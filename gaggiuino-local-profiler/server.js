@@ -7,7 +7,7 @@ const app = express();
 
 // Konfiguration: Ein eigener Unterordner im offiziellen HA-Config-Verzeichnis
 const PORT = 8099; 
-const DATA_FILE = '/config/glp_shots.json';
+const DATA_DIR = '/config/gaggiuino_profiler'; 
 const DATA_FILE = path.join(DATA_DIR, 'glp_shots.json'); 
 const MACHINE_URL = process.env.MACHINE_URL || 'http://gaggia.intern/api/shots';
 
