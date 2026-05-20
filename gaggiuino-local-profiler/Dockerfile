@@ -3,17 +3,10 @@ FROM node:18.20.4-alpine3.20
 WORKDIR /app
 
 COPY package.json ./
-RUN npm install --only=production \
-    && addgroup -S glp \
-    && adduser  -S glp -G glp
+RUN npm install --only=production
 
 COPY server.js ./
 COPY public/ ./public/
-
-# /data wird vom HA Supervisor gemountet
-RUN mkdir -p /data && chown glp:glp /data
-
-USER glp
 
 EXPOSE 8099
 
