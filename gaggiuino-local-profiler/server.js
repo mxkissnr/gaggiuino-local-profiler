@@ -13,6 +13,11 @@ const MACHINE_URL = process.env.MACHINE_URL || 'http://gaggia.intern/api/shots';
 // Statische Dateien aus dem public-Ordner bereitstellen (index.html, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// NEU: Explizite Route für die Startseite hinzufügen
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // API-Endpunkt für das Frontend zum Laden der JSON-Daten
 app.get('/shots.json', (req, res) => {
     if (fs.existsSync(DATA_FILE)) {

@@ -364,13 +364,23 @@ const corsairPlugin = {
 
 async function loadData(){
     try {
-        // Geändert: ./ stellt sicher, dass die Anfrage im Ingress-Unterordner bleibt
-        const r = await fetch(`./shots.json?v=${new Date().getTime()}`);
+        // Ermittelt den aktuellen Ingress-Pfad dynamisch aus der Browser-Leiste
+        const currentPath = window.location.pathname;
+        const basePath = currentPath.endsWith('/') ? currentPath : currentPath + '/';
+        
+        // Baut den exakten, absolut-relativen API-Pfad inklusive Cache-Breaker
+        const url = `${basePath}shots.json?v=${new Date().getTime()}`;
+        console.log("GLP versucht Daten zu laden von:", url);
+
+        const r = await fetch(url);
         if (!r.ok) {
-            console.error("Fehler beim Laden der Shots-API:", r.statusText);
+            console.error("Fehler beim Laden der Shots-API. Status:", r.status, r.statusText);
             return;
         }
+        
         shots = await r.json();
+        console.log("Erfolgreich geladene Shots:", shots);
+        
         renderSidebar();
         if(shots.length > 0) {
             primaryShotId = shots[shots.length - 1].id;
