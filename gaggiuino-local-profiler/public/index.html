@@ -363,7 +363,8 @@ const corsairPlugin = {
 };
 
 async function loadData(){
-    const r = await fetch('./shots.json');
+    // Geändert: Relativer Pfad ohne Punkt + Cache-Breaker gegen das aggressive HA-Caching
+    const r = await fetch(`shots.json?v=${new Date().getTime()}`);
     shots = await r.json();
     renderSidebar();
     if(shots.length > 0) {
