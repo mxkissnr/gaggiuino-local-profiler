@@ -363,13 +363,21 @@ const corsairPlugin = {
 };
 
 async function loadData(){
-    // Geändert: Relativer Pfad ohne Punkt + Cache-Breaker gegen das aggressive HA-Caching
-    const r = await fetch(`shots.json?v=${new Date().getTime()}`);
-    shots = await r.json();
-    renderSidebar();
-    if(shots.length > 0) {
-        primaryShotId = shots[shots.length - 1].id;
-        updateView();
+    try {
+        // Geändert: ./ stellt sicher, dass die Anfrage im Ingress-Unterordner bleibt
+        const r = await fetch(`./shots.json?v=${new Date().getTime()}`);
+        if (!r.ok) {
+            console.error("Fehler beim Laden der Shots-API:", r.statusText);
+            return;
+        }
+        shots = await r.json();
+        renderSidebar();
+        if(shots.length > 0) {
+            primaryShotId = shots[shots.length - 1].id;
+            updateView();
+        }
+    } catch (error) {
+        console.error("Kritischer Fehler in loadData:", error);
     }
 }
 
