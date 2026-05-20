@@ -20,6 +20,20 @@ function log(message, isError = false) {
     }
 }
 
+// SICHERHEITS-CHECK: Erstelle die Datei/Verzeichnis sofort, falls sie fehlt
+try {
+    const dir = path.dirname(DATA_FILE);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    if (!fs.existsSync(DATA_FILE)) {
+        fs.writeFileSync(DATA_FILE, '[]', 'utf8');
+        log(`📂 Neue, leere Datenbank unter ${DATA_FILE} initialisiert.`);
+    }
+} catch (err) {
+    log(`❌ Fehler bei der Dateiinitialisierung: ${err.message}`, true);
+}
+
 // Statische Dateien aus dem public-Ordner bereitstellen
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -28,22 +42,22 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// API-Endpunkt für das Frontend zum Laden der JSON-Daten (MIT LOGGING!)
+// API-Endpunkt für das Frontend zum Laden der JSON-Daten
 app.get('/shots.json', (req, res) => {
     log(`» Frontend fragt shots.json an...`);
-    if (fs.existsSync(DATA_FILE)) {
-        try {
+    try {
+        if (fs.existsSync(DATA_FILE)) {
             const rawData = fs.readFileSync(DATA_FILE, 'utf8');
             const parsed = JSON.parse(rawData);
             log(`« shots.json erfolgreich gesendet. Anzahl gelieferter Shots: ${parsed.length}`);
             res.json(parsed);
-        } catch (err) {
-            log(`❌ Fehler beim Lesen/Parsen der shots.json: ${err.message}`, true);
-            res.status(500).json({ error: "Fehler beim Lesen der lokalen Daten" });
+        } else {
+            log(`⚠ shots.json nicht gefunden. Sende [].`);
+            res.json([]);
         }
-    } else {
-        log(`⚠ shots.json existiert nicht auf dem Pfad. Sende leeres Array [].`);
-        res.json([]);
+    } catch (err) {
+        log(`❌ Fehler beim Lesen/Parsen der shots.json: ${err.message}`, true);
+        res.status(500).json({ error: "Fehler beim Lesen der lokalen Daten" });
     }
 });
 
@@ -60,14 +74,15 @@ async function syncShots() {
         const latestMachineId = latestResponse.data[0].lastShotId;
         log(`Neueste Shot-ID auf der Maschine: ${latestMachineId}`);
 
-        // 2. Lokale Daten laden, falls vorhanden
+        // 2. Lokale Daten laden
         let localShots = [];
         if (fs.existsSync(DATA_FILE)) {
             const rawData = fs.readFileSync(DATA_FILE, 'utf8');
-            localShots = JSON.parse(rawData);
+            // Verhindert Crash bei korrupter/leerer Datei
+            localShots = rawData ? JSON.parse(rawData) : []; 
         }
 
-        // Höchste ID ermitteln, die wir lokal schon gespeichert haben
+        // Höchste ID ermitteln
         const maxLocalId = localShots.length > 0 
             ? localShots.reduce((max, shot) => shot.id > max ? shot.id : max, 0) 
             : 0;
@@ -97,14 +112,14 @@ async function syncShots() {
             }
         }
 
-        // 4. Aktualisierte Liste wieder abspeichern, wenn neue Shots geladen wurden
+        // 4. Aktualisierte Liste wieder abspeichern
         if (newShotsCount > 0) {
             fs.writeFileSync(DATA_FILE, JSON.stringify(localShots, null, 2), 'utf8');
-            log(`Sync beendet. ${newShotsCount} neue Shots geladen und in ${DATA_FILE} gespeichert.`);
+            log(`Sync beendet. ${newShotsCount} neue Shots geladen und gespeichert.`);
         }
 
     } catch (err) {
-        log(`Fehler bei der Synchronisierung: ${err.message}`, true);
+        log(`❌ Fehler bei der Synchronisierung: ${err.message}`, true);
     }
 }
 
@@ -123,14 +138,11 @@ const server = app.listen(PORT, () => {
     setInterval(syncShots, 5 * 60 * 1000);
 });
 
-// Fehlerbehandlung für den Server-Start (fängt besetzte Ports ab)
+// Fehlerbehandlung für den Server-Start
 server.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
         console.error(`\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
         log(`❌ CRITICAL ERROR: Port ${PORT} wird bereits verwendet!`, true);
-        console.error(`   Das Add-on kann nicht auf diesem Port starten.`);
-        console.error(`   Bitte prüfe, ob ein anderes Add-on (z.B. OpenThread)`);
-        console.error(`   denselben Port belegt und ändere ihn in der config.`);
         console.error(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n`);
         process.exit(1);
     } else {
