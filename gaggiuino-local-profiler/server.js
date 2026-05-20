@@ -13,7 +13,7 @@ const MACHINE_URL = process.env.MACHINE_URL || 'http://gaggia.intern/api/shots';
 // Statische Dateien aus dem public-Ordner bereitstellen (index.html, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// NEU: Explizite Route für die Startseite hinzufügen
+// Explizite Route für die Startseite hinzufügen (wichtig für HA-Ingress)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -49,16 +49,24 @@ async function syncShots() {
         }
 
         // Höchste ID ermitteln, die wir lokal schon gespeichert haben
-        const maxLocalId = localShots.reduce((max, shot) => shot.id > max ? shot.id : max, 0);
+        // Korrektur: Wenn die Liste leer ist, fangen wir sauber bei 0 an
+        const maxLocalId = localShots.length > 0 
+            ? localShots.reduce((max, shot) => shot.id > max ? shot.id : max, 0) 
+            : 0;
 
-        if (maxLocalId >= latestMachineId) {
+        console.log(`Lokale maximale Shot-ID: ${maxLocalId} | Maschine maximale Shot-ID: ${latestMachineId}`);
+
+        // Wenn wir wirklich schon alles haben, abbrechen
+        if (localShots.length > 0 && maxLocalId >= latestMachineId) {
             console.log('Alles up to date. Keine neuen Shots auf der SD-Karte.');
             return;
         }
 
         // 3. Fehlende Shots einzeln von der Maschine abrufen
         let newShotsCount = 0;
-        for (let i = maxLocalId + 1; i <= latestMachineId; i++) {
+        const startId = maxLocalId === 0 ? 1 : maxLocalId + 1;
+
+        for (let i = startId; i <= latestMachineId; i++) {
             try {
                 const shotResponse = await axios.get(`${MACHINE_URL}/${i}`);
                 if (shotResponse.status === 200 && shotResponse.data) {
