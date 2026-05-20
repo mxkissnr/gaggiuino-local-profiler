@@ -8,7 +8,7 @@ const app = express();
 // Konfiguration
 const PORT = 8099; 
 const DATA_DIR = '/data'; 
-const DATA_FILE = path.join(DATA_DIR, 'shots.json'); // Dateiname exakt wie vom Frontend erwartet
+const DATA_FILE = '/data/shots.json';
 const MACHINE_URL = process.env.MACHINE_URL || 'http://gaggia.intern/api/shots';
 
 // Hilfsfunktion für Logs
@@ -61,18 +61,28 @@ async function syncShots() {
         const latestResponse = await axios.get(`${MACHINE_URL}/latest`);
         const latestMachineId = latestResponse.data[0].lastShotId;
 
-        let localShots = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8') || '[]');
+        // Lese aus DIESER Datei
+        let localShots = [];
+        if (fs.existsSync(DATA_FILE)) {
+            const content = fs.readFileSync(DATA_FILE, 'utf8');
+            localShots = content ? JSON.parse(content) : [];
+        }
+        
         const maxLocalId = localShots.length > 0 ? Math.max(...localShots.map(s => s.id)) : 0;
 
-        if (maxLocalId >= latestMachineId) return;
+        if (maxLocalId >= latestMachineId) {
+            log(`Alles aktuell. Shots in Datei: ${localShots.length}`);
+            return;
+        }
 
         for (let i = maxLocalId + 1; i <= latestMachineId; i++) {
             const shotResponse = await axios.get(`${MACHINE_URL}/${i}`);
             localShots.push(shotResponse.data);
         }
 
+        // Schreibe in DIESE Datei
         fs.writeFileSync(DATA_FILE, JSON.stringify(localShots, null, 2), 'utf8');
-        log(`Sync beendet. Aktueller Stand: ${localShots.length} Shots.`);
+        log(`Sync beendet. Gespeichert in ${DATA_FILE}. Aktueller Stand: ${localShots.length} Shots.`);
     } catch (err) {
         log(`❌ Sync-Fehler: ${err.message}`, true);
     }
@@ -80,7 +90,7 @@ async function syncShots() {
 
 // Server-Start
 app.listen(PORT, () => {
-    log(`🚀 GLP Add-on v1.3.9 gestartet. Pfad: ${DATA_FILE}`);
+    log(`🚀 GLP Add-on v1.3.11 gestartet. Pfad: ${DATA_FILE}`);
     syncShots();
     setInterval(syncShots, 5 * 60 * 1000);
 });
