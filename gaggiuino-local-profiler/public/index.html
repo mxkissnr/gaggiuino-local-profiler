@@ -673,6 +673,46 @@ function esc(str) {
         .replace(/'/g, '&#39;');
 }
 
+// ── Phase background plugin ───────────────────────────────────────────────
+const phasePlugin = {
+    id: 'phases',
+    beforeDatasetsDraw(chart, _args, opts) {
+        if (!opts?.preinfusion) return;
+        const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+        const preEnd   = Math.min(Math.max(x.getPixelForValue(opts.preinfusion), left), right);
+        const totalEnd = Math.min(Math.max(x.getPixelForValue(opts.preinfusion + opts.extraction), left), right);
+
+        ctx.save();
+
+        if (preEnd > left) {
+            ctx.fillStyle = 'rgba(52,152,219,0.08)';
+            ctx.fillRect(left, top, preEnd - left, bottom - top);
+        }
+        if (totalEnd > preEnd) {
+            ctx.fillStyle = 'rgba(243,156,18,0.06)';
+            ctx.fillRect(preEnd, top, totalEnd - preEnd, bottom - top);
+        }
+
+        // Phase boundary
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+        ctx.moveTo(preEnd, top);
+        ctx.lineTo(preEnd, bottom);
+        ctx.stroke();
+
+        // Labels
+        ctx.setLineDash([]);
+        ctx.font = '10px Figtree, sans-serif';
+        ctx.fillStyle = 'rgba(161,161,170,0.65)';
+        if (preEnd - left > 30)    { ctx.textAlign = 'left';  ctx.fillText('Preinfusion', left + 5,   top + 14); }
+        if (totalEnd - preEnd > 55) { ctx.textAlign = 'left';  ctx.fillText('Extraktion',  preEnd + 5, top + 14); }
+
+        ctx.restore();
+    }
+};
+
 // ── Corsair crosshair ─────────────────────────────────────────────────────
 const corsairPlugin = {
     id: 'corsair',
@@ -1204,7 +1244,7 @@ function updateView() {
 
     chart = new Chart(ctx, {
         type: 'line',
-        plugins: [corsairPlugin],
+        plugins: [corsairPlugin, phasePlugin],
         data: { datasets },
         options: {
             responsive: true,
@@ -1212,7 +1252,8 @@ function updateView() {
             layout: { padding: { bottom: 20 } },
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { labels: { color: '#e4e4e7', font: { family: 'Figtree' } } },
+                phases:  phases ? { preinfusion: phases.preinfusion, extraction: phases.extraction } : {},
+                legend:  { labels: { color: '#e4e4e7', font: { family: 'Figtree' } } },
                 tooltip: { callbacks: { title: ctx => 'Zeit: ' + formatTimeLabel(ctx[0].parsed.x) } }
             },
             scales: {

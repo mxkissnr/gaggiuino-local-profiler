@@ -1,3 +1,6 @@
+## 1.10.1
+- Phasen-Visualisierung im Chart: Preinfusion (blau) und Extraktion (orange) als Hintergrundzonen mit Trennlinie und Labels
+
 ## 1.10.0
 - Suche/Filter in der Shot-Seitenleiste (nach Profil, Kaffee, Mühle)
 - Dose → Yield → Ratio-Berechnung (z.B. 18g → 36g · 1:2.0)
