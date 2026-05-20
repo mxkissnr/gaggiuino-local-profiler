@@ -8,6 +8,6 @@ RUN npm install --only=production
 COPY server.js ./
 COPY public/ ./public/
 
-EXPOSE 8080
+EXPOSE 8099
 
 CMD [ "node", "server.js" ]

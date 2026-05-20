@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gaggiuino Local SProfiler</title>
+    <title>Gaggiuino Local Profiler</title>
     
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,600&display=swap" rel="stylesheet" />
@@ -227,6 +227,89 @@
             margin-top: 16px;
         }
 
+        #sidebar-footer {
+            padding: 12px 20px;
+            border-top: 1px solid var(--gray-700);
+            font-size: 0.75rem;
+            color: #71717a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+            flex-shrink: 0;
+        }
+
+        .status-dot.ok     { background: #22c55e; }
+        .status-dot.error  { background: #ef4444; }
+        .status-dot.unknown{ background: #52525b; }
+
+        #syncBtn {
+            background: rgba(63, 63, 70, 0.5);
+            color: #a1a1aa;
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-family: 'Figtree', sans-serif;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        #syncBtn:hover    { background: var(--gray-800); color: #fff; }
+        #syncBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        #shot-count {
+            color: #52525b;
+            font-size: 0.85rem;
+            font-weight: normal;
+            margin-left: 6px;
+        }
+
+        .loading-state {
+            padding: 24px 20px;
+            color: #52525b;
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
+        #empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            text-align: center;
+            padding: 60px 40px;
+        }
+
+        #empty-state .es-icon { font-size: 3rem; margin-bottom: 20px; }
+
+        #empty-state h2 {
+            color: #71717a;
+            font-size: 1.25rem;
+            margin: 0 0 10px 0;
+        }
+
+        #empty-state p {
+            font-size: 0.875rem;
+            color: #52525b;
+            margin: 0;
+            max-width: 360px;
+            line-height: 1.6;
+        }
+
+        #chart-area { display: flex; flex-direction: column; flex: 1; }
+
         @media (max-width: 768px) {
             body {
                 flex-direction: column;
@@ -263,13 +346,27 @@
 <body>
 
 <div id="sidebar">
-    <h2>☕ Shots</h2>
+    <h2>☕ Shots <span id="shot-count"></span></h2>
     <div class="sidebar-hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
     <div id="shots"></div>
+    <div id="sidebar-footer">
+        <div>
+            <span class="status-dot unknown" id="statusDot" title="Sync-Status"></span>
+            <span id="syncTime">kein Sync</span>
+        </div>
+        <button id="syncBtn" onclick="triggerSync()">↻ Sync</button>
+    </div>
 </div>
 
 <div id="main">
-    
+
+    <div id="empty-state" style="display:none">
+        <div class="es-icon">☕</div>
+        <h2>Keine Shots vorhanden</h2>
+        <p>Stelle sicher, dass die Gaggiuino-Maschine unter der konfigurierten URL erreichbar ist. Nutze <b>↻ Sync</b> in der Seitenleiste um einen manuellen Sync auszulösen.</p>
+    </div>
+
+    <div id="chart-area">
     <div class="sprofiler-header">
         <h1 id="topTitle">Profile Name</h1>
         <p id="topSubtitle">Gaggia Classic Evo Pro | gaggiuino</p>
@@ -327,6 +424,7 @@
         <canvas id="espressoShotChart"></canvas>
     </div>
 
+    </div><!-- #chart-area -->
 </div>
 
 <script>
@@ -362,30 +460,78 @@ const corsairPlugin = {
     }
 };
 
-async function loadData(){
-    try {
-        // Wir nehmen den Pfad aus der Adressleiste (Ingress URL)
-        // und hängen 'shots.json' direkt an, ohne Slash am Anfang
-        const url = 'shots.json'; 
-        console.log("GLP versucht Daten zu laden von:", url);
+async function loadData() {
+    const shotsEl = document.getElementById('shots');
+    shotsEl.innerHTML = '<div class="loading-state">Lade Shots …</div>';
 
-        const r = await fetch(url);
-        
+    try {
+        const r = await fetch('shots.json');
+
         if (!r.ok) {
-            console.error("Fehler beim Laden der API. Status:", r.status);
+            shotsEl.innerHTML = `<div class="loading-state" style="color:#ef4444">Fehler beim Laden (HTTP ${r.status})</div>`;
             return;
         }
-        
+
         shots = await r.json();
-        console.log("Erfolgreich geladene Shots:", shots);
-        
         renderSidebar();
-        if(shots.length > 0) {
+
+        const emptyState = document.getElementById('empty-state');
+        const chartArea  = document.getElementById('chart-area');
+
+        if (shots.length > 0) {
+            emptyState.style.display = 'none';
+            chartArea.style.display  = 'flex';
             primaryShotId = shots[shots.length - 1].id;
             updateView();
+        } else {
+            emptyState.style.display = 'flex';
+            chartArea.style.display  = 'none';
         }
     } catch (error) {
-        console.error("Kritischer Fehler in loadData:", error);
+        shotsEl.innerHTML = '<div class="loading-state" style="color:#ef4444">Verbindungsfehler</div>';
+        console.error('Fehler in loadData:', error);
+    }
+}
+
+async function updateStatus() {
+    try {
+        const r = await fetch('api/status');
+        if (!r.ok) return;
+        const s = await r.json();
+
+        const dot     = document.getElementById('statusDot');
+        const timeEl  = document.getElementById('syncTime');
+        const countEl = document.getElementById('shot-count');
+
+        if (countEl) countEl.textContent = `(${s.shotCount})`;
+
+        if (s.lastSync) {
+            const d = new Date(s.lastSync);
+            timeEl.textContent = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        if (s.lastSyncError) {
+            dot.className = 'status-dot error';
+            dot.title = s.lastSyncError;
+        } else if (s.lastSync) {
+            dot.className = 'status-dot ok';
+            dot.title = 'Letzter Sync erfolgreich';
+        }
+    } catch (e) {}
+}
+
+async function triggerSync() {
+    const btn = document.getElementById('syncBtn');
+    btn.disabled = true;
+    btn.textContent = '↻ …';
+    try {
+        await fetch('api/sync', { method: 'POST' });
+        await new Promise(r => setTimeout(r, 2500));
+        await loadData();
+        await updateStatus();
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '↻ Sync';
     }
 }
 
@@ -652,6 +798,8 @@ function updateView() {
 }
 
 loadData();
+updateStatus();
+setInterval(updateStatus, 30000);
 </script>
 
 </body>
