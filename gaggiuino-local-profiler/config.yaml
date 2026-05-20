@@ -1,6 +1,6 @@
 name: "Gaggiuino Local Profiler (GLP)"
 description: "Lokaler Profiler für Gaggiuino Shot-Analysen"
-version: "1.2.7"
+version: "1.2.8"
 slug: "gaggiuino_local_profiler"
 init: false
 arch:
