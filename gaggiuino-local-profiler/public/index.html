@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gaggiuino Local SProfiler</title>
+    
+    <link rel="preconnect" href="https://fonts.bunny.net">
+    <link href="https://fonts.bunny.net/css?family=figtree:400,600&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --gray-50: #fafafa;
+            --gray-200: #e4e4e7;
+            --gray-700: #3f3f46;
+            --gray-800: #27272a;
+            --gray-900: #18181b;
+            --gray-950: #09090b;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--gray-950);
+            color: rgba(255, 255, 255, 0.8);
+            font-family: 'Figtree', sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #sidebar {
+            width: 320px;
+            background: var(--gray-900);
+            overflow-y: auto;
+            border-right: 1px solid var(--gray-700);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #sidebar h2 {
+            padding: 20px;
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #fff;
+            border-bottom: 1px solid var(--gray-700);
+        }
+
+        .sidebar-hint {
+            padding: 10px 20px;
+            font-size: 0.75rem;
+            color: #a1a1aa;
+            background: rgba(39, 39, 42, 0.3);
+            border-bottom: 1px solid var(--gray-700);
+        }
+
+        #shots {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .shot-wrapper {
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid rgba(63, 63, 70, 0.3);
+            transition: 0.2s;
+            padding-right: 12px;
+        }
+
+        .shot-wrapper:hover {
+            background: rgba(39, 39, 42, 0.3);
+        }
+
+        .shot {
+            flex: 1;
+            padding: 15px 12px 15px 20px;
+            cursor: pointer;
+            border-left: 4px solid transparent;
+        }
+
+        .shot-wrapper.active {
+            background: var(--gray-800);
+        }
+        
+        .shot-wrapper.active .shot {
+            border-left-color: #ef4444; 
+        }
+
+        .shot-wrapper.compare-active {
+            background: rgba(52, 152, 219, 0.12);
+        }
+
+        .shot-wrapper.compare-active .shot {
+            border-left-color: #3498db; 
+        }
+
+        .profile-name-sidebar {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 2px;
+        }
+
+        .shotid-sidebar {
+            color: #a1a1aa;
+            font-size: 0.85rem;
+        }
+
+        .date-sidebar {
+            color: #71717a;
+            font-size: 0.75rem;
+            margin-top: 4px;
+        }
+
+        .compare-btn {
+            background: rgba(63, 63, 70, 0.5);
+            color: #a1a1aa;
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+
+        .compare-btn:hover {
+            background: #27272a;
+            color: #fff;
+        }
+
+        .shot-wrapper.compare-active .compare-btn {
+            background: #3498db;
+            color: #fff;
+            border-color: #2980b9;
+        }
+
+        #main {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sprofiler-header {
+            margin-bottom: 24px;
+        }
+
+        .sprofiler-header h1 {
+            font-size: 1.875rem;
+            font-weight: 600;
+            color: #fff;
+            margin: 0 0 4px 0;
+        }
+
+        .sprofiler-header p {
+            font-size: 0.875rem;
+            color: #a1a1aa;
+            margin: 0;
+        }
+
+        .sprofiler-meta-grid {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            margin-bottom: 32px;
+            gap: 40px;
+        }
+
+        .meta-column {
+            max-width: 450px;
+            flex: 1;
+        }
+
+        .divide-y > * + * {
+            border-top-width: 1px;
+            border-color: var(--gray-800);
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            padding-top: 12px;
+            padding-bottom: 12px;
+        }
+
+        .meta-item:first-child {
+            padding-top: 0;
+        }
+
+        .meta-item:last-child {
+            padding-bottom: 0;
+        }
+
+        .meta-label {
+            margin-bottom: 4px;
+            color: #a1a1aa;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        .meta-value {
+            font-weight: 600;
+            color: #fff;
+            font-size: 1rem;
+        }
+
+        .meta-sub {
+            font-size: 0.85rem;
+            color: #71717a;
+            font-weight: normal;
+            margin-left: 6px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 550px;
+            width: 100%;
+            margin-top: 16px;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+                overflow: auto;
+                height: auto;
+            }
+            #sidebar {
+                width: 100%;
+                height: 300px;
+                border-right: none;
+                border-bottom: 1px solid var(--gray-700);
+            }
+            #main {
+                padding: 20px;
+            }
+            .sprofiler-meta-grid {
+                flex-direction: column;
+                gap: 16px;
+                margin-bottom: 16px;
+            }
+            .meta-column {
+                max-width: 100%;
+            }
+            .meta-column[style*="text-align: right"] {
+                text-align: left !important;
+            }
+            .chart-container {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="sidebar">
+    <h2>☕ Shots</h2>
+    <div class="sidebar-hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
+    <div id="shots"></div>
+</div>
+
+<div id="main">
+    
+    <div class="sprofiler-header">
+        <h1 id="topTitle">Profile Name</h1>
+        <p id="topSubtitle">Gaggia Classic Evo Pro | gaggiuino</p>
+    </div>
+
+    <div class="sprofiler-meta-grid">
+        
+        <div class="meta-column divide-y">
+            <div class="meta-item">
+                <span class="meta-label">Profile</span>
+                <span class="meta-value" id="valProfile">-</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Pressure (Avg / Max Target)</span>
+                <span class="meta-value">
+                    <span id="pressure">-</span><span class="meta-sub" id="targetPressure">-</span>
+                </span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Pump Flow (Avg / Target)</span>
+                <span class="meta-value">
+                    <span id="flow">-</span><span class="meta-sub" id="targetFlow">-</span>
+                </span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Temperature (Avg / Target)</span>
+                <span class="meta-value">
+                    <span id="temp">-</span><span class="meta-sub" id="targetTemp">-</span>
+                </span>
+            </div>
+        </div>
+
+        <div class="meta-column divide-y" style="text-align: right;">
+            <div class="meta-item">
+                <span class="meta-label">Weight (Total / Flow Last)</span>
+                <span class="meta-value">
+                    <span id="weight">-</span><span class="meta-sub" id="weightFlowSub">-</span>
+                </span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Weight Flow (Avg / Max)</span>
+                <span class="meta-value">
+                    <span id="wf">-</span><span class="meta-sub" id="maxWf">-</span>
+                </span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Duration</span>
+                <span class="meta-value" id="duration">-</span>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="chart-container">
+        <canvas id="espressoShotChart"></canvas>
+    </div>
+
+</div>
+
+<script>
+let shots = [];
+let chart;
+let primaryShotId = null;
+let compareShotId = null;
+
+const corsairPlugin = {
+    id: 'corsair',
+    defaults: { width: 1, color: 'rgba(255,255,255,0.4)', dash: [4, 4] },
+    afterInit: (chart) => { chart.corsair = { x: 0, y: 0 }; },
+    afterEvent: (chart, args) => {
+        const { inChartArea } = args;
+        const { x, y } = args.event;
+        chart.corsair = { x, y, draw: inChartArea };
+        chart.draw();
+    },
+    beforeDatasetsDraw: (chart, args, opts) => {
+        const { ctx } = chart;
+        const { top, bottom } = chart.chartArea;
+        const { x, draw } = chart.corsair;
+        if (!draw) return;
+        ctx.save();
+        ctx.beginPath();
+        ctx.lineWidth = opts.width;
+        ctx.strokeStyle = opts.color;
+        ctx.setLineDash(opts.dash);
+        ctx.moveTo(x, bottom);
+        ctx.lineTo(x, top);
+        ctx.stroke();
+        ctx.restore();
+    }
+};
+
+async function loadData(){
+    const r = await fetch('./shots.json');
+    shots = await r.json();
+    renderSidebar();
+    if(shots.length > 0) {
+        primaryShotId = shots[shots.length - 1].id;
+        updateView();
+    }
+}
+
+function renderSidebar(){
+    const el = document.getElementById('shots');
+    el.innerHTML = '';
+    
+    [...shots].reverse().forEach((shot) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'shot-wrapper';
+        wrapper.id = `wrapper-${shot.id}`;
+
+        const divShot = document.createElement('div');
+        divShot.className = 'shot';
+
+        const date = new Date(shot.timestamp * 1000);
+        const profileName = shot.profile?.name || shot.profileName || "Unknown Profile";
+
+        divShot.innerHTML = `
+            <div class="profile-name-sidebar">${profileName}</div>
+            <div class="shotid-sidebar">Shot ${shot.id}</div>
+            <div class="date-sidebar">${date.toLocaleString('de-DE')}</div>
+        `;
+
+        divShot.onclick = (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                toggleCompare(shot.id);
+            } else {
+                primaryShotId = shot.id;
+                compareShotId = null;
+                updateSidebarHighlighting();
+                updateView();
+            }
+        };
+
+        const btnCompare = document.createElement('button');
+        btnCompare.className = 'compare-btn';
+        btnCompare.innerHTML = '⇄';
+        btnCompare.title = "Als Vergleichs-Shot wählen";
+        btnCompare.onclick = (e) => {
+            e.stopPropagation(); 
+            toggleCompare(shot.id);
+        };
+
+        wrapper.appendChild(divShot);
+        wrapper.appendChild(btnCompare);
+        el.appendChild(wrapper);
+    });
+    updateSidebarHighlighting();
+}
+
+function toggleCompare(id) {
+    if (primaryShotId === id) return; 
+    
+    if (compareShotId === id) {
+        compareShotId = null;
+    } else {
+        compareShotId = id;
+    }
+    updateSidebarHighlighting();
+    updateView();
+}
+
+function updateSidebarHighlighting() {
+    document.querySelectorAll('.shot-wrapper').forEach(x => {
+        x.classList.remove('active', 'compare-active');
+        const id = parseInt(x.id.replace('wrapper-', ''));
+        if (id === primaryShotId) x.classList.add('active');
+        if (id === compareShotId) x.classList.add('compare-active');
+    });
+}
+
+function safeLast(arr){
+    if(!arr || !arr.length) return null;
+    for (let i = arr.length - 1; i >= 0; i--) {
+        if (arr[i] !== null && arr[i] !== undefined && !isNaN(arr[i])) return arr[i];
+    }
+    return null;
+}
+
+function avgActive(arr, threshold = 0.5){
+    if(!arr || !arr.length) return null;
+    const activeValues = arr.filter(v => v > threshold);
+    if(activeValues.length === 0) return arr[arr.length - 1];
+    return activeValues.reduce((a,b)=>a+b,0)/activeValues.length;
+}
+
+function avg(arr){
+    if(!arr || !arr.length) return null;
+    return arr.reduce((a,b)=>a+b,0)/arr.length;
+}
+
+function max(arr){
+    if(!arr || !arr.length) return null;
+    return Math.max(...arr);
+}
+
+function formatTimeLabel(seconds) {
+    if (seconds == null || isNaN(seconds)) return '00:00';
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+}
+
+function fmt(v, unit=''){
+    return v == null ? '-' : `${v.toFixed(1)}${unit}`;
+}
+
+function mapToXY(timeArr, dataArr) {
+    if (!timeArr || !dataArr) return [];
+    return timeArr.map((t, idx) => ({
+        x: t / 10,
+        y: dataArr[idx] !== undefined ? dataArr[idx] / 10 : null
+    })).filter(pt => pt.y !== null);
+}
+
+function getShotData(shot) {
+    if (!shot) return null;
+    const d = shot.datapoints || {};
+    const times = d.timeInShot || [];
+    return {
+        rawTimes: times.map(v => v / 10),
+        pressure: mapToXY(times, d.pressure),
+        targetPressure: mapToXY(times, d.targetPressure),
+        flow: mapToXY(times, d.pumpFlow),
+        targetFlow: mapToXY(times, d.targetPumpFlow),
+        weight: mapToXY(times, d.shotWeight || d.weight),
+        weightFlow: mapToXY(times, d.weightFlow),
+        temp: mapToXY(times, d.temperature),
+        targetTemp: mapToXY(times, d.targetTemperature)
+    };
+}
+
+function updateView() {
+    const shotA = shots.find(s => s.id === primaryShotId);
+    const shotB = compareShotId ? shots.find(s => s.id === compareShotId) : null;
+    
+    if (!shotA) return;
+    
+    const dataA = getShotData(shotA);
+    const dataB = getShotData(shotB);
+
+    const maxTempA = max((shotA.datapoints?.temperature || []).map(v => v / 10)) || 0;
+    const maxTempB = shotB ? (max((shotB.datapoints?.temperature || []).map(v => v / 10)) || 0) : 0;
+    const maxTempDetected = Math.max(maxTempA, maxTempB);
+    const tempMaxScale = maxTempDetected > 0 ? Math.ceil(maxTempDetected + 5) : 100;
+
+    const profileNameA = shotA.profile?.name || shotA.profileName || "Unknown Profile";
+
+    if (shotB) {
+        const profileNameB = shotB.profile?.name || shotB.profileName || "Unknown Profile";
+        document.getElementById('topTitle').innerText = `Vergleich: Shot ${shotA.id} vs. Shot ${shotB.id}`;
+        document.getElementById('valProfile').innerText = `${profileNameA} vs. ${profileNameB}`;
+    } else {
+        document.getElementById('topTitle').innerText = `${profileNameA} - Shot ${shotA.id}`;
+        document.getElementById('valProfile').innerText = profileNameA;
+    }
+
+    const totalSeconds = (shotA.duration || 0) / 10;
+    const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+    const seconds = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
+    document.getElementById('duration').innerText = `${minutes}:${seconds}`;
+
+    document.getElementById('pressure').innerText = fmt(avgActive(dataA.pressure.map(p => p.y), 1.5), ' bar');
+    document.getElementById('targetPressure').innerText = ` / ${fmt(max(dataA.targetPressure.map(p => p.y)), ' bar')}`;
+    
+    document.getElementById('flow').innerText = fmt(avgActive(dataA.flow.map(p => p.y), 0.2), ' ml/s');
+    document.getElementById('targetFlow').innerText = ` / ${fmt(avgActive(dataA.targetFlow.map(p => p.y), 0.2), ' ml/s')}`;
+    
+    document.getElementById('temp').innerText = fmt(avg(dataA.temp.map(p => p.y)), ' °C');
+    document.getElementById('targetTemp').innerText = ` / ${fmt(avg(dataA.targetTemp.map(p => p.y)), ' °C')}`;
+
+    document.getElementById('weight').innerText = fmt(max(dataA.weight.map(p => p.y)), ' g');
+    document.getElementById('weightFlowSub').innerText = ` / ${fmt(safeLast(dataA.weightFlow.map(p => p.y)), ' ml/s')}`;
+    
+    document.getElementById('wf').innerText = fmt(avgActive(dataA.weightFlow.map(p => p.y), 0.1), ' ml/s');
+    document.getElementById('maxWf').innerText = ` / ${fmt(max(dataA.weightFlow.map(p => p.y)), ' max')}`;
+
+    const maxTimeA = dataA.rawTimes.length > 0 ? dataA.rawTimes[dataA.rawTimes.length - 1] : 0;
+    const maxTimeB = dataB && dataB.rawTimes.length > 0 ? dataB.rawTimes[dataB.rawTimes.length - 1] : 0;
+    const finalMaxTime = Math.max(maxTimeA, maxTimeB);
+
+    const datasets = [
+        { label: 'Pressure (A)', data: dataA.pressure, yAxisID: 'y', borderWidth: 2.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
+        { label: 'Pump Flow (A)', data: dataA.flow, yAxisID: 'y', borderWidth: 2, tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
+        { label: 'Weight Flow (A)', data: dataA.weightFlow, yAxisID: 'y', borderWidth: 2, tension: 0.1, borderColor: '#9b59b6', backgroundColor: 'transparent', pointStyle: false },
+        { label: 'Weight (A)', data: dataA.weight, yAxisID: 'temp', borderWidth: 2, tension: 0.1, borderColor: '#2ecc71', backgroundColor: 'transparent', pointStyle: false },
+        { label: 'Temperature (A)', data: dataA.temp, yAxisID: 'temp', borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
+    ];
+
+    if (!shotB) {
+        datasets.push(
+            /* Identische Farbwahl für Target-Linien ohne Transparenz, nur über borderDash separiert */
+            { label: 'Target Pressure', data: dataA.targetPressure, yAxisID: 'y', borderDash: [5, 5], borderWidth: 1.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
+            { label: 'Target Flow', data: dataA.targetFlow, yAxisID: 'y', borderDash: [5, 5], borderWidth: 1.5, tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
+            { label: 'Target Temp', data: dataA.targetTemp, yAxisID: 'temp', borderDash: [5, 5], borderWidth: 1.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
+        );
+    }
+
+    if (shotB && dataB) {
+        datasets.push(
+            { label: 'Pressure (B)', data: dataB.pressure, yAxisID: 'y', borderDash: [3, 3], borderWidth: 2, tension: 0.1, borderColor: 'rgba(52, 152, 219, 0.65)', backgroundColor: 'transparent', pointStyle: false },
+            { label: 'Pump Flow (B)', data: dataB.flow, yAxisID: 'y', borderDash: [3, 3], borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(243, 156, 18, 0.65)', backgroundColor: 'transparent', pointStyle: false },
+            { label: 'Weight Flow (B)', data: dataB.weightFlow, yAxisID: 'y', borderDash: [3, 3], borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(155, 89, 182, 0.65)', backgroundColor: 'transparent', pointStyle: false },
+            { label: 'Weight (B)', data: dataB.weight, yAxisID: 'temp', borderDash: [3, 3], borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(46, 204, 113, 0.65)', backgroundColor: 'transparent', pointStyle: false },
+            { label: 'Temperature (B)', data: dataB.temp, yAxisID: 'temp', borderDash: [3, 3], borderWidth: 2, tension: 0.1, borderColor: 'rgba(231, 76, 60, 0.65)', backgroundColor: 'transparent', pointStyle: false }
+        );
+    }
+
+    const ctx = document.getElementById('espressoShotChart');
+    if(chart) { chart.destroy(); }
+
+    chart = new Chart(ctx, {
+        type: 'line',
+        plugins: [corsairPlugin],
+        data: {
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+                padding: { bottom: 20 }
+            },
+            interaction: { mode: 'index', intersect: false },
+            plugins: { 
+                legend: { labels: { color: '#e4e4e7', font: { family: 'Figtree' } } },
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            return 'Zeit: ' + formatTimeLabel(context[0].parsed.x);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { 
+                    type: 'linear',
+                    min: 0,
+                    max: finalMaxTime, 
+                    clip: false,
+                    ticks: { 
+                        color: '#a1a1aa',
+                        font: { family: 'Figtree' },
+                        stepSize: 5,
+                        callback: function(value) {
+                            return formatTimeLabel(value);
+                        }
+                    }, 
+                    grid: { color: '#27272a' } 
+                },
+                y: { type: 'linear', position: 'left', min: 0, max: 12, ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
+                temp: {
+                    type: 'linear',
+                    position: 'right',
+                    min: 0,
+                    max: tempMaxScale,
+                    ticks: { color: '#a1a1aa' },
+                    grid: { drawOnChartArea: false }
+                }
+            }
+        }
+    });
+}
+
+loadData();
+</script>
+
+</body>
+</html>
