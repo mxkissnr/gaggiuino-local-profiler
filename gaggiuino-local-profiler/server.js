@@ -4,11 +4,24 @@ const path = require('path');
 const app = express();
 const PORT = 8080;
 
-// Limit auf 50mb erhöht, falls deine alte shots.json sehr groß ist
 app.use(express.json({ limit: '50mb' }));
 
 const DATA_DIR = fs.existsSync('/data') ? '/data' : path.join(__dirname, 'public');
 const SHOTS_FILE = path.join(DATA_DIR, 'shots.json');
+const OPTIONS_FILE = '/data/options.json';
+
+// Funktion zum Auslesen der konfigurierten IP/DNS-Adresse
+function getMachineAddress() {
+    try {
+        if (fs.existsSync(OPTIONS_FILE)) {
+            const options = JSON.parse(fs.readFileSync(OPTIONS_FILE, 'utf8'));
+            return options.machine_address || "gaggiuino.local";
+        }
+    } catch (e) {
+        console.error("Fehler beim Lesen der HA-Optionen:", e.message);
+    }
+    return "gaggiuino.local"; // Lokaler Fallback
+}
 
 if (!fs.existsSync(SHOTS_FILE)) {
     const initialFile = path.join(__dirname, 'public', 'shots.json');
@@ -25,7 +38,12 @@ app.get('/shots.json', (req, res) => {
     res.sendFile(SHOTS_FILE);
 });
 
-// NATIVE ROUTE: Einzelnen Shot speichern
+// Neue API-Route, damit das Frontend weiß, wie die Maschine erreichbar ist
+app.get('/api/machine-config', (req, res) => {
+    res.json({ machineAddress: getMachineAddress() });
+});
+
+// Einzelnen Shot speichern
 app.post('/api/shots', (req, res) => {
     try {
         const newDatapoints = req.body;
@@ -51,11 +69,10 @@ app.post('/api/shots', (req, res) => {
     }
 });
 
-// NEUE IMPORT ROUTE: Ganzes Array von alten Shots importieren
+// Massen-Import von alten Shots
 app.post('/api/shots/import', (req, res) => {
     try {
-        const oldShots = req.body; // Erwartet ein Array [...]
-        
+        const oldShots = req.body;
         if (!Array.isArray(oldShots)) {
             return res.status(400).json({ success: false, error: "Payload muss ein JSON-Array sein." });
         }
@@ -87,5 +104,5 @@ app.post('/api/shots/import', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`GLP Add-on läuft auf Port ${PORT}. Datenpfad: ${SHOTS_FILE}`);
+    console.log(`GLP Add-on läuft auf Port ${PORT}. Konfigurierte Maschine: ${getMachineAddress()}`);
 });
