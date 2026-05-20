@@ -50,20 +50,20 @@ app.get('/', (req, res) => {
 
 // API-Endpunkt für das Frontend zum Laden der JSON-Daten
 app.get('/shots.json', (req, res) => {
-    log(`» Frontend fragt shots.json an...`);
+    log(`» Anfrage erhalten: ${req.url}`);
     try {
         if (fs.existsSync(DATA_FILE)) {
             const rawData = fs.readFileSync(DATA_FILE, 'utf8');
-            const parsed = JSON.parse(rawData || '[]');
-            log(`« shots.json erfolgreich gesendet. Anzahl gelieferter Shots: ${parsed.length}`);
-            res.json(parsed);
+            res.setHeader('Content-Type', 'application/json');
+            res.send(rawData);
+            log(`« Daten erfolgreich an Ingress gesendet.`);
         } else {
-            log(`⚠ shots.json nicht gefunden. Sende [].`);
+            log(`⚠ Datei nicht gefunden unter: ${DATA_FILE}`);
             res.json([]);
         }
     } catch (err) {
-        log(`❌ Fehler beim Lesen/Parsen der shots.json: ${err.message}`, true);
-        res.status(500).json({ error: "Fehler beim Lesen der lokalen Daten" });
+        log(`❌ Fehler: ${err.message}`, true);
+        res.status(500).json({ error: "Fehler beim Lesen" });
     }
 });
 
