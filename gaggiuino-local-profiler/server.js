@@ -5,9 +5,10 @@ const axios = require('axios');
 
 const app = express();
 
-// Konfiguration: Wir erzwingen den Pfad im offiziellen HA-Config-Ordner
+// Konfiguration: Ein eigener Unterordner im offiziellen HA-Config-Verzeichnis
 const PORT = 8099; 
-const DATA_FILE = '/homeassistant/glp_shots.json';
+const DATA_DIR = '/config/gaggiuino_profiler'; // Unser neuer, sauberer Ordner!
+const DATA_FILE = path.join(DATA_DIR, 'glp_shots.json'); 
 const MACHINE_URL = process.env.MACHINE_URL || 'http://gaggia.intern/api/shots';
 
 // Hilfsfunktion für Logs mit deutscher Uhrzeit
@@ -20,8 +21,15 @@ function log(message, isError = false) {
     }
 }
 
-// SICHERHEITS-CHECK: Datei sofort im HA-Config-Verzeichnis anlegen, falls sie fehlt
+// SICHERHEITS-CHECK: Erstelle den Add-on-Ordner und die Datei, falls sie fehlen
 try {
+    // 1. Prüfen und Erstellen des Unterordners
+    if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        log(`📁 Unterordner ${DATA_DIR} erfolgreich erstellt.`);
+    }
+
+    // 2. Prüfen und Erstellen der JSON-Datenbank
     if (!fs.existsSync(DATA_FILE)) {
         fs.writeFileSync(DATA_FILE, '[]', 'utf8');
         log(`📂 Neue, leere Datenbank unter ${DATA_FILE} initialisiert.`);
@@ -29,7 +37,7 @@ try {
         log(`📂 Bestehende Datenbank unter ${DATA_FILE} gefunden.`);
     }
 } catch (err) {
-    log(`❌ Fehler bei der Dateiinitialisierung: ${err.message}`, true);
+    log(`❌ Fehler bei der Ordner- oder Dateiinitialisierung: ${err.message}`, true);
 }
 
 // Statische Dateien aus dem public-Ordner bereitstellen
@@ -113,11 +121,12 @@ async function syncShots() {
 
         // 4. Aktualisierte Liste wieder abspeichern
         if (newShotsCount > 0) {
-            fs.writeFileSync(DATA_FILE, JSON.stringify(localShots, null, 2), 'utf8');
-            log(`Sync beendet. ${newShotsCount} neue Shots geladen und gespeichert.`);
-        } else if (maxLocalId === 0 && latestMachineId > 0) {
-            // Absicherung: Falls die lokale ID 0 war, aber nichts geladen wurde, schreiben wir zumindest das leere Array neu
-            fs.writeFileSync(DATA_FILE, '[]', 'utf8');
+            try {
+                fs.writeFileSync(DATA_FILE, JSON.stringify(localShots, null, 2), 'utf8');
+                log(`Sync beendet. ${newShotsCount} neue Shots geladen und im Add-on-Ordner gespeichert.`);
+            } catch (writeErr) {
+                log(`❌ Kritischer Schreibfehler in ${DATA_FILE}: ${writeErr.message}`, true);
+            }
         }
 
     } catch (err) {
