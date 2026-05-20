@@ -1,17 +1,62 @@
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" rx="80" fill="#18181b"/>
-  <!-- Cup body -->
-  <path d="M138 232 L164 394 Q167 414 187 414 L325 414 Q345 414 348 394 L374 232 Z" fill="#27272a" stroke="#52525b" stroke-width="6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#27272a"/>
+      <stop offset="100%" stop-color="#18181b"/>
+    </linearGradient>
+    <linearGradient id="curveGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#1d4ed8"/>
+      <stop offset="50%"  stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+    <linearGradient id="cupBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#c2410c"/>
+      <stop offset="100%" stop-color="#7c2d12"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Subtle baseline -->
+  <line x1="44" y1="290" x2="468" y2="290" stroke="rgba(255,255,255,0.05)" stroke-width="2"/>
+
+  <!-- Pressure profile curve (hero element) -->
+  <path d="M 44 290 L 84 290 C 108 290 118 170 166 150
+           C 206 134 226 192 268 183
+           C 314 174 338 206 396 190 L 468 194"
+        stroke="url(#curveGrad)" stroke-width="18" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Flow / weight curve (amber, thinner) -->
+  <path d="M 44 302 L 84 302 C 108 302 118 278 166 271
+           C 206 266 226 280 268 277
+           C 314 274 338 284 396 278 L 468 281"
+        stroke="#f59e0b" stroke-width="10" fill="none"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.72"/>
+
+  <!-- Espresso cup body -->
+  <path d="M 172 326 L 184 420 Q 256 442 328 420 L 340 326 Z" fill="url(#cupBody)"/>
+
+  <!-- Cup body highlight -->
+  <path d="M 172 326 L 184 420 Q 196 432 210 428 L 198 326 Z"
+        fill="rgba(255,255,255,0.07)"/>
+
+  <!-- Cup rim -->
+  <rect x="158" y="312" width="196" height="18" rx="9" fill="#ea580c"/>
+
+  <!-- Crema -->
+  <ellipse cx="256" cy="320" rx="86" ry="12" fill="#fb923c"/>
+  <path d="M 186 317 Q 221 312 256 315 Q 291 318 326 315"
+        stroke="rgba(255,220,80,0.22)" stroke-width="5" fill="none" stroke-linecap="round"/>
+
   <!-- Handle -->
-  <path d="M374 282 Q434 282 434 322 Q434 362 374 362" fill="none" stroke="#52525b" stroke-width="18" stroke-linecap="round"/>
-  <!-- Coffee surface -->
-  <ellipse cx="256" cy="232" rx="118" ry="25" fill="#6b3a1f"/>
-  <!-- Crema highlight -->
-  <ellipse cx="246" cy="226" rx="72" ry="14" fill="#8b5a2b" opacity="0.6"/>
-  <!-- Steam lines -->
-  <path d="M192 206 Q206 168 192 130" fill="none" stroke="#3f3f46" stroke-width="12" stroke-linecap="round"/>
-  <path d="M256 198 Q270 160 256 122" fill="none" stroke="#3f3f46" stroke-width="12" stroke-linecap="round"/>
-  <path d="M320 206 Q334 168 320 130" fill="none" stroke="#3f3f46" stroke-width="12" stroke-linecap="round"/>
+  <path d="M 338 340 Q 396 340 396 374 Q 396 408 338 408"
+        stroke="#9a3412" stroke-width="20" fill="none" stroke-linecap="round"/>
+  <path d="M 338 340 Q 378 340 378 374 Q 378 408 338 408"
+        stroke="#18181b" stroke-width="9" fill="none" stroke-linecap="round"/>
+
   <!-- Saucer -->
-  <ellipse cx="256" cy="424" rx="150" ry="22" fill="#27272a" stroke="#52525b" stroke-width="5"/>
+  <ellipse cx="256" cy="425" rx="112" ry="13" fill="#92400e" opacity="0.55"/>
+  <ellipse cx="256" cy="423" rx="95"  ry="7"  fill="#b45309" opacity="0.40"/>
 </svg>

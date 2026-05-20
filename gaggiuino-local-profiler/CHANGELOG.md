@@ -1,3 +1,6 @@
+## 1.10.2
+- Neues Add-on Icon: Druckprofil-Kurve über Espresso-Cup (icon.png, 512×512)
+
 ## 1.10.1
 - Phasen-Visualisierung im Chart: Preinfusion (blau) und Extraktion (orange) als Hintergrundzonen mit Trennlinie und Labels
 
