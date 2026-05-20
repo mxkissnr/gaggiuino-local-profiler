@@ -445,18 +445,18 @@
         #sidebarToggle {
             display: none;
             background: none;
-            border: 1px solid var(--gray-700);
-            border-radius: 5px;
+            border: none;
             color: #71717a;
             cursor: pointer;
-            font-size: .72rem;
-            padding: 3px 8px;
-            margin-left: auto;
+            font-size: 1.25rem;
+            line-height: 1;
+            padding: 0 10px 0 0;
+            margin: 0;
             font-family: 'Figtree', sans-serif;
-            transition: all .2s;
+            transition: color .2s;
             flex-shrink: 0;
         }
-        #sidebarToggle:hover { color: #fff; border-color: #71717a; }
+        #sidebarToggle:hover { color: #fff; }
 
         /* ── Responsive ── */
         @media (max-width: 768px) {
@@ -464,7 +464,7 @@
             #sidebar          { width: 100%; border-right: none; border-bottom: 1px solid var(--gray-700); overflow: hidden; transition: max-height .3s ease; max-height: 520px; }
             #sidebar.collapsed { max-height: 54px; }
             #sidebar h2       { display: flex; align-items: center; }
-            #sidebarToggle    { display: block; }
+            #sidebarToggle    { display: flex; align-items: center; }
             #chart-area, #live-view { padding: 16px; }
             .sprofiler-header h1 { font-size: 1.3rem; }
             .sprofiler-meta-grid { flex-direction: column; gap: 12px; }
@@ -489,7 +489,7 @@
 
 <!-- ── Sidebar ── -->
 <div id="sidebar">
-    <h2>☕ Shots <span id="shot-count"></span><button id="sidebarToggle" onclick="toggleSidebar()">▼ Liste</button></h2>
+    <h2><button id="sidebarToggle" onclick="toggleSidebar()">☰</button>☕ Shots <span id="shot-count"></span></h2>
     <div class="sidebar-hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
     <div id="search-container">
         <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …" oninput="filterShots(this.value)">
@@ -1347,10 +1347,13 @@ function updateView() {
 
 // ── Shot score ────────────────────────────────────────────────────────────
 function calcShotScore(shot, data) {
+    // Require meaningful pressure data — skip test/empty shots
+    const pVals = data.pressure.map(p => p.y).filter(v => v >= 5);
+    if (pVals.length <= 3) return null;
+
     const scores = [], weights = [];
 
     // 1. Extraction pressure (only values ≥5 bar = active pulling)
-    const pVals = data.pressure.map(p => p.y).filter(v => v >= 5);
     if (pVals.length > 3) {
         const avgP = pVals.reduce((a,b) => a+b, 0) / pVals.length;
         let s = avgP >= 7 && avgP <= 9.5 ? 100
@@ -1413,7 +1416,7 @@ function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     const btn     = document.getElementById('sidebarToggle');
     const now     = sidebar.classList.toggle('collapsed');
-    btn.textContent = now ? '▼ Liste' : '▲ Liste';
+    btn.textContent = now ? '☰' : '✕';
 }
 
 function collapseSidebarOnMobile() {
@@ -1421,7 +1424,7 @@ function collapseSidebarOnMobile() {
         const sidebar = document.getElementById('sidebar');
         sidebar.classList.add('collapsed');
         const btn = document.getElementById('sidebarToggle');
-        if (btn) btn.textContent = '▼ Liste';
+        if (btn) btn.textContent = '☰';
     }
 }
 
