@@ -5,9 +5,9 @@ const axios = require('axios');
 
 const app = express();
 
-// Konfiguration aus Umgebungsvariablen oder Fallbacks
+// Konfiguration: Wir erzwingen den Pfad im offiziellen HA-Config-Ordner
 const PORT = 8099; 
-const DATA_FILE = process.env.DATA_PATH || '/data/shots.json';
+const DATA_FILE = '/config/glp_shots.json'; // NEU: Direkt im sichtbaren HA-Ordner!
 const MACHINE_URL = process.env.MACHINE_URL || 'http://gaggia.intern/api/shots';
 
 // Hilfsfunktion für Logs mit deutscher Uhrzeit
@@ -20,15 +20,13 @@ function log(message, isError = false) {
     }
 }
 
-// SICHERHEITS-CHECK: Erstelle die Datei/Verzeichnis sofort, falls sie fehlt
+// SICHERHEITS-CHECK: Datei sofort im HA-Config-Verzeichnis anlegen, falls sie fehlt
 try {
-    const dir = path.dirname(DATA_FILE);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
     if (!fs.existsSync(DATA_FILE)) {
         fs.writeFileSync(DATA_FILE, '[]', 'utf8');
         log(`📂 Neue, leere Datenbank unter ${DATA_FILE} initialisiert.`);
+    } else {
+        log(`📂 Bestehende Datenbank unter ${DATA_FILE} gefunden.`);
     }
 } catch (err) {
     log(`❌ Fehler bei der Dateiinitialisierung: ${err.message}`, true);
@@ -48,7 +46,7 @@ app.get('/shots.json', (req, res) => {
     try {
         if (fs.existsSync(DATA_FILE)) {
             const rawData = fs.readFileSync(DATA_FILE, 'utf8');
-            const parsed = JSON.parse(rawData);
+            const parsed = JSON.parse(rawData || '[]');
             log(`« shots.json erfolgreich gesendet. Anzahl gelieferter Shots: ${parsed.length}`);
             res.json(parsed);
         } else {
@@ -78,11 +76,10 @@ async function syncShots() {
         let localShots = [];
         if (fs.existsSync(DATA_FILE)) {
             const rawData = fs.readFileSync(DATA_FILE, 'utf8');
-            // Verhindert Crash bei korrupter/leerer Datei
             localShots = rawData ? JSON.parse(rawData) : []; 
         }
 
-        // Höchste ID ermitteln
+        // Höchste ID ermitteln. Wenn Datei leer/neu, fangen wir bei 0 an.
         const maxLocalId = localShots.length > 0 
             ? localShots.reduce((max, shot) => shot.id > max ? shot.id : max, 0) 
             : 0;
@@ -98,6 +95,8 @@ async function syncShots() {
         // 3. Fehlende Shots einzeln von der Maschine abrufen
         let newShotsCount = 0;
         const startId = maxLocalId === 0 ? 1 : maxLocalId + 1;
+
+        log(`Starte inkrementellen Download ab Shot-ID: ${startId}`);
 
         for (let i = startId; i <= latestMachineId; i++) {
             try {
@@ -116,6 +115,9 @@ async function syncShots() {
         if (newShotsCount > 0) {
             fs.writeFileSync(DATA_FILE, JSON.stringify(localShots, null, 2), 'utf8');
             log(`Sync beendet. ${newShotsCount} neue Shots geladen und gespeichert.`);
+        } else if (maxLocalId === 0 && latestMachineId > 0) {
+            // Absicherung: Falls die lokale ID 0 war, aber nichts geladen wurde, schreiben wir zumindest das leere Array neu
+            fs.writeFileSync(DATA_FILE, '[]', 'utf8');
         }
 
     } catch (err) {
