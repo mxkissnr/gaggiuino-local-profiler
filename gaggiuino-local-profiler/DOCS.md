@@ -69,6 +69,32 @@ Die HA-Integration wird im Hintergrund alle 30 Sekunden geprüft, um bei steigen
 | Ziel-Temperatur | Gaggiuino direkt | `/api/system/status` → `targetTemperature` |
 | Auto-Sync (neuer Shot) | HA-Sensor (optional) | `sensor.gaggiuino_latest_shot_id` |
 
+## Shot-Score
+
+Jeder Shot erhält automatisch einen Score von 0–100, der oben rechts in der Profil-Ansicht angezeigt wird.
+
+| Farbe | Bereich | Bedeutung |
+|---|---|---|
+| 🟢 Grün | 88–100 | Sehr guter Bezug |
+| 🟡 Gelbgrün | 75–87 | Guter Bezug |
+| 🟡 Amber | 60–74 | Solider Bezug |
+| 🟠 Orange | 45–59 | Verbesserungswürdig |
+| 🔴 Rot | 0–44 | Problematischer Bezug |
+
+### Berechnungsfaktoren
+
+| Faktor | Gewichtung | Optimum | Punkte |
+|---|---|---|---|
+| **Extraktionsdruck** | 25 % | 7–9.5 bar (Ø aktiver Anteil ≥5 bar) | 100 bei Optimum, lineare Abwertung außerhalb |
+| **Temperaturstabilität (σ)** | 20 % | σ ≤ 0.3 °C | 100 / 90 / 72 / 50 / <50 je nach σ |
+| **Bezugsdauer** | 20 % | 25–35 s | 100 bei Optimum, 82 bei 20–25 s oder 35–42 s |
+| **Dose→Yield-Ratio** | 20 % | 1:1.8 – 1:2.5 | Nur wenn Dosis in den Notizen eingetragen |
+| **Channeling** | 15 % | kein Channeling | 100 (kein) oder 20 (erkannt) |
+
+> **Hinweis zur Ratio:** Der Faktor wird nur berücksichtigt, wenn unter „Notizen & Bewertung" eine Dosis eingetragen ist. Ohne Dosis werden die restlichen Gewichtungen anteilig hochgerechnet.
+
+> **Hinweis zum Druck:** Der Durchschnitt wird nur über Messwerte ≥ 5 bar berechnet, um die Preinfusionsphase (niedriger Druck) nicht zu bestrafen.
+
 ## API-Endpunkte (intern)
 
 | Endpunkt | Methode | Beschreibung |

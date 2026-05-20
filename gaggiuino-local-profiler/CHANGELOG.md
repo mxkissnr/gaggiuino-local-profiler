@@ -1,3 +1,6 @@
+## 1.11.1
+- DOCS.md: Shot-Score-Berechnung vollständig dokumentiert (Faktoren, Gewichtungen, Farbskala)
+
 ## 1.11.0
 - Shot-Score (0–100): automatisch berechnet aus Extraktionsdruck, Temp-Stabilität, Dauer, Ratio und Channeling
 - Phasen-Visualisierung: deutlichere Hintergrundzonen + farbige Pill-Labels im Chart
