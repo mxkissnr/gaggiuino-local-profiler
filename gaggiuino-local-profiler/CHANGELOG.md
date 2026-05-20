@@ -1,3 +1,12 @@
+## 1.13.0
+- Shot-Score in Sidebar: jeder Shot zeigt farbige Score-Pill direkt im Listeneintrag
+- Sortierung: Sidebar sortierbar nach Neueste / Score / Bewertung / Dauer
+- P·Q Diagramm: zweiter Chart-Tab zeigt Druck vs. Pumpenfluss (Extraktions-Signatur)
+- Röstdatum + Frische-Badge: Tage seit Röstung neben Kaffee-Name angezeigt
+- Extraction Yield (EY %): automatisch berechnet wenn TDS und Dosis eingetragen
+- Mahlgrad-Empfehlung: Hinweis basierend auf Bezugsdauer und Channeling-Erkennung
+- Fix: Verbindungsfehler in Sidebar unterscheidet jetzt zwischen Netzwerkfehler (mit Retry-Button) und JavaScript-Fehlern
+
 ## 1.12.0
 - Mobile: Hamburger-Icon (☰/✕) links in der Sidebar-Kopfzeile ersetzt den Text-Toggle-Button
 - Fix: Shot-Score wird nicht mehr für Test-/Leerlauf-Shots angezeigt (Score setzt aktiven Extraktionsdruck ≥5 bar voraus)

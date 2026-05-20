@@ -386,6 +386,79 @@
         #shotSearch:focus       { border-color: #71717a; }
         #shotSearch::placeholder { color: #52525b; }
 
+        /* ── Sidebar score pill ── */
+        .sidebar-score {
+            font-size: .7rem;
+            font-weight: 700;
+            border-radius: 4px;
+            padding: 1px 6px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .ss-great { background: rgba(34,197,94,.15);  color: #22c55e; }
+        .ss-good  { background: rgba(132,204,22,.15); color: #84cc16; }
+        .ss-ok    { background: rgba(245,158,11,.15); color: #f59e0b; }
+        .ss-poor  { background: rgba(249,115,22,.15); color: #f97316; }
+        .ss-bad   { background: rgba(239,68,68,.12);  color: #ef4444; }
+
+        /* ── Sidebar sort bar ── */
+        #sort-bar {
+            display: flex;
+            gap: 4px;
+            padding: 6px 12px;
+            border-bottom: 1px solid var(--gray-700);
+            flex-wrap: wrap;
+        }
+        .sort-btn {
+            background: transparent;
+            color: #71717a;
+            border: 1px solid var(--gray-700);
+            border-radius: 5px;
+            padding: 3px 9px;
+            cursor: pointer;
+            font-size: .7rem;
+            font-family: 'Figtree', sans-serif;
+            transition: all .15s;
+            white-space: nowrap;
+        }
+        .sort-btn:hover     { color: #e4e4e7; border-color: #71717a; }
+        .sort-btn.active    { background: var(--gray-800); color: #fff; border-color: #71717a; }
+
+        /* ── Freshness badge ── */
+        .freshness-badge {
+            display: inline-block;
+            font-size: .72rem; font-weight: 600;
+            border-radius: 4px; padding: 2px 7px;
+            margin-left: 8px; vertical-align: middle;
+        }
+        .freshness-fresh  { background: rgba(34,197,94,.15);  color: #22c55e; }
+        .freshness-ok     { background: rgba(245,158,11,.15); color: #f59e0b; }
+        .freshness-old    { background: rgba(239,68,68,.12);  color: #ef4444; }
+
+        /* ── Grind advice ── */
+        .grind-advice {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 14px; border-radius: 8px; border: 1px solid;
+            font-size: .85rem; margin-top: 16px;
+        }
+        .grind-advice .grind-icon { font-size: 1.1rem; flex-shrink: 0; }
+        .grind-ok      { border-color: rgba(34,197,94,.3);  background: rgba(34,197,94,.06);  color: #86efac; }
+        .grind-finer   { border-color: rgba(52,152,219,.3); background: rgba(52,152,219,.06); color: #93c5fd; }
+        .grind-coarser { border-color: rgba(243,156,18,.3); background: rgba(243,156,18,.06); color: #fcd34d; }
+        .grind-warning { border-color: rgba(239,68,68,.3);  background: rgba(239,68,68,.06);  color: #fca5a5; }
+
+        /* ── Chart tabs ── */
+        .chart-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+        .chart-tab {
+            background: transparent; color: #71717a;
+            border: 1px solid var(--gray-700); border-radius: 6px;
+            padding: 5px 14px; cursor: pointer;
+            font-family: 'Figtree', sans-serif; font-size: .8rem; font-weight: 600;
+            transition: all .2s;
+        }
+        .chart-tab:hover  { color: #e4e4e7; border-color: #71717a; }
+        .chart-tab.active { background: var(--gray-800); color: #fff; border-color: #71717a; }
+
         /* ── Export button ── */
         .export-btn {
             background: rgba(63,63,70,.5);
@@ -494,6 +567,12 @@
     <div id="search-container">
         <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …" oninput="filterShots(this.value)">
     </div>
+    <div id="sort-bar">
+        <button class="sort-btn active" id="sortNewest" onclick="setSortMode('newest')">Neueste</button>
+        <button class="sort-btn" id="sortScore"  onclick="setSortMode('score')">Score ↓</button>
+        <button class="sort-btn" id="sortRating" onclick="setSortMode('rating')">⭐ Bewertung</button>
+        <button class="sort-btn" id="sortDur"    onclick="setSortMode('duration')">Dauer</button>
+    </div>
     <div id="shots"></div>
     <div id="sidebar-footer">
         <div>
@@ -528,7 +607,7 @@
             <div class="sprofiler-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
                 <div style="flex:1;min-width:0">
                     <h1 id="topTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Profil-Name</h1>
-                    <p id="topSubtitle">Gaggia Classic Evo Pro | gaggiuino</p>
+                    <p id="topSubtitle" style="margin:0">Gaggia Classic Evo Pro | gaggiuino<span id="freshnessBadge" class="freshness-badge" style="display:none"></span></p>
                 </div>
                 <div style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
                     <div id="shotScoreBadge" class="score-badge" style="display:none">
@@ -590,11 +669,27 @@
                         <span class="meta-label">Dosis → Yield · Ratio</span>
                         <span class="meta-value" id="ratio">-</span>
                     </div>
+                    <div class="meta-item" id="eyItem" style="display:none">
+                        <span class="meta-label">Extraction Yield (EY)</span>
+                        <span class="meta-value" id="ey">-</span>
+                    </div>
                 </div>
             </div>
 
-            <div class="chart-container">
+            <div id="grindAdvice" class="grind-advice" style="display:none">
+                <span class="grind-icon" id="grindAdviceIcon"></span>
+                <span id="grindAdviceText"></span>
+            </div>
+
+            <div class="chart-tabs">
+                <button class="chart-tab active" id="tabZeit" onclick="switchChartTab('zeit')">⏱ Zeit</button>
+                <button class="chart-tab" id="tabPQ" onclick="switchChartTab('pq')">P·Q Kurve</button>
+            </div>
+            <div id="zeitContainer" class="chart-container">
                 <canvas id="espressoShotChart"></canvas>
+            </div>
+            <div id="pqContainer" class="chart-container" style="display:none">
+                <canvas id="pqChart"></canvas>
             </div>
 
             <!-- Annotation panel BELOW chart -->
@@ -625,6 +720,14 @@
                     <div class="annotation-field">
                         <label>Dosis (g)</label>
                         <input type="number" id="annDose" placeholder="z.B. 18" step="0.1" min="0">
+                    </div>
+                    <div class="annotation-field">
+                        <label>Röstdatum</label>
+                        <input type="date" id="annRoastDate">
+                    </div>
+                    <div class="annotation-field">
+                        <label>TDS % <span style="color:#52525b;font-weight:normal">(optional)</span></label>
+                        <input type="number" id="annTds" placeholder="z.B. 9.2" step="0.1" min="0" max="25">
                     </div>
                     <div class="annotation-field full-width">
                         <label>Notizen</label>
@@ -705,6 +808,13 @@ let currentMode   = 'shots';
 let liveEventSource = null;
 let liveChart       = null;
 let liveIsActive    = false;
+
+// Chart / P·Q state
+let pqChart        = null;
+let currentChartTab = 'zeit';
+
+// Sidebar sort
+let currentSort = 'newest';
 
 // ── HTML escaping (XSS prevention) ───────────────────────────────────────
 function esc(str) {
@@ -828,31 +938,68 @@ async function loadData() {
     const shotsEl = document.getElementById('shots');
     shotsEl.innerHTML = '<div class="loading-state">Lade Shots …</div>';
 
+    // Fetch phase — network errors show a retry button
+    let fetched;
     try {
         const r = await fetch('shots.json');
         if (!r.ok) {
             shotsEl.innerHTML = `<div class="loading-state" style="color:#ef4444">HTTP ${r.status}</div>`;
             return;
         }
-        shots = await r.json();
-        renderSidebar();
-
-        const empty    = document.getElementById('empty-state');
-        const chartArea = document.getElementById('chart-area');
-        if (shots.length > 0) {
-            empty.style.display     = 'none';
-            chartArea.style.display = 'flex';
-            if (!primaryShotId || !shots.find(s => s.id === primaryShotId))
-                primaryShotId = shots[shots.length - 1].id;
-            updateView();
-        } else {
-            empty.style.display     = 'flex';
-            chartArea.style.display = 'none';
-        }
+        fetched = await r.json();
     } catch (e) {
-        document.getElementById('shots').innerHTML =
-            '<div class="loading-state" style="color:#ef4444">Verbindungsfehler</div>';
+        shotsEl.innerHTML =
+            `<div class="loading-state" style="color:#ef4444">Verbindungsfehler<br>` +
+            `<button onclick="loadData()" style="margin-top:10px;padding:4px 12px;cursor:pointer;` +
+            `background:rgba(63,63,70,.5);color:#a1a1aa;border:1px solid #3f3f46;border-radius:6px;` +
+            `font-family:Figtree,sans-serif;font-size:.8rem">↻ Neu laden</button></div>`;
+        return;
     }
+
+    // Processing phase — JS errors here must NOT mask as "Verbindungsfehler"
+    shots = fetched;
+    renderSidebar();
+
+    const empty     = document.getElementById('empty-state');
+    const chartArea = document.getElementById('chart-area');
+    if (shots.length > 0) {
+        empty.style.display     = 'none';
+        chartArea.style.display = 'flex';
+        if (!primaryShotId || !shots.find(s => s.id === primaryShotId))
+            primaryShotId = shots[shots.length - 1].id;
+        updateView();
+    } else {
+        empty.style.display     = 'flex';
+        chartArea.style.display = 'none';
+    }
+}
+
+// ── Sidebar sort ──────────────────────────────────────────────────────────
+function setSortMode(mode) {
+    currentSort = mode;
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+    const map = { newest: 'sortNewest', score: 'sortScore', rating: 'sortRating', duration: 'sortDur' };
+    document.getElementById(map[mode])?.classList.add('active');
+    renderSidebar();
+}
+
+function sortedShots() {
+    const list = [...shots];
+    if (currentSort === 'newest')   return list.reverse();
+    if (currentSort === 'score') {
+        return list.sort((a, b) => {
+            const sa = calcShotScore(a, getShotData(a)) ?? -1;
+            const sb = calcShotScore(b, getShotData(b)) ?? -1;
+            return sb - sa;
+        });
+    }
+    if (currentSort === 'rating') {
+        return list.sort((a, b) => ((b.annotation?.rating || 0) - (a.annotation?.rating || 0)));
+    }
+    if (currentSort === 'duration') {
+        return list.sort((a, b) => (b.duration || 0) - (a.duration || 0));
+    }
+    return list.reverse();
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────
@@ -862,7 +1009,7 @@ function renderSidebar() {
     const countEl = document.getElementById('shot-count');
     if (countEl) countEl.textContent = `(${shots.length})`;
 
-    [...shots].reverse().forEach(shot => {
+    sortedShots().forEach(shot => {
         const wrapper  = document.createElement('div');
         wrapper.className = 'shot-wrapper';
         wrapper.id = `wrapper-${shot.id}`;
@@ -879,8 +1026,12 @@ function renderSidebar() {
         const starsHtml = ann.rating
             ? `<div class="sidebar-stars">${'★'.repeat(ann.rating)}${'☆'.repeat(5 - ann.rating)}</div>` : '';
 
+        const sc = calcShotScore(shot, getShotData(shot));
+        const scorePill = sc !== null
+            ? `<span class="sidebar-score ss-${scoreClass(sc).replace('score-','')}">${sc}</span>`
+            : '';
         divShot.innerHTML = `
-            <div class="profile-name-sidebar">${esc(profileName)}</div>
+            <div class="profile-name-sidebar">${esc(profileName)}${scorePill}</div>
             ${coffeeHtml}
             <div class="shotid-sidebar">Shot ${esc(String(shot.id))}${ann.grinder ? ` · ${esc(ann.grinder)}` : ''}</div>
             <div class="date-sidebar">${esc(date.toLocaleString('de-DE'))}</div>
@@ -935,6 +1086,8 @@ function renderAnnotationPanel(shot) {
     document.getElementById('annGrinder').value      = ann.grinder      || '';
     document.getElementById('annGrindSetting').value = ann.grindSetting || '';
     document.getElementById('annDose').value         = ann.dose         || '';
+    document.getElementById('annRoastDate').value    = ann.roastDate    || '';
+    document.getElementById('annTds').value          = ann.tds          || '';
     document.getElementById('annNotes').value        = ann.notes        || '';
     const btn = document.getElementById('saveAnnotationBtn');
     btn.textContent = 'Speichern';
@@ -950,6 +1103,8 @@ async function saveAnnotation() {
         grinder:      document.getElementById('annGrinder').value.trim(),
         grindSetting: document.getElementById('annGrindSetting').value.trim(),
         dose:         parseFloat(document.getElementById('annDose').value) || null,
+        roastDate:    document.getElementById('annRoastDate').value || null,
+        tds:          parseFloat(document.getElementById('annTds').value) || null,
         notes:        document.getElementById('annNotes').value.trim()
     };
     try {
@@ -1255,6 +1410,32 @@ function updateView() {
         ratioItem.style.display = 'none';
     }
 
+    // EY (Extraction Yield) — requires TDS from annotation
+    const eyItem = document.getElementById('eyItem');
+    if (!shotB && ann.dose && ann.tds && finalWeight) {
+        const ey = (finalWeight * ann.tds) / ann.dose;
+        const eyEl = document.getElementById('ey');
+        eyEl.textContent = `${ey.toFixed(1)} %`;
+        const eyOk = ey >= 18 && ey <= 22;
+        eyEl.className = 'meta-value ' + (eyOk ? 'score-great' : ey >= 16 && ey <= 24 ? 'score-ok' : 'score-bad');
+        eyItem.style.display = '';
+    } else {
+        eyItem.style.display = 'none';
+    }
+
+    // Freshness badge
+    const freshEl = document.getElementById('freshnessBadge');
+    if (!shotB && ann.roastDate && ann.coffee) {
+        const days = Math.round((Date.now() - new Date(ann.roastDate)) / 86400000);
+        if (days >= 0 && days <= 365) {
+            const cls = days <= 21 ? 'freshness-fresh' : days <= 35 ? 'freshness-ok' : 'freshness-old';
+            freshEl.className  = `freshness-badge ${cls}`;
+            freshEl.textContent = `${days}d`;
+            freshEl.title = `${days} Tage seit Röstung (Optimum: 7–21 Tage)`;
+            freshEl.style.display = '';
+        } else { freshEl.style.display = 'none'; }
+    } else { freshEl.style.display = 'none'; }
+
     // Phases
     const phases     = !shotB ? detectPhases(pressureTimes, pressureVals) : null;
     const phasesItem = document.getElementById('phasesItem');
@@ -1270,6 +1451,16 @@ function updateView() {
     // Channeling
     const channeling = !shotB && detectChanneling(pressureTimes, pressureVals);
     document.getElementById('channelingWarning').style.display = channeling ? '' : 'none';
+
+    // Grind advice
+    const adviceEl = document.getElementById('grindAdvice');
+    const advice    = !shotB ? calcGrindAdvice(shotA, dA) : null;
+    if (advice) {
+        adviceEl.className = `grind-advice grind-${advice.type}`;
+        document.getElementById('grindAdviceIcon').textContent = advice.icon;
+        document.getElementById('grindAdviceText').textContent = advice.text;
+        adviceEl.style.display = '';
+    } else { adviceEl.style.display = 'none'; }
 
     // Shot score
     const scoreBadge = document.getElementById('shotScoreBadge');
@@ -1316,6 +1507,10 @@ function updateView() {
             { label:'Temperatur (B)', data:dB.temp,        yAxisID:'temp', borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(231,76,60,.65)',  backgroundColor:'transparent', pointStyle:false }
         );
     }
+
+    // Destroy old P·Q chart when shot changes; rebuild lazily on tab click
+    if (pqChart) { pqChart.destroy(); pqChart = null; }
+    if (currentChartTab === 'pq') updatePQChart();
 
     const ctx = document.getElementById('espressoShotChart');
     if (chart) chart.destroy();
@@ -1409,6 +1604,95 @@ function calcShotScore(shot, data) {
 
 function scoreClass(n) {
     return n >= 88 ? 'score-great' : n >= 75 ? 'score-good' : n >= 60 ? 'score-ok' : n >= 45 ? 'score-poor' : 'score-bad';
+}
+
+// ── Grind advice ──────────────────────────────────────────────────────────
+function calcGrindAdvice(shot, data) {
+    const secs = (shot.duration || 0) / 10;
+    if (secs < 8) return null;
+
+    const pTimes = data.pressure.map(p => p.x);
+    const pAll   = data.pressure.map(p => p.y);
+
+    if (detectChanneling(pTimes, pAll))
+        return { type: 'warning', icon: '⚡', text: 'Channeling erkannt – Puck-Vorbereitung (Verteilung & Tamping) prüfen' };
+
+    if (secs < 18)
+        return { type: 'finer',   icon: '↓', text: `Bezug zu kurz (${secs.toFixed(0)} s) – feiner mahlen` };
+    if (secs < 23)
+        return { type: 'finer',   icon: '↓', text: `Bezug etwas kurz (${secs.toFixed(0)} s) – leicht feiner mahlen` };
+    if (secs > 50)
+        return { type: 'coarser', icon: '↑', text: `Bezug zu lang (${secs.toFixed(0)} s) – gröber mahlen` };
+    if (secs > 42)
+        return { type: 'coarser', icon: '↑', text: `Bezug etwas lang (${secs.toFixed(0)} s) – leicht gröber mahlen` };
+
+    const pVals = pAll.filter(v => v >= 5);
+    const avgP  = pVals.length ? pVals.reduce((a,b)=>a+b,0)/pVals.length : 0;
+    return { type: 'ok', icon: '✓', text: `Mahlgrad passt – ${secs.toFixed(0)} s${avgP > 0 ? `, ${avgP.toFixed(1)} bar Ø` : ''}` };
+}
+
+// ── P·Q Chart ─────────────────────────────────────────────────────────────
+function switchChartTab(tab) {
+    currentChartTab = tab;
+    document.getElementById('tabZeit').classList.toggle('active', tab === 'zeit');
+    document.getElementById('tabPQ').classList.toggle('active',   tab === 'pq');
+    document.getElementById('zeitContainer').style.display = tab === 'zeit' ? '' : 'none';
+    document.getElementById('pqContainer').style.display   = tab === 'pq'   ? '' : 'none';
+    if (tab === 'pq') updatePQChart();
+}
+
+function getPQData(shot) {
+    const d = shot.datapoints || {};
+    const t = d.timeInShot  || [];
+    const p = d.pressure    || [];
+    const f = d.pumpFlow    || [];
+    const n = Math.min(t.length, p.length, f.length);
+    const result = [];
+    for (let i = 0; i < n; i++) {
+        if (p[i] != null && f[i] != null && p[i] >= 30 && f[i] > 0)
+            result.push({ x: f[i] / 10, y: p[i] / 10 });
+    }
+    return result;
+}
+
+function updatePQChart() {
+    const shotA = shots.find(s => s.id === primaryShotId);
+    if (!shotA) return;
+
+    const canvas = document.getElementById('pqChart');
+    if (pqChart) { pqChart.destroy(); pqChart = null; }
+
+    const shotB  = compareShotId ? shots.find(s => s.id === compareShotId) : null;
+    const datasets = [
+        { label: `Shot ${shotA.id}`, data: getPQData(shotA), borderColor: '#3498db',
+          backgroundColor: 'rgba(52,152,219,.08)', fill: true,
+          borderWidth: 2.5, pointRadius: 0, tension: 0.3 }
+    ];
+    if (shotB) datasets.push(
+        { label: `Shot ${shotB.id}`, data: getPQData(shotB), borderColor: 'rgba(52,152,219,.5)',
+          backgroundColor: 'transparent', fill: false,
+          borderDash: [4,3], borderWidth: 2, pointRadius: 0, tension: 0.3 }
+    );
+
+    pqChart = new Chart(canvas, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            plugins: {
+                legend: { labels: { color: '#e4e4e7', font: { family: 'Figtree' } } },
+                tooltip: { callbacks: { label: c => `${c.parsed.y.toFixed(1)} bar @ ${c.parsed.x.toFixed(1)} ml/s` } }
+            },
+            scales: {
+                x: { type: 'linear', min: 0, max: 5,
+                     title: { display: true, text: 'Pumpenfluss (ml/s)', color: '#71717a', font: { family: 'Figtree' } },
+                     ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
+                y: { type: 'linear', min: 0, max: 12,
+                     title: { display: true, text: 'Druck (bar)', color: '#71717a', font: { family: 'Figtree' } },
+                     ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } }
+            }
+        }
+    });
 }
 
 // ── Mobile sidebar toggle ─────────────────────────────────────────────────

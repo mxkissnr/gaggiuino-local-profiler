@@ -8,9 +8,13 @@ Lokales Dashboard für die [Gaggiuino](https://gaggiuino.github.io/)-Espressomas
 - **Live-Modus** – Echtzeit-Anzeige direkt vom Controller (`/api/system/status`), kein HA-Polling-Delay
 - **Auto-Sync** – neuer Shot wird automatisch geladen sobald `gaggiuino_latest_shot_id` steigt
 - **Vergleichsmodus** – zwei Shots direkt nebeneinander vergleichen
-- **Notizen & Bewertung** – Kaffee/Bohne, Mühle, Mahlgrad, Dosis, Freitext; Sternebewertung 1–5
-- **Shot-Score** – automatisch berechneter 0–100-Score aus Druck, Temperaturstabilität, Dauer, Ratio und Channeling
-- **Analyse-Metriken** – Dose→Yield→Ratio, Temperatur-Stabilität (±σ), Phasen-Erkennung, Channeling-Warnung
+- **Notizen & Bewertung** – Kaffee/Bohne, Mühle, Mahlgrad, Dosis, Röstdatum, TDS %, Freitext; Sternebewertung 1–5
+- **Shot-Score** – automatisch berechneter 0–100-Score aus Druck, Temperaturstabilität, Dauer, Ratio und Channeling; Score-Pill direkt in der Sidebar sichtbar
+- **Sortierung** – Sidebar sortierbar nach Neueste / Score / Bewertung / Dauer
+- **Analyse-Metriken** – Dose→Yield→Ratio, EY (Extraction Yield), Temperatur-Stabilität (±σ), Phasen-Erkennung, Channeling-Warnung
+- **P·Q Diagramm** – Druck-Fluss-Kurve als alternative Chart-Ansicht (Extraktions-Signatur)
+- **Mahlgrad-Empfehlung** – automatischer Hinweis basierend auf Bezugsdauer und Channeling
+- **Röstdatum & Frische** – Tage seit Röstung als farbiger Badge (grün: 7–21 Tage Optimum)
 - **Shot-Suche** – Sidebar-Filter nach Profil, Kaffee, Mühle
 - **CSV-Export** – alle Shots mit Annotationen als CSV herunterladen
 - **Manueller Sync** – Sync-Button im Dashboard (max. 1×/30s)
@@ -68,6 +72,40 @@ Die HA-Integration wird im Hintergrund alle 30 Sekunden geprüft, um bei steigen
 | Gewicht / Fluss | Gaggiuino direkt | `/api/system/status` → `weight` |
 | Ziel-Temperatur | Gaggiuino direkt | `/api/system/status` → `targetTemperature` |
 | Auto-Sync (neuer Shot) | HA-Sensor (optional) | `sensor.gaggiuino_latest_shot_id` |
+
+## P·Q Diagramm
+
+Der Tab **P·Q Kurve** zeigt Druck (Y-Achse) gegen Pumpenfluss (X-Achse) statt der Zeitachse. Diese Darstellung offenbart das Extraktionsverhalten des Pucks:
+
+- **Enge, ruhige Kurve** → homogene Extraktion, gleichmäßiger Puck
+- **Breite, zittrige Kurve** → Channeling oder ungleichmäßige Füllung
+- **Kurve weit rechts** → viel Fluss bei wenig Druck (zu grob gemahlen)
+- **Kurve weit links** → wenig Fluss trotz hohem Druck (zu fein gemahlen)
+
+## Extraction Yield (EY)
+
+EY = (Beverage Weight × TDS %) / Dose
+
+Trägt man unter *Notizen & Bewertung* die **Dosis** und den **TDS %** (gemessen mit Refraktometer) ein, berechnet das Dashboard automatisch den Extraction Yield. Zielbereich nach SCA: **18–22 %**.
+
+| Farbe | Bereich | Bedeutung |
+|---|---|---|
+| 🟢 Grün | 18–22 % | Optimale Extraktion |
+| 🟡 Gelb | 16–17 % oder 23–24 % | Leichte Unter-/Überextraktion |
+| 🔴 Rot | < 16 % oder > 24 % | Deutliche Unter-/Überextraktion |
+
+## Mahlgrad-Empfehlung
+
+Die automatische Empfehlung basiert auf Bezugsdauer und Channeling-Erkennung:
+
+| Bezugsdauer | Empfehlung |
+|---|---|
+| < 18 s | Feiner mahlen |
+| 18–22 s | Leicht feiner mahlen |
+| 23–42 s | Mahlgrad passt |
+| 43–50 s | Leicht gröber mahlen |
+| > 50 s | Gröber mahlen |
+| Channeling erkannt | Puck-Vorbereitung (Verteilung & Tamping) prüfen |
 
 ## Shot-Score
 
