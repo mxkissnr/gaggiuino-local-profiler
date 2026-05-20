@@ -5,22 +5,28 @@ const axios = require('axios');
 
 const app = express();
 
-const PORT = 8099;
-const DATA_DIR = '/data';
-const DATA_FILE = '/data/shots.json';
+const PORT          = 8099;
+const DATA_DIR      = '/data';
+const DATA_FILE     = '/data/shots.json';
 const ANNOTATIONS_FILE = '/data/annotations.json';
-const OPTIONS_FILE = '/data/options.json';
+const OPTIONS_FILE  = '/data/options.json';
 
-let lastSyncTime   = null;
-let lastSyncError  = null;
-let lastManualSync = 0;
+// HA Supervisor API (available when homeassistant_api: true in config.yaml)
+const HA_API   = 'http://supervisor/core/api';
+const HA_TOKEN = process.env.SUPERVISOR_TOKEN;
+
+const ALLOWED_URL_SCHEMES = ['http:', 'https:'];
+const MAX_SHOT_ID = 100000;
+
+let lastSyncTime    = null;
+let lastSyncError   = null;
+let lastManualSync  = 0;
+let lastKnownShotId = 0;  // tracks latest_shot_id from HA to trigger auto-sync
 
 // Live polling state
-const liveClients   = new Set();
-let livePollTimer   = null;
-let lastLiveShotId  = null;
-let lastLiveDataLen = 0;
-let lastLiveDataAt  = 0;
+const liveClients = new Set();
+let livePollTimer  = null;
+let liveAccum      = null; // shot data accumulator during brew
 
 function log(message, isError = false) {
     const now = new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });
@@ -36,20 +42,17 @@ function loadOptions() {
     return {};
 }
 
-const ALLOWED_URL_SCHEMES = ['http:', 'https:'];
-const MAX_SHOT_ID = 100000;
-
 function getMachineUrl(opts) {
     const raw = opts.machine_url || process.env.MACHINE_URL || 'http://gaggia.intern/api/shots';
     try {
         const u = new URL(raw);
         if (!ALLOWED_URL_SCHEMES.includes(u.protocol)) {
-            log(`⚠️ Ungültiges URL-Schema in machine_url: ${u.protocol} – Fallback auf Standard`, true);
+            log(`⚠️ Ungültiges URL-Schema: ${u.protocol} – Fallback auf Standard`, true);
             return 'http://gaggia.intern/api/shots';
         }
         return raw;
     } catch (e) {
-        log(`⚠️ Ungültige machine_url: ${raw} – Fallback auf Standard`, true);
+        log(`⚠️ Ungültige machine_url – Fallback auf Standard`, true);
         return 'http://gaggia.intern/api/shots';
     }
 }
@@ -106,10 +109,11 @@ app.get('/api/status', (req, res) => {
     try { shotCount = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')).length; } catch (e) {}
     res.json({
         shotCount,
-        lastSync: lastSyncTime,
+        lastSync:      lastSyncTime,
         lastSyncError,
-        machineUrl:   getMachineUrl(opts),
-        syncInterval: opts.sync_interval || 5
+        machineUrl:    getMachineUrl(opts),
+        syncInterval:  opts.sync_interval || 5,
+        haConnected:   !!HA_TOKEN
     });
 });
 
@@ -156,7 +160,7 @@ app.get('/api/live', (req, res) => {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'connected', haConnected: !!HA_TOKEN })}\n\n`);
     liveClients.add(res);
     if (liveClients.size === 1) startLivePolling();
 
@@ -180,47 +184,149 @@ function broadcastLive(payload) {
 
 function startLivePolling() {
     if (livePollTimer) return;
-    log('▶ Live-Polling gestartet');
+    const method = HA_TOKEN ? 'HA-Sensoren' : 'Gaggiuino-API (Fallback)';
+    log(`▶ Live-Polling gestartet via ${method}`);
     livePollTimer = setInterval(pollLive, 1000);
 }
 
 function stopLivePolling() {
     if (!livePollTimer) return;
     clearInterval(livePollTimer);
-    livePollTimer   = null;
-    lastLiveShotId  = null;
-    lastLiveDataLen = 0;
+    livePollTimer = null;
+    liveAccum     = null;
     log('⏹ Live-Polling gestoppt');
 }
 
+// ── Live polling: HA sensors (primary) ───────────────────────────────────
+
 async function pollLive() {
-    const opts = loadOptions();
+    if (HA_TOKEN) {
+        await pollViaHaSensors();
+    } else {
+        await pollViaGaggiuinoApi();
+    }
+}
+
+async function pollViaHaSensors() {
+    const headers = { Authorization: `Bearer ${HA_TOKEN}` };
+
+    const get = (entity) =>
+        axios.get(`${HA_API}/states/${entity}`, { headers, timeout: 3000 })
+             .then(r => r.data)
+             .catch(() => ({ state: 'unavailable' }));
+
+    try {
+        const [brewSwitch, pressure, temp, weight, profileName, latestShotId, targetTemp] =
+            await Promise.all([
+                get('binary_sensor.gaggiuino_brew_switch'),
+                get('sensor.gaggiuino_pressure'),
+                get('sensor.gaggiuino_temperature'),
+                get('sensor.gaggiuino_weight'),
+                get('sensor.gaggiuino_profile_name'),
+                get('sensor.gaggiuino_latest_shot_id'),
+                get('sensor.gaggiuino_target_temperature'),
+            ]);
+
+        const isBrewing  = brewSwitch.state === 'on';
+        const presVal    = parseFloat(pressure.state)   || 0;
+        const tempVal    = parseFloat(temp.state)       || 0;
+        const weightVal  = parseFloat(weight.state)     || 0;
+        const tTempVal   = parseFloat(targetTemp.state) || 0;
+        const profile    = profileName.state !== 'unavailable' ? profileName.state : 'Unknown';
+        const shotId     = parseInt(latestShotId.state) || 0;
+
+        // Auto-sync when latest_shot_id increases (new shot saved on machine)
+        if (shotId > lastKnownShotId && lastKnownShotId > 0) {
+            log(`📥 Neue Shot-ID erkannt: ${shotId} – auto-sync`);
+            setTimeout(syncShots, 2000);
+        }
+        lastKnownShotId = shotId;
+
+        // Brew start
+        if (isBrewing && !liveAccum) {
+            liveAccum = {
+                startTime:   Date.now(),
+                profileName: profile,
+                shotId:      shotId + 1,
+                prevWeight:  weightVal,
+                datapoints: {
+                    timeInShot:         [],
+                    pressure:           [],
+                    temperature:        [],
+                    shotWeight:         [],
+                    weightFlow:         [],
+                    pumpFlow:           [],
+                    targetTemperature:  []
+                }
+            };
+            log(`☕ Bezug gestartet – Profil: ${profile}`);
+        }
+
+        // Brew end
+        if (!isBrewing && liveAccum) {
+            log('✅ Bezug beendet');
+            liveAccum = null;
+            setTimeout(syncShots, 3000);
+        }
+
+        // Accumulate datapoints during brew
+        if (isBrewing && liveAccum) {
+            // timeInShot in units of 0.1s (×10 to match Gaggiuino format)
+            const elapsed    = Math.round((Date.now() - liveAccum.startTime) / 100);
+            const weightFlow = Math.max(0, weightVal - liveAccum.prevWeight); // g since last poll
+            liveAccum.prevWeight = weightVal;
+
+            liveAccum.datapoints.timeInShot.push(elapsed * 10);
+            liveAccum.datapoints.pressure.push(Math.round(presVal * 10));
+            liveAccum.datapoints.temperature.push(Math.round(tempVal * 10));
+            liveAccum.datapoints.shotWeight.push(Math.round(weightVal * 10));
+            liveAccum.datapoints.weightFlow.push(Math.round(weightFlow * 10));
+            liveAccum.datapoints.pumpFlow.push(0);
+            liveAccum.datapoints.targetTemperature.push(Math.round(tTempVal * 10));
+        }
+
+        broadcastLive({
+            type:        'data',
+            shotId:      isBrewing && liveAccum ? liveAccum.shotId : shotId,
+            isLive:      isBrewing,
+            profileName: isBrewing && liveAccum ? liveAccum.profileName : profile,
+            datapoints:  isBrewing && liveAccum ? liveAccum.datapoints : null
+        });
+
+    } catch (err) {
+        broadcastLive({ type: 'error', message: err.message });
+    }
+}
+
+// ── Live polling: Gaggiuino API (fallback when no SUPERVISOR_TOKEN) ────────
+
+async function pollViaGaggiuinoApi() {
+    const opts       = loadOptions();
     const machineUrl = getMachineUrl(opts);
     try {
         const latestRes = await axios.get(`${machineUrl}/latest`, { timeout: 3000 });
         const shotId    = latestRes.data[0].lastShotId;
-        const shotRes   = await axios.get(`${machineUrl}/${shotId}`, { timeout: 3000 });
+        const shotRes   = await axios.get(`${machineUrl}/${shotId}`,  { timeout: 3000 });
         const shot      = shotRes.data;
 
-        const dpLen    = shot.datapoints?.timeInShot?.length || 0;
-        const now      = Date.now();
-        const growing  = (shotId !== lastLiveShotId) || (dpLen > lastLiveDataLen);
+        const dpLen   = shot.datapoints?.timeInShot?.length || 0;
+        const now     = Date.now();
 
-        if (growing) lastLiveDataAt = now;
+        if (!liveAccum || liveAccum.shotId !== shotId) {
+            liveAccum = { shotId, lastLen: 0, lastDataAt: now };
+        }
+        const growing = dpLen > liveAccum.lastLen;
+        if (growing) liveAccum.lastDataAt = now;
+        liveAccum.lastLen = dpLen;
 
-        // "brewing" if data grew within the last 3 seconds
-        const isLive = dpLen > 0 && (now - lastLiveDataAt) < 3000;
-
-        lastLiveShotId  = shotId;
-        lastLiveDataLen = dpLen;
+        const isLive = dpLen > 0 && (now - liveAccum.lastDataAt) < 3000;
 
         broadcastLive({
             type:        'data',
             shotId,
             isLive,
             profileName: shot.profile?.name || shot.profileName || 'Unknown',
-            datapoints:  shot.datapoints,
-            duration:    shot.duration
+            datapoints:  shot.datapoints
         });
     } catch (err) {
         broadcastLive({ type: 'error', message: err.message });
@@ -232,10 +338,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ── Background sync ───────────────────────────────────────────────────────
 
 async function syncShots() {
-    const opts = loadOptions();
+    const opts       = loadOptions();
     const machineUrl = getMachineUrl(opts);
     try {
-        const latestResponse = await axios.get(`${machineUrl}/latest`, { timeout: 10000 });
+        const latestResponse  = await axios.get(`${machineUrl}/latest`, { timeout: 10000 });
         const latestMachineId = latestResponse.data[0].lastShotId;
 
         let localShots = [];
@@ -279,8 +385,9 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.6.0 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v1.8.0 gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
+    log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);
     syncShots().then(scheduleNextSync);
 });
