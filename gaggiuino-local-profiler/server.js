@@ -7,7 +7,7 @@ const app = express();
 
 // Konfiguration: Wir erzwingen den Pfad im offiziellen HA-Config-Ordner
 const PORT = 8099; 
-const DATA_FILE = '/config/glp_shots.json'; // NEU: Direkt im sichtbaren HA-Ordner!
+const DATA_FILE = '/homeassistant/glp_shots.json';
 const MACHINE_URL = process.env.MACHINE_URL || 'http://gaggia.intern/api/shots';
 
 // Hilfsfunktion für Logs mit deutscher Uhrzeit
