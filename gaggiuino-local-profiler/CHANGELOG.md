@@ -1,3 +1,9 @@
+## 1.11.0
+- Shot-Score (0–100): automatisch berechnet aus Extraktionsdruck, Temp-Stabilität, Dauer, Ratio und Channeling
+- Phasen-Visualisierung: deutlichere Hintergrundzonen + farbige Pill-Labels im Chart
+- Responsive / Mobile: einklappbare Sidebar, kompaktes Layout, Auto-Collapse beim Shot-Auswahl
+- Sidebar-Toggle-Button (mobile)
+
 ## 1.10.2
 - Neues Add-on Icon: Druckprofil-Kurve über Espresso-Cup (icon.png, 512×512)
 

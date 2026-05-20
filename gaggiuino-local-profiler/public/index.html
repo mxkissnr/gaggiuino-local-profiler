@@ -431,18 +431,56 @@
         /* ── Temp stability / meta badge ── */
         .meta-badge { font-size: .8rem; color: #71717a; margin-left: 4px; font-weight: normal; }
 
+        /* ── Score badge ── */
+        .score-badge { text-align: center; flex-shrink: 0; }
+        .score-num   { font-size: 2rem; font-weight: 700; line-height: 1; margin-bottom: 2px; }
+        .score-lbl   { font-size: .6rem; text-transform: uppercase; letter-spacing: .08em; color: #52525b; }
+        .score-great { color: #22c55e; }
+        .score-good  { color: #84cc16; }
+        .score-ok    { color: #f59e0b; }
+        .score-poor  { color: #f97316; }
+        .score-bad   { color: #ef4444; }
+
+        /* ── Sidebar toggle (mobile only) ── */
+        #sidebarToggle {
+            display: none;
+            background: none;
+            border: 1px solid var(--gray-700);
+            border-radius: 5px;
+            color: #71717a;
+            cursor: pointer;
+            font-size: .72rem;
+            padding: 3px 8px;
+            margin-left: auto;
+            font-family: 'Figtree', sans-serif;
+            transition: all .2s;
+            flex-shrink: 0;
+        }
+        #sidebarToggle:hover { color: #fff; border-color: #71717a; }
+
         /* ── Responsive ── */
         @media (max-width: 768px) {
-            body { flex-direction: column; overflow: auto; height: auto; }
-            #sidebar { width: 100%; height: 280px; border-right: none; border-bottom: 1px solid var(--gray-700); }
-            #chart-area, #live-view { padding: 20px; }
-            .sprofiler-meta-grid { flex-direction: column; gap: 16px; }
-            .meta-column { max-width: 100%; }
+            body              { flex-direction: column; overflow: auto; height: auto; }
+            #sidebar          { width: 100%; border-right: none; border-bottom: 1px solid var(--gray-700); overflow: hidden; transition: max-height .3s ease; max-height: 520px; }
+            #sidebar.collapsed { max-height: 54px; }
+            #sidebar h2       { display: flex; align-items: center; }
+            #sidebarToggle    { display: block; }
+            #chart-area, #live-view { padding: 16px; }
+            .sprofiler-header h1 { font-size: 1.3rem; }
+            .sprofiler-meta-grid { flex-direction: column; gap: 12px; }
+            .meta-column      { max-width: 100%; }
             .meta-column[style*="text-align: right"] { text-align: left !important; }
             .annotation-fields { grid-template-columns: 1fr; }
             .annotation-field.full-width { grid-column: 1; }
-            .chart-container, .live-chart-container { height: 340px; }
-            .live-stats { grid-template-columns: repeat(3, 1fr); }
+            .chart-container, .live-chart-container { height: 300px; }
+            .live-stats       { grid-template-columns: repeat(3, 1fr); }
+            #mode-bar         { padding: 0 16px; }
+            .mode-btn         { padding: 12px 14px; font-size: .8rem; }
+            .score-num        { font-size: 1.5rem; }
+        }
+        @media (max-width: 480px) {
+            .live-stats { grid-template-columns: repeat(2, 1fr); }
+            .sprofiler-header h1 { font-size: 1.1rem; }
         }
     </style>
 </head>
@@ -451,7 +489,7 @@
 
 <!-- ── Sidebar ── -->
 <div id="sidebar">
-    <h2>☕ Shots <span id="shot-count"></span></h2>
+    <h2>☕ Shots <span id="shot-count"></span><button id="sidebarToggle" onclick="toggleSidebar()">▼ Liste</button></h2>
     <div class="sidebar-hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
     <div id="search-container">
         <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …" oninput="filterShots(this.value)">
@@ -487,12 +525,18 @@
         </div>
 
         <div id="chart-area">
-            <div class="sprofiler-header" style="display:flex;justify-content:space-between;align-items:flex-start">
-                <div>
-                    <h1 id="topTitle">Profil-Name</h1>
+            <div class="sprofiler-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+                <div style="flex:1;min-width:0">
+                    <h1 id="topTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Profil-Name</h1>
                     <p id="topSubtitle">Gaggia Classic Evo Pro | gaggiuino</p>
                 </div>
-                <button class="export-btn" onclick="exportCSV()" title="Alle Shots als CSV exportieren">↓ CSV</button>
+                <div style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
+                    <div id="shotScoreBadge" class="score-badge" style="display:none">
+                        <div id="shotScoreVal" class="score-num">–</div>
+                        <div class="score-lbl">Score</div>
+                    </div>
+                    <button class="export-btn" onclick="exportCSV()" title="Alle Shots als CSV exportieren">↓ CSV</button>
+                </div>
             </div>
 
             <div class="sprofiler-meta-grid">
@@ -685,29 +729,43 @@ const phasePlugin = {
         ctx.save();
 
         if (preEnd > left) {
-            ctx.fillStyle = 'rgba(52,152,219,0.08)';
+            ctx.fillStyle = 'rgba(52,152,219,0.13)';
             ctx.fillRect(left, top, preEnd - left, bottom - top);
         }
         if (totalEnd > preEnd) {
-            ctx.fillStyle = 'rgba(243,156,18,0.06)';
+            ctx.fillStyle = 'rgba(243,156,18,0.10)';
             ctx.fillRect(preEnd, top, totalEnd - preEnd, bottom - top);
         }
 
-        // Phase boundary
+        // Phase boundary line
         ctx.beginPath();
-        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-        ctx.setLineDash([4, 4]);
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.setLineDash([5, 4]);
+        ctx.lineWidth = 1.5;
         ctx.moveTo(preEnd, top);
         ctx.lineTo(preEnd, bottom);
         ctx.stroke();
 
-        // Labels
+        // Labels with pill background
         ctx.setLineDash([]);
-        ctx.font = '10px Figtree, sans-serif';
-        ctx.fillStyle = 'rgba(161,161,170,0.65)';
-        if (preEnd - left > 30)    { ctx.textAlign = 'left';  ctx.fillText('Preinfusion', left + 5,   top + 14); }
-        if (totalEnd - preEnd > 55) { ctx.textAlign = 'left';  ctx.fillText('Extraktion',  preEnd + 5, top + 14); }
+        ctx.font = '600 11px Figtree, sans-serif';
+        const labelY = top + 16;
+        if (preEnd - left > 40) {
+            const lbl = 'Preinfusion';
+            const w   = ctx.measureText(lbl).width;
+            ctx.fillStyle = 'rgba(52,152,219,0.22)';
+            ctx.beginPath(); ctx.roundRect(left + 6, labelY - 12, w + 12, 16, 4); ctx.fill();
+            ctx.fillStyle = 'rgba(147,197,253,0.9)';
+            ctx.textAlign = 'left'; ctx.fillText(lbl, left + 12, labelY);
+        }
+        if (totalEnd - preEnd > 60) {
+            const lbl = 'Extraktion';
+            const w   = ctx.measureText(lbl).width;
+            ctx.fillStyle = 'rgba(243,156,18,0.22)';
+            ctx.beginPath(); ctx.roundRect(preEnd + 6, labelY - 12, w + 12, 16, 4); ctx.fill();
+            ctx.fillStyle = 'rgba(251,191,36,0.9)';
+            ctx.textAlign = 'left'; ctx.fillText(lbl, preEnd + 12, labelY);
+        }
 
         ctx.restore();
     }
@@ -831,7 +889,11 @@ function renderSidebar() {
 
         divShot.onclick = e => {
             if (e.ctrlKey || e.metaKey) { toggleCompare(shot.id); }
-            else { primaryShotId = shot.id; compareShotId = null; updateSidebarHighlighting(); updateView(); }
+            else {
+                primaryShotId = shot.id; compareShotId = null;
+                updateSidebarHighlighting(); updateView();
+                collapseSidebarOnMobile();
+            }
         };
 
         const btnCmp = document.createElement('button');
@@ -1209,6 +1271,22 @@ function updateView() {
     const channeling = !shotB && detectChanneling(pressureTimes, pressureVals);
     document.getElementById('channelingWarning').style.display = channeling ? '' : 'none';
 
+    // Shot score
+    const scoreBadge = document.getElementById('shotScoreBadge');
+    const scoreVal   = document.getElementById('shotScoreVal');
+    if (!shotB && scoreBadge && scoreVal) {
+        const sc = calcShotScore(shotA, dA);
+        if (sc !== null) {
+            scoreVal.textContent = sc;
+            scoreVal.className   = 'score-num ' + scoreClass(sc);
+            scoreBadge.style.display = '';
+        } else {
+            scoreBadge.style.display = 'none';
+        }
+    } else if (scoreBadge) {
+        scoreBadge.style.display = 'none';
+    }
+
     renderAnnotationPanel(shotA);
 
     const maxTimeA = dA.rawTimes.length>0 ? dA.rawTimes[dA.rawTimes.length-1] : 0;
@@ -1265,6 +1343,86 @@ function updateView() {
             }
         }
     });
+}
+
+// ── Shot score ────────────────────────────────────────────────────────────
+function calcShotScore(shot, data) {
+    const scores = [], weights = [];
+
+    // 1. Extraction pressure (only values ≥5 bar = active pulling)
+    const pVals = data.pressure.map(p => p.y).filter(v => v >= 5);
+    if (pVals.length > 3) {
+        const avgP = pVals.reduce((a,b) => a+b, 0) / pVals.length;
+        let s = avgP >= 7 && avgP <= 9.5 ? 100
+              : avgP < 7                  ? Math.max(20, 100 - (7 - avgP) * 22)
+                                          : Math.max(20, 100 - (avgP - 9.5) * 28);
+        scores.push(Math.round(s)); weights.push(25);
+    }
+
+    // 2. Temperature stability (σ)
+    const tVals = data.temp.map(p => p.y);
+    if (tVals.length > 5) {
+        const sd = stddev(tVals) || 0;
+        const s  = sd <= 0.3 ? 100 : sd <= 0.7 ? 90 : sd <= 1.5 ? 72
+                 : sd <= 3   ? 50  : Math.max(15, 50 - (sd - 3) * 12);
+        scores.push(Math.round(s)); weights.push(20);
+    }
+
+    // 3. Duration
+    const secs = (shot.duration || 0) / 10;
+    if (secs > 5) {
+        const s = secs >= 25 && secs <= 35 ? 100
+                : secs >= 20 && secs < 25   ? 82
+                : secs > 35 && secs <= 42   ? 82
+                : secs > 42 && secs <= 55   ? 62
+                : secs < 20 ? Math.max(15, 70 - (20 - secs) * 5)
+                             : Math.max(15, 62 - (secs - 55) * 3);
+        scores.push(Math.round(s)); weights.push(20);
+    }
+
+    // 4. Ratio (dose × yield) – only if dose annotated
+    const ann = shot.annotation || {};
+    const finalW = max(data.weight.map(p => p.y));
+    if (ann.dose && ann.dose > 0 && finalW) {
+        const r = finalW / ann.dose;
+        const s = r >= 1.8 && r <= 2.5 ? 100
+                : r >= 1.5 && r < 1.8   ? 75
+                : r > 2.5 && r <= 3.2   ? 75
+                : r < 1.5 ? Math.max(15, 55 - (1.5 - r) * 40)
+                           : Math.max(15, 60 - (r - 3.2) * 22);
+        scores.push(Math.round(s)); weights.push(20);
+    }
+
+    // 5. Channeling penalty
+    const pTimes = data.pressure.map(p => p.x);
+    const pAll   = data.pressure.map(p => p.y);
+    scores.push(detectChanneling(pTimes, pAll) ? 20 : 100);
+    weights.push(15);
+
+    if (!scores.length) return null;
+    const tw = weights.reduce((a,b) => a+b, 0);
+    return Math.round(scores.reduce((s, v, i) => s + v * weights[i], 0) / tw);
+}
+
+function scoreClass(n) {
+    return n >= 88 ? 'score-great' : n >= 75 ? 'score-good' : n >= 60 ? 'score-ok' : n >= 45 ? 'score-poor' : 'score-bad';
+}
+
+// ── Mobile sidebar toggle ─────────────────────────────────────────────────
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const btn     = document.getElementById('sidebarToggle');
+    const now     = sidebar.classList.toggle('collapsed');
+    btn.textContent = now ? '▼ Liste' : '▲ Liste';
+}
+
+function collapseSidebarOnMobile() {
+    if (window.innerWidth <= 768) {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.add('collapsed');
+        const btn = document.getElementById('sidebarToggle');
+        if (btn) btn.textContent = '▼ Liste';
+    }
 }
 
 // ── Analytics helpers ─────────────────────────────────────────────────────
@@ -1357,6 +1515,7 @@ function exportCSV() {
 loadData();
 updateStatus();
 setInterval(updateStatus, 30000);
+collapseSidebarOnMobile();
 </script>
 
 </body>

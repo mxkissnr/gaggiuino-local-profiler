@@ -9,6 +9,7 @@ Lokales Dashboard für die [Gaggiuino](https://gaggiuino.github.io/)-Espressomas
 - **Auto-Sync** – neuer Shot wird automatisch geladen sobald `gaggiuino_latest_shot_id` steigt
 - **Vergleichsmodus** – zwei Shots direkt nebeneinander vergleichen
 - **Notizen & Bewertung** – Kaffee/Bohne, Mühle, Mahlgrad, Dosis, Freitext; Sternebewertung 1–5
+- **Shot-Score** – automatisch berechneter 0–100-Score aus Druck, Temperaturstabilität, Dauer, Ratio und Channeling
 - **Analyse-Metriken** – Dose→Yield→Ratio, Temperatur-Stabilität (±σ), Phasen-Erkennung, Channeling-Warnung
 - **Shot-Suche** – Sidebar-Filter nach Profil, Kaffee, Mühle
 - **CSV-Export** – alle Shots mit Annotationen als CSV herunterladen
