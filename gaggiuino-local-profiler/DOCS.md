@@ -15,7 +15,7 @@ Lokales Dashboard für die [Gaggiuino](https://gaggiuino.github.io/)-Espressomas
 ## Voraussetzungen
 
 - Gaggiuino-Controller per HTTP vom Home Assistant Host erreichbar
-- Gaggiuino-Integration in Home Assistant installiert und konfiguriert (für Live-Modus und Auto-Sync)
+- Gaggiuino-Integration in Home Assistant installiert (optional, für Auto-Sync via `latest_shot_id`)
 
 Test im HA-Terminal: `curl http://<ip>/api/shots/latest`
 
@@ -46,23 +46,24 @@ sync_interval: 10
 ### Live-Modus
 
 1. Tab **Live** oben im Dashboard anklicken
-2. Sobald `binary_sensor.gaggiuino_brew_switch` auf `on` geht, startet die Echtzeit-Anzeige automatisch
-3. Stat-Boxen und Chart aktualisieren sich sekündlich mit Daten aus den HA-Sensoren
+2. Sobald der Brew-Switch aktiv ist, startet die Echtzeit-Anzeige automatisch
+3. Stat-Boxen und Chart aktualisieren sich sekündlich direkt vom Controller
 4. Nach Ende des Bezugs wird der vollständige Shot automatisch synchronisiert
 
-**Verwendete HA-Sensoren:**
+Der Live-Modus fragt den Gaggiuino-Controller direkt über `/api/system/status` ab (1-Sekunden-Intervall) – **nicht** über die HA-Sensoren. Dadurch ist die Erkennung des Brew-Starts sofort, ohne Verzögerung durch das HA-Polling-Intervall.
 
-| Sensor | Verwendung |
-|---|---|
-| `binary_sensor.gaggiuino_brew_switch` | Bezug-Erkennung (start / stop) |
-| `sensor.gaggiuino_pressure` | Live-Druck |
-| `sensor.gaggiuino_temperature` | Live-Temperatur |
-| `sensor.gaggiuino_weight` | Live-Gewicht (Gewichtsfluss wird abgeleitet) |
-| `sensor.gaggiuino_target_temperature` | Ziel-Temperatur |
-| `sensor.gaggiuino_profile_name` | Aktives Profil |
-| `sensor.gaggiuino_latest_shot_id` | Auto-Sync bei neuer Shot-ID |
+Die HA-Integration wird im Hintergrund alle 30 Sekunden geprüft, um bei steigender `sensor.gaggiuino_latest_shot_id` einen Auto-Sync auszulösen.
 
-> **Hinweis:** Wenn kein `SUPERVISOR_TOKEN` verfügbar ist (z.B. lokale Entwicklung), fällt der Live-Modus automatisch auf direktes Gaggiuino-API-Polling zurück.
+**Datenquelle Live-Modus:**
+
+| Feld | Quelle | Endpunkt |
+|---|---|---|
+| Brew-Switch (Start/Stop) | Gaggiuino direkt | `/api/system/status` → `brewSwitchState` |
+| Druck | Gaggiuino direkt | `/api/system/status` → `pressure` |
+| Temperatur | Gaggiuino direkt | `/api/system/status` → `temperature` |
+| Gewicht / Fluss | Gaggiuino direkt | `/api/system/status` → `weight` |
+| Ziel-Temperatur | Gaggiuino direkt | `/api/system/status` → `targetTemperature` |
+| Auto-Sync (neuer Shot) | HA-Sensor (optional) | `sensor.gaggiuino_latest_shot_id` |
 
 ## API-Endpunkte (intern)
 

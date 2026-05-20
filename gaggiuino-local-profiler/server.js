@@ -57,6 +57,16 @@ function getMachineUrl(opts) {
     }
 }
 
+function getMachineBaseUrl(opts) {
+    const machineUrl = getMachineUrl(opts);
+    try {
+        const u = new URL(machineUrl);
+        return `${u.protocol}//${u.host}`;
+    } catch (e) {
+        return 'http://gaggia.intern';
+    }
+}
+
 function getSyncIntervalMs(opts) {
     return (opts.sync_interval || 5) * 60 * 1000;
 }
@@ -184,8 +194,7 @@ function broadcastLive(payload) {
 
 function startLivePolling() {
     if (livePollTimer) return;
-    const method = HA_TOKEN ? 'HA-Sensoren' : 'Gaggiuino-API (Fallback)';
-    log(`▶ Live-Polling gestartet via ${method}`);
+    log('▶ Live-Polling gestartet via Gaggiuino /api/system/status');
     livePollTimer = setInterval(pollLive, 1000);
 }
 
@@ -197,66 +206,41 @@ function stopLivePolling() {
     log('⏹ Live-Polling gestoppt');
 }
 
-// ── Live polling: HA sensors (primary) ───────────────────────────────────
+// ── Live polling: direct machine status API ───────────────────────────────
 
 async function pollLive() {
-    if (HA_TOKEN) {
-        await pollViaHaSensors();
-    } else {
-        await pollViaGaggiuinoApi();
-    }
+    await pollViaGaggiuinoStatus();
 }
 
-async function pollViaHaSensors() {
-    const headers = { Authorization: `Bearer ${HA_TOKEN}` };
-
-    const get = (entity) =>
-        axios.get(`${HA_API}/states/${entity}`, { headers, timeout: 3000 })
-             .then(r => r.data)
-             .catch(() => ({ state: 'unavailable' }));
+async function pollViaGaggiuinoStatus() {
+    const opts    = loadOptions();
+    const baseUrl = getMachineBaseUrl(opts);
 
     try {
-        const [brewSwitch, pressure, temp, weight, profileName, latestShotId, targetTemp] =
-            await Promise.all([
-                get('binary_sensor.gaggiuino_brew_switch'),
-                get('sensor.gaggiuino_pressure'),
-                get('sensor.gaggiuino_temperature'),
-                get('sensor.gaggiuino_weight'),
-                get('sensor.gaggiuino_profile_name'),
-                get('sensor.gaggiuino_latest_shot_id'),
-                get('sensor.gaggiuino_target_temperature'),
-            ]);
+        const statusRes = await axios.get(`${baseUrl}/api/system/status`, { timeout: 3000 });
+        const status    = statusRes.data;
 
-        const isBrewing  = brewSwitch.state === 'on';
-        const presVal    = parseFloat(pressure.state)   || 0;
-        const tempVal    = parseFloat(temp.state)       || 0;
-        const weightVal  = parseFloat(weight.state)     || 0;
-        const tTempVal   = parseFloat(targetTemp.state) || 0;
-        const profile    = profileName.state !== 'unavailable' ? profileName.state : 'Unknown';
-        const shotId     = parseInt(latestShotId.state) || 0;
-
-        // Auto-sync when latest_shot_id increases (new shot saved on machine)
-        if (shotId > lastKnownShotId && lastKnownShotId > 0) {
-            log(`📥 Neue Shot-ID erkannt: ${shotId} – auto-sync`);
-            setTimeout(syncShots, 2000);
-        }
-        lastKnownShotId = shotId;
+        const isBrewing = status.brewSwitchState === true;
+        const presVal   = parseFloat(status.pressure)          || 0;
+        const tempVal   = parseFloat(status.temperature)       || 0;
+        const weightVal = parseFloat(status.weight)            || 0;
+        const tTempVal  = parseFloat(status.targetTemperature) || 0;
+        const profile   = status.profileName || 'Unknown';
 
         // Brew start
         if (isBrewing && !liveAccum) {
             liveAccum = {
                 startTime:   Date.now(),
                 profileName: profile,
-                shotId:      shotId + 1,
                 prevWeight:  weightVal,
                 datapoints: {
-                    timeInShot:         [],
-                    pressure:           [],
-                    temperature:        [],
-                    shotWeight:         [],
-                    weightFlow:         [],
-                    pumpFlow:           [],
-                    targetTemperature:  []
+                    timeInShot:        [],
+                    pressure:          [],
+                    temperature:       [],
+                    shotWeight:        [],
+                    weightFlow:        [],
+                    pumpFlow:          [],
+                    targetTemperature: []
                 }
             };
             log(`☕ Bezug gestartet – Profil: ${profile}`);
@@ -269,11 +253,10 @@ async function pollViaHaSensors() {
             setTimeout(syncShots, 3000);
         }
 
-        // Accumulate datapoints during brew
+        // Accumulate datapoints during brew (×10 to match Gaggiuino shot format)
         if (isBrewing && liveAccum) {
-            // timeInShot in units of 0.1s (×10 to match Gaggiuino format)
             const elapsed    = Math.round((Date.now() - liveAccum.startTime) / 100);
-            const weightFlow = Math.max(0, weightVal - liveAccum.prevWeight); // g since last poll
+            const weightFlow = Math.max(0, weightVal - liveAccum.prevWeight);
             liveAccum.prevWeight = weightVal;
 
             liveAccum.datapoints.timeInShot.push(elapsed * 10);
@@ -287,10 +270,9 @@ async function pollViaHaSensors() {
 
         broadcastLive({
             type:        'data',
-            shotId:      isBrewing && liveAccum ? liveAccum.shotId : shotId,
             isLive:      isBrewing,
-            profileName: isBrewing && liveAccum ? liveAccum.profileName : profile,
-            datapoints:  isBrewing && liveAccum ? liveAccum.datapoints : null
+            profileName: liveAccum ? liveAccum.profileName : profile,
+            datapoints:  liveAccum ? liveAccum.datapoints : null
         });
 
     } catch (err) {
@@ -298,39 +280,23 @@ async function pollViaHaSensors() {
     }
 }
 
-// ── Live polling: Gaggiuino API (fallback when no SUPERVISOR_TOKEN) ────────
+// ── Background: check latest_shot_id via HA for auto-sync ─────────────────
 
-async function pollViaGaggiuinoApi() {
-    const opts       = loadOptions();
-    const machineUrl = getMachineUrl(opts);
+async function backgroundHaCheck() {
+    if (!HA_TOKEN) return;
     try {
-        const latestRes = await axios.get(`${machineUrl}/latest`, { timeout: 3000 });
-        const shotId    = latestRes.data[0].lastShotId;
-        const shotRes   = await axios.get(`${machineUrl}/${shotId}`,  { timeout: 3000 });
-        const shot      = shotRes.data;
-
-        const dpLen   = shot.datapoints?.timeInShot?.length || 0;
-        const now     = Date.now();
-
-        if (!liveAccum || liveAccum.shotId !== shotId) {
-            liveAccum = { shotId, lastLen: 0, lastDataAt: now };
+        const headers = { Authorization: `Bearer ${HA_TOKEN}` };
+        const res     = await axios.get(
+            `${HA_API}/states/sensor.gaggiuino_latest_shot_id`,
+            { headers, timeout: 3000 }
+        );
+        const shotId = parseInt(res.data.state) || 0;
+        if (shotId > lastKnownShotId && lastKnownShotId > 0) {
+            log(`📥 Neue Shot-ID erkannt: ${shotId} – auto-sync`);
+            setTimeout(syncShots, 2000);
         }
-        const growing = dpLen > liveAccum.lastLen;
-        if (growing) liveAccum.lastDataAt = now;
-        liveAccum.lastLen = dpLen;
-
-        const isLive = dpLen > 0 && (now - liveAccum.lastDataAt) < 3000;
-
-        broadcastLive({
-            type:        'data',
-            shotId,
-            isLive,
-            profileName: shot.profile?.name || shot.profileName || 'Unknown',
-            datapoints:  shot.datapoints
-        });
-    } catch (err) {
-        broadcastLive({ type: 'error', message: err.message });
-    }
+        lastKnownShotId = shotId;
+    } catch (e) {}
 }
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -385,9 +351,10 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.8.0 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v1.9.0 gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
-    log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);
+    log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);
+    setInterval(backgroundHaCheck, 30000);
     syncShots().then(scheduleNextSync);
 });

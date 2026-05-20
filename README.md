@@ -16,7 +16,7 @@ Lokales Dashboard für die Gaggiuino-Espressomaschine als Home Assistant Add-on.
 ## Funktionen
 
 - Shot-Archiv mit interaktivem Profil-Browser (Druck, Fluss, Gewicht, Temperatur)
-- **Live-Modus** – Echtzeit-Anzeige via HA-Sensoren (`gaggiuino_brew_switch` etc.)
+- **Live-Modus** – Echtzeit-Anzeige direkt vom Controller (`/api/system/status`, kein HA-Polling-Delay)
 - **Auto-Sync** – neuer Shot wird automatisch geladen wenn `gaggiuino_latest_shot_id` steigt
 - Vergleichsmodus (zwei Shots nebeneinander)
 - Notizen, Kaffee-Infos, Mühleneinstellungen und Sternebewertung pro Shot
@@ -32,6 +32,6 @@ Lokales Dashboard für die Gaggiuino-Espressomaschine als Home Assistant Add-on.
 ## Voraussetzungen
 
 - Gaggiuino-Controller per HTTP vom HA-Host erreichbar
-- Gaggiuino-Integration in HA für Live-Modus und Auto-Sync empfohlen
+- Gaggiuino-Integration in HA optional (für Auto-Sync via `latest_shot_id`)
 
 → [Vollständige Dokumentation](gaggiuino-local-profiler/DOCS.md)
