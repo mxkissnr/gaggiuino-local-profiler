@@ -1,16 +1,22 @@
 name: "Gaggiuino Local Profiler"
-version: "1.6.0"
+version: "1.7.0"
 slug: "gaggiuino_local_profiler"
 description: "Lokaler Shot-Profiler für die Gaggiuino Espresso-Maschine – speichert und visualisiert deine Espresso-Shots."
+url: "https://github.com/mxkissnr/gaggiuino-local-profiler"
 arch:
   - amd64
   - armv7
   - aarch64
+startup: application
+boot: auto
 init: false
 ingress: true
+ingress_port: 8099
+panel_icon: mdi:coffee
+panel_title: "GLP"
 options:
   machine_url: "http://gaggia.intern/api/shots"
   sync_interval: 5
 schema:
-  machine_url: str
-  sync_interval: int
+  machine_url: url
+  sync_interval: int(1,60)

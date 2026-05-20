@@ -587,6 +587,17 @@ let liveEventSource = null;
 let liveChart       = null;
 let liveIsActive    = false;
 
+// ── HTML escaping (XSS prevention) ───────────────────────────────────────
+function esc(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // ── Corsair crosshair ─────────────────────────────────────────────────────
 const corsairPlugin = {
     id: 'corsair',
@@ -691,15 +702,15 @@ function renderSidebar() {
         const ann = shot.annotation || {};
 
         const coffeeHtml = ann.coffee
-            ? `<div class="coffee-name-sidebar">${ann.coffee}${ann.dose ? ` · ${ann.dose}g` : ''}</div>` : '';
+            ? `<div class="coffee-name-sidebar">${esc(ann.coffee)}${ann.dose ? ` · ${esc(String(ann.dose))}g` : ''}</div>` : '';
         const starsHtml = ann.rating
             ? `<div class="sidebar-stars">${'★'.repeat(ann.rating)}${'☆'.repeat(5 - ann.rating)}</div>` : '';
 
         divShot.innerHTML = `
-            <div class="profile-name-sidebar">${profileName}</div>
+            <div class="profile-name-sidebar">${esc(profileName)}</div>
             ${coffeeHtml}
-            <div class="shotid-sidebar">Shot ${shot.id}${ann.grinder ? ` · ${ann.grinder}` : ''}</div>
-            <div class="date-sidebar">${date.toLocaleString('de-DE')}</div>
+            <div class="shotid-sidebar">Shot ${esc(String(shot.id))}${ann.grinder ? ` · ${esc(ann.grinder)}` : ''}</div>
+            <div class="date-sidebar">${esc(date.toLocaleString('de-DE'))}</div>
             ${starsHtml}
         `;
 

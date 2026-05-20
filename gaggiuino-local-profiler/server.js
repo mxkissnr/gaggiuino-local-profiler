@@ -36,8 +36,22 @@ function loadOptions() {
     return {};
 }
 
+const ALLOWED_URL_SCHEMES = ['http:', 'https:'];
+const MAX_SHOT_ID = 100000;
+
 function getMachineUrl(opts) {
-    return opts.machine_url || process.env.MACHINE_URL || 'http://gaggia.intern/api/shots';
+    const raw = opts.machine_url || process.env.MACHINE_URL || 'http://gaggia.intern/api/shots';
+    try {
+        const u = new URL(raw);
+        if (!ALLOWED_URL_SCHEMES.includes(u.protocol)) {
+            log(`⚠️ Ungültiges URL-Schema in machine_url: ${u.protocol} – Fallback auf Standard`, true);
+            return 'http://gaggia.intern/api/shots';
+        }
+        return raw;
+    } catch (e) {
+        log(`⚠️ Ungültige machine_url: ${raw} – Fallback auf Standard`, true);
+        return 'http://gaggia.intern/api/shots';
+    }
 }
 
 function getSyncIntervalMs(opts) {
@@ -65,7 +79,7 @@ try {
     log(`❌ Fehler bei der Initialisierung: ${err.message}`, true);
 }
 
-app.use(express.json());
+app.use(express.json({ limit: '16kb' }));
 
 // ── API routes (before static) ────────────────────────────────────────────
 
@@ -110,16 +124,20 @@ app.post('/api/sync', (req, res) => {
 
 app.post('/api/shots/:id/annotate', (req, res) => {
     const id = parseInt(req.params.id);
-    if (isNaN(id)) return res.status(400).json({ error: 'Ungültige Shot-ID' });
+    if (isNaN(id) || id < 1 || id > MAX_SHOT_ID)
+        return res.status(400).json({ error: 'Ungültige Shot-ID' });
     try {
         const annotations = loadAnnotations();
+        const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
         annotations[String(id)] = {
-            rating:       req.body.rating       || null,
-            coffee:       req.body.coffee       || '',
-            grinder:      req.body.grinder      || '',
-            grindSetting: req.body.grindSetting || '',
-            dose:         req.body.dose         || null,
-            notes:        req.body.notes        || ''
+            rating:       Number.isInteger(req.body.rating) && req.body.rating >= 1 && req.body.rating <= 5
+                              ? req.body.rating : null,
+            coffee:       str(req.body.coffee,       200),
+            grinder:      str(req.body.grinder,      200),
+            grindSetting: str(req.body.grindSetting, 100),
+            dose:         (typeof req.body.dose === 'number' && req.body.dose > 0 && req.body.dose < 100)
+                              ? req.body.dose : null,
+            notes:        str(req.body.notes, 2000)
         };
         fs.writeFileSync(ANNOTATIONS_FILE, JSON.stringify(annotations, null, 2), 'utf8');
         res.json({ ok: true });
