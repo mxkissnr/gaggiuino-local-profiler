@@ -1,6 +1,6 @@
 # Gaggiuino Local Profiler – Home Assistant Add-on Repository
 
-Dieses Repository enthält das **Gaggiuino Local Profiler** Add-on für Home Assistant.
+Lokales Dashboard für die Gaggiuino-Espressomaschine als Home Assistant Add-on.
 
 ## Installation
 
@@ -10,16 +10,16 @@ Dieses Repository enthält das **Gaggiuino Local Profiler** Add-on für Home Ass
    https://github.com/mxkissnr/gaggiuino-local-profiler
    ```
 3. **Gaggiuino Local Profiler** suchen und installieren
-4. In den Add-on-Optionen `machine_url` auf die IP deines Gaggiuino-Controllers setzen
+4. `machine_url` in den Add-on-Optionen auf die IP des Controllers setzen
 5. Add-on starten → Dashboard über **Öffnen** aufrufen
 
 ## Funktionen
 
 - Shot-Archiv mit interaktivem Profil-Browser (Druck, Fluss, Gewicht, Temperatur)
-- **Live-Modus** – Echtzeit-Anzeige während eines laufenden Bezugs
+- **Live-Modus** – Echtzeit-Anzeige via HA-Sensoren (`gaggiuino_brew_switch` etc.)
+- **Auto-Sync** – neuer Shot wird automatisch geladen wenn `gaggiuino_latest_shot_id` steigt
 - Vergleichsmodus (zwei Shots nebeneinander)
 - Notizen, Kaffee-Infos, Mühleneinstellungen und Sternebewertung pro Shot
-- Automatischer und manueller Sync vom Controller
 - Persistente Datenspeicherung in `/data`
 
 ## Konfiguration
@@ -28,5 +28,10 @@ Dieses Repository enthält das **Gaggiuino Local Profiler** Add-on für Home Ass
 |---|---|---|
 | `machine_url` | `http://gaggia.intern/api/shots` | API-URL des Controllers |
 | `sync_interval` | `5` | Sync-Intervall in Minuten (1–60) |
+
+## Voraussetzungen
+
+- Gaggiuino-Controller per HTTP vom HA-Host erreichbar
+- Gaggiuino-Integration in HA für Live-Modus und Auto-Sync empfohlen
 
 → [Vollständige Dokumentation](gaggiuino-local-profiler/DOCS.md)
