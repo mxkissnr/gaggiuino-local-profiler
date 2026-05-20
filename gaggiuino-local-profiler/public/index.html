@@ -4,14 +4,15 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Gaggiuino Local Profiler</title>
-    
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%2318181b'/><text y='.85em' font-size='78' x='10'>☕</text></svg>">
+
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,600&display=swap" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         :root {
-            --gray-50: #fafafa;
+            --gray-50:  #fafafa;
             --gray-200: #e4e4e7;
             --gray-700: #3f3f46;
             --gray-800: #27272a;
@@ -19,24 +20,27 @@
             --gray-950: #09090b;
         }
 
+        * { box-sizing: border-box; }
+
         body {
             margin: 0;
             background-color: var(--gray-950);
-            color: rgba(255, 255, 255, 0.8);
+            color: rgba(255,255,255,0.8);
             font-family: 'Figtree', sans-serif;
             display: flex;
             height: 100vh;
             overflow: hidden;
         }
 
+        /* ── Sidebar ── */
         #sidebar {
             width: 320px;
             background: var(--gray-900);
-            overflow-y: auto;
             border-right: 1px solid var(--gray-700);
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
 
         #sidebar h2 {
@@ -46,76 +50,74 @@
             font-weight: 600;
             color: #fff;
             border-bottom: 1px solid var(--gray-700);
+            flex-shrink: 0;
+        }
+
+        #shot-count {
+            color: #52525b;
+            font-size: 0.85rem;
+            font-weight: normal;
+            margin-left: 6px;
         }
 
         .sidebar-hint {
             padding: 10px 20px;
             font-size: 0.75rem;
             color: #a1a1aa;
-            background: rgba(39, 39, 42, 0.3);
+            background: rgba(39,39,42,0.3);
             border-bottom: 1px solid var(--gray-700);
+            flex-shrink: 0;
         }
 
-        #shots {
-            flex: 1;
-            overflow-y: auto;
-        }
+        #shots { flex: 1; overflow-y: auto; }
 
         .shot-wrapper {
             display: flex;
             align-items: center;
-            border-bottom: 1px solid rgba(63, 63, 70, 0.3);
-            transition: 0.2s;
+            border-bottom: 1px solid rgba(63,63,70,0.3);
+            transition: background 0.2s;
             padding-right: 12px;
         }
 
-        .shot-wrapper:hover {
-            background: rgba(39, 39, 42, 0.3);
-        }
+        .shot-wrapper:hover           { background: rgba(39,39,42,0.3); }
+        .shot-wrapper.active          { background: var(--gray-800); }
+        .shot-wrapper.compare-active  { background: rgba(52,152,219,0.12); }
 
         .shot {
             flex: 1;
-            padding: 15px 12px 15px 20px;
+            padding: 12px 12px 12px 20px;
             cursor: pointer;
             border-left: 4px solid transparent;
         }
 
-        .shot-wrapper.active {
-            background: var(--gray-800);
-        }
-        
-        .shot-wrapper.active .shot {
-            border-left-color: #ef4444; 
-        }
-
-        .shot-wrapper.compare-active {
-            background: rgba(52, 152, 219, 0.12);
-        }
-
-        .shot-wrapper.compare-active .shot {
-            border-left-color: #3498db; 
-        }
+        .shot-wrapper.active .shot         { border-left-color: #ef4444; }
+        .shot-wrapper.compare-active .shot { border-left-color: #3498db; }
 
         .profile-name-sidebar {
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: 600;
             color: #fff;
+            margin-bottom: 1px;
+        }
+
+        .coffee-name-sidebar {
+            font-size: 0.8rem;
+            color: #a1a1aa;
             margin-bottom: 2px;
         }
 
-        .shotid-sidebar {
-            color: #a1a1aa;
-            font-size: 0.85rem;
-        }
+        .shotid-sidebar { color: #a1a1aa; font-size: 0.8rem; }
+        .date-sidebar   { color: #71717a;  font-size: 0.72rem; margin-top: 3px; }
 
-        .date-sidebar {
-            color: #71717a;
-            font-size: 0.75rem;
-            margin-top: 4px;
+        .sidebar-stars {
+            color: #f59e0b;
+            font-size: 0.72rem;
+            letter-spacing: 1px;
+            margin-top: 3px;
         }
 
         .compare-btn {
-            background: rgba(63, 63, 70, 0.5);
+            background: rgba(63,63,70,0.5);
             color: #a1a1aa;
             border: 1px solid var(--gray-700);
             border-radius: 6px;
@@ -130,101 +132,11 @@
             flex-shrink: 0;
         }
 
-        .compare-btn:hover {
-            background: #27272a;
-            color: #fff;
-        }
-
+        .compare-btn:hover { background: #27272a; color: #fff; }
         .shot-wrapper.compare-active .compare-btn {
             background: #3498db;
             color: #fff;
             border-color: #2980b9;
-        }
-
-        #main {
-            flex: 1;
-            padding: 40px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .sprofiler-header {
-            margin-bottom: 24px;
-        }
-
-        .sprofiler-header h1 {
-            font-size: 1.875rem;
-            font-weight: 600;
-            color: #fff;
-            margin: 0 0 4px 0;
-        }
-
-        .sprofiler-header p {
-            font-size: 0.875rem;
-            color: #a1a1aa;
-            margin: 0;
-        }
-
-        .sprofiler-meta-grid {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.875rem;
-            margin-bottom: 32px;
-            gap: 40px;
-        }
-
-        .meta-column {
-            max-width: 450px;
-            flex: 1;
-        }
-
-        .divide-y > * + * {
-            border-top-width: 1px;
-            border-color: var(--gray-800);
-        }
-
-        .meta-item {
-            display: flex;
-            flex-direction: column;
-            padding-top: 12px;
-            padding-bottom: 12px;
-        }
-
-        .meta-item:first-child {
-            padding-top: 0;
-        }
-
-        .meta-item:last-child {
-            padding-bottom: 0;
-        }
-
-        .meta-label {
-            margin-bottom: 4px;
-            color: #a1a1aa;
-            text-transform: uppercase;
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-        }
-
-        .meta-value {
-            font-weight: 600;
-            color: #fff;
-            font-size: 1rem;
-        }
-
-        .meta-sub {
-            font-size: 0.85rem;
-            color: #71717a;
-            font-weight: normal;
-            margin-left: 6px;
-        }
-
-        .chart-container {
-            position: relative;
-            height: 550px;
-            width: 100%;
-            margin-top: 16px;
         }
 
         #sidebar-footer {
@@ -245,15 +157,14 @@
             border-radius: 50%;
             display: inline-block;
             margin-right: 5px;
-            flex-shrink: 0;
         }
 
-        .status-dot.ok     { background: #22c55e; }
-        .status-dot.error  { background: #ef4444; }
-        .status-dot.unknown{ background: #52525b; }
+        .status-dot.ok      { background: #22c55e; }
+        .status-dot.error   { background: #ef4444; }
+        .status-dot.unknown { background: #52525b; }
 
         #syncBtn {
-            background: rgba(63, 63, 70, 0.5);
+            background: rgba(63,63,70,0.5);
             color: #a1a1aa;
             border: 1px solid var(--gray-700);
             border-radius: 6px;
@@ -268,13 +179,6 @@
         #syncBtn:hover    { background: var(--gray-800); color: #fff; }
         #syncBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        #shot-count {
-            color: #52525b;
-            font-size: 0.85rem;
-            font-weight: normal;
-            margin-left: 6px;
-        }
-
         .loading-state {
             padding: 24px 20px;
             color: #52525b;
@@ -282,8 +186,16 @@
             text-align: center;
         }
 
-        #empty-state {
+        /* ── Main area ── */
+        #main {
+            flex: 1;
+            overflow-y: auto;
             display: flex;
+            flex-direction: column;
+        }
+
+        #empty-state {
+            display: none;
             flex-direction: column;
             align-items: center;
             justify-content: center;
@@ -292,7 +204,7 @@
             padding: 60px 40px;
         }
 
-        #empty-state .es-icon { font-size: 3rem; margin-bottom: 20px; }
+        #empty-state .es-icon { font-size: 3.5rem; margin-bottom: 20px; }
 
         #empty-state h2 {
             color: #71717a;
@@ -308,37 +220,192 @@
             line-height: 1.6;
         }
 
-        #chart-area { display: flex; flex-direction: column; flex: 1; }
+        #chart-area {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            padding: 36px 40px 40px;
+        }
 
+        /* ── Shot header ── */
+        .sprofiler-header { margin-bottom: 20px; }
+
+        .sprofiler-header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: #fff;
+            margin: 0 0 4px 0;
+        }
+
+        .sprofiler-header p {
+            font-size: 0.875rem;
+            color: #a1a1aa;
+            margin: 0;
+        }
+
+        /* ── Meta grid ── */
+        .sprofiler-meta-grid {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            margin-bottom: 24px;
+            gap: 40px;
+        }
+
+        .meta-column { max-width: 450px; flex: 1; }
+
+        .divide-y > * + * {
+            border-top-width: 1px;
+            border-color: var(--gray-800);
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            padding: 10px 0;
+        }
+
+        .meta-item:first-child { padding-top: 0; }
+        .meta-item:last-child  { padding-bottom: 0; }
+
+        .meta-label {
+            margin-bottom: 4px;
+            color: #a1a1aa;
+            text-transform: uppercase;
+            font-size: 0.72rem;
+            letter-spacing: 0.05em;
+        }
+
+        .meta-value   { font-weight: 600; color: #fff; font-size: 1rem; }
+        .meta-sub     { font-size: 0.85rem; color: #71717a; font-weight: normal; margin-left: 6px; }
+
+        /* ── Annotation panel ── */
+        .annotation-panel {
+            background: var(--gray-900);
+            border: 1px solid var(--gray-700);
+            border-radius: 8px;
+            padding: 18px 20px;
+            margin-bottom: 24px;
+        }
+
+        .annotation-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+
+        .annotation-title {
+            font-size: 0.72rem;
+            color: #a1a1aa;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .star-rating { display: flex; gap: 3px; }
+
+        .star {
+            font-size: 1.4rem;
+            cursor: pointer;
+            color: #3f3f46;
+            transition: color 0.12s;
+            user-select: none;
+            line-height: 1;
+        }
+
+        .star.active { color: #f59e0b; }
+        .star:hover  { color: #f59e0b; }
+
+        .annotation-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .annotation-field label {
+            display: block;
+            font-size: 0.7rem;
+            color: #71717a;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+
+        .annotation-field input,
+        .annotation-field textarea {
+            width: 100%;
+            background: var(--gray-800);
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            color: rgba(255,255,255,0.85);
+            font-family: 'Figtree', sans-serif;
+            font-size: 0.875rem;
+            padding: 7px 10px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .annotation-field input:focus,
+        .annotation-field textarea:focus { border-color: #71717a; }
+
+        .annotation-field textarea {
+            resize: vertical;
+            min-height: 58px;
+        }
+
+        .annotation-field.full-width { grid-column: 1 / -1; }
+
+        .annotation-actions {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .save-btn {
+            background: var(--gray-800);
+            color: #a1a1aa;
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            padding: 6px 18px;
+            cursor: pointer;
+            font-family: 'Figtree', sans-serif;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .save-btn:hover  { background: var(--gray-700); color: #fff; }
+        .save-btn.saved  { background: #14532d; color: #86efac; border-color: #166534; }
+
+        /* ── Chart ── */
+        .chart-container {
+            position: relative;
+            height: 480px;
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        /* ── Responsive ── */
         @media (max-width: 768px) {
-            body {
-                flex-direction: column;
-                overflow: auto;
-                height: auto;
-            }
+            body { flex-direction: column; overflow: auto; height: auto; }
+
             #sidebar {
                 width: 100%;
                 height: 300px;
                 border-right: none;
                 border-bottom: 1px solid var(--gray-700);
             }
-            #main {
-                padding: 20px;
-            }
-            .sprofiler-meta-grid {
-                flex-direction: column;
-                gap: 16px;
-                margin-bottom: 16px;
-            }
-            .meta-column {
-                max-width: 100%;
-            }
-            .meta-column[style*="text-align: right"] {
-                text-align: left !important;
-            }
-            .chart-container {
-                height: 400px;
-            }
+
+            #chart-area { padding: 20px; }
+
+            .sprofiler-meta-grid { flex-direction: column; gap: 16px; margin-bottom: 16px; }
+            .meta-column         { max-width: 100%; }
+            .meta-column[style*="text-align: right"] { text-align: left !important; }
+
+            .annotation-fields { grid-template-columns: 1fr; }
+            .annotation-field.full-width { grid-column: 1; }
+
+            .chart-container { height: 380px; }
         }
     </style>
 </head>
@@ -360,97 +427,136 @@
 
 <div id="main">
 
-    <div id="empty-state" style="display:none">
+    <div id="empty-state">
         <div class="es-icon">☕</div>
         <h2>Keine Shots vorhanden</h2>
         <p>Stelle sicher, dass die Gaggiuino-Maschine unter der konfigurierten URL erreichbar ist. Nutze <b>↻ Sync</b> in der Seitenleiste um einen manuellen Sync auszulösen.</p>
     </div>
 
     <div id="chart-area">
-    <div class="sprofiler-header">
-        <h1 id="topTitle">Profile Name</h1>
-        <p id="topSubtitle">Gaggia Classic Evo Pro | gaggiuino</p>
-    </div>
 
-    <div class="sprofiler-meta-grid">
-        
-        <div class="meta-column divide-y">
-            <div class="meta-item">
-                <span class="meta-label">Profile</span>
-                <span class="meta-value" id="valProfile">-</span>
+        <div class="sprofiler-header">
+            <h1 id="topTitle">Profil-Name</h1>
+            <p id="topSubtitle">Gaggia Classic Evo Pro | gaggiuino</p>
+        </div>
+
+        <div class="sprofiler-meta-grid">
+            <div class="meta-column divide-y">
+                <div class="meta-item">
+                    <span class="meta-label">Profil</span>
+                    <span class="meta-value" id="valProfile">-</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Druck (Ø / Max Ziel)</span>
+                    <span class="meta-value">
+                        <span id="pressure">-</span><span class="meta-sub" id="targetPressure"></span>
+                    </span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Pumpenfluss (Ø / Ziel)</span>
+                    <span class="meta-value">
+                        <span id="flow">-</span><span class="meta-sub" id="targetFlow"></span>
+                    </span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Temperatur (Ø / Ziel)</span>
+                    <span class="meta-value">
+                        <span id="temp">-</span><span class="meta-sub" id="targetTemp"></span>
+                    </span>
+                </div>
             </div>
-            <div class="meta-item">
-                <span class="meta-label">Pressure (Avg / Max Target)</span>
-                <span class="meta-value">
-                    <span id="pressure">-</span><span class="meta-sub" id="targetPressure">-</span>
-                </span>
-            </div>
-            <div class="meta-item">
-                <span class="meta-label">Pump Flow (Avg / Target)</span>
-                <span class="meta-value">
-                    <span id="flow">-</span><span class="meta-sub" id="targetFlow">-</span>
-                </span>
-            </div>
-            <div class="meta-item">
-                <span class="meta-label">Temperature (Avg / Target)</span>
-                <span class="meta-value">
-                    <span id="temp">-</span><span class="meta-sub" id="targetTemp">-</span>
-                </span>
+
+            <div class="meta-column divide-y" style="text-align:right">
+                <div class="meta-item">
+                    <span class="meta-label">Gewicht (Gesamt / Fluss Ende)</span>
+                    <span class="meta-value">
+                        <span id="weight">-</span><span class="meta-sub" id="weightFlowSub"></span>
+                    </span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Gewichtsfluss (Ø / Max)</span>
+                    <span class="meta-value">
+                        <span id="wf">-</span><span class="meta-sub" id="maxWf"></span>
+                    </span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Dauer</span>
+                    <span class="meta-value" id="duration">-</span>
+                </div>
             </div>
         </div>
 
-        <div class="meta-column divide-y" style="text-align: right;">
-            <div class="meta-item">
-                <span class="meta-label">Weight (Total / Flow Last)</span>
-                <span class="meta-value">
-                    <span id="weight">-</span><span class="meta-sub" id="weightFlowSub">-</span>
-                </span>
+        <!-- Annotation panel -->
+        <div class="annotation-panel" id="annotationPanel">
+            <div class="annotation-header">
+                <span class="annotation-title">Notizen & Bewertung</span>
+                <div class="star-rating" id="starRating">
+                    <span class="star" data-val="1">★</span>
+                    <span class="star" data-val="2">★</span>
+                    <span class="star" data-val="3">★</span>
+                    <span class="star" data-val="4">★</span>
+                    <span class="star" data-val="5">★</span>
+                </div>
             </div>
-            <div class="meta-item">
-                <span class="meta-label">Weight Flow (Avg / Max)</span>
-                <span class="meta-value">
-                    <span id="wf">-</span><span class="meta-sub" id="maxWf">-</span>
-                </span>
+            <div class="annotation-fields">
+                <div class="annotation-field">
+                    <label>Kaffee / Bohne</label>
+                    <input type="text" id="annCoffee" placeholder="z.B. Ethiopia Yirgacheffe">
+                </div>
+                <div class="annotation-field">
+                    <label>Mühle</label>
+                    <input type="text" id="annGrinder" placeholder="z.B. Niche Zero">
+                </div>
+                <div class="annotation-field">
+                    <label>Mahlgrad</label>
+                    <input type="text" id="annGrindSetting" placeholder="z.B. 23 Clicks">
+                </div>
+                <div class="annotation-field">
+                    <label>Dosis (g)</label>
+                    <input type="number" id="annDose" placeholder="z.B. 18" step="0.1" min="0">
+                </div>
+                <div class="annotation-field full-width">
+                    <label>Notizen</label>
+                    <textarea id="annNotes" placeholder="Geschmack, Beobachtungen, Anpassungen …"></textarea>
+                </div>
             </div>
-            <div class="meta-item">
-                <span class="meta-label">Duration</span>
-                <span class="meta-value" id="duration">-</span>
+            <div class="annotation-actions">
+                <button class="save-btn" id="saveAnnotationBtn" onclick="saveAnnotation()">Speichern</button>
             </div>
         </div>
 
-    </div>
-
-    <div class="chart-container">
-        <canvas id="espressoShotChart"></canvas>
-    </div>
+        <div class="chart-container">
+            <canvas id="espressoShotChart"></canvas>
+        </div>
 
     </div><!-- #chart-area -->
-</div>
+</div><!-- #main -->
 
 <script>
 let shots = [];
 let chart;
-let primaryShotId = null;
-let compareShotId = null;
+let primaryShotId  = null;
+let compareShotId  = null;
+let currentRating  = 0;
 
+// ── Corsair crosshair plugin ──────────────────────────────────────────────
 const corsairPlugin = {
     id: 'corsair',
     defaults: { width: 1, color: 'rgba(255,255,255,0.4)', dash: [4, 4] },
-    afterInit: (chart) => { chart.corsair = { x: 0, y: 0 }; },
+    afterInit:  (chart) => { chart.corsair = { x: 0, y: 0 }; },
     afterEvent: (chart, args) => {
-        const { inChartArea } = args;
         const { x, y } = args.event;
-        chart.corsair = { x, y, draw: inChartArea };
+        chart.corsair = { x, y, draw: args.inChartArea };
         chart.draw();
     },
-    beforeDatasetsDraw: (chart, args, opts) => {
+    beforeDatasetsDraw: (chart, _args, opts) => {
         const { ctx } = chart;
         const { top, bottom } = chart.chartArea;
         const { x, draw } = chart.corsair;
         if (!draw) return;
         ctx.save();
         ctx.beginPath();
-        ctx.lineWidth = opts.width;
+        ctx.lineWidth   = opts.width;
         ctx.strokeStyle = opts.color;
         ctx.setLineDash(opts.dash);
         ctx.moveTo(x, bottom);
@@ -460,13 +566,30 @@ const corsairPlugin = {
     }
 };
 
+// ── Star rating setup ─────────────────────────────────────────────────────
+document.querySelectorAll('#starRating .star').forEach(star => {
+    const val = parseInt(star.dataset.val);
+    star.addEventListener('mouseover', () => renderStars(val));
+    star.addEventListener('mouseout',  () => renderStars(currentRating));
+    star.addEventListener('click', () => {
+        currentRating = (currentRating === val) ? 0 : val;
+        renderStars(currentRating);
+    });
+});
+
+function renderStars(rating) {
+    document.querySelectorAll('#starRating .star').forEach(s => {
+        s.classList.toggle('active', parseInt(s.dataset.val) <= rating);
+    });
+}
+
+// ── Data loading ──────────────────────────────────────────────────────────
 async function loadData() {
     const shotsEl = document.getElementById('shots');
     shotsEl.innerHTML = '<div class="loading-state">Lade Shots …</div>';
 
     try {
         const r = await fetch('shots.json');
-
         if (!r.ok) {
             shotsEl.innerHTML = `<div class="loading-state" style="color:#ef4444">Fehler beim Laden (HTTP ${r.status})</div>`;
             return;
@@ -481,7 +604,9 @@ async function loadData() {
         if (shots.length > 0) {
             emptyState.style.display = 'none';
             chartArea.style.display  = 'flex';
-            primaryShotId = shots[shots.length - 1].id;
+            if (!primaryShotId || !shots.find(s => s.id === primaryShotId)) {
+                primaryShotId = shots[shots.length - 1].id;
+            }
             updateView();
         } else {
             emptyState.style.display = 'flex';
@@ -493,53 +618,15 @@ async function loadData() {
     }
 }
 
-async function updateStatus() {
-    try {
-        const r = await fetch('api/status');
-        if (!r.ok) return;
-        const s = await r.json();
-
-        const dot     = document.getElementById('statusDot');
-        const timeEl  = document.getElementById('syncTime');
-        const countEl = document.getElementById('shot-count');
-
-        if (countEl) countEl.textContent = `(${s.shotCount})`;
-
-        if (s.lastSync) {
-            const d = new Date(s.lastSync);
-            timeEl.textContent = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-        }
-
-        if (s.lastSyncError) {
-            dot.className = 'status-dot error';
-            dot.title = s.lastSyncError;
-        } else if (s.lastSync) {
-            dot.className = 'status-dot ok';
-            dot.title = 'Letzter Sync erfolgreich';
-        }
-    } catch (e) {}
-}
-
-async function triggerSync() {
-    const btn = document.getElementById('syncBtn');
-    btn.disabled = true;
-    btn.textContent = '↻ …';
-    try {
-        await fetch('api/sync', { method: 'POST' });
-        await new Promise(r => setTimeout(r, 2500));
-        await loadData();
-        await updateStatus();
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '↻ Sync';
-    }
-}
-
-function renderSidebar(){
+// ── Sidebar ───────────────────────────────────────────────────────────────
+function renderSidebar() {
     const el = document.getElementById('shots');
     el.innerHTML = '';
-    
-    [...shots].reverse().forEach((shot) => {
+
+    const countEl = document.getElementById('shot-count');
+    if (countEl) countEl.textContent = `(${shots.length})`;
+
+    [...shots].reverse().forEach(shot => {
         const wrapper = document.createElement('div');
         wrapper.className = 'shot-wrapper';
         wrapper.id = `wrapper-${shot.id}`;
@@ -547,13 +634,22 @@ function renderSidebar(){
         const divShot = document.createElement('div');
         divShot.className = 'shot';
 
-        const date = new Date(shot.timestamp * 1000);
-        const profileName = shot.profile?.name || shot.profileName || "Unknown Profile";
+        const date        = new Date(shot.timestamp * 1000);
+        const profileName = shot.profile?.name || shot.profileName || 'Unknown Profile';
+        const ann         = shot.annotation || {};
+
+        const coffeeHtml = ann.coffee
+            ? `<div class="coffee-name-sidebar">${ann.coffee}${ann.dose ? ` · ${ann.dose}g` : ''}</div>` : '';
+
+        const starsHtml = ann.rating
+            ? `<div class="sidebar-stars">${'★'.repeat(ann.rating)}${'☆'.repeat(5 - ann.rating)}</div>` : '';
 
         divShot.innerHTML = `
             <div class="profile-name-sidebar">${profileName}</div>
-            <div class="shotid-sidebar">Shot ${shot.id}</div>
+            ${coffeeHtml}
+            <div class="shotid-sidebar">Shot ${shot.id}${ann.grinder ? ` · ${ann.grinder}` : ''}</div>
             <div class="date-sidebar">${date.toLocaleString('de-DE')}</div>
+            ${starsHtml}
         `;
 
         divShot.onclick = (e) => {
@@ -570,9 +666,9 @@ function renderSidebar(){
         const btnCompare = document.createElement('button');
         btnCompare.className = 'compare-btn';
         btnCompare.innerHTML = '⇄';
-        btnCompare.title = "Als Vergleichs-Shot wählen";
+        btnCompare.title = 'Als Vergleichs-Shot wählen';
         btnCompare.onclick = (e) => {
-            e.stopPropagation(); 
+            e.stopPropagation();
             toggleCompare(shot.id);
         };
 
@@ -580,17 +676,13 @@ function renderSidebar(){
         wrapper.appendChild(btnCompare);
         el.appendChild(wrapper);
     });
+
     updateSidebarHighlighting();
 }
 
 function toggleCompare(id) {
-    if (primaryShotId === id) return; 
-    
-    if (compareShotId === id) {
-        compareShotId = null;
-    } else {
-        compareShotId = id;
-    }
+    if (primaryShotId === id) return;
+    compareShotId = (compareShotId === id) ? null : id;
     updateSidebarHighlighting();
     updateView();
 }
@@ -599,53 +691,154 @@ function updateSidebarHighlighting() {
     document.querySelectorAll('.shot-wrapper').forEach(x => {
         x.classList.remove('active', 'compare-active');
         const id = parseInt(x.id.replace('wrapper-', ''));
-        if (id === primaryShotId) x.classList.add('active');
-        if (id === compareShotId) x.classList.add('compare-active');
+        if (id === primaryShotId)  x.classList.add('active');
+        if (id === compareShotId)  x.classList.add('compare-active');
     });
 }
 
-function safeLast(arr){
-    if(!arr || !arr.length) return null;
+// ── Annotation panel ──────────────────────────────────────────────────────
+function renderAnnotationPanel(shot) {
+    const ann = shot.annotation || {};
+    currentRating = ann.rating || 0;
+    renderStars(currentRating);
+    document.getElementById('annCoffee').value       = ann.coffee       || '';
+    document.getElementById('annGrinder').value      = ann.grinder      || '';
+    document.getElementById('annGrindSetting').value = ann.grindSetting || '';
+    document.getElementById('annDose').value         = ann.dose         || '';
+    document.getElementById('annNotes').value        = ann.notes        || '';
+
+    const btn = document.getElementById('saveAnnotationBtn');
+    btn.textContent = 'Speichern';
+    btn.classList.remove('saved');
+}
+
+async function saveAnnotation() {
+    if (!primaryShotId) return;
+    const btn = document.getElementById('saveAnnotationBtn');
+
+    const payload = {
+        rating:       currentRating || null,
+        coffee:       document.getElementById('annCoffee').value.trim(),
+        grinder:      document.getElementById('annGrinder').value.trim(),
+        grindSetting: document.getElementById('annGrindSetting').value.trim(),
+        dose:         parseFloat(document.getElementById('annDose').value) || null,
+        notes:        document.getElementById('annNotes').value.trim()
+    };
+
+    try {
+        const r = await fetch(`api/shots/${primaryShotId}/annotate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (r.ok) {
+            const idx = shots.findIndex(s => s.id === primaryShotId);
+            if (idx !== -1) shots[idx].annotation = payload;
+
+            btn.textContent = '✓ Gespeichert';
+            btn.classList.add('saved');
+            setTimeout(() => {
+                btn.textContent = 'Speichern';
+                btn.classList.remove('saved');
+            }, 2000);
+
+            renderSidebar();
+            updateSidebarHighlighting();
+        }
+    } catch (e) {
+        console.error('Fehler beim Speichern:', e);
+    }
+}
+
+// ── Status / Sync ─────────────────────────────────────────────────────────
+async function updateStatus() {
+    try {
+        const r = await fetch('api/status');
+        if (!r.ok) return;
+        const s = await r.json();
+
+        const dot    = document.getElementById('statusDot');
+        const timeEl = document.getElementById('syncTime');
+
+        if (s.lastSync) {
+            const d = new Date(s.lastSync);
+            timeEl.textContent = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        if (s.lastSyncError) {
+            dot.className = 'status-dot error';
+            dot.title     = s.lastSyncError;
+        } else if (s.lastSync) {
+            dot.className = 'status-dot ok';
+            dot.title     = 'Letzter Sync erfolgreich';
+        }
+    } catch (e) {}
+}
+
+async function triggerSync() {
+    const btn = document.getElementById('syncBtn');
+    btn.disabled    = true;
+    btn.textContent = '↻ …';
+    try {
+        const r = await fetch('api/sync', { method: 'POST' });
+        if (r.status === 429) {
+            const data = await r.json();
+            btn.textContent = data.error || 'Warten …';
+            setTimeout(() => { btn.textContent = '↻ Sync'; btn.disabled = false; }, 3000);
+            return;
+        }
+        await new Promise(res => setTimeout(res, 2500));
+        await loadData();
+        await updateStatus();
+    } finally {
+        btn.disabled    = false;
+        btn.textContent = '↻ Sync';
+    }
+}
+
+// ── Data helpers ──────────────────────────────────────────────────────────
+function safeLast(arr) {
+    if (!arr || !arr.length) return null;
     for (let i = arr.length - 1; i >= 0; i--) {
-        if (arr[i] !== null && arr[i] !== undefined && !isNaN(arr[i])) return arr[i];
+        if (arr[i] != null && !isNaN(arr[i])) return arr[i];
     }
     return null;
 }
 
-function avgActive(arr, threshold = 0.5){
-    if(!arr || !arr.length) return null;
-    const activeValues = arr.filter(v => v > threshold);
-    if(activeValues.length === 0) return arr[arr.length - 1];
-    return activeValues.reduce((a,b)=>a+b,0)/activeValues.length;
+function avgActive(arr, threshold = 0.5) {
+    if (!arr || !arr.length) return null;
+    const active = arr.filter(v => v > threshold);
+    if (!active.length) return arr[arr.length - 1];
+    return active.reduce((a, b) => a + b, 0) / active.length;
 }
 
-function avg(arr){
-    if(!arr || !arr.length) return null;
-    return arr.reduce((a,b)=>a+b,0)/arr.length;
+function avg(arr) {
+    if (!arr || !arr.length) return null;
+    return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
-function max(arr){
-    if(!arr || !arr.length) return null;
-    return Math.max(...arr);
+function max(arr) {
+    if (!arr || !arr.length) return null;
+    return arr.reduce((m, v) => v > m ? v : m, arr[0]);
+}
+
+function fmt(v, unit = '') {
+    return v == null ? '-' : `${v.toFixed(1)}${unit}`;
 }
 
 function formatTimeLabel(seconds) {
     if (seconds == null || isNaN(seconds)) return '00:00';
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
-}
-
-function fmt(v, unit=''){
-    return v == null ? '-' : `${v.toFixed(1)}${unit}`;
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
 }
 
 function mapToXY(timeArr, dataArr) {
     if (!timeArr || !dataArr) return [];
-    return timeArr.map((t, idx) => ({
-        x: t / 10,
-        y: dataArr[idx] !== undefined ? dataArr[idx] / 10 : null
-    })).filter(pt => pt.y !== null);
+    return timeArr
+        .map((t, i) => ({ x: t / 10, y: dataArr[i] != null ? dataArr[i] / 10 : null }))
+        .filter(pt => pt.y !== null);
 }
 
 function getShotData(shot) {
@@ -653,137 +846,131 @@ function getShotData(shot) {
     const d = shot.datapoints || {};
     const times = d.timeInShot || [];
     return {
-        rawTimes: times.map(v => v / 10),
-        pressure: mapToXY(times, d.pressure),
-        targetPressure: mapToXY(times, d.targetPressure),
-        flow: mapToXY(times, d.pumpFlow),
-        targetFlow: mapToXY(times, d.targetPumpFlow),
-        weight: mapToXY(times, d.shotWeight || d.weight),
-        weightFlow: mapToXY(times, d.weightFlow),
-        temp: mapToXY(times, d.temperature),
-        targetTemp: mapToXY(times, d.targetTemperature)
+        rawTimes:      times.map(v => v / 10),
+        pressure:      mapToXY(times, d.pressure),
+        targetPressure:mapToXY(times, d.targetPressure),
+        flow:          mapToXY(times, d.pumpFlow),
+        targetFlow:    mapToXY(times, d.targetPumpFlow),
+        weight:        mapToXY(times, d.shotWeight || d.weight),
+        weightFlow:    mapToXY(times, d.weightFlow),
+        temp:          mapToXY(times, d.temperature),
+        targetTemp:    mapToXY(times, d.targetTemperature)
     };
 }
 
+// ── Main view ─────────────────────────────────────────────────────────────
 function updateView() {
     const shotA = shots.find(s => s.id === primaryShotId);
     const shotB = compareShotId ? shots.find(s => s.id === compareShotId) : null;
-    
     if (!shotA) return;
-    
+
     const dataA = getShotData(shotA);
     const dataB = getShotData(shotB);
 
-    const maxTempA = max((shotA.datapoints?.temperature || []).map(v => v / 10)) || 0;
-    const maxTempB = shotB ? (max((shotB.datapoints?.temperature || []).map(v => v / 10)) || 0) : 0;
-    const maxTempDetected = Math.max(maxTempA, maxTempB);
-    const tempMaxScale = maxTempDetected > 0 ? Math.ceil(maxTempDetected + 5) : 100;
+    const maxTempA      = max((shotA.datapoints?.temperature || []).map(v => v / 10)) || 0;
+    const maxTempB      = shotB ? (max((shotB.datapoints?.temperature || []).map(v => v / 10)) || 0) : 0;
+    const tempMaxScale  = Math.ceil(Math.max(maxTempA, maxTempB) + 5) || 100;
 
-    const profileNameA = shotA.profile?.name || shotA.profileName || "Unknown Profile";
+    const profileNameA = shotA.profile?.name || shotA.profileName || 'Unknown Profile';
 
     if (shotB) {
-        const profileNameB = shotB.profile?.name || shotB.profileName || "Unknown Profile";
-        document.getElementById('topTitle').innerText = `Vergleich: Shot ${shotA.id} vs. Shot ${shotB.id}`;
+        const profileNameB = shotB.profile?.name || shotB.profileName || 'Unknown Profile';
+        document.getElementById('topTitle').innerText   = `Vergleich: Shot ${shotA.id} vs. Shot ${shotB.id}`;
         document.getElementById('valProfile').innerText = `${profileNameA} vs. ${profileNameB}`;
     } else {
-        document.getElementById('topTitle').innerText = `${profileNameA} - Shot ${shotA.id}`;
+        document.getElementById('topTitle').innerText   = `${profileNameA} – Shot ${shotA.id}`;
         document.getElementById('valProfile').innerText = profileNameA;
     }
 
-    const totalSeconds = (shotA.duration || 0) / 10;
-    const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-    const seconds = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
-    document.getElementById('duration').innerText = `${minutes}:${seconds}`;
+    const totalSecs = (shotA.duration || 0) / 10;
+    document.getElementById('duration').innerText =
+        `${Math.floor(totalSecs / 60).toString().padStart(2,'0')}:${Math.floor(totalSecs % 60).toString().padStart(2,'0')}`;
 
-    document.getElementById('pressure').innerText = fmt(avgActive(dataA.pressure.map(p => p.y), 1.5), ' bar');
-    document.getElementById('targetPressure').innerText = ` / ${fmt(max(dataA.targetPressure.map(p => p.y)), ' bar')}`;
-    
-    document.getElementById('flow').innerText = fmt(avgActive(dataA.flow.map(p => p.y), 0.2), ' ml/s');
-    document.getElementById('targetFlow').innerText = ` / ${fmt(avgActive(dataA.targetFlow.map(p => p.y), 0.2), ' ml/s')}`;
-    
-    document.getElementById('temp').innerText = fmt(avg(dataA.temp.map(p => p.y)), ' °C');
-    document.getElementById('targetTemp').innerText = ` / ${fmt(avg(dataA.targetTemp.map(p => p.y)), ' °C')}`;
-
-    document.getElementById('weight').innerText = fmt(max(dataA.weight.map(p => p.y)), ' g');
+    document.getElementById('pressure').innerText      = fmt(avgActive(dataA.pressure.map(p => p.y), 1.5), ' bar');
+    document.getElementById('targetPressure').innerText= ` / ${fmt(max(dataA.targetPressure.map(p => p.y)), ' bar')}`;
+    document.getElementById('flow').innerText          = fmt(avgActive(dataA.flow.map(p => p.y), 0.2), ' ml/s');
+    document.getElementById('targetFlow').innerText    = ` / ${fmt(avgActive(dataA.targetFlow.map(p => p.y), 0.2), ' ml/s')}`;
+    document.getElementById('temp').innerText          = fmt(avg(dataA.temp.map(p => p.y)), ' °C');
+    document.getElementById('targetTemp').innerText    = ` / ${fmt(avg(dataA.targetTemp.map(p => p.y)), ' °C')}`;
+    document.getElementById('weight').innerText        = fmt(max(dataA.weight.map(p => p.y)), ' g');
     document.getElementById('weightFlowSub').innerText = ` / ${fmt(safeLast(dataA.weightFlow.map(p => p.y)), ' ml/s')}`;
-    
-    document.getElementById('wf').innerText = fmt(avgActive(dataA.weightFlow.map(p => p.y), 0.1), ' ml/s');
-    document.getElementById('maxWf').innerText = ` / ${fmt(max(dataA.weightFlow.map(p => p.y)), ' max')}`;
+    document.getElementById('wf').innerText            = fmt(avgActive(dataA.weightFlow.map(p => p.y), 0.1), ' ml/s');
+    document.getElementById('maxWf').innerText         = ` / ${fmt(max(dataA.weightFlow.map(p => p.y)), ' max')}`;
 
-    const maxTimeA = dataA.rawTimes.length > 0 ? dataA.rawTimes[dataA.rawTimes.length - 1] : 0;
-    const maxTimeB = dataB && dataB.rawTimes.length > 0 ? dataB.rawTimes[dataB.rawTimes.length - 1] : 0;
+    renderAnnotationPanel(shotA);
+
+    const maxTimeA   = dataA.rawTimes.length > 0 ? dataA.rawTimes[dataA.rawTimes.length - 1] : 0;
+    const maxTimeB   = dataB?.rawTimes.length > 0 ? dataB.rawTimes[dataB.rawTimes.length - 1] : 0;
     const finalMaxTime = Math.max(maxTimeA, maxTimeB);
 
     const datasets = [
-        { label: 'Pressure (A)', data: dataA.pressure, yAxisID: 'y', borderWidth: 2.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
-        { label: 'Pump Flow (A)', data: dataA.flow, yAxisID: 'y', borderWidth: 2, tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
-        { label: 'Weight Flow (A)', data: dataA.weightFlow, yAxisID: 'y', borderWidth: 2, tension: 0.1, borderColor: '#9b59b6', backgroundColor: 'transparent', pointStyle: false },
-        { label: 'Weight (A)', data: dataA.weight, yAxisID: 'temp', borderWidth: 2, tension: 0.1, borderColor: '#2ecc71', backgroundColor: 'transparent', pointStyle: false },
-        { label: 'Temperature (A)', data: dataA.temp, yAxisID: 'temp', borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
+        { label: 'Druck (A)',          data: dataA.pressure,   yAxisID: 'y',    borderWidth: 2.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
+        { label: 'Pumpenfluss (A)',     data: dataA.flow,       yAxisID: 'y',    borderWidth: 2,   tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
+        { label: 'Gewichtsfluss (A)',   data: dataA.weightFlow, yAxisID: 'y',    borderWidth: 2,   tension: 0.1, borderColor: '#9b59b6', backgroundColor: 'transparent', pointStyle: false },
+        { label: 'Gewicht (A)',         data: dataA.weight,     yAxisID: 'temp', borderWidth: 2,   tension: 0.1, borderColor: '#2ecc71', backgroundColor: 'transparent', pointStyle: false },
+        { label: 'Temperatur (A)',      data: dataA.temp,       yAxisID: 'temp', borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
     ];
 
     if (!shotB) {
         datasets.push(
-            /* Identische Farbwahl für Target-Linien ohne Transparenz, nur über borderDash separiert */
-            { label: 'Target Pressure', data: dataA.targetPressure, yAxisID: 'y', borderDash: [5, 5], borderWidth: 1.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
-            { label: 'Target Flow', data: dataA.targetFlow, yAxisID: 'y', borderDash: [5, 5], borderWidth: 1.5, tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
-            { label: 'Target Temp', data: dataA.targetTemp, yAxisID: 'temp', borderDash: [5, 5], borderWidth: 1.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
+            { label: 'Ziel Druck',      data: dataA.targetPressure, yAxisID: 'y',    borderDash: [5,5], borderWidth: 1.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
+            { label: 'Ziel Fluss',      data: dataA.targetFlow,     yAxisID: 'y',    borderDash: [5,5], borderWidth: 1.5, tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
+            { label: 'Ziel Temperatur', data: dataA.targetTemp,     yAxisID: 'temp', borderDash: [5,5], borderWidth: 1.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
         );
     }
 
     if (shotB && dataB) {
         datasets.push(
-            { label: 'Pressure (B)', data: dataB.pressure, yAxisID: 'y', borderDash: [3, 3], borderWidth: 2, tension: 0.1, borderColor: 'rgba(52, 152, 219, 0.65)', backgroundColor: 'transparent', pointStyle: false },
-            { label: 'Pump Flow (B)', data: dataB.flow, yAxisID: 'y', borderDash: [3, 3], borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(243, 156, 18, 0.65)', backgroundColor: 'transparent', pointStyle: false },
-            { label: 'Weight Flow (B)', data: dataB.weightFlow, yAxisID: 'y', borderDash: [3, 3], borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(155, 89, 182, 0.65)', backgroundColor: 'transparent', pointStyle: false },
-            { label: 'Weight (B)', data: dataB.weight, yAxisID: 'temp', borderDash: [3, 3], borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(46, 204, 113, 0.65)', backgroundColor: 'transparent', pointStyle: false },
-            { label: 'Temperature (B)', data: dataB.temp, yAxisID: 'temp', borderDash: [3, 3], borderWidth: 2, tension: 0.1, borderColor: 'rgba(231, 76, 60, 0.65)', backgroundColor: 'transparent', pointStyle: false }
+            { label: 'Druck (B)',        data: dataB.pressure,   yAxisID: 'y',    borderDash: [3,3], borderWidth: 2,   tension: 0.1, borderColor: 'rgba(52,152,219,0.65)',  backgroundColor: 'transparent', pointStyle: false },
+            { label: 'Pumpenfluss (B)',  data: dataB.flow,       yAxisID: 'y',    borderDash: [3,3], borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(243,156,18,0.65)',  backgroundColor: 'transparent', pointStyle: false },
+            { label: 'Gewichtsfl. (B)', data: dataB.weightFlow, yAxisID: 'y',    borderDash: [3,3], borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(155,89,182,0.65)',  backgroundColor: 'transparent', pointStyle: false },
+            { label: 'Gewicht (B)',      data: dataB.weight,     yAxisID: 'temp', borderDash: [3,3], borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(46,204,113,0.65)', backgroundColor: 'transparent', pointStyle: false },
+            { label: 'Temperatur (B)',   data: dataB.temp,       yAxisID: 'temp', borderDash: [3,3], borderWidth: 2,   tension: 0.1, borderColor: 'rgba(231,76,60,0.65)',  backgroundColor: 'transparent', pointStyle: false }
         );
     }
 
     const ctx = document.getElementById('espressoShotChart');
-    if(chart) { chart.destroy(); }
+    if (chart) chart.destroy();
 
     chart = new Chart(ctx, {
         type: 'line',
         plugins: [corsairPlugin],
-        data: {
-            datasets: datasets
-        },
+        data: { datasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            layout: {
-                padding: { bottom: 20 }
-            },
+            layout: { padding: { bottom: 20 } },
             interaction: { mode: 'index', intersect: false },
-            plugins: { 
+            plugins: {
                 legend: { labels: { color: '#e4e4e7', font: { family: 'Figtree' } } },
                 tooltip: {
                     callbacks: {
-                        title: function(context) {
-                            return 'Zeit: ' + formatTimeLabel(context[0].parsed.x);
-                        }
+                        title: ctx => 'Zeit: ' + formatTimeLabel(ctx[0].parsed.x)
                     }
                 }
             },
             scales: {
-                x: { 
+                x: {
                     type: 'linear',
                     min: 0,
-                    max: finalMaxTime, 
+                    max: finalMaxTime,
                     clip: false,
-                    ticks: { 
+                    ticks: {
                         color: '#a1a1aa',
                         font: { family: 'Figtree' },
                         stepSize: 5,
-                        callback: function(value) {
-                            return formatTimeLabel(value);
-                        }
-                    }, 
-                    grid: { color: '#27272a' } 
+                        callback: v => formatTimeLabel(v)
+                    },
+                    grid: { color: '#27272a' }
                 },
-                y: { type: 'linear', position: 'left', min: 0, max: 12, ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    min: 0,
+                    max: 12,
+                    ticks: { color: '#a1a1aa' },
+                    grid: { color: '#27272a' }
+                },
                 temp: {
                     type: 'linear',
                     position: 'right',
