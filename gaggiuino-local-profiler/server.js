@@ -1,126 +1,108 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
+
 const app = express();
-const PORT = 8080;
 
-app.use(express.json({ limit: '50mb' }));
+// Konfiguration aus Umgebungsvariablen oder Fallbacks
+const PORT = 8099; // Sicherer, freier Port für das GLP-Dashboard
+const DATA_FILE = process.env.DATA_PATH || '/data/shots.json';
+const MACHINE_URL = process.env.MACHINE_URL || 'http://gaggia.intern/api/shots';
 
-const DATA_DIR = fs.existsSync('/data') ? '/data' : path.join(__dirname, 'public');
-const SHOTS_FILE = path.join(DATA_DIR, 'shots.json');
-const OPTIONS_FILE = '/data/options.json';
-
-function getMachineAddress() {
-    try {
-        if (fs.existsSync(OPTIONS_FILE)) {
-            const options = JSON.parse(fs.readFileSync(OPTIONS_FILE, 'utf8'));
-            return options.machine_address || "gaggia.intern";
-        }
-    } catch (e) {
-        console.error("Fehler beim Lesen der HA-Optionen:", e.message);
-    }
-    return "gaggia.intern";
-}
-
-if (!fs.existsSync(SHOTS_FILE)) {
-    fs.writeFileSync(SHOTS_FILE, JSON.stringify([], null, 4));
-}
-
-// --- AUTOMATISCHER SYNC VON SD-KARTE (LOGIK AUS PROXY.PY) ---
-async function syncShotsFromMachine() {
-    const host = getMachineAddress();
-    const baseUrl = `http://${host}/api/shots`;
-    
-    console.log(`Starte Synchronisierung mit der Maschine: ${baseUrl}...`);
-    
-    try {
-        // 1. Neueste Shot-ID von der Maschine holen
-        const latestResponse = await fetch(`${baseUrl}/latest`);
-        if (!latestResponse.ok) throw new Error("Konnte /latest nicht abfragen");
-        const latestData = await latestResponse.json();
-        const latestId = latestData[0]?.lastShotId;
-        
-        if (!latestId) {
-            console.log("Keine Shots auf der Maschine gefunden.");
-            return;
-        }
-        
-        console.log(`Neueste Shot-ID auf der Maschine: ${latestId}`);
-        
-        // 2. Lokale Datenbank laden
-        let localShots = JSON.parse(fs.readFileSync(SHOTS_FILE, 'utf8'));
-        
-        // Wir merken uns, welche Timestamps oder IDs wir schon haben, um Duplikate zu vermeiden
-        // Da die ID auf der SD-Karte mitgeliefert wird, nutzen wir die als Identifikator im Datapoint
-        let existingIds = new Set(localShots.map(s => s.externalId));
-        
-        let importedCount = 0;
-
-        // 3. Alle IDs von 1 bis latestId durchgehen und fehlende abrufen
-        for (let i = 1; i <= latestId; i++) {
-            if (existingIds.has(i)) continue; // Haben wir schon? Überspringen!
-            
-            try {
-                const shotResponse = await fetch(`${baseUrl}/${i}`);
-                if (shotResponse.status !== 200) {
-                    console.log(`Überspringe Shot ${i} (Status ${shotResponse.status})`);
-                    continue;
-                }
-                
-                const rawShot = await shotResponse.json();
-                
-                // Format anpassen für dein Frontend
-                const nextId = localShots.length > 0 ? Math.max(...localShots.map(s => s.id)) + 1 : 1;
-                const normalizedShot = {
-                    id: nextId,
-                    externalId: i, // ID von der SD-Karte merken
-                    timestamp: rawShot.timestamp || Math.floor(Date.now() / 1000),
-                    profileName: rawShot.profileName || rawShot.profile?.name || "Adaptive",
-                    duration: rawShot.duration || 0,
-                    datapoints: rawShot.datapoints || {}
-                };
-                
-                localShots.push(normalizedShot);
-                existingIds.add(i);
-                importedCount++;
-                console.log(`Shot ${i} erfolgreich von SD-Karte importiert.`);
-                
-            } catch (shotErr) {
-                console.error(`Fehler bei Shot ${i}:`, shotErr.message);
-            }
-        }
-        
-        if (importedCount > 0) {
-            fs.writeFileSync(SHOTS_FILE, JSON.stringify(localShots, null, 4));
-            console.log(`Sync beendet. ${importedCount} neue Shots geladen.`);
-        } else {
-            console.log("Alles up to date. Keine neuen Shots auf der SD-Karte.");
-        }
-        
-    } catch (error) {
-        console.error("Fehler beim Sync von SD-Karte:", error.message);
-    }
-}
-
-// Beim Start des Add-ons direkt einmal syncen
-setTimeout(syncShotsFromMachine, 5000);
-
-// Alle 10 Minuten im Hintergrund nach neuen Shots suchen
-setInterval(syncShotsFromMachine, 10 * 60 * 1000);
-// ------------------------------------------------------------
-
+// Statische Dateien aus dem public-Ordner bereitstellen (index.html, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// API-Endpunkt für das Frontend zum Laden der JSON-Daten
 app.get('/shots.json', (req, res) => {
-    res.sendFile(SHOTS_FILE);
+    if (fs.existsSync(DATA_FILE)) {
+        res.sendFile(DATA_FILE);
+    } else {
+        // Falls noch keine Datei existiert, leeres Array zurückgeben
+        res.json([]);
+    }
 });
 
-// Manueller Trigger für den Sync über das Frontend (falls man nicht warten will)
-app.post('/api/sync', async (req, res) => {
-    await syncShotsFromMachine();
-    res.json({ success: true, message: "Sync-Vorgang im Hintergrund gestartet." });
+// Hilfsfunktion zur Synchronisierung der Shots von der Maschine
+async function syncShots() {
+    console.log(`Starte Synchronisierung mit der Maschine: ${MACHINE_URL}...`);
+    try {
+        // 1. Neueste ID von der Maschine holen
+        const latestResponse = await axios.get(`${MACHINE_URL}/latest`);
+        if (!latestResponse.data || latestResponse.data.length === 0) {
+            console.log('Keine Antwort von der Maschine erhalten.');
+            return;
+        }
+        const latestMachineId = latestResponse.data[0].lastShotId;
+        console.log(`Neueste Shot-ID auf der Maschine: ${latestMachineId}`);
+
+        // 2. Lokale Daten laden, falls vorhanden
+        let localShots = [];
+        if (fs.existsSync(DATA_FILE)) {
+            const rawData = fs.readFileSync(DATA_FILE, 'utf8');
+            localShots = JSON.parse(rawData);
+        }
+
+        // Höchste ID ermitteln, die wir lokal schon gespeichert haben
+        const maxLocalId = localShots.reduce((max, shot) => shot.id > max ? shot.id : max, 0);
+
+        if (maxLocalId >= latestMachineId) {
+            console.log('Alles up to date. Keine neuen Shots auf der SD-Karte.');
+            return;
+        }
+
+        // 3. Fehlende Shots einzeln von der Maschine abrufen
+        let newShotsCount = 0;
+        for (let i = maxLocalId + 1; i <= latestMachineId; i++) {
+            try {
+                const shotResponse = await axios.get(`${MACHINE_URL}/${i}`);
+                if (shotResponse.status === 200 && shotResponse.data) {
+                    localShots.push(shotResponse.data);
+                    newShotsCount++;
+                    console.log(`Shot ${i} erfolgreich von SD-Karte importiert.`);
+                }
+            } catch (shotErr) {
+                console.error(`Fehler beim Laden von Shot ${i}: ${shotErr.message}`);
+            }
+        }
+
+        // 4. Aktualisierte Liste wieder abspeichern, wenn neue Shots geladen wurden
+        if (newShotsCount > 0) {
+            fs.writeFileSync(DATA_FILE, JSON.stringify(localShots, null, 2), 'utf8');
+            console.log(`Sync beendet. ${newShotsCount} neue Shots geladen.`);
+        }
+
+    } catch (err) {
+        console.error(`Fehler bei der Synchronisierung: ${err.message}`);
+    }
+}
+
+// Server starten und aktiven Port-Check durchführen
+const server = app.listen(PORT, () => {
+    console.log(`==================================================`);
+    console.log(`🚀 GLP Add-on erfolgreich gestartet!`);
+    console.log(`📂 Datenpfad: ${DATA_FILE}`);
+    console.log(`🌍 Dashboard erreichbar unter: http://localhost:${PORT}`);
+    console.log(`==================================================`);
+
+    // Nach erfolgreichem Start den ersten Sync-Vorgang anstoßen
+    syncShots();
+    
+    // Alle 5 Minuten automatisch im Hintergrund synchronisieren
+    setInterval(syncShots, 5 * 60 * 1000);
 });
 
-app.listen(PORT, () => {
-    console.log(`GLP Add-on läuft auf Port ${PORT}.`);
+// Fehlerbehandlung für den Server-Start (fängt besetzte Ports ab)
+server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+        console.error(`\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
+        console.error(`❌ CRITICAL ERROR: Port ${PORT} wird bereits verwendet!`);
+        console.error(`   Das Add-on kann nicht auf diesem Port starten.`);
+        console.error(`   Bitte prüfe, ob ein anderes Add-on (z.B. OpenThread)`);
+        console.error(`   denselben Port belegt und ändere ihn in der config.`);
+        console.error(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n`);
+        process.exit(1); // Beendet den Prozess hart, damit Home Assistant den Fehler meldet
+    } else {
+        console.error(`❌ Unerwarteter Serverfehler beim Starten:`, error);
+    }
 });

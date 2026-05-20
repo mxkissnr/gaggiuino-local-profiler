@@ -1,6 +1,6 @@
 name: "Gaggiuino Local Profiler (GLP)"
 description: "Lokaler Profiler für Gaggiuino Shot-Analysen"
-version: "1.2.2"
+version: "1.2.3"
 slug: "gaggiuino_local_profiler"
 init: false
 arch:
@@ -10,9 +10,9 @@ arch:
 panel_icon: "mdi:coffee-maker-check"
 panel_title: "GLP"
 ingress: true
-ingress_port: 8080
+ingress_port: 8099  # <--- Hier auf 8099 ändern, passend zur server.js!
 # Neue Konfigurationsfelder für Home Assistant
 options:
-  machine_address: "gaggiuino.local"
+  machine_address: "gaggia.local"
 schema:
   machine_address: str
