@@ -27,6 +27,7 @@ let lastKnownShotId = 0;  // tracks latest_shot_id from HA to trigger auto-sync
 const liveClients = new Set();
 let livePollTimer  = null;
 let liveAccum      = null; // shot data accumulator during brew
+let isPollRunning  = false;
 
 function log(message, isError = false) {
     const now = new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });
@@ -209,7 +210,10 @@ function stopLivePolling() {
 // ── Live polling: direct machine status API ───────────────────────────────
 
 async function pollLive() {
-    await pollViaGaggiuinoStatus();
+    if (isPollRunning) return;
+    isPollRunning = true;
+    try { await pollViaGaggiuinoStatus(); }
+    finally { isPollRunning = false; }
 }
 
 async function pollViaGaggiuinoStatus() {
@@ -250,7 +254,7 @@ async function pollViaGaggiuinoStatus() {
         if (!isBrewing && liveAccum) {
             log('✅ Bezug beendet');
             liveAccum = null;
-            setTimeout(syncShots, 3000);
+            setTimeout(syncAfterBrew, 3000);
         }
 
         // Accumulate datapoints during brew (×10 to match Gaggiuino shot format)
@@ -301,6 +305,29 @@ async function backgroundHaCheck() {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Sync after brew: notify live clients of new shot ID ───────────────────
+
+async function syncAfterBrew() {
+    let prevMaxId = 0;
+    try {
+        const existing = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        prevMaxId = existing.length > 0
+            ? existing.reduce((m, s) => s.id > m ? s.id : m, 0) : 0;
+    } catch (e) {}
+
+    await syncShots();
+
+    try {
+        const updated  = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        const newShots = updated.filter(s => s.id > prevMaxId);
+        if (newShots.length > 0) {
+            const ids = newShots.map(s => s.id);
+            broadcastLive({ type: 'shot_saved', shotIds: ids });
+            log(`📤 Neuer Shot gespeichert: #${ids.join(', ')}`);
+        }
+    } catch (e) {}
+}
+
 // ── Background sync ───────────────────────────────────────────────────────
 
 async function syncShots() {
@@ -328,6 +355,10 @@ async function syncShots() {
 
         for (let i = maxLocalId + 1; i <= latestMachineId; i++) {
             const r = await axios.get(`${machineUrl}/${i}`, { timeout: 10000 });
+            if (!r.data || typeof r.data.id === 'undefined' || !r.data.datapoints) {
+                log(`⚠️ Shot ${i} hat ungültige Daten – übersprungen`, true);
+                continue;
+            }
             localShots.push(r.data);
         }
 
@@ -351,7 +382,7 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.9.0 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v1.10.0 gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
     log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);

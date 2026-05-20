@@ -20,6 +20,9 @@ Lokales Dashboard für die Gaggiuino-Espressomaschine als Home Assistant Add-on.
 - **Auto-Sync** – neuer Shot wird automatisch geladen wenn `gaggiuino_latest_shot_id` steigt
 - Vergleichsmodus (zwei Shots nebeneinander)
 - Notizen, Kaffee-Infos, Mühleneinstellungen und Sternebewertung pro Shot
+- **Analyse-Metriken** – Ratio, Temperatur-Stabilität (±σ), Phasen-Erkennung, Channeling-Warnung
+- **Shot-Suche** – Sidebar-Filter nach Profil, Kaffee, Mühle
+- **CSV-Export** – alle Shots mit Annotationen exportieren
 - Persistente Datenspeicherung in `/data`
 
 ## Konfiguration

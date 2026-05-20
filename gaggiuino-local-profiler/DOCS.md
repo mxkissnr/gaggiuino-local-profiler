@@ -5,10 +5,13 @@ Lokales Dashboard für die [Gaggiuino](https://gaggiuino.github.io/)-Espressomas
 ## Funktionen
 
 - **Shot-Archiv** – alle Bezüge mit Druck-, Fluss-, Gewichts- und Temperaturkurven
-- **Live-Modus** – Echtzeit-Anzeige während eines laufenden Bezugs via HA-Sensoren
+- **Live-Modus** – Echtzeit-Anzeige direkt vom Controller (`/api/system/status`), kein HA-Polling-Delay
 - **Auto-Sync** – neuer Shot wird automatisch geladen sobald `gaggiuino_latest_shot_id` steigt
 - **Vergleichsmodus** – zwei Shots direkt nebeneinander vergleichen
 - **Notizen & Bewertung** – Kaffee/Bohne, Mühle, Mahlgrad, Dosis, Freitext; Sternebewertung 1–5
+- **Analyse-Metriken** – Dose→Yield→Ratio, Temperatur-Stabilität (±σ), Phasen-Erkennung, Channeling-Warnung
+- **Shot-Suche** – Sidebar-Filter nach Profil, Kaffee, Mühle
+- **CSV-Export** – alle Shots mit Annotationen als CSV herunterladen
 - **Manueller Sync** – Sync-Button im Dashboard (max. 1×/30s)
 - **Datenpersistenz** – Shots und Notizen bleiben bei Updates und Neustarts erhalten
 

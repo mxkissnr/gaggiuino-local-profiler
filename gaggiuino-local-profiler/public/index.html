@@ -370,6 +370,67 @@
         #live-idle h2 { color: #71717a; font-size: 1.1rem; margin: 0 0 8px; }
         #live-idle p  { font-size: .875rem; color: #52525b; margin: 0; max-width: 320px; line-height: 1.6; }
 
+        /* ── Search ── */
+        #search-container { padding: 8px 12px; border-bottom: 1px solid var(--gray-700); }
+        #shotSearch {
+            width: 100%;
+            background: var(--gray-800);
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            color: rgba(255,255,255,.85);
+            font-family: 'Figtree', sans-serif;
+            font-size: .8rem;
+            padding: 6px 10px;
+            outline: none;
+        }
+        #shotSearch:focus       { border-color: #71717a; }
+        #shotSearch::placeholder { color: #52525b; }
+
+        /* ── Export button ── */
+        .export-btn {
+            background: rgba(63,63,70,.5);
+            color: #a1a1aa;
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            padding: 5px 12px;
+            cursor: pointer;
+            font-size: .75rem;
+            font-family: 'Figtree', sans-serif;
+            transition: all .2s;
+            white-space: nowrap;
+        }
+        .export-btn:hover { background: var(--gray-800); color: #fff; }
+
+        /* ── Channeling warning ── */
+        .channeling-warn {
+            display: inline-block;
+            background: rgba(239,68,68,.12);
+            color: #ef4444;
+            border: 1px solid rgba(239,68,68,.25);
+            border-radius: 4px;
+            font-size: .68rem;
+            padding: 1px 5px;
+            margin-left: 7px;
+            font-weight: 600;
+            vertical-align: middle;
+            letter-spacing: .03em;
+        }
+
+        /* ── Phase tags ── */
+        .phase-tag {
+            display: inline-block;
+            font-size: .75rem;
+            color: #a1a1aa;
+            background: var(--gray-800);
+            border-radius: 4px;
+            padding: 1px 7px;
+            margin-right: 5px;
+        }
+        .phase-tag span { color: #fff; font-weight: 600; }
+
+        /* ── Temp stability / meta badge ── */
+        .meta-badge { font-size: .8rem; color: #71717a; margin-left: 4px; font-weight: normal; }
+
         /* ── Responsive ── */
         @media (max-width: 768px) {
             body { flex-direction: column; overflow: auto; height: auto; }
@@ -392,6 +453,9 @@
 <div id="sidebar">
     <h2>☕ Shots <span id="shot-count"></span></h2>
     <div class="sidebar-hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
+    <div id="search-container">
+        <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …" oninput="filterShots(this.value)">
+    </div>
     <div id="shots"></div>
     <div id="sidebar-footer">
         <div>
@@ -423,9 +487,12 @@
         </div>
 
         <div id="chart-area">
-            <div class="sprofiler-header">
-                <h1 id="topTitle">Profil-Name</h1>
-                <p id="topSubtitle">Gaggia Classic Evo Pro | gaggiuino</p>
+            <div class="sprofiler-header" style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div>
+                    <h1 id="topTitle">Profil-Name</h1>
+                    <p id="topSubtitle">Gaggia Classic Evo Pro | gaggiuino</p>
+                </div>
+                <button class="export-btn" onclick="exportCSV()" title="Alle Shots als CSV exportieren">↓ CSV</button>
             </div>
 
             <div class="sprofiler-meta-grid">
@@ -437,7 +504,7 @@
                     <div class="meta-item">
                         <span class="meta-label">Druck (Ø / Max Ziel)</span>
                         <span class="meta-value">
-                            <span id="pressure">-</span><span class="meta-sub" id="targetPressure"></span>
+                            <span id="pressure">-</span><span class="meta-sub" id="targetPressure"></span><span id="channelingWarning" class="channeling-warn" style="display:none">⚡ Channeling</span>
                         </span>
                     </div>
                     <div class="meta-item">
@@ -447,10 +514,14 @@
                         </span>
                     </div>
                     <div class="meta-item">
-                        <span class="meta-label">Temperatur (Ø / Ziel)</span>
+                        <span class="meta-label">Temperatur (Ø ±σ / Ziel)</span>
                         <span class="meta-value">
-                            <span id="temp">-</span><span class="meta-sub" id="targetTemp"></span>
+                            <span id="temp">-</span><span class="meta-badge" id="tempStability"></span><span class="meta-sub" id="targetTemp"></span>
                         </span>
+                    </div>
+                    <div class="meta-item" id="phasesItem" style="display:none">
+                        <span class="meta-label">Phasen</span>
+                        <span class="meta-value" id="phases">-</span>
                     </div>
                 </div>
 
@@ -470,6 +541,10 @@
                     <div class="meta-item">
                         <span class="meta-label">Dauer</span>
                         <span class="meta-value" id="duration">-</span>
+                    </div>
+                    <div class="meta-item" id="ratioItem" style="display:none">
+                        <span class="meta-label">Dosis → Yield · Ratio</span>
+                        <span class="meta-value" id="ratio">-</span>
                     </div>
                 </div>
             </div>
@@ -730,6 +805,7 @@ function renderSidebar() {
         el.appendChild(wrapper);
     });
     updateSidebarHighlighting();
+    if (currentFilter) filterShots(currentFilter);
 }
 
 function toggleCompare(id) {
@@ -871,9 +947,15 @@ function connectLiveStream() {
 
     liveEventSource.onmessage = e => {
         const msg = JSON.parse(e.data);
-        if (msg.type === 'connected') { setLiveBadge('ready'); return; }
-        if (msg.type === 'error')     { setLiveBadge('error', msg.message); return; }
-        if (msg.type === 'data')      handleLiveData(msg);
+        if (msg.type === 'connected')  { setLiveBadge('ready'); return; }
+        if (msg.type === 'error')      { setLiveBadge('error', msg.message); return; }
+        if (msg.type === 'data')       { handleLiveData(msg); return; }
+        if (msg.type === 'shot_saved') {
+            const id = msg.shotIds[msg.shotIds.length - 1];
+            document.getElementById('live-meta').textContent = `Shot #${id} gespeichert ✓`;
+            setTimeout(() => loadData(), 800);
+            return;
+        }
     };
 
     liveEventSource.onerror = () => setLiveBadge('error', 'Verbindung unterbrochen');
@@ -1041,16 +1123,51 @@ function updateView() {
     document.getElementById('duration').innerText =
         `${Math.floor(totalSecs/60).toString().padStart(2,'0')}:${Math.floor(totalSecs%60).toString().padStart(2,'0')}`;
 
-    document.getElementById('pressure').innerText      = fmt(avgActive(dA.pressure.map(p=>p.y),1.5),' bar');
-    document.getElementById('targetPressure').innerText= ` / ${fmt(max(dA.targetPressure.map(p=>p.y)),' bar')}`;
-    document.getElementById('flow').innerText          = fmt(avgActive(dA.flow.map(p=>p.y),0.2),' ml/s');
-    document.getElementById('targetFlow').innerText    = ` / ${fmt(avgActive(dA.targetFlow.map(p=>p.y),0.2),' ml/s')}`;
-    document.getElementById('temp').innerText          = fmt(avg(dA.temp.map(p=>p.y)),' °C');
+    const pressureVals = dA.pressure.map(p=>p.y);
+    const pressureTimes = dA.pressure.map(p=>p.x);
+    document.getElementById('pressure').innerText       = fmt(avgActive(pressureVals, 1.5),' bar');
+    document.getElementById('targetPressure').innerText = ` / ${fmt(max(dA.targetPressure.map(p=>p.y)),' bar')}`;
+    document.getElementById('flow').innerText           = fmt(avgActive(dA.flow.map(p=>p.y),0.2),' ml/s');
+    document.getElementById('targetFlow').innerText     = ` / ${fmt(avgActive(dA.targetFlow.map(p=>p.y),0.2),' ml/s')}`;
+
+    const tempVals = dA.temp.map(p=>p.y);
+    const sdTemp   = stddev(tempVals);
+    document.getElementById('temp').innerText          = fmt(avg(tempVals),' °C');
+    document.getElementById('tempStability').textContent = (sdTemp != null && sdTemp < 5) ? `±${sdTemp.toFixed(1)}` : '';
     document.getElementById('targetTemp').innerText    = ` / ${fmt(avg(dA.targetTemp.map(p=>p.y)),' °C')}`;
-    document.getElementById('weight').innerText        = fmt(max(dA.weight.map(p=>p.y)),' g');
+
+    const finalWeight = max(dA.weight.map(p=>p.y));
+    document.getElementById('weight').innerText        = fmt(finalWeight,' g');
     document.getElementById('weightFlowSub').innerText = ` / ${fmt(safeLast(dA.weightFlow.map(p=>p.y)),' ml/s')}`;
     document.getElementById('wf').innerText            = fmt(avgActive(dA.weightFlow.map(p=>p.y),0.1),' ml/s');
     document.getElementById('maxWf').innerText         = ` / ${fmt(max(dA.weightFlow.map(p=>p.y)),' max')}`;
+
+    // Ratio
+    const ann       = shotA.annotation || {};
+    const ratioItem = document.getElementById('ratioItem');
+    if (ann.dose && finalWeight && !shotB) {
+        const r = (finalWeight / ann.dose).toFixed(1);
+        document.getElementById('ratio').textContent = `${ann.dose}g → ${fmt(finalWeight,'g')} · 1:${r}`;
+        ratioItem.style.display = '';
+    } else {
+        ratioItem.style.display = 'none';
+    }
+
+    // Phases
+    const phases     = !shotB ? detectPhases(pressureTimes, pressureVals) : null;
+    const phasesItem = document.getElementById('phasesItem');
+    if (phases) {
+        document.getElementById('phases').innerHTML =
+            `<span class="phase-tag">Preinfusion <span>${formatTimeLabel(phases.preinfusion)}</span></span>` +
+            `<span class="phase-tag">Extraktion <span>${formatTimeLabel(phases.extraction)}</span></span>`;
+        phasesItem.style.display = '';
+    } else {
+        phasesItem.style.display = 'none';
+    }
+
+    // Channeling
+    const channeling = !shotB && detectChanneling(pressureTimes, pressureVals);
+    document.getElementById('channelingWarning').style.display = channeling ? '' : 'none';
 
     renderAnnotationPanel(shotA);
 
@@ -1107,6 +1224,92 @@ function updateView() {
             }
         }
     });
+}
+
+// ── Analytics helpers ─────────────────────────────────────────────────────
+function stddev(arr) {
+    if (!arr?.length) return null;
+    const m = arr.reduce((a,b)=>a+b,0)/arr.length;
+    return Math.sqrt(arr.reduce((a,b)=>a+(b-m)**2,0)/arr.length);
+}
+
+function detectPhases(times, pressures) {
+    if (!times?.length || pressures?.length < 5) return null;
+    const THRESH = 3.5;
+    let endIdx = -1;
+    for (let i = 0; i < pressures.length; i++) {
+        if (times[i] >= 1 && pressures[i] >= THRESH) { endIdx = i; break; }
+    }
+    if (endIdx <= 0) return null;
+    const preinfusion = times[endIdx];
+    if (preinfusion < 1.5) return null;
+    return { preinfusion, extraction: times[times.length-1] - preinfusion };
+}
+
+function detectChanneling(times, pressures) {
+    if (!times?.length || pressures?.length < 5) return false;
+    for (let i = 1; i < pressures.length; i++) {
+        if (pressures[i-1] < 5) continue;
+        const dt   = times[i] - times[i-1];
+        if (dt <= 0 || dt > 3) continue;
+        if (pressures[i-1] - pressures[i] > 1.5) return true;
+    }
+    return false;
+}
+
+// ── Sidebar filter ────────────────────────────────────────────────────────
+let currentFilter = '';
+
+function filterShots(query) {
+    currentFilter = query;
+    const q = query.trim().toLowerCase();
+    document.querySelectorAll('#shots .shot-wrapper').forEach(wrapper => {
+        const id   = parseInt(wrapper.id.replace('wrapper-', ''));
+        const shot = shots.find(s => s.id === id);
+        if (!shot) { wrapper.style.display = 'none'; return; }
+        const ann    = shot.annotation || {};
+        const haystack = [
+            shot.profile?.name || shot.profileName || '',
+            ann.coffee   || '',
+            ann.grinder  || '',
+            ann.notes    || ''
+        ].join(' ').toLowerCase();
+        wrapper.style.display = (!q || haystack.includes(q)) ? '' : 'none';
+    });
+}
+
+// ── CSV Export ────────────────────────────────────────────────────────────
+function exportCSV() {
+    const header = ['Shot ID','Datum','Profil','Dauer (s)','Ø Druck (bar)','Max Gewicht (g)',
+                    'Dosis (g)','Ratio','Ø Temp (°C)','Bewertung','Kaffee','Mühle','Mahlgrad','Notizen'];
+    const rows = shots.map(shot => {
+        const d     = getShotData(shot);
+        const ann   = shot.annotation || {};
+        const avgP  = avgActive(d.pressure.map(p=>p.y), 1.5);
+        const finalW = max(d.weight.map(p=>p.y));
+        const avgT  = avg(d.temp.map(p=>p.y));
+        const secs  = ((shot.duration||0)/10).toFixed(1);
+        const ratio = (ann.dose && finalW) ? `1:${(finalW/ann.dose).toFixed(1)}` : '';
+        const date  = new Date(shot.timestamp * 1000).toLocaleString('de-DE');
+        return [
+            shot.id, date,
+            shot.profile?.name || shot.profileName || '',
+            secs,
+            avgP  != null ? avgP.toFixed(2)  : '',
+            finalW != null ? finalW.toFixed(1) : '',
+            ann.dose || '', ratio,
+            avgT  != null ? avgT.toFixed(1)  : '',
+            ann.rating || '', ann.coffee || '', ann.grinder || '',
+            ann.grindSetting || '',
+            (ann.notes || '').replace(/\n/g,' ')
+        ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+    });
+    const csv  = [header.join(','), ...rows].join('\n');
+    const blob = new Blob(['﻿'+csv], { type:'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'shots.csv'; a.click();
+    URL.revokeObjectURL(url);
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
