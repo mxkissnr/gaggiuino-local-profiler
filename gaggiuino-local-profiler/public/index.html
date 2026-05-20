@@ -7,13 +7,11 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%2318181b'/><text y='.85em' font-size='78' x='10'>☕</text></svg>">
 
     <link rel="preconnect" href="https://fonts.bunny.net">
-    <link href="https://fonts.bunny.net/css?family=figtree:400,600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.bunny.net/css?family=figtree:400,600&display=swap" rel="stylesheet"/>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         :root {
-            --gray-50:  #fafafa;
-            --gray-200: #e4e4e7;
             --gray-700: #3f3f46;
             --gray-800: #27272a;
             --gray-900: #18181b;
@@ -24,7 +22,7 @@
 
         body {
             margin: 0;
-            background-color: var(--gray-950);
+            background: var(--gray-950);
             color: rgba(255,255,255,0.8);
             font-family: 'Figtree', sans-serif;
             display: flex;
@@ -50,23 +48,16 @@
             font-weight: 600;
             color: #fff;
             border-bottom: 1px solid var(--gray-700);
-            flex-shrink: 0;
         }
 
-        #shot-count {
-            color: #52525b;
-            font-size: 0.85rem;
-            font-weight: normal;
-            margin-left: 6px;
-        }
+        #shot-count { color: #52525b; font-size: .85rem; font-weight: normal; margin-left: 6px; }
 
         .sidebar-hint {
             padding: 10px 20px;
-            font-size: 0.75rem;
+            font-size: .75rem;
             color: #a1a1aa;
-            background: rgba(39,39,42,0.3);
+            background: rgba(39,39,42,.3);
             border-bottom: 1px solid var(--gray-700);
-            flex-shrink: 0;
         }
 
         #shots { flex: 1; overflow-y: auto; }
@@ -74,124 +65,117 @@
         .shot-wrapper {
             display: flex;
             align-items: center;
-            border-bottom: 1px solid rgba(63,63,70,0.3);
-            transition: background 0.2s;
+            border-bottom: 1px solid rgba(63,63,70,.3);
             padding-right: 12px;
+            transition: background .15s;
         }
-
-        .shot-wrapper:hover           { background: rgba(39,39,42,0.3); }
+        .shot-wrapper:hover           { background: rgba(39,39,42,.4); }
         .shot-wrapper.active          { background: var(--gray-800); }
-        .shot-wrapper.compare-active  { background: rgba(52,152,219,0.12); }
+        .shot-wrapper.compare-active  { background: rgba(52,152,219,.12); }
 
         .shot {
             flex: 1;
-            padding: 12px 12px 12px 20px;
+            padding: 11px 12px 11px 20px;
             cursor: pointer;
             border-left: 4px solid transparent;
         }
+        .shot-wrapper.active .shot        { border-left-color: #ef4444; }
+        .shot-wrapper.compare-active .shot{ border-left-color: #3498db; }
 
-        .shot-wrapper.active .shot         { border-left-color: #ef4444; }
-        .shot-wrapper.compare-active .shot { border-left-color: #3498db; }
-
-        .profile-name-sidebar {
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: #fff;
-            margin-bottom: 1px;
-        }
-
-        .coffee-name-sidebar {
-            font-size: 0.8rem;
-            color: #a1a1aa;
-            margin-bottom: 2px;
-        }
-
-        .shotid-sidebar { color: #a1a1aa; font-size: 0.8rem; }
-        .date-sidebar   { color: #71717a;  font-size: 0.72rem; margin-top: 3px; }
-
-        .sidebar-stars {
-            color: #f59e0b;
-            font-size: 0.72rem;
-            letter-spacing: 1px;
-            margin-top: 3px;
-        }
+        .profile-name-sidebar { font-size: .95rem; font-weight: 600; color: #fff; margin-bottom: 1px; }
+        .coffee-name-sidebar  { font-size: .8rem; color: #a1a1aa; margin-bottom: 2px; }
+        .shotid-sidebar       { color: #a1a1aa; font-size: .8rem; }
+        .date-sidebar         { color: #71717a; font-size: .72rem; margin-top: 3px; }
+        .sidebar-stars        { color: #f59e0b; font-size: .72rem; letter-spacing: 1px; margin-top: 3px; }
 
         .compare-btn {
-            background: rgba(63,63,70,0.5);
+            background: rgba(63,63,70,.5);
             color: #a1a1aa;
             border: 1px solid var(--gray-700);
             border-radius: 6px;
-            width: 34px;
-            height: 34px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            width: 34px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
             cursor: pointer;
-            transition: all 0.2s;
             font-size: 1.1rem;
             flex-shrink: 0;
+            transition: all .2s;
         }
-
-        .compare-btn:hover { background: #27272a; color: #fff; }
-        .shot-wrapper.compare-active .compare-btn {
-            background: #3498db;
-            color: #fff;
-            border-color: #2980b9;
-        }
+        .compare-btn:hover { background: var(--gray-800); color: #fff; }
+        .shot-wrapper.compare-active .compare-btn { background: #3498db; color: #fff; border-color: #2980b9; }
 
         #sidebar-footer {
             padding: 12px 20px;
             border-top: 1px solid var(--gray-700);
-            font-size: 0.75rem;
+            font-size: .75rem;
             color: #71717a;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 8px;
-            flex-shrink: 0;
         }
 
-        .status-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 5px;
-        }
-
+        .status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; }
         .status-dot.ok      { background: #22c55e; }
         .status-dot.error   { background: #ef4444; }
         .status-dot.unknown { background: #52525b; }
 
         #syncBtn {
-            background: rgba(63,63,70,0.5);
+            background: rgba(63,63,70,.5);
             color: #a1a1aa;
             border: 1px solid var(--gray-700);
             border-radius: 6px;
             padding: 4px 10px;
             cursor: pointer;
-            font-size: 0.75rem;
+            font-size: .75rem;
             font-family: 'Figtree', sans-serif;
-            transition: all 0.2s;
-            white-space: nowrap;
+            transition: all .2s;
         }
-
         #syncBtn:hover    { background: var(--gray-800); color: #fff; }
-        #syncBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+        #syncBtn:disabled { opacity: .4; cursor: not-allowed; }
 
-        .loading-state {
-            padding: 24px 20px;
-            color: #52525b;
-            font-size: 0.85rem;
-            text-align: center;
+        .loading-state { padding: 24px 20px; color: #52525b; font-size: .85rem; text-align: center; }
+
+        /* ── Main ── */
+        #main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+        /* ── Mode bar ── */
+        #mode-bar {
+            display: flex;
+            gap: 0;
+            padding: 0 36px;
+            border-bottom: 1px solid var(--gray-800);
+            flex-shrink: 0;
         }
 
-        /* ── Main area ── */
-        #main {
-            flex: 1;
-            overflow-y: auto;
+        .mode-btn {
+            background: transparent;
+            color: #71717a;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 14px 20px;
+            cursor: pointer;
+            font-family: 'Figtree', sans-serif;
+            font-size: .875rem;
+            font-weight: 600;
+            transition: all .2s;
+            margin-bottom: -1px;
+        }
+        .mode-btn:hover    { color: #e4e4e7; }
+        .mode-btn.active   { color: #fff; border-bottom-color: #ef4444; }
+        #btnLive .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #52525b; margin-right: 6px; transition: background .3s; }
+        #btnLive.live-brewing .live-dot { background: #ef4444; animation: pulse 1.2s infinite; }
+        #btnLive.live-ready   .live-dot { background: #22c55e; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: .3; }
+        }
+
+        /* ── Shots view ── */
+        #shots-view {
             display: flex;
             flex-direction: column;
+            flex: 1;
         }
 
         #empty-state {
@@ -203,81 +187,33 @@
             text-align: center;
             padding: 60px 40px;
         }
-
         #empty-state .es-icon { font-size: 3.5rem; margin-bottom: 20px; }
+        #empty-state h2 { color: #71717a; font-size: 1.25rem; margin: 0 0 10px; }
+        #empty-state p  { font-size: .875rem; color: #52525b; margin: 0; max-width: 360px; line-height: 1.6; }
 
-        #empty-state h2 {
-            color: #71717a;
-            font-size: 1.25rem;
-            margin: 0 0 10px 0;
-        }
+        #chart-area { display: flex; flex-direction: column; padding: 32px 40px 40px; }
 
-        #empty-state p {
-            font-size: 0.875rem;
-            color: #52525b;
-            margin: 0;
-            max-width: 360px;
-            line-height: 1.6;
-        }
+        .sprofiler-header        { margin-bottom: 18px; }
+        .sprofiler-header h1     { font-size: 1.75rem; font-weight: 600; color: #fff; margin: 0 0 4px; }
+        .sprofiler-header p      { font-size: .875rem; color: #a1a1aa; margin: 0; }
 
-        #chart-area {
-            display: flex;
-            flex-direction: column;
-            flex: 1;
-            padding: 36px 40px 40px;
-        }
-
-        /* ── Shot header ── */
-        .sprofiler-header { margin-bottom: 20px; }
-
-        .sprofiler-header h1 {
-            font-size: 1.75rem;
-            font-weight: 600;
-            color: #fff;
-            margin: 0 0 4px 0;
-        }
-
-        .sprofiler-header p {
-            font-size: 0.875rem;
-            color: #a1a1aa;
-            margin: 0;
-        }
-
-        /* ── Meta grid ── */
         .sprofiler-meta-grid {
             display: flex;
             justify-content: space-between;
-            font-size: 0.875rem;
-            margin-bottom: 24px;
+            font-size: .875rem;
+            margin-bottom: 20px;
             gap: 40px;
         }
-
         .meta-column { max-width: 450px; flex: 1; }
-
-        .divide-y > * + * {
-            border-top-width: 1px;
-            border-color: var(--gray-800);
-        }
-
-        .meta-item {
-            display: flex;
-            flex-direction: column;
-            padding: 10px 0;
-        }
-
+        .divide-y > * + * { border-top: 1px solid var(--gray-800); }
+        .meta-item { display: flex; flex-direction: column; padding: 9px 0; }
         .meta-item:first-child { padding-top: 0; }
         .meta-item:last-child  { padding-bottom: 0; }
+        .meta-label { margin-bottom: 4px; color: #a1a1aa; text-transform: uppercase; font-size: .7rem; letter-spacing: .05em; }
+        .meta-value { font-weight: 600; color: #fff; font-size: 1rem; }
+        .meta-sub   { font-size: .85rem; color: #71717a; font-weight: normal; margin-left: 6px; }
 
-        .meta-label {
-            margin-bottom: 4px;
-            color: #a1a1aa;
-            text-transform: uppercase;
-            font-size: 0.72rem;
-            letter-spacing: 0.05em;
-        }
-
-        .meta-value   { font-weight: 600; color: #fff; font-size: 1rem; }
-        .meta-sub     { font-size: 0.85rem; color: #71717a; font-weight: normal; margin-left: 6px; }
+        .chart-container { position: relative; height: 480px; width: 100%; }
 
         /* ── Annotation panel ── */
         .annotation-panel {
@@ -285,37 +221,14 @@
             border: 1px solid var(--gray-700);
             border-radius: 8px;
             padding: 18px 20px;
-            margin-bottom: 24px;
+            margin-top: 28px;
         }
-
-        .annotation-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 14px;
-        }
-
-        .annotation-title {
-            font-size: 0.72rem;
-            color: #a1a1aa;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-weight: 600;
-        }
+        .annotation-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+        .annotation-title  { font-size: .7rem; color: #a1a1aa; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
 
         .star-rating { display: flex; gap: 3px; }
-
-        .star {
-            font-size: 1.4rem;
-            cursor: pointer;
-            color: #3f3f46;
-            transition: color 0.12s;
-            user-select: none;
-            line-height: 1;
-        }
-
-        .star.active { color: #f59e0b; }
-        .star:hover  { color: #f59e0b; }
+        .star { font-size: 1.4rem; cursor: pointer; color: #3f3f46; transition: color .12s; user-select: none; line-height: 1; }
+        .star.active, .star:hover { color: #f59e0b; }
 
         .annotation-fields {
             display: grid;
@@ -323,44 +236,30 @@
             gap: 10px;
             margin-bottom: 12px;
         }
-
         .annotation-field label {
             display: block;
-            font-size: 0.7rem;
-            color: #71717a;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            font-size: .7rem; color: #71717a;
+            text-transform: uppercase; letter-spacing: .05em;
             margin-bottom: 4px;
         }
-
         .annotation-field input,
         .annotation-field textarea {
             width: 100%;
             background: var(--gray-800);
             border: 1px solid var(--gray-700);
             border-radius: 6px;
-            color: rgba(255,255,255,0.85);
+            color: rgba(255,255,255,.85);
             font-family: 'Figtree', sans-serif;
-            font-size: 0.875rem;
+            font-size: .875rem;
             padding: 7px 10px;
             outline: none;
-            transition: border-color 0.2s;
+            transition: border-color .2s;
         }
-
         .annotation-field input:focus,
         .annotation-field textarea:focus { border-color: #71717a; }
-
-        .annotation-field textarea {
-            resize: vertical;
-            min-height: 58px;
-        }
-
+        .annotation-field textarea { resize: vertical; min-height: 58px; }
         .annotation-field.full-width { grid-column: 1 / -1; }
-
-        .annotation-actions {
-            display: flex;
-            justify-content: flex-end;
-        }
+        .annotation-actions { display: flex; justify-content: flex-end; }
 
         .save-btn {
             background: var(--gray-800);
@@ -370,203 +269,360 @@
             padding: 6px 18px;
             cursor: pointer;
             font-family: 'Figtree', sans-serif;
-            font-size: 0.85rem;
-            transition: all 0.2s;
+            font-size: .85rem;
+            transition: all .2s;
+        }
+        .save-btn:hover { background: var(--gray-700); color: #fff; }
+        .save-btn.saved { background: #14532d; color: #86efac; border-color: #166534; }
+
+        /* ── Live view ── */
+        #live-view {
+            display: none;
+            flex-direction: column;
+            flex: 1;
+            padding: 32px 40px 40px;
         }
 
-        .save-btn:hover  { background: var(--gray-700); color: #fff; }
-        .save-btn.saved  { background: #14532d; color: #86efac; border-color: #166534; }
-
-        /* ── Chart ── */
-        .chart-container {
-            position: relative;
-            height: 480px;
-            width: 100%;
-            margin-top: 8px;
+        #live-header {
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+            margin-bottom: 24px;
         }
+
+        #live-header h1 { font-size: 1.75rem; font-weight: 600; color: #fff; margin: 0; }
+
+        #live-status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: .8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #52525b;
+        }
+
+        #live-status-badge.brewing { color: #ef4444; }
+        #live-status-badge.ready   { color: #22c55e; }
+        #live-status-badge.error   { color: #ef4444; }
+
+        #live-status-badge .badge-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+        #live-status-badge.brewing .badge-dot { animation: pulse 1.2s infinite; }
+
+        #live-meta {
+            display: flex;
+            font-size: .8rem;
+            color: #71717a;
+            gap: 6px;
+            margin-bottom: 24px;
+            min-height: 1.2em;
+        }
+
+        .live-stats {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .live-stat {
+            background: var(--gray-900);
+            border: 1px solid var(--gray-700);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .live-stat .stat-val {
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: #fff;
+            line-height: 1.1;
+            margin-bottom: 4px;
+        }
+
+        .live-stat .stat-unit { font-size: .75rem; color: #71717a; }
+        .live-stat .stat-label { font-size: .68rem; color: #52525b; text-transform: uppercase; letter-spacing: .05em; margin-top: 6px; }
+
+        .live-stat.highlight-pressure { border-color: rgba(52,152,219,.4); }
+        .live-stat.highlight-flow     { border-color: rgba(243,156,18,.4); }
+        .live-stat.highlight-weight   { border-color: rgba(46,204,113,.4); }
+        .live-stat.highlight-temp     { border-color: rgba(231,76,60,.4); }
+        .live-stat.highlight-time     { border-color: rgba(156,89,182,.4); }
+
+        .live-chart-container { position: relative; height: 420px; width: 100%; }
+
+        #live-idle {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            text-align: center;
+            padding: 60px 40px;
+        }
+        #live-idle .idle-icon { font-size: 3rem; margin-bottom: 16px; }
+        #live-idle h2 { color: #71717a; font-size: 1.1rem; margin: 0 0 8px; }
+        #live-idle p  { font-size: .875rem; color: #52525b; margin: 0; max-width: 320px; line-height: 1.6; }
 
         /* ── Responsive ── */
         @media (max-width: 768px) {
             body { flex-direction: column; overflow: auto; height: auto; }
-
-            #sidebar {
-                width: 100%;
-                height: 300px;
-                border-right: none;
-                border-bottom: 1px solid var(--gray-700);
-            }
-
-            #chart-area { padding: 20px; }
-
-            .sprofiler-meta-grid { flex-direction: column; gap: 16px; margin-bottom: 16px; }
-            .meta-column         { max-width: 100%; }
+            #sidebar { width: 100%; height: 280px; border-right: none; border-bottom: 1px solid var(--gray-700); }
+            #chart-area, #live-view { padding: 20px; }
+            .sprofiler-meta-grid { flex-direction: column; gap: 16px; }
+            .meta-column { max-width: 100%; }
             .meta-column[style*="text-align: right"] { text-align: left !important; }
-
             .annotation-fields { grid-template-columns: 1fr; }
             .annotation-field.full-width { grid-column: 1; }
-
-            .chart-container { height: 380px; }
+            .chart-container, .live-chart-container { height: 340px; }
+            .live-stats { grid-template-columns: repeat(3, 1fr); }
         }
     </style>
 </head>
 
 <body>
 
+<!-- ── Sidebar ── -->
 <div id="sidebar">
     <h2>☕ Shots <span id="shot-count"></span></h2>
     <div class="sidebar-hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
     <div id="shots"></div>
     <div id="sidebar-footer">
         <div>
-            <span class="status-dot unknown" id="statusDot" title="Sync-Status"></span>
+            <span class="status-dot unknown" id="statusDot"></span>
             <span id="syncTime">kein Sync</span>
         </div>
         <button id="syncBtn" onclick="triggerSync()">↻ Sync</button>
     </div>
 </div>
 
+<!-- ── Main ── -->
 <div id="main">
 
-    <div id="empty-state">
-        <div class="es-icon">☕</div>
-        <h2>Keine Shots vorhanden</h2>
-        <p>Stelle sicher, dass die Gaggiuino-Maschine unter der konfigurierten URL erreichbar ist. Nutze <b>↻ Sync</b> in der Seitenleiste um einen manuellen Sync auszulösen.</p>
+    <!-- Mode switcher -->
+    <div id="mode-bar">
+        <button class="mode-btn active" id="btnShots" onclick="switchMode('shots')">Shots</button>
+        <button class="mode-btn" id="btnLive" onclick="switchMode('live')">
+            <span class="live-dot"></span>Live
+        </button>
     </div>
 
-    <div id="chart-area">
+    <!-- Shots view -->
+    <div id="shots-view">
 
-        <div class="sprofiler-header">
-            <h1 id="topTitle">Profil-Name</h1>
-            <p id="topSubtitle">Gaggia Classic Evo Pro | gaggiuino</p>
+        <div id="empty-state">
+            <div class="es-icon">☕</div>
+            <h2>Keine Shots vorhanden</h2>
+            <p>Stelle sicher, dass die Gaggiuino-Maschine unter der konfigurierten URL erreichbar ist und nutze <b>↻ Sync</b>.</p>
         </div>
 
-        <div class="sprofiler-meta-grid">
-            <div class="meta-column divide-y">
-                <div class="meta-item">
-                    <span class="meta-label">Profil</span>
-                    <span class="meta-value" id="valProfile">-</span>
+        <div id="chart-area">
+            <div class="sprofiler-header">
+                <h1 id="topTitle">Profil-Name</h1>
+                <p id="topSubtitle">Gaggia Classic Evo Pro | gaggiuino</p>
+            </div>
+
+            <div class="sprofiler-meta-grid">
+                <div class="meta-column divide-y">
+                    <div class="meta-item">
+                        <span class="meta-label">Profil</span>
+                        <span class="meta-value" id="valProfile">-</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Druck (Ø / Max Ziel)</span>
+                        <span class="meta-value">
+                            <span id="pressure">-</span><span class="meta-sub" id="targetPressure"></span>
+                        </span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Pumpenfluss (Ø / Ziel)</span>
+                        <span class="meta-value">
+                            <span id="flow">-</span><span class="meta-sub" id="targetFlow"></span>
+                        </span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Temperatur (Ø / Ziel)</span>
+                        <span class="meta-value">
+                            <span id="temp">-</span><span class="meta-sub" id="targetTemp"></span>
+                        </span>
+                    </div>
                 </div>
-                <div class="meta-item">
-                    <span class="meta-label">Druck (Ø / Max Ziel)</span>
-                    <span class="meta-value">
-                        <span id="pressure">-</span><span class="meta-sub" id="targetPressure"></span>
-                    </span>
-                </div>
-                <div class="meta-item">
-                    <span class="meta-label">Pumpenfluss (Ø / Ziel)</span>
-                    <span class="meta-value">
-                        <span id="flow">-</span><span class="meta-sub" id="targetFlow"></span>
-                    </span>
-                </div>
-                <div class="meta-item">
-                    <span class="meta-label">Temperatur (Ø / Ziel)</span>
-                    <span class="meta-value">
-                        <span id="temp">-</span><span class="meta-sub" id="targetTemp"></span>
-                    </span>
+
+                <div class="meta-column divide-y" style="text-align:right">
+                    <div class="meta-item">
+                        <span class="meta-label">Gewicht (Gesamt / Fluss Ende)</span>
+                        <span class="meta-value">
+                            <span id="weight">-</span><span class="meta-sub" id="weightFlowSub"></span>
+                        </span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Gewichtsfluss (Ø / Max)</span>
+                        <span class="meta-value">
+                            <span id="wf">-</span><span class="meta-sub" id="maxWf"></span>
+                        </span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Dauer</span>
+                        <span class="meta-value" id="duration">-</span>
+                    </div>
                 </div>
             </div>
 
-            <div class="meta-column divide-y" style="text-align:right">
-                <div class="meta-item">
-                    <span class="meta-label">Gewicht (Gesamt / Fluss Ende)</span>
-                    <span class="meta-value">
-                        <span id="weight">-</span><span class="meta-sub" id="weightFlowSub"></span>
-                    </span>
+            <div class="chart-container">
+                <canvas id="espressoShotChart"></canvas>
+            </div>
+
+            <!-- Annotation panel BELOW chart -->
+            <div class="annotation-panel" id="annotationPanel">
+                <div class="annotation-header">
+                    <span class="annotation-title">Notizen & Bewertung</span>
+                    <div class="star-rating" id="starRating">
+                        <span class="star" data-val="1">★</span>
+                        <span class="star" data-val="2">★</span>
+                        <span class="star" data-val="3">★</span>
+                        <span class="star" data-val="4">★</span>
+                        <span class="star" data-val="5">★</span>
+                    </div>
                 </div>
-                <div class="meta-item">
-                    <span class="meta-label">Gewichtsfluss (Ø / Max)</span>
-                    <span class="meta-value">
-                        <span id="wf">-</span><span class="meta-sub" id="maxWf"></span>
-                    </span>
+                <div class="annotation-fields">
+                    <div class="annotation-field">
+                        <label>Kaffee / Bohne</label>
+                        <input type="text" id="annCoffee" placeholder="z.B. Ethiopia Yirgacheffe">
+                    </div>
+                    <div class="annotation-field">
+                        <label>Mühle</label>
+                        <input type="text" id="annGrinder" placeholder="z.B. Niche Zero">
+                    </div>
+                    <div class="annotation-field">
+                        <label>Mahlgrad</label>
+                        <input type="text" id="annGrindSetting" placeholder="z.B. 23 Clicks">
+                    </div>
+                    <div class="annotation-field">
+                        <label>Dosis (g)</label>
+                        <input type="number" id="annDose" placeholder="z.B. 18" step="0.1" min="0">
+                    </div>
+                    <div class="annotation-field full-width">
+                        <label>Notizen</label>
+                        <textarea id="annNotes" placeholder="Geschmack, Beobachtungen, Anpassungen …"></textarea>
+                    </div>
                 </div>
-                <div class="meta-item">
-                    <span class="meta-label">Dauer</span>
-                    <span class="meta-value" id="duration">-</span>
+                <div class="annotation-actions">
+                    <button class="save-btn" id="saveAnnotationBtn" onclick="saveAnnotation()">Speichern</button>
                 </div>
             </div>
         </div>
 
-        <!-- Annotation panel -->
-        <div class="annotation-panel" id="annotationPanel">
-            <div class="annotation-header">
-                <span class="annotation-title">Notizen & Bewertung</span>
-                <div class="star-rating" id="starRating">
-                    <span class="star" data-val="1">★</span>
-                    <span class="star" data-val="2">★</span>
-                    <span class="star" data-val="3">★</span>
-                    <span class="star" data-val="4">★</span>
-                    <span class="star" data-val="5">★</span>
+    </div><!-- #shots-view -->
+
+    <!-- Live view -->
+    <div id="live-view">
+        <div id="live-header">
+            <h1>Live Shot</h1>
+            <div id="live-status-badge">
+                <span class="badge-dot"></span>
+                <span id="live-status-text">Verbinde …</span>
+            </div>
+        </div>
+        <div id="live-meta">–</div>
+
+        <div id="live-content">
+            <div class="live-stats">
+                <div class="live-stat highlight-time">
+                    <div class="stat-val" id="liveTime">–</div>
+                    <div class="stat-unit">min:sec</div>
+                    <div class="stat-label">Zeit</div>
+                </div>
+                <div class="live-stat highlight-pressure">
+                    <div class="stat-val" id="livePressure">–</div>
+                    <div class="stat-unit">bar</div>
+                    <div class="stat-label">Druck</div>
+                </div>
+                <div class="live-stat highlight-flow">
+                    <div class="stat-val" id="liveFlow">–</div>
+                    <div class="stat-unit">ml/s</div>
+                    <div class="stat-label">Pumpenfluss</div>
+                </div>
+                <div class="live-stat highlight-weight">
+                    <div class="stat-val" id="liveWeight">–</div>
+                    <div class="stat-unit">g</div>
+                    <div class="stat-label">Gewicht</div>
+                </div>
+                <div class="live-stat highlight-temp">
+                    <div class="stat-val" id="liveTemp">–</div>
+                    <div class="stat-unit">°C</div>
+                    <div class="stat-label">Temperatur</div>
                 </div>
             </div>
-            <div class="annotation-fields">
-                <div class="annotation-field">
-                    <label>Kaffee / Bohne</label>
-                    <input type="text" id="annCoffee" placeholder="z.B. Ethiopia Yirgacheffe">
-                </div>
-                <div class="annotation-field">
-                    <label>Mühle</label>
-                    <input type="text" id="annGrinder" placeholder="z.B. Niche Zero">
-                </div>
-                <div class="annotation-field">
-                    <label>Mahlgrad</label>
-                    <input type="text" id="annGrindSetting" placeholder="z.B. 23 Clicks">
-                </div>
-                <div class="annotation-field">
-                    <label>Dosis (g)</label>
-                    <input type="number" id="annDose" placeholder="z.B. 18" step="0.1" min="0">
-                </div>
-                <div class="annotation-field full-width">
-                    <label>Notizen</label>
-                    <textarea id="annNotes" placeholder="Geschmack, Beobachtungen, Anpassungen …"></textarea>
-                </div>
-            </div>
-            <div class="annotation-actions">
-                <button class="save-btn" id="saveAnnotationBtn" onclick="saveAnnotation()">Speichern</button>
+
+            <div class="live-chart-container">
+                <canvas id="liveChart"></canvas>
             </div>
         </div>
 
-        <div class="chart-container">
-            <canvas id="espressoShotChart"></canvas>
+        <div id="live-idle" style="display:none">
+            <div class="idle-icon">☕</div>
+            <h2>Maschine bereit</h2>
+            <p>Sobald ein Bezug startet, erscheinen hier die Echtzeit-Daten.</p>
         </div>
+    </div><!-- #live-view -->
 
-    </div><!-- #chart-area -->
 </div><!-- #main -->
 
 <script>
-let shots = [];
-let chart;
-let primaryShotId  = null;
-let compareShotId  = null;
-let currentRating  = 0;
+let shots        = [];
+let chart        = null;
+let primaryShotId = null;
+let compareShotId = null;
+let currentRating = 0;
+let currentMode   = 'shots';
 
-// ── Corsair crosshair plugin ──────────────────────────────────────────────
+// Live state
+let liveEventSource = null;
+let liveChart       = null;
+let liveIsActive    = false;
+
+// ── Corsair crosshair ─────────────────────────────────────────────────────
 const corsairPlugin = {
     id: 'corsair',
-    defaults: { width: 1, color: 'rgba(255,255,255,0.4)', dash: [4, 4] },
-    afterInit:  (chart) => { chart.corsair = { x: 0, y: 0 }; },
-    afterEvent: (chart, args) => {
-        const { x, y } = args.event;
-        chart.corsair = { x, y, draw: args.inChartArea };
-        chart.draw();
-    },
-    beforeDatasetsDraw: (chart, _args, opts) => {
-        const { ctx } = chart;
-        const { top, bottom } = chart.chartArea;
-        const { x, draw } = chart.corsair;
+    defaults: { width: 1, color: 'rgba(255,255,255,0.35)', dash: [4,4] },
+    afterInit:  c => { c.corsair = { x: 0, y: 0 }; },
+    afterEvent: (c, args) => { c.corsair = { x: args.event.x, y: args.event.y, draw: args.inChartArea }; c.draw(); },
+    beforeDatasetsDraw: (c, _a, opts) => {
+        const { ctx } = c;
+        const { top, bottom } = c.chartArea;
+        const { x, draw } = c.corsair;
         if (!draw) return;
         ctx.save();
         ctx.beginPath();
-        ctx.lineWidth   = opts.width;
-        ctx.strokeStyle = opts.color;
-        ctx.setLineDash(opts.dash);
-        ctx.moveTo(x, bottom);
-        ctx.lineTo(x, top);
-        ctx.stroke();
+        ctx.lineWidth = opts.width; ctx.strokeStyle = opts.color; ctx.setLineDash(opts.dash);
+        ctx.moveTo(x, bottom); ctx.lineTo(x, top); ctx.stroke();
         ctx.restore();
     }
 };
 
-// ── Star rating setup ─────────────────────────────────────────────────────
+// ── Mode switcher ─────────────────────────────────────────────────────────
+function switchMode(mode) {
+    currentMode = mode;
+    document.getElementById('btnShots').classList.toggle('active', mode === 'shots');
+    document.getElementById('btnLive').classList.toggle('active',  mode === 'live');
+    document.getElementById('shots-view').style.display = mode === 'shots' ? 'flex' : 'none';
+    document.getElementById('live-view').style.display  = mode === 'live'  ? 'flex' : 'none';
+
+    if (mode === 'live') {
+        initLiveChart();
+        connectLiveStream();
+    } else {
+        disconnectLiveStream();
+    }
+}
+
+// ── Star rating ───────────────────────────────────────────────────────────
 document.querySelectorAll('#starRating .star').forEach(star => {
     const val = parseInt(star.dataset.val);
     star.addEventListener('mouseover', () => renderStars(val));
@@ -591,30 +647,27 @@ async function loadData() {
     try {
         const r = await fetch('shots.json');
         if (!r.ok) {
-            shotsEl.innerHTML = `<div class="loading-state" style="color:#ef4444">Fehler beim Laden (HTTP ${r.status})</div>`;
+            shotsEl.innerHTML = `<div class="loading-state" style="color:#ef4444">HTTP ${r.status}</div>`;
             return;
         }
-
         shots = await r.json();
         renderSidebar();
 
-        const emptyState = document.getElementById('empty-state');
-        const chartArea  = document.getElementById('chart-area');
-
+        const empty    = document.getElementById('empty-state');
+        const chartArea = document.getElementById('chart-area');
         if (shots.length > 0) {
-            emptyState.style.display = 'none';
-            chartArea.style.display  = 'flex';
-            if (!primaryShotId || !shots.find(s => s.id === primaryShotId)) {
+            empty.style.display     = 'none';
+            chartArea.style.display = 'flex';
+            if (!primaryShotId || !shots.find(s => s.id === primaryShotId))
                 primaryShotId = shots[shots.length - 1].id;
-            }
             updateView();
         } else {
-            emptyState.style.display = 'flex';
-            chartArea.style.display  = 'none';
+            empty.style.display     = 'flex';
+            chartArea.style.display = 'none';
         }
-    } catch (error) {
-        shotsEl.innerHTML = '<div class="loading-state" style="color:#ef4444">Verbindungsfehler</div>';
-        console.error('Fehler in loadData:', error);
+    } catch (e) {
+        document.getElementById('shots').innerHTML =
+            '<div class="loading-state" style="color:#ef4444">Verbindungsfehler</div>';
     }
 }
 
@@ -622,25 +675,23 @@ async function loadData() {
 function renderSidebar() {
     const el = document.getElementById('shots');
     el.innerHTML = '';
-
     const countEl = document.getElementById('shot-count');
     if (countEl) countEl.textContent = `(${shots.length})`;
 
     [...shots].reverse().forEach(shot => {
-        const wrapper = document.createElement('div');
+        const wrapper  = document.createElement('div');
         wrapper.className = 'shot-wrapper';
         wrapper.id = `wrapper-${shot.id}`;
 
         const divShot = document.createElement('div');
         divShot.className = 'shot';
 
-        const date        = new Date(shot.timestamp * 1000);
+        const date = new Date(shot.timestamp * 1000);
         const profileName = shot.profile?.name || shot.profileName || 'Unknown Profile';
-        const ann         = shot.annotation || {};
+        const ann = shot.annotation || {};
 
         const coffeeHtml = ann.coffee
             ? `<div class="coffee-name-sidebar">${ann.coffee}${ann.dose ? ` · ${ann.dose}g` : ''}</div>` : '';
-
         const starsHtml = ann.rating
             ? `<div class="sidebar-stars">${'★'.repeat(ann.rating)}${'☆'.repeat(5 - ann.rating)}</div>` : '';
 
@@ -652,31 +703,21 @@ function renderSidebar() {
             ${starsHtml}
         `;
 
-        divShot.onclick = (e) => {
-            if (e.ctrlKey || e.metaKey) {
-                toggleCompare(shot.id);
-            } else {
-                primaryShotId = shot.id;
-                compareShotId = null;
-                updateSidebarHighlighting();
-                updateView();
-            }
+        divShot.onclick = e => {
+            if (e.ctrlKey || e.metaKey) { toggleCompare(shot.id); }
+            else { primaryShotId = shot.id; compareShotId = null; updateSidebarHighlighting(); updateView(); }
         };
 
-        const btnCompare = document.createElement('button');
-        btnCompare.className = 'compare-btn';
-        btnCompare.innerHTML = '⇄';
-        btnCompare.title = 'Als Vergleichs-Shot wählen';
-        btnCompare.onclick = (e) => {
-            e.stopPropagation();
-            toggleCompare(shot.id);
-        };
+        const btnCmp = document.createElement('button');
+        btnCmp.className = 'compare-btn';
+        btnCmp.innerHTML = '⇄';
+        btnCmp.title = 'Als Vergleichs-Shot wählen';
+        btnCmp.onclick = e => { e.stopPropagation(); toggleCompare(shot.id); };
 
         wrapper.appendChild(divShot);
-        wrapper.appendChild(btnCompare);
+        wrapper.appendChild(btnCmp);
         el.appendChild(wrapper);
     });
-
     updateSidebarHighlighting();
 }
 
@@ -691,8 +732,8 @@ function updateSidebarHighlighting() {
     document.querySelectorAll('.shot-wrapper').forEach(x => {
         x.classList.remove('active', 'compare-active');
         const id = parseInt(x.id.replace('wrapper-', ''));
-        if (id === primaryShotId)  x.classList.add('active');
-        if (id === compareShotId)  x.classList.add('compare-active');
+        if (id === primaryShotId) x.classList.add('active');
+        if (id === compareShotId) x.classList.add('compare-active');
     });
 }
 
@@ -706,7 +747,6 @@ function renderAnnotationPanel(shot) {
     document.getElementById('annGrindSetting').value = ann.grindSetting || '';
     document.getElementById('annDose').value         = ann.dose         || '';
     document.getElementById('annNotes').value        = ann.notes        || '';
-
     const btn = document.getElementById('saveAnnotationBtn');
     btn.textContent = 'Speichern';
     btn.classList.remove('saved');
@@ -715,7 +755,6 @@ function renderAnnotationPanel(shot) {
 async function saveAnnotation() {
     if (!primaryShotId) return;
     const btn = document.getElementById('saveAnnotationBtn');
-
     const payload = {
         rating:       currentRating || null,
         coffee:       document.getElementById('annCoffee').value.trim(),
@@ -724,31 +763,22 @@ async function saveAnnotation() {
         dose:         parseFloat(document.getElementById('annDose').value) || null,
         notes:        document.getElementById('annNotes').value.trim()
     };
-
     try {
         const r = await fetch(`api/shots/${primaryShotId}/annotate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-
         if (r.ok) {
             const idx = shots.findIndex(s => s.id === primaryShotId);
             if (idx !== -1) shots[idx].annotation = payload;
-
             btn.textContent = '✓ Gespeichert';
             btn.classList.add('saved');
-            setTimeout(() => {
-                btn.textContent = 'Speichern';
-                btn.classList.remove('saved');
-            }, 2000);
-
+            setTimeout(() => { btn.textContent = 'Speichern'; btn.classList.remove('saved'); }, 2000);
             renderSidebar();
             updateSidebarHighlighting();
         }
-    } catch (e) {
-        console.error('Fehler beim Speichern:', e);
-    }
+    } catch (e) { console.error('Annotation-Fehler:', e); }
 }
 
 // ── Status / Sync ─────────────────────────────────────────────────────────
@@ -757,34 +787,26 @@ async function updateStatus() {
         const r = await fetch('api/status');
         if (!r.ok) return;
         const s = await r.json();
-
         const dot    = document.getElementById('statusDot');
         const timeEl = document.getElementById('syncTime');
-
         if (s.lastSync) {
-            const d = new Date(s.lastSync);
-            timeEl.textContent = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+            timeEl.textContent = new Date(s.lastSync)
+                .toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
         }
-
-        if (s.lastSyncError) {
-            dot.className = 'status-dot error';
-            dot.title     = s.lastSyncError;
-        } else if (s.lastSync) {
-            dot.className = 'status-dot ok';
-            dot.title     = 'Letzter Sync erfolgreich';
-        }
+        dot.className = s.lastSyncError ? 'status-dot error' : (s.lastSync ? 'status-dot ok' : 'status-dot unknown');
+        dot.title     = s.lastSyncError || '';
     } catch (e) {}
 }
 
 async function triggerSync() {
     const btn = document.getElementById('syncBtn');
-    btn.disabled    = true;
+    btn.disabled = true;
     btn.textContent = '↻ …';
     try {
         const r = await fetch('api/sync', { method: 'POST' });
         if (r.status === 429) {
-            const data = await r.json();
-            btn.textContent = data.error || 'Warten …';
+            const d = await r.json();
+            btn.textContent = d.error || 'Warten …';
             setTimeout(() => { btn.textContent = '↻ Sync'; btn.disabled = false; }, 3000);
             return;
         }
@@ -792,140 +814,260 @@ async function triggerSync() {
         await loadData();
         await updateStatus();
     } finally {
-        btn.disabled    = false;
+        btn.disabled = false;
         btn.textContent = '↻ Sync';
     }
 }
 
-// ── Data helpers ──────────────────────────────────────────────────────────
-function safeLast(arr) {
-    if (!arr || !arr.length) return null;
-    for (let i = arr.length - 1; i >= 0; i--) {
-        if (arr[i] != null && !isNaN(arr[i])) return arr[i];
+// ── Live mode ─────────────────────────────────────────────────────────────
+function initLiveChart() {
+    const ctx = document.getElementById('liveChart');
+    if (liveChart) liveChart.destroy();
+
+    liveChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [
+                { label: 'Druck',       data: [], yAxisID: 'y',    borderWidth: 2.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
+                { label: 'Pumpenfluss', data: [], yAxisID: 'y',    borderWidth: 2,   tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
+                { label: 'Gewicht',     data: [], yAxisID: 'temp', borderWidth: 2,   tension: 0.1, borderColor: '#2ecc71', backgroundColor: 'transparent', pointStyle: false },
+                { label: 'Temperatur',  data: [], yAxisID: 'temp', borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { color: '#e4e4e7', font: { family: 'Figtree' } } },
+                tooltip: { callbacks: { title: ctx => 'Zeit: ' + formatTimeLabel(ctx[0].parsed.x) } }
+            },
+            scales: {
+                x:    { type: 'linear', min: 0, max: 60, ticks: { color: '#a1a1aa', callback: v => formatTimeLabel(v), stepSize: 5 }, grid: { color: '#27272a' } },
+                y:    { type: 'linear', position: 'left',  min: 0, max: 12, ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
+                temp: { type: 'linear', position: 'right', min: 0, max: 100, ticks: { color: '#a1a1aa' }, grid: { drawOnChartArea: false } }
+            }
+        }
+    });
+}
+
+function connectLiveStream() {
+    if (liveEventSource) liveEventSource.close();
+    setLiveBadge('connecting');
+
+    liveEventSource = new EventSource('api/live');
+
+    liveEventSource.onmessage = e => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'connected') { setLiveBadge('ready'); return; }
+        if (msg.type === 'error')     { setLiveBadge('error', msg.message); return; }
+        if (msg.type === 'data')      handleLiveData(msg);
+    };
+
+    liveEventSource.onerror = () => setLiveBadge('error', 'Verbindung unterbrochen');
+}
+
+function disconnectLiveStream() {
+    if (liveEventSource) { liveEventSource.close(); liveEventSource = null; }
+    if (liveChart)       { liveChart.destroy(); liveChart = null; }
+}
+
+function setLiveBadge(state, detail = '') {
+    const badge   = document.getElementById('live-status-badge');
+    const textEl  = document.getElementById('live-status-text');
+    const liveBtn = document.getElementById('btnLive');
+
+    badge.className = `live-status-badge ${state}`;
+    liveBtn.classList.remove('live-brewing', 'live-ready');
+
+    const labels = {
+        connecting: 'Verbinde …',
+        ready:      'Bereit',
+        brewing:    'Brüht …',
+        error:      detail || 'Fehler',
+        idle:       'Bereit'
+    };
+    textEl.textContent = labels[state] || state;
+
+    if (state === 'brewing') liveBtn.classList.add('live-brewing');
+    if (state === 'ready' || state === 'idle') liveBtn.classList.add('live-ready');
+}
+
+function handleLiveData(msg) {
+    const dp       = msg.datapoints || {};
+    const times    = dp.timeInShot  || [];
+    const lastIdx  = times.length - 1;
+
+    const metaEl = document.getElementById('live-meta');
+    const contentEl = document.getElementById('live-content');
+    const idleEl    = document.getElementById('live-idle');
+
+    if (!msg.isLive && times.length === 0) {
+        setLiveBadge('ready');
+        metaEl.textContent = '–';
+        contentEl.style.display = 'none';
+        idleEl.style.display    = 'flex';
+        return;
     }
+
+    contentEl.style.display = 'block';
+    idleEl.style.display    = 'none';
+
+    if (msg.isLive) {
+        setLiveBadge('brewing');
+        metaEl.textContent = `Shot ${msg.shotId} · ${msg.profileName}`;
+    } else {
+        setLiveBadge('idle');
+        metaEl.textContent = `Shot ${msg.shotId} · ${msg.profileName} · abgeschlossen`;
+    }
+
+    // Update stat boxes
+    if (lastIdx >= 0) {
+        const elapsed  = times[lastIdx] / 10;
+        const pressure = dp.pressure?.[lastIdx]    != null ? dp.pressure[lastIdx] / 10    : null;
+        const flow     = dp.pumpFlow?.[lastIdx]     != null ? dp.pumpFlow[lastIdx] / 10    : null;
+        const weight   = (dp.shotWeight || dp.weight)?.[lastIdx] != null
+                       ? (dp.shotWeight || dp.weight)[lastIdx] / 10 : null;
+        const temp     = dp.temperature?.[lastIdx]  != null ? dp.temperature[lastIdx] / 10 : null;
+
+        document.getElementById('liveTime').textContent     = formatTimeLabel(elapsed);
+        document.getElementById('livePressure').textContent = pressure != null ? pressure.toFixed(1) : '–';
+        document.getElementById('liveFlow').textContent     = flow     != null ? flow.toFixed(1)     : '–';
+        document.getElementById('liveWeight').textContent   = weight   != null ? weight.toFixed(1)   : '–';
+        document.getElementById('liveTemp').textContent     = temp     != null ? temp.toFixed(1)     : '–';
+    }
+
+    // Update live chart
+    if (liveChart) {
+        const maxTime = times.length > 0 ? times[times.length - 1] / 10 : 60;
+        liveChart.data.datasets[0].data = mapToXY(times, dp.pressure);
+        liveChart.data.datasets[1].data = mapToXY(times, dp.pumpFlow);
+        liveChart.data.datasets[2].data = mapToXY(times, dp.shotWeight || dp.weight);
+        liveChart.data.datasets[3].data = mapToXY(times, dp.temperature);
+        liveChart.options.scales.x.max  = Math.max(maxTime + 5, 30);
+
+        const maxTemp = dp.temperature?.length
+            ? dp.temperature.reduce((m, v) => v > m ? v : m, 0) / 10 : 0;
+        liveChart.options.scales.temp.max = Math.ceil(maxTemp + 5) || 100;
+
+        liveChart.update('none');
+    }
+}
+
+// ── Shot chart helpers ────────────────────────────────────────────────────
+function safeLast(arr) {
+    if (!arr?.length) return null;
+    for (let i = arr.length - 1; i >= 0; i--)
+        if (arr[i] != null && !isNaN(arr[i])) return arr[i];
     return null;
 }
-
-function avgActive(arr, threshold = 0.5) {
-    if (!arr || !arr.length) return null;
-    const active = arr.filter(v => v > threshold);
-    if (!active.length) return arr[arr.length - 1];
-    return active.reduce((a, b) => a + b, 0) / active.length;
+function avgActive(arr, t = 0.5) {
+    if (!arr?.length) return null;
+    const active = arr.filter(v => v > t);
+    return active.length ? active.reduce((a,b)=>a+b,0)/active.length : arr[arr.length-1];
 }
-
 function avg(arr) {
-    if (!arr || !arr.length) return null;
-    return arr.reduce((a, b) => a + b, 0) / arr.length;
+    if (!arr?.length) return null;
+    return arr.reduce((a,b)=>a+b,0)/arr.length;
 }
-
 function max(arr) {
-    if (!arr || !arr.length) return null;
-    return arr.reduce((m, v) => v > m ? v : m, arr[0]);
+    if (!arr?.length) return null;
+    return arr.reduce((m,v)=>v>m?v:m, arr[0]);
 }
-
-function fmt(v, unit = '') {
-    return v == null ? '-' : `${v.toFixed(1)}${unit}`;
+function fmt(v, unit='') { return v==null ? '-' : `${v.toFixed(1)}${unit}`; }
+function formatTimeLabel(s) {
+    if (s==null||isNaN(s)) return '00:00';
+    return `${Math.floor(s/60).toString().padStart(2,'0')}:${Math.floor(s%60).toString().padStart(2,'0')}`;
 }
-
-function formatTimeLabel(seconds) {
-    if (seconds == null || isNaN(seconds)) return '00:00';
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-}
-
 function mapToXY(timeArr, dataArr) {
-    if (!timeArr || !dataArr) return [];
+    if (!timeArr||!dataArr) return [];
     return timeArr
-        .map((t, i) => ({ x: t / 10, y: dataArr[i] != null ? dataArr[i] / 10 : null }))
+        .map((t,i) => ({ x: t/10, y: dataArr[i]!=null ? dataArr[i]/10 : null }))
         .filter(pt => pt.y !== null);
 }
-
 function getShotData(shot) {
     if (!shot) return null;
     const d = shot.datapoints || {};
-    const times = d.timeInShot || [];
+    const t = d.timeInShot || [];
     return {
-        rawTimes:      times.map(v => v / 10),
-        pressure:      mapToXY(times, d.pressure),
-        targetPressure:mapToXY(times, d.targetPressure),
-        flow:          mapToXY(times, d.pumpFlow),
-        targetFlow:    mapToXY(times, d.targetPumpFlow),
-        weight:        mapToXY(times, d.shotWeight || d.weight),
-        weightFlow:    mapToXY(times, d.weightFlow),
-        temp:          mapToXY(times, d.temperature),
-        targetTemp:    mapToXY(times, d.targetTemperature)
+        rawTimes:       t.map(v=>v/10),
+        pressure:       mapToXY(t, d.pressure),
+        targetPressure: mapToXY(t, d.targetPressure),
+        flow:           mapToXY(t, d.pumpFlow),
+        targetFlow:     mapToXY(t, d.targetPumpFlow),
+        weight:         mapToXY(t, d.shotWeight||d.weight),
+        weightFlow:     mapToXY(t, d.weightFlow),
+        temp:           mapToXY(t, d.temperature),
+        targetTemp:     mapToXY(t, d.targetTemperature)
     };
 }
 
-// ── Main view ─────────────────────────────────────────────────────────────
+// ── Shot view ─────────────────────────────────────────────────────────────
 function updateView() {
-    const shotA = shots.find(s => s.id === primaryShotId);
-    const shotB = compareShotId ? shots.find(s => s.id === compareShotId) : null;
+    const shotA = shots.find(s=>s.id===primaryShotId);
+    const shotB = compareShotId ? shots.find(s=>s.id===compareShotId) : null;
     if (!shotA) return;
 
-    const dataA = getShotData(shotA);
-    const dataB = getShotData(shotB);
+    const dA = getShotData(shotA);
+    const dB = getShotData(shotB);
 
-    const maxTempA      = max((shotA.datapoints?.temperature || []).map(v => v / 10)) || 0;
-    const maxTempB      = shotB ? (max((shotB.datapoints?.temperature || []).map(v => v / 10)) || 0) : 0;
-    const tempMaxScale  = Math.ceil(Math.max(maxTempA, maxTempB) + 5) || 100;
+    const maxTempA = max((shotA.datapoints?.temperature||[]).map(v=>v/10))||0;
+    const maxTempB = shotB ? (max((shotB.datapoints?.temperature||[]).map(v=>v/10))||0) : 0;
+    const tempMaxScale = Math.ceil(Math.max(maxTempA, maxTempB)+5)||100;
 
-    const profileNameA = shotA.profile?.name || shotA.profileName || 'Unknown Profile';
-
+    const nameA = shotA.profile?.name||shotA.profileName||'Unknown Profile';
     if (shotB) {
-        const profileNameB = shotB.profile?.name || shotB.profileName || 'Unknown Profile';
+        const nameB = shotB.profile?.name||shotB.profileName||'Unknown Profile';
         document.getElementById('topTitle').innerText   = `Vergleich: Shot ${shotA.id} vs. Shot ${shotB.id}`;
-        document.getElementById('valProfile').innerText = `${profileNameA} vs. ${profileNameB}`;
+        document.getElementById('valProfile').innerText = `${nameA} vs. ${nameB}`;
     } else {
-        document.getElementById('topTitle').innerText   = `${profileNameA} – Shot ${shotA.id}`;
-        document.getElementById('valProfile').innerText = profileNameA;
+        document.getElementById('topTitle').innerText   = `${nameA} – Shot ${shotA.id}`;
+        document.getElementById('valProfile').innerText = nameA;
     }
 
-    const totalSecs = (shotA.duration || 0) / 10;
+    const totalSecs = (shotA.duration||0)/10;
     document.getElementById('duration').innerText =
-        `${Math.floor(totalSecs / 60).toString().padStart(2,'0')}:${Math.floor(totalSecs % 60).toString().padStart(2,'0')}`;
+        `${Math.floor(totalSecs/60).toString().padStart(2,'0')}:${Math.floor(totalSecs%60).toString().padStart(2,'0')}`;
 
-    document.getElementById('pressure').innerText      = fmt(avgActive(dataA.pressure.map(p => p.y), 1.5), ' bar');
-    document.getElementById('targetPressure').innerText= ` / ${fmt(max(dataA.targetPressure.map(p => p.y)), ' bar')}`;
-    document.getElementById('flow').innerText          = fmt(avgActive(dataA.flow.map(p => p.y), 0.2), ' ml/s');
-    document.getElementById('targetFlow').innerText    = ` / ${fmt(avgActive(dataA.targetFlow.map(p => p.y), 0.2), ' ml/s')}`;
-    document.getElementById('temp').innerText          = fmt(avg(dataA.temp.map(p => p.y)), ' °C');
-    document.getElementById('targetTemp').innerText    = ` / ${fmt(avg(dataA.targetTemp.map(p => p.y)), ' °C')}`;
-    document.getElementById('weight').innerText        = fmt(max(dataA.weight.map(p => p.y)), ' g');
-    document.getElementById('weightFlowSub').innerText = ` / ${fmt(safeLast(dataA.weightFlow.map(p => p.y)), ' ml/s')}`;
-    document.getElementById('wf').innerText            = fmt(avgActive(dataA.weightFlow.map(p => p.y), 0.1), ' ml/s');
-    document.getElementById('maxWf').innerText         = ` / ${fmt(max(dataA.weightFlow.map(p => p.y)), ' max')}`;
+    document.getElementById('pressure').innerText      = fmt(avgActive(dA.pressure.map(p=>p.y),1.5),' bar');
+    document.getElementById('targetPressure').innerText= ` / ${fmt(max(dA.targetPressure.map(p=>p.y)),' bar')}`;
+    document.getElementById('flow').innerText          = fmt(avgActive(dA.flow.map(p=>p.y),0.2),' ml/s');
+    document.getElementById('targetFlow').innerText    = ` / ${fmt(avgActive(dA.targetFlow.map(p=>p.y),0.2),' ml/s')}`;
+    document.getElementById('temp').innerText          = fmt(avg(dA.temp.map(p=>p.y)),' °C');
+    document.getElementById('targetTemp').innerText    = ` / ${fmt(avg(dA.targetTemp.map(p=>p.y)),' °C')}`;
+    document.getElementById('weight').innerText        = fmt(max(dA.weight.map(p=>p.y)),' g');
+    document.getElementById('weightFlowSub').innerText = ` / ${fmt(safeLast(dA.weightFlow.map(p=>p.y)),' ml/s')}`;
+    document.getElementById('wf').innerText            = fmt(avgActive(dA.weightFlow.map(p=>p.y),0.1),' ml/s');
+    document.getElementById('maxWf').innerText         = ` / ${fmt(max(dA.weightFlow.map(p=>p.y)),' max')}`;
 
     renderAnnotationPanel(shotA);
 
-    const maxTimeA   = dataA.rawTimes.length > 0 ? dataA.rawTimes[dataA.rawTimes.length - 1] : 0;
-    const maxTimeB   = dataB?.rawTimes.length > 0 ? dataB.rawTimes[dataB.rawTimes.length - 1] : 0;
-    const finalMaxTime = Math.max(maxTimeA, maxTimeB);
+    const maxTimeA = dA.rawTimes.length>0 ? dA.rawTimes[dA.rawTimes.length-1] : 0;
+    const maxTimeB = dB?.rawTimes.length>0 ? dB.rawTimes[dB.rawTimes.length-1] : 0;
 
     const datasets = [
-        { label: 'Druck (A)',          data: dataA.pressure,   yAxisID: 'y',    borderWidth: 2.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
-        { label: 'Pumpenfluss (A)',     data: dataA.flow,       yAxisID: 'y',    borderWidth: 2,   tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
-        { label: 'Gewichtsfluss (A)',   data: dataA.weightFlow, yAxisID: 'y',    borderWidth: 2,   tension: 0.1, borderColor: '#9b59b6', backgroundColor: 'transparent', pointStyle: false },
-        { label: 'Gewicht (A)',         data: dataA.weight,     yAxisID: 'temp', borderWidth: 2,   tension: 0.1, borderColor: '#2ecc71', backgroundColor: 'transparent', pointStyle: false },
-        { label: 'Temperatur (A)',      data: dataA.temp,       yAxisID: 'temp', borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
+        { label:'Druck (A)',        data:dA.pressure,   yAxisID:'y',    borderWidth:2.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
+        { label:'Pumpenfluss (A)',  data:dA.flow,        yAxisID:'y',    borderWidth:2,   tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
+        { label:'Gewichtsfluss (A)',data:dA.weightFlow,  yAxisID:'y',    borderWidth:2,   tension:.1, borderColor:'#9b59b6', backgroundColor:'transparent', pointStyle:false },
+        { label:'Gewicht (A)',      data:dA.weight,      yAxisID:'temp', borderWidth:2,   tension:.1, borderColor:'#2ecc71', backgroundColor:'transparent', pointStyle:false },
+        { label:'Temperatur (A)',   data:dA.temp,        yAxisID:'temp', borderWidth:2.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
     ];
 
     if (!shotB) {
         datasets.push(
-            { label: 'Ziel Druck',      data: dataA.targetPressure, yAxisID: 'y',    borderDash: [5,5], borderWidth: 1.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
-            { label: 'Ziel Fluss',      data: dataA.targetFlow,     yAxisID: 'y',    borderDash: [5,5], borderWidth: 1.5, tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
-            { label: 'Ziel Temperatur', data: dataA.targetTemp,     yAxisID: 'temp', borderDash: [5,5], borderWidth: 1.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
+            { label:'Ziel Druck',     data:dA.targetPressure, yAxisID:'y',    borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
+            { label:'Ziel Fluss',     data:dA.targetFlow,     yAxisID:'y',    borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
+            { label:'Ziel Temperatur',data:dA.targetTemp,     yAxisID:'temp', borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
         );
     }
-
-    if (shotB && dataB) {
+    if (shotB && dB) {
         datasets.push(
-            { label: 'Druck (B)',        data: dataB.pressure,   yAxisID: 'y',    borderDash: [3,3], borderWidth: 2,   tension: 0.1, borderColor: 'rgba(52,152,219,0.65)',  backgroundColor: 'transparent', pointStyle: false },
-            { label: 'Pumpenfluss (B)',  data: dataB.flow,       yAxisID: 'y',    borderDash: [3,3], borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(243,156,18,0.65)',  backgroundColor: 'transparent', pointStyle: false },
-            { label: 'Gewichtsfl. (B)', data: dataB.weightFlow, yAxisID: 'y',    borderDash: [3,3], borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(155,89,182,0.65)',  backgroundColor: 'transparent', pointStyle: false },
-            { label: 'Gewicht (B)',      data: dataB.weight,     yAxisID: 'temp', borderDash: [3,3], borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(46,204,113,0.65)', backgroundColor: 'transparent', pointStyle: false },
-            { label: 'Temperatur (B)',   data: dataB.temp,       yAxisID: 'temp', borderDash: [3,3], borderWidth: 2,   tension: 0.1, borderColor: 'rgba(231,76,60,0.65)',  backgroundColor: 'transparent', pointStyle: false }
+            { label:'Druck (B)',        data:dB.pressure,  yAxisID:'y',    borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(52,152,219,.65)',  backgroundColor:'transparent', pointStyle:false },
+            { label:'Pumpenfluss (B)', data:dB.flow,       yAxisID:'y',    borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(243,156,18,.65)', backgroundColor:'transparent', pointStyle:false },
+            { label:'Gewfluß (B)',     data:dB.weightFlow, yAxisID:'y',    borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(155,89,182,.65)', backgroundColor:'transparent', pointStyle:false },
+            { label:'Gewicht (B)',     data:dB.weight,     yAxisID:'temp', borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.65)', backgroundColor:'transparent', pointStyle:false },
+            { label:'Temperatur (B)', data:dB.temp,        yAxisID:'temp', borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(231,76,60,.65)',  backgroundColor:'transparent', pointStyle:false }
         );
     }
 
@@ -943,47 +1085,20 @@ function updateView() {
             interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { labels: { color: '#e4e4e7', font: { family: 'Figtree' } } },
-                tooltip: {
-                    callbacks: {
-                        title: ctx => 'Zeit: ' + formatTimeLabel(ctx[0].parsed.x)
-                    }
-                }
+                tooltip: { callbacks: { title: ctx => 'Zeit: ' + formatTimeLabel(ctx[0].parsed.x) } }
             },
             scales: {
-                x: {
-                    type: 'linear',
-                    min: 0,
-                    max: finalMaxTime,
-                    clip: false,
-                    ticks: {
-                        color: '#a1a1aa',
-                        font: { family: 'Figtree' },
-                        stepSize: 5,
-                        callback: v => formatTimeLabel(v)
-                    },
-                    grid: { color: '#27272a' }
-                },
-                y: {
-                    type: 'linear',
-                    position: 'left',
-                    min: 0,
-                    max: 12,
-                    ticks: { color: '#a1a1aa' },
-                    grid: { color: '#27272a' }
-                },
-                temp: {
-                    type: 'linear',
-                    position: 'right',
-                    min: 0,
-                    max: tempMaxScale,
-                    ticks: { color: '#a1a1aa' },
-                    grid: { drawOnChartArea: false }
-                }
+                x:    { type:'linear', min:0, max:Math.max(maxTimeA,maxTimeB), clip:false,
+                        ticks:{ color:'#a1a1aa', font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v) },
+                        grid:{ color:'#27272a' } },
+                y:    { type:'linear', position:'left',  min:0, max:12, ticks:{color:'#a1a1aa'}, grid:{color:'#27272a'} },
+                temp: { type:'linear', position:'right', min:0, max:tempMaxScale, ticks:{color:'#a1a1aa'}, grid:{drawOnChartArea:false} }
             }
         }
     });
 }
 
+// ── Init ──────────────────────────────────────────────────────────────────
 loadData();
 updateStatus();
 setInterval(updateStatus, 30000);
