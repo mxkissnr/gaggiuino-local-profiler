@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/releases/latest">
-    <img src="https://img.shields.io/github/v/release/mxkissnr/gaggiuino-local-profiler?color=%23f59e0b&label=Version&style=flat-square" alt="Version"/>
+  <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/releases/tag/v1.17.8">
+    <img src="https://img.shields.io/github/v/tag/mxkissnr/gaggiuino-local-profiler?color=%23f59e0b&label=Version&style=flat-square" alt="Version"/>
   </a>
   <img src="https://img.shields.io/badge/Home%20Assistant-Add--on-41bdf5?logo=home-assistant&style=flat-square" alt="HA Add-on"/>
   <img src="https://img.shields.io/badge/arch-amd64%20%7C%20armv7%20%7C%20aarch64-6b7280?style=flat-square" alt="Architectures"/>
