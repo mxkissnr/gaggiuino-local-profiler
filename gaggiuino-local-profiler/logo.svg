@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 180" width="760" height="180">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#1c1c1f"/>
+    </linearGradient>
+    <linearGradient id="cupGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d97706"/>
+      <stop offset="100%" stop-color="#92400e"/>
+    </linearGradient>
+    <linearGradient id="glpGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e4e4e7"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="760" height="180" rx="18" fill="url(#bg)"/>
+  <!-- Subtle border -->
+  <rect width="760" height="180" rx="18" fill="none" stroke="#3f3f46" stroke-width="1.5"/>
+
+  <!-- ── Espresso cup ── -->
+  <!-- Saucer -->
+  <ellipse cx="107" cy="148" rx="52" ry="7" fill="#78350f" opacity="0.9"/>
+  <ellipse cx="107" cy="146" rx="46" ry="5" fill="#92400e"/>
+
+  <!-- Cup body (trapezoid via path) -->
+  <path d="M 74 105 L 79 142 L 135 142 L 140 105 Z" fill="url(#cupGrad)" rx="4"/>
+
+  <!-- Cup rim -->
+  <rect x="70" y="100" width="74" height="9" rx="4.5" fill="#f59e0b"/>
+
+  <!-- Handle -->
+  <path d="M 140 112 C 162 112 162 136 140 136"
+        fill="none" stroke="#d97706" stroke-width="7" stroke-linecap="round"/>
+  <path d="M 140 112 C 158 112 158 136 140 136"
+        fill="none" stroke="#fbbf24" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Coffee surface inside cup -->
+  <ellipse cx="107" cy="104" rx="33" ry="5" fill="#451a03" opacity="0.85"/>
+  <!-- Crema highlight -->
+  <ellipse cx="100" cy="103" rx="14" ry="2.5" fill="#92400e" opacity="0.6"/>
+
+  <!-- Steam wisps -->
+  <path d="M 88 96 C 84 82 92 74 88 60 C 84 46 92 38 88 24"
+        fill="none" stroke="#9ca3af" stroke-width="2.5" stroke-linecap="round" opacity="0.55"/>
+  <path d="M 107 93 C 103 79 111 71 107 57 C 103 43 111 35 107 21"
+        fill="none" stroke="#9ca3af" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
+  <path d="M 126 96 C 122 82 130 74 126 60 C 122 46 130 38 126 24"
+        fill="none" stroke="#9ca3af" stroke-width="2.5" stroke-linecap="round" opacity="0.55"/>
+
+  <!-- ── Divider ── -->
+  <rect x="186" y="54" width="2.5" height="82" rx="1.25" fill="#f97316" opacity="0.85"/>
+
+  <!-- ── GLP Text ── -->
+  <text x="210" y="122"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-size="72" font-weight="800" fill="url(#glpGrad)"
+        letter-spacing="-3">GLP</text>
+
+  <!-- Subtitle -->
+  <text x="213" y="146"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-size="15" font-weight="400" fill="#71717a" letter-spacing="2.5">GAGGIUINO LOCAL PROFILER</text>
+
+  <!-- ── Right side: version badge ── -->
+  <rect x="606" y="70" width="118" height="40" rx="8" fill="#27272a"/>
+  <rect x="606" y="70" width="118" height="40" rx="8" fill="none" stroke="#3f3f46" stroke-width="1"/>
+  <text x="665" y="86"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-size="10" fill="#71717a" text-anchor="middle" letter-spacing="1">HOME ASSISTANT</text>
+  <text x="665" y="101"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-size="11" font-weight="600" fill="#a1a1aa" text-anchor="middle" letter-spacing="0.5">ADD-ON</text>
+</svg>

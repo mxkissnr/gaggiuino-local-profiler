@@ -1,9 +1,12 @@
-# Gaggiuino Local Profiler – Home Assistant Add-on Repository
+<p align="center">
+  <img src="gaggiuino-local-profiler/logo.svg" alt="Gaggiuino Local Profiler" width="640"/>
+</p>
 
-Local shot-profiling dashboard for [Gaggiuino](https://gaggiuino.github.io/)-based espresso machines as a Home Assistant Add-on.
-
-![HA Add-on](https://img.shields.io/badge/Home%20Assistant-Add--on-blue?logo=home-assistant)
-![Version](https://img.shields.io/badge/version-1.16.0-green)
+<p align="center">
+  <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/releases"><img src="https://img.shields.io/badge/version-1.17.8-green" alt="Version"/></a>
+  <img src="https://img.shields.io/badge/Home%20Assistant-Add--on-blue?logo=home-assistant" alt="HA Add-on"/>
+  <img src="https://img.shields.io/badge/arch-amd64%20%7C%20armv7%20%7C%20aarch64-lightgrey" alt="Architectures"/>
+</p>
 
 ## Installation
 
