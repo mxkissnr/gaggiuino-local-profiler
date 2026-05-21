@@ -1518,7 +1518,7 @@ function updateView() {
             `<b>pres[0..2]:</b> ${_p}<br>` +
             `<b>temp[0..2]:</b> ${_tmp}<br>` +
             `<b>tempMaxScale:</b> ${tempMaxScale} | maxTempA:${maxTempA.toFixed(2)}<br>` +
-            `<b>win:</b> ${window.innerWidth}×${window.innerHeight} dpr:${window.devicePixelRatio}`;
+            `<b>win[v172]:</b> ${window.innerWidth}×${window.innerHeight} dpr:${window.devicePixelRatio}`;
     }
 
     const nameA = shotA.profile?.name||shotA.profileName||'Unknown Profile';
@@ -1671,6 +1671,7 @@ function updateView() {
     const ctx = document.getElementById('espressoShotChart');
     if (chart) chart.destroy();
 
+    try {
     chart = new Chart(ctx, {
         type: 'line',
         plugins: [corsairPlugin, phasePlugin],
@@ -1698,6 +1699,11 @@ function updateView() {
             }
         }
     });
+    } catch(chartErr) {
+        const _dbgErr = document.getElementById('chartDebug');
+        if (_dbgErr) _dbgErr.innerHTML += `<br><b>★CHART ERR:</b> ${chartErr.message}`;
+        return;
+    }
 
     // Synchronous post-creation debug (always, so we see it immediately)
     const _dbgPost = document.getElementById('chartDebug');
