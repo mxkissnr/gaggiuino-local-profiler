@@ -746,6 +746,8 @@
                 <span id="grindAdviceText"></span>
             </div>
 
+            <div id="chartDebug" style="display:none;font-size:.65rem;color:#52525b;padding:4px 2px;font-family:monospace;word-break:break-all;line-height:1.5"></div>
+
             <div class="chart-tabs">
                 <button class="chart-tab active" id="tabZeit" onclick="switchChartTab('zeit')">⏱ Zeit</button>
                 <button class="chart-tab" id="tabPQ" onclick="switchChartTab('pq')">P·Q Kurve</button>
@@ -1494,6 +1496,24 @@ function updateView() {
     const maxTempA = max((shotA.datapoints?.temperature||[]).map(v=>v/10))||0;
     const maxTempB = shotB ? (max((shotB.datapoints?.temperature||[]).map(v=>v/10))||0) : 0;
     const tempMaxScale = Math.ceil(Math.max(maxTempA, maxTempB)+5)||100;
+
+    // Debug: show raw values to diagnose chart scaling issue
+    const _dbg = document.getElementById('chartDebug');
+    if (_dbg) {
+        const dp = shotA.datapoints || {};
+        const _t  = (dp.timeInShot||[]).slice(0,3);
+        const _p  = (dp.pressure||[]).slice(0,3);
+        const _tmp = (dp.temperature||[]).slice(0,3);
+        const _keys = Object.keys(dp).join(',');
+        _dbg.style.display = '';
+        _dbg.innerHTML =
+            `<b>keys:</b> ${_keys}<br>` +
+            `<b>time[0..2]:</b> ${_t}<br>` +
+            `<b>pres[0..2]:</b> ${_p}<br>` +
+            `<b>temp[0..2]:</b> ${_tmp}<br>` +
+            `<b>tempMaxScale:</b> ${tempMaxScale} | maxTempA:${maxTempA.toFixed(2)}<br>` +
+            `<b>win:</b> ${window.innerWidth}×${window.innerHeight} dpr:${window.devicePixelRatio}`;
+    }
 
     const nameA = shotA.profile?.name||shotA.profileName||'Unknown Profile';
     if (shotB) {
