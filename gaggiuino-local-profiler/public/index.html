@@ -1311,8 +1311,8 @@ function initLiveChart() {
             datasets: [
                 { label: 'Druck',       data: [], yAxisID: 'y',    borderWidth: 2.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
                 { label: 'Pumpenfluss', data: [], yAxisID: 'y',    borderWidth: 2,   tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
-                { label: 'Gewicht',     data: [], yAxisID: 'temp', borderWidth: 2,   tension: 0.1, borderColor: '#2ecc71', backgroundColor: 'transparent', pointStyle: false },
-                { label: 'Temperatur',  data: [], yAxisID: 'temp', borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
+                { label: 'Gewicht',     data: [], yAxisID: 'y1',   borderWidth: 2,   tension: 0.1, borderColor: '#2ecc71', backgroundColor: 'transparent', pointStyle: false },
+                { label: 'Temperatur',  data: [], yAxisID: 'y1',   borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
             ]
         },
         options: {
@@ -1327,7 +1327,7 @@ function initLiveChart() {
             scales: {
                 x:    { type: 'linear', min: 0, max: 60, ticks: { color: '#a1a1aa', callback: v => formatTimeLabel(v), stepSize: 5 }, grid: { color: '#27272a' } },
                 y:    { type: 'linear', position: 'left',  min: 0, max: 12, ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
-                temp: { type: 'linear', position: 'right', min: 0, max: 100, ticks: { color: '#a1a1aa' }, grid: { drawOnChartArea: false } }
+                y1:   { type: 'linear', position: 'right', min: 0, max: 100, ticks: { color: '#a1a1aa' }, grid: { drawOnChartArea: false } }
             }
         }
     });
@@ -1436,7 +1436,7 @@ function handleLiveData(msg) {
 
         const maxTemp = dp.temperature?.length
             ? dp.temperature.reduce((m, v) => v > m ? v : m, 0) / 10 : 0;
-        liveChart.options.scales.temp.max = Math.ceil(maxTemp + 5) || 100;
+        liveChart.options.scales.y1.max = Math.ceil(maxTemp + 5) || 100;
 
         liveChart.update('none');
     }
@@ -1643,15 +1643,15 @@ function updateView() {
         { label:`Druck${sfx}`,        data:dA.pressure,   yAxisID:'y',    borderWidth:2.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
         { label:`Pumpenfluss${sfx}`,  data:dA.flow,        yAxisID:'y',    borderWidth:2,   tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
         { label:`Gewichtsfluss${sfx}`,data:dA.weightFlow,  yAxisID:'y',    borderWidth:2,   tension:.1, borderColor:'#9b59b6', backgroundColor:'transparent', pointStyle:false },
-        { label:`Gewicht${sfx}`,      data:dA.weight,      yAxisID:'temp', borderWidth:2,   tension:.1, borderColor:'#2ecc71', backgroundColor:'transparent', pointStyle:false },
-        { label:`Temperatur${sfx}`,   data:dA.temp,        yAxisID:'temp', borderWidth:2.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
+        { label:`Gewicht${sfx}`,      data:dA.weight,      yAxisID:'y1', borderWidth:2,   tension:.1, borderColor:'#2ecc71', backgroundColor:'transparent', pointStyle:false },
+        { label:`Temperatur${sfx}`,   data:dA.temp,        yAxisID:'y1', borderWidth:2.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
     ];
 
     if (!shotB) {
         datasets.push(
             { label:'Ziel Druck',     data:dA.targetPressure, yAxisID:'y',    borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
             { label:'Ziel Fluss',     data:dA.targetFlow,     yAxisID:'y',    borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
-            { label:'Ziel Temperatur',data:dA.targetTemp,     yAxisID:'temp', borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
+            { label:'Ziel Temperatur',data:dA.targetTemp,     yAxisID:'y1', borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
         );
     }
     if (shotB && dB) {
@@ -1659,8 +1659,8 @@ function updateView() {
             { label:'Druck (B)',        data:dB.pressure,  yAxisID:'y',    borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(52,152,219,.65)',  backgroundColor:'transparent', pointStyle:false },
             { label:'Pumpenfluss (B)', data:dB.flow,       yAxisID:'y',    borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(243,156,18,.65)', backgroundColor:'transparent', pointStyle:false },
             { label:'Gewfluß (B)',     data:dB.weightFlow, yAxisID:'y',    borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(155,89,182,.65)', backgroundColor:'transparent', pointStyle:false },
-            { label:'Gewicht (B)',     data:dB.weight,     yAxisID:'temp', borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.65)', backgroundColor:'transparent', pointStyle:false },
-            { label:'Temperatur (B)', data:dB.temp,        yAxisID:'temp', borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(231,76,60,.65)',  backgroundColor:'transparent', pointStyle:false }
+            { label:'Gewicht (B)',     data:dB.weight,     yAxisID:'y1', borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.65)', backgroundColor:'transparent', pointStyle:false },
+            { label:'Temperatur (B)', data:dB.temp,        yAxisID:'y1', borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(231,76,60,.65)',  backgroundColor:'transparent', pointStyle:false }
         );
     }
 
@@ -1694,7 +1694,7 @@ function updateView() {
                         ticks:{ color:'#a1a1aa', font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
                         grid:{ color:'#27272a' } },
                 y:    { type:'linear', position:'left',  min:0, max:12, ticks:{color:'#a1a1aa', maxTicksLimit:6}, grid:{color:'#27272a'} },
-                temp: { type:'linear', position:'right', min:0, max:tempMaxScale, ticks:{color:'#a1a1aa', maxTicksLimit:6}, grid:{drawOnChartArea:false} }
+                y1:   { type:'linear', position:'right', min:0, max:tempMaxScale, ticks:{color:'#a1a1aa', maxTicksLimit:6}, grid:{drawOnChartArea:false} }
             }
         }
     });
@@ -1704,15 +1704,19 @@ function updateView() {
         // Debug: show actual chart scale state after render
         setTimeout(() => {
             const _d = document.getElementById('chartDebug');
-            if (_d && chart) {
-                const sk = Object.keys(chart.scales).join(',');
-                const tm = chart.scales.temp?.max;
-                const ym = chart.scales.y?.max;
-                const ds0y = chart.data.datasets[0]?.yAxisID;
-                const ds4y = chart.data.datasets[4]?.yAxisID;
-                _d.innerHTML += `<br><b>scales:</b> ${sk}<br>` +
-                    `<b>y.max:</b> ${ym} | <b>temp.max:</b> ${tm}<br>` +
+            if (!_d) return;
+            try {
+                const sk  = chart ? Object.keys(chart.scales).join(',') : 'no chart';
+                const y1m = chart?.scales?.y1?.max;
+                const ym  = chart?.scales?.y?.max;
+                const ds0y = chart?.data?.datasets[0]?.yAxisID;
+                const ds4y = chart?.data?.datasets[4]?.yAxisID;
+                _d.innerHTML += `<br><b>⏱timeout ran</b><br>` +
+                    `<b>scales:</b> ${sk}<br>` +
+                    `<b>y.max:</b> ${ym} | <b>y1.max:</b> ${y1m}<br>` +
                     `<b>ds[0].yAxisID:</b> ${ds0y} | <b>ds[4].yAxisID:</b> ${ds4y}`;
+            } catch(err) {
+                _d.innerHTML += `<br><b>⚠ debug err:</b> ${err.message}`;
             }
         }, 200);
     });
