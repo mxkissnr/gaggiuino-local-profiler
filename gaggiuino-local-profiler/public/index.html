@@ -607,7 +607,7 @@
             <div class="sprofiler-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
                 <div style="flex:1;min-width:0">
                     <h1 id="topTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Profil-Name</h1>
-                    <p id="topSubtitle" style="margin:0">Gaggia Classic Evo Pro | gaggiuino<span id="freshnessBadge" class="freshness-badge" style="display:none"></span></p>
+                    <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="freshness-badge" style="display:none"></span></p>
                 </div>
                 <div style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
                     <div id="shotScoreBadge" class="score-badge" style="display:none">
@@ -723,7 +723,7 @@
                     </div>
                     <div class="annotation-field">
                         <label>Röstdatum</label>
-                        <input type="date" id="annRoastDate">
+                        <input type="text" id="annRoastDate" placeholder="TT.MM.JJJJ" maxlength="10">
                     </div>
                     <div class="annotation-field">
                         <label>TDS % <span style="color:#52525b;font-weight:normal">(optional)</span></label>
@@ -815,6 +815,7 @@ let currentChartTab = 'zeit';
 
 // Sidebar sort
 let currentSort = 'newest';
+let sortAsc = false;
 
 // ── HTML escaping (XSS prevention) ───────────────────────────────────────
 function esc(str) {
@@ -976,29 +977,37 @@ async function loadData() {
 
 // ── Sidebar sort ──────────────────────────────────────────────────────────
 function setSortMode(mode) {
-    currentSort = mode;
+    if (currentSort === mode) {
+        sortAsc = !sortAsc;
+    } else {
+        currentSort = mode;
+        sortAsc = false;
+    }
+    const arrow = sortAsc ? ' ↑' : ' ↓';
+    const labels = { newest: 'Neueste', score: 'Score', rating: '⭐ Bewertung', duration: 'Dauer' };
     document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
     const map = { newest: 'sortNewest', score: 'sortScore', rating: 'sortRating', duration: 'sortDur' };
-    document.getElementById(map[mode])?.classList.add('active');
+    const activeBtn = document.getElementById(map[mode]);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.textContent = labels[mode] + arrow;
+    }
     renderSidebar();
 }
 
 function sortedShots() {
     const list = [...shots];
-    if (currentSort === 'newest')   return list.reverse();
-    if (currentSort === 'score') {
-        return list.sort((a, b) => {
-            const sa = calcShotScore(a, getShotData(a)) ?? -1;
-            const sb = calcShotScore(b, getShotData(b)) ?? -1;
-            return sb - sa;
-        });
-    }
-    if (currentSort === 'rating') {
-        return list.sort((a, b) => ((b.annotation?.rating || 0) - (a.annotation?.rating || 0)));
-    }
-    if (currentSort === 'duration') {
-        return list.sort((a, b) => (b.duration || 0) - (a.duration || 0));
-    }
+    const dir   = sortAsc ? 1 : -1;
+    if (currentSort === 'newest')
+        return sortAsc ? list : list.reverse();
+    if (currentSort === 'score')
+        return list.sort((a, b) => dir * (
+            (calcShotScore(b, getShotData(b)) ?? -1) - (calcShotScore(a, getShotData(a)) ?? -1)
+        ));
+    if (currentSort === 'rating')
+        return list.sort((a, b) => dir * ((b.annotation?.rating || 0) - (a.annotation?.rating || 0)));
+    if (currentSort === 'duration')
+        return list.sort((a, b) => dir * ((b.duration || 0) - (a.duration || 0)));
     return list.reverse();
 }
 
@@ -1086,7 +1095,7 @@ function renderAnnotationPanel(shot) {
     document.getElementById('annGrinder').value      = ann.grinder      || '';
     document.getElementById('annGrindSetting').value = ann.grindSetting || '';
     document.getElementById('annDose').value         = ann.dose         || '';
-    document.getElementById('annRoastDate').value    = ann.roastDate    || '';
+    document.getElementById('annRoastDate').value    = isoToGerman(ann.roastDate || '');
     document.getElementById('annTds').value          = ann.tds          || '';
     document.getElementById('annNotes').value        = ann.notes        || '';
     const btn = document.getElementById('saveAnnotationBtn');
@@ -1103,7 +1112,7 @@ async function saveAnnotation() {
         grinder:      document.getElementById('annGrinder').value.trim(),
         grindSetting: document.getElementById('annGrindSetting').value.trim(),
         dose:         parseFloat(document.getElementById('annDose').value) || null,
-        roastDate:    document.getElementById('annRoastDate').value || null,
+        roastDate:    germanToIso(document.getElementById('annRoastDate').value) || null,
         tds:          parseFloat(document.getElementById('annTds').value) || null,
         notes:        document.getElementById('annNotes').value.trim()
     };
@@ -1139,6 +1148,13 @@ async function updateStatus() {
         }
         dot.className = s.lastSyncError ? 'status-dot error' : (s.lastSync ? 'status-dot ok' : 'status-dot unknown');
         dot.title     = s.lastSyncError || '';
+        if (s.machineUrl) {
+            try {
+                const host = new URL(s.machineUrl).hostname;
+                const el   = document.getElementById('machineSubtitle');
+                if (el) el.textContent = `${host} | gaggiuino`;
+            } catch (_) {}
+        }
     } catch (e) {}
 }
 
@@ -1483,12 +1499,13 @@ function updateView() {
     const maxTimeA = dA.rawTimes.length>0 ? dA.rawTimes[dA.rawTimes.length-1] : 0;
     const maxTimeB = dB?.rawTimes.length>0 ? dB.rawTimes[dB.rawTimes.length-1] : 0;
 
+    const sfx = shotB ? ' (A)' : '';
     const datasets = [
-        { label:'Druck (A)',        data:dA.pressure,   yAxisID:'y',    borderWidth:2.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
-        { label:'Pumpenfluss (A)',  data:dA.flow,        yAxisID:'y',    borderWidth:2,   tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
-        { label:'Gewichtsfluss (A)',data:dA.weightFlow,  yAxisID:'y',    borderWidth:2,   tension:.1, borderColor:'#9b59b6', backgroundColor:'transparent', pointStyle:false },
-        { label:'Gewicht (A)',      data:dA.weight,      yAxisID:'temp', borderWidth:2,   tension:.1, borderColor:'#2ecc71', backgroundColor:'transparent', pointStyle:false },
-        { label:'Temperatur (A)',   data:dA.temp,        yAxisID:'temp', borderWidth:2.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
+        { label:`Druck${sfx}`,        data:dA.pressure,   yAxisID:'y',    borderWidth:2.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
+        { label:`Pumpenfluss${sfx}`,  data:dA.flow,        yAxisID:'y',    borderWidth:2,   tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
+        { label:`Gewichtsfluss${sfx}`,data:dA.weightFlow,  yAxisID:'y',    borderWidth:2,   tension:.1, borderColor:'#9b59b6', backgroundColor:'transparent', pointStyle:false },
+        { label:`Gewicht${sfx}`,      data:dA.weight,      yAxisID:'temp', borderWidth:2,   tension:.1, borderColor:'#2ecc71', backgroundColor:'transparent', pointStyle:false },
+        { label:`Temperatur${sfx}`,   data:dA.temp,        yAxisID:'temp', borderWidth:2.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
     ];
 
     if (!shotB) {
@@ -1538,6 +1555,8 @@ function updateView() {
             }
         }
     });
+    // Force chart resize on mobile to fix blank-canvas issue
+    if (window.innerWidth <= 768) requestAnimationFrame(() => chart?.resize());
 }
 
 // ── Shot score ────────────────────────────────────────────────────────────
@@ -1693,6 +1712,30 @@ function updatePQChart() {
             }
         }
     });
+}
+
+// ── Tap outside sidebar closes it (mobile) ───────────────────────────────
+document.addEventListener('click', e => {
+    if (window.innerWidth > 768) return;
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar.classList.contains('collapsed') && !sidebar.contains(e.target)) {
+        sidebar.classList.add('collapsed');
+        const btn = document.getElementById('sidebarToggle');
+        if (btn) btn.textContent = '☰';
+    }
+});
+
+// ── German date format helpers ────────────────────────────────────────────
+function isoToGerman(iso) {
+    if (!iso) return '';
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
+}
+function germanToIso(s) {
+    if (!s) return null;
+    const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (!m) return null;
+    return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
 }
 
 // ── Mobile sidebar toggle ─────────────────────────────────────────────────

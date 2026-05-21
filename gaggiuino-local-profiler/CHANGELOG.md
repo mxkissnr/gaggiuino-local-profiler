@@ -1,3 +1,12 @@
+## 1.14.0
+- Chart-Beschriftung: Druck/Fluss etc. zeigen (A)/(B) nur im Vergleichsmodus
+- Sortierung: zweiter Klick auf aktiven Sort-Button kehrt Reihenfolge um (↑/↓)
+- Mobile: Tippen außerhalb der Sidebar schließt diese
+- Maschinentitel unter dem Shot-Namen zeigt jetzt den konfigurierten Hostnamen dynamisch
+- Mobile Chart: erzwungener Resize nach Initialisierung behebt leere Canvas in HA-App
+- Röstdatum: Eingabe und Anzeige jetzt im deutschen Format (TT.MM.JJJJ)
+- Release-Tags v1.12.0 und v1.13.0 auf GitHub erstellt
+
 ## 1.13.0
 - Shot-Score in Sidebar: jeder Shot zeigt farbige Score-Pill direkt im Listeneintrag
 - Sortierung: Sidebar sortierbar nach Neueste / Score / Bewertung / Dauer
