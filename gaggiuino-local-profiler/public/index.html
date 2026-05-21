@@ -1847,6 +1847,7 @@ function openChartFullscreen() {
     currentFsTab = currentChartTab;
     document.getElementById('fsTabZeit').classList.toggle('active', currentFsTab === 'zeit');
     document.getElementById('fsTabPQ').classList.toggle('active',   currentFsTab === 'pq');
+    screen.orientation?.lock?.('landscape').catch(() => {});
     renderFsChart();
 }
 
@@ -1854,6 +1855,7 @@ function closeChartFullscreen() {
     document.getElementById('chartFullscreen').classList.remove('open');
     document.body.style.overflow = '';
     if (fsChart) { fsChart.destroy(); fsChart = null; }
+    screen.orientation?.unlock?.();
 }
 
 function switchFsTab(tab) {
