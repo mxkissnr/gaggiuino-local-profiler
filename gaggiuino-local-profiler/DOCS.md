@@ -33,13 +33,25 @@ Test im HA-Terminal: `curl http://<ip>/api/shots/latest`
 |---|---|---|
 | `machine_url` | API-URL des Gaggiuino-Controllers | `http://gaggia.intern/api/shots` |
 | `sync_interval` | Automatischer Sync-Intervall in Minuten (1–60) | `5` |
+| `switch_entity` | HA-Switch-Entität zum Ein-/Ausschalten der Maschine (z.B. `switch.espresso_steckdose`) | *(leer)* |
 
 ### Beispiel
 
 ```yaml
 machine_url: "http://192.168.1.42/api/shots"
 sync_interval: 10
+switch_entity: "switch.espresso_steckdose"
 ```
+
+## Steckdosen-Steuerung (optional)
+
+Wenn `switch_entity` konfiguriert ist, erscheint in der Sidebar ein **⏻ Schalter-Button**:
+
+- **Grün** → Maschine ist eingeschaltet
+- **Grau** → Maschine ist ausgeschaltet
+- Klicken togglet den Switch über die HA-API
+
+Der **Live-Tab** ist automatisch deaktiviert wenn die Maschine ausgeschaltet ist – so entstehen keine sinnlosen Verbindungsversuche.
 
 ## Verwendung
 
@@ -184,6 +196,17 @@ Gaggiuino Local Profiler is a local shot profiling dashboard for [Gaggiuino](htt
 |---|---|---|
 | `machine_url` | API URL of the Gaggiuino controller | `http://gaggia.intern/api/shots` |
 | `sync_interval` | Auto-sync interval in minutes (1–60) | `5` |
+| `switch_entity` | HA switch entity to power the machine on/off (e.g. `switch.espresso_plug`) | *(empty)* |
+
+## Smart Plug Control (optional)
+
+When `switch_entity` is configured, a **⏻ power button** appears in the sidebar footer:
+
+- **Green** → machine is on
+- **Grey** → machine is off
+- Click to toggle the switch via the HA API
+
+The **Live tab** is automatically disabled when the machine is off — preventing pointless connection attempts.
 
 ## Shot Score Calculation
 

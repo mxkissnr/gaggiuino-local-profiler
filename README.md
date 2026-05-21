@@ -1,40 +1,92 @@
 # Gaggiuino Local Profiler – Home Assistant Add-on Repository
 
-Lokales Dashboard für die Gaggiuino-Espressomaschine als Home Assistant Add-on.
+Local shot-profiling dashboard for [Gaggiuino](https://gaggiuino.github.io/)-based espresso machines as a Home Assistant Add-on.
+
+![HA Add-on](https://img.shields.io/badge/Home%20Assistant-Add--on-blue?logo=home-assistant)
+![Version](https://img.shields.io/badge/version-1.16.0-green)
 
 ## Installation
 
-1. **Einstellungen → Add-ons → Add-on-Store → ⋮ → Repositories**
-2. URL hinzufügen:
+1. **Settings → Add-ons → Add-on Store → ⋮ → Repositories**
+2. Add the URL:
    ```
    https://github.com/mxkissnr/gaggiuino-local-profiler
    ```
-3. **Gaggiuino Local Profiler** suchen und installieren
-4. `machine_url` in den Add-on-Optionen auf die IP des Controllers setzen
-5. Add-on starten → Dashboard über **Öffnen** aufrufen
+3. Search for **Gaggiuino Local Profiler** and install
+4. Set `machine_url` in the add-on options to your controller's IP
+5. Start the add-on → open the dashboard via **Open Web UI**
 
-## Funktionen
+## Features
 
-- Shot-Archiv mit interaktivem Profil-Browser (Druck, Fluss, Gewicht, Temperatur)
-- **Live-Modus** – Echtzeit-Anzeige direkt vom Controller (`/api/system/status`, kein HA-Polling-Delay)
-- **Auto-Sync** – neuer Shot wird automatisch geladen wenn `gaggiuino_latest_shot_id` steigt
-- Vergleichsmodus (zwei Shots nebeneinander)
-- Notizen, Kaffee-Infos, Mühleneinstellungen und Sternebewertung pro Shot
-- **Analyse-Metriken** – Ratio, Temperatur-Stabilität (±σ), Phasen-Erkennung, Channeling-Warnung
-- **Shot-Suche** – Sidebar-Filter nach Profil, Kaffee, Mühle
-- **CSV-Export** – alle Shots mit Annotationen exportieren
-- Persistente Datenspeicherung in `/data`
+| Feature | Description |
+|---|---|
+| **Shot Archive** | All shots with pressure, flow, weight and temperature curves |
+| **Live Mode** | Real-time display directly from the controller (`/api/system/status`) |
+| **Auto-Sync** | New shots load automatically when `gaggiuino_latest_shot_id` rises |
+| **Compare Mode** | Overlay two shots side by side |
+| **Shot Score** | Automatic 0–100 score (pressure, stability, duration, ratio, channeling) |
+| **Sidebar Sorting** | Sort by newest / score / rating / duration; click again to reverse |
+| **P·Q Diagram** | Pressure vs. flow chart — reveals extraction signature |
+| **EY Calculation** | Extraction Yield % when TDS and dose are entered |
+| **Grind Recommendation** | Automatic advice based on shot duration and channeling |
+| **Roast Date & Freshness** | Days since roast as colored badge |
+| **Annotations & Rating** | Coffee, grinder, grind setting, dose, roast date, TDS, notes; 1–5 stars |
+| **Shot Search** | Filter sidebar by profile, coffee, grinder |
+| **.shot Export** | Export in Decent Espresso format (Visualizer.coffee compatible) |
+| **CSV Export** | All shots with annotations as CSV |
+| **Smart Plug** | Optional: power machine on/off via HA switch entity |
+| **Live Tab Gating** | Live tab is disabled when the machine is switched off |
 
-## Konfiguration
+## Configuration
 
-| Option | Standard | Beschreibung |
+| Option | Default | Description |
 |---|---|---|
-| `machine_url` | `http://gaggia.intern/api/shots` | API-URL des Controllers |
-| `sync_interval` | `5` | Sync-Intervall in Minuten (1–60) |
+| `machine_url` | `http://gaggia.intern/api/shots` | API URL of the Gaggiuino controller |
+| `sync_interval` | `5` | Auto-sync interval in minutes (1–60) |
+| `switch_entity` | *(empty)* | HA switch entity to power the machine on/off (e.g. `switch.espresso_plug`) |
 
-## Voraussetzungen
+### Example
 
-- Gaggiuino-Controller per HTTP vom HA-Host erreichbar
-- Gaggiuino-Integration in HA optional (für Auto-Sync via `latest_shot_id`)
+```yaml
+machine_url: "http://192.168.1.42/api/shots"
+sync_interval: 10
+switch_entity: "switch.espresso_plug"
+```
 
-→ [Vollständige Dokumentation](gaggiuino-local-profiler/DOCS.md)
+## Prerequisites
+
+- Gaggiuino controller reachable via HTTP from the HA host
+- Gaggiuino HA integration (optional, for auto-sync via `latest_shot_id`)
+
+Test in HA terminal: `curl http://<ip>/api/shots/latest`
+
+## HA Dashboard Card
+
+To embed the profiler in a Lovelace dashboard:
+
+1. **Settings → Dashboards → Edit → Add Card → Webpage**
+2. URL: `/api/hassio_ingress/<addon-slug>/`  
+   *(find the slug in the add-on info page URL)*
+3. Or use a **Markdown card** with an iframe:
+   ```yaml
+   type: markdown
+   content: >
+     <iframe src="/api/hassio_ingress/gaggiuino_local_profiler/" 
+             style="width:100%;height:800px;border:none;border-radius:12px">
+     </iframe>
+   ```
+
+## Architecture
+
+```
+HA Host
+├── Add-on (Node.js / Express)
+│   ├── /data/shots.json          Shot data from machine
+│   ├── /data/annotations.json    Notes and ratings
+│   └── Supervisor API            HA switch control, auto-sync
+└── Gaggiuino Controller
+    ├── /api/shots                Shot list & individual shots
+    └── /api/system/status        Live data (1s polling)
+```
+
+→ [Full documentation](gaggiuino-local-profiler/DOCS.md) · [Changelog](gaggiuino-local-profiler/CHANGELOG.md)

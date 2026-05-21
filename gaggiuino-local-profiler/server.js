@@ -124,8 +124,46 @@ app.get('/api/status', (req, res) => {
         lastSyncError,
         machineUrl:    getMachineUrl(opts),
         syncInterval:  opts.sync_interval || 5,
-        haConnected:   !!HA_TOKEN
+        haConnected:   !!HA_TOKEN,
+        switchEntity:  opts.switch_entity || null
     });
+});
+
+// ── Machine power switch ──────────────────────────────────────────────────
+async function getSwitchState(entity) {
+    if (!HA_TOKEN || !entity) return null;
+    try {
+        const r = await axios.get(`${HA_API}/states/${entity}`,
+            { headers: { Authorization: `Bearer ${HA_TOKEN}` }, timeout: 3000 });
+        return r.data.state === 'on';
+    } catch (e) { return null; }
+}
+
+app.get('/api/switch', async (req, res) => {
+    const opts   = loadOptions();
+    const entity = opts.switch_entity;
+    if (!entity) return res.json({ configured: false });
+    const state  = await getSwitchState(entity);
+    res.json({ configured: true, entity, state });
+});
+
+app.post('/api/switch/toggle', async (req, res) => {
+    const opts   = loadOptions();
+    const entity = opts.switch_entity;
+    if (!HA_TOKEN || !entity)
+        return res.status(400).json({ error: 'switch_entity nicht konfiguriert' });
+    try {
+        const current = await getSwitchState(entity);
+        const action  = current ? 'turn_off' : 'turn_on';
+        await axios.post(`${HA_API}/services/switch/${action}`,
+            { entity_id: entity },
+            { headers: { Authorization: `Bearer ${HA_TOKEN}` }, timeout: 5000 });
+        res.json({ ok: true, state: !current });
+        log(`🔌 Switch ${entity} → ${action}`);
+    } catch (e) {
+        log(`❌ Switch toggle Fehler: ${e.message}`, true);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.post('/api/sync', (req, res) => {
@@ -382,7 +420,7 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.10.0 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v1.16.0 gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
     log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);
