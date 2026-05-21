@@ -153,3 +153,60 @@ Jeder Shot erhält automatisch einen Score von 0–100, der oben rechts in der P
 ## Sicherheit
 
 Das Add-on läuft hinter dem Home Assistant Ingress-Proxy, der die Authentifizierung übernimmt. Alle API-Endpunkte sind nur über das HA-Dashboard erreichbar. Der Zugriff auf die HA-API erfolgt ausschließlich lesend über den Supervisor-Token.
+
+---
+
+# English Documentation
+
+## Overview
+
+Gaggiuino Local Profiler is a local shot profiling dashboard for [Gaggiuino](https://gaggiuino.github.io/)-based espresso machines. It syncs shot data automatically from the controller, visualizes extraction profiles and provides a real-time live mode.
+
+## Features
+
+- **Shot Archive** – all shots with pressure, flow, weight and temperature curves
+- **Live Mode** – real-time display directly from the controller (`/api/system/status`)
+- **Shot Score** – automatic 0–100 score based on pressure, temperature stability, duration, ratio and channeling; shown as colored pill in the sidebar
+- **Sidebar Sorting** – sort by newest / score / rating / duration; click again to reverse
+- **P·Q Chart** – pressure vs. flow diagram (extraction signature), alternate chart tab
+- **Roast Date & Freshness** – days since roast shown as a colored badge (green: 7–21 days optimal)
+- **Extraction Yield (EY %)** – calculated automatically when TDS % and dose are entered
+- **Grind Recommendation** – automatic advice based on shot duration and channeling detection
+- **Annotations & Rating** – coffee/bean, grinder, grind setting, dose, roast date, TDS %, free text; 1–5 star rating
+- **Shot Search** – sidebar filter by profile, coffee, grinder
+- **.shot Export** – export current shot in Decent Espresso format (compatible with Visualizer.coffee)
+- **CSV Export** – all shots with annotations as CSV
+- **Compare Mode** – overlay two shots side by side
+
+## Configuration
+
+| Option | Description | Default |
+|---|---|---|
+| `machine_url` | API URL of the Gaggiuino controller | `http://gaggia.intern/api/shots` |
+| `sync_interval` | Auto-sync interval in minutes (1–60) | `5` |
+
+## Shot Score Calculation
+
+| Factor | Weight | Optimum | Points |
+|---|---|---|---|
+| **Extraction pressure** | 25 % | 7–9.5 bar (avg of values ≥5 bar) | 100 at optimum, linear penalty outside |
+| **Temperature stability (σ)** | 20 % | σ ≤ 0.3 °C | 100 / 90 / 72 / 50 / <50 depending on σ |
+| **Shot duration** | 20 % | 25–35 s | 100 at optimum, 82 at 20–25 s or 35–42 s |
+| **Dose→Yield ratio** | 20 % | 1:1.8 – 1:2.5 | Only when dose is entered in annotations |
+| **Channeling** | 15 % | no channeling | 100 (none) or 20 (detected) |
+
+## P·Q Diagram
+
+The **P·Q Curve** tab shows pressure (Y-axis) vs. pump flow (X-axis) instead of the time axis. This reveals the extraction behavior of the puck:
+- **Tight, smooth curve** → homogeneous extraction
+- **Wide, noisy curve** → channeling or uneven distribution
+- **Curve far right** → high flow at low pressure (grind too coarse)
+- **Curve far left** → low flow despite high pressure (grind too fine)
+
+## .shot Export
+
+Exports the currently selected shot in Decent Espresso `.shot` format. Compatible with [Visualizer.coffee](https://visualizer.coffee/) and other profiling tools that accept Decent Espresso shot files.
+
+## Security
+
+The add-on runs behind the Home Assistant Ingress proxy which handles authentication. All API endpoints are only accessible through the HA dashboard. HA API access is read-only via the Supervisor token.

@@ -514,7 +514,7 @@
         .score-poor  { color: #f97316; }
         .score-bad   { color: #ef4444; }
 
-        /* ── Sidebar toggle (mobile only) ── */
+        /* ── Sidebar close button (inside overlay header) ── */
         #sidebarToggle {
             display: none;
             background: none;
@@ -525,31 +525,71 @@
             line-height: 1;
             padding: 0 10px 0 0;
             margin: 0;
-            font-family: 'Figtree', sans-serif;
             transition: color .2s;
             flex-shrink: 0;
         }
         #sidebarToggle:hover { color: #fff; }
 
+        /* ── Mobile hamburger in mode-bar ── */
+        #mobileMenuBtn {
+            display: none;
+            background: none;
+            border: none;
+            color: #71717a;
+            cursor: pointer;
+            font-size: 1.25rem;
+            line-height: 1;
+            padding: 0 12px 0 0;
+            align-items: center;
+            flex-shrink: 0;
+            transition: color .2s;
+        }
+        #mobileMenuBtn:hover { color: #fff; }
+
+        /* ── Sidebar backdrop ── */
+        #sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.5);
+            z-index: 199;
+        }
+        #sidebar-backdrop.visible { display: block; }
+
         /* ── Responsive ── */
         @media (max-width: 768px) {
-            body              { flex-direction: column; overflow: auto; height: auto; }
-            #sidebar          { width: 100%; border-right: none; border-bottom: 1px solid var(--gray-700); overflow: hidden; transition: max-height .3s ease; max-height: 520px; }
-            #sidebar.collapsed { max-height: 54px; }
-            #sidebar h2       { display: flex; align-items: center; }
-            #sidebarToggle    { display: flex; align-items: center; }
+            /* Sidebar becomes a fixed left-side overlay drawer */
+            #sidebar {
+                position: fixed;
+                top: 0; left: 0; bottom: 0;
+                width: min(300px, 85vw);
+                height: 100vh;
+                z-index: 200;
+                transform: translateX(-100%);
+                transition: transform .3s ease;
+                max-height: none;
+                border-right: 1px solid var(--gray-700);
+                border-bottom: none;
+                overflow-y: auto;
+            }
+            #sidebar.open      { transform: translateX(0); }
+            #sidebar.collapsed { max-height: none; }
+            #sidebar h2        { display: flex; align-items: center; }
+            #sidebarToggle     { display: flex; align-items: center; }
+            #mobileMenuBtn     { display: flex; }
+            #main              { height: 100vh; overflow-y: auto; }
             #chart-area, #live-view { padding: 16px; }
             .sprofiler-header h1 { font-size: 1.3rem; }
             .sprofiler-meta-grid { flex-direction: column; gap: 12px; }
-            .meta-column      { max-width: 100%; }
+            .meta-column       { max-width: 100%; }
             .meta-column[style*="text-align: right"] { text-align: left !important; }
             .annotation-fields { grid-template-columns: 1fr; }
             .annotation-field.full-width { grid-column: 1; }
             .chart-container, .live-chart-container { height: 300px; }
-            .live-stats       { grid-template-columns: repeat(3, 1fr); }
-            #mode-bar         { padding: 0 16px; }
-            .mode-btn         { padding: 12px 14px; font-size: .8rem; }
-            .score-num        { font-size: 1.5rem; }
+            .live-stats        { grid-template-columns: repeat(3, 1fr); }
+            #mode-bar          { padding: 0 16px; }
+            .mode-btn          { padding: 12px 14px; font-size: .8rem; }
+            .score-num         { font-size: 1.5rem; }
         }
         @media (max-width: 480px) {
             .live-stats { grid-template-columns: repeat(2, 1fr); }
@@ -583,11 +623,14 @@
     </div>
 </div>
 
+<div id="sidebar-backdrop" onclick="closeSidebar()"></div>
+
 <!-- ── Main ── -->
 <div id="main">
 
     <!-- Mode switcher -->
     <div id="mode-bar">
+        <button id="mobileMenuBtn" onclick="openSidebar()">☰</button>
         <button class="mode-btn active" id="btnShots" onclick="switchMode('shots')">Shots</button>
         <button class="mode-btn" id="btnLive" onclick="switchMode('live')">
             <span class="live-dot"></span>Live
@@ -615,6 +658,7 @@
                         <div class="score-lbl">Score</div>
                     </div>
                     <button class="export-btn" onclick="exportCSV()" title="Alle Shots als CSV exportieren">↓ CSV</button>
+                    <button class="export-btn" id="exportShotBtn" onclick="exportShot()" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
                 </div>
             </div>
 
@@ -1714,16 +1758,18 @@ function updatePQChart() {
     });
 }
 
-// ── Tap outside sidebar closes it (mobile) ───────────────────────────────
-document.addEventListener('click', e => {
-    if (window.innerWidth > 768) return;
-    const sidebar = document.getElementById('sidebar');
-    if (!sidebar.classList.contains('collapsed') && !sidebar.contains(e.target)) {
-        sidebar.classList.add('collapsed');
-        const btn = document.getElementById('sidebarToggle');
-        if (btn) btn.textContent = '☰';
-    }
-});
+// ── Sidebar overlay (mobile) ──────────────────────────────────────────────
+function openSidebar() {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebar-backdrop').classList.add('visible');
+    const btn = document.getElementById('sidebarToggle');
+    if (btn) btn.textContent = '✕';
+}
+
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-backdrop').classList.remove('visible');
+}
 
 // ── German date format helpers ────────────────────────────────────────────
 function isoToGerman(iso) {
@@ -1738,21 +1784,14 @@ function germanToIso(s) {
     return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
 }
 
-// ── Mobile sidebar toggle ─────────────────────────────────────────────────
+// ── Mobile sidebar toggle (close button inside overlay) ──────────────────
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
-    const btn     = document.getElementById('sidebarToggle');
-    const now     = sidebar.classList.toggle('collapsed');
-    btn.textContent = now ? '☰' : '✕';
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
 }
 
 function collapseSidebarOnMobile() {
-    if (window.innerWidth <= 768) {
-        const sidebar = document.getElementById('sidebar');
-        sidebar.classList.add('collapsed');
-        const btn = document.getElementById('sidebarToggle');
-        if (btn) btn.textContent = '☰';
-    }
+    if (window.innerWidth <= 768) closeSidebar();
 }
 
 // ── Analytics helpers ─────────────────────────────────────────────────────
@@ -1838,6 +1877,48 @@ function exportCSV() {
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url; a.download = 'shots.csv'; a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ── .shot export (Decent Espresso format) ────────────────────────────────
+function exportShot() {
+    const shot = shots.find(s => s.id === primaryShotId);
+    if (!shot) return;
+    const d   = shot.datapoints || {};
+    const ann = shot.annotation || {};
+    const t   = d.timeInShot || [];
+
+    const tcl = arr => arr?.length ? `{${arr.map(v => (v / 10).toFixed(2)).join(' ')}}` : '{}';
+
+    const finalWeight = d.shotWeight || d.weight || [];
+    const lastW = finalWeight.length ? (finalWeight[finalWeight.length - 1] / 10).toFixed(1) : '0.0';
+    const date  = new Date(shot.timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19);
+
+    const lines = [
+        `clock ${shot.timestamp}`,
+        `date ${date}`,
+        `profile_title {${(shot.profile?.name || shot.profileName || 'Unknown').replace(/[{}]/g, '')}}`,
+        ann.coffee    ? `bean_desc {${ann.coffee.replace(/[{}]/g, '')}}` : '',
+        ann.grinder   ? `grinder_model {${ann.grinder.replace(/[{}]/g, '')}}` : '',
+        ann.grindSetting ? `grinder_setting {${ann.grindSetting.replace(/[{}]/g, '')}}` : '',
+        ann.dose      ? `bean_weight ${ann.dose}` : '',
+        ann.notes     ? `espresso_notes {${ann.notes.replace(/[{}]/g, '')}}` : '',
+        `espresso_elapsed ${tcl(t)}`,
+        `espresso_pressure ${tcl(d.pressure)}`,
+        `espresso_flow ${tcl(d.pumpFlow)}`,
+        `espresso_weight ${tcl(d.shotWeight || d.weight)}`,
+        `espresso_flow_weight ${tcl(d.weightFlow)}`,
+        `espresso_temperature_goal ${tcl(d.targetTemperature)}`,
+        `espresso_temperature_mix ${tcl(d.temperature)}`,
+        `espresso_water_dispensed ${lastW}`,
+    ].filter(Boolean).join('\n');
+
+    const blob = new Blob([lines], { type: 'text/plain;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `shot_${shot.id}_${date.slice(0,10)}.shot`;
+    a.click();
     URL.revokeObjectURL(url);
 }
 
