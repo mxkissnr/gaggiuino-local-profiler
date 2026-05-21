@@ -1900,7 +1900,7 @@ function renderFsChart() {
         return;
     }
 
-    // Zeit chart — copy the current chart's data and config
+    // Time chart — copy the current chart's data and config
     if (!chart) return;
     const dA = getShotData(shotA);
     const maxTempA = Math.max(...(shotA.datapoints?.temperature||[]).map(v=>v/10), 0);
