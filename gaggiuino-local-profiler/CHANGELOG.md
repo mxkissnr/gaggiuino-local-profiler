@@ -1,3 +1,10 @@
+## 1.17.4
+- Vollbild-Chart (⤢ Button): Zeit- und P·Q-Chart als Fullscreen-Overlay, ideal für Querformat auf Mobile
+- Fix: Corsair-Plugin Null-Check verhindert "Cannot destructure property 'x'" Fehler
+- Fix: Chart.getChart() vor jeder Chart-Erstellung verhindert "canvas already in use" (war Ursache unsichtbarer Charts auf Mobile)
+- Fix: Chart.js Scale-ID `temp` → `y1` behebt rechte Y-Achse (zeigte max=6 statt ~98)
+- Server: Cache-Control no-cache für HTML verhindert Caching in HA-App
+
 ## 1.17.0
 - Fix: Chart.js Scale-ID `temp` → `y1` – behebt mobilen Rendering-Fehler (rechte Y-Achse zeigte max=6 statt ~98 auf Android/HA-App)
 - Debug-Panel verbessert: try-catch + "timeout ran"-Marker für bessere Fehlerdiagnose

@@ -466,7 +466,7 @@
         .grind-warning { border-color: rgba(239,68,68,.3);  background: rgba(239,68,68,.06);  color: #fca5a5; }
 
         /* ── Chart tabs ── */
-        .chart-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+        .chart-tabs { display: flex; gap: 4px; margin-bottom: 12px; align-items: center; }
         .chart-tab {
             background: transparent; color: #71717a;
             border: 1px solid var(--gray-700); border-radius: 6px;
@@ -476,6 +476,36 @@
         }
         .chart-tab:hover  { color: #e4e4e7; border-color: #71717a; }
         .chart-tab.active { background: var(--gray-800); color: #fff; border-color: #71717a; }
+        #expandChartBtn {
+            margin-left: auto; background: transparent; color: #52525b;
+            border: 1px solid var(--gray-700); border-radius: 6px;
+            padding: 4px 9px; cursor: pointer; font-size: .85rem; line-height: 1;
+            transition: all .2s;
+        }
+        #expandChartBtn:hover { color: #e4e4e7; border-color: #71717a; }
+
+        /* ── Fullscreen chart overlay ── */
+        #chartFullscreen {
+            display: none; position: fixed; inset: 0; z-index: 9000;
+            background: var(--gray-950);
+            flex-direction: column;
+            padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0)
+                     env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+        }
+        #chartFullscreen.open { display: flex; }
+        #chartFullscreen .fs-header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 14px; border-bottom: 1px solid var(--gray-700); flex-shrink: 0;
+        }
+        #chartFullscreen .fs-tabs { display: flex; gap: 6px; flex: 1; }
+        #chartFullscreen .fs-title { color: #a1a1aa; font-size: .8rem; flex: 1; text-align: center; }
+        #closeFullscreenBtn {
+            background: transparent; border: 1px solid var(--gray-700); border-radius: 6px;
+            color: #a1a1aa; padding: 4px 10px; cursor: pointer; font-size: .85rem;
+            font-family: 'Figtree', sans-serif; transition: all .2s;
+        }
+        #closeFullscreenBtn:hover { color: #fff; border-color: #71717a; }
+        #chartFullscreen .fs-body { flex: 1; position: relative; min-height: 0; padding: 8px; }
 
         /* ── Export button ── */
         .export-btn {
@@ -746,17 +776,30 @@
                 <span id="grindAdviceText"></span>
             </div>
 
-            <div id="chartDebug" style="display:none;font-size:.65rem;color:#52525b;padding:4px 2px;font-family:monospace;word-break:break-all;line-height:1.5"></div>
-
             <div class="chart-tabs">
                 <button class="chart-tab active" id="tabZeit" onclick="switchChartTab('zeit')">⏱ Zeit</button>
                 <button class="chart-tab" id="tabPQ" onclick="switchChartTab('pq')">P·Q Kurve</button>
+                <button id="expandChartBtn" onclick="openChartFullscreen()" title="Vollbild">⤢</button>
             </div>
             <div id="zeitContainer" class="chart-container">
                 <canvas id="espressoShotChart"></canvas>
             </div>
             <div id="pqContainer" class="chart-container" style="display:none">
                 <canvas id="pqChart"></canvas>
+            </div>
+
+            <!-- Fullscreen chart overlay -->
+            <div id="chartFullscreen">
+                <div class="fs-header">
+                    <div class="fs-tabs">
+                        <button class="chart-tab active" id="fsTabZeit" onclick="switchFsTab('zeit')">⏱ Zeit</button>
+                        <button class="chart-tab" id="fsTabPQ" onclick="switchFsTab('pq')">P·Q Kurve</button>
+                    </div>
+                    <button id="closeFullscreenBtn" onclick="closeChartFullscreen()">✕ Schließen</button>
+                </div>
+                <div class="fs-body">
+                    <canvas id="espressoShotChartFs" style="width:100%;height:100%"></canvas>
+                </div>
             </div>
 
             <!-- Annotation panel BELOW chart -->
@@ -959,6 +1002,7 @@ const corsairPlugin = {
     afterInit:  c => { c.corsair = { x: 0, y: 0 }; },
     afterEvent: (c, args) => { c.corsair = { x: args.event.x, y: args.event.y, draw: args.inChartArea }; c.draw(); },
     beforeDatasetsDraw: (c, _a, opts) => {
+        if (!c.corsair) return;
         const { ctx } = c;
         const { top, bottom } = c.chartArea;
         const { x, draw } = c.corsair;
@@ -1505,23 +1549,6 @@ function updateView() {
     const maxTempB = shotB ? (max((shotB.datapoints?.temperature||[]).map(v=>v/10))||0) : 0;
     const tempMaxScale = Math.ceil(Math.max(maxTempA, maxTempB)+5)||100;
 
-    // Debug: show raw values to diagnose chart scaling issue
-    const _dbg = document.getElementById('chartDebug');
-    if (_dbg) {
-        const dp = shotA.datapoints || {};
-        const _t  = (dp.timeInShot||[]).slice(0,3);
-        const _p  = (dp.pressure||[]).slice(0,3);
-        const _tmp = (dp.temperature||[]).slice(0,3);
-        const _keys = Object.keys(dp).join(',');
-        _dbg.style.display = '';
-        _dbg.innerHTML =
-            `<b>keys:</b> ${_keys}<br>` +
-            `<b>time[0..2]:</b> ${_t}<br>` +
-            `<b>pres[0..2]:</b> ${_p}<br>` +
-            `<b>temp[0..2]:</b> ${_tmp}<br>` +
-            `<b>tempMaxScale:</b> ${tempMaxScale} | maxTempA:${maxTempA.toFixed(2)}<br>` +
-            `<b>win[v172]:</b> ${window.innerWidth}×${window.innerHeight} dpr:${window.devicePixelRatio}`;
-    }
 
     const nameA = shotA.profile?.name||shotA.profileName||'Unknown Profile';
     if (shotB) {
@@ -1704,30 +1731,8 @@ function updateView() {
             }
         }
     });
-    } catch(chartErr) {
-        const _dbgErr = document.getElementById('chartDebug');
-        if (_dbgErr) _dbgErr.innerHTML += `<br><b>★CHART ERR:</b> ${chartErr.message}`;
-        return;
-    }
-
-    // Synchronous post-creation debug (always, so we see it immediately)
-    const _dbgPost = document.getElementById('chartDebug');
-    if (_dbgPost) {
-        try {
-            const sk  = Object.keys(chart.scales).join(',');
-            const y1m = chart.scales.y1?.max;
-            const ym  = chart.scales.y?.max;
-            _dbgPost.innerHTML += `<br><b>★post-new:</b> scales=[${sk}]<br>y.max=${ym} y1.max=${y1m} tms=${tempMaxScale}(${typeof tempMaxScale})`;
-        } catch(e) {
-            _dbgPost.innerHTML += `<br><b>★post-new err:</b> ${e.message}`;
-        }
-    }
-
-    // Force y1 max after creation as failsafe (in case Chart.js ignored it)
-    if (chart.scales?.y1 && chart.scales.y1.max !== Number(tempMaxScale)) {
-        chart.options.scales.y1.max = Number(tempMaxScale);
-        chart.update('none');
-        if (_dbgPost) _dbgPost.innerHTML += `<br><b>★override applied</b> new y1.max=${chart.scales.y1?.max}`;
+    } catch(e) {
+        console.error('Chart creation error:', e);
     }
 }
 
@@ -1830,6 +1835,97 @@ function switchChartTab(tab) {
     document.getElementById('zeitContainer').style.display = tab === 'zeit' ? '' : 'none';
     document.getElementById('pqContainer').style.display   = tab === 'pq'   ? '' : 'none';
     if (tab === 'pq') updatePQChart();
+}
+
+// ── Fullscreen chart ──────────────────────────────────────────────────────
+let fsChart = null;
+let currentFsTab = 'zeit';
+
+function openChartFullscreen() {
+    document.getElementById('chartFullscreen').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    currentFsTab = currentChartTab;
+    document.getElementById('fsTabZeit').classList.toggle('active', currentFsTab === 'zeit');
+    document.getElementById('fsTabPQ').classList.toggle('active',   currentFsTab === 'pq');
+    renderFsChart();
+}
+
+function closeChartFullscreen() {
+    document.getElementById('chartFullscreen').classList.remove('open');
+    document.body.style.overflow = '';
+    if (fsChart) { fsChart.destroy(); fsChart = null; }
+}
+
+function switchFsTab(tab) {
+    currentFsTab = tab;
+    document.getElementById('fsTabZeit').classList.toggle('active', tab === 'zeit');
+    document.getElementById('fsTabPQ').classList.toggle('active',   tab === 'pq');
+    renderFsChart();
+}
+
+function renderFsChart() {
+    const shotA = shots.find(s => s.id === primaryShotId);
+    if (!shotA) return;
+    const existing = Chart.getChart('espressoShotChartFs');
+    if (existing) existing.destroy();
+    fsChart = null;
+
+    const canvas = document.getElementById('espressoShotChartFs');
+
+    if (currentFsTab === 'pq') {
+        const data = getPQData(shotA);
+        fsChart = new Chart(canvas, {
+            type: 'scatter',
+            data: { datasets: [{ label: `Shot ${shotA.id}`, data, showLine: true, tension: 0.2,
+                borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.15)',
+                borderWidth: 2, pointRadius: 0 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                plugins: {
+                    legend: { labels: { color: '#e4e4e7', font: { family: 'Figtree' } } },
+                    tooltip: { callbacks: { label: c => `${c.parsed.y.toFixed(1)} bar @ ${c.parsed.x.toFixed(1)} ml/s` } }
+                },
+                scales: {
+                    x: { type: 'linear', min: 0, max: 5,
+                         title: { display: true, text: 'Pumpenfluss (ml/s)', color: '#71717a', font: { family: 'Figtree' } },
+                         ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
+                    y: { type: 'linear', min: 0, max: 12,
+                         title: { display: true, text: 'Druck (bar)', color: '#71717a', font: { family: 'Figtree' } },
+                         ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } }
+                }
+            }
+        });
+        return;
+    }
+
+    // Zeit chart — copy the current chart's data and config
+    if (!chart) return;
+    const dA = getShotData(shotA);
+    const maxTempA = Math.max(...(shotA.datapoints?.temperature||[]).map(v=>v/10), 0);
+    const tms = Math.ceil(maxTempA + 5) || 100;
+    const maxTime = dA.rawTimes.length > 0 ? dA.rawTimes[dA.rawTimes.length-1] : 60;
+    const datasets = chart.data.datasets.map(ds => ({...ds, data: [...ds.data]}));
+
+    fsChart = new Chart(canvas, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: true, position: 'bottom',
+                    labels: { color: '#e4e4e7', font: { family: 'Figtree', size: 11 }, boxWidth: 12, padding: 8 } },
+                tooltip: { callbacks: { title: c => 'Zeit: ' + formatTimeLabel(c[0].parsed.x) } }
+            },
+            scales: {
+                x: { type:'linear', min:0, max:maxTime, clip:false,
+                     ticks:{ color:'#a1a1aa', font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v) },
+                     grid:{ color:'#27272a' } },
+                y:  { type:'linear', position:'left',  min:0, max:12, ticks:{color:'#a1a1aa'}, grid:{color:'#27272a'} },
+                y1: { type:'linear', position:'right', min:0, max:tms, ticks:{color:'#a1a1aa'}, grid:{drawOnChartArea:false} }
+            }
+        }
+    });
 }
 
 function getPQData(shot) {
