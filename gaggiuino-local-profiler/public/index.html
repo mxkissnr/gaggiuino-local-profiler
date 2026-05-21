@@ -1121,8 +1121,14 @@ function renderSidebar() {
             if (e.ctrlKey || e.metaKey) { toggleCompare(shot.id); }
             else {
                 primaryShotId = shot.id; compareShotId = null;
-                updateSidebarHighlighting(); updateView();
+                updateSidebarHighlighting();
+                // Close sidebar first so the canvas has correct dimensions when chart renders
                 collapseSidebarOnMobile();
+                if (window.innerWidth <= 768) {
+                    setTimeout(() => updateView(), 50);
+                } else {
+                    updateView();
+                }
             }
         };
 
@@ -1693,7 +1699,23 @@ function updateView() {
         }
     });
     // Force chart resize on mobile to fix blank-canvas issue
-    if (window.innerWidth <= 768) requestAnimationFrame(() => chart?.resize());
+    if (window.innerWidth <= 768) requestAnimationFrame(() => {
+        chart?.resize();
+        // Debug: show actual chart scale state after render
+        setTimeout(() => {
+            const _d = document.getElementById('chartDebug');
+            if (_d && chart) {
+                const sk = Object.keys(chart.scales).join(',');
+                const tm = chart.scales.temp?.max;
+                const ym = chart.scales.y?.max;
+                const ds0y = chart.data.datasets[0]?.yAxisID;
+                const ds4y = chart.data.datasets[4]?.yAxisID;
+                _d.innerHTML += `<br><b>scales:</b> ${sk}<br>` +
+                    `<b>y.max:</b> ${ym} | <b>temp.max:</b> ${tm}<br>` +
+                    `<b>ds[0].yAxisID:</b> ${ds0y} | <b>ds[4].yAxisID:</b> ${ds4y}`;
+            }
+        }, 200);
+    });
 }
 
 // ── Shot score ────────────────────────────────────────────────────────────
