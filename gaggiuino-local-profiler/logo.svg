@@ -1,79 +1,63 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 180" width="760" height="180">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 140" width="720" height="140">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#18181b"/>
-      <stop offset="100%" stop-color="#1c1c1f"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#111113"/>
+      <stop offset="100%" stop-color="#0c0c0e"/>
     </linearGradient>
-    <linearGradient id="cupGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#d97706"/>
-      <stop offset="100%" stop-color="#92400e"/>
+    <linearGradient id="iconBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
     </linearGradient>
-    <linearGradient id="glpGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#e4e4e7"/>
-    </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="3" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
+    <clipPath id="bgClip">
+      <rect width="720" height="140" rx="14"/>
+    </clipPath>
   </defs>
 
   <!-- Background -->
-  <rect width="760" height="180" rx="18" fill="url(#bg)"/>
-  <!-- Subtle border -->
-  <rect width="760" height="180" rx="18" fill="none" stroke="#3f3f46" stroke-width="1.5"/>
+  <rect width="720" height="140" rx="14" fill="url(#bg)"/>
 
-  <!-- ── Espresso cup ── -->
-  <!-- Saucer -->
-  <ellipse cx="107" cy="148" rx="52" ry="7" fill="#78350f" opacity="0.9"/>
-  <ellipse cx="107" cy="146" rx="46" ry="5" fill="#92400e"/>
+  <!-- Left amber accent bar -->
+  <rect width="4" height="140" rx="2" fill="#f59e0b" clip-path="url(#bgClip)"/>
 
-  <!-- Cup body (trapezoid via path) -->
-  <path d="M 74 105 L 79 142 L 135 142 L 140 105 Z" fill="url(#cupGrad)" rx="4"/>
+  <!-- Icon container: amber rounded square -->
+  <rect x="28" y="30" width="80" height="80" rx="20" fill="url(#iconBg)"/>
 
-  <!-- Cup rim -->
-  <rect x="70" y="100" width="74" height="9" rx="4.5" fill="#f59e0b"/>
-
+  <!-- Coffee cup (flat / material icon style, white on amber) -->
+  <!-- Steam -->
+  <path d="M 52,44 Q 49,37 52,30" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+  <path d="M 68,42 Q 65,35 68,28" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+  <!-- Cup body -->
+  <path d="M 46,52 L 48,82 L 88,82 L 90,52 Z" fill="white" rx="2"/>
   <!-- Handle -->
-  <path d="M 140 112 C 162 112 162 136 140 136"
-        fill="none" stroke="#d97706" stroke-width="7" stroke-linecap="round"/>
-  <path d="M 140 112 C 158 112 158 136 140 136"
-        fill="none" stroke="#fbbf24" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 90,60 Q 102,60 102,68 Q 102,76 90,76" fill="none" stroke="white" stroke-width="4.5" stroke-linecap="round"/>
+  <!-- Saucer -->
+  <rect x="42" y="84" width="54" height="5" rx="2.5" fill="rgba(255,255,255,0.55)"/>
 
-  <!-- Coffee surface inside cup -->
-  <ellipse cx="107" cy="104" rx="33" ry="5" fill="#451a03" opacity="0.85"/>
-  <!-- Crema highlight -->
-  <ellipse cx="100" cy="103" rx="14" ry="2.5" fill="#92400e" opacity="0.6"/>
+  <!-- Divider -->
+  <line x1="136" y1="28" x2="136" y2="112" stroke="#27272a" stroke-width="1"/>
 
-  <!-- Steam wisps -->
-  <path d="M 88 96 C 84 82 92 74 88 60 C 84 46 92 38 88 24"
-        fill="none" stroke="#9ca3af" stroke-width="2.5" stroke-linecap="round" opacity="0.55"/>
-  <path d="M 107 93 C 103 79 111 71 107 57 C 103 43 111 35 107 21"
-        fill="none" stroke="#9ca3af" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
-  <path d="M 126 96 C 122 82 130 74 126 60 C 122 46 130 38 126 24"
-        fill="none" stroke="#9ca3af" stroke-width="2.5" stroke-linecap="round" opacity="0.55"/>
+  <!-- GLP wordmark -->
+  <text x="162" y="102"
+        font-family="'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="70" font-weight="800" fill="white" letter-spacing="-3">GLP</text>
 
-  <!-- ── Divider ── -->
-  <rect x="186" y="54" width="2.5" height="82" rx="1.25" fill="#f97316" opacity="0.85"/>
+  <!-- Tagline -->
+  <text x="165" y="124"
+        font-family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="12" font-weight="500" fill="#52525b" letter-spacing="3.5">GAGGIUINO LOCAL PROFILER</text>
 
-  <!-- ── GLP Text ── -->
-  <text x="210" y="122"
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
-        font-size="72" font-weight="800" fill="url(#glpGrad)"
-        letter-spacing="-3">GLP</text>
+  <!-- Right: subtle pressure-curve decoration -->
+  <polyline
+    points="460,108 480,96 500,72 522,46 548,42 572,44 596,42 620,44 645,46 668,50"
+    fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.18"/>
+  <polyline
+    points="460,108 480,104 500,88 522,52 548,44 572,38 596,36 620,37 645,39 668,43"
+    fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.15"/>
 
-  <!-- Subtitle -->
-  <text x="213" y="146"
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
-        font-size="15" font-weight="400" fill="#71717a" letter-spacing="2.5">GAGGIUINO LOCAL PROFILER</text>
-
-  <!-- ── Right side: version badge ── -->
-  <rect x="606" y="70" width="118" height="40" rx="8" fill="#27272a"/>
-  <rect x="606" y="70" width="118" height="40" rx="8" fill="none" stroke="#3f3f46" stroke-width="1"/>
-  <text x="665" y="86"
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
-        font-size="10" fill="#71717a" text-anchor="middle" letter-spacing="1">HOME ASSISTANT</text>
-  <text x="665" y="101"
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
-        font-size="11" font-weight="600" fill="#a1a1aa" text-anchor="middle" letter-spacing="0.5">ADD-ON</text>
+  <!-- HA chip top-right -->
+  <rect x="636" y="24" width="70" height="26" rx="13" fill="#1c1917"/>
+  <rect x="636" y="24" width="70" height="26" rx="13" fill="none" stroke="#292524" stroke-width="1"/>
+  <text x="671" y="41"
+        font-family="system-ui, sans-serif" font-size="10" font-weight="600"
+        fill="#78716c" text-anchor="middle" letter-spacing="0.5">HA ADD-ON</text>
 </svg>
