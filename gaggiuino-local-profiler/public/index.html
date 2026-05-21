@@ -1303,7 +1303,9 @@ async function triggerSync() {
 // ── Live mode ─────────────────────────────────────────────────────────────
 function initLiveChart() {
     const ctx = document.getElementById('liveChart');
-    if (liveChart) liveChart.destroy();
+    const _existingLive = Chart.getChart(ctx);
+    if (_existingLive) _existingLive.destroy();
+    liveChart = null;
 
     liveChart = new Chart(ctx, {
         type: 'line',
@@ -1669,7 +1671,10 @@ function updateView() {
     if (currentChartTab === 'pq') updatePQChart();
 
     const ctx = document.getElementById('espressoShotChart');
-    if (chart) chart.destroy();
+    // Always destroy any existing chart on this canvas (handles stale references)
+    const _existingChart = Chart.getChart(ctx);
+    if (_existingChart) _existingChart.destroy();
+    chart = null;
 
     try {
     chart = new Chart(ctx, {
