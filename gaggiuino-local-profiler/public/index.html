@@ -1694,32 +1694,30 @@ function updateView() {
                         ticks:{ color:'#a1a1aa', font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
                         grid:{ color:'#27272a' } },
                 y:    { type:'linear', position:'left',  min:0, max:12, ticks:{color:'#a1a1aa', maxTicksLimit:6}, grid:{color:'#27272a'} },
-                y1:   { type:'linear', position:'right', min:0, max:tempMaxScale, ticks:{color:'#a1a1aa', maxTicksLimit:6}, grid:{drawOnChartArea:false} }
+                y1:   { type:'linear', position:'right', min:0, max:Number(tempMaxScale), ticks:{color:'#a1a1aa', maxTicksLimit:6}, grid:{drawOnChartArea:false} }
             }
         }
     });
-    // Force chart resize on mobile to fix blank-canvas issue
-    if (window.innerWidth <= 768) requestAnimationFrame(() => {
-        chart?.resize();
-        // Debug: show actual chart scale state after render
-        setTimeout(() => {
-            const _d = document.getElementById('chartDebug');
-            if (!_d) return;
-            try {
-                const sk  = chart ? Object.keys(chart.scales).join(',') : 'no chart';
-                const y1m = chart?.scales?.y1?.max;
-                const ym  = chart?.scales?.y?.max;
-                const ds0y = chart?.data?.datasets[0]?.yAxisID;
-                const ds4y = chart?.data?.datasets[4]?.yAxisID;
-                _d.innerHTML += `<br><b>⏱timeout ran</b><br>` +
-                    `<b>scales:</b> ${sk}<br>` +
-                    `<b>y.max:</b> ${ym} | <b>y1.max:</b> ${y1m}<br>` +
-                    `<b>ds[0].yAxisID:</b> ${ds0y} | <b>ds[4].yAxisID:</b> ${ds4y}`;
-            } catch(err) {
-                _d.innerHTML += `<br><b>⚠ debug err:</b> ${err.message}`;
-            }
-        }, 200);
-    });
+
+    // Synchronous post-creation debug (always, so we see it immediately)
+    const _dbgPost = document.getElementById('chartDebug');
+    if (_dbgPost) {
+        try {
+            const sk  = Object.keys(chart.scales).join(',');
+            const y1m = chart.scales.y1?.max;
+            const ym  = chart.scales.y?.max;
+            _dbgPost.innerHTML += `<br><b>★post-new:</b> scales=[${sk}]<br>y.max=${ym} y1.max=${y1m} tms=${tempMaxScale}(${typeof tempMaxScale})`;
+        } catch(e) {
+            _dbgPost.innerHTML += `<br><b>★post-new err:</b> ${e.message}`;
+        }
+    }
+
+    // Force y1 max after creation as failsafe (in case Chart.js ignored it)
+    if (chart.scales?.y1 && chart.scales.y1.max !== Number(tempMaxScale)) {
+        chart.options.scales.y1.max = Number(tempMaxScale);
+        chart.update('none');
+        if (_dbgPost) _dbgPost.innerHTML += `<br><b>★override applied</b> new y1.max=${chart.scales.y1?.max}`;
+    }
 }
 
 // ── Shot score ────────────────────────────────────────────────────────────
