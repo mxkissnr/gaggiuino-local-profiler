@@ -193,7 +193,7 @@ The trash button (🗑) in the sidebar removes a shot and its annotations from t
 | `/api/status` | GET | Sync status, shot count, HA connection |
 | `/api/sync` | POST | Trigger manual sync (max. once per 30 s) |
 | `/api/shots/:id/annotate` | POST | Save annotation for a shot |
-| `/api/shots/:id` | DELETE | Delete a shot and its annotation |
+| `/api/shots/:id/delete` | POST | Delete a shot and its annotation |
 | `/api/live` | GET (SSE) | Real-time data stream |
 
 ## Data Storage

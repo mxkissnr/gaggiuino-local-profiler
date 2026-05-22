@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh issue create --repo mxkissnr/gaggiuino-local-profiler --title 'Coffee Library: bean & grinder database' --label enhancement --body ' *)"
+    ]
+  }
+}

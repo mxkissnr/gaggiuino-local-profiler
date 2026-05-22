@@ -176,7 +176,7 @@ Exportiert den aktuell ausgewählten Shot im Decent Espresso `.shot`-Format. Kom
 | `/api/status` | GET | Sync-Status, Shot-Anzahl, HA-Verbindung |
 | `/api/sync` | POST | Manuellen Sync auslösen (max. 1×/30 s) |
 | `/api/shots/:id/annotate` | POST | Annotation für Shot speichern |
-| `/api/shots/:id` | DELETE | Shot und Annotation löschen |
+| `/api/shots/:id/delete` | POST | Shot und Annotation löschen |
 | `/api/live` | GET (SSE) | Echtzeit-Datenstrom |
 
 ## Datenspeicherung

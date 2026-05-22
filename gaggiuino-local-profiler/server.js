@@ -200,7 +200,7 @@ app.post('/api/shots/:id/annotate', (req, res) => {
     }
 });
 
-app.delete('/api/shots/:id', (req, res) => {
+app.post('/api/shots/:id/delete', (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id) || id < 1 || id > MAX_SHOT_ID)
         return res.status(400).json({ error: 'Invalid shot ID' });

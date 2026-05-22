@@ -1,3 +1,6 @@
+## 1.18.1
+- Fix: shot delete used HTTP DELETE which HA ingress proxy blocks — changed to POST /api/shots/:id/delete
+
 ## 1.18.0
 - Shot delete: trash button in sidebar removes shot + annotation permanently (with confirmation)
 - Sidebar collapsible on desktop: ‹/› toggle button gives full-width chart view
