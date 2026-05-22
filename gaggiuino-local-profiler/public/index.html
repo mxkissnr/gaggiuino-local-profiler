@@ -2073,37 +2073,51 @@ function filterShots(query) {
 }
 
 // ── CSV Export ────────────────────────────────────────────────────────────
-function exportCSV() {
-    const header = ['Shot ID','Datum','Profil','Dauer (s)','Ø Druck (bar)','Max Gewicht (g)',
-                    'Dosis (g)','Ratio','Ø Temp (°C)','Bewertung','Kaffee','Mühle','Mahlgrad','Notizen'];
-    const rows = shots.map(shot => {
-        const d     = getShotData(shot);
-        const ann   = shot.annotation || {};
-        const avgP  = avgActive(d.pressure.map(p=>p.y), 1.5);
-        const finalW = max(d.weight.map(p=>p.y));
-        const avgT  = avg(d.temp.map(p=>p.y));
-        const secs  = ((shot.duration||0)/10).toFixed(1);
-        const ratio = (ann.dose && finalW) ? `1:${(finalW/ann.dose).toFixed(1)}` : '';
-        const date  = new Date(shot.timestamp * 1000).toLocaleString('de-DE');
-        return [
-            shot.id, date,
-            shot.profile?.name || shot.profileName || '',
-            secs,
-            avgP  != null ? avgP.toFixed(2)  : '',
-            finalW != null ? finalW.toFixed(1) : '',
-            ann.dose || '', ratio,
-            avgT  != null ? avgT.toFixed(1)  : '',
-            ann.rating || '', ann.coffee || '', ann.grinder || '',
-            ann.grindSetting || '',
-            (ann.notes || '').replace(/\n/g,' ')
-        ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
-    });
-    const csv  = [header.join(','), ...rows].join('\n');
-    const blob = new Blob(['﻿'+csv], { type:'text/csv;charset=utf-8;' });
+function shotToCSVRow(shot) {
+    const d      = getShotData(shot);
+    const ann    = shot.annotation || {};
+    const avgP   = avgActive(d.pressure.map(p=>p.y), 1.5);
+    const finalW = max(d.weight.map(p=>p.y));
+    const avgT   = avg(d.temp.map(p=>p.y));
+    const secs   = ((shot.duration||0)/10).toFixed(1);
+    const ratio  = (ann.dose && finalW) ? `1:${(finalW/ann.dose).toFixed(1)}` : '';
+    const date   = new Date(shot.timestamp * 1000).toLocaleString('de-DE');
+    return [
+        shot.id, date,
+        shot.profile?.name || shot.profileName || '',
+        secs,
+        avgP   != null ? avgP.toFixed(2)  : '',
+        finalW != null ? finalW.toFixed(1) : '',
+        ann.dose || '', ratio,
+        avgT   != null ? avgT.toFixed(1)  : '',
+        ann.rating || '', ann.coffee || '', ann.grinder || '',
+        ann.grindSetting || '',
+        (ann.notes || '').replace(/\n/g,' ')
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+}
+
+function downloadCSV(rows, filename) {
+    const header = ['Shot ID','Date','Profile','Duration (s)','Avg Pressure (bar)','Max Weight (g)',
+                    'Dose (g)','Ratio','Avg Temp (C)','Rating','Coffee','Grinder','Grind Setting','Notes'];
+    const csv  = [header.join(','), ...rows].join('\r\n');
+    // UTF-8 BOM ensures correct display in Excel
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    a.href = url; a.download = 'shots.csv'; a.click();
+    a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
+}
+
+function exportCSV() {
+    const shot = shots.find(s => s.id === primaryShotId);
+    if (!shot) return;
+    const date = new Date(shot.timestamp * 1000).toISOString().slice(0,10);
+    const profile = (shot.profile?.name || shot.profileName || 'shot').replace(/[^a-z0-9]/gi,'_');
+    downloadCSV([shotToCSVRow(shot)], `glp_shot_${date}_${profile}.csv`);
+}
+
+function exportAllCSV() {
+    downloadCSV(shots.map(shotToCSVRow), 'glp_all_shots.csv');
 }
 
 // ── .shot export (Decent Espresso format) ────────────────────────────────
