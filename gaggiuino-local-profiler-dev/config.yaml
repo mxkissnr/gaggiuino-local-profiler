@@ -1,0 +1,25 @@
+name: "GLP Dev"
+version: "dev"
+slug: "gaggiuino_local_profiler_dev"
+description: "Development version of Gaggiuino Local Profiler — may be unstable."
+url: "https://github.com/mxkissnr/gaggiuino-local-profiler/tree/dev"
+arch:
+  - amd64
+  - armv7
+  - aarch64
+startup: application
+boot: manual
+homeassistant_api: true
+init: false
+ingress: true
+ingress_port: 8100
+panel_icon: mdi:coffee-outline
+panel_title: "GLP Dev"
+options:
+  machine_url: "http://gaggia.intern/api/shots"
+  sync_interval: 5
+  switch_entity: ""
+schema:
+  machine_url: url
+  sync_interval: int(1,60)
+  switch_entity: str?

@@ -1,0 +1,2448 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gaggiuino Local Profiler</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%2318181b'/><text y='.85em' font-size='78' x='10'>☕</text></svg>">
+
+    <link rel="preconnect" href="https://fonts.bunny.net">
+    <link href="https://fonts.bunny.net/css?family=figtree:400,600&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --gray-700: #3f3f46;
+            --gray-800: #27272a;
+            --gray-900: #18181b;
+            --gray-950: #09090b;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background: var(--gray-950);
+            color: rgba(255,255,255,0.8);
+            font-family: 'Figtree', sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ── Sidebar ── */
+        #sidebar {
+            width: 320px;
+            background: var(--gray-900);
+            border-right: 1px solid var(--gray-700);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width .3s cubic-bezier(.4,0,.2,1), border-color .3s ease;
+            will-change: width;
+        }
+
+        #sidebar h2 {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #fff;
+            border-bottom: 1px solid var(--gray-700);
+        }
+
+        #shot-count { color: #52525b; font-size: .85rem; font-weight: normal; margin-left: 6px; }
+
+        .sidebar-hint {
+            padding: 10px 20px;
+            font-size: .75rem;
+            color: #a1a1aa;
+            background: rgba(39,39,42,.3);
+            border-bottom: 1px solid var(--gray-700);
+        }
+
+        #shots { flex: 1; overflow-y: auto; }
+
+        .shot-wrapper {
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid rgba(63,63,70,.3);
+            padding-right: 12px;
+            transition: background .15s;
+        }
+        .shot-wrapper:hover           { background: rgba(39,39,42,.4); }
+        .shot-wrapper.active          { background: var(--gray-800); }
+        .shot-wrapper.compare-active  { background: rgba(52,152,219,.12); }
+
+        .shot {
+            flex: 1;
+            padding: 11px 12px 11px 20px;
+            cursor: pointer;
+            border-left: 4px solid transparent;
+        }
+        .shot-wrapper.active .shot        { border-left-color: #ef4444; }
+        .shot-wrapper.compare-active .shot{ border-left-color: #3498db; }
+
+        .profile-name-sidebar { font-size: .95rem; font-weight: 600; color: #fff; margin-bottom: 1px; }
+        .coffee-name-sidebar  { font-size: .8rem; color: #a1a1aa; margin-bottom: 2px; }
+        .shotid-sidebar       { color: #a1a1aa; font-size: .8rem; }
+        .date-sidebar         { color: #71717a; font-size: .72rem; margin-top: 3px; }
+        .sidebar-stars        { color: #f59e0b; font-size: .72rem; letter-spacing: 1px; margin-top: 3px; }
+
+        .compare-btn {
+            background: rgba(63,63,70,.5);
+            color: #a1a1aa;
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            width: 34px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+            transition: all .2s;
+        }
+        .compare-btn:hover { background: var(--gray-800); color: #fff; }
+        .shot-wrapper.compare-active .compare-btn { background: #3498db; color: #fff; border-color: #2980b9; }
+
+        #sidebar-footer {
+            padding: 12px 20px;
+            border-top: 1px solid var(--gray-700);
+            font-size: .75rem;
+            color: #71717a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        .status-dot.ok      { background: #22c55e; }
+        .status-dot.error   { background: #ef4444; }
+        .status-dot.unknown { background: #52525b; }
+
+        #syncBtn {
+            background: rgba(63,63,70,.5);
+            color: #a1a1aa;
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: .75rem;
+            font-family: 'Figtree', sans-serif;
+            transition: all .2s;
+        }
+        #syncBtn:hover    { background: var(--gray-800); color: #fff; }
+        #syncBtn:disabled { opacity: .4; cursor: not-allowed; }
+
+        #powerBtn {
+            background: rgba(63,63,70,.5);
+            color: #a1a1aa;
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: .85rem;
+            font-family: 'Figtree', sans-serif;
+            transition: all .2s;
+        }
+        #powerBtn:hover          { background: var(--gray-800); color: #fff; }
+        #powerBtn:disabled       { opacity: .4; cursor: not-allowed; }
+        #powerBtn.machine-on     { color: #22c55e; border-color: rgba(34,197,94,.35); }
+        #powerBtn.machine-off    { color: #52525b; }
+        .mode-btn:disabled       { opacity: .38; cursor: not-allowed; }
+        .mode-btn:disabled:hover { color: #71717a; }
+
+        .loading-state { padding: 24px 20px; color: #52525b; font-size: .85rem; text-align: center; }
+
+        /* ── Main ── */
+        #main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+        /* ── Mode bar ── */
+        #mode-bar {
+            display: flex;
+            gap: 0;
+            padding: 0 36px;
+            border-bottom: 1px solid var(--gray-800);
+            flex-shrink: 0;
+        }
+
+        .mode-btn {
+            background: transparent;
+            color: #71717a;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 14px 20px;
+            cursor: pointer;
+            font-family: 'Figtree', sans-serif;
+            font-size: .875rem;
+            font-weight: 600;
+            transition: all .2s;
+            margin-bottom: -1px;
+        }
+        .mode-btn:hover    { color: #e4e4e7; }
+        .mode-btn.active   { color: #fff; border-bottom-color: #ef4444; }
+        #btnLive .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #52525b; margin-right: 6px; transition: background .3s; }
+        #btnLive.live-brewing .live-dot { background: #ef4444; animation: pulse 1.2s infinite; }
+        #btnLive.live-ready   .live-dot { background: #22c55e; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: .3; }
+        }
+
+        /* ── Shots view ── */
+        #shots-view {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+
+        #empty-state {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            text-align: center;
+            padding: 60px 40px;
+        }
+        #empty-state .es-icon { font-size: 3.5rem; margin-bottom: 20px; }
+        #empty-state h2 { color: #71717a; font-size: 1.25rem; margin: 0 0 10px; }
+        #empty-state p  { font-size: .875rem; color: #52525b; margin: 0; max-width: 360px; line-height: 1.6; }
+
+        #chart-area { display: flex; flex-direction: column; padding: 32px 40px 40px; }
+
+        .sprofiler-header        { margin-bottom: 18px; }
+        .sprofiler-header h1     { font-size: 1.75rem; font-weight: 600; color: #fff; margin: 0 0 4px; }
+        .sprofiler-header p      { font-size: .875rem; color: #a1a1aa; margin: 0; }
+
+        .sprofiler-meta-grid {
+            display: flex;
+            justify-content: space-between;
+            font-size: .875rem;
+            margin-bottom: 20px;
+            gap: 40px;
+        }
+        .meta-column { max-width: 450px; flex: 1; }
+        .divide-y > * + * { border-top: 1px solid var(--gray-800); }
+        .meta-item { display: flex; flex-direction: column; padding: 9px 0; }
+        .meta-item:first-child { padding-top: 0; }
+        .meta-item:last-child  { padding-bottom: 0; }
+        .meta-label { margin-bottom: 4px; color: #a1a1aa; text-transform: uppercase; font-size: .7rem; letter-spacing: .05em; }
+        .meta-value { font-weight: 600; color: #fff; font-size: 1rem; }
+        .meta-sub   { font-size: .85rem; color: #71717a; font-weight: normal; margin-left: 6px; }
+
+        .chart-container { position: relative; height: 480px; width: 100%; }
+
+        /* ── Annotation panel ── */
+        .annotation-panel {
+            background: var(--gray-900);
+            border: 1px solid var(--gray-700);
+            border-radius: 8px;
+            padding: 18px 20px;
+            margin-top: 28px;
+        }
+        .annotation-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+        .annotation-title  { font-size: .7rem; color: #a1a1aa; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+
+        .star-rating { display: flex; gap: 3px; }
+        .star { font-size: 1.4rem; cursor: pointer; color: #3f3f46; transition: color .12s; user-select: none; line-height: 1; }
+        .star.active, .star:hover { color: #f59e0b; }
+
+        .annotation-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .annotation-field label {
+            display: block;
+            font-size: .7rem; color: #71717a;
+            text-transform: uppercase; letter-spacing: .05em;
+            margin-bottom: 4px;
+        }
+        .annotation-field input,
+        .annotation-field textarea {
+            width: 100%;
+            background: var(--gray-800);
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            color: rgba(255,255,255,.85);
+            font-family: 'Figtree', sans-serif;
+            font-size: .875rem;
+            padding: 7px 10px;
+            outline: none;
+            transition: border-color .2s;
+        }
+        .annotation-field input:focus,
+        .annotation-field textarea:focus { border-color: #71717a; }
+        .annotation-field textarea { resize: vertical; min-height: 58px; }
+        .annotation-field.full-width { grid-column: 1 / -1; }
+        .annotation-actions { display: flex; justify-content: flex-end; }
+
+        .save-btn {
+            background: var(--gray-800);
+            color: #a1a1aa;
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            padding: 6px 18px;
+            cursor: pointer;
+            font-family: 'Figtree', sans-serif;
+            font-size: .85rem;
+            transition: all .2s;
+        }
+        .save-btn:hover { background: var(--gray-700); color: #fff; }
+        .save-btn.saved { background: #14532d; color: #86efac; border-color: #166534; }
+
+        /* ── Live view ── */
+        #live-view {
+            display: none;
+            flex-direction: column;
+            flex: 1;
+            padding: 32px 40px 40px;
+        }
+
+        #live-header {
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        #live-header h1 { font-size: 1.75rem; font-weight: 600; color: #fff; margin: 0; }
+
+        #live-status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: .8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #52525b;
+        }
+
+        #live-status-badge.brewing { color: #ef4444; }
+        #live-status-badge.ready   { color: #22c55e; }
+        #live-status-badge.error   { color: #ef4444; }
+
+        #live-status-badge .badge-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+        #live-status-badge.brewing .badge-dot { animation: pulse 1.2s infinite; }
+
+        #live-meta {
+            display: flex;
+            font-size: .8rem;
+            color: #71717a;
+            gap: 6px;
+            margin-bottom: 24px;
+            min-height: 1.2em;
+        }
+
+        .live-stats {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .live-stat {
+            background: var(--gray-900);
+            border: 1px solid var(--gray-700);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .live-stat .stat-val {
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: #fff;
+            line-height: 1.1;
+            margin-bottom: 4px;
+        }
+
+        .live-stat .stat-unit { font-size: .75rem; color: #71717a; }
+        .live-stat .stat-label { font-size: .68rem; color: #52525b; text-transform: uppercase; letter-spacing: .05em; margin-top: 6px; }
+
+        .live-stat.highlight-pressure { border-color: rgba(52,152,219,.4); }
+        .live-stat.highlight-flow     { border-color: rgba(243,156,18,.4); }
+        .live-stat.highlight-weight   { border-color: rgba(46,204,113,.4); }
+        .live-stat.highlight-temp     { border-color: rgba(231,76,60,.4); }
+        .live-stat.highlight-time     { border-color: rgba(156,89,182,.4); }
+
+        .live-chart-container { position: relative; height: 420px; width: 100%; }
+
+        #live-idle {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            text-align: center;
+            padding: 60px 40px;
+        }
+        #live-idle .idle-icon { font-size: 3rem; margin-bottom: 16px; }
+        #live-idle h2 { color: #71717a; font-size: 1.1rem; margin: 0 0 8px; }
+        #live-idle p  { font-size: .875rem; color: #52525b; margin: 0; max-width: 320px; line-height: 1.6; }
+
+        /* ── Search ── */
+        #search-container { padding: 8px 12px; border-bottom: 1px solid var(--gray-700); }
+        #shotSearch {
+            width: 100%;
+            background: var(--gray-800);
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            color: rgba(255,255,255,.85);
+            font-family: 'Figtree', sans-serif;
+            font-size: .8rem;
+            padding: 6px 10px;
+            outline: none;
+        }
+        #shotSearch:focus       { border-color: #71717a; }
+        #shotSearch::placeholder { color: #52525b; }
+
+        /* ── Sidebar score pill ── */
+        .sidebar-score {
+            font-size: .7rem;
+            font-weight: 700;
+            border-radius: 4px;
+            padding: 1px 6px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .ss-great { background: rgba(34,197,94,.15);  color: #22c55e; }
+        .ss-good  { background: rgba(132,204,22,.15); color: #84cc16; }
+        .ss-ok    { background: rgba(245,158,11,.15); color: #f59e0b; }
+        .ss-poor  { background: rgba(249,115,22,.15); color: #f97316; }
+        .ss-bad   { background: rgba(239,68,68,.12);  color: #ef4444; }
+
+        /* ── Sidebar sort bar ── */
+        #sort-bar {
+            display: flex;
+            gap: 4px;
+            padding: 6px 12px;
+            border-bottom: 1px solid var(--gray-700);
+            flex-wrap: wrap;
+        }
+        .sort-btn {
+            background: transparent;
+            color: #71717a;
+            border: 1px solid var(--gray-700);
+            border-radius: 5px;
+            padding: 3px 9px;
+            cursor: pointer;
+            font-size: .7rem;
+            font-family: 'Figtree', sans-serif;
+            transition: all .15s;
+            white-space: nowrap;
+        }
+        .sort-btn:hover     { color: #e4e4e7; border-color: #71717a; }
+        .sort-btn.active    { background: var(--gray-800); color: #fff; border-color: #71717a; }
+
+        /* ── Freshness badge ── */
+        .freshness-badge {
+            display: inline-block;
+            font-size: .72rem; font-weight: 600;
+            border-radius: 4px; padding: 2px 7px;
+            margin-left: 8px; vertical-align: middle;
+        }
+        .freshness-fresh  { background: rgba(34,197,94,.15);  color: #22c55e; }
+        .freshness-ok     { background: rgba(245,158,11,.15); color: #f59e0b; }
+        .freshness-old    { background: rgba(239,68,68,.12);  color: #ef4444; }
+
+        /* ── Grind advice ── */
+        .grind-advice {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 14px; border-radius: 8px; border: 1px solid;
+            font-size: .85rem; margin-top: 16px;
+        }
+        .grind-advice .grind-icon { font-size: 1.1rem; flex-shrink: 0; }
+        .grind-ok      { border-color: rgba(34,197,94,.3);  background: rgba(34,197,94,.06);  color: #86efac; }
+        .grind-finer   { border-color: rgba(52,152,219,.3); background: rgba(52,152,219,.06); color: #93c5fd; }
+        .grind-coarser { border-color: rgba(243,156,18,.3); background: rgba(243,156,18,.06); color: #fcd34d; }
+        .grind-warning { border-color: rgba(239,68,68,.3);  background: rgba(239,68,68,.06);  color: #fca5a5; }
+
+        /* ── Chart tabs ── */
+        .chart-tabs { display: flex; gap: 4px; margin-bottom: 12px; align-items: center; }
+        .chart-tab {
+            background: transparent; color: #71717a;
+            border: 1px solid var(--gray-700); border-radius: 6px;
+            padding: 5px 14px; cursor: pointer;
+            font-family: 'Figtree', sans-serif; font-size: .8rem; font-weight: 600;
+            transition: all .2s;
+        }
+        .chart-tab:hover  { color: #e4e4e7; border-color: #71717a; }
+        .chart-tab.active { background: var(--gray-800); color: #fff; border-color: #71717a; }
+        #expandChartBtn {
+            margin-left: auto; background: transparent; color: #52525b;
+            border: 1px solid var(--gray-700); border-radius: 6px;
+            padding: 4px 9px; cursor: pointer; font-size: .85rem; line-height: 1;
+            transition: all .2s;
+        }
+        #expandChartBtn:hover { color: #e4e4e7; border-color: #71717a; }
+
+        /* ── Fullscreen chart overlay ── */
+        #chartFullscreen {
+            display: none; position: fixed; inset: 0; z-index: 9000;
+            background: var(--gray-950);
+            flex-direction: column;
+            padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0)
+                     env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+        }
+        #chartFullscreen.open { display: flex; }
+        #chartFullscreen .fs-header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 14px; border-bottom: 1px solid var(--gray-700); flex-shrink: 0;
+        }
+        #chartFullscreen .fs-tabs { display: flex; gap: 6px; flex: 1; }
+        #chartFullscreen .fs-title { color: #a1a1aa; font-size: .8rem; flex: 1; text-align: center; }
+        #closeFullscreenBtn {
+            background: transparent; border: 1px solid var(--gray-700); border-radius: 6px;
+            color: #a1a1aa; padding: 4px 10px; cursor: pointer; font-size: .85rem;
+            font-family: 'Figtree', sans-serif; transition: all .2s;
+        }
+        #closeFullscreenBtn:hover { color: #fff; border-color: #71717a; }
+        #chartFullscreen .fs-body { flex: 1; position: relative; min-height: 0; padding: 8px; }
+
+        /* ── Export button ── */
+        .export-btn {
+            background: rgba(63,63,70,.5);
+            color: #a1a1aa;
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            padding: 5px 12px;
+            cursor: pointer;
+            font-size: .75rem;
+            font-family: 'Figtree', sans-serif;
+            transition: all .2s;
+            white-space: nowrap;
+        }
+        .export-btn:hover { background: var(--gray-800); color: #fff; }
+
+        /* ── Channeling warning ── */
+        .channeling-warn {
+            display: inline-block;
+            background: rgba(239,68,68,.12);
+            color: #ef4444;
+            border: 1px solid rgba(239,68,68,.25);
+            border-radius: 4px;
+            font-size: .68rem;
+            padding: 1px 5px;
+            margin-left: 7px;
+            font-weight: 600;
+            vertical-align: middle;
+            letter-spacing: .03em;
+        }
+
+        /* ── Phase subtitle (mobile only) ── */
+        #phaseSubtitle { display: none; }
+
+        /* ── Phase tags ── */
+        .phase-tag {
+            display: inline-block;
+            font-size: .75rem;
+            color: #a1a1aa;
+            background: var(--gray-800);
+            border-radius: 4px;
+            padding: 1px 7px;
+            margin-right: 5px;
+        }
+        .phase-tag span { color: #fff; font-weight: 600; }
+
+        /* ── Temp stability / meta badge ── */
+        .meta-badge { font-size: .8rem; color: #71717a; margin-left: 4px; font-weight: normal; }
+
+        /* ── Score badge ── */
+        .score-badge { text-align: center; flex-shrink: 0; }
+        .score-num   { font-size: 2rem; font-weight: 700; line-height: 1; margin-bottom: 2px; }
+        .score-lbl   { font-size: .6rem; text-transform: uppercase; letter-spacing: .08em; color: #52525b; }
+        .score-great { color: #22c55e; }
+        .score-good  { color: #84cc16; }
+        .score-ok    { color: #f59e0b; }
+        .score-poor  { color: #f97316; }
+        .score-bad   { color: #ef4444; }
+
+        /* ── Trash section ── */
+        #trash-section {
+            border-top: 1px solid var(--gray-700);
+            flex-shrink: 0;
+        }
+        #trash-toggle {
+            width: 100%; background: none; border: none;
+            color: #52525b; cursor: pointer; font-size: .75rem;
+            font-family: 'Figtree', sans-serif;
+            padding: 8px 20px; text-align: left;
+            display: flex; align-items: center; gap: 6px;
+            transition: color .15s;
+        }
+        #trash-toggle:hover { color: #a1a1aa; }
+        #trash-toggle .trash-count {
+            margin-left: auto;
+            background: rgba(239,68,68,.12); color: #ef4444;
+            border-radius: 10px; padding: 1px 7px; font-size: .7rem; font-weight: 700;
+        }
+        #trash-list { overflow-y: auto; max-height: 220px; }
+        .trash-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 7px 12px 7px 20px;
+            border-bottom: 1px solid rgba(63,63,70,.2);
+            font-size: .78rem; color: #71717a;
+        }
+        .trash-item-info { flex: 1; min-width: 0; }
+        .trash-item-name { color: #a1a1aa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .trash-item-days { font-size: .7rem; color: #52525b; margin-top: 1px; }
+        .trash-restore-btn {
+            background: none; border: 1px solid var(--gray-700);
+            border-radius: 5px; color: #52525b; cursor: pointer;
+            padding: 3px 7px; font-size: .72rem; font-family: 'Figtree', sans-serif;
+            transition: all .15s; white-space: nowrap; flex-shrink: 0;
+        }
+        .trash-restore-btn:hover { color: #22c55e; border-color: rgba(34,197,94,.4); }
+        .trash-delete-btn {
+            background: none; border: none; color: #3f3f46;
+            cursor: pointer; padding: 4px; font-size: .85rem;
+            transition: color .15s; flex-shrink: 0;
+        }
+        .trash-delete-btn:hover { color: #ef4444; }
+
+        /* ── Delete button (in sidebar shot items) ── */
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #3f3f46;
+            cursor: pointer;
+            padding: 6px 4px;
+            font-size: .9rem;
+            line-height: 1;
+            transition: color .15s;
+            flex-shrink: 0;
+        }
+        .delete-btn:hover { color: #ef4444; }
+
+        /* ── Desktop sidebar collapse ── */
+        #collapseBtn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #27272a;
+            border: 1px solid #3f3f46;
+            border-radius: 6px;
+            color: #a1a1aa;
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            width: 26px;
+            height: 26px;
+            padding: 0;
+            margin-left: auto;
+            transition: background .2s, color .2s, border-color .2s;
+            flex-shrink: 0;
+        }
+        #collapseBtn:hover { background: #3f3f46; border-color: #52525b; color: #fff; }
+        #expandSidebarBtn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #27272a;
+            border: 1px solid #3f3f46;
+            border-radius: 6px;
+            color: #a1a1aa;
+            cursor: pointer;
+            font-size: 1rem;
+            width: 26px;
+            height: 26px;
+            padding: 0;
+            margin-right: 8px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .3s ease, background .2s, color .2s;
+        }
+        #expandSidebarBtn.visible { opacity: 1; pointer-events: auto; }
+        #expandSidebarBtn:hover { background: #3f3f46; border-color: #52525b; color: #fff; }
+        #sidebar > * { min-width: 320px; }
+        #sidebar.desktop-collapsed {
+            width: 0;
+            min-width: 0;
+            border-right-color: transparent;
+        }
+
+        /* ── Sidebar close button (inside overlay header) ── */
+        #sidebarToggle {
+            display: none;
+            background: none;
+            border: none;
+            color: #71717a;
+            cursor: pointer;
+            font-size: 1.25rem;
+            line-height: 1;
+            padding: 0 10px 0 0;
+            margin: 0;
+            transition: color .2s;
+            flex-shrink: 0;
+        }
+        #sidebarToggle:hover { color: #fff; }
+
+        /* ── Mobile hamburger in mode-bar ── */
+        #mobileMenuBtn {
+            display: none;
+            background: none;
+            border: none;
+            color: #71717a;
+            cursor: pointer;
+            font-size: 1.25rem;
+            line-height: 1;
+            padding: 0 12px 0 0;
+            align-items: center;
+            flex-shrink: 0;
+            transition: color .2s;
+        }
+        #mobileMenuBtn:hover { color: #fff; }
+
+        /* ── Sidebar backdrop ── */
+        #sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.5);
+            z-index: 199;
+        }
+        #sidebar-backdrop.visible { display: block; }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            /* Sidebar becomes a fixed left-side overlay drawer */
+            #sidebar {
+                position: fixed;
+                top: 0; left: 0; bottom: 0;
+                width: min(300px, 85vw);
+                height: 100vh;
+                z-index: 200;
+                transform: translateX(-100%);
+                transition: transform .3s ease;
+                max-height: none;
+                border-right: 1px solid var(--gray-700);
+                border-bottom: none;
+                overflow-y: auto;
+            }
+            #sidebar.open      { transform: translateX(0); }
+            #sidebar.collapsed { max-height: none; }
+            #sidebar h2        { display: flex; align-items: center; }
+            #sidebarToggle     { display: flex; align-items: center; }
+            #mobileMenuBtn     { display: flex; }
+            #collapseBtn       { display: flex; }
+            #main              { height: 100vh; overflow-y: auto; }
+            #chart-area, #live-view { padding: 16px; }
+            .sprofiler-header { margin-bottom: 10px; }
+            .sprofiler-header h1 { font-size: 1.3rem; }
+            .sprofiler-meta-grid { gap: 0; flex-direction: column; }
+            .meta-column       { max-width: 100%; }
+            .meta-column[style*="text-align: right"] { text-align: left !important; }
+            .meta-item {
+                flex-direction: row;
+                align-items: baseline;
+                justify-content: space-between;
+                padding: 5px 0;
+                gap: 8px;
+            }
+            .meta-label { margin-bottom: 0; }
+            .meta-value { font-size: .875rem; text-align: right; }
+            #phasesItem { display: none !important; }
+            #phaseSubtitle { display: block; }
+            .annotation-fields { grid-template-columns: 1fr; }
+            .annotation-field.full-width { grid-column: 1; }
+            .chart-container, .live-chart-container { height: 360px; }
+            .live-stats        { grid-template-columns: repeat(3, 1fr); }
+            #mode-bar          { padding: 0 16px; }
+            .mode-btn          { padding: 12px 14px; font-size: .8rem; }
+            .score-num         { font-size: 1.5rem; }
+        }
+        @media (max-width: 480px) {
+            .live-stats { grid-template-columns: repeat(2, 1fr); }
+            .sprofiler-header h1 { font-size: 1.1rem; }
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- ── Sidebar ── -->
+<div id="sidebar">
+    <h2><button id="sidebarToggle" onclick="toggleSidebar()">☰</button>☕ Shots <span id="shot-count"></span><button id="collapseBtn" onclick="toggleDesktopSidebar()" title="Sidebar einklappen">‹</button></h2>
+    <div class="sidebar-hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
+    <div id="search-container">
+        <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …" oninput="filterShots(this.value)">
+    </div>
+    <div id="sort-bar">
+        <button class="sort-btn active" id="sortNewest" onclick="setSortMode('newest')">Neueste</button>
+        <button class="sort-btn" id="sortScore"  onclick="setSortMode('score')">Score ↓</button>
+        <button class="sort-btn" id="sortRating" onclick="setSortMode('rating')">⭐ Bewertung</button>
+        <button class="sort-btn" id="sortDur"    onclick="setSortMode('duration')">Dauer</button>
+    </div>
+    <div id="shots"></div>
+    <div id="trash-section" style="display:none">
+        <button id="trash-toggle" onclick="toggleTrash()">
+            🗑 Papierkorb
+            <span class="trash-count" id="trash-count">0</span>
+        </button>
+        <div id="trash-list" style="display:none"></div>
+    </div>
+
+    <div id="sidebar-footer">
+        <div>
+            <span class="status-dot unknown" id="statusDot"></span>
+            <span id="syncTime">kein Sync</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+            <button id="powerBtn" onclick="toggleMachinePower()" style="display:none" title="">⏻</button>
+            <button id="syncBtn" onclick="triggerSync()">↻ Sync</button>
+        </div>
+    </div>
+</div>
+
+<div id="sidebar-backdrop" onclick="closeSidebar()"></div>
+
+<!-- ── Main ── -->
+<div id="main">
+
+    <!-- Mode switcher -->
+    <div id="mode-bar">
+        <button id="mobileMenuBtn" onclick="openSidebar()">☰</button>
+        <button id="expandSidebarBtn" onclick="toggleDesktopSidebar()" title="Sidebar aufklappen">›</button>
+        <button class="mode-btn active" id="btnShots" onclick="switchMode('shots')">Shots</button>
+        <button class="mode-btn" id="btnLive" onclick="switchMode('live')">
+            <span class="live-dot"></span>Live
+        </button>
+    </div>
+
+    <!-- Shots view -->
+    <div id="shots-view">
+
+        <div id="empty-state">
+            <div class="es-icon">☕</div>
+            <h2>Keine Shots vorhanden</h2>
+            <p>Stelle sicher, dass die Gaggiuino-Maschine unter der konfigurierten URL erreichbar ist und nutze <b>↻ Sync</b>.</p>
+        </div>
+
+        <div id="chart-area">
+            <div class="sprofiler-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+                <div style="flex:1;min-width:0">
+                    <h1 id="topTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Profil-Name</h1>
+                    <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="freshness-badge" style="display:none"></span></p>
+                    <div id="phaseSubtitle" style="display:none;margin-top:4px"></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
+                    <div id="shotScoreBadge" class="score-badge" style="display:none">
+                        <div id="shotScoreVal" class="score-num">–</div>
+                        <div class="score-lbl">Score</div>
+                    </div>
+                    <button class="export-btn" onclick="exportCSV()" title="Alle Shots als CSV exportieren">↓ CSV</button>
+                    <button class="export-btn" id="exportShotBtn" onclick="exportShot()" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
+                </div>
+            </div>
+
+            <div class="sprofiler-meta-grid">
+                <div class="meta-column divide-y">
+                    <div class="meta-item">
+                        <span class="meta-label">Profil</span>
+                        <span class="meta-value" id="valProfile">-</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Druck (Ø / Max Ziel)</span>
+                        <span class="meta-value">
+                            <span id="pressure">-</span><span class="meta-sub" id="targetPressure"></span><span id="channelingWarning" class="channeling-warn" style="display:none">⚡ Channeling</span>
+                        </span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Pumpenfluss (Ø / Ziel)</span>
+                        <span class="meta-value">
+                            <span id="flow">-</span><span class="meta-sub" id="targetFlow"></span>
+                        </span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Temperatur (Ø ±σ / Ziel)</span>
+                        <span class="meta-value">
+                            <span id="temp">-</span><span class="meta-badge" id="tempStability"></span><span class="meta-sub" id="targetTemp"></span>
+                        </span>
+                    </div>
+                    <div class="meta-item" id="phasesItem" style="display:none">
+                        <span class="meta-label">Phasen</span>
+                        <span class="meta-value" id="phases">-</span>
+                    </div>
+                </div>
+
+                <div class="meta-column divide-y" style="text-align:right">
+                    <div class="meta-item">
+                        <span class="meta-label">Gewicht (Gesamt / Fluss Ende)</span>
+                        <span class="meta-value">
+                            <span id="weight">-</span><span class="meta-sub" id="weightFlowSub"></span>
+                        </span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Gewichtsfluss (Ø / Max)</span>
+                        <span class="meta-value">
+                            <span id="wf">-</span><span class="meta-sub" id="maxWf"></span>
+                        </span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Dauer</span>
+                        <span class="meta-value" id="duration">-</span>
+                    </div>
+                    <div class="meta-item" id="ratioItem" style="display:none">
+                        <span class="meta-label">Dosis → Yield · Ratio</span>
+                        <span class="meta-value" id="ratio">-</span>
+                    </div>
+                    <div class="meta-item" id="eyItem" style="display:none">
+                        <span class="meta-label">Extraction Yield (EY)</span>
+                        <span class="meta-value" id="ey">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="grindAdvice" class="grind-advice" style="display:none">
+                <span class="grind-icon" id="grindAdviceIcon"></span>
+                <span id="grindAdviceText"></span>
+            </div>
+
+            <div class="chart-tabs">
+                <button class="chart-tab active" id="tabZeit" onclick="switchChartTab('zeit')">⏱ Zeit</button>
+                <button class="chart-tab" id="tabPQ" onclick="switchChartTab('pq')">P·Q Kurve</button>
+                <button id="expandChartBtn" onclick="openChartFullscreen()" title="Vollbild">⤢</button>
+            </div>
+            <div id="zeitContainer" class="chart-container">
+                <canvas id="espressoShotChart"></canvas>
+            </div>
+            <div id="pqContainer" class="chart-container" style="display:none">
+                <canvas id="pqChart"></canvas>
+            </div>
+
+            <!-- Fullscreen chart overlay -->
+            <div id="chartFullscreen">
+                <div class="fs-header">
+                    <div class="fs-tabs">
+                        <button class="chart-tab active" id="fsTabZeit" onclick="switchFsTab('zeit')">⏱ Zeit</button>
+                        <button class="chart-tab" id="fsTabPQ" onclick="switchFsTab('pq')">P·Q Kurve</button>
+                    </div>
+                    <button id="closeFullscreenBtn" onclick="closeChartFullscreen()">✕ Schließen</button>
+                </div>
+                <div class="fs-body">
+                    <canvas id="espressoShotChartFs" style="width:100%;height:100%"></canvas>
+                </div>
+            </div>
+
+            <!-- Annotation panel BELOW chart -->
+            <div class="annotation-panel" id="annotationPanel">
+                <div class="annotation-header">
+                    <span class="annotation-title">Notizen & Bewertung</span>
+                    <div class="star-rating" id="starRating">
+                        <span class="star" data-val="1">★</span>
+                        <span class="star" data-val="2">★</span>
+                        <span class="star" data-val="3">★</span>
+                        <span class="star" data-val="4">★</span>
+                        <span class="star" data-val="5">★</span>
+                    </div>
+                </div>
+                <div class="annotation-fields">
+                    <div class="annotation-field">
+                        <label>Kaffee / Bohne</label>
+                        <input type="text" id="annCoffee" placeholder="z.B. Ethiopia Yirgacheffe">
+                    </div>
+                    <div class="annotation-field">
+                        <label>Mühle</label>
+                        <input type="text" id="annGrinder" placeholder="z.B. Niche Zero">
+                    </div>
+                    <div class="annotation-field">
+                        <label>Mahlgrad</label>
+                        <input type="text" id="annGrindSetting" placeholder="z.B. 23 Clicks">
+                    </div>
+                    <div class="annotation-field">
+                        <label>Dosis (g)</label>
+                        <input type="number" id="annDose" placeholder="z.B. 18" step="0.1" min="0">
+                    </div>
+                    <div class="annotation-field">
+                        <label>Röstdatum</label>
+                        <input type="text" id="annRoastDate" placeholder="TT.MM.JJJJ" maxlength="10">
+                    </div>
+                    <div class="annotation-field">
+                        <label>TDS % <span style="color:#52525b;font-weight:normal">(optional)</span></label>
+                        <input type="number" id="annTds" placeholder="z.B. 9.2" step="0.1" min="0" max="25">
+                    </div>
+                    <div class="annotation-field full-width">
+                        <label>Notizen</label>
+                        <textarea id="annNotes" placeholder="Geschmack, Beobachtungen, Anpassungen …"></textarea>
+                    </div>
+                </div>
+                <div class="annotation-actions">
+                    <button class="save-btn" id="saveAnnotationBtn" onclick="saveAnnotation()">Speichern</button>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- #shots-view -->
+
+    <!-- Live view -->
+    <div id="live-view">
+        <div id="live-header">
+            <h1>Live Shot</h1>
+            <div id="live-status-badge">
+                <span class="badge-dot"></span>
+                <span id="live-status-text">Verbinde …</span>
+            </div>
+        </div>
+        <div id="live-meta">–</div>
+
+        <div id="live-content">
+            <div class="live-stats">
+                <div class="live-stat highlight-time">
+                    <div class="stat-val" id="liveTime">–</div>
+                    <div class="stat-unit">min:sec</div>
+                    <div class="stat-label">Zeit</div>
+                </div>
+                <div class="live-stat highlight-pressure">
+                    <div class="stat-val" id="livePressure">–</div>
+                    <div class="stat-unit">bar</div>
+                    <div class="stat-label">Druck</div>
+                </div>
+                <div class="live-stat highlight-flow">
+                    <div class="stat-val" id="liveFlow">–</div>
+                    <div class="stat-unit">ml/s</div>
+                    <div class="stat-label">Pumpenfluss</div>
+                </div>
+                <div class="live-stat highlight-weight">
+                    <div class="stat-val" id="liveWeight">–</div>
+                    <div class="stat-unit">g</div>
+                    <div class="stat-label">Gewicht</div>
+                </div>
+                <div class="live-stat highlight-temp">
+                    <div class="stat-val" id="liveTemp">–</div>
+                    <div class="stat-unit">°C</div>
+                    <div class="stat-label">Temperatur</div>
+                </div>
+            </div>
+
+            <div class="live-chart-container">
+                <canvas id="liveChart"></canvas>
+            </div>
+        </div>
+
+        <div id="live-idle" style="display:none">
+            <div class="idle-icon">☕</div>
+            <h2>Maschine bereit</h2>
+            <p>Sobald ein Bezug startet, erscheinen hier die Echtzeit-Daten.</p>
+        </div>
+    </div><!-- #live-view -->
+
+</div><!-- #main -->
+
+<script>
+let shots        = [];
+let trashedShots = [];
+let chart        = null;
+let primaryShotId = null;
+let compareShotId = null;
+let currentRating = 0;
+let currentMode   = 'shots';
+let trashOpen     = false;
+
+// Live state
+let livePollInterval = null;
+let liveChart        = null;
+let liveIsActive     = false;
+let liveLastSeq      = -1;
+let liveWasLive      = false;
+
+// Chart / P·Q state
+let pqChart        = null;
+let currentChartTab = 'zeit';
+
+// Machine power state (null = no switch configured, true/false = on/off)
+let machinePowerState = null;
+
+// Sidebar sort
+let currentSort = 'newest';
+let sortAsc = false;
+
+// ── HTML escaping (XSS prevention) ───────────────────────────────────────
+function esc(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// ── Phase background plugin ───────────────────────────────────────────────
+const phasePlugin = {
+    id: 'phases',
+    beforeDatasetsDraw(chart, _args, opts) {
+        if (!opts?.preinfusion) return;
+        const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+        const preEnd   = Math.min(Math.max(x.getPixelForValue(opts.preinfusion), left), right);
+        const totalEnd = Math.min(Math.max(x.getPixelForValue(opts.preinfusion + opts.extraction), left), right);
+
+        ctx.save();
+
+        if (preEnd > left) {
+            ctx.fillStyle = 'rgba(52,152,219,0.13)';
+            ctx.fillRect(left, top, preEnd - left, bottom - top);
+        }
+        if (totalEnd > preEnd) {
+            ctx.fillStyle = 'rgba(243,156,18,0.10)';
+            ctx.fillRect(preEnd, top, totalEnd - preEnd, bottom - top);
+        }
+
+        // Phase boundary line
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.setLineDash([5, 4]);
+        ctx.lineWidth = 1.5;
+        ctx.moveTo(preEnd, top);
+        ctx.lineTo(preEnd, bottom);
+        ctx.stroke();
+
+        // Labels with pill background
+        ctx.setLineDash([]);
+        ctx.font = '600 11px Figtree, sans-serif';
+        const labelY = top + 34;
+        if (preEnd - left > 40) {
+            const lbl = 'Preinfusion';
+            const w   = ctx.measureText(lbl).width;
+            ctx.fillStyle = 'rgba(52,152,219,0.22)';
+            ctx.beginPath(); ctx.roundRect(left + 6, labelY - 12, w + 12, 16, 4); ctx.fill();
+            ctx.fillStyle = 'rgba(147,197,253,0.9)';
+            ctx.textAlign = 'left'; ctx.fillText(lbl, left + 12, labelY);
+        }
+        if (totalEnd - preEnd > 60) {
+            const lbl = 'Extraktion';
+            const w   = ctx.measureText(lbl).width;
+            ctx.fillStyle = 'rgba(243,156,18,0.22)';
+            ctx.beginPath(); ctx.roundRect(preEnd + 6, labelY - 12, w + 12, 16, 4); ctx.fill();
+            ctx.fillStyle = 'rgba(251,191,36,0.9)';
+            ctx.textAlign = 'left'; ctx.fillText(lbl, preEnd + 12, labelY);
+        }
+
+        ctx.restore();
+    }
+};
+
+// ── Corsair crosshair ─────────────────────────────────────────────────────
+const corsairPlugin = {
+    id: 'corsair',
+    defaults: { width: 1, color: 'rgba(255,255,255,0.35)', dash: [4,4] },
+    afterInit:  c => { c.corsair = { x: 0, y: 0 }; },
+    afterEvent: (c, args) => { c.corsair = { x: args.event.x, y: args.event.y, draw: args.inChartArea }; c.draw(); },
+    beforeDatasetsDraw: (c, _a, opts) => {
+        if (!c.corsair) return;
+        const { ctx } = c;
+        const { top, bottom } = c.chartArea;
+        const { x, draw } = c.corsair;
+        if (!draw) return;
+        ctx.save();
+        ctx.beginPath();
+        ctx.lineWidth = opts.width; ctx.strokeStyle = opts.color; ctx.setLineDash(opts.dash);
+        ctx.moveTo(x, bottom); ctx.lineTo(x, top); ctx.stroke();
+        ctx.restore();
+    }
+};
+
+// ── Mode switcher ─────────────────────────────────────────────────────────
+function switchMode(mode) {
+    currentMode = mode;
+    document.getElementById('btnShots').classList.toggle('active', mode === 'shots');
+    document.getElementById('btnLive').classList.toggle('active',  mode === 'live');
+    document.getElementById('shots-view').style.display = mode === 'shots' ? 'flex' : 'none';
+    document.getElementById('live-view').style.display  = mode === 'live'  ? 'flex' : 'none';
+
+    if (mode === 'live') {
+        initLiveChart();
+        connectLiveStream();
+    } else {
+        disconnectLiveStream();
+    }
+}
+
+// ── Star rating ───────────────────────────────────────────────────────────
+document.querySelectorAll('#starRating .star').forEach(star => {
+    const val = parseInt(star.dataset.val);
+    star.addEventListener('mouseover', () => renderStars(val));
+    star.addEventListener('mouseout',  () => renderStars(currentRating));
+    star.addEventListener('click', () => {
+        currentRating = (currentRating === val) ? 0 : val;
+        renderStars(currentRating);
+    });
+});
+
+function renderStars(rating) {
+    document.querySelectorAll('#starRating .star').forEach(s => {
+        s.classList.toggle('active', parseInt(s.dataset.val) <= rating);
+    });
+}
+
+// ── Data loading ──────────────────────────────────────────────────────────
+async function loadData() {
+    const shotsEl = document.getElementById('shots');
+    shotsEl.innerHTML = '<div class="loading-state">Lade Shots …</div>';
+
+    // Fetch phase — network errors show a retry button
+    let fetched;
+    try {
+        const r = await fetch('shots.json');
+        if (!r.ok) {
+            shotsEl.innerHTML = `<div class="loading-state" style="color:#ef4444">HTTP ${r.status}</div>`;
+            return;
+        }
+        fetched = await r.json();
+    } catch (e) {
+        shotsEl.innerHTML =
+            `<div class="loading-state" style="color:#ef4444">Verbindungsfehler<br>` +
+            `<button onclick="loadData()" style="margin-top:10px;padding:4px 12px;cursor:pointer;` +
+            `background:rgba(63,63,70,.5);color:#a1a1aa;border:1px solid #3f3f46;border-radius:6px;` +
+            `font-family:Figtree,sans-serif;font-size:.8rem">↻ Neu laden</button></div>`;
+        return;
+    }
+
+    // Processing phase — JS errors here must NOT mask as "Verbindungsfehler"
+    shots = fetched;
+    renderSidebar();
+    loadTrashData();
+
+    const empty     = document.getElementById('empty-state');
+    const chartArea = document.getElementById('chart-area');
+    if (shots.length > 0) {
+        empty.style.display     = 'none';
+        chartArea.style.display = 'flex';
+        if (!primaryShotId || !shots.find(s => s.id === primaryShotId))
+            primaryShotId = shots[shots.length - 1].id;
+        updateView();
+    } else {
+        empty.style.display     = 'flex';
+        chartArea.style.display = 'none';
+    }
+}
+
+// ── Sidebar sort ──────────────────────────────────────────────────────────
+function setSortMode(mode) {
+    if (currentSort === mode) {
+        sortAsc = !sortAsc;
+    } else {
+        currentSort = mode;
+        sortAsc = false;
+    }
+    const arrow = sortAsc ? ' ↑' : ' ↓';
+    const labels = { newest: 'Neueste', score: 'Score', rating: '⭐ Bewertung', duration: 'Dauer' };
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+    const map = { newest: 'sortNewest', score: 'sortScore', rating: 'sortRating', duration: 'sortDur' };
+    const activeBtn = document.getElementById(map[mode]);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.textContent = labels[mode] + arrow;
+    }
+    renderSidebar();
+}
+
+function sortedShots() {
+    const list = [...shots];
+    const dir   = sortAsc ? 1 : -1;
+    if (currentSort === 'newest')
+        return sortAsc ? list : list.reverse();
+    if (currentSort === 'score')
+        return list.sort((a, b) => dir * (
+            (calcShotScore(b, getShotData(b)) ?? -1) - (calcShotScore(a, getShotData(a)) ?? -1)
+        ));
+    if (currentSort === 'rating')
+        return list.sort((a, b) => dir * ((b.annotation?.rating || 0) - (a.annotation?.rating || 0)));
+    if (currentSort === 'duration')
+        return list.sort((a, b) => dir * ((b.duration || 0) - (a.duration || 0)));
+    return list.reverse();
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────
+function renderSidebar() {
+    const el = document.getElementById('shots');
+    el.innerHTML = '';
+    const countEl = document.getElementById('shot-count');
+    if (countEl) countEl.textContent = `(${shots.length})`;
+
+    sortedShots().forEach(shot => {
+        const wrapper  = document.createElement('div');
+        wrapper.className = 'shot-wrapper';
+        wrapper.id = `wrapper-${shot.id}`;
+
+        const divShot = document.createElement('div');
+        divShot.className = 'shot';
+
+        const date = new Date(shot.timestamp * 1000);
+        const profileName = shot.profile?.name || shot.profileName || 'Unknown Profile';
+        const ann = shot.annotation || {};
+
+        const coffeeHtml = ann.coffee
+            ? `<div class="coffee-name-sidebar">${esc(ann.coffee)}${ann.dose ? ` · ${esc(String(ann.dose))}g` : ''}</div>` : '';
+        const starsHtml = ann.rating
+            ? `<div class="sidebar-stars">${'★'.repeat(ann.rating)}${'☆'.repeat(5 - ann.rating)}</div>` : '';
+
+        const sc = calcShotScore(shot, getShotData(shot));
+        const scorePill = sc !== null
+            ? `<span class="sidebar-score ss-${scoreClass(sc).replace('score-','')}">${sc}</span>`
+            : '';
+        divShot.innerHTML = `
+            <div class="profile-name-sidebar">${esc(profileName)}${scorePill}</div>
+            ${coffeeHtml}
+            <div class="shotid-sidebar">Shot ${esc(String(shot.id))}${ann.grinder ? ` · ${esc(ann.grinder)}` : ''}</div>
+            <div class="date-sidebar">${esc(date.toLocaleString('de-DE'))}</div>
+            ${starsHtml}
+        `;
+
+        divShot.onclick = e => {
+            if (e.ctrlKey || e.metaKey) { toggleCompare(shot.id); }
+            else {
+                primaryShotId = shot.id; compareShotId = null;
+                updateSidebarHighlighting();
+                // Close sidebar first so the canvas has correct dimensions when chart renders
+                collapseSidebarOnMobile();
+                if (window.innerWidth <= 768) {
+                    setTimeout(() => updateView(), 50);
+                } else {
+                    updateView();
+                }
+            }
+        };
+
+        const btnCmp = document.createElement('button');
+        btnCmp.className = 'compare-btn';
+        btnCmp.innerHTML = '⇄';
+        btnCmp.title = 'Als Vergleichs-Shot wählen';
+        btnCmp.onclick = e => { e.stopPropagation(); toggleCompare(shot.id); };
+
+        const btnDel = document.createElement('button');
+        btnDel.className = 'delete-btn';
+        btnDel.innerHTML = '🗑';
+        btnDel.title = 'Shot löschen';
+        btnDel.onclick = e => { e.stopPropagation(); trashShot(shot.id); };
+
+        wrapper.appendChild(divShot);
+        wrapper.appendChild(btnCmp);
+        wrapper.appendChild(btnDel);
+        el.appendChild(wrapper);
+    });
+    updateSidebarHighlighting();
+    if (currentFilter) filterShots(currentFilter);
+}
+
+function toggleCompare(id) {
+    if (primaryShotId === id) return;
+    compareShotId = (compareShotId === id) ? null : id;
+    updateSidebarHighlighting();
+    updateView();
+}
+
+function updateSidebarHighlighting() {
+    document.querySelectorAll('.shot-wrapper').forEach(x => {
+        x.classList.remove('active', 'compare-active');
+        const id = parseInt(x.id.replace('wrapper-', ''));
+        if (id === primaryShotId) x.classList.add('active');
+        if (id === compareShotId) x.classList.add('compare-active');
+    });
+}
+
+// ── Annotation panel ──────────────────────────────────────────────────────
+function renderAnnotationPanel(shot) {
+    const ann = shot.annotation || {};
+    currentRating = ann.rating || 0;
+    renderStars(currentRating);
+    document.getElementById('annCoffee').value       = ann.coffee       || '';
+    document.getElementById('annGrinder').value      = ann.grinder      || '';
+    document.getElementById('annGrindSetting').value = ann.grindSetting || '';
+    document.getElementById('annDose').value         = ann.dose         || '';
+    document.getElementById('annRoastDate').value    = isoToGerman(ann.roastDate || '');
+    document.getElementById('annTds').value          = ann.tds          || '';
+    document.getElementById('annNotes').value        = ann.notes        || '';
+    const btn = document.getElementById('saveAnnotationBtn');
+    btn.textContent = 'Speichern';
+    btn.classList.remove('saved');
+}
+
+async function saveAnnotation() {
+    if (!primaryShotId) return;
+    const btn = document.getElementById('saveAnnotationBtn');
+    const payload = {
+        rating:       currentRating || null,
+        coffee:       document.getElementById('annCoffee').value.trim(),
+        grinder:      document.getElementById('annGrinder').value.trim(),
+        grindSetting: document.getElementById('annGrindSetting').value.trim(),
+        dose:         parseFloat(document.getElementById('annDose').value) || null,
+        roastDate:    germanToIso(document.getElementById('annRoastDate').value) || null,
+        tds:          parseFloat(document.getElementById('annTds').value) || null,
+        notes:        document.getElementById('annNotes').value.trim()
+    };
+    try {
+        const r = await fetch(`api/shots/${primaryShotId}/annotate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (r.ok) {
+            const idx = shots.findIndex(s => s.id === primaryShotId);
+            if (idx !== -1) shots[idx].annotation = payload;
+            btn.textContent = '✓ Gespeichert';
+            btn.classList.add('saved');
+            setTimeout(() => { btn.textContent = 'Speichern'; btn.classList.remove('saved'); }, 2000);
+            renderSidebar();
+            updateSidebarHighlighting();
+        }
+    } catch (e) { console.error('Annotation-Fehler:', e); }
+}
+
+// ── Status / Sync ─────────────────────────────────────────────────────────
+async function updateStatus() {
+    try {
+        const [statusRes, switchRes] = await Promise.all([
+            fetch('api/status'),
+            fetch('api/switch').catch(() => null)
+        ]);
+        if (!statusRes.ok) return;
+        const s = await statusRes.json();
+        const dot    = document.getElementById('statusDot');
+        const timeEl = document.getElementById('syncTime');
+        if (s.lastSync) {
+            timeEl.textContent = new Date(s.lastSync)
+                .toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        }
+        dot.className = s.lastSyncError ? 'status-dot error' : (s.lastSync ? 'status-dot ok' : 'status-dot unknown');
+        dot.title     = s.lastSyncError || '';
+        if (s.machineHostname) {
+            const el = document.getElementById('machineSubtitle');
+            if (el) el.textContent = s.machineVersion
+                ? `${s.machineHostname} · ${s.machineVersion}`
+                : s.machineHostname;
+        }
+        if (switchRes?.ok) updatePowerButton(await switchRes.json());
+    } catch (e) {}
+}
+
+function updatePowerButton(sw) {
+    const btn     = document.getElementById('powerBtn');
+    const liveBtn = document.getElementById('btnLive');
+    if (!sw.configured) {
+        btn.style.display = 'none';
+        machinePowerState = null;
+        liveBtn.disabled = false;
+        liveBtn.title    = '';
+        return;
+    }
+    btn.style.display = '';
+    machinePowerState = sw.state;
+    btn.className  = sw.state === true  ? 'machine-on'
+                   : sw.state === false ? 'machine-off' : '';
+    btn.title      = sw.state === true  ? 'Maschine AN – zum Ausschalten klicken'
+                   : sw.state === false ? 'Maschine AUS – zum Einschalten klicken'
+                   : 'Schalter-Status unbekannt';
+
+    const machineOff  = sw.state === false;
+    liveBtn.disabled  = machineOff;
+    liveBtn.title     = machineOff ? 'Live-Modus nicht verfügbar – Maschine ist ausgeschaltet' : '';
+    if (machineOff && currentMode === 'live') switchMode('shots');
+}
+
+async function toggleMachinePower() {
+    const btn = document.getElementById('powerBtn');
+    btn.disabled = true;
+    try {
+        const r = await fetch('api/switch/toggle', { method: 'POST' });
+        if (r.ok) {
+            const result = await r.json();
+            updatePowerButton({ configured: true, state: result.state });
+            setTimeout(async () => {
+                const sr = await fetch('api/switch').catch(() => null);
+                if (sr?.ok) updatePowerButton(await sr.json());
+            }, 2000);
+        }
+    } catch (e) { console.error('Power toggle Fehler:', e); }
+    finally { btn.disabled = false; }
+}
+
+async function triggerSync() {
+    const btn = document.getElementById('syncBtn');
+    btn.disabled = true;
+    btn.textContent = '↻ …';
+    try {
+        const r = await fetch('api/sync', { method: 'POST' });
+        if (r.status === 429) {
+            const d = await r.json();
+            btn.textContent = d.error || 'Warten …';
+            setTimeout(() => { btn.textContent = '↻ Sync'; btn.disabled = false; }, 3000);
+            return;
+        }
+        await new Promise(res => setTimeout(res, 2500));
+        await loadData();
+        await updateStatus();
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '↻ Sync';
+    }
+}
+
+// ── Live mode ─────────────────────────────────────────────────────────────
+function initLiveChart() {
+    const ctx = document.getElementById('liveChart');
+    const _existingLive = Chart.getChart(ctx);
+    if (_existingLive) _existingLive.destroy();
+    liveChart = null;
+
+    liveChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [
+                { label: 'Druck',       data: [], yAxisID: 'y',    borderWidth: 2.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
+                { label: 'Pumpenfluss', data: [], yAxisID: 'y',    borderWidth: 2,   tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
+                { label: 'Gewicht',     data: [], yAxisID: 'y1',   borderWidth: 2,   tension: 0.1, borderColor: '#2ecc71', backgroundColor: 'transparent', pointStyle: false },
+                { label: 'Temperatur',  data: [], yAxisID: 'y1',   borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { color: '#e4e4e7', font: { family: 'Figtree' } } },
+                tooltip: { callbacks: { title: ctx => 'Zeit: ' + formatTimeLabel(ctx[0].parsed.x) } }
+            },
+            scales: {
+                x:    { type: 'linear', min: 0, max: 60, ticks: { color: '#a1a1aa', callback: v => formatTimeLabel(v), stepSize: 5 }, grid: { color: '#27272a' } },
+                y:    { type: 'linear', position: 'left',  min: 0, max: 12, ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
+                y1:   { type: 'linear', position: 'right', min: 0, max: 100, ticks: { color: '#a1a1aa' }, grid: { drawOnChartArea: false } }
+            }
+        }
+    });
+}
+
+function connectLiveStream() {
+    disconnectLiveStream();
+    setLiveBadge('connecting');
+    liveLastSeq  = -1;
+    liveWasLive  = false;
+    fetchLiveData();
+    livePollInterval = setInterval(fetchLiveData, 1000);
+}
+
+async function fetchLiveData() {
+    try {
+        const r = await fetch('api/live/data');
+        if (!r.ok) { setLiveBadge('error', `HTTP ${r.status}`); return; }
+        const msg = await r.json();
+
+        // First successful response — mark as ready
+        if (livePollInterval && document.getElementById('live-status-text').textContent === 'Verbinde …') {
+            setLiveBadge('ready');
+        }
+
+        // Brew just ended → reload shot list after sync delay
+        if (liveWasLive && !msg.isLive && msg.seq !== liveLastSeq) {
+            liveLastSeq = msg.seq;
+            setTimeout(() => loadData(), 4000);
+        }
+        liveWasLive = msg.isLive;
+
+        handleLiveData(msg);
+    } catch (e) {
+        setLiveBadge('error', 'Verbindung unterbrochen');
+    }
+}
+
+function disconnectLiveStream() {
+    if (livePollInterval) { clearInterval(livePollInterval); livePollInterval = null; }
+    if (liveChart)        { liveChart.destroy(); liveChart = null; }
+}
+
+function setLiveBadge(state, detail = '') {
+    const badge   = document.getElementById('live-status-badge');
+    const textEl  = document.getElementById('live-status-text');
+    const liveBtn = document.getElementById('btnLive');
+
+    badge.className = `live-status-badge ${state}`;
+    liveBtn.classList.remove('live-brewing', 'live-ready');
+
+    const labels = {
+        connecting: 'Verbinde …',
+        ready:      'Bereit',
+        brewing:    'Brüht …',
+        error:      detail || 'Fehler',
+        idle:       'Bereit'
+    };
+    textEl.textContent = labels[state] || state;
+
+    if (state === 'brewing') liveBtn.classList.add('live-brewing');
+    if (state === 'ready' || state === 'idle') liveBtn.classList.add('live-ready');
+}
+
+function handleLiveData(msg) {
+    const dp       = msg.datapoints || {};
+    const times    = dp.timeInShot  || [];
+    const lastIdx  = times.length - 1;
+
+    const metaEl = document.getElementById('live-meta');
+    const contentEl = document.getElementById('live-content');
+    const idleEl    = document.getElementById('live-idle');
+
+    if (!msg.isLive && times.length === 0) {
+        setLiveBadge('ready');
+        metaEl.textContent = '–';
+        contentEl.style.display = 'none';
+        idleEl.style.display    = 'flex';
+        return;
+    }
+
+    contentEl.style.display = 'block';
+    idleEl.style.display    = 'none';
+
+    if (msg.isLive) {
+        setLiveBadge('brewing');
+        metaEl.textContent = `Shot ${msg.shotId} · ${msg.profileName}`;
+    } else {
+        setLiveBadge('idle');
+        metaEl.textContent = `Shot ${msg.shotId} · ${msg.profileName} · abgeschlossen`;
+    }
+
+    // Update stat boxes
+    if (lastIdx >= 0) {
+        const elapsed  = times[lastIdx] / 10;
+        const pressure = dp.pressure?.[lastIdx]    != null ? dp.pressure[lastIdx] / 10    : null;
+        const flow     = dp.pumpFlow?.[lastIdx]     != null ? dp.pumpFlow[lastIdx] / 10    : null;
+        const weight   = (dp.shotWeight || dp.weight)?.[lastIdx] != null
+                       ? (dp.shotWeight || dp.weight)[lastIdx] / 10 : null;
+        const temp     = dp.temperature?.[lastIdx]  != null ? dp.temperature[lastIdx] / 10 : null;
+
+        document.getElementById('liveTime').textContent     = formatTimeLabel(elapsed);
+        document.getElementById('livePressure').textContent = pressure != null ? pressure.toFixed(1) : '–';
+        document.getElementById('liveFlow').textContent     = flow     != null ? flow.toFixed(1)     : '–';
+        document.getElementById('liveWeight').textContent   = weight   != null ? weight.toFixed(1)   : '–';
+        document.getElementById('liveTemp').textContent     = temp     != null ? temp.toFixed(1)     : '–';
+    }
+
+    // Update live chart
+    if (liveChart) {
+        const maxTime = times.length > 0 ? times[times.length - 1] / 10 : 60;
+        liveChart.data.datasets[0].data = mapToXY(times, dp.pressure);
+        liveChart.data.datasets[1].data = mapToXY(times, dp.pumpFlow);
+        liveChart.data.datasets[2].data = mapToXY(times, dp.shotWeight || dp.weight);
+        liveChart.data.datasets[3].data = mapToXY(times, dp.temperature);
+        liveChart.options.scales.x.max  = Math.max(maxTime + 5, 30);
+
+        const maxTemp = dp.temperature?.length
+            ? dp.temperature.reduce((m, v) => v > m ? v : m, 0) / 10 : 0;
+        liveChart.options.scales.y1.max = Math.ceil(maxTemp + 5) || 100;
+
+        liveChart.update('none');
+    }
+}
+
+// ── Shot chart helpers ────────────────────────────────────────────────────
+function safeLast(arr) {
+    if (!arr?.length) return null;
+    for (let i = arr.length - 1; i >= 0; i--)
+        if (arr[i] != null && !isNaN(arr[i])) return arr[i];
+    return null;
+}
+function avgActive(arr, t = 0.5) {
+    if (!arr?.length) return null;
+    const active = arr.filter(v => v > t);
+    return active.length ? active.reduce((a,b)=>a+b,0)/active.length : arr[arr.length-1];
+}
+function avg(arr) {
+    if (!arr?.length) return null;
+    return arr.reduce((a,b)=>a+b,0)/arr.length;
+}
+function max(arr) {
+    if (!arr?.length) return null;
+    return arr.reduce((m,v)=>v>m?v:m, arr[0]);
+}
+function fmt(v, unit='') { return v==null ? '-' : `${v.toFixed(1)}${unit}`; }
+function formatTimeLabel(s) {
+    if (s==null||isNaN(s)) return '00:00';
+    return `${Math.floor(s/60).toString().padStart(2,'0')}:${Math.floor(s%60).toString().padStart(2,'0')}`;
+}
+function mapToXY(timeArr, dataArr) {
+    if (!timeArr||!dataArr) return [];
+    return timeArr
+        .map((t,i) => ({ x: t/10, y: dataArr[i]!=null ? dataArr[i]/10 : null }))
+        .filter(pt => pt.y !== null);
+}
+function getShotData(shot) {
+    if (!shot) return null;
+    const d = shot.datapoints || {};
+    const t = d.timeInShot || [];
+    return {
+        rawTimes:       t.map(v=>v/10),
+        pressure:       mapToXY(t, d.pressure),
+        targetPressure: mapToXY(t, d.targetPressure),
+        flow:           mapToXY(t, d.pumpFlow),
+        targetFlow:     mapToXY(t, d.targetPumpFlow),
+        weight:         mapToXY(t, d.shotWeight||d.weight),
+        weightFlow:     mapToXY(t, d.weightFlow),
+        temp:           mapToXY(t, d.temperature),
+        targetTemp:     mapToXY(t, d.targetTemperature)
+    };
+}
+
+// ── Shot view ─────────────────────────────────────────────────────────────
+function updateView() {
+    const shotA = shots.find(s=>s.id===primaryShotId);
+    const shotB = compareShotId ? shots.find(s=>s.id===compareShotId) : null;
+    if (!shotA) return;
+
+    const dA = getShotData(shotA);
+    const dB = getShotData(shotB);
+
+    const maxTempA = max((shotA.datapoints?.temperature||[]).map(v=>v/10))||0;
+    const maxTempB = shotB ? (max((shotB.datapoints?.temperature||[]).map(v=>v/10))||0) : 0;
+    const tempMaxScale = Math.ceil(Math.max(maxTempA, maxTempB)+5)||100;
+
+
+    const nameA = shotA.profile?.name||shotA.profileName||'Unknown Profile';
+    if (shotB) {
+        const nameB = shotB.profile?.name||shotB.profileName||'Unknown Profile';
+        document.getElementById('topTitle').innerText   = `Vergleich: Shot ${shotA.id} vs. Shot ${shotB.id}`;
+        document.getElementById('valProfile').innerText = `${nameA} vs. ${nameB}`;
+    } else {
+        document.getElementById('topTitle').innerText   = `${nameA} – Shot ${shotA.id}`;
+        document.getElementById('valProfile').innerText = nameA;
+    }
+
+    const totalSecs = (shotA.duration||0)/10;
+    document.getElementById('duration').innerText =
+        `${Math.floor(totalSecs/60).toString().padStart(2,'0')}:${Math.floor(totalSecs%60).toString().padStart(2,'0')}`;
+
+    const pressureVals = dA.pressure.map(p=>p.y);
+    const pressureTimes = dA.pressure.map(p=>p.x);
+    document.getElementById('pressure').innerText       = fmt(avgActive(pressureVals, 1.5),' bar');
+    document.getElementById('targetPressure').innerText = ` / ${fmt(max(dA.targetPressure.map(p=>p.y)),' bar')}`;
+    document.getElementById('flow').innerText           = fmt(avgActive(dA.flow.map(p=>p.y),0.2),' ml/s');
+    document.getElementById('targetFlow').innerText     = ` / ${fmt(avgActive(dA.targetFlow.map(p=>p.y),0.2),' ml/s')}`;
+
+    const tempVals = dA.temp.map(p=>p.y);
+    const sdTemp   = stddev(tempVals);
+    document.getElementById('temp').innerText          = fmt(avg(tempVals),' °C');
+    document.getElementById('tempStability').textContent = (sdTemp != null && sdTemp < 5) ? `±${sdTemp.toFixed(1)}` : '';
+    document.getElementById('targetTemp').innerText    = ` / ${fmt(avg(dA.targetTemp.map(p=>p.y)),' °C')}`;
+
+    const finalWeight = max(dA.weight.map(p=>p.y));
+    document.getElementById('weight').innerText        = fmt(finalWeight,' g');
+    document.getElementById('weightFlowSub').innerText = ` / ${fmt(safeLast(dA.weightFlow.map(p=>p.y)),' ml/s')}`;
+    document.getElementById('wf').innerText            = fmt(avgActive(dA.weightFlow.map(p=>p.y),0.1),' ml/s');
+    document.getElementById('maxWf').innerText         = ` / ${fmt(max(dA.weightFlow.map(p=>p.y)),' max')}`;
+
+    // Ratio
+    const ann       = shotA.annotation || {};
+    const ratioItem = document.getElementById('ratioItem');
+    if (ann.dose && finalWeight && !shotB) {
+        const r = (finalWeight / ann.dose).toFixed(1);
+        document.getElementById('ratio').textContent = `${ann.dose}g → ${fmt(finalWeight,'g')} · 1:${r}`;
+        ratioItem.style.display = '';
+    } else {
+        ratioItem.style.display = 'none';
+    }
+
+    // EY (Extraction Yield) — requires TDS from annotation
+    const eyItem = document.getElementById('eyItem');
+    if (!shotB && ann.dose && ann.tds && finalWeight) {
+        const ey = (finalWeight * ann.tds) / ann.dose;
+        const eyEl = document.getElementById('ey');
+        eyEl.textContent = `${ey.toFixed(1)} %`;
+        const eyOk = ey >= 18 && ey <= 22;
+        eyEl.className = 'meta-value ' + (eyOk ? 'score-great' : ey >= 16 && ey <= 24 ? 'score-ok' : 'score-bad');
+        eyItem.style.display = '';
+    } else {
+        eyItem.style.display = 'none';
+    }
+
+    // Freshness badge
+    const freshEl = document.getElementById('freshnessBadge');
+    if (!shotB && ann.roastDate && ann.coffee) {
+        const days = Math.round((Date.now() - new Date(ann.roastDate)) / 86400000);
+        if (days >= 0 && days <= 365) {
+            const cls = days <= 21 ? 'freshness-fresh' : days <= 35 ? 'freshness-ok' : 'freshness-old';
+            freshEl.className  = `freshness-badge ${cls}`;
+            freshEl.textContent = `${days}d`;
+            freshEl.title = `${days} Tage seit Röstung (Optimum: 7–21 Tage)`;
+            freshEl.style.display = '';
+        } else { freshEl.style.display = 'none'; }
+    } else { freshEl.style.display = 'none'; }
+
+    // Phases
+    const phases     = !shotB ? detectPhases(pressureTimes, pressureVals) : null;
+    const phasesItem = document.getElementById('phasesItem');
+    const phaseSubtitle = document.getElementById('phaseSubtitle');
+    if (phases) {
+        const phaseHtml =
+            `<span class="phase-tag">Preinfusion <span>${formatTimeLabel(phases.preinfusion)}</span></span>` +
+            `<span class="phase-tag">Extraktion <span>${formatTimeLabel(phases.extraction)}</span></span>`;
+        document.getElementById('phases').innerHTML = phaseHtml;
+        phasesItem.style.display = '';
+        if (phaseSubtitle) { phaseSubtitle.innerHTML = phaseHtml; phaseSubtitle.style.display = ''; }
+    } else {
+        phasesItem.style.display = 'none';
+        if (phaseSubtitle) phaseSubtitle.style.display = 'none';
+    }
+
+    // Channeling
+    const channeling = !shotB && detectChanneling(pressureTimes, pressureVals);
+    document.getElementById('channelingWarning').style.display = channeling ? '' : 'none';
+
+    // Grind advice
+    const adviceEl = document.getElementById('grindAdvice');
+    const advice    = !shotB ? calcGrindAdvice(shotA, dA) : null;
+    if (advice) {
+        adviceEl.className = `grind-advice grind-${advice.type}`;
+        document.getElementById('grindAdviceIcon').textContent = advice.icon;
+        document.getElementById('grindAdviceText').textContent = advice.text;
+        adviceEl.style.display = '';
+    } else { adviceEl.style.display = 'none'; }
+
+    // Shot score
+    const scoreBadge = document.getElementById('shotScoreBadge');
+    const scoreVal   = document.getElementById('shotScoreVal');
+    if (!shotB && scoreBadge && scoreVal) {
+        const sc = calcShotScore(shotA, dA);
+        if (sc !== null) {
+            scoreVal.textContent = sc;
+            scoreVal.className   = 'score-num ' + scoreClass(sc);
+            scoreBadge.style.display = '';
+        } else {
+            scoreBadge.style.display = 'none';
+        }
+    } else if (scoreBadge) {
+        scoreBadge.style.display = 'none';
+    }
+
+    renderAnnotationPanel(shotA);
+
+    const maxTimeA = dA.rawTimes.length>0 ? dA.rawTimes[dA.rawTimes.length-1] : 0;
+    const maxTimeB = dB?.rawTimes.length>0 ? dB.rawTimes[dB.rawTimes.length-1] : 0;
+
+    const sfx = shotB ? ' (A)' : '';
+    const datasets = [
+        { label:`Druck${sfx}`,        data:dA.pressure,   yAxisID:'y',    borderWidth:2.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
+        { label:`Pumpenfluss${sfx}`,  data:dA.flow,        yAxisID:'y',    borderWidth:2,   tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
+        { label:`Gewichtsfluss${sfx}`,data:dA.weightFlow,  yAxisID:'y',    borderWidth:2,   tension:.1, borderColor:'#9b59b6', backgroundColor:'transparent', pointStyle:false },
+        { label:`Gewicht${sfx}`,      data:dA.weight,      yAxisID:'y1', borderWidth:2,   tension:.1, borderColor:'#2ecc71', backgroundColor:'transparent', pointStyle:false },
+        { label:`Temperatur${sfx}`,   data:dA.temp,        yAxisID:'y1', borderWidth:2.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
+    ];
+
+    if (!shotB) {
+        datasets.push(
+            { label:'Ziel Druck',     data:dA.targetPressure, yAxisID:'y',    borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
+            { label:'Ziel Fluss',     data:dA.targetFlow,     yAxisID:'y',    borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
+            { label:'Ziel Temperatur',data:dA.targetTemp,     yAxisID:'y1', borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
+        );
+    }
+    if (shotB && dB) {
+        datasets.push(
+            { label:'Druck (B)',        data:dB.pressure,  yAxisID:'y',    borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(52,152,219,.65)',  backgroundColor:'transparent', pointStyle:false },
+            { label:'Pumpenfluss (B)', data:dB.flow,       yAxisID:'y',    borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(243,156,18,.65)', backgroundColor:'transparent', pointStyle:false },
+            { label:'Gewfluß (B)',     data:dB.weightFlow, yAxisID:'y',    borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(155,89,182,.65)', backgroundColor:'transparent', pointStyle:false },
+            { label:'Gewicht (B)',     data:dB.weight,     yAxisID:'y1', borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.65)', backgroundColor:'transparent', pointStyle:false },
+            { label:'Temperatur (B)', data:dB.temp,        yAxisID:'y1', borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(231,76,60,.65)',  backgroundColor:'transparent', pointStyle:false }
+        );
+    }
+
+    // Destroy old P·Q chart when shot changes; rebuild lazily on tab click
+    if (pqChart) { pqChart.destroy(); pqChart = null; }
+    if (currentChartTab === 'pq') updatePQChart();
+
+    const ctx = document.getElementById('espressoShotChart');
+    // Always destroy any existing chart on this canvas (handles stale references)
+    const _existingChart = Chart.getChart(ctx);
+    if (_existingChart) _existingChart.destroy();
+    chart = null;
+
+    try {
+    chart = new Chart(ctx, {
+        type: 'line',
+        plugins: [corsairPlugin, phasePlugin],
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: { bottom: 20 } },
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                phases:  phases ? { preinfusion: phases.preinfusion, extraction: phases.extraction } : {},
+                legend:  {
+                    display:  true,
+                    position: 'bottom',
+                    labels: { color: '#e4e4e7', font: { family: 'Figtree', size: window.innerWidth <= 600 ? 9 : 11 }, boxWidth: window.innerWidth <= 600 ? 8 : 12, padding: window.innerWidth <= 600 ? 4 : 8 }
+                },
+                tooltip: { callbacks: { title: ctx => 'Zeit: ' + formatTimeLabel(ctx[0].parsed.x) } }
+            },
+            scales: {
+                x:    { type:'linear', min:0, max:Math.max(maxTimeA,maxTimeB), clip:false,
+                        ticks:{ color:'#a1a1aa', font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
+                        grid:{ color:'#27272a' } },
+                y:    { type:'linear', position:'left',  min:0, max:12, ticks:{color:'#a1a1aa', maxTicksLimit:6}, grid:{color:'#27272a'} },
+                y1:   { type:'linear', position:'right', min:0, max:Number(tempMaxScale), ticks:{color:'#a1a1aa', maxTicksLimit:6}, grid:{drawOnChartArea:false} }
+            }
+        }
+    });
+    } catch(e) {
+        console.error('Chart creation error:', e);
+    }
+}
+
+// ── Shot score ────────────────────────────────────────────────────────────
+function calcShotScore(shot, data) {
+    // Require meaningful pressure data — skip test/empty shots
+    const pVals = data.pressure.map(p => p.y).filter(v => v >= 5);
+    if (pVals.length <= 3) return null;
+
+    const scores = [], weights = [];
+
+    // 1. Extraction pressure (only values ≥5 bar = active pulling)
+    if (pVals.length > 3) {
+        const avgP = pVals.reduce((a,b) => a+b, 0) / pVals.length;
+        let s = avgP >= 7 && avgP <= 9.5 ? 100
+              : avgP < 7                  ? Math.max(20, 100 - (7 - avgP) * 22)
+                                          : Math.max(20, 100 - (avgP - 9.5) * 28);
+        scores.push(Math.round(s)); weights.push(25);
+    }
+
+    // 2. Temperature stability (σ)
+    const tVals = data.temp.map(p => p.y);
+    if (tVals.length > 5) {
+        const sd = stddev(tVals) || 0;
+        const s  = sd <= 0.3 ? 100 : sd <= 0.7 ? 90 : sd <= 1.5 ? 72
+                 : sd <= 3   ? 50  : Math.max(15, 50 - (sd - 3) * 12);
+        scores.push(Math.round(s)); weights.push(20);
+    }
+
+    // 3. Duration
+    const secs = (shot.duration || 0) / 10;
+    if (secs > 5) {
+        const s = secs >= 25 && secs <= 35 ? 100
+                : secs >= 20 && secs < 25   ? 82
+                : secs > 35 && secs <= 42   ? 82
+                : secs > 42 && secs <= 55   ? 62
+                : secs < 20 ? Math.max(15, 70 - (20 - secs) * 5)
+                             : Math.max(15, 62 - (secs - 55) * 3);
+        scores.push(Math.round(s)); weights.push(20);
+    }
+
+    // 4. Ratio (dose × yield) – only if dose annotated
+    const ann = shot.annotation || {};
+    const finalW = max(data.weight.map(p => p.y));
+    if (ann.dose && ann.dose > 0 && finalW) {
+        const r = finalW / ann.dose;
+        const s = r >= 1.8 && r <= 2.5 ? 100
+                : r >= 1.5 && r < 1.8   ? 75
+                : r > 2.5 && r <= 3.2   ? 75
+                : r < 1.5 ? Math.max(15, 55 - (1.5 - r) * 40)
+                           : Math.max(15, 60 - (r - 3.2) * 22);
+        scores.push(Math.round(s)); weights.push(20);
+    }
+
+    // 5. Channeling penalty
+    const pTimes = data.pressure.map(p => p.x);
+    const pAll   = data.pressure.map(p => p.y);
+    scores.push(detectChanneling(pTimes, pAll) ? 20 : 100);
+    weights.push(15);
+
+    if (!scores.length) return null;
+    const tw = weights.reduce((a,b) => a+b, 0);
+    return Math.round(scores.reduce((s, v, i) => s + v * weights[i], 0) / tw);
+}
+
+function scoreClass(n) {
+    return n >= 88 ? 'score-great' : n >= 75 ? 'score-good' : n >= 60 ? 'score-ok' : n >= 45 ? 'score-poor' : 'score-bad';
+}
+
+// ── Grind advice ──────────────────────────────────────────────────────────
+function calcGrindAdvice(shot, data) {
+    const secs = (shot.duration || 0) / 10;
+    if (secs < 8) return null;
+
+    const pTimes = data.pressure.map(p => p.x);
+    const pAll   = data.pressure.map(p => p.y);
+
+    if (detectChanneling(pTimes, pAll))
+        return { type: 'warning', icon: '⚡', text: 'Channeling erkannt – Puck-Vorbereitung (Verteilung & Tamping) prüfen' };
+
+    if (secs < 18)
+        return { type: 'finer',   icon: '↓', text: `Bezug zu kurz (${secs.toFixed(0)} s) – feiner mahlen` };
+    if (secs < 23)
+        return { type: 'finer',   icon: '↓', text: `Bezug etwas kurz (${secs.toFixed(0)} s) – leicht feiner mahlen` };
+    if (secs > 50)
+        return { type: 'coarser', icon: '↑', text: `Bezug zu lang (${secs.toFixed(0)} s) – gröber mahlen` };
+    if (secs > 42)
+        return { type: 'coarser', icon: '↑', text: `Bezug etwas lang (${secs.toFixed(0)} s) – leicht gröber mahlen` };
+
+    const pVals = pAll.filter(v => v >= 5);
+    const avgP  = pVals.length ? pVals.reduce((a,b)=>a+b,0)/pVals.length : 0;
+    return { type: 'ok', icon: '✓', text: `Mahlgrad passt – ${secs.toFixed(0)} s${avgP > 0 ? `, ${avgP.toFixed(1)} bar Ø` : ''}` };
+}
+
+// ── P·Q Chart ─────────────────────────────────────────────────────────────
+function switchChartTab(tab) {
+    currentChartTab = tab;
+    document.getElementById('tabZeit').classList.toggle('active', tab === 'zeit');
+    document.getElementById('tabPQ').classList.toggle('active',   tab === 'pq');
+    document.getElementById('zeitContainer').style.display = tab === 'zeit' ? '' : 'none';
+    document.getElementById('pqContainer').style.display   = tab === 'pq'   ? '' : 'none';
+    if (tab === 'pq') updatePQChart();
+}
+
+// ── Fullscreen chart ──────────────────────────────────────────────────────
+let fsChart = null;
+let currentFsTab = 'zeit';
+
+function openChartFullscreen() {
+    document.getElementById('chartFullscreen').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    currentFsTab = currentChartTab;
+    document.getElementById('fsTabZeit').classList.toggle('active', currentFsTab === 'zeit');
+    document.getElementById('fsTabPQ').classList.toggle('active',   currentFsTab === 'pq');
+    screen.orientation?.lock?.('landscape').catch(() => {});
+    renderFsChart();
+}
+
+function closeChartFullscreen() {
+    document.getElementById('chartFullscreen').classList.remove('open');
+    document.body.style.overflow = '';
+    if (fsChart) { fsChart.destroy(); fsChart = null; }
+    screen.orientation?.unlock?.();
+}
+
+function switchFsTab(tab) {
+    currentFsTab = tab;
+    document.getElementById('fsTabZeit').classList.toggle('active', tab === 'zeit');
+    document.getElementById('fsTabPQ').classList.toggle('active',   tab === 'pq');
+    renderFsChart();
+}
+
+function renderFsChart() {
+    const shotA = shots.find(s => s.id === primaryShotId);
+    if (!shotA) return;
+    const existing = Chart.getChart('espressoShotChartFs');
+    if (existing) existing.destroy();
+    fsChart = null;
+
+    const canvas = document.getElementById('espressoShotChartFs');
+
+    if (currentFsTab === 'pq') {
+        const data = getPQData(shotA);
+        fsChart = new Chart(canvas, {
+            type: 'scatter',
+            data: { datasets: [{ label: `Shot ${shotA.id}`, data, showLine: true, tension: 0.2,
+                borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.15)',
+                borderWidth: 2, pointRadius: 0 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                plugins: {
+                    legend: { labels: { color: '#e4e4e7', font: { family: 'Figtree' } } },
+                    tooltip: { callbacks: { label: c => `${c.parsed.y.toFixed(1)} bar @ ${c.parsed.x.toFixed(1)} ml/s` } }
+                },
+                scales: {
+                    x: { type: 'linear', min: 0, max: 5,
+                         title: { display: true, text: 'Pumpenfluss (ml/s)', color: '#71717a', font: { family: 'Figtree' } },
+                         ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
+                    y: { type: 'linear', min: 0, max: 12,
+                         title: { display: true, text: 'Druck (bar)', color: '#71717a', font: { family: 'Figtree' } },
+                         ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } }
+                }
+            }
+        });
+        return;
+    }
+
+    // Time chart — copy the current chart's data and config
+    if (!chart) return;
+    const dA = getShotData(shotA);
+    const maxTempA = Math.max(...(shotA.datapoints?.temperature||[]).map(v=>v/10), 0);
+    const tms = Math.ceil(maxTempA + 5) || 100;
+    const maxTime = dA.rawTimes.length > 0 ? dA.rawTimes[dA.rawTimes.length-1] : 60;
+    const datasets = chart.data.datasets.map(ds => ({...ds, data: [...ds.data]}));
+
+    fsChart = new Chart(canvas, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: true, position: 'bottom',
+                    labels: { color: '#e4e4e7', font: { family: 'Figtree', size: 11 }, boxWidth: 12, padding: 8 } },
+                tooltip: { callbacks: { title: c => 'Zeit: ' + formatTimeLabel(c[0].parsed.x) } }
+            },
+            scales: {
+                x: { type:'linear', min:0, max:maxTime, clip:false,
+                     ticks:{ color:'#a1a1aa', font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v) },
+                     grid:{ color:'#27272a' } },
+                y:  { type:'linear', position:'left',  min:0, max:12, ticks:{color:'#a1a1aa'}, grid:{color:'#27272a'} },
+                y1: { type:'linear', position:'right', min:0, max:tms, ticks:{color:'#a1a1aa'}, grid:{drawOnChartArea:false} }
+            }
+        }
+    });
+}
+
+function getPQData(shot) {
+    const d = shot.datapoints || {};
+    const t = d.timeInShot  || [];
+    const p = d.pressure    || [];
+    const f = d.pumpFlow    || [];
+    const n = Math.min(t.length, p.length, f.length);
+    const result = [];
+    for (let i = 0; i < n; i++) {
+        if (p[i] != null && f[i] != null && p[i] >= 30 && f[i] > 0)
+            result.push({ x: f[i] / 10, y: p[i] / 10 });
+    }
+    return result;
+}
+
+function updatePQChart() {
+    const shotA = shots.find(s => s.id === primaryShotId);
+    if (!shotA) return;
+
+    const canvas = document.getElementById('pqChart');
+    if (pqChart) { pqChart.destroy(); pqChart = null; }
+
+    const shotB  = compareShotId ? shots.find(s => s.id === compareShotId) : null;
+    const datasets = [
+        { label: `Shot ${shotA.id}`, data: getPQData(shotA), borderColor: '#3498db',
+          backgroundColor: 'rgba(52,152,219,.08)', fill: true,
+          borderWidth: 2.5, pointRadius: 0, tension: 0.3 }
+    ];
+    if (shotB) datasets.push(
+        { label: `Shot ${shotB.id}`, data: getPQData(shotB), borderColor: 'rgba(52,152,219,.5)',
+          backgroundColor: 'transparent', fill: false,
+          borderDash: [4,3], borderWidth: 2, pointRadius: 0, tension: 0.3 }
+    );
+
+    pqChart = new Chart(canvas, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            plugins: {
+                legend: { labels: { color: '#e4e4e7', font: { family: 'Figtree' } } },
+                tooltip: { callbacks: { label: c => `${c.parsed.y.toFixed(1)} bar @ ${c.parsed.x.toFixed(1)} ml/s` } }
+            },
+            scales: {
+                x: { type: 'linear', min: 0, max: 5,
+                     title: { display: true, text: 'Pumpenfluss (ml/s)', color: '#71717a', font: { family: 'Figtree' } },
+                     ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
+                y: { type: 'linear', min: 0, max: 12,
+                     title: { display: true, text: 'Druck (bar)', color: '#71717a', font: { family: 'Figtree' } },
+                     ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } }
+            }
+        }
+    });
+}
+
+// ── Shot delete ───────────────────────────────────────────────────────────
+function confirmDeleteShot(id) {
+    const shot = shots.find(s => s.id === id);
+    if (!shot) return;
+    const name = shot.profile?.name || shot.profileName || `Shot ${id}`;
+    const date = new Date(shot.timestamp * 1000).toLocaleDateString('de-DE');
+    if (!confirm(`Shot ${id} löschen?\n${name} · ${date}\n\nDieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
+    deleteShot(id);
+}
+
+async function deleteShot(id) {
+    try {
+        const r = await fetch(`api/shots/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        if (!r.ok) throw new Error(await r.text());
+        shots = shots.filter(s => s.id !== id);
+        if (primaryShotId === id) { primaryShotId = shots[0]?.id || null; }
+        if (compareShotId === id) { compareShotId = null; }
+        renderSidebar();
+        updateView();
+    } catch (e) {
+        alert('Fehler beim Löschen: ' + e.message);
+    }
+}
+
+// ── Trash bin ─────────────────────────────────────────────────────────────
+async function loadTrashData() {
+    try {
+        const r = await fetch('shots.json?trash=1');
+        if (!r.ok) return;
+        trashedShots = await r.json();
+        renderTrash();
+    } catch (e) {}
+}
+
+function renderTrash() {
+    const section  = document.getElementById('trash-section');
+    const countEl  = document.getElementById('trash-count');
+    const listEl   = document.getElementById('trash-list');
+    const count    = trashedShots.length;
+
+    section.style.display = count > 0 ? 'block' : 'none';
+    countEl.textContent   = count;
+
+    listEl.innerHTML = '';
+    const now = Date.now();
+    trashedShots.forEach(shot => {
+        const daysLeft = Math.max(0, 30 - Math.floor((now - shot.trashedAt) / 86400000));
+        const name = shot.profile?.name || shot.profileName || `Shot ${shot.id}`;
+        const row  = document.createElement('div');
+        row.className = 'trash-item';
+        row.innerHTML = `
+            <div class="trash-item-info">
+                <div class="trash-item-name">${esc(name)}</div>
+                <div class="trash-item-days">Shot ${shot.id} · wird in ${daysLeft} Tag${daysLeft !== 1 ? 'en' : ''} gelöscht</div>
+            </div>
+            <button class="trash-restore-btn" onclick="restoreShot(${shot.id})">↩ Wiederherstellen</button>
+            <button class="trash-delete-btn" title="Jetzt löschen" onclick="permanentDeleteShot(${shot.id})">✕</button>
+        `;
+        listEl.appendChild(row);
+    });
+}
+
+function toggleTrash() {
+    trashOpen = !trashOpen;
+    document.getElementById('trash-list').style.display = trashOpen ? 'block' : 'none';
+}
+
+async function trashShot(id) {
+    try {
+        const r = await fetch(`api/shots/${id}/trash`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        if (!r.ok) throw new Error(await r.text());
+        shots = shots.filter(s => s.id !== id);
+        if (primaryShotId === id) { primaryShotId = shots[0]?.id || null; }
+        if (compareShotId === id) { compareShotId = null; }
+        renderSidebar();
+        updateView();
+        await loadTrashData();
+    } catch (e) {
+        alert('Fehler: ' + e.message);
+    }
+}
+
+async function restoreShot(id) {
+    try {
+        const r = await fetch(`api/shots/${id}/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        if (!r.ok) throw new Error(await r.text());
+        await loadData();
+    } catch (e) {
+        alert('Fehler: ' + e.message);
+    }
+}
+
+async function permanentDeleteShot(id) {
+    if (!confirm(`Shot ${id} jetzt permanent löschen?\nDieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
+    try {
+        const r = await fetch(`api/shots/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        if (!r.ok) throw new Error(await r.text());
+        trashedShots = trashedShots.filter(s => s.id !== id);
+        renderTrash();
+    } catch (e) {
+        alert('Fehler: ' + e.message);
+    }
+}
+
+// ── Desktop sidebar collapse ──────────────────────────────────────────────
+function toggleDesktopSidebar() {
+    const sidebar     = document.getElementById('sidebar');
+    const expandBtn   = document.getElementById('expandSidebarBtn');
+    const collapseBtn = document.getElementById('collapseBtn');
+    const collapsed   = sidebar.classList.toggle('desktop-collapsed');
+    if (expandBtn)   expandBtn.classList.toggle('visible', collapsed);
+    if (collapseBtn) collapseBtn.textContent = collapsed ? '›' : '‹';
+    if (!collapsed) setTimeout(() => updateView(), 320);
+}
+
+// ── Sidebar overlay (mobile) ──────────────────────────────────────────────
+function openSidebar() {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebar-backdrop').classList.add('visible');
+    const btn = document.getElementById('sidebarToggle');
+    if (btn) btn.textContent = '✕';
+}
+
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-backdrop').classList.remove('visible');
+}
+
+// ── German date format helpers ────────────────────────────────────────────
+function isoToGerman(iso) {
+    if (!iso) return '';
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
+}
+function germanToIso(s) {
+    if (!s) return null;
+    const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (!m) return null;
+    return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+}
+
+// ── Mobile sidebar toggle (close button inside overlay) ──────────────────
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+}
+
+function collapseSidebarOnMobile() {
+    if (window.innerWidth <= 768) closeSidebar();
+}
+
+// ── Analytics helpers ─────────────────────────────────────────────────────
+function stddev(arr) {
+    if (!arr?.length) return null;
+    const m = arr.reduce((a,b)=>a+b,0)/arr.length;
+    return Math.sqrt(arr.reduce((a,b)=>a+(b-m)**2,0)/arr.length);
+}
+
+function detectPhases(times, pressures) {
+    if (!times?.length || pressures?.length < 5) return null;
+    const THRESH = 3.5;
+    let endIdx = -1;
+    for (let i = 0; i < pressures.length; i++) {
+        if (times[i] >= 1 && pressures[i] >= THRESH) { endIdx = i; break; }
+    }
+    if (endIdx <= 0) return null;
+    const preinfusion = times[endIdx];
+    if (preinfusion < 1.5) return null;
+    return { preinfusion, extraction: times[times.length-1] - preinfusion };
+}
+
+function detectChanneling(times, pressures) {
+    if (!times?.length || pressures?.length < 5) return false;
+    for (let i = 1; i < pressures.length; i++) {
+        if (pressures[i-1] < 5) continue;
+        const dt   = times[i] - times[i-1];
+        if (dt <= 0 || dt > 3) continue;
+        if (pressures[i-1] - pressures[i] > 1.5) return true;
+    }
+    return false;
+}
+
+// ── Sidebar filter ────────────────────────────────────────────────────────
+let currentFilter = '';
+
+function filterShots(query) {
+    currentFilter = query;
+    const q = query.trim().toLowerCase();
+    document.querySelectorAll('#shots .shot-wrapper').forEach(wrapper => {
+        const id   = parseInt(wrapper.id.replace('wrapper-', ''));
+        const shot = shots.find(s => s.id === id);
+        if (!shot) { wrapper.style.display = 'none'; return; }
+        const ann    = shot.annotation || {};
+        const haystack = [
+            shot.profile?.name || shot.profileName || '',
+            ann.coffee   || '',
+            ann.grinder  || '',
+            ann.notes    || ''
+        ].join(' ').toLowerCase();
+        wrapper.style.display = (!q || haystack.includes(q)) ? '' : 'none';
+    });
+}
+
+// ── CSV Export ────────────────────────────────────────────────────────────
+function shotToCSVRow(shot) {
+    const d      = getShotData(shot);
+    const ann    = shot.annotation || {};
+    const avgP   = avgActive(d.pressure.map(p=>p.y), 1.5);
+    const finalW = max(d.weight.map(p=>p.y));
+    const avgT   = avg(d.temp.map(p=>p.y));
+    const secs   = ((shot.duration||0)/10).toFixed(1);
+    const ratio  = (ann.dose && finalW) ? `1:${(finalW/ann.dose).toFixed(1)}` : '';
+    const date   = new Date(shot.timestamp * 1000).toLocaleString('de-DE');
+    return [
+        shot.id, date,
+        shot.profile?.name || shot.profileName || '',
+        secs,
+        avgP   != null ? avgP.toFixed(2)  : '',
+        finalW != null ? finalW.toFixed(1) : '',
+        ann.dose || '', ratio,
+        avgT   != null ? avgT.toFixed(1)  : '',
+        ann.rating || '', ann.coffee || '', ann.grinder || '',
+        ann.grindSetting || '',
+        (ann.notes || '').replace(/\n/g,' ')
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+}
+
+function downloadCSV(rows, filename) {
+    const header = ['Shot ID','Date','Profile','Duration (s)','Avg Pressure (bar)','Max Weight (g)',
+                    'Dose (g)','Ratio','Avg Temp (C)','Rating','Coffee','Grinder','Grind Setting','Notes'];
+    const csv  = [header.join(','), ...rows].join('\r\n');
+    // UTF-8 BOM ensures correct display in Excel
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+}
+
+function exportCSV() {
+    const shot = shots.find(s => s.id === primaryShotId);
+    if (!shot) return;
+    const date = new Date(shot.timestamp * 1000).toISOString().slice(0,10);
+    const profile = (shot.profile?.name || shot.profileName || 'shot').replace(/[^a-z0-9]/gi,'_');
+    downloadCSV([shotToCSVRow(shot)], `glp_shot_${date}_${profile}.csv`);
+}
+
+function exportAllCSV() {
+    downloadCSV(shots.map(shotToCSVRow), 'glp_all_shots.csv');
+}
+
+// ── .shot export (Decent Espresso format) ────────────────────────────────
+function exportShot() {
+    const shot = shots.find(s => s.id === primaryShotId);
+    if (!shot) return;
+    const d   = shot.datapoints || {};
+    const ann = shot.annotation || {};
+    const t   = d.timeInShot || [];
+
+    const tcl = arr => arr?.length ? `{${arr.map(v => (v / 10).toFixed(2)).join(' ')}}` : '{}';
+
+    const finalWeight = d.shotWeight || d.weight || [];
+    const lastW = finalWeight.length ? (finalWeight[finalWeight.length - 1] / 10).toFixed(1) : '0.0';
+    const date  = new Date(shot.timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19);
+
+    const lines = [
+        `clock ${shot.timestamp}`,
+        `date ${date}`,
+        `profile_title {${(shot.profile?.name || shot.profileName || 'Unknown').replace(/[{}]/g, '')}}`,
+        ann.coffee    ? `bean_desc {${ann.coffee.replace(/[{}]/g, '')}}` : '',
+        ann.grinder   ? `grinder_model {${ann.grinder.replace(/[{}]/g, '')}}` : '',
+        ann.grindSetting ? `grinder_setting {${ann.grindSetting.replace(/[{}]/g, '')}}` : '',
+        ann.dose      ? `bean_weight ${ann.dose}` : '',
+        ann.notes     ? `espresso_notes {${ann.notes.replace(/[{}]/g, '')}}` : '',
+        `espresso_elapsed ${tcl(t)}`,
+        `espresso_pressure ${tcl(d.pressure)}`,
+        `espresso_flow ${tcl(d.pumpFlow)}`,
+        `espresso_weight ${tcl(d.shotWeight || d.weight)}`,
+        `espresso_flow_weight ${tcl(d.weightFlow)}`,
+        `espresso_temperature_goal ${tcl(d.targetTemperature)}`,
+        `espresso_temperature_mix ${tcl(d.temperature)}`,
+        `espresso_water_dispensed ${lastW}`,
+    ].filter(Boolean).join('\n');
+
+    const blob = new Blob([lines], { type: 'text/plain;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `shot_${shot.id}_${date.slice(0,10)}.shot`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+loadData();
+updateStatus();
+setInterval(updateStatus, 30000);
+collapseSidebarOnMobile();
+</script>
+
+</body>
+</html>
