@@ -172,6 +172,37 @@ Exports the currently selected shot in Decent Espresso `.shot` format. Compatibl
 | `/data/shots.json` | Machine data for all shots |
 | `/data/annotations.json` | Notes and ratings (separate file, sync-safe) |
 
+## Deleting Shots
+
+The trash button (🗑) in the sidebar removes a shot and its annotations from the local storage. However, the sync is **incremental and one-directional**: it tracks the highest local shot ID and only fetches shots with a higher ID from the machine.
+
+| What you delete | Result |
+|---|---|
+| An older shot (not the latest) | Safe — stays deleted. The sync only fetches IDs higher than the current maximum, so it won't re-download old shots. |
+| The most recent shot | Will come back on the next sync — the machine still has it and the local max ID drops below the machine's latest ID. |
+
+**Practical use:** Deleting works well for test shots, aborted pulls, or cleaning up older data. The very last shot (highest ID) will always be re-synced from the machine.
+
+> A future version will introduce a blocklist so that deleted shots are permanently excluded from syncing.
+
+## API Endpoints (internal)
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/shots.json` | GET | All shots with annotations |
+| `/api/status` | GET | Sync status, shot count, HA connection |
+| `/api/sync` | POST | Trigger manual sync (max. once per 30 s) |
+| `/api/shots/:id/annotate` | POST | Save annotation for a shot |
+| `/api/shots/:id` | DELETE | Delete a shot and its annotation |
+| `/api/live` | GET (SSE) | Real-time data stream |
+
+## Data Storage
+
+| File | Contents |
+|---|---|
+| `/data/shots.json` | Machine data for all shots |
+| `/data/annotations.json` | Notes and ratings (separate file, sync-safe) |
+
 ## Security
 
 The add-on runs behind the Home Assistant Ingress proxy, which handles authentication. All API endpoints are only accessible through the HA dashboard. HA API access is read-only via the Supervisor token.
