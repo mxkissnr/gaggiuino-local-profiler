@@ -9,15 +9,15 @@
   <!-- Background -->
   <rect width="720" height="140" rx="14" fill="url(#bg)"/>
   <!-- Border -->
-  <rect width="720" height="140" rx="14" fill="none" stroke="#27272a" stroke-width="1.5"/>
+  <rect width="720" height="140" rx="14" fill="none" stroke="#3f3f46" stroke-width="1.5"/>
 
-  <!-- MDI coffee icon (mdi:coffee) – amber, scaled to 96px -->
-  <g transform="translate(22, 22) scale(4)" fill="white">
+  <!-- MDI coffee icon – amber -->
+  <g transform="translate(22, 22) scale(4)" fill="#f59e0b">
     <path d="M2,21V19H20V21H2M20,8V5H18V8H20M20,3A2,2 0 0,1 22,5V8A2,2 0 0,1 20,10H18V13A4,4 0 0,1 14,17H8A4,4 0 0,1 4,13V3H20M16,5H6V13A2,2 0 0,0 8,15H14A2,2 0 0,0 16,13V5Z"/>
   </g>
 
   <!-- Divider -->
-  <line x1="138" y1="24" x2="138" y2="116" stroke="#27272a" stroke-width="1.5"/>
+  <line x1="138" y1="24" x2="138" y2="116" stroke="#3f3f46" stroke-width="1.5"/>
 
   <!-- GLP wordmark -->
   <text x="162" y="101"
@@ -27,11 +27,12 @@
   <!-- Subtitle -->
   <text x="165" y="123"
         font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
-        font-size="12" font-weight="500" fill="#52525b" letter-spacing="3.5">GAGGIUINO LOCAL PROFILER</text>
+        font-size="12" font-weight="500" fill="#71717a" letter-spacing="3.5">GAGGIUINO LOCAL PROFILER</text>
 
-  <!-- Subtle pressure-curve hint (very low opacity) -->
+  <!-- Pressure curve (amber) -->
   <polyline points="490,104 514,86 536,58 556,40 578,37 602,39 626,37 650,39 674,42 700,46"
-            fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.12"/>
+            fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+  <!-- Flow curve (blue) -->
   <polyline points="490,104 514,100 536,82 556,44 578,38 602,32 626,30 650,31 674,34 700,38"
-            fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.10"/>
+            fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.40"/>
 </svg>
