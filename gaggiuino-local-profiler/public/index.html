@@ -2043,7 +2043,7 @@ function confirmDeleteShot(id) {
 
 async function deleteShot(id) {
     try {
-        const r = await fetch(`/api/shots/${id}/delete`, { method: 'POST' });
+        const r = await fetch(`api/shots/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         if (!r.ok) throw new Error(await r.text());
         shots = shots.filter(s => s.id !== id);
         if (primaryShotId === id) { primaryShotId = shots[0]?.id || null; }

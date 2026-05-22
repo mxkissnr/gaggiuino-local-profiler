@@ -1,3 +1,6 @@
+## 1.18.2
+- Fix: shot delete fetch URL used absolute path (/api/...) — changed to relative (api/...) so requests correctly route through HA ingress
+
 ## 1.18.1
 - Fix: shot delete used HTTP DELETE which HA ingress proxy blocks — changed to POST /api/shots/:id/delete
 
