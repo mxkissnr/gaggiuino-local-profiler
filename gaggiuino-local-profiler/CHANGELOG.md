@@ -1,3 +1,6 @@
+## 1.19.0
+- Machine firmware version shown next to hostname in shot header (fetched from controller `/api/system/info` on startup, silently ignored if endpoint not available)
+
 ## 1.18.9
 - Fix: permanently deleted shots added to blocklist — sync never re-fetches them from machine (#1)
 - Fix: machine subtitle shows hostname from server (`machineHostname` in `/api/status`), no client-side URL parsing (#9)

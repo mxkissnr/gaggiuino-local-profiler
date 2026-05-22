@@ -1401,7 +1401,9 @@ async function updateStatus() {
         dot.title     = s.lastSyncError || '';
         if (s.machineHostname) {
             const el = document.getElementById('machineSubtitle');
-            if (el) el.textContent = s.machineHostname;
+            if (el) el.textContent = s.machineVersion
+                ? `${s.machineHostname} · ${s.machineVersion}`
+                : s.machineHostname;
         }
         if (switchRes?.ok) updatePowerButton(await switchRes.json());
     } catch (e) {}

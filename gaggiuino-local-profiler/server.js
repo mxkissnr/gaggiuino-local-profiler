@@ -21,10 +21,11 @@ const HA_TOKEN = process.env.SUPERVISOR_TOKEN;
 const ALLOWED_URL_SCHEMES = ['http:', 'https:'];
 const MAX_SHOT_ID = 100000;
 
-let lastSyncTime    = null;
-let lastSyncError   = null;
-let lastManualSync  = 0;
-let lastKnownShotId = 0;  // tracks latest_shot_id from HA to trigger auto-sync
+let lastSyncTime      = null;
+let lastSyncError     = null;
+let lastManualSync    = 0;
+let lastKnownShotId   = 0;  // tracks latest_shot_id from HA to trigger auto-sync
+let cachedMachineVersion = null; // firmware version from controller, fetched once
 
 // Live polling state
 const liveClients = new Set();
@@ -107,6 +108,18 @@ function saveBlocklist(list) {
     fs.writeFileSync(BLOCKLIST_FILE, JSON.stringify(list, null, 2), 'utf8');
 }
 
+async function fetchMachineVersion() {
+    if (cachedMachineVersion) return;
+    const opts    = loadOptions();
+    const baseUrl = getMachineBaseUrl(opts);
+    try {
+        const res  = await axios.get(`${baseUrl}/api/system/info`, { timeout: 3000 });
+        const data = res.data || {};
+        const ver  = data.version || data.firmware || data.softwareVersion || data.fw_version || null;
+        if (ver) { cachedMachineVersion = String(ver); log(`🔖 Gaggiuino firmware: ${cachedMachineVersion}`); }
+    } catch (_) { /* endpoint may not exist — silently ignore */ }
+}
+
 function purgeExpiredTrash() {
     const trash = loadTrash();
     const now = Date.now();
@@ -182,6 +195,7 @@ app.get('/api/status', (req, res) => {
         lastSyncError,
         machineUrl,
         machineHostname,
+        machineVersion:  cachedMachineVersion,
         syncInterval:    opts.sync_interval || 5,
         haConnected:     !!HA_TOKEN,
         switchEntity:    opts.switch_entity || null
@@ -544,12 +558,13 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.18.9 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v1.19.0 gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
     log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);
     setInterval(backgroundHaCheck, 30000);
     purgeExpiredTrash();
     setInterval(purgeExpiredTrash, 24 * 60 * 60 * 1000); // daily
+    fetchMachineVersion();
     syncShots().then(scheduleNextSync);
 });
