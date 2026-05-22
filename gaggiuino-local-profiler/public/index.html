@@ -704,7 +704,7 @@
             #sidebar h2        { display: flex; align-items: center; }
             #sidebarToggle     { display: flex; align-items: center; }
             #mobileMenuBtn     { display: flex; }
-            #collapseBtn       { display: none; }
+            #collapseBtn       { display: flex; }
             #main              { height: 100vh; overflow-y: auto; }
             #chart-area, #live-view { padding: 16px; }
             .sprofiler-header h1 { font-size: 1.3rem; }
@@ -2191,11 +2191,12 @@ async function permanentDeleteShot(id) {
 
 // ── Desktop sidebar collapse ──────────────────────────────────────────────
 function toggleDesktopSidebar() {
-    if (window.innerWidth <= 768) return;
-    const sidebar   = document.getElementById('sidebar');
-    const expandBtn = document.getElementById('expandSidebarBtn');
-    const collapsed = sidebar.classList.toggle('desktop-collapsed');
-    if (expandBtn) expandBtn.style.display = collapsed ? 'block' : 'none';
+    const sidebar     = document.getElementById('sidebar');
+    const expandBtn   = document.getElementById('expandSidebarBtn');
+    const collapseBtn = document.getElementById('collapseBtn');
+    const collapsed   = sidebar.classList.toggle('desktop-collapsed');
+    if (expandBtn)   expandBtn.style.display = collapsed ? 'block' : 'none';
+    if (collapseBtn) collapseBtn.textContent  = collapsed ? '›' : '‹';
     if (!collapsed) setTimeout(() => updateView(), 50);
 }
 

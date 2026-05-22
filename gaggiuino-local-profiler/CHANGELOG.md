@@ -1,3 +1,7 @@
+## 1.18.4
+- Fix: sidebar collapse (‹/›) now works in HA companion app — removed viewport width guard that prevented collapse when `window.innerWidth ≤ 768`
+- Fix: ‹ button flips to › when sidebar is collapsed and back on expand
+
 ## 1.18.3
 - Trash bin: 🗑 button moves shot to trash instead of permanent delete
 - Trashed shots hidden from main sidebar, shown in collapsible Papierkorb section
