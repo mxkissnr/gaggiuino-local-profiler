@@ -1,3 +1,6 @@
+## 1.18.7
+- Fix: sidebar collapse button ‹ now inline with "Shots" heading (missing `display:flex` on h2)
+
 ## 1.18.6
 - Polish: sidebar collapse button ‹ styled as proper pill button (dark bg, border, rounded) with hover state
 
