@@ -29,10 +29,10 @@
         font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
         font-size="12" font-weight="500" fill="#71717a" letter-spacing="3.5">GAGGIUINO LOCAL PROFILER</text>
 
-  <!-- Pressure curve (amber) -->
-  <polyline points="490,104 514,86 536,58 556,40 578,37 602,39 626,37 650,39 674,42 700,46"
-            fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
-  <!-- Flow curve (blue) -->
-  <polyline points="490,104 514,100 536,82 556,44 578,38 602,32 626,30 650,31 674,34 700,38"
+  <!-- Pressure curve (amber) — Shot 54 "Adaptive" -->
+  <polyline points="490.0,97.7 497.9,98.5 505.8,93.6 513.6,87.0 521.5,85.4 529.4,85.4 537.2,85.4 545.1,82.9 553.9,71.5 561.8,62.4 569.6,55.1 577.5,46.0 585.4,36.2 593.2,37.0 601.1,37.0 609.0,37.0 616.9,38.7 624.8,41.1 632.6,42.8 640.5,42.8 648.4,43.6 656.2,41.9 664.1,42.8 672.0,41.9 679.9,41.9 688.6,41.9 696.5,41.9"
+            fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.60"/>
+  <!-- Flow curve (blue) — Shot 54 "Adaptive" -->
+  <polyline points="490.0,54.4 497.9,37.1 505.8,38.0 513.6,47.1 521.5,86.3 529.4,94.5 537.2,102.7 545.1,100.9 553.9,96.3 561.8,95.4 569.6,94.5 577.5,92.7 585.4,91.8 593.2,91.8 601.1,91.8 609.0,91.8 616.9,90.9 624.8,90.9 632.6,90.9 640.5,90.9 648.4,90.9 656.2,90.9 664.1,90.9 672.0,90.9 679.9,90.9 688.6,90.9 696.5,90.9"
             fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.40"/>
 </svg>
