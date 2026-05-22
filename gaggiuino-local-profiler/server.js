@@ -200,6 +200,28 @@ app.post('/api/shots/:id/annotate', (req, res) => {
     }
 });
 
+app.delete('/api/shots/:id', (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id) || id < 1 || id > MAX_SHOT_ID)
+        return res.status(400).json({ error: 'Invalid shot ID' });
+    try {
+        let shots = [];
+        if (fs.existsSync(DATA_FILE)) shots = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        const before = shots.length;
+        shots = shots.filter(s => s.id !== id);
+        if (shots.length === before) return res.status(404).json({ error: 'Shot not found' });
+        fs.writeFileSync(DATA_FILE, JSON.stringify(shots, null, 2), 'utf8');
+        const annotations = loadAnnotations();
+        delete annotations[String(id)];
+        fs.writeFileSync(ANNOTATIONS_FILE, JSON.stringify(annotations, null, 2), 'utf8');
+        log(`🗑 Shot ${id} deleted`);
+        res.json({ ok: true });
+    } catch (err) {
+        log(`❌ Delete error: ${err.message}`, true);
+        res.status(500).json({ error: 'Failed to delete' });
+    }
+});
+
 // ── Live SSE endpoint ─────────────────────────────────────────────────────
 
 app.get('/api/live', (req, res) => {

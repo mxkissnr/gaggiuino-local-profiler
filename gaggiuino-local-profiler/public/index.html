@@ -562,6 +562,42 @@
         .score-poor  { color: #f97316; }
         .score-bad   { color: #ef4444; }
 
+        /* ── Delete button (in sidebar shot items) ── */
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #3f3f46;
+            cursor: pointer;
+            padding: 6px 4px;
+            font-size: .9rem;
+            line-height: 1;
+            transition: color .15s;
+            flex-shrink: 0;
+        }
+        .delete-btn:hover { color: #ef4444; }
+
+        /* ── Desktop sidebar collapse ── */
+        #collapseBtn {
+            display: flex;
+            align-items: center;
+            background: none;
+            border: none;
+            color: #52525b;
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            padding: 0 6px 0 0;
+            margin-left: auto;
+            transition: color .2s;
+            flex-shrink: 0;
+        }
+        #collapseBtn:hover { color: #fff; }
+        #sidebar.desktop-collapsed {
+            width: 0;
+            min-width: 0;
+            border-right: none;
+        }
+
         /* ── Sidebar close button (inside overlay header) ── */
         #sidebarToggle {
             display: none;
@@ -625,12 +661,15 @@
             #sidebar h2        { display: flex; align-items: center; }
             #sidebarToggle     { display: flex; align-items: center; }
             #mobileMenuBtn     { display: flex; }
+            #collapseBtn       { display: none; }
             #main              { height: 100vh; overflow-y: auto; }
             #chart-area, #live-view { padding: 16px; }
             .sprofiler-header h1 { font-size: 1.3rem; }
-            .sprofiler-meta-grid { flex-direction: column; gap: 12px; }
+            .sprofiler-meta-grid { gap: 0; }
             .meta-column       { max-width: 100%; }
             .meta-column[style*="text-align: right"] { text-align: left !important; }
+            .meta-item { padding: 6px 0; }
+            .meta-value { font-size: .9rem; }
             .annotation-fields { grid-template-columns: 1fr; }
             .annotation-field.full-width { grid-column: 1; }
             .chart-container, .live-chart-container { height: 360px; }
@@ -650,7 +689,7 @@
 
 <!-- ── Sidebar ── -->
 <div id="sidebar">
-    <h2><button id="sidebarToggle" onclick="toggleSidebar()">☰</button>☕ Shots <span id="shot-count"></span></h2>
+    <h2><button id="sidebarToggle" onclick="toggleSidebar()">☰</button>☕ Shots <span id="shot-count"></span><button id="collapseBtn" onclick="toggleDesktopSidebar()" title="Sidebar einklappen">‹</button></h2>
     <div class="sidebar-hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
     <div id="search-container">
         <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …" oninput="filterShots(this.value)">
@@ -682,6 +721,7 @@
     <!-- Mode switcher -->
     <div id="mode-bar">
         <button id="mobileMenuBtn" onclick="openSidebar()">☰</button>
+        <button id="expandSidebarBtn" onclick="toggleDesktopSidebar()" title="Sidebar aufklappen" style="display:none;background:none;border:none;color:#71717a;cursor:pointer;font-size:1rem;padding:0 10px 0 0;line-height:1;transition:color .2s">›</button>
         <button class="mode-btn active" id="btnShots" onclick="switchMode('shots')">Shots</button>
         <button class="mode-btn" id="btnLive" onclick="switchMode('live')">
             <span class="live-dot"></span>Live
@@ -1182,8 +1222,15 @@ function renderSidebar() {
         btnCmp.title = 'Als Vergleichs-Shot wählen';
         btnCmp.onclick = e => { e.stopPropagation(); toggleCompare(shot.id); };
 
+        const btnDel = document.createElement('button');
+        btnDel.className = 'delete-btn';
+        btnDel.innerHTML = '🗑';
+        btnDel.title = 'Shot löschen';
+        btnDel.onclick = e => { e.stopPropagation(); confirmDeleteShot(shot.id); };
+
         wrapper.appendChild(divShot);
         wrapper.appendChild(btnCmp);
+        wrapper.appendChild(btnDel);
         el.appendChild(wrapper);
     });
     updateSidebarHighlighting();
@@ -1716,9 +1763,9 @@ function updateView() {
             plugins: {
                 phases:  phases ? { preinfusion: phases.preinfusion, extraction: phases.extraction } : {},
                 legend:  {
-                    display:  window.innerWidth > 600,
+                    display:  true,
                     position: 'bottom',
-                    labels: { color: '#e4e4e7', font: { family: 'Figtree', size: 11 }, boxWidth: 12, padding: 8 }
+                    labels: { color: '#e4e4e7', font: { family: 'Figtree', size: window.innerWidth <= 600 ? 9 : 11 }, boxWidth: window.innerWidth <= 600 ? 8 : 12, padding: window.innerWidth <= 600 ? 4 : 8 }
                 },
                 tooltip: { callbacks: { title: ctx => 'Zeit: ' + formatTimeLabel(ctx[0].parsed.x) } }
             },
@@ -1982,6 +2029,40 @@ function updatePQChart() {
             }
         }
     });
+}
+
+// ── Shot delete ───────────────────────────────────────────────────────────
+function confirmDeleteShot(id) {
+    const shot = shots.find(s => s.id === id);
+    if (!shot) return;
+    const name = shot.profile?.name || shot.profileName || `Shot ${id}`;
+    const date = new Date(shot.timestamp * 1000).toLocaleDateString('de-DE');
+    if (!confirm(`Shot ${id} löschen?\n${name} · ${date}\n\nDieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
+    deleteShot(id);
+}
+
+async function deleteShot(id) {
+    try {
+        const r = await fetch(`/api/shots/${id}`, { method: 'DELETE' });
+        if (!r.ok) throw new Error(await r.text());
+        shots = shots.filter(s => s.id !== id);
+        if (primaryShotId === id) { primaryShotId = shots[0]?.id || null; }
+        if (compareShotId === id) { compareShotId = null; }
+        renderSidebar();
+        updateView();
+    } catch (e) {
+        alert('Fehler beim Löschen: ' + e.message);
+    }
+}
+
+// ── Desktop sidebar collapse ──────────────────────────────────────────────
+function toggleDesktopSidebar() {
+    if (window.innerWidth <= 768) return;
+    const sidebar   = document.getElementById('sidebar');
+    const expandBtn = document.getElementById('expandSidebarBtn');
+    const collapsed = sidebar.classList.toggle('desktop-collapsed');
+    if (expandBtn) expandBtn.style.display = collapsed ? 'block' : 'none';
+    if (!collapsed) setTimeout(() => updateView(), 50);
 }
 
 // ── Sidebar overlay (mobile) ──────────────────────────────────────────────

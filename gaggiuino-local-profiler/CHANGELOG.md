@@ -1,3 +1,9 @@
+## 1.18.0
+- Shot delete: trash button in sidebar removes shot + annotation permanently (with confirmation)
+- Sidebar collapsible on desktop: ‹/› toggle button gives full-width chart view
+- Mobile: chart legend now always visible (compact size on small screens)
+- Mobile: meta-grid stays 2-column, tighter spacing — less scrolling before chart
+
 ## 1.17.9
 - Fix: CSV export now exports only the currently selected shot (not all shots)
 - Fix: CSV headers use ASCII only — no more encoding issues in Excel/Numbers
