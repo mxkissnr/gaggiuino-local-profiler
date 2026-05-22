@@ -1,3 +1,9 @@
+## 1.17.9
+- Fix: CSV export now exports only the currently selected shot (not all shots)
+- Fix: CSV headers use ASCII only — no more encoding issues in Excel/Numbers
+- Fix: CSV filename includes date and profile (e.g. `glp_shot_2026-05-18_Adaptive.csv`)
+- New: `exportAllCSV()` available for exporting all shots at once
+
 ## 1.17.4
 - Vollbild-Chart (⤢ Button): Zeit- und P·Q-Chart als Fullscreen-Overlay, ideal für Querformat auf Mobile
 - Fix: Corsair-Plugin Null-Check verhindert "Cannot destructure property 'x'" Fehler
