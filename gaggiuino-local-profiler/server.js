@@ -339,36 +339,18 @@ app.post('/api/shots/:id/delete', (req, res) => {
     }
 });
 
-// ── Live SSE endpoint ─────────────────────────────────────────────────────
+// ── Live polling endpoint (replaces SSE — HA ServiceWorker blocks EventSource) ──
 
-app.get('/api/live', (req, res) => {
-    res.setHeader('Content-Type',  'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection',    'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
+let liveSeq = 0; // increments on each brew-end so frontend can detect new shots
 
-    res.write(`data: ${JSON.stringify({ type: 'connected', haConnected: !!HA_TOKEN })}\n\n`);
-    liveClients.add(res);
-    if (liveClients.size === 1) startLivePolling();
-
-    const heartbeat = setInterval(() => {
-        try { res.write(': ping\n\n'); } catch (e) {}
-    }, 15000);
-
-    req.on('close', () => {
-        clearInterval(heartbeat);
-        liveClients.delete(res);
-        if (liveClients.size === 0) stopLivePolling();
+app.get('/api/live/data', (req, res) => {
+    res.json({
+        isLive:      !!liveAccum,
+        profileName: liveAccum?.profileName || '',
+        datapoints:  liveAccum ? liveAccum.datapoints : null,
+        seq:         liveSeq
     });
 });
-
-function broadcastLive(payload) {
-    const msg = `data: ${JSON.stringify(payload)}\n\n`;
-    for (const client of liveClients) {
-        try { client.write(msg); } catch (e) { liveClients.delete(client); }
-    }
-}
 
 function startLivePolling() {
     if (livePollTimer) return;
@@ -431,6 +413,7 @@ async function pollViaGaggiuinoStatus() {
         if (!isBrewing && liveAccum) {
             log('✅ Bezug beendet');
             liveAccum = null;
+            liveSeq++;
             setTimeout(syncAfterBrew, 3000);
         }
 
@@ -570,7 +553,7 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.19.2 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v1.19.3 gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
     log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);
@@ -578,5 +561,6 @@ app.listen(PORT, () => {
     purgeExpiredTrash();
     setInterval(purgeExpiredTrash, 24 * 60 * 60 * 1000); // daily
     fetchMachineVersion();
+    startLivePolling();
     syncShots().then(scheduleNextSync);
 });

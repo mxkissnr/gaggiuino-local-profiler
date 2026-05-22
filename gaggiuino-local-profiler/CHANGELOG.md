@@ -1,3 +1,8 @@
+## 1.19.3
+- Fix: live mode replaced SSE/EventSource with fetch-polling — HA's ServiceWorker was blocking EventSource connections through ingress (#7)
+- Server polls machine every second continuously (not only when client is connected)
+- Frontend polls `api/live/data` every second; auto-reloads shot list when brew ends
+
 ## 1.19.2
 - Fix: live mode brew detection now accepts `brewSwitchState`, `brewActive`, or `isBrewing` fields — handles multiple Gaggiuino firmware versions (#7)
 - Debug: `GET api/debug/machine` shows raw `/api/system/status` response from controller

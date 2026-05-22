@@ -1051,9 +1051,11 @@ let currentMode   = 'shots';
 let trashOpen     = false;
 
 // Live state
-let liveEventSource = null;
-let liveChart       = null;
-let liveIsActive    = false;
+let livePollInterval = null;
+let liveChart        = null;
+let liveIsActive     = false;
+let liveLastSeq      = -1;
+let liveWasLive      = false;
 
 // Chart / P·Q state
 let pqChart        = null;
@@ -1523,30 +1525,41 @@ function initLiveChart() {
 }
 
 function connectLiveStream() {
-    if (liveEventSource) liveEventSource.close();
+    disconnectLiveStream();
     setLiveBadge('connecting');
+    liveLastSeq  = -1;
+    liveWasLive  = false;
+    fetchLiveData();
+    livePollInterval = setInterval(fetchLiveData, 1000);
+}
 
-    liveEventSource = new EventSource('api/live');
+async function fetchLiveData() {
+    try {
+        const r = await fetch('api/live/data');
+        if (!r.ok) { setLiveBadge('error', `HTTP ${r.status}`); return; }
+        const msg = await r.json();
 
-    liveEventSource.onmessage = e => {
-        const msg = JSON.parse(e.data);
-        if (msg.type === 'connected')  { setLiveBadge('ready'); return; }
-        if (msg.type === 'error')      { setLiveBadge('error', msg.message); return; }
-        if (msg.type === 'data')       { handleLiveData(msg); return; }
-        if (msg.type === 'shot_saved') {
-            const id = msg.shotIds[msg.shotIds.length - 1];
-            document.getElementById('live-meta').textContent = `Shot #${id} gespeichert ✓`;
-            setTimeout(() => loadData(), 800);
-            return;
+        // First successful response — mark as ready
+        if (livePollInterval && document.getElementById('live-status-text').textContent === 'Verbinde …') {
+            setLiveBadge('ready');
         }
-    };
 
-    liveEventSource.onerror = () => setLiveBadge('error', 'Verbindung unterbrochen');
+        // Brew just ended → reload shot list after sync delay
+        if (liveWasLive && !msg.isLive && msg.seq !== liveLastSeq) {
+            liveLastSeq = msg.seq;
+            setTimeout(() => loadData(), 4000);
+        }
+        liveWasLive = msg.isLive;
+
+        handleLiveData(msg);
+    } catch (e) {
+        setLiveBadge('error', 'Verbindung unterbrochen');
+    }
 }
 
 function disconnectLiveStream() {
-    if (liveEventSource) { liveEventSource.close(); liveEventSource = null; }
-    if (liveChart)       { liveChart.destroy(); liveChart = null; }
+    if (livePollInterval) { clearInterval(livePollInterval); livePollInterval = null; }
+    if (liveChart)        { liveChart.destroy(); liveChart = null; }
 }
 
 function setLiveBadge(state, detail = '') {
