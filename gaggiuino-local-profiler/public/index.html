@@ -1399,12 +1399,9 @@ async function updateStatus() {
         }
         dot.className = s.lastSyncError ? 'status-dot error' : (s.lastSync ? 'status-dot ok' : 'status-dot unknown');
         dot.title     = s.lastSyncError || '';
-        if (s.machineUrl) {
-            try {
-                const host = new URL(s.machineUrl).hostname;
-                const el   = document.getElementById('machineSubtitle');
-                if (el) el.textContent = `${host} | gaggiuino`;
-            } catch (_) {}
+        if (s.machineHostname) {
+            const el = document.getElementById('machineSubtitle');
+            if (el) el.textContent = s.machineHostname;
         }
         if (switchRes?.ok) updatePowerButton(await switchRes.json());
     } catch (e) {}

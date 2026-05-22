@@ -9,9 +9,10 @@ const PORT          = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
 const ANNOTATIONS_FILE = '/data/annotations.json';
-const TRASH_FILE    = '/data/trash.json';
-const OPTIONS_FILE  = '/data/options.json';
-const TRASH_TTL_MS  = 30 * 24 * 60 * 60 * 1000; // 30 days
+const TRASH_FILE     = '/data/trash.json';
+const BLOCKLIST_FILE = '/data/blocklist.json';
+const OPTIONS_FILE   = '/data/options.json';
+const TRASH_TTL_MS   = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // HA Supervisor API (available when homeassistant_api: true in config.yaml)
 const HA_API   = 'http://supervisor/core/api';
@@ -94,6 +95,18 @@ function saveTrash(trash) {
     fs.writeFileSync(TRASH_FILE, JSON.stringify(trash, null, 2), 'utf8');
 }
 
+function loadBlocklist() {
+    try {
+        if (fs.existsSync(BLOCKLIST_FILE))
+            return JSON.parse(fs.readFileSync(BLOCKLIST_FILE, 'utf8'));
+    } catch (e) {}
+    return [];
+}
+
+function saveBlocklist(list) {
+    fs.writeFileSync(BLOCKLIST_FILE, JSON.stringify(list, null, 2), 'utf8');
+}
+
 function purgeExpiredTrash() {
     const trash = loadTrash();
     const now = Date.now();
@@ -157,17 +170,21 @@ app.get('/shots.json', (req, res) => {
 });
 
 app.get('/api/status', (req, res) => {
-    const opts = loadOptions();
+    const opts       = loadOptions();
+    const machineUrl = getMachineUrl(opts);
     let shotCount = 0;
+    let machineHostname = '';
     try { shotCount = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')).length; } catch (e) {}
+    try { machineHostname = new URL(machineUrl).hostname; } catch (e) {}
     res.json({
         shotCount,
-        lastSync:      lastSyncTime,
+        lastSync:        lastSyncTime,
         lastSyncError,
-        machineUrl:    getMachineUrl(opts),
-        syncInterval:  opts.sync_interval || 5,
-        haConnected:   !!HA_TOKEN,
-        switchEntity:  opts.switch_entity || null
+        machineUrl,
+        machineHostname,
+        syncInterval:    opts.sync_interval || 5,
+        haConnected:     !!HA_TOKEN,
+        switchEntity:    opts.switch_entity || null
     });
 });
 
@@ -286,7 +303,9 @@ app.post('/api/shots/:id/delete', (req, res) => {
         const annotations = loadAnnotations();
         delete annotations[String(id)];
         fs.writeFileSync(ANNOTATIONS_FILE, JSON.stringify(annotations, null, 2), 'utf8');
-        log(`🗑 Shot ${id} deleted`);
+        const blocklist = loadBlocklist();
+        if (!blocklist.includes(id)) { blocklist.push(id); saveBlocklist(blocklist); }
+        log(`🗑 Shot ${id} deleted (added to blocklist)`);
         res.json({ ok: true });
     } catch (err) {
         log(`❌ Delete error: ${err.message}`, true);
@@ -483,17 +502,20 @@ async function syncShots() {
             localShots = content ? JSON.parse(content) : [];
         }
 
-        const maxLocalId = localShots.length > 0
+        const blocklist    = loadBlocklist();
+        const maxLocalId   = localShots.length > 0
             ? localShots.reduce((max, s) => s.id > max ? s.id : max, 0) : 0;
+        const maxBlockedId = blocklist.length > 0 ? Math.max(...blocklist) : 0;
+        const effectiveMax = Math.max(maxLocalId, maxBlockedId);
 
-        if (maxLocalId >= latestMachineId) {
+        if (effectiveMax >= latestMachineId) {
             log(`Alles aktuell. Shots: ${localShots.length}`);
             lastSyncTime  = new Date().toISOString();
             lastSyncError = null;
             return;
         }
 
-        for (let i = maxLocalId + 1; i <= latestMachineId; i++) {
+        for (let i = effectiveMax + 1; i <= latestMachineId; i++) {
             const r = await axios.get(`${machineUrl}/${i}`, { timeout: 10000 });
             if (!r.data || typeof r.data.id === 'undefined' || !r.data.datapoints) {
                 log(`⚠️ Shot ${i} hat ungültige Daten – übersprungen`, true);
@@ -522,7 +544,7 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.18.8 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v1.18.9 gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
     log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);

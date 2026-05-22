@@ -1,3 +1,7 @@
+## 1.18.9
+- Fix: permanently deleted shots added to blocklist — sync never re-fetches them from machine (#1)
+- Fix: machine subtitle shows hostname from server (`machineHostname` in `/api/status`), no client-side URL parsing (#9)
+
 ## 1.18.8
 - Polish: sidebar slides in/out smoothly (0.3s ease transition on width)
 - Expand button › fades in/out instead of hard show/hide
