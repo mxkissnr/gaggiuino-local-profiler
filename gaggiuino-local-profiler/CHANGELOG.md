@@ -1,3 +1,6 @@
+## 1.18.5
+- Fix: sidebar collapse button ‹ now visible — color changed from near-black to visible gray, slightly larger
+
 ## 1.18.4
 - Fix: sidebar collapse (‹/›) now works in HA companion app — removed viewport width guard that prevented collapse when `window.innerWidth ≤ 768`
 - Fix: ‹ button flips to › when sidebar is collapsed and back on expand
