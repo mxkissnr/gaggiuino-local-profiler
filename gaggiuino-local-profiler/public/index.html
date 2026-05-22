@@ -562,6 +562,49 @@
         .score-poor  { color: #f97316; }
         .score-bad   { color: #ef4444; }
 
+        /* ── Trash section ── */
+        #trash-section {
+            border-top: 1px solid var(--gray-700);
+            flex-shrink: 0;
+        }
+        #trash-toggle {
+            width: 100%; background: none; border: none;
+            color: #52525b; cursor: pointer; font-size: .75rem;
+            font-family: 'Figtree', sans-serif;
+            padding: 8px 20px; text-align: left;
+            display: flex; align-items: center; gap: 6px;
+            transition: color .15s;
+        }
+        #trash-toggle:hover { color: #a1a1aa; }
+        #trash-toggle .trash-count {
+            margin-left: auto;
+            background: rgba(239,68,68,.12); color: #ef4444;
+            border-radius: 10px; padding: 1px 7px; font-size: .7rem; font-weight: 700;
+        }
+        #trash-list { overflow-y: auto; max-height: 220px; }
+        .trash-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 7px 12px 7px 20px;
+            border-bottom: 1px solid rgba(63,63,70,.2);
+            font-size: .78rem; color: #71717a;
+        }
+        .trash-item-info { flex: 1; min-width: 0; }
+        .trash-item-name { color: #a1a1aa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .trash-item-days { font-size: .7rem; color: #52525b; margin-top: 1px; }
+        .trash-restore-btn {
+            background: none; border: 1px solid var(--gray-700);
+            border-radius: 5px; color: #52525b; cursor: pointer;
+            padding: 3px 7px; font-size: .72rem; font-family: 'Figtree', sans-serif;
+            transition: all .15s; white-space: nowrap; flex-shrink: 0;
+        }
+        .trash-restore-btn:hover { color: #22c55e; border-color: rgba(34,197,94,.4); }
+        .trash-delete-btn {
+            background: none; border: none; color: #3f3f46;
+            cursor: pointer; padding: 4px; font-size: .85rem;
+            transition: color .15s; flex-shrink: 0;
+        }
+        .trash-delete-btn:hover { color: #ef4444; }
+
         /* ── Delete button (in sidebar shot items) ── */
         .delete-btn {
             background: none;
@@ -701,6 +744,14 @@
         <button class="sort-btn" id="sortDur"    onclick="setSortMode('duration')">Dauer</button>
     </div>
     <div id="shots"></div>
+    <div id="trash-section" style="display:none">
+        <button id="trash-toggle" onclick="toggleTrash()">
+            🗑 Papierkorb
+            <span class="trash-count" id="trash-count">0</span>
+        </button>
+        <div id="trash-list" style="display:none"></div>
+    </div>
+
     <div id="sidebar-footer">
         <div>
             <span class="status-dot unknown" id="statusDot"></span>
@@ -948,11 +999,13 @@
 
 <script>
 let shots        = [];
+let trashedShots = [];
 let chart        = null;
 let primaryShotId = null;
 let compareShotId = null;
 let currentRating = 0;
 let currentMode   = 'shots';
+let trashOpen     = false;
 
 // Live state
 let liveEventSource = null;
@@ -1114,6 +1167,7 @@ async function loadData() {
     // Processing phase — JS errors here must NOT mask as "Verbindungsfehler"
     shots = fetched;
     renderSidebar();
+    loadTrashData();
 
     const empty     = document.getElementById('empty-state');
     const chartArea = document.getElementById('chart-area');
@@ -1226,7 +1280,7 @@ function renderSidebar() {
         btnDel.className = 'delete-btn';
         btnDel.innerHTML = '🗑';
         btnDel.title = 'Shot löschen';
-        btnDel.onclick = e => { e.stopPropagation(); confirmDeleteShot(shot.id); };
+        btnDel.onclick = e => { e.stopPropagation(); trashShot(shot.id); };
 
         wrapper.appendChild(divShot);
         wrapper.appendChild(btnCmp);
@@ -2052,6 +2106,86 @@ async function deleteShot(id) {
         updateView();
     } catch (e) {
         alert('Fehler beim Löschen: ' + e.message);
+    }
+}
+
+// ── Trash bin ─────────────────────────────────────────────────────────────
+async function loadTrashData() {
+    try {
+        const r = await fetch('shots.json?trash=1');
+        if (!r.ok) return;
+        trashedShots = await r.json();
+        renderTrash();
+    } catch (e) {}
+}
+
+function renderTrash() {
+    const section  = document.getElementById('trash-section');
+    const countEl  = document.getElementById('trash-count');
+    const listEl   = document.getElementById('trash-list');
+    const count    = trashedShots.length;
+
+    section.style.display = count > 0 ? 'block' : 'none';
+    countEl.textContent   = count;
+
+    listEl.innerHTML = '';
+    const now = Date.now();
+    trashedShots.forEach(shot => {
+        const daysLeft = Math.max(0, 30 - Math.floor((now - shot.trashedAt) / 86400000));
+        const name = shot.profile?.name || shot.profileName || `Shot ${shot.id}`;
+        const row  = document.createElement('div');
+        row.className = 'trash-item';
+        row.innerHTML = `
+            <div class="trash-item-info">
+                <div class="trash-item-name">${esc(name)}</div>
+                <div class="trash-item-days">Shot ${shot.id} · wird in ${daysLeft} Tag${daysLeft !== 1 ? 'en' : ''} gelöscht</div>
+            </div>
+            <button class="trash-restore-btn" onclick="restoreShot(${shot.id})">↩ Wiederherstellen</button>
+            <button class="trash-delete-btn" title="Jetzt löschen" onclick="permanentDeleteShot(${shot.id})">✕</button>
+        `;
+        listEl.appendChild(row);
+    });
+}
+
+function toggleTrash() {
+    trashOpen = !trashOpen;
+    document.getElementById('trash-list').style.display = trashOpen ? 'block' : 'none';
+}
+
+async function trashShot(id) {
+    try {
+        const r = await fetch(`api/shots/${id}/trash`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        if (!r.ok) throw new Error(await r.text());
+        shots = shots.filter(s => s.id !== id);
+        if (primaryShotId === id) { primaryShotId = shots[0]?.id || null; }
+        if (compareShotId === id) { compareShotId = null; }
+        renderSidebar();
+        updateView();
+        await loadTrashData();
+    } catch (e) {
+        alert('Fehler: ' + e.message);
+    }
+}
+
+async function restoreShot(id) {
+    try {
+        const r = await fetch(`api/shots/${id}/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        if (!r.ok) throw new Error(await r.text());
+        await loadData();
+    } catch (e) {
+        alert('Fehler: ' + e.message);
+    }
+}
+
+async function permanentDeleteShot(id) {
+    if (!confirm(`Shot ${id} jetzt permanent löschen?\nDieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
+    try {
+        const r = await fetch(`api/shots/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        if (!r.ok) throw new Error(await r.text());
+        trashedShots = trashedShots.filter(s => s.id !== id);
+        renderTrash();
+    } catch (e) {
+        alert('Fehler: ' + e.message);
     }
 }
 

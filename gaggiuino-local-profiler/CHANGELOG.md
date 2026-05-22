@@ -1,3 +1,11 @@
+## 1.18.3
+- Trash bin: 🗑 button moves shot to trash instead of permanent delete
+- Trashed shots hidden from main sidebar, shown in collapsible Papierkorb section
+- Each trashed shot shows days remaining until auto-deletion (30 days)
+- Restore (↩) and permanent delete (✕) per trashed shot
+- Server: auto-purges expired trash on startup and daily
+- Fixes issue #6
+
 ## 1.18.2
 - Fix: shot delete fetch URL used absolute path (/api/...) — changed to relative (api/...) so requests correctly route through HA ingress
 

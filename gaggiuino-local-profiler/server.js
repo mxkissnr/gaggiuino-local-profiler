@@ -9,7 +9,9 @@ const PORT          = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
 const ANNOTATIONS_FILE = '/data/annotations.json';
+const TRASH_FILE    = '/data/trash.json';
 const OPTIONS_FILE  = '/data/options.json';
+const TRASH_TTL_MS  = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // HA Supervisor API (available when homeassistant_api: true in config.yaml)
 const HA_API   = 'http://supervisor/core/api';
@@ -80,6 +82,40 @@ function loadAnnotations() {
     return {};
 }
 
+function loadTrash() {
+    try {
+        if (fs.existsSync(TRASH_FILE))
+            return JSON.parse(fs.readFileSync(TRASH_FILE, 'utf8'));
+    } catch (e) {}
+    return {};
+}
+
+function saveTrash(trash) {
+    fs.writeFileSync(TRASH_FILE, JSON.stringify(trash, null, 2), 'utf8');
+}
+
+function purgeExpiredTrash() {
+    const trash = loadTrash();
+    const now = Date.now();
+    const expired = Object.entries(trash)
+        .filter(([, ts]) => now - ts > TRASH_TTL_MS)
+        .map(([id]) => parseInt(id));
+    if (expired.length === 0) return;
+    try {
+        let shots = [];
+        if (fs.existsSync(DATA_FILE)) shots = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        shots = shots.filter(s => !expired.includes(s.id));
+        fs.writeFileSync(DATA_FILE, JSON.stringify(shots, null, 2), 'utf8');
+        const annotations = loadAnnotations();
+        expired.forEach(id => { delete annotations[String(id)]; delete trash[String(id)]; });
+        fs.writeFileSync(ANNOTATIONS_FILE, JSON.stringify(annotations, null, 2), 'utf8');
+        saveTrash(trash);
+        log(`🗑 Auto-purged ${expired.length} shot(s) from trash (>30 days): ${expired.join(', ')}`);
+    } catch (e) {
+        log(`❌ Trash purge error: ${e.message}`, true);
+    }
+}
+
 try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
     if (!fs.existsSync(DATA_FILE)) {
@@ -102,9 +138,15 @@ app.get('/shots.json', (req, res) => {
         let shots = [];
         if (fs.existsSync(DATA_FILE)) shots = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
         const annotations = loadAnnotations();
-        const merged = shots.map(s => {
+        const trash = loadTrash();
+        const includeTrash = req.query.trash === '1';
+        const filtered = includeTrash
+            ? shots.filter(s => trash[String(s.id)])
+            : shots.filter(s => !trash[String(s.id)]);
+        const merged = filtered.map(s => {
             const ann = annotations[String(s.id)];
-            return ann ? { ...s, annotation: ann } : s;
+            const trashedAt = trash[String(s.id)] || null;
+            return { ...s, ...(ann ? { annotation: ann } : {}), ...(trashedAt ? { trashedAt } : {}) };
         });
         res.setHeader('Content-Type', 'application/json');
         res.send(JSON.stringify(merged));
@@ -197,6 +239,36 @@ app.post('/api/shots/:id/annotate', (req, res) => {
     } catch (err) {
         log(`❌ Annotation-Fehler: ${err.message}`, true);
         res.status(500).json({ error: 'Fehler beim Speichern' });
+    }
+});
+
+app.post('/api/shots/:id/trash', (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id) || id < 1 || id > MAX_SHOT_ID)
+        return res.status(400).json({ error: 'Invalid shot ID' });
+    try {
+        const trash = loadTrash();
+        trash[String(id)] = Date.now();
+        saveTrash(trash);
+        log(`🗑 Shot ${id} moved to trash`);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/shots/:id/restore', (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id) || id < 1 || id > MAX_SHOT_ID)
+        return res.status(400).json({ error: 'Invalid shot ID' });
+    try {
+        const trash = loadTrash();
+        delete trash[String(id)];
+        saveTrash(trash);
+        log(`♻️ Shot ${id} restored from trash`);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -450,10 +522,12 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.17.0 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v1.18.3 gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
     log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);
     setInterval(backgroundHaCheck, 30000);
+    purgeExpiredTrash();
+    setInterval(purgeExpiredTrash, 24 * 60 * 60 * 1000); // daily
     syncShots().then(scheduleNextSync);
 });
