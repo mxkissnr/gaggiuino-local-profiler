@@ -202,6 +202,18 @@ app.get('/api/status', (req, res) => {
     });
 });
 
+// ── Debug: raw machine status passthrough ────────────────────────────────
+app.get('/api/debug/machine', async (req, res) => {
+    const opts    = loadOptions();
+    const baseUrl = getMachineBaseUrl(opts);
+    try {
+        const r = await axios.get(`${baseUrl}/api/system/status`, { timeout: 5000 });
+        res.json({ ok: true, baseUrl, data: r.data });
+    } catch (e) {
+        res.json({ ok: false, baseUrl, error: e.message });
+    }
+});
+
 // ── Machine power switch ──────────────────────────────────────────────────
 async function getSwitchState(entity) {
     if (!HA_TOKEN || !entity) return null;
@@ -389,7 +401,7 @@ async function pollViaGaggiuinoStatus() {
         const statusRes = await axios.get(`${baseUrl}/api/system/status`, { timeout: 3000 });
         const status    = statusRes.data;
 
-        const isBrewing = status.brewSwitchState === true;
+        const isBrewing = !!(status.brewSwitchState || status.brewActive || status.isBrewing);
         const presVal   = parseFloat(status.pressure)          || 0;
         const tempVal   = parseFloat(status.temperature)       || 0;
         const weightVal = parseFloat(status.weight)            || 0;
@@ -558,7 +570,7 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.19.1 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v1.19.2 gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
     log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);

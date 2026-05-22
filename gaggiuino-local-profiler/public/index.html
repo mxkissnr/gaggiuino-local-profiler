@@ -39,7 +39,8 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            transition: width .3s ease, border-color .3s ease;
+            transition: width .3s cubic-bezier(.4,0,.2,1), border-color .3s ease;
+            will-change: width;
         }
 
         #sidebar h2 {
@@ -665,6 +666,7 @@
         }
         #expandSidebarBtn.visible { opacity: 1; pointer-events: auto; }
         #expandSidebarBtn:hover { background: #3f3f46; border-color: #52525b; color: #fff; }
+        #sidebar > * { min-width: 320px; }
         #sidebar.desktop-collapsed {
             width: 0;
             min-width: 0;

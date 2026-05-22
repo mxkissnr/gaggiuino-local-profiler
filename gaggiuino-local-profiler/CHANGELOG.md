@@ -1,3 +1,9 @@
+## 1.19.2
+- Fix: live mode brew detection now accepts `brewSwitchState`, `brewActive`, or `isBrewing` fields — handles multiple Gaggiuino firmware versions (#7)
+- Debug: `GET api/debug/machine` shows raw `/api/system/status` response from controller
+- Polish: sidebar collapse transition uses `cubic-bezier` + `will-change` for smooth GPU animation
+- Polish: sidebar children get `min-width: 320px` so content doesn't reflow during transition
+
 ## 1.19.1
 - Mobile: meta-items now horizontal (label left, value right) — halves the height of each row
 - Mobile: phases (Preinfusion / Extraktion) moved from meta-grid into header subtitle area, saving a full row (#5)
