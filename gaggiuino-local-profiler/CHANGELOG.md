@@ -1,3 +1,6 @@
+## 1.19.4
+- Fix: server crash on start — removed leftover `broadcastLive()` call after SSE removal
+
 ## 1.19.3
 - Fix: live mode replaced SSE/EventSource with fetch-polling — HA's ServiceWorker was blocking EventSource connections through ingress (#7)
 - Server polls machine every second continuously (not only when client is connected)

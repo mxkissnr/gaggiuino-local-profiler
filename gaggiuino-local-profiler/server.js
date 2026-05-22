@@ -432,15 +432,8 @@ async function pollViaGaggiuinoStatus() {
             liveAccum.datapoints.targetTemperature.push(Math.round(tTempVal * 10));
         }
 
-        broadcastLive({
-            type:        'data',
-            isLive:      isBrewing,
-            profileName: liveAccum ? liveAccum.profileName : profile,
-            datapoints:  liveAccum ? liveAccum.datapoints : null
-        });
-
     } catch (err) {
-        broadcastLive({ type: 'error', message: err.message });
+        log(`❌ Live-Poll Fehler: ${err.message}`, true);
     }
 }
 
@@ -553,7 +546,7 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.19.3 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v1.19.4 gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
     log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);
