@@ -1,3 +1,7 @@
+## 1.19.1
+- Mobile: meta-items now horizontal (label left, value right) — halves the height of each row
+- Mobile: phases (Preinfusion / Extraktion) moved from meta-grid into header subtitle area, saving a full row (#5)
+
 ## 1.19.0
 - Machine firmware version shown next to hostname in shot header (fetched from controller `/api/system/info` on startup, silently ignored if endpoint not available)
 

@@ -540,6 +540,9 @@
             letter-spacing: .03em;
         }
 
+        /* ── Phase subtitle (mobile only) ── */
+        #phaseSubtitle { display: none; }
+
         /* ── Phase tags ── */
         .phase-tag {
             display: inline-block;
@@ -734,12 +737,22 @@
             #collapseBtn       { display: flex; }
             #main              { height: 100vh; overflow-y: auto; }
             #chart-area, #live-view { padding: 16px; }
+            .sprofiler-header { margin-bottom: 10px; }
             .sprofiler-header h1 { font-size: 1.3rem; }
-            .sprofiler-meta-grid { gap: 0; }
+            .sprofiler-meta-grid { gap: 0; flex-direction: column; }
             .meta-column       { max-width: 100%; }
             .meta-column[style*="text-align: right"] { text-align: left !important; }
-            .meta-item { padding: 6px 0; }
-            .meta-value { font-size: .9rem; }
+            .meta-item {
+                flex-direction: row;
+                align-items: baseline;
+                justify-content: space-between;
+                padding: 5px 0;
+                gap: 8px;
+            }
+            .meta-label { margin-bottom: 0; }
+            .meta-value { font-size: .875rem; text-align: right; }
+            #phasesItem { display: none !important; }
+            #phaseSubtitle { display: block; }
             .annotation-fields { grid-template-columns: 1fr; }
             .annotation-field.full-width { grid-column: 1; }
             .chart-container, .live-chart-container { height: 360px; }
@@ -820,6 +833,7 @@
                 <div style="flex:1;min-width:0">
                     <h1 id="topTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Profil-Name</h1>
                     <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="freshness-badge" style="display:none"></span></p>
+                    <div id="phaseSubtitle" style="display:none;margin-top:4px"></div>
                 </div>
                 <div style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
                     <div id="shotScoreBadge" class="score-badge" style="display:none">
@@ -1750,13 +1764,17 @@ function updateView() {
     // Phases
     const phases     = !shotB ? detectPhases(pressureTimes, pressureVals) : null;
     const phasesItem = document.getElementById('phasesItem');
+    const phaseSubtitle = document.getElementById('phaseSubtitle');
     if (phases) {
-        document.getElementById('phases').innerHTML =
+        const phaseHtml =
             `<span class="phase-tag">Preinfusion <span>${formatTimeLabel(phases.preinfusion)}</span></span>` +
             `<span class="phase-tag">Extraktion <span>${formatTimeLabel(phases.extraction)}</span></span>`;
+        document.getElementById('phases').innerHTML = phaseHtml;
         phasesItem.style.display = '';
+        if (phaseSubtitle) { phaseSubtitle.innerHTML = phaseHtml; phaseSubtitle.style.display = ''; }
     } else {
         phasesItem.style.display = 'none';
+        if (phaseSubtitle) phaseSubtitle.style.display = 'none';
     }
 
     // Channeling
