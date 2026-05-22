@@ -1,3 +1,7 @@
+## 1.18.8
+- Polish: sidebar slides in/out smoothly (0.3s ease transition on width)
+- Expand button › fades in/out instead of hard show/hide
+
 ## 1.18.7
 - Fix: sidebar collapse button ‹ now inline with "Shots" heading (missing `display:flex` on h2)
 
