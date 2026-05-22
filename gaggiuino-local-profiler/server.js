@@ -522,7 +522,7 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.18.5 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v1.18.6 gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
     log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);

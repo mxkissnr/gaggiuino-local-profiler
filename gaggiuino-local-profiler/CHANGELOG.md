@@ -1,3 +1,6 @@
+## 1.18.6
+- Polish: sidebar collapse button ‹ styled as proper pill button (dark bg, border, rounded) with hover state
+
 ## 1.18.5
 - Fix: sidebar collapse button ‹ now visible — color changed from near-black to visible gray, slightly larger
 
