@@ -158,7 +158,7 @@
         .loading-state { padding: 24px 20px; color: #52525b; font-size: .85rem; text-align: center; }
 
         /* ── Main ── */
-        #main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+        #main { flex: 1; min-width: 0; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; }
 
         /* ── Mode bar ── */
         #mode-bar {
@@ -202,6 +202,8 @@
             display: none;
             flex-direction: column;
             flex: 1;
+            min-width: 0;
+            overflow-x: hidden;
             overflow-y: auto;
             padding: 24px;
             gap: 20px;
@@ -212,11 +214,12 @@
             border: 1px solid var(--gray-700);
             border-radius: 12px;
             padding: 20px;
+            min-width: 0;
         }
         .analytics-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
         .analytics-section-title { margin: 0 0 16px 0; font-size: .95rem; font-weight: 600; color: #e4e4e7; }
         .analytics-card-head .analytics-section-title { margin-bottom: 0; }
-        .analytics-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .analytics-two-col { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
         .analytics-filter-row { display: flex; gap: 6px; }
         .analytics-filter-btn {
             background: transparent; border: 1px solid var(--gray-700); color: #71717a;

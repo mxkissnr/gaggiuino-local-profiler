@@ -1,3 +1,6 @@
+## 1.23.1
+- Fix: analytics layout no longer overflows horizontally — added `min-width: 0` to `#main`, `#analytics-view`, and `.analytics-card`; grid columns use `minmax(0, 1fr)` instead of `1fr`
+
 ## 1.23.0
 - Feature: Multi-language UI — DE / EN / IT / FR / ES selectable via language switcher in sidebar footer
 - Language auto-detected from browser (`navigator.language`), persisted in `localStorage`
