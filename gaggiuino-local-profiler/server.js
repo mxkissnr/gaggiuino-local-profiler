@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.21.0';
+const GLP_VERSION   = '1.21.1';
 const PORT          = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -30,7 +30,6 @@ let lastKnownShotId   = 0;  // tracks latest_shot_id from HA to trigger auto-syn
 let cachedMachineVersion = null; // firmware version from controller, fetched once
 
 // Live polling state
-const liveClients = new Set();
 let livePollTimer  = null;
 let liveAccum      = null; // shot data accumulator during brew
 let isPollRunning  = false;
@@ -283,15 +282,17 @@ app.post('/api/shots/:id/annotate', (req, res) => {
     try {
         const annotations = loadAnnotations();
         const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+        const num = (v, min, max) => (typeof v === 'number' && v >= min && v <= max) ? v : null;
         annotations[String(id)] = {
             rating:       Number.isInteger(req.body.rating) && req.body.rating >= 1 && req.body.rating <= 5
                               ? req.body.rating : null,
             coffee:       str(req.body.coffee,       200),
             grinder:      str(req.body.grinder,      200),
             grindSetting: str(req.body.grindSetting, 100),
-            dose:         (typeof req.body.dose === 'number' && req.body.dose > 0 && req.body.dose < 100)
-                              ? req.body.dose : null,
-            notes:        str(req.body.notes, 2000)
+            dose:         num(req.body.dose,    0.1, 100),
+            roastDate:    str(req.body.roastDate, 10),
+            tds:          num(req.body.tds,     0.1,  30),
+            notes:        str(req.body.notes,       2000)
         };
         fs.writeFileSync(ANNOTATIONS_FILE, JSON.stringify(annotations, null, 2), 'utf8');
         res.json({ ok: true });
@@ -365,8 +366,9 @@ app.post('/api/library/bean', (req, res) => {
     const { name, roaster, roastDate, notes } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
+    const s   = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
     const lib  = loadLibrary();
-    const bean = { id: Date.now(), name: name.trim(), roaster: (roaster || '').trim(), roastDate: (roastDate || '').trim(), notes: (notes || '').trim() };
+    const bean = { id: Date.now(), name: s(name, 200), roaster: s(roaster, 200), roastDate: s(roastDate, 10), notes: s(notes, 1000) };
     lib.beans.push(bean);
     saveLibrary(lib);
     res.json(bean);
@@ -377,11 +379,12 @@ app.put('/api/library/bean/:id', (req, res) => {
     const lib = loadLibrary();
     const idx = lib.beans.findIndex(b => b.id === id);
     if (idx === -1) return res.status(404).json({ error: 'not found' });
+    const s = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : undefined;
     const { name, roaster, roastDate, notes } = req.body;
-    if (name) lib.beans[idx].name      = name.trim();
-    if (roaster    !== undefined) lib.beans[idx].roaster   = roaster.trim();
-    if (roastDate  !== undefined) lib.beans[idx].roastDate = roastDate.trim();
-    if (notes      !== undefined) lib.beans[idx].notes     = notes.trim();
+    if (name !== undefined)      lib.beans[idx].name      = s(name, 200) || lib.beans[idx].name;
+    if (roaster !== undefined)   lib.beans[idx].roaster   = s(roaster, 200);
+    if (roastDate !== undefined) lib.beans[idx].roastDate = s(roastDate, 10);
+    if (notes !== undefined)     lib.beans[idx].notes     = s(notes, 1000);
     saveLibrary(lib);
     res.json(lib.beans[idx]);
 });
@@ -398,8 +401,9 @@ app.post('/api/library/grinder', (req, res) => {
     const { name, notes } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
+    const s       = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
     const lib     = loadLibrary();
-    const grinder = { id: Date.now(), name: name.trim(), notes: (notes || '').trim() };
+    const grinder = { id: Date.now(), name: s(name, 200), notes: s(notes, 1000) };
     lib.grinders.push(grinder);
     saveLibrary(lib);
     res.json(grinder);
@@ -410,9 +414,10 @@ app.put('/api/library/grinder/:id', (req, res) => {
     const lib = loadLibrary();
     const idx = lib.grinders.findIndex(g => g.id === id);
     if (idx === -1) return res.status(404).json({ error: 'not found' });
+    const s = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : undefined;
     const { name, notes } = req.body;
-    if (name)  lib.grinders[idx].name  = name.trim();
-    if (notes !== undefined) lib.grinders[idx].notes = notes.trim();
+    if (name !== undefined)  lib.grinders[idx].name  = s(name, 200) || lib.grinders[idx].name;
+    if (notes !== undefined) lib.grinders[idx].notes = s(notes, 1000);
     saveLibrary(lib);
     res.json(lib.grinders[idx]);
 });
@@ -568,9 +573,7 @@ async function syncAfterBrew() {
         const updated  = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
         const newShots = updated.filter(s => s.id > prevMaxId);
         if (newShots.length > 0) {
-            const ids = newShots.map(s => s.id);
-            broadcastLive({ type: 'shot_saved', shotIds: ids });
-            log(`📤 Neuer Shot gespeichert: #${ids.join(', ')}`);
+            log(`📤 Neuer Shot gespeichert: #${newShots.map(s => s.id).join(', ')}`);
         }
     } catch (e) {}
 }

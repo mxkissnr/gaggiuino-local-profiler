@@ -1,3 +1,9 @@
+## 1.21.1
+- Fix: roastDate and tds now correctly persisted in annotation endpoint (were silently dropped, causing data loss after page reload)
+- Fix: removed undefined broadcastLive() call in syncAfterBrew() — silent ReferenceError swallowed by catch block
+- Fix: removed dead liveClients Set (leftover from SSE removal in v1.19.3)
+- Hardening: server-side field length limits added to all library endpoints (name 200, roastDate 10, notes 1000)
+
 ## 1.21.0
 - Feature: Analytics tab — new dedicated view with 4 sections
 - Analytics: Score-Trend chart with 5-shot moving average (filter: last 30 / 90 / all shots)
