@@ -230,10 +230,10 @@
         .analytics-filter-btn.active { background: var(--gray-700); color: #fff; border-color: var(--gray-700); }
 
         /* Calendar heatmap */
-        .cal-wrapper { overflow-x: auto; padding-bottom: 4px; }
-        .cal-grid { display: flex; gap: 3px; }
-        .cal-week { display: flex; flex-direction: column; gap: 3px; }
-        .cal-day { width: 13px; height: 13px; border-radius: 2px; cursor: default; }
+        .cal-wrapper { overflow-x: hidden; padding-bottom: 4px; }
+        .cal-grid { display: flex; }
+        .cal-week { display: flex; flex-direction: column; }
+        .cal-day { border-radius: 2px; cursor: default; flex-shrink: 0; }
         .cal-0 { background: var(--gray-800); }
         .cal-1 { background: rgba(239,68,68,.35); }
         .cal-2 { background: rgba(239,68,68,.6); }
@@ -3323,7 +3323,6 @@ function buildCalendar() {
     const dow = (startDate.getDay() + 6) % 7;
     startDate.setDate(startDate.getDate() - dow);
 
-    const CELL = 16; // px per week (13px + 3px gap)
     const months = [];
     let lastMonth = -1;
     const weeks = [];
@@ -3345,20 +3344,27 @@ function buildCalendar() {
         weeks.push(week);
     }
 
+    // Responsive cell size: fit all weeks into available container width
+    const GAP      = 2;
+    const W        = el.offsetWidth || 600;
+    const cellSize = Math.max(7, Math.floor((W - (weeks.length - 1) * GAP) / weeks.length));
+    const CELL     = cellSize + GAP;
+    const cellSz   = `width:${cellSize}px;height:${cellSize}px`;
+
     const cls = c => c === 0 ? 'cal-0' : c === 1 ? 'cal-1' : c === 2 ? 'cal-2' : 'cal-3';
 
-    let html = `<div style="position:relative;height:16px;margin-bottom:4px">`;
+    let html = `<div style="position:relative;height:${cellSize + 3}px;margin-bottom:4px">`;
     for (const m of months) html += `<span style="position:absolute;left:${m.weekIdx*CELL}px;font-size:.65rem;color:#52525b">${m.label}</span>`;
-    html += `</div><div class="cal-grid">`;
+    html += `</div><div class="cal-grid" style="gap:${GAP}px">`;
 
     for (const week of weeks) {
-        html += `<div class="cal-week">`;
+        html += `<div class="cal-week" style="gap:${GAP}px">`;
         for (const day of week) {
             const isFuture = day.date > today;
             const dateStr  = day.date.toLocaleDateString(LOCALE_MAP[currentLang] || 'de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
             const title    = day.count === 0 ? dateStr
                            : `${dateStr}: ${day.count} Shot${day.count>1?'s':''}${day.avgSc!==null?` · Ø ${day.avgSc}`:''}`;
-            html += `<div class="${isFuture ? 'cal-future' : cls(day.count)} cal-day" title="${title}"></div>`;
+            html += `<div class="${isFuture ? 'cal-future' : cls(day.count)} cal-day" style="${cellSz}" title="${title}"></div>`;
         }
         html += `</div>`;
     }
