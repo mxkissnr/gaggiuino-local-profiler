@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.24.1';
+const GLP_VERSION   = '1.25.0';
 const PORT          = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -433,6 +433,46 @@ app.post('/api/library/grinder/:id/delete', (req, res) => {
 // ── Live polling endpoint (replaces SSE — HA ServiceWorker blocks EventSource) ──
 
 let liveSeq = 0; // increments on each brew-end so frontend can detect new shots
+
+// ── Backup & Restore ─────────────────────────────────────────────────────
+
+app.get('/api/backup', (req, res) => {
+    try {
+        const read = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return fallback; } };
+        const bundle = {
+            glp_backup:     true,
+            version:        GLP_VERSION,
+            created:        new Date().toISOString(),
+            shots:          read(DATA_FILE, []),
+            annotations:    read(ANNOTATIONS_FILE, {}),
+            coffee_library: read(LIBRARY_FILE, { beans: [], grinders: [] }),
+            blocklist:      read(BLOCKLIST_FILE, []),
+            trash:          read(TRASH_FILE, {})
+        };
+        const filename = `glp-backup-${new Date().toISOString().slice(0,10)}.json`;
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Type', 'application/json');
+        res.json(bundle);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/restore', express.json({ limit: '50mb' }), (req, res) => {
+    try {
+        const b = req.body;
+        if (!b || b.glp_backup !== true || !Array.isArray(b.shots)) {
+            return res.status(400).json({ error: 'Invalid backup file' });
+        }
+        if (Array.isArray(b.shots))          fs.writeFileSync(DATA_FILE,       JSON.stringify(b.shots, null, 2), 'utf8');
+        if (b.annotations && typeof b.annotations === 'object')
+                                             fs.writeFileSync(ANNOTATIONS_FILE, JSON.stringify(b.annotations, null, 2), 'utf8');
+        if (b.coffee_library)                fs.writeFileSync(LIBRARY_FILE,    JSON.stringify(b.coffee_library, null, 2), 'utf8');
+        if (Array.isArray(b.blocklist))      fs.writeFileSync(BLOCKLIST_FILE,  JSON.stringify(b.blocklist, null, 2), 'utf8');
+        if (b.trash && typeof b.trash === 'object')
+                                             fs.writeFileSync(TRASH_FILE,      JSON.stringify(b.trash, null, 2), 'utf8');
+        log(`♻ Restore completed from backup v${b.version || '?'} (${b.shots.length} shots)`);
+        res.json({ ok: true, shots: b.shots.length });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.get('/api/live/data', (req, res) => {
     res.json({

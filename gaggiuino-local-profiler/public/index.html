@@ -263,6 +263,39 @@
             #library-view { padding: 16px; }
         }
 
+        /* ── Backup modal ── */
+        #backupModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:200; align-items:center; justify-content:center; }
+        #backupModal.open { display:flex; }
+        .backup-box { background:#18181b; border:1px solid #3f3f46; border-radius:12px; padding:24px; width:320px; display:flex; flex-direction:column; gap:16px; }
+        .backup-box h3 { margin:0; font-size:.95rem; color:#e4e4e7; }
+        .backup-box p { margin:0; font-size:.8rem; color:#71717a; line-height:1.5; }
+        .backup-btn { background:#27272a; border:1px solid #3f3f46; color:#e4e4e7; padding:10px 14px; border-radius:8px; cursor:pointer; font-size:.85rem; font-family:'Figtree',sans-serif; text-align:left; transition:background .15s; text-decoration:none; display:block; }
+        .backup-btn:hover { background:#3f3f46; }
+        .backup-btn.danger:hover { background:rgba(239,68,68,.15); border-color:#ef4444; color:#ef4444; }
+        .backup-close { background:none; border:none; color:#52525b; font-size:.8rem; cursor:pointer; font-family:'Figtree',sans-serif; align-self:flex-end; }
+
+        /* ── Degassing tracker ── */
+        .degassing-bar-wrap { margin-top:6px; }
+        .degassing-bar-track { height:6px; border-radius:3px; background:#27272a; position:relative; overflow:visible; }
+        .degassing-bar-fill  { height:100%; border-radius:3px; transition:width .3s; }
+        .degassing-label { font-size:.7rem; margin-top:4px; }
+
+        /* ── Einwähl-Modus ── */
+        #dialin-view { display:none; flex-direction:column; flex:1; min-width:0; overflow-x:hidden; overflow-y:auto; padding:24px; gap:20px; }
+        .dialin-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:14px; }
+        .dialin-card { background:#18181b; border:1px solid #3f3f46; border-radius:10px; padding:14px; cursor:pointer; transition:border-color .15s; }
+        .dialin-card:hover { border-color:#52525b; }
+        .dialin-card-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+        .dialin-profile { font-size:.8rem; font-weight:600; color:#e4e4e7; }
+        .dialin-date { font-size:.7rem; color:#52525b; margin-top:2px; }
+        .dialin-metrics { display:flex; flex-direction:column; gap:4px; }
+        .dialin-metric { display:flex; justify-content:space-between; font-size:.75rem; }
+        .dialin-metric-lbl { color:#52525b; }
+        .dialin-metric-val { color:#a1a1aa; font-weight:500; }
+        .dialin-empty { color:#52525b; font-size:.85rem; text-align:center; padding:40px 0; }
+        .dialin-header { display:flex; justify-content:space-between; align-items:center; }
+        .dialin-count-select { background:#18181b; border:1px solid #3f3f46; color:#71717a; font-size:.75rem; padding:3px 6px; border-radius:6px; font-family:'Figtree',sans-serif; cursor:pointer; outline:none; }
+
         /* ── Language switcher ── */
         .lang-select {
             background: #18181b; border: 1px solid #3f3f46; color: #71717a;
@@ -921,13 +954,16 @@
         </div>
         <div class="footer-row">
             <span id="glpVersionBadge" style="color:#3f3f46;font-size:.7rem;user-select:none"></span>
-            <select id="langSelect" class="lang-select" onchange="setLang(this.value)">
-                <option value="de">DE</option>
-                <option value="en">EN</option>
-                <option value="it">IT</option>
-                <option value="fr">FR</option>
-                <option value="es">ES</option>
-            </select>
+            <div style="display:flex;gap:6px;align-items:center">
+                <button onclick="document.getElementById('backupModal').classList.add('open')" style="background:none;border:none;color:#3f3f46;font-size:.85rem;cursor:pointer;padding:2px 4px;" title="Backup / Restore">⚙</button>
+                <select id="langSelect" class="lang-select" onchange="setLang(this.value)">
+                    <option value="de">DE</option>
+                    <option value="en">EN</option>
+                    <option value="it">IT</option>
+                    <option value="fr">FR</option>
+                    <option value="es">ES</option>
+                </select>
+            </div>
         </div>
     </div>
 </div>
@@ -946,6 +982,7 @@
             <span class="live-dot"></span>Live
         </button>
         <button class="mode-btn" id="btnAnalytics" onclick="switchMode('analytics')">Analytics</button>
+        <button class="mode-btn" id="btnDialin"    onclick="switchMode('dialin')">Einwählen</button>
         <button class="mode-btn" id="btnLibrary"   onclick="switchMode('library')">Bibliothek</button>
     </div>
 
@@ -1100,7 +1137,11 @@
                     </div>
                     <div class="annotation-field">
                         <label data-i18n="ann_roast_date">Röstdatum</label>
-                        <input type="text" id="annRoastDate" data-i18n-placeholder="ann_roast_date_ph" placeholder="TT.MM.JJJJ" maxlength="10">
+                        <input type="text" id="annRoastDate" data-i18n-placeholder="ann_roast_date_ph" placeholder="TT.MM.JJJJ" maxlength="10" oninput="updateDegassing(this.value)">
+                        <div id="degassingTracker" class="degassing-bar-wrap" style="display:none">
+                            <div class="degassing-bar-track"><div id="degassingFill" class="degassing-bar-fill"></div></div>
+                            <div id="degassingLabel" class="degassing-label"></div>
+                        </div>
                     </div>
                     <div class="annotation-field">
                         <label>TDS % <span id="annTdsOptional" style="color:#52525b;font-weight:normal" data-i18n="ann_tds_optional">(optional)</span></label>
@@ -1271,7 +1312,38 @@
         </div>
     </div><!-- #analytics-view -->
 
+    <!-- Einwähl-Modus view -->
+    <div id="dialin-view">
+        <div class="dialin-header">
+            <h3 style="margin:0;font-size:.95rem;color:#e4e4e7" data-i18n="dialin_title">Einwählen</h3>
+            <select id="dialinCount" class="dialin-count-select" onchange="renderDialin()">
+                <option value="3">3 Shots</option>
+                <option value="5" selected>5 Shots</option>
+                <option value="10">10 Shots</option>
+            </select>
+        </div>
+        <div id="dialinGrid" class="dialin-grid"></div>
+    </div>
+
 </div><!-- #main -->
+
+<!-- Backup / Restore Modal -->
+<div id="backupModal">
+    <div class="backup-box">
+        <h3 data-i18n="backup_title">Backup & Restore</h3>
+        <div>
+            <p data-i18n="backup_desc">Alle Shots, Notizen und die Kaffee-Bibliothek als JSON-Datei sichern oder wiederherstellen.</p>
+        </div>
+        <a id="backupDownloadBtn" href="api/backup" class="backup-btn" data-i18n="backup_download">Backup herunterladen</a>
+        <div>
+            <label class="backup-btn" style="cursor:pointer" data-i18n="backup_restore">
+                Aus Backup wiederherstellen …
+                <input type="file" accept=".json" style="display:none" onchange="restoreFromFile(this)">
+            </label>
+        </div>
+        <button class="backup-close" onclick="document.getElementById('backupModal').classList.remove('open')" data-i18n="backup_close">Schließen</button>
+    </div>
+</div>
 
 <script>
 // ── i18n ──────────────────────────────────────────────────────────────────
@@ -1342,6 +1414,21 @@ const TRANSLATIONS = {
     grind_long_slight:(s)=>`Bezug etwas lang (${s} s) – leicht gröber mahlen`,
     grind_channeling_full:'Channeling erkannt – Puck-Vorbereitung (Verteilung & Tamping) prüfen',
     compare_hint:'Shot für Vergleich wählen',
+    nav_dialin:'Einwählen', dialin_title:'Einwählen',
+    dialin_empty:'Noch keine Shots für die Einwähl-Ansicht.',
+    dialin_pressure:'Druck', dialin_duration:'Dauer', dialin_dose:'Dosis', dialin_ratio:'Ratio', dialin_yield:'EY %',
+    degas_too_fresh:(d)=>`${d} Tage seit Röstung – noch zu frisch`,
+    degas_almost:(d)=>`${d} Tage seit Röstung – fast bereit`,
+    degas_optimal:(d)=>`${d} Tage seit Röstung – optimales Fenster`,
+    degas_aging:(d)=>`${d} Tage seit Röstung – wird älter`,
+    degas_old:(d)=>`${d} Tage seit Röstung – zu alt`,
+    backup_title:'Backup & Restore',
+    backup_desc:'Alle Shots, Notizen und die Kaffee-Bibliothek als JSON-Datei sichern oder wiederherstellen.',
+    backup_download:'Backup herunterladen', backup_restore:'Backup wiederherstellen', backup_close:'Schließen',
+    backup_confirm:'Alle aktuellen Daten werden überschrieben. Fortfahren?',
+    backup_invalid:'Ungültige Backup-Datei.',
+    backup_restored:(n)=>`Wiederhergestellt: ${n} Shots.`,
+    backup_error:(msg)=>`Fehler: ${msg}`,
   },
   en: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
@@ -1407,6 +1494,21 @@ const TRANSLATIONS = {
     grind_long_slight:(s)=>`Shot slightly long (${s} s) — grind slightly coarser`,
     grind_channeling_full:'Channeling detected — check puck prep (distribution & tamping)',
     compare_hint:'Select shot for comparison',
+    nav_dialin:'Dial-In', dialin_title:'Dial-In',
+    dialin_empty:'No shots yet for dial-in view.',
+    dialin_pressure:'Pressure', dialin_duration:'Duration', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
+    degas_too_fresh:(d)=>`${d} days since roast — still too fresh`,
+    degas_almost:(d)=>`${d} days since roast — almost ready`,
+    degas_optimal:(d)=>`${d} days since roast — optimal window`,
+    degas_aging:(d)=>`${d} days since roast — aging`,
+    degas_old:(d)=>`${d} days since roast — too old`,
+    backup_title:'Backup & Restore',
+    backup_desc:'Save or restore all shots, notes and the coffee library as a JSON file.',
+    backup_download:'Download backup', backup_restore:'Restore backup', backup_close:'Close',
+    backup_confirm:'All current data will be overwritten. Continue?',
+    backup_invalid:'Invalid backup file.',
+    backup_restored:(n)=>`Restored: ${n} shots.`,
+    backup_error:(msg)=>`Error: ${msg}`,
   },
   it: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Libreria',
@@ -1472,6 +1574,21 @@ const TRANSLATIONS = {
     grind_long_slight:(s)=>`Shot leggermente lungo (${s} s) — macinare leggermente più grosso`,
     grind_channeling_full:'Channeling rilevato — controllare preparazione puck',
     compare_hint:'Seleziona shot per confronto',
+    nav_dialin:'Calibrazione', dialin_title:'Calibrazione',
+    dialin_empty:'Nessun shot per la vista di calibrazione.',
+    dialin_pressure:'Pressione', dialin_duration:'Durata', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
+    degas_too_fresh:(d)=>`${d} giorni dalla torrefazione — ancora troppo fresco`,
+    degas_almost:(d)=>`${d} giorni dalla torrefazione — quasi pronto`,
+    degas_optimal:(d)=>`${d} giorni dalla torrefazione — finestra ottimale`,
+    degas_aging:(d)=>`${d} giorni dalla torrefazione — invecchiamento`,
+    degas_old:(d)=>`${d} giorni dalla torrefazione — troppo vecchio`,
+    backup_title:'Backup & Restore',
+    backup_desc:'Salva o ripristina tutti gli shot, le note e la libreria caffè come file JSON.',
+    backup_download:'Scarica backup', backup_restore:'Ripristina backup', backup_close:'Chiudi',
+    backup_confirm:'Tutti i dati attuali verranno sovrascritti. Continuare?',
+    backup_invalid:'File di backup non valido.',
+    backup_restored:(n)=>`Ripristinato: ${n} shot.`,
+    backup_error:(msg)=>`Errore: ${msg}`,
   },
   fr: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Bibliothèque',
@@ -1537,6 +1654,21 @@ const TRANSLATIONS = {
     grind_long_slight:(s)=>`Shot légèrement long (${s} s) — moudre légèrement plus grossier`,
     grind_channeling_full:'Channeling détecté — vérifier la préparation du puck',
     compare_hint:'Sélectionner un shot pour comparaison',
+    nav_dialin:'Réglage', dialin_title:'Réglage',
+    dialin_empty:'Aucun shot pour la vue de réglage.',
+    dialin_pressure:'Pression', dialin_duration:'Durée', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
+    degas_too_fresh:(d)=>`${d} jours depuis la torréfaction — encore trop frais`,
+    degas_almost:(d)=>`${d} jours depuis la torréfaction — presque prêt`,
+    degas_optimal:(d)=>`${d} jours depuis la torréfaction — fenêtre optimale`,
+    degas_aging:(d)=>`${d} jours depuis la torréfaction — vieillissement`,
+    degas_old:(d)=>`${d} jours depuis la torréfaction — trop vieux`,
+    backup_title:'Backup & Restore',
+    backup_desc:'Sauvegardez ou restaurez tous les shots, notes et la bibliothèque café en JSON.',
+    backup_download:'Télécharger la sauvegarde', backup_restore:'Restaurer la sauvegarde', backup_close:'Fermer',
+    backup_confirm:'Toutes les données actuelles seront écrasées. Continuer ?',
+    backup_invalid:'Fichier de sauvegarde invalide.',
+    backup_restored:(n)=>`Restauré : ${n} shot${n!==1?'s':''}.`,
+    backup_error:(msg)=>`Erreur : ${msg}`,
   },
   es: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Biblioteca',
@@ -1602,6 +1734,21 @@ const TRANSLATIONS = {
     grind_long_slight:(s)=>`Shot ligeramente largo (${s} s) — moler ligeramente más grueso`,
     grind_channeling_full:'Channeling detectado — revisar preparación del puck',
     compare_hint:'Seleccionar shot para comparación',
+    nav_dialin:'Calibración', dialin_title:'Calibración',
+    dialin_empty:'No hay shots para la vista de calibración.',
+    dialin_pressure:'Presión', dialin_duration:'Duración', dialin_dose:'Dosis', dialin_ratio:'Ratio', dialin_yield:'EY %',
+    degas_too_fresh:(d)=>`${d} días desde el tueste — aún demasiado fresco`,
+    degas_almost:(d)=>`${d} días desde el tueste — casi listo`,
+    degas_optimal:(d)=>`${d} días desde el tueste — ventana óptima`,
+    degas_aging:(d)=>`${d} días desde el tueste — envejeciendo`,
+    degas_old:(d)=>`${d} días desde el tueste — demasiado viejo`,
+    backup_title:'Backup & Restore',
+    backup_desc:'Guarda o restaura todos los shots, notas y la biblioteca de café como archivo JSON.',
+    backup_download:'Descargar copia de seguridad', backup_restore:'Restaurar copia de seguridad', backup_close:'Cerrar',
+    backup_confirm:'Todos los datos actuales serán reemplazados. ¿Continuar?',
+    backup_invalid:'Archivo de copia de seguridad no válido.',
+    backup_restored:(n)=>`Restaurado: ${n} shot${n!==1?'s':''}.`,
+    backup_error:(msg)=>`Error: ${msg}`,
   },
 };
 
@@ -1621,12 +1768,13 @@ function setLang(lang) {
     renderSidebar();
     if (currentMode === 'analytics') initAnalytics();
     if (currentMode === 'library') { renderBeanList(); renderGrinderList(); }
+    if (currentMode === 'dialin') renderDialin();
 }
 
 function applyTranslations() {
     // Elements with IDs
     const idMap = {
-        btnShots: 'nav_shots', btnAnalytics: 'nav_analytics', btnLibrary: 'nav_library',
+        btnShots: 'nav_shots', btnAnalytics: 'nav_analytics', btnLibrary: 'nav_library', btnDialin: 'nav_dialin',
         sortNewest: 'sort_newest', sortScore: 'sort_score', sortRating: 'sort_rating', sortDur: 'sort_duration',
         syncBtn: 'btn_sync',
     };
@@ -1785,10 +1933,12 @@ function switchMode(mode) {
     document.getElementById('btnShots').classList.toggle('active',     mode === 'shots');
     document.getElementById('btnLive').classList.toggle('active',      mode === 'live');
     document.getElementById('btnAnalytics').classList.toggle('active', mode === 'analytics');
+    document.getElementById('btnDialin').classList.toggle('active',    mode === 'dialin');
     document.getElementById('btnLibrary').classList.toggle('active',   mode === 'library');
     document.getElementById('shots-view').style.display     = mode === 'shots'     ? 'flex' : 'none';
     document.getElementById('live-view').style.display      = mode === 'live'      ? 'flex' : 'none';
     document.getElementById('analytics-view').style.display = mode === 'analytics' ? 'flex' : 'none';
+    document.getElementById('dialin-view').style.display    = mode === 'dialin'    ? 'flex' : 'none';
     document.getElementById('library-view').style.display   = mode === 'library'   ? 'flex' : 'none';
 
     if (mode === 'live') {
@@ -1798,6 +1948,7 @@ function switchMode(mode) {
         disconnectLiveStream();
     }
     if (mode === 'analytics') initAnalytics();
+    if (mode === 'dialin')    renderDialin();
     if (mode === 'library') { renderBeanList(); renderGrinderList(); }
 }
 
@@ -3496,6 +3647,124 @@ function buildProfileChart() {
             }
         }
     });
+}
+
+// ── Degassing Tracker ─────────────────────────────────────────────────────
+function parseDMY(s) {
+    if (!s) return null;
+    const m = s.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2,4})$/);
+    if (!m) return null;
+    const y = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
+    const d = new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));
+    return isNaN(d) ? null : d;
+}
+
+function updateDegassing(val) {
+    const tracker = document.getElementById('degassingTracker');
+    const fill    = document.getElementById('degassingFill');
+    const label   = document.getElementById('degassingLabel');
+    const date    = parseDMY(val);
+    if (!date) { tracker.style.display = 'none'; return; }
+    const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+    if (days < 0 || days > 180) { tracker.style.display = 'none'; return; }
+
+    tracker.style.display = 'block';
+    const pct = Math.min(100, (days / 42) * 100);
+    fill.style.width = pct + '%';
+
+    let color, text;
+    if      (days < 4)  { color = '#52525b'; text = t('degas_too_fresh', days); }
+    else if (days < 7)  { color = '#eab308'; text = t('degas_almost',    days); }
+    else if (days <= 21){ color = '#22c55e'; text = t('degas_optimal',   days); }
+    else if (days <= 35){ color = '#f97316'; text = t('degas_aging',     days); }
+    else                { color = '#ef4444'; text = t('degas_old',       days); }
+
+    fill.style.background  = color;
+    label.style.color      = color;
+    label.textContent      = text;
+}
+
+// ── Einwähl-Modus ─────────────────────────────────────────────────────────
+function renderDialin() {
+    const n    = parseInt(document.getElementById('dialinCount')?.value || 5);
+    const grid = document.getElementById('dialinGrid');
+    if (!grid) return;
+
+    const recent = [...shots]
+        .filter(s => !s._trashed)
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, n);
+
+    if (recent.length === 0) {
+        grid.innerHTML = `<div class="dialin-empty">${t('dialin_empty')}</div>`;
+        return;
+    }
+
+    grid.innerHTML = recent.map(s => {
+        const data  = getShotData(s);
+        const ann   = s.annotation || {};
+        const score = calcShotScore(s, data);
+        const dur   = s.duration ? (s.duration / 10).toFixed(0) + ' s' : '–';
+        const pArr  = data.pressure || [];
+        const pActive = pArr.filter(v => v != null && v / 10 >= 5);
+        const pAvg  = pActive.length ? (pActive.reduce((a,b)=>a+b,0)/pActive.length/10).toFixed(1) + ' bar' : '–';
+        const dose  = ann.dose  ? ann.dose + ' g'  : null;
+        const yield_= s.weight  ? (s.weight/10).toFixed(1) + ' g' : null;
+        const ratio = (ann.dose && s.weight) ? '1:' + (s.weight/10/ann.dose).toFixed(1) : null;
+        const date  = new Date(s.timestamp * 1000).toLocaleDateString(LOCALE_MAP[currentLang] || 'de-DE', { day:'2-digit', month:'2-digit', year:'2-digit' });
+        const profile = s.profile?.name || s.profileName || '–';
+        const scorePill = score !== null ? `<span style="background:${scoreColor(score)};color:#fff;font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:10px">${score}</span>` : '';
+
+        const metrics = [
+            [t('dialin_pressure'), pAvg],
+            [t('dialin_duration'), dur],
+            dose   ? [t('dialin_dose'),  dose]  : null,
+            ratio  ? [t('dialin_ratio'), ratio]  : null,
+            yield_ ? [t('dialin_yield'), yield_] : null,
+        ].filter(Boolean).slice(0, 5);
+
+        return `<div class="dialin-card" onclick="selectShot(${s.id}); switchMode('shots')">
+            <div class="dialin-card-head">
+                <div>
+                    <div class="dialin-profile">${esc(profile)}</div>
+                    <div class="dialin-date">${date}${ann.coffee ? ' · ' + esc(ann.coffee) : ''}</div>
+                </div>
+                ${scorePill}
+            </div>
+            <div class="dialin-metrics">
+                ${metrics.map(([l,v]) => `<div class="dialin-metric"><span class="dialin-metric-lbl">${l}</span><span class="dialin-metric-val">${v}</span></div>`).join('')}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function scoreColor(sc) {
+    return sc >= 88 ? '#16a34a' : sc >= 75 ? '#65a30d' : sc >= 60 ? '#ca8a04' : sc >= 45 ? '#ea580c' : '#dc2626';
+}
+
+// ── Backup / Restore ───────────────────────────────────────────────────────
+async function restoreFromFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const confirmMsg = t('backup_confirm');
+    if (!confirm(confirmMsg)) { input.value = ''; return; }
+    try {
+        const text   = await file.text();
+        const bundle = JSON.parse(text);
+        if (!bundle.glp_backup) { alert(t('backup_invalid')); return; }
+        const r = await fetch('api/restore', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text
+        });
+        const res = await r.json();
+        if (res.ok) {
+            document.getElementById('backupModal').classList.remove('open');
+            await loadData();
+            alert(t('backup_restored', res.shots));
+        } else {
+            alert(t('backup_error', res.error));
+        }
+    } catch (e) { alert(t('backup_error', e.message)); }
+    input.value = '';
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────

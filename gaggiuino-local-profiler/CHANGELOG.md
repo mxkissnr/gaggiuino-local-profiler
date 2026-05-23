@@ -1,3 +1,9 @@
+## 1.25.0
+- Feature: Backup & Restore — download all data (shots, annotations, coffee library, blocklist, trash) as a JSON file; restore via file upload; closes #26
+- Feature: Degassing Tracker — roast date input in annotation panel now shows a colored progress bar with days since roast and a status label (too fresh / almost / optimal / aging / old); closes #28
+- Feature: Dial-In Mode — new "Einwählen" tab shows the last N shots as metric cards (pressure, duration, dose, ratio, EY %) for quick grind adjustment; closes #22
+- i18n: all new strings translated in DE / EN / IT / FR / ES
+
 ## 1.24.2
 - Polish: sidebar footer split into two rows — sync status top, version + language bottom; cleaner layout
 - Docs: README documentation links now point to GitHub Wiki (EN + DE)
