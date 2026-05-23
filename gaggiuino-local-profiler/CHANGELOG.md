@@ -1,3 +1,6 @@
+## 1.25.3
+- Polish: "Einwählen" tab renamed to "Bezugslog" (DE) — better German
+
 ## 1.25.2
 - Fix: live polling and sync pause when smart plug is off — `checkAndApplyMachinePower()` checks switch state on startup and every 30 s; polling resumes automatically when machine turns on; closes #39
 - Polish: sidebar footer merged into one row — sync status, version badge, and sync button on a single line; version badge color lightened to be readable; closes #40

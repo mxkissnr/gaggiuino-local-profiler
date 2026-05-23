@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.25.2';
+const GLP_VERSION   = '1.25.3';
 const PORT          = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
