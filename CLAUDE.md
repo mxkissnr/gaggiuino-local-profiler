@@ -32,7 +32,7 @@ Docs and code always in the same commit — never deliver CHANGELOG/DOCS/README 
 Every commit that ships a feature or fix needs:
 1. Code change
 2. `CHANGELOG.md` entry at the top
-3. `DOCS.md` update if the feature is user-facing
+3. `DOCS.md` **and** `DOCS.de.md` update if the feature is user-facing — both languages always in sync
 4. `README.md` features table update if it's a new feature
 
 After the commit:
