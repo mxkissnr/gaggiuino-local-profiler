@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.28.2';
+const GLP_VERSION   = '1.29.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -13,8 +13,57 @@ const ANNOTATIONS_FILE = '/data/annotations.json';
 const TRASH_FILE     = '/data/trash.json';
 const BLOCKLIST_FILE = '/data/blocklist.json';
 const OPTIONS_FILE   = '/data/options.json';
-const LIBRARY_FILE   = '/data/coffee_library.json';
-const TRASH_TTL_MS   = 30 * 24 * 60 * 60 * 1000; // 30 days
+const LIBRARY_FILE      = '/data/coffee_library.json';
+const MAINTENANCE_FILE  = '/data/maintenance.json';
+const TRASH_TTL_MS      = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+const MAINTENANCE_DEFAULTS = {
+    descaling:   { lastDate: null, threshold_shots: 200, threshold_days: 60  },
+    backflush:   { lastDate: null, threshold_shots: 20,  threshold_days: null },
+    grouphead:   { lastDate: null, threshold_shots: null, threshold_days: 180 },
+    gaskets:     { lastDate: null, threshold_shots: null, threshold_days: 365 },
+    waterfilter: { lastDate: null, threshold_shots: null, threshold_days: 90  },
+};
+
+function loadMaintenance() {
+    try {
+        if (fs.existsSync(MAINTENANCE_FILE)) {
+            const saved = JSON.parse(fs.readFileSync(MAINTENANCE_FILE, 'utf8'));
+            const result = JSON.parse(JSON.stringify(MAINTENANCE_DEFAULTS));
+            for (const key of Object.keys(result)) {
+                if (saved[key]) Object.assign(result[key], saved[key]);
+            }
+            return result;
+        }
+    } catch (e) {}
+    return JSON.parse(JSON.stringify(MAINTENANCE_DEFAULTS));
+}
+
+function saveMaintenance(data) {
+    fs.writeFileSync(MAINTENANCE_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
+
+function computeMaintenanceStats(maint) {
+    let shots = [];
+    try { if (fs.existsSync(DATA_FILE)) shots = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) {}
+    const now = Date.now();
+    const result = {};
+    for (const [key, task] of Object.entries(maint)) {
+        const lastTs    = task.lastDate ? new Date(task.lastDate).getTime() : 0;
+        const daysSince = lastTs ? Math.floor((now - lastTs) / 86400000) : null;
+        const shotsSince = shots.filter(s => s.timestamp * 1000 > lastTs).length;
+        let pct = 0;
+        if (task.threshold_shots && task.threshold_days)
+            pct = Math.max(shotsSince / task.threshold_shots, daysSince !== null ? daysSince / task.threshold_days : 0);
+        else if (task.threshold_shots)
+            pct = shotsSince / task.threshold_shots;
+        else if (task.threshold_days)
+            pct = daysSince !== null ? daysSince / task.threshold_days : 0;
+        const status = !task.lastDate ? 'never' : pct >= 1 ? 'due' : pct >= 0.8 ? 'soon' : 'ok';
+        result[key] = { ...task, daysSince, shotsSince, pct: Math.min(pct, 1), status };
+    }
+    return result;
+}
 
 // HA Supervisor API (available when homeassistant_api: true in config.yaml)
 const HA_API   = 'http://supervisor/core/api';
@@ -474,6 +523,28 @@ app.post('/api/restore', express.json({ limit: '50mb' }), (req, res) => {
         log(`♻ Restore completed from backup v${b.version || '?'} (${b.shots.length} shots)`);
         res.json({ ok: true, shots: b.shots.length });
     } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/maintenance', (req, res) => {
+    res.json(computeMaintenanceStats(loadMaintenance()));
+});
+
+app.post('/api/maintenance/:task/done', (req, res) => {
+    const maint = loadMaintenance();
+    if (!maint[req.params.task]) return res.status(404).json({ error: 'Unknown task' });
+    maint[req.params.task].lastDate = new Date().toISOString().split('T')[0];
+    saveMaintenance(maint);
+    res.json(computeMaintenanceStats(maint));
+});
+
+app.post('/api/maintenance/:task/threshold', express.json(), (req, res) => {
+    const maint = loadMaintenance();
+    if (!maint[req.params.task]) return res.status(404).json({ error: 'Unknown task' });
+    const { threshold_shots, threshold_days } = req.body;
+    if (threshold_shots !== undefined) maint[req.params.task].threshold_shots = parseInt(threshold_shots) || null;
+    if (threshold_days  !== undefined) maint[req.params.task].threshold_days  = parseInt(threshold_days)  || null;
+    saveMaintenance(maint);
+    res.json(computeMaintenanceStats(maint));
 });
 
 app.get('/api/live/data', (req, res) => {

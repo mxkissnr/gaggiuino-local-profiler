@@ -919,6 +919,49 @@
             .sprofiler-header h1 { font-size: 1.1rem; }
         }
 
+        /* ── Maintenance view ── */
+        #maintenance-view { display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto; padding:24px; gap:16px; }
+        .maint-card { background:#18181b; border:1px solid #3f3f46; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:10px; max-width:520px; }
+        .maint-card.status-due  { border-color:#ef4444; }
+        .maint-card.status-soon { border-color:#f59e0b; }
+        .maint-card-header { display:flex; align-items:center; gap:10px; }
+        .maint-icon { font-size:1.3rem; }
+        .maint-title { font-size:.95rem; font-weight:600; color:#e4e4e7; flex:1; }
+        .maint-status-pill {
+            font-size:.7rem; font-weight:700; border-radius:999px; padding:2px 10px; flex-shrink:0;
+        }
+        .maint-status-pill.ok    { background:rgba(34,197,94,.15);  color:#22c55e; }
+        .maint-status-pill.soon  { background:rgba(245,158,11,.15); color:#f59e0b; }
+        .maint-status-pill.due   { background:rgba(239,68,68,.12);  color:#ef4444; }
+        .maint-status-pill.never { background:rgba(113,113,122,.15);color:#71717a; }
+        .maint-stats { font-size:.8rem; color:#71717a; display:flex; gap:16px; flex-wrap:wrap; }
+        .maint-stats span { display:flex; align-items:center; gap:4px; }
+        .maint-bar-track { background:#27272a; border-radius:999px; height:5px; overflow:hidden; }
+        .maint-bar-fill  { height:100%; border-radius:999px; transition:width .4s ease, background .4s; }
+        .maint-bar-fill.ok   { background:#22c55e; }
+        .maint-bar-fill.soon { background:#f59e0b; }
+        .maint-bar-fill.due  { background:#ef4444; }
+        .maint-bar-fill.never{ background:#3f3f46; width:0% !important; }
+        .maint-thresholds { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+        .maint-threshold-field { display:flex; align-items:center; gap:5px; font-size:.78rem; color:#71717a; }
+        .maint-threshold-field input {
+            width:60px; background:#27272a; border:1px solid #3f3f46; border-radius:5px;
+            color:#e4e4e7; font-size:.78rem; padding:3px 6px; text-align:center; outline:none;
+            font-family:'Figtree',sans-serif;
+        }
+        .maint-threshold-field input:focus { border-color:#71717a; }
+        .maint-done-btn {
+            align-self:flex-start; background:#27272a; border:1px solid #3f3f46; border-radius:7px;
+            color:#a1a1aa; font-size:.8rem; font-weight:600; padding:6px 14px; cursor:pointer;
+            transition:background .2s,color .2s,border-color .2s; font-family:'Figtree',sans-serif;
+        }
+        .maint-done-btn:hover { background:#3f3f46; color:#fff; border-color:#52525b; }
+        .maint-badge {
+            display:inline-block; width:7px; height:7px; background:#ef4444;
+            border-radius:50%; margin-left:5px; vertical-align:middle;
+            animation:pulse 1.2s infinite;
+        }
+
         /* ── Split-flap counter (inline in sidebar header) ── */
         .flap-board {
             display: inline-flex;
@@ -1054,6 +1097,7 @@
             <button class="mode-btn" id="btnAnalytics" onclick="switchMode('analytics')">Analytics</button>
             <button class="mode-btn" id="btnDialin"    onclick="switchMode('dialin')">Einwählen</button>
             <button class="mode-btn" id="btnLibrary"   onclick="switchMode('library')">Bibliothek</button>
+            <button class="mode-btn" id="btnMaintenance" onclick="switchMode('maintenance')">Wartung<span id="maintBadge" class="maint-badge" style="display:none"></span></button>
         </div>
         <button class="mode-btn" id="btnSettings"  onclick="switchMode('settings')">⚙</button>
     </div>
@@ -1231,6 +1275,11 @@
         </div>
 
     </div><!-- #shots-view -->
+
+    <!-- Maintenance view -->
+    <div id="maintenance-view">
+        <div id="maint-cards" style="display:flex;flex-direction:column;gap:16px;max-width:520px;width:100%"></div>
+    </div>
 
     <!-- Library view -->
     <div id="library-view">
@@ -1499,6 +1548,15 @@ const TRANSLATIONS = {
     lib_bean_stock:'Vorrat (g)', lib_bean_stock_ph:'z.B. 500',
     lib_inv_consumed:(n)=>`${n} g verbraucht`, lib_inv_remaining:(n)=>`${n} g übrig`, lib_inv_reorder:'Nachbestellen',
     nav_dialin:'Bezugslog', dialin_title:'Bezugslog',
+    nav_maintenance:'Wartung',
+    maint_descaling:'Entkalken', maint_backflush:'Backflush', maint_grouphead:'Gruppenköpf Service',
+    maint_gaskets:'Dichtungen & Siebe', maint_waterfilter:'Wasserfilter',
+    maint_due:'⚠ Fällig', maint_soon:'Bald fällig', maint_never:'Nie erledigt',
+    maint_never_done:'Noch nie erledigt', maint_today:'Heute',
+    maint_ago_days:(n)=>`Vor ${n} Tag${n===1?'':'en'}`,
+    maint_shots_since:(n)=>`${n} Shot${n===1?'':'s'} seit letztem`,
+    maint_thresh_shots:'Grenze Shots', maint_thresh_days:'Grenze Tage',
+    maint_done_btn:'Jetzt erledigt',
     dialin_empty:'Noch keine Shots für die Einwähl-Ansicht.',
     dialin_pressure:'Druck', dialin_duration:'Dauer', dialin_dose:'Dosis', dialin_ratio:'Ratio', dialin_yield:'EY %',
     degas_too_fresh:(d)=>`${d} Tage seit Röstung – noch zu frisch`,
@@ -1582,6 +1640,15 @@ const TRANSLATIONS = {
     lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'e.g. 500',
     lib_inv_consumed:(n)=>`${n} g used`, lib_inv_remaining:(n)=>`${n} g remaining`, lib_inv_reorder:'Reorder',
     nav_dialin:'Dial-In', dialin_title:'Dial-In',
+    nav_maintenance:'Maintenance',
+    maint_descaling:'Descaling', maint_backflush:'Backflush', maint_grouphead:'Group Head Service',
+    maint_gaskets:'Gaskets & Screens', maint_waterfilter:'Water Filter',
+    maint_due:'⚠ Due', maint_soon:'Due soon', maint_never:'Never done',
+    maint_never_done:'Never done', maint_today:'Today',
+    maint_ago_days:(n)=>`${n} day${n===1?'':'s'} ago`,
+    maint_shots_since:(n)=>`${n} shot${n===1?'':'s'} since last`,
+    maint_thresh_shots:'Threshold shots', maint_thresh_days:'Threshold days',
+    maint_done_btn:'Mark as done',
     dialin_empty:'No shots yet for dial-in view.',
     dialin_pressure:'Pressure', dialin_duration:'Duration', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
     degas_too_fresh:(d)=>`${d} days since roast — still too fresh`,
@@ -1665,6 +1732,15 @@ const TRANSLATIONS = {
     lib_bean_stock:'Scorta (g)', lib_bean_stock_ph:'es. 500',
     lib_inv_consumed:(n)=>`${n} g usati`, lib_inv_remaining:(n)=>`${n} g rimanenti`, lib_inv_reorder:'Riordinare',
     nav_dialin:'Calibrazione', dialin_title:'Calibrazione',
+    nav_maintenance:'Manutenzione',
+    maint_descaling:'Decalcificazione', maint_backflush:'Backflush', maint_grouphead:'Servizio Gruppo',
+    maint_gaskets:'Guarnizioni & Filtri', maint_waterfilter:'Filtro acqua',
+    maint_due:'⚠ Scaduto', maint_soon:'In scadenza', maint_never:'Mai fatto',
+    maint_never_done:'Mai fatto', maint_today:'Oggi',
+    maint_ago_days:(n)=>`${n} giorno${n===1?'':'i'} fa`,
+    maint_shots_since:(n)=>`${n} shot dall'ultimo`,
+    maint_thresh_shots:'Soglia shots', maint_thresh_days:'Soglia giorni',
+    maint_done_btn:'Fatto ora',
     dialin_empty:'Nessun shot per la vista di calibrazione.',
     dialin_pressure:'Pressione', dialin_duration:'Durata', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
     degas_too_fresh:(d)=>`${d} giorni dalla torrefazione — ancora troppo fresco`,
@@ -1748,6 +1824,15 @@ const TRANSLATIONS = {
     lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'ex. 500',
     lib_inv_consumed:(n)=>`${n} g utilisés`, lib_inv_remaining:(n)=>`${n} g restants`, lib_inv_reorder:'Réapprovisionner',
     nav_dialin:'Réglage', dialin_title:'Réglage',
+    nav_maintenance:'Entretien',
+    maint_descaling:'Détartrage', maint_backflush:'Backflush', maint_grouphead:'Service groupe',
+    maint_gaskets:'Joints & Filtres', maint_waterfilter:'Filtre eau',
+    maint_due:'⚠ À faire', maint_soon:'Bientôt dû', maint_never:'Jamais fait',
+    maint_never_done:'Jamais fait', maint_today:"Aujourd'hui",
+    maint_ago_days:(n)=>`Il y a ${n} jour${n===1?'':'s'}`,
+    maint_shots_since:(n)=>`${n} shot${n===1?'':'s'} depuis`,
+    maint_thresh_shots:'Seuil shots', maint_thresh_days:'Seuil jours',
+    maint_done_btn:'Fait maintenant',
     dialin_empty:'Aucun shot pour la vue de réglage.',
     dialin_pressure:'Pression', dialin_duration:'Durée', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
     degas_too_fresh:(d)=>`${d} jours depuis la torréfaction — encore trop frais`,
@@ -1831,6 +1916,15 @@ const TRANSLATIONS = {
     lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'ej. 500',
     lib_inv_consumed:(n)=>`${n} g usados`, lib_inv_remaining:(n)=>`${n} g restantes`, lib_inv_reorder:'Repedir',
     nav_dialin:'Calibración', dialin_title:'Calibración',
+    nav_maintenance:'Mantenimiento',
+    maint_descaling:'Descalcificación', maint_backflush:'Backflush', maint_grouphead:'Servicio grupo',
+    maint_gaskets:'Juntas & Filtros', maint_waterfilter:'Filtro agua',
+    maint_due:'⚠ Vencido', maint_soon:'Por vencer', maint_never:'Nunca hecho',
+    maint_never_done:'Nunca hecho', maint_today:'Hoy',
+    maint_ago_days:(n)=>`Hace ${n} día${n===1?'':'s'}`,
+    maint_shots_since:(n)=>`${n} shot${n===1?'':'s'} desde último`,
+    maint_thresh_shots:'Límite shots', maint_thresh_days:'Límite días',
+    maint_done_btn:'Hecho ahora',
     dialin_empty:'No hay shots para la vista de calibración.',
     dialin_pressure:'Presión', dialin_duration:'Duración', dialin_dose:'Dosis', dialin_ratio:'Ratio', dialin_yield:'EY %',
     degas_too_fresh:(d)=>`${d} días desde el tueste — aún demasiado fresco`,
@@ -1884,6 +1978,13 @@ function applyTranslations() {
         const dot = btnLive.querySelector('.live-dot');
         btnLive.textContent = t('nav_live');
         if (dot) btnLive.prepend(dot);
+    }
+    // Maintenance button: preserve badge span
+    const btnMaint = document.getElementById('btnMaintenance');
+    if (btnMaint) {
+        const badge = btnMaint.querySelector('.maint-badge');
+        btnMaint.textContent = t('nav_maintenance');
+        if (badge) btnMaint.appendChild(badge);
     }
     // Search placeholder
     const searchEl = document.getElementById('shotSearch');
@@ -2032,14 +2133,16 @@ function switchMode(mode) {
     document.getElementById('btnLive').classList.toggle('active',      mode === 'live');
     document.getElementById('btnAnalytics').classList.toggle('active', mode === 'analytics');
     document.getElementById('btnDialin').classList.toggle('active',    mode === 'dialin');
-    document.getElementById('btnLibrary').classList.toggle('active',   mode === 'library');
-    document.getElementById('btnSettings').classList.toggle('active',  mode === 'settings');
-    document.getElementById('shots-view').style.display     = mode === 'shots'     ? 'flex' : 'none';
-    document.getElementById('live-view').style.display      = mode === 'live'      ? 'flex' : 'none';
-    document.getElementById('analytics-view').style.display = mode === 'analytics' ? 'flex' : 'none';
-    document.getElementById('dialin-view').style.display    = mode === 'dialin'    ? 'flex' : 'none';
-    document.getElementById('library-view').style.display   = mode === 'library'   ? 'flex' : 'none';
-    document.getElementById('settings-view').style.display  = mode === 'settings'  ? 'flex' : 'none';
+    document.getElementById('btnLibrary').classList.toggle('active',     mode === 'library');
+    document.getElementById('btnMaintenance').classList.toggle('active', mode === 'maintenance');
+    document.getElementById('btnSettings').classList.toggle('active',    mode === 'settings');
+    document.getElementById('shots-view').style.display        = mode === 'shots'       ? 'flex' : 'none';
+    document.getElementById('live-view').style.display         = mode === 'live'        ? 'flex' : 'none';
+    document.getElementById('analytics-view').style.display    = mode === 'analytics'   ? 'flex' : 'none';
+    document.getElementById('dialin-view').style.display       = mode === 'dialin'      ? 'flex' : 'none';
+    document.getElementById('library-view').style.display      = mode === 'library'     ? 'flex' : 'none';
+    document.getElementById('maintenance-view').style.display  = mode === 'maintenance' ? 'flex' : 'none';
+    document.getElementById('settings-view').style.display     = mode === 'settings'    ? 'flex' : 'none';
 
     if (mode === 'live') {
         initLiveChart();
@@ -2047,9 +2150,10 @@ function switchMode(mode) {
     } else {
         disconnectLiveStream();
     }
-    if (mode === 'analytics') initAnalytics();
-    if (mode === 'dialin')    renderDialin();
-    if (mode === 'library') { renderBeanList(); renderGrinderList(); }
+    if (mode === 'analytics')   initAnalytics();
+    if (mode === 'dialin')      renderDialin();
+    if (mode === 'library')     { renderBeanList(); renderGrinderList(); }
+    if (mode === 'maintenance') loadMaintenanceView();
 }
 
 // ── Star rating ───────────────────────────────────────────────────────────
@@ -2145,6 +2249,101 @@ function sortedShots() {
     if (currentSort === 'duration')
         return list.sort((a, b) => dir * ((b.duration || 0) - (a.duration || 0)));
     return list.reverse();
+}
+
+// ── Maintenance ───────────────────────────────────────────────────────────
+const MAINT_META = {
+    descaling:   { icon: '🧪', key: 'maint_descaling'   },
+    backflush:   { icon: '🔄', key: 'maint_backflush'   },
+    grouphead:   { icon: '🔧', key: 'maint_grouphead'   },
+    gaskets:     { icon: '⭕', key: 'maint_gaskets'     },
+    waterfilter: { icon: '💧', key: 'maint_waterfilter' },
+};
+
+function maintStatusLabel(status) {
+    return { ok:'✓ OK', soon: t('maint_soon'), due: t('maint_due'), never: t('maint_never') }[status] || '';
+}
+
+async function loadMaintenanceView() {
+    const container = document.getElementById('maint-cards');
+    container.innerHTML = `<div class="loading-state">${t('loading')}</div>`;
+    try {
+        const r = await fetch('api/maintenance');
+        const data = await r.json();
+        renderMaintenanceCards(data);
+    } catch(e) {
+        container.innerHTML = `<div class="loading-state" style="color:#ef4444">Fehler beim Laden</div>`;
+    }
+}
+
+function renderMaintenanceCards(data) {
+    const container = document.getElementById('maint-cards');
+    container.innerHTML = '';
+    let anyDue = false;
+    for (const [task, meta] of Object.entries(MAINT_META)) {
+        const d = data[task];
+        if (!d) continue;
+        if (d.status === 'due' || d.status === 'never') anyDue = true;
+        const card = document.createElement('div');
+        card.className = `maint-card status-${d.status}`;
+
+        const lastDoneText = d.daysSince === null
+            ? t('maint_never_done')
+            : d.daysSince === 0
+                ? t('maint_today')
+                : `${t('maint_ago_days', d.daysSince)}`;
+        const shotsText = d.shotsSince > 0 ? ` · ${t('maint_shots_since', d.shotsSince)}` : '';
+
+        const threshFields = [];
+        if (d.threshold_shots !== null)
+            threshFields.push(`<label class="maint-threshold-field">
+                <span>${t('maint_thresh_shots')}</span>
+                <input type="number" min="1" max="9999" value="${d.threshold_shots}"
+                    onchange="saveMaintThreshold('${task}','threshold_shots',this.value)">
+            </label>`);
+        if (d.threshold_days !== null)
+            threshFields.push(`<label class="maint-threshold-field">
+                <span>${t('maint_thresh_days')}</span>
+                <input type="number" min="1" max="9999" value="${d.threshold_days}"
+                    onchange="saveMaintThreshold('${task}','threshold_days',this.value)">
+            </label>`);
+
+        card.innerHTML = `
+            <div class="maint-card-header">
+                <span class="maint-icon">${meta.icon}</span>
+                <span class="maint-title">${t(meta.key)}</span>
+                <span class="maint-status-pill ${d.status}">${maintStatusLabel(d.status)}</span>
+            </div>
+            <div class="maint-stats">
+                <span>📅 ${lastDoneText}${shotsText}</span>
+            </div>
+            <div class="maint-bar-track">
+                <div class="maint-bar-fill ${d.status}" style="width:${Math.round(d.pct * 100)}%"></div>
+            </div>
+            ${threshFields.length ? `<div class="maint-thresholds">${threshFields.join('')}</div>` : ''}
+            <button class="maint-done-btn" onclick="markMaintDone('${task}')">✓ ${t('maint_done_btn')}</button>
+        `;
+        container.appendChild(card);
+    }
+    const badge = document.getElementById('maintBadge');
+    if (badge) badge.style.display = anyDue ? 'inline-block' : 'none';
+}
+
+async function markMaintDone(task) {
+    try {
+        const r = await fetch(`api/maintenance/${task}/done`, { method: 'POST' });
+        renderMaintenanceCards(await r.json());
+    } catch(e) {}
+}
+
+async function saveMaintThreshold(task, field, value) {
+    try {
+        await fetch(`api/maintenance/${task}/threshold`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [field]: parseInt(value) }),
+        });
+    } catch(e) {}
 }
 
 // ── Split-flap counter ────────────────────────────────────────────────────
