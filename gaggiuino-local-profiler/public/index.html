@@ -173,6 +173,18 @@
             top: 0;
             z-index: 10;
             background: #09090b;
+            overflow: hidden;
+        }
+        #mode-bar-scroll {
+            display: flex;
+            flex: 1;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        #mode-bar-scroll::-webkit-scrollbar { display: none; }
+        #btnSettings {
+            flex-shrink: 0;
+            border-left: 1px solid var(--gray-800);
         }
 
         .mode-btn {
@@ -262,7 +274,7 @@
 
         /* ── Backup modal ── */
         /* ── Settings view ── */
-        #settings-view { display:none; flex-direction:column; flex:1; min-width:0; overflow-x:hidden; overflow-y:auto; padding:24px; gap:16px; }
+        #settings-view { display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto; padding:24px; gap:16px; }
         .settings-card { background:#18181b; border:1px solid #3f3f46; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px; max-width:520px; }
         .settings-card-title { margin:0; font-size:.95rem; font-weight:600; color:#e4e4e7; }
         .settings-card-desc { margin:0; font-size:.8rem; color:#71717a; line-height:1.5; }
@@ -876,7 +888,7 @@
             #sidebarToggle     { display: flex; align-items: center; }
             #mobileMenuBtn     { display: flex; }
             #collapseBtn       { display: flex; }
-            #main              { height: 100vh; overflow-y: auto; }
+            #main              { height: 100vh; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
             #chart-area, #live-view { padding: 16px; }
             .sprofiler-header { margin-bottom: 10px; }
             .sprofiler-header h1 { font-size: 1.3rem; }
@@ -898,7 +910,7 @@
             .annotation-field.full-width { grid-column: 1; }
             .chart-container, .live-chart-container { height: 360px; }
             .live-stats        { grid-template-columns: repeat(3, 1fr); }
-            #mode-bar          { padding: 0 16px; }
+            #mode-bar          { padding: 0; }
             .mode-btn          { padding: 12px 14px; font-size: .8rem; }
             .score-num         { font-size: 1.5rem; }
         }
@@ -1034,13 +1046,15 @@
     <div id="mode-bar">
         <button id="mobileMenuBtn" onclick="openSidebar()">☰</button>
         <button id="expandSidebarBtn" onclick="toggleDesktopSidebar()" title="Sidebar aufklappen">›</button>
-        <button class="mode-btn active" id="btnShots" onclick="switchMode('shots')">Shots</button>
-        <button class="mode-btn" id="btnLive" onclick="switchMode('live')">
-            <span class="live-dot"></span>Live
-        </button>
-        <button class="mode-btn" id="btnAnalytics" onclick="switchMode('analytics')">Analytics</button>
-        <button class="mode-btn" id="btnDialin"    onclick="switchMode('dialin')">Einwählen</button>
-        <button class="mode-btn" id="btnLibrary"   onclick="switchMode('library')">Bibliothek</button>
+        <div id="mode-bar-scroll">
+            <button class="mode-btn active" id="btnShots" onclick="switchMode('shots')">Shots</button>
+            <button class="mode-btn" id="btnLive" onclick="switchMode('live')">
+                <span class="live-dot"></span>Live
+            </button>
+            <button class="mode-btn" id="btnAnalytics" onclick="switchMode('analytics')">Analytics</button>
+            <button class="mode-btn" id="btnDialin"    onclick="switchMode('dialin')">Einwählen</button>
+            <button class="mode-btn" id="btnLibrary"   onclick="switchMode('library')">Bibliothek</button>
+        </div>
         <button class="mode-btn" id="btnSettings"  onclick="switchMode('settings')">⚙</button>
     </div>
 
