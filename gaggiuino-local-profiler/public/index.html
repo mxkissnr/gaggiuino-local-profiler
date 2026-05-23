@@ -264,15 +264,17 @@
         }
 
         /* ── Backup modal ── */
-        #backupModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:200; align-items:center; justify-content:center; }
-        #backupModal.open { display:flex; }
-        .backup-box { background:#18181b; border:1px solid #3f3f46; border-radius:12px; padding:24px; width:320px; display:flex; flex-direction:column; gap:16px; }
-        .backup-box h3 { margin:0; font-size:.95rem; color:#e4e4e7; }
-        .backup-box p { margin:0; font-size:.8rem; color:#71717a; line-height:1.5; }
+        /* ── Settings view ── */
+        #settings-view { display:none; flex-direction:column; flex:1; min-width:0; overflow-x:hidden; overflow-y:auto; padding:24px; gap:16px; }
+        .settings-card { background:#18181b; border:1px solid #3f3f46; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px; max-width:520px; }
+        .settings-card-title { margin:0; font-size:.95rem; font-weight:600; color:#e4e4e7; }
+        .settings-card-desc { margin:0; font-size:.8rem; color:#71717a; line-height:1.5; }
+        .settings-lang-group { display:flex; gap:8px; flex-wrap:wrap; }
+        .lang-option-btn { background:#27272a; border:1px solid #3f3f46; color:#a1a1aa; padding:8px 18px; border-radius:8px; cursor:pointer; font-size:.85rem; font-family:'Figtree',sans-serif; font-weight:600; transition:all .15s; }
+        .lang-option-btn:hover { background:#3f3f46; color:#e4e4e7; }
+        .lang-option-btn.active { border-color:#ef4444; color:#fff; }
         .backup-btn { background:#27272a; border:1px solid #3f3f46; color:#e4e4e7; padding:10px 14px; border-radius:8px; cursor:pointer; font-size:.85rem; font-family:'Figtree',sans-serif; text-align:left; transition:background .15s; text-decoration:none; display:block; }
         .backup-btn:hover { background:#3f3f46; }
-        .backup-btn.danger:hover { background:rgba(239,68,68,.15); border-color:#ef4444; color:#ef4444; }
-        .backup-close { background:none; border:none; color:#52525b; font-size:.8rem; cursor:pointer; font-family:'Figtree',sans-serif; align-self:flex-end; }
 
         /* ── Degassing tracker ── */
         .degassing-bar-wrap { margin-top:6px; }
@@ -295,15 +297,6 @@
         .dialin-empty { color:#52525b; font-size:.85rem; text-align:center; padding:40px 0; }
         .dialin-header { display:flex; justify-content:space-between; align-items:center; }
         .dialin-count-select { background:#18181b; border:1px solid #3f3f46; color:#71717a; font-size:.75rem; padding:3px 6px; border-radius:6px; font-family:'Figtree',sans-serif; cursor:pointer; outline:none; }
-
-        /* ── Language switcher ── */
-        .lang-select {
-            background: #18181b; border: 1px solid #3f3f46; color: #71717a;
-            font-size: .7rem; font-weight: 600; padding: 2px 5px; border-radius: 4px;
-            font-family: 'Figtree', sans-serif; letter-spacing: .04em;
-            cursor: pointer; outline: none; appearance: none; -webkit-appearance: none;
-        }
-        .lang-select:focus { border-color: #52525b; color: #a1a1aa; }
 
         /* ── Shots view ── */
         #shots-view {
@@ -954,16 +947,6 @@
         </div>
         <div class="footer-row">
             <span id="glpVersionBadge" style="color:#3f3f46;font-size:.7rem;user-select:none"></span>
-            <div style="display:flex;gap:6px;align-items:center">
-                <button onclick="document.getElementById('backupModal').classList.add('open')" style="background:none;border:none;color:#3f3f46;font-size:.85rem;cursor:pointer;padding:2px 4px;" title="Backup / Restore">⚙</button>
-                <select id="langSelect" class="lang-select" onchange="setLang(this.value)">
-                    <option value="de">DE</option>
-                    <option value="en">EN</option>
-                    <option value="it">IT</option>
-                    <option value="fr">FR</option>
-                    <option value="es">ES</option>
-                </select>
-            </div>
         </div>
     </div>
 </div>
@@ -984,6 +967,7 @@
         <button class="mode-btn" id="btnAnalytics" onclick="switchMode('analytics')">Analytics</button>
         <button class="mode-btn" id="btnDialin"    onclick="switchMode('dialin')">Einwählen</button>
         <button class="mode-btn" id="btnLibrary"   onclick="switchMode('library')">Bibliothek</button>
+        <button class="mode-btn" id="btnSettings"  onclick="switchMode('settings')">⚙</button>
     </div>
 
     <!-- Shots view -->
@@ -1325,25 +1309,30 @@
         <div id="dialinGrid" class="dialin-grid"></div>
     </div>
 
-</div><!-- #main -->
-
-<!-- Backup / Restore Modal -->
-<div id="backupModal">
-    <div class="backup-box">
-        <h3 data-i18n="backup_title">Backup & Restore</h3>
-        <div>
-            <p data-i18n="backup_desc">Alle Shots, Notizen und die Kaffee-Bibliothek als JSON-Datei sichern oder wiederherstellen.</p>
+    <!-- Settings view -->
+    <div id="settings-view">
+        <div class="settings-card">
+            <h3 class="settings-card-title" data-i18n="settings_language">Sprache</h3>
+            <div class="settings-lang-group">
+                <button class="lang-option-btn" data-lang="de" onclick="setLang('de')">Deutsch</button>
+                <button class="lang-option-btn" data-lang="en" onclick="setLang('en')">English</button>
+                <button class="lang-option-btn" data-lang="it" onclick="setLang('it')">Italiano</button>
+                <button class="lang-option-btn" data-lang="fr" onclick="setLang('fr')">Français</button>
+                <button class="lang-option-btn" data-lang="es" onclick="setLang('es')">Español</button>
+            </div>
         </div>
-        <a id="backupDownloadBtn" href="api/backup" class="backup-btn" data-i18n="backup_download">Backup herunterladen</a>
-        <div>
+        <div class="settings-card">
+            <h3 class="settings-card-title" data-i18n="backup_title">Backup & Restore</h3>
+            <p class="settings-card-desc" data-i18n="backup_desc">Alle Shots, Notizen und die Kaffee-Bibliothek als JSON-Datei sichern oder wiederherstellen.</p>
+            <a id="backupDownloadBtn" href="api/backup" class="backup-btn" data-i18n="backup_download">Backup herunterladen</a>
             <label class="backup-btn" style="cursor:pointer" data-i18n="backup_restore">
                 Aus Backup wiederherstellen …
                 <input type="file" accept=".json" style="display:none" onchange="restoreFromFile(this)">
             </label>
         </div>
-        <button class="backup-close" onclick="document.getElementById('backupModal').classList.remove('open')" data-i18n="backup_close">Schließen</button>
     </div>
-</div>
+
+</div><!-- /main -->
 
 <script>
 // ── i18n ──────────────────────────────────────────────────────────────────
@@ -1414,6 +1403,7 @@ const TRANSLATIONS = {
     grind_long_slight:(s)=>`Bezug etwas lang (${s} s) – leicht gröber mahlen`,
     grind_channeling_full:'Channeling erkannt – Puck-Vorbereitung (Verteilung & Tamping) prüfen',
     compare_hint:'Shot für Vergleich wählen',
+    nav_settings:'⚙', settings_language:'Sprache',
     nav_dialin:'Einwählen', dialin_title:'Einwählen',
     dialin_empty:'Noch keine Shots für die Einwähl-Ansicht.',
     dialin_pressure:'Druck', dialin_duration:'Dauer', dialin_dose:'Dosis', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1494,6 +1484,7 @@ const TRANSLATIONS = {
     grind_long_slight:(s)=>`Shot slightly long (${s} s) — grind slightly coarser`,
     grind_channeling_full:'Channeling detected — check puck prep (distribution & tamping)',
     compare_hint:'Select shot for comparison',
+    nav_settings:'⚙', settings_language:'Language',
     nav_dialin:'Dial-In', dialin_title:'Dial-In',
     dialin_empty:'No shots yet for dial-in view.',
     dialin_pressure:'Pressure', dialin_duration:'Duration', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1574,6 +1565,7 @@ const TRANSLATIONS = {
     grind_long_slight:(s)=>`Shot leggermente lungo (${s} s) — macinare leggermente più grosso`,
     grind_channeling_full:'Channeling rilevato — controllare preparazione puck',
     compare_hint:'Seleziona shot per confronto',
+    nav_settings:'⚙', settings_language:'Lingua',
     nav_dialin:'Calibrazione', dialin_title:'Calibrazione',
     dialin_empty:'Nessun shot per la vista di calibrazione.',
     dialin_pressure:'Pressione', dialin_duration:'Durata', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1654,6 +1646,7 @@ const TRANSLATIONS = {
     grind_long_slight:(s)=>`Shot légèrement long (${s} s) — moudre légèrement plus grossier`,
     grind_channeling_full:'Channeling détecté — vérifier la préparation du puck',
     compare_hint:'Sélectionner un shot pour comparaison',
+    nav_settings:'⚙', settings_language:'Langue',
     nav_dialin:'Réglage', dialin_title:'Réglage',
     dialin_empty:'Aucun shot pour la vue de réglage.',
     dialin_pressure:'Pression', dialin_duration:'Durée', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1734,6 +1727,7 @@ const TRANSLATIONS = {
     grind_long_slight:(s)=>`Shot ligeramente largo (${s} s) — moler ligeramente más grueso`,
     grind_channeling_full:'Channeling detectado — revisar preparación del puck',
     compare_hint:'Seleccionar shot para comparación',
+    nav_settings:'⚙', settings_language:'Idioma',
     nav_dialin:'Calibración', dialin_title:'Calibración',
     dialin_empty:'No hay shots para la vista de calibración.',
     dialin_pressure:'Presión', dialin_duration:'Duración', dialin_dose:'Dosis', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1774,7 +1768,7 @@ function setLang(lang) {
 function applyTranslations() {
     // Elements with IDs
     const idMap = {
-        btnShots: 'nav_shots', btnAnalytics: 'nav_analytics', btnLibrary: 'nav_library', btnDialin: 'nav_dialin',
+        btnShots: 'nav_shots', btnAnalytics: 'nav_analytics', btnLibrary: 'nav_library', btnDialin: 'nav_dialin', btnSettings: 'nav_settings',
         sortNewest: 'sort_newest', sortScore: 'sort_score', sortRating: 'sort_rating', sortDur: 'sort_duration',
         syncBtn: 'btn_sync',
     };
@@ -1799,8 +1793,10 @@ function applyTranslations() {
         if (allNoSync.includes(stEl.textContent)) stEl.textContent = t('no_sync');
     }
     // Language dropdown — sync selected value
-    const langSel = document.getElementById('langSelect');
-    if (langSel) langSel.value = currentLang;
+    // Active language button in settings view
+    document.querySelectorAll('.lang-option-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.lang === currentLang);
+    });
     // data-i18n elements
     document.querySelectorAll('[data-i18n]').forEach(el => {
         el.textContent = t(el.dataset.i18n);
@@ -1935,11 +1931,13 @@ function switchMode(mode) {
     document.getElementById('btnAnalytics').classList.toggle('active', mode === 'analytics');
     document.getElementById('btnDialin').classList.toggle('active',    mode === 'dialin');
     document.getElementById('btnLibrary').classList.toggle('active',   mode === 'library');
+    document.getElementById('btnSettings').classList.toggle('active',  mode === 'settings');
     document.getElementById('shots-view').style.display     = mode === 'shots'     ? 'flex' : 'none';
     document.getElementById('live-view').style.display      = mode === 'live'      ? 'flex' : 'none';
     document.getElementById('analytics-view').style.display = mode === 'analytics' ? 'flex' : 'none';
     document.getElementById('dialin-view').style.display    = mode === 'dialin'    ? 'flex' : 'none';
     document.getElementById('library-view').style.display   = mode === 'library'   ? 'flex' : 'none';
+    document.getElementById('settings-view').style.display  = mode === 'settings'  ? 'flex' : 'none';
 
     if (mode === 'live') {
         initLiveChart();
@@ -3757,7 +3755,6 @@ async function restoreFromFile(input) {
         });
         const res = await r.json();
         if (res.ok) {
-            document.getElementById('backupModal').classList.remove('open');
             await loadData();
             alert(t('backup_restored', res.shots));
         } else {
