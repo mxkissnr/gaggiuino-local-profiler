@@ -259,10 +259,13 @@
         }
 
         /* ── Language switcher ── */
-        .lang-switcher { display: flex; gap: 3px; }
-        .lang-btn { background: none; border: none; color: #3f3f46; font-size: .65rem; font-weight: 600; padding: 2px 5px; cursor: pointer; border-radius: 4px; font-family: 'Figtree', sans-serif; letter-spacing: .04em; transition: color .15s; }
-        .lang-btn:hover { color: #71717a; }
-        .lang-btn.active { color: #a1a1aa; }
+        .lang-select {
+            background: #18181b; border: 1px solid #3f3f46; color: #71717a;
+            font-size: .7rem; font-weight: 600; padding: 2px 5px; border-radius: 4px;
+            font-family: 'Figtree', sans-serif; letter-spacing: .04em;
+            cursor: pointer; outline: none; appearance: none; -webkit-appearance: none;
+        }
+        .lang-select:focus { border-color: #52525b; color: #a1a1aa; }
 
         /* ── Shots view ── */
         #shots-view {
@@ -906,13 +909,13 @@
             <span id="syncTime">kein Sync</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-            <div class="lang-switcher">
-                <button class="lang-btn active" data-lang="de" onclick="setLang('de')">DE</button>
-                <button class="lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
-                <button class="lang-btn" data-lang="it" onclick="setLang('it')">IT</button>
-                <button class="lang-btn" data-lang="fr" onclick="setLang('fr')">FR</button>
-                <button class="lang-btn" data-lang="es" onclick="setLang('es')">ES</button>
-            </div>
+            <select id="langSelect" class="lang-select" onchange="setLang(this.value)">
+                <option value="de">DE</option>
+                <option value="en">EN</option>
+                <option value="it">IT</option>
+                <option value="fr">FR</option>
+                <option value="es">ES</option>
+            </select>
             <span id="glpVersionBadge" style="color:#3f3f46;font-size:.7rem;user-select:none"></span>
             <button id="powerBtn" onclick="toggleMachinePower()" style="display:none" title="">⏻</button>
             <button id="syncBtn" onclick="triggerSync()">↻ Sync</button>
@@ -1638,10 +1641,9 @@ function applyTranslations() {
         const allNoSync = Object.values(TRANSLATIONS).map(tr => tr.no_sync);
         if (allNoSync.includes(stEl.textContent)) stEl.textContent = t('no_sync');
     }
-    // Language switcher highlight
-    document.querySelectorAll('.lang-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.lang === currentLang);
-    });
+    // Language dropdown — sync selected value
+    const langSel = document.getElementById('langSelect');
+    if (langSel) langSel.value = currentLang;
     // data-i18n elements
     document.querySelectorAll('[data-i18n]').forEach(el => {
         el.textContent = t(el.dataset.i18n);
@@ -1664,11 +1666,13 @@ let currentMode   = 'shots';
 let trashOpen     = false;
 
 // Live state
-let livePollInterval = null;
-let liveChart        = null;
-let liveIsActive     = false;
-let liveLastSeq      = -1;
-let liveWasLive      = false;
+let livePollInterval  = null;
+let liveChart         = null;
+let liveIsActive      = false;
+let liveLastSeq       = -1;
+let liveWasLive       = false;
+let liveBrewStartWall = null;  // wall-clock ms at brew start, for smooth timer
+let liveTimerTick     = null;  // 100ms interval that updates liveTime display
 
 // Chart / P·Q state
 let pqChart        = null;
@@ -2182,7 +2186,9 @@ async function fetchLiveData() {
 
 function disconnectLiveStream() {
     if (livePollInterval) { clearInterval(livePollInterval); livePollInterval = null; }
+    if (liveTimerTick)    { clearInterval(liveTimerTick);    liveTimerTick = null; }
     if (liveChart)        { liveChart.destroy(); liveChart = null; }
+    liveBrewStartWall = null;
 }
 
 function setLiveBadge(state, detail = '') {
@@ -2243,7 +2249,24 @@ function handleLiveData(msg) {
                        ? (dp.shotWeight || dp.weight)[lastIdx] / 10 : null;
         const temp     = dp.temperature?.[lastIdx]  != null ? dp.temperature[lastIdx] / 10 : null;
 
-        document.getElementById('liveTime').textContent     = formatTimeLabel(elapsed);
+        if (msg.isLive) {
+            // Re-sync wall clock with machine time on every poll so timer stays accurate
+            liveBrewStartWall = Date.now() - elapsed * 1000;
+            if (!liveTimerTick) {
+                liveTimerTick = setInterval(() => {
+                    if (liveBrewStartWall) {
+                        const s = (Date.now() - liveBrewStartWall) / 1000;
+                        document.getElementById('liveTime').textContent = formatTimeLabel(s);
+                    }
+                }, 100);
+            }
+        } else {
+            // Brew ended — stop smooth timer, freeze on final machine value
+            if (liveTimerTick) { clearInterval(liveTimerTick); liveTimerTick = null; }
+            liveBrewStartWall = null;
+            document.getElementById('liveTime').textContent = formatTimeLabel(elapsed);
+        }
+
         document.getElementById('livePressure').textContent = pressure != null ? pressure.toFixed(1) : '–';
         document.getElementById('liveFlow').textContent     = flow     != null ? flow.toFixed(1)     : '–';
         document.getElementById('liveWeight').textContent   = weight   != null ? weight.toFixed(1)   : '–';
