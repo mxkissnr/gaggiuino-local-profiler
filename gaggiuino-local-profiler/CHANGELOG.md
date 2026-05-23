@@ -1,3 +1,10 @@
+## 1.21.0
+- Feature: Analytics tab — new dedicated view with 4 sections
+- Analytics: Score-Trend chart with 5-shot moving average (filter: last 30 / 90 / all shots)
+- Analytics: Shot calendar — GitHub-style heatmap showing shot activity over the last 52 weeks
+- Analytics: Bohnen-Auswertung — stats per bean (shot count, avg score, best score, avg duration)
+- Analytics: Profil-Performance — horizontal bar chart with avg score per profile
+
 ## 1.20.1
 - Fix: expand button (›) and mode tabs stay visible when scrolling with sidebar collapsed — mode-bar uses `position: sticky`
 

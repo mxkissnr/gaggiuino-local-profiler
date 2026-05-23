@@ -11,6 +11,7 @@ Local shot profiling dashboard for [Gaggiuino](https://gaggiuino.github.io/)-bas
 - **Annotations & Rating** – coffee/bean, grinder, grind setting, dose, roast date, TDS %, free text; 1–5 star rating
 - **Coffee Library** – persistent bean and grinder database with autocomplete in annotation fields; roast date auto-fills on selection
 - **Shot Score** – automatic 0–100 score based on pressure, temperature stability, duration, ratio and channeling; shown as colored pill in the sidebar
+- **Analytics** – dedicated tab with score trend chart, shot calendar heatmap, bean stats and profile performance
 - **Sidebar Sorting** – sort by newest / score / rating / duration; click again to reverse
 - **Analysis Metrics** – dose → yield → ratio, EY (Extraction Yield), temperature stability (±σ), phase detection, channeling warning
 - **P·Q Diagram** – pressure vs. flow chart (extraction signature), alternate chart tab
@@ -151,6 +152,32 @@ Each shot automatically receives a score from 0–100, shown in the top right of
 > **Ratio note:** This factor is only included when a dose is entered under Annotations. Without dose, the remaining weights are scaled proportionally.
 
 > **Pressure note:** The average is calculated only over values ≥ 5 bar to avoid penalizing the pre-infusion phase.
+
+## Analytics
+
+The **Analytics** tab provides four overview sections based on all stored shots:
+
+### Score Trend
+
+Line chart of shot scores over time, with a 5-shot moving average overlay. Use the filter buttons to show the last 30, 90, or all shots.
+
+### Shot Calendar
+
+GitHub-style activity heatmap for the past 52 weeks. Each cell represents one day — darker red means more shots. Hover a cell to see the date, shot count and average score.
+
+### Bohnen-Auswertung (Bean Stats)
+
+Cards grouped by coffee bean (from annotations). Each card shows:
+- Total shot count
+- Average score
+- Best score
+- Average duration
+
+Only shots with a coffee name in the annotation are included.
+
+### Profil-Performance
+
+Horizontal bar chart showing the average score per extraction profile, sorted from best to worst. Bar color follows the score color scale (green → red). Hover a bar to see the total shot count for that profile.
 
 ## Coffee Library
 
