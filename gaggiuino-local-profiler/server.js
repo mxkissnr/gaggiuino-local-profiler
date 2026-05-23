@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.25.1';
+const GLP_VERSION   = '1.25.2';
 const PORT          = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -33,6 +33,7 @@ let cachedMachineVersion = null; // firmware version from controller, fetched on
 let livePollTimer  = null;
 let liveAccum      = null; // shot data accumulator during brew
 let isPollRunning  = false;
+let machineOn      = true; // optimistic default; updated by checkAndApplyMachinePower()
 
 function log(message, isError = false) {
     const now = new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });
@@ -497,6 +498,27 @@ function stopLivePolling() {
     log('⏹ Live-Polling gestoppt');
 }
 
+async function checkAndApplyMachinePower() {
+    const opts   = loadOptions();
+    const entity = opts.switch_entity;
+    if (!entity || !HA_TOKEN) {
+        if (!livePollTimer) startLivePolling();
+        return;
+    }
+    const isOn = await getSwitchState(entity);
+    if (isOn === null) return; // HA unreachable — keep current state
+    if (isOn === machineOn) return; // no change
+    machineOn = isOn;
+    if (isOn) {
+        log('🔌 Maschine eingeschaltet — Live-Polling und Sync fortgesetzt');
+        startLivePolling();
+        setTimeout(syncShots, 2000); // give machine time to boot
+    } else {
+        log('🔌 Maschine ausgeschaltet — Live-Polling und Sync pausiert');
+        stopLivePolling();
+    }
+}
+
 // ── Live polling: direct machine status API ───────────────────────────────
 
 async function pollLive() {
@@ -572,6 +594,7 @@ async function pollViaGaggiuinoStatus() {
 
 async function backgroundHaCheck() {
     if (!HA_TOKEN) return;
+    await checkAndApplyMachinePower();
     try {
         const headers = { Authorization: `Bearer ${HA_TOKEN}` };
         const res     = await axios.get(
@@ -622,6 +645,7 @@ async function syncAfterBrew() {
 
 async function syncShots() {
     const opts       = loadOptions();
+    if (!machineOn && opts.switch_entity) return; // machine off — skip sync
     const machineUrl = getMachineUrl(opts);
     try {
         const latestResponse  = await axios.get(`${machineUrl}/latest`, { timeout: 10000 });
@@ -683,6 +707,5 @@ app.listen(PORT, () => {
     purgeExpiredTrash();
     setInterval(purgeExpiredTrash, 24 * 60 * 60 * 1000); // daily
     fetchMachineVersion();
-    startLivePolling();
-    syncShots().then(scheduleNextSync);
+    checkAndApplyMachinePower().then(() => syncShots().then(scheduleNextSync));
 });

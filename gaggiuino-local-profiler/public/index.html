@@ -112,9 +112,6 @@
             border-top: 1px solid var(--gray-700);
             font-size: .75rem;
             color: #71717a;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
         }
         .footer-row {
             display: flex;
@@ -936,17 +933,15 @@
 
     <div id="sidebar-footer">
         <div class="footer-row">
-            <div>
+            <div style="display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden">
                 <span class="status-dot unknown" id="statusDot"></span>
-                <span id="syncTime">kein Sync</span>
+                <span id="syncTime" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">kein Sync</span>
+                <span id="glpVersionBadge" style="color:#52525b;font-size:.7rem;user-select:none;flex-shrink:0"></span>
             </div>
-            <div style="display:flex;gap:6px;align-items:center">
+            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
                 <button id="powerBtn" onclick="toggleMachinePower()" style="display:none" title="">⏻</button>
                 <button id="syncBtn" onclick="triggerSync()">↻ Sync</button>
             </div>
-        </div>
-        <div class="footer-row">
-            <span id="glpVersionBadge" style="color:#3f3f46;font-size:.7rem;user-select:none"></span>
         </div>
     </div>
 </div>
