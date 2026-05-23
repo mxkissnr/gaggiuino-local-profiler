@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.25.3';
+const GLP_VERSION   = '1.26.0';
 const PORT          = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -364,12 +364,12 @@ app.get('/api/library', (req, res) => {
 });
 
 app.post('/api/library/bean', (req, res) => {
-    const { name, roaster, roastDate, notes } = req.body;
+    const { name, roaster, roastDate, notes, stock_g } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
     const s   = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
     const lib  = loadLibrary();
-    const bean = { id: Date.now(), name: s(name, 200), roaster: s(roaster, 200), roastDate: s(roastDate, 10), notes: s(notes, 1000) };
+    const bean = { id: Date.now(), name: s(name, 200), roaster: s(roaster, 200), roastDate: s(roastDate, 10), notes: s(notes, 1000), stock_g: parseFloat(stock_g) || null };
     lib.beans.push(bean);
     saveLibrary(lib);
     res.json(bean);
@@ -381,11 +381,12 @@ app.put('/api/library/bean/:id', (req, res) => {
     const idx = lib.beans.findIndex(b => b.id === id);
     if (idx === -1) return res.status(404).json({ error: 'not found' });
     const s = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : undefined;
-    const { name, roaster, roastDate, notes } = req.body;
+    const { name, roaster, roastDate, notes, stock_g } = req.body;
     if (name !== undefined)      lib.beans[idx].name      = s(name, 200) || lib.beans[idx].name;
     if (roaster !== undefined)   lib.beans[idx].roaster   = s(roaster, 200);
     if (roastDate !== undefined) lib.beans[idx].roastDate = s(roastDate, 10);
     if (notes !== undefined)     lib.beans[idx].notes     = s(notes, 1000);
+    if (stock_g !== undefined)   lib.beans[idx].stock_g   = parseFloat(stock_g) || null;
     saveLibrary(lib);
     res.json(lib.beans[idx]);
 });
@@ -676,6 +677,7 @@ async function syncShots() {
                 log(`⚠️ Shot ${i} hat ungültige Daten – übersprungen`, true);
                 continue;
             }
+            if (cachedMachineVersion) r.data.glpFirmwareVersion = cachedMachineVersion;
             localShots.push(r.data);
         }
 

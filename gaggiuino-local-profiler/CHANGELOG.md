@@ -1,3 +1,9 @@
+## 1.26.0
+- Feature: Quick-Clone — "↩ Letzten" button in annotation panel copies bean, grinder, grind setting, dose and roast date from the previous shot; closes #21
+- Feature: Keyboard shortcuts — ← / → arrow keys navigate between shots when no input is focused; closes #23
+- Feature: Firmware version per shot — new shots are tagged with the controller firmware version at sync time and shown in the shot header; closes #35
+- Feature: Bohnen-Inventar — optional "Vorrat (g)" field per bean in the library; shows consumed grams (from dose annotations), remaining stock, and a reorder badge when < 100 g left; closes #29
+
 ## 1.25.3
 - Polish: "Einwählen" tab renamed to "Bezugslog" (DE) — better German
 

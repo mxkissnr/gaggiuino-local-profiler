@@ -402,6 +402,10 @@
         .lib-item-name { font-size: .85rem; color: #e4e4e7; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-sub  { font-size: .75rem; color: #71717a; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+        .lib-inv-stats { font-size: .7rem; color: #52525b; margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .lib-inv-remaining { color: #71717a; }
+        .lib-inv-remaining.low { color: #ef4444; }
+        .lib-inv-reorder { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); color: #ef4444; border-radius: 4px; padding: 1px 5px; font-size: .65rem; font-weight: 600; }
         .lib-btn-sm { background: none; border: 1px solid #3f3f46; border-radius: 5px; color: #a1a1aa; font-size: .7rem; padding: 3px 7px; cursor: pointer; }
         .lib-btn-sm:hover { border-color: #71717a; color: #e4e4e7; }
         .lib-btn-sm.del:hover { border-color: #ef4444; color: #ef4444; }
@@ -978,7 +982,7 @@
             <div class="sprofiler-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
                 <div style="flex:1;min-width:0">
                     <h1 id="topTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Profil-Name</h1>
-                    <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="freshness-badge" style="display:none"></span></p>
+                    <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="freshness-badge" style="display:none"></span><span id="firmwareVersionBadge" style="display:none;font-size:.7rem;color:#52525b;margin-left:6px"></span></p>
                     <div id="phaseSubtitle" style="display:none;margin-top:4px"></div>
                 </div>
                 <div style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
@@ -1083,8 +1087,9 @@
             <!-- Annotation panel BELOW chart -->
             <div class="annotation-panel" id="annotationPanel">
                 <div class="annotation-header">
-                    <div style="display:flex;align-items:center;gap:10px">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                         <span class="annotation-title" data-i18n="ann_title">Notizen & Bewertung</span>
+                        <button class="lib-open-btn" onclick="quickClone()" data-i18n="ann_clone_btn" title="">↩ Letzten</button>
                         <button class="lib-open-btn" onclick="openLibraryModal()" data-i18n="ann_library_btn">☕ Bibliothek</button>
                     </div>
                     <div class="star-rating" id="starRating">
@@ -1167,6 +1172,10 @@
                             <div class="lib-form-field">
                                 <label data-i18n="lib_bean_notes">Notizen</label>
                                 <input type="text" id="beanFormNotes" placeholder="Blaubeere, Jasmin …">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_bean_stock">Vorrat (g)</label>
+                                <input type="number" id="beanFormStock" data-i18n-placeholder="lib_bean_stock_ph" placeholder="z.B. 500" step="1" min="0">
                             </div>
                         </div>
                         <div class="lib-form-actions">
@@ -1399,6 +1408,9 @@ const TRANSLATIONS = {
     grind_channeling_full:'Channeling erkannt – Puck-Vorbereitung (Verteilung & Tamping) prüfen',
     compare_hint:'Shot für Vergleich wählen',
     nav_settings:'⚙', settings_language:'Sprache',
+    ann_clone_btn:'↩ Letzten',
+    lib_bean_stock:'Vorrat (g)', lib_bean_stock_ph:'z.B. 500',
+    lib_inv_consumed:(n)=>`${n} g verbraucht`, lib_inv_remaining:(n)=>`${n} g übrig`, lib_inv_reorder:'Nachbestellen',
     nav_dialin:'Bezugslog', dialin_title:'Bezugslog',
     dialin_empty:'Noch keine Shots für die Einwähl-Ansicht.',
     dialin_pressure:'Druck', dialin_duration:'Dauer', dialin_dose:'Dosis', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1480,6 +1492,9 @@ const TRANSLATIONS = {
     grind_channeling_full:'Channeling detected — check puck prep (distribution & tamping)',
     compare_hint:'Select shot for comparison',
     nav_settings:'⚙', settings_language:'Language',
+    ann_clone_btn:'↩ Clone last',
+    lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'e.g. 500',
+    lib_inv_consumed:(n)=>`${n} g used`, lib_inv_remaining:(n)=>`${n} g remaining`, lib_inv_reorder:'Reorder',
     nav_dialin:'Dial-In', dialin_title:'Dial-In',
     dialin_empty:'No shots yet for dial-in view.',
     dialin_pressure:'Pressure', dialin_duration:'Duration', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1561,6 +1576,9 @@ const TRANSLATIONS = {
     grind_channeling_full:'Channeling rilevato — controllare preparazione puck',
     compare_hint:'Seleziona shot per confronto',
     nav_settings:'⚙', settings_language:'Lingua',
+    ann_clone_btn:'↩ Clona',
+    lib_bean_stock:'Scorta (g)', lib_bean_stock_ph:'es. 500',
+    lib_inv_consumed:(n)=>`${n} g usati`, lib_inv_remaining:(n)=>`${n} g rimanenti`, lib_inv_reorder:'Riordinare',
     nav_dialin:'Calibrazione', dialin_title:'Calibrazione',
     dialin_empty:'Nessun shot per la vista di calibrazione.',
     dialin_pressure:'Pressione', dialin_duration:'Durata', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1642,6 +1660,9 @@ const TRANSLATIONS = {
     grind_channeling_full:'Channeling détecté — vérifier la préparation du puck',
     compare_hint:'Sélectionner un shot pour comparaison',
     nav_settings:'⚙', settings_language:'Langue',
+    ann_clone_btn:'↩ Cloner',
+    lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'ex. 500',
+    lib_inv_consumed:(n)=>`${n} g utilisés`, lib_inv_remaining:(n)=>`${n} g restants`, lib_inv_reorder:'Réapprovisionner',
     nav_dialin:'Réglage', dialin_title:'Réglage',
     dialin_empty:'Aucun shot pour la vue de réglage.',
     dialin_pressure:'Pression', dialin_duration:'Durée', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1723,6 +1744,9 @@ const TRANSLATIONS = {
     grind_channeling_full:'Channeling detectado — revisar preparación del puck',
     compare_hint:'Seleccionar shot para comparación',
     nav_settings:'⚙', settings_language:'Idioma',
+    ann_clone_btn:'↩ Clonar',
+    lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'ej. 500',
+    lib_inv_consumed:(n)=>`${n} g usados`, lib_inv_remaining:(n)=>`${n} g restantes`, lib_inv_reorder:'Repedir',
     nav_dialin:'Calibración', dialin_title:'Calibración',
     dialin_empty:'No hay shots para la vista de calibración.',
     dialin_pressure:'Presión', dialin_duration:'Duración', dialin_dose:'Dosis', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -2143,6 +2167,20 @@ function renderAnnotationPanel(shot) {
     const btn = document.getElementById('saveAnnotationBtn');
     btn.textContent = t('btn_save');
     btn.classList.remove('saved');
+}
+
+function quickClone() {
+    if (!primaryShotId) return;
+    const prev = shots.filter(s => s.id < primaryShotId).sort((a, b) => b.id - a.id)[0];
+    if (!prev) return;
+    const ann = prev.annotation || {};
+    document.getElementById('annCoffee').value       = ann.coffee       || '';
+    document.getElementById('annGrinder').value      = ann.grinder      || '';
+    document.getElementById('annGrindSetting').value = ann.grindSetting || '';
+    document.getElementById('annDose').value         = ann.dose         || '';
+    const rd = isoToGerman(ann.roastDate || '');
+    document.getElementById('annRoastDate').value = rd;
+    if (rd) updateDegassing(rd);
 }
 
 async function saveAnnotation() {
@@ -2574,6 +2612,14 @@ function updateView() {
             freshEl.style.display = '';
         } else { freshEl.style.display = 'none'; }
     } else { freshEl.style.display = 'none'; }
+
+    // Firmware version badge
+    const fwEl = document.getElementById('firmwareVersionBadge');
+    if (fwEl) {
+        const fw = !shotB && shotA.glpFirmwareVersion;
+        fwEl.textContent = fw ? `· fw ${fw}` : '';
+        fwEl.style.display = fw ? '' : 'none';
+    }
 
     // Phases
     const phases     = !shotB ? detectPhases(pressureTimes, pressureVals) : null;
@@ -3146,6 +3192,28 @@ function filterShots(query) {
     });
 }
 
+// ── Keyboard shortcuts ────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    if (['input', 'textarea', 'select'].includes(tag)) return;
+    if (currentMode !== 'shots' || !shots.length) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const visible = [...document.querySelectorAll('#shots .shot-wrapper')]
+        .filter(w => w.style.display !== 'none')
+        .map(w => parseInt(w.id.replace('wrapper-', '')));
+    if (!visible.length) return;
+    const idx = visible.indexOf(primaryShotId);
+    const next = e.key === 'ArrowLeft'
+        ? (idx > 0 ? idx - 1 : visible.length - 1)
+        : (idx < visible.length - 1 ? idx + 1 : 0);
+    const id = visible[next];
+    primaryShotId = id; compareShotId = null;
+    updateSidebarHighlighting();
+    updateView();
+    document.getElementById(`wrapper-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+
 // ── CSV Export ────────────────────────────────────────────────────────────
 function shotToCSVRow(shot) {
     const d      = getShotData(shot);
@@ -3275,17 +3343,37 @@ function renderBeanList() {
         el.innerHTML = `<div class="lib-empty">${t('lib_empty_beans')}</div>`;
         return;
     }
-    el.innerHTML = coffeeLibrary.beans.map(b => `
-        <div class="lib-item">
+    el.innerHTML = coffeeLibrary.beans.map(b => {
+        const consumed = shots.reduce((sum, s) => {
+            const d = parseFloat(s.annotation?.dose);
+            const match = (s.annotation?.coffee || '').toLowerCase() === b.name.toLowerCase();
+            return (match && d) ? sum + d : sum;
+        }, 0);
+        const consumedRnd = Math.round(consumed);
+        let invHtml = '';
+        if (b.stock_g) {
+            const remaining = Math.round(b.stock_g - consumed);
+            const isLow = remaining < 100;
+            invHtml = `<div class="lib-inv-stats">
+                <span>${t('lib_inv_consumed', consumedRnd)}</span>
+                <span class="lib-inv-remaining${isLow ? ' low' : ''}">${t('lib_inv_remaining', remaining)}</span>
+                ${isLow ? `<span class="lib-inv-reorder">${t('lib_inv_reorder')}</span>` : ''}
+            </div>`;
+        } else if (consumedRnd > 0) {
+            invHtml = `<div class="lib-inv-stats"><span>${t('lib_inv_consumed', consumedRnd)}</span></div>`;
+        }
+        return `<div class="lib-item">
             <div class="lib-item-info">
                 <div class="lib-item-name">${esc(b.name)}</div>
                 <div class="lib-item-sub">${[b.roaster, b.roastDate, b.notes].filter(Boolean).map(esc).join(' · ')}</div>
+                ${invHtml}
             </div>
             <div class="lib-item-actions">
                 <button class="lib-btn-sm" onclick="editBean(${b.id})">${t('lib_btn_edit')}</button>
                 <button class="lib-btn-sm del" onclick="deleteBean(${b.id})">${t('lib_btn_delete')}</button>
             </div>
-        </div>`).join('');
+        </div>`;
+    }).join('');
 }
 
 function renderGrinderList() {
@@ -3313,6 +3401,7 @@ function openBeanForm(bean) {
     document.getElementById('beanFormRoaster').value   = bean?.roaster   || '';
     document.getElementById('beanFormRoastDate').value = bean?.roastDate || '';
     document.getElementById('beanFormNotes').value     = bean?.notes     || '';
+    document.getElementById('beanFormStock').value     = bean?.stock_g   || '';
     document.getElementById('beanAddForm').classList.add('open');
     document.getElementById('beanAddTrigger').style.display = 'none';
     document.getElementById('beanFormName').focus();
@@ -3334,8 +3423,9 @@ async function saveBean() {
     const roaster   = document.getElementById('beanFormRoaster').value.trim();
     const roastDate = document.getElementById('beanFormRoastDate').value.trim();
     const notes     = document.getElementById('beanFormNotes').value.trim();
+    const stock_g   = parseFloat(document.getElementById('beanFormStock').value) || null;
     if (!name) { document.getElementById('beanFormName').focus(); return; }
-    const body = JSON.stringify({ name, roaster, roastDate, notes });
+    const body = JSON.stringify({ name, roaster, roastDate, notes, stock_g });
     const url  = beanEditId ? `api/library/bean/${beanEditId}` : 'api/library/bean';
     const r    = await fetch(url, { method: beanEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
     if (!r.ok) return;
