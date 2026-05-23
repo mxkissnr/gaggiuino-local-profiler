@@ -9,6 +9,7 @@
   <img src="https://img.shields.io/badge/Home%20Assistant-Add--on-41bdf5?logo=home-assistant&style=flat-square" alt="HA Add-on"/>
   <img src="https://img.shields.io/badge/arch-amd64%20%7C%20armv7%20%7C%20aarch64-6b7280?style=flat-square" alt="Architectures"/>
   <img src="https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&style=flat-square" alt="Node.js"/>
+  <img src="https://img.shields.io/badge/Built%20with-Claude%20by%20Anthropic-D97706?style=flat-square" alt="Built with Claude"/>
 </p>
 
 <p align="center">
@@ -39,10 +40,12 @@ Click the button above to add this repository directly to your Home Assistant �
 | 🔄 | **Auto-Sync** | New shots load automatically when `gaggiuino_latest_shot_id` rises |
 | ⇄ | **Compare Mode** | Overlay two shots side by side |
 | 🏆 | **Shot Score** | Automatic 0–100 score (pressure, stability, duration, ratio, channeling) |
+| 📊 | **Analytics** | Score trend, shot calendar heatmap, bean stats, profile performance |
 | 📊 | **P·Q Diagram** | Pressure vs. flow chart — reveals extraction signature |
 | ⚗️ | **EY Calculation** | Extraction Yield % when TDS and dose are entered |
 | ☕ | **Grind Recommendation** | Automatic advice based on shot duration and channeling |
 | 📅 | **Roast Date & Freshness** | Days since roast as colored badge (green: 7–21 days optimal) |
+| ☕ | **Coffee Library** | Persistent bean and grinder database with autocomplete; roast date auto-fills |
 | 📝 | **Annotations & Rating** | Coffee, grinder, grind setting, dose, roast date, TDS, notes; 1–5 stars |
 | 🔍 | **Shot Search** | Filter sidebar by profile, coffee, grinder |
 | ⛶ | **Fullscreen Chart** | Expand chart to fullscreen with auto landscape rotation on mobile |
@@ -149,4 +152,8 @@ Home Assistant Host
   <a href="gaggiuino-local-profiler/DOCS.de.md">📖 Dokumentation (DE)</a> ·
   <a href="gaggiuino-local-profiler/CHANGELOG.md">📋 Changelog</a> ·
   <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/issues">🐛 Issues</a>
+</p>
+
+<p align="center">
+  <sub>Built with AI assistance — designed and developed together with <a href="https://claude.ai">Claude</a> by Anthropic</sub>
 </p>
