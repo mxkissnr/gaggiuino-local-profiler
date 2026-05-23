@@ -9,7 +9,9 @@ Lokales Shot-Profiling-Dashboard für [Gaggiuino](https://gaggiuino.github.io/)-
 - **Auto-Sync** – neuer Shot wird automatisch geladen sobald `gaggiuino_latest_shot_id` steigt
 - **Vergleichsmodus** – zwei Shots direkt nebeneinander vergleichen
 - **Notizen & Bewertung** – Kaffee/Bohne, Mühle, Mahlgrad, Dosis, Röstdatum, TDS %, Freitext; Sternebewertung 1–5
+- **Kaffee-Bibliothek** – persistente Datenbank für Bohnen (Name, Röster, Röstdatum, Notizen) und Mühlen mit Autocomplete in den Notizfeldern; Röstdatum wird beim Auswählen automatisch befüllt
 - **Shot-Score** – automatisch berechneter 0–100-Score aus Druck, Temperaturstabilität, Dauer, Ratio und Channeling; Score-Pill direkt in der Sidebar sichtbar
+- **Analytics** – eigener Tab mit Score-Trend-Chart, Shot-Kalender-Heatmap, Bohnen-Auswertung und Profil-Performance
 - **Sortierung** – Sidebar sortierbar nach Neueste / Score / Bewertung / Dauer; zweiter Klick kehrt Reihenfolge um
 - **Analyse-Metriken** – Dose → Yield → Ratio, EY (Extraction Yield), Temperatur-Stabilität (±σ), Phasen-Erkennung, Channeling-Warnung
 - **P·Q Diagramm** – Druck-Fluss-Kurve als alternative Chart-Ansicht (Extraktions-Signatur)
@@ -162,7 +164,49 @@ Der Trash-Button (🗑) in der Sidebar entfernt einen Shot und seine Annotation 
 
 **Praktische Nutzung:** Löschen eignet sich gut für Test-Bezüge, abgebrochene Shots oder das Bereinigen älterer Daten. Der allerneueste Shot (höchste ID) wird immer von der Maschine neu synchronisiert.
 
-> Eine zukünftige Version wird eine Blockliste einführen, damit gelöschte Shots dauerhaft vom Sync ausgeschlossen werden können.
+Gelöschte Shots werden automatisch in einer Blockliste gespeichert, sodass sie beim nächsten Sync nicht erneut heruntergeladen werden.
+
+## Kaffee-Bibliothek
+
+Der **☕ Bibliothek**-Button im Notizen-Panel öffnet die Bibliotheksverwaltung.
+
+### Bohnen
+
+Bohnen mit Name, Röster, Röstdatum und Notizen speichern. Gespeicherte Bohnen erscheinen als Autocomplete-Vorschläge im Feld **Kaffee / Bohne**. Wenn eine passende Bohne ausgewählt wird und das Röstdatum-Feld leer ist, wird es automatisch befüllt.
+
+### Mühlen
+
+Mühlennamen für die schnelle Auswahl im Feld **Mühle** speichern.
+
+### Speicherung
+
+Die Bibliothek wird unter `/data/coffee_library.json` gespeichert und bleibt bei Updates und Neustarts erhalten.
+
+## Analytics
+
+Der Tab **Analytics** bietet vier Übersichts-Sektionen über alle gespeicherten Shots:
+
+### Score-Trend
+
+Linienchart der Shot-Scores über die Zeit, mit einem gleitenden 5-Shot-Durchschnitt. Über die Filterbuttons lassen sich die letzten 30, 90 oder alle Shots anzeigen.
+
+### Shot-Kalender
+
+GitHub-artiger Aktivitäts-Heatmap für die letzten 52 Wochen. Jede Zelle steht für einen Tag — dunkleres Rot bedeutet mehr Shots. Hover über eine Zelle zeigt Datum, Anzahl Shots und Durchschnittsscore.
+
+### Bohnen-Auswertung
+
+Kacheln gruppiert nach Kaffee-Bohne (aus den Annotationen). Jede Kachel zeigt:
+- Gesamte Anzahl Shots
+- Durchschnittsscore
+- Bester Score
+- Durchschnittliche Bezugsdauer
+
+Nur Shots mit eingetragenem Kaffee-Namen werden berücksichtigt.
+
+### Profil-Performance
+
+Horizontales Balkendiagramm mit dem Durchschnittsscore je Extraktionsprofil, sortiert von bestem zu schlechtestem. Die Balkenfarbe folgt der Score-Farbskala (grün → rot). Hover über einen Balken zeigt die Gesamtanzahl Shots für dieses Profil.
 
 ## .shot-Export
 

@@ -227,7 +227,7 @@ The trash button (🗑) in the sidebar removes a shot and its annotations from t
 
 **Practical use:** Deleting works well for test shots, aborted pulls, or cleaning up older data. The very last shot (highest ID) will always be re-synced from the machine.
 
-> A future version will introduce a blocklist so that deleted shots are permanently excluded from syncing.
+Deleted shots are automatically added to a blocklist so they are never re-downloaded on the next sync.
 
 ## API Endpoints (internal)
 
