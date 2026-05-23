@@ -5,8 +5,8 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.26.1';
-const PORT          = 8099;
+const GLP_VERSION   = '1.27.0';
+const DEFAULT_PORT  = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
 const ANNOTATIONS_FILE = '/data/annotations.json';
@@ -700,6 +700,8 @@ function scheduleNextSync() {
     }, getSyncIntervalMs(opts));
 }
 
+const opts0 = loadOptions();
+const PORT = opts0.port || DEFAULT_PORT;
 app.listen(PORT, () => {
     log(`🚀 Gaggiuino Local Profiler v${GLP_VERSION} gestartet auf Port ${PORT}`);
     const opts = loadOptions();

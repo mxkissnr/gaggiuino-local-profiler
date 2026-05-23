@@ -26,5 +26,6 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | `machine_url` | API-URL des Gaggiuino-Controllers | `http://gaggia.intern/api/shots` |
 | `sync_interval` | Automatischer Sync-Intervall in Minuten (1–60) | `5` |
 | `switch_entity` | HA-Switch-Entität zum Ein-/Ausschalten der Maschine | *(leer)* |
+| `port` | Port, auf dem der Server lauscht (1024–65535) | `8099` |
 
 Vollständige Dokumentation — Features, Live-Modus, Analytics, Shot-Score, Exporte, Kompatibilität — im [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).
