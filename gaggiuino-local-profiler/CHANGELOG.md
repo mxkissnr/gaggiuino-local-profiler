@@ -1,3 +1,6 @@
+## 1.20.1
+- Fix: expand button (›) and mode tabs stay visible when scrolling with sidebar collapsed — mode-bar uses `position: sticky`
+
 ## 1.20.0
 - Feature: Coffee Library — save beans (name, roaster, roast date, notes) and grinders in a persistent library (`/data/coffee_library.json`)
 - Annotation panel: coffee and grinder fields now have browser autocomplete from library entries
