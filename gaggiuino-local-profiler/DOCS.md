@@ -35,6 +35,31 @@ Verify connectivity from the HA terminal:
 curl http://<gaggiuino-ip>/api/shots/latest
 ```
 
+## Compatibility
+
+### Software (Gaggiuino firmware)
+
+GLP requires the **Gaggiuino web interface firmware** (GCP — Gaggiuino Control Panel) which exposes an HTTP REST API. The legacy serial/USB-only firmware is not supported.
+
+| Endpoint used | Purpose |
+|---|---|
+| `GET /api/shots` / `GET /api/shots/latest` | Shot archive sync |
+| `GET /api/system/status` | Live mode (brew state, pressure, temp, weight) |
+| `GET /api/system/info` | Firmware version display (optional, silently ignored if absent) |
+
+The add-on handles multiple firmware naming variants for brew state detection: `brewSwitchState`, `brewActive`, and `isBrewing`.
+
+> **Tested with:** Gaggiuino GCP firmware (ESP32-based). Older builds that expose the same API surface should work. If an endpoint is missing, GLP degrades gracefully (live mode or version display may be unavailable).
+
+### Hardware (espresso machine)
+
+GLP works with any Gaggiuino-modded machine — the add-on only communicates with the controller, not the machine hardware directly. Tested and reported working on:
+
+- Gaggia Classic (pre-2015)
+- Gaggia Classic Pro / Evo
+
+Other Gaggia models with a Gaggiuino installation should work, but have not been explicitly tested.
+
 ## Configuration
 
 | Option | Description | Default |
