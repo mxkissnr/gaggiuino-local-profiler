@@ -22,6 +22,7 @@ Local shot profiling dashboard for [Gaggiuino](https://gaggiuino.github.io/)-bas
 - **.shot Export** – export in Decent Espresso format (Visualizer.coffee compatible)
 - **CSV Export** – all shots with annotations as CSV
 - **Smart Plug** – optional: power machine on/off via HA switch entity
+- **Multi-Language UI** – DE / EN / IT / FR / ES selectable in the sidebar footer; auto-detected from browser language
 - **Data Persistence** – shots and notes are preserved across updates and restarts
 
 ## Prerequisites
@@ -194,6 +195,12 @@ Store grinder names for quick selection in the **Mühle** annotation field.
 ### Storage
 
 The library is saved to `/data/coffee_library.json` and persists across updates and restarts.
+
+## Language
+
+The dashboard supports **DE / EN / IT / FR / ES**. Use the language switcher in the sidebar footer to change the language at any time. The selection is saved in the browser's `localStorage` and persists across sessions.
+
+If no preference has been set, the language is auto-detected from the browser (`navigator.language`). If the detected language is not supported, the UI defaults to German.
 
 ## .shot Export
 

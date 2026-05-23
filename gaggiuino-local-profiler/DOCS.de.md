@@ -23,6 +23,7 @@ Lokales Shot-Profiling-Dashboard für [Gaggiuino](https://gaggiuino.github.io/)-
 - **.shot-Export** – Export im Decent Espresso Format (Visualizer.coffee-kompatibel)
 - **CSV-Export** – aktuell ausgewählter Shot als CSV mit korrektem UTF-8-Encoding
 - **Steckdosen-Steuerung** – optional: Maschine per HA-Switch-Entität ein-/ausschalten
+- **Mehrsprachige Oberfläche** – DE / EN / IT / FR / ES wählbar über Sprachumschalter in der Sidebar-Fußzeile; automatisch anhand der Browsersprache erkannt
 - **Datenpersistenz** – Shots und Notizen bleiben bei Updates und Neustarts erhalten
 
 ## Voraussetzungen
@@ -207,6 +208,12 @@ Nur Shots mit eingetragenem Kaffee-Namen werden berücksichtigt.
 ### Profil-Performance
 
 Horizontales Balkendiagramm mit dem Durchschnittsscore je Extraktionsprofil, sortiert von bestem zu schlechtestem. Die Balkenfarbe folgt der Score-Farbskala (grün → rot). Hover über einen Balken zeigt die Gesamtanzahl Shots für dieses Profil.
+
+## Sprache
+
+Das Dashboard unterstützt **DE / EN / IT / FR / ES**. Die Sprache lässt sich jederzeit über den Sprachumschalter in der Sidebar-Fußzeile wechseln. Die Auswahl wird im `localStorage` des Browsers gespeichert.
+
+Ist keine Spracheinstellung vorhanden, wird die Browsersprache automatisch erkannt (`navigator.language`). Wird die erkannte Sprache nicht unterstützt, wechselt die Oberfläche auf Deutsch.
 
 ## .shot-Export
 

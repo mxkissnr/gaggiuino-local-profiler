@@ -206,7 +206,7 @@
             padding: 24px;
             gap: 20px;
         }
-        .analytics-container { display: flex; flex-direction: column; gap: 20px; max-width: 1100px; width: 100%; }
+        .analytics-container { display: flex; flex-direction: column; gap: 20px; width: 100%; }
         .analytics-card {
             background: var(--gray-900);
             border: 1px solid var(--gray-700);
@@ -252,7 +252,14 @@
         @media (max-width: 768px) {
             .analytics-two-col { grid-template-columns: 1fr; }
             #analytics-view { padding: 16px; }
+            #library-view { padding: 16px; }
         }
+
+        /* ── Language switcher ── */
+        .lang-switcher { display: flex; gap: 3px; }
+        .lang-btn { background: none; border: none; color: #3f3f46; font-size: .65rem; font-weight: 600; padding: 2px 5px; cursor: pointer; border-radius: 4px; font-family: 'Figtree', sans-serif; letter-spacing: .04em; transition: color .15s; }
+        .lang-btn:hover { color: #71717a; }
+        .lang-btn.active { color: #a1a1aa; }
 
         /* ── Shots view ── */
         #shots-view {
@@ -348,7 +355,7 @@
         .lib-open-btn { background: none; border: 1px solid #3f3f46; border-radius: 6px; color: #a1a1aa; font-size: .75rem; padding: 3px 8px; cursor: pointer; transition: border-color .15s, color .15s; }
         .lib-open-btn:hover { border-color: #71717a; color: #e4e4e7; }
         #library-view { display: none; flex-direction: column; flex: 1; overflow-y: auto; padding: 24px; }
-        #library-view > .lib-page { max-width: 680px; width: 100%; }
+        #library-view > .lib-page { max-width: 780px; width: 100%; }
         .lib-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
         .lib-tab { background: none; border: none; border-bottom: 2px solid transparent; color: #71717a; font-size: .8rem; font-weight: 500; padding: 6px 12px; cursor: pointer; transition: color .15s; }
         .lib-tab.active { color: #f59e0b; border-bottom-color: #f59e0b; }
@@ -896,6 +903,13 @@
             <span id="syncTime">kein Sync</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
+            <div class="lang-switcher">
+                <button class="lang-btn active" data-lang="de" onclick="setLang('de')">DE</button>
+                <button class="lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
+                <button class="lang-btn" data-lang="it" onclick="setLang('it')">IT</button>
+                <button class="lang-btn" data-lang="fr" onclick="setLang('fr')">FR</button>
+                <button class="lang-btn" data-lang="es" onclick="setLang('es')">ES</button>
+            </div>
             <span id="glpVersionBadge" style="color:#3f3f46;font-size:.7rem;user-select:none"></span>
             <button id="powerBtn" onclick="toggleMachinePower()" style="display:none" title="">⏻</button>
             <button id="syncBtn" onclick="triggerSync()">↻ Sync</button>
@@ -925,8 +939,8 @@
 
         <div id="empty-state">
             <div class="es-icon">☕</div>
-            <h2>Keine Shots vorhanden</h2>
-            <p>Stelle sicher, dass die Gaggiuino-Maschine unter der konfigurierten URL erreichbar ist und nutze <b>↻ Sync</b>.</p>
+            <h2 data-i18n="empty_title">Keine Shots vorhanden</h2>
+            <p data-i18n="empty_desc">Stelle sicher, dass die Gaggiuino-Maschine unter der konfigurierten URL erreichbar ist und nutze <b>↻ Sync</b>.</p>
         </div>
 
         <div id="chart-area">
@@ -949,56 +963,56 @@
             <div class="sprofiler-meta-grid">
                 <div class="meta-column divide-y">
                     <div class="meta-item">
-                        <span class="meta-label">Profil</span>
+                        <span class="meta-label" data-i18n="meta_profile">Profil</span>
                         <span class="meta-value" id="valProfile">-</span>
                     </div>
                     <div class="meta-item">
-                        <span class="meta-label">Druck (Ø / Max Ziel)</span>
+                        <span class="meta-label" data-i18n="meta_pressure">Druck (Ø / Max Ziel)</span>
                         <span class="meta-value">
                             <span id="pressure">-</span><span class="meta-sub" id="targetPressure"></span><span id="channelingWarning" class="channeling-warn" style="display:none">⚡ Channeling</span>
                         </span>
                     </div>
                     <div class="meta-item">
-                        <span class="meta-label">Pumpenfluss (Ø / Ziel)</span>
+                        <span class="meta-label" data-i18n="meta_flow">Pumpenfluss (Ø / Ziel)</span>
                         <span class="meta-value">
                             <span id="flow">-</span><span class="meta-sub" id="targetFlow"></span>
                         </span>
                     </div>
                     <div class="meta-item">
-                        <span class="meta-label">Temperatur (Ø ±σ / Ziel)</span>
+                        <span class="meta-label" data-i18n="meta_temp">Temperatur (Ø ±σ / Ziel)</span>
                         <span class="meta-value">
                             <span id="temp">-</span><span class="meta-badge" id="tempStability"></span><span class="meta-sub" id="targetTemp"></span>
                         </span>
                     </div>
                     <div class="meta-item" id="phasesItem" style="display:none">
-                        <span class="meta-label">Phasen</span>
+                        <span class="meta-label" data-i18n="meta_phases">Phasen</span>
                         <span class="meta-value" id="phases">-</span>
                     </div>
                 </div>
 
                 <div class="meta-column divide-y" style="text-align:right">
                     <div class="meta-item">
-                        <span class="meta-label">Gewicht (Gesamt / Fluss Ende)</span>
+                        <span class="meta-label" data-i18n="meta_weight">Gewicht (Gesamt / Fluss Ende)</span>
                         <span class="meta-value">
                             <span id="weight">-</span><span class="meta-sub" id="weightFlowSub"></span>
                         </span>
                     </div>
                     <div class="meta-item">
-                        <span class="meta-label">Gewichtsfluss (Ø / Max)</span>
+                        <span class="meta-label" data-i18n="meta_weight_flow">Gewichtsfluss (Ø / Max)</span>
                         <span class="meta-value">
                             <span id="wf">-</span><span class="meta-sub" id="maxWf"></span>
                         </span>
                     </div>
                     <div class="meta-item">
-                        <span class="meta-label">Dauer</span>
+                        <span class="meta-label" data-i18n="meta_duration">Dauer</span>
                         <span class="meta-value" id="duration">-</span>
                     </div>
                     <div class="meta-item" id="ratioItem" style="display:none">
-                        <span class="meta-label">Dosis → Yield · Ratio</span>
+                        <span class="meta-label" data-i18n="meta_ratio">Dosis → Yield · Ratio</span>
                         <span class="meta-value" id="ratio">-</span>
                     </div>
                     <div class="meta-item" id="eyItem" style="display:none">
-                        <span class="meta-label">Extraction Yield (EY)</span>
+                        <span class="meta-label" data-i18n="meta_ey">Extraction Yield (EY)</span>
                         <span class="meta-value" id="ey">-</span>
                     </div>
                 </div>
@@ -1010,9 +1024,9 @@
             </div>
 
             <div class="chart-tabs">
-                <button class="chart-tab active" id="tabZeit" onclick="switchChartTab('zeit')">⏱ Zeit</button>
-                <button class="chart-tab" id="tabPQ" onclick="switchChartTab('pq')">P·Q Kurve</button>
-                <button id="expandChartBtn" onclick="openChartFullscreen()" title="Vollbild">⤢</button>
+                <button class="chart-tab active" id="tabZeit" onclick="switchChartTab('zeit')" data-i18n="tab_time">⏱ Zeit</button>
+                <button class="chart-tab" id="tabPQ" onclick="switchChartTab('pq')" data-i18n="tab_pq">P·Q Kurve</button>
+                <button id="expandChartBtn" onclick="openChartFullscreen()" data-i18n-title="btn_fullscreen_tooltip" title="Vollbild">⤢</button>
             </div>
             <div id="zeitContainer" class="chart-container">
                 <canvas id="espressoShotChart"></canvas>
@@ -1025,10 +1039,10 @@
             <div id="chartFullscreen">
                 <div class="fs-header">
                     <div class="fs-tabs">
-                        <button class="chart-tab active" id="fsTabZeit" onclick="switchFsTab('zeit')">⏱ Zeit</button>
-                        <button class="chart-tab" id="fsTabPQ" onclick="switchFsTab('pq')">P·Q Kurve</button>
+                        <button class="chart-tab active" id="fsTabZeit" onclick="switchFsTab('zeit')" data-i18n="tab_time">⏱ Zeit</button>
+                        <button class="chart-tab" id="fsTabPQ" onclick="switchFsTab('pq')" data-i18n="tab_pq">P·Q Kurve</button>
                     </div>
-                    <button id="closeFullscreenBtn" onclick="closeChartFullscreen()">✕ Schließen</button>
+                    <button id="closeFullscreenBtn" onclick="closeChartFullscreen()" data-i18n="btn_fullscreen_close">✕ Schließen</button>
                 </div>
                 <div class="fs-body">
                     <canvas id="espressoShotChartFs" style="width:100%;height:100%"></canvas>
@@ -1039,8 +1053,8 @@
             <div class="annotation-panel" id="annotationPanel">
                 <div class="annotation-header">
                     <div style="display:flex;align-items:center;gap:10px">
-                        <span class="annotation-title">Notizen & Bewertung</span>
-                        <button class="lib-open-btn" onclick="openLibraryModal()">☕ Bibliothek</button>
+                        <span class="annotation-title" data-i18n="ann_title">Notizen & Bewertung</span>
+                        <button class="lib-open-btn" onclick="openLibraryModal()" data-i18n="ann_library_btn">☕ Bibliothek</button>
                     </div>
                     <div class="star-rating" id="starRating">
                         <span class="star" data-val="1">★</span>
@@ -1052,38 +1066,38 @@
                 </div>
                 <div class="annotation-fields">
                     <div class="annotation-field">
-                        <label>Kaffee / Bohne</label>
-                        <input type="text" id="annCoffee" placeholder="z.B. Ethiopia Yirgacheffe" list="beanList" autocomplete="off">
+                        <label data-i18n="ann_coffee">Kaffee / Bohne</label>
+                        <input type="text" id="annCoffee" data-i18n-placeholder="ann_coffee_ph" placeholder="z.B. Ethiopia Yirgacheffe" list="beanList" autocomplete="off">
                         <datalist id="beanList"></datalist>
                     </div>
                     <div class="annotation-field">
-                        <label>Mühle</label>
-                        <input type="text" id="annGrinder" placeholder="z.B. Niche Zero" list="grinderList" autocomplete="off">
+                        <label data-i18n="ann_grinder">Mühle</label>
+                        <input type="text" id="annGrinder" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" list="grinderList" autocomplete="off">
                         <datalist id="grinderList"></datalist>
                     </div>
                     <div class="annotation-field">
-                        <label>Mahlgrad</label>
-                        <input type="text" id="annGrindSetting" placeholder="z.B. 23 Clicks">
+                        <label data-i18n="ann_grind_setting">Mahlgrad</label>
+                        <input type="text" id="annGrindSetting" data-i18n-placeholder="ann_grind_ph" placeholder="z.B. 23 Clicks">
                     </div>
                     <div class="annotation-field">
-                        <label>Dosis (g)</label>
-                        <input type="number" id="annDose" placeholder="z.B. 18" step="0.1" min="0">
+                        <label data-i18n="ann_dose">Dosis (g)</label>
+                        <input type="number" id="annDose" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0">
                     </div>
                     <div class="annotation-field">
-                        <label>Röstdatum</label>
-                        <input type="text" id="annRoastDate" placeholder="TT.MM.JJJJ" maxlength="10">
+                        <label data-i18n="ann_roast_date">Röstdatum</label>
+                        <input type="text" id="annRoastDate" data-i18n-placeholder="ann_roast_date_ph" placeholder="TT.MM.JJJJ" maxlength="10">
                     </div>
                     <div class="annotation-field">
-                        <label>TDS % <span style="color:#52525b;font-weight:normal">(optional)</span></label>
-                        <input type="number" id="annTds" placeholder="z.B. 9.2" step="0.1" min="0" max="25">
+                        <label>TDS % <span id="annTdsOptional" style="color:#52525b;font-weight:normal" data-i18n="ann_tds_optional">(optional)</span></label>
+                        <input type="number" id="annTds" data-i18n-placeholder="ann_tds_ph" placeholder="z.B. 9.2" step="0.1" min="0" max="25">
                     </div>
                     <div class="annotation-field full-width">
-                        <label>Notizen</label>
-                        <textarea id="annNotes" placeholder="Geschmack, Beobachtungen, Anpassungen …"></textarea>
+                        <label data-i18n="ann_notes">Notizen</label>
+                        <textarea id="annNotes" data-i18n-placeholder="ann_notes_ph" placeholder="Geschmack, Beobachtungen, Anpassungen …"></textarea>
                     </div>
                 </div>
                 <div class="annotation-actions">
-                    <button class="save-btn" id="saveAnnotationBtn" onclick="saveAnnotation()">Speichern</button>
+                    <button class="save-btn" id="saveAnnotationBtn" onclick="saveAnnotation()" data-i18n="btn_save">Speichern</button>
                 </div>
             </div>
         </div>
@@ -1094,8 +1108,8 @@
     <div id="library-view">
         <div class="lib-page">
             <div class="lib-tabs">
-                <button class="lib-tab active" id="libTabBeans"    onclick="switchLibTab('beans')">Bohnen</button>
-                <button class="lib-tab"         id="libTabGrinders" onclick="switchLibTab('grinders')">Mühlen</button>
+                <button class="lib-tab active" id="libTabBeans"    onclick="switchLibTab('beans')" data-i18n="lib_beans">Bohnen</button>
+                <button class="lib-tab"         id="libTabGrinders" onclick="switchLibTab('grinders')" data-i18n="lib_grinders">Mühlen</button>
             </div>
             <div class="lib-body">
                 <!-- Beans -->
@@ -1104,28 +1118,28 @@
                     <div class="lib-add-form" id="beanAddForm">
                         <div class="lib-form-grid">
                             <div class="lib-form-field">
-                                <label>Name *</label>
-                                <input type="text" id="beanFormName" placeholder="Ethiopia Yirgacheffe">
+                                <label data-i18n="lib_bean_name">Name *</label>
+                                <input type="text" id="beanFormName" data-i18n-placeholder="lib_bean_name_ph" placeholder="Ethiopia Yirgacheffe">
                             </div>
                             <div class="lib-form-field">
-                                <label>Rösterei</label>
-                                <input type="text" id="beanFormRoaster" placeholder="Quijote Kaffee">
+                                <label data-i18n="lib_bean_roaster">Rösterei</label>
+                                <input type="text" id="beanFormRoaster" data-i18n-placeholder="lib_bean_roaster_ph" placeholder="Quijote Kaffee">
                             </div>
                             <div class="lib-form-field">
-                                <label>Röstdatum</label>
+                                <label data-i18n="lib_bean_roast_date">Röstdatum</label>
                                 <input type="text" id="beanFormRoastDate" placeholder="TT.MM.JJJJ">
                             </div>
                             <div class="lib-form-field">
-                                <label>Notizen</label>
+                                <label data-i18n="lib_bean_notes">Notizen</label>
                                 <input type="text" id="beanFormNotes" placeholder="Blaubeere, Jasmin …">
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" onclick="closeBeanForm()">Abbrechen</button>
-                            <button class="lib-save-btn" onclick="saveBean()">Speichern</button>
+                            <button class="lib-btn-sm" onclick="closeBeanForm()" data-i18n="lib_cancel">Abbrechen</button>
+                            <button class="lib-save-btn" onclick="saveBean()" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
-                    <button class="lib-add-trigger" id="beanAddTrigger" onclick="openBeanForm()">+ Bohne hinzufügen</button>
+                    <button class="lib-add-trigger" id="beanAddTrigger" onclick="openBeanForm()" data-i18n="lib_add_bean">+ Bohne hinzufügen</button>
                 </div>
                 <!-- Grinders -->
                 <div class="lib-section" id="libSectionGrinders">
@@ -1133,20 +1147,20 @@
                     <div class="lib-add-form" id="grinderAddForm">
                         <div class="lib-form-grid single">
                             <div class="lib-form-field">
-                                <label>Name *</label>
-                                <input type="text" id="grinderFormName" placeholder="Niche Zero">
+                                <label data-i18n="lib_grinder_name">Name *</label>
+                                <input type="text" id="grinderFormName" data-i18n-placeholder="lib_grinder_name_ph" placeholder="Niche Zero">
                             </div>
                             <div class="lib-form-field">
-                                <label>Notizen</label>
-                                <input type="text" id="grinderFormNotes" placeholder="Espresso: 23 Clicks">
+                                <label data-i18n="lib_grinder_notes">Notizen</label>
+                                <input type="text" id="grinderFormNotes" data-i18n-placeholder="lib_grinder_notes_ph" placeholder="Espresso: 23 Clicks">
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" onclick="closeGrinderForm()">Abbrechen</button>
-                            <button class="lib-save-btn" onclick="saveGrinder()">Speichern</button>
+                            <button class="lib-btn-sm" onclick="closeGrinderForm()" data-i18n="lib_cancel">Abbrechen</button>
+                            <button class="lib-save-btn" onclick="saveGrinder()" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
-                    <button class="lib-add-trigger" id="grinderAddTrigger" onclick="openGrinderForm()">+ Mühle hinzufügen</button>
+                    <button class="lib-add-trigger" id="grinderAddTrigger" onclick="openGrinderForm()" data-i18n="lib_add_grinder">+ Mühle hinzufügen</button>
                 </div>
             </div>
         </div>
@@ -1167,28 +1181,28 @@
             <div class="live-stats">
                 <div class="live-stat highlight-time">
                     <div class="stat-val" id="liveTime">–</div>
-                    <div class="stat-unit">min:sec</div>
-                    <div class="stat-label">Zeit</div>
+                    <div class="stat-unit" data-i18n="live_time_unit">min:sec</div>
+                    <div class="stat-label" data-i18n="live_time_label">Zeit</div>
                 </div>
                 <div class="live-stat highlight-pressure">
                     <div class="stat-val" id="livePressure">–</div>
                     <div class="stat-unit">bar</div>
-                    <div class="stat-label">Druck</div>
+                    <div class="stat-label" data-i18n="live_pressure_label">Druck</div>
                 </div>
                 <div class="live-stat highlight-flow">
                     <div class="stat-val" id="liveFlow">–</div>
                     <div class="stat-unit">ml/s</div>
-                    <div class="stat-label">Pumpenfluss</div>
+                    <div class="stat-label" data-i18n="live_flow_label">Pumpenfluss</div>
                 </div>
                 <div class="live-stat highlight-weight">
                     <div class="stat-val" id="liveWeight">–</div>
                     <div class="stat-unit">g</div>
-                    <div class="stat-label">Gewicht</div>
+                    <div class="stat-label" data-i18n="live_weight_label">Gewicht</div>
                 </div>
                 <div class="live-stat highlight-temp">
                     <div class="stat-val" id="liveTemp">–</div>
                     <div class="stat-unit">°C</div>
-                    <div class="stat-label">Temperatur</div>
+                    <div class="stat-label" data-i18n="live_temp_label">Temperatur</div>
                 </div>
             </div>
 
@@ -1200,7 +1214,7 @@
         <div id="live-idle" style="display:none">
             <div class="idle-icon">☕</div>
             <h2>Maschine bereit</h2>
-            <p>Sobald ein Bezug startet, erscheinen hier die Echtzeit-Daten.</p>
+            <p id="liveIdleText" data-i18n="live_idle_text">Sobald ein Bezug startet, erscheinen hier die Echtzeit-Daten.</p>
         </div>
     </div><!-- #live-view -->
 
@@ -1211,11 +1225,11 @@
             <!-- Score Trend -->
             <div class="analytics-card">
                 <div class="analytics-card-head">
-                    <h3 class="analytics-section-title">Score-Trend</h3>
+                    <h3 class="analytics-section-title" data-i18n="analytics_trend">Score-Trend</h3>
                     <div class="analytics-filter-row">
-                        <button class="analytics-filter-btn active" id="trendBtn30"  onclick="setTrendWindow(30)">30 Shots</button>
-                        <button class="analytics-filter-btn"        id="trendBtn90"  onclick="setTrendWindow(90)">90 Shots</button>
-                        <button class="analytics-filter-btn"        id="trendBtnAll" onclick="setTrendWindow(0)">Alle</button>
+                        <button class="analytics-filter-btn active" id="trendBtn30"  onclick="setTrendWindow(30)" data-i18n="analytics_trend_30">30 Shots</button>
+                        <button class="analytics-filter-btn"        id="trendBtn90"  onclick="setTrendWindow(90)" data-i18n="analytics_trend_90">90 Shots</button>
+                        <button class="analytics-filter-btn"        id="trendBtnAll" onclick="setTrendWindow(0)"  data-i18n="analytics_trend_all">Alle</button>
                     </div>
                 </div>
                 <div style="height:200px;position:relative"><canvas id="trendChart"></canvas></div>
@@ -1223,18 +1237,18 @@
 
             <!-- Shot Calendar -->
             <div class="analytics-card">
-                <h3 class="analytics-section-title">Shot-Kalender</h3>
+                <h3 class="analytics-section-title" data-i18n="analytics_calendar">Shot-Kalender</h3>
                 <div id="shotCalendar" class="cal-wrapper"></div>
             </div>
 
             <!-- Bean stats + Profile chart -->
             <div class="analytics-two-col">
                 <div class="analytics-card">
-                    <h3 class="analytics-section-title">Bohnen-Auswertung</h3>
+                    <h3 class="analytics-section-title" data-i18n="analytics_beans">Bohnen-Auswertung</h3>
                     <div id="beanStats"></div>
                 </div>
                 <div class="analytics-card">
-                    <h3 class="analytics-section-title">Profil-Performance</h3>
+                    <h3 class="analytics-section-title" data-i18n="analytics_profiles">Profil-Performance</h3>
                     <div id="profileChartWrap" style="height:220px;position:relative"><canvas id="profileChart"></canvas></div>
                 </div>
             </div>
@@ -1245,6 +1259,398 @@
 </div><!-- #main -->
 
 <script>
+// ── i18n ──────────────────────────────────────────────────────────────────
+const LOCALE_MAP = { de: 'de-DE', en: 'en-US', it: 'it-IT', fr: 'fr-FR', es: 'es-ES' };
+
+const TRANSLATIONS = {
+  de: {
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Bibliothek',
+    sort_newest:'Neueste', sort_score:'Score', sort_rating:'Bewertung', sort_duration:'Dauer',
+    search_placeholder:'Profil, Kaffee, Mühle …', trash_label:'Papierkorb',
+    no_sync:'kein Sync', btn_sync:'↻ Sync',
+    empty_title:'Keine Shots vorhanden',
+    empty_desc:'Stelle sicher, dass die Gaggiuino-Maschine unter der konfigurierten URL erreichbar ist und nutze ↻ Sync.',
+    loading:'Lade Shots …', btn_reload:'↻ Neu laden',
+    meta_profile:'Profil', meta_pressure:'Druck (Ø / Max Ziel)', meta_flow:'Pumpenfluss (Ø / Ziel)',
+    meta_temp:'Temperatur (Ø ±σ / Ziel)', meta_phases:'Phasen',
+    meta_weight:'Gewicht (Gesamt / Fluss Ende)', meta_weight_flow:'Gewichtsfluss (Ø / Max)',
+    meta_duration:'Dauer', meta_ratio:'Dosis → Yield · Ratio', meta_ey:'Extraction Yield (EY)',
+    tab_time:'⏱ Zeit', tab_pq:'P·Q Kurve',
+    btn_fullscreen_close:'✕ Schließen', btn_fullscreen_tooltip:'Vollbild',
+    btn_compare_tooltip:'Als Vergleichs-Shot wählen', btn_delete_tooltip:'Shot löschen',
+    ann_title:'Notizen & Bewertung', ann_library_btn:'☕ Bibliothek',
+    ann_coffee:'Kaffee / Bohne', ann_coffee_ph:'z.B. Ethiopia Yirgacheffe',
+    ann_grinder:'Mühle', ann_grinder_ph:'z.B. Niche Zero',
+    ann_grind_setting:'Mahlgrad', ann_grind_ph:'z.B. 23 Clicks',
+    ann_dose:'Dosis (g)', ann_dose_ph:'z.B. 18',
+    ann_roast_date:'Röstdatum', ann_roast_date_ph:'TT.MM.JJJJ',
+    ann_tds:'TDS %', ann_tds_optional:'(optional)',
+    ann_tds_ph:'z.B. 9.2', ann_notes:'Notizen',
+    ann_notes_ph:'Geschmack, Beobachtungen, Anpassungen …',
+    btn_save:'Speichern', btn_saved:'✓ Gespeichert',
+    grind_finer_urgent:'Feiner mahlen', grind_finer:'Leicht feiner mahlen',
+    grind_ok:'Mahlgrad passt', grind_coarser:'Leicht gröber mahlen',
+    grind_coarser_urgent:'Gröber mahlen', grind_channeling:'Puck-Vorbereitung prüfen',
+    live_title:'Live Shot', live_connecting:'Verbinde …', live_brewing:'Brewing …',
+    live_waiting:'Warte auf Bezug …', live_disabled:'Live deaktiviert (Maschine aus)',
+    live_idle_text:'Sobald ein Bezug startet, erscheinen hier die Echtzeit-Daten.',
+    live_time_unit:'min:sec', live_time_label:'Zeit',
+    live_pressure_label:'Druck', live_flow_label:'Pumpenfluss',
+    live_weight_label:'Gewicht', live_temp_label:'Temperatur',
+    lib_beans:'Bohnen', lib_grinders:'Mühlen',
+    lib_add_bean:'+ Bohne hinzufügen', lib_add_grinder:'+ Mühle hinzufügen',
+    lib_bean_name:'Name *', lib_bean_roaster:'Rösterei', lib_bean_roast_date:'Röstdatum', lib_bean_notes:'Notizen',
+    lib_grinder_name:'Name *', lib_grinder_notes:'Notizen',
+    lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Quijote Kaffee',
+    lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',
+    lib_cancel:'Abbrechen', lib_save:'Speichern',
+    lib_empty_beans:'Noch keine Bohnen gespeichert', lib_empty_grinders:'Noch keine Mühlen gespeichert',
+    lib_btn_edit:'Bearbeiten', lib_btn_delete:'Löschen',
+    lib_confirm_delete_bean:'Bohne aus der Bibliothek löschen?',
+    lib_confirm_delete_grinder:'Mühle aus der Bibliothek löschen?',
+    analytics_trend:'Score-Trend', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Alle',
+    analytics_calendar:'Shot-Kalender', analytics_beans:'Bohnen-Auswertung', analytics_profiles:'Profil-Performance',
+    analytics_no_trend:'Nicht genug Shots mit Score für den Trend.',
+    analytics_no_beans:'Noch keine Bohnen in Annotationen eingetragen.',
+    analytics_no_profiles:'Keine Profil-Daten verfügbar.',
+    bean_stat_shots:'Shots', bean_stat_avg:'Ø Score', bean_stat_best:'Best', bean_stat_duration:'Ø Dauer',
+    confirm_trash:'Shot in den Papierkorb verschieben?',
+    confirm_delete:(id,name,date)=>`Shot ${id} löschen?\n${name} · ${date}\n\nDieser Vorgang kann nicht rückgängig gemacht werden.`,
+    confirm_perm_delete:(id)=>`Shot ${id} jetzt permanent löschen?\nDieser Vorgang kann nicht rückgängig gemacht werden.`,
+    trash_days_left:(d)=>`wird in ${d} Tag${d!==1?'en':''} gelöscht`,
+    trash_restore_label:'↩ Wiederherstellen', trash_delete_title:'Jetzt löschen',
+    freshness_title:(d)=>`${d} Tage seit Röstung (Optimum: 7–21 Tage)`,
+    phase_preinfusion:'Preinfusion', phase_extraction:'Extraktion',
+    grind_short:(s)=>`Bezug zu kurz (${s} s) – feiner mahlen`,
+    grind_short_slight:(s)=>`Bezug etwas kurz (${s} s) – leicht feiner mahlen`,
+    grind_long:(s)=>`Bezug zu lang (${s} s) – gröber mahlen`,
+    grind_long_slight:(s)=>`Bezug etwas lang (${s} s) – leicht gröber mahlen`,
+    grind_channeling_full:'Channeling erkannt – Puck-Vorbereitung (Verteilung & Tamping) prüfen',
+    compare_hint:'Shot für Vergleich wählen',
+  },
+  en: {
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
+    sort_newest:'Newest', sort_score:'Score', sort_rating:'Rating', sort_duration:'Duration',
+    search_placeholder:'Profile, Coffee, Grinder …', trash_label:'Trash',
+    no_sync:'no sync', btn_sync:'↻ Sync',
+    empty_title:'No shots yet',
+    empty_desc:'Make sure the Gaggiuino controller is reachable at the configured URL and tap ↻ Sync.',
+    loading:'Loading shots …', btn_reload:'↻ Reload',
+    meta_profile:'Profile', meta_pressure:'Pressure (avg / max target)', meta_flow:'Pump flow (avg / target)',
+    meta_temp:'Temperature (avg ±σ / target)', meta_phases:'Phases',
+    meta_weight:'Weight (total / end flow)', meta_weight_flow:'Weight flow (avg / max)',
+    meta_duration:'Duration', meta_ratio:'Dose → Yield · Ratio', meta_ey:'Extraction Yield (EY)',
+    tab_time:'⏱ Time', tab_pq:'P·Q Curve',
+    btn_fullscreen_close:'✕ Close', btn_fullscreen_tooltip:'Fullscreen',
+    btn_compare_tooltip:'Select as compare shot', btn_delete_tooltip:'Delete shot',
+    ann_title:'Notes & Rating', ann_library_btn:'☕ Library',
+    ann_coffee:'Coffee / Bean', ann_coffee_ph:'e.g. Ethiopia Yirgacheffe',
+    ann_grinder:'Grinder', ann_grinder_ph:'e.g. Niche Zero',
+    ann_grind_setting:'Grind setting', ann_grind_ph:'e.g. 23 Clicks',
+    ann_dose:'Dose (g)', ann_dose_ph:'e.g. 18',
+    ann_roast_date:'Roast date', ann_roast_date_ph:'DD.MM.YYYY',
+    ann_tds:'TDS %', ann_tds_optional:'(optional)',
+    ann_tds_ph:'e.g. 9.2', ann_notes:'Notes',
+    ann_notes_ph:'Taste, observations, adjustments …',
+    btn_save:'Save', btn_saved:'✓ Saved',
+    grind_finer_urgent:'Grind finer', grind_finer:'Grind slightly finer',
+    grind_ok:'Grind setting is good', grind_coarser:'Grind slightly coarser',
+    grind_coarser_urgent:'Grind coarser', grind_channeling:'Check puck prep',
+    live_title:'Live Shot', live_connecting:'Connecting …', live_brewing:'Brewing …',
+    live_waiting:'Waiting for shot …', live_disabled:'Live disabled (machine off)',
+    live_idle_text:'Once a shot starts, real-time data will appear here.',
+    live_time_unit:'min:sec', live_time_label:'Time',
+    live_pressure_label:'Pressure', live_flow_label:'Pump Flow',
+    live_weight_label:'Weight', live_temp_label:'Temperature',
+    lib_beans:'Beans', lib_grinders:'Grinders',
+    lib_add_bean:'+ Add bean', lib_add_grinder:'+ Add grinder',
+    lib_bean_name:'Name *', lib_bean_roaster:'Roaster', lib_bean_roast_date:'Roast date', lib_bean_notes:'Notes',
+    lib_grinder_name:'Name *', lib_grinder_notes:'Notes',
+    lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Quijote Kaffee',
+    lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',
+    lib_cancel:'Cancel', lib_save:'Save',
+    lib_empty_beans:'No beans saved yet', lib_empty_grinders:'No grinders saved yet',
+    lib_btn_edit:'Edit', lib_btn_delete:'Delete',
+    lib_confirm_delete_bean:'Remove bean from library?',
+    lib_confirm_delete_grinder:'Remove grinder from library?',
+    analytics_trend:'Score Trend', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'All',
+    analytics_calendar:'Shot Calendar', analytics_beans:'Bean Stats', analytics_profiles:'Profile Performance',
+    analytics_no_trend:'Not enough scored shots for trend.',
+    analytics_no_beans:'No beans entered in annotations yet.',
+    analytics_no_profiles:'No profile data available.',
+    bean_stat_shots:'Shots', bean_stat_avg:'Avg Score', bean_stat_best:'Best', bean_stat_duration:'Avg Duration',
+    confirm_trash:'Move shot to trash?',
+    confirm_delete:(id,name,date)=>`Delete shot ${id}?\n${name} · ${date}\n\nThis action cannot be undone.`,
+    confirm_perm_delete:(id)=>`Permanently delete shot ${id}?\nThis action cannot be undone.`,
+    trash_days_left:(d)=>`deleted in ${d} day${d!==1?'s':''}`,
+    trash_restore_label:'↩ Restore', trash_delete_title:'Delete now',
+    freshness_title:(d)=>`Roasted ${d} days ago (optimal: 7–21 days)`,
+    phase_preinfusion:'Preinfusion', phase_extraction:'Extraction',
+    grind_short:(s)=>`Shot too short (${s} s) — grind finer`,
+    grind_short_slight:(s)=>`Shot slightly short (${s} s) — grind slightly finer`,
+    grind_long:(s)=>`Shot too long (${s} s) — grind coarser`,
+    grind_long_slight:(s)=>`Shot slightly long (${s} s) — grind slightly coarser`,
+    grind_channeling_full:'Channeling detected — check puck prep (distribution & tamping)',
+    compare_hint:'Select shot for comparison',
+  },
+  it: {
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Libreria',
+    sort_newest:'Recenti', sort_score:'Score', sort_rating:'Voto', sort_duration:'Durata',
+    search_placeholder:'Profilo, Caffè, Macinino …', trash_label:'Cestino',
+    no_sync:'nessun sync', btn_sync:'↻ Sync',
+    empty_title:'Nessun shot',
+    empty_desc:"Assicurati che il controller Gaggiuino sia raggiungibile all'URL configurato e premi ↻ Sync.",
+    loading:'Caricamento shots …', btn_reload:'↻ Ricarica',
+    meta_profile:'Profilo', meta_pressure:'Pressione (med / max target)', meta_flow:'Flusso pompa (med / target)',
+    meta_temp:'Temperatura (med ±σ / target)', meta_phases:'Fasi',
+    meta_weight:'Peso (totale / fine flusso)', meta_weight_flow:'Flusso peso (med / max)',
+    meta_duration:'Durata', meta_ratio:'Dose → Resa · Ratio', meta_ey:'Extraction Yield (EY)',
+    tab_time:'⏱ Tempo', tab_pq:'Curva P·Q',
+    btn_fullscreen_close:'✕ Chiudi', btn_fullscreen_tooltip:'Schermo intero',
+    btn_compare_tooltip:'Seleziona come shot di confronto', btn_delete_tooltip:'Elimina shot',
+    ann_title:'Note & Valutazione', ann_library_btn:'☕ Libreria',
+    ann_coffee:'Caffè / Grani', ann_coffee_ph:'es. Ethiopia Yirgacheffe',
+    ann_grinder:'Macinino', ann_grinder_ph:'es. Niche Zero',
+    ann_grind_setting:'Macinatura', ann_grind_ph:'es. 23 Click',
+    ann_dose:'Dose (g)', ann_dose_ph:'es. 18',
+    ann_roast_date:'Data torrefazione', ann_roast_date_ph:'GG.MM.AAAA',
+    ann_tds:'TDS %', ann_tds_optional:'(opzionale)',
+    ann_tds_ph:'es. 9.2', ann_notes:'Note',
+    ann_notes_ph:'Gusto, osservazioni, aggiustamenti …',
+    btn_save:'Salva', btn_saved:'✓ Salvato',
+    grind_finer_urgent:'Macinare più fine', grind_finer:'Macinare leggermente più fine',
+    grind_ok:'Macinatura corretta', grind_coarser:'Macinare leggermente più grosso',
+    grind_coarser_urgent:'Macinare più grosso', grind_channeling:'Controllare la preparazione del puck',
+    live_title:'Shot Live', live_connecting:'Connessione …', live_brewing:'Estrazione …',
+    live_waiting:'In attesa dello shot …', live_disabled:'Live disabilitato (macchina spenta)',
+    live_idle_text:'Quando inizia uno shot, i dati in tempo reale appariranno qui.',
+    live_time_unit:'min:sec', live_time_label:'Tempo',
+    live_pressure_label:'Pressione', live_flow_label:'Flusso pompa',
+    live_weight_label:'Peso', live_temp_label:'Temperatura',
+    lib_beans:'Grani', lib_grinders:'Macinini',
+    lib_add_bean:'+ Aggiungi grani', lib_add_grinder:'+ Aggiungi macinino',
+    lib_bean_name:'Nome *', lib_bean_roaster:'Torrefazione', lib_bean_roast_date:'Data torrefazione', lib_bean_notes:'Note',
+    lib_grinder_name:'Nome *', lib_grinder_notes:'Note',
+    lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Torrefazione Roma',
+    lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Click',
+    lib_cancel:'Annulla', lib_save:'Salva',
+    lib_empty_beans:'Nessun grano salvato', lib_empty_grinders:'Nessun macinino salvato',
+    lib_btn_edit:'Modifica', lib_btn_delete:'Elimina',
+    lib_confirm_delete_bean:'Rimuovere il grano dalla libreria?',
+    lib_confirm_delete_grinder:'Rimuovere il macinino dalla libreria?',
+    analytics_trend:'Andamento Score', analytics_trend_30:'30 Shot', analytics_trend_90:'90 Shot', analytics_trend_all:'Tutti',
+    analytics_calendar:'Calendario Shot', analytics_beans:'Statistiche Grani', analytics_profiles:'Performance Profili',
+    analytics_no_trend:'Non abbastanza shot con score per il trend.',
+    analytics_no_beans:'Nessun grano inserito nelle note.',
+    analytics_no_profiles:'Nessun dato di profilo disponibile.',
+    bean_stat_shots:'Shot', bean_stat_avg:'Score med.', bean_stat_best:'Migliore', bean_stat_duration:'Durata med.',
+    confirm_trash:'Spostare lo shot nel cestino?',
+    confirm_delete:(id,name,date)=>`Eliminare lo shot ${id}?\n${name} · ${date}\n\nOperazione non annullabile.`,
+    confirm_perm_delete:(id)=>`Eliminare definitivamente lo shot ${id}?\nOperazione non annullabile.`,
+    trash_days_left:(d)=>`eliminato tra ${d} giorno${d!==1?'i':''}`,
+    trash_restore_label:'↩ Ripristina', trash_delete_title:'Elimina ora',
+    freshness_title:(d)=>`Torrefatto ${d} giorni fa (ottimale: 7–21 giorni)`,
+    phase_preinfusion:'Preinfusione', phase_extraction:'Estrazione',
+    grind_short:(s)=>`Shot troppo corto (${s} s) — macinare più fine`,
+    grind_short_slight:(s)=>`Shot leggermente corto (${s} s) — macinare leggermente più fine`,
+    grind_long:(s)=>`Shot troppo lungo (${s} s) — macinare più grosso`,
+    grind_long_slight:(s)=>`Shot leggermente lungo (${s} s) — macinare leggermente più grosso`,
+    grind_channeling_full:'Channeling rilevato — controllare preparazione puck',
+    compare_hint:'Seleziona shot per confronto',
+  },
+  fr: {
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Bibliothèque',
+    sort_newest:'Récents', sort_score:'Score', sort_rating:'Note', sort_duration:'Durée',
+    search_placeholder:'Profil, Café, Moulin …', trash_label:'Corbeille',
+    no_sync:'pas de sync', btn_sync:'↻ Sync',
+    empty_title:'Aucun shot',
+    empty_desc:"Vérifiez que le contrôleur Gaggiuino est accessible à l'URL configurée et appuyez sur ↻ Sync.",
+    loading:'Chargement des shots …', btn_reload:'↻ Recharger',
+    meta_profile:'Profil', meta_pressure:'Pression (moy / max cible)', meta_flow:'Débit pompe (moy / cible)',
+    meta_temp:'Température (moy ±σ / cible)', meta_phases:'Phases',
+    meta_weight:'Poids (total / fin débit)', meta_weight_flow:'Débit poids (moy / max)',
+    meta_duration:'Durée', meta_ratio:'Dose → Rendement · Ratio', meta_ey:"Taux d'extraction (EY)",
+    tab_time:'⏱ Temps', tab_pq:'Courbe P·Q',
+    btn_fullscreen_close:'✕ Fermer', btn_fullscreen_tooltip:'Plein écran',
+    btn_compare_tooltip:'Sélectionner comme shot de comparaison', btn_delete_tooltip:'Supprimer le shot',
+    ann_title:'Notes & Évaluation', ann_library_btn:'☕ Bibliothèque',
+    ann_coffee:'Café / Grain', ann_coffee_ph:'ex. Ethiopia Yirgacheffe',
+    ann_grinder:'Moulin', ann_grinder_ph:'ex. Niche Zero',
+    ann_grind_setting:'Mouture', ann_grind_ph:'ex. 23 Clics',
+    ann_dose:'Dose (g)', ann_dose_ph:'ex. 18',
+    ann_roast_date:'Date de torréfaction', ann_roast_date_ph:'JJ.MM.AAAA',
+    ann_tds:'TDS %', ann_tds_optional:'(optionnel)',
+    ann_tds_ph:'ex. 9.2', ann_notes:'Notes',
+    ann_notes_ph:'Goût, observations, ajustements …',
+    btn_save:'Enregistrer', btn_saved:'✓ Enregistré',
+    grind_finer_urgent:'Moudre plus fin', grind_finer:'Moudre légèrement plus fin',
+    grind_ok:'La mouture est bonne', grind_coarser:'Moudre légèrement plus grossier',
+    grind_coarser_urgent:'Moudre plus grossier', grind_channeling:'Vérifier la préparation du puck',
+    live_title:'Shot Live', live_connecting:'Connexion …', live_brewing:'Extraction …',
+    live_waiting:'En attente du shot …', live_disabled:'Live désactivé (machine éteinte)',
+    live_idle_text:"Dès qu'un shot démarre, les données en temps réel apparaîtront ici.",
+    live_time_unit:'min:sec', live_time_label:'Temps',
+    live_pressure_label:'Pression', live_flow_label:'Débit pompe',
+    live_weight_label:'Poids', live_temp_label:'Température',
+    lib_beans:'Grains', lib_grinders:'Moulins',
+    lib_add_bean:'+ Ajouter un grain', lib_add_grinder:'+ Ajouter un moulin',
+    lib_bean_name:'Nom *', lib_bean_roaster:'Torréfacteur', lib_bean_roast_date:'Date de torréfaction', lib_bean_notes:'Notes',
+    lib_grinder_name:'Nom *', lib_grinder_notes:'Notes',
+    lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Torréfacteur Paris',
+    lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clics',
+    lib_cancel:'Annuler', lib_save:'Enregistrer',
+    lib_empty_beans:'Aucun grain enregistré', lib_empty_grinders:'Aucun moulin enregistré',
+    lib_btn_edit:'Modifier', lib_btn_delete:'Supprimer',
+    lib_confirm_delete_bean:'Supprimer le grain de la bibliothèque ?',
+    lib_confirm_delete_grinder:'Supprimer le moulin de la bibliothèque ?',
+    analytics_trend:'Tendance Score', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Tous',
+    analytics_calendar:'Calendrier des Shots', analytics_beans:'Stats par Grain', analytics_profiles:'Performance des Profils',
+    analytics_no_trend:'Pas assez de shots avec score pour la tendance.',
+    analytics_no_beans:'Aucun grain saisi dans les notes.',
+    analytics_no_profiles:'Aucune donnée de profil disponible.',
+    bean_stat_shots:'Shots', bean_stat_avg:'Score moy.', bean_stat_best:'Meilleur', bean_stat_duration:'Durée moy.',
+    confirm_trash:'Déplacer le shot dans la corbeille ?',
+    confirm_delete:(id,name,date)=>`Supprimer le shot ${id} ?\n${name} · ${date}\n\nCette action est irréversible.`,
+    confirm_perm_delete:(id)=>`Supprimer définitivement le shot ${id} ?\nCette action est irréversible.`,
+    trash_days_left:(d)=>`supprimé dans ${d} jour${d!==1?'s':''}`,
+    trash_restore_label:'↩ Restaurer', trash_delete_title:'Supprimer maintenant',
+    freshness_title:(d)=>`Torréfié il y a ${d} jours (optimal: 7–21 jours)`,
+    phase_preinfusion:'Pré-infusion', phase_extraction:'Extraction',
+    grind_short:(s)=>`Shot trop court (${s} s) — moudre plus fin`,
+    grind_short_slight:(s)=>`Shot légèrement court (${s} s) — moudre légèrement plus fin`,
+    grind_long:(s)=>`Shot trop long (${s} s) — moudre plus grossier`,
+    grind_long_slight:(s)=>`Shot légèrement long (${s} s) — moudre légèrement plus grossier`,
+    grind_channeling_full:'Channeling détecté — vérifier la préparation du puck',
+    compare_hint:'Sélectionner un shot pour comparaison',
+  },
+  es: {
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Biblioteca',
+    sort_newest:'Recientes', sort_score:'Score', sort_rating:'Valoración', sort_duration:'Duración',
+    search_placeholder:'Perfil, Café, Molino …', trash_label:'Papelera',
+    no_sync:'sin sync', btn_sync:'↻ Sync',
+    empty_title:'Sin shots',
+    empty_desc:'Asegúrate de que el controlador Gaggiuino sea accesible en la URL configurada y pulsa ↻ Sync.',
+    loading:'Cargando shots …', btn_reload:'↻ Recargar',
+    meta_profile:'Perfil', meta_pressure:'Presión (med / máx objetivo)', meta_flow:'Flujo bomba (med / objetivo)',
+    meta_temp:'Temperatura (med ±σ / objetivo)', meta_phases:'Fases',
+    meta_weight:'Peso (total / fin flujo)', meta_weight_flow:'Flujo peso (med / máx)',
+    meta_duration:'Duración', meta_ratio:'Dosis → Rendimiento · Ratio', meta_ey:'Rendimiento extracción (EY)',
+    tab_time:'⏱ Tiempo', tab_pq:'Curva P·Q',
+    btn_fullscreen_close:'✕ Cerrar', btn_fullscreen_tooltip:'Pantalla completa',
+    btn_compare_tooltip:'Seleccionar como shot de comparación', btn_delete_tooltip:'Eliminar shot',
+    ann_title:'Notas & Valoración', ann_library_btn:'☕ Biblioteca',
+    ann_coffee:'Café / Grano', ann_coffee_ph:'ej. Ethiopia Yirgacheffe',
+    ann_grinder:'Molino', ann_grinder_ph:'ej. Niche Zero',
+    ann_grind_setting:'Molturación', ann_grind_ph:'ej. 23 Clicks',
+    ann_dose:'Dosis (g)', ann_dose_ph:'ej. 18',
+    ann_roast_date:'Fecha de tueste', ann_roast_date_ph:'DD.MM.AAAA',
+    ann_tds:'TDS %', ann_tds_optional:'(opcional)',
+    ann_tds_ph:'ej. 9.2', ann_notes:'Notas',
+    ann_notes_ph:'Sabor, observaciones, ajustes …',
+    btn_save:'Guardar', btn_saved:'✓ Guardado',
+    grind_finer_urgent:'Moler más fino', grind_finer:'Moler ligeramente más fino',
+    grind_ok:'La molturación es correcta', grind_coarser:'Moler ligeramente más grueso',
+    grind_coarser_urgent:'Moler más grueso', grind_channeling:'Revisar preparación del puck',
+    live_title:'Shot Live', live_connecting:'Conectando …', live_brewing:'Extrayendo …',
+    live_waiting:'Esperando shot …', live_disabled:'Live desactivado (máquina apagada)',
+    live_idle_text:'Cuando comience un shot, los datos en tiempo real aparecerán aquí.',
+    live_time_unit:'min:seg', live_time_label:'Tiempo',
+    live_pressure_label:'Presión', live_flow_label:'Flujo bomba',
+    live_weight_label:'Peso', live_temp_label:'Temperatura',
+    lib_beans:'Granos', lib_grinders:'Molinos',
+    lib_add_bean:'+ Añadir grano', lib_add_grinder:'+ Añadir molino',
+    lib_bean_name:'Nombre *', lib_bean_roaster:'Tostadero', lib_bean_roast_date:'Fecha de tueste', lib_bean_notes:'Notas',
+    lib_grinder_name:'Nombre *', lib_grinder_notes:'Notas',
+    lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Tostadero Madrid',
+    lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',
+    lib_cancel:'Cancelar', lib_save:'Guardar',
+    lib_empty_beans:'No hay granos guardados', lib_empty_grinders:'No hay molinos guardados',
+    lib_btn_edit:'Editar', lib_btn_delete:'Eliminar',
+    lib_confirm_delete_bean:'¿Eliminar el grano de la biblioteca?',
+    lib_confirm_delete_grinder:'¿Eliminar el molino de la biblioteca?',
+    analytics_trend:'Tendencia Score', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Todos',
+    analytics_calendar:'Calendario de Shots', analytics_beans:'Estadísticas por Grano', analytics_profiles:'Rendimiento de Perfiles',
+    analytics_no_trend:'No hay suficientes shots con score.',
+    analytics_no_beans:'No se han introducido granos en las notas.',
+    analytics_no_profiles:'No hay datos de perfil disponibles.',
+    bean_stat_shots:'Shots', bean_stat_avg:'Score med.', bean_stat_best:'Mejor', bean_stat_duration:'Duración med.',
+    confirm_trash:'¿Mover el shot a la papelera?',
+    confirm_delete:(id,name,date)=>`¿Eliminar shot ${id}?\n${name} · ${date}\n\nEsta acción no se puede deshacer.`,
+    confirm_perm_delete:(id)=>`¿Eliminar definitivamente el shot ${id}?\nEsta acción no se puede deshacer.`,
+    trash_days_left:(d)=>`eliminado en ${d} día${d!==1?'s':''}`,
+    trash_restore_label:'↩ Restaurar', trash_delete_title:'Eliminar ahora',
+    freshness_title:(d)=>`Tostado hace ${d} días (óptimo: 7–21 días)`,
+    phase_preinfusion:'Preinfusión', phase_extraction:'Extracción',
+    grind_short:(s)=>`Shot demasiado corto (${s} s) — moler más fino`,
+    grind_short_slight:(s)=>`Shot ligeramente corto (${s} s) — moler ligeramente más fino`,
+    grind_long:(s)=>`Shot demasiado largo (${s} s) — moler más grueso`,
+    grind_long_slight:(s)=>`Shot ligeramente largo (${s} s) — moler ligeramente más grueso`,
+    grind_channeling_full:'Channeling detectado — revisar preparación del puck',
+    compare_hint:'Seleccionar shot para comparación',
+  },
+};
+
+let currentLang = localStorage.getItem('glp_lang') || navigator.language.slice(0,2).toLowerCase();
+if (!TRANSLATIONS[currentLang]) currentLang = 'de';
+
+function t(key, ...args) {
+    const val = TRANSLATIONS[currentLang]?.[key] ?? TRANSLATIONS.de?.[key] ?? key;
+    return typeof val === 'function' ? val(...args) : val;
+}
+
+function setLang(lang) {
+    if (!TRANSLATIONS[lang]) return;
+    currentLang = lang;
+    localStorage.setItem('glp_lang', lang);
+    applyTranslations();
+    renderSidebar();
+    if (currentMode === 'analytics') initAnalytics();
+    if (currentMode === 'library') { renderBeanList(); renderGrinderList(); }
+}
+
+function applyTranslations() {
+    // Elements with IDs
+    const idMap = {
+        btnShots: 'nav_shots', btnAnalytics: 'nav_analytics', btnLibrary: 'nav_library',
+        sortNewest: 'sort_newest', sortScore: 'sort_score', sortRating: 'sort_rating', sortDur: 'sort_duration',
+        syncBtn: 'btn_sync',
+    };
+    for (const [id, key] of Object.entries(idMap)) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = t(key);
+    }
+    // Live button: preserve inner dot span
+    const btnLive = document.getElementById('btnLive');
+    if (btnLive) {
+        const dot = btnLive.querySelector('.live-dot');
+        btnLive.textContent = t('nav_live');
+        if (dot) btnLive.prepend(dot);
+    }
+    // Search placeholder
+    const searchEl = document.getElementById('shotSearch');
+    if (searchEl) searchEl.placeholder = t('search_placeholder');
+    // Sync time — only replace if it shows the "no sync" sentinel
+    const stEl = document.getElementById('syncTime');
+    if (stEl) {
+        const allNoSync = Object.values(TRANSLATIONS).map(tr => tr.no_sync);
+        if (allNoSync.includes(stEl.textContent)) stEl.textContent = t('no_sync');
+    }
+    // Language switcher highlight
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.lang === currentLang);
+    });
+    // data-i18n elements
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        el.textContent = t(el.dataset.i18n);
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        el.placeholder = t(el.dataset.i18nPlaceholder);
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        el.title = t(el.dataset.i18nTitle);
+    });
+}
+
 let shots        = [];
 let trashedShots = [];
 let chart        = null;
@@ -1317,7 +1723,7 @@ const phasePlugin = {
         ctx.font = '600 11px Figtree, sans-serif';
         const labelY = top + 34;
         if (preEnd - left > 40) {
-            const lbl = 'Preinfusion';
+            const lbl = t('phase_preinfusion');
             const w   = ctx.measureText(lbl).width;
             ctx.fillStyle = 'rgba(52,152,219,0.22)';
             ctx.beginPath(); ctx.roundRect(left + 6, labelY - 12, w + 12, 16, 4); ctx.fill();
@@ -1325,7 +1731,7 @@ const phasePlugin = {
             ctx.textAlign = 'left'; ctx.fillText(lbl, left + 12, labelY);
         }
         if (totalEnd - preEnd > 60) {
-            const lbl = 'Extraktion';
+            const lbl = t('phase_extraction');
             const w   = ctx.measureText(lbl).width;
             ctx.fillStyle = 'rgba(243,156,18,0.22)';
             ctx.beginPath(); ctx.roundRect(preEnd + 6, labelY - 12, w + 12, 16, 4); ctx.fill();
@@ -1399,7 +1805,7 @@ function renderStars(rating) {
 // ── Data loading ──────────────────────────────────────────────────────────
 async function loadData() {
     const shotsEl = document.getElementById('shots');
-    shotsEl.innerHTML = '<div class="loading-state">Lade Shots …</div>';
+    shotsEl.innerHTML = `<div class="loading-state">${t('loading')}</div>`;
 
     // Fetch phase — network errors show a retry button
     let fetched;
@@ -1415,7 +1821,7 @@ async function loadData() {
             `<div class="loading-state" style="color:#ef4444">Verbindungsfehler<br>` +
             `<button onclick="loadData()" style="margin-top:10px;padding:4px 12px;cursor:pointer;` +
             `background:rgba(63,63,70,.5);color:#a1a1aa;border:1px solid #3f3f46;border-radius:6px;` +
-            `font-family:Figtree,sans-serif;font-size:.8rem">↻ Neu laden</button></div>`;
+            `font-family:Figtree,sans-serif;font-size:.8rem">${t('btn_reload')}</button></div>`;
         return;
     }
 
@@ -1506,7 +1912,7 @@ function renderSidebar() {
             <div class="profile-name-sidebar">${esc(profileName)}${scorePill}</div>
             ${coffeeHtml}
             <div class="shotid-sidebar">Shot ${esc(String(shot.id))}${ann.grinder ? ` · ${esc(ann.grinder)}` : ''}</div>
-            <div class="date-sidebar">${esc(date.toLocaleString('de-DE'))}</div>
+            <div class="date-sidebar">${esc(date.toLocaleString(LOCALE_MAP[currentLang] || 'de-DE'))}</div>
             ${starsHtml}
         `;
 
@@ -1534,7 +1940,7 @@ function renderSidebar() {
         const btnDel = document.createElement('button');
         btnDel.className = 'delete-btn';
         btnDel.innerHTML = '🗑';
-        btnDel.title = 'Shot löschen';
+        btnDel.title = t('btn_delete_tooltip');
         btnDel.onclick = e => { e.stopPropagation(); trashShot(shot.id); };
 
         wrapper.appendChild(divShot);
@@ -1575,7 +1981,7 @@ function renderAnnotationPanel(shot) {
     document.getElementById('annTds').value          = ann.tds          || '';
     document.getElementById('annNotes').value        = ann.notes        || '';
     const btn = document.getElementById('saveAnnotationBtn');
-    btn.textContent = 'Speichern';
+    btn.textContent = t('btn_save');
     btn.classList.remove('saved');
 }
 
@@ -1601,9 +2007,9 @@ async function saveAnnotation() {
         if (r.ok) {
             const idx = shots.findIndex(s => s.id === primaryShotId);
             if (idx !== -1) shots[idx].annotation = payload;
-            btn.textContent = '✓ Gespeichert';
+            btn.textContent = t('btn_saved');
             btn.classList.add('saved');
-            setTimeout(() => { btn.textContent = 'Speichern'; btn.classList.remove('saved'); }, 2000);
+            setTimeout(() => { btn.textContent = t('btn_save'); btn.classList.remove('saved'); }, 2000);
             renderSidebar();
             updateSidebarHighlighting();
         }
@@ -1623,7 +2029,7 @@ async function updateStatus() {
         const timeEl = document.getElementById('syncTime');
         if (s.lastSync) {
             timeEl.textContent = new Date(s.lastSync)
-                .toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                .toLocaleTimeString(LOCALE_MAP[currentLang] || 'de-DE', { hour: '2-digit', minute: '2-digit' });
         }
         dot.className = s.lastSyncError ? 'status-dot error' : (s.lastSync ? 'status-dot ok' : 'status-dot unknown');
         dot.title     = s.lastSyncError || '';
@@ -1691,7 +2097,7 @@ async function triggerSync() {
         if (r.status === 429) {
             const d = await r.json();
             btn.textContent = d.error || 'Warten …';
-            setTimeout(() => { btn.textContent = '↻ Sync'; btn.disabled = false; }, 3000);
+            setTimeout(() => { btn.textContent = t('btn_sync'); btn.disabled = false; }, 3000);
             return;
         }
         await new Promise(res => setTimeout(res, 2500));
@@ -1699,7 +2105,7 @@ async function triggerSync() {
         await updateStatus();
     } finally {
         btn.disabled = false;
-        btn.textContent = '↻ Sync';
+        btn.textContent = t('btn_sync');
     }
 }
 
@@ -1754,7 +2160,7 @@ async function fetchLiveData() {
         const msg = await r.json();
 
         // First successful response — mark as ready
-        if (livePollInterval && document.getElementById('live-status-text').textContent === 'Verbinde …') {
+        if (livePollInterval && document.getElementById('live-status-text').textContent === t('live_connecting')) {
             setLiveBadge('ready');
         }
 
@@ -1785,7 +2191,7 @@ function setLiveBadge(state, detail = '') {
     liveBtn.classList.remove('live-brewing', 'live-ready');
 
     const labels = {
-        connecting: 'Verbinde …',
+        connecting: t('live_connecting'),
         ready:      'Bereit',
         brewing:    'Brüht …',
         error:      detail || 'Fehler',
@@ -1985,7 +2391,7 @@ function updateView() {
             const cls = days <= 21 ? 'freshness-fresh' : days <= 35 ? 'freshness-ok' : 'freshness-old';
             freshEl.className  = `freshness-badge ${cls}`;
             freshEl.textContent = `${days}d`;
-            freshEl.title = `${days} Tage seit Röstung (Optimum: 7–21 Tage)`;
+            freshEl.title = t('freshness_title', days);
             freshEl.style.display = '';
         } else { freshEl.style.display = 'none'; }
     } else { freshEl.style.display = 'none'; }
@@ -2185,16 +2591,16 @@ function calcGrindAdvice(shot, data) {
     const pAll   = data.pressure.map(p => p.y);
 
     if (detectChanneling(pTimes, pAll))
-        return { type: 'warning', icon: '⚡', text: 'Channeling erkannt – Puck-Vorbereitung (Verteilung & Tamping) prüfen' };
+        return { type: 'warning', icon: '⚡', text: t('grind_channeling_full') };
 
     if (secs < 18)
-        return { type: 'finer',   icon: '↓', text: `Bezug zu kurz (${secs.toFixed(0)} s) – feiner mahlen` };
+        return { type: 'finer',   icon: '↓', text: t('grind_short', secs.toFixed(0)) };
     if (secs < 23)
-        return { type: 'finer',   icon: '↓', text: `Bezug etwas kurz (${secs.toFixed(0)} s) – leicht feiner mahlen` };
+        return { type: 'finer',   icon: '↓', text: t('grind_short_slight', secs.toFixed(0)) };
     if (secs > 50)
-        return { type: 'coarser', icon: '↑', text: `Bezug zu lang (${secs.toFixed(0)} s) – gröber mahlen` };
+        return { type: 'coarser', icon: '↑', text: t('grind_long', secs.toFixed(0)) };
     if (secs > 42)
-        return { type: 'coarser', icon: '↑', text: `Bezug etwas lang (${secs.toFixed(0)} s) – leicht gröber mahlen` };
+        return { type: 'coarser', icon: '↑', text: t('grind_long_slight', secs.toFixed(0)) };
 
     const pVals = pAll.filter(v => v >= 5);
     const avgP  = pVals.length ? pVals.reduce((a,b)=>a+b,0)/pVals.length : 0;
@@ -2363,8 +2769,8 @@ function confirmDeleteShot(id) {
     const shot = shots.find(s => s.id === id);
     if (!shot) return;
     const name = shot.profile?.name || shot.profileName || `Shot ${id}`;
-    const date = new Date(shot.timestamp * 1000).toLocaleDateString('de-DE');
-    if (!confirm(`Shot ${id} löschen?\n${name} · ${date}\n\nDieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
+    const date = new Date(shot.timestamp * 1000).toLocaleDateString(LOCALE_MAP[currentLang] || 'de-DE');
+    if (!confirm(t('confirm_delete', id, name, date))) return;
     deleteShot(id);
 }
 
@@ -2411,10 +2817,10 @@ function renderTrash() {
         row.innerHTML = `
             <div class="trash-item-info">
                 <div class="trash-item-name">${esc(name)}</div>
-                <div class="trash-item-days">Shot ${shot.id} · wird in ${daysLeft} Tag${daysLeft !== 1 ? 'en' : ''} gelöscht</div>
+                <div class="trash-item-days">Shot ${shot.id} · ${t('trash_days_left', daysLeft)}</div>
             </div>
-            <button class="trash-restore-btn" onclick="restoreShot(${shot.id})">↩ Wiederherstellen</button>
-            <button class="trash-delete-btn" title="Jetzt löschen" onclick="permanentDeleteShot(${shot.id})">✕</button>
+            <button class="trash-restore-btn" onclick="restoreShot(${shot.id})">${t('trash_restore_label')}</button>
+            <button class="trash-delete-btn" title="${t('trash_delete_title')}" onclick="permanentDeleteShot(${shot.id})">✕</button>
         `;
         listEl.appendChild(row);
     });
@@ -2451,7 +2857,7 @@ async function restoreShot(id) {
 }
 
 async function permanentDeleteShot(id) {
-    if (!confirm(`Shot ${id} jetzt permanent löschen?\nDieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
+    if (!confirm(t('confirm_perm_delete', id))) return;
     try {
         const r = await fetch(`api/shots/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         if (!r.ok) throw new Error(await r.text());
@@ -2570,7 +2976,7 @@ function shotToCSVRow(shot) {
     const avgT   = avg(d.temp.map(p=>p.y));
     const secs   = ((shot.duration||0)/10).toFixed(1);
     const ratio  = (ann.dose && finalW) ? `1:${(finalW/ann.dose).toFixed(1)}` : '';
-    const date   = new Date(shot.timestamp * 1000).toLocaleString('de-DE');
+    const date   = new Date(shot.timestamp * 1000).toLocaleString(LOCALE_MAP[currentLang] || 'de-DE');
     return [
         shot.id, date,
         shot.profile?.name || shot.profileName || '',
@@ -2687,7 +3093,7 @@ function switchLibTab(tab) {
 function renderBeanList() {
     const el = document.getElementById('beanListUI');
     if (!coffeeLibrary.beans.length) {
-        el.innerHTML = '<div class="lib-empty">Noch keine Bohnen gespeichert</div>';
+        el.innerHTML = `<div class="lib-empty">${t('lib_empty_beans')}</div>`;
         return;
     }
     el.innerHTML = coffeeLibrary.beans.map(b => `
@@ -2697,8 +3103,8 @@ function renderBeanList() {
                 <div class="lib-item-sub">${[b.roaster, b.roastDate, b.notes].filter(Boolean).map(esc).join(' · ')}</div>
             </div>
             <div class="lib-item-actions">
-                <button class="lib-btn-sm" onclick="editBean(${b.id})">Bearbeiten</button>
-                <button class="lib-btn-sm del" onclick="deleteBean(${b.id})">Löschen</button>
+                <button class="lib-btn-sm" onclick="editBean(${b.id})">${t('lib_btn_edit')}</button>
+                <button class="lib-btn-sm del" onclick="deleteBean(${b.id})">${t('lib_btn_delete')}</button>
             </div>
         </div>`).join('');
 }
@@ -2706,7 +3112,7 @@ function renderBeanList() {
 function renderGrinderList() {
     const el = document.getElementById('grinderListUI');
     if (!coffeeLibrary.grinders.length) {
-        el.innerHTML = '<div class="lib-empty">Noch keine Mühlen gespeichert</div>';
+        el.innerHTML = `<div class="lib-empty">${t('lib_empty_grinders')}</div>`;
         return;
     }
     el.innerHTML = coffeeLibrary.grinders.map(g => `
@@ -2716,8 +3122,8 @@ function renderGrinderList() {
                 ${g.notes ? `<div class="lib-item-sub">${esc(g.notes)}</div>` : ''}
             </div>
             <div class="lib-item-actions">
-                <button class="lib-btn-sm" onclick="editGrinder(${g.id})">Bearbeiten</button>
-                <button class="lib-btn-sm del" onclick="deleteGrinder(${g.id})">Löschen</button>
+                <button class="lib-btn-sm" onclick="editGrinder(${g.id})">${t('lib_btn_edit')}</button>
+                <button class="lib-btn-sm del" onclick="deleteGrinder(${g.id})">${t('lib_btn_delete')}</button>
             </div>
         </div>`).join('');
 }
@@ -2767,7 +3173,7 @@ async function saveBean() {
 }
 
 async function deleteBean(id) {
-    if (!confirm('Bohne aus der Bibliothek löschen?')) return;
+    if (!confirm(t('lib_confirm_delete_bean'))) return;
     const r = await fetch(`api/library/bean/${id}/delete`, { method: 'POST' });
     if (!r.ok) return;
     coffeeLibrary.beans = coffeeLibrary.beans.filter(b => b.id !== id);
@@ -2816,7 +3222,7 @@ async function saveGrinder() {
 }
 
 async function deleteGrinder(id) {
-    if (!confirm('Mühle aus der Bibliothek löschen?')) return;
+    if (!confirm(t('lib_confirm_delete_grinder'))) return;
     const r = await fetch(`api/library/grinder/${id}/delete`, { method: 'POST' });
     if (!r.ok) return;
     coffeeLibrary.grinders = coffeeLibrary.grinders.filter(g => g.id !== id);
@@ -2862,11 +3268,11 @@ function buildTrendChart() {
     if (trendChart) { trendChart.destroy(); trendChart = null; }
 
     if (src.length < 2) {
-        ctx.parentElement.innerHTML = '<p style="color:#52525b;font-size:.85rem;padding-top:8px">Nicht genug Shots mit Score für den Trend.</p>';
+        ctx.parentElement.innerHTML = `<p style="color:#52525b;font-size:.85rem;padding-top:8px">${t('analytics_no_trend')}</p>`;
         return;
     }
 
-    const labels     = src.map(s => new Date(s.timestamp * 1000).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit' }));
+    const labels     = src.map(s => new Date(s.timestamp * 1000).toLocaleDateString(LOCALE_MAP[currentLang] || 'de-DE', { day:'2-digit', month:'2-digit' }));
     const scoreData  = src.map(s => calcShotScore(s, getShotData(s)));
     const maData     = scoreData.map((_, i) => {
         const sl = scoreData.slice(Math.max(0, i - 4), i + 1);
@@ -2927,7 +3333,7 @@ function buildCalendar() {
             const data = dayMap[key] || { count: 0, scores: [] };
             const avgSc = data.scores.length ? Math.round(data.scores.reduce((a,b)=>a+b,0)/data.scores.length) : null;
             if (d === 0 && cur.getMonth() !== lastMonth) {
-                months.push({ weekIdx: weeks.length, label: cur.toLocaleDateString('de-DE', { month: 'short' }) });
+                months.push({ weekIdx: weeks.length, label: cur.toLocaleDateString(LOCALE_MAP[currentLang] || 'de-DE', { month: 'short' }) });
                 lastMonth = cur.getMonth();
             }
             week.push({ date: new Date(cur), key, count: data.count, avgSc });
@@ -2946,7 +3352,7 @@ function buildCalendar() {
         html += `<div class="cal-week">`;
         for (const day of week) {
             const isFuture = day.date > today;
-            const dateStr  = day.date.toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
+            const dateStr  = day.date.toLocaleDateString(LOCALE_MAP[currentLang] || 'de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
             const title    = day.count === 0 ? dateStr
                            : `${dateStr}: ${day.count} Shot${day.count>1?'s':''}${day.avgSc!==null?` · Ø ${day.avgSc}`:''}`;
             html += `<div class="${isFuture ? 'cal-future' : cls(day.count)} cal-day" title="${title}"></div>`;
@@ -2976,7 +3382,7 @@ function buildBeanStats() {
     const beans = Object.entries(byBean).sort((a, b) => b[1].count - a[1].count);
 
     if (beans.length === 0) {
-        el.innerHTML = '<p style="color:#52525b;font-size:.85rem">Noch keine Bohnen in Annotationen eingetragen.</p>';
+        el.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_no_beans')}</p>`;
         return;
     }
 
@@ -2989,10 +3395,10 @@ function buildBeanStats() {
         html += `<div class="bean-card">
             <div class="bean-card-name" title="${esc(name)}">${esc(name)}</div>
             <div class="bean-card-stats">
-                <div class="bean-stat"><span class="bean-stat-val">${d.count}</span><span class="bean-stat-lbl">Shots</span></div>
-                ${avgSc  !== null ? `<div class="bean-stat"><span class="bean-stat-val ${scCls}">${avgSc}</span><span class="bean-stat-lbl">Ø Score</span></div>` : ''}
-                ${bestSc !== null ? `<div class="bean-stat"><span class="bean-stat-val">${bestSc}</span><span class="bean-stat-lbl">Best</span></div>` : ''}
-                ${avgDur !== null ? `<div class="bean-stat"><span class="bean-stat-val">${avgDur}s</span><span class="bean-stat-lbl">Ø Dauer</span></div>` : ''}
+                <div class="bean-stat"><span class="bean-stat-val">${d.count}</span><span class="bean-stat-lbl">${t('bean_stat_shots')}</span></div>
+                ${avgSc  !== null ? `<div class="bean-stat"><span class="bean-stat-val ${scCls}">${avgSc}</span><span class="bean-stat-lbl">${t('bean_stat_avg')}</span></div>` : ''}
+                ${bestSc !== null ? `<div class="bean-stat"><span class="bean-stat-val">${bestSc}</span><span class="bean-stat-lbl">${t('bean_stat_best')}</span></div>` : ''}
+                ${avgDur !== null ? `<div class="bean-stat"><span class="bean-stat-val">${avgDur}s</span><span class="bean-stat-lbl">${t('bean_stat_duration')}</span></div>` : ''}
             </div>
         </div>`;
     }
@@ -3021,7 +3427,7 @@ function buildProfileChart() {
     if (profileBarChart) { profileBarChart.destroy(); profileBarChart = null; }
 
     if (entries.length === 0) {
-        wrap.innerHTML = '<p style="color:#52525b;font-size:.85rem">Keine Profil-Daten verfügbar.</p>';
+        wrap.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_no_profiles')}</p>`;
         return;
     }
 
@@ -3052,6 +3458,7 @@ function buildProfileChart() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
+applyTranslations();
 loadData();
 loadLibrary();
 updateStatus();

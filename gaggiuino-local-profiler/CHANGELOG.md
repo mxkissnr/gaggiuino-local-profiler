@@ -1,3 +1,10 @@
+## 1.23.0
+- Feature: Multi-language UI — DE / EN / IT / FR / ES selectable via language switcher in sidebar footer
+- Language auto-detected from browser (`navigator.language`), persisted in `localStorage`
+- All UI strings translated; dynamic strings (grind advice, confirm dialogs, freshness badge) use `t()` helper
+- Date formatting follows selected locale (`Intl` / `toLocaleString`)
+- Fix: Analytics container no longer has a fixed max-width — uses full screen width on desktop and scales correctly on mobile
+
 ## 1.22.0
 - Feature: Coffee Library is now a dedicated top-level tab ("Bibliothek") in the mode-bar — no longer a modal overlay
 - The "☕ Bibliothek" button in the annotation panel switches to the new tab
