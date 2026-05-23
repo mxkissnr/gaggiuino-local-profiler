@@ -5,6 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
+const GLP_VERSION   = '1.20.0';
 const PORT          = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -212,7 +213,8 @@ app.get('/api/status', (req, res) => {
         machineVersion:  cachedMachineVersion,
         syncInterval:    opts.sync_interval || 5,
         haConnected:     !!HA_TOKEN,
-        switchEntity:    opts.switch_entity || null
+        switchEntity:    opts.switch_entity || null,
+        glpVersion:      GLP_VERSION
     });
 });
 
@@ -630,7 +632,7 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.20.0 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v${GLP_VERSION} gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
     log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);

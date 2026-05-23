@@ -840,6 +840,7 @@
             <span id="syncTime">kein Sync</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
+            <span id="glpVersionBadge" style="color:#3f3f46;font-size:.7rem;user-select:none"></span>
             <button id="powerBtn" onclick="toggleMachinePower()" style="display:none" title="">⏻</button>
             <button id="syncBtn" onclick="triggerSync()">↻ Sync</button>
         </div>
@@ -1533,6 +1534,10 @@ async function updateStatus() {
             if (el) el.textContent = s.machineVersion
                 ? `${s.machineHostname} · ${s.machineVersion}`
                 : s.machineHostname;
+        }
+        if (s.glpVersion) {
+            const vEl = document.getElementById('glpVersionBadge');
+            if (vEl) vEl.textContent = `v${s.glpVersion}`;
         }
         if (switchRes?.ok) updatePowerButton(await switchRes.json());
     } catch (e) {}
