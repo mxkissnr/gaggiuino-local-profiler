@@ -782,7 +782,6 @@
             width: 26px;
             height: 26px;
             padding: 0;
-            margin-left: auto;
             transition: background .2s, color .2s, border-color .2s;
             flex-shrink: 0;
         }
@@ -908,29 +907,24 @@
             .sprofiler-header h1 { font-size: 1.1rem; }
         }
 
-        /* ── Split-flap counter ── */
-        #flap-counter {
-            padding: 14px 12px 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-            border-bottom: 1px solid var(--gray-700);
-            background: var(--gray-900);
-        }
+        /* ── Split-flap counter (inline in sidebar header) ── */
         .flap-board {
             display: inline-flex;
-            gap: 3px;
-            perspective: 600px;
+            gap: 2px;
+            perspective: 400px;
+            margin-left: auto;
+            margin-right: 8px;
+            align-items: center;
         }
         .flap-cell {
             position: relative;
-            width: 26px;
-            height: 40px;
-            border-radius: 4px;
+            width: 20px;
+            height: 30px;
+            border-radius: 3px;
             overflow: hidden;
             background: #111;
-            box-shadow: 0 2px 6px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.05);
+            box-shadow: 0 1px 4px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.04);
+            flex-shrink: 0;
         }
         .flap-half {
             position: absolute;
@@ -943,16 +937,16 @@
         .flap-half.top    { top: 0;    align-items: flex-end;   background: #161616; }
         .flap-half.bottom { bottom: 0; align-items: flex-start; background: #111; }
         .flap-half span {
-            font-size: 1.55rem;
+            font-size: 1.05rem;
             font-weight: 700;
             font-family: 'Courier New', 'SF Mono', monospace;
             color: #e8dfc0;
-            line-height: 40px;
+            line-height: 30px;
             position: absolute;
-            top: 0; width: 100%; text-align: center; height: 40px;
+            top: 0; width: 100%; text-align: center; height: 30px;
             letter-spacing: -.02em;
         }
-        .flap-half.bottom span { top: -20px; }
+        .flap-half.bottom span { top: -15px; }
         .flap-cell::after {
             content: '';
             position: absolute; top: 50%; left: 0; right: 0;
@@ -971,29 +965,23 @@
             align-items: flex-end;
             transform-origin: center bottom;
             z-index: 5;
-            border-radius: 4px 4px 0 0;
+            border-radius: 3px 3px 0 0;
             backface-visibility: hidden;
         }
         .flap-fold span {
-            font-size: 1.55rem;
+            font-size: 1.05rem;
             font-weight: 700;
             font-family: 'Courier New', 'SF Mono', monospace;
             color: #e8dfc0;
-            line-height: 40px;
+            line-height: 30px;
             position: absolute;
-            top: 0; width: 100%; text-align: center; height: 40px;
+            top: 0; width: 100%; text-align: center; height: 30px;
             letter-spacing: -.02em;
         }
         .flap-fold.flipping { animation: flapDown .14s ease-in forwards; }
         @keyframes flapDown {
             from { transform: rotateX(0deg); }
             to   { transform: rotateX(-90deg); }
-        }
-        .flap-caption {
-            font-size: .6rem;
-            color: #3f3f46;
-            text-transform: uppercase;
-            letter-spacing: .12em;
         }
     </style>
 </head>
@@ -1002,12 +990,8 @@
 
 <!-- ── Sidebar ── -->
 <div id="sidebar">
-    <h2><button id="sidebarToggle" onclick="toggleSidebar()">☰</button>☕ Shots <span id="shot-count"></span><button id="collapseBtn" onclick="toggleDesktopSidebar()" title="Sidebar einklappen">‹</button></h2>
+    <h2><button id="sidebarToggle" onclick="toggleSidebar()">☰</button>☕ Shots <span id="shot-count"></span><div class="flap-board" id="flapDigits"></div><button id="collapseBtn" onclick="toggleDesktopSidebar()" title="Sidebar einklappen">‹</button></h2>
     <div class="sidebar-hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
-    <div id="flap-counter">
-        <div class="flap-board" id="flapDigits"></div>
-        <div class="flap-caption" data-i18n="flap_total">Shots gesamt</div>
-    </div>
     <div id="search-container">
         <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …" oninput="filterShots(this.value)">
     </div>
@@ -1448,8 +1432,7 @@ const TRANSLATIONS = {
     tab_time:'⏱ Zeit', tab_pq:'P·Q Kurve',
     btn_fullscreen_close:'✕ Schließen', btn_fullscreen_tooltip:'Vollbild',
     btn_compare_tooltip:'Als Vergleichs-Shot wählen', btn_delete_tooltip:'Shot löschen',
-    ann_title:'Notizen & Bewertung', flap_total:'Shots gesamt',
-    ann_coffee:'Kaffee / Bohne', ann_coffee_ph:'z.B. Ethiopia Yirgacheffe',
+    ann_title:'Notizen & Bewertung',    ann_coffee:'Kaffee / Bohne', ann_coffee_ph:'z.B. Ethiopia Yirgacheffe',
     ann_grinder:'Mühle', ann_grinder_ph:'z.B. Niche Zero',
     ann_grind_setting:'Mahlgrad', ann_grind_ph:'z.B. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'z.B. 18',
@@ -1532,8 +1515,7 @@ const TRANSLATIONS = {
     tab_time:'⏱ Time', tab_pq:'P·Q Curve',
     btn_fullscreen_close:'✕ Close', btn_fullscreen_tooltip:'Fullscreen',
     btn_compare_tooltip:'Select as compare shot', btn_delete_tooltip:'Delete shot',
-    ann_title:'Notes & Rating', flap_total:'Total shots',
-    ann_coffee:'Coffee / Bean', ann_coffee_ph:'e.g. Ethiopia Yirgacheffe',
+    ann_title:'Notes & Rating',    ann_coffee:'Coffee / Bean', ann_coffee_ph:'e.g. Ethiopia Yirgacheffe',
     ann_grinder:'Grinder', ann_grinder_ph:'e.g. Niche Zero',
     ann_grind_setting:'Grind setting', ann_grind_ph:'e.g. 23 Clicks',
     ann_dose:'Dose (g)', ann_dose_ph:'e.g. 18',
@@ -1616,8 +1598,7 @@ const TRANSLATIONS = {
     tab_time:'⏱ Tempo', tab_pq:'Curva P·Q',
     btn_fullscreen_close:'✕ Chiudi', btn_fullscreen_tooltip:'Schermo intero',
     btn_compare_tooltip:'Seleziona come shot di confronto', btn_delete_tooltip:'Elimina shot',
-    ann_title:'Note & Valutazione', flap_total:'Shot totali',
-    ann_coffee:'Caffè / Grani', ann_coffee_ph:'es. Ethiopia Yirgacheffe',
+    ann_title:'Note & Valutazione',    ann_coffee:'Caffè / Grani', ann_coffee_ph:'es. Ethiopia Yirgacheffe',
     ann_grinder:'Macinino', ann_grinder_ph:'es. Niche Zero',
     ann_grind_setting:'Macinatura', ann_grind_ph:'es. 23 Click',
     ann_dose:'Dose (g)', ann_dose_ph:'es. 18',
@@ -1700,8 +1681,7 @@ const TRANSLATIONS = {
     tab_time:'⏱ Temps', tab_pq:'Courbe P·Q',
     btn_fullscreen_close:'✕ Fermer', btn_fullscreen_tooltip:'Plein écran',
     btn_compare_tooltip:'Sélectionner comme shot de comparaison', btn_delete_tooltip:'Supprimer le shot',
-    ann_title:'Notes & Évaluation', flap_total:'Shots au total',
-    ann_coffee:'Café / Grain', ann_coffee_ph:'ex. Ethiopia Yirgacheffe',
+    ann_title:'Notes & Évaluation',    ann_coffee:'Café / Grain', ann_coffee_ph:'ex. Ethiopia Yirgacheffe',
     ann_grinder:'Moulin', ann_grinder_ph:'ex. Niche Zero',
     ann_grind_setting:'Mouture', ann_grind_ph:'ex. 23 Clics',
     ann_dose:'Dose (g)', ann_dose_ph:'ex. 18',
@@ -1784,8 +1764,7 @@ const TRANSLATIONS = {
     tab_time:'⏱ Tiempo', tab_pq:'Curva P·Q',
     btn_fullscreen_close:'✕ Cerrar', btn_fullscreen_tooltip:'Pantalla completa',
     btn_compare_tooltip:'Seleccionar como shot de comparación', btn_delete_tooltip:'Eliminar shot',
-    ann_title:'Notas & Valoración', flap_total:'Shots totales',
-    ann_coffee:'Café / Grano', ann_coffee_ph:'ej. Ethiopia Yirgacheffe',
+    ann_title:'Notas & Valoración',    ann_coffee:'Café / Grano', ann_coffee_ph:'ej. Ethiopia Yirgacheffe',
     ann_grinder:'Molino', ann_grinder_ph:'ej. Niche Zero',
     ann_grind_setting:'Molturación', ann_grind_ph:'ej. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'ej. 18',
