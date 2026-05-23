@@ -52,6 +52,7 @@ Click the button above to add this repository directly to your Home Assistant �
 | 💾 | **.shot Export** | Export in Decent Espresso format (Visualizer.coffee compatible) |
 | 📤 | **CSV Export** | All shots with annotations as CSV |
 | 🔌 | **Smart Plug** | Optional: power machine on/off via HA switch entity |
+| 🌐 | **Multi-Language UI** | DE / EN / IT / FR / ES — auto-detected from browser, persisted per session |
 
 ---
 
