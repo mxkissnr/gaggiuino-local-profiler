@@ -1,3 +1,10 @@
+## 1.20.0
+- Feature: Coffee Library — save beans (name, roaster, roast date, notes) and grinders in a persistent library (`/data/coffee_library.json`)
+- Annotation panel: coffee and grinder fields now have browser autocomplete from library entries
+- Annotation panel: roast date auto-fills when a library bean is selected and the field is empty
+- Annotation panel: "☕ Bibliothek" button opens library management modal (add, edit, delete)
+- Sidebar footer: current GLP version shown as subtle badge next to sync button
+
 ## 1.19.4
 - Fix: server crash on start — removed leftover `broadcastLive()` call after SSE removal
 

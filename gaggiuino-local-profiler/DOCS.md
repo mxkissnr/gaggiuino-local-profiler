@@ -9,6 +9,7 @@ Local shot profiling dashboard for [Gaggiuino](https://gaggiuino.github.io/)-bas
 - **Auto-Sync** – new shot loads automatically when `gaggiuino_latest_shot_id` rises
 - **Compare Mode** – overlay two shots side by side
 - **Annotations & Rating** – coffee/bean, grinder, grind setting, dose, roast date, TDS %, free text; 1–5 star rating
+- **Coffee Library** – persistent bean and grinder database with autocomplete in annotation fields; roast date auto-fills on selection
 - **Shot Score** – automatic 0–100 score based on pressure, temperature stability, duration, ratio and channeling; shown as colored pill in the sidebar
 - **Sidebar Sorting** – sort by newest / score / rating / duration; click again to reverse
 - **Analysis Metrics** – dose → yield → ratio, EY (Extraction Yield), temperature stability (±σ), phase detection, channeling warning
@@ -150,6 +151,22 @@ Each shot automatically receives a score from 0–100, shown in the top right of
 > **Ratio note:** This factor is only included when a dose is entered under Annotations. Without dose, the remaining weights are scaled proportionally.
 
 > **Pressure note:** The average is calculated only over values ≥ 5 bar to avoid penalizing the pre-infusion phase.
+
+## Coffee Library
+
+The **☕ Bibliothek** button in the annotation panel opens the library manager.
+
+### Beans
+
+Store coffee beans with name, roaster, roast date and notes. Saved beans appear as autocomplete suggestions in the **Kaffee / Bohne** annotation field. If a matching bean is selected and the roast date field is empty, it is filled in automatically.
+
+### Grinders
+
+Store grinder names for quick selection in the **Mühle** annotation field.
+
+### Storage
+
+The library is saved to `/data/coffee_library.json` and persists across updates and restarts.
 
 ## .shot Export
 
