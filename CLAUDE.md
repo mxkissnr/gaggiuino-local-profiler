@@ -2,6 +2,13 @@
 
 Working rules for this repo. Follow these in every session.
 
+## Language rules
+
+- **Code, comments, commit messages, GitHub issues, PR descriptions** → always English
+- **DOCS.md, README.md** → English (primary)
+- **DOCS.de.md** → German (supplementary, always kept in sync with DOCS.md)
+- **UI strings in index.html** → German (current default until i18n is implemented, see #34)
+
 ## Workflow
 
 **Issue first, then code.**

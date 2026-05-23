@@ -181,7 +181,7 @@ Horizontal bar chart showing the average score per extraction profile, sorted fr
 
 ## Coffee Library
 
-The **☕ Bibliothek** button in the annotation panel opens the library manager.
+The **Bibliothek** tab in the top navigation opens the library, or use the **☕ Bibliothek** shortcut button in the annotation panel to jump there directly.
 
 ### Beans
 

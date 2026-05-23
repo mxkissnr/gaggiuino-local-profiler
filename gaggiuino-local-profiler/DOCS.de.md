@@ -168,7 +168,7 @@ Gelöschte Shots werden automatisch in einer Blockliste gespeichert, sodass sie 
 
 ## Kaffee-Bibliothek
 
-Der **☕ Bibliothek**-Button im Notizen-Panel öffnet die Bibliotheksverwaltung.
+Der **Bibliothek**-Tab in der oberen Navigationsleiste öffnet die Bibliothek. Alternativ springt der **☕ Bibliothek**-Button im Notizen-Panel direkt dorthin.
 
 ### Bohnen
 

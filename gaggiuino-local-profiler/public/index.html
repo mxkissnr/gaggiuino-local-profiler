@@ -347,14 +347,9 @@
         /* ── Coffee Library ── */
         .lib-open-btn { background: none; border: 1px solid #3f3f46; border-radius: 6px; color: #a1a1aa; font-size: .75rem; padding: 3px 8px; cursor: pointer; transition: border-color .15s, color .15s; }
         .lib-open-btn:hover { border-color: #71717a; color: #e4e4e7; }
-        #libraryOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 300; align-items: center; justify-content: center; }
-        #libraryOverlay.open { display: flex; }
-        #libraryModal { background: #18181b; border: 1px solid #3f3f46; border-radius: 14px; width: min(600px, 96vw); max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
-        .lib-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 12px; border-bottom: 1px solid #27272a; }
-        .lib-modal-title { font-size: .85rem; font-weight: 600; color: #e4e4e7; letter-spacing: .03em; }
-        .lib-modal-close { background: none; border: none; color: #71717a; font-size: 1.1rem; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
-        .lib-modal-close:hover { color: #e4e4e7; background: #27272a; }
-        .lib-tabs { display: flex; gap: 4px; padding: 12px 20px 0; }
+        #library-view { display: none; flex-direction: column; flex: 1; overflow-y: auto; padding: 24px; }
+        #library-view > .lib-page { max-width: 680px; width: 100%; }
+        .lib-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
         .lib-tab { background: none; border: none; border-bottom: 2px solid transparent; color: #71717a; font-size: .8rem; font-weight: 500; padding: 6px 12px; cursor: pointer; transition: color .15s; }
         .lib-tab.active { color: #f59e0b; border-bottom-color: #f59e0b; }
         .lib-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
@@ -922,6 +917,7 @@
             <span class="live-dot"></span>Live
         </button>
         <button class="mode-btn" id="btnAnalytics" onclick="switchMode('analytics')">Analytics</button>
+        <button class="mode-btn" id="btnLibrary"   onclick="switchMode('library')">Bibliothek</button>
     </div>
 
     <!-- Shots view -->
@@ -1094,16 +1090,12 @@
 
     </div><!-- #shots-view -->
 
-    <!-- Coffee Library Modal -->
-    <div id="libraryOverlay" onclick="if(event.target===this)closeLibraryModal()">
-        <div id="libraryModal">
-            <div class="lib-modal-header">
-                <span class="lib-modal-title">☕ Kaffee-Bibliothek</span>
-                <button class="lib-modal-close" onclick="closeLibraryModal()">✕</button>
-            </div>
+    <!-- Library view -->
+    <div id="library-view">
+        <div class="lib-page">
             <div class="lib-tabs">
-                <button class="lib-tab active" id="libTabBeans" onclick="switchLibTab('beans')">Bohnen</button>
-                <button class="lib-tab" id="libTabGrinders" onclick="switchLibTab('grinders')">Mühlen</button>
+                <button class="lib-tab active" id="libTabBeans"    onclick="switchLibTab('beans')">Bohnen</button>
+                <button class="lib-tab"         id="libTabGrinders" onclick="switchLibTab('grinders')">Mühlen</button>
             </div>
             <div class="lib-body">
                 <!-- Beans -->
@@ -1158,7 +1150,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </div><!-- #library-view -->
 
     <!-- Live view -->
     <div id="live-view">
@@ -1371,9 +1363,11 @@ function switchMode(mode) {
     document.getElementById('btnShots').classList.toggle('active',     mode === 'shots');
     document.getElementById('btnLive').classList.toggle('active',      mode === 'live');
     document.getElementById('btnAnalytics').classList.toggle('active', mode === 'analytics');
+    document.getElementById('btnLibrary').classList.toggle('active',   mode === 'library');
     document.getElementById('shots-view').style.display     = mode === 'shots'     ? 'flex' : 'none';
     document.getElementById('live-view').style.display      = mode === 'live'      ? 'flex' : 'none';
     document.getElementById('analytics-view').style.display = mode === 'analytics' ? 'flex' : 'none';
+    document.getElementById('library-view').style.display   = mode === 'library'   ? 'flex' : 'none';
 
     if (mode === 'live') {
         initLiveChart();
@@ -1382,6 +1376,7 @@ function switchMode(mode) {
         disconnectLiveStream();
     }
     if (mode === 'analytics') initAnalytics();
+    if (mode === 'library') { renderBeanList(); renderGrinderList(); }
 }
 
 // ── Star rating ───────────────────────────────────────────────────────────
@@ -2679,15 +2674,7 @@ function updateLibraryDatalist() {
 }
 
 function openLibraryModal() {
-    renderBeanList();
-    renderGrinderList();
-    document.getElementById('libraryOverlay').classList.add('open');
-}
-
-function closeLibraryModal() {
-    document.getElementById('libraryOverlay').classList.remove('open');
-    closeBeanForm();
-    closeGrinderForm();
+    switchMode('library');
 }
 
 function switchLibTab(tab) {

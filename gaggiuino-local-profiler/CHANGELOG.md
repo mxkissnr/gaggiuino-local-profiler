@@ -1,3 +1,7 @@
+## 1.22.0
+- Feature: Coffee Library is now a dedicated top-level tab ("Bibliothek") in the mode-bar — no longer a modal overlay
+- The "☕ Bibliothek" button in the annotation panel switches to the new tab
+
 ## 1.21.1
 - Fix: roastDate and tds now correctly persisted in annotation endpoint (were silently dropped, causing data loss after page reload)
 - Fix: removed undefined broadcastLive() call in syncAfterBrew() — silent ReferenceError swallowed by catch block
