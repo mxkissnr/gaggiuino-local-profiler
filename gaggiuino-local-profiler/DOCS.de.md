@@ -28,4 +28,19 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | `switch_entity` | HA-Switch-Entität zum Ein-/Ausschalten der Maschine | *(leer)* |
 | `port` | Port, auf dem der Server lauscht (1024–65535) | `8099` |
 
+## Features
+
+| Tab | Beschreibung |
+|---|---|
+| **Live** | Echtzeit-Charts für Druck, Flow, Gewicht und Temperatur während eines Shots. Optional kann ein beliebiger früherer Shot als gestrichelte Referenzkurve eingeblendet werden. Der Tab ist nur sichtbar wenn die Maschine eingeschaltet ist (erfordert `switch_entity`). |
+| **Shots** | Shot-Verlauf mit vollständigem Chart, Score, Annotation (Kaffee, Mühle, Dosis, Notizen) und Vollbild-Chart. |
+| **Analytics** | Aggregierte Statistiken und Trendcharts über alle Shots. |
+| **Bibliothek** | Kaffeebohnen- und Mühlenkatalog mit Verknüpfung zu Shots. |
+| **Einwählen** | Einwähl-Assistent: Ziel-Shot mit aktuellen Versuchen vergleichen. |
+| **Wartung** | Fünf Wartungserinnerungen (Entkalken, Backflush, Gruppenköpf-Service, Dichtungen & Siebe, Wasserfilter) mit konfigurierbaren Schwellenwerten, Fortschrittsbalken und „Jetzt erledigt"-Button. |
+
+### Live-Tab und Switch-Entity
+
+Wenn `switch_entity` gesetzt ist, wird der **Live**-Tab ausgeblendet solange die Maschine aus ist und erscheint automatisch sobald sie eingeschaltet wird. Ohne Switch-Entity ist der Tab immer sichtbar.
+
 Vollständige Dokumentation — Features, Live-Modus, Analytics, Shot-Score, Exporte, Kompatibilität — im [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).
