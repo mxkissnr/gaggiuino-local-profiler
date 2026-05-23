@@ -12,6 +12,7 @@ const ANNOTATIONS_FILE = '/data/annotations.json';
 const TRASH_FILE     = '/data/trash.json';
 const BLOCKLIST_FILE = '/data/blocklist.json';
 const OPTIONS_FILE   = '/data/options.json';
+const LIBRARY_FILE   = '/data/coffee_library.json';
 const TRASH_TTL_MS   = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // HA Supervisor API (available when homeassistant_api: true in config.yaml)
@@ -108,6 +109,18 @@ function saveBlocklist(list) {
     fs.writeFileSync(BLOCKLIST_FILE, JSON.stringify(list, null, 2), 'utf8');
 }
 
+function loadLibrary() {
+    try {
+        if (fs.existsSync(LIBRARY_FILE))
+            return JSON.parse(fs.readFileSync(LIBRARY_FILE, 'utf8'));
+    } catch (e) {}
+    return { beans: [], grinders: [] };
+}
+
+function saveLibrary(lib) {
+    fs.writeFileSync(LIBRARY_FILE, JSON.stringify(lib, null, 2), 'utf8');
+}
+
 async function fetchMachineVersion() {
     if (cachedMachineVersion) return;
     const opts    = loadOptions();
@@ -151,6 +164,7 @@ try {
         log(`📂 Bestehende Datenbank unter ${DATA_FILE} gefunden.`);
     }
     if (!fs.existsSync(ANNOTATIONS_FILE)) fs.writeFileSync(ANNOTATIONS_FILE, '{}', 'utf8');
+    if (!fs.existsSync(LIBRARY_FILE))    fs.writeFileSync(LIBRARY_FILE, JSON.stringify({ beans: [], grinders: [] }, null, 2), 'utf8');
 } catch (err) {
     log(`❌ Fehler bei der Initialisierung: ${err.message}`, true);
 }
@@ -337,6 +351,76 @@ app.post('/api/shots/:id/delete', (req, res) => {
         log(`❌ Delete error: ${err.message}`, true);
         res.status(500).json({ error: 'Failed to delete' });
     }
+});
+
+// ── Coffee Library ────────────────────────────────────────────────────────────
+
+app.get('/api/library', (req, res) => {
+    res.json(loadLibrary());
+});
+
+app.post('/api/library/bean', (req, res) => {
+    const { name, roaster, roastDate, notes } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim())
+        return res.status(400).json({ error: 'name required' });
+    const lib  = loadLibrary();
+    const bean = { id: Date.now(), name: name.trim(), roaster: (roaster || '').trim(), roastDate: (roastDate || '').trim(), notes: (notes || '').trim() };
+    lib.beans.push(bean);
+    saveLibrary(lib);
+    res.json(bean);
+});
+
+app.put('/api/library/bean/:id', (req, res) => {
+    const id  = parseInt(req.params.id, 10);
+    const lib = loadLibrary();
+    const idx = lib.beans.findIndex(b => b.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'not found' });
+    const { name, roaster, roastDate, notes } = req.body;
+    if (name) lib.beans[idx].name      = name.trim();
+    if (roaster    !== undefined) lib.beans[idx].roaster   = roaster.trim();
+    if (roastDate  !== undefined) lib.beans[idx].roastDate = roastDate.trim();
+    if (notes      !== undefined) lib.beans[idx].notes     = notes.trim();
+    saveLibrary(lib);
+    res.json(lib.beans[idx]);
+});
+
+app.post('/api/library/bean/:id/delete', (req, res) => {
+    const id  = parseInt(req.params.id, 10);
+    const lib = loadLibrary();
+    lib.beans = lib.beans.filter(b => b.id !== id);
+    saveLibrary(lib);
+    res.json({ ok: true });
+});
+
+app.post('/api/library/grinder', (req, res) => {
+    const { name, notes } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim())
+        return res.status(400).json({ error: 'name required' });
+    const lib     = loadLibrary();
+    const grinder = { id: Date.now(), name: name.trim(), notes: (notes || '').trim() };
+    lib.grinders.push(grinder);
+    saveLibrary(lib);
+    res.json(grinder);
+});
+
+app.put('/api/library/grinder/:id', (req, res) => {
+    const id  = parseInt(req.params.id, 10);
+    const lib = loadLibrary();
+    const idx = lib.grinders.findIndex(g => g.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'not found' });
+    const { name, notes } = req.body;
+    if (name)  lib.grinders[idx].name  = name.trim();
+    if (notes !== undefined) lib.grinders[idx].notes = notes.trim();
+    saveLibrary(lib);
+    res.json(lib.grinders[idx]);
+});
+
+app.post('/api/library/grinder/:id/delete', (req, res) => {
+    const id  = parseInt(req.params.id, 10);
+    const lib = loadLibrary();
+    lib.grinders = lib.grinders.filter(g => g.id !== id);
+    saveLibrary(lib);
+    res.json({ ok: true });
 });
 
 // ── Live polling endpoint (replaces SSE — HA ServiceWorker blocks EventSource) ──
@@ -546,7 +630,7 @@ function scheduleNextSync() {
 }
 
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v1.19.4 gestartet auf Port ${PORT}`);
+    log(`🚀 Gaggiuino Local Profiler v1.20.0 gestartet auf Port ${PORT}`);
     const opts = loadOptions();
     log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
     log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);

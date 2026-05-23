@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh issue create --repo mxkissnr/gaggiuino-local-profiler --title 'Coffee Library: bean & grinder database' --label enhancement --body ' *)"
+      "Bash(gh issue create --repo mxkissnr/gaggiuino-local-profiler --title 'Coffee Library: bean & grinder database' --label enhancement --body ' *)",
+      "Bash(gh issue create --repo mxkissnr/gaggiuino-local-profiler --title 'Machine subtitle: extract dynamically from controller instead of static text' --label enhancement --body ' *)",
+      "Bash(gh issue *)"
     ]
   }
 }
