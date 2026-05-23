@@ -150,8 +150,8 @@ Home Assistant Host
 ---
 
 <p align="center">
-  <a href="gaggiuino-local-profiler/DOCS.md">📖 Documentation (EN)</a> ·
-  <a href="gaggiuino-local-profiler/DOCS.de.md">📖 Dokumentation (DE)</a> ·
+  <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/wiki">📖 Documentation (EN)</a> ·
+  <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/wiki/Home-de">📖 Dokumentation (DE)</a> ·
   <a href="gaggiuino-local-profiler/CHANGELOG.md">📋 Changelog</a> ·
   <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/issues">🐛 Issues</a>
 </p>

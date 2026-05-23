@@ -108,14 +108,19 @@
         .shot-wrapper.compare-active .compare-btn { background: #3498db; color: #fff; border-color: #2980b9; }
 
         #sidebar-footer {
-            padding: 12px 20px;
+            padding: 10px 20px;
             border-top: 1px solid var(--gray-700);
             font-size: .75rem;
             color: #71717a;
             display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .footer-row {
+            display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 8px;
+            gap: 6px;
         }
 
         .status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; }
@@ -904,11 +909,18 @@
     </div>
 
     <div id="sidebar-footer">
-        <div>
-            <span class="status-dot unknown" id="statusDot"></span>
-            <span id="syncTime">kein Sync</span>
+        <div class="footer-row">
+            <div>
+                <span class="status-dot unknown" id="statusDot"></span>
+                <span id="syncTime">kein Sync</span>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center">
+                <button id="powerBtn" onclick="toggleMachinePower()" style="display:none" title="">⏻</button>
+                <button id="syncBtn" onclick="triggerSync()">↻ Sync</button>
+            </div>
         </div>
-        <div style="display:flex;gap:6px;align-items:center">
+        <div class="footer-row">
+            <span id="glpVersionBadge" style="color:#3f3f46;font-size:.7rem;user-select:none"></span>
             <select id="langSelect" class="lang-select" onchange="setLang(this.value)">
                 <option value="de">DE</option>
                 <option value="en">EN</option>
@@ -916,9 +928,6 @@
                 <option value="fr">FR</option>
                 <option value="es">ES</option>
             </select>
-            <span id="glpVersionBadge" style="color:#3f3f46;font-size:.7rem;user-select:none"></span>
-            <button id="powerBtn" onclick="toggleMachinePower()" style="display:none" title="">⏻</button>
-            <button id="syncBtn" onclick="triggerSync()">↻ Sync</button>
         </div>
     </div>
 </div>

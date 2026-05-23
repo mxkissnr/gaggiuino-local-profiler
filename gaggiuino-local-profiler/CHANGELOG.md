@@ -1,3 +1,7 @@
+## 1.24.2
+- Polish: sidebar footer split into two rows — sync status top, version + language bottom; cleaner layout
+- Docs: README documentation links now point to GitHub Wiki (EN + DE)
+
 ## 1.24.1
 - Fix: shot calendar no longer hides recent shots — minimum cell size lowered from 7px to 4px so all 52 weeks always fit within the container without cutting off the right side
 - Docs: DOCS.md and DOCS.de.md replaced with short stubs; full documentation moved to GitHub Wiki
