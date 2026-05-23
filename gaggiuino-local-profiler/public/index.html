@@ -1128,7 +1128,7 @@
         <button id="mobileMenuBtn" onclick="openSidebar()">☰</button>
         <button id="expandSidebarBtn" onclick="toggleDesktopSidebar()" title="Sidebar aufklappen">›</button>
         <div id="mode-bar-scroll">
-            <button class="mode-btn" id="btnLive" onclick="switchMode('live')">
+            <button class="mode-btn" id="btnLive" onclick="switchMode('live')" style="display:none">
                 <span class="live-dot"></span>Live
             </button>
             <button class="mode-btn active" id="btnShots" onclick="switchMode('shots')">Shots</button>
@@ -2628,6 +2628,7 @@ async function updateStatus() {
             if (vEl) vEl.textContent = `v${s.glpVersion}`;
         }
         if (switchRes?.ok) updatePowerButton(await switchRes.json());
+        else updatePowerButton({ configured: false });
     } catch (e) {}
 }
 
@@ -2635,11 +2636,11 @@ function updatePowerButton(sw) {
     const btn     = document.getElementById('powerBtn');
     const liveBtn = document.getElementById('btnLive');
     if (!sw.configured) {
-        btn.style.display   = 'none';
-        machinePowerState   = null;
+        btn.style.display     = 'none';
+        machinePowerState     = null;
         liveBtn.style.display = '';
-        liveBtn.disabled    = false;
-        liveBtn.title       = '';
+        liveBtn.disabled      = false;
+        liveBtn.title         = '';
         return;
     }
     btn.style.display = '';
