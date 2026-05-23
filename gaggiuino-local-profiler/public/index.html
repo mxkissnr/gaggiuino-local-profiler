@@ -1128,10 +1128,10 @@
         <button id="mobileMenuBtn" onclick="openSidebar()">☰</button>
         <button id="expandSidebarBtn" onclick="toggleDesktopSidebar()" title="Sidebar aufklappen">›</button>
         <div id="mode-bar-scroll">
-            <button class="mode-btn active" id="btnShots" onclick="switchMode('shots')">Shots</button>
             <button class="mode-btn" id="btnLive" onclick="switchMode('live')">
                 <span class="live-dot"></span>Live
             </button>
+            <button class="mode-btn active" id="btnShots" onclick="switchMode('shots')">Shots</button>
             <button class="mode-btn" id="btnAnalytics" onclick="switchMode('analytics')">Analytics</button>
             <button class="mode-btn" id="btnDialin"    onclick="switchMode('dialin')">Einwählen</button>
             <button class="mode-btn" id="btnLibrary"   onclick="switchMode('library')">Bibliothek</button>
@@ -2635,10 +2635,11 @@ function updatePowerButton(sw) {
     const btn     = document.getElementById('powerBtn');
     const liveBtn = document.getElementById('btnLive');
     if (!sw.configured) {
-        btn.style.display = 'none';
-        machinePowerState = null;
-        liveBtn.disabled = false;
-        liveBtn.title    = '';
+        btn.style.display   = 'none';
+        machinePowerState   = null;
+        liveBtn.style.display = '';
+        liveBtn.disabled    = false;
+        liveBtn.title       = '';
         return;
     }
     btn.style.display = '';
@@ -2649,9 +2650,10 @@ function updatePowerButton(sw) {
                    : sw.state === false ? 'Maschine AUS – zum Einschalten klicken'
                    : 'Schalter-Status unbekannt';
 
-    const machineOff  = sw.state === false;
-    liveBtn.disabled  = machineOff;
-    liveBtn.title     = machineOff ? 'Live-Modus nicht verfügbar – Maschine ist ausgeschaltet' : '';
+    const machineOff      = sw.state === false;
+    liveBtn.style.display = machineOff ? 'none' : '';
+    liveBtn.disabled      = false;
+    liveBtn.title         = '';
     if (machineOff && currentMode === 'live') switchMode('shots');
 }
 
