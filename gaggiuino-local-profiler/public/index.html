@@ -791,22 +791,21 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #27272a;
-            border: 1px solid #3f3f46;
-            border-radius: 6px;
-            color: #a1a1aa;
+            background: transparent;
+            border: none;
+            color: #52525b;
             cursor: pointer;
-            font-size: 1rem;
-            width: 26px;
-            height: 26px;
+            font-size: 1.1rem;
+            width: 32px;
+            height: 100%;
             padding: 0;
-            margin-right: 8px;
+            margin-right: 4px;
             opacity: 0;
             pointer-events: none;
-            transition: opacity .3s ease, background .2s, color .2s;
+            transition: opacity .3s ease, color .2s;
         }
         #expandSidebarBtn.visible { opacity: 1; pointer-events: auto; }
-        #expandSidebarBtn:hover { background: #3f3f46; border-color: #52525b; color: #fff; }
+        #expandSidebarBtn:hover { color: #e4e4e7; }
         #sidebar > * { min-width: 320px; }
         #sidebar.desktop-collapsed {
             width: 0;
@@ -1090,7 +1089,6 @@
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                         <span class="annotation-title" data-i18n="ann_title">Notizen & Bewertung</span>
                         <button class="lib-open-btn" onclick="quickClone()" data-i18n="ann_clone_btn" title="">↩ Letzten</button>
-                        <button class="lib-open-btn" onclick="openLibraryModal()" data-i18n="ann_library_btn">☕ Bibliothek</button>
                     </div>
                     <div class="star-rating" id="starRating">
                         <span class="star" data-val="1">★</span>
@@ -1344,7 +1342,7 @@ const LOCALE_MAP = { de: 'de-DE', en: 'en-US', it: 'it-IT', fr: 'fr-FR', es: 'es
 
 const TRANSLATIONS = {
   de: {
-    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Bibliothek',
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiken', nav_library:'Bibliothek',
     sort_newest:'Neueste', sort_score:'Score', sort_rating:'Bewertung', sort_duration:'Dauer',
     search_placeholder:'Profil, Kaffee, Mühle …', trash_label:'Papierkorb',
     no_sync:'kein Sync', btn_sync:'↻ Sync',
@@ -1358,7 +1356,7 @@ const TRANSLATIONS = {
     tab_time:'⏱ Zeit', tab_pq:'P·Q Kurve',
     btn_fullscreen_close:'✕ Schließen', btn_fullscreen_tooltip:'Vollbild',
     btn_compare_tooltip:'Als Vergleichs-Shot wählen', btn_delete_tooltip:'Shot löschen',
-    ann_title:'Notizen & Bewertung', ann_library_btn:'☕ Bibliothek',
+    ann_title:'Notizen & Bewertung',
     ann_coffee:'Kaffee / Bohne', ann_coffee_ph:'z.B. Ethiopia Yirgacheffe',
     ann_grinder:'Mühle', ann_grinder_ph:'z.B. Niche Zero',
     ann_grind_setting:'Mahlgrad', ann_grind_ph:'z.B. 23 Clicks',
@@ -1442,7 +1440,7 @@ const TRANSLATIONS = {
     tab_time:'⏱ Time', tab_pq:'P·Q Curve',
     btn_fullscreen_close:'✕ Close', btn_fullscreen_tooltip:'Fullscreen',
     btn_compare_tooltip:'Select as compare shot', btn_delete_tooltip:'Delete shot',
-    ann_title:'Notes & Rating', ann_library_btn:'☕ Library',
+    ann_title:'Notes & Rating',
     ann_coffee:'Coffee / Bean', ann_coffee_ph:'e.g. Ethiopia Yirgacheffe',
     ann_grinder:'Grinder', ann_grinder_ph:'e.g. Niche Zero',
     ann_grind_setting:'Grind setting', ann_grind_ph:'e.g. 23 Clicks',
@@ -1512,7 +1510,7 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Error: ${msg}`,
   },
   it: {
-    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Libreria',
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
     sort_newest:'Recenti', sort_score:'Score', sort_rating:'Voto', sort_duration:'Durata',
     search_placeholder:'Profilo, Caffè, Macinino …', trash_label:'Cestino',
     no_sync:'nessun sync', btn_sync:'↻ Sync',
@@ -1526,7 +1524,7 @@ const TRANSLATIONS = {
     tab_time:'⏱ Tempo', tab_pq:'Curva P·Q',
     btn_fullscreen_close:'✕ Chiudi', btn_fullscreen_tooltip:'Schermo intero',
     btn_compare_tooltip:'Seleziona come shot di confronto', btn_delete_tooltip:'Elimina shot',
-    ann_title:'Note & Valutazione', ann_library_btn:'☕ Libreria',
+    ann_title:'Note & Valutazione',
     ann_coffee:'Caffè / Grani', ann_coffee_ph:'es. Ethiopia Yirgacheffe',
     ann_grinder:'Macinino', ann_grinder_ph:'es. Niche Zero',
     ann_grind_setting:'Macinatura', ann_grind_ph:'es. 23 Click',
@@ -1596,7 +1594,7 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Errore: ${msg}`,
   },
   fr: {
-    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Bibliothèque',
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque',
     sort_newest:'Récents', sort_score:'Score', sort_rating:'Note', sort_duration:'Durée',
     search_placeholder:'Profil, Café, Moulin …', trash_label:'Corbeille',
     no_sync:'pas de sync', btn_sync:'↻ Sync',
@@ -1610,7 +1608,7 @@ const TRANSLATIONS = {
     tab_time:'⏱ Temps', tab_pq:'Courbe P·Q',
     btn_fullscreen_close:'✕ Fermer', btn_fullscreen_tooltip:'Plein écran',
     btn_compare_tooltip:'Sélectionner comme shot de comparaison', btn_delete_tooltip:'Supprimer le shot',
-    ann_title:'Notes & Évaluation', ann_library_btn:'☕ Bibliothèque',
+    ann_title:'Notes & Évaluation',
     ann_coffee:'Café / Grain', ann_coffee_ph:'ex. Ethiopia Yirgacheffe',
     ann_grinder:'Moulin', ann_grinder_ph:'ex. Niche Zero',
     ann_grind_setting:'Mouture', ann_grind_ph:'ex. 23 Clics',
@@ -1680,7 +1678,7 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Erreur : ${msg}`,
   },
   es: {
-    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Biblioteca',
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
     sort_newest:'Recientes', sort_score:'Score', sort_rating:'Valoración', sort_duration:'Duración',
     search_placeholder:'Perfil, Café, Molino …', trash_label:'Papelera',
     no_sync:'sin sync', btn_sync:'↻ Sync',
@@ -1694,7 +1692,7 @@ const TRANSLATIONS = {
     tab_time:'⏱ Tiempo', tab_pq:'Curva P·Q',
     btn_fullscreen_close:'✕ Cerrar', btn_fullscreen_tooltip:'Pantalla completa',
     btn_compare_tooltip:'Seleccionar como shot de comparación', btn_delete_tooltip:'Eliminar shot',
-    ann_title:'Notas & Valoración', ann_library_btn:'☕ Biblioteca',
+    ann_title:'Notas & Valoración',
     ann_coffee:'Café / Grano', ann_coffee_ph:'ej. Ethiopia Yirgacheffe',
     ann_grinder:'Molino', ann_grinder_ph:'ej. Niche Zero',
     ann_grind_setting:'Molturación', ann_grind_ph:'ej. 23 Clicks',
