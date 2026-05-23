@@ -532,6 +532,44 @@
 
         .live-chart-container { position: relative; height: 420px; width: 100%; }
 
+        /* ── Live reference bar ── */
+        #live-ref-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-top: 1px solid #27272a;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+        .live-ref-label { font-size: .75rem; color: #71717a; flex-shrink: 0; }
+        #refShotSelect {
+            flex: 1;
+            min-width: 160px;
+            background: #1c1c1e;
+            border: 1px solid #3f3f46;
+            border-radius: 6px;
+            color: #e4e4e7;
+            font-size: .78rem;
+            padding: 4px 8px;
+            outline: none;
+            font-family: 'Figtree', sans-serif;
+        }
+        #refShotSelect:focus { border-color: #71717a; }
+        #refClearBtn {
+            background: transparent;
+            border: 1px solid #3f3f46;
+            border-radius: 6px;
+            color: #71717a;
+            font-size: .78rem;
+            padding: 4px 10px;
+            cursor: pointer;
+            flex-shrink: 0;
+            font-family: 'Figtree', sans-serif;
+            transition: color .2s, border-color .2s;
+        }
+        #refClearBtn:hover { color: #e4e4e7; border-color: #71717a; }
+
         #live-idle {
             display: flex;
             flex-direction: column;
@@ -1392,6 +1430,14 @@
             </div>
         </div>
 
+        <div id="live-ref-bar">
+            <span class="live-ref-label" data-i18n="ref_label">Referenz:</span>
+            <select id="refShotSelect" onchange="onRefShotChange(this.value)">
+                <option value="" data-i18n="ref_none">— kein Referenz-Shot —</option>
+            </select>
+            <button id="refClearBtn" onclick="clearReferenceShot()" style="display:none" data-i18n="ref_clear">✕ Löschen</button>
+        </div>
+
         <div id="live-idle" style="display:none">
             <div class="idle-icon">☕</div>
             <h2>Maschine bereit</h2>
@@ -1509,6 +1555,8 @@ const TRANSLATIONS = {
     grind_coarser_urgent:'Gröber mahlen', grind_channeling:'Puck-Vorbereitung prüfen',
     live_title:'Live Shot', live_connecting:'Verbinde …', live_brewing:'Brewing …',
     live_waiting:'Warte auf Bezug …', live_disabled:'Live deaktiviert (Maschine aus)',
+    ref_label:'Referenz:', ref_none:'— kein Referenz-Shot —', ref_clear:'✕ Löschen',
+    ref_pressure:'Ref: Druck', ref_flow:'Ref: Fluss', ref_weight:'Ref: Gewicht', ref_temp:'Ref: Temp',
     live_idle_text:'Sobald ein Bezug startet, erscheinen hier die Echtzeit-Daten.',
     live_time_unit:'min:sec', live_time_label:'Zeit',
     live_pressure_label:'Druck', live_flow_label:'Pumpenfluss',
@@ -1601,6 +1649,8 @@ const TRANSLATIONS = {
     grind_coarser_urgent:'Grind coarser', grind_channeling:'Check puck prep',
     live_title:'Live Shot', live_connecting:'Connecting …', live_brewing:'Brewing …',
     live_waiting:'Waiting for shot …', live_disabled:'Live disabled (machine off)',
+    ref_label:'Reference:', ref_none:'— no reference shot —', ref_clear:'✕ Clear',
+    ref_pressure:'Ref: Pressure', ref_flow:'Ref: Flow', ref_weight:'Ref: Weight', ref_temp:'Ref: Temp',
     live_idle_text:'Once a shot starts, real-time data will appear here.',
     live_time_unit:'min:sec', live_time_label:'Time',
     live_pressure_label:'Pressure', live_flow_label:'Pump Flow',
@@ -1693,6 +1743,8 @@ const TRANSLATIONS = {
     grind_coarser_urgent:'Macinare più grosso', grind_channeling:'Controllare la preparazione del puck',
     live_title:'Shot Live', live_connecting:'Connessione …', live_brewing:'Estrazione …',
     live_waiting:'In attesa dello shot …', live_disabled:'Live disabilitato (macchina spenta)',
+    ref_label:'Riferimento:', ref_none:'— nessuno shot di riferimento —', ref_clear:'✕ Rimuovi',
+    ref_pressure:'Rif: Pressione', ref_flow:'Rif: Flusso', ref_weight:'Rif: Peso', ref_temp:'Rif: Temp',
     live_idle_text:'Quando inizia uno shot, i dati in tempo reale appariranno qui.',
     live_time_unit:'min:sec', live_time_label:'Tempo',
     live_pressure_label:'Pressione', live_flow_label:'Flusso pompa',
@@ -1785,6 +1837,8 @@ const TRANSLATIONS = {
     grind_coarser_urgent:'Moudre plus grossier', grind_channeling:'Vérifier la préparation du puck',
     live_title:'Shot Live', live_connecting:'Connexion …', live_brewing:'Extraction …',
     live_waiting:'En attente du shot …', live_disabled:'Live désactivé (machine éteinte)',
+    ref_label:'Référence:', ref_none:'— pas de shot de référence —', ref_clear:'✕ Effacer',
+    ref_pressure:'Réf: Pression', ref_flow:'Réf: Débit', ref_weight:'Réf: Poids', ref_temp:'Réf: Temp',
     live_idle_text:"Dès qu'un shot démarre, les données en temps réel apparaîtront ici.",
     live_time_unit:'min:sec', live_time_label:'Temps',
     live_pressure_label:'Pression', live_flow_label:'Débit pompe',
@@ -1877,6 +1931,8 @@ const TRANSLATIONS = {
     grind_coarser_urgent:'Moler más grueso', grind_channeling:'Revisar preparación del puck',
     live_title:'Shot Live', live_connecting:'Conectando …', live_brewing:'Extrayendo …',
     live_waiting:'Esperando shot …', live_disabled:'Live desactivado (máquina apagada)',
+    ref_label:'Referencia:', ref_none:'— sin shot de referencia —', ref_clear:'✕ Quitar',
+    ref_pressure:'Ref: Presión', ref_flow:'Ref: Flujo', ref_weight:'Ref: Peso', ref_temp:'Ref: Temp',
     live_idle_text:'Cuando comience un shot, los datos en tiempo real aparecerán aquí.',
     live_time_unit:'min:seg', live_time_label:'Tiempo',
     live_pressure_label:'Presión', live_flow_label:'Flujo bomba',
@@ -2024,6 +2080,7 @@ let trashOpen     = false;
 // Live state
 let livePollInterval  = null;
 let liveChart         = null;
+let refShotId         = null;
 let liveIsActive      = false;
 let liveLastSeq       = -1;
 let liveWasLive       = false;
@@ -2145,6 +2202,7 @@ function switchMode(mode) {
     document.getElementById('settings-view').style.display     = mode === 'settings'    ? 'flex' : 'none';
 
     if (mode === 'live') {
+        populateRefSelector();
         initLiveChart();
         connectLiveStream();
     } else {
@@ -2649,7 +2707,12 @@ function initLiveChart() {
                 { label: 'Druck',       data: [], yAxisID: 'y',    borderWidth: 2.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
                 { label: 'Pumpenfluss', data: [], yAxisID: 'y',    borderWidth: 2,   tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
                 { label: 'Gewicht',     data: [], yAxisID: 'y1',   borderWidth: 2,   tension: 0.1, borderColor: '#2ecc71', backgroundColor: 'transparent', pointStyle: false },
-                { label: 'Temperatur',  data: [], yAxisID: 'y1',   borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false }
+                { label: 'Temperatur',  data: [], yAxisID: 'y1',   borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false },
+                // Reference datasets (4-7) — dashed, semi-transparent
+                { label: t('ref_pressure'), data: [], yAxisID: 'y',  borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(52,152,219,0.4)',  borderDash: [6,3], backgroundColor: 'transparent', pointStyle: false },
+                { label: t('ref_flow'),     data: [], yAxisID: 'y',  borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(243,156,18,0.4)',  borderDash: [6,3], backgroundColor: 'transparent', pointStyle: false },
+                { label: t('ref_weight'),   data: [], yAxisID: 'y1', borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(46,204,113,0.4)',  borderDash: [6,3], backgroundColor: 'transparent', pointStyle: false },
+                { label: t('ref_temp'),     data: [], yAxisID: 'y1', borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(231,76,60,0.4)',   borderDash: [6,3], backgroundColor: 'transparent', pointStyle: false }
             ]
         },
         options: {
@@ -2668,6 +2731,63 @@ function initLiveChart() {
             }
         }
     });
+
+    // Re-apply reference shot data after chart re-init
+    if (refShotId) {
+        const refShot = shots.find(s => s.id === refShotId);
+        if (refShot) _applyRefDatasets(getShotData(refShot));
+    }
+}
+
+function _applyRefDatasets(d) {
+    if (!liveChart) return;
+    liveChart.data.datasets[4].data = d.pressure;
+    liveChart.data.datasets[5].data = d.flow;
+    liveChart.data.datasets[6].data = d.weight;
+    liveChart.data.datasets[7].data = d.temp;
+    liveChart.update('none');
+}
+
+function populateRefSelector() {
+    const sel = document.getElementById('refShotSelect');
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">${t('ref_none')}</option>`;
+    shots.filter(s => (s.datapoints?.pressure?.length || 0) > 5)
+        .slice().reverse().slice(0, 40)
+        .forEach(s => {
+            const date    = new Date(s.timestamp * 1000).toLocaleDateString();
+            const profile = s.profile?.name || s.profileName || '?';
+            const ann     = s.annotation || {};
+            const score   = ann.score != null ? ` · ${ann.score}` : '';
+            const coffee  = ann.coffee ? ` — ${ann.coffee}` : '';
+            const opt = document.createElement('option');
+            opt.value       = s.id;
+            opt.textContent = `${date} · ${profile}${coffee}${score}`;
+            if (String(s.id) === String(prev)) opt.selected = true;
+            sel.appendChild(opt);
+        });
+}
+
+function onRefShotChange(val) {
+    if (!val) { clearReferenceShot(); return; }
+    refShotId = parseInt(val);
+    const shot = shots.find(s => s.id === refShotId);
+    if (!shot) return;
+    _applyRefDatasets(getShotData(shot));
+    document.getElementById('refClearBtn').style.display = '';
+}
+
+function clearReferenceShot() {
+    refShotId = null;
+    if (liveChart) {
+        [4,5,6,7].forEach(i => { liveChart.data.datasets[i].data = []; });
+        liveChart.update('none');
+    }
+    const sel = document.getElementById('refShotSelect');
+    if (sel) sel.value = '';
+    const btn = document.getElementById('refClearBtn');
+    if (btn) btn.style.display = 'none';
 }
 
 function connectLiveStream() {
