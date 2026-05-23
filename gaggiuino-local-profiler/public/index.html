@@ -3367,10 +3367,10 @@ function buildCalendar() {
         weeks.push(week);
     }
 
-    // Responsive cell size: fit all weeks into available container width
+    // Responsive cell size: fit ALL weeks into available container width exactly
     const GAP      = 2;
     const W        = el.offsetWidth || 600;
-    const cellSize = Math.max(7, Math.floor((W - (weeks.length - 1) * GAP) / weeks.length));
+    const cellSize = Math.max(4, Math.floor((W - (weeks.length - 1) * GAP) / weeks.length));
     const CELL     = cellSize + GAP;
     const cellSz   = `width:${cellSize}px;height:${cellSize}px`;
 

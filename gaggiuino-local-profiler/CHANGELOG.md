@@ -1,3 +1,7 @@
+## 1.24.1
+- Fix: shot calendar no longer hides recent shots — minimum cell size lowered from 7px to 4px so all 52 weeks always fit within the container without cutting off the right side
+- Docs: DOCS.md and DOCS.de.md replaced with short stubs; full documentation moved to GitHub Wiki
+
 ## 1.24.0
 - Feature: Live mode shot timer ticks smoothly every 100ms (client-side wall clock, re-synced with machine data each poll) — no more 1-second jumps in the time display; closes #25
 - Feature: Language switcher is now a compact dropdown instead of 5 inline buttons — saves space in the sidebar footer, same localStorage persistence
