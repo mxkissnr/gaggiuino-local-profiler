@@ -11,16 +11,22 @@ Working rules for this repo. Follow these in every session.
 
 ## Workflow
 
-**Issue first, then code.**
-Every bug fix or feature needs a GitHub issue before the first line of code.
-Only exception: typo fixes or single-word changes.
+> **STOP — issue first, then code. This rule has been violated repeatedly.**
+> Do not write a single line of implementation before the issue exists.
+> No exceptions for bug fixes, security fixes, refactors, or "small" changes.
+> The only exception is a typo or single-word change.
 
+**Step 1 — create the issue (always, before anything else):**
 ```
 gh issue create --repo mxkissnr/gaggiuino-local-profiler --title "..." --label "bug|enhancement" --body "..."
 gh project item-add 2 --owner mxkissnr --url <issue-url>
 ```
 
-Close the issue in the commit message: `Closes #N`
+**Step 2 — implement the fix/feature.**
+
+**Step 3 — close the issue in the commit message:** `Closes #N`
+
+If you catch yourself writing code without an issue number in hand: stop, create the issue first, then continue.
 
 ## Versioning
 
