@@ -33,7 +33,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 
 | Tab | Description |
 |---|---|
-| **Live** | Real-time pressure, flow, weight and temperature charts during a shot. Optionally overlay any previous shot as a dashed reference curve. The tab is only visible when the machine is on (requires `switch_entity`). |
+| **Live** | Real-time pressure, flow, weight and temperature charts during a shot. When a brew starts, the most recent shot with the same profile name is automatically overlaid as a dashed reference curve. Can be overridden or cleared via the dropdown. The tab is only visible when the machine is on (requires `switch_entity`). |
 | **Shots** | Shot history with full chart view, score, annotation (coffee, grinder, dose, notes) and a fullscreen chart. |
 | **Analytics** | Aggregated statistics and trend charts across all shots. |
 | **Library** | Coffee bean and grinder catalogue linked to shots. |
