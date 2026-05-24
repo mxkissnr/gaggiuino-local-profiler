@@ -2876,6 +2876,8 @@ function updatePreheatWidget(d) {
         const m = Math.floor(d.remaining / 60);
         const s = d.remaining % 60;
         countdown.textContent     = t('preheat_remain', m, s);
+        const statusEl = document.getElementById('preheat-status-text');
+        if (statusEl && d.preheatTime) statusEl.textContent = `${t('preheat_warming')} · ${d.preheatTime} min`;
     } else {
         readyBadge.style.display  = 'none';
         warmingWrap.style.display = 'none';
