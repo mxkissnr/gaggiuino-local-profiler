@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.32.3';
+const GLP_VERSION   = '1.32.4';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -82,7 +82,7 @@ let cachedMachineVersion = null; // firmware version from controller, fetched on
 let livePollTimer  = null;
 let liveAccum      = null; // shot data accumulator during brew
 let isPollRunning  = false;
-let machineOn      = true; // optimistic default; updated by checkAndApplyMachinePower()
+let machineOn      = false; // updated by checkAndApplyMachinePower() on startup and every 30s
 
 // Preheat state
 let switchOnAt     = null; // ms timestamp when preheat timer started
