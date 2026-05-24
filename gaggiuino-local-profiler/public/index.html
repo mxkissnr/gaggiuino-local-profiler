@@ -2819,6 +2819,20 @@ function populateRefSelector() {
         });
 }
 
+function autoApplyRefShot(profileName) {
+    const match = shots
+        .filter(s => (s.profile?.name || s.profileName || '') === profileName
+                  && (s.datapoints?.pressure?.length || 0) > 5)
+        .sort((a, b) => b.timestamp - a.timestamp)[0];
+    if (!match) return;
+    refShotId = match.id;
+    _applyRefDatasets(getShotData(match));
+    const sel = document.getElementById('refShotSelect');
+    if (sel) sel.value = String(match.id);
+    const btn = document.getElementById('refClearBtn');
+    if (btn) btn.style.display = '';
+}
+
 function onRefShotChange(val) {
     if (!val) { clearReferenceShot(); return; }
     refShotId = parseInt(val);
@@ -2893,6 +2907,11 @@ async function fetchLiveData() {
         // First successful response — mark as ready
         if (livePollInterval && document.getElementById('live-status-text').textContent === t('live_connecting')) {
             setLiveBadge('ready');
+        }
+
+        // Brew just started → auto-select last same-profile shot as reference
+        if (!liveWasLive && msg.isLive && msg.profileName) {
+            autoApplyRefShot(msg.profileName);
         }
 
         // Brew just ended → reload shot list after sync delay
