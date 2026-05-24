@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.32.0';
+const GLP_VERSION   = '1.32.1';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -521,7 +521,7 @@ app.post('/api/restore', express.json({ limit: '50mb' }), (req, res) => {
         if (Array.isArray(b.shots))          fs.writeFileSync(DATA_FILE,       JSON.stringify(b.shots, null, 2), 'utf8');
         if (b.annotations && typeof b.annotations === 'object')
                                              fs.writeFileSync(ANNOTATIONS_FILE, JSON.stringify(b.annotations, null, 2), 'utf8');
-        if (b.coffee_library)                fs.writeFileSync(LIBRARY_FILE,    JSON.stringify(b.coffee_library, null, 2), 'utf8');
+        if (b.coffee_library && typeof b.coffee_library === 'object') fs.writeFileSync(LIBRARY_FILE, JSON.stringify(b.coffee_library, null, 2), 'utf8');
         if (Array.isArray(b.blocklist))      fs.writeFileSync(BLOCKLIST_FILE,  JSON.stringify(b.blocklist, null, 2), 'utf8');
         if (b.trash && typeof b.trash === 'object')
                                              fs.writeFileSync(TRASH_FILE,      JSON.stringify(b.trash, null, 2), 'utf8');
@@ -534,17 +534,19 @@ app.get('/api/maintenance', (req, res) => {
     res.json(computeMaintenanceStats(loadMaintenance()));
 });
 
+const VALID_MAINTENANCE_TASKS = new Set(['descaling', 'backflush', 'grouphead', 'gaskets', 'waterfilter']);
+
 app.post('/api/maintenance/:task/done', (req, res) => {
+    if (!VALID_MAINTENANCE_TASKS.has(req.params.task)) return res.status(404).json({ error: 'Unknown task' });
     const maint = loadMaintenance();
-    if (!maint[req.params.task]) return res.status(404).json({ error: 'Unknown task' });
     maint[req.params.task].lastDate = new Date().toISOString().split('T')[0];
     saveMaintenance(maint);
     res.json(computeMaintenanceStats(maint));
 });
 
 app.post('/api/maintenance/:task/threshold', express.json(), (req, res) => {
+    if (!VALID_MAINTENANCE_TASKS.has(req.params.task)) return res.status(404).json({ error: 'Unknown task' });
     const maint = loadMaintenance();
-    if (!maint[req.params.task]) return res.status(404).json({ error: 'Unknown task' });
     const { threshold_shots, threshold_days } = req.body;
     if (threshold_shots !== undefined) maint[req.params.task].threshold_shots = parseInt(threshold_shots) || null;
     if (threshold_days  !== undefined) maint[req.params.task].threshold_days  = parseInt(threshold_days)  || null;
@@ -791,7 +793,7 @@ async function syncShots() {
         lastSyncError = null;
         log(`✅ Sync abgeschlossen. ${localShots.length} Shots gespeichert.`);
     } catch (err) {
-        lastSyncError = err.message;
+        lastSyncError = err.message.replace(/https?:\/\/\S+/g, '[url]');
         lastSyncTime  = new Date().toISOString();
         log(`❌ Sync-Fehler: ${err.message}`, true);
     }
