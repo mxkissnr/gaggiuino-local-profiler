@@ -956,8 +956,9 @@
         }
 
         /* ── Maintenance view ── */
-        #maintenance-view { display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto; padding:24px; gap:16px; }
-        .maint-card { background:#18181b; border:1px solid #3f3f46; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:10px; max-width:520px; }
+        #maintenance-view { display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto; padding:24px; }
+        #maint-cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(420px,100%),1fr)); gap:16px; align-items:start; }
+        .maint-card { background:#18181b; border:1px solid #3f3f46; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:10px; }
         .maint-card.status-due  { border-color:#ef4444; }
         .maint-card.status-soon { border-color:#f59e0b; }
         .maint-card-header { display:flex; align-items:center; gap:10px; }
@@ -1314,7 +1315,7 @@
 
     <!-- Maintenance view -->
     <div id="maintenance-view">
-        <div id="maint-cards" style="display:flex;flex-direction:column;gap:16px;max-width:520px;width:100%"></div>
+        <div id="maint-cards"></div>
     </div>
 
     <!-- Library view -->

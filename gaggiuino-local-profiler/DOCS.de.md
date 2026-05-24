@@ -37,7 +37,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | **Analytics** | Aggregierte Statistiken und Trendcharts über alle Shots. |
 | **Bibliothek** | Kaffeebohnen- und Mühlenkatalog mit Verknüpfung zu Shots. |
 | **Einwählen** | Einwähl-Assistent: Ziel-Shot mit aktuellen Versuchen vergleichen. |
-| **Wartung** | Fünf Wartungserinnerungen (Entkalken, Backflush, Gruppenköpf-Service, Dichtungen & Siebe, Wasserfilter) mit konfigurierbaren Schwellenwerten, Fortschrittsbalken und „Jetzt erledigt"-Button. |
+| **Wartung** | Fünf Wartungserinnerungen (Entkalken, Backflush, Gruppenköpf-Service, Dichtungen & Siebe, Wasserfilter) mit konfigurierbaren Schwellenwerten, Fortschrittsbalken und „Jetzt erledigt"-Button. Karten werden auf breiteren Bildschirmen im 2-Spalten-Grid angezeigt. |
 
 ### Live-Tab und Switch-Entity
 

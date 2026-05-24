@@ -37,7 +37,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | **Analytics** | Aggregated statistics and trend charts across all shots. |
 | **Library** | Coffee bean and grinder catalogue linked to shots. |
 | **Einwählen** | Dial-in assistant: compare a target shot with recent attempts. |
-| **Maintenance** | Five maintenance reminders (descaling, backflush, group head service, gaskets & screens, water filter) with configurable thresholds, progress bars and a "Done now" button. |
+| **Maintenance** | Five maintenance reminders (descaling, backflush, group head service, gaskets & screens, water filter) with configurable thresholds, progress bars and a "Done now" button. Cards displayed in a 2-column grid on wider screens. |
 
 ### Live tab and switch entity
 
