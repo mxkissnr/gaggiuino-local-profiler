@@ -1603,6 +1603,7 @@ const TRANSLATIONS = {
     maint_ago_days:(n)=>`Vor ${n} Tag${n===1?'':'en'}`,
     maint_shots_since:(n)=>`${n} Shot${n===1?'':'s'} seit letztem`,
     maint_thresh_shots:'Grenze Shots', maint_thresh_days:'Grenze Tage',
+    maint_ok:'✓ OK',
     maint_done_btn:'Jetzt erledigt',
     dialin_empty:'Noch keine Shots für die Einwähl-Ansicht.',
     dialin_pressure:'Druck', dialin_duration:'Dauer', dialin_dose:'Dosis', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1697,6 +1698,7 @@ const TRANSLATIONS = {
     maint_ago_days:(n)=>`${n} day${n===1?'':'s'} ago`,
     maint_shots_since:(n)=>`${n} shot${n===1?'':'s'} since last`,
     maint_thresh_shots:'Threshold shots', maint_thresh_days:'Threshold days',
+    maint_ok:'✓ OK',
     maint_done_btn:'Mark as done',
     dialin_empty:'No shots yet for dial-in view.',
     dialin_pressure:'Pressure', dialin_duration:'Duration', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1791,6 +1793,7 @@ const TRANSLATIONS = {
     maint_ago_days:(n)=>`${n} giorno${n===1?'':'i'} fa`,
     maint_shots_since:(n)=>`${n} shot dall'ultimo`,
     maint_thresh_shots:'Soglia shots', maint_thresh_days:'Soglia giorni',
+    maint_ok:'✓ OK',
     maint_done_btn:'Fatto ora',
     dialin_empty:'Nessun shot per la vista di calibrazione.',
     dialin_pressure:'Pressione', dialin_duration:'Durata', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1885,6 +1888,7 @@ const TRANSLATIONS = {
     maint_ago_days:(n)=>`Il y a ${n} jour${n===1?'':'s'}`,
     maint_shots_since:(n)=>`${n} shot${n===1?'':'s'} depuis`,
     maint_thresh_shots:'Seuil shots', maint_thresh_days:'Seuil jours',
+    maint_ok:'✓ OK',
     maint_done_btn:'Fait maintenant',
     dialin_empty:'Aucun shot pour la vue de réglage.',
     dialin_pressure:'Pression', dialin_duration:'Durée', dialin_dose:'Dose', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -1979,6 +1983,7 @@ const TRANSLATIONS = {
     maint_ago_days:(n)=>`Hace ${n} día${n===1?'':'s'}`,
     maint_shots_since:(n)=>`${n} shot${n===1?'':'s'} desde último`,
     maint_thresh_shots:'Límite shots', maint_thresh_days:'Límite días',
+    maint_ok:'✓ OK',
     maint_done_btn:'Hecho ahora',
     dialin_empty:'No hay shots para la vista de calibración.',
     dialin_pressure:'Presión', dialin_duration:'Duración', dialin_dose:'Dosis', dialin_ratio:'Ratio', dialin_yield:'EY %',
@@ -2318,7 +2323,7 @@ const MAINT_META = {
 };
 
 function maintStatusLabel(status) {
-    return { ok:'✓ OK', soon: t('maint_soon'), due: t('maint_due'), never: t('maint_never') }[status] || '';
+    return { ok: t('maint_ok'), soon: t('maint_soon'), due: t('maint_due'), never: t('maint_never') }[status] || '';
 }
 
 async function loadMaintenanceView() {
