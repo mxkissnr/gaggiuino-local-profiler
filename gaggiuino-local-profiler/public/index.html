@@ -2250,7 +2250,6 @@ function switchMode(mode) {
 
     if (mode === 'live') {
         populateRefSelector();
-        initLiveChart();
         connectLiveStream();
     } else {
         disconnectLiveStream();
@@ -2856,6 +2855,7 @@ function clearReferenceShot() {
 
 function connectLiveStream() {
     disconnectLiveStream();
+    initLiveChart();
     setLiveBadge('connecting');
     liveLastSeq  = -1;
     liveWasLive  = false;
