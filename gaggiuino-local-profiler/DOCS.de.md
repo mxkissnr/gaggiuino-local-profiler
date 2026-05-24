@@ -26,6 +26,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | `machine_url` | API-URL des Gaggiuino-Controllers | `http://gaggia.intern/api/shots` |
 | `sync_interval` | Automatischer Sync-Intervall in Minuten (1–60) | `5` |
 | `switch_entity` | HA-Switch-Entität zum Ein-/Ausschalten der Maschine | *(leer)* |
+| `preheat_time` | Aufwärmzeit in Minuten — wie lange nach dem Einschalten bis die Maschine brühbereit ist (1–120) | `20` |
 | `port` | Port, auf dem der Server lauscht (1024–65535) | `8099` |
 
 ## Features
@@ -39,8 +40,10 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | **Einwählen** | Einwähl-Assistent: Ziel-Shot mit aktuellen Versuchen vergleichen. |
 | **Wartung** | Fünf Wartungserinnerungen (Entkalken, Backflush, Gruppenköpf-Service, Dichtungen & Siebe, Wasserfilter) mit konfigurierbaren Schwellenwerten, Fortschrittsbalken und „Jetzt erledigt"-Button. Karten werden auf breiteren Bildschirmen im 2-Spalten-Grid angezeigt. |
 
-### Live-Tab und Switch-Entity
+### Live-Tab, Switch-Entity und Aufwärmtimer
 
 Wenn `switch_entity` gesetzt ist, wird der **Live**-Tab ausgeblendet solange die Maschine aus ist und erscheint automatisch sobald sie eingeschaltet wird. Ohne Switch-Entity ist der Tab immer sichtbar.
+
+Nach dem Einschalten zeigt der Live-Tab einen Fortschrittsbalken und einen Countdown bis `preheat_time` Minuten abgelaufen sind. Der Timer wird **nicht** zurückgesetzt, wenn die Maschine kurz aus- und wieder eingeschaltet wird, solange die Temperatur noch über 80 °C liegt (Auszeit < 5 Minuten) — kurze Stromunterbrechungen werden ignoriert. Der Aufwärmstatus wird auch als HA-Sensoren über die Companion-Integration bereitgestellt (`binary_sensor.…preheat_ready`, `sensor.…preheat_elapsed`, `sensor.…preheat_remaining`).
 
 Vollständige Dokumentation — Features, Live-Modus, Analytics, Shot-Score, Exporte, Kompatibilität — im [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).

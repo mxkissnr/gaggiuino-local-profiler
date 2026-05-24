@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.30.5';
+const GLP_VERSION   = '1.31.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -83,6 +83,11 @@ let livePollTimer  = null;
 let liveAccum      = null; // shot data accumulator during brew
 let isPollRunning  = false;
 let machineOn      = true; // optimistic default; updated by checkAndApplyMachinePower()
+
+// Preheat state
+let switchOnAt     = null; // ms timestamp when preheat timer started
+let switchOffAt    = null; // ms timestamp when machine last switched off
+let currentTemp    = null; // latest temperature reading from machine (°C)
 
 function log(message, isError = false) {
     const now = new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });
@@ -547,6 +552,24 @@ app.post('/api/maintenance/:task/threshold', express.json(), (req, res) => {
     res.json(computeMaintenanceStats(maint));
 });
 
+app.get('/api/preheat', (req, res) => {
+    const opts        = loadOptions();
+    const preheatMins = Math.max(1, parseInt(opts.preheat_time) || 20);
+    const preheatMs   = preheatMins * 60 * 1000;
+
+    const machineOff  = !machineOn && !!opts.switch_entity;
+    if (machineOff || !switchOnAt) {
+        return res.json({ ready: false, elapsed: 0, remaining: preheatMins * 60, pct: 0, preheatTime: preheatMins, temp: currentTemp });
+    }
+
+    const elapsedMs = Date.now() - switchOnAt;
+    const elapsed   = Math.floor(elapsedMs / 1000);
+    const remaining = Math.max(0, Math.ceil((preheatMs - elapsedMs) / 1000));
+    const pct       = Math.min(1, elapsedMs / preheatMs);
+
+    res.json({ ready: remaining === 0, elapsed, remaining, pct, preheatTime: preheatMins, temp: currentTemp });
+});
+
 app.get('/api/live/data', (req, res) => {
     res.json({
         isLive:      !!liveAccum,
@@ -558,6 +581,15 @@ app.get('/api/live/data', (req, res) => {
 
 function startLivePolling() {
     if (livePollTimer) return;
+
+    const WARM_TEMP_MIN   = 80;              // °C — machine considered still warm
+    const WARM_OFF_MAX_MS = 5 * 60 * 1000;  // off < 5 min + warm temp = keep timer
+
+    const offMs     = switchOffAt ? Date.now() - switchOffAt : Infinity;
+    const stillWarm = currentTemp !== null && currentTemp > WARM_TEMP_MIN && offMs < WARM_OFF_MAX_MS;
+
+    if (!switchOnAt || !stillWarm) switchOnAt = Date.now();
+
     log('▶ Live-Polling gestartet via Gaggiuino /api/system/status');
     livePollTimer = setInterval(pollLive, 1000);
 }
@@ -567,6 +599,7 @@ function stopLivePolling() {
     clearInterval(livePollTimer);
     livePollTimer = null;
     liveAccum     = null;
+    switchOffAt   = Date.now();
     log('⏹ Live-Polling gestoppt');
 }
 
@@ -611,6 +644,7 @@ async function pollViaGaggiuinoStatus() {
         const isBrewing = !!(status.brewSwitchState || status.brewActive || status.isBrewing);
         const presVal   = parseFloat(status.pressure)          || 0;
         const tempVal   = parseFloat(status.temperature)       || 0;
+        currentTemp     = tempVal || currentTemp; // keep last known value if reading is 0
         const weightVal = parseFloat(status.weight)            || 0;
         const tTempVal  = parseFloat(status.targetTemperature) || 0;
         const profile   = status.profileName || 'Unknown';

@@ -583,6 +583,29 @@
         #live-idle h2 { color: #71717a; font-size: 1.1rem; margin: 0 0 8px; }
         #live-idle p  { font-size: .875rem; color: #52525b; margin: 0; max-width: 320px; line-height: 1.6; }
 
+        /* ── Preheat widget ── */
+        #preheat-widget { width: 100%; max-width: 320px; margin-bottom: 28px; text-align: center; }
+        #preheat-ready-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.35);
+            color: #22c55e; border-radius: 24px; padding: 10px 28px;
+            font-size: 1.05rem; font-weight: 600; letter-spacing: .04em;
+        }
+        #preheat-warming-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        #preheat-icon { font-size: 1.8rem; margin-bottom: 4px; }
+        #preheat-status-text { font-size: .9rem; color: #a1a1aa; font-weight: 600; }
+        #preheat-bar-bg {
+            width: 100%; height: 6px;
+            background: rgba(255,255,255,.08); border-radius: 3px; overflow: hidden;
+            margin: 10px 0 6px;
+        }
+        #preheat-bar-fill {
+            height: 100%; width: 0%;
+            background: linear-gradient(90deg, #f59e0b, #ef4444);
+            border-radius: 3px; transition: width .8s ease;
+        }
+        #preheat-countdown { font-size: .82rem; color: #71717a; }
+
         /* ── Search ── */
         #search-container { padding: 8px 12px; border-bottom: 1px solid var(--gray-700); }
         #shotSearch {
@@ -1438,6 +1461,15 @@
         </div>
 
         <div id="live-idle" style="display:none">
+            <div id="preheat-widget">
+                <div id="preheat-ready-badge" style="display:none" data-i18n="preheat_ready">Brühbereit ☕</div>
+                <div id="preheat-warming-wrap" style="display:none">
+                    <div id="preheat-icon">🔥</div>
+                    <div id="preheat-status-text" data-i18n="preheat_warming">Aufheizen …</div>
+                    <div id="preheat-bar-bg"><div id="preheat-bar-fill"></div></div>
+                    <div id="preheat-countdown">–</div>
+                </div>
+            </div>
             <div class="idle-icon">☕</div>
             <h2>Maschine bereit</h2>
             <p id="liveIdleText" data-i18n="live_idle_text">Sobald ein Bezug startet, erscheinen hier die Echtzeit-Daten.</p>
@@ -1619,6 +1651,8 @@ const TRANSLATIONS = {
     backup_invalid:'Ungültige Backup-Datei.',
     backup_restored:(n)=>`Wiederhergestellt: ${n} Shots.`,
     backup_error:(msg)=>`Fehler: ${msg}`,
+    preheat_warming:'Aufheizen …', preheat_ready:'Brühbereit ☕',
+    preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} verbleibend`,
   },
   en: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
@@ -1714,6 +1748,8 @@ const TRANSLATIONS = {
     backup_invalid:'Invalid backup file.',
     backup_restored:(n)=>`Restored: ${n} shots.`,
     backup_error:(msg)=>`Error: ${msg}`,
+    preheat_warming:'Warming up …', preheat_ready:'Ready to brew ☕',
+    preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} remaining`,
   },
   it: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
@@ -1809,6 +1845,8 @@ const TRANSLATIONS = {
     backup_invalid:'File di backup non valido.',
     backup_restored:(n)=>`Ripristinato: ${n} shot.`,
     backup_error:(msg)=>`Errore: ${msg}`,
+    preheat_warming:'Riscaldamento …', preheat_ready:'Pronto per estrarre ☕',
+    preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} rimanenti`,
   },
   fr: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque',
@@ -1904,6 +1942,8 @@ const TRANSLATIONS = {
     backup_invalid:'Fichier de sauvegarde invalide.',
     backup_restored:(n)=>`Restauré : ${n} shot${n!==1?'s':''}.`,
     backup_error:(msg)=>`Erreur : ${msg}`,
+    preheat_warming:'Chauffe en cours …', preheat_ready:'Prêt à extraire ☕',
+    preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} restantes`,
   },
   es: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
@@ -1999,6 +2039,8 @@ const TRANSLATIONS = {
     backup_invalid:'Archivo de copia de seguridad no válido.',
     backup_restored:(n)=>`Restaurado: ${n} shot${n!==1?'s':''}.`,
     backup_error:(msg)=>`Error: ${msg}`,
+    preheat_warming:'Calentando …', preheat_ready:'Listo para extraer ☕',
+    preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} restante`,
   },
 };
 
@@ -2082,8 +2124,9 @@ let currentMode   = 'shots';
 let trashOpen     = false;
 
 // Live state
-let livePollInterval  = null;
-let liveChart         = null;
+let livePollInterval    = null;
+let preheatPollInterval = null;
+let liveChart           = null;
 let refShotId         = null;
 let liveIsActive      = false;
 let liveLastSeq       = -1;
@@ -2803,7 +2846,40 @@ function connectLiveStream() {
     liveLastSeq  = -1;
     liveWasLive  = false;
     fetchLiveData();
-    livePollInterval = setInterval(fetchLiveData, 1000);
+    fetchPreheatData();
+    livePollInterval    = setInterval(fetchLiveData, 1000);
+    preheatPollInterval = setInterval(fetchPreheatData, 10000);
+}
+
+async function fetchPreheatData() {
+    try {
+        const r = await fetch('api/preheat');
+        if (!r.ok) return;
+        updatePreheatWidget(await r.json());
+    } catch (e) {}
+}
+
+function updatePreheatWidget(d) {
+    const readyBadge  = document.getElementById('preheat-ready-badge');
+    const warmingWrap = document.getElementById('preheat-warming-wrap');
+    const barFill     = document.getElementById('preheat-bar-fill');
+    const countdown   = document.getElementById('preheat-countdown');
+    if (!readyBadge) return;
+
+    if (d.ready) {
+        readyBadge.style.display  = '';
+        warmingWrap.style.display = 'none';
+    } else if (d.remaining > 0) {
+        readyBadge.style.display  = 'none';
+        warmingWrap.style.display = '';
+        barFill.style.width       = `${Math.round((d.pct || 0) * 100)}%`;
+        const m = Math.floor(d.remaining / 60);
+        const s = d.remaining % 60;
+        countdown.textContent     = t('preheat_remain', m, s);
+    } else {
+        readyBadge.style.display  = 'none';
+        warmingWrap.style.display = 'none';
+    }
 }
 
 async function fetchLiveData() {
@@ -2831,9 +2907,10 @@ async function fetchLiveData() {
 }
 
 function disconnectLiveStream() {
-    if (livePollInterval) { clearInterval(livePollInterval); livePollInterval = null; }
-    if (liveTimerTick)    { clearInterval(liveTimerTick);    liveTimerTick = null; }
-    if (liveChart)        { liveChart.destroy(); liveChart = null; }
+    if (livePollInterval)    { clearInterval(livePollInterval);    livePollInterval = null; }
+    if (preheatPollInterval) { clearInterval(preheatPollInterval); preheatPollInterval = null; }
+    if (liveTimerTick)       { clearInterval(liveTimerTick);       liveTimerTick = null; }
+    if (liveChart)           { liveChart.destroy(); liveChart = null; }
     liveBrewStartWall = null;
 }
 

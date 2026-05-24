@@ -26,6 +26,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | `machine_url` | API URL of the Gaggiuino controller | `http://gaggia.intern/api/shots` |
 | `sync_interval` | Auto-sync interval in minutes (1–60) | `5` |
 | `switch_entity` | HA switch entity to power the machine on/off | *(empty)* |
+| `preheat_time` | Warmup time in minutes — how long after switch-on until the machine is ready to brew (1–120) | `20` |
 | `port` | Port the add-on server listens on (1024–65535) | `8099` |
 
 ## Features
@@ -39,8 +40,10 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | **Einwählen** | Dial-in assistant: compare a target shot with recent attempts. |
 | **Maintenance** | Five maintenance reminders (descaling, backflush, group head service, gaskets & screens, water filter) with configurable thresholds, progress bars and a "Done now" button. Cards displayed in a 2-column grid on wider screens. |
 
-### Live tab and switch entity
+### Live tab, switch entity and preheat timer
 
 When `switch_entity` is set, the **Live** tab is hidden while the machine is off and appears automatically once it powers on. If no switch entity is configured the tab is always visible.
+
+Once the machine turns on, a preheat progress bar and countdown are shown in the Live tab until `preheat_time` minutes have elapsed. The timer does **not** reset if the machine is briefly switched off and back on while the temperature is still above 80 °C (off for < 5 minutes) — short power cycles are ignored. The preheat state is also exposed as HA sensors via the companion integration (`binary_sensor.…preheat_ready`, `sensor.…preheat_elapsed`, `sensor.…preheat_remaining`).
 
 For full documentation — features, live mode, analytics, shot score, exports, compatibility — see the [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).
