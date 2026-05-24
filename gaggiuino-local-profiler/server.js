@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.32.4';
+const GLP_VERSION   = '1.32.5';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -685,7 +685,7 @@ async function pollViaGaggiuinoStatus() {
             const weightFlow = Math.max(0, weightVal - liveAccum.prevWeight);
             liveAccum.prevWeight = weightVal;
 
-            liveAccum.datapoints.timeInShot.push(elapsed * 10);
+            liveAccum.datapoints.timeInShot.push(elapsed);
             liveAccum.datapoints.pressure.push(Math.round(presVal * 10));
             liveAccum.datapoints.temperature.push(Math.round(tempVal * 10));
             liveAccum.datapoints.shotWeight.push(Math.round(weightVal * 10));

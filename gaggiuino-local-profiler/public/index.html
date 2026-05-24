@@ -2978,10 +2978,10 @@ function handleLiveData(msg) {
 
     if (msg.isLive) {
         setLiveBadge('brewing');
-        metaEl.textContent = `Shot ${msg.shotId} · ${msg.profileName}`;
+        metaEl.textContent = msg.profileName || '–';
     } else {
         setLiveBadge('idle');
-        metaEl.textContent = `Shot ${msg.shotId} · ${msg.profileName} · abgeschlossen`;
+        metaEl.textContent = (msg.profileName || '–') + ' · abgeschlossen';
     }
 
     // Update stat boxes
