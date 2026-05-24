@@ -1,5 +1,5 @@
 name: "Gaggiuino Local Profiler"
-version: "1.32.2"
+version: "1.32.3"
 slug: "gaggiuino_local_profiler"
 description: "Lokaler Shot-Profiler für die Gaggiuino Espresso-Maschine – speichert und visualisiert deine Espresso-Shots."
 url: "https://github.com/mxkissnr/gaggiuino-local-profiler"

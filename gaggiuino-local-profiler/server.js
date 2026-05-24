@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.32.2';
+const GLP_VERSION   = '1.32.3';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -641,9 +641,10 @@ async function pollViaGaggiuinoStatus() {
 
     try {
         const statusRes = await axios.get(`${baseUrl}/api/system/status`, { timeout: 3000 });
-        const status    = statusRes.data;
+        const raw       = statusRes.data;
+        const status    = Array.isArray(raw) ? raw[0] : raw;
 
-        const isBrewing = !!(status.brewSwitchState || status.brewActive || status.isBrewing);
+        const isBrewing = !!status.brewSwitchState;
         const presVal   = parseFloat(status.pressure)          || 0;
         const tempVal   = parseFloat(status.temperature)       || 0;
         currentTemp     = tempVal || currentTemp; // keep last known value if reading is 0
