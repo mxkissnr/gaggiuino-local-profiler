@@ -12,7 +12,7 @@ const cheerio = require('cheerio');
 
 const app = express();
 
-const GLP_VERSION   = '1.46.0';
+const GLP_VERSION   = '1.47.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -337,6 +337,33 @@ app.get('/shots.json', (req, res) => {
         log(`Read error: ${err.message}`, true);
         res.status(500).json({ error: 'Fehler beim Laden' });
     }
+});
+
+app.get('/api/shots/last', (req, res) => {
+    try {
+        if (!fs.existsSync(DATA_FILE)) return res.json(null);
+        const shots = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        const trash = loadTrash();
+        const annotations = loadAnnotations();
+        const last = shots.filter(s => !trash[String(s.id)]).slice(-1)[0] || null;
+        if (!last) return res.json(null);
+        const ann = annotations[String(last.id)];
+        res.json(ann ? { ...last, annotation: ann } : last);
+    } catch { res.json(null); }
+});
+
+app.get('/api/shots/:id', (req, res) => {
+    try {
+        if (!fs.existsSync(DATA_FILE)) return res.json(null);
+        const shots = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        const trash = loadTrash();
+        const annotations = loadAnnotations();
+        const id = req.params.id;
+        const shot = shots.find(s => String(s.id) === id && !trash[id]) || null;
+        if (!shot) return res.json(null);
+        const ann = annotations[id];
+        res.json(ann ? { ...shot, annotation: ann } : shot);
+    } catch { res.json(null); }
 });
 
 app.get('/api/status', (req, res) => {
@@ -784,8 +811,15 @@ app.post('/api/orders/:id/complete', (req, res) => {
     if (!order) return res.status(404).json({ error: 'not found' });
     order.status      = 'done';
     order.completedAt = Date.now();
+    try {
+        if (fs.existsSync(DATA_FILE)) {
+            const trash = loadTrash();
+            const shots = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')).filter(s => !trash[String(s.id)]);
+            order.shotId = shots[shots.length - 1]?.id ?? null;
+        }
+    } catch { order.shotId = null; }
     saveOrders(orders);
-    log(`Order ${order.id} done`);
+    log(`Order ${order.id} done (shotId: ${order.shotId})`);
     res.json(order);
 });
 

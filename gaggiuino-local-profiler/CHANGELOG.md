@@ -1,3 +1,6 @@
+## 1.47.0
+- Feature: shot summary for order card — `POST /api/orders/:id/complete` now stores `shotId` (ID of the last non-trashed shot at completion time); new public endpoints `GET /api/shots/last` and `GET /api/shots/:id` for customer card shot retrieval; closes #80
+
 ## 1.46.0
 - Feature: order acceptance toggle — barista can pause/resume order acceptance from a toggle switch at the top of the Bestellungen tab; when paused, `POST /api/orders` returns 503; customer card shows "Bestellungen momentan pausiert"; state persisted in `/data/orders_settings.json`; closes #79
 
