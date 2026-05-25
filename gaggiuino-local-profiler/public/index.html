@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,600&display=swap" rel="stylesheet"/>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 
     <style>
         :root {
@@ -437,6 +438,29 @@
         .lib-add-trigger { background: none; border: 1px dashed #3f3f46; border-radius: 8px; color: #71717a; font-size: .8rem; padding: 8px; width: 100%; cursor: pointer; transition: border-color .15s, color .15s; }
         .lib-add-trigger:hover { border-color: #71717a; color: #e4e4e7; }
         .lib-empty { color: #52525b; font-size: .8rem; text-align: center; padding: 20px 0; }
+        .lib-trigger-row { display: flex; gap: 6px; }
+        .lib-trigger-row .lib-add-trigger { flex: 1; }
+        .lib-scan-trigger { background: none; border: 1px solid #3f3f46; border-radius: 8px; color: #71717a; font-size: .8rem; padding: 8px 12px; cursor: pointer; transition: border-color .15s, color .15s; white-space: nowrap; }
+        .lib-scan-trigger:hover { border-color: #71717a; color: #e4e4e7; }
+
+        /* ── Scan modal ── */
+        #scanModal { display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.85); flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:20px; }
+        #scanModal.open { display:flex; }
+        #scanModal h3 { color:#e4e4e7; font-size:.95rem; font-weight:600; margin:0; }
+        #scanViewport { position:relative; width:100%; max-width:420px; border-radius:12px; overflow:hidden; background:#000; aspect-ratio:1; }
+        #scanViewport video { width:100%; height:100%; object-fit:cover; display:block; }
+        .scan-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+        .scan-frame { width:60%; aspect-ratio:1; border:2px solid #f59e0b; border-radius:8px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
+        #scanStatus { color:#a1a1aa; font-size:.8rem; text-align:center; min-height:1.2em; }
+        #scanStatus.found { color:#22c55e; }
+        #scanStatus.error { color:#ef4444; }
+        .scan-close-btn { background:#27272a; border:1px solid #3f3f46; border-radius:8px; color:#a1a1aa; font-size:.85rem; padding:8px 20px; cursor:pointer; }
+        .scan-close-btn:hover { background:#3f3f46; color:#fff; }
+
+        /* ── QR code display in bean card ── */
+        .bean-qr-wrap { display:flex; flex-direction:column; align-items:center; gap:6px; margin-top:6px; }
+        .bean-qr-wrap canvas { border-radius:6px; }
+        .bean-qr-label { font-size:.65rem; color:#52525b; }
 
         .save-btn {
             background: var(--gray-800);
@@ -1391,7 +1415,10 @@
                             <button class="lib-save-btn" onclick="saveBean()" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
-                    <button class="lib-add-trigger" id="beanAddTrigger" onclick="openBeanForm()" data-i18n="lib_add_bean">+ Bohne hinzufügen</button>
+                    <div class="lib-trigger-row">
+                        <button class="lib-add-trigger" id="beanAddTrigger" onclick="openBeanForm()" data-i18n="lib_add_bean">+ Bohne hinzufügen</button>
+                        <button class="lib-scan-trigger" onclick="openScanModal()" data-i18n="lib_scan_barcode">⬛ Scan</button>
+                    </div>
                 </div>
                 <!-- Grinders -->
                 <div class="lib-section" id="libSectionGrinders">
@@ -1674,6 +1701,17 @@ const TRANSLATIONS = {
     live_ready_status:'Bereit', live_error_status:'Fehler',
     maint_by_shots:'Shots', maint_by_days:'Tage',
     maint_grinder_section:'Mühlen',
+    lib_scan_barcode:'⬛ Scan',
+    scan_title:'Barcode / QR scannen',
+    scan_attribution:'Produktdaten von',
+    scan_close:'Schließen',
+    scan_searching:'Suche …',
+    scan_not_supported:'Barcode-Scanner wird von diesem Browser nicht unterstützt',
+    scan_not_found:'Kein Eintrag gefunden — Felder manuell ausfüllen',
+    scan_found:(name)=>`Gefunden: ${name}`,
+    scan_error:'Scan-Fehler — bitte erneut versuchen',
+    scan_glp_imported:'GLP-QR importiert',
+    bean_qr_label:'QR-Code für diese Bohne',
   },
   en: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
@@ -1781,6 +1819,17 @@ const TRANSLATIONS = {
     live_ready_status:'Ready', live_error_status:'Error',
     maint_by_shots:'Shots', maint_by_days:'Days',
     maint_grinder_section:'Grinders',
+    lib_scan_barcode:'⬛ Scan',
+    scan_title:'Scan Barcode / QR',
+    scan_attribution:'Product data from',
+    scan_close:'Close',
+    scan_searching:'Searching …',
+    scan_not_supported:'Barcode scanning is not supported by this browser',
+    scan_not_found:'No entry found — fill in fields manually',
+    scan_found:(name)=>`Found: ${name}`,
+    scan_error:'Scan error — please try again',
+    scan_glp_imported:'GLP QR imported',
+    bean_qr_label:'QR code for this bean',
   },
   it: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
@@ -1888,6 +1937,17 @@ const TRANSLATIONS = {
     live_ready_status:'Pronto', live_error_status:'Errore',
     maint_by_shots:'Shots', maint_by_days:'Giorni',
     maint_grinder_section:'Macine',
+    lib_scan_barcode:'⬛ Scan',
+    scan_title:'Scansiona Barcode / QR',
+    scan_attribution:'Dati prodotto da',
+    scan_close:'Chiudi',
+    scan_searching:'Ricerca …',
+    scan_not_supported:'Scansione barcode non supportata da questo browser',
+    scan_not_found:'Nessun risultato — compila i campi manualmente',
+    scan_found:(name)=>`Trovato: ${name}`,
+    scan_error:'Errore scansione — riprova',
+    scan_glp_imported:'QR GLP importato',
+    bean_qr_label:'Codice QR per questo caffè',
   },
   fr: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque',
@@ -1995,6 +2055,17 @@ const TRANSLATIONS = {
     live_ready_status:'Prêt', live_error_status:'Erreur',
     maint_by_shots:'Shots', maint_by_days:'Jours',
     maint_grinder_section:'Moulins',
+    lib_scan_barcode:'⬛ Scan',
+    scan_title:'Scanner Codes-barres / QR',
+    scan_attribution:'Données produit de',
+    scan_close:'Fermer',
+    scan_searching:'Recherche …',
+    scan_not_supported:'Le scan de codes-barres n\'est pas supporté par ce navigateur',
+    scan_not_found:'Aucun résultat — remplir les champs manuellement',
+    scan_found:(name)=>`Trouvé : ${name}`,
+    scan_error:'Erreur de scan — réessayer',
+    scan_glp_imported:'QR GLP importé',
+    bean_qr_label:'Code QR pour ce café',
   },
   es: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
@@ -2102,6 +2173,17 @@ const TRANSLATIONS = {
     live_ready_status:'Listo', live_error_status:'Error',
     maint_by_shots:'Shots', maint_by_days:'Días',
     maint_grinder_section:'Molinos',
+    lib_scan_barcode:'⬛ Scan',
+    scan_title:'Escanear Código / QR',
+    scan_attribution:'Datos del producto de',
+    scan_close:'Cerrar',
+    scan_searching:'Buscando …',
+    scan_not_supported:'El escáner de códigos de barras no es compatible con este navegador',
+    scan_not_found:'Sin resultados — rellenar campos manualmente',
+    scan_found:(name)=>`Encontrado: ${name}`,
+    scan_error:'Error de escaneo — vuelve a intentarlo',
+    scan_glp_imported:'QR GLP importado',
+    bean_qr_label:'Código QR para este café',
   },
 };
 
@@ -4138,11 +4220,27 @@ function renderBeanList() {
                 ${invHtml}
             </div>
             <div class="lib-item-actions">
+                <button class="lib-btn-sm" onclick="toggleBeanQR(${b.id})" title="${t('bean_qr_label')}">QR</button>
                 <button class="lib-btn-sm" onclick="editBean(${b.id})">${t('lib_btn_edit')}</button>
                 <button class="lib-btn-sm del" onclick="deleteBean(${b.id})">${t('lib_btn_delete')}</button>
             </div>
+            <div class="bean-qr-wrap" id="beanQR${b.id}" style="display:none">
+                <canvas id="beanQRCanvas${b.id}"></canvas>
+                <span class="bean-qr-label">${t('bean_qr_label')}</span>
+            </div>
         </div>`;
     }).join('');
+}
+
+function toggleBeanQR(id) {
+    const wrap = document.getElementById(`beanQR${id}`);
+    if (!wrap) return;
+    if (wrap.style.display !== 'none') { wrap.style.display = 'none'; return; }
+    const bean = coffeeLibrary.beans.find(b => b.id === id);
+    if (!bean) return;
+    wrap.style.display = 'flex';
+    const canvas = document.getElementById(`beanQRCanvas${id}`);
+    QRCode.toCanvas(canvas, generateBeanQR(bean), { width: 140, margin: 1, color: { dark: '#e4e4e7', light: '#18181b' } });
 }
 
 function renderGrinderList() {
@@ -4633,10 +4731,131 @@ async function restoreFromFile(input) {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 applyTranslations();
+// ── Barcode / QR scanner ──────────────────────────────────────────────────
+let _scanStream = null;
+let _scanDetector = null;
+let _scanActive = false;
+
+async function openScanModal() {
+    if (!('BarcodeDetector' in window)) {
+        alert(t('scan_not_supported'));
+        return;
+    }
+    const modal = document.getElementById('scanModal');
+    const video = document.getElementById('scanVideo');
+    const status = document.getElementById('scanStatus');
+    status.textContent = t('scan_searching');
+    status.className = '';
+    modal.classList.add('open');
+    try {
+        _scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = _scanStream;
+    } catch (e) {
+        status.textContent = t('scan_error');
+        status.className = 'error';
+        return;
+    }
+    _scanActive = true;
+    _scanDetector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code', 'data_matrix'] });
+    _runScanLoop();
+}
+
+function closeScanModal() {
+    _scanActive = false;
+    if (_scanStream) { _scanStream.getTracks().forEach(t => t.stop()); _scanStream = null; }
+    document.getElementById('scanModal').classList.remove('open');
+    document.getElementById('scanVideo').srcObject = null;
+}
+
+async function _runScanLoop() {
+    const video = document.getElementById('scanVideo');
+    const status = document.getElementById('scanStatus');
+    while (_scanActive) {
+        await new Promise(r => setTimeout(r, 300));
+        if (!_scanActive) break;
+        try {
+            const codes = await _scanDetector.detect(video);
+            if (!codes.length) continue;
+            const raw = codes[0].rawValue;
+            _scanActive = false;
+            await _handleScanResult(raw, status);
+        } catch (e) { /* frame not ready yet */ }
+    }
+}
+
+async function _handleScanResult(raw, status) {
+    // GLP QR schema: glp://coffee?name=...&roaster=...&notes=...&roastDate=...
+    if (raw.startsWith('glp://coffee')) {
+        const params = new URLSearchParams(raw.replace('glp://coffee?', ''));
+        closeScanModal();
+        openBeanForm();
+        if (params.get('name'))      document.getElementById('beanFormName').value      = params.get('name');
+        if (params.get('roaster'))   document.getElementById('beanFormRoaster').value   = params.get('roaster');
+        if (params.get('roastDate')) document.getElementById('beanFormRoastDate').value = params.get('roastDate');
+        if (params.get('notes'))     document.getElementById('beanFormNotes').value     = params.get('notes');
+        status.textContent = t('scan_glp_imported');
+        status.className = 'found';
+        return;
+    }
+    // EAN/UPC → Open Food Facts
+    status.textContent = t('scan_searching');
+    try {
+        const r = await fetch(`https://world.openfoodfacts.org/api/v3/product/${encodeURIComponent(raw)}.json`);
+        const data = await r.json();
+        const p = data?.product;
+        if (p) {
+            const name    = p.product_name || p.product_name_de || p.product_name_en || '';
+            const roaster = p.brands || '';
+            const notes   = [p.categories_tags?.find(c => c.startsWith('en:'))?.replace('en:', '') || '', p.labels || ''].filter(Boolean).join(', ');
+            closeScanModal();
+            openBeanForm();
+            if (name)    document.getElementById('beanFormName').value    = name;
+            if (roaster) document.getElementById('beanFormRoaster').value = roaster;
+            if (notes)   document.getElementById('beanFormNotes').value   = notes;
+            const displayName = name || raw;
+            document.getElementById('scanStatus').textContent = t('scan_found', displayName);
+            document.getElementById('scanStatus').className = 'found';
+        } else {
+            closeScanModal();
+            openBeanForm();
+            status.textContent = t('scan_not_found');
+            status.className = 'error';
+        }
+    } catch (e) {
+        closeScanModal();
+        openBeanForm();
+        status.textContent = t('scan_not_found');
+        status.className = 'error';
+    }
+}
+
+function generateBeanQR(bean) {
+    const params = new URLSearchParams();
+    if (bean.name)      params.set('name',      bean.name);
+    if (bean.roaster)   params.set('roaster',   bean.roaster);
+    if (bean.roastDate) params.set('roastDate', bean.roastDate);
+    if (bean.notes)     params.set('notes',     bean.notes);
+    return `glp://coffee?${params.toString()}`;
+}
+
 initToken().then(() => { loadData(); loadLibrary(); updateStatus(); });
 setInterval(updateStatus, 30000);
 collapseSidebarOnMobile();
 </script>
+
+<!-- ── Barcode scan modal ── -->
+<div id="scanModal">
+    <h3 data-i18n="scan_title">Barcode / QR scannen</h3>
+    <div id="scanViewport">
+        <video id="scanVideo" autoplay muted playsinline></video>
+        <div class="scan-overlay"><div class="scan-frame"></div></div>
+    </div>
+    <div id="scanStatus"></div>
+    <p style="color:#52525b;font-size:.7rem;text-align:center;margin:0">
+        <span data-i18n="scan_attribution">Produktdaten von</span> <a href="https://world.openfoodfacts.org" target="_blank" style="color:#71717a">Open Food Facts</a> (ODbL)
+    </p>
+    <button class="scan-close-btn" onclick="closeScanModal()" data-i18n="scan_close">Schließen</button>
+</div>
 
 </body>
 </html>

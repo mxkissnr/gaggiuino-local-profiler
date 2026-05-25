@@ -6,7 +6,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.40.0';
+const GLP_VERSION   = '1.41.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
