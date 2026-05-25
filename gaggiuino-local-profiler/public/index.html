@@ -1025,6 +1025,7 @@
             transition:background .2s,color .2s,border-color .2s; font-family:'Figtree',sans-serif;
         }
         .maint-done-btn:hover { background:#3f3f46; color:#fff; border-color:#52525b; }
+        .maint-section-title { font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#71717a; margin:8px 0 4px; grid-column:1/-1; }
         .maint-badge {
             display:inline-block; width:7px; height:7px; background:#ef4444;
             border-radius:50%; margin-left:5px; vertical-align:middle;
@@ -1672,6 +1673,7 @@ const TRANSLATIONS = {
     error_load:'Fehler beim Laden',
     live_ready_status:'Bereit', live_error_status:'Fehler',
     maint_by_shots:'Shots', maint_by_days:'Tage',
+    maint_grinder_section:'Mühlen',
   },
   en: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
@@ -1778,6 +1780,7 @@ const TRANSLATIONS = {
     error_load:'Error loading data',
     live_ready_status:'Ready', live_error_status:'Error',
     maint_by_shots:'Shots', maint_by_days:'Days',
+    maint_grinder_section:'Grinders',
   },
   it: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
@@ -1884,6 +1887,7 @@ const TRANSLATIONS = {
     error_load:'Errore di caricamento',
     live_ready_status:'Pronto', live_error_status:'Errore',
     maint_by_shots:'Shots', maint_by_days:'Giorni',
+    maint_grinder_section:'Macine',
   },
   fr: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque',
@@ -1990,6 +1994,7 @@ const TRANSLATIONS = {
     error_load:'Erreur de chargement',
     live_ready_status:'Prêt', live_error_status:'Erreur',
     maint_by_shots:'Shots', maint_by_days:'Jours',
+    maint_grinder_section:'Moulins',
   },
   es: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
@@ -2096,6 +2101,7 @@ const TRANSLATIONS = {
     error_load:'Error al cargar',
     live_ready_status:'Listo', live_error_status:'Error',
     maint_by_shots:'Shots', maint_by_days:'Días',
+    maint_grinder_section:'Molinos',
   },
 };
 
@@ -2463,57 +2469,72 @@ async function loadMaintenanceView() {
     }
 }
 
+function _buildMaintCard(task, d, title, icon) {
+    const lastDoneText = d.daysSince === null
+        ? t('maint_never_done')
+        : d.daysSince === 0
+            ? t('maint_today')
+            : `${t('maint_ago_days', d.daysSince)}`;
+    const shotsText = d.shotsSince > 0 ? ` · ${t('maint_shots_since', d.shotsSince)}` : '';
+    const mode = d.threshold_shots !== null ? 'shots' : 'days';
+    const val  = mode === 'shots' ? d.threshold_shots : d.threshold_days;
+    const threshHtml = `<div class="maint-thresholds">
+        <div class="maint-mode-toggle">
+            <button class="maint-mode-btn${mode==='shots'?' active':''}"
+                onclick="setMaintMode('${task}','shots')">${t('maint_by_shots')}</button>
+            <button class="maint-mode-btn${mode==='days'?' active':''}"
+                onclick="setMaintMode('${task}','days')">${t('maint_by_days')}</button>
+        </div>
+        <label class="maint-threshold-field">
+            <input type="number" min="1" max="9999" value="${val}"
+                onchange="saveMaintThreshold('${task}','${mode==='shots'?'threshold_shots':'threshold_days'}',this.value)">
+        </label>
+    </div>`;
+    const card = document.createElement('div');
+    card.className = `maint-card status-${d.status}`;
+    card.innerHTML = `
+        <div class="maint-card-header">
+            <span class="maint-icon">${icon}</span>
+            <span class="maint-title">${title}</span>
+            <span class="maint-status-pill ${d.status}">${maintStatusLabel(d.status)}</span>
+        </div>
+        <div class="maint-stats">
+            <span>${lastDoneText}${shotsText}</span>
+        </div>
+        <div class="maint-bar-track">
+            <div class="maint-bar-fill ${d.status}" style="width:${Math.round(d.pct * 100)}%"></div>
+        </div>
+        ${threshHtml}
+        <button class="maint-done-btn" onclick="markMaintDone('${task}')">✓ ${t('maint_done_btn')}</button>
+    `;
+    return card;
+}
+
 function renderMaintenanceCards(data) {
     const container = document.getElementById('maint-cards');
     container.innerHTML = '';
     let anyDue = false;
+
     for (const [task, meta] of Object.entries(MAINT_META)) {
         const d = data[task];
         if (!d) continue;
         if (d.status === 'due' || d.status === 'never') anyDue = true;
-        const card = document.createElement('div');
-        card.className = `maint-card status-${d.status}`;
-
-        const lastDoneText = d.daysSince === null
-            ? t('maint_never_done')
-            : d.daysSince === 0
-                ? t('maint_today')
-                : `${t('maint_ago_days', d.daysSince)}`;
-        const shotsText = d.shotsSince > 0 ? ` · ${t('maint_shots_since', d.shotsSince)}` : '';
-
-        // active mode: shots if threshold_shots is set, else days
-        const mode = d.threshold_shots !== null ? 'shots' : 'days';
-        const val  = mode === 'shots' ? d.threshold_shots : d.threshold_days;
-        const threshHtml = `<div class="maint-thresholds">
-            <div class="maint-mode-toggle">
-                <button class="maint-mode-btn${mode==='shots'?' active':''}"
-                    onclick="setMaintMode('${task}','shots')">${t('maint_by_shots')}</button>
-                <button class="maint-mode-btn${mode==='days'?' active':''}"
-                    onclick="setMaintMode('${task}','days')">${t('maint_by_days')}</button>
-            </div>
-            <label class="maint-threshold-field">
-                <input type="number" min="1" max="9999" value="${val}"
-                    onchange="saveMaintThreshold('${task}','${mode==='shots'?'threshold_shots':'threshold_days'}',this.value)">
-            </label>
-        </div>`;
-
-        card.innerHTML = `
-            <div class="maint-card-header">
-                <span class="maint-icon">${meta.icon}</span>
-                <span class="maint-title">${t(meta.key)}</span>
-                <span class="maint-status-pill ${d.status}">${maintStatusLabel(d.status)}</span>
-            </div>
-            <div class="maint-stats">
-                <span>📅 ${lastDoneText}${shotsText}</span>
-            </div>
-            <div class="maint-bar-track">
-                <div class="maint-bar-fill ${d.status}" style="width:${Math.round(d.pct * 100)}%"></div>
-            </div>
-            ${threshHtml}
-            <button class="maint-done-btn" onclick="markMaintDone('${task}')">✓ ${t('maint_done_btn')}</button>
-        `;
-        container.appendChild(card);
+        container.appendChild(_buildMaintCard(task, d, t(meta.key), meta.icon));
     }
+
+    const grinderEntries = Object.entries(data).filter(([k]) => k.startsWith('grinder_'));
+    if (grinderEntries.length > 0) {
+        const header = document.createElement('h3');
+        header.className = 'maint-section-title';
+        header.textContent = t('maint_grinder_section');
+        container.appendChild(header);
+        for (const [task, d] of grinderEntries) {
+            if (!d) continue;
+            if (d.status === 'due' || d.status === 'never') anyDue = true;
+            container.appendChild(_buildMaintCard(task, d, d.grinderName || task, '⚙'));
+        }
+    }
+
     const badge = document.getElementById('maintBadge');
     if (badge) badge.style.display = anyDue ? 'inline-block' : 'none';
 }

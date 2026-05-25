@@ -1,3 +1,6 @@
+## 1.40.0
+- Feature: grinder cleaning schedule in Maintenance tab — each grinder from the library gets its own maintenance card with a configurable shot or day threshold; marking done and adjusting thresholds work identically to built-in machine tasks; deleting a grinder from the library also removes its maintenance entry; closes #65
+
 ## 1.39.0
 - Fix: maintenance threshold UI now shows a Shots/Days toggle — only one mode is active at a time; switching mode saves immediately and resets the value to a sensible default (shots: 200, days: 30); tasks that previously had both thresholds set default to shots mode; closes #69
 

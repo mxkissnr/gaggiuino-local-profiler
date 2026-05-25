@@ -6,7 +6,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.39.0';
+const GLP_VERSION   = '1.40.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -30,14 +30,24 @@ const MAINTENANCE_DEFAULTS = {
 
 function loadMaintenance() {
     try {
-        if (fs.existsSync(MAINTENANCE_FILE)) {
-            const saved = JSON.parse(fs.readFileSync(MAINTENANCE_FILE, 'utf8'));
-            const result = JSON.parse(JSON.stringify(MAINTENANCE_DEFAULTS));
-            for (const key of Object.keys(result)) {
-                if (saved[key]) Object.assign(result[key], saved[key]);
-            }
-            return result;
+        const saved = fs.existsSync(MAINTENANCE_FILE)
+            ? JSON.parse(fs.readFileSync(MAINTENANCE_FILE, 'utf8'))
+            : {};
+        const result = JSON.parse(JSON.stringify(MAINTENANCE_DEFAULTS));
+        for (const key of Object.keys(result)) {
+            if (saved[key]) Object.assign(result[key], saved[key]);
         }
+        for (const grinder of loadLibrary().grinders) {
+            const key = `grinder_${grinder.id}`;
+            const s   = saved[key] || {};
+            result[key] = {
+                lastDate:        s.lastDate        ?? null,
+                threshold_shots: s.threshold_shots ?? 200,
+                threshold_days:  s.threshold_days  ?? null,
+                grinderName:     grinder.name,
+            };
+        }
+        return result;
     } catch (e) {}
     return JSON.parse(JSON.stringify(MAINTENANCE_DEFAULTS));
 }
@@ -543,6 +553,12 @@ app.post('/api/library/grinder/:id/delete', (req, res) => {
     const lib = loadLibrary();
     lib.grinders = lib.grinders.filter(g => g.id !== id);
     saveLibrary(lib);
+    try {
+        const maint = fs.existsSync(MAINTENANCE_FILE)
+            ? JSON.parse(fs.readFileSync(MAINTENANCE_FILE, 'utf8')) : {};
+        delete maint[`grinder_${id}`];
+        fs.writeFileSync(MAINTENANCE_FILE, JSON.stringify(maint, null, 2), 'utf8');
+    } catch (e) {}
     res.json({ ok: true });
 });
 
@@ -594,10 +610,15 @@ app.get('/api/maintenance', (req, res) => {
     res.json(computeMaintenanceStats(loadMaintenance()));
 });
 
-const VALID_MAINTENANCE_TASKS = new Set(['descaling', 'backflush', 'grouphead', 'gaskets', 'waterfilter']);
+const STATIC_MAINTENANCE_TASKS = new Set(['descaling', 'backflush', 'grouphead', 'gaskets', 'waterfilter']);
+function isValidMaintenanceTask(task) {
+    if (STATIC_MAINTENANCE_TASKS.has(task)) return true;
+    if (/^grinder_\d+$/.test(task)) return loadLibrary().grinders.some(g => `grinder_${g.id}` === task);
+    return false;
+}
 
 app.post('/api/maintenance/:task/done', (req, res) => {
-    if (!VALID_MAINTENANCE_TASKS.has(req.params.task)) return res.status(404).json({ error: 'Unknown task' });
+    if (!isValidMaintenanceTask(req.params.task)) return res.status(404).json({ error: 'Unknown task' });
     const maint = loadMaintenance();
     maint[req.params.task].lastDate = new Date().toISOString().split('T')[0];
     saveMaintenance(maint);
@@ -605,7 +626,7 @@ app.post('/api/maintenance/:task/done', (req, res) => {
 });
 
 app.post('/api/maintenance/:task/threshold', express.json(), (req, res) => {
-    if (!VALID_MAINTENANCE_TASKS.has(req.params.task)) return res.status(404).json({ error: 'Unknown task' });
+    if (!isValidMaintenanceTask(req.params.task)) return res.status(404).json({ error: 'Unknown task' });
     const maint = loadMaintenance();
     const { threshold_shots, threshold_days } = req.body;
     if (threshold_shots !== undefined) maint[req.params.task].threshold_shots = parseInt(threshold_shots) || null;
