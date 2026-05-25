@@ -12,7 +12,7 @@ const cheerio = require('cheerio');
 
 const app = express();
 
-const GLP_VERSION   = '1.47.0';
+const GLP_VERSION   = '1.48.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -818,6 +818,14 @@ app.post('/api/orders/:id/complete', (req, res) => {
             order.shotId = shots[shots.length - 1]?.id ?? null;
         }
     } catch { order.shotId = null; }
+    if (order.shotId != null) {
+        try {
+            const annotations = loadAnnotations();
+            const key = String(order.shotId);
+            annotations[key] = { ...(annotations[key] || {}), orderedBy: { customer: order.customer, haUserId: order.haUserId, orderId: order.id } };
+            fs.writeFileSync(ANNOTATIONS_FILE, JSON.stringify(annotations, null, 2), 'utf8');
+        } catch { /* non-critical */ }
+    }
     saveOrders(orders);
     log(`Order ${order.id} done (shotId: ${order.shotId})`);
     res.json(order);

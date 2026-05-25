@@ -1,3 +1,7 @@
+## 1.48.0
+- Feature: shot tagging — `POST /api/orders/:id/complete` merges `orderedBy: { customer, haUserId, orderId }` into the shot annotation (non-destructive, existing annotation fields preserved); closes #81
+- Feature: customer statistics section in Bestellungen tab — collapsible panel showing global totals (total completed orders, most popular drink) and per-customer cards (total, favourite drink, last order date); computed client-side from existing order history; closes #82
+
 ## 1.47.0
 - Feature: shot summary for order card — `POST /api/orders/:id/complete` now stores `shotId` (ID of the last non-trashed shot at completion time); new public endpoints `GET /api/shots/last` and `GET /api/shots/:id` for customer card shot retrieval; closes #80
 

@@ -1102,6 +1102,15 @@
         .order-decline-input:focus { border-color:#52525b; }
         .orders-empty { color:#52525b; font-size:.85rem; text-align:center; padding:18px 0; }
         .orders-machine-off { background:rgba(239,68,68,.07); border:1px solid rgba(239,68,68,.2); border-radius:10px; color:#ef4444; font-size:.85rem; text-align:center; padding:14px; }
+        .orders-stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; margin-bottom:14px; }
+        .orders-stats-card { background:rgba(255,255,255,.04); border:1px solid #3f3f46; border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:4px; }
+        .orders-stats-name { font-size:.82rem; font-weight:700; color:#e4e4e7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .orders-stats-row  { font-size:.75rem; color:#71717a; display:flex; justify-content:space-between; gap:8px; }
+        .orders-stats-val  { color:#a1a1aa; font-weight:600; }
+        .orders-stats-global { display:flex; gap:20px; flex-wrap:wrap; margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid #27272a; }
+        .orders-stats-global-item { display:flex; flex-direction:column; gap:2px; }
+        .orders-stats-global-label { font-size:.68rem; text-transform:uppercase; letter-spacing:.07em; color:#52525b; }
+        .orders-stats-global-val   { font-size:1rem; font-weight:700; color:#e4e4e7; }
         .orders-toggle-row { display:flex; align-items:center; gap:12px; background:#18181b; border:1px solid #3f3f46; border-radius:12px; padding:14px 18px; }
         .orders-toggle-label { font-size:.85rem; font-weight:600; color:#e4e4e7; flex:1; }
         .orders-toggle-state { font-size:.78rem; font-weight:600; min-width:54px; text-align:right; }
@@ -1490,6 +1499,15 @@
                 </div>
             </div>
         </div>
+        <div class="orders-menu-section" id="ordersStatsSection">
+            <div class="orders-menu-title" onclick="toggleOrdersStats()">
+                <span data-i18n="orders_stats_title">Kunden-Statistik</span>
+                <span id="ordersStatsToggle">▸</span>
+            </div>
+            <div id="ordersStatsBody" style="display:none">
+                <div id="ordersStatsContent"></div>
+            </div>
+        </div>
     </div>
 
     <!-- Library view -->
@@ -1847,6 +1865,7 @@ const TRANSLATIONS = {
     orders_eta_label:'ETA (min)', orders_decline_ph:'Grund …',
     orders_machine_off:'Maschine aus – Bestellungen nicht verfügbar',
     orders_accept_toggle:'Bestellannahme', orders_accept_on:'aktiv', orders_accept_off:'pausiert',
+    orders_stats_title:'Kunden-Statistik', orders_stats_total:'Gesamt', orders_stats_fav:'Lieblingsgetränk', orders_stats_last:'Zuletzt', orders_stats_orders:'Bestellungen', orders_stats_popular:'Beliebtestes Getränk', orders_stats_no_data:'Noch keine Daten',
     orders_menu_title:'Menü verwalten', orders_menu_add:'+ Getränk hinzufügen',
     orders_menu_name_ph:'Name …', orders_menu_emoji_ph:'☕', orders_menu_save:'Hinzufügen',
     orders_for:'für', orders_note_ph:'Notiz …',
@@ -1985,6 +2004,7 @@ const TRANSLATIONS = {
     orders_eta_label:'ETA (min)', orders_decline_ph:'Reason …',
     orders_machine_off:'Machine off — ordering not available',
     orders_accept_toggle:'Order acceptance', orders_accept_on:'active', orders_accept_off:'paused',
+    orders_stats_title:'Customer Statistics', orders_stats_total:'Total', orders_stats_fav:'Favourite', orders_stats_last:'Last order', orders_stats_orders:'orders', orders_stats_popular:'Most popular', orders_stats_no_data:'No data yet',
     orders_menu_title:'Manage Menu', orders_menu_add:'+ Add drink',
     orders_menu_name_ph:'Name …', orders_menu_emoji_ph:'☕', orders_menu_save:'Add',
     orders_for:'for', orders_note_ph:'Note …',
@@ -2123,6 +2143,7 @@ const TRANSLATIONS = {
     orders_eta_label:'ETA (min)', orders_decline_ph:'Motivo …',
     orders_machine_off:'Macchina spenta — ordini non disponibili',
     orders_accept_toggle:'Accettazione ordini', orders_accept_on:'attivo', orders_accept_off:'in pausa',
+    orders_stats_title:'Statistiche clienti', orders_stats_total:'Totale', orders_stats_fav:'Preferito', orders_stats_last:'Ultimo ordine', orders_stats_orders:'ordini', orders_stats_popular:'Più popolare', orders_stats_no_data:'Nessun dato',
     orders_menu_title:'Gestisci menu', orders_menu_add:'+ Aggiungi bevanda',
     orders_menu_name_ph:'Nome …', orders_menu_emoji_ph:'☕', orders_menu_save:'Aggiungi',
     orders_for:'per', orders_note_ph:'Nota …',
@@ -2261,6 +2282,7 @@ const TRANSLATIONS = {
     orders_eta_label:'ETA (min)', orders_decline_ph:'Raison …',
     orders_machine_off:'Machine éteinte — commandes non disponibles',
     orders_accept_toggle:'Acceptation des commandes', orders_accept_on:'actif', orders_accept_off:'en pause',
+    orders_stats_title:'Statistiques clients', orders_stats_total:'Total', orders_stats_fav:'Favori', orders_stats_last:'Dernière commande', orders_stats_orders:'commandes', orders_stats_popular:'Le plus populaire', orders_stats_no_data:'Pas encore de données',
     orders_menu_title:'Gérer le menu', orders_menu_add:'+ Ajouter une boisson',
     orders_menu_name_ph:'Nom …', orders_menu_emoji_ph:'☕', orders_menu_save:'Ajouter',
     orders_for:'pour', orders_note_ph:'Note …',
@@ -2399,6 +2421,7 @@ const TRANSLATIONS = {
     orders_eta_label:'ETA (min)', orders_decline_ph:'Motivo …',
     orders_machine_off:'Máquina apagada — pedidos no disponibles',
     orders_accept_toggle:'Aceptación de pedidos', orders_accept_on:'activo', orders_accept_off:'pausado',
+    orders_stats_title:'Estadísticas de clientes', orders_stats_total:'Total', orders_stats_fav:'Favorito', orders_stats_last:'Último pedido', orders_stats_orders:'pedidos', orders_stats_popular:'Más popular', orders_stats_no_data:'Sin datos aún',
     orders_menu_title:'Gestionar menú', orders_menu_add:'+ Agregar bebida',
     orders_menu_name_ph:'Nombre …', orders_menu_emoji_ph:'☕', orders_menu_save:'Agregar',
     orders_for:'para', orders_note_ph:'Nota …',
@@ -5181,6 +5204,7 @@ async function loadOrdersView() {
 
     renderOrdersList(orders);
     renderOrdersMenuAdmin(menu);
+    if (_ordersStatsOpen) renderOrdersStats(orders);
     // Update badge
     const pending = orders.filter(o => o.status === 'pending').length;
     const badge = document.getElementById('ordersBadge');
@@ -5339,6 +5363,60 @@ async function renderOrdersMenuAdmin(menu) {
             loadOrdersView();
         });
     });
+}
+
+let _ordersStatsOpen = false;
+function toggleOrdersStats() {
+    _ordersStatsOpen = !_ordersStatsOpen;
+    document.getElementById('ordersStatsBody').style.display = _ordersStatsOpen ? '' : 'none';
+    document.getElementById('ordersStatsToggle').textContent = _ordersStatsOpen ? '▾' : '▸';
+    if (_ordersStatsOpen) loadOrdersView();
+}
+
+function renderOrdersStats(orders) {
+    const el = document.getElementById('ordersStatsContent');
+    if (!el) return;
+    const done = orders.filter(o => o.status === 'done');
+    if (!done.length) { el.innerHTML = `<div style="color:#52525b;font-size:.8rem;padding:8px 0">${t('orders_stats_no_data')}</div>`; return; }
+
+    // Global stats
+    const itemCounts = {};
+    done.forEach(o => { itemCounts[o.item] = (itemCounts[o.item] || 0) + 1; });
+    const mostPopular = Object.entries(itemCounts).sort((a,b) => b[1]-a[1])[0];
+
+    // Per customer
+    const byCustomer = {};
+    done.forEach(o => {
+        if (!byCustomer[o.customer]) byCustomer[o.customer] = { orders: [], items: {} };
+        byCustomer[o.customer].orders.push(o);
+        byCustomer[o.customer].items[o.item] = (byCustomer[o.customer].items[o.item] || 0) + 1;
+    });
+    const customers = Object.entries(byCustomer).sort((a,b) => b[1].orders.length - a[1].orders.length);
+
+    const fmtDate = ts => ts ? new Date(ts).toLocaleDateString() : '–';
+    const cards = customers.map(([name, d]) => {
+        const fav = Object.entries(d.items).sort((a,b) => b[1]-a[1])[0];
+        const last = Math.max(...d.orders.map(o => o.completedAt || o.createdAt));
+        return `<div class="orders-stats-card">
+            <div class="orders-stats-name" title="${esc(name)}">${esc(name)}</div>
+            <div class="orders-stats-row"><span>${t('orders_stats_total')}</span><span class="orders-stats-val">${d.orders.length} ${t('orders_stats_orders')}</span></div>
+            <div class="orders-stats-row"><span>${t('orders_stats_fav')}</span><span class="orders-stats-val">${fav ? esc(fav[0]) : '–'}</span></div>
+            <div class="orders-stats-row"><span>${t('orders_stats_last')}</span><span class="orders-stats-val">${fmtDate(last)}</span></div>
+        </div>`;
+    }).join('');
+
+    el.innerHTML = `
+        <div class="orders-stats-global">
+            <div class="orders-stats-global-item">
+                <span class="orders-stats-global-label">${t('orders_stats_total')}</span>
+                <span class="orders-stats-global-val">${done.length}</span>
+            </div>
+            <div class="orders-stats-global-item">
+                <span class="orders-stats-global-label">${t('orders_stats_popular')}</span>
+                <span class="orders-stats-global-val">${mostPopular ? esc(mostPopular[0]) + ' ×' + mostPopular[1] : '–'}</span>
+            </div>
+        </div>
+        <div class="orders-stats-grid">${cards}</div>`;
 }
 
 async function addOrderMenuItem() {
