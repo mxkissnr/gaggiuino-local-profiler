@@ -4,9 +4,9 @@ Local shot profiling dashboard for [Gaggiuino](https://gaggiuino.github.io/)-bas
 
 **Full documentation:** [github.com/mxkissnr/gaggiuino-local-profiler/wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki)
 
-## Architecture — how the three components work together
+## Architecture — how the components work together
 
-The GLP (Gaggiuino Local Profiler) ecosystem consists of three independent pieces that build on each other:
+The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces that build on each other:
 
 ```
   Gaggiuino Machine
@@ -24,28 +24,30 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of three independent piece
   └────────┬─────────────────────────┘
            │                    ▲
            │  polls             │  HA Ingress (browser, authenticated)
-           │  /api/status       │  direct port 8099 (integration, card)
+           │  /api/status       │  direct port 8099 (integration, cards)
            │  /shots.json       │
-           │  /api/preheat      │
-           │  /api/maintenance  │
-           ▼                    │
-  ┌─────────────────────┐       │
-  │  GLP HA Integration │       │  ┌──────────────────────┐
-  │  (custom component) │       └──│  GLP Lovelace Card   │
-  │  creates sensors,   │          │  (custom card)       │
-  │  fires HA events    │─────────►│  reads switch_entity │
-  └─────────────────────┘  sensor  │  from machine_status │
-           │               attrs   │  sensor attribute    │
-           ▼                       └──────────────────────┘
-    HA sensors, automations,
-    energy monitoring, …
+           │  /api/preheat      ├──────────────────────────┐
+           │  /api/maintenance  │                          │
+           │  /api/orders †     │                          │
+           ▼                    │                          │
+  ┌─────────────────────┐  ┌────┴─────────────────┐  ┌────┴─────────────────┐
+  │  GLP HA Integration │  │  GLP Shot Card  ③    │  │  GLP Order Card  ④   │
+  │  (custom component) │─►│  machine status,     │  │  customer ordering,  │
+  │  creates sensors,   │  │  last shot summary,  │  │  order status,       │
+  │  fires HA events    │─►│  preheat progress    │  │  shot summary on done│
+  └─────────────────────┘  └──────────────────────┘  └──────────────────────┘
+           │          sensor attrs → both cards auto-detect switch_entity
+           ▼
+    HA sensors, automations, energy monitoring, …
+
+† requires enable_orders: true in add-on configuration
 ```
 
 ### GLP Add-on (this repo)
 
 The central piece. It syncs shot history from the Gaggiuino machine, stores it locally in `/data/shots.json`, and serves:
 - A web UI accessible via HA Ingress (the ☕ panel icon in the HA sidebar)
-- A REST API on port 8099 consumed by the integration and the Lovelace card
+- A REST API on port 8099 consumed by the integration and the Lovelace cards
 
 ### GLP HA Integration
 
@@ -53,17 +55,23 @@ A custom component that polls the add-on every 60 s (configurable). It exposes a
 
 Install via HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
 
-### GLP Lovelace Card
+### GLP Shot Card
 
-A custom Lovelace card that displays machine status, last shot summary, preheat progress, a power button and a **profile selector**. It talks to port 8099 directly and reads the `switch_entity` from the `machine_status` sensor attribute (set automatically by the integration) — no manual card configuration needed beyond the GLP URL.
+A custom Lovelace card that displays machine status, last shot summary, preheat progress, a power button and a **profile selector**. It talks to port 8099 directly and reads the `switch_entity` from the `machine_status` sensor attribute (set automatically by the integration) — no manual card configuration needed.
 
 The profile selector requires the original [Gaggiuino HA integration](https://github.com/ALERTua/hass-gaggiuino) to be installed; it creates the `select.gaggiuino_profile` entity that the card reads and writes. The selector is automatically hidden when the entity is not present.
 
 Install via HACS: [github.com/mxkissnr/glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)
 
+### GLP Order Card
+
+A customer-facing Lovelace card for the order system. Customers browse the drink menu, place an order and track its status in real time. When the barista marks an order as done, the card shows the shot summary with a pressure sparkline. Requires `enable_orders: true` in the add-on configuration.
+
+Install via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/mxkissnr/glp-order-card)
+
 ### API token
 
-All three components authenticate automatically via a shared token:
+All components authenticate automatically via a shared token:
 
 1. The add-on generates a random 64-character token at first start and stores it in `/data/api_token.txt`.
 2. `/api/status` is public and returns the token.

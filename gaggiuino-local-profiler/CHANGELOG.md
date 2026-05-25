@@ -1,3 +1,6 @@
+## 1.49.1
+- Docs: update architecture diagram and component descriptions to reflect all four GLP components (add-on, integration, Shot Card, Order Card); add GLP Order Card section; update "three components" references
+
 ## 1.49.0
 - Feature: order system is now opt-in — new config option `enable_orders` (default `false`); Bestellungen tab is hidden when disabled; all `/api/orders/*` endpoints return 404 when disabled; `GET /api/status` exposes `ordersFeature` flag; closes #83
 
