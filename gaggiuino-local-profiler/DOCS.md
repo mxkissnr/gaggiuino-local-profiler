@@ -107,6 +107,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | **Library** | Coffee bean and grinder catalogue linked to shots. |
 | **Einwählen** | Dial-in assistant: compare a target shot with recent attempts. |
 | **Maintenance** | Five machine maintenance reminders (descaling, backflush, group head service, gaskets & screens, water filter) plus a per-grinder cleaning schedule. All tasks have configurable shot or day thresholds, progress bars and a "Done now" button. |
+| **Bestellungen** | Barista order management backend. Toggle order acceptance on/off, manage the drink menu (emoji + name, persisted in `/data/menu.json`), see the live order queue (pending / in progress) and history. Accept orders with an ETA picker, or decline with a free-text reason. Customer-facing order placement is handled by the [GLP Order Card](https://github.com/mxkissnr/glp-order-card). |
 
 ### Live tab, switch entity and preheat timer
 

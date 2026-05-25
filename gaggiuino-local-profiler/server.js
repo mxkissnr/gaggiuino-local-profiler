@@ -12,7 +12,7 @@ const cheerio = require('cheerio');
 
 const app = express();
 
-const GLP_VERSION   = '1.45.0';
+const GLP_VERSION   = '1.46.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -24,8 +24,9 @@ const BLOCKLIST_FILE = '/data/blocklist.json';
 const OPTIONS_FILE   = '/data/options.json';
 const LIBRARY_FILE      = '/data/coffee_library.json';
 const MAINTENANCE_FILE  = '/data/maintenance.json';
-const ORDERS_FILE       = '/data/orders.json';
-const MENU_FILE         = '/data/menu.json';
+const ORDERS_FILE          = '/data/orders.json';
+const MENU_FILE            = '/data/menu.json';
+const ORDERS_SETTINGS_FILE = '/data/orders_settings.json';
 const TRASH_TTL_MS      = 30 * 24 * 60 * 60 * 1000; // 30 days
 const ORDERS_HISTORY_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -679,6 +680,12 @@ function loadOrders() {
 }
 function saveOrders(orders) { fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2)); }
 
+function loadOrdersSettings() {
+    try { return fs.existsSync(ORDERS_SETTINGS_FILE) ? JSON.parse(fs.readFileSync(ORDERS_SETTINGS_FILE, 'utf8')) : { enabled: true }; }
+    catch { return { enabled: true }; }
+}
+function saveOrdersSettings(s) { fs.writeFileSync(ORDERS_SETTINGS_FILE, JSON.stringify(s, null, 2)); }
+
 // Menu — public read, auth write
 app.get('/api/orders/menu', (req, res) => res.json(loadMenu()));
 
@@ -710,6 +717,17 @@ app.delete('/api/orders/menu/:id', (req, res) => {
     res.json({ ok: true });
 });
 
+// Orders settings
+app.get('/api/orders/settings', (req, res) => res.json(loadOrdersSettings()));
+
+app.post('/api/orders/settings', express.json(), (req, res) => {
+    if (typeof req.body?.enabled !== 'boolean') return res.status(400).json({ error: 'enabled (boolean) required' });
+    const s = { enabled: req.body.enabled };
+    saveOrdersSettings(s);
+    log(`Orders ${s.enabled ? 'enabled' : 'disabled'}`);
+    res.json(s);
+});
+
 // Orders
 app.get('/api/orders', (req, res) => {
     let orders = loadOrders();
@@ -725,6 +743,7 @@ app.get('/api/orders/mine', (req, res) => {
 });
 
 app.post('/api/orders', express.json(), (req, res) => {
+    if (!loadOrdersSettings().enabled) return res.status(503).json({ error: 'orders_disabled' });
     const { item, note, customer, haUserId } = req.body || {};
     if (!item || !customer?.trim()) return res.status(400).json({ error: 'item and customer required' });
     const menu = loadMenu();

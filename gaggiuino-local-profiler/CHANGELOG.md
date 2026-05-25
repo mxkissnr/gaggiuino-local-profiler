@@ -1,3 +1,10 @@
+## 1.46.0
+- Feature: order acceptance toggle — barista can pause/resume order acceptance from a toggle switch at the top of the Bestellungen tab; when paused, `POST /api/orders` returns 503; customer card shows "Bestellungen momentan pausiert"; state persisted in `/data/orders_settings.json`; closes #79
+
+**New server endpoints:**
+- `GET /api/orders/settings` — public; returns `{ enabled: bool }`
+- `POST /api/orders/settings` — auth; sets `{ enabled: bool }`
+
 ## 1.45.0
 - Feature: order management system — new "Bestellungen" tab in the GLP web UI for barista order management; order flow: pending → accepted (with ETA picker: 2/5/10/15/20 min or custom) → done; barista can also decline with a free-text reason; order queue auto-refreshes every 10 s; order tab badge shows number of pending orders; machine-off banner when switch entity is configured and off; menu management (add/delete drinks with emoji) stored in `/data/menu.json`; default menu: Espresso, Ristretto, Lungo, Cappuccino, Latte Macchiato, Flat White; customer orders via new REST endpoints (see below); completed orders auto-pruned after 7 days; all 5 languages translated (DE/EN/IT/FR/ES); closes #77
 

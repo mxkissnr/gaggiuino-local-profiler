@@ -107,6 +107,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | **Bibliothek** | Kaffeebohnen- und Mühlenkatalog mit Verknüpfung zu Shots. |
 | **Einwählen** | Einwähl-Assistent: Ziel-Shot mit aktuellen Versuchen vergleichen. |
 | **Wartung** | Fünf Maschinenwartungs-Erinnerungen (Entkalken, Backflush, Gruppenköpf-Service, Dichtungen & Siebe, Wasserfilter) plus ein eigener Reinigungsplan pro Mühle. Alle Aufgaben haben konfigurierbare Shot- oder Tages-Schwellenwerte, Fortschrittsbalken und „Jetzt erledigt"-Button. |
+| **Bestellungen** | Barista-Backend für Bestellverwaltung. Bestellannahme per Toggle ein-/ausschalten, Getränkemenü verwalten (Emoji + Name, gespeichert in `/data/menu.json`), Live-Warteschlange (ausstehend / in Zubereitung) und Verlauf einsehen. Bestellungen annehmen mit ETA-Auswahl oder mit Freitext ablehnen. Kundenbestellung über die [GLP Order Card](https://github.com/mxkissnr/glp-order-card). |
 
 ### Live-Tab, Switch-Entity und Aufwärmtimer
 
