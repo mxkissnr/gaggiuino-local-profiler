@@ -1105,8 +1105,8 @@
 
 <!-- ── Sidebar ── -->
 <div id="sidebar">
-    <h2><button id="sidebarToggle" onclick="toggleSidebar()">☰</button>☕ Shots <span id="shot-count"></span><div class="flap-board" id="flapDigits"></div><button id="collapseBtn" onclick="toggleDesktopSidebar()" title="Sidebar einklappen">‹</button></h2>
-    <div class="sidebar-hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
+    <h2><button id="sidebarToggle" onclick="toggleSidebar()">☰</button>☕ Shots <span id="shot-count"></span><div class="flap-board" id="flapDigits"></div><button id="collapseBtn" onclick="toggleDesktopSidebar()" data-i18n-title="sidebar_collapse" title="Sidebar einklappen">‹</button></h2>
+    <div class="sidebar-hint" data-i18n-html="sidebar_hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
     <div id="search-container">
         <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …" oninput="filterShots(this.value)">
     </div>
@@ -1148,7 +1148,7 @@
     <!-- Mode switcher -->
     <div id="mode-bar">
         <button id="mobileMenuBtn" onclick="openSidebar()">☰</button>
-        <button id="expandSidebarBtn" onclick="toggleDesktopSidebar()" title="Sidebar aufklappen">›</button>
+        <button id="expandSidebarBtn" onclick="toggleDesktopSidebar()" data-i18n-title="sidebar_expand" title="Sidebar aufklappen">›</button>
         <div id="mode-bar-scroll">
             <button class="mode-btn" id="btnLive" onclick="switchMode('live')" style="display:none">
                 <span class="live-dot"></span>Live
@@ -1653,6 +1653,8 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Fehler: ${msg}`,
     preheat_warming:'Aufheizen …', preheat_ready:'Brühbereit ☕',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} verbleibend`,
+    sidebar_hint:'Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).',
+    sidebar_collapse:'Sidebar einklappen', sidebar_expand:'Sidebar aufklappen',
   },
   en: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
@@ -1750,6 +1752,8 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Error: ${msg}`,
     preheat_warming:'Warming up …', preheat_ready:'Ready to brew ☕',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} remaining`,
+    sidebar_hint:'Click the name for Shot A. Use <b>⇄</b> to set the compare shot (Shot B).',
+    sidebar_collapse:'Collapse sidebar', sidebar_expand:'Expand sidebar',
   },
   it: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
@@ -1847,6 +1851,8 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Errore: ${msg}`,
     preheat_warming:'Riscaldamento …', preheat_ready:'Pronto per estrarre ☕',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} rimanenti`,
+    sidebar_hint:'Clicca sul nome per Shot A. Usa <b>⇄</b> per il confronto (Shot B).',
+    sidebar_collapse:'Comprimi la barra laterale', sidebar_expand:'Espandi la barra laterale',
   },
   fr: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque',
@@ -1944,6 +1950,8 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Erreur : ${msg}`,
     preheat_warming:'Chauffe en cours …', preheat_ready:'Prêt à extraire ☕',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} restantes`,
+    sidebar_hint:'Cliquez sur le nom pour Shot A. Utilisez <b>⇄</b> pour la comparaison (Shot B).',
+    sidebar_collapse:'Réduire la barre latérale', sidebar_expand:'Développer la barre latérale',
   },
   es: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
@@ -2041,6 +2049,8 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Error: ${msg}`,
     preheat_warming:'Calentando …', preheat_ready:'Listo para extraer ☕',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} restante`,
+    sidebar_hint:'Haz clic en el nombre para Shot A. Usa <b>⇄</b> para la comparación (Shot B).',
+    sidebar_collapse:'Contraer barra lateral', sidebar_expand:'Expandir barra lateral',
   },
 };
 
@@ -2111,6 +2121,9 @@ function applyTranslations() {
     });
     document.querySelectorAll('[data-i18n-title]').forEach(el => {
         el.title = t(el.dataset.i18nTitle);
+    });
+    document.querySelectorAll('[data-i18n-html]').forEach(el => {
+        el.innerHTML = t(el.dataset.i18nHtml);
     });
 }
 
