@@ -11,6 +11,7 @@
   <img src="https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&style=flat-square" alt="Node.js"/>
   <img src="https://img.shields.io/badge/Built%20with-Claude%20by%20Anthropic-D97706?style=flat-square" alt="Built with Claude"/>
   <img src="https://img.shields.io/badge/status-Work%20In%20Progress-orange?style=flat-square" alt="Work In Progress"/>
+  <img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square" alt="License GPL-3.0"/>
 </p>
 
 <p align="center">
@@ -156,6 +157,18 @@ Home Assistant Host
   <a href="gaggiuino-local-profiler/CHANGELOG.md">📋 Changelog</a> ·
   <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/issues">🐛 Issues</a>
 </p>
+
+---
+
+## License
+
+GPL-3.0 © 2024–2026 mxkissnr — free to use, fork and modify; any derivative work must remain open source under the same license. Commercial use is not permitted.
+
+## Acknowledgements
+
+Inspired by [BeanConqueror](https://github.com/graphefruit/beanconqueror) by graphefruit — a fantastic open-source coffee tracking app that pioneered many of the ideas around shot logging and coffee library management that influenced this project.
+
+---
 
 <p align="center">
   <sub>Built with AI assistance — designed and developed together with <a href="https://claude.ai">Claude</a> by Anthropic</sub>
