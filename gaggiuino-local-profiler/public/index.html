@@ -1664,6 +1664,10 @@ const TRANSLATIONS = {
     profile_export_no_data:'Keine Profildaten in diesem Shot vorhanden.',
     sidebar_hint:'Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).',
     sidebar_collapse:'Sidebar einklappen', sidebar_expand:'Sidebar aufklappen',
+    error_delete:(msg)=>`Fehler beim Löschen: ${msg}`,
+    error_generic:(msg)=>`Fehler: ${msg}`,
+    error_load:'Fehler beim Laden',
+    live_ready_status:'Bereit', live_error_status:'Fehler',
   },
   en: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
@@ -1765,6 +1769,10 @@ const TRANSLATIONS = {
     profile_export_no_data:'No profile data available in this shot.',
     sidebar_hint:'Click the name for Shot A. Use <b>⇄</b> to set the compare shot (Shot B).',
     sidebar_collapse:'Collapse sidebar', sidebar_expand:'Expand sidebar',
+    error_delete:(msg)=>`Delete error: ${msg}`,
+    error_generic:(msg)=>`Error: ${msg}`,
+    error_load:'Error loading data',
+    live_ready_status:'Ready', live_error_status:'Error',
   },
   it: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
@@ -1866,6 +1874,10 @@ const TRANSLATIONS = {
     profile_export_no_data:'Nessun dato di profilo disponibile in questo shot.',
     sidebar_hint:'Clicca sul nome per Shot A. Usa <b>⇄</b> per il confronto (Shot B).',
     sidebar_collapse:'Comprimi la barra laterale', sidebar_expand:'Espandi la barra laterale',
+    error_delete:(msg)=>`Errore durante l'eliminazione: ${msg}`,
+    error_generic:(msg)=>`Errore: ${msg}`,
+    error_load:'Errore di caricamento',
+    live_ready_status:'Pronto', live_error_status:'Errore',
   },
   fr: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque',
@@ -1967,6 +1979,10 @@ const TRANSLATIONS = {
     profile_export_no_data:'Aucune donnée de profil disponible dans ce shot.',
     sidebar_hint:'Cliquez sur le nom pour Shot A. Utilisez <b>⇄</b> pour la comparaison (Shot B).',
     sidebar_collapse:'Réduire la barre latérale', sidebar_expand:'Développer la barre latérale',
+    error_delete:(msg)=>`Erreur lors de la suppression : ${msg}`,
+    error_generic:(msg)=>`Erreur : ${msg}`,
+    error_load:'Erreur de chargement',
+    live_ready_status:'Prêt', live_error_status:'Erreur',
   },
   es: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
@@ -2068,6 +2084,10 @@ const TRANSLATIONS = {
     profile_export_no_data:'No hay datos de perfil disponibles en este shot.',
     sidebar_hint:'Haz clic en el nombre para Shot A. Usa <b>⇄</b> para la comparación (Shot B).',
     sidebar_collapse:'Contraer barra lateral', sidebar_expand:'Expandir barra lateral',
+    error_delete:(msg)=>`Error al eliminar: ${msg}`,
+    error_generic:(msg)=>`Error: ${msg}`,
+    error_load:'Error al cargar',
+    live_ready_status:'Listo', live_error_status:'Error',
   },
 };
 
@@ -2431,7 +2451,7 @@ async function loadMaintenanceView() {
         const data = await r.json();
         renderMaintenanceCards(data);
     } catch(e) {
-        container.innerHTML = `<div class="loading-state" style="color:#ef4444">Fehler beim Laden</div>`;
+        container.innerHTML = `<div class="loading-state" style="color:#ef4444">${t('error_load')}</div>`;
     }
 }
 
@@ -3004,10 +3024,10 @@ function setLiveBadge(state, detail = '') {
 
     const labels = {
         connecting: t('live_connecting'),
-        ready:      'Bereit',
-        brewing:    'Brüht …',
-        error:      detail || 'Fehler',
-        idle:       'Bereit'
+        ready:      t('live_ready_status'),
+        brewing:    t('live_brewing'),
+        error:      detail || t('live_error_status'),
+        idle:       t('live_ready_status')
     };
     textEl.textContent = labels[state] || state;
 
@@ -3621,7 +3641,7 @@ async function deleteShot(id) {
         renderSidebar();
         updateView();
     } catch (e) {
-        alert('Fehler beim Löschen: ' + e.message);
+        alert(t('error_delete', e.message));
     }
 }
 
@@ -3679,7 +3699,7 @@ async function trashShot(id) {
         updateView();
         await loadTrashData();
     } catch (e) {
-        alert('Fehler: ' + e.message);
+        alert(t('error_generic', e.message));
     }
 }
 
@@ -3689,7 +3709,7 @@ async function restoreShot(id) {
         if (!r.ok) throw new Error(await r.text());
         await loadData();
     } catch (e) {
-        alert('Fehler: ' + e.message);
+        alert(t('error_generic', e.message));
     }
 }
 
@@ -3701,7 +3721,7 @@ async function permanentDeleteShot(id) {
         trashedShots = trashedShots.filter(s => s.id !== id);
         renderTrash();
     } catch (e) {
-        alert('Fehler: ' + e.message);
+        alert(t('error_generic', e.message));
     }
 }
 

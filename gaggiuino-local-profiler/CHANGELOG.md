@@ -1,3 +1,6 @@
+## 1.37.0
+- Fix: all user-visible error and status strings now go through the `t()` translation system — delete errors, load errors, restore errors and live-status labels (`ready`/`brewing`/`error`) are now shown in the selected UI language (DE/EN/IT/FR/ES); closes #68
+
 ## 1.36.0
 - Fix: active tab not scrolled into view on mobile — switching tabs no longer leaves the tab bar scrolled to a position where earlier tabs (e.g. "Shots") are partially hidden; `switchMode()` now calls `scrollIntoView` on the active button after each switch; closes #64
 - Fix: library bean/grinder edit form stayed 2-column on narrow screens — `.lib-form-grid` now collapses to single column at ≤ 480 px
