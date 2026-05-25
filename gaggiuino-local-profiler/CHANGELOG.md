@@ -1,3 +1,8 @@
+## 1.35.0
+- Feature: preheat timer survives add-on restarts — `switchOnAt`/`switchOffAt` persisted in `/data/preheat_state.json`; state is restored on startup if younger than 24 h; if temperature is already stable at target (rolling variance of last 60 readings < 1.5 °C²) the preheat is auto-completed immediately; closes #63
+- Fix: shot calendar (`Shot-Kalender`) was clipped on the right side — container width was sampled once at render time via `offsetWidth`; switched to `getBoundingClientRect().width` and added a `ResizeObserver` so the calendar redraws when the container resizes (e.g. sidebar toggle)
+- Chore: removed all emoji characters from server.js log output and translated remaining German log strings to English
+
 ## 1.34.1
 - Security: API token is now auto-generated at first start (64-char cryptographically random hex via `crypto.randomBytes(32)`) and persisted in `/data/api_token.txt` — no user configuration required; token is distributed transparently via `/api/status` (public endpoint); browser UI and HA integration fetch and use it automatically; closes #60
 

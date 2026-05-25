@@ -4262,7 +4262,20 @@ function buildTrendChart() {
     });
 }
 
+let _calendarResizeObserver = null;
+
 function buildCalendar() {
+    const el = document.getElementById('shotCalendar');
+    if (!el) return;
+
+    if (!_calendarResizeObserver) {
+        _calendarResizeObserver = new ResizeObserver(() => _renderCalendar());
+        _calendarResizeObserver.observe(el);
+    }
+    _renderCalendar();
+}
+
+function _renderCalendar() {
     const el = document.getElementById('shotCalendar');
     if (!el) return;
 
@@ -4304,7 +4317,7 @@ function buildCalendar() {
 
     // Responsive cell size: fit ALL weeks into available container width exactly
     const GAP      = 2;
-    const W        = el.offsetWidth || 600;
+    const W        = Math.floor(el.getBoundingClientRect().width) || 600;
     const cellSize = Math.max(4, Math.floor((W - (weeks.length - 1) * GAP) / weeks.length));
     const CELL     = cellSize + GAP;
     const cellSz   = `width:${cellSize}px;height:${cellSize}px`;

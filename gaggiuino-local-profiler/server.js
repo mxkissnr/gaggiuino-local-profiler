@@ -6,11 +6,12 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.34.1';
+const GLP_VERSION   = '1.35.0';
 const DEFAULT_PORT  = 8099;
-const DATA_DIR      = '/data';
-const TOKEN_FILE    = '/data/api_token.txt';
-const DATA_FILE     = '/data/shots.json';
+const DATA_DIR           = '/data';
+const TOKEN_FILE         = '/data/api_token.txt';
+const PREHEAT_STATE_FILE = '/data/preheat_state.json';
+const DATA_FILE          = '/data/shots.json';
 const ANNOTATIONS_FILE = '/data/annotations.json';
 const TRASH_FILE     = '/data/trash.json';
 const BLOCKLIST_FILE = '/data/blocklist.json';
@@ -88,10 +89,10 @@ function loadOrCreateApiToken() {
         } else {
             apiToken = crypto.randomBytes(32).toString('hex');
             fs.writeFileSync(TOKEN_FILE, apiToken, 'utf8');
-            log('🔑 New API token generated');
+            log('API token generated');
         }
     } catch (e) {
-        log(`⚠️ Could not load/create API token: ${e.message}`, true);
+        log(`Could not load/create API token: ${e.message}`, true);
     }
 }
 
@@ -105,6 +106,35 @@ let machineOn      = false; // updated by checkAndApplyMachinePower() on startup
 let switchOnAt     = null; // ms timestamp when preheat timer started
 let switchOffAt    = null; // ms timestamp when machine last switched off
 let currentTemp    = null; // latest temperature reading from machine (°C)
+
+// Temperature stability detection
+const TEMP_HISTORY_MAX   = 60;  // keep 60 readings (= 60 s at 1 Hz)
+const TEMP_STABLE_MIN    = 30;  // need at least 30 readings before deciding
+const TEMP_STABLE_VAR    = 1.5; // max variance (°C²) to consider temp stable
+const PREHEAT_STATE_TTL  = 24 * 60 * 60 * 1000; // discard persisted state older than 24 h
+let tempHistory = [];
+
+function savePreheatState() {
+    try { fs.writeFileSync(PREHEAT_STATE_FILE, JSON.stringify({ switchOnAt, switchOffAt }), 'utf8'); } catch (e) {}
+}
+
+function loadPreheatState() {
+    try {
+        if (!fs.existsSync(PREHEAT_STATE_FILE)) return;
+        const s = JSON.parse(fs.readFileSync(PREHEAT_STATE_FILE, 'utf8'));
+        const now = Date.now();
+        if (s.switchOnAt && (now - s.switchOnAt) < PREHEAT_STATE_TTL) switchOnAt = s.switchOnAt;
+        if (s.switchOffAt && (now - s.switchOffAt) < PREHEAT_STATE_TTL) switchOffAt = s.switchOffAt;
+        if (switchOnAt) log(`Preheat state restored: started ${Math.round((now - switchOnAt) / 60000)} min ago`);
+    } catch (e) {}
+}
+
+function isTempStable() {
+    if (tempHistory.length < TEMP_STABLE_MIN) return false;
+    const mean = tempHistory.reduce((a, b) => a + b, 0) / tempHistory.length;
+    const variance = tempHistory.reduce((sum, t) => sum + (t - mean) ** 2, 0) / tempHistory.length;
+    return variance < TEMP_STABLE_VAR;
+}
 
 function log(message, isError = false) {
     const now = new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });
@@ -125,12 +155,12 @@ function getMachineUrl(opts) {
     try {
         const u = new URL(raw);
         if (!ALLOWED_URL_SCHEMES.includes(u.protocol)) {
-            log(`⚠️ Ungültiges URL-Schema: ${u.protocol} – Fallback auf Standard`, true);
+            log(`Invalid URL scheme: ${u.protocol} -- using default`, true);
             return 'http://gaggia.intern/api/shots';
         }
         return raw;
     } catch (e) {
-        log(`⚠️ Ungültige machine_url – Fallback auf Standard`, true);
+        log(`Invalid machine_url -- using default`, true);
         return 'http://gaggia.intern/api/shots';
     }
 }
@@ -201,7 +231,7 @@ async function fetchMachineVersion() {
         const res  = await axios.get(`${baseUrl}/api/system/info`, { timeout: 3000 });
         const data = res.data || {};
         const ver  = data.version || data.firmware || data.softwareVersion || data.fw_version || null;
-        if (ver) { cachedMachineVersion = String(ver); log(`🔖 Gaggiuino firmware: ${cachedMachineVersion}`); }
+        if (ver) { cachedMachineVersion = String(ver); log(`Gaggiuino firmware: ${cachedMachineVersion}`); }
     } catch (_) { /* endpoint may not exist — silently ignore */ }
 }
 
@@ -221,9 +251,9 @@ function purgeExpiredTrash() {
         expired.forEach(id => { delete annotations[String(id)]; delete trash[String(id)]; });
         fs.writeFileSync(ANNOTATIONS_FILE, JSON.stringify(annotations, null, 2), 'utf8');
         saveTrash(trash);
-        log(`🗑 Auto-purged ${expired.length} shot(s) from trash (>30 days): ${expired.join(', ')}`);
+        log(`Auto-purged ${expired.length} shot(s) from trash (>30 days): ${expired.join(', ')}`);
     } catch (e) {
-        log(`❌ Trash purge error: ${e.message}`, true);
+        log(`Trash purge error: ${e.message}`, true);
     }
 }
 
@@ -231,14 +261,14 @@ try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
     if (!fs.existsSync(DATA_FILE)) {
         fs.writeFileSync(DATA_FILE, '[]', 'utf8');
-        log(`📂 Neue Datenbank unter ${DATA_FILE} initialisiert.`);
+        log(`Database initialized: ${DATA_FILE}`);
     } else {
-        log(`📂 Bestehende Datenbank unter ${DATA_FILE} gefunden.`);
+        log(`Database loaded: ${DATA_FILE}`);
     }
     if (!fs.existsSync(ANNOTATIONS_FILE)) fs.writeFileSync(ANNOTATIONS_FILE, '{}', 'utf8');
     if (!fs.existsSync(LIBRARY_FILE))    fs.writeFileSync(LIBRARY_FILE, JSON.stringify({ beans: [], grinders: [] }, null, 2), 'utf8');
 } catch (err) {
-    log(`❌ Fehler bei der Initialisierung: ${err.message}`, true);
+    log(`Init error: ${err.message}`, true);
 }
 
 app.use(express.json({ limit: '16kb' }));
@@ -273,7 +303,7 @@ app.get('/shots.json', (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.send(JSON.stringify(merged));
     } catch (err) {
-        log(`❌ Fehler beim Auslesen: ${err.message}`, true);
+        log(`Read error: ${err.message}`, true);
         res.status(500).json({ error: 'Fehler beim Laden' });
     }
 });
@@ -342,9 +372,9 @@ app.post('/api/switch/toggle', async (req, res) => {
             { entity_id: entity },
             { headers: { Authorization: `Bearer ${HA_TOKEN}` }, timeout: 5000 });
         res.json({ ok: true, state: !current });
-        log(`🔌 Switch ${entity} → ${action}`);
+        log(`Switch ${entity} -> ${action}`);
     } catch (e) {
-        log(`❌ Switch toggle Fehler: ${e.message}`, true);
+        log(`Switch toggle error: ${e.message}`, true);
         res.status(500).json({ error: e.message });
     }
 });
@@ -380,7 +410,7 @@ app.post('/api/shots/:id/annotate', (req, res) => {
         fs.writeFileSync(ANNOTATIONS_FILE, JSON.stringify(annotations, null, 2), 'utf8');
         res.json({ ok: true });
     } catch (err) {
-        log(`❌ Annotation-Fehler: ${err.message}`, true);
+        log(`Annotation error: ${err.message}`, true);
         res.status(500).json({ error: 'Fehler beim Speichern' });
     }
 });
@@ -393,7 +423,7 @@ app.post('/api/shots/:id/trash', (req, res) => {
         const trash = loadTrash();
         trash[String(id)] = Date.now();
         saveTrash(trash);
-        log(`🗑 Shot ${id} moved to trash`);
+        log(`Shot ${id} moved to trash`);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -408,7 +438,7 @@ app.post('/api/shots/:id/restore', (req, res) => {
         const trash = loadTrash();
         delete trash[String(id)];
         saveTrash(trash);
-        log(`♻️ Shot ${id} restored from trash`);
+        log(`Shot ${id} restored from trash`);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -431,10 +461,10 @@ app.post('/api/shots/:id/delete', (req, res) => {
         fs.writeFileSync(ANNOTATIONS_FILE, JSON.stringify(annotations, null, 2), 'utf8');
         const blocklist = loadBlocklist();
         if (!blocklist.includes(id)) { blocklist.push(id); saveBlocklist(blocklist); }
-        log(`🗑 Shot ${id} deleted (added to blocklist)`);
+        log(`Shot ${id} deleted (added to blocklist)`);
         res.json({ ok: true });
     } catch (err) {
-        log(`❌ Delete error: ${err.message}`, true);
+        log(`Delete error: ${err.message}`, true);
         res.status(500).json({ error: 'Failed to delete' });
     }
 });
@@ -553,7 +583,7 @@ app.post('/api/restore', express.json({ limit: '50mb' }), (req, res) => {
         if (Array.isArray(b.blocklist))      fs.writeFileSync(BLOCKLIST_FILE,  JSON.stringify(b.blocklist, null, 2), 'utf8');
         if (b.trash && typeof b.trash === 'object')
                                              fs.writeFileSync(TRASH_FILE,      JSON.stringify(b.trash, null, 2), 'utf8');
-        log(`♻ Restore completed from backup v${b.version || '?'} (${b.shots.length} shots)`);
+        log(`Restore completed from backup v${b.version || '?'} (${b.shots.length} shots)`);
         res.json({ ok: true, shots: b.shots.length });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -618,9 +648,10 @@ function startLivePolling() {
     const offMs     = switchOffAt ? Date.now() - switchOffAt : Infinity;
     const stillWarm = currentTemp !== null && currentTemp > WARM_TEMP_MIN && offMs < WARM_OFF_MAX_MS;
 
-    if (!switchOnAt || !stillWarm) switchOnAt = Date.now();
+    if (!switchOnAt || !stillWarm) { switchOnAt = Date.now(); savePreheatState(); }
 
-    log('▶ Live-Polling gestartet via Gaggiuino /api/system/status');
+    tempHistory = []; // reset stability buffer on new session
+    log('Live polling started via /api/system/status');
     livePollTimer = setInterval(pollLive, 1000);
 }
 
@@ -630,7 +661,9 @@ function stopLivePolling() {
     livePollTimer = null;
     liveAccum     = null;
     switchOffAt   = Date.now();
-    log('⏹ Live-Polling gestoppt');
+    tempHistory   = [];
+    savePreheatState();
+    log('Live polling stopped');
 }
 
 async function checkAndApplyMachinePower() {
@@ -645,11 +678,11 @@ async function checkAndApplyMachinePower() {
     if (isOn === machineOn) return; // no change
     machineOn = isOn;
     if (isOn) {
-        log('🔌 Maschine eingeschaltet — Live-Polling und Sync fortgesetzt');
+        log('Machine on -- live polling and sync resumed');
         startLivePolling();
         setTimeout(syncShots, 2000); // give machine time to boot
     } else {
-        log('🔌 Maschine ausgeschaltet — Live-Polling und Sync pausiert');
+        log('Machine off -- live polling and sync paused');
         stopLivePolling();
     }
 }
@@ -680,6 +713,24 @@ async function pollViaGaggiuinoStatus() {
         const tTempVal  = parseFloat(status.targetTemperature) || 0;
         const profile   = status.profileName || 'Unknown';
 
+        // Temperature stability — track history, detect completed preheat
+        if (tempVal > 0 && !isBrewing) {
+            tempHistory.push(tempVal);
+            if (tempHistory.length > TEMP_HISTORY_MAX) tempHistory.shift();
+            // If temp is stable and at/near target, preheat is done — advance switchOnAt so remaining = 0
+            if (switchOnAt && tTempVal > 0 && tempVal >= tTempVal - 2 && isTempStable()) {
+                const opts = loadOptions();
+                const preheatMs = (Math.max(1, parseInt(opts.preheat_time) || 20)) * 60 * 1000;
+                if (Date.now() - switchOnAt < preheatMs) {
+                    switchOnAt = Date.now() - preheatMs;
+                    savePreheatState();
+                    log('Temperature stable -- preheat marked complete');
+                }
+            }
+        } else if (isBrewing) {
+            tempHistory = []; // clear during brew so next session starts fresh
+        }
+
         // Brew start
         if (isBrewing && !liveAccum) {
             liveAccum = {
@@ -696,12 +747,12 @@ async function pollViaGaggiuinoStatus() {
                     targetTemperature: []
                 }
             };
-            log(`☕ Bezug gestartet – Profil: ${profile}`);
+            log(`Brew started: profile ${profile}`);
         }
 
         // Brew end
         if (!isBrewing && liveAccum) {
-            log('✅ Bezug beendet');
+            log('Brew finished');
             liveAccum = null;
             liveSeq++;
             setTimeout(syncAfterBrew, 3000);
@@ -723,7 +774,7 @@ async function pollViaGaggiuinoStatus() {
         }
 
     } catch (err) {
-        log(`❌ Live-Poll Fehler: ${err.message}`, true);
+        log(`Live poll error: ${err.message}`, true);
     }
 }
 
@@ -741,7 +792,7 @@ async function backgroundHaCheck() {
         );
         const shotId = parseInt(res.data.state) || 0;
         if (shotId > lastKnownShotId && lastKnownShotId > 0) {
-            log(`📥 Neue Shot-ID erkannt: ${shotId} – auto-sync`);
+            log(`New shot ID detected: ${shotId} -- auto-sync`);
             setTimeout(syncShots, 2000);
         }
         lastKnownShotId = shotId;
@@ -774,7 +825,7 @@ async function syncAfterBrew() {
         const updated  = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
         const newShots = updated.filter(s => s.id > prevMaxId);
         if (newShots.length > 0) {
-            log(`📤 Neuer Shot gespeichert: #${newShots.map(s => s.id).join(', ')}`);
+            log(`New shot saved: #${newShots.map(s => s.id).join(', ')}`);
         }
     } catch (e) {}
 }
@@ -802,7 +853,7 @@ async function syncShots() {
         const effectiveMax = Math.max(maxLocalId, maxBlockedId);
 
         if (effectiveMax >= latestMachineId) {
-            log(`Alles aktuell. Shots: ${localShots.length}`);
+            log(`Already up to date. Shots: ${localShots.length}`);
             lastSyncTime  = new Date().toISOString();
             lastSyncError = null;
             return;
@@ -811,7 +862,7 @@ async function syncShots() {
         for (let i = effectiveMax + 1; i <= latestMachineId; i++) {
             const r = await axios.get(`${machineUrl}/${i}`, { timeout: 10000 });
             if (!r.data || typeof r.data.id === 'undefined' || !r.data.datapoints) {
-                log(`⚠️ Shot ${i} hat ungültige Daten – übersprungen`, true);
+                log(`Shot ${i} has invalid data -- skipped`, true);
                 continue;
             }
             if (cachedMachineVersion) r.data.glpFirmwareVersion = cachedMachineVersion;
@@ -821,11 +872,11 @@ async function syncShots() {
         fs.writeFileSync(DATA_FILE, JSON.stringify(localShots, null, 2), 'utf8');
         lastSyncTime  = new Date().toISOString();
         lastSyncError = null;
-        log(`✅ Sync abgeschlossen. ${localShots.length} Shots gespeichert.`);
+        log(`Sync complete: ${localShots.length} shots stored`);
     } catch (err) {
         lastSyncError = err.message.replace(/https?:\/\/\S+/g, '[url]');
         lastSyncTime  = new Date().toISOString();
-        log(`❌ Sync-Fehler: ${err.message}`, true);
+        log(`Sync error: ${err.message}`, true);
     }
 }
 
@@ -838,13 +889,14 @@ function scheduleNextSync() {
 }
 
 loadOrCreateApiToken();
+loadPreheatState();
 const opts0 = loadOptions();
 const PORT = opts0.port || DEFAULT_PORT;
 app.listen(PORT, () => {
-    log(`🚀 Gaggiuino Local Profiler v${GLP_VERSION} gestartet auf Port ${PORT}`);
+    log(`Gaggiuino Local Profiler v${GLP_VERSION} started on port ${PORT}`);
     const opts = loadOptions();
-    log(`🔗 ${getMachineUrl(opts)}  |  Sync alle ${opts.sync_interval || 5} min`);
-    log(`🏠 HA-Integration: ${HA_TOKEN ? 'aktiv (auto-sync via latest_shot_id)' : 'nicht verfügbar (kein SUPERVISOR_TOKEN)'}`);
+    log(`Machine URL: ${getMachineUrl(opts)} | sync every ${opts.sync_interval || 5} min`);
+    log(`HA integration: ${HA_TOKEN ? 'active (auto-sync via latest_shot_id)' : 'unavailable (no SUPERVISOR_TOKEN)'}`);
     setInterval(backgroundHaCheck, 30000);
     purgeExpiredTrash();
     setInterval(purgeExpiredTrash, 24 * 60 * 60 * 1000); // daily
