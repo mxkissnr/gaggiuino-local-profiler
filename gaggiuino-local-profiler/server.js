@@ -3,10 +3,11 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const axios = require('axios');
+const cheerio = require('cheerio');
 
 const app = express();
 
-const GLP_VERSION   = '1.42.2';
+const GLP_VERSION   = '1.43.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -488,12 +489,14 @@ app.get('/api/library', (req, res) => {
 });
 
 app.post('/api/library/bean', (req, res) => {
-    const { name, roaster, roastDate, notes, stock_g } = req.body;
+    const { name, roaster, roastDate, notes, stock_g, source, importedAt } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
-    const s   = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+    const s    = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
     const lib  = loadLibrary();
     const bean = { id: Date.now(), name: s(name, 200), roaster: s(roaster, 200), roastDate: s(roastDate, 10), notes: s(notes, 1000), stock_g: parseFloat(stock_g) || null };
+    if (source)     bean.source     = s(source, 200);
+    if (importedAt) bean.importedAt = s(importedAt, 10);
     lib.beans.push(bean);
     saveLibrary(lib);
     res.json(bean);
@@ -560,6 +563,51 @@ app.post('/api/library/grinder/:id/delete', (req, res) => {
         fs.writeFileSync(MAINTENANCE_FILE, JSON.stringify(maint, null, 2), 'utf8');
     } catch (e) {}
     res.json({ ok: true });
+});
+
+// ── URL import (server-side fetch + parse to avoid CORS) ─────────────────────
+
+const ALLOWED_IMPORT_HOSTS = ['kaffeebraun.com', 'www.kaffeebraun.com'];
+
+app.get('/api/import/url', async (req, res) => {
+    const raw = req.query.url;
+    if (!raw) return res.status(400).json({ error: 'url required' });
+    let parsed;
+    try { parsed = new URL(raw); } catch { return res.status(400).json({ error: 'invalid url' }); }
+    if (!ALLOWED_IMPORT_HOSTS.includes(parsed.hostname))
+        return res.status(400).json({ error: 'unsupported domain' });
+    try {
+        const r = await axios.get(raw, {
+            headers: { 'User-Agent': 'GLP/1.0 (Gaggiuino Local Profiler; private use)' },
+            timeout: 8000,
+        });
+        const $ = cheerio.load(r.data);
+        const name = $('.product-detail-name').first().text().trim();
+        if (!name) return res.status(404).json({ error: 'product not found on page' });
+        const props = {};
+        $('tr.properties-row').each((_, row) => {
+            const key = $(row).find('th.properties-label').text().replace(':', '').trim();
+            const val = $(row).find('td.properties-value span').map((_, el) => $(el).text().trim()).get().join(', ');
+            if (key && val) props[key] = val;
+        });
+        const roastLabel = $('.degree.roest .description').first().text().trim();
+        const roastScore = $('.degree.roest .value-score').first().text().trim();
+        const noteParts = [
+            props['Aroma'],
+            props['Herkunft']       ? `Herkunft: ${props['Herkunft']}`           : '',
+            props['Aufbereitungsart'] ? `Aufbereitung: ${props['Aufbereitungsart']}` : '',
+            roastLabel              ? `Röstgrad: ${roastLabel} (${roastScore}/5)` : '',
+        ].filter(Boolean);
+        res.json({
+            name,
+            roaster:    'Kaffee Braun',
+            notes:      noteParts.join(' · '),
+            source:     'kaffeebraun.com',
+            importedAt: new Date().toISOString().slice(0, 10),
+        });
+    } catch (e) {
+        res.status(500).json({ error: 'fetch failed' });
+    }
 });
 
 // ── Live polling endpoint (replaces SSE — HA ServiceWorker blocks EventSource) ──

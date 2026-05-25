@@ -449,6 +449,12 @@
         .lib-trigger-row .lib-add-trigger { flex: 1; }
         .lib-scan-trigger { background: none; border: 1px solid #3f3f46; border-radius: 8px; color: #71717a; font-size: .8rem; padding: 8px 12px; cursor: pointer; transition: border-color .15s, color .15s; white-space: nowrap; }
         .lib-scan-trigger:hover { border-color: #71717a; color: #e4e4e7; }
+        .lib-url-row { display:flex; gap:6px; margin-top:6px; }
+        .lib-url-input { flex:1; background:#18181b; border:1px solid #3f3f46; border-radius:8px; color:#e4e4e7; font-size:.78rem; padding:7px 10px; outline:none; font-family:'Figtree',sans-serif; }
+        .lib-url-input:focus { border-color:#71717a; }
+        .lib-url-btn { background:none; border:1px solid #3f3f46; border-radius:8px; color:#71717a; font-size:.78rem; padding:7px 12px; cursor:pointer; white-space:nowrap; transition:border-color .15s,color .15s; }
+        .lib-url-btn:hover { border-color:#71717a; color:#e4e4e7; }
+        .lib-item-source { font-size:.65rem; color:#52525b; margin-top:3px; }
 
         /* ── Scan modal ── */
         #scanModal { display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.85); flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:20px; }
@@ -1425,6 +1431,11 @@
                     <div class="lib-trigger-row">
                         <button class="lib-add-trigger" id="beanAddTrigger" onclick="openBeanForm()" data-i18n="lib_add_bean">+ Bohne hinzufügen</button>
                         <button class="lib-scan-trigger" onclick="openScanModal()" data-i18n="lib_scan_barcode">⬛ Scan</button>
+                        <button class="lib-scan-trigger" onclick="toggleUrlImport()" data-i18n="lib_url_import">🔗 URL</button>
+                    </div>
+                    <div class="lib-url-row" id="urlImportRow" style="display:none">
+                        <input class="lib-url-input" id="urlImportInput" data-i18n-placeholder="lib_url_placeholder" placeholder="kaffeebraun.com/…" onkeydown="if(event.key==='Enter')importFromUrl()">
+                        <button class="lib-url-btn" onclick="importFromUrl()" data-i18n="lib_url_btn">Importieren</button>
                     </div>
                 </div>
                 <!-- Grinders -->
@@ -1709,6 +1720,13 @@ const TRANSLATIONS = {
     maint_by_shots:'Shots', maint_by_days:'Tage',
     maint_grinder_section:'Mühlen',
     lib_scan_barcode:'⬛ Scan',
+    lib_url_import:'🔗 URL',
+    lib_url_placeholder:'kaffeebraun.com/…',
+    lib_url_btn:'Importieren',
+    lib_url_importing:'Importiere …',
+    lib_url_error:'Fehler beim Importieren',
+    lib_url_unsupported:'Nicht unterstützte Website',
+    lib_imported_from:(src,date)=>`Importiert von ${src} · ${date}`,
     scan_title:'Barcode / QR scannen',
     scan_attribution:'Produktdaten von',
     scan_close:'Schließen',
@@ -1827,6 +1845,13 @@ const TRANSLATIONS = {
     maint_by_shots:'Shots', maint_by_days:'Days',
     maint_grinder_section:'Grinders',
     lib_scan_barcode:'⬛ Scan',
+    lib_url_import:'🔗 URL',
+    lib_url_placeholder:'kaffeebraun.com/…',
+    lib_url_btn:'Import',
+    lib_url_importing:'Importing …',
+    lib_url_error:'Import failed',
+    lib_url_unsupported:'Unsupported website',
+    lib_imported_from:(src,date)=>`Imported from ${src} · ${date}`,
     scan_title:'Scan Barcode / QR',
     scan_attribution:'Product data from',
     scan_close:'Close',
@@ -1945,6 +1970,13 @@ const TRANSLATIONS = {
     maint_by_shots:'Shots', maint_by_days:'Giorni',
     maint_grinder_section:'Macine',
     lib_scan_barcode:'⬛ Scan',
+    lib_url_import:'🔗 URL',
+    lib_url_placeholder:'kaffeebraun.com/…',
+    lib_url_btn:'Importa',
+    lib_url_importing:'Importazione …',
+    lib_url_error:'Errore di importazione',
+    lib_url_unsupported:'Sito non supportato',
+    lib_imported_from:(src,date)=>`Importato da ${src} · ${date}`,
     scan_title:'Scansiona Barcode / QR',
     scan_attribution:'Dati prodotto da',
     scan_close:'Chiudi',
@@ -2063,6 +2095,13 @@ const TRANSLATIONS = {
     maint_by_shots:'Shots', maint_by_days:'Jours',
     maint_grinder_section:'Moulins',
     lib_scan_barcode:'⬛ Scan',
+    lib_url_import:'🔗 URL',
+    lib_url_placeholder:'kaffeebraun.com/…',
+    lib_url_btn:'Importer',
+    lib_url_importing:'Import en cours …',
+    lib_url_error:'Erreur d\'importation',
+    lib_url_unsupported:'Site non supporté',
+    lib_imported_from:(src,date)=>`Importé de ${src} · ${date}`,
     scan_title:'Scanner Codes-barres / QR',
     scan_attribution:'Données produit de',
     scan_close:'Fermer',
@@ -2181,6 +2220,13 @@ const TRANSLATIONS = {
     maint_by_shots:'Shots', maint_by_days:'Días',
     maint_grinder_section:'Molinos',
     lib_scan_barcode:'⬛ Scan',
+    lib_url_import:'🔗 URL',
+    lib_url_placeholder:'kaffeebraun.com/…',
+    lib_url_btn:'Importar',
+    lib_url_importing:'Importando …',
+    lib_url_error:'Error de importación',
+    lib_url_unsupported:'Sitio no compatible',
+    lib_imported_from:(src,date)=>`Importado de ${src} · ${date}`,
     scan_title:'Escanear Código / QR',
     scan_attribution:'Datos del producto de',
     scan_close:'Cerrar',
@@ -4225,6 +4271,7 @@ function renderBeanList() {
                 <div class="lib-item-name">${esc(b.name)}</div>
                 <div class="lib-item-sub">${[b.roaster, b.roastDate, b.notes].filter(Boolean).map(esc).join(' · ')}</div>
                 ${invHtml}
+                ${b.source ? `<div class="lib-item-source">${t('lib_imported_from', b.source, b.importedAt || '')}</div>` : ''}
             </div>
             <div class="lib-item-actions">
                 <button class="lib-btn-sm" onclick="toggleBeanQR(${b.id})" title="${t('bean_qr_label')}">QR</button>
@@ -4283,6 +4330,8 @@ function openBeanForm(bean) {
 
 function closeBeanForm() {
     beanEditId = null;
+    _urlImportSource = null;
+    _urlImportedAt   = null;
     document.getElementById('beanAddForm').classList.remove('open');
     document.getElementById('beanAddTrigger').style.display = '';
 }
@@ -4299,7 +4348,9 @@ async function saveBean() {
     const notes     = document.getElementById('beanFormNotes').value.trim();
     const stock_g   = parseFloat(document.getElementById('beanFormStock').value) || null;
     if (!name) { document.getElementById('beanFormName').focus(); return; }
-    const body = JSON.stringify({ name, roaster, roastDate, notes, stock_g });
+    const payload = { name, roaster, roastDate, notes, stock_g };
+    if (!beanEditId && _urlImportSource) { payload.source = _urlImportSource; payload.importedAt = _urlImportedAt; }
+    const body = JSON.stringify(payload);
     const url  = beanEditId ? `api/library/bean/${beanEditId}` : 'api/library/bean';
     const r    = await apiFetch(url, { method: beanEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
     if (!r.ok) return;
@@ -4738,6 +4789,48 @@ async function restoreFromFile(input) {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 applyTranslations();
+// ── URL importer (kaffeebraun.com) ────────────────────────────────────────
+let _urlImportSource = null;
+let _urlImportedAt   = null;
+
+function toggleUrlImport() {
+    const row = document.getElementById('urlImportRow');
+    const visible = row.style.display !== 'none';
+    row.style.display = visible ? 'none' : 'flex';
+    if (!visible) document.getElementById('urlImportInput').focus();
+}
+
+async function importFromUrl() {
+    const input = document.getElementById('urlImportInput');
+    const btn   = document.querySelector('#urlImportRow .lib-url-btn');
+    const url   = input.value.trim();
+    if (!url) return;
+    btn.textContent = t('lib_url_importing');
+    btn.disabled = true;
+    try {
+        const r = await apiFetch(`api/import/url?url=${encodeURIComponent(url)}`);
+        if (r.status === 400) {
+            alert(t('lib_url_unsupported'));
+            return;
+        }
+        if (!r.ok) throw new Error();
+        const data = await r.json();
+        _urlImportSource = data.source   || null;
+        _urlImportedAt   = data.importedAt || null;
+        openBeanForm();
+        if (data.name)    document.getElementById('beanFormName').value    = data.name;
+        if (data.roaster) document.getElementById('beanFormRoaster').value = data.roaster;
+        if (data.notes)   document.getElementById('beanFormNotes').value   = data.notes;
+        input.value = '';
+        document.getElementById('urlImportRow').style.display = 'none';
+    } catch {
+        alert(t('lib_url_error'));
+    } finally {
+        btn.textContent = t('lib_url_btn');
+        btn.disabled = false;
+    }
+}
+
 // ── Barcode / QR scanner ──────────────────────────────────────────────────
 let _scanStream = null;
 let _scanDetector = null;
