@@ -1,3 +1,6 @@
+## 1.42.0
+- Feature: PWA support — GLP can now be installed as a standalone app via "Add to Home Screen" on Android and iOS; app shell (index.html, fonts, Chart.js, qrcode.js) is cached by a service worker for instant load; API calls and shot data always go to the network; closes #27
+
 ## 1.41.0
 - Feature: barcode and QR scanner in coffee library — tap the Scan button next to "Add Bean" to scan any EAN/UPC barcode or QR code; EAN/UPC codes are looked up via the Open Food Facts API (no key required); the GLP QR schema (`glp://coffee?name=...`) enables instant full import; each bean card now has a QR button that generates a shareable QR code; closes #70
 

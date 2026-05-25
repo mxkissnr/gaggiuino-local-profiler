@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Gaggiuino Local Profiler</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%2318181b'/><text y='.85em' font-size='78' x='10'>☕</text></svg>">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="GLP">
+    <meta name="theme-color" content="#18181b">
 
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,600&display=swap" rel="stylesheet"/>
@@ -4841,6 +4848,10 @@ function generateBeanQR(bean) {
 initToken().then(() => { loadData(); loadLibrary(); updateStatus(); });
 setInterval(updateStatus, 30000);
 collapseSidebarOnMobile();
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
 </script>
 
 <!-- ── Barcode scan modal ── -->
