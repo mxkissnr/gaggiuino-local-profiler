@@ -1,13 +1,15 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.34.0';
+const GLP_VERSION   = '1.34.1';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR      = '/data';
+const TOKEN_FILE    = '/data/api_token.txt';
 const DATA_FILE     = '/data/shots.json';
 const ANNOTATIONS_FILE = '/data/annotations.json';
 const TRASH_FILE     = '/data/trash.json';
@@ -77,6 +79,21 @@ let lastSyncError     = null;
 let lastManualSync    = 0;
 let lastKnownShotId   = 0;  // tracks latest_shot_id from HA to trigger auto-sync
 let cachedMachineVersion = null; // firmware version from controller, fetched once
+let apiToken          = ''; // auto-generated on first start, persisted in TOKEN_FILE
+
+function loadOrCreateApiToken() {
+    try {
+        if (fs.existsSync(TOKEN_FILE)) {
+            apiToken = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
+        } else {
+            apiToken = crypto.randomBytes(32).toString('hex');
+            fs.writeFileSync(TOKEN_FILE, apiToken, 'utf8');
+            log('🔑 New API token generated');
+        }
+    } catch (e) {
+        log(`⚠️ Could not load/create API token: ${e.message}`, true);
+    }
+}
 
 // Live polling state
 let livePollTimer  = null;
@@ -228,13 +245,11 @@ app.use(express.json({ limit: '16kb' }));
 
 // ── API token auth middleware ─────────────────────────────────────────────
 app.use((req, res, next) => {
-    const opts  = loadOptions();
-    const token = (opts.api_token || '').trim();
-    if (!token) return next(); // no token configured → open access
+    if (!apiToken) return next();
     if (req.headers['x-ingress-path'] !== undefined) return next(); // HA ingress → already authed
-    // only protect API and shots.json; static files remain accessible
-    if (!req.path.startsWith('/api/') && req.path !== '/shots.json') return next();
-    if (req.headers['x-glp-token'] === token) return next();
+    if (req.path === '/api/status') return next(); // status is public — used to distribute token
+    if (!req.path.startsWith('/api/') && req.path !== '/shots.json') return next(); // static files
+    if (req.headers['x-glp-token'] === apiToken) return next();
     res.status(401).json({ error: 'Unauthorized' });
 });
 
@@ -280,7 +295,8 @@ app.get('/api/status', (req, res) => {
         syncInterval:    opts.sync_interval || 5,
         haConnected:     !!HA_TOKEN,
         switchEntity:    opts.switch_entity || null,
-        glpVersion:      GLP_VERSION
+        glpVersion:      GLP_VERSION,
+        apiToken:        apiToken || null
     });
 });
 
@@ -821,6 +837,7 @@ function scheduleNextSync() {
     }, getSyncIntervalMs(opts));
 }
 
+loadOrCreateApiToken();
 const opts0 = loadOptions();
 const PORT = opts0.port || DEFAULT_PORT;
 app.listen(PORT, () => {

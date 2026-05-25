@@ -1,3 +1,6 @@
+## 1.34.1
+- Security: API token is now auto-generated at first start (64-char cryptographically random hex via `crypto.randomBytes(32)`) and persisted in `/data/api_token.txt` — no user configuration required; token is distributed transparently via `/api/status` (public endpoint); browser UI and HA integration fetch and use it automatically; closes #60
+
 ## 1.34.0
 - Security: optional API token for direct port 8099 access — set `api_token` in add-on options; if set, all `/api/*` and `/shots.json` requests must include the `X-GLP-Token` header (HA Ingress requests bypass this check as they are already authenticated by HA); browser UI reads token from localStorage and shows a token-entry modal on 401; closes #59
 
