@@ -104,12 +104,31 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | **Analytics** | Aggregierte Statistiken und Trendcharts über alle Shots. |
 | **Bibliothek** | Kaffeebohnen- und Mühlenkatalog mit Verknüpfung zu Shots. |
 | **Einwählen** | Einwähl-Assistent: Ziel-Shot mit aktuellen Versuchen vergleichen. |
-| **Wartung** | Fünf Wartungserinnerungen (Entkalken, Backflush, Gruppenköpf-Service, Dichtungen & Siebe, Wasserfilter) mit konfigurierbaren Schwellenwerten, Fortschrittsbalken und „Jetzt erledigt"-Button. Karten werden auf breiteren Bildschirmen im 2-Spalten-Grid angezeigt. |
+| **Wartung** | Fünf Maschinenwartungs-Erinnerungen (Entkalken, Backflush, Gruppenköpf-Service, Dichtungen & Siebe, Wasserfilter) plus ein eigener Reinigungsplan pro Mühle. Alle Aufgaben haben konfigurierbare Shot- oder Tages-Schwellenwerte, Fortschrittsbalken und „Jetzt erledigt"-Button. |
 
 ### Live-Tab, Switch-Entity und Aufwärmtimer
 
 Wenn `switch_entity` gesetzt ist, wird der **Live**-Tab ausgeblendet solange die Maschine aus ist und erscheint automatisch sobald sie eingeschaltet wird. Ohne Switch-Entity ist der Tab immer sichtbar.
 
 Nach dem Einschalten zeigt der Live-Tab einen Fortschrittsbalken und einen Countdown bis `preheat_time` Minuten abgelaufen sind. Der Timer wird **nicht** zurückgesetzt, wenn die Maschine kurz aus- und wieder eingeschaltet wird, solange die Temperatur noch über 80 °C liegt (Auszeit < 5 Minuten) — kurze Stromunterbrechungen werden ignoriert. Der Aufwärmstatus wird auch als HA-Sensoren über die Companion-Integration bereitgestellt (`binary_sensor.…preheat_ready`, `sensor.…preheat_elapsed`, `sensor.…preheat_remaining`).
+
+### Barcode- und QR-Scanner
+
+Im Bibliothek-Tab auf **⬛ Scan** neben „Bohne hinzufügen" tippen, um den Kamera-Scanner zu öffnen.
+
+- **EAN/UPC-Barcode** (z.B. auf einer Supermarkt-Kaffeepackung) — GLP schlägt den Code bei [Open Food Facts](https://world.openfoodfacts.org) nach und befüllt Name, Rösterei und Notizen vor. Specialty-Kaffees sind oft nicht in der Datenbank — Rest manuell ausfüllen.
+- **GLP-QR-Code** — QR-Code einer anderen GLP-Installation scannen für vollständigen Direktimport.
+- Jede Bohne in der Bibliothek hat einen **QR-Button** der einen teilbaren QR-Code mit allen Bohnen-Feldern erzeugt.
+
+Erfordert einen Chromium-basierten Browser (nutzt die native BarcodeDetector Web API). Firefox und Safari werden nicht unterstützt.
+
+### Als Standalone-App installieren (PWA)
+
+GLP liefert ein Web App Manifest und einen Service Worker mit, sodass es als eigenständige App auf dem Handy installiert werden kann.
+
+**Android (Chrome):** GLP öffnen → Installations-Banner tippen oder ⋮-Menü → *Zum Startbildschirm hinzufügen*
+**iOS (Safari):** GLP öffnen → Teilen-Symbol → *Zum Home-Bildschirm*
+
+Nach der Installation öffnet GLP ohne Browser-Chrome und die App-Shell lädt sofort aus dem Cache. Shot-Daten und Live-Modus holen immer frische Daten vom Netzwerk.
 
 Vollständige Dokumentation — Features, Live-Modus, Analytics, Shot-Score, Exporte, Kompatibilität — im [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).
