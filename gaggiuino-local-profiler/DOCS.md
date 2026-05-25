@@ -112,6 +112,18 @@ When `switch_entity` is set, the **Live** tab is hidden while the machine is off
 
 Once the machine turns on, a preheat progress bar and countdown are shown in the Live tab until `preheat_time` minutes have elapsed. The timer does **not** reset if the machine is briefly switched off and back on while the temperature is still above 80 °C (off for < 5 minutes) — short power cycles are ignored. The preheat state is also exposed as HA sensors via the companion integration (`binary_sensor.…preheat_ready`, `sensor.…preheat_elapsed`, `sensor.…preheat_remaining`).
 
+### Import from kaffeebraun.com
+
+In the Library tab, click **🔗 URL** next to "Add Bean", paste any product URL from [kaffeebraun.com](https://kaffeebraun.com) and press Import. The add-on fetches the product page server-side and pre-fills the bean form with:
+
+- Name and roaster (auto-set to "Kaffee Braun")
+- Aromas / tasting notes
+- Origin (Herkunft)
+- Processing method (Aufbereitungsart)
+- Roast level label and score
+
+Imported beans show a small **"Imported from kaffeebraun.com · date"** line in the library card so you always know where the data came from and when.
+
 ### Barcode and QR scanner
 
 In the Library tab, tap **⬛ Scan** next to "Add Bean" to open the camera scanner.

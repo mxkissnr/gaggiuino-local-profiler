@@ -112,6 +112,18 @@ Wenn `switch_entity` gesetzt ist, wird der **Live**-Tab ausgeblendet solange die
 
 Nach dem Einschalten zeigt der Live-Tab einen Fortschrittsbalken und einen Countdown bis `preheat_time` Minuten abgelaufen sind. Der Timer wird **nicht** zurückgesetzt, wenn die Maschine kurz aus- und wieder eingeschaltet wird, solange die Temperatur noch über 80 °C liegt (Auszeit < 5 Minuten) — kurze Stromunterbrechungen werden ignoriert. Der Aufwärmstatus wird auch als HA-Sensoren über die Companion-Integration bereitgestellt (`binary_sensor.…preheat_ready`, `sensor.…preheat_elapsed`, `sensor.…preheat_remaining`).
 
+### Import von kaffeebraun.com
+
+Im Bibliothek-Tab auf **🔗 URL** neben „Bohne hinzufügen" klicken, eine Produkt-URL von [kaffeebraun.com](https://kaffeebraun.com) einfügen und auf „Importieren" drücken. Das Add-on lädt die Produktseite serverseitig und befüllt das Bohnen-Formular mit:
+
+- Name und Rösterei (wird automatisch auf „Kaffee Braun" gesetzt)
+- Aromen / Tasting Notes
+- Herkunft
+- Aufbereitungsart
+- Röstgrad (Label und Punktzahl)
+
+Importierte Bohnen zeigen in der Bibliothekskarte eine kleine Zeile **„Importiert von kaffeebraun.com · Datum"**, damit man immer weiß woher die Daten stammen und wann sie importiert wurden.
+
 ### Barcode- und QR-Scanner
 
 Im Bibliothek-Tab auf **⬛ Scan** neben „Bohne hinzufügen" tippen, um den Kamera-Scanner zu öffnen.
