@@ -4,6 +4,72 @@ Local shot profiling dashboard for [Gaggiuino](https://gaggiuino.github.io/)-bas
 
 **Full documentation:** [github.com/mxkissnr/gaggiuino-local-profiler/wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki)
 
+## Architecture — how the three components work together
+
+The GLP (Gaggiuino Local Profiler) ecosystem consists of three independent pieces that build on each other:
+
+```
+  Gaggiuino Machine
+  └─ /api/shots          (shot history)
+  └─ /api/system/status  (live brew data)
+  └─ /api/system/info    (firmware version)
+         │
+         │  sync every N min + live polling during brew
+         ▼
+  ┌──────────────────────────────────┐
+  │         GLP Add-on               │  ← this add-on
+  │  Node.js server, port 8099       │
+  │  stores shots in /data/shots.json│
+  │  REST API + web UI               │
+  └────────┬─────────────────────────┘
+           │                    ▲
+           │  polls             │  HA Ingress (browser, authenticated)
+           │  /api/status       │  direct port 8099 (integration, card)
+           │  /shots.json       │
+           │  /api/preheat      │
+           │  /api/maintenance  │
+           ▼                    │
+  ┌─────────────────────┐       │
+  │  GLP HA Integration │       │  ┌──────────────────────┐
+  │  (custom component) │       └──│  GLP Lovelace Card   │
+  │  creates sensors,   │          │  (custom card)       │
+  │  fires HA events    │─────────►│  reads switch_entity │
+  └─────────────────────┘  sensor  │  from machine_status │
+           │               attrs   │  sensor attribute    │
+           ▼                       └──────────────────────┘
+    HA sensors, automations,
+    energy monitoring, …
+```
+
+### GLP Add-on (this repo)
+
+The central piece. It syncs shot history from the Gaggiuino machine, stores it locally in `/data/shots.json`, and serves:
+- A web UI accessible via HA Ingress (the ☕ panel icon in the HA sidebar)
+- A REST API on port 8099 consumed by the integration and the Lovelace card
+
+### GLP HA Integration
+
+A custom component that polls the add-on every 60 s (configurable). It exposes all GLP data as native HA sensors — shot count, last shot profile, score, duration, weight, maintenance status, preheat state, etc. — so they can be used in automations, energy dashboards, and Lovelace dashboards.
+
+Install via HACS: [github.com/mxkissnr/gaggiuino-profiler-integration](https://github.com/mxkissnr/gaggiuino-profiler-integration)
+
+### GLP Lovelace Card
+
+A custom Lovelace card that displays machine status, last shot summary, preheat progress and a power button. It talks to port 8099 directly and reads the `switch_entity` from the `machine_status` sensor attribute (set automatically by the integration) — no manual card configuration needed beyond the GLP URL.
+
+Install via HACS: [github.com/mxkissnr/glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)
+
+### API token
+
+All three components authenticate automatically via a shared token:
+
+1. The add-on generates a random 64-character token at first start and stores it in `/data/api_token.txt`.
+2. `/api/status` is public and returns the token.
+3. The browser UI and the integration read the token from `/api/status` on startup and include it as an `X-GLP-Token` header on all subsequent requests.
+4. Requests coming through HA Ingress bypass the token check — HA already authenticated the user.
+
+No manual configuration is required. To rotate the token, delete `/data/api_token.txt` and restart the add-on.
+
 ## Quick start
 
 Set `machine_url` to your controller's API URL and start the add-on.
