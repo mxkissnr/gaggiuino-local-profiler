@@ -6,7 +6,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.37.0';
+const GLP_VERSION   = '1.38.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -151,16 +151,18 @@ function loadOptions() {
 }
 
 function getMachineUrl(opts) {
-    const raw = opts.machine_url || process.env.MACHINE_URL || 'http://gaggia.intern/api/shots';
+    const raw = (opts.machine_host || opts.machine_url || process.env.MACHINE_URL || 'gaggia.intern').trim();
+    // Accept plain hostname/IP (with optional :port) — backwards-compat with full URLs
+    const normalised = /^https?:\/\//i.test(raw) ? raw : `http://${raw}/api/shots`;
     try {
-        const u = new URL(raw);
+        const u = new URL(normalised);
         if (!ALLOWED_URL_SCHEMES.includes(u.protocol)) {
             log(`Invalid URL scheme: ${u.protocol} -- using default`, true);
             return 'http://gaggia.intern/api/shots';
         }
-        return raw;
+        return normalised;
     } catch (e) {
-        log(`Invalid machine_url -- using default`, true);
+        log(`Invalid machine_host value -- using default`, true);
         return 'http://gaggia.intern/api/shots';
     }
 }
@@ -890,8 +892,7 @@ function scheduleNextSync() {
 
 loadOrCreateApiToken();
 loadPreheatState();
-const opts0 = loadOptions();
-const PORT = opts0.port || DEFAULT_PORT;
+const PORT = DEFAULT_PORT;
 app.listen(PORT, () => {
     log(`Gaggiuino Local Profiler v${GLP_VERSION} started on port ${PORT}`);
     const opts = loadOptions();
