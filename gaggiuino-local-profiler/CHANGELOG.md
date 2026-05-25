@@ -1,3 +1,9 @@
+## 1.36.0
+- Fix: active tab not scrolled into view on mobile — switching tabs no longer leaves the tab bar scrolled to a position where earlier tabs (e.g. "Shots") are partially hidden; `switchMode()` now calls `scrollIntoView` on the active button after each switch; closes #64
+- Fix: library bean/grinder edit form stayed 2-column on narrow screens — `.lib-form-grid` now collapses to single column at ≤ 480 px
+- Fix: added `-webkit-overflow-scrolling: touch` to `#mode-bar-scroll` for smooth momentum scroll on iOS
+- Fix: tab padding reduced to `12px 10px` and font to `.75rem` at ≤ 480 px so more tabs fit without scrolling; all content views use `12px` padding on narrow screens
+
 ## 1.35.0
 - Feature: preheat timer survives add-on restarts — `switchOnAt`/`switchOffAt` persisted in `/data/preheat_state.json`; state is restored on startup if younger than 24 h; if temperature is already stable at target (rolling variance of last 60 readings < 1.5 °C²) the preheat is auto-completed immediately; closes #63
 - Fix: shot calendar (`Shot-Kalender`) was clipped on the right side — container width was sampled once at render time via `offsetWidth`; switched to `getBoundingClientRect().width` and added a `ResizeObserver` so the calendar redraws when the container resizes (e.g. sidebar toggle)
