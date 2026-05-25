@@ -1016,7 +1016,7 @@
             .live-stats { grid-template-columns: repeat(2, 1fr); }
             .sprofiler-header h1 { font-size: 1.1rem; }
             #analytics-view, #library-view, #maintenance-view,
-            #dialin-view, #settings-view { padding: 12px; }
+            #dialin-view, #settings-view, #orders-view { padding: 12px; }
             .maint-card { padding: 14px; }
             .mode-btn { padding: 12px 10px; font-size: .75rem; }
         }
@@ -1068,6 +1068,56 @@
             border-radius:50%; margin-left:5px; vertical-align:middle;
             animation:pulse 1.2s infinite;
         }
+
+        /* ── Orders view ── */
+        #orders-view { display:none; flex-direction:column; flex:1; min-width:0; overflow-x:hidden; overflow-y:auto; padding:24px; gap:20px; }
+        .orders-columns { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+        @media(max-width:700px){ .orders-columns { grid-template-columns:1fr; } }
+        .orders-col-title { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#71717a; margin-bottom:10px; }
+        .order-card { background:#18181b; border:1px solid #3f3f46; border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:10px; margin-bottom:10px; }
+        .order-card.status-pending  { border-color:#f59e0b; }
+        .order-card.status-accepted { border-color:#22c55e; }
+        .order-card.status-done     { opacity:.6; }
+        .order-card.status-declined { opacity:.5; border-color:#ef4444; }
+        .order-card-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+        .order-item-name { font-size:1rem; font-weight:700; color:#f5f5f5; }
+        .order-customer  { font-size:.78rem; color:#a1a1aa; }
+        .order-note      { font-size:.78rem; color:#71717a; font-style:italic; }
+        .order-meta      { font-size:.72rem; color:#52525b; }
+        .order-eta-tag   { font-size:.75rem; font-weight:600; color:#22c55e; background:rgba(34,197,94,.1); border:1px solid rgba(34,197,94,.25); border-radius:6px; padding:2px 8px; }
+        .order-decline-tag { font-size:.75rem; color:#ef4444; }
+        .order-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+        .order-eta-picker { display:flex; gap:4px; flex-wrap:wrap; align-items:center; }
+        .order-eta-btn { background:#27272a; border:1px solid #3f3f46; border-radius:6px; color:#a1a1aa; font-size:.75rem; padding:4px 9px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; }
+        .order-eta-btn:hover,.order-eta-btn.selected { background:#3f3f46; color:#fff; border-color:#52525b; }
+        .order-eta-custom { width:52px; background:#27272a; border:1px solid #3f3f46; border-radius:6px; color:#e4e4e7; font-size:.75rem; padding:4px 6px; text-align:center; outline:none; font-family:'Figtree',sans-serif; }
+        .order-btn { border:none; border-radius:7px; font-size:.78rem; font-weight:600; padding:6px 13px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; }
+        .order-btn.accept  { background:rgba(34,197,94,.15); color:#22c55e; border:1px solid rgba(34,197,94,.3); }
+        .order-btn.accept:hover { background:rgba(34,197,94,.25); }
+        .order-btn.complete{ background:rgba(34,197,94,.15); color:#22c55e; border:1px solid rgba(34,197,94,.3); }
+        .order-btn.complete:hover { background:rgba(34,197,94,.25); }
+        .order-btn.decline { background:rgba(239,68,68,.1);  color:#ef4444; border:1px solid rgba(239,68,68,.25); }
+        .order-btn.decline:hover { background:rgba(239,68,68,.18); }
+        .order-decline-input { flex:1; min-width:120px; background:#27272a; border:1px solid #3f3f46; border-radius:6px; color:#e4e4e7; font-size:.78rem; padding:5px 8px; outline:none; font-family:'Figtree',sans-serif; }
+        .order-decline-input:focus { border-color:#52525b; }
+        .orders-empty { color:#52525b; font-size:.85rem; text-align:center; padding:18px 0; }
+        .orders-machine-off { background:rgba(239,68,68,.07); border:1px solid rgba(239,68,68,.2); border-radius:10px; color:#ef4444; font-size:.85rem; text-align:center; padding:14px; }
+        .orders-history-list { display:flex; flex-direction:column; gap:8px; }
+        .orders-section { display:flex; flex-direction:column; gap:0; }
+        .orders-menu-section { background:#18181b; border:1px solid #3f3f46; border-radius:12px; padding:20px; }
+        .orders-menu-title { font-size:.9rem; font-weight:700; color:#e4e4e7; margin-bottom:14px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; }
+        .orders-menu-list { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+        .orders-menu-item { display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid #27272a; }
+        .orders-menu-item-name { flex:1; font-size:.88rem; color:#e4e4e7; }
+        .orders-menu-del { background:none; border:none; color:#52525b; font-size:1rem; cursor:pointer; padding:2px 6px; transition:color .15s; }
+        .orders-menu-del:hover { color:#ef4444; }
+        .orders-menu-add-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .orders-menu-input { background:#27272a; border:1px solid #3f3f46; border-radius:7px; color:#e4e4e7; font-size:.82rem; padding:6px 10px; outline:none; font-family:'Figtree',sans-serif; }
+        .orders-menu-input:focus { border-color:#52525b; }
+        .orders-menu-input.emoji { width:56px; text-align:center; }
+        .orders-menu-save-btn { background:#27272a; border:1px solid #3f3f46; border-radius:7px; color:#a1a1aa; font-size:.82rem; font-weight:600; padding:6px 14px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; }
+        .orders-menu-save-btn:hover { background:#3f3f46; color:#fff; }
+        .orders-new-badge { font-size:.65rem; font-weight:700; background:#ef4444; color:#fff; border-radius:4px; padding:1px 5px; margin-left:6px; vertical-align:middle; }
 
         /* ── Split-flap counter (inline in sidebar header) ── */
         .flap-board {
@@ -1205,6 +1255,7 @@
             <button class="mode-btn" id="btnDialin"    onclick="switchMode('dialin')">Einwählen</button>
             <button class="mode-btn" id="btnLibrary"   onclick="switchMode('library')">Bibliothek</button>
             <button class="mode-btn" id="btnMaintenance" onclick="switchMode('maintenance')">Wartung<span id="maintBadge" class="maint-badge" style="display:none"></span></button>
+            <button class="mode-btn" id="btnOrders" onclick="switchMode('orders')">Bestellungen<span id="ordersBadge" class="maint-badge" style="display:none"></span></button>
         </div>
         <button class="mode-btn" id="btnSettings"  onclick="switchMode('settings')">⚙</button>
     </div>
@@ -1387,6 +1438,39 @@
     <!-- Maintenance view -->
     <div id="maintenance-view">
         <div id="maint-cards"></div>
+    </div>
+
+    <!-- Orders view (barista backend) -->
+    <div id="orders-view">
+        <div id="orders-machine-off-banner" class="orders-machine-off" style="display:none"></div>
+        <div class="orders-columns">
+            <div class="orders-section">
+                <div class="orders-col-title" data-i18n="orders_queue">Warteschlange</div>
+                <div id="orders-pending-list"></div>
+            </div>
+            <div class="orders-section">
+                <div class="orders-col-title" data-i18n="orders_inprogress">In Zubereitung</div>
+                <div id="orders-accepted-list"></div>
+            </div>
+        </div>
+        <div>
+            <div class="orders-col-title" data-i18n="orders_history">Verlauf</div>
+            <div class="orders-history-list" id="orders-history-list"></div>
+        </div>
+        <div class="orders-menu-section">
+            <div class="orders-menu-title" onclick="toggleOrdersMenu()">
+                <span data-i18n="orders_menu_title">Menü verwalten</span>
+                <span id="ordersMenuToggle">▾</span>
+            </div>
+            <div id="ordersMenuBody">
+                <div class="orders-menu-list" id="ordersMenuList"></div>
+                <div class="orders-menu-add-row">
+                    <input class="orders-menu-input emoji" id="ordersMenuEmoji" placeholder="☕" maxlength="2">
+                    <input class="orders-menu-input" id="ordersMenuName" style="flex:1" placeholder="Name …" data-i18n-ph="orders_menu_name_ph">
+                    <button class="orders-menu-save-btn" onclick="addOrderMenuItem()" data-i18n="orders_menu_save">Hinzufügen</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Library view -->
@@ -1737,6 +1821,18 @@ const TRANSLATIONS = {
     scan_error:'Scan-Fehler — bitte erneut versuchen',
     scan_glp_imported:'GLP-QR importiert',
     bean_qr_label:'QR-Code für diese Bohne',
+    nav_orders:'Bestellungen',
+    orders_queue:'Warteschlange', orders_inprogress:'In Zubereitung', orders_history:'Verlauf',
+    orders_empty:'Keine offenen Bestellungen',
+    orders_accept:'Annehmen', orders_decline:'Ablehnen', orders_complete:'✓ Erledigt',
+    orders_eta_label:'ETA (min)', orders_decline_ph:'Grund …',
+    orders_machine_off:'Maschine aus – Bestellungen nicht verfügbar',
+    orders_menu_title:'Menü verwalten', orders_menu_add:'+ Getränk hinzufügen',
+    orders_menu_name_ph:'Name …', orders_menu_emoji_ph:'☕', orders_menu_save:'Hinzufügen',
+    orders_for:'für', orders_note_ph:'Notiz …',
+    orders_ago:(m)=>`Vor ${m} Min`, orders_eta_in:(m)=>`Fertig in ${m} Min`,
+    orders_declined:'Abgelehnt', orders_done:'Erledigt', orders_new_badge:'NEU',
+    orders_confirm_delete_item:'Getränk aus dem Menü entfernen?',
   },
   en: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
@@ -1862,6 +1958,18 @@ const TRANSLATIONS = {
     scan_error:'Scan error — please try again',
     scan_glp_imported:'GLP QR imported',
     bean_qr_label:'QR code for this bean',
+    nav_orders:'Orders',
+    orders_queue:'Queue', orders_inprogress:'In Progress', orders_history:'History',
+    orders_empty:'No open orders',
+    orders_accept:'Accept', orders_decline:'Decline', orders_complete:'✓ Done',
+    orders_eta_label:'ETA (min)', orders_decline_ph:'Reason …',
+    orders_machine_off:'Machine off — ordering not available',
+    orders_menu_title:'Manage Menu', orders_menu_add:'+ Add drink',
+    orders_menu_name_ph:'Name …', orders_menu_emoji_ph:'☕', orders_menu_save:'Add',
+    orders_for:'for', orders_note_ph:'Note …',
+    orders_ago:(m)=>`${m} min ago`, orders_eta_in:(m)=>`Ready in ${m} min`,
+    orders_declined:'Declined', orders_done:'Done', orders_new_badge:'NEW',
+    orders_confirm_delete_item:'Remove drink from menu?',
   },
   it: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
@@ -1987,6 +2095,18 @@ const TRANSLATIONS = {
     scan_error:'Errore scansione — riprova',
     scan_glp_imported:'QR GLP importato',
     bean_qr_label:'Codice QR per questo caffè',
+    nav_orders:'Ordini',
+    orders_queue:'In attesa', orders_inprogress:'In preparazione', orders_history:'Cronologia',
+    orders_empty:'Nessun ordine aperto',
+    orders_accept:'Accetta', orders_decline:'Rifiuta', orders_complete:'✓ Fatto',
+    orders_eta_label:'ETA (min)', orders_decline_ph:'Motivo …',
+    orders_machine_off:'Macchina spenta — ordini non disponibili',
+    orders_menu_title:'Gestisci menu', orders_menu_add:'+ Aggiungi bevanda',
+    orders_menu_name_ph:'Nome …', orders_menu_emoji_ph:'☕', orders_menu_save:'Aggiungi',
+    orders_for:'per', orders_note_ph:'Nota …',
+    orders_ago:(m)=>`${m} min fa`, orders_eta_in:(m)=>`Pronto in ${m} min`,
+    orders_declined:'Rifiutato', orders_done:'Fatto', orders_new_badge:'NUOVO',
+    orders_confirm_delete_item:'Rimuovere la bevanda dal menu?',
   },
   fr: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque',
@@ -2112,6 +2232,18 @@ const TRANSLATIONS = {
     scan_error:'Erreur de scan — réessayer',
     scan_glp_imported:'QR GLP importé',
     bean_qr_label:'Code QR pour ce café',
+    nav_orders:'Commandes',
+    orders_queue:'File d\'attente', orders_inprogress:'En cours', orders_history:'Historique',
+    orders_empty:'Aucune commande ouverte',
+    orders_accept:'Accepter', orders_decline:'Refuser', orders_complete:'✓ Terminé',
+    orders_eta_label:'ETA (min)', orders_decline_ph:'Raison …',
+    orders_machine_off:'Machine éteinte — commandes non disponibles',
+    orders_menu_title:'Gérer le menu', orders_menu_add:'+ Ajouter une boisson',
+    orders_menu_name_ph:'Nom …', orders_menu_emoji_ph:'☕', orders_menu_save:'Ajouter',
+    orders_for:'pour', orders_note_ph:'Note …',
+    orders_ago:(m)=>`Il y a ${m} min`, orders_eta_in:(m)=>`Prêt dans ${m} min`,
+    orders_declined:'Refusé', orders_done:'Terminé', orders_new_badge:'NOUVEAU',
+    orders_confirm_delete_item:'Supprimer la boisson du menu ?',
   },
   es: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
@@ -2237,6 +2369,18 @@ const TRANSLATIONS = {
     scan_error:'Error de escaneo — vuelve a intentarlo',
     scan_glp_imported:'QR GLP importado',
     bean_qr_label:'Código QR para este café',
+    nav_orders:'Pedidos',
+    orders_queue:'Cola', orders_inprogress:'En preparación', orders_history:'Historial',
+    orders_empty:'No hay pedidos abiertos',
+    orders_accept:'Aceptar', orders_decline:'Rechazar', orders_complete:'✓ Listo',
+    orders_eta_label:'ETA (min)', orders_decline_ph:'Motivo …',
+    orders_machine_off:'Máquina apagada — pedidos no disponibles',
+    orders_menu_title:'Gestionar menú', orders_menu_add:'+ Agregar bebida',
+    orders_menu_name_ph:'Nombre …', orders_menu_emoji_ph:'☕', orders_menu_save:'Agregar',
+    orders_for:'para', orders_note_ph:'Nota …',
+    orders_ago:(m)=>`Hace ${m} min`, orders_eta_in:(m)=>`Listo en ${m} min`,
+    orders_declined:'Rechazado', orders_done:'Listo', orders_new_badge:'NUEVO',
+    orders_confirm_delete_item:'¿Eliminar bebida del menú?',
   },
 };
 
@@ -2303,6 +2447,13 @@ function applyTranslations() {
         const badge = btnMaint.querySelector('.maint-badge');
         btnMaint.textContent = t('nav_maintenance');
         if (badge) btnMaint.appendChild(badge);
+    }
+    // Orders button: preserve badge span
+    const btnOrd = document.getElementById('btnOrders');
+    if (btnOrd) {
+        const badge = btnOrd.querySelector('.maint-badge');
+        btnOrd.textContent = t('nav_orders');
+        if (badge) btnOrd.appendChild(badge);
     }
     // Search placeholder
     const searchEl = document.getElementById('shotSearch');
@@ -2458,6 +2609,7 @@ function switchMode(mode) {
     document.getElementById('btnDialin').classList.toggle('active',    mode === 'dialin');
     document.getElementById('btnLibrary').classList.toggle('active',     mode === 'library');
     document.getElementById('btnMaintenance').classList.toggle('active', mode === 'maintenance');
+    document.getElementById('btnOrders').classList.toggle('active',      mode === 'orders');
     document.getElementById('btnSettings').classList.toggle('active',    mode === 'settings');
     document.getElementById('shots-view').style.display        = mode === 'shots'       ? 'flex' : 'none';
     document.getElementById('live-view').style.display         = mode === 'live'        ? 'flex' : 'none';
@@ -2465,6 +2617,7 @@ function switchMode(mode) {
     document.getElementById('dialin-view').style.display       = mode === 'dialin'      ? 'flex' : 'none';
     document.getElementById('library-view').style.display      = mode === 'library'     ? 'flex' : 'none';
     document.getElementById('maintenance-view').style.display  = mode === 'maintenance' ? 'flex' : 'none';
+    document.getElementById('orders-view').style.display       = mode === 'orders'      ? 'flex' : 'none';
     document.getElementById('settings-view').style.display     = mode === 'settings'    ? 'flex' : 'none';
 
     if (mode === 'live') {
@@ -2477,9 +2630,11 @@ function switchMode(mode) {
     if (mode === 'dialin')      renderDialin();
     if (mode === 'library')     { renderBeanList(); renderGrinderList(); }
     if (mode === 'maintenance') loadMaintenanceView();
+    if (mode === 'orders')     { loadOrdersView(); startOrdersPolling(); } else stopOrdersPolling();
 
     const modeMap = { shots: 'btnShots', live: 'btnLive', analytics: 'btnAnalytics',
-                      dialin: 'btnDialin', library: 'btnLibrary', maintenance: 'btnMaintenance', settings: 'btnSettings' };
+                      dialin: 'btnDialin', library: 'btnLibrary', maintenance: 'btnMaintenance',
+                      orders: 'btnOrders', settings: 'btnSettings' };
     const activeBtn = document.getElementById(modeMap[mode]);
     if (activeBtn) activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
 }
@@ -4946,6 +5101,213 @@ collapseSidebarOnMobile();
 
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+// ── Orders (barista backend) ──────────────────────────────────────────────
+
+let _ordersMenuOpen = true;
+let _ordersPollTimer = null;
+let _ordersEtaSelected = {};    // orderId → selected ETA value
+let _ordersDeclineOpen = {};    // orderId → bool
+
+function toggleOrdersMenu() {
+    _ordersMenuOpen = !_ordersMenuOpen;
+    document.getElementById('ordersMenuBody').style.display = _ordersMenuOpen ? '' : 'none';
+    document.getElementById('ordersMenuToggle').textContent = _ordersMenuOpen ? '▾' : '▸';
+}
+
+function startOrdersPolling() {
+    stopOrdersPolling();
+    loadOrdersView();
+    _ordersPollTimer = setInterval(loadOrdersView, 10000);
+}
+function stopOrdersPolling() {
+    if (_ordersPollTimer) { clearInterval(_ordersPollTimer); _ordersPollTimer = null; }
+}
+
+async function loadOrdersView() {
+    const sw = await apiFetch('api/switch').then(r => r.json()).catch(() => ({}));
+    const machineOff = sw.configured && sw.state === false;
+    const banner = document.getElementById('orders-machine-off-banner');
+    if (banner) { banner.style.display = machineOff ? '' : 'none'; banner.textContent = t('orders_machine_off'); }
+
+    const [orders, menu] = await Promise.all([
+        apiFetch('api/orders').then(r => r.json()).catch(() => []),
+        apiFetch('api/orders/menu').then(r => r.json()).catch(() => []),
+    ]);
+
+    renderOrdersList(orders);
+    renderOrdersMenuAdmin(menu);
+    // Update badge
+    const pending = orders.filter(o => o.status === 'pending').length;
+    const badge = document.getElementById('ordersBadge');
+    if (badge) badge.style.display = pending > 0 ? '' : 'none';
+}
+
+function _orderTimeAgo(ts) {
+    const min = Math.round((Date.now() - ts) / 60000);
+    if (min < 1) return 'gerade eben';
+    return t('orders_ago')(min);
+}
+
+function renderOrdersList(orders) {
+    const pending  = orders.filter(o => o.status === 'pending');
+    const accepted = orders.filter(o => o.status === 'accepted');
+    const history  = orders.filter(o => ['done', 'declined'].includes(o.status)).slice(0, 20);
+
+    const pendingEl  = document.getElementById('orders-pending-list');
+    const acceptedEl = document.getElementById('orders-accepted-list');
+    const historyEl  = document.getElementById('orders-history-list');
+    if (!pendingEl) return;
+
+    pendingEl.innerHTML = pending.length ? pending.map(o => renderOrderCard(o, 'pending')).join('') :
+        `<div class="orders-empty">${t('orders_empty')}</div>`;
+
+    acceptedEl.innerHTML = accepted.length ? accepted.map(o => renderOrderCard(o, 'accepted')).join('') :
+        `<div class="orders-empty">${t('orders_empty')}</div>`;
+
+    historyEl.innerHTML = history.length ? history.map(o => renderOrderCard(o, 'history')).join('') : '';
+
+    // Bind buttons after render
+    pendingEl.querySelectorAll('[data-order-accept]').forEach(btn => {
+        btn.addEventListener('click', () => acceptOrder(btn.dataset.orderAccept));
+    });
+    pendingEl.querySelectorAll('[data-order-decline-toggle]').forEach(btn => {
+        btn.addEventListener('click', () => toggleDeclineRow(btn.dataset.orderDeclineToggle));
+    });
+    pendingEl.querySelectorAll('[data-order-decline-submit]').forEach(btn => {
+        btn.addEventListener('click', () => submitDecline(btn.dataset.orderDeclineSubmit));
+    });
+    pendingEl.querySelectorAll('[data-eta-btn]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.dataset.orderId;
+            _ordersEtaSelected[id] = parseInt(btn.dataset.etaBtn);
+            btn.closest('.order-eta-picker').querySelectorAll('.order-eta-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+        });
+    });
+    acceptedEl.querySelectorAll('[data-order-complete]').forEach(btn => {
+        btn.addEventListener('click', () => completeOrder(btn.dataset.orderComplete));
+    });
+    acceptedEl.querySelectorAll('[data-order-decline-toggle]').forEach(btn => {
+        btn.addEventListener('click', () => toggleDeclineRow(btn.dataset.orderDeclineToggle));
+    });
+    acceptedEl.querySelectorAll('[data-order-decline-submit]').forEach(btn => {
+        btn.addEventListener('click', () => submitDecline(btn.dataset.orderDeclineSubmit));
+    });
+}
+
+function renderOrderCard(o, ctx) {
+    const etaBtns = [2, 5, 10, 15, 20];
+    const selectedEta = _ordersEtaSelected[o.id] || 5;
+    const isNew = (Date.now() - o.createdAt) < 60000;
+
+    if (ctx === 'pending') {
+        const declineOpen = _ordersDeclineOpen[o.id];
+        return `<div class="order-card status-pending">
+            <div class="order-card-top">
+                <span class="order-item-name">${esc(o.item)}${isNew ? `<span class="orders-new-badge">${t('orders_new_badge')}</span>` : ''}</span>
+                <span class="order-meta">${_orderTimeAgo(o.createdAt)}</span>
+            </div>
+            <div class="order-customer">${t('orders_for')} <b>${esc(o.customer)}</b>${o.note ? ` · <span class="order-note">${esc(o.note)}</span>` : ''}</div>
+            <div class="order-eta-picker">
+                ${etaBtns.map(m => `<button class="order-eta-btn${_ordersEtaSelected[o.id]===m?' selected':''}" data-order-id="${esc(o.id)}" data-eta-btn="${m}">${m} min</button>`).join('')}
+                <input class="order-eta-custom" type="number" min="1" max="60" value="${selectedEta}" id="etaCustom_${esc(o.id)}" placeholder="min">
+            </div>
+            <div class="order-actions">
+                <button class="order-btn accept" data-order-accept="${esc(o.id)}">${t('orders_accept')}</button>
+                <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${t('orders_decline')}</button>
+            </div>
+            ${declineOpen ? `<div class="order-actions">
+                <input class="order-decline-input" id="declineReason_${esc(o.id)}" placeholder="${t('orders_decline_ph')}">
+                <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${t('orders_decline')} ✓</button>
+            </div>` : ''}
+        </div>`;
+    }
+    if (ctx === 'accepted') {
+        const etaDone = o.acceptedAt + o.eta * 60000;
+        const minsLeft = Math.max(0, Math.ceil((etaDone - Date.now()) / 60000));
+        const declineOpen = _ordersDeclineOpen[o.id];
+        return `<div class="order-card status-accepted">
+            <div class="order-card-top">
+                <span class="order-item-name">${esc(o.item)}</span>
+                <span class="order-eta-tag">${t('orders_eta_in')(minsLeft)}</span>
+            </div>
+            <div class="order-customer">${t('orders_for')} <b>${esc(o.customer)}</b>${o.note ? ` · <span class="order-note">${esc(o.note)}</span>` : ''}</div>
+            <div class="order-actions">
+                <button class="order-btn complete" data-order-complete="${esc(o.id)}">${t('orders_complete')}</button>
+                <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${t('orders_decline')}</button>
+            </div>
+            ${declineOpen ? `<div class="order-actions">
+                <input class="order-decline-input" id="declineReason_${esc(o.id)}" placeholder="${t('orders_decline_ph')}">
+                <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${t('orders_decline')} ✓</button>
+            </div>` : ''}
+        </div>`;
+    }
+    // history
+    const statusLabel = o.status === 'done' ? t('orders_done') : t('orders_declined');
+    return `<div class="order-card status-${o.status}">
+        <div class="order-card-top">
+            <span class="order-item-name">${esc(o.item)}</span>
+            <span class="order-meta">${statusLabel} · ${_orderTimeAgo(o.completedAt || o.createdAt)}</span>
+        </div>
+        <div class="order-customer">${t('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? ` · <span class="order-decline-tag">${esc(o.declineReason)}</span>` : ''}</div>
+    </div>`;
+}
+
+async function acceptOrder(id) {
+    const etaCustom = document.getElementById(`etaCustom_${id}`);
+    const eta = etaCustom ? (parseInt(etaCustom.value) || _ordersEtaSelected[id] || 5) : (_ordersEtaSelected[id] || 5);
+    await apiFetch(`api/orders/${id}/accept`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ eta }) });
+    loadOrdersView();
+}
+
+function toggleDeclineRow(id) {
+    _ordersDeclineOpen[id] = !_ordersDeclineOpen[id];
+    loadOrdersView();
+}
+
+async function submitDecline(id) {
+    const input = document.getElementById(`declineReason_${id}`);
+    const reason = input ? input.value.trim() : '';
+    await apiFetch(`api/orders/${id}/decline`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ reason }) });
+    delete _ordersDeclineOpen[id];
+    loadOrdersView();
+}
+
+async function completeOrder(id) {
+    await apiFetch(`api/orders/${id}/complete`, { method: 'POST' });
+    loadOrdersView();
+}
+
+async function renderOrdersMenuAdmin(menu) {
+    const list = document.getElementById('ordersMenuList');
+    if (!list) return;
+    list.innerHTML = menu.map(item => `
+        <div class="orders-menu-item">
+            <span>${item.emoji}</span>
+            <span class="orders-menu-item-name">${esc(item.name)}</span>
+            <button class="orders-menu-del" data-menu-del="${esc(item.id)}" title="${t('orders_confirm_delete_item')}">✕</button>
+        </div>`).join('');
+    list.querySelectorAll('[data-menu-del]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm(t('orders_confirm_delete_item'))) return;
+            await apiFetch(`api/orders/menu/${btn.dataset.menuDel}`, { method: 'DELETE' });
+            loadOrdersView();
+        });
+    });
+}
+
+async function addOrderMenuItem() {
+    const nameEl  = document.getElementById('ordersMenuName');
+    const emojiEl = document.getElementById('ordersMenuEmoji');
+    const name    = nameEl?.value.trim();
+    const emoji   = emojiEl?.value.trim() || '☕';
+    if (!name) return;
+    await apiFetch('api/orders/menu', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, emoji }) });
+    if (nameEl)  nameEl.value  = '';
+    if (emojiEl) emojiEl.value = '';
+    loadOrdersView();
 }
 </script>
 

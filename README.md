@@ -61,6 +61,7 @@ Click the button above to add this repository directly to your Home Assistant �
 | 🔗 | **kaffeebraun.com Import** | Paste a product URL from kaffeebraun.com — name, roaster, aromas, origin, roast level and processing are imported automatically; imported beans show source and import date |
 | 📱 | **PWA / Add to Home Screen** | Installable as a standalone app on Android and iOS; app shell cached for instant load |
 | 🎛️ | **Profile Selector** | Lovelace card shows a dropdown to switch the active brew profile via `select.gaggiuino_profile` (requires the Gaggiuino HA integration) |
+| 📋 | **Order Management** | Barista backend tab to manage espresso orders — queue, accept with ETA, complete or decline with reason; configurable menu (emoji + drink name); companion Lovelace card for customers (`glp-order-card`) |
 
 ---
 

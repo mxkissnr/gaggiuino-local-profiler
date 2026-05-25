@@ -12,7 +12,7 @@ const cheerio = require('cheerio');
 
 const app = express();
 
-const GLP_VERSION   = '1.44.0';
+const GLP_VERSION   = '1.45.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -24,7 +24,19 @@ const BLOCKLIST_FILE = '/data/blocklist.json';
 const OPTIONS_FILE   = '/data/options.json';
 const LIBRARY_FILE      = '/data/coffee_library.json';
 const MAINTENANCE_FILE  = '/data/maintenance.json';
+const ORDERS_FILE       = '/data/orders.json';
+const MENU_FILE         = '/data/menu.json';
 const TRASH_TTL_MS      = 30 * 24 * 60 * 60 * 1000; // 30 days
+const ORDERS_HISTORY_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+const DEFAULT_MENU = [
+    { id: 'espresso',   name: 'Espresso',        emoji: '☕' },
+    { id: 'ristretto',  name: 'Ristretto',        emoji: '☕' },
+    { id: 'lungo',      name: 'Lungo',            emoji: '☕' },
+    { id: 'cappuccino', name: 'Cappuccino',        emoji: '🥛' },
+    { id: 'latte',      name: 'Latte Macchiato',  emoji: '🥛' },
+    { id: 'flat_white', name: 'Flat White',        emoji: '🥛' },
+];
 
 const MAINTENANCE_DEFAULTS = {
     descaling:   { lastDate: null, threshold_shots: 200, threshold_days: 60  },
@@ -647,6 +659,129 @@ app.get('/api/import/url', async (req, res) => {
 // ── Live polling endpoint (replaces SSE — HA ServiceWorker blocks EventSource) ──
 
 let liveSeq = 0; // increments on each brew-end so frontend can detect new shots
+
+// ── Order Management ─────────────────────────────────────────────────────
+
+function loadMenu() {
+    try { return fs.existsSync(MENU_FILE) ? JSON.parse(fs.readFileSync(MENU_FILE, 'utf8')) : DEFAULT_MENU; }
+    catch { return DEFAULT_MENU; }
+}
+function saveMenu(menu) { fs.writeFileSync(MENU_FILE, JSON.stringify(menu, null, 2)); }
+
+function loadOrders() {
+    try {
+        if (!fs.existsSync(ORDERS_FILE)) return [];
+        const orders = JSON.parse(fs.readFileSync(ORDERS_FILE, 'utf8'));
+        const cutoff = Date.now() - ORDERS_HISTORY_TTL_MS;
+        // Prune completed/declined orders older than 7 days
+        return orders.filter(o => ['pending','accepted'].includes(o.status) || (o.completedAt && o.completedAt > cutoff));
+    } catch { return []; }
+}
+function saveOrders(orders) { fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2)); }
+
+// Menu — public read, auth write
+app.get('/api/orders/menu', (req, res) => res.json(loadMenu()));
+
+app.post('/api/orders/menu', express.json(), (req, res) => {
+    const { name, emoji } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'name required' });
+    const menu = loadMenu();
+    const item = { id: `m_${Date.now()}`, name: name.trim(), emoji: emoji?.trim() || '☕' };
+    menu.push(item);
+    saveMenu(menu);
+    res.json(item);
+});
+
+app.put('/api/orders/menu/:id', express.json(), (req, res) => {
+    const menu = loadMenu();
+    const item = menu.find(m => m.id === req.params.id);
+    if (!item) return res.status(404).json({ error: 'not found' });
+    if (req.body?.name?.trim()) item.name  = req.body.name.trim();
+    if (req.body?.emoji?.trim()) item.emoji = req.body.emoji.trim();
+    saveMenu(menu);
+    res.json(item);
+});
+
+app.delete('/api/orders/menu/:id', (req, res) => {
+    const menu = loadMenu();
+    const filtered = menu.filter(m => m.id !== req.params.id);
+    if (filtered.length === menu.length) return res.status(404).json({ error: 'not found' });
+    saveMenu(filtered);
+    res.json({ ok: true });
+});
+
+// Orders
+app.get('/api/orders', (req, res) => {
+    let orders = loadOrders();
+    if (req.query.status) orders = orders.filter(o => o.status === req.query.status);
+    res.json(orders.slice().reverse().slice(0, 100));
+});
+
+app.get('/api/orders/mine', (req, res) => {
+    const { haUserId } = req.query;
+    if (!haUserId) return res.status(400).json({ error: 'haUserId required' });
+    const orders = loadOrders().filter(o => o.haUserId === haUserId).reverse().slice(0, 10);
+    res.json(orders);
+});
+
+app.post('/api/orders', express.json(), (req, res) => {
+    const { item, note, customer, haUserId } = req.body || {};
+    if (!item || !customer?.trim()) return res.status(400).json({ error: 'item and customer required' });
+    const menu = loadMenu();
+    if (!menu.find(m => m.name === item)) return res.status(400).json({ error: 'unknown item' });
+    const orders = loadOrders();
+    const order = {
+        id: `ord_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        createdAt: Date.now(),
+        customer:  String(customer).trim().slice(0, 50),
+        haUserId:  String(haUserId || '').slice(0, 100),
+        item,
+        note:      note ? String(note).slice(0, 200) : '',
+        status:    'pending',
+        eta:       null, acceptedAt: null, completedAt: null, declineReason: null,
+    };
+    orders.push(order);
+    saveOrders(orders);
+    log(`Order ${order.id}: ${order.customer} → ${order.item}`);
+    res.json(order);
+});
+
+app.post('/api/orders/:id/accept', express.json(), (req, res) => {
+    const orders = loadOrders();
+    const order = orders.find(o => o.id === req.params.id);
+    if (!order) return res.status(404).json({ error: 'not found' });
+    if (order.status !== 'pending') return res.status(400).json({ error: 'not pending' });
+    order.status     = 'accepted';
+    order.eta        = Math.max(1, Math.min(60, parseInt(req.body?.eta) || 5));
+    order.acceptedAt = Date.now();
+    saveOrders(orders);
+    log(`Order ${order.id} accepted (ETA ${order.eta} min)`);
+    res.json(order);
+});
+
+app.post('/api/orders/:id/complete', (req, res) => {
+    const orders = loadOrders();
+    const order = orders.find(o => o.id === req.params.id);
+    if (!order) return res.status(404).json({ error: 'not found' });
+    order.status      = 'done';
+    order.completedAt = Date.now();
+    saveOrders(orders);
+    log(`Order ${order.id} done`);
+    res.json(order);
+});
+
+app.post('/api/orders/:id/decline', express.json(), (req, res) => {
+    const orders = loadOrders();
+    const order = orders.find(o => o.id === req.params.id);
+    if (!order) return res.status(404).json({ error: 'not found' });
+    if (!['pending', 'accepted'].includes(order.status)) return res.status(400).json({ error: 'cannot decline' });
+    order.status        = 'declined';
+    order.declineReason = String(req.body?.reason || '').slice(0, 200);
+    order.completedAt   = Date.now();
+    saveOrders(orders);
+    log(`Order ${order.id} declined: ${order.declineReason}`);
+    res.json(order);
+});
 
 // ── Backup & Restore ─────────────────────────────────────────────────────
 

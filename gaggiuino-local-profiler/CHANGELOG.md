@@ -1,3 +1,16 @@
+## 1.45.0
+- Feature: order management system — new "Bestellungen" tab in the GLP web UI for barista order management; order flow: pending → accepted (with ETA picker: 2/5/10/15/20 min or custom) → done; barista can also decline with a free-text reason; order queue auto-refreshes every 10 s; order tab badge shows number of pending orders; machine-off banner when switch entity is configured and off; menu management (add/delete drinks with emoji) stored in `/data/menu.json`; default menu: Espresso, Ristretto, Lungo, Cappuccino, Latte Macchiato, Flat White; customer orders via new REST endpoints (see below); completed orders auto-pruned after 7 days; all 5 languages translated (DE/EN/IT/FR/ES); closes #77
+
+**New server endpoints:**
+- `GET /api/orders/menu` — public, returns menu items
+- `POST/PUT/DELETE /api/orders/menu/:id` — menu CRUD (auth required)
+- `GET /api/orders` — all orders barista view (auth required)
+- `GET /api/orders/mine?haUserId=` — customer's own orders (auth required)
+- `POST /api/orders` — place order (auth required)
+- `POST /api/orders/:id/accept` — accept with ETA (auth required)
+- `POST /api/orders/:id/complete` — mark done (auth required)
+- `POST /api/orders/:id/decline` — decline with reason (auth required)
+
 ## 1.44.0
 - Feature: expose `/api/machine/profiles` (GET) and `/api/machine/profile/set` (POST) endpoints — proxy to HA `select.gaggiuino_profile` entity via Supervisor API; used by the GLP Lovelace card; gracefully returns `{ available: false }` when the Gaggiuino HA integration is not installed; closes #76
 
