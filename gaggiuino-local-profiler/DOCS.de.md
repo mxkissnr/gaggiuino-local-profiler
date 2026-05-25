@@ -95,6 +95,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | `sync_interval` | Automatischer Sync-Intervall in Minuten (1–60) | `5` |
 | `switch_entity` | HA-Switch-Entität zum Ein-/Ausschalten der Maschine | *(leer)* |
 | `preheat_time` | Aufwärmzeit in Minuten — wie lange nach dem Einschalten bis die Maschine brühbereit ist (1–120) | `20` |
+| `enable_orders` | Bestellsystem aktivieren — Barista-Backend-Tab + Kunden-Bestellkarte; standardmäßig deaktiviert | `false` |
 | `port` | Port, auf dem der Server lauscht (1024–65535) | `8099` |
 
 ## Features
@@ -107,7 +108,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | **Bibliothek** | Kaffeebohnen- und Mühlenkatalog mit Verknüpfung zu Shots. |
 | **Einwählen** | Einwähl-Assistent: Ziel-Shot mit aktuellen Versuchen vergleichen. |
 | **Wartung** | Fünf Maschinenwartungs-Erinnerungen (Entkalken, Backflush, Gruppenköpf-Service, Dichtungen & Siebe, Wasserfilter) plus ein eigener Reinigungsplan pro Mühle. Alle Aufgaben haben konfigurierbare Shot- oder Tages-Schwellenwerte, Fortschrittsbalken und „Jetzt erledigt"-Button. |
-| **Bestellungen** | Barista-Backend für Bestellverwaltung. Bestellannahme per Toggle ein-/ausschalten, Getränkemenü verwalten (Emoji + Name, gespeichert in `/data/menu.json`), Live-Warteschlange (ausstehend / in Zubereitung) und Verlauf einsehen. Bestellungen annehmen mit ETA-Auswahl oder mit Freitext ablehnen. Kundenbestellung über die [GLP Order Card](https://github.com/mxkissnr/glp-order-card). |
+| **Bestellungen** | Barista-Backend für Bestellverwaltung *(erfordert `enable_orders: true`)*. Bestellannahme per Toggle ein-/ausschalten, Getränkemenü verwalten (Emoji + Name, gespeichert in `/data/menu.json`), Live-Warteschlange (ausstehend / in Zubereitung) und Verlauf einsehen. Bestellungen annehmen mit ETA-Auswahl oder mit Freitext ablehnen. Kunden-Statistik-Panel zeigt Gesamtbestellungen und Auswertung pro Kunde. Kundenbestellung über die [GLP Order Card](https://github.com/mxkissnr/glp-order-card). |
 
 ### Live-Tab, Switch-Entity und Aufwärmtimer
 

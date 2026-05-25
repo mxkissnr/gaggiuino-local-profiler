@@ -95,6 +95,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | `sync_interval` | Auto-sync interval in minutes (1–60) | `5` |
 | `switch_entity` | HA switch entity to power the machine on/off | *(empty)* |
 | `preheat_time` | Warmup time in minutes — how long after switch-on until the machine is ready to brew (1–120) | `20` |
+| `enable_orders` | Enable the order management system — barista backend tab + customer order card support; disabled by default | `false` |
 | `port` | Port the add-on server listens on (1024–65535) | `8099` |
 
 ## Features
@@ -107,7 +108,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | **Library** | Coffee bean and grinder catalogue linked to shots. |
 | **Einwählen** | Dial-in assistant: compare a target shot with recent attempts. |
 | **Maintenance** | Five machine maintenance reminders (descaling, backflush, group head service, gaskets & screens, water filter) plus a per-grinder cleaning schedule. All tasks have configurable shot or day thresholds, progress bars and a "Done now" button. |
-| **Bestellungen** | Barista order management backend. Toggle order acceptance on/off, manage the drink menu (emoji + name, persisted in `/data/menu.json`), see the live order queue (pending / in progress) and history. Accept orders with an ETA picker, or decline with a free-text reason. Customer-facing order placement is handled by the [GLP Order Card](https://github.com/mxkissnr/glp-order-card). |
+| **Bestellungen** | Barista order management backend *(requires `enable_orders: true`)*. Toggle order acceptance on/off, manage the drink menu (emoji + name, persisted in `/data/menu.json`), see the live order queue (pending / in progress) and history. Accept orders with an ETA picker, or decline with a free-text reason. Customer statistics panel shows total orders and per-customer breakdown. Customer-facing order placement is handled by the [GLP Order Card](https://github.com/mxkissnr/glp-order-card). |
 
 ### Live tab, switch entity and preheat timer
 

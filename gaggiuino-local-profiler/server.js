@@ -12,7 +12,7 @@ const cheerio = require('cheerio');
 
 const app = express();
 
-const GLP_VERSION   = '1.48.0';
+const GLP_VERSION   = '1.49.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -384,7 +384,8 @@ app.get('/api/status', (req, res) => {
         haConnected:     !!HA_TOKEN,
         switchEntity:    opts.switch_entity || null,
         glpVersion:      GLP_VERSION,
-        apiToken:        apiToken || null
+        apiToken:        apiToken || null,
+        ordersFeature:   isOrdersEnabled()
     });
 });
 
@@ -707,11 +708,19 @@ function loadOrders() {
 }
 function saveOrders(orders) { fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2)); }
 
+function isOrdersEnabled() { return !!loadOptions().enable_orders; }
+
 function loadOrdersSettings() {
     try { return fs.existsSync(ORDERS_SETTINGS_FILE) ? JSON.parse(fs.readFileSync(ORDERS_SETTINGS_FILE, 'utf8')) : { enabled: true }; }
     catch { return { enabled: true }; }
 }
 function saveOrdersSettings(s) { fs.writeFileSync(ORDERS_SETTINGS_FILE, JSON.stringify(s, null, 2)); }
+
+// Guard: all /api/orders/* routes require enable_orders: true
+app.use('/api/orders', (req, res, next) => {
+    if (!isOrdersEnabled()) return res.status(404).json({ error: 'orders feature not enabled' });
+    next();
+});
 
 // Menu — public read, auth write
 app.get('/api/orders/menu', (req, res) => res.json(loadMenu()));

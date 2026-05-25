@@ -1275,7 +1275,7 @@
             <button class="mode-btn" id="btnDialin"    onclick="switchMode('dialin')">Einwählen</button>
             <button class="mode-btn" id="btnLibrary"   onclick="switchMode('library')">Bibliothek</button>
             <button class="mode-btn" id="btnMaintenance" onclick="switchMode('maintenance')">Wartung<span id="maintBadge" class="maint-badge" style="display:none"></span></button>
-            <button class="mode-btn" id="btnOrders" onclick="switchMode('orders')">Bestellungen<span id="ordersBadge" class="maint-badge" style="display:none"></span></button>
+            <button class="mode-btn" id="btnOrders" onclick="switchMode('orders')" style="display:none">Bestellungen<span id="ordersBadge" class="maint-badge" style="display:none"></span></button>
         </div>
         <button class="mode-btn" id="btnSettings"  onclick="switchMode('settings')">⚙</button>
     </div>
@@ -3135,6 +3135,8 @@ async function updateStatus() {
             const vEl = document.getElementById('glpVersionBadge');
             if (vEl) vEl.textContent = `v${s.glpVersion}`;
         }
+        const ordersBtn = document.getElementById('btnOrders');
+        if (ordersBtn) ordersBtn.style.display = s.ordersFeature ? '' : 'none';
         if (switchRes?.ok) updatePowerButton(await switchRes.json());
         else updatePowerButton({ configured: false });
     } catch (e) {}

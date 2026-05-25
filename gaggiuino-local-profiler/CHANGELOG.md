@@ -1,3 +1,6 @@
+## 1.49.0
+- Feature: order system is now opt-in — new config option `enable_orders` (default `false`); Bestellungen tab is hidden when disabled; all `/api/orders/*` endpoints return 404 when disabled; `GET /api/status` exposes `ordersFeature` flag; closes #83
+
 ## 1.48.0
 - Feature: shot tagging — `POST /api/orders/:id/complete` merges `orderedBy: { customer, haUserId, orderId }` into the shot annotation (non-destructive, existing annotation fields preserved); closes #81
 - Feature: customer statistics section in Bestellungen tab — collapsible panel showing global totals (total completed orders, most popular drink) and per-customer cards (total, favourite drink, last order date); computed client-side from existing order history; closes #82
