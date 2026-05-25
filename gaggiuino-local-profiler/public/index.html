@@ -4814,25 +4814,27 @@ async function _handleScanResult(raw, status) {
             const name    = p.product_name || p.product_name_de || p.product_name_en || '';
             const roaster = p.brands || '';
             const notes   = [p.categories_tags?.find(c => c.startsWith('en:'))?.replace('en:', '') || '', p.labels || ''].filter(Boolean).join(', ');
+            status.textContent = t('scan_found', name || raw);
+            status.className = 'found';
+            await new Promise(r => setTimeout(r, 1000));
             closeScanModal();
             openBeanForm();
             if (name)    document.getElementById('beanFormName').value    = name;
             if (roaster) document.getElementById('beanFormRoaster').value = roaster;
             if (notes)   document.getElementById('beanFormNotes').value   = notes;
-            const displayName = name || raw;
-            document.getElementById('scanStatus').textContent = t('scan_found', displayName);
-            document.getElementById('scanStatus').className = 'found';
         } else {
-            closeScanModal();
-            openBeanForm();
             status.textContent = t('scan_not_found');
             status.className = 'error';
+            await new Promise(r => setTimeout(r, 1800));
+            closeScanModal();
+            openBeanForm();
         }
     } catch (e) {
+        status.textContent = t('scan_error');
+        status.className = 'error';
+        await new Promise(r => setTimeout(r, 1800));
         closeScanModal();
         openBeanForm();
-        status.textContent = t('scan_not_found');
-        status.className = 'error';
     }
 }
 

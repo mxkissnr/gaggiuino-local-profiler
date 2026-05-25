@@ -1,3 +1,6 @@
+## 1.42.2
+- Fix: barcode scan showed no feedback when product not found — status message was set on the already-hidden modal; modal now stays open for 1.8 s to show the result before auto-closing and opening the form; same fix for network errors; closes #73
+
 ## 1.42.1
 - Fix: Dial-In cards showed '–' for pressure — `getShotData()` returns `{x,y}` objects from `mapToXY()` but the pressure filter treated them as raw numbers; fixed to read `pt.y` correctly; closes #72
 
