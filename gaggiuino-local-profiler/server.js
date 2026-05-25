@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.33.0';
+const GLP_VERSION   = '1.33.1';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -704,6 +704,7 @@ async function pollViaGaggiuinoStatus() {
 async function backgroundHaCheck() {
     if (!HA_TOKEN) return;
     await checkAndApplyMachinePower();
+    if (!cachedMachineVersion) fetchMachineVersion();
     try {
         const headers = { Authorization: `Bearer ${HA_TOKEN}` };
         const res     = await axios.get(
