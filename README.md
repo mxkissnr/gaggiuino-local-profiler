@@ -60,6 +60,7 @@ Click the button above to add this repository directly to your Home Assistant �
 | 📷 | **Barcode / QR Scanner** | Scan coffee bag barcodes (EAN/UPC) via camera — name and roaster looked up on Open Food Facts; GLP QR schema for full bean import between installations; each bean card generates a shareable QR code |
 | 🔗 | **kaffeebraun.com Import** | Paste a product URL from kaffeebraun.com — name, roaster, aromas, origin, roast level and processing are imported automatically; imported beans show source and import date |
 | 📱 | **PWA / Add to Home Screen** | Installable as a standalone app on Android and iOS; app shell cached for instant load |
+| 🎛️ | **Profile Selector** | Lovelace card shows a dropdown to switch the active brew profile via `select.gaggiuino_profile` (requires the Gaggiuino HA integration) |
 
 ---
 

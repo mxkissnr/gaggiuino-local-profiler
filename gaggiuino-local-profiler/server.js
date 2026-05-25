@@ -12,7 +12,7 @@ const cheerio = require('cheerio');
 
 const app = express();
 
-const GLP_VERSION   = '1.43.1';
+const GLP_VERSION   = '1.44.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -393,6 +393,35 @@ app.post('/api/switch/toggle', async (req, res) => {
         log(`Switch ${entity} -> ${action}`);
     } catch (e) {
         log(`Switch toggle error: ${e.message}`, true);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/machine/profiles', async (req, res) => {
+    if (!HA_TOKEN) return res.json({ available: false });
+    try {
+        const r = await axios.get(`${HA_API}/states/select.gaggiuino_profile`,
+            { headers: { Authorization: `Bearer ${HA_TOKEN}` }, timeout: 5000 });
+        const { state, attributes } = r.data;
+        res.json({ available: true, current: state, options: attributes.options || [] });
+    } catch (e) {
+        if (e.response?.status === 404) return res.json({ available: false });
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/machine/profile/set', express.json(), async (req, res) => {
+    const { option } = req.body || {};
+    if (!option) return res.status(400).json({ error: 'option required' });
+    if (!HA_TOKEN) return res.status(503).json({ error: 'HA token unavailable' });
+    try {
+        await axios.post(`${HA_API}/services/select/select_option`,
+            { entity_id: 'select.gaggiuino_profile', option },
+            { headers: { Authorization: `Bearer ${HA_TOKEN}` }, timeout: 5000 });
+        res.json({ ok: true });
+        log(`Profile switched to: ${option}`);
+    } catch (e) {
+        log(`Profile set error: ${e.message}`, true);
         res.status(500).json({ error: e.message });
     }
 });

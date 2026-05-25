@@ -55,7 +55,9 @@ Installation via HACS: [github.com/mxkissnr/gaggiuino-profiler-integration](http
 
 ### GLP Lovelace-Karte
 
-Eine Custom Lovelace-Karte, die Maschinenstatus, letzten Shot, Aufwärm-Fortschritt und einen Power-Button anzeigt. Sie kommuniziert direkt mit Port 8099 und liest die `switch_entity` aus dem `machine_status`-Sensor-Attribut (automatisch von der Integration gesetzt) — keine manuelle Konfiguration der Karte erforderlich außer der GLP-URL.
+Eine Custom Lovelace-Karte, die Maschinenstatus, letzten Shot, Aufwärm-Fortschritt, einen Power-Button und eine **Profil-Auswahl** anzeigt. Sie kommuniziert direkt mit Port 8099 und liest die `switch_entity` aus dem `machine_status`-Sensor-Attribut (automatisch von der Integration gesetzt) — keine manuelle Konfiguration der Karte erforderlich außer der GLP-URL.
+
+Die Profil-Auswahl erfordert die originale [Gaggiuino HA-Integration](https://github.com/ALERTua/hass-gaggiuino); diese erstellt die `select.gaggiuino_profile`-Entität, die die Karte liest und beschreibt. Die Auswahl wird automatisch ausgeblendet wenn die Entität nicht vorhanden ist.
 
 Installation via HACS: [github.com/mxkissnr/glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)
 

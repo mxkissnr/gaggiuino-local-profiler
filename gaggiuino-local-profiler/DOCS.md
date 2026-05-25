@@ -55,7 +55,9 @@ Install via HACS: [github.com/mxkissnr/gaggiuino-profiler-integration](https://g
 
 ### GLP Lovelace Card
 
-A custom Lovelace card that displays machine status, last shot summary, preheat progress and a power button. It talks to port 8099 directly and reads the `switch_entity` from the `machine_status` sensor attribute (set automatically by the integration) — no manual card configuration needed beyond the GLP URL.
+A custom Lovelace card that displays machine status, last shot summary, preheat progress, a power button and a **profile selector**. It talks to port 8099 directly and reads the `switch_entity` from the `machine_status` sensor attribute (set automatically by the integration) — no manual card configuration needed beyond the GLP URL.
+
+The profile selector requires the original [Gaggiuino HA integration](https://github.com/ALERTua/hass-gaggiuino) to be installed; it creates the `select.gaggiuino_profile` entity that the card reads and writes. The selector is automatically hidden when the entity is not present.
 
 Install via HACS: [github.com/mxkissnr/glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)
 

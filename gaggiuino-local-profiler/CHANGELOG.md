@@ -1,3 +1,6 @@
+## 1.44.0
+- Feature: expose `/api/machine/profiles` (GET) and `/api/machine/profile/set` (POST) endpoints — proxy to HA `select.gaggiuino_profile` entity via Supervisor API; used by the GLP Lovelace card; gracefully returns `{ available: false }` when the Gaggiuino HA integration is not installed; closes #76
+
 ## 1.43.1
 - Fix: add-on failed to start on Node.js 18 — cheerio pulls in undici which references the `File` global added only in Node.js 20; added polyfill using `buffer.File` (available since Node.js 18.13.0) at the top of server.js; closes #75
 
