@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const app = express();
 
-const GLP_VERSION   = '1.33.1';
+const GLP_VERSION   = '1.34.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR      = '/data';
 const DATA_FILE     = '/data/shots.json';
@@ -225,6 +225,18 @@ try {
 }
 
 app.use(express.json({ limit: '16kb' }));
+
+// ── API token auth middleware ─────────────────────────────────────────────
+app.use((req, res, next) => {
+    const opts  = loadOptions();
+    const token = (opts.api_token || '').trim();
+    if (!token) return next(); // no token configured → open access
+    if (req.headers['x-ingress-path'] !== undefined) return next(); // HA ingress → already authed
+    // only protect API and shots.json; static files remain accessible
+    if (!req.path.startsWith('/api/') && req.path !== '/shots.json') return next();
+    if (req.headers['x-glp-token'] === token) return next();
+    res.status(401).json({ error: 'Unauthorized' });
+});
 
 // ── API routes (before static) ────────────────────────────────────────────
 

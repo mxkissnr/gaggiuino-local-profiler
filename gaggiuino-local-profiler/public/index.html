@@ -1658,6 +1658,10 @@ const TRANSLATIONS = {
     profile_export_no_data:'Keine Profildaten in diesem Shot vorhanden.',
     sidebar_hint:'Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).',
     sidebar_collapse:'Sidebar einklappen', sidebar_expand:'Sidebar aufklappen',
+    token_modal_title:'API-Token erforderlich',
+    token_modal_desc:'Dieser GLP-Server ist mit einem API-Token gesichert. Gib den Token aus den Add-on-Optionen ein.',
+    token_modal_placeholder:'API-Token',
+    token_modal_save:'Speichern',
   },
   en: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
@@ -1759,6 +1763,10 @@ const TRANSLATIONS = {
     profile_export_no_data:'No profile data available in this shot.',
     sidebar_hint:'Click the name for Shot A. Use <b>⇄</b> to set the compare shot (Shot B).',
     sidebar_collapse:'Collapse sidebar', sidebar_expand:'Expand sidebar',
+    token_modal_title:'API token required',
+    token_modal_desc:'This GLP server is protected by an API token. Enter the token from the add-on options.',
+    token_modal_placeholder:'API token',
+    token_modal_save:'Save',
   },
   it: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
@@ -1860,6 +1868,10 @@ const TRANSLATIONS = {
     profile_export_no_data:'Nessun dato di profilo disponibile in questo shot.',
     sidebar_hint:'Clicca sul nome per Shot A. Usa <b>⇄</b> per il confronto (Shot B).',
     sidebar_collapse:'Comprimi la barra laterale', sidebar_expand:'Espandi la barra laterale',
+    token_modal_title:'Token API richiesto',
+    token_modal_desc:'Questo server GLP è protetto da un token API. Inserisci il token dalle opzioni del componente aggiuntivo.',
+    token_modal_placeholder:'Token API',
+    token_modal_save:'Salva',
   },
   fr: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque',
@@ -1961,6 +1973,10 @@ const TRANSLATIONS = {
     profile_export_no_data:'Aucune donnée de profil disponible dans ce shot.',
     sidebar_hint:'Cliquez sur le nom pour Shot A. Utilisez <b>⇄</b> pour la comparaison (Shot B).',
     sidebar_collapse:'Réduire la barre latérale', sidebar_expand:'Développer la barre latérale',
+    token_modal_title:'Token API requis',
+    token_modal_desc:'Ce serveur GLP est protégé par un token API. Entrez le token depuis les options du module complémentaire.',
+    token_modal_placeholder:'Token API',
+    token_modal_save:'Enregistrer',
   },
   es: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
@@ -2062,11 +2078,56 @@ const TRANSLATIONS = {
     profile_export_no_data:'No hay datos de perfil disponibles en este shot.',
     sidebar_hint:'Haz clic en el nombre para Shot A. Usa <b>⇄</b> para la comparación (Shot B).',
     sidebar_collapse:'Contraer barra lateral', sidebar_expand:'Expandir barra lateral',
+    token_modal_title:'Token de API requerido',
+    token_modal_desc:'Este servidor GLP está protegido por un token de API. Introduce el token desde las opciones del complemento.',
+    token_modal_placeholder:'Token de API',
+    token_modal_save:'Guardar',
   },
 };
 
 let currentLang = localStorage.getItem('glp_lang') || navigator.language.slice(0,2).toLowerCase();
 if (!TRANSLATIONS[currentLang]) currentLang = 'de';
+
+let glpToken = localStorage.getItem('glp_token') || '';
+
+async function apiFetch(url, opts = {}) {
+    if (glpToken) opts = { ...opts, headers: { ...opts.headers, 'X-GLP-Token': glpToken } };
+    const r = await apiFetch(url, opts);
+    if (r.status === 401) { showTokenModal(); throw new Error('401 Unauthorized'); }
+    return r;
+}
+
+function showTokenModal() {
+    let modal = document.getElementById('tokenModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'tokenModal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999';
+        modal.innerHTML = `<div style="background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:28px;max-width:380px;width:90%">
+            <h2 style="margin:0 0 8px;font-size:1.1rem;color:#fff" id="tokenModalTitle"></h2>
+            <p style="margin:0 0 16px;font-size:.85rem;color:#a1a1aa" id="tokenModalDesc"></p>
+            <input id="tokenModalInput" type="password" style="width:100%;padding:8px 12px;background:#18181b;border:1px solid #3f3f46;border-radius:8px;color:#fff;font-size:.9rem;box-sizing:border-box" />
+            <button onclick="saveToken()" style="margin-top:12px;width:100%;padding:9px;background:#ef4444;border:none;border-radius:8px;color:#fff;font-weight:600;cursor:pointer;font-size:.9rem" id="tokenModalSave"></button>
+        </div>`;
+        document.body.appendChild(modal);
+        modal.querySelector('#tokenModalInput').addEventListener('keydown', e => { if (e.key === 'Enter') saveToken(); });
+    }
+    modal.querySelector('#tokenModalTitle').textContent = t('token_modal_title');
+    modal.querySelector('#tokenModalDesc').textContent  = t('token_modal_desc');
+    modal.querySelector('#tokenModalInput').placeholder = t('token_modal_placeholder');
+    modal.querySelector('#tokenModalSave').textContent  = t('token_modal_save');
+    modal.style.display = 'flex';
+    modal.querySelector('#tokenModalInput').focus();
+}
+
+function saveToken() {
+    const val = document.getElementById('tokenModalInput')?.value.trim();
+    if (!val) return;
+    glpToken = val;
+    localStorage.setItem('glp_token', val);
+    document.getElementById('tokenModal').style.display = 'none';
+    location.reload();
+}
 
 function t(key, ...args) {
     const val = TRANSLATIONS[currentLang]?.[key] ?? TRANSLATIONS.de?.[key] ?? key;
@@ -2309,7 +2370,7 @@ async function loadData() {
     // Fetch phase — network errors show a retry button
     let fetched;
     try {
-        const r = await fetch('shots.json');
+        const r = await apiFetch('shots.json');
         if (!r.ok) {
             shotsEl.innerHTML = `<div class="loading-state" style="color:#ef4444">HTTP ${r.status}</div>`;
             return;
@@ -2396,7 +2457,7 @@ async function loadMaintenanceView() {
     const container = document.getElementById('maint-cards');
     container.innerHTML = `<div class="loading-state">${t('loading')}</div>`;
     try {
-        const r = await fetch('api/maintenance');
+        const r = await apiFetch('api/maintenance');
         const data = await r.json();
         renderMaintenanceCards(data);
     } catch(e) {
@@ -2459,14 +2520,14 @@ function renderMaintenanceCards(data) {
 
 async function markMaintDone(task) {
     try {
-        const r = await fetch(`api/maintenance/${task}/done`, { method: 'POST' });
+        const r = await apiFetch(`api/maintenance/${task}/done`, { method: 'POST' });
         renderMaintenanceCards(await r.json());
     } catch(e) {}
 }
 
 async function saveMaintThreshold(task, field, value) {
     try {
-        await fetch(`api/maintenance/${task}/threshold`, {
+        await apiFetch(`api/maintenance/${task}/threshold`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ [field]: parseInt(value) }),
@@ -2653,7 +2714,7 @@ async function saveAnnotation() {
         notes:        document.getElementById('annNotes').value.trim()
     };
     try {
-        const r = await fetch(`api/shots/${primaryShotId}/annotate`, {
+        const r = await apiFetch(`api/shots/${primaryShotId}/annotate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -2674,8 +2735,8 @@ async function saveAnnotation() {
 async function updateStatus() {
     try {
         const [statusRes, switchRes] = await Promise.all([
-            fetch('api/status'),
-            fetch('api/switch').catch(() => null)
+            apiFetch('api/status'),
+            apiFetch('api/switch').catch(() => null)
         ]);
         if (!statusRes.ok) return;
         const s = await statusRes.json();
@@ -2732,12 +2793,12 @@ async function toggleMachinePower() {
     const btn = document.getElementById('powerBtn');
     btn.disabled = true;
     try {
-        const r = await fetch('api/switch/toggle', { method: 'POST' });
+        const r = await apiFetch('api/switch/toggle', { method: 'POST' });
         if (r.ok) {
             const result = await r.json();
             updatePowerButton({ configured: true, state: result.state });
             setTimeout(async () => {
-                const sr = await fetch('api/switch').catch(() => null);
+                const sr = await apiFetch('api/switch').catch(() => null);
                 if (sr?.ok) updatePowerButton(await sr.json());
             }, 2000);
         }
@@ -2750,7 +2811,7 @@ async function triggerSync() {
     btn.disabled = true;
     btn.textContent = '↻ …';
     try {
-        const r = await fetch('api/sync', { method: 'POST' });
+        const r = await apiFetch('api/sync', { method: 'POST' });
         if (r.status === 429) {
             const d = await r.json();
             btn.textContent = d.error || 'Warten …';
@@ -2891,7 +2952,7 @@ function connectLiveStream() {
 
 async function fetchPreheatData() {
     try {
-        const r = await fetch('api/preheat');
+        const r = await apiFetch('api/preheat');
         if (!r.ok) return;
         updatePreheatWidget(await r.json());
     } catch (e) {}
@@ -2924,7 +2985,7 @@ function updatePreheatWidget(d) {
 
 async function fetchLiveData() {
     try {
-        const r = await fetch('api/live/data');
+        const r = await apiFetch('api/live/data');
         if (!r.ok) { setLiveBadge('error', `HTTP ${r.status}`); return; }
         const msg = await r.json();
 
@@ -3578,7 +3639,7 @@ function confirmDeleteShot(id) {
 
 async function deleteShot(id) {
     try {
-        const r = await fetch(`api/shots/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const r = await apiFetch(`api/shots/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         if (!r.ok) throw new Error(await r.text());
         shots = shots.filter(s => s.id !== id);
         if (primaryShotId === id) { primaryShotId = shots[0]?.id || null; }
@@ -3593,7 +3654,7 @@ async function deleteShot(id) {
 // ── Trash bin ─────────────────────────────────────────────────────────────
 async function loadTrashData() {
     try {
-        const r = await fetch('shots.json?trash=1');
+        const r = await apiFetch('shots.json?trash=1');
         if (!r.ok) return;
         trashedShots = await r.json();
         renderTrash();
@@ -3635,7 +3696,7 @@ function toggleTrash() {
 
 async function trashShot(id) {
     try {
-        const r = await fetch(`api/shots/${id}/trash`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const r = await apiFetch(`api/shots/${id}/trash`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         if (!r.ok) throw new Error(await r.text());
         shots = shots.filter(s => s.id !== id);
         if (primaryShotId === id) { primaryShotId = shots[0]?.id || null; }
@@ -3650,7 +3711,7 @@ async function trashShot(id) {
 
 async function restoreShot(id) {
     try {
-        const r = await fetch(`api/shots/${id}/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const r = await apiFetch(`api/shots/${id}/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         if (!r.ok) throw new Error(await r.text());
         await loadData();
     } catch (e) {
@@ -3661,7 +3722,7 @@ async function restoreShot(id) {
 async function permanentDeleteShot(id) {
     if (!confirm(t('confirm_perm_delete', id))) return;
     try {
-        const r = await fetch(`api/shots/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const r = await apiFetch(`api/shots/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         if (!r.ok) throw new Error(await r.text());
         trashedShots = trashedShots.filter(s => s.id !== id);
         renderTrash();
@@ -3980,7 +4041,7 @@ let grinderEditId = null;
 
 async function loadLibrary() {
     try {
-        const r = await fetch('api/library');
+        const r = await apiFetch('api/library');
         if (!r.ok) return;
         coffeeLibrary = await r.json();
         updateLibraryDatalist();
@@ -4095,7 +4156,7 @@ async function saveBean() {
     if (!name) { document.getElementById('beanFormName').focus(); return; }
     const body = JSON.stringify({ name, roaster, roastDate, notes, stock_g });
     const url  = beanEditId ? `api/library/bean/${beanEditId}` : 'api/library/bean';
-    const r    = await fetch(url, { method: beanEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    const r    = await apiFetch(url, { method: beanEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
     if (!r.ok) return;
     const saved = await r.json();
     if (beanEditId) {
@@ -4111,7 +4172,7 @@ async function saveBean() {
 
 async function deleteBean(id) {
     if (!confirm(t('lib_confirm_delete_bean'))) return;
-    const r = await fetch(`api/library/bean/${id}/delete`, { method: 'POST' });
+    const r = await apiFetch(`api/library/bean/${id}/delete`, { method: 'POST' });
     if (!r.ok) return;
     coffeeLibrary.beans = coffeeLibrary.beans.filter(b => b.id !== id);
     updateLibraryDatalist();
@@ -4144,7 +4205,7 @@ async function saveGrinder() {
     if (!name) { document.getElementById('grinderFormName').focus(); return; }
     const body = JSON.stringify({ name, notes });
     const url  = grinderEditId ? `api/library/grinder/${grinderEditId}` : 'api/library/grinder';
-    const r    = await fetch(url, { method: grinderEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    const r    = await apiFetch(url, { method: grinderEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
     if (!r.ok) return;
     const saved = await r.json();
     if (grinderEditId) {
@@ -4160,7 +4221,7 @@ async function saveGrinder() {
 
 async function deleteGrinder(id) {
     if (!confirm(t('lib_confirm_delete_grinder'))) return;
-    const r = await fetch(`api/library/grinder/${id}/delete`, { method: 'POST' });
+    const r = await apiFetch(`api/library/grinder/${id}/delete`, { method: 'POST' });
     if (!r.ok) return;
     coffeeLibrary.grinders = coffeeLibrary.grinders.filter(g => g.id !== id);
     updateLibraryDatalist();
@@ -4503,7 +4564,7 @@ async function restoreFromFile(input) {
         const text   = await file.text();
         const bundle = JSON.parse(text);
         if (!bundle.glp_backup) { alert(t('backup_invalid')); return; }
-        const r = await fetch('api/restore', {
+        const r = await apiFetch('api/restore', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text
         });
         const res = await r.json();
