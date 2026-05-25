@@ -4676,8 +4676,8 @@ function renderDialin() {
         const score = calcShotScore(s, data);
         const dur   = s.duration ? (s.duration / 10).toFixed(0) + ' s' : '–';
         const pArr  = data.pressure || [];
-        const pActive = pArr.filter(v => v != null && v / 10 >= 5);
-        const pAvg  = pActive.length ? (pActive.reduce((a,b)=>a+b,0)/pActive.length/10).toFixed(1) + ' bar' : '–';
+        const pActive = pArr.filter(pt => pt.y != null && pt.y >= 5);
+        const pAvg  = pActive.length ? (pActive.reduce((a,pt)=>a+pt.y,0)/pActive.length).toFixed(1) + ' bar' : '–';
         const dose  = ann.dose  ? ann.dose + ' g'  : null;
         const yield_= s.weight  ? (s.weight/10).toFixed(1) + ' g' : null;
         const ratio = (ann.dose && s.weight) ? '1:' + (s.weight/10/ann.dose).toFixed(1) : null;
