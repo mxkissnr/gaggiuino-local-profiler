@@ -51,7 +51,7 @@ Das zentrale Stück. Es synchronisiert den Shot-Verlauf von der Gaggiuino-Maschi
 
 Ein Custom Component, das das Add-on alle 60 Sekunden abfragt (konfigurierbar). Es stellt alle GLP-Daten als native HA-Sensoren bereit — Shot-Anzahl, letztes Profil, Score, Dauer, Gewicht, Wartungsstatus, Aufwärmstatus usw. — sodass sie in Automationen, Energie-Dashboards und Lovelace-Dashboards verwendet werden können.
 
-Installation via HACS: [github.com/mxkissnr/gaggiuino-profiler-integration](https://github.com/mxkissnr/gaggiuino-profiler-integration)
+Installation via HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
 
 ### GLP Lovelace-Karte
 

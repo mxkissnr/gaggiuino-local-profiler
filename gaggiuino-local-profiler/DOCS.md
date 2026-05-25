@@ -51,7 +51,7 @@ The central piece. It syncs shot history from the Gaggiuino machine, stores it l
 
 A custom component that polls the add-on every 60 s (configurable). It exposes all GLP data as native HA sensors — shot count, last shot profile, score, duration, weight, maintenance status, preheat state, etc. — so they can be used in automations, energy dashboards, and Lovelace dashboards.
 
-Install via HACS: [github.com/mxkissnr/gaggiuino-profiler-integration](https://github.com/mxkissnr/gaggiuino-profiler-integration)
+Install via HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
 
 ### GLP Lovelace Card
 
