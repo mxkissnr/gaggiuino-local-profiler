@@ -1,3 +1,9 @@
+## 1.49.2
+- Security: validate `x-ingress-path` header value against expected slug path instead of mere presence check — prevents auth bypass via header spoofing
+- Security: add `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` response headers
+- Security: in-memory rate limiting on write endpoints — library mutations (30/min), order placement (10/min), restore (3/min)
+- Security: maintenance threshold values validated to sane ranges (shots: 1–10000, days: 1–365); closes #84
+
 ## 1.49.1
 - Docs: update architecture diagram and component descriptions to reflect all four GLP components (add-on, integration, Shot Card, Order Card); add GLP Order Card section; update "three components" references
 

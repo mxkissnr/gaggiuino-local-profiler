@@ -12,7 +12,7 @@ const cheerio = require('cheerio');
 
 const app = express();
 
-const GLP_VERSION   = '1.49.1';
+const GLP_VERSION   = '1.49.2';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -103,6 +103,7 @@ const HA_TOKEN = process.env.SUPERVISOR_TOKEN;
 
 const ALLOWED_URL_SCHEMES = ['http:', 'https:'];
 const MAX_SHOT_ID = 100000;
+const HA_INGRESS_PATH = '/api/hassio_ingress/gaggiuino_local_profiler';
 
 let lastSyncTime      = null;
 let lastSyncError     = null;
@@ -304,10 +305,34 @@ try {
 
 app.use(express.json({ limit: '16kb' }));
 
+// ── Simple in-memory rate limiter (no external dep) ───────────────────────
+const _rlWindows = new Map();
+function rateLimit(key, maxPerMinute) {
+    const now  = Date.now();
+    const win  = 60_000;
+    let e = _rlWindows.get(key);
+    if (!e || now - e.t > win) { e = { t: now, n: 0 }; _rlWindows.set(key, e); }
+    return ++e.n <= maxPerMinute;
+}
+// Periodically clean up stale entries to prevent unbounded growth
+setInterval(() => {
+    const cutoff = Date.now() - 120_000;
+    for (const [k, v] of _rlWindows) { if (v.t < cutoff) _rlWindows.delete(k); }
+}, 120_000);
+
+// ── Security headers ─────────────────────────────────────────────────────
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'same-origin');
+    next();
+});
+
 // ── API token auth middleware ─────────────────────────────────────────────
 app.use((req, res, next) => {
     if (!apiToken) return next();
-    if (req.headers['x-ingress-path'] !== undefined) return next(); // HA ingress → already authed
+    const ingressPath = req.headers['x-ingress-path'];
+    if (ingressPath !== undefined && ingressPath.startsWith(HA_INGRESS_PATH)) return next(); // HA ingress → already authed
     if (req.path === '/api/status') return next(); // status is public — used to distribute token
     if (!req.path.startsWith('/api/') && req.path !== '/shots.json') return next(); // static files
     if (req.headers['x-glp-token'] === apiToken) return next();
@@ -564,6 +589,7 @@ app.get('/api/library', (req, res) => {
 });
 
 app.post('/api/library/bean', (req, res) => {
+    if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
     const { name, roaster, roastDate, notes, stock_g, source, importedAt } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
@@ -602,6 +628,7 @@ app.post('/api/library/bean/:id/delete', (req, res) => {
 });
 
 app.post('/api/library/grinder', (req, res) => {
+    if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
     const { name, notes } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
@@ -779,6 +806,7 @@ app.get('/api/orders/mine', (req, res) => {
 });
 
 app.post('/api/orders', express.json(), (req, res) => {
+    if (!rateLimit(`orders:${req.ip}`, 10)) return res.status(429).json({ error: 'Rate limit exceeded' });
     if (!loadOrdersSettings().enabled) return res.status(503).json({ error: 'orders_disabled' });
     const { item, note, customer, haUserId } = req.body || {};
     if (!item || !customer?.trim()) return res.status(400).json({ error: 'item and customer required' });
@@ -876,6 +904,7 @@ app.get('/api/backup', (req, res) => {
 });
 
 app.post('/api/restore', express.json({ limit: '50mb' }), (req, res) => {
+    if (!rateLimit(`restore:${req.ip}`, 3)) return res.status(429).json({ error: 'Rate limit exceeded' });
     try {
         const b = req.body;
         if (!b || b.glp_backup !== true || !Array.isArray(b.shots)) {
@@ -916,8 +945,14 @@ app.post('/api/maintenance/:task/threshold', express.json(), (req, res) => {
     if (!isValidMaintenanceTask(req.params.task)) return res.status(404).json({ error: 'Unknown task' });
     const maint = loadMaintenance();
     const { threshold_shots, threshold_days } = req.body;
-    if (threshold_shots !== undefined) maint[req.params.task].threshold_shots = parseInt(threshold_shots) || null;
-    if (threshold_days  !== undefined) maint[req.params.task].threshold_days  = parseInt(threshold_days)  || null;
+    if (threshold_shots !== undefined) {
+        const v = parseInt(threshold_shots);
+        maint[req.params.task].threshold_shots = (!isNaN(v) && v >= 1 && v <= 10000) ? v : null;
+    }
+    if (threshold_days !== undefined) {
+        const v = parseInt(threshold_days);
+        maint[req.params.task].threshold_days = (!isNaN(v) && v >= 1 && v <= 365) ? v : null;
+    }
     saveMaintenance(maint);
     res.json(computeMaintenanceStats(maint));
 });
