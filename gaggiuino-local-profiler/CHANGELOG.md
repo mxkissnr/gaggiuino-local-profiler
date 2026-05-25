@@ -1,3 +1,6 @@
+## 1.39.0
+- Fix: maintenance threshold UI now shows a Shots/Days toggle — only one mode is active at a time; switching mode saves immediately and resets the value to a sensible default (shots: 200, days: 30); tasks that previously had both thresholds set default to shots mode; closes #69
+
 ## 1.38.0
 - Fix: removed redundant `port` option from add-on options — the port is always fixed at 8099 internally; users who need a different external port use the HA Netzwerk port-mapping panel; closes #66
 - Fix: `machine_url` option renamed to `machine_host` — enter only the hostname or IP (e.g. `gaggia.intern` or `192.168.1.100:8080`); the `/api/shots` path is appended automatically; full URLs (with `http://`) continue to work for backwards compatibility; closes #67

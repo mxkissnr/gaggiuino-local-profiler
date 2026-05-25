@@ -1008,7 +1008,10 @@
         .maint-bar-fill.soon { background:#f59e0b; }
         .maint-bar-fill.due  { background:#ef4444; }
         .maint-bar-fill.never{ background:#3f3f46; width:0% !important; }
-        .maint-thresholds { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+        .maint-thresholds { display:flex; gap:8px; align-items:center; }
+        .maint-mode-toggle { display:flex; border-radius:6px; overflow:hidden; border:1px solid #3f3f46; flex-shrink:0; }
+        .maint-mode-btn { background:#27272a; border:none; color:#71717a; font-size:.72rem; font-weight:600; padding:4px 10px; cursor:pointer; font-family:'Figtree',sans-serif; transition:all .15s; }
+        .maint-mode-btn.active { background:#3f3f46; color:#e4e4e7; }
         .maint-threshold-field { display:flex; align-items:center; gap:5px; font-size:.78rem; color:#71717a; }
         .maint-threshold-field input {
             width:60px; background:#27272a; border:1px solid #3f3f46; border-radius:5px;
@@ -1668,6 +1671,7 @@ const TRANSLATIONS = {
     error_generic:(msg)=>`Fehler: ${msg}`,
     error_load:'Fehler beim Laden',
     live_ready_status:'Bereit', live_error_status:'Fehler',
+    maint_by_shots:'Shots', maint_by_days:'Tage',
   },
   en: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
@@ -1773,6 +1777,7 @@ const TRANSLATIONS = {
     error_generic:(msg)=>`Error: ${msg}`,
     error_load:'Error loading data',
     live_ready_status:'Ready', live_error_status:'Error',
+    maint_by_shots:'Shots', maint_by_days:'Days',
   },
   it: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
@@ -1878,6 +1883,7 @@ const TRANSLATIONS = {
     error_generic:(msg)=>`Errore: ${msg}`,
     error_load:'Errore di caricamento',
     live_ready_status:'Pronto', live_error_status:'Errore',
+    maint_by_shots:'Shots', maint_by_days:'Giorni',
   },
   fr: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque',
@@ -1983,6 +1989,7 @@ const TRANSLATIONS = {
     error_generic:(msg)=>`Erreur : ${msg}`,
     error_load:'Erreur de chargement',
     live_ready_status:'Prêt', live_error_status:'Erreur',
+    maint_by_shots:'Shots', maint_by_days:'Jours',
   },
   es: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
@@ -2088,6 +2095,7 @@ const TRANSLATIONS = {
     error_generic:(msg)=>`Error: ${msg}`,
     error_load:'Error al cargar',
     live_ready_status:'Listo', live_error_status:'Error',
+    maint_by_shots:'Shots', maint_by_days:'Días',
   },
 };
 
@@ -2473,19 +2481,21 @@ function renderMaintenanceCards(data) {
                 : `${t('maint_ago_days', d.daysSince)}`;
         const shotsText = d.shotsSince > 0 ? ` · ${t('maint_shots_since', d.shotsSince)}` : '';
 
-        const threshFields = [];
-        if (d.threshold_shots !== null)
-            threshFields.push(`<label class="maint-threshold-field">
-                <span>${t('maint_thresh_shots')}</span>
-                <input type="number" min="1" max="9999" value="${d.threshold_shots}"
-                    onchange="saveMaintThreshold('${task}','threshold_shots',this.value)">
-            </label>`);
-        if (d.threshold_days !== null)
-            threshFields.push(`<label class="maint-threshold-field">
-                <span>${t('maint_thresh_days')}</span>
-                <input type="number" min="1" max="9999" value="${d.threshold_days}"
-                    onchange="saveMaintThreshold('${task}','threshold_days',this.value)">
-            </label>`);
+        // active mode: shots if threshold_shots is set, else days
+        const mode = d.threshold_shots !== null ? 'shots' : 'days';
+        const val  = mode === 'shots' ? d.threshold_shots : d.threshold_days;
+        const threshHtml = `<div class="maint-thresholds">
+            <div class="maint-mode-toggle">
+                <button class="maint-mode-btn${mode==='shots'?' active':''}"
+                    onclick="setMaintMode('${task}','shots')">${t('maint_by_shots')}</button>
+                <button class="maint-mode-btn${mode==='days'?' active':''}"
+                    onclick="setMaintMode('${task}','days')">${t('maint_by_days')}</button>
+            </div>
+            <label class="maint-threshold-field">
+                <input type="number" min="1" max="9999" value="${val}"
+                    onchange="saveMaintThreshold('${task}','${mode==='shots'?'threshold_shots':'threshold_days'}',this.value)">
+            </label>
+        </div>`;
 
         card.innerHTML = `
             <div class="maint-card-header">
@@ -2499,7 +2509,7 @@ function renderMaintenanceCards(data) {
             <div class="maint-bar-track">
                 <div class="maint-bar-fill ${d.status}" style="width:${Math.round(d.pct * 100)}%"></div>
             </div>
-            ${threshFields.length ? `<div class="maint-thresholds">${threshFields.join('')}</div>` : ''}
+            ${threshHtml}
             <button class="maint-done-btn" onclick="markMaintDone('${task}')">✓ ${t('maint_done_btn')}</button>
         `;
         container.appendChild(card);
@@ -2522,6 +2532,21 @@ async function saveMaintThreshold(task, field, value) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ [field]: parseInt(value) }),
         });
+    } catch(e) {}
+}
+
+async function setMaintMode(task, mode) {
+    const defaults = { shots: 200, days: 30 };
+    const body = mode === 'shots'
+        ? { threshold_shots: defaults.shots, threshold_days: null }
+        : { threshold_shots: null, threshold_days: defaults.days };
+    try {
+        const r = await apiFetch(`api/maintenance/${task}/threshold`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        renderMaintenanceCards(await r.json());
     } catch(e) {}
 }
 
