@@ -1185,6 +1185,7 @@
                     </div>
                     <button class="export-btn" onclick="exportCSV()" title="Alle Shots als CSV exportieren">↓ CSV</button>
                     <button class="export-btn" id="exportShotBtn" onclick="exportShot()" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
+                    <button class="export-btn" id="exportProfileBtn" onclick="exportProfile()" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
                 </div>
             </div>
 
@@ -1653,6 +1654,8 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Fehler: ${msg}`,
     preheat_warming:'Aufheizen …', preheat_ready:'Brühbereit ☕',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} verbleibend`,
+    btn_export_profile_tooltip:'Gaggiuino-Profil aus Shot exportieren',
+    profile_export_no_data:'Keine Profildaten in diesem Shot vorhanden.',
     sidebar_hint:'Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).',
     sidebar_collapse:'Sidebar einklappen', sidebar_expand:'Sidebar aufklappen',
   },
@@ -1752,6 +1755,8 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Error: ${msg}`,
     preheat_warming:'Warming up …', preheat_ready:'Ready to brew ☕',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} remaining`,
+    btn_export_profile_tooltip:'Export Gaggiuino profile from shot',
+    profile_export_no_data:'No profile data available in this shot.',
     sidebar_hint:'Click the name for Shot A. Use <b>⇄</b> to set the compare shot (Shot B).',
     sidebar_collapse:'Collapse sidebar', sidebar_expand:'Expand sidebar',
   },
@@ -1851,6 +1856,8 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Errore: ${msg}`,
     preheat_warming:'Riscaldamento …', preheat_ready:'Pronto per estrarre ☕',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} rimanenti`,
+    btn_export_profile_tooltip:'Esporta profilo Gaggiuino dallo shot',
+    profile_export_no_data:'Nessun dato di profilo disponibile in questo shot.',
     sidebar_hint:'Clicca sul nome per Shot A. Usa <b>⇄</b> per il confronto (Shot B).',
     sidebar_collapse:'Comprimi la barra laterale', sidebar_expand:'Espandi la barra laterale',
   },
@@ -1950,6 +1957,8 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Erreur : ${msg}`,
     preheat_warming:'Chauffe en cours …', preheat_ready:'Prêt à extraire ☕',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} restantes`,
+    btn_export_profile_tooltip:'Exporter le profil Gaggiuino depuis le shot',
+    profile_export_no_data:'Aucune donnée de profil disponible dans ce shot.',
     sidebar_hint:'Cliquez sur le nom pour Shot A. Utilisez <b>⇄</b> pour la comparaison (Shot B).',
     sidebar_collapse:'Réduire la barre latérale', sidebar_expand:'Développer la barre latérale',
   },
@@ -2049,6 +2058,8 @@ const TRANSLATIONS = {
     backup_error:(msg)=>`Error: ${msg}`,
     preheat_warming:'Calentando …', preheat_ready:'Listo para extraer ☕',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} restante`,
+    btn_export_profile_tooltip:'Exportar perfil Gaggiuino desde el shot',
+    profile_export_no_data:'No hay datos de perfil disponibles en este shot.',
     sidebar_hint:'Haz clic en el nombre para Shot A. Usa <b>⇄</b> para la comparación (Shot B).',
     sidebar_collapse:'Contraer barra lateral', sidebar_expand:'Expandir barra lateral',
   },
@@ -3867,6 +3878,97 @@ function exportShot() {
     a.href = url;
     a.download = `shot_${shot.id}_${date.slice(0,10)}.shot`;
     a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ── Profile export (Gaggiuino JSON format) ────────────────────────────────
+
+function exportProfile() {
+    const shot = shots.find(s => s.id === primaryShotId);
+    if (!shot) return;
+
+    const profile = shot.profile;
+
+    // Case 1: machine stored the full profile (phases present) — export as-is
+    if (profile && Array.isArray(profile.phases) && profile.phases.length > 0) {
+        const out  = JSON.parse(JSON.stringify(profile));
+        const ann  = shot.annotation || {};
+        if (!out.recipe) out.recipe = {};
+        if (ann.dose)        out.recipe.coffeeIn  = parseFloat(ann.dose);
+        if (!out.recipe.coffeeOut && ann.dose) out.recipe.coffeeOut = parseFloat(ann.dose) * 2;
+        if (out.recipe.coffeeIn && out.recipe.coffeeOut)
+            out.recipe.ratio = Math.round(out.recipe.coffeeOut / out.recipe.coffeeIn * 100) / 100;
+        _downloadJSON(out, (out.name || shot.profileName || `shot_${shot.id}`).replace(/[^a-z0-9_\-]/gi, '_') + '.json');
+        return;
+    }
+
+    // Case 2: no phases — generate from target pressure/flow datapoints
+    const d      = shot.datapoints || {};
+    const rawT   = d.timeInShot    || [];
+    const rawTP  = d.targetPressure || [];
+    const rawTF  = d.targetPumpFlow || [];
+
+    if (rawT.length === 0 || (rawTP.length === 0 && rawTF.length === 0)) {
+        showToast(t('profile_export_no_data'));
+        return;
+    }
+
+    const times  = rawT.map(v => v / 10);   // → seconds
+    const tPress = rawTP.map(v => v / 10);  // → bar
+    const totalMs = Math.round(times[times.length - 1] * 1000);
+    const ann     = shot.annotation || {};
+
+    // Detect preinfusion end: first index where target pressure crosses 6 bar
+    const PREINF_THRESHOLD = 6;
+    let preinfEndIdx = tPress.findIndex(p => p >= PREINF_THRESHOLD);
+    if (preinfEndIdx < 0) preinfEndIdx = 0;
+    const preinfMs = preinfEndIdx > 0 ? Math.round(times[preinfEndIdx] * 1000) : 0;
+
+    const phases = [];
+
+    if (preinfMs > 500) {
+        const preinfTarget = Math.round(Math.max(...tPress.slice(0, preinfEndIdx)) * 10) / 10 || 4;
+        phases.push({
+            type: 0,
+            target: { start: 0, end: preinfTarget, curve: 1, time: preinfMs },
+            restriction: 0,
+            stopConditions: { time: preinfMs, pressureAbove: 0, pressureBelow: 0, flowAbove: 0, flowBelow: 0, weight: 0 }
+        });
+    }
+
+    const extractionSlice = tPress.slice(preinfEndIdx || 0);
+    const avgExtraction = extractionSlice.length
+        ? Math.round(extractionSlice.reduce((a, b) => a + b, 0) / extractionSlice.length * 10) / 10
+        : 9;
+    const extractionMs = totalMs - preinfMs;
+    const yieldG = ann.dose ? parseFloat(ann.dose) * 2 : 36;
+
+    phases.push({
+        type: 0,
+        target: { start: avgExtraction, end: avgExtraction, curve: 0, time: extractionMs },
+        restriction: 0,
+        stopConditions: { time: extractionMs, pressureAbove: 0, pressureBelow: 0, flowAbove: 0, flowBelow: 0, weight: yieldG }
+    });
+
+    const out = {
+        id: shot.id,
+        name: shot.profileName || `Shot ${shot.id}`,
+        phases,
+        globalStopConditions: { time: 0, weight: yieldG, waterPumped: 0 },
+        recipe: {
+            coffeeIn:  ann.dose  ? parseFloat(ann.dose)  : 18,
+            coffeeOut: yieldG,
+            ratio:     ann.dose  ? Math.round(yieldG / parseFloat(ann.dose) * 100) / 100 : 2
+        }
+    };
+    _downloadJSON(out, (out.name).replace(/[^a-z0-9_\-]/gi, '_') + '.json');
+}
+
+function _downloadJSON(obj, filename) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
 }
 
