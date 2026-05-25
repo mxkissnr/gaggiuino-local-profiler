@@ -5175,8 +5175,17 @@ function stopOrdersPolling() {
 }
 
 async function setOrdersEnabled(enabled) {
-    await apiFetch('api/orders/settings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ enabled }) }).catch(() => {});
-    _updateOrdersToggleUI(enabled);
+    try {
+        const res = await apiFetch('api/orders/settings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ enabled }) });
+        if (!res.ok) throw new Error('save failed');
+        _updateOrdersToggleUI(enabled);
+    } catch {
+        // Save failed — reload actual state from server so the toggle reflects reality
+        try {
+            const settings = await apiFetch('api/orders/settings').then(r => r.json());
+            _updateOrdersToggleUI(settings.enabled);
+        } catch {}
+    }
 }
 
 function _updateOrdersToggleUI(enabled) {

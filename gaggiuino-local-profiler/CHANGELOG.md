@@ -1,3 +1,6 @@
+## 1.49.3
+- Fix: `setOrdersEnabled()` silently swallowed save errors and showed optimistic "aktiv" toggle state even when the server write failed; on error the UI now re-fetches the actual server state and reverts the toggle accordingly; closes #86
+
 ## 1.49.2
 - Security: validate `x-ingress-path` header value against expected slug path instead of mere presence check — prevents auth bypass via header spoofing
 - Security: add `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` response headers
