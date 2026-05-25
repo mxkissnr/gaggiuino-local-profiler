@@ -168,7 +168,7 @@ GPL-3.0 © 2024–2026 mxkissnr — free to use, fork and modify; any derivative
 
 Inspired by [BeanConqueror](https://github.com/graphefruit/beanconqueror) by graphefruit — a fantastic open-source coffee tracking app that pioneered many of the ideas around shot logging and coffee library management that influenced this project.
 
-Built on top of the [Gaggiuino](https://gaggiuino.github.io/) project and the original [Gaggiuino Home Assistant Integration](https://github.com/Homeassistant-Gaggiuino/Gaggiuino-HomeAssistant) — without their work this project would not exist.
+Built on top of the [Gaggiuino](https://gaggiuino.github.io/) project and the original [Gaggiuino Home Assistant Integration](https://github.com/ALERTua/hass-gaggiuino) by ALERTua — without their work this project would not exist.
 
 ---
 
