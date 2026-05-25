@@ -1,3 +1,8 @@
+// Polyfill File global for Node.js < 20 (undici, which cheerio depends on, requires it)
+if (typeof File === 'undefined') {
+  try { global.File = require('buffer').File; } catch (_) { global.File = class File {}; }
+}
+
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -7,7 +12,7 @@ const cheerio = require('cheerio');
 
 const app = express();
 
-const GLP_VERSION   = '1.43.0';
+const GLP_VERSION   = '1.43.1';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';

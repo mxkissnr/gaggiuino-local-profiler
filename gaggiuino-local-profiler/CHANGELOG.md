@@ -1,3 +1,6 @@
+## 1.43.1
+- Fix: add-on failed to start on Node.js 18 — cheerio pulls in undici which references the `File` global added only in Node.js 20; added polyfill using `buffer.File` (available since Node.js 18.13.0) at the top of server.js; closes #75
+
 ## 1.43.0
 - Feature: import coffee from kaffeebraun.com URL — paste any product URL from kaffeebraun.com into the new 🔗 URL field in the Library tab; the server fetches and parses the page (cheerio) and pre-fills name, roaster, origin, aromas, roast level and processing method; imported beans show "Imported from kaffeebraun.com · date" in the bean card; closes #74
 
