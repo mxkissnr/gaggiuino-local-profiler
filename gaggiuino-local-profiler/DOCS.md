@@ -31,7 +31,7 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces
            │  /api/orders †     │                          │
            ▼                    │                          │
   ┌─────────────────────┐  ┌────┴─────────────────┐  ┌────┴─────────────────┐
-  │  GLP HA Integration │  │  GLP Shot Card  ③    │  │  GLP Order Card  ④   │
+  │  GLP HA Integration │  │  GLP Shot Card       │  │  GLP Order Card      │
   │  (custom component) │─►│  machine status,     │  │  customer ordering,  │
   │  creates sensors,   │  │  last shot summary,  │  │  order status,       │
   │  fires HA events    │─►│  preheat progress    │  │  shot summary on done│
