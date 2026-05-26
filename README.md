@@ -141,6 +141,19 @@ aspect_ratio: "16:9"
 
 ---
 
+## 🔗 Component Compatibility
+
+| Component | Current | Requires |
+|---|---|---|
+| **GLP Add-on** | v1.51.0 | — |
+| **GLP Integration** ([glp-integration](https://github.com/mxkissnr/glp-integration)) | v1.8.0 | Add-on v1.51.0+ |
+| **GLP Lovelace Card** ([glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)) | v1.5.0 | Integration v1.8.0+ |
+| **GLP Order Card** ([glp-order-card](https://github.com/mxkissnr/glp-order-card)) | v1.4.0 | Integration v1.7.0+ |
+
+All four components are optional and independently installable — only install what you need.
+
+---
+
 ## 🏗️ Architecture
 
 ```
