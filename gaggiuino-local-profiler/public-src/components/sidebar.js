@@ -47,6 +47,7 @@ export function renderSidebar() {
       else {
         S.primaryShotId = shot.id; S.compareShotId = null;
         updateSidebarHighlighting();
+        if (S.currentMode !== 'shots' && window.switchMode) window.switchMode('shots');
         collapseSidebarOnMobile();
         if (window.innerWidth <= 768) {
           setTimeout(() => { if (window.updateView) window.updateView(); }, 50);

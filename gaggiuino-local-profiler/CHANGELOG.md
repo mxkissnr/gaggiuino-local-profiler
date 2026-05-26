@@ -1,3 +1,6 @@
+## 1.57.1
+- fix: clicking a shot in the left sidebar from any non-shots view now switches to shots mode — previously `updateView()` ran but the shots view stayed hidden (`display:none`); also fixes `goToShot()` scroll timing (requestAnimationFrame → setTimeout 50 ms so layout is computed after display change); closes #104
+
 ## 1.57.0
 - feat: sync retry with exponential backoff — on machine connection failure the scheduler retries 3 times before returning to the regular interval (30 s → 60 s → 120 s); `syncShots()` now returns a boolean; `state.syncRetryCount` and `GET /api/status` expose the current retry attempt; closes #102
 

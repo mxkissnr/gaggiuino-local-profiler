@@ -3,10 +3,10 @@ import { S } from '../state.js';
 export function goToShot(id) {
   switchMode('shots');
   if (window.selectShot) window.selectShot(id);
-  requestAnimationFrame(() => {
+  setTimeout(() => {
     const el = document.getElementById(`wrapper-${id}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  });
+  }, 50);
 }
 
 export function switchMode(mode) {
