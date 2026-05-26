@@ -3,10 +3,14 @@ FROM node:18.20.4-alpine3.20
 WORKDIR /app
 
 COPY package.json ./
-RUN npm install --only=production
+RUN npm install
+
+COPY public/ ./public/
+COPY vite.config.js ./
+COPY public-src/ ./public-src/
+RUN npm run build
 
 COPY server.js ./
-COPY public/ ./public/
 
 EXPOSE 8099
 
