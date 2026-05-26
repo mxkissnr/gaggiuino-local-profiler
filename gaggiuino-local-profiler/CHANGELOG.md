@@ -1,3 +1,6 @@
+## 1.51.0
+- feat: `/api/preheat` now includes `targetTemp` (current target temperature in °C from the machine); `currentTargetTemp` is persisted across polling cycles so the value survives temporary zero readings; closes #85
+
 ## 1.50.1
 - Fix: Vite default `base: '/'` generated absolute asset paths (`/assets/…`) that break under HA ingress; set `base: './'` so paths are relative and work at any ingress sub-path
 

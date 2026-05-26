@@ -12,7 +12,7 @@ const cheerio = require('cheerio');
 
 const app = express();
 
-const GLP_VERSION   = '1.50.1';
+const GLP_VERSION   = '1.51.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -135,7 +135,8 @@ let machineOn      = false; // updated by checkAndApplyMachinePower() on startup
 // Preheat state
 let switchOnAt     = null; // ms timestamp when preheat timer started
 let switchOffAt    = null; // ms timestamp when machine last switched off
-let currentTemp    = null; // latest temperature reading from machine (°C)
+let currentTemp       = null; // latest temperature reading from machine (°C)
+let currentTargetTemp = null; // latest target temperature from machine (°C)
 
 // Temperature stability detection
 const TEMP_HISTORY_MAX   = 60;  // keep 60 readings (= 60 s at 1 Hz)
@@ -964,7 +965,7 @@ app.get('/api/preheat', (req, res) => {
 
     const machineOff  = !machineOn && !!opts.switch_entity;
     if (machineOff || !switchOnAt) {
-        return res.json({ ready: false, elapsed: 0, remaining: preheatMins * 60, pct: 0, preheatTime: preheatMins, temp: currentTemp });
+        return res.json({ ready: false, elapsed: 0, remaining: preheatMins * 60, pct: 0, preheatTime: preheatMins, temp: currentTemp, targetTemp: currentTargetTemp });
     }
 
     const elapsedMs = Date.now() - switchOnAt;
@@ -972,7 +973,7 @@ app.get('/api/preheat', (req, res) => {
     const remaining = Math.max(0, Math.ceil((preheatMs - elapsedMs) / 1000));
     const pct       = Math.min(1, elapsedMs / preheatMs);
 
-    res.json({ ready: remaining === 0, elapsed, remaining, pct, preheatTime: preheatMins, temp: currentTemp });
+    res.json({ ready: remaining === 0, elapsed, remaining, pct, preheatTime: preheatMins, temp: currentTemp, targetTemp: currentTargetTemp });
 });
 
 app.get('/api/live/data', (req, res) => {
@@ -1056,6 +1057,7 @@ async function pollViaGaggiuinoStatus() {
         currentTemp     = tempVal || currentTemp; // keep last known value if reading is 0
         const weightVal = parseFloat(status.weight)            || 0;
         const tTempVal  = parseFloat(status.targetTemperature) || 0;
+        currentTargetTemp = tTempVal || currentTargetTemp;
         const profile   = status.profileName || 'Unknown';
 
         // Temperature stability — track history, detect completed preheat
