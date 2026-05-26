@@ -5,6 +5,6 @@ export default defineConfig({
   base: './',
   build: {
     outDir: '../public',
-    emptyOutDir: false,
+    emptyOutDir: true,
   },
 });
