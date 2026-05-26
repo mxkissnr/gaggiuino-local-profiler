@@ -1,3 +1,6 @@
+## 1.51.2
+- fix: library edit/delete buttons now use Material Design SVG icons (pencil + trash-can-outline) instead of text labels — no more clipping on mobile, consistent with MDI design language; permanent-delete button in trash view also replaced (`✕` → trash icon); icon buttons have a 28×28 px minimum hit target; closes #92
+
 ## 1.51.1
 - fix: Library view mobile layout — form grid breakpoint raised to 640px so fields stack on actual phones; lone last field spans full width; bean card actions move to a separate row below the info text on narrow screens; action buttons use flat ghost style (no border box); closes #91
 
