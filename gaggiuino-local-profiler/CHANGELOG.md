@@ -1,3 +1,6 @@
+## 1.50.1
+- Fix: Vite default `base: '/'` generated absolute asset paths (`/assets/…`) that break under HA ingress; set `base: './'` so paths are relative and work at any ingress sub-path
+
 ## 1.50.0
 - Refactor: split `public/index.html` monolith (~5500 lines) into Vite + vanilla JS modules under `public-src/`; 19 ESM modules across `views/`, `components/`, and shared helpers; mutable state consolidated in `state.js`; Vite bundles CSS + JS into `public/assets/` at build time; closes #87
 
