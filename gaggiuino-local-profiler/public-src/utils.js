@@ -1,0 +1,116 @@
+// ── HTML escaping (XSS prevention) ───────────────────────────────────────
+export function esc(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ── Math helpers ──────────────────────────────────────────────────────────
+export function avg(arr) {
+  if (!arr?.length) return null;
+  return arr.reduce((a, b) => a + b, 0) / arr.length;
+}
+
+export function avgActive(arr, t = 0.5) {
+  if (!arr?.length) return null;
+  const active = arr.filter(v => v > t);
+  return active.length ? active.reduce((a, b) => a + b, 0) / active.length : arr[arr.length - 1];
+}
+
+export function max(arr) {
+  if (!arr?.length) return null;
+  return arr.reduce((m, v) => v > m ? v : m, arr[0]);
+}
+
+export function safeLast(arr) {
+  if (!arr?.length) return null;
+  for (let i = arr.length - 1; i >= 0; i--)
+    if (arr[i] != null && !isNaN(arr[i])) return arr[i];
+  return null;
+}
+
+export function stddev(arr) {
+  if (!arr?.length) return null;
+  const m = arr.reduce((a, b) => a + b, 0) / arr.length;
+  return Math.sqrt(arr.reduce((a, b) => a + (b - m) ** 2, 0) / arr.length);
+}
+
+// ── Formatting ────────────────────────────────────────────────────────────
+export function fmt(v, unit = '') {
+  return v == null ? '-' : `${v.toFixed(1)}${unit}`;
+}
+
+export function formatTimeLabel(s) {
+  if (s == null || isNaN(s)) return '00:00';
+  return `${Math.floor(s / 60).toString().padStart(2, '0')}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
+}
+
+// ── Data mapping ──────────────────────────────────────────────────────────
+export function mapToXY(timeArr, dataArr) {
+  if (!timeArr || !dataArr) return [];
+  return timeArr
+    .map((t, i) => ({ x: t / 10, y: dataArr[i] != null ? dataArr[i] / 10 : null }))
+    .filter(pt => pt.y !== null);
+}
+
+// ── Phase detection ───────────────────────────────────────────────────────
+export function detectPhases(times, pressures) {
+  if (!times?.length || pressures?.length < 5) return null;
+  const THRESH = 3.5;
+  let endIdx = -1;
+  for (let i = 0; i < pressures.length; i++) {
+    if (times[i] >= 1 && pressures[i] >= THRESH) { endIdx = i; break; }
+  }
+  if (endIdx <= 0) return null;
+  const preinfusion = times[endIdx];
+  if (preinfusion < 1.5) return null;
+  return { preinfusion, extraction: times[times.length - 1] - preinfusion };
+}
+
+// ── Channeling detection ──────────────────────────────────────────────────
+export function detectChanneling(times, pressures) {
+  if (!times?.length || pressures?.length < 5) return false;
+  for (let i = 1; i < pressures.length; i++) {
+    if (pressures[i - 1] < 5) continue;
+    const dt = times[i] - times[i - 1];
+    if (dt <= 0 || dt > 3) continue;
+    if (pressures[i - 1] - pressures[i] > 1.5) return true;
+  }
+  return false;
+}
+
+// ── Date helpers ──────────────────────────────────────────────────────────
+export function isoToGerman(iso) {
+  if (!iso) return '';
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
+}
+
+export function germanToIso(s) {
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (!m) return null;
+  return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+}
+
+export function parseDMY(s) {
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2,4})$/);
+  if (!m) return null;
+  const y = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
+  const d = new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));
+  return isNaN(d) ? null : d;
+}
+
+// ── Score helpers ─────────────────────────────────────────────────────────
+export function scoreClass(n) {
+  return n >= 88 ? 'score-great' : n >= 75 ? 'score-good' : n >= 60 ? 'score-ok' : n >= 45 ? 'score-poor' : 'score-bad';
+}
+
+export function scoreColor(sc) {
+  return sc >= 88 ? '#16a34a' : sc >= 75 ? '#65a30d' : sc >= 60 ? '#ca8a04' : sc >= 45 ? '#ea580c' : '#dc2626';
+}
