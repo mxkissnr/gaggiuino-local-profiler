@@ -56,7 +56,13 @@ export function buildTrendChart() {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: '#a1a1aa', font: { size: 11 } } } },
+      onClick: (_, elements) => {
+        if (elements.length > 0 && window.goToShot) window.goToShot(src[elements[0].index].id);
+      },
+      plugins: {
+        legend: { labels: { color: '#a1a1aa', font: { size: 11 } } },
+        tooltip: { callbacks: { footer: () => '↗ Shot anzeigen' } },
+      },
       scales: {
         x: { ticks: { color: '#52525b', font: { size: 10 }, maxRotation: 45 }, grid: { color: 'rgba(63,63,70,.3)' } },
         y: { min: 0, max: 100, ticks: { color: '#52525b', font: { size: 10 }, stepSize: 20 }, grid: { color: 'rgba(63,63,70,.3)' } }
@@ -83,8 +89,9 @@ export function _renderCalendar() {
   const dayMap = {};
   for (const s of S.shots) {
     const key = new Date(s.timestamp * 1000).toISOString().slice(0, 10);
-    if (!dayMap[key]) dayMap[key] = { count: 0, scores: [] };
+    if (!dayMap[key]) dayMap[key] = { count: 0, scores: [], lastId: null };
     dayMap[key].count++;
+    dayMap[key].lastId = s.id;
     if (window.calcShotScore && window.getShotData) {
       const sc = window.calcShotScore(s, window.getShotData(s));
       if (sc !== null) dayMap[key].scores.push(sc);
@@ -113,7 +120,7 @@ export function _renderCalendar() {
         months.push({ weekIdx: weeks.length, label: cur.toLocaleDateString(locale, { month: 'short' }) });
         lastMonth = cur.getMonth();
       }
-      week.push({ date: new Date(cur), key, count: data.count, avgSc });
+      week.push({ date: new Date(cur), key, count: data.count, avgSc, lastId: data.lastId || null });
       cur.setDate(cur.getDate() + 1);
     }
     weeks.push(week);
@@ -138,7 +145,8 @@ export function _renderCalendar() {
       const dateStr  = day.date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
       const title    = day.count === 0 ? dateStr
                      : `${dateStr}: ${day.count} Shot${day.count > 1 ? 's' : ''}${day.avgSc !== null ? ` · Ø ${day.avgSc}` : ''}`;
-      html += `<div class="${isFuture ? 'cal-future' : cls(day.count)} cal-day" style="${cellSz}" title="${title}"></div>`;
+      const clickable = !isFuture && day.count > 0 && day.lastId !== null;
+      html += `<div class="${isFuture ? 'cal-future' : cls(day.count)} cal-day${clickable ? ' cal-day-link' : ''}" style="${cellSz}" title="${title}"${clickable ? ` onclick="goToShot(${day.lastId})"` : ''}></div>`;
     }
     html += `</div>`;
   }

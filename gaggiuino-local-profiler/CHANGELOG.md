@@ -1,3 +1,10 @@
+## 1.56.0
+- feat: global `goToShot(id)` — clicking any shot reference from any view instantly switches to Shots mode, selects the shot, and scrolls the sidebar to it; closes #104
+  - Analytics calendar: day cells are now clickable — navigates to the most recent shot of that day
+  - Analytics trend chart: clicking a data point navigates to that shot; tooltip shows "↗ Shot anzeigen"
+  - Orders history: completed orders with a linked shot show a "Shot #N" badge that navigates on click
+  - Dial-in cards: simplified to use `goToShot()` (was `selectShot + switchMode`)
+
 ## 1.55.0
 - fix: Dockerfile runtime stage now copies `lib/` and `routes/` directories — v1.54.0 crashed on startup with `Cannot find module './lib/constants'` because the multi-stage build only copied `server.js`; closes #103
 - feat: OpenAPI 3.0.3 spec — all 42 API endpoints documented with request/response schemas; served as JSON at `GET /api/openapi.json` (no auth required); spec committed as `openapi.yaml`; closes #101

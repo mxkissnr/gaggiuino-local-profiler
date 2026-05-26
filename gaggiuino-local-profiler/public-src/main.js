@@ -7,7 +7,7 @@ import { t, setLang, applyTranslations } from './i18n.js';
 import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
          toggleDesktopSidebar, openSidebar, closeSidebar, toggleSidebar, collapseSidebarOnMobile, selectShot } from './components/sidebar.js';
 import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync } from './components/status.js';
-import { switchMode } from './components/mode.js';
+import { switchMode, goToShot } from './components/mode.js';
 
 import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggleTrash,
          trashShot, restoreShot, permanentDeleteShot,
@@ -96,6 +96,7 @@ Object.assign(window, {
 
   // mode switcher
   switchMode,
+  goToShot,
 
   // shots view
   getShotData,

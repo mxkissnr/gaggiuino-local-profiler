@@ -1,5 +1,14 @@
 import { S } from '../state.js';
 
+export function goToShot(id) {
+  switchMode('shots');
+  if (window.selectShot) window.selectShot(id);
+  requestAnimationFrame(() => {
+    const el = document.getElementById(`wrapper-${id}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+}
+
 export function switchMode(mode) {
   S.currentMode = mode;
   document.getElementById('btnShots').classList.toggle('active',       mode === 'shots');

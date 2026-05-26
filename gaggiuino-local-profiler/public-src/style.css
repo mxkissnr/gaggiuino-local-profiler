@@ -236,6 +236,8 @@
         .cal-grid { display: flex; }
         .cal-week { display: flex; flex-direction: column; }
         .cal-day { border-radius: 2px; cursor: default; flex-shrink: 0; }
+        .cal-day-link { cursor: pointer; }
+        .cal-day-link:hover { filter: brightness(1.35); outline: 1px solid rgba(255,255,255,.3); }
         .cal-0 { background: var(--gray-800); }
         .cal-1 { background: rgba(239,68,68,.35); }
         .cal-2 { background: rgba(239,68,68,.6); }
@@ -1076,6 +1078,8 @@
         .order-meta      { font-size:.72rem; color:#52525b; }
         .order-eta-tag   { font-size:.75rem; font-weight:600; color:#22c55e; background:rgba(34,197,94,.1); border:1px solid rgba(34,197,94,.25); border-radius:6px; padding:2px 8px; }
         .order-decline-tag { font-size:.75rem; color:#ef4444; }
+        .order-shot-link { font-size:.75rem; color:#71717a; cursor:pointer; border-bottom:1px dotted #52525b; }
+        .order-shot-link:hover { color:#e4e4e7; border-bottom-color:#e4e4e7; }
         .order-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
         .order-eta-picker { display:flex; gap:4px; flex-wrap:wrap; align-items:center; }
         .order-eta-btn { background:#27272a; border:1px solid #3f3f46; border-radius:6px; color:#a1a1aa; font-size:.75rem; padding:4px 9px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; }
