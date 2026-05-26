@@ -1128,6 +1128,13 @@
         .orders-menu-save-btn { background:#27272a; border:1px solid #3f3f46; border-radius:7px; color:#a1a1aa; font-size:.82rem; font-weight:600; padding:6px 14px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; }
         .orders-menu-save-btn:hover { background:#3f3f46; color:#fff; }
         .orders-new-badge { font-size:.65rem; font-weight:700; background:#ef4444; color:#fff; border-radius:4px; padding:1px 5px; margin-left:6px; vertical-align:middle; }
+        .orders-notify-hint { font-size:.8rem; color:#71717a; margin:0 0 12px; }
+        .orders-notify-list { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+        .orders-notify-row { display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid #27272a; }
+        .orders-notify-customer { flex:1; font-size:.88rem; color:#e4e4e7; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .orders-notify-select { background:#27272a; border:1px solid #3f3f46; border-radius:7px; color:#e4e4e7; font-size:.78rem; padding:5px 8px; outline:none; font-family:'Figtree',sans-serif; cursor:pointer; }
+        .orders-notify-select:focus { border-color:#52525b; }
+        .orders-notify-actions { display:flex; justify-content:flex-end; }
 
         /* ── Split-flap counter (inline in sidebar header) ── */
         .flap-board {

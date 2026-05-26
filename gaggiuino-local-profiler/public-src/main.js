@@ -26,10 +26,11 @@ import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode,
          renderMaintenanceCards, maintStatusLabel, _buildMaintCard } from './views/maintenance.js';
 
 import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled,
-         toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats,
+         toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify,
          renderOrdersList, renderOrderCard, renderOrdersMenuAdmin, renderOrdersStats,
          acceptOrder, toggleDeclineRow, submitDecline, completeOrder,
          deleteOrder, clearOrderHistory,
+         loadNotifyMappingView, saveNotifyMapping,
          _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
@@ -163,6 +164,7 @@ Object.assign(window, {
   toggleOrdersMenu,
   addOrderMenuItem,
   toggleOrdersStats,
+  toggleOrdersNotify,
   renderOrdersList,
   renderOrderCard,
   renderOrdersMenuAdmin,
@@ -173,6 +175,8 @@ Object.assign(window, {
   completeOrder,
   deleteOrder,
   clearOrderHistory,
+  loadNotifyMappingView,
+  saveNotifyMapping,
   _updateOrdersToggleUI,
   _orderTimeAgo,
 

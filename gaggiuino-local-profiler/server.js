@@ -12,7 +12,7 @@ const cheerio = require('cheerio');
 
 const app = express();
 
-const GLP_VERSION   = '1.52.0';
+const GLP_VERSION   = '1.53.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -27,6 +27,7 @@ const MAINTENANCE_FILE  = '/data/maintenance.json';
 const ORDERS_FILE          = '/data/orders.json';
 const MENU_FILE            = '/data/menu.json';
 const ORDERS_SETTINGS_FILE = '/data/orders_settings.json';
+const NOTIFY_MAPPING_FILE  = '/data/notify_mapping.json';
 const TRASH_TTL_MS      = 30 * 24 * 60 * 60 * 1000; // 30 days
 const ORDERS_HISTORY_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -427,6 +428,59 @@ app.get('/api/debug/machine', async (req, res) => {
     }
 });
 
+// ── HA push notifications ─────────────────────────────────────────────────
+async function sendHaNotify(service, title, message, tag) {
+    if (!HA_TOKEN || !service) return;
+    const [domain, ...rest] = service.split('.');
+    const svcName = rest.join('.');
+    try {
+        await axios.post(`${HA_API}/services/${domain}/${svcName}`,
+            { title, message, data: { tag: tag || undefined, push: { sound: 'default' } } },
+            { headers: { Authorization: `Bearer ${HA_TOKEN}` }, timeout: 5000 });
+    } catch (e) { log(`Notify ${service} failed: ${e.message}`); }
+}
+
+async function getNotifyServices() {
+    if (!HA_TOKEN) return [];
+    try {
+        const r = await axios.get(`${HA_API}/services`,
+            { headers: { Authorization: `Bearer ${HA_TOKEN}` }, timeout: 5000 });
+        const notifyDomain = r.data.find(d => d.domain === 'notify');
+        if (!notifyDomain) return [];
+        return Object.keys(notifyDomain.services)
+            .filter(s => s !== 'notify' && s !== 'send_message')
+            .map(s => ({ id: `notify.${s}`, name: s.replace(/_/g, ' ') }));
+    } catch { return []; }
+}
+
+app.get('/api/orders/notify-services', async (req, res) => {
+    res.json(await getNotifyServices());
+});
+
+app.get('/api/orders/notify-mapping', (req, res) => {
+    const orders  = loadOrders();
+    const mapping = loadNotifyMapping();
+    // Collect unique customers from all orders
+    const customers = {};
+    orders.forEach(o => {
+        if (o.haUserId) customers[o.haUserId] = o.customer;
+    });
+    res.json({ mapping, customers });
+});
+
+app.post('/api/orders/notify-mapping', express.json(), (req, res) => {
+    const updates = req.body || {};
+    const mapping = loadNotifyMapping();
+    Object.entries(updates).forEach(([haUserId, svc]) => {
+        if (typeof svc === 'string' && (svc === '' || svc.startsWith('notify.'))) {
+            if (svc === '') delete mapping[haUserId];
+            else mapping[haUserId] = svc;
+        }
+    });
+    saveNotifyMapping(mapping);
+    res.json({ ok: true });
+});
+
 // ── Machine power switch ──────────────────────────────────────────────────
 async function getSwitchState(entity) {
     if (!HA_TOKEN || !entity) return null;
@@ -744,6 +798,11 @@ function loadOrdersSettings() {
 }
 function saveOrdersSettings(s) { fs.writeFileSync(ORDERS_SETTINGS_FILE, JSON.stringify(s, null, 2)); }
 
+function loadNotifyMapping() {
+    try { return JSON.parse(fs.readFileSync(NOTIFY_MAPPING_FILE, 'utf8')); } catch { return {}; }
+}
+function saveNotifyMapping(m) { fs.writeFileSync(NOTIFY_MAPPING_FILE, JSON.stringify(m, null, 2)); }
+
 // Guard: all /api/orders/* routes require enable_orders: true
 app.use('/api/orders', (req, res, next) => {
     if (!isOrdersEnabled()) return res.status(404).json({ error: 'orders feature not enabled' });
@@ -840,6 +899,10 @@ app.post('/api/orders/:id/accept', express.json(), (req, res) => {
     order.acceptedAt = Date.now();
     saveOrders(orders);
     log(`Order ${order.id} accepted (ETA ${order.eta} min)`);
+    sendHaNotify(loadNotifyMapping()[order.haUserId],
+        `☕ ${order.item} wird zubereitet`,
+        `Fertig in ~${order.eta} Min!`,
+        order.id);
     res.json(order);
 });
 
@@ -866,6 +929,10 @@ app.post('/api/orders/:id/complete', (req, res) => {
     }
     saveOrders(orders);
     log(`Order ${order.id} done (shotId: ${order.shotId})`);
+    sendHaNotify(loadNotifyMapping()[order.haUserId],
+        `✓ ${order.item} ist fertig!`,
+        `Hol dir deinen ${order.item} ab — guten Genuss!`,
+        order.id);
     res.json(order);
 });
 
@@ -879,6 +946,10 @@ app.post('/api/orders/:id/decline', express.json(), (req, res) => {
     order.completedAt   = Date.now();
     saveOrders(orders);
     log(`Order ${order.id} declined: ${order.declineReason}`);
+    sendHaNotify(loadNotifyMapping()[order.haUserId],
+        `✕ ${order.item} abgelehnt`,
+        order.declineReason ? `Grund: ${order.declineReason}` : 'Deine Bestellung wurde leider abgelehnt.',
+        order.id);
     res.json(order);
 });
 

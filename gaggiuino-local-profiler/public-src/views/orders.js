@@ -313,6 +313,81 @@ export async function clearOrderHistory() {
   loadOrdersView();
 }
 
+export async function loadNotifyMappingView() {
+  const section = document.getElementById('ordersNotifyBody');
+  if (!section) return;
+
+  const [{ mapping, customers }, services] = await Promise.all([
+    apiFetch('api/orders/notify-mapping').then(r => r.json()).catch(() => ({ mapping: {}, customers: {} })),
+    apiFetch('api/orders/notify-services').then(r => r.json()).catch(() => null),
+  ]);
+
+  if (services === null) {
+    section.innerHTML = `<p class="orders-notify-hint">${t('orders_notify_no_ha')}</p>`;
+    return;
+  }
+
+  const haUserIds = Object.keys(customers);
+  if (!haUserIds.length) {
+    section.innerHTML = `<p class="orders-notify-hint">${t('orders_notify_no_customers')}</p>`;
+    return;
+  }
+
+  const serviceOptions = services.map(s =>
+    `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+
+  section.innerHTML = `
+    <p class="orders-notify-hint">${t('orders_notify_desc')}</p>
+    <div class="orders-notify-list" id="ordersNotifyList">
+      ${haUserIds.map(uid => `
+        <div class="orders-notify-row">
+          <span class="orders-notify-customer">${esc(customers[uid])}</span>
+          <select class="orders-notify-select" data-uid="${esc(uid)}">
+            <option value="">${t('orders_notify_no_service')}</option>
+            ${serviceOptions}
+          </select>
+        </div>`).join('')}
+    </div>
+    <div class="orders-notify-actions">
+      <button class="orders-menu-save-btn" id="ordersNotifySaveBtn" onclick="saveNotifyMapping()">${t('orders_notify_save')}</button>
+    </div>`;
+
+  // Apply saved mapping values
+  section.querySelectorAll('[data-uid]').forEach(sel => {
+    const saved = mapping[sel.dataset.uid];
+    if (saved) sel.value = saved;
+  });
+}
+
+export async function saveNotifyMapping() {
+  const list = document.getElementById('ordersNotifyList');
+  if (!list) return;
+  const updates = {};
+  list.querySelectorAll('[data-uid]').forEach(sel => {
+    updates[sel.dataset.uid] = sel.value;
+  });
+  await apiFetch('api/orders/notify-mapping', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  const btn = document.getElementById('ordersNotifySaveBtn');
+  if (btn) {
+    btn.textContent = t('orders_notify_saved');
+    setTimeout(() => { btn.textContent = t('orders_notify_save'); }, 2000);
+  }
+}
+
+export function toggleOrdersNotify() {
+  const body = document.getElementById('ordersNotifyBody');
+  const toggle = document.getElementById('ordersNotifyToggle');
+  if (!body || !toggle) return;
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  toggle.textContent = open ? '▾' : '▸';
+  if (open) loadNotifyMappingView();
+}
+
 export async function addOrderMenuItem() {
   const nameEl  = document.getElementById('ordersMenuName');
   const emojiEl = document.getElementById('ordersMenuEmoji');
