@@ -1,3 +1,6 @@
+## 1.51.4
+- fix: sidebar delete icon barely visible — color raised from `#3f3f46` to `#71717a`
+
 ## 1.51.3
 - fix: sidebar delete button — replace `🗑` emoji (uncontrolled size, clipped by overflow:hidden) with MDI trash SVG; 28×28 px hit target, red hover tint matching library buttons; closes #93
 - fix: sidebar collapse/expand buttons — replace `‹`/`›` characters with MDI chevron SVGs; `margin-left: auto` pushes the button to the far right of the header so it no longer sits cramped against the flap-board digits
