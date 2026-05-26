@@ -1,3 +1,7 @@
+## 1.51.3
+- fix: sidebar delete button — replace `🗑` emoji (uncontrolled size, clipped by overflow:hidden) with MDI trash SVG; 28×28 px hit target, red hover tint matching library buttons; closes #93
+- fix: sidebar collapse/expand buttons — replace `‹`/`›` characters with MDI chevron SVGs; `margin-left: auto` pushes the button to the far right of the header so it no longer sits cramped against the flap-board digits
+
 ## 1.51.2
 - fix: library edit/delete buttons now use Material Design SVG icons (pencil + trash-can-outline) instead of text labels — no more clipping on mobile, consistent with MDI design language; permanent-delete button in trash view also replaced (`✕` → trash icon); icon buttons have a 28×28 px minimum hit target; closes #92
 
