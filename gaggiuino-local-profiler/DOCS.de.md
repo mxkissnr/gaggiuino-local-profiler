@@ -80,6 +80,8 @@ Alle Komponenten authentifizieren sich automatisch über einen gemeinsamen Token
 
 Keine manuelle Konfiguration erforderlich. Um den Token zu erneuern, `/data/api_token.txt` löschen und das Add-on neu starten.
 
+Alle persistenten Daten werden atomar geschrieben (erst `.tmp`, dann `fs.renameSync`), sodass ein Absturz während eines Schreibvorgangs keine halbgeschriebene JSON-Datei hinterlässt.
+
 ## Schnellstart
 
 `machine_url` auf die API-URL des Controllers setzen und Add-on starten.

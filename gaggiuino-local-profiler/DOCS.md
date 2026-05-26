@@ -80,6 +80,8 @@ All components authenticate automatically via a shared token:
 
 No manual configuration is required. To rotate the token, delete `/data/api_token.txt` and restart the add-on.
 
+All persistent data is written atomically (write to `.tmp`, then `fs.renameSync`) so a crash during a write cannot produce a half-written JSON file.
+
 ## Quick start
 
 Set `machine_url` to your controller's API URL and start the add-on.

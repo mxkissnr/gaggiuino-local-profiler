@@ -1,3 +1,10 @@
+## 1.54.0
+- refactor: split monolithic `server.js` (~1340 lines) into `lib/` modules (`constants`, `helpers`, `state`, `data`, `ha`, `live-sync`) and `routes/` modules (`shots`, `library`, `maintenance`, `orders`, `system`, `backup`, `import`); `server.js` reduced to ~85-line entry point; closes #97
+- security: `writeFileSafe()` — all JSON writes now use atomic rename-swap (write to `.tmp`, then `fs.renameSync`) to prevent half-written files on crash; closes #97
+- security: `withFileLock()` async mutex per file — prevents interleaved load→modify→save races under concurrent requests; closes #97
+- security: `haUserId` in order placement now prefers the `X-GLP-HA-User-ID` header (set by glp-integration from the authenticated HA session) over the client-supplied body field — prevents user impersonation; closes #97
+- fix: `/api/restore` body limit raised to 50 MB before the global 16 kB limit is applied — previously large restores were silently rejected; closes #97
+
 ## 1.53.0
 - feat: HA push notifications for orders — barista configures a per-customer `haUserId → notify.<device>` mapping in the backend UI (Orders → Push-Benachrichtigungen); the add-on calls the configured `notify.*` service via Supervisor API on accept, complete, and decline; mapping stored in `/data/notify_mapping.json`; new endpoints: `GET /api/orders/notify-services`, `GET /api/orders/notify-mapping`, `POST /api/orders/notify-mapping`; no-op when `SUPERVISOR_TOKEN` is absent; closes #96
 
