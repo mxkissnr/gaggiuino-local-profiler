@@ -1,3 +1,6 @@
+## 1.51.1
+- fix: Library view mobile layout — form grid breakpoint raised to 640px so fields stack on actual phones; lone last field spans full width; bean card actions move to a separate row below the info text on narrow screens; action buttons use flat ghost style (no border box); closes #91
+
 ## 1.51.0
 - feat: `/api/preheat` now includes `targetTemp` (current target temperature in °C from the machine); `currentTargetTemp` is persisted across polling cycles so the value survives temporary zero readings; closes #85
 
