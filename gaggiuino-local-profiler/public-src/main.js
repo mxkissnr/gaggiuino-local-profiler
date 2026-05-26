@@ -29,6 +29,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats,
          renderOrdersList, renderOrderCard, renderOrdersMenuAdmin, renderOrdersStats,
          acceptOrder, toggleDeclineRow, submitDecline, completeOrder,
+         deleteOrder, clearOrderHistory,
          _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
@@ -170,6 +171,8 @@ Object.assign(window, {
   toggleDeclineRow,
   submitDecline,
   completeOrder,
+  deleteOrder,
+  clearOrderHistory,
   _updateOrdersToggleUI,
   _orderTimeAgo,
 

@@ -84,7 +84,8 @@ export function renderOrdersList(orders) {
 
   const pendingEl  = document.getElementById('orders-pending-list');
   const acceptedEl = document.getElementById('orders-accepted-list');
-  const historyEl  = document.getElementById('orders-history-list');
+  const historyEl   = document.getElementById('orders-history-list');
+  const clearHistBtn = document.getElementById('orders-clear-history');
   if (!pendingEl) return;
 
   pendingEl.innerHTML = pending.length ? pending.map(o => renderOrderCard(o, 'pending')).join('') :
@@ -94,6 +95,7 @@ export function renderOrdersList(orders) {
     `<div class="orders-empty">${t('orders_empty')}</div>`;
 
   historyEl.innerHTML = history.length ? history.map(o => renderOrderCard(o, 'history')).join('') : '';
+  if (clearHistBtn) clearHistBtn.style.display = history.length ? '' : 'none';
 
   // Bind buttons after render
   pendingEl.querySelectorAll('[data-order-accept]').forEach(btn => {
@@ -107,10 +109,20 @@ export function renderOrdersList(orders) {
   });
   pendingEl.querySelectorAll('[data-eta-btn]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const id = btn.dataset.orderId;
-      S._ordersEtaSelected[id] = parseInt(btn.dataset.etaBtn);
+      const id  = btn.dataset.orderId;
+      const val = parseInt(btn.dataset.etaBtn);
+      S._ordersEtaSelected[id] = val;
       btn.closest('.order-eta-picker').querySelectorAll('.order-eta-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
+      const inp = document.getElementById(`etaCustom_${id}`);
+      if (inp) inp.value = val;
+    });
+  });
+  pendingEl.querySelectorAll('.order-eta-custom').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const id = inp.id.replace('etaCustom_', '');
+      S._ordersEtaSelected[id] = parseInt(inp.value) || 5;
+      inp.closest('.order-eta-picker').querySelectorAll('.order-eta-btn').forEach(b => b.classList.remove('selected'));
     });
   });
   acceptedEl.querySelectorAll('[data-order-complete]').forEach(btn => {
@@ -122,6 +134,12 @@ export function renderOrdersList(orders) {
   acceptedEl.querySelectorAll('[data-order-decline-submit]').forEach(btn => {
     btn.addEventListener('click', () => submitDecline(btn.dataset.orderDeclineSubmit));
   });
+  historyEl.querySelectorAll('[data-order-delete]').forEach(btn => {
+    btn.addEventListener('click', () => deleteOrder(btn.dataset.orderDelete));
+  });
+  if (clearHistBtn) {
+    clearHistBtn.onclick = () => clearOrderHistory();
+  }
 }
 
 export function renderOrderCard(o, ctx) {
@@ -178,7 +196,10 @@ export function renderOrderCard(o, ctx) {
   return `<div class="order-card status-${o.status}">
     <div class="order-card-top">
       <span class="order-item-name">${esc(o.item)}</span>
-      <span class="order-meta">${statusLabel} · ${_orderTimeAgo(o.completedAt || o.createdAt)}</span>
+      <span class="order-history-right">
+        <span class="order-meta">${statusLabel} · ${_orderTimeAgo(o.completedAt || o.createdAt)}</span>
+        <button class="order-hist-del" data-order-delete="${esc(o.id)}" title="${t('orders_delete_entry')}"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
+      </span>
     </div>
     <div class="order-customer">${t('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? ` · <span class="order-decline-tag">${esc(o.declineReason)}</span>` : ''}</div>
   </div>`;
@@ -279,6 +300,17 @@ export function renderOrdersStats(orders) {
       </div>
     </div>
     <div class="orders-stats-grid">${cards}</div>`;
+}
+
+export async function deleteOrder(id) {
+  await apiFetch(`api/orders/${id}`, { method: 'DELETE' });
+  loadOrdersView();
+}
+
+export async function clearOrderHistory() {
+  if (!confirm(t('orders_confirm_clear_history'))) return;
+  await apiFetch('api/orders/history', { method: 'DELETE' });
+  loadOrdersView();
 }
 
 export async function addOrderMenuItem() {

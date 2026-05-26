@@ -1,3 +1,7 @@
+## 1.52.0
+- fix: ETA preset buttons ("2 min" etc.) now sync their value into the custom input field — previously `acceptOrder()` always read the input's stale default (5); also: typing in the custom input now deselects all preset buttons; closes #94
+- feat: orders history management — per-entry delete button (trash icon) on each done/declined order card; "Verlauf löschen" button clears all history at once; backend: `DELETE /api/orders/:id` and `DELETE /api/orders/history`; closes #94
+
 ## 1.51.4
 - fix: sidebar delete icon barely visible — color raised from `#3f3f46` to `#71717a`
 

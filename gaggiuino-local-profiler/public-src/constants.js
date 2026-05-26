@@ -139,6 +139,8 @@ export const TRANSLATIONS = {
     orders_ago:(m)=>`Vor ${m} Min`, orders_eta_in:(m)=>`Fertig in ${m} Min`,
     orders_declined:'Abgelehnt', orders_done:'Erledigt', orders_new_badge:'NEU',
     orders_confirm_delete_item:'Getränk aus dem Menü entfernen?',
+    orders_delete_entry:'Eintrag löschen', orders_clear_history:'Verlauf löschen',
+    orders_confirm_clear_history:'Gesamten Verlauf löschen?',
   },
   en: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
@@ -278,6 +280,8 @@ export const TRANSLATIONS = {
     orders_ago:(m)=>`${m} min ago`, orders_eta_in:(m)=>`Ready in ${m} min`,
     orders_declined:'Declined', orders_done:'Done', orders_new_badge:'NEW',
     orders_confirm_delete_item:'Remove drink from menu?',
+    orders_delete_entry:'Delete entry', orders_clear_history:'Clear history',
+    orders_confirm_clear_history:'Delete entire history?',
   },
   it: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
@@ -417,6 +421,8 @@ export const TRANSLATIONS = {
     orders_ago:(m)=>`${m} min fa`, orders_eta_in:(m)=>`Pronto in ${m} min`,
     orders_declined:'Rifiutato', orders_done:'Fatto', orders_new_badge:'NUOVO',
     orders_confirm_delete_item:'Rimuovere la bevanda dal menu?',
+    orders_delete_entry:'Elimina voce', orders_clear_history:'Cancella cronologia',
+    orders_confirm_clear_history:'Eliminare tutta la cronologia?',
   },
   fr: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque',
@@ -556,6 +562,8 @@ export const TRANSLATIONS = {
     orders_ago:(m)=>`Il y a ${m} min`, orders_eta_in:(m)=>`Prêt dans ${m} min`,
     orders_declined:'Refusé', orders_done:'Terminé', orders_new_badge:'NOUVEAU',
     orders_confirm_delete_item:'Supprimer la boisson du menu ?',
+    orders_delete_entry:'Supprimer', orders_clear_history:'Effacer l\'historique',
+    orders_confirm_clear_history:'Supprimer tout l\'historique ?',
   },
   es: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
@@ -695,6 +703,8 @@ export const TRANSLATIONS = {
     orders_ago:(m)=>`Hace ${m} min`, orders_eta_in:(m)=>`Listo en ${m} min`,
     orders_declined:'Rechazado', orders_done:'Listo', orders_new_badge:'NUEVO',
     orders_confirm_delete_item:'¿Eliminar bebida del menú?',
+    orders_delete_entry:'Eliminar entrada', orders_clear_history:'Borrar historial',
+    orders_confirm_clear_history:'¿Borrar todo el historial?',
   },
 };
 

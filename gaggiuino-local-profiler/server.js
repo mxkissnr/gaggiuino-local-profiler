@@ -12,7 +12,7 @@ const cheerio = require('cheerio');
 
 const app = express();
 
-const GLP_VERSION   = '1.51.4';
+const GLP_VERSION   = '1.52.0';
 const DEFAULT_PORT  = 8099;
 const DATA_DIR           = '/data';
 const TOKEN_FILE         = '/data/api_token.txt';
@@ -880,6 +880,21 @@ app.post('/api/orders/:id/decline', express.json(), (req, res) => {
     saveOrders(orders);
     log(`Order ${order.id} declined: ${order.declineReason}`);
     res.json(order);
+});
+
+app.delete('/api/orders/history', (req, res) => {
+    const orders = loadOrders().filter(o => !['done', 'declined'].includes(o.status));
+    saveOrders(orders);
+    res.json({ ok: true });
+});
+
+app.delete('/api/orders/:id', (req, res) => {
+    const orders = loadOrders();
+    const order  = orders.find(o => o.id === req.params.id);
+    if (!order) return res.status(404).json({ error: 'not found' });
+    if (!['done', 'declined'].includes(order.status)) return res.status(400).json({ error: 'can only delete completed orders' });
+    saveOrders(orders.filter(o => o.id !== req.params.id));
+    res.json({ ok: true });
 });
 
 // ── Backup & Restore ─────────────────────────────────────────────────────
