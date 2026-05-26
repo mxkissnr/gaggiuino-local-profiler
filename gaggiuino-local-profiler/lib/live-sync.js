@@ -137,6 +137,8 @@ async function pollViaGaggiuinoStatus() {
 
 // ── Sync ──────────────────────────────────────────────────────────────────
 
+const SYNC_RETRY_DELAYS = [30_000, 60_000, 120_000]; // 30s → 60s → 120s
+
 async function syncAfterBrew() {
     let prevMaxId = 0;
     try {
@@ -153,7 +155,7 @@ async function syncAfterBrew() {
 
 async function syncShots() {
     const opts = loadOptions();
-    if (!state.machineOn && opts.switch_entity) return;
+    if (!state.machineOn && opts.switch_entity) return true;
     const machineUrl = getMachineUrl(opts);
     try {
         const latestResponse  = await axios.get(`${machineUrl}/latest`, { timeout: 10000 });
@@ -174,7 +176,8 @@ async function syncShots() {
             log(`Already up to date. Shots: ${localShots.length}`);
             state.lastSyncTime  = new Date().toISOString();
             state.lastSyncError = null;
-            return;
+            state.syncRetryCount = 0;
+            return true;
         }
 
         for (let i = effectiveMax + 1; i <= latestMachineId; i++) {
@@ -188,19 +191,43 @@ async function syncShots() {
         }
 
         writeFileSafe(DATA_FILE, localShots);
-        state.lastSyncTime  = new Date().toISOString();
-        state.lastSyncError = null;
+        state.lastSyncTime   = new Date().toISOString();
+        state.lastSyncError  = null;
+        state.syncRetryCount = 0;
         log(`Sync complete: ${localShots.length} shots stored`);
+        return true;
     } catch (err) {
         state.lastSyncError = err.message.replace(/https?:\/\/\S+/g, '[url]');
         state.lastSyncTime  = new Date().toISOString();
         log(`Sync error: ${err.message}`, true);
+        return false;
     }
 }
 
-function scheduleNextSync() {
+function scheduleNextSync(retryCount = 0) {
     const opts = loadOptions();
-    setTimeout(async () => { await syncShots(); scheduleNextSync(); }, getSyncIntervalMs(opts));
+    state.syncRetryCount = retryCount;
+
+    let delay;
+    if (retryCount > 0 && retryCount <= SYNC_RETRY_DELAYS.length) {
+        delay = SYNC_RETRY_DELAYS[retryCount - 1];
+        log(`Sync retry ${retryCount}/${SYNC_RETRY_DELAYS.length} in ${delay / 1000}s`);
+    } else {
+        delay = getSyncIntervalMs(opts);
+        if (retryCount > SYNC_RETRY_DELAYS.length) {
+            log(`Sync retries exhausted -- resuming regular ${opts.sync_interval || 5} min schedule`);
+        }
+    }
+
+    setTimeout(async () => {
+        const ok = await syncShots();
+        if (ok) {
+            scheduleNextSync(0);
+        } else {
+            const nextRetry = retryCount + 1;
+            scheduleNextSync(nextRetry <= SYNC_RETRY_DELAYS.length ? nextRetry : 0);
+        }
+    }, delay);
 }
 
 async function fetchMachineVersion() {

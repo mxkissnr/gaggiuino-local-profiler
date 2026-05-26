@@ -4,6 +4,7 @@ module.exports = {
     apiToken:             '',
     lastSyncTime:         null,
     lastSyncError:        null,
+    syncRetryCount:       0,
     lastManualSync:       0,
     lastKnownShotId:      0,
     cachedMachineVersion: null,

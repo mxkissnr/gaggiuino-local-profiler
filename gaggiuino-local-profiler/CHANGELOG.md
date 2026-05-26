@@ -1,3 +1,6 @@
+## 1.57.0
+- feat: sync retry with exponential backoff — on machine connection failure the scheduler retries 3 times before returning to the regular interval (30 s → 60 s → 120 s); `syncShots()` now returns a boolean; `state.syncRetryCount` and `GET /api/status` expose the current retry attempt; closes #102
+
 ## 1.56.0
 - feat: global `goToShot(id)` — clicking any shot reference from any view instantly switches to Shots mode, selects the shot, and scrolls the sidebar to it; closes #104
   - Analytics calendar: day cells are now clickable — navigates to the most recent shot of that day

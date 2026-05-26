@@ -34,8 +34,9 @@ router.get('/api/status', (req, res) => {
     try { machineHostname = new URL(machineUrl).hostname; } catch (e) {}
     res.json({
         shotCount,
-        lastSync:       state.lastSyncTime,
-        lastSyncError:  state.lastSyncError,
+        lastSync:        state.lastSyncTime,
+        lastSyncError:   state.lastSyncError,
+        syncRetryCount:  state.syncRetryCount,
         machineUrl,
         machineHostname,
         machineVersion: state.cachedMachineVersion,

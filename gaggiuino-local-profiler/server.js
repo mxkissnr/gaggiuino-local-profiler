@@ -103,5 +103,5 @@ app.listen(PORT, () => {
     purgeExpiredTrash();
     setInterval(purgeExpiredTrash, 24 * 60 * 60 * 1000);
     fetchMachineVersion();
-    checkAndApplyMachinePower().then(() => syncShots().then(scheduleNextSync));
+    checkAndApplyMachinePower().then(() => syncShots().then(ok => scheduleNextSync(ok ? 0 : 1)));
 });

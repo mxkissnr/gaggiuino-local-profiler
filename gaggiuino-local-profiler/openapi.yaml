@@ -180,8 +180,9 @@ components:
       type: object
       properties:
         shotCount:      { type: integer }
-        lastSync:       { type: string, format: date-time, nullable: true }
-        lastSyncError:  { type: string, nullable: true }
+        lastSync:        { type: string, format: date-time, nullable: true }
+        lastSyncError:   { type: string, nullable: true }
+        syncRetryCount:  { type: integer, description: "Current retry attempt (0 = normal schedule, 1–3 = backing off)" }
         machineUrl:     { type: string }
         machineHostname: { type: string }
         machineVersion: { type: string, nullable: true }
