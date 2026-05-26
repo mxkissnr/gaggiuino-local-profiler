@@ -1,16 +1,25 @@
-FROM node:18.20.4-alpine3.20
+FROM node:18.20.4-alpine3.20 AS builder
 
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY public/ ./public/
 COPY vite.config.js ./
 COPY public-src/ ./public-src/
 RUN npm run build
 
+# ── Runtime stage ──────────────────────────────────────────────────────────
+FROM node:18.20.4-alpine3.20
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
 COPY server.js ./
+COPY --from=builder /app/public ./public
 
 EXPOSE 8099
 
