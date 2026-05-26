@@ -82,6 +82,10 @@ Keine manuelle Konfiguration erforderlich. Um den Token zu erneuern, `/data/api_
 
 Alle persistenten Daten werden atomar geschrieben (erst `.tmp`, dann `fs.renameSync`), sodass ein Absturz während eines Schreibvorgangs keine halbgeschriebene JSON-Datei hinterlässt.
 
+### API-Spec
+
+Eine maschinenlesbare OpenAPI-3.0.3-Spezifikation aller Endpunkte ist unter `GET /api/openapi.json` (ohne Auth) abrufbar und als [`openapi.yaml`](openapi.yaml) im Repository abgelegt. Einfach die URL oder die Datei in den [Swagger Editor](https://editor.swagger.io/) einfügen, um die vollständige API zu erkunden.
+
 ## Schnellstart
 
 `machine_url` auf die API-URL des Controllers setzen und Add-on starten.

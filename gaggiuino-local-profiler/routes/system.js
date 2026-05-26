@@ -1,6 +1,18 @@
 const express = require('express');
 const axios   = require('axios');
+const fs      = require('fs');
+const path    = require('path');
+const yaml    = require('js-yaml');
 const router  = express.Router();
+
+let _openApiSpec = null;
+function getOpenApiSpec() {
+    if (!_openApiSpec) {
+        const raw = fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8');
+        _openApiSpec = yaml.load(raw);
+    }
+    return _openApiSpec;
+}
 
 const { GLP_VERSION, DATA_FILE, HA_API, HA_TOKEN } = require('../lib/constants');
 const { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled } = require('../lib/data');
@@ -129,6 +141,13 @@ router.get('/api/live/data', (req, res) => {
         datapoints:  state.liveAccum ? state.liveAccum.datapoints : null,
         seq:         state.liveSeq,
     });
+});
+
+// ── OpenAPI spec ──────────────────────────────────────────────────────────
+
+router.get('/api/openapi.json', (req, res) => {
+    try { res.json(getOpenApiSpec()); }
+    catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Debug ─────────────────────────────────────────────────────────────────

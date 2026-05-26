@@ -82,6 +82,10 @@ No manual configuration is required. To rotate the token, delete `/data/api_toke
 
 All persistent data is written atomically (write to `.tmp`, then `fs.renameSync`) so a crash during a write cannot produce a half-written JSON file.
 
+### API spec
+
+A machine-readable OpenAPI 3.0.3 specification of all endpoints is served at `GET /api/openapi.json` (no auth required) and committed as [`openapi.yaml`](openapi.yaml) in the repository. You can paste the URL or the file into [Swagger Editor](https://editor.swagger.io/) to browse the full API.
+
 ## Quick start
 
 Set `machine_url` to your controller's API URL and start the add-on.

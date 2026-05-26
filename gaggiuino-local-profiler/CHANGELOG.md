@@ -1,3 +1,7 @@
+## 1.55.0
+- fix: Dockerfile runtime stage now copies `lib/` and `routes/` directories — v1.54.0 crashed on startup with `Cannot find module './lib/constants'` because the multi-stage build only copied `server.js`; closes #103
+- feat: OpenAPI 3.0.3 spec — all 42 API endpoints documented with request/response schemas; served as JSON at `GET /api/openapi.json` (no auth required); spec committed as `openapi.yaml`; closes #101
+
 ## 1.54.0
 - refactor: split monolithic `server.js` (~1340 lines) into `lib/` modules (`constants`, `helpers`, `state`, `data`, `ha`, `live-sync`) and `routes/` modules (`shots`, `library`, `maintenance`, `orders`, `system`, `backup`, `import`); `server.js` reduced to ~85-line entry point; closes #97
 - security: `writeFileSafe()` — all JSON writes now use atomic rename-swap (write to `.tmp`, then `fs.renameSync`) to prevent half-written files on crash; closes #97

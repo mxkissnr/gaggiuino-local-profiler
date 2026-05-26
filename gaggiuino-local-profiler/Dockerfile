@@ -18,6 +18,9 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY server.js ./
+COPY lib/ ./lib/
+COPY routes/ ./routes/
+COPY openapi.yaml ./
 COPY --from=builder /app/public ./public
 
 EXPOSE 8099

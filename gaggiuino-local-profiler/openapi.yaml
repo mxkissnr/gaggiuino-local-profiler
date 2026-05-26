@@ -1,0 +1,1014 @@
+openapi: 3.0.3
+info:
+  title: GLP REST API
+  version: 1.55.0
+  description: >
+    REST API for the **Gaggiuino Local Profiler** Home Assistant add-on.
+    Provides shot storage, coffee library, maintenance tracking, a barista
+    orders system, and live machine data.
+  contact:
+    url: https://github.com/mxkissnr/gaggiuino-local-profiler
+
+servers:
+  - url: http://localhost:8099
+    description: Direct port (integration, cards)
+  - url: /api/hassio_ingress/gaggiuino_local_profiler
+    description: HA Ingress (browser — auth via HA session, no token needed)
+
+security:
+  - tokenAuth: []
+
+components:
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: X-GLP-Token
+      description: >
+        64-char hex token, auto-generated on first start, stored in
+        `/data/api_token.txt`. Retrieve from `GET /api/status`.
+        Requests via HA Ingress bypass this check (HA session is sufficient).
+        `GET /api/status` is always public.
+
+  schemas:
+
+    Ok:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean, example: true }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, example: "not found" }
+
+    # ── Shots ──────────────────────────────────────────────────────────────
+
+    Annotation:
+      type: object
+      description: User-supplied metadata attached to a shot.
+      properties:
+        rating:       { type: integer, minimum: 1, maximum: 5, nullable: true }
+        coffee:       { type: string, maxLength: 200 }
+        grinder:      { type: string, maxLength: 200 }
+        grindSetting: { type: string, maxLength: 100 }
+        dose:         { type: number, minimum: 0.1, maximum: 100, nullable: true }
+        roastDate:    { type: string, format: date, maxLength: 10 }
+        tds:          { type: number, minimum: 0.1, maximum: 30, nullable: true }
+        notes:        { type: string, maxLength: 2000 }
+        orderedBy:
+          type: object
+          description: Set automatically when an order is completed for this shot.
+          properties:
+            customer:  { type: string }
+            haUserId:  { type: string }
+            orderId:   { type: string }
+
+    Shot:
+      type: object
+      description: >
+        Raw shot record from the Gaggiuino machine, enriched with annotation
+        and trash metadata by the add-on.
+      properties:
+        id:          { type: integer, description: Unique shot ID }
+        timestamp:   { type: integer, description: Unix seconds (divide by 1 to get Date) }
+        duration:    { type: integer, description: "Duration × 10 — divide by 10 for seconds" }
+        profileName: { type: string }
+        profile:
+          type: object
+          properties:
+            name: { type: string }
+        weight:      { type: number, description: Output weight in grams }
+        annotation:
+          $ref: '#/components/schemas/Annotation'
+        trashedAt:   { type: integer, description: Unix ms timestamp when shot was trashed, nullable: true }
+
+    # ── Library ────────────────────────────────────────────────────────────
+
+    Bean:
+      type: object
+      required: [id, name]
+      properties:
+        id:         { type: integer, description: Unix ms timestamp used as ID }
+        name:       { type: string, maxLength: 200 }
+        roaster:    { type: string, maxLength: 200 }
+        roastDate:  { type: string, format: date, maxLength: 10 }
+        notes:      { type: string, maxLength: 1000 }
+        stock_g:    { type: number, nullable: true, description: Stock in grams }
+        source:     { type: string, maxLength: 200, description: Import source URL domain }
+        importedAt: { type: string, format: date, maxLength: 10 }
+
+    Grinder:
+      type: object
+      required: [id, name]
+      properties:
+        id:    { type: integer }
+        name:  { type: string, maxLength: 200 }
+        notes: { type: string, maxLength: 1000 }
+
+    Library:
+      type: object
+      properties:
+        beans:    { type: array, items: { $ref: '#/components/schemas/Bean' } }
+        grinders: { type: array, items: { $ref: '#/components/schemas/Grinder' } }
+
+    # ── Maintenance ────────────────────────────────────────────────────────
+
+    MaintenanceTask:
+      type: object
+      properties:
+        lastDate:        { type: string, format: date, nullable: true }
+        threshold_shots: { type: integer, minimum: 1, maximum: 10000, nullable: true }
+        threshold_days:  { type: integer, minimum: 1, maximum: 365, nullable: true }
+        shots_since:     { type: integer, description: Shots since last maintenance }
+        days_since:      { type: integer, description: Days since last maintenance, nullable: true }
+        pct:             { type: number, minimum: 0, maximum: 1, description: Progress toward threshold (0–1) }
+        status:          { type: string, enum: [ok, warning, overdue] }
+
+    MaintenanceStats:
+      type: object
+      description: >
+        Keys are task names: `descaling`, `backflush`, `grouphead`,
+        `gaskets`, `waterfilter`, `grinder_{id}`.
+      additionalProperties:
+        $ref: '#/components/schemas/MaintenanceTask'
+
+    # ── Orders ────────────────────────────────────────────────────────────
+
+    MenuItem:
+      type: object
+      required: [id, name, emoji]
+      properties:
+        id:    { type: string, example: "m_1716000000000" }
+        name:  { type: string, maxLength: 200 }
+        emoji: { type: string, maxLength: 10 }
+
+    Order:
+      type: object
+      required: [id, createdAt, customer, item, status]
+      properties:
+        id:            { type: string, example: "ord_1716000000000_ab12" }
+        createdAt:     { type: integer, description: Unix ms }
+        customer:      { type: string, maxLength: 50 }
+        haUserId:      { type: string, maxLength: 100 }
+        item:          { type: string, description: Menu item name }
+        note:          { type: string, maxLength: 200 }
+        status:
+          type: string
+          enum: [pending, accepted, done, declined]
+        eta:           { type: integer, description: Minutes, nullable: true }
+        acceptedAt:    { type: integer, description: Unix ms, nullable: true }
+        completedAt:   { type: integer, description: Unix ms, nullable: true }
+        declineReason: { type: string, nullable: true }
+        shotId:        { type: integer, description: Last shot ID when order completed, nullable: true }
+
+    OrdersSettings:
+      type: object
+      properties:
+        enabled: { type: boolean }
+
+    NotifyMapping:
+      type: object
+      description: Map of haUserId → notify service name (e.g. "notify.mobile_app_phone")
+      additionalProperties: { type: string }
+
+    # ── System ────────────────────────────────────────────────────────────
+
+    Status:
+      type: object
+      properties:
+        shotCount:      { type: integer }
+        lastSync:       { type: string, format: date-time, nullable: true }
+        lastSyncError:  { type: string, nullable: true }
+        machineUrl:     { type: string }
+        machineHostname: { type: string }
+        machineVersion: { type: string, nullable: true }
+        syncInterval:   { type: integer, description: Minutes }
+        haConnected:    { type: boolean }
+        switchEntity:   { type: string, nullable: true }
+        glpVersion:     { type: string }
+        apiToken:       { type: string, nullable: true }
+        ordersFeature:  { type: boolean }
+
+    PreheatStatus:
+      type: object
+      properties:
+        ready:       { type: boolean }
+        elapsed:     { type: integer, description: Elapsed seconds }
+        remaining:   { type: integer, description: Remaining seconds }
+        pct:         { type: number, minimum: 0, maximum: 1 }
+        preheatTime: { type: integer, description: Configured preheat time in minutes }
+        temp:        { type: number, description: Current boiler temperature °C, nullable: true }
+        targetTemp:  { type: number, description: Target boiler temperature °C, nullable: true }
+
+    LiveData:
+      type: object
+      properties:
+        isLive:      { type: boolean }
+        profileName: { type: string }
+        datapoints:
+          type: array
+          nullable: true
+          items:
+            type: object
+            description: Live brew datapoint
+        seq: { type: integer, description: Sequence counter — increments on each update }
+
+    # ── Backup ────────────────────────────────────────────────────────────
+
+    BackupBundle:
+      type: object
+      required: [glp_backup, version, created, shots]
+      properties:
+        glp_backup:     { type: boolean, example: true }
+        version:        { type: string }
+        created:        { type: string, format: date-time }
+        shots:          { type: array, items: { $ref: '#/components/schemas/Shot' } }
+        annotations:    { type: object }
+        coffee_library: { $ref: '#/components/schemas/Library' }
+        blocklist:      { type: array, items: { type: integer } }
+        trash:          { type: object }
+
+paths:
+
+  # ── Shots ───────────────────────────────────────────────────────────────
+
+  /shots.json:
+    get:
+      tags: [Shots]
+      summary: All shots (with annotations merged)
+      parameters:
+        - name: trash
+          in: query
+          description: Set to "1" to return trashed shots instead of active shots
+          schema: { type: string, enum: ["0", "1"] }
+      responses:
+        "200":
+          description: Array of shots
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Shot' }
+
+  /api/shots/last:
+    get:
+      tags: [Shots]
+      summary: Most recent non-trashed shot
+      responses:
+        "200":
+          description: Shot object or null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Shot'
+                  - type: "null"
+
+  /api/shots/{id}:
+    get:
+      tags: [Shots]
+      summary: Single shot by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Shot object or null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Shot'
+                  - type: "null"
+
+  /api/shots/{id}/annotate:
+    post:
+      tags: [Shots]
+      summary: Save or update annotation for a shot
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Annotation' }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "400": { description: Invalid shot ID, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/shots/{id}/trash:
+    post:
+      tags: [Shots]
+      summary: Move shot to trash (soft delete, auto-purged after 30 days)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "400": { description: Invalid shot ID, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/shots/{id}/restore:
+    post:
+      tags: [Shots]
+      summary: Restore shot from trash
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "400": { description: Invalid shot ID, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/shots/{id}/delete:
+    post:
+      tags: [Shots]
+      summary: Permanently delete a shot (adds ID to blocklist to prevent re-import)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "404": { description: Shot not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  # ── Library ─────────────────────────────────────────────────────────────
+
+  /api/library:
+    get:
+      tags: [Library]
+      summary: Full coffee library (beans and grinders)
+      responses:
+        "200":
+          description: Library object
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Library' }
+
+  /api/library/bean:
+    post:
+      tags: [Library]
+      summary: Add a bean to the library
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:       { type: string, maxLength: 200 }
+                roaster:    { type: string, maxLength: 200 }
+                roastDate:  { type: string, format: date }
+                notes:      { type: string, maxLength: 1000 }
+                stock_g:    { type: number }
+                source:     { type: string, maxLength: 200 }
+                importedAt: { type: string, format: date }
+      responses:
+        "200": { description: Created bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
+        "400": { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "429": { description: Rate limit exceeded }
+
+  /api/library/bean/{id}:
+    put:
+      tags: [Library]
+      summary: Update a bean
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:      { type: string, maxLength: 200 }
+                roaster:   { type: string, maxLength: 200 }
+                roastDate: { type: string, format: date }
+                notes:     { type: string, maxLength: 1000 }
+                stock_g:   { type: number }
+      responses:
+        "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
+        "404": { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/library/bean/{id}/delete:
+    post:
+      tags: [Library]
+      summary: Delete a bean
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+
+  /api/library/grinder:
+    post:
+      tags: [Library]
+      summary: Add a grinder to the library
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:  { type: string, maxLength: 200 }
+                notes: { type: string, maxLength: 1000 }
+      responses:
+        "200": { description: Created grinder, content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
+        "400": { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "429": { description: Rate limit exceeded }
+
+  /api/library/grinder/{id}:
+    put:
+      tags: [Library]
+      summary: Update a grinder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:  { type: string, maxLength: 200 }
+                notes: { type: string, maxLength: 1000 }
+      responses:
+        "200": { description: Updated grinder, content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
+        "404": { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/library/grinder/{id}/delete:
+    post:
+      tags: [Library]
+      summary: Delete a grinder (also removes its maintenance entry)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+
+  # ── Maintenance ──────────────────────────────────────────────────────────
+
+  /api/maintenance:
+    get:
+      tags: [Maintenance]
+      summary: Full maintenance state with computed stats
+      description: >
+        Static tasks: `descaling`, `backflush`, `grouphead`, `gaskets`, `waterfilter`.
+        Dynamic grinder tasks use the key `grinder_{id}`.
+      responses:
+        "200":
+          description: Maintenance stats map
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceStats' }
+
+  /api/maintenance/{task}/done:
+    post:
+      tags: [Maintenance]
+      summary: Mark a maintenance task as done today
+      parameters:
+        - name: task
+          in: path
+          required: true
+          schema: { type: string }
+          description: Task name (e.g. "descaling", "grinder_1716000000000")
+      responses:
+        "200": { description: Updated stats, content: { application/json: { schema: { $ref: '#/components/schemas/MaintenanceStats' } } } }
+        "404": { description: Unknown task, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/maintenance/{task}/threshold:
+    post:
+      tags: [Maintenance]
+      summary: Update reminder thresholds for a maintenance task
+      parameters:
+        - name: task
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                threshold_shots: { type: integer, minimum: 1, maximum: 10000, nullable: true }
+                threshold_days:  { type: integer, minimum: 1, maximum: 365, nullable: true }
+      responses:
+        "200": { description: Updated stats, content: { application/json: { schema: { $ref: '#/components/schemas/MaintenanceStats' } } } }
+        "404": { description: Unknown task, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  # ── Orders ───────────────────────────────────────────────────────────────
+
+  /api/orders:
+    get:
+      tags: [Orders]
+      summary: List orders (most recent first, max 100)
+      description: >
+        Requires `enable_orders: true` in add-on config, otherwise returns 404.
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, accepted, done, declined] }
+      responses:
+        "200":
+          description: Array of orders
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Order' } }
+        "404": { description: Orders feature not enabled }
+    post:
+      tags: [Orders]
+      summary: Place a new order
+      description: >
+        `haUserId` should be supplied by the glp-integration proxy via the
+        `X-GLP-HA-User-ID` header (injected from the authenticated HA session).
+        The header value takes precedence over the body field.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [item, customer]
+              properties:
+                item:     { type: string, description: Must match a menu item name }
+                customer: { type: string, maxLength: 50 }
+                note:     { type: string, maxLength: 200 }
+                haUserId: { type: string, maxLength: 100, description: Overridden by X-GLP-HA-User-ID header if present }
+      responses:
+        "200": { description: Created order, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        "400": { description: Validation error }
+        "429": { description: Rate limit exceeded }
+        "503": { description: Orders disabled }
+
+  /api/orders/mine:
+    get:
+      tags: [Orders]
+      summary: Orders placed by a specific HA user (max 10, most recent first)
+      parameters:
+        - name: haUserId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Array of orders
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Order' } }
+        "400": { description: haUserId required }
+
+  /api/orders/{id}/accept:
+    post:
+      tags: [Orders]
+      summary: Accept a pending order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                eta: { type: integer, minimum: 1, maximum: 60, description: Estimated minutes, default 5 }
+      responses:
+        "200": { description: Updated order, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        "400": { description: Order not in pending state }
+        "404": { description: Not found }
+
+  /api/orders/{id}/complete:
+    post:
+      tags: [Orders]
+      summary: Mark an order as done (links the most recent shot)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Updated order, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        "404": { description: Not found }
+
+  /api/orders/{id}/decline:
+    post:
+      tags: [Orders]
+      summary: Decline a pending or accepted order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 200 }
+      responses:
+        "200": { description: Updated order, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        "400": { description: Cannot decline in current state }
+        "404": { description: Not found }
+
+  /api/orders/{id}:
+    delete:
+      tags: [Orders]
+      summary: Delete a completed (done/declined) order from history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "400": { description: Can only delete completed orders }
+        "404": { description: Not found }
+
+  /api/orders/history:
+    delete:
+      tags: [Orders]
+      summary: Clear all completed (done/declined) orders from history
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+
+  /api/orders/menu:
+    get:
+      tags: [Orders]
+      summary: Get the current menu
+      responses:
+        "200":
+          description: Array of menu items
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/MenuItem' } }
+    post:
+      tags: [Orders]
+      summary: Add a menu item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:  { type: string, maxLength: 200 }
+                emoji: { type: string, maxLength: 10, default: "☕" }
+      responses:
+        "200": { description: Created item, content: { application/json: { schema: { $ref: '#/components/schemas/MenuItem' } } } }
+        "400": { description: name required }
+
+  /api/orders/menu/{id}:
+    put:
+      tags: [Orders]
+      summary: Update a menu item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:  { type: string, maxLength: 200 }
+                emoji: { type: string, maxLength: 10 }
+      responses:
+        "200": { description: Updated item, content: { application/json: { schema: { $ref: '#/components/schemas/MenuItem' } } } }
+        "404": { description: Not found }
+    delete:
+      tags: [Orders]
+      summary: Delete a menu item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "404": { description: Not found }
+
+  /api/orders/settings:
+    get:
+      tags: [Orders]
+      summary: Get orders feature settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrdersSettings' }
+    post:
+      tags: [Orders]
+      summary: Enable or disable the orders feature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        "200": { description: Updated settings, content: { application/json: { schema: { $ref: '#/components/schemas/OrdersSettings' } } } }
+        "400": { description: enabled (boolean) required }
+
+  /api/orders/notify-services:
+    get:
+      tags: [Orders]
+      summary: List available HA notify services (requires SUPERVISOR_TOKEN)
+      responses:
+        "200":
+          description: Array of service names
+          content:
+            application/json:
+              schema: { type: array, items: { type: string }, example: ["notify.mobile_app_phone"] }
+
+  /api/orders/notify-mapping:
+    get:
+      tags: [Orders]
+      summary: Get the haUserId → notify service mapping
+      responses:
+        "200":
+          description: Mapping + known customers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mapping:
+                    $ref: '#/components/schemas/NotifyMapping'
+                  customers:
+                    type: object
+                    description: Map of haUserId → customer display name (derived from order history)
+                    additionalProperties: { type: string }
+    post:
+      tags: [Orders]
+      summary: Update the haUserId → notify service mapping
+      description: >
+        Send a partial map. Set a key to `""` to remove the mapping for that user.
+        Only keys starting with `"notify."` are accepted (or empty string to delete).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NotifyMapping' }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+
+  # ── System ───────────────────────────────────────────────────────────────
+
+  /api/status:
+    get:
+      tags: [System]
+      summary: Add-on status (public — no auth required)
+      security: []
+      responses:
+        "200":
+          description: Status object
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Status' }
+
+  /api/sync:
+    post:
+      tags: [System]
+      summary: Trigger a manual sync from the machine
+      description: Rate-limited to one request per 30 seconds.
+      responses:
+        "200": { description: Sync triggered, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "429": { description: Too soon since last manual sync }
+
+  /api/switch:
+    get:
+      tags: [System]
+      summary: Machine power switch state
+      responses:
+        "200":
+          description: Switch state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configured: { type: boolean }
+                  entity:     { type: string, nullable: true }
+                  state:      { type: boolean, nullable: true, description: true = on }
+
+  /api/switch/toggle:
+    post:
+      tags: [System]
+      summary: Toggle machine power switch (requires switch_entity + SUPERVISOR_TOKEN)
+      responses:
+        "200":
+          description: New switch state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:    { type: boolean }
+                  state: { type: boolean, description: New state after toggle }
+        "400": { description: switch_entity not configured }
+        "500": { description: HA call failed }
+
+  /api/machine/profiles:
+    get:
+      tags: [System]
+      summary: Available Gaggiuino profiles (via HA select entity)
+      responses:
+        "200":
+          description: Profile list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+                  current:   { type: string }
+                  options:   { type: array, items: { type: string } }
+
+  /api/machine/profile/set:
+    post:
+      tags: [System]
+      summary: Switch the active Gaggiuino profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [option]
+              properties:
+                option: { type: string }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "400": { description: option required }
+        "503": { description: HA token unavailable }
+
+  /api/preheat:
+    get:
+      tags: [System]
+      summary: Preheat progress and current boiler temperature
+      responses:
+        "200":
+          description: Preheat status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PreheatStatus' }
+
+  /api/live/data:
+    get:
+      tags: [System]
+      summary: Live brew data (updated during active shot)
+      description: Poll this endpoint during a shot to get real-time data. Check `seq` to detect updates.
+      responses:
+        "200":
+          description: Live data
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LiveData' }
+
+  /api/debug/machine:
+    get:
+      tags: [System]
+      summary: Raw response from the machine's /api/system/status (for debugging)
+      responses:
+        "200":
+          description: Debug info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:      { type: boolean }
+                  baseUrl: { type: string }
+                  data:    { type: object }
+                  error:   { type: string }
+
+  /api/openapi.json:
+    get:
+      tags: [System]
+      summary: This OpenAPI specification as JSON
+      security: []
+      responses:
+        "200":
+          description: OpenAPI 3.0.3 spec
+          content:
+            application/json:
+              schema: { type: object }
+
+  # ── Backup / Restore ─────────────────────────────────────────────────────
+
+  /api/backup:
+    get:
+      tags: [Backup]
+      summary: Download a full backup of all add-on data
+      responses:
+        "200":
+          description: Backup bundle (Content-Disposition attachment)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BackupBundle' }
+
+  /api/restore:
+    post:
+      tags: [Backup]
+      summary: Restore all add-on data from a backup bundle
+      description: >
+        Body limit is 50 MB. Rate-limited to 3 requests per minute per IP.
+        **Overwrites all existing data.**
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BackupBundle' }
+      responses:
+        "200":
+          description: Restore result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:    { type: boolean }
+                  shots: { type: integer, description: Number of shots restored }
+        "400": { description: Invalid backup file }
+        "429": { description: Rate limit exceeded }
+
+  # ── Import ───────────────────────────────────────────────────────────────
+
+  /api/import/url:
+    get:
+      tags: [Import]
+      summary: Import bean metadata from a product URL
+      description: Currently supports kaffeebraun.com product pages.
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema: { type: string, format: uri }
+      responses:
+        "200":
+          description: Extracted bean metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:       { type: string }
+                  roaster:    { type: string }
+                  notes:      { type: string }
+                  source:     { type: string }
+                  importedAt: { type: string, format: date }
+        "400": { description: Missing or invalid URL, or unsupported domain }
+        "404": { description: Product not found on page }
+        "500": { description: Fetch failed }
+
+tags:
+  - name: Shots
+    description: Shot history — read, annotate, trash, restore, delete
+  - name: Library
+    description: Coffee bean and grinder library
+  - name: Maintenance
+    description: Maintenance task tracker with configurable thresholds
+  - name: Orders
+    description: Barista order system (requires enable_orders in add-on config)
+  - name: System
+    description: Add-on status, manual sync, machine switch, live data, preheat
+  - name: Backup
+    description: Full backup and restore
+  - name: Import
+    description: Bean metadata import from external URLs
