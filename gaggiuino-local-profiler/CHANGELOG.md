@@ -1,3 +1,11 @@
+## 1.62.4
+- fix: `initProfilesCache` IIFE ran before `const state` / `const log` were declared (TDZ bug) — profile cache from v1.62.1 never actually loaded on startup; fix: moved `require` calls above the IIFE; closes #119
+- fix: sync no longer crashes when machine `/latest` returns no `lastShotId` — added null-guard with early-return
+- fix: `/api/restore` now rejects payloads with more than `MAX_SHOT_ID` shots to prevent DoS via oversized arrays
+- fix: removed redundant `require('fs')` inside `/api/status` handler (was shadowing top-level import)
+- fix: removed unused `getHaState` import in `routes/system.js`
+- feat: `Content-Security-Policy` header added — allows `'self'` + `cdn.jsdelivr.net` (Chart.js + QRCode)
+
 ## 1.62.3
 - fix: fullscreen chart now shows the vertical crosshair cursor line — `corsairPlugin` was registered on the main chart but missing from the fullscreen chart config; closes #118
 

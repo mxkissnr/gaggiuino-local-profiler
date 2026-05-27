@@ -2,7 +2,7 @@ const express = require('express');
 const fs      = require('fs');
 const router  = express.Router();
 
-const { GLP_VERSION, DATA_FILE, ANNOTATIONS_FILE, LIBRARY_FILE, BLOCKLIST_FILE, TRASH_FILE } = require('../lib/constants');
+const { GLP_VERSION, DATA_FILE, ANNOTATIONS_FILE, LIBRARY_FILE, BLOCKLIST_FILE, TRASH_FILE, MAX_SHOT_ID } = require('../lib/constants');
 const { log, rateLimit, writeFileSafe } = require('../lib/helpers');
 
 router.get('/api/backup', (req, res) => {
@@ -32,6 +32,8 @@ router.post('/api/restore', (req, res) => {
         const b = req.body;
         if (!b || b.glp_backup !== true || !Array.isArray(b.shots))
             return res.status(400).json({ error: 'Invalid backup file' });
+        if (b.shots.length > MAX_SHOT_ID)
+            return res.status(400).json({ error: `Backup contains too many shots (max ${MAX_SHOT_ID})` });
         if (Array.isArray(b.shots))          writeFileSafe(DATA_FILE,       b.shots);
         if (b.annotations && typeof b.annotations === 'object')
                                              writeFileSafe(ANNOTATIONS_FILE, b.annotations);

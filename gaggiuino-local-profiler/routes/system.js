@@ -16,7 +16,9 @@ function getOpenApiSpec() {
 
 const { GLP_VERSION, DATA_FILE, HA_API, HA_TOKEN, PROFILES_CACHE_FILE } = require('../lib/constants');
 const { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled, loadMenu } = require('../lib/data');
-const { getSwitchState, callHaService, getHaState } = require('../lib/ha');
+const { getSwitchState, callHaService } = require('../lib/ha');
+const { log } = require('../lib/helpers');
+const state = require('../lib/state');
 
 // ── Profile cache helpers ─────────────────────────────────────────────────
 
@@ -40,8 +42,6 @@ function saveProfilesCache(profiles) {
         log(`Profiles cache loaded: ${cached.length} profiles`);
     }
 })();
-const { log } = require('../lib/helpers');
-const state = require('../lib/state');
 
 // ── Status ────────────────────────────────────────────────────────────────
 
@@ -50,9 +50,8 @@ router.get('/api/status', (req, res) => {
     const machineUrl    = getMachineUrl(opts);
     let shotCount = 0, machineHostname = '';
     try {
-        const fs = require('fs');
-        if (require('fs').existsSync(DATA_FILE))
-            shotCount = JSON.parse(require('fs').readFileSync(DATA_FILE, 'utf8')).length;
+        if (fs.existsSync(DATA_FILE))
+            shotCount = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')).length;
     } catch (e) {}
     try { machineHostname = new URL(machineUrl).hostname; } catch (e) {}
     res.json({

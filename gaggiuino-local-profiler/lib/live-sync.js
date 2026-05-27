@@ -174,7 +174,11 @@ async function syncShots() {
     const machineUrl = getMachineUrl(opts);
     try {
         const latestResponse  = await axios.get(`${machineUrl}/latest`, { timeout: 10000 });
-        const latestMachineId = latestResponse.data[0].lastShotId;
+        const latestMachineId = latestResponse.data?.[0]?.lastShotId;
+        if (latestMachineId == null) {
+            log('Sync: machine /latest returned no lastShotId — skipped', true);
+            return false;
+        }
 
         let localShots = [];
         if (fs.existsSync(DATA_FILE)) {
