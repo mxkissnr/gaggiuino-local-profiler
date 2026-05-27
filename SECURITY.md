@@ -8,7 +8,7 @@ Only the **latest release** receives security fixes. Please update before report
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Send a private report to **maximilian.kissner24@gmail.com** with:
+Please open a **[private security advisory](https://github.com/mxkissnr/gaggiuino-local-profiler/security/advisories/new)** on GitHub and include:
 
 - A clear description of the vulnerability
 - Steps to reproduce (proof-of-concept if possible)

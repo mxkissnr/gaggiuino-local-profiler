@@ -34,7 +34,7 @@ This Code of Conduct applies within all community spaces and also applies when a
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainer at **maximilian.kissner24@gmail.com**. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project maintainer via [GitHub (@mxkissnr)](https://github.com/mxkissnr). All complaints will be reviewed and investigated promptly and fairly.
 
 ## Attribution
 
