@@ -148,6 +148,8 @@ export const TRANSLATIONS = {
     orders_notify_saved:'✓ Gespeichert',
     orders_notify_no_customers:'Noch keine Kunden bekannt (es müssen zuerst Bestellungen eingehen).',
     orders_notify_no_ha:'HA-API nicht verfügbar — Benachrichtigungen nicht konfigurierbar.',
+    orders_trending_toggle:'Trending ein/aus',
+    ann_ordered_by:'Bestellt von',
   },
   en: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
@@ -296,6 +298,8 @@ export const TRANSLATIONS = {
     orders_notify_saved:'✓ Saved',
     orders_notify_no_customers:'No customers yet (orders must come in first).',
     orders_notify_no_ha:'HA API unavailable — notifications cannot be configured.',
+    orders_trending_toggle:'Toggle trending',
+    ann_ordered_by:'Ordered by',
   },
   it: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
@@ -444,6 +448,8 @@ export const TRANSLATIONS = {
     orders_notify_saved:'✓ Salvato',
     orders_notify_no_customers:'Nessun cliente ancora (devono arrivare prima degli ordini).',
     orders_notify_no_ha:'API HA non disponibile — notifiche non configurabili.',
+    orders_trending_toggle:'Attiva/disattiva trending',
+    ann_ordered_by:'Ordinato da',
   },
   fr: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque',
@@ -592,6 +598,8 @@ export const TRANSLATIONS = {
     orders_notify_saved:'✓ Enregistré',
     orders_notify_no_customers:'Aucun client encore (des commandes doivent d\'abord arriver).',
     orders_notify_no_ha:'API HA indisponible — notifications non configurables.',
+    orders_trending_toggle:'Activer/désactiver tendance',
+    ann_ordered_by:'Commandé par',
   },
   es: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
@@ -740,6 +748,8 @@ export const TRANSLATIONS = {
     orders_notify_saved:'✓ Guardado',
     orders_notify_no_customers:'Aún no hay clientes (primero deben llegar pedidos).',
     orders_notify_no_ha:'API de HA no disponible — las notificaciones no se pueden configurar.',
+    orders_trending_toggle:'Activar/desactivar tendencia',
+    ann_ordered_by:'Pedido por',
   },
 };
 

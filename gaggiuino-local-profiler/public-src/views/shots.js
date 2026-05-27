@@ -238,6 +238,16 @@ export function renderAnnotationPanel(shot) {
   const btn = document.getElementById('saveAnnotationBtn');
   btn.textContent = t('btn_save');
   btn.classList.remove('saved');
+  const badge = document.getElementById('orderedByBadge');
+  if (badge) {
+    const ob = ann.orderedBy;
+    if (ob?.customer) {
+      badge.textContent = `☕ ${t('ann_ordered_by')}: ${ob.customer}`;
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
 }
 
 export function renderStars(rating) {

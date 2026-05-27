@@ -1,3 +1,10 @@
+## 1.58.0
+- feat: orders — notify all mapped customers via HA push when shop opens (orders enabled → true); no-op when SUPERVISOR_TOKEN absent or mapping empty; closes #108
+- feat: orders — menu items get `createdAt` timestamp on creation (for "New" badge in order card); closes #109
+- feat: orders — menu items get `trending` boolean (default false); PUT `/api/orders/menu/:id` accepts `trending`; barista can toggle trending via 🔥 button in menu admin; closes #107
+- feat: orders — browser notification + chime when new pending orders arrive on barista side; permission requested on first visit to orders view; closes #99
+- feat: shots — `orderedBy` badge shown in annotation panel when a shot was linked to an order (customer name in amber badge); closes #106
+
 ## 1.57.1
 - fix: clicking a shot in the left sidebar from any non-shots view now switches to shots mode — previously `updateView()` ran but the shots view stayed hidden (`display:none`); also fixes `goToShot()` scroll timing (requestAnimationFrame → setTimeout 50 ms so layout is computed after display change); closes #104
 

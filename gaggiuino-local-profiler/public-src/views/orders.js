@@ -9,8 +9,39 @@ export function toggleOrdersMenu() {
   document.getElementById('ordersMenuToggle').textContent = S._ordersMenuOpen ? '▾' : '▸';
 }
 
+function _playOrderChime() {
+  try {
+    const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.45);
+  } catch (_) {}
+}
+
+function _notifyNewOrders(newOrders) {
+  _playOrderChime();
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const n = newOrders.length;
+  new Notification(`☕ ${n} neue Bestellung${n > 1 ? 'en' : ''}`, {
+    body: newOrders.map(o => `${o.customer}: ${o.item}`).join('\n'),
+    tag: 'glp-new-order',
+    silent: true,
+  });
+}
+
 export function startOrdersPolling() {
   stopOrdersPolling();
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+  S._knownPendingIds = null; // reset so first load doesn't trigger notify
   loadOrdersView();
   S._ordersPollTimer = setInterval(loadOrdersView, 10000);
 }
@@ -66,9 +97,16 @@ export async function loadOrdersView() {
   renderOrdersMenuAdmin(menu);
   if (S._ordersStatsOpen) renderOrdersStats(orders);
 
-  const pending = orders.filter(o => o.status === 'pending').length;
+  const pendingOrders = orders.filter(o => o.status === 'pending');
   const badge = document.getElementById('ordersBadge');
-  if (badge) badge.style.display = pending > 0 ? '' : 'none';
+  if (badge) badge.style.display = pendingOrders.length > 0 ? '' : 'none';
+
+  // Browser notification for new pending orders
+  if (S._knownPendingIds !== null && S._knownPendingIds !== undefined) {
+    const newOnes = pendingOrders.filter(o => !S._knownPendingIds.has(o.id));
+    if (newOnes.length > 0) _notifyNewOrders(newOnes);
+  }
+  S._knownPendingIds = new Set(pendingOrders.map(o => o.id));
 }
 
 export function _orderTimeAgo(ts) {
@@ -237,8 +275,22 @@ export async function renderOrdersMenuAdmin(menu) {
     <div class="orders-menu-item">
       <span>${item.emoji}</span>
       <span class="orders-menu-item-name">${esc(item.name)}</span>
+      <button class="orders-menu-trend${item.trending ? ' active' : ''}" data-menu-trend="${esc(item.id)}" title="${t('orders_trending_toggle')}">🔥</button>
       <button class="orders-menu-del" data-menu-del="${esc(item.id)}" title="${t('orders_confirm_delete_item')}">✕</button>
     </div>`).join('');
+  list.querySelectorAll('[data-menu-trend]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id   = btn.dataset.menuTrend;
+      const item = menu.find(m => m.id === id);
+      if (!item) return;
+      await apiFetch(`api/orders/menu/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trending: !item.trending }),
+      });
+      loadOrdersView();
+    });
+  });
   list.querySelectorAll('[data-menu-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm(t('orders_confirm_delete_item'))) return;

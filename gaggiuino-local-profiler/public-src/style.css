@@ -384,7 +384,8 @@
         .annotation-field textarea:focus { border-color: #71717a; }
         .annotation-field textarea { resize: vertical; min-height: 58px; }
         .annotation-field.full-width { grid-column: 1 / -1; }
-        .annotation-actions { display: flex; justify-content: flex-end; }
+        .annotation-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .ordered-by-badge { font-size: .75rem; color: #a16207; background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.25); border-radius: 6px; padding: 3px 8px; }
 
         /* ── Coffee Library ── */
         .lib-open-btn { background: none; border: 1px solid #3f3f46; border-radius: 6px; color: #a1a1aa; font-size: .75rem; padding: 3px 8px; cursor: pointer; transition: border-color .15s, color .15s; }
@@ -1123,6 +1124,9 @@
         .orders-menu-list { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
         .orders-menu-item { display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid #27272a; }
         .orders-menu-item-name { flex:1; font-size:.88rem; color:#e4e4e7; }
+        .orders-menu-trend { background:none; border:none; font-size:1rem; cursor:pointer; padding:2px 6px; opacity:.3; transition:opacity .15s; }
+        .orders-menu-trend:hover { opacity:.7; }
+        .orders-menu-trend.active { opacity:1; }
         .orders-menu-del { background:none; border:none; color:#52525b; font-size:1rem; cursor:pointer; padding:2px 6px; transition:color .15s; }
         .orders-menu-del:hover { color:#ef4444; }
         .orders-menu-add-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }

@@ -26,7 +26,7 @@ router.post('/api/orders/menu', (req, res) => {
     const { name, emoji } = req.body || {};
     if (!name?.trim()) return res.status(400).json({ error: 'name required' });
     const menu = loadMenu();
-    const item = { id: `m_${Date.now()}`, name: name.trim(), emoji: emoji?.trim() || '☕' };
+    const item = { id: `m_${Date.now()}`, name: name.trim(), emoji: emoji?.trim() || '☕', createdAt: Date.now(), trending: false };
     menu.push(item);
     saveMenu(menu);
     res.json(item);
@@ -36,8 +36,9 @@ router.put('/api/orders/menu/:id', (req, res) => {
     const menu = loadMenu();
     const item = menu.find(m => m.id === req.params.id);
     if (!item) return res.status(404).json({ error: 'not found' });
-    if (req.body?.name?.trim())  item.name  = req.body.name.trim();
-    if (req.body?.emoji?.trim()) item.emoji = req.body.emoji.trim();
+    if (req.body?.name?.trim())                       item.name     = req.body.name.trim();
+    if (req.body?.emoji?.trim())                      item.emoji    = req.body.emoji.trim();
+    if (typeof req.body?.trending === 'boolean')      item.trending = req.body.trending;
     saveMenu(menu);
     res.json(item);
 });
@@ -56,9 +57,19 @@ router.get('/api/orders/settings', (req, res) => res.json(loadOrdersSettings()))
 
 router.post('/api/orders/settings', (req, res) => {
     if (typeof req.body?.enabled !== 'boolean') return res.status(400).json({ error: 'enabled (boolean) required' });
-    const s = { enabled: req.body.enabled };
+    const prev = loadOrdersSettings();
+    const s    = { enabled: req.body.enabled };
     saveOrdersSettings(s);
     log(`Orders ${s.enabled ? 'enabled' : 'disabled'}`);
+    if (s.enabled && !prev.enabled) {
+        const mapping = loadNotifyMapping();
+        const services = [...new Set(Object.values(mapping))].filter(Boolean);
+        services.forEach(svc => sendHaNotify(svc,
+            '☕ Kaffee-Shop geöffnet!',
+            'Du kannst jetzt Getränke bestellen.',
+            'glp_shop_open'));
+        if (services.length) log(`Shop-open notification sent to ${services.length} device(s)`);
+    }
     res.json(s);
 });
 
