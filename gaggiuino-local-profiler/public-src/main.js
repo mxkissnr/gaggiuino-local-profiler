@@ -15,7 +15,7 @@ import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggl
          updateView, switchChartTab, updatePQChart,
          openChartFullscreen, closeChartFullscreen, switchFsTab,
          exportCSV, exportAllCSV, exportShot, exportProfile, restoreFromFile,
-         loadDrinkMenu } from './views/shots.js';
+         loadDrinkMenu, selectDrinkType } from './views/shots.js';
 
 import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, clearReferenceShot,
          connectLiveStream, disconnectLiveStream, setLiveBadge, handleLiveData,
@@ -71,6 +71,14 @@ Object.assign(window, {
   setLang,
   applyTranslations,
 
+  // theme
+  setTheme: (theme) => {
+    localStorage.setItem('glp_theme', theme);
+    document.documentElement.dataset.theme = theme;
+    document.querySelectorAll('.theme-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.themeVal === theme));
+  },
+
   // api
   initToken,
   apiFetch,
@@ -114,6 +122,7 @@ Object.assign(window, {
   quickClone,
   saveAnnotation,
   scheduleAutoSave,
+  selectDrinkType,
   loadDrinkMenu,
   updateDegassing,
   updateView,
@@ -276,6 +285,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (prev) selectShot(prev.id);
     }
   });
+
+  // ── Theme ──────────────────────────────────────────────────────────────
+  const _applyTheme = (theme) => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelectorAll('.theme-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.themeVal === theme));
+  };
+  _applyTheme(localStorage.getItem('glp_theme') || 'dark');
 
   // ── Init sequence ──────────────────────────────────────────────────────
   applyTranslations();

@@ -54,15 +54,27 @@ export async function loadDrinkMenu() {
   try {
     const r = await apiFetch('api/menu');
     if (r.ok) S.drinkMenu = await r.json();
-  } catch (e) { /* keep empty — select won't render */ }
+  } catch (e) { /* keep empty — pills won't render */ }
 }
 
-function _populateDrinkSelect(sel) {
-  if (!S.drinkMenu?.length) return;
-  const current = sel.value;
-  sel.innerHTML = `<option value="">${t('ann_drink_type_none')}</option>` +
-    S.drinkMenu.map(m => `<option value="${m.id}">${m.emoji} ${m.name}</option>`).join('');
-  sel.value = current;
+function _renderDrinkPills(selectedId) {
+  const container = document.getElementById('drinkPillsContainer');
+  const hidden    = document.getElementById('annDrinkType');
+  if (!container) return;
+  if (!S.drinkMenu?.length) { container.innerHTML = ''; return; }
+  container.innerHTML = S.drinkMenu.map(m =>
+    `<button type="button" class="drink-pill${selectedId === m.id ? ' active' : ''}"
+      onclick="selectDrinkType('${esc(m.id)}')">${esc(m.emoji)} ${esc(m.name)}</button>`
+  ).join('');
+  if (hidden) hidden.value = selectedId || '';
+}
+
+export function selectDrinkType(id) {
+  const hidden = document.getElementById('annDrinkType');
+  if (!hidden) return;
+  const newVal = hidden.value === id ? '' : id; // click active pill → deselect
+  _renderDrinkPills(newVal);
+  scheduleAutoSave();
 }
 
 // ── Shot data helper ──────────────────────────────────────────────────────
@@ -308,12 +320,8 @@ export function renderAnnotationPanel(shot) {
   document.getElementById('annRoastDate').value    = isoToGerman(ann.roastDate || '');
   document.getElementById('annTds').value          = ann.tds          || '';
   document.getElementById('annNotes').value        = ann.notes        || '';
-  // Drink type dropdown
-  const dtSel = document.getElementById('annDrinkType');
-  if (dtSel) {
-    _populateDrinkSelect(dtSel);
-    dtSel.value = ann.drinkType || '';
-  }
+  // Drink type pills
+  _renderDrinkPills(ann.drinkType || '');
   const btn = document.getElementById('saveAnnotationBtn');
   btn.textContent = t('btn_save');
   btn.classList.remove('saved');

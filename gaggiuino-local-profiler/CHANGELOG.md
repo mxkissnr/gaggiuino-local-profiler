@@ -1,4 +1,7 @@
-## 1.60.1
+## 1.61.0
+- feat: light/dark theme toggle — CSS refactored to use 11 custom properties (--gray-200…950, --accent, --ok, --err); 303 hardcoded colour values replaced with var(); [data-theme="light"] override inverts the scale; theme stored in localStorage (glp_theme); toggle added as first card in Settings; closes #113
+- feat: drink type annotation now uses pill/chip buttons instead of a native <select>; pills render from the menu, active pill highlighted in amber, click again to deselect; closes #112
+- feat: new glp-ha-theme.yaml in repo root — installable HA themes "GLP Dark" and "GLP Light" covering sidebar, header, cards, inputs, switches, status colours; closes #113
 - fix: P-Q chart no longer shows misleading filled triangle — switched from type:line/fill:true to type:scatter with showLine:true and fill:false; small point dots (r=1.5) give density indication; x-axis now auto-scales to actual max flow + 10 % headroom instead of fixed max:5; applied to both normal and fullscreen view; closes #111
 
 ## 1.60.0

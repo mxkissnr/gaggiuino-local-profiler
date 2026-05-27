@@ -1,0 +1,167 @@
+###############################################################
+# GLP Home Assistant Theme
+# https://github.com/mxkissnr/gaggiuino-local-profiler
+#
+# Installation:
+#   1. Copy this file to your HA config/themes/ directory
+#      (create the folder if it doesn't exist)
+#   2. Add "themes: !include_dir_merge_named themes" to
+#      your configuration.yaml (restart HA once)
+#   3. In your HA profile select "GLP Dark" or "GLP Light"
+###############################################################
+
+GLP Dark:
+  modes:
+    dark: true
+
+  # ── Navigation / header ──────────────────────────────────────
+  app-header-background-color: "#09090b"
+  app-header-text-color: "#e4e4e7"
+  app-header-selection-bar-color: "#f59e0b"
+  app-header-edit-background-color: "#18181b"
+
+  # ── Sidebar ──────────────────────────────────────────────────
+  sidebar-background-color: "#09090b"
+  sidebar-text-color: "#a1a1aa"
+  sidebar-selected-text-color: "#f59e0b"
+  sidebar-icon-color: "#52525b"
+  sidebar-selected-icon-color: "#f59e0b"
+  sidebar-selected-background-color: "rgba(245,158,11,0.08)"
+
+  # ── Backgrounds ──────────────────────────────────────────────
+  primary-background-color: "#09090b"
+  secondary-background-color: "#18181b"
+  card-background-color: "#18181b"
+
+  # ── Text ─────────────────────────────────────────────────────
+  primary-text-color: "#e4e4e7"
+  secondary-text-color: "#a1a1aa"
+  text-primary-color: "#e4e4e7"
+  disabled-text-color: "#3f3f46"
+  label-badge-background-color: "#27272a"
+
+  # ── Accent / primary ─────────────────────────────────────────
+  primary-color: "#f59e0b"
+  accent-color: "#f59e0b"
+  light-primary-color: "rgba(245,158,11,0.2)"
+  dark-primary-color: "#d97706"
+
+  # ── Cards ────────────────────────────────────────────────────
+  ha-card-background: "#18181b"
+  ha-card-border-radius: "12px"
+  ha-card-border-color: "#3f3f46"
+  ha-card-border-width: "1px"
+  ha-card-box-shadow: "0 1px 3px rgba(0,0,0,0.5)"
+
+  # ── Dividers / borders ───────────────────────────────────────
+  divider-color: "#27272a"
+  table-row-background-color: "#18181b"
+  table-row-alternative-background-color: "#1c1c1f"
+
+  # ── Inputs ───────────────────────────────────────────────────
+  input-background-color: "#27272a"
+  input-fill-color: "#27272a"
+  input-ink-color: "#e4e4e7"
+  input-label-ink-color: "#71717a"
+  input-idle-line-color: "#3f3f46"
+  input-hover-line-color: "#71717a"
+  input-focused-line-color: "#f59e0b"
+
+  # ── Switches / toggles ───────────────────────────────────────
+  switch-checked-color: "#f59e0b"
+  switch-checked-button-color: "#fff"
+  switch-checked-track-color: "rgba(245,158,11,0.3)"
+  switch-unchecked-button-color: "#71717a"
+  switch-unchecked-track-color: "#3f3f46"
+
+  # ── State chip / badge colors ────────────────────────────────
+  state-icon-color: "#71717a"
+  state-on-color: "#f59e0b"
+  state-off-color: "#3f3f46"
+
+  # ── Status colors ────────────────────────────────────────────
+  success-color: "#22c55e"
+  warning-color: "#f59e0b"
+  error-color: "#ef4444"
+  info-color: "#3b82f6"
+
+  # ── Sliders ──────────────────────────────────────────────────
+  paper-slider-active-color: "#f59e0b"
+  paper-slider-knob-color: "#f59e0b"
+  paper-slider-container-color: "#3f3f46"
+
+  # ── Lovelace dashboard ───────────────────────────────────────
+  lovelace-background: "#09090b"
+
+  # ── Scrollbars ───────────────────────────────────────────────
+  scrollbar-thumb-color: "#3f3f46"
+
+GLP Light:
+  modes:
+    dark: false
+
+  app-header-background-color: "#ffffff"
+  app-header-text-color: "#18181b"
+  app-header-selection-bar-color: "#d97706"
+  app-header-edit-background-color: "#fafafa"
+
+  sidebar-background-color: "#fafafa"
+  sidebar-text-color: "#52525b"
+  sidebar-selected-text-color: "#d97706"
+  sidebar-icon-color: "#71717a"
+  sidebar-selected-icon-color: "#d97706"
+  sidebar-selected-background-color: "rgba(217,119,6,0.08)"
+
+  primary-background-color: "#fafafa"
+  secondary-background-color: "#ffffff"
+  card-background-color: "#ffffff"
+
+  primary-text-color: "#18181b"
+  secondary-text-color: "#52525b"
+  text-primary-color: "#18181b"
+  disabled-text-color: "#a1a1aa"
+
+  primary-color: "#d97706"
+  accent-color: "#d97706"
+  light-primary-color: "rgba(217,119,6,0.15)"
+  dark-primary-color: "#b45309"
+
+  ha-card-background: "#ffffff"
+  ha-card-border-radius: "12px"
+  ha-card-border-color: "#e4e4e7"
+  ha-card-border-width: "1px"
+  ha-card-box-shadow: "0 1px 4px rgba(0,0,0,0.08)"
+
+  divider-color: "#f4f4f5"
+  table-row-background-color: "#ffffff"
+  table-row-alternative-background-color: "#fafafa"
+
+  input-background-color: "#f4f4f5"
+  input-fill-color: "#f4f4f5"
+  input-ink-color: "#18181b"
+  input-label-ink-color: "#71717a"
+  input-idle-line-color: "#d4d4d8"
+  input-hover-line-color: "#71717a"
+  input-focused-line-color: "#d97706"
+
+  switch-checked-color: "#d97706"
+  switch-checked-button-color: "#fff"
+  switch-checked-track-color: "rgba(217,119,6,0.3)"
+  switch-unchecked-button-color: "#a1a1aa"
+  switch-unchecked-track-color: "#e4e4e7"
+
+  state-icon-color: "#71717a"
+  state-on-color: "#d97706"
+  state-off-color: "#d4d4d8"
+
+  success-color: "#16a34a"
+  warning-color: "#d97706"
+  error-color: "#dc2626"
+  info-color: "#2563eb"
+
+  paper-slider-active-color: "#d97706"
+  paper-slider-knob-color: "#d97706"
+  paper-slider-container-color: "#e4e4e7"
+
+  lovelace-background: "#fafafa"
+  scrollbar-thumb-color: "#d4d4d8"

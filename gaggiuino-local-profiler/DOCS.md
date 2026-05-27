@@ -161,4 +161,17 @@ GLP ships a Web App Manifest and Service Worker that allow it to be installed as
 
 Once installed, GLP opens without browser chrome and the app shell loads instantly from cache. Shot data and live mode always fetch from the network.
 
+### Light / Dark theme
+
+GLP has a built-in theme toggle (⚙ Settings → Theme). The choice is saved in `localStorage` and applied immediately. **Dark** is the default; **Light** inverts the grey scale to a white-based palette.
+
+### HA theme
+
+A matching Home Assistant theme (`glp-ha-theme.yaml`) is included in the repository root. It provides **GLP Dark** and **GLP Light** variants for the full HA interface (sidebar, cards, inputs, switches, status colours).
+
+**Installation:**
+1. Copy `glp-ha-theme.yaml` to `config/themes/` in your HA config directory (create `themes/` if it doesn't exist).
+2. Add `themes: !include_dir_merge_named themes` to `configuration.yaml` and restart HA once.
+3. In your HA profile select *GLP Dark* or *GLP Light*.
+
 For full documentation — features, live mode, analytics, shot score, exports, compatibility — see the [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).

@@ -213,11 +213,10 @@
                     </div>
                 </div>
                 <div class="annotation-fields">
-                    <div class="annotation-field">
+                    <div class="annotation-field full-width">
                         <label data-i18n="ann_drink_type">Getränk</label>
-                        <select id="annDrinkType" onchange="scheduleAutoSave()">
-                            <option value="">— keines —</option>
-                        </select>
+                        <div class="drink-pills" id="drinkPillsContainer"></div>
+                        <input type="hidden" id="annDrinkType">
                     </div>
                     <div class="annotation-field">
                         <label data-i18n="ann_coffee">Kaffee / Bohne</label>
@@ -525,6 +524,13 @@
 
     <!-- Settings view -->
     <div id="settings-view">
+        <div class="settings-card">
+            <h3 class="settings-card-title" data-i18n="settings_theme">Theme</h3>
+            <div class="theme-toggle-group" id="themeToggleGroup">
+                <button class="theme-btn" data-theme-val="dark"  onclick="setTheme('dark')" >🌙 <span data-i18n="theme_dark">Dark</span></button>
+                <button class="theme-btn" data-theme-val="light" onclick="setTheme('light')">☀️ <span data-i18n="theme_light">Light</span></button>
+            </div>
+        </div>
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="settings_language">Sprache</h3>
             <div class="settings-lang-group">
