@@ -1,3 +1,6 @@
+## 1.62.1
+- fix: profile list now persisted to `/data/profiles_cache.json`; loaded from cache on startup so `select.gaggiuino_profiler_profile` is immediately available even when the machine is off; live fetch updates cache, failed fetch falls back to cache; closes #116
+
 ## 1.62.0
 - feat: profile proxy endpoints (`GET /api/machine/profiles`, `POST /api/machine/profile/set`) now call the Gaggiuino machine directly — no longer depend on ALERTua/hass-gaggiuino or `select.gaggiuino_profile`; profile list cached in `state.machineProfiles`; closes #115
 - feat: new `GET /api/machine/status` endpoint — returns cached machine status (temp, pressure, waterLevel, weight, upTime, profileId/Name, brewSwitchState, steamSwitchState) from the 1 s live poll; `available: false` when machine has not been polled yet

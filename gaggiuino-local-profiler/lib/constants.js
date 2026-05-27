@@ -3,7 +3,7 @@ if (typeof File === 'undefined') {
     try { global.File = require('buffer').File; } catch (_) { global.File = class File {}; }
 }
 
-const GLP_VERSION  = '1.62.0';
+const GLP_VERSION  = '1.62.1';
 const DEFAULT_PORT = 8099;
 
 const DATA_DIR             = '/data';
@@ -20,6 +20,7 @@ const ORDERS_FILE          = '/data/orders.json';
 const MENU_FILE            = '/data/menu.json';
 const ORDERS_SETTINGS_FILE = '/data/orders_settings.json';
 const NOTIFY_MAPPING_FILE  = '/data/notify_mapping.json';
+const PROFILES_CACHE_FILE  = '/data/profiles_cache.json';
 
 const TRASH_TTL_MS          = 30 * 24 * 60 * 60 * 1000;
 const ORDERS_HISTORY_TTL_MS = 7  * 24 * 60 * 60 * 1000;
@@ -60,7 +61,7 @@ module.exports = {
     GLP_VERSION, DEFAULT_PORT,
     DATA_DIR, TOKEN_FILE, PREHEAT_STATE_FILE, DATA_FILE, ANNOTATIONS_FILE,
     TRASH_FILE, BLOCKLIST_FILE, OPTIONS_FILE, LIBRARY_FILE, MAINTENANCE_FILE,
-    ORDERS_FILE, MENU_FILE, ORDERS_SETTINGS_FILE, NOTIFY_MAPPING_FILE,
+    ORDERS_FILE, MENU_FILE, ORDERS_SETTINGS_FILE, NOTIFY_MAPPING_FILE, PROFILES_CACHE_FILE,
     TRASH_TTL_MS, ORDERS_HISTORY_TTL_MS, MAX_SHOT_ID,
     HA_INGRESS_PATH, HA_API, HA_TOKEN, ALLOWED_URL_SCHEMES, ALLOWED_IMPORT_HOSTS,
     TEMP_HISTORY_MAX, TEMP_STABLE_MIN, TEMP_STABLE_VAR, PREHEAT_STATE_TTL,

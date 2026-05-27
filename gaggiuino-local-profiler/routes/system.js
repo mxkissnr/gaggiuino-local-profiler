@@ -14,9 +14,32 @@ function getOpenApiSpec() {
     return _openApiSpec;
 }
 
-const { GLP_VERSION, DATA_FILE, HA_API, HA_TOKEN } = require('../lib/constants');
+const { GLP_VERSION, DATA_FILE, HA_API, HA_TOKEN, PROFILES_CACHE_FILE } = require('../lib/constants');
 const { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled, loadMenu } = require('../lib/data');
 const { getSwitchState, callHaService, getHaState } = require('../lib/ha');
+
+// ── Profile cache helpers ─────────────────────────────────────────────────
+
+function loadProfilesCache() {
+    try {
+        if (fs.existsSync(PROFILES_CACHE_FILE))
+            return JSON.parse(fs.readFileSync(PROFILES_CACHE_FILE, 'utf8'));
+    } catch (_) {}
+    return [];
+}
+
+function saveProfilesCache(profiles) {
+    try { fs.writeFileSync(PROFILES_CACHE_FILE, JSON.stringify(profiles)); } catch (_) {}
+}
+
+// Pre-load cache into state on startup so the profile select is immediately available
+(function initProfilesCache() {
+    const cached = loadProfilesCache();
+    if (cached.length) {
+        state.machineProfiles = cached;
+        log(`Profiles cache loaded: ${cached.length} profiles`);
+    }
+})();
 const { log } = require('../lib/helpers');
 const state = require('../lib/state');
 
@@ -92,18 +115,37 @@ router.post('/api/switch/toggle', async (req, res) => {
 router.get('/api/machine/profiles', async (req, res) => {
     const opts    = loadOptions();
     const baseUrl = getMachineBaseUrl(opts);
-    if (!baseUrl) return res.json({ available: false });
+    const currentId   = state.machineStatus?.profileId   ?? null;
+    const currentName = state.machineStatus?.profileName ?? null;
+
+    const respond = (profiles, stale = false) => {
+        const options = profiles.map(p => p.name);
+        res.json({
+            available:  profiles.length > 0,
+            stale,
+            current:    currentName,
+            currentId,
+            options,
+            optionsRaw: profiles.map(p => ({ id: p.id, name: p.name })),
+        });
+    };
+
+    if (!baseUrl) {
+        // No machine URL configured — serve from cache if available
+        return respond(state.machineProfiles, true);
+    }
     try {
         const r    = await axios.get(`${baseUrl}/api/profiles/all`, { timeout: 5000 });
         const raw  = Array.isArray(r.data) ? r.data : [];
-        state.machineProfiles = raw;
-        // current profile comes from cached machineStatus (updated every live poll)
-        const currentId   = state.machineStatus?.profileId   ?? null;
-        const currentName = state.machineStatus?.profileName ?? null;
-        const options     = raw.map(p => p.name);
-        res.json({ available: true, current: currentName, currentId, options, optionsRaw: raw.map(p => ({ id: p.id, name: p.name })) });
+        if (raw.length) {
+            state.machineProfiles = raw;
+            saveProfilesCache(raw);
+        }
+        respond(state.machineProfiles, raw.length === 0);
     } catch (e) {
-        res.json({ available: false, error: e.message });
+        // Machine unreachable — fall back to last-known cache
+        log(`Profiles fetch failed, using cache (${state.machineProfiles.length} entries): ${e.message}`, true);
+        respond(state.machineProfiles, true);
     }
 });
 
