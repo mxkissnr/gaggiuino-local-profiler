@@ -1,3 +1,8 @@
+## 1.62.0
+- feat: profile proxy endpoints (`GET /api/machine/profiles`, `POST /api/machine/profile/set`) now call the Gaggiuino machine directly — no longer depend on ALERTua/hass-gaggiuino or `select.gaggiuino_profile`; profile list cached in `state.machineProfiles`; closes #115
+- feat: new `GET /api/machine/status` endpoint — returns cached machine status (temp, pressure, waterLevel, weight, upTime, profileId/Name, brewSwitchState, steamSwitchState) from the 1 s live poll; `available: false` when machine has not been polled yet
+- chore: `backgroundHaCheck()` no longer polls `sensor.gaggiuino_latest_shot_id` from HA — auto-sync continues to work via scheduled sync + `syncAfterBrew()`; removes a residual ALERTua dependency
+
 ## 1.61.1
 - chore: remove PWA — delete Service Worker (sw.js) and Web App Manifest (manifest.json); remove manifest link from HTML; remove SW registration from JS; remove PWA section from docs and README; closes #114
 

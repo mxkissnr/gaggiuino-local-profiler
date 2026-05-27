@@ -165,4 +165,24 @@ A matching Home Assistant theme (`glp-ha-theme.yaml`) is included in the reposit
 2. Add `themes: !include_dir_merge_named themes` to `configuration.yaml` and restart HA once.
 3. In your HA profile select *GLP Dark* or *GLP Light*.
 
+### ALERTua/hass-gaggiuino compatibility
+
+As of glp-integration v1.9.0, you no longer need to install [ALERTua/hass-gaggiuino](https://github.com/ALERTua/hass-gaggiuino). The GLP integration covers the same machine sensor set plus all GLP-specific sensors:
+
+| Entity | glp-integration | hass-gaggiuino |
+|---|---|---|
+| `select.…_profile` | ✅ `select.gaggiuino_profiler_profile` | `select.gaggiuino_profile` |
+| Temperature (live) | ✅ `sensor.…_machine_live_temperature` | ✅ |
+| Target Temperature | ✅ `sensor.…_machine_target_temperature_live` | ✅ |
+| Pressure (live) | ✅ `sensor.…_machine_live_pressure` | ✅ |
+| Water Level | ✅ `sensor.…_machine_water_level` | ✅ |
+| Weight (live) | ✅ `sensor.…_machine_live_weight` | ✅ |
+| Uptime | ✅ `sensor.…_machine_uptime` | ✅ |
+| Active Profile | ✅ `sensor.…_machine_live_profile` | ✅ |
+| Brew Switch state | ✅ `binary_sensor.…_brew_switch` | ✅ |
+| Steam Switch state | ✅ `binary_sensor.…_steam_switch` | ✅ |
+| Shot count, score, maintenance, preheat … | ✅ (GLP-specific) | ✗ |
+
+The profile endpoint design in GLP was inspired by the pioneering work in ALERTua/hass-gaggiuino. Thank you to [@ALERTua](https://github.com/ALERTua) for the original integration.
+
 For full documentation — features, live mode, analytics, shot score, exports, compatibility — see the [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).

@@ -165,4 +165,24 @@ Eine passende Home-Assistant-Theme-Datei (`glp-ha-theme.yaml`) liegt im Reposito
 2. `themes: !include_dir_merge_named themes` in `configuration.yaml` eintragen, HA einmal neu starten.
 3. Im HA-Profil *GLP Dark* oder *GLP Light* auswählen.
 
+### Kompatibilität mit ALERTua/hass-gaggiuino
+
+Ab glp-integration v1.9.0 ist [ALERTua/hass-gaggiuino](https://github.com/ALERTua/hass-gaggiuino) nicht mehr notwendig. Die GLP-Integration deckt denselben Maschinen-Sensor-Satz ab und fügt alle GLP-spezifischen Sensoren hinzu:
+
+| Entität | glp-integration | hass-gaggiuino |
+|---|---|---|
+| `select.…_profile` | ✅ `select.gaggiuino_profiler_profile` | `select.gaggiuino_profile` |
+| Temperatur (live) | ✅ `sensor.…_machine_live_temperature` | ✅ |
+| Zieltemperatur | ✅ `sensor.…_machine_target_temperature_live` | ✅ |
+| Druck (live) | ✅ `sensor.…_machine_live_pressure` | ✅ |
+| Wasserstand | ✅ `sensor.…_machine_water_level` | ✅ |
+| Gewicht (live) | ✅ `sensor.…_machine_live_weight` | ✅ |
+| Betriebszeit | ✅ `sensor.…_machine_uptime` | ✅ |
+| Aktives Profil | ✅ `sensor.…_machine_live_profile` | ✅ |
+| Brühschalter-Status | ✅ `binary_sensor.…_brew_switch` | ✅ |
+| Dampfschalter-Status | ✅ `binary_sensor.…_steam_switch` | ✅ |
+| Shot-Anzahl, Score, Wartung, Aufwärmen … | ✅ (GLP-exklusiv) | ✗ |
+
+Die Profil-Endpunkte in GLP wurden vom Konzept der ALERTua/hass-gaggiuino-Integration inspiriert. Danke an [@ALERTua](https://github.com/ALERTua) für die ursprüngliche Integration.
+
 Vollständige Dokumentation — Features, Live-Modus, Analytics, Shot-Score, Exporte, Kompatibilität — im [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).

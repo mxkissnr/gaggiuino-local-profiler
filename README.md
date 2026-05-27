@@ -145,12 +145,14 @@ aspect_ratio: "16:9"
 
 | Component | Current | Requires |
 |---|---|---|
-| **GLP Add-on** | v1.51.0 | — |
-| **GLP Integration** ([glp-integration](https://github.com/mxkissnr/glp-integration)) | v1.8.0 | Add-on v1.51.0+ |
-| **GLP Lovelace Card** ([glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)) | v1.5.0 | Integration v1.8.0+ |
+| **GLP Add-on** | v1.62.0 | — |
+| **GLP Integration** ([glp-integration](https://github.com/mxkissnr/glp-integration)) | v1.9.0 | Add-on v1.62.0+ |
+| **GLP Lovelace Card** ([glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)) | v1.6.0 | Integration v1.9.0+ |
 | **GLP Order Card** ([glp-order-card](https://github.com/mxkissnr/glp-order-card)) | v1.4.0 | Integration v1.7.0+ |
 
 All four components are optional and independently installable — only install what you need.
+
+> **No longer requires ALERTua/hass-gaggiuino** — as of GLP Integration v1.9.0 all machine sensors (temperature, pressure, water level, weight, profiles, switch states) are provided natively.
 
 ---
 
@@ -187,7 +189,7 @@ GPL-3.0 © 2024–2026 mxkissnr — free to use, fork and modify; any derivative
 
 Inspired by [BeanConqueror](https://github.com/graphefruit/beanconqueror) by graphefruit — a fantastic open-source coffee tracking app that pioneered many of the ideas around shot logging and coffee library management that influenced this project.
 
-Built on top of the [Gaggiuino](https://gaggiuino.github.io/) project and the original [Gaggiuino Home Assistant Integration](https://github.com/ALERTua/hass-gaggiuino) by ALERTua — without their work this project would not exist.
+Built on top of the [Gaggiuino](https://gaggiuino.github.io/) project. The machine sensor integration in glp-integration was inspired by [ALERTua/hass-gaggiuino](https://github.com/ALERTua/hass-gaggiuino) — the original Home Assistant integration for Gaggiuino. Thank you to [@ALERTua](https://github.com/ALERTua) for pioneering the HA connectivity concepts that made this possible.
 
 ---
 

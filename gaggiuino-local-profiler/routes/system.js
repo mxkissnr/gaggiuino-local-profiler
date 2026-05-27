@@ -90,28 +90,58 @@ router.post('/api/switch/toggle', async (req, res) => {
 // ── Machine profiles ──────────────────────────────────────────────────────
 
 router.get('/api/machine/profiles', async (req, res) => {
-    if (!HA_TOKEN) return res.json({ available: false });
+    const opts    = loadOptions();
+    const baseUrl = getMachineBaseUrl(opts);
+    if (!baseUrl) return res.json({ available: false });
     try {
-        const data = await getHaState('select.gaggiuino_profile');
-        res.json({ available: true, current: data.state, options: data.attributes.options || [] });
+        const r    = await axios.get(`${baseUrl}/api/profiles/all`, { timeout: 5000 });
+        const raw  = Array.isArray(r.data) ? r.data : [];
+        state.machineProfiles = raw;
+        // current profile comes from cached machineStatus (updated every live poll)
+        const currentId   = state.machineStatus?.profileId   ?? null;
+        const currentName = state.machineStatus?.profileName ?? null;
+        const options     = raw.map(p => p.name);
+        res.json({ available: true, current: currentName, currentId, options, optionsRaw: raw.map(p => ({ id: p.id, name: p.name })) });
     } catch (e) {
-        if (e.response?.status === 404) return res.json({ available: false });
-        res.status(500).json({ error: e.message });
+        res.json({ available: false, error: e.message });
     }
 });
 
 router.post('/api/machine/profile/set', async (req, res) => {
-    const { option } = req.body || {};
-    if (!option) return res.status(400).json({ error: 'option required' });
-    if (!HA_TOKEN) return res.status(503).json({ error: 'HA token unavailable' });
+    const { option, id: reqId } = req.body || {};
+    if (!option && reqId == null) return res.status(400).json({ error: 'option or id required' });
+    const opts    = loadOptions();
+    const baseUrl = getMachineBaseUrl(opts);
+    if (!baseUrl) return res.status(503).json({ error: 'machine URL not configured' });
     try {
-        await callHaService('select', 'select_option', { entity_id: 'select.gaggiuino_profile', option });
-        res.json({ ok: true });
-        log(`Profile switched to: ${option}`);
+        let profileId = reqId != null ? parseInt(reqId) : null;
+        if (profileId == null) {
+            // look up by name in cached profile list (refresh if empty)
+            let profiles = state.machineProfiles;
+            if (!profiles.length) {
+                const r = await axios.get(`${baseUrl}/api/profiles/all`, { timeout: 5000 });
+                profiles = Array.isArray(r.data) ? r.data : [];
+                state.machineProfiles = profiles;
+            }
+            const match = profiles.find(p => p.name === option);
+            if (!match) return res.status(404).json({ error: `Profile not found: ${option}` });
+            profileId = match.id;
+        }
+        await axios.post(`${baseUrl}/api/profile-select/${profileId}`, {}, { timeout: 5000 });
+        log(`Profile switched to: ${option || profileId}`);
+        res.json({ ok: true, profileId });
     } catch (e) {
         log(`Profile set error: ${e.message}`, true);
         res.status(500).json({ error: e.message });
     }
+});
+
+// ── Machine live status (for integration / Lovelace card) ──────────────────
+
+router.get('/api/machine/status', (req, res) => {
+    if (!state.machineStatus) return res.json({ available: false });
+    const staleSec = (Date.now() - state.machineStatus.updatedAt) / 1000;
+    res.json({ available: true, stale: staleSec > 10, ...state.machineStatus });
 });
 
 // ── Preheat ───────────────────────────────────────────────────────────────

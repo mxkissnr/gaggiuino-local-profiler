@@ -18,4 +18,8 @@ module.exports = {
     currentTemp:          null,
     currentTargetTemp:    null,
     tempHistory:          [],
+    // Full machine status (cached from /api/system/status polls)
+    machineStatus:        null,
+    // Profile list (cached from /api/profiles/all)
+    machineProfiles:      [],
 };

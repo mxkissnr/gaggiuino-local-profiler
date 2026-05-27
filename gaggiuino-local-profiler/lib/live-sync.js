@@ -83,6 +83,21 @@ async function pollViaGaggiuinoStatus() {
         state.currentTargetTemp = tTempVal || state.currentTargetTemp;
         const profile   = status.profileName || 'Unknown';
 
+        // Cache full machine status for /api/machine/status
+        state.machineStatus = {
+            temperature:       tempVal,
+            targetTemperature: tTempVal,
+            pressure:          presVal,
+            waterLevel:        parseInt(status.waterLevel) || 0,
+            weight:            weightVal,
+            upTime:            parseInt(status.upTime)    || 0,
+            profileId:         parseInt(status.profileId) || null,
+            profileName:       status.profileName         || null,
+            brewSwitchState:   !!status.brewSwitchState,
+            steamSwitchState:  !!status.steamSwitchState,
+            updatedAt:         Date.now(),
+        };
+
         if (tempVal > 0 && !isBrewing) {
             state.tempHistory.push(tempVal);
             if (state.tempHistory.length > TEMP_HISTORY_MAX) state.tempHistory.shift();
@@ -267,16 +282,6 @@ async function backgroundHaCheck() {
     if (!HA_TOKEN) return;
     await checkAndApplyMachinePower();
     if (!state.cachedMachineVersion) fetchMachineVersion();
-    try {
-        const res    = await axios.get(`${HA_API}/states/sensor.gaggiuino_latest_shot_id`,
-            { headers: { Authorization: `Bearer ${HA_TOKEN}` }, timeout: 3000 });
-        const shotId = parseInt(res.data.state) || 0;
-        if (shotId > state.lastKnownShotId && state.lastKnownShotId > 0) {
-            log(`New shot ID detected: ${shotId} -- auto-sync`);
-            setTimeout(syncShots, 2000);
-        }
-        state.lastKnownShotId = shotId;
-    } catch (e) {}
 }
 
 module.exports = {
