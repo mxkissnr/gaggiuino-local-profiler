@@ -1,3 +1,7 @@
+## 1.59.0
+- feat: shots — annotation fields (all text inputs, numbers, roast date, textarea, star rating) auto-save 1 s after the last keystroke; a green "✓" indicator appears briefly next to the Save button; manual Save still works; closes #98
+- feat: shots — primary shot selection and compare shot selection are persisted in `localStorage`; page reload restores the last viewed shot and active comparison; closes #100
+
 ## 1.58.0
 - feat: orders — notify all mapped customers via HA push when shop opens (orders enabled → true); no-op when SUPERVISOR_TOKEN absent or mapping empty; closes #108
 - feat: orders — menu items get `createdAt` timestamp on creation (for "New" badge in order card); closes #109

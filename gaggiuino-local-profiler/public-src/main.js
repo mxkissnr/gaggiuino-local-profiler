@@ -11,7 +11,7 @@ import { switchMode, goToShot } from './components/mode.js';
 
 import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggleTrash,
          trashShot, restoreShot, permanentDeleteShot,
-         renderAnnotationPanel, renderStars, quickClone, saveAnnotation, updateDegassing,
+         renderAnnotationPanel, renderStars, quickClone, saveAnnotation, scheduleAutoSave, updateDegassing,
          updateView, switchChartTab, updatePQChart,
          openChartFullscreen, closeChartFullscreen, switchFsTab,
          exportCSV, exportAllCSV, exportShot, exportProfile, restoreFromFile } from './views/shots.js';
@@ -112,6 +112,7 @@ Object.assign(window, {
   renderStars,
   quickClone,
   saveAnnotation,
+  scheduleAutoSave,
   updateDegassing,
   updateView,
   switchChartTab,
@@ -234,6 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const val = parseInt(star.dataset.val);
       S.currentRating = S.currentRating === val ? 0 : val;
       renderStars(S.currentRating);
+      if (window.scheduleAutoSave) window.scheduleAutoSave();
     });
   }
 

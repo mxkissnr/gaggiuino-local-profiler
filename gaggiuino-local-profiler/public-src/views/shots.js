@@ -8,6 +8,46 @@ import {
 } from '../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../components/sidebar.js';
 
+// ── Auto-save state ───────────────────────────────────────────────────────
+let _autoSaveTimer = null;
+
+export function scheduleAutoSave() {
+  clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(async () => {
+    if (!S.primaryShotId) return;
+    const payload = {
+      rating:       S.currentRating || null,
+      coffee:       document.getElementById('annCoffee').value.trim(),
+      grinder:      document.getElementById('annGrinder').value.trim(),
+      grindSetting: document.getElementById('annGrindSetting').value.trim(),
+      dose:         parseFloat(document.getElementById('annDose').value) || null,
+      roastDate:    germanToIso(document.getElementById('annRoastDate').value) || null,
+      tds:          parseFloat(document.getElementById('annTds').value) || null,
+      notes:        document.getElementById('annNotes').value.trim()
+    };
+    try {
+      const r = await apiFetch(`api/shots/${S.primaryShotId}/annotate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (r.ok) {
+        const idx = S.shots.findIndex(s => s.id === S.primaryShotId);
+        if (idx !== -1) S.shots[idx].annotation = payload;
+        renderSidebar();
+        updateSidebarHighlighting();
+        const status = document.getElementById('autoSaveStatus');
+        if (status) {
+          status.textContent = '✓';
+          status.classList.add('visible');
+          clearTimeout(status._hideTimer);
+          status._hideTimer = setTimeout(() => status.classList.remove('visible'), 1800);
+        }
+      }
+    } catch (e) { /* silent — user can still click Save manually */ }
+  }, 1000);
+}
+
 // ── Shot data helper ──────────────────────────────────────────────────────
 export function getShotData(shot) {
   if (!shot) return null;
@@ -134,8 +174,17 @@ export async function loadData() {
   if (S.shots.length > 0) {
     empty.style.display     = 'none';
     chartArea.style.display = 'flex';
-    if (!S.primaryShotId || !S.shots.find(s => s.id === S.primaryShotId))
+    // Restore last selection from localStorage
+    const savedPrimary = parseInt(localStorage.getItem('glp_primaryShotId'));
+    const savedCompare = parseInt(localStorage.getItem('glp_compareShotId'));
+    if (savedPrimary && S.shots.find(s => s.id === savedPrimary)) {
+      S.primaryShotId = savedPrimary;
+    } else if (!S.primaryShotId || !S.shots.find(s => s.id === S.primaryShotId)) {
       S.primaryShotId = S.shots[S.shots.length - 1].id;
+    }
+    if (savedCompare && S.shots.find(s => s.id === savedCompare) && savedCompare !== S.primaryShotId) {
+      S.compareShotId = savedCompare;
+    }
     updateView();
   } else {
     empty.style.display     = 'flex';
@@ -191,8 +240,15 @@ export async function trashShot(id) {
     const r = await apiFetch(`api/shots/${id}/trash`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
     if (!r.ok) throw new Error(await r.text());
     S.shots = S.shots.filter(s => s.id !== id);
-    if (S.primaryShotId === id) { S.primaryShotId = S.shots[0]?.id || null; }
-    if (S.compareShotId === id) { S.compareShotId = null; }
+    if (S.primaryShotId === id) {
+      S.primaryShotId = S.shots[0]?.id || null;
+      if (S.primaryShotId) localStorage.setItem('glp_primaryShotId', S.primaryShotId);
+      else localStorage.removeItem('glp_primaryShotId');
+    }
+    if (S.compareShotId === id) {
+      S.compareShotId = null;
+      localStorage.removeItem('glp_compareShotId');
+    }
     renderSidebar();
     updateView();
     await loadTrashData();

@@ -46,6 +46,8 @@ export function renderSidebar() {
       if (e.ctrlKey || e.metaKey) { toggleCompare(shot.id); }
       else {
         S.primaryShotId = shot.id; S.compareShotId = null;
+        localStorage.setItem('glp_primaryShotId', shot.id);
+        localStorage.removeItem('glp_compareShotId');
         updateSidebarHighlighting();
         if (S.currentMode !== 'shots' && window.switchMode) window.switchMode('shots');
         collapseSidebarOnMobile();
@@ -81,6 +83,8 @@ export function renderSidebar() {
 export function toggleCompare(id) {
   if (S.primaryShotId === id) return;
   S.compareShotId = (S.compareShotId === id) ? null : id;
+  if (S.compareShotId) localStorage.setItem('glp_compareShotId', S.compareShotId);
+  else localStorage.removeItem('glp_compareShotId');
   updateSidebarHighlighting();
   if (window.updateView) window.updateView();
 }
@@ -228,6 +232,8 @@ export function collapseSidebarOnMobile() {
 export function selectShot(id) {
   S.primaryShotId = id;
   S.compareShotId = null;
+  localStorage.setItem('glp_primaryShotId', id);
+  localStorage.removeItem('glp_compareShotId');
   updateSidebarHighlighting();
   if (window.updateView) window.updateView();
 }

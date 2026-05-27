@@ -215,25 +215,25 @@
                 <div class="annotation-fields">
                     <div class="annotation-field">
                         <label data-i18n="ann_coffee">Kaffee / Bohne</label>
-                        <input type="text" id="annCoffee" data-i18n-placeholder="ann_coffee_ph" placeholder="z.B. Ethiopia Yirgacheffe" list="beanList" autocomplete="off">
+                        <input type="text" id="annCoffee" data-i18n-placeholder="ann_coffee_ph" placeholder="z.B. Ethiopia Yirgacheffe" list="beanList" autocomplete="off" oninput="scheduleAutoSave()">
                         <datalist id="beanList"></datalist>
                     </div>
                     <div class="annotation-field">
                         <label data-i18n="ann_grinder">Mühle</label>
-                        <input type="text" id="annGrinder" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" list="grinderList" autocomplete="off">
+                        <input type="text" id="annGrinder" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" list="grinderList" autocomplete="off" oninput="scheduleAutoSave()">
                         <datalist id="grinderList"></datalist>
                     </div>
                     <div class="annotation-field">
                         <label data-i18n="ann_grind_setting">Mahlgrad</label>
-                        <input type="text" id="annGrindSetting" data-i18n-placeholder="ann_grind_ph" placeholder="z.B. 23 Clicks">
+                        <input type="text" id="annGrindSetting" data-i18n-placeholder="ann_grind_ph" placeholder="z.B. 23 Clicks" oninput="scheduleAutoSave()">
                     </div>
                     <div class="annotation-field">
                         <label data-i18n="ann_dose">Dosis (g)</label>
-                        <input type="number" id="annDose" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0">
+                        <input type="number" id="annDose" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0" oninput="scheduleAutoSave()">
                     </div>
                     <div class="annotation-field">
                         <label data-i18n="ann_roast_date">Röstdatum</label>
-                        <input type="text" id="annRoastDate" data-i18n-placeholder="ann_roast_date_ph" placeholder="TT.MM.JJJJ" maxlength="10" oninput="updateDegassing(this.value)">
+                        <input type="text" id="annRoastDate" data-i18n-placeholder="ann_roast_date_ph" placeholder="TT.MM.JJJJ" maxlength="10" oninput="updateDegassing(this.value); scheduleAutoSave()">
                         <div id="degassingTracker" class="degassing-bar-wrap" style="display:none">
                             <div class="degassing-bar-track"><div id="degassingFill" class="degassing-bar-fill"></div></div>
                             <div id="degassingLabel" class="degassing-label"></div>
@@ -241,15 +241,16 @@
                     </div>
                     <div class="annotation-field">
                         <label>TDS % <span id="annTdsOptional" style="color:#52525b;font-weight:normal" data-i18n="ann_tds_optional">(optional)</span></label>
-                        <input type="number" id="annTds" data-i18n-placeholder="ann_tds_ph" placeholder="z.B. 9.2" step="0.1" min="0" max="25">
+                        <input type="number" id="annTds" data-i18n-placeholder="ann_tds_ph" placeholder="z.B. 9.2" step="0.1" min="0" max="25" oninput="scheduleAutoSave()">
                     </div>
                     <div class="annotation-field full-width">
                         <label data-i18n="ann_notes">Notizen</label>
-                        <textarea id="annNotes" data-i18n-placeholder="ann_notes_ph" placeholder="Geschmack, Beobachtungen, Anpassungen …"></textarea>
+                        <textarea id="annNotes" data-i18n-placeholder="ann_notes_ph" placeholder="Geschmack, Beobachtungen, Anpassungen …" oninput="scheduleAutoSave()"></textarea>
                     </div>
                 </div>
                 <div class="annotation-actions">
                     <button class="save-btn" id="saveAnnotationBtn" onclick="saveAnnotation()" data-i18n="btn_save">Speichern</button>
+                    <span id="autoSaveStatus" class="autosave-status"></span>
                     <div id="orderedByBadge" class="ordered-by-badge" style="display:none"></div>
                 </div>
             </div>
