@@ -1,3 +1,7 @@
+## 1.62.2
+- fix: drink type (Getränk) now actually saved — `drinkType` was missing from the annotation write in `POST /api/shots/:id/annotate`; closes #117
+- fix: quickClone (← Letzten) now correctly restores drink type pill selection
+
 ## 1.62.1
 - fix: profile list now persisted to `/data/profiles_cache.json`; loaded from cache on startup so `select.gaggiuino_profiler_profile` is immediately available even when the machine is off; live fetch updates cache, failed fetch falls back to cache; closes #116
 

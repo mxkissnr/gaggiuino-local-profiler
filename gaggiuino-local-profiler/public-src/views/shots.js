@@ -355,8 +355,7 @@ export function quickClone() {
   const rd = isoToGerman(ann.roastDate || '');
   document.getElementById('annRoastDate').value = rd;
   if (rd) updateDegassing(rd);
-  const dtSel = document.getElementById('annDrinkType');
-  if (dtSel && ann.drinkType) dtSel.value = ann.drinkType;
+  _renderDrinkPills(ann.drinkType || '');
 }
 
 export async function saveAnnotation() {

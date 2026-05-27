@@ -75,6 +75,7 @@ router.post('/api/shots/:id/annotate', (req, res) => {
             roastDate:    str(req.body.roastDate, 10),
             tds:          num(req.body.tds,     0.1,  30),
             notes:        str(req.body.notes,       2000),
+            drinkType:    str(req.body.drinkType,     50) || null,
         };
         saveAnnotations(annotations);
         res.json({ ok: true });
