@@ -34,10 +34,14 @@ export function renderSidebar() {
     const scorePill = sc !== null
       ? `<span class="sidebar-score ss-${scoreClass(sc).replace('score-', '')}">${sc}</span>`
       : '';
+    const drinkItem = ann.drinkType && S.drinkMenu?.find(m => m.id === ann.drinkType);
+    const drinkHtml = drinkItem
+      ? `<span class="sidebar-drink-badge">${drinkItem.emoji} ${esc(drinkItem.name)}</span>`
+      : '';
     divShot.innerHTML = `
       <div class="profile-name-sidebar">${esc(profileName)}${scorePill}</div>
       ${coffeeHtml}
-      <div class="shotid-sidebar">Shot ${esc(String(shot.id))}${ann.grinder ? ` · ${esc(ann.grinder)}` : ''}</div>
+      <div class="shotid-sidebar">Shot ${esc(String(shot.id))}${ann.grinder ? ` · ${esc(ann.grinder)}` : ''}${drinkHtml}</div>
       <div class="date-sidebar">${esc(date.toLocaleString(LOCALE_MAP[S.currentLang] || 'de-DE'))}</div>
       ${starsHtml}
     `;

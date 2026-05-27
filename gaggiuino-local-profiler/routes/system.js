@@ -15,7 +15,7 @@ function getOpenApiSpec() {
 }
 
 const { GLP_VERSION, DATA_FILE, HA_API, HA_TOKEN } = require('../lib/constants');
-const { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled } = require('../lib/data');
+const { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled, loadMenu } = require('../lib/data');
 const { getSwitchState, callHaService, getHaState } = require('../lib/ha');
 const { log } = require('../lib/helpers');
 const state = require('../lib/state');
@@ -143,6 +143,10 @@ router.get('/api/live/data', (req, res) => {
         seq:         state.liveSeq,
     });
 });
+
+// ── Public menu (drink types for annotations; always available) ───────────
+
+router.get('/api/menu', (req, res) => res.json(loadMenu()));
 
 // ── OpenAPI spec ──────────────────────────────────────────────────────────
 

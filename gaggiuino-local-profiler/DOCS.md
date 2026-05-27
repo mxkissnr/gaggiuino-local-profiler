@@ -117,7 +117,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | Tab | Description |
 |---|---|
 | **Live** | Real-time pressure, flow, weight and temperature charts during a shot. When a brew starts, the most recent shot with the same profile name is automatically overlaid as a dashed reference curve. Can be overridden or cleared via the dropdown. The tab is only visible when the machine is on (requires `switch_entity`). |
-| **Shots** | Shot history with full chart view, score, annotation (coffee, grinder, dose, notes) and a fullscreen chart. Annotation fields **auto-save** 1 s after the last keystroke — a green ✓ appears briefly; manual Save still works. The last selected shot and any active comparison are restored after a page reload (persisted in `localStorage`). |
+| **Shots** | Shot history with full chart view, score, annotation (coffee, grinder, dose, notes, **drink type**) and a fullscreen chart. Annotation fields **auto-save** 1 s after the last keystroke — a green ✓ appears briefly; manual Save still works. The last selected shot and any active comparison are restored after a page reload (persisted in `localStorage`). Drink type options are loaded from the same menu used by the orders feature (`GET /api/menu`). |
 | **Analytics** | Aggregated statistics and trend charts across all shots. |
 | **Library** | Coffee bean and grinder catalogue linked to shots. |
 | **Einwählen** | Dial-in assistant: compare a target shot with recent attempts. |

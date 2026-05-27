@@ -23,7 +23,8 @@ export function scheduleAutoSave() {
       dose:         parseFloat(document.getElementById('annDose').value) || null,
       roastDate:    germanToIso(document.getElementById('annRoastDate').value) || null,
       tds:          parseFloat(document.getElementById('annTds').value) || null,
-      notes:        document.getElementById('annNotes').value.trim()
+      notes:        document.getElementById('annNotes').value.trim(),
+      drinkType:    document.getElementById('annDrinkType')?.value || null
     };
     try {
       const r = await apiFetch(`api/shots/${S.primaryShotId}/annotate`, {
@@ -46,6 +47,22 @@ export function scheduleAutoSave() {
       }
     } catch (e) { /* silent — user can still click Save manually */ }
   }, 1000);
+}
+
+// ── Drink menu helpers ────────────────────────────────────────────────────
+export async function loadDrinkMenu() {
+  try {
+    const r = await apiFetch('api/menu');
+    if (r.ok) S.drinkMenu = await r.json();
+  } catch (e) { /* keep empty — select won't render */ }
+}
+
+function _populateDrinkSelect(sel) {
+  if (!S.drinkMenu?.length) return;
+  const current = sel.value;
+  sel.innerHTML = `<option value="">${t('ann_drink_type_none')}</option>` +
+    S.drinkMenu.map(m => `<option value="${m.id}">${m.emoji} ${m.name}</option>`).join('');
+  sel.value = current;
 }
 
 // ── Shot data helper ──────────────────────────────────────────────────────
@@ -291,6 +308,12 @@ export function renderAnnotationPanel(shot) {
   document.getElementById('annRoastDate').value    = isoToGerman(ann.roastDate || '');
   document.getElementById('annTds').value          = ann.tds          || '';
   document.getElementById('annNotes').value        = ann.notes        || '';
+  // Drink type dropdown
+  const dtSel = document.getElementById('annDrinkType');
+  if (dtSel) {
+    _populateDrinkSelect(dtSel);
+    dtSel.value = ann.drinkType || '';
+  }
   const btn = document.getElementById('saveAnnotationBtn');
   btn.textContent = t('btn_save');
   btn.classList.remove('saved');
@@ -324,6 +347,8 @@ export function quickClone() {
   const rd = isoToGerman(ann.roastDate || '');
   document.getElementById('annRoastDate').value = rd;
   if (rd) updateDegassing(rd);
+  const dtSel = document.getElementById('annDrinkType');
+  if (dtSel && ann.drinkType) dtSel.value = ann.drinkType;
 }
 
 export async function saveAnnotation() {
@@ -337,7 +362,8 @@ export async function saveAnnotation() {
     dose:         parseFloat(document.getElementById('annDose').value) || null,
     roastDate:    germanToIso(document.getElementById('annRoastDate').value) || null,
     tds:          parseFloat(document.getElementById('annTds').value) || null,
-    notes:        document.getElementById('annNotes').value.trim()
+    notes:        document.getElementById('annNotes').value.trim(),
+    drinkType:    document.getElementById('annDrinkType')?.value || null
   };
   try {
     const r = await apiFetch(`api/shots/${S.primaryShotId}/annotate`, {

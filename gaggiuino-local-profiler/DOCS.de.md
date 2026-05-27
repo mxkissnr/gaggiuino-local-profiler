@@ -117,7 +117,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | Tab | Beschreibung |
 |---|---|
 | **Live** | Echtzeit-Charts für Druck, Flow, Gewicht und Temperatur während eines Shots. Beim Start eines Bezugs wird automatisch der letzte Shot mit demselben Profil als gestrichelte Referenzkurve eingeblendet. Kann über das Dropdown überschrieben oder entfernt werden. Der Tab ist nur sichtbar wenn die Maschine eingeschaltet ist (erfordert `switch_entity`). |
-| **Shots** | Shot-Verlauf mit vollständigem Chart, Score, Annotation (Kaffee, Mühle, Dosis, Notizen) und Vollbild-Chart. Annotationsfelder werden **automatisch gespeichert** 1 Sekunde nach der letzten Eingabe — ein grünes ✓ erscheint kurz; manuelles Speichern ist weiterhin möglich. Der zuletzt angezeigte Shot und ein aktiver Vergleich werden nach einem Neuladen der Seite wiederhergestellt (`localStorage`). |
+| **Shots** | Shot-Verlauf mit vollständigem Chart, Score, Annotation (Kaffee, Mühle, Dosis, Notizen, **Getränktyp**) und Vollbild-Chart. Annotationsfelder werden **automatisch gespeichert** 1 Sekunde nach der letzten Eingabe — ein grünes ✓ erscheint kurz; manuelles Speichern ist weiterhin möglich. Der zuletzt angezeigte Shot und ein aktiver Vergleich werden nach einem Neuladen der Seite wiederhergestellt (`localStorage`). Getränkoptionen kommen aus demselben Menü wie das Bestellsystem (`GET /api/menu`). |
 | **Analytics** | Aggregierte Statistiken und Trendcharts über alle Shots. |
 | **Bibliothek** | Kaffeebohnen- und Mühlenkatalog mit Verknüpfung zu Shots. |
 | **Einwählen** | Einwähl-Assistent: Ziel-Shot mit aktuellen Versuchen vergleichen. |

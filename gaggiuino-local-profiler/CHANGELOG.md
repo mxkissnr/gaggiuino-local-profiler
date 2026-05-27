@@ -1,3 +1,6 @@
+## 1.60.0
+- feat: shots — new "Drink" field in the annotation panel; populated from the same menu used by the orders feature (GET /api/menu, always accessible regardless of enable_orders); drink emoji + name shown as a subtle badge in the sidebar; closes #110
+
 ## 1.59.0
 - feat: shots — annotation fields (all text inputs, numbers, roast date, textarea, star rating) auto-save 1 s after the last keystroke; a green "✓" indicator appears briefly next to the Save button; manual Save still works; closes #98
 - feat: shots — primary shot selection and compare shot selection are persisted in `localStorage`; page reload restores the last viewed shot and active comparison; closes #100

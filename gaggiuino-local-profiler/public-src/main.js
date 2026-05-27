@@ -14,7 +14,8 @@ import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggl
          renderAnnotationPanel, renderStars, quickClone, saveAnnotation, scheduleAutoSave, updateDegassing,
          updateView, switchChartTab, updatePQChart,
          openChartFullscreen, closeChartFullscreen, switchFsTab,
-         exportCSV, exportAllCSV, exportShot, exportProfile, restoreFromFile } from './views/shots.js';
+         exportCSV, exportAllCSV, exportShot, exportProfile, restoreFromFile,
+         loadDrinkMenu } from './views/shots.js';
 
 import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, clearReferenceShot,
          connectLiveStream, disconnectLiveStream, setLiveBadge, handleLiveData,
@@ -113,6 +114,7 @@ Object.assign(window, {
   quickClone,
   saveAnnotation,
   scheduleAutoSave,
+  loadDrinkMenu,
   updateDegassing,
   updateView,
   switchChartTab,
@@ -279,6 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
   applyTranslations();
 
   initToken().then(() => {
+    loadDrinkMenu();
     loadData();
     loadLibrary();
     updateStatus();

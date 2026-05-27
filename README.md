@@ -48,7 +48,7 @@ Click the button above to add this repository directly to your Home Assistant �
 | ☕ | **Grind Recommendation** | Automatic advice based on shot duration and channeling |
 | 📅 | **Roast Date & Freshness** | Days since roast as colored badge (green: 7–21 days optimal) |
 | ☕ | **Coffee Library** | Persistent bean and grinder database with autocomplete; roast date auto-fills |
-| 📝 | **Annotations & Rating** | Coffee, grinder, grind setting, dose, roast date, TDS, notes; 1–5 stars; **auto-saves 1 s after last keystroke** |
+| 📝 | **Annotations & Rating** | Coffee, grinder, grind setting, dose, roast date, TDS, notes, **drink type** (from menu); 1–5 stars; auto-saves 1 s after last keystroke |
 | 🔍 | **Shot Search** | Filter sidebar by profile, coffee, grinder |
 | ⛶ | **Fullscreen Chart** | Expand chart to fullscreen with auto landscape rotation on mobile |
 | 💾 | **.shot Export** | Export in Decent Espresso format (Visualizer.coffee compatible) |

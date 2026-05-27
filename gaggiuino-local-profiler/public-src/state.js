@@ -31,6 +31,7 @@ export const S = {
   currentFsTab: 'zeit',
   _flapInitDone: false,
   coffeeLibrary: { beans: [], grinders: [] },
+  drinkMenu: [],
   beanEditId: null,
   grinderEditId: null,
   trendChart: null,
