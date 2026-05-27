@@ -779,6 +779,7 @@ function renderFsChart() {
 
   S.fsChart = new Chart(canvas, {
     type: 'line',
+    plugins: [corsairPlugin],
     data: { datasets },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,

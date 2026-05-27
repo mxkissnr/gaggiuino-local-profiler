@@ -1,3 +1,6 @@
+## 1.62.3
+- fix: fullscreen chart now shows the vertical crosshair cursor line — `corsairPlugin` was registered on the main chart but missing from the fullscreen chart config; closes #118
+
 ## 1.62.2
 - fix: drink type (Getränk) now actually saved — `drinkType` was missing from the annotation write in `POST /api/shots/:id/annotate`; closes #117
 - fix: quickClone (← Letzten) now correctly restores drink type pill selection
