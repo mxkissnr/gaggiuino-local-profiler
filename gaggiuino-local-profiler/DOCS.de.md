@@ -152,15 +152,6 @@ Im Bibliothek-Tab auf **⬛ Scan** neben „Bohne hinzufügen" tippen, um den Ka
 
 Erfordert einen Chromium-basierten Browser (nutzt die native BarcodeDetector Web API). Firefox und Safari werden nicht unterstützt.
 
-### Als Standalone-App installieren (PWA)
-
-GLP liefert ein Web App Manifest und einen Service Worker mit, sodass es als eigenständige App auf dem Handy installiert werden kann.
-
-**Android (Chrome):** GLP öffnen → Installations-Banner tippen oder ⋮-Menü → *Zum Startbildschirm hinzufügen*
-**iOS (Safari):** GLP öffnen → Teilen-Symbol → *Zum Home-Bildschirm*
-
-Nach der Installation öffnet GLP ohne Browser-Chrome und die App-Shell lädt sofort aus dem Cache. Shot-Daten und Live-Modus holen immer frische Daten vom Netzwerk.
-
 ### Hell / Dunkel Theme
 
 GLP hat einen eingebauten Theme-Wechsler (⚙ Einstellungen → Theme). Die Wahl wird in `localStorage` gespeichert und sofort angewandt. **Dark** ist die Voreinstellung; **Hell** kehrt die Grau-Skala auf eine weiß-basierte Palette um.

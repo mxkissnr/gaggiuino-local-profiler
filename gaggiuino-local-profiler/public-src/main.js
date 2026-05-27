@@ -307,8 +307,4 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(updateStatus, 30000);
   collapseSidebarOnMobile();
 
-  // ── Service worker ──────────────────────────────────────────────────────
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
-  }
 });

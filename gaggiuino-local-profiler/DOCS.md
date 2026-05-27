@@ -152,15 +152,6 @@ In the Library tab, tap **⬛ Scan** next to "Add Bean" to open the camera scann
 
 Requires a Chromium-based browser (uses the native BarcodeDetector Web API). Not supported on Firefox or Safari.
 
-### Install as a standalone app (PWA)
-
-GLP ships a Web App Manifest and Service Worker that allow it to be installed as a standalone app on your phone.
-
-**Android (Chrome):** Open GLP → tap the install banner or ⋮ menu → *Add to Home Screen*
-**iOS (Safari):** Open GLP → share icon → *Add to Home Screen*
-
-Once installed, GLP opens without browser chrome and the app shell loads instantly from cache. Shot data and live mode always fetch from the network.
-
 ### Light / Dark theme
 
 GLP has a built-in theme toggle (⚙ Settings → Theme). The choice is saved in `localStorage` and applied immediately. **Dark** is the default; **Light** inverts the grey scale to a white-based palette.

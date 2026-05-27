@@ -1,3 +1,6 @@
+## 1.61.1
+- chore: remove PWA — delete Service Worker (sw.js) and Web App Manifest (manifest.json); remove manifest link from HTML; remove SW registration from JS; remove PWA section from docs and README; closes #114
+
 ## 1.61.0
 - feat: light/dark theme toggle — CSS refactored to use 11 custom properties (--gray-200…950, --accent, --ok, --err); 303 hardcoded colour values replaced with var(); [data-theme="light"] override inverts the scale; theme stored in localStorage (glp_theme); toggle added as first card in Settings; closes #113
 - feat: drink type annotation now uses pill/chip buttons instead of a native <select>; pills render from the menu, active pill highlighted in amber, click again to deselect; closes #112

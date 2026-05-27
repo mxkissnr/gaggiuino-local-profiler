@@ -59,7 +59,6 @@ Click the button above to add this repository directly to your Home Assistant �
 | 🔧 | **Grinder Maintenance** | Per-grinder cleaning schedule with configurable shot or day threshold; cards shown alongside machine maintenance tasks |
 | 📷 | **Barcode / QR Scanner** | Scan coffee bag barcodes (EAN/UPC) via camera — name and roaster looked up on Open Food Facts; GLP QR schema for full bean import between installations; each bean card generates a shareable QR code |
 | 🔗 | **kaffeebraun.com Import** | Paste a product URL from kaffeebraun.com — name, roaster, aromas, origin, roast level and processing are imported automatically; imported beans show source and import date |
-| 📱 | **PWA / Add to Home Screen** | Installable as a standalone app on Android and iOS; app shell cached for instant load |
 | 🌙 | **Light / Dark theme** | Built-in theme toggle (Settings); choice persisted in localStorage; matching `glp-ha-theme.yaml` for the full HA interface |
 | 🎛️ | **Profile Selector** | Lovelace card shows a dropdown to switch the active brew profile via `select.gaggiuino_profile` (requires the Gaggiuino HA integration) |
 | 📋 | **Order Management** | Barista backend tab to manage espresso orders — queue, accept with ETA, complete or decline with reason; configurable menu (emoji + drink name); companion Lovelace card for customers (`glp-order-card`) |
