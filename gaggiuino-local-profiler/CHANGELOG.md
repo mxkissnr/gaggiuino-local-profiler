@@ -1,3 +1,6 @@
+## 1.62.7
+- fix: hamburger icon (☰) still clipped on left edge on mobile — `#mobileMenuBtn` had `padding: 0 12px 0 0` (no left padding) and `#mode-bar` has `padding: 0` on mobile; added 12 px left padding; closes #123
+
 ## 1.62.6
 - fix: hamburger menu icon (☰) was clipped on mobile — `#mode-bar` had `overflow: hidden` which cut off the icon; removed (scroll is handled by `#mode-bar-scroll`); closes #122
 - fix: chart tooltip and corsair crosshair remained visible after lifting finger on mobile — added `touchend` listener to shot chart, P·Q chart and fullscreen chart that clears active elements and resets the crosshair; closes #122
