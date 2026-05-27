@@ -1,3 +1,6 @@
+## 1.62.5
+- fix: CSP header from v1.62.4 blocked all `onclick` event handlers — entire UI was non-interactive; added `'unsafe-inline'` to `script-src` (required: HTML contains ~57 inline handlers) and added `fonts.bunny.net` to `style-src` + `font-src` for Figtree font
+
 ## 1.62.4
 - fix: `initProfilesCache` IIFE ran before `const state` / `const log` were declared (TDZ bug) — profile cache from v1.62.1 never actually loaded on startup; fix: moved `require` calls above the IIFE; closes #119
 - fix: sync no longer crashes when machine `/latest` returns no `lastShotId` — added null-guard with early-return

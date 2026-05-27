@@ -50,14 +50,15 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'same-origin');
-    // Chart.js and QRCode are loaded from jsdelivr CDN
+    // Chart.js and QRCode are loaded from jsdelivr; Figtree font from bunny.net
+    // 'unsafe-inline' in script-src is required — the HTML uses onclick="..." handlers throughout
     res.setHeader('Content-Security-Policy',
         "default-src 'self'; " +
-        "script-src 'self' https://cdn.jsdelivr.net; " +
-        "style-src 'self' 'unsafe-inline'; " +
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+        "style-src 'self' 'unsafe-inline' https://fonts.bunny.net; " +
+        "font-src 'self' data: https://fonts.bunny.net; " +
         "img-src 'self' data:; " +
-        "connect-src 'self'; " +
-        "font-src 'self' data:;");
+        "connect-src 'self';");
     next();
 });
 
