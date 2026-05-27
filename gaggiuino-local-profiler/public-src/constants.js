@@ -821,6 +821,19 @@ export const phasePlugin = {
   }
 };
 
+// ── Mobile: clear tooltip + crosshair on touchend ─────────────────────────
+/**
+ * Attach a touchend listener to a Chart.js instance so the tooltip and
+ * corsair crosshair disappear when the user lifts their finger on mobile.
+ */
+export function clearChartOnTouchEnd(chart) {
+  chart.canvas.addEventListener('touchend', () => {
+    if (chart.corsair) chart.corsair = { draw: false };
+    chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+    chart.update('none');
+  }, { passive: true });
+}
+
 // ── Corsair crosshair ─────────────────────────────────────────────────────
 export const corsairPlugin = {
   id: 'corsair',

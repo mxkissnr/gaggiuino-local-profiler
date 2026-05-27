@@ -1,7 +1,7 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
-import { LOCALE_MAP, phasePlugin, corsairPlugin } from '../constants.js';
+import { LOCALE_MAP, phasePlugin, corsairPlugin, clearChartOnTouchEnd } from '../constants.js';
 import {
   esc, avg, avgActive, max, safeLast, fmt, formatTimeLabel, mapToXY,
   stddev, detectPhases, detectChanneling, isoToGerman, germanToIso, scoreClass
@@ -628,6 +628,7 @@ export function updateView() {
         }
       }
     });
+    clearChartOnTouchEnd(S.chart);
   } catch (e) {
     console.error('Chart creation error:', e);
   }
@@ -767,6 +768,7 @@ function renderFsChart() {
         }
       }
     });
+    clearChartOnTouchEnd(S.fsChart);
     return;
   }
 
@@ -798,6 +800,7 @@ function renderFsChart() {
       }
     }
   });
+  clearChartOnTouchEnd(S.fsChart);
 }
 
 // ── CSV Export ────────────────────────────────────────────────────────────

@@ -1,3 +1,8 @@
+## 1.62.6
+- fix: hamburger menu icon (☰) was clipped on mobile — `#mode-bar` had `overflow: hidden` which cut off the icon; removed (scroll is handled by `#mode-bar-scroll`); closes #122
+- fix: chart tooltip and corsair crosshair remained visible after lifting finger on mobile — added `touchend` listener to shot chart, P·Q chart and fullscreen chart that clears active elements and resets the crosshair; closes #122
+- fix: sidebar action buttons (compare ⇄, delete 🗑) and collapse button had too little space from the right sidebar edge on mobile — increased `padding-right` on shot rows (12→18 px) and adjusted sidebar header padding in mobile breakpoint; closes #122
+
 ## 1.62.5
 - fix: CSP header from v1.62.4 blocked all `onclick` event handlers — entire UI was non-interactive; added `'unsafe-inline'` to `script-src` (required: HTML contains ~57 inline handlers) and added `fonts.bunny.net` to `style-src` + `font-src` for Figtree font
 

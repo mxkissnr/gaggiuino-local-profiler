@@ -184,7 +184,6 @@
             top: 0;
             z-index: 10;
             background: var(--gray-950);
-            overflow: hidden;
         }
         #mode-bar-scroll {
             display: flex;
@@ -996,7 +995,7 @@
             #sidebar {
                 position: fixed;
                 top: 0; left: 0; bottom: 0;
-                width: min(300px, 85vw);
+                width: min(320px, 88vw);
                 height: 100vh;
                 z-index: 200;
                 transform: translateX(-100%);
@@ -1035,6 +1034,9 @@
             .chart-container, .live-chart-container { height: 360px; }
             .live-stats        { grid-template-columns: repeat(3, 1fr); }
             #mode-bar          { padding: 0; }
+            .shot-wrapper      { padding-right: 18px; }
+            #sidebar h2        { padding: 16px 18px; }
+            #collapseBtn       { margin-right: 0; }
             .mode-btn          { padding: 12px 14px; font-size: .8rem; }
             .score-num         { font-size: 1.5rem; }
         }
