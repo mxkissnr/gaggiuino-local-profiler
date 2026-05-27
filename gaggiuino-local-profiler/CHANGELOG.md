@@ -1,3 +1,6 @@
+## 1.60.1
+- fix: P-Q chart no longer shows misleading filled triangle — switched from type:line/fill:true to type:scatter with showLine:true and fill:false; small point dots (r=1.5) give density indication; x-axis now auto-scales to actual max flow + 10 % headroom instead of fixed max:5; applied to both normal and fullscreen view; closes #111
+
 ## 1.60.0
 - feat: shots — new "Drink" field in the annotation panel; populated from the same menu used by the orders feature (GET /api/menu, always accessible regardless of enable_orders); drink emoji + name shown as a subtle badge in the sidebar; closes #110
 

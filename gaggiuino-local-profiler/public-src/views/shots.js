@@ -658,19 +658,28 @@ export function updatePQChart() {
   if (S.pqChart) { S.pqChart.destroy(); S.pqChart = null; }
 
   const shotB = S.compareShotId ? S.shots.find(s => s.id === S.compareShotId) : null;
+  const dataA = getPQData(shotA);
+  const dataB = shotB ? getPQData(shotB) : [];
+
+  // Auto-scale x to actual max flow (+ 10 % headroom), minimum 3
+  const allFlow = [...dataA, ...dataB].map(d => d.x);
+  const xMax = allFlow.length ? Math.max(3, Math.ceil(Math.max(...allFlow) * 1.1 * 2) / 2) : 5;
+
   const datasets = [
-    { label: `Shot ${shotA.id}`, data: getPQData(shotA), borderColor: '#3498db',
-      backgroundColor: 'rgba(52,152,219,.08)', fill: true,
-      borderWidth: 2.5, pointRadius: 0, tension: 0.3 }
+    { label: `Shot ${shotA.id}`, data: dataA,
+      showLine: true, tension: 0.2, fill: false,
+      borderColor: '#3498db', backgroundColor: '#3498db',
+      borderWidth: 2, pointRadius: 1.5, pointHoverRadius: 4 }
   ];
-  if (shotB) datasets.push(
-    { label: `Shot ${shotB.id}`, data: getPQData(shotB), borderColor: 'rgba(52,152,219,.5)',
-      backgroundColor: 'transparent', fill: false,
-      borderDash: [4,3], borderWidth: 2, pointRadius: 0, tension: 0.3 }
+  if (shotB && dataB.length) datasets.push(
+    { label: `Shot ${shotB.id}`, data: dataB,
+      showLine: true, tension: 0.2, fill: false,
+      borderColor: 'rgba(52,152,219,.55)', backgroundColor: 'rgba(52,152,219,.55)',
+      borderDash: [4,3], borderWidth: 2, pointRadius: 1, pointHoverRadius: 3 }
   );
 
   S.pqChart = new Chart(canvas, {
-    type: 'line',
+    type: 'scatter',
     data: { datasets },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
@@ -679,7 +688,7 @@ export function updatePQChart() {
         tooltip: { callbacks: { label: c => `${c.parsed.y.toFixed(1)} bar @ ${c.parsed.x.toFixed(1)} ml/s` } }
       },
       scales: {
-        x: { type: 'linear', min: 0, max: 5,
+        x: { type: 'linear', min: 0, max: xMax,
              title: { display: true, text: 'Pumpenfluss (ml/s)', color: '#71717a', font: { family: 'Figtree' } },
              ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
         y: { type: 'linear', min: 0, max: 12,
@@ -726,11 +735,15 @@ function renderFsChart() {
 
   if (S.currentFsTab === 'pq') {
     const data = getPQData(shotA);
+    const xMax = data.length
+      ? Math.max(3, Math.ceil(Math.max(...data.map(d => d.x)) * 1.1 * 2) / 2)
+      : 5;
     S.fsChart = new Chart(canvas, {
       type: 'scatter',
-      data: { datasets: [{ label: `Shot ${shotA.id}`, data, showLine: true, tension: 0.2,
-          borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.15)',
-          borderWidth: 2, pointRadius: 0 }] },
+      data: { datasets: [{ label: `Shot ${shotA.id}`, data,
+          showLine: true, tension: 0.2, fill: false,
+          borderColor: '#3498db', backgroundColor: '#3498db',
+          borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5 }] },
       options: {
         responsive: true, maintainAspectRatio: false, animation: false,
         plugins: {
@@ -738,7 +751,7 @@ function renderFsChart() {
           tooltip: { callbacks: { label: c => `${c.parsed.y.toFixed(1)} bar @ ${c.parsed.x.toFixed(1)} ml/s` } }
         },
         scales: {
-          x: { type: 'linear', min: 0, max: 5,
+          x: { type: 'linear', min: 0, max: xMax,
                title: { display: true, text: 'Pumpenfluss (ml/s)', color: '#71717a', font: { family: 'Figtree' } },
                ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
           y: { type: 'linear', min: 0, max: 12,
