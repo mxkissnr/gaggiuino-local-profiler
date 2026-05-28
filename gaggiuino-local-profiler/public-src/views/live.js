@@ -14,10 +14,10 @@ export function initLiveChart() {
     type: 'line',
     data: {
       datasets: [
-        { label: 'Druck',       data: [], yAxisID: 'y',  borderWidth: 2.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
-        { label: 'Pumpenfluss', data: [], yAxisID: 'y',  borderWidth: 2,   tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
-        { label: 'Gewicht',     data: [], yAxisID: 'y1', borderWidth: 2,   tension: 0.1, borderColor: '#2ecc71', backgroundColor: 'transparent', pointStyle: false },
-        { label: 'Temperatur',  data: [], yAxisID: 'y1', borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false },
+        { label: t('chart_pressure'), data: [], yAxisID: 'y',  borderWidth: 2.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
+        { label: t('chart_flow'),     data: [], yAxisID: 'y',  borderWidth: 2,   tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
+        { label: t('chart_weight'),   data: [], yAxisID: 'y1', borderWidth: 2,   tension: 0.1, borderColor: '#2ecc71', backgroundColor: 'transparent', pointStyle: false },
+        { label: t('chart_temp'),     data: [], yAxisID: 'y1', borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false },
         // Reference datasets (4-7) — dashed, semi-transparent
         { label: t('ref_pressure'), data: [], yAxisID: 'y',  borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(52,152,219,0.4)',  borderDash: [6,3], backgroundColor: 'transparent', pointStyle: false },
         { label: t('ref_flow'),     data: [], yAxisID: 'y',  borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(243,156,18,0.4)',  borderDash: [6,3], backgroundColor: 'transparent', pointStyle: false },
@@ -32,7 +32,7 @@ export function initLiveChart() {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { labels: { color: '#e4e4e7', font: { family: 'Figtree' } } },
-        tooltip: { callbacks: { title: ctx => 'Zeit: ' + formatTimeLabel(ctx[0].parsed.x) } }
+        tooltip: { callbacks: { title: ctx => t('chart_time', formatTimeLabel(ctx[0].parsed.x)) } }
       },
       scales: {
         x:  { type: 'linear', min: 0, max: 60, ticks: { color: '#a1a1aa', callback: v => formatTimeLabel(v), stepSize: 5 }, grid: { color: '#27272a' } },

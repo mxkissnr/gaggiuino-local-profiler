@@ -1,3 +1,6 @@
+## 1.70.1
+- fix: i18n — chart labels, tooltip titles and y-axis descriptions were hardcoded in German; now use `t()` with keys `chart_pressure`, `chart_flow`, `chart_weightflow`, `chart_weight`, `chart_temp`, `chart_target_*`, `chart_time`, `chart_*_unit`; `'gerade eben'` in orders view replaced with `t('orders_just_now')`; all 5 languages covered
+
 ## 1.70.0
 - feat: orders — **Warteschlangen-ETA** (#130): neuer Endpoint `GET /api/orders/queue-eta` berechnet geschätzte Wartezeit pro Bestellung (Summe restlicher accepted-Zeit + Position × durchschnittliche Zubereitungszeit aus letzten 10 Bestellungen); Barista-Ansicht zeigt Queue-Banner wenn ≥2 Bestellungen aktiv und schlägt ETA-Wert im Picker vor; Customer Card (glp-order-card v1.7.0) zeigt Queue-Position und Wartezeit wenn Bestellung pending
 

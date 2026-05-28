@@ -602,27 +602,27 @@ export function updateView() {
 
   const sfx = shotB ? ' (A)' : '';
   const datasets = [
-    { label:`Druck${sfx}`,         data: dA.pressure,  yAxisID:'y',  borderWidth:2.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
-    { label:`Pumpenfluss${sfx}`,   data: dA.flow,       yAxisID:'y',  borderWidth:2,   tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
-    { label:`Gewichtsfluss${sfx}`, data: dA.weightFlow, yAxisID:'y',  borderWidth:2,   tension:.1, borderColor:'#9b59b6', backgroundColor:'transparent', pointStyle:false },
-    { label:`Gewicht${sfx}`,       data: dA.weight,     yAxisID:'y1', borderWidth:2,   tension:.1, borderColor:'#2ecc71', backgroundColor:'transparent', pointStyle:false },
-    { label:`Temperatur${sfx}`,    data: dA.temp,       yAxisID:'y1', borderWidth:2.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
+    { label:t('chart_pressure')    + sfx, data: dA.pressure,  yAxisID:'y',  borderWidth:2.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
+    { label:t('chart_flow')        + sfx, data: dA.flow,       yAxisID:'y',  borderWidth:2,   tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
+    { label:t('chart_weightflow')  + sfx, data: dA.weightFlow, yAxisID:'y',  borderWidth:2,   tension:.1, borderColor:'#9b59b6', backgroundColor:'transparent', pointStyle:false },
+    { label:t('chart_weight')      + sfx, data: dA.weight,     yAxisID:'y1', borderWidth:2,   tension:.1, borderColor:'#2ecc71', backgroundColor:'transparent', pointStyle:false },
+    { label:t('chart_temp')        + sfx, data: dA.temp,       yAxisID:'y1', borderWidth:2.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
   ];
 
   if (!shotB) {
     datasets.push(
-      { label:'Ziel Druck',      data: dA.targetPressure, yAxisID:'y',  borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
-      { label:'Ziel Fluss',      data: dA.targetFlow,     yAxisID:'y',  borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
-      { label:'Ziel Temperatur', data: dA.targetTemp,     yAxisID:'y1', borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
+      { label:t('chart_target_pressure'), data: dA.targetPressure, yAxisID:'y',  borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_target_flow'),     data: dA.targetFlow,     yAxisID:'y',  borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_target_temp'),     data: dA.targetTemp,     yAxisID:'y1', borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
     );
   }
   if (shotB && dB) {
     datasets.push(
-      { label:'Druck (B)',        data: dB.pressure,  yAxisID:'y',  borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(52,152,219,.65)',  backgroundColor:'transparent', pointStyle:false },
-      { label:'Pumpenfluss (B)', data: dB.flow,       yAxisID:'y',  borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(243,156,18,.65)',  backgroundColor:'transparent', pointStyle:false },
-      { label:'Gewfluß (B)',     data: dB.weightFlow, yAxisID:'y',  borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(155,89,182,.65)',  backgroundColor:'transparent', pointStyle:false },
-      { label:'Gewicht (B)',     data: dB.weight,     yAxisID:'y1', borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.65)',  backgroundColor:'transparent', pointStyle:false },
-      { label:'Temperatur (B)', data: dB.temp,        yAxisID:'y1', borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(231,76,60,.65)',   backgroundColor:'transparent', pointStyle:false }
+      { label:t('chart_pressure')   + ' (B)', data: dB.pressure,  yAxisID:'y',  borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(52,152,219,.65)',  backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_flow')       + ' (B)', data: dB.flow,       yAxisID:'y',  borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(243,156,18,.65)',  backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_weightflow') + ' (B)', data: dB.weightFlow, yAxisID:'y',  borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(155,89,182,.65)',  backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_weight')     + ' (B)', data: dB.weight,     yAxisID:'y1', borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.65)',  backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_temp')       + ' (B)', data: dB.temp,       yAxisID:'y1', borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(231,76,60,.65)',   backgroundColor:'transparent', pointStyle:false }
     );
   }
 
@@ -651,7 +651,7 @@ export function updateView() {
             position: 'bottom',
             labels: { color: '#e4e4e7', font: { family: 'Figtree', size: window.innerWidth <= 600 ? 9 : 11 }, boxWidth: window.innerWidth <= 600 ? 8 : 12, padding: window.innerWidth <= 600 ? 4 : 8 }
           },
-          tooltip: { callbacks: { title: ctx => 'Zeit: ' + formatTimeLabel(ctx[0].parsed.x) } }
+          tooltip: { callbacks: { title: ctx => t('chart_time', formatTimeLabel(ctx[0].parsed.x)) } }
         },
         scales: {
           x:  { type:'linear', min:0, max:Math.max(maxTimeA, maxTimeB), clip:false,
@@ -731,10 +731,10 @@ export function updatePQChart() {
       },
       scales: {
         x: { type: 'linear', min: 0, max: xMax,
-             title: { display: true, text: 'Pumpenfluss (ml/s)', color: '#71717a', font: { family: 'Figtree' } },
+             title: { display: true, text: t('chart_flow_unit'), color: '#71717a', font: { family: 'Figtree' } },
              ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
         y: { type: 'linear', min: 0, max: 12,
-             title: { display: true, text: 'Druck (bar)', color: '#71717a', font: { family: 'Figtree' } },
+             title: { display: true, text: t('chart_pressure_unit'), color: '#71717a', font: { family: 'Figtree' } },
              ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } }
       }
     }
@@ -794,10 +794,10 @@ function renderFsChart() {
         },
         scales: {
           x: { type: 'linear', min: 0, max: xMax,
-               title: { display: true, text: 'Pumpenfluss (ml/s)', color: '#71717a', font: { family: 'Figtree' } },
+               title: { display: true, text: t('chart_flow_unit'), color: '#71717a', font: { family: 'Figtree' } },
                ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
           y: { type: 'linear', min: 0, max: 12,
-               title: { display: true, text: 'Druck (bar)', color: '#71717a', font: { family: 'Figtree' } },
+               title: { display: true, text: t('chart_pressure_unit'), color: '#71717a', font: { family: 'Figtree' } },
                ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } }
         }
       }

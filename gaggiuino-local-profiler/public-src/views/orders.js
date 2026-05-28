@@ -113,7 +113,7 @@ export async function loadOrdersView() {
 
 export function _orderTimeAgo(ts) {
   const min = Math.round((Date.now() - ts) / 60000);
-  if (min < 1) return 'gerade eben';
+  if (min < 1) return t('orders_just_now');
   return t('orders_ago', min);
 }
 
