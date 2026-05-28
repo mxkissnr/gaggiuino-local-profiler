@@ -9,7 +9,7 @@ const {
     loadNotifyMapping, saveNotifyMapping,
     loadAnnotations, loadTrash, isOrdersEnabled, loadOptions,
 } = require('../lib/data');
-const { sendHaNotify, getNotifyServices } = require('../lib/ha');
+const { sendHaNotify, getNotifyServices, getHaPersons } = require('../lib/ha');
 const { log, rateLimit, writeFileSafe } = require('../lib/helpers');
 const state = require('../lib/state');
 
@@ -83,8 +83,8 @@ router.post('/api/orders/settings', (req, res) => {
             const { ready, remainingMin } = _getPreheatInfo();
             const title = ready ? '☕ Kaffee ist jetzt geöffnet!' : '⏳ Kaffee öffnet bald!';
             const body  = ready
-                ? 'Die Maschine ist bereit — du kannst jetzt bestellen.'
-                : `Die Maschine heizt noch auf. Kaffee öffnet in ca. ${remainingMin} Min.`;
+                ? 'Die Maschine ist bereit — Bestellungen über das Menü Kaffeebar aufgeben.'
+                : `Die Maschine heizt noch auf. Kaffee öffnet in ca. ${remainingMin} Min. — Bestellungen über das Menü Kaffeebar.`;
             recipients.forEach(svc => sendHaNotify(svc, title, body, 'glp_shop_open'));
             log(`Shop-open broadcast sent to ${recipients.length} device(s)`);
         }
@@ -98,11 +98,17 @@ router.get('/api/orders/notify-services', async (req, res) => {
     res.json(await getNotifyServices());
 });
 
-router.get('/api/orders/notify-mapping', (req, res) => {
+router.get('/api/orders/notify-mapping', async (req, res) => {
     const orders    = loadOrders();
     const mapping   = loadNotifyMapping();
+    // Start with order history customers
     const customers = {};
     orders.forEach(o => { if (o.haUserId) customers[o.haUserId] = o.customer; });
+    // Merge in all HA person entities (so admin can assign devices before first order)
+    try {
+        const persons = await getHaPersons();
+        persons.forEach(p => { if (!customers[p.haUserId]) customers[p.haUserId] = p.name; });
+    } catch { /* non-critical, fall back to order-history customers only */ }
     res.json({ mapping, customers });
 });
 

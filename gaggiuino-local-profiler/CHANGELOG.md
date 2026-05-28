@@ -1,3 +1,7 @@
+## 1.65.0
+- feat: orders notify-mapping shows all HA `person.*` entities (not just past customers) — barista can assign devices before the first order; merged with order-history customers; closes #125 (partial)
+- fix: orders open-notification text includes "Bestellungen über das Menü Kaffeebar aufgeben"
+
 ## 1.64.0
 - feat: orders — broadcast-recipients config in barista UI; barista selects which HA devices get notified when orders open; preheat-aware message: "opens in ~X min" while warming up, "open now" when ready; `broadcastRecipients` array stored in orders settings; closes #125
 

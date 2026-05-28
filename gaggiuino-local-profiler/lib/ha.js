@@ -49,4 +49,20 @@ async function getHaState(entityId) {
     return r.data;
 }
 
-module.exports = { getSwitchState, sendHaNotify, getNotifyServices, callHaService, getHaState, HA_TOKEN };
+// Returns all HA person entities that have a user_id attribute.
+// Each entry: { haUserId, name }
+async function getHaPersons() {
+    if (!HA_TOKEN) return [];
+    try {
+        const r = await axios.get(`${HA_API}/states`,
+            { headers: { Authorization: `Bearer ${HA_TOKEN}` }, timeout: 5000 });
+        return r.data
+            .filter(e => e.entity_id.startsWith('person.') && e.attributes?.user_id)
+            .map(e => ({
+                haUserId: e.attributes.user_id,
+                name:     e.attributes.friendly_name || e.entity_id.replace('person.', ''),
+            }));
+    } catch { return []; }
+}
+
+module.exports = { getSwitchState, sendHaNotify, getNotifyServices, callHaService, getHaState, getHaPersons, HA_TOKEN };
