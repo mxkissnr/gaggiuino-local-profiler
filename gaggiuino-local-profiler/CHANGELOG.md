@@ -1,3 +1,6 @@
+## 1.71.0
+- feat: Nederlands (NL) als sechste UI-Sprache hinzugefügt — vollständige Übersetzung aller Schlüssel inkl. Library, Rezepte, Bestellungen, Wartung, Charts
+
 ## 1.70.1
 - fix: i18n — chart labels, tooltip titles and y-axis descriptions were hardcoded in German; now use `t()` with keys `chart_pressure`, `chart_flow`, `chart_weightflow`, `chart_weight`, `chart_temp`, `chart_target_*`, `chart_time`, `chart_*_unit`; `'gerade eben'` in orders view replaced with `t('orders_just_now')`; all 5 languages covered
 
