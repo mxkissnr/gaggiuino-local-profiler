@@ -1,3 +1,6 @@
+## 1.70.0
+- feat: orders — **Warteschlangen-ETA** (#130): neuer Endpoint `GET /api/orders/queue-eta` berechnet geschätzte Wartezeit pro Bestellung (Summe restlicher accepted-Zeit + Position × durchschnittliche Zubereitungszeit aus letzten 10 Bestellungen); Barista-Ansicht zeigt Queue-Banner wenn ≥2 Bestellungen aktiv und schlägt ETA-Wert im Picker vor; Customer Card (glp-order-card v1.7.0) zeigt Queue-Position und Wartezeit wenn Bestellung pending
+
 ## 1.69.0
 - feat: Shots — **Bohnenalter beim Shot** (#129): beim Annotieren wird `beanAgeDays` automatisch berechnet (Shot-Zeitstempel − Röstdatum der aktiven Packung) und in der Annotation gespeichert; Freshness-Badge zeigt jetzt "X Tage beim Shot" statt aktuellem Alter; wenn Bean ausgewählt wird, erscheint ein Hinweis mit dem berechneten Alter; Auto-fill Röstdatum nutzt die Packung die zum Shot-Zeitpunkt aktiv war
 

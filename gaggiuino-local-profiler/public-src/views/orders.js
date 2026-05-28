@@ -88,10 +88,12 @@ export async function loadOrdersView() {
   if (banner) { banner.style.display = machineOff ? '' : 'none'; banner.textContent = t('orders_machine_off'); }
   _updateOrdersToggleUI(settings.enabled);
 
-  const [orders, menu] = await Promise.all([
+  const [orders, menu, queueEta] = await Promise.all([
     apiFetch('api/orders').then(r => r.json()).catch(() => []),
     apiFetch('api/orders/menu').then(r => r.json()).catch(() => []),
+    apiFetch('api/orders/queue-eta').then(r => r.json()).catch(() => null),
   ]);
+  S._ordersQueueEta = queueEta;
 
   renderOrdersList(orders);
   renderOrdersMenuAdmin(menu);
@@ -126,8 +128,17 @@ export function renderOrdersList(orders) {
   const clearHistBtn = document.getElementById('orders-clear-history');
   if (!pendingEl) return;
 
-  pendingEl.innerHTML = pending.length ? pending.map(o => renderOrderCard(o, 'pending')).join('') :
-    `<div class="orders-empty">${t('orders_empty')}</div>`;
+  // Queue banner — only when 2+ orders active
+  const totalActive = pending.length + accepted.length;
+  const totalEta = S._ordersQueueEta
+    ? Math.ceil((S._ordersQueueEta.acceptedRemaining || 0) + (S._ordersQueueEta.pendingCount || 0) * (S._ordersQueueEta.prepTime || 4))
+    : 0;
+  const queueBanner = totalActive >= 2 && totalEta > 0
+    ? `<div class="orders-queue-banner">${t('orders_queue_banner', totalActive, totalEta)}</div>`
+    : '';
+
+  pendingEl.innerHTML = queueBanner + (pending.length ? pending.map(o => renderOrderCard(o, 'pending')).join('') :
+    `<div class="orders-empty">${t('orders_empty')}</div>`);
 
   acceptedEl.innerHTML = accepted.length ? accepted.map(o => renderOrderCard(o, 'accepted')).join('') :
     `<div class="orders-empty">${t('orders_empty')}</div>`;
@@ -182,20 +193,27 @@ export function renderOrdersList(orders) {
 
 export function renderOrderCard(o, ctx) {
   const etaBtns    = [2, 5, 10, 15, 20];
-  const selectedEta = S._ordersEtaSelected[o.id] || 5;
+  // Use queue-suggested ETA if barista hasn't manually overridden
+  const queuePos  = S._ordersQueueEta?.positions?.[o.id];
+  const suggested = queuePos?.suggestedEta ?? 5;
+  const selectedEta = S._ordersEtaSelected[o.id] ?? suggested;
   const isNew = (Date.now() - o.createdAt) < 60000;
 
   if (ctx === 'pending') {
     const declineOpen = S._ordersDeclineOpen[o.id];
+    const queueHint = queuePos
+      ? `<span class="order-queue-hint">${t('orders_queue_pos', queuePos.position, queuePos.suggestedEta)}</span>`
+      : '';
     return `<div class="order-card status-pending">
       <div class="order-card-top">
         <span class="order-item-name">${esc(o.item)}${isNew ? `<span class="orders-new-badge">${t('orders_new_badge')}</span>` : ''}</span>
-        <span class="order-meta">${_orderTimeAgo(o.createdAt)}</span>
+        <span class="order-meta">${_orderTimeAgo(o.createdAt)}${queueHint}</span>
       </div>
       <div class="order-customer">${t('orders_for')} <b>${esc(o.customer)}</b>${o.note ? ` · <span class="order-note">${esc(o.note)}</span>` : ''}</div>
       <div class="order-eta-picker">
-        ${etaBtns.map(m => `<button class="order-eta-btn${S._ordersEtaSelected[o.id] === m ? ' selected' : ''}" data-order-id="${esc(o.id)}" data-eta-btn="${m}">${m} min</button>`).join('')}
+        ${etaBtns.map(m => `<button class="order-eta-btn${selectedEta === m ? ' selected' : ''}" data-order-id="${esc(o.id)}" data-eta-btn="${m}">${m} min</button>`).join('')}
         <input class="order-eta-custom" type="number" min="1" max="60" value="${selectedEta}" id="etaCustom_${esc(o.id)}" placeholder="min">
+        ${queuePos ? `<span class="order-eta-suggest">${t('orders_suggested_eta', queuePos.suggestedEta)}</span>` : ''}
       </div>
       <div class="order-actions">
         <button class="order-btn accept" data-order-accept="${esc(o.id)}">${t('orders_accept')}</button>

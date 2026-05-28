@@ -98,6 +98,47 @@ router.post('/api/orders/settings', (req, res) => {
     res.json(s);
 });
 
+// ── Queue ETA ─────────────────────────────────────────────────────────────
+
+const DEFAULT_PREP_TIME = 4; // minutes per order, used when no historical data
+
+router.get('/api/orders/queue-eta', (req, res) => {
+    const orders  = loadOrders();
+    const now     = Date.now();
+    const accepted = orders.filter(o => o.status === 'accepted');
+    const pending  = orders.filter(o => o.status === 'pending')
+        .sort((a, b) => a.createdAt - b.createdAt);
+
+    // Sum remaining time of all accepted orders
+    const acceptedRemaining = accepted.reduce((sum, o) => {
+        return sum + Math.max(0, (o.acceptedAt + o.eta * 60000 - now) / 60000);
+    }, 0);
+
+    // Use average ETA of last 10 completed orders as prep time estimate
+    const recent = orders
+        .filter(o => o.status === 'done' && o.eta)
+        .slice(-10);
+    const prepTime = recent.length
+        ? recent.reduce((s, o) => s + o.eta, 0) / recent.length
+        : DEFAULT_PREP_TIME;
+
+    // Per-order suggested ETA based on queue position
+    const positions = {};
+    pending.forEach((o, i) => {
+        positions[o.id] = {
+            position:     i + 1,
+            suggestedEta: Math.max(1, Math.min(60, Math.ceil(acceptedRemaining + i * prepTime + prepTime))),
+        };
+    });
+
+    res.json({
+        acceptedRemaining: Math.round(acceptedRemaining * 10) / 10,
+        pendingCount:      pending.length,
+        prepTime:          Math.round(prepTime * 10) / 10,
+        positions,
+    });
+});
+
 // ── Notify mapping ────────────────────────────────────────────────────────
 
 router.get('/api/orders/notify-services', async (req, res) => {

@@ -1160,6 +1160,9 @@
         .order-eta-btn { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:6px; color:var(--gray-400); font-size:.75rem; padding:4px 9px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; }
         .order-eta-btn:hover,.order-eta-btn.selected { background:var(--gray-700); color:#fff; border-color:var(--gray-600); }
         .order-eta-custom { width:52px; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:6px; color:var(--gray-200); font-size:.75rem; padding:4px 6px; text-align:center; outline:none; font-family:'Figtree',sans-serif; }
+        .order-eta-suggest { font-size:.68rem; color:var(--gray-600); align-self:center; }
+        .order-queue-hint { font-size:.68rem; color:var(--gray-600); margin-left:6px; }
+        .orders-queue-banner { background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.2); border-radius:8px; padding:7px 12px; font-size:.78rem; color:var(--amber); margin-bottom:8px; }
         .order-btn { border:none; border-radius:7px; font-size:.78rem; font-weight:600; padding:6px 13px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; }
         .order-btn.accept  { background:rgba(34,197,94,.15); color:var(--ok); border:1px solid rgba(34,197,94,.3); }
         .order-btn.accept:hover { background:rgba(34,197,94,.25); }
