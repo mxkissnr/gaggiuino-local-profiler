@@ -124,18 +124,34 @@ router.post('/api/library/grinder/:id/delete', (req, res) => {
 
 // ── Recipes ───────────────────────────────────────────────────────────────
 
+function _parseSteps(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.slice(0, 30).map(step => ({
+        text:       typeof step.text === 'string' ? step.text.trim().slice(0, 500) : '',
+        duration_s: parseFloat(step.duration_s) || null,
+    })).filter(s => s.text);
+}
+
+const VALID_BREW_METHODS = ['espresso', 'aeropress', 'v60', 'french_press', 'moka', 'cold_brew', 'other'];
+
 router.post('/api/library/recipe', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
-    const { name, drinkType, targetDose_g, targetYield_g, targetTime_s, notes, profileName, beanName } = req.body;
+    const { name, brewMethod, drinkType, targetDose_g, targetYield_g, targetTime_s,
+            waterTemp_c, grindSize, notes, profileName, beanName, steps } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
     const s      = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
     const f      = v => parseFloat(v) || null;
     const lib    = loadLibrary();
     const recipe = {
-        id: Date.now(), name: s(name, 200), drinkType: s(drinkType, 50),
-        targetDose_g: f(targetDose_g), targetYield_g: f(targetYield_g), targetTime_s: f(targetTime_s),
-        notes: s(notes, 1000), profileName: s(profileName, 200), beanName: s(beanName, 200),
+        id: Date.now(), name: s(name, 200),
+        brewMethod:    VALID_BREW_METHODS.includes(brewMethod) ? brewMethod : 'other',
+        drinkType:     s(drinkType, 50),
+        targetDose_g:  f(targetDose_g), targetYield_g: f(targetYield_g), targetTime_s: f(targetTime_s),
+        waterTemp_c:   f(waterTemp_c),
+        grindSize:     s(grindSize, 200),
+        steps:         _parseSteps(steps),
+        notes:         s(notes, 1000), profileName: s(profileName, 200), beanName: s(beanName, 200),
     };
     if (!Array.isArray(lib.recipes)) lib.recipes = [];
     lib.recipes.push(recipe);
@@ -151,12 +167,17 @@ router.put('/api/library/recipe/:id', (req, res) => {
     if (idx === -1) return res.status(404).json({ error: 'not found' });
     const s = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : undefined;
     const f = v => v !== undefined ? (parseFloat(v) || null) : undefined;
-    const { name, drinkType, targetDose_g, targetYield_g, targetTime_s, notes, profileName, beanName } = req.body;
+    const { name, brewMethod, drinkType, targetDose_g, targetYield_g, targetTime_s,
+            waterTemp_c, grindSize, notes, profileName, beanName, steps } = req.body;
     if (name !== undefined)         lib.recipes[idx].name         = s(name, 200) || lib.recipes[idx].name;
+    if (brewMethod !== undefined)   lib.recipes[idx].brewMethod   = VALID_BREW_METHODS.includes(brewMethod) ? brewMethod : 'other';
     if (drinkType !== undefined)    lib.recipes[idx].drinkType    = s(drinkType, 50);
     if (targetDose_g !== undefined) lib.recipes[idx].targetDose_g = f(targetDose_g);
     if (targetYield_g !== undefined)lib.recipes[idx].targetYield_g= f(targetYield_g);
     if (targetTime_s !== undefined) lib.recipes[idx].targetTime_s = f(targetTime_s);
+    if (waterTemp_c !== undefined)  lib.recipes[idx].waterTemp_c  = f(waterTemp_c);
+    if (grindSize !== undefined)    lib.recipes[idx].grindSize    = s(grindSize, 200);
+    if (steps !== undefined)        lib.recipes[idx].steps        = _parseSteps(steps);
     if (notes !== undefined)        lib.recipes[idx].notes        = s(notes, 1000);
     if (profileName !== undefined)  lib.recipes[idx].profileName  = s(profileName, 200);
     if (beanName !== undefined)     lib.recipes[idx].beanName     = s(beanName, 200);

@@ -411,23 +411,43 @@
                         <div class="lib-form-grid">
                             <div class="lib-form-field">
                                 <label data-i18n="lib_recipe_name">Name *</label>
-                                <input type="text" id="recipeFormName" placeholder="Flat White">
+                                <input type="text" id="recipeFormName" placeholder="Aerocano">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_recipe_brew_method">Brühmethode</label>
+                                <select id="recipeFormBrewMethod">
+                                    <option value="espresso"    data-i18n="lib_brew_espresso">Espresso</option>
+                                    <option value="aeropress"   data-i18n="lib_brew_aeropress">AeroPress</option>
+                                    <option value="v60"         data-i18n="lib_brew_v60">V60 / Pour Over</option>
+                                    <option value="french_press" data-i18n="lib_brew_french_press">French Press</option>
+                                    <option value="moka"        data-i18n="lib_brew_moka">Moka Pot</option>
+                                    <option value="cold_brew"   data-i18n="lib_brew_cold_brew">Cold Brew</option>
+                                    <option value="other"       data-i18n="lib_brew_other">Sonstiges</option>
+                                </select>
                             </div>
                             <div class="lib-form-field">
                                 <label data-i18n="lib_recipe_drink_type">Getränketyp</label>
-                                <input type="text" id="recipeFormDrinkType" placeholder="Espresso, Lungo …">
+                                <input type="text" id="recipeFormDrinkType" placeholder="Flat White, Lungo …">
                             </div>
                             <div class="lib-form-field">
                                 <label data-i18n="lib_recipe_dose">Dosis (g)</label>
-                                <input type="number" id="recipeFormDose" step="0.1" min="0" placeholder="18">
+                                <input type="number" id="recipeFormDose" step="0.1" min="0" placeholder="11">
                             </div>
                             <div class="lib-form-field">
                                 <label data-i18n="lib_recipe_yield">Ausbeute (g)</label>
-                                <input type="number" id="recipeFormYield" step="0.1" min="0" placeholder="36">
+                                <input type="number" id="recipeFormYield" step="0.1" min="0" placeholder="200">
                             </div>
                             <div class="lib-form-field">
                                 <label data-i18n="lib_recipe_time">Zeit (s)</label>
-                                <input type="number" id="recipeFormTime" step="1" min="0" placeholder="28">
+                                <input type="number" id="recipeFormTime" step="1" min="0" placeholder="150">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_recipe_water_temp">Wassertemperatur (°C)</label>
+                                <input type="number" id="recipeFormWaterTemp" step="1" min="0" max="100" placeholder="100">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_recipe_grind">Mahlgrad</label>
+                                <input type="text" id="recipeFormGrind" placeholder="mittelfein, Niche 18 …">
                             </div>
                             <div class="lib-form-field">
                                 <label data-i18n="lib_recipe_profile">Profil</label>
@@ -441,6 +461,13 @@
                                 <label data-i18n="lib_recipe_notes">Notizen</label>
                                 <input type="text" id="recipeFormNotes" placeholder="Notizen …">
                             </div>
+                        </div>
+                        <div class="lib-recipe-steps-section">
+                            <div class="lib-recipe-steps-header">
+                                <span data-i18n="lib_recipe_steps">Workflow-Schritte</span>
+                                <button class="lib-btn-sm" onclick="addRecipeStep()" data-i18n="lib_recipe_add_step">+ Schritt</button>
+                            </div>
+                            <div id="recipeStepsList"></div>
                         </div>
                         <div class="lib-form-actions">
                             <button class="lib-btn-sm" onclick="closeRecipeForm()" data-i18n="lib_cancel">Abbrechen</button>

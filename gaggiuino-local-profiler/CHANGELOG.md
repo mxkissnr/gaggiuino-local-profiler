@@ -1,3 +1,6 @@
+## 1.67.0
+- feat: Library Rezepte — **Brühmethode** (Espresso / AeroPress / V60 / French Press / Moka / Cold Brew), **Wassertemperatur**, **Mahlgrad** und **Workflow-Schritte** (geordnete Liste mit optionaler Dauer je Schritt); Rezeptkarte zeigt alle Schritte nummeriert an; Schritte live hinzufügen/entfernen im Formular
+
 ## 1.66.0
 - feat: Library — **Decaf-Flag** (#127): Bohnen können als entkoffeiniert markiert werden (Checkbox im Formular, grünes DECAF-Badge auf der Karte)
 - feat: Library — **Chargen-Tracking** (#128): "Neue Packung"-Button auf jeder Bohne; aktuelle Packung + Gesamtverbrauch über alle Packungen; aufklappbarer Packungsverlauf

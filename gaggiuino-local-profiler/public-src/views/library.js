@@ -442,6 +442,12 @@ export async function _handleScanResult(raw, status) {
 
 // ── Recipes ───────────────────────────────────────────────────────────────
 
+const BREW_METHOD_LABELS = {
+  espresso: 'lib_brew_espresso', aeropress: 'lib_brew_aeropress', v60: 'lib_brew_v60',
+  french_press: 'lib_brew_french_press', moka: 'lib_brew_moka',
+  cold_brew: 'lib_brew_cold_brew', other: 'lib_brew_other',
+};
+
 export function renderRecipeList() {
   const el = document.getElementById('recipeListUI');
   if (!el) return;
@@ -451,18 +457,32 @@ export function renderRecipeList() {
     return;
   }
   el.innerHTML = recipes.map(r => {
-    const params = [
-      r.targetDose_g  ? `${r.targetDose_g} g`  : null,
-      r.targetYield_g ? `→ ${r.targetYield_g} g` : null,
-      r.targetTime_s  ? `${r.targetTime_s} s`  : null,
-    ].filter(Boolean).join(' · ');
+    const brewLabel = r.brewMethod && BREW_METHOD_LABELS[r.brewMethod]
+      ? `<span class="lib-brew-badge">${t(BREW_METHOD_LABELS[r.brewMethod])}</span>`
+      : '';
     const meta = [r.drinkType, r.beanName, r.profileName].filter(Boolean).map(esc).join(' · ');
+    const params = [
+      r.targetDose_g  ? `${r.targetDose_g} g`    : null,
+      r.targetYield_g ? `→ ${r.targetYield_g} g` : null,
+      r.targetTime_s  ? `${r.targetTime_s} s`    : null,
+      r.waterTemp_c   ? `${r.waterTemp_c} °C`    : null,
+      r.grindSize     ? esc(r.grindSize)          : null,
+    ].filter(Boolean);
+    const stepsHtml = Array.isArray(r.steps) && r.steps.length
+      ? `<div class="lib-recipe-steps-list">${r.steps.map((s, i) => `
+          <div class="lib-recipe-step">
+            <span class="lib-recipe-step-n">${i + 1}.</span>
+            <span>${esc(s.text)}</span>
+            ${s.duration_s ? `<span class="lib-recipe-step-dur">${s.duration_s} s</span>` : ''}
+          </div>`).join('')}</div>`
+      : '';
     return `<div class="lib-item">
       <div class="lib-item-info">
-        <div class="lib-item-name">${esc(r.name)}</div>
+        <div class="lib-item-name">${brewLabel}${esc(r.name)}</div>
         ${meta ? `<div class="lib-item-sub">${meta}</div>` : ''}
-        ${params ? `<div class="lib-item-sub">${params}</div>` : ''}
-        ${r.notes ? `<div class="lib-item-sub">${esc(r.notes)}</div>` : ''}
+        ${params.length ? `<div class="lib-recipe-params">${params.map(p => `<span>${p}</span>`).join('')}</div>` : ''}
+        ${stepsHtml}
+        ${r.notes ? `<div class="lib-item-sub" style="margin-top:4px">${esc(r.notes)}</div>` : ''}
       </div>
       <div class="lib-item-actions">
         <button class="lib-btn-sm lib-btn-icon" onclick="editRecipe(${r.id})" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
@@ -472,16 +492,60 @@ export function renderRecipeList() {
   }).join('');
 }
 
+function _renderStepRows(steps) {
+  const list = document.getElementById('recipeStepsList');
+  if (!list) return;
+  list.innerHTML = (steps || []).map((s, i) => _stepRowHtml(i, s.text, s.duration_s)).join('');
+}
+
+function _stepRowHtml(i, text = '', dur = '') {
+  return `<div class="lib-step-row" id="recipeStep${i}">
+    <span class="lib-step-num">${i + 1}</span>
+    <input class="lib-step-text" placeholder="${t('lib_recipe_step_ph')}" value="${esc(text)}">
+    <input class="lib-step-dur" type="number" min="0" step="1" placeholder="${t('lib_recipe_step_dur')}" value="${dur ?? ''}">
+    <button class="lib-btn-sm del lib-btn-icon" onclick="removeRecipeStep(${i})">${ICON_TRASH}</button>
+  </div>`;
+}
+
+export function addRecipeStep() {
+  const list = document.getElementById('recipeStepsList');
+  if (!list) return;
+  const idx = list.children.length;
+  list.insertAdjacentHTML('beforeend', _stepRowHtml(idx));
+}
+
+export function removeRecipeStep(i) {
+  const row = document.getElementById(`recipeStep${i}`);
+  if (row) row.remove();
+  // Re-number remaining rows
+  document.querySelectorAll('#recipeStepsList .lib-step-row').forEach((row, idx) => {
+    row.id = `recipeStep${idx}`;
+    row.querySelector('.lib-step-num').textContent = idx + 1;
+    row.querySelector('.lib-btn-sm.del').setAttribute('onclick', `removeRecipeStep(${idx})`);
+  });
+}
+
+function _collectSteps() {
+  return [...document.querySelectorAll('#recipeStepsList .lib-step-row')].map(row => ({
+    text:       row.querySelector('.lib-step-text')?.value.trim() || '',
+    duration_s: parseFloat(row.querySelector('.lib-step-dur')?.value) || null,
+  })).filter(s => s.text);
+}
+
 export function openRecipeForm(recipe) {
   S.recipeEditId = recipe ? recipe.id : null;
-  document.getElementById('recipeFormName').value      = recipe?.name         || '';
-  document.getElementById('recipeFormDrinkType').value = recipe?.drinkType    || '';
-  document.getElementById('recipeFormDose').value      = recipe?.targetDose_g ?? '';
-  document.getElementById('recipeFormYield').value     = recipe?.targetYield_g ?? '';
-  document.getElementById('recipeFormTime').value      = recipe?.targetTime_s  ?? '';
-  document.getElementById('recipeFormProfile').value   = recipe?.profileName  || '';
-  document.getElementById('recipeFormBean').value      = recipe?.beanName     || '';
-  document.getElementById('recipeFormNotes').value     = recipe?.notes        || '';
+  document.getElementById('recipeFormName').value         = recipe?.name          || '';
+  document.getElementById('recipeFormBrewMethod').value   = recipe?.brewMethod    || 'espresso';
+  document.getElementById('recipeFormDrinkType').value    = recipe?.drinkType     || '';
+  document.getElementById('recipeFormDose').value         = recipe?.targetDose_g  ?? '';
+  document.getElementById('recipeFormYield').value        = recipe?.targetYield_g ?? '';
+  document.getElementById('recipeFormTime').value         = recipe?.targetTime_s  ?? '';
+  document.getElementById('recipeFormWaterTemp').value    = recipe?.waterTemp_c   ?? '';
+  document.getElementById('recipeFormGrind').value        = recipe?.grindSize     || '';
+  document.getElementById('recipeFormProfile').value      = recipe?.profileName   || '';
+  document.getElementById('recipeFormBean').value         = recipe?.beanName      || '';
+  document.getElementById('recipeFormNotes').value        = recipe?.notes         || '';
+  _renderStepRows(recipe?.steps || []);
   document.getElementById('recipeAddForm').classList.add('open');
   document.getElementById('recipeAddTrigger').style.display = 'none';
   document.getElementById('recipeFormName').focus();
@@ -499,17 +563,21 @@ export function editRecipe(id) {
 }
 
 export async function saveRecipe() {
-  const name        = document.getElementById('recipeFormName').value.trim();
+  const name = document.getElementById('recipeFormName').value.trim();
   if (!name) { document.getElementById('recipeFormName').focus(); return; }
   const payload = {
     name,
-    drinkType:    document.getElementById('recipeFormDrinkType').value.trim(),
-    targetDose_g: parseFloat(document.getElementById('recipeFormDose').value) || null,
-    targetYield_g:parseFloat(document.getElementById('recipeFormYield').value) || null,
-    targetTime_s: parseFloat(document.getElementById('recipeFormTime').value) || null,
-    profileName:  document.getElementById('recipeFormProfile').value.trim(),
-    beanName:     document.getElementById('recipeFormBean').value.trim(),
-    notes:        document.getElementById('recipeFormNotes').value.trim(),
+    brewMethod:    document.getElementById('recipeFormBrewMethod').value,
+    drinkType:     document.getElementById('recipeFormDrinkType').value.trim(),
+    targetDose_g:  parseFloat(document.getElementById('recipeFormDose').value)      || null,
+    targetYield_g: parseFloat(document.getElementById('recipeFormYield').value)     || null,
+    targetTime_s:  parseFloat(document.getElementById('recipeFormTime').value)      || null,
+    waterTemp_c:   parseFloat(document.getElementById('recipeFormWaterTemp').value) || null,
+    grindSize:     document.getElementById('recipeFormGrind').value.trim(),
+    profileName:   document.getElementById('recipeFormProfile').value.trim(),
+    beanName:      document.getElementById('recipeFormBean').value.trim(),
+    notes:         document.getElementById('recipeFormNotes').value.trim(),
+    steps:         _collectSteps(),
   };
   const url = S.recipeEditId ? `api/library/recipe/${S.recipeEditId}` : 'api/library/recipe';
   const r   = await apiFetch(url, { method: S.recipeEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });

@@ -40,6 +40,7 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
          toggleBeanQR, generateBeanQR,
          toggleBagHistory, openNewBagForm, closeNewBagForm, saveNewBag,
          openRecipeForm, closeRecipeForm, editRecipe, saveRecipe, deleteRecipe, renderRecipeList,
+         addRecipeStep, removeRecipeStep,
          toggleUrlImport, importFromUrl,
          openScanModal, closeScanModal, _runScanLoop, _handleScanResult } from './views/library.js';
 
@@ -224,6 +225,8 @@ Object.assign(window, {
   saveRecipe,
   deleteRecipe,
   renderRecipeList,
+  addRecipeStep,
+  removeRecipeStep,
   toggleUrlImport,
   importFromUrl,
   openScanModal,
