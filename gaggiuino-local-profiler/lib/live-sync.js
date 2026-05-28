@@ -101,6 +101,13 @@ async function pollViaGaggiuinoStatus() {
             updatedAt:         Date.now(),
         };
 
+        // Extract firmware version from status response if not yet cached
+        if (!state.cachedMachineVersion) {
+            const ver = status.softwareVersion || status.version || status.firmware ||
+                        status.buildNumber     || status.fw_version || status.buildDate || null;
+            if (ver) { state.cachedMachineVersion = String(ver); log(`Gaggiuino firmware (from status): ${state.cachedMachineVersion}`); }
+        }
+
         if (tempVal > 0 && !isBrewing) {
             state.tempHistory.push(tempVal);
             if (state.tempHistory.length > TEMP_HISTORY_MAX) state.tempHistory.shift();
@@ -209,6 +216,13 @@ async function syncShots() {
                 log(`Shot ${i} has invalid data -- skipped`, true);
                 continue;
             }
+            // Try to extract firmware version from the shot payload itself
+            if (!state.cachedMachineVersion) {
+                const d   = r.data;
+                const ver = d.softwareVersion || d.firmware || d.buildNumber ||
+                            d.buildDate       || d.version  || null;
+                if (ver) { state.cachedMachineVersion = String(ver); log(`Gaggiuino firmware (from shot): ${state.cachedMachineVersion}`); }
+            }
             if (state.cachedMachineVersion) r.data.glpFirmwareVersion = state.cachedMachineVersion;
             localShots.push(r.data);
         }
@@ -257,12 +271,17 @@ async function fetchMachineVersion() {
     if (state.cachedMachineVersion) return;
     const opts    = loadOptions();
     const baseUrl = getMachineBaseUrl(opts);
-    try {
-        const res = await axios.get(`${baseUrl}/api/system/info`, { timeout: 3000 });
-        const ver = (res.data || {}).version || (res.data || {}).firmware ||
-                    (res.data || {}).softwareVersion || (res.data || {}).fw_version || null;
-        if (ver) { state.cachedMachineVersion = String(ver); log(`Gaggiuino firmware: ${state.cachedMachineVersion}`); }
-    } catch (_) {}
+    // Try multiple known Gaggiuino firmware endpoints
+    const endpoints = ['/api/system/info', '/api/firmware', '/api/about'];
+    for (const path of endpoints) {
+        try {
+            const res = await axios.get(`${baseUrl}${path}`, { timeout: 3000 });
+            const d   = res.data || {};
+            const ver = d.version || d.firmware || d.softwareVersion ||
+                        d.fw_version || d.buildNumber || d.buildDate || null;
+            if (ver) { state.cachedMachineVersion = String(ver); log(`Gaggiuino firmware (${path}): ${state.cachedMachineVersion}`); return; }
+        } catch (_) {}
+    }
 }
 
 async function checkAndApplyMachinePower() {

@@ -1,3 +1,6 @@
+## 1.71.1
+- fix: firmware version detection — `fetchMachineVersion()` tried only `/api/system/info` (doesn't exist on Gaggiuino); now also tries `/api/firmware` and `/api/about`; additionally extracts firmware from `/api/system/status` response fields every live-poll cycle; as last fallback reads `softwareVersion`/`buildNumber`/`buildDate` directly from the shot JSON at sync time
+
 ## 1.71.0
 - feat: Nederlands (NL) als sechste UI-Sprache hinzugefügt — vollständige Übersetzung aller Schlüssel inkl. Library, Rezepte, Bestellungen, Wartung, Charts
 
