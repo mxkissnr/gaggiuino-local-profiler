@@ -12,7 +12,9 @@ export async function loadLibrary() {
     const r = await apiFetch('api/library');
     if (!r.ok) return;
     S.coffeeLibrary = await r.json();
+    if (!S.coffeeLibrary.recipes) S.coffeeLibrary.recipes = [];
     updateLibraryDatalist();
+    renderRecipeList();
   } catch (e) {}
 }
 
@@ -26,8 +28,10 @@ export function updateLibraryDatalist() {
 export function switchLibTab(tab) {
   document.getElementById('libTabBeans').classList.toggle('active',       tab === 'beans');
   document.getElementById('libTabGrinders').classList.toggle('active',    tab === 'grinders');
+  document.getElementById('libTabRecipes').classList.toggle('active',     tab === 'recipes');
   document.getElementById('libSectionBeans').classList.toggle('active',   tab === 'beans');
   document.getElementById('libSectionGrinders').classList.toggle('active', tab === 'grinders');
+  document.getElementById('libSectionRecipes').classList.toggle('active', tab === 'recipes');
 }
 
 // ── Bean list ─────────────────────────────────────────────────────────────
@@ -39,35 +43,74 @@ export function renderBeanList() {
     return;
   }
   el.innerHTML = S.coffeeLibrary.beans.map(b => {
-    const consumed = S.shots.reduce((sum, s) => {
+    // Total consumption across all bags (all shots matching bean name)
+    const totalConsumed = Math.round(S.shots.reduce((sum, s) => {
+      const d = parseFloat(s.annotation?.dose);
+      return (s.annotation?.coffee || '').toLowerCase() === b.name.toLowerCase() && d ? sum + d : sum;
+    }, 0));
+
+    // Current bag consumption (shots since last bag openedAt)
+    const bags = Array.isArray(b.bags) ? b.bags : [];
+    const activeBag = bags.length ? bags[bags.length - 1] : null;
+    const activeBagConsumed = activeBag ? Math.round(S.shots.reduce((sum, s) => {
       const d = parseFloat(s.annotation?.dose);
       const match = (s.annotation?.coffee || '').toLowerCase() === b.name.toLowerCase();
-      return (match && d) ? sum + d : sum;
-    }, 0);
-    const consumedRnd = Math.round(consumed);
+      const afterOpen = s.timestamp * 1000 >= (activeBag.openedAt || 0);
+      return (match && d && afterOpen) ? sum + d : sum;
+    }, 0)) : totalConsumed;
+
     let invHtml = '';
     if (b.stock_g) {
-      const remaining = Math.round(b.stock_g - consumed);
+      const remaining = Math.round(b.stock_g - activeBagConsumed);
       const isLow = remaining < 100;
       invHtml = `<div class="lib-inv-stats">
-        <span>${t('lib_inv_consumed', consumedRnd)}</span>
+        <span>${t('lib_inv_consumed', activeBagConsumed)}</span>
         <span class="lib-inv-remaining${isLow ? ' low' : ''}">${t('lib_inv_remaining', remaining)}</span>
         ${isLow ? `<span class="lib-inv-reorder">${t('lib_inv_reorder')}</span>` : ''}
+        ${bags.length > 1 ? `<span class="lib-inv-total">${t('lib_inv_total_consumed', totalConsumed)} · ${t('lib_inv_bags', bags.length)}</span>` : ''}
       </div>`;
-    } else if (consumedRnd > 0) {
-      invHtml = `<div class="lib-inv-stats"><span>${t('lib_inv_consumed', consumedRnd)}</span></div>`;
+    } else if (totalConsumed > 0) {
+      invHtml = `<div class="lib-inv-stats">
+        <span>${t('lib_inv_total_consumed', totalConsumed)}</span>
+        ${bags.length > 1 ? `<span>${t('lib_inv_bags', bags.length)}</span>` : ''}
+      </div>`;
     }
+
+    // Bag history (collapsed)
+    const bagHistoryHtml = bags.length > 1 ? `
+      <div class="lib-bag-history" id="bagHistory${b.id}" style="display:none">
+        <div class="lib-bag-history-title">${t('lib_bag_history')}</div>
+        ${bags.slice().reverse().map((bg, i) => `
+          <div class="lib-bag-row${i === 0 ? ' active' : ''}">
+            <span>${bg.roastDate || '–'}</span>
+            <span>${bg.stock_g ? bg.stock_g + ' g' : '–'}</span>
+          </div>`).join('')}
+      </div>
+      <button class="lib-btn-sm lib-bag-history-btn" onclick="toggleBagHistory(${b.id})" id="bagHistoryBtn${b.id}">▸ ${t('lib_bag_history')}</button>` : '';
+
     return `<div class="lib-item">
       <div class="lib-item-info">
-        <div class="lib-item-name">${esc(b.name)}</div>
+        <div class="lib-item-name">${esc(b.name)}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}</div>
         <div class="lib-item-sub">${[b.roaster, b.roastDate, b.notes].filter(Boolean).map(esc).join(' · ')}</div>
         ${invHtml}
+        ${bagHistoryHtml}
         ${b.source ? `<div class="lib-item-source">${t('lib_imported_from', b.source, b.importedAt || '')}</div>` : ''}
       </div>
       <div class="lib-item-actions">
+        <button class="lib-btn-sm" onclick="openNewBagForm(${b.id})" title="${t('lib_new_bag')}">${t('lib_new_bag')}</button>
         <button class="lib-btn-sm" onclick="toggleBeanQR(${b.id})" title="${t('bean_qr_label')}">QR</button>
         <button class="lib-btn-sm lib-btn-icon" onclick="editBean(${b.id})" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
         <button class="lib-btn-sm del lib-btn-icon" onclick="deleteBean(${b.id})" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
+      </div>
+      <div id="newBagForm${b.id}" class="lib-new-bag-form" style="display:none">
+        <div class="lib-new-bag-fields">
+          <input type="text" class="lib-new-bag-input" id="newBagRoastDate${b.id}" placeholder="${t('lib_bag_roast_date')} (TT.MM.JJJJ)">
+          <input type="number" class="lib-new-bag-input" id="newBagStock${b.id}" placeholder="${t('lib_bag_stock')}" min="0" step="1">
+        </div>
+        <div class="lib-form-actions">
+          <button class="lib-btn-sm" onclick="closeNewBagForm(${b.id})">${t('lib_cancel')}</button>
+          <button class="lib-save-btn" onclick="saveNewBag(${b.id})">${t('lib_new_bag_save')}</button>
+        </div>
       </div>
       <div class="bean-qr-wrap" id="beanQR${b.id}" style="display:none">
         <canvas id="beanQRCanvas${b.id}"></canvas>
@@ -75,6 +118,38 @@ export function renderBeanList() {
       </div>
     </div>`;
   }).join('');
+}
+
+export function toggleBagHistory(id) {
+  const wrap = document.getElementById(`bagHistory${id}`);
+  const btn  = document.getElementById(`bagHistoryBtn${id}`);
+  if (!wrap) return;
+  const open = wrap.style.display === 'none';
+  wrap.style.display = open ? '' : 'none';
+  if (btn) btn.textContent = (open ? '▾ ' : '▸ ') + t('lib_bag_history');
+}
+
+export function openNewBagForm(id) {
+  document.getElementById(`newBagForm${id}`).style.display = '';
+}
+
+export function closeNewBagForm(id) {
+  document.getElementById(`newBagForm${id}`).style.display = 'none';
+}
+
+export async function saveNewBag(id) {
+  const roastDate = document.getElementById(`newBagRoastDate${id}`)?.value.trim() || '';
+  const stock_g   = parseFloat(document.getElementById(`newBagStock${id}`)?.value) || null;
+  const r = await apiFetch(`api/library/bean/${id}/new-bag`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roastDate, stock_g }),
+  });
+  if (!r.ok) return;
+  const saved = await r.json();
+  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
+  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  renderBeanList();
 }
 
 export function toggleBeanQR(id) {
@@ -126,6 +201,7 @@ export function openBeanForm(bean) {
   document.getElementById('beanFormRoastDate').value = bean?.roastDate || '';
   document.getElementById('beanFormNotes').value     = bean?.notes     || '';
   document.getElementById('beanFormStock').value     = bean?.stock_g   || '';
+  document.getElementById('beanFormDecaf').checked   = !!bean?.decaf;
   document.getElementById('beanAddForm').classList.add('open');
   document.getElementById('beanAddTrigger').style.display = 'none';
   document.getElementById('beanFormName').focus();
@@ -150,8 +226,9 @@ export async function saveBean() {
   const roastDate = document.getElementById('beanFormRoastDate').value.trim();
   const notes     = document.getElementById('beanFormNotes').value.trim();
   const stock_g   = parseFloat(document.getElementById('beanFormStock').value) || null;
+  const decaf     = document.getElementById('beanFormDecaf').checked;
   if (!name) { document.getElementById('beanFormName').focus(); return; }
-  const payload = { name, roaster, roastDate, notes, stock_g };
+  const payload = { name, roaster, roastDate, notes, stock_g, decaf };
   if (!S.beanEditId && S._urlImportSource) { payload.source = S._urlImportSource; payload.importedAt = S._urlImportedAt; }
   const body = JSON.stringify(payload);
   const url  = S.beanEditId ? `api/library/bean/${S.beanEditId}` : 'api/library/bean';
@@ -361,4 +438,98 @@ export async function _handleScanResult(raw, status) {
     closeScanModal();
     openBeanForm();
   }
+}
+
+// ── Recipes ───────────────────────────────────────────────────────────────
+
+export function renderRecipeList() {
+  const el = document.getElementById('recipeListUI');
+  if (!el) return;
+  const recipes = S.coffeeLibrary.recipes || [];
+  if (!recipes.length) {
+    el.innerHTML = `<div class="lib-empty">${t('lib_empty_recipes')}</div>`;
+    return;
+  }
+  el.innerHTML = recipes.map(r => {
+    const params = [
+      r.targetDose_g  ? `${r.targetDose_g} g`  : null,
+      r.targetYield_g ? `→ ${r.targetYield_g} g` : null,
+      r.targetTime_s  ? `${r.targetTime_s} s`  : null,
+    ].filter(Boolean).join(' · ');
+    const meta = [r.drinkType, r.beanName, r.profileName].filter(Boolean).map(esc).join(' · ');
+    return `<div class="lib-item">
+      <div class="lib-item-info">
+        <div class="lib-item-name">${esc(r.name)}</div>
+        ${meta ? `<div class="lib-item-sub">${meta}</div>` : ''}
+        ${params ? `<div class="lib-item-sub">${params}</div>` : ''}
+        ${r.notes ? `<div class="lib-item-sub">${esc(r.notes)}</div>` : ''}
+      </div>
+      <div class="lib-item-actions">
+        <button class="lib-btn-sm lib-btn-icon" onclick="editRecipe(${r.id})" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button class="lib-btn-sm del lib-btn-icon" onclick="deleteRecipe(${r.id})" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+export function openRecipeForm(recipe) {
+  S.recipeEditId = recipe ? recipe.id : null;
+  document.getElementById('recipeFormName').value      = recipe?.name         || '';
+  document.getElementById('recipeFormDrinkType').value = recipe?.drinkType    || '';
+  document.getElementById('recipeFormDose').value      = recipe?.targetDose_g ?? '';
+  document.getElementById('recipeFormYield').value     = recipe?.targetYield_g ?? '';
+  document.getElementById('recipeFormTime').value      = recipe?.targetTime_s  ?? '';
+  document.getElementById('recipeFormProfile').value   = recipe?.profileName  || '';
+  document.getElementById('recipeFormBean').value      = recipe?.beanName     || '';
+  document.getElementById('recipeFormNotes').value     = recipe?.notes        || '';
+  document.getElementById('recipeAddForm').classList.add('open');
+  document.getElementById('recipeAddTrigger').style.display = 'none';
+  document.getElementById('recipeFormName').focus();
+}
+
+export function closeRecipeForm() {
+  S.recipeEditId = null;
+  document.getElementById('recipeAddForm').classList.remove('open');
+  document.getElementById('recipeAddTrigger').style.display = '';
+}
+
+export function editRecipe(id) {
+  const recipe = (S.coffeeLibrary.recipes || []).find(r => r.id === id);
+  if (recipe) openRecipeForm(recipe);
+}
+
+export async function saveRecipe() {
+  const name        = document.getElementById('recipeFormName').value.trim();
+  if (!name) { document.getElementById('recipeFormName').focus(); return; }
+  const payload = {
+    name,
+    drinkType:    document.getElementById('recipeFormDrinkType').value.trim(),
+    targetDose_g: parseFloat(document.getElementById('recipeFormDose').value) || null,
+    targetYield_g:parseFloat(document.getElementById('recipeFormYield').value) || null,
+    targetTime_s: parseFloat(document.getElementById('recipeFormTime').value) || null,
+    profileName:  document.getElementById('recipeFormProfile').value.trim(),
+    beanName:     document.getElementById('recipeFormBean').value.trim(),
+    notes:        document.getElementById('recipeFormNotes').value.trim(),
+  };
+  const url = S.recipeEditId ? `api/library/recipe/${S.recipeEditId}` : 'api/library/recipe';
+  const r   = await apiFetch(url, { method: S.recipeEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  if (!r.ok) return;
+  const saved = await r.json();
+  if (!Array.isArray(S.coffeeLibrary.recipes)) S.coffeeLibrary.recipes = [];
+  if (S.recipeEditId) {
+    const idx = S.coffeeLibrary.recipes.findIndex(r => r.id === S.recipeEditId);
+    if (idx !== -1) S.coffeeLibrary.recipes[idx] = saved;
+  } else {
+    S.coffeeLibrary.recipes.push(saved);
+  }
+  closeRecipeForm();
+  renderRecipeList();
+}
+
+export async function deleteRecipe(id) {
+  if (!confirm(t('lib_confirm_delete_recipe'))) return;
+  const r = await apiFetch(`api/library/recipe/${id}/delete`, { method: 'POST' });
+  if (!r.ok) return;
+  S.coffeeLibrary.recipes = (S.coffeeLibrary.recipes || []).filter(r => r.id !== id);
+  renderRecipeList();
 }

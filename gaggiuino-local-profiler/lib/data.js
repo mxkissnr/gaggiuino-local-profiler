@@ -78,10 +78,13 @@ function saveBlocklist(list) { writeFileSafe(BLOCKLIST_FILE, list); }
 
 function loadLibrary() {
     try {
-        if (fs.existsSync(LIBRARY_FILE))
-            return JSON.parse(fs.readFileSync(LIBRARY_FILE, 'utf8'));
+        if (fs.existsSync(LIBRARY_FILE)) {
+            const lib = JSON.parse(fs.readFileSync(LIBRARY_FILE, 'utf8'));
+            if (!lib.recipes) lib.recipes = [];
+            return lib;
+        }
     } catch (e) {}
-    return { beans: [], grinders: [] };
+    return { beans: [], grinders: [], recipes: [] };
 }
 function saveLibrary(lib) { writeFileSafe(LIBRARY_FILE, lib); }
 

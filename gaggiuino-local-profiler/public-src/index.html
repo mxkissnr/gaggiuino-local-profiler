@@ -333,6 +333,7 @@
             <div class="lib-tabs">
                 <button class="lib-tab active" id="libTabBeans"    onclick="switchLibTab('beans')" data-i18n="lib_beans">Bohnen</button>
                 <button class="lib-tab"         id="libTabGrinders" onclick="switchLibTab('grinders')" data-i18n="lib_grinders">Mühlen</button>
+                <button class="lib-tab"         id="libTabRecipes"  onclick="switchLibTab('recipes')" data-i18n="lib_recipes">Rezepte</button>
             </div>
             <div class="lib-body">
                 <!-- Beans -->
@@ -359,6 +360,12 @@
                             <div class="lib-form-field">
                                 <label data-i18n="lib_bean_stock">Vorrat (g)</label>
                                 <input type="number" id="beanFormStock" data-i18n-placeholder="lib_bean_stock_ph" placeholder="z.B. 500" step="1" min="0">
+                            </div>
+                            <div class="lib-form-field lib-form-field-check">
+                                <label class="lib-check-label">
+                                    <input type="checkbox" id="beanFormDecaf">
+                                    <span data-i18n="lib_bean_decaf">Entkoffeiniert</span>
+                                </label>
                             </div>
                         </div>
                         <div class="lib-form-actions">
@@ -396,6 +403,51 @@
                         </div>
                     </div>
                     <button class="lib-add-trigger" id="grinderAddTrigger" onclick="openGrinderForm()" data-i18n="lib_add_grinder">+ Mühle hinzufügen</button>
+                </div>
+                <!-- Recipes -->
+                <div class="lib-section" id="libSectionRecipes">
+                    <div class="lib-list" id="recipeListUI"></div>
+                    <div class="lib-add-form" id="recipeAddForm">
+                        <div class="lib-form-grid">
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_recipe_name">Name *</label>
+                                <input type="text" id="recipeFormName" placeholder="Flat White">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_recipe_drink_type">Getränketyp</label>
+                                <input type="text" id="recipeFormDrinkType" placeholder="Espresso, Lungo …">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_recipe_dose">Dosis (g)</label>
+                                <input type="number" id="recipeFormDose" step="0.1" min="0" placeholder="18">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_recipe_yield">Ausbeute (g)</label>
+                                <input type="number" id="recipeFormYield" step="0.1" min="0" placeholder="36">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_recipe_time">Zeit (s)</label>
+                                <input type="number" id="recipeFormTime" step="1" min="0" placeholder="28">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_recipe_profile">Profil</label>
+                                <input type="text" id="recipeFormProfile" list="profileList" placeholder="Standard …">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_recipe_bean">Bohne</label>
+                                <input type="text" id="recipeFormBean" list="beanList" placeholder="Ethiopia …">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_recipe_notes">Notizen</label>
+                                <input type="text" id="recipeFormNotes" placeholder="Notizen …">
+                            </div>
+                        </div>
+                        <div class="lib-form-actions">
+                            <button class="lib-btn-sm" onclick="closeRecipeForm()" data-i18n="lib_cancel">Abbrechen</button>
+                            <button class="lib-save-btn" onclick="saveRecipe()" data-i18n="lib_save">Speichern</button>
+                        </div>
+                    </div>
+                    <button class="lib-add-trigger" id="recipeAddTrigger" onclick="openRecipeForm()" data-i18n="lib_add_recipe">+ Rezept hinzufügen</button>
                 </div>
             </div>
         </div>

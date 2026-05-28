@@ -1,3 +1,8 @@
+## 1.66.0
+- feat: Library — **Decaf-Flag** (#127): Bohnen können als entkoffeiniert markiert werden (Checkbox im Formular, grünes DECAF-Badge auf der Karte)
+- feat: Library — **Chargen-Tracking** (#128): "Neue Packung"-Button auf jeder Bohne; aktuelle Packung + Gesamtverbrauch über alle Packungen; aufklappbarer Packungsverlauf
+- feat: Library — **Rezepte** (#126): neuer "Rezepte"-Tab mit Name, Getränketyp, Dosis/Ausbeute/Zeit, Profil, Bohne, Notizen; vollständiges CRUD
+
 ## 1.65.2
 - docs: DOCS.md + DOCS.de.md updated — orders push-notification section now documents both broadcast recipients (open/close with preheat-awareness) and per-customer mapping
 
