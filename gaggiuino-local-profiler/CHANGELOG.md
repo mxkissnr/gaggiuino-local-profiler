@@ -1,3 +1,6 @@
+## 1.69.0
+- feat: Shots — **Bohnenalter beim Shot** (#129): beim Annotieren wird `beanAgeDays` automatisch berechnet (Shot-Zeitstempel − Röstdatum der aktiven Packung) und in der Annotation gespeichert; Freshness-Badge zeigt jetzt "X Tage beim Shot" statt aktuellem Alter; wenn Bean ausgewählt wird, erscheint ein Hinweis mit dem berechneten Alter; Auto-fill Röstdatum nutzt die Packung die zum Shot-Zeitpunkt aktiv war
+
 ## 1.68.0
 - feat: preheat thermal stability detection improved (#124): `isTempStable()` now uses **range (max−min ≤ 1.5 °C)** over the last 30 seconds instead of statistical variance over the full history — reacts to recent stability even if the machine oscillated earlier; `state.stabilityReady` flag tracks whether preheat was completed by stability or timer; `/api/preheat` response includes `stabilityReady: bool`
 

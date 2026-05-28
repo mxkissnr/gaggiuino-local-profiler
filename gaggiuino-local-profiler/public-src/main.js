@@ -11,7 +11,7 @@ import { switchMode, goToShot } from './components/mode.js';
 
 import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggleTrash,
          trashShot, restoreShot, permanentDeleteShot,
-         renderAnnotationPanel, renderStars, quickClone, saveAnnotation, scheduleAutoSave, updateDegassing,
+         renderAnnotationPanel, renderStars, quickClone, saveAnnotation, scheduleAutoSave, updateDegassing, calcBeanAgeAtShot,
          updateView, switchChartTab, updatePQChart,
          openChartFullscreen, closeChartFullscreen, switchFsTab,
          exportCSV, exportAllCSV, exportShot, exportProfile, restoreFromFile,
@@ -266,18 +266,43 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── annCoffee: auto-fill roast date from library bean ──────────────────
+  // ── annCoffee: auto-fill roast date + show bean age hint ───────────────
   const annCoffee = document.getElementById('annCoffee');
   if (annCoffee) {
     annCoffee.addEventListener('change', () => {
       const name = annCoffee.value.trim();
-      if (!name || !S.coffeeLibrary) return;
+      const hintEl = document.getElementById('beanAgeHint');
+      if (!name || !S.coffeeLibrary) { if (hintEl) hintEl.style.display = 'none'; return; }
+
       const bean = S.coffeeLibrary.beans?.find(b => b.name === name);
-      if (!bean || !bean.roastDate) return;
+      if (!bean) { if (hintEl) hintEl.style.display = 'none'; return; }
+
+      // Find roast date from the active bag at shot time
+      const shot   = S.primaryShotId ? S.shots?.find(s => s.id === S.primaryShotId) : null;
+      const shotMs = shot ? shot.timestamp * 1000 : Date.now();
+      const bags   = Array.isArray(bean.bags) ? bean.bags : [];
+      let roastDate = bean.roastDate;
+      if (bags.length) {
+        const activeBag = bags
+          .filter(b => (b.openedAt || 0) <= shotMs)
+          .sort((a, b) => b.openedAt - a.openedAt)[0];
+        if (activeBag?.roastDate) roastDate = activeBag.roastDate;
+      }
+
+      // Auto-fill roast date (only if empty)
       const annRoastDate = document.getElementById('annRoastDate');
-      if (annRoastDate && !annRoastDate.value) {
-        annRoastDate.value = bean.roastDate;
-        updateDegassing(bean.roastDate);
+      if (annRoastDate && !annRoastDate.value && roastDate) {
+        annRoastDate.value = roastDate;
+        updateDegassing(roastDate);
+      }
+
+      // Show bean age hint
+      const ageDays = calcBeanAgeAtShot(name, shot?.timestamp);
+      if (hintEl && ageDays != null) {
+        hintEl.textContent = t('bean_age_at_shot', ageDays);
+        hintEl.style.display = '';
+      } else if (hintEl) {
+        hintEl.style.display = 'none';
       }
     });
   }

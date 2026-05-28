@@ -8,6 +8,33 @@ import {
 } from '../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../components/sidebar.js';
 
+// ── Bean age helper ───────────────────────────────────────────────────────
+function _parseDMY(str) {
+  if (!str) return NaN;
+  const p = str.split('.');
+  if (p.length !== 3) return NaN;
+  return new Date(+p[2], +p[1] - 1, +p[0]).getTime();
+}
+
+export function calcBeanAgeAtShot(beanName, shotTimestampSec) {
+  if (!beanName || !shotTimestampSec || !S.coffeeLibrary) return null;
+  const bean = S.coffeeLibrary.beans?.find(b => b.name.toLowerCase() === beanName.toLowerCase());
+  if (!bean) return null;
+  const shotMs = shotTimestampSec * 1000;
+  const bags   = Array.isArray(bean.bags) ? bean.bags : [];
+  let roastDateStr = bean.roastDate;
+  if (bags.length) {
+    const activeBag = bags
+      .filter(b => (b.openedAt || 0) <= shotMs)
+      .sort((a, b) => b.openedAt - a.openedAt)[0];
+    if (activeBag?.roastDate) roastDateStr = activeBag.roastDate;
+  }
+  const roastMs = _parseDMY(roastDateStr);
+  if (isNaN(roastMs)) return null;
+  const days = Math.round((shotMs - roastMs) / 86400000);
+  return days >= 0 && days <= 730 ? days : null;
+}
+
 // ── Auto-save state ───────────────────────────────────────────────────────
 let _autoSaveTimer = null;
 
@@ -15,16 +42,19 @@ export function scheduleAutoSave() {
   clearTimeout(_autoSaveTimer);
   _autoSaveTimer = setTimeout(async () => {
     if (!S.primaryShotId) return;
+    const shot    = S.shots.find(s => s.id === S.primaryShotId);
+    const coffee  = document.getElementById('annCoffee').value.trim();
     const payload = {
       rating:       S.currentRating || null,
-      coffee:       document.getElementById('annCoffee').value.trim(),
+      coffee,
       grinder:      document.getElementById('annGrinder').value.trim(),
       grindSetting: document.getElementById('annGrindSetting').value.trim(),
       dose:         parseFloat(document.getElementById('annDose').value) || null,
       roastDate:    germanToIso(document.getElementById('annRoastDate').value) || null,
       tds:          parseFloat(document.getElementById('annTds').value) || null,
       notes:        document.getElementById('annNotes').value.trim(),
-      drinkType:    document.getElementById('annDrinkType')?.value || null
+      drinkType:    document.getElementById('annDrinkType')?.value || null,
+      beanAgeDays:  calcBeanAgeAtShot(coffee, shot?.timestamp) ?? null,
     };
     try {
       const r = await apiFetch(`api/shots/${S.primaryShotId}/annotate`, {
@@ -360,17 +390,20 @@ export function quickClone() {
 
 export async function saveAnnotation() {
   if (!S.primaryShotId) return;
-  const btn = document.getElementById('saveAnnotationBtn');
+  const btn    = document.getElementById('saveAnnotationBtn');
+  const shot   = S.shots.find(s => s.id === S.primaryShotId);
+  const coffee = document.getElementById('annCoffee').value.trim();
   const payload = {
     rating:       S.currentRating || null,
-    coffee:       document.getElementById('annCoffee').value.trim(),
+    coffee,
     grinder:      document.getElementById('annGrinder').value.trim(),
     grindSetting: document.getElementById('annGrindSetting').value.trim(),
     dose:         parseFloat(document.getElementById('annDose').value) || null,
     roastDate:    germanToIso(document.getElementById('annRoastDate').value) || null,
     tds:          parseFloat(document.getElementById('annTds').value) || null,
     notes:        document.getElementById('annNotes').value.trim(),
-    drinkType:    document.getElementById('annDrinkType')?.value || null
+    drinkType:    document.getElementById('annDrinkType')?.value || null,
+    beanAgeDays:  calcBeanAgeAtShot(coffee, shot?.timestamp) ?? null,
   };
   try {
     const r = await apiFetch(`api/shots/${S.primaryShotId}/annotate`, {
@@ -494,17 +527,18 @@ export function updateView() {
     eyItem.style.display = 'none';
   }
 
-  // Freshness badge
+  // Freshness badge — prefer stored beanAgeDays (age at shot time) over live calculation
   const freshEl = document.getElementById('freshnessBadge');
-  if (!shotB && ann.roastDate && ann.coffee) {
-    const days = Math.round((Date.now() - new Date(ann.roastDate)) / 86400000);
-    if (days >= 0 && days <= 365) {
-      const cls = days <= 21 ? 'freshness-fresh' : days <= 35 ? 'freshness-ok' : 'freshness-old';
-      freshEl.className   = `freshness-badge ${cls}`;
-      freshEl.textContent = `${days}d`;
-      freshEl.title = t('freshness_title', days);
-      freshEl.style.display = '';
-    } else { freshEl.style.display = 'none'; }
+  const ageAtShot = ann.beanAgeDays != null ? ann.beanAgeDays
+    : (!shotB && ann.roastDate && ann.coffee)
+      ? Math.round((Date.now() - new Date(ann.roastDate)) / 86400000)
+      : null;
+  if (ageAtShot != null && ageAtShot >= 0 && ageAtShot <= 365) {
+    const cls = ageAtShot <= 21 ? 'freshness-fresh' : ageAtShot <= 35 ? 'freshness-ok' : 'freshness-old';
+    freshEl.className   = `freshness-badge ${cls}`;
+    freshEl.textContent = ann.beanAgeDays != null ? t('bean_age_badge', ageAtShot) : `${ageAtShot}d`;
+    freshEl.title       = ann.beanAgeDays != null ? t('bean_age_at_shot', ageAtShot) : t('freshness_title', ageAtShot);
+    freshEl.style.display = '';
   } else { freshEl.style.display = 'none'; }
 
   // Firmware version badge

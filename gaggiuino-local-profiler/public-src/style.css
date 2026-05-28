@@ -302,6 +302,7 @@
         .degassing-bar-track { height:6px; border-radius:3px; background:var(--gray-800); position:relative; overflow:visible; }
         .degassing-bar-fill  { height:100%; border-radius:3px; transition:width .3s; }
         .degassing-label { font-size:.7rem; margin-top:4px; }
+        .bean-age-hint { font-size:.72rem; color:var(--gray-500); margin-top:4px; }
 
         /* ── Einwähl-Modus ── */
         #dialin-view { display:none; flex-direction:column; flex:1; min-width:0; overflow-x:hidden; overflow-y:auto; padding:24px; gap:20px; }
