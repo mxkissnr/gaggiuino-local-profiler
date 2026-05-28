@@ -1,3 +1,6 @@
+## 1.63.0
+- feat: orders — customer-chosen notify service: `notifyService` field stored on order (validated to `notify.*`); accept/complete/decline prefer `order.notifyService` over per-user barista mapping; glp-order-card v1.6.0 sends the selection; closes #12 (glp-order-card)
+
 ## 1.62.7
 - fix: hamburger icon (☰) still clipped on left edge on mobile — `#mobileMenuBtn` had `padding: 0 12px 0 0` (no left padding) and `#mode-bar` has `padding: 0` on mobile; added 12 px left padding; closes #123
 

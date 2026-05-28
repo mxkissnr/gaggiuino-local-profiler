@@ -120,7 +120,7 @@ router.get('/api/orders/mine', (req, res) => {
 router.post('/api/orders', (req, res) => {
     if (!rateLimit(`orders:${req.ip}`, 10)) return res.status(429).json({ error: 'Rate limit exceeded' });
     if (!loadOrdersSettings().enabled) return res.status(503).json({ error: 'orders_disabled' });
-    const { item, note, customer } = req.body || {};
+    const { item, note, customer, notifyService } = req.body || {};
     if (!item || !customer?.trim()) return res.status(400).json({ error: 'item and customer required' });
     const menu = loadMenu();
     if (!menu.find(m => m.name === item)) return res.status(400).json({ error: 'unknown item' });
@@ -137,7 +137,8 @@ router.post('/api/orders', (req, res) => {
         customer:  String(customer).trim().slice(0, 50),
         haUserId,
         item,
-        note:      note ? String(note).slice(0, 200) : '',
+        note:           note ? String(note).slice(0, 200) : '',
+        notifyService:  notifyService && String(notifyService).startsWith('notify.') ? String(notifyService).slice(0, 100) : null,
         status:    'pending',
         eta: null, acceptedAt: null, completedAt: null, declineReason: null,
     };
@@ -159,7 +160,7 @@ router.post('/api/orders/:id/accept', (req, res) => {
     order.acceptedAt = Date.now();
     saveOrders(orders);
     log(`Order ${order.id} accepted (ETA ${order.eta} min)`);
-    sendHaNotify(loadNotifyMapping()[order.haUserId],
+    sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId],
         `☕ ${order.item} wird zubereitet`, `Fertig in ~${order.eta} Min!`, order.id);
     res.json(order);
 });
@@ -187,7 +188,7 @@ router.post('/api/orders/:id/complete', (req, res) => {
     }
     saveOrders(orders);
     log(`Order ${order.id} done (shotId: ${order.shotId})`);
-    sendHaNotify(loadNotifyMapping()[order.haUserId],
+    sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId],
         `✓ ${order.item} ist fertig!`, `Hol dir deinen ${order.item} ab — guten Genuss!`, order.id);
     res.json(order);
 });
@@ -202,7 +203,7 @@ router.post('/api/orders/:id/decline', (req, res) => {
     order.completedAt   = Date.now();
     saveOrders(orders);
     log(`Order ${order.id} declined: ${order.declineReason}`);
-    sendHaNotify(loadNotifyMapping()[order.haUserId],
+    sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId],
         `✕ ${order.item} abgelehnt`,
         order.declineReason ? `Grund: ${order.declineReason}` : 'Deine Bestellung wurde leider abgelehnt.',
         order.id);
