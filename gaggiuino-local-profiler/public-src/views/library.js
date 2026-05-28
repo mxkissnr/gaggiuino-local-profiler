@@ -464,6 +464,8 @@ export function renderRecipeList() {
     const params = [
       r.targetDose_g  ? `${r.targetDose_g} g`    : null,
       r.targetYield_g ? `→ ${r.targetYield_g} g` : null,
+      r.water_g       ? `💧 ${r.water_g} g`      : null,
+      r.ice_g         ? `🧊 ${r.ice_g} g`        : null,
       r.targetTime_s  ? `${r.targetTime_s} s`    : null,
       r.waterTemp_c   ? `${r.waterTemp_c} °C`    : null,
       r.grindSize     ? esc(r.grindSize)          : null,
@@ -483,6 +485,7 @@ export function renderRecipeList() {
         ${params.length ? `<div class="lib-recipe-params">${params.map(p => `<span>${p}</span>`).join('')}</div>` : ''}
         ${stepsHtml}
         ${r.notes ? `<div class="lib-item-sub" style="margin-top:4px">${esc(r.notes)}</div>` : ''}
+        ${r.sourceUrl ? `<div class="lib-item-source"><a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">🔗 Quelle</a></div>` : ''}
       </div>
       <div class="lib-item-actions">
         <button class="lib-btn-sm lib-btn-icon" onclick="editRecipe(${r.id})" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
@@ -541,7 +544,10 @@ export function openRecipeForm(recipe) {
   document.getElementById('recipeFormYield').value        = recipe?.targetYield_g ?? '';
   document.getElementById('recipeFormTime').value         = recipe?.targetTime_s  ?? '';
   document.getElementById('recipeFormWaterTemp').value    = recipe?.waterTemp_c   ?? '';
+  document.getElementById('recipeFormWaterG').value       = recipe?.water_g       ?? '';
+  document.getElementById('recipeFormIceG').value         = recipe?.ice_g         ?? '';
   document.getElementById('recipeFormGrind').value        = recipe?.grindSize     || '';
+  document.getElementById('recipeFormSourceUrl').value    = recipe?.sourceUrl     || '';
   document.getElementById('recipeFormProfile').value      = recipe?.profileName   || '';
   document.getElementById('recipeFormBean').value         = recipe?.beanName      || '';
   document.getElementById('recipeFormNotes').value        = recipe?.notes         || '';
@@ -573,7 +579,10 @@ export async function saveRecipe() {
     targetYield_g: parseFloat(document.getElementById('recipeFormYield').value)     || null,
     targetTime_s:  parseFloat(document.getElementById('recipeFormTime').value)      || null,
     waterTemp_c:   parseFloat(document.getElementById('recipeFormWaterTemp').value) || null,
+    water_g:       parseFloat(document.getElementById('recipeFormWaterG').value)    || null,
+    ice_g:         parseFloat(document.getElementById('recipeFormIceG').value)      || null,
     grindSize:     document.getElementById('recipeFormGrind').value.trim(),
+    sourceUrl:     document.getElementById('recipeFormSourceUrl').value.trim(),
     profileName:   document.getElementById('recipeFormProfile').value.trim(),
     beanName:      document.getElementById('recipeFormBean').value.trim(),
     notes:         document.getElementById('recipeFormNotes').value.trim(),

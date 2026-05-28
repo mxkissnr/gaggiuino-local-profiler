@@ -137,19 +137,21 @@ const VALID_BREW_METHODS = ['espresso', 'aeropress', 'v60', 'french_press', 'mok
 router.post('/api/library/recipe', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
     const { name, brewMethod, drinkType, targetDose_g, targetYield_g, targetTime_s,
-            waterTemp_c, grindSize, notes, profileName, beanName, steps } = req.body;
+            waterTemp_c, water_g, ice_g, grindSize, notes, profileName, beanName, steps, sourceUrl } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
     const s      = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
     const f      = v => parseFloat(v) || null;
+    const safeUrl = v => { if (!v) return ''; try { const u = new URL(v.trim()); return (u.protocol==='http:'||u.protocol==='https:') ? u.href : ''; } catch { return ''; } };
     const lib    = loadLibrary();
     const recipe = {
         id: Date.now(), name: s(name, 200),
         brewMethod:    VALID_BREW_METHODS.includes(brewMethod) ? brewMethod : 'other',
         drinkType:     s(drinkType, 50),
         targetDose_g:  f(targetDose_g), targetYield_g: f(targetYield_g), targetTime_s: f(targetTime_s),
-        waterTemp_c:   f(waterTemp_c),
+        waterTemp_c:   f(waterTemp_c), water_g: f(water_g), ice_g: f(ice_g),
         grindSize:     s(grindSize, 200),
+        sourceUrl:     safeUrl(sourceUrl),
         steps:         _parseSteps(steps),
         notes:         s(notes, 1000), profileName: s(profileName, 200), beanName: s(beanName, 200),
     };
@@ -168,7 +170,8 @@ router.put('/api/library/recipe/:id', (req, res) => {
     const s = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : undefined;
     const f = v => v !== undefined ? (parseFloat(v) || null) : undefined;
     const { name, brewMethod, drinkType, targetDose_g, targetYield_g, targetTime_s,
-            waterTemp_c, grindSize, notes, profileName, beanName, steps } = req.body;
+            waterTemp_c, water_g, ice_g, grindSize, notes, profileName, beanName, steps, sourceUrl } = req.body;
+    const safeUrl = v => { if (!v) return ''; try { const u = new URL(v.trim()); return (u.protocol==='http:'||u.protocol==='https:') ? u.href : ''; } catch { return ''; } };
     if (name !== undefined)         lib.recipes[idx].name         = s(name, 200) || lib.recipes[idx].name;
     if (brewMethod !== undefined)   lib.recipes[idx].brewMethod   = VALID_BREW_METHODS.includes(brewMethod) ? brewMethod : 'other';
     if (drinkType !== undefined)    lib.recipes[idx].drinkType    = s(drinkType, 50);
@@ -176,7 +179,10 @@ router.put('/api/library/recipe/:id', (req, res) => {
     if (targetYield_g !== undefined)lib.recipes[idx].targetYield_g= f(targetYield_g);
     if (targetTime_s !== undefined) lib.recipes[idx].targetTime_s = f(targetTime_s);
     if (waterTemp_c !== undefined)  lib.recipes[idx].waterTemp_c  = f(waterTemp_c);
+    if (water_g !== undefined)      lib.recipes[idx].water_g      = f(water_g);
+    if (ice_g !== undefined)        lib.recipes[idx].ice_g        = f(ice_g);
     if (grindSize !== undefined)    lib.recipes[idx].grindSize    = s(grindSize, 200);
+    if (sourceUrl !== undefined)    lib.recipes[idx].sourceUrl    = safeUrl(sourceUrl);
     if (steps !== undefined)        lib.recipes[idx].steps        = _parseSteps(steps);
     if (notes !== undefined)        lib.recipes[idx].notes        = s(notes, 1000);
     if (profileName !== undefined)  lib.recipes[idx].profileName  = s(profileName, 200);

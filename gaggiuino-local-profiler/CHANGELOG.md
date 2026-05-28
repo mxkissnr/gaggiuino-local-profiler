@@ -1,3 +1,6 @@
+## 1.67.1
+- feat: Library Rezepte — **Wassermenge (g)**, **Eismenge (g)** und **Quellenlink (URL)** als neue Felder; Karte zeigt 💧/🧊 in der Parameterzeile und einen klickbaren 🔗-Link
+
 ## 1.67.0
 - feat: Library Rezepte — **Brühmethode** (Espresso / AeroPress / V60 / French Press / Moka / Cold Brew), **Wassertemperatur**, **Mahlgrad** und **Workflow-Schritte** (geordnete Liste mit optionaler Dauer je Schritt); Rezeptkarte zeigt alle Schritte nummeriert an; Schritte live hinzufügen/entfernen im Formular
 
