@@ -1,3 +1,6 @@
+## 1.72.2
+- docs: DOCS.md + DOCS.de.md comprehensive update — NL language added to language table, API token section updated (v1.72.0 /api/token change + direct-URL glp_token), Library tab updated (recipes, bag tracking, decaf), tab names corrected (Einwählen→Dial-in, Bestellungen→Orders in EN), preheat section updated (thermal stability detection), Orders tab updated (queue ETA), UI language section added (DE/EN/IT/FR/ES/NL)
+
 ## 1.72.1
 - fix: Vite reverted to 6.x — Vite 8 uses Rolldown (Rust native binaries) which has no musl/Alpine build, causing the Docker image build to fail on all HA-supported architectures; Vite 6 (pure JS bundler) works correctly on Alpine
 - fix: Dockerfile updated from `node:18-alpine` (EOL April 2025) to `node:20-alpine` (LTS)

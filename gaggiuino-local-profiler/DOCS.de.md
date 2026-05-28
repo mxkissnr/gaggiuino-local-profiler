@@ -74,11 +74,12 @@ Installation via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/m
 Alle Komponenten authentifizieren sich automatisch über einen gemeinsamen Token:
 
 1. Das Add-on generiert beim ersten Start einen zufälligen 64-stelligen Token und speichert ihn in `/data/api_token.txt`.
-2. `/api/status` ist öffentlich zugänglich und gibt den Token zurück.
-3. Browser-UI und Integration lesen den Token beim Start aus `/api/status` und schicken ihn danach als `X-GLP-Token`-Header bei allen Anfragen mit.
-4. Anfragen über HA Ingress umgehen die Token-Prüfung — HA hat den Benutzer bereits authentifiziert.
+2. `GET /api/token` gibt den Token zurück — aber nur für Anfragen die aus dem HA-Supervisor-Netz (`172.30.x.x`) stammen, also über den HA-Ingress-Proxy gehen. Externe LAN-Clients können den Token nicht über einen nicht-authentifizierten Endpunkt lesen.
+3. Browser-UI und Integration lesen den Token beim Start über `/api/token` (die Anfrage läuft durch den Supervisor) und schicken ihn danach als `X-GLP-Token`-Header bei allen Anfragen mit.
+4. Anfragen über HA Ingress umgehen die Token-Prüfung vollständig — HA hat den Benutzer bereits authentifiziert.
+5. **GLP Order Card im Direkt-URL-Modus** (`glp_url` konfiguriert): `glp_token: <token>` in der Karten-YAML-Konfiguration setzen. Der Token wird beim ersten Start in den Add-on-Logs ausgegeben.
 
-Keine manuelle Konfiguration erforderlich. Um den Token zu erneuern, `/data/api_token.txt` löschen und das Add-on neu starten.
+Keine manuelle Konfiguration für den HA-Ingress-Pfad erforderlich. Um den Token zu erneuern, `/data/api_token.txt` löschen und das Add-on neu starten.
 
 Alle persistenten Daten werden atomar geschrieben (erst `.tmp`, dann `fs.renameSync`), sodass ein Absturz während eines Schreibvorgangs keine halbgeschriebene JSON-Datei hinterlässt.
 
@@ -117,18 +118,18 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | Tab | Beschreibung |
 |---|---|
 | **Live** | Echtzeit-Charts für Druck, Flow, Gewicht und Temperatur während eines Shots. Beim Start eines Bezugs wird automatisch der letzte Shot mit demselben Profil als gestrichelte Referenzkurve eingeblendet. Kann über das Dropdown überschrieben oder entfernt werden. Der Tab ist nur sichtbar wenn die Maschine eingeschaltet ist (erfordert `switch_entity`). |
-| **Shots** | Shot-Verlauf mit vollständigem Chart, Score, Annotation (Kaffee, Mühle, Dosis, Notizen, **Getränktyp**) und Vollbild-Chart. Annotationsfelder werden **automatisch gespeichert** 1 Sekunde nach der letzten Eingabe — ein grünes ✓ erscheint kurz; manuelles Speichern ist weiterhin möglich. Der zuletzt angezeigte Shot und ein aktiver Vergleich werden nach einem Neuladen der Seite wiederhergestellt (`localStorage`). Getränkoptionen kommen aus demselben Menü wie das Bestellsystem (`GET /api/menu`). |
+| **Shots** | Shot-Verlauf mit vollständigem Chart, Score, Annotation (Kaffee, Mühle, Dosis, Notizen, **Getränktyp**, **Bohnenalter beim Shot**) und Vollbild-Chart. Annotationsfelder werden **automatisch gespeichert** 1 Sekunde nach der letzten Eingabe. Wenn eine bekannte Bohne ausgewählt wird, wird das Alter der Bohne zum Zeitpunkt des Shots automatisch aus dem Röstdatum der aktiven Packung berechnet und in der Annotation gespeichert. Getränkoptionen kommen aus demselben Menü wie das Bestellsystem. |
 | **Analytics** | Aggregierte Statistiken und Trendcharts über alle Shots. |
-| **Bibliothek** | Kaffeebohnen- und Mühlenkatalog mit Verknüpfung zu Shots. |
+| **Bibliothek** | Kaffeebohnen- und Mühlenkatalog plus **Rezepte**-Tab. Bohnen unterstützen: Entkoffeiniert-Flag, Chargen-Tracking (Röstdatum + Anfangsgewicht pro Packung, Verbrauch pro Packung und Gesamtverbrauch über alle Packungen), URL-Import von kaffeebraun.com, Barcode-Scan, QR-Code. Rezepte speichern Brühmethode (Espresso, AeroPress, V60, French Press, Moka, Cold Brew), Dosis, Ausbeute, Zeit, Wassertemperatur, Wassermenge, Eismenge, Mahlgrad, Quellenlink und Workflow-Schritte. |
 | **Einwählen** | Einwähl-Assistent: Ziel-Shot mit aktuellen Versuchen vergleichen. |
 | **Wartung** | Fünf Maschinenwartungs-Erinnerungen (Entkalken, Backflush, Gruppenköpf-Service, Dichtungen & Siebe, Wasserfilter) plus ein eigener Reinigungsplan pro Mühle. Alle Aufgaben haben konfigurierbare Shot- oder Tages-Schwellenwerte, Fortschrittsbalken und „Jetzt erledigt"-Button. |
-| **Bestellungen** | Barista-Backend für Bestellverwaltung *(erfordert `enable_orders: true`)*. Bestellannahme per Toggle ein-/ausschalten, Getränkemenü verwalten (Emoji + Name, gespeichert in `/data/menu.json`), Live-Warteschlange (ausstehend / in Zubereitung) und Verlauf einsehen. Bestellungen annehmen mit ETA-Auswahl oder mit Freitext ablehnen. Kunden-Statistik-Panel zeigt Gesamtbestellungen und Auswertung pro Kunde. **Push-Benachrichtigungen** (einklappbare Sektion): zwei unabhängige Bereiche — (1) **Broadcast-Empfänger**: ein oder mehrere `notify.mobile_app_*`-Geräte auswählen, die eine Nachricht erhalten wenn Bestellungen geöffnet werden ("☕ geöffnet — Bestellungen über das Menü Kaffeebar"; aufheiz-bewusst: "öffnet in ca. X Min." während der Aufheizphase) oder geschlossen werden ("🚫 geschlossen"); (2) **Pro-Kunden-Zuordnung**: jedem HA-Nutzer ein Gerät zuweisen (alle `person.*` Entities werden angezeigt, plus Kunden aus dem Bestellverlauf) — dieses Gerät wird benachrichtigt wenn die eigene Bestellung angenommen, fertig oder abgelehnt wird. Erfordert `homeassistant_api: true` und die HA Companion App. Kundenbestellung über die [GLP Order Card](https://github.com/mxkissnr/glp-order-card). |
+| **Bestellungen** | Barista-Backend für Bestellverwaltung *(erfordert `enable_orders: true`)*. Bestellannahme per Toggle ein-/ausschalten, Getränkemenü verwalten (Emoji + Name, gespeichert in `/data/menu.json`), Live-Warteschlange mit automatisch vorgeschlagenem ETA basierend auf der aktuellen Warteschlangenlänge, und Verlauf einsehen. Bestellungen annehmen mit ETA-Auswahl (vorausgefüllt mit Warteschlangen-Schätzung) oder mit Freitext ablehnen. Kunden-Statistik-Panel zeigt Gesamtbestellungen und Auswertung pro Kunde. **Push-Benachrichtigungen** (einklappbare Sektion): zwei unabhängige Bereiche — (1) **Broadcast-Empfänger**: ein oder mehrere `notify.mobile_app_*`-Geräte auswählen, die eine Nachricht erhalten wenn Bestellungen geöffnet werden ("☕ geöffnet — Bestellungen über das Menü Kaffeebar aufgeben"; aufheiz-bewusst: "öffnet in ca. X Min." während der Aufheizphase) oder geschlossen werden ("🚫 geschlossen"); (2) **Pro-Kunden-Zuordnung**: jedem HA-Nutzer ein Gerät zuweisen (alle `person.*` Entities werden angezeigt, plus Kunden aus dem Bestellverlauf) — dieses Gerät wird benachrichtigt wenn die eigene Bestellung angenommen, fertig oder abgelehnt wird. Erfordert `homeassistant_api: true` und die HA Companion App. Kundenbestellung über die [GLP Order Card](https://github.com/mxkissnr/glp-order-card). |
 
 ### Live-Tab, Switch-Entity und Aufwärmtimer
 
 Wenn `switch_entity` gesetzt ist, wird der **Live**-Tab ausgeblendet solange die Maschine aus ist und erscheint automatisch sobald sie eingeschaltet wird. Ohne Switch-Entity ist der Tab immer sichtbar.
 
-Nach dem Einschalten zeigt der Live-Tab einen Fortschrittsbalken und einen Countdown bis `preheat_time` Minuten abgelaufen sind. Der Timer wird **nicht** zurückgesetzt, wenn die Maschine kurz aus- und wieder eingeschaltet wird, solange die Temperatur noch über 80 °C liegt (Auszeit < 5 Minuten) — kurze Stromunterbrechungen werden ignoriert. Der Aufwärmstatus wird auch als HA-Sensoren über die Companion-Integration bereitgestellt (`binary_sensor.…preheat_ready`, `sensor.…preheat_elapsed`, `sensor.…preheat_remaining`).
+Nach dem Einschalten zeigt der Live-Tab einen Fortschrittsbalken und einen Countdown. Die Maschine gilt als bereit wenn **thermische Stabilität** erkannt wird: die Temperatur muss die letzten 30 Sekunden innerhalb von ±1,5 °C bei oder nahe dem Zielwert liegen. Der feste `preheat_time`-Timer dient als Sicherheits-Ceiling — nach Ablauf wird die Maschine in jedem Fall als bereit markiert, auch ohne erkannte Stabilität. Der Timer wird **nicht** zurückgesetzt bei kurzen Stromunterbrechungen (< 5 Minuten, Temperatur noch über 80 °C). Der Aufwärmstatus wird auch als HA-Sensoren bereitgestellt (`binary_sensor.…preheat_ready`, `sensor.…preheat_elapsed`, `sensor.…preheat_remaining`).
 
 ### Import von kaffeebraun.com
 
@@ -151,6 +152,21 @@ Im Bibliothek-Tab auf **⬛ Scan** neben „Bohne hinzufügen" tippen, um den Ka
 - Jede Bohne in der Bibliothek hat einen **QR-Button** der einen teilbaren QR-Code mit allen Bohnen-Feldern erzeugt.
 
 Erfordert einen Chromium-basierten Browser (nutzt die native BarcodeDetector Web API). Firefox und Safari werden nicht unterstützt.
+
+### UI-Sprache
+
+GLP unterstützt sechs Oberflächensprachen, umschaltbar unter ⚙ Einstellungen → Sprache:
+
+| Code | Sprache |
+|---|---|
+| DE | Deutsch |
+| EN | English |
+| IT | Italiano |
+| FR | Français |
+| ES | Español |
+| NL | Nederlands |
+
+Die Auswahl wird in `localStorage` gespeichert. Alle UI-Texte, Chart-Beschriftungen, Mahlgrad-Empfehlungen, Wartungserinnerungen, Bestellstatus-Meldungen und Bibliothekstexte sind in allen sechs Sprachen vollständig übersetzt.
 
 ### Hell / Dunkel Theme
 

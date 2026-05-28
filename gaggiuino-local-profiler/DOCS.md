@@ -74,11 +74,12 @@ Install via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/mxkiss
 All components authenticate automatically via a shared token:
 
 1. The add-on generates a random 64-character token at first start and stores it in `/data/api_token.txt`.
-2. `/api/status` is public and returns the token.
-3. The browser UI and the integration read the token from `/api/status` on startup and include it as an `X-GLP-Token` header on all subsequent requests.
-4. Requests coming through HA Ingress bypass the token check — HA already authenticated the user.
+2. `GET /api/token` returns the token to requests originating from the HA Supervisor network (`172.30.x.x`) — i.e. requests going through the HA Ingress proxy. External LAN clients cannot read the token from an unauthenticated endpoint.
+3. The browser UI reads the token via `/api/token` on startup (the request goes through the Supervisor) and includes it as an `X-GLP-Token` header on all subsequent requests.
+4. Requests coming through HA Ingress bypass the token check entirely — HA already authenticated the user.
+5. **GLP Order Card in direct-URL mode** (`glp_url` configured): set `glp_token: <your-token>` in the card YAML. The token is printed in the add-on logs on first start.
 
-No manual configuration is required. To rotate the token, delete `/data/api_token.txt` and restart the add-on.
+No manual configuration is required for the HA Ingress path. To rotate the token, delete `/data/api_token.txt` and restart the add-on.
 
 All persistent data is written atomically (write to `.tmp`, then `fs.renameSync`) so a crash during a write cannot produce a half-written JSON file.
 
@@ -117,18 +118,18 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | Tab | Description |
 |---|---|
 | **Live** | Real-time pressure, flow, weight and temperature charts during a shot. When a brew starts, the most recent shot with the same profile name is automatically overlaid as a dashed reference curve. Can be overridden or cleared via the dropdown. The tab is only visible when the machine is on (requires `switch_entity`). |
-| **Shots** | Shot history with full chart view, score, annotation (coffee, grinder, dose, notes, **drink type**) and a fullscreen chart. Annotation fields **auto-save** 1 s after the last keystroke — a green ✓ appears briefly; manual Save still works. The last selected shot and any active comparison are restored after a page reload (persisted in `localStorage`). Drink type options are loaded from the same menu used by the orders feature (`GET /api/menu`). |
+| **Shots** | Shot history with full chart view, score, annotation (coffee, grinder, dose, notes, **drink type**, **bean age at shot time**) and a fullscreen chart. Annotation fields **auto-save** 1 s after the last keystroke. When a known bean is selected, the bean's age at shot time is calculated automatically from the active bag's roast date and stored in the annotation. Drink type options are loaded from the same menu used by the orders feature. |
 | **Analytics** | Aggregated statistics and trend charts across all shots. |
-| **Library** | Coffee bean and grinder catalogue linked to shots. |
-| **Einwählen** | Dial-in assistant: compare a target shot with recent attempts. |
+| **Library** | Coffee bean and grinder catalogue plus a **Recipes** tab. Beans support: decaf flag, bag/batch tracking (roast date + initial weight per bag, consumption tracked per bag and total across all bags), URL import from kaffeebraun.com, barcode scan, QR code. Recipes store brew method (Espresso, AeroPress, V60, French Press, Moka, Cold Brew), dose, yield, time, water temperature, water amount, ice amount, grind size, source URL and step-by-step workflow. |
+| **Dial-in** | Dial-in assistant: compare a target shot with recent attempts. |
 | **Maintenance** | Five machine maintenance reminders (descaling, backflush, group head service, gaskets & screens, water filter) plus a per-grinder cleaning schedule. All tasks have configurable shot or day thresholds, progress bars and a "Done now" button. |
-| **Bestellungen** | Barista order management backend *(requires `enable_orders: true`)*. Toggle order acceptance on/off, manage the drink menu (emoji + name, persisted in `/data/menu.json`), see the live order queue (pending / in progress) and history. Accept orders with an ETA picker, or decline with a free-text reason. Customer statistics panel shows total orders and per-customer breakdown. **Push notifications** (collapsible section): two independent sub-sections — (1) **Broadcast recipients**: select one or more `notify.mobile_app_*` devices that receive a broadcast when orders open ("☕ open — order via the Kaffeebar menu"; preheat-aware: "opens in ~X min" while warming up) or close ("🚫 closed"); (2) **Per-customer mapping**: assign a specific device to each HA user (all `person.*` entities are listed, plus anyone who has already placed an order) — that device is notified when their individual order is accepted, completed, or declined. Requires `homeassistant_api: true` and the HA Companion app. Customer-facing order placement is handled by the [GLP Order Card](https://github.com/mxkissnr/glp-order-card). |
+| **Orders** | Barista order management backend *(requires `enable_orders: true`)*. Toggle order acceptance on/off, manage the drink menu (emoji + name, persisted in `/data/menu.json`), see the live order queue with auto-suggested ETAs based on current queue length, and history. Accept orders with an ETA picker (pre-filled with queue estimate), or decline with a free-text reason. Customer statistics panel shows total orders and per-customer breakdown. **Push notifications** (collapsible section): two independent sub-sections — (1) **Broadcast recipients**: select one or more `notify.mobile_app_*` devices that receive a broadcast when orders open ("☕ open — order via the Kaffeebar menu"; preheat-aware: "opens in ~X min" while warming up) or close ("🚫 closed"); (2) **Per-customer mapping**: assign a specific device to each HA user (all `person.*` entities are listed, plus anyone who has already placed an order) — that device is notified when their individual order is accepted, completed, or declined. Requires `homeassistant_api: true` and the HA Companion app. Customer-facing order placement is handled by the [GLP Order Card](https://github.com/mxkissnr/glp-order-card). |
 
 ### Live tab, switch entity and preheat timer
 
 When `switch_entity` is set, the **Live** tab is hidden while the machine is off and appears automatically once it powers on. If no switch entity is configured the tab is always visible.
 
-Once the machine turns on, a preheat progress bar and countdown are shown in the Live tab until `preheat_time` minutes have elapsed. The timer does **not** reset if the machine is briefly switched off and back on while the temperature is still above 80 °C (off for < 5 minutes) — short power cycles are ignored. The preheat state is also exposed as HA sensors via the companion integration (`binary_sensor.…preheat_ready`, `sensor.…preheat_elapsed`, `sensor.…preheat_remaining`).
+Once the machine turns on, a preheat progress bar and countdown are shown in the Live tab. The machine is considered ready when **thermal stability** is detected: temperature must remain within ±1.5 °C over the last 30 seconds while at or near the target temperature. The fixed `preheat_time` timer acts as a safety ceiling — the machine will always be marked ready after that many minutes even if stability was not detected. The timer does **not** reset on brief power cycles (off for < 5 minutes, still above 80 °C). The preheat state is exposed as HA sensors via the companion integration (`binary_sensor.…preheat_ready`, `sensor.…preheat_elapsed`, `sensor.…preheat_remaining`).
 
 ### Import from kaffeebraun.com
 
@@ -151,6 +152,21 @@ In the Library tab, tap **⬛ Scan** next to "Add Bean" to open the camera scann
 - Each bean in the library has a **QR button** that generates a shareable QR code encoding all bean fields.
 
 Requires a Chromium-based browser (uses the native BarcodeDetector Web API). Not supported on Firefox or Safari.
+
+### UI language
+
+GLP ships with six interface languages selectable in ⚙ Settings → Language:
+
+| Code | Language |
+|---|---|
+| DE | Deutsch |
+| EN | English |
+| IT | Italiano |
+| FR | Français |
+| ES | Español |
+| NL | Nederlands |
+
+The selection is saved in `localStorage`. All UI strings, chart labels, grind recommendations, maintenance reminders, order status messages, and library labels are fully translated in all six languages.
 
 ### Light / Dark theme
 
