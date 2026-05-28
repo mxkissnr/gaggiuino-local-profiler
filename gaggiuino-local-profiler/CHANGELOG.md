@@ -1,3 +1,7 @@
+## 1.72.1
+- fix: Vite reverted to 6.x — Vite 8 uses Rolldown (Rust native binaries) which has no musl/Alpine build, causing the Docker image build to fail on all HA-supported architectures; Vite 6 (pure JS bundler) works correctly on Alpine
+- fix: Dockerfile updated from `node:18-alpine` (EOL April 2025) to `node:20-alpine` (LTS)
+
 ## 1.72.0
 - security: **apiToken no longer returned by unauthenticated `/api/status`** — new `/api/token` endpoint returns the token only to requests from the HA Supervisor network (172.30.x.x) or already-authenticated callers; closes #131 (Finding 1)
 - security: **ingress header bypass restricted to Supervisor source IP** — `X-Ingress-Path` is now only trusted when the request originates from `172.30.x.x`; external LAN clients can no longer spoof the header to bypass authentication; closes #131 (Finding 2)

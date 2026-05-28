@@ -1,4 +1,4 @@
-FROM node:18.20.4-alpine3.20 AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY public-src/ ./public-src/
 RUN npm run build
 
 # ── Runtime stage ──────────────────────────────────────────────────────────
-FROM node:18.20.4-alpine3.20
+FROM node:20-alpine
 
 WORKDIR /app
 
