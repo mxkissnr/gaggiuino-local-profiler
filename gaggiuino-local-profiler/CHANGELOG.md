@@ -1,3 +1,6 @@
+## 1.65.1
+- feat: orders — broadcast notification when orders are **disabled**: "🚫 Kaffeebar geschlossen — Die Bestellannahme wurde beendet."
+
 ## 1.65.0
 - feat: orders notify-mapping shows all HA `person.*` entities (not just past customers) — barista can assign devices before the first order; merged with order-history customers; closes #125 (partial)
 - fix: orders open-notification text includes "Bestellungen über das Menü Kaffeebar aufgeben"

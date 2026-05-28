@@ -77,9 +77,9 @@ router.post('/api/orders/settings', (req, res) => {
     }
     saveOrdersSettings(s);
     log(`Orders ${s.enabled ? 'enabled' : 'disabled'}`);
-    if (s.enabled && !prev.enabled) {
-        const recipients = s.broadcastRecipients || [];
-        if (recipients.length) {
+    const recipients = s.broadcastRecipients || [];
+    if (recipients.length) {
+        if (s.enabled && !prev.enabled) {
             const { ready, remainingMin } = _getPreheatInfo();
             const title = ready ? '☕ Kaffee ist jetzt geöffnet!' : '⏳ Kaffee öffnet bald!';
             const body  = ready
@@ -87,6 +87,12 @@ router.post('/api/orders/settings', (req, res) => {
                 : `Die Maschine heizt noch auf. Kaffee öffnet in ca. ${remainingMin} Min. — Bestellungen über das Menü Kaffeebar.`;
             recipients.forEach(svc => sendHaNotify(svc, title, body, 'glp_shop_open'));
             log(`Shop-open broadcast sent to ${recipients.length} device(s)`);
+        } else if (!s.enabled && prev.enabled) {
+            recipients.forEach(svc => sendHaNotify(svc,
+                '🚫 Kaffeebar geschlossen',
+                'Die Bestellannahme wurde beendet.',
+                'glp_shop_closed'));
+            log(`Shop-closed broadcast sent to ${recipients.length} device(s)`);
         }
     }
     res.json(s);
