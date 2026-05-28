@@ -1,3 +1,6 @@
+## 1.65.2
+- docs: DOCS.md + DOCS.de.md updated — orders push-notification section now documents both broadcast recipients (open/close with preheat-awareness) and per-customer mapping
+
 ## 1.65.1
 - feat: orders — broadcast notification when orders are **disabled**: "🚫 Kaffeebar geschlossen — Die Bestellannahme wurde beendet."
 
