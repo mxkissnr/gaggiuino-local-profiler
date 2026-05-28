@@ -369,9 +369,10 @@ export async function loadNotifyMappingView() {
   const section = document.getElementById('ordersNotifyBody');
   if (!section) return;
 
-  const [{ mapping, customers }, services] = await Promise.all([
+  const [{ mapping, customers }, services, settings] = await Promise.all([
     apiFetch('api/orders/notify-mapping').then(r => r.json()).catch(() => ({ mapping: {}, customers: {} })),
     apiFetch('api/orders/notify-services').then(r => r.json()).catch(() => null),
+    apiFetch('api/orders/settings').then(r => r.json()).catch(() => ({})),
   ]);
 
   if (services === null) {
@@ -379,36 +380,74 @@ export async function loadNotifyMappingView() {
     return;
   }
 
-  const haUserIds = Object.keys(customers);
-  if (!haUserIds.length) {
-    section.innerHTML = `<p class="orders-notify-hint">${t('orders_notify_no_customers')}</p>`;
-    return;
-  }
+  const savedRecipients = Array.isArray(settings.broadcastRecipients) ? settings.broadcastRecipients : [];
 
-  const serviceOptions = services.map(s =>
-    `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  // ── Broadcast section ────────────────────────────────────────
+  const broadcastRows = services.length
+    ? services.map(s => `
+        <div class="orders-broadcast-row">
+          <input type="checkbox" id="bc_${esc(s.id)}" data-svc="${esc(s.id)}"${savedRecipients.includes(s.id) ? ' checked' : ''}>
+          <label for="bc_${esc(s.id)}">${esc(s.name)}</label>
+        </div>`).join('')
+    : `<p class="orders-broadcast-empty">${t('orders_notify_no_ha')}</p>`;
 
-  section.innerHTML = `
-    <p class="orders-notify-hint">${t('orders_notify_desc')}</p>
-    <div class="orders-notify-list" id="ordersNotifyList">
-      ${haUserIds.map(uid => `
-        <div class="orders-notify-row">
-          <span class="orders-notify-customer">${esc(customers[uid])}</span>
-          <select class="orders-notify-select" data-uid="${esc(uid)}">
-            <option value="">${t('orders_notify_no_service')}</option>
-            ${serviceOptions}
-          </select>
-        </div>`).join('')}
-    </div>
-    <div class="orders-notify-actions">
-      <button class="orders-menu-save-btn" id="ordersNotifySaveBtn" onclick="saveNotifyMapping()">${t('orders_notify_save')}</button>
+  const broadcastHtml = `
+    <div class="orders-broadcast-section">
+      <p class="orders-broadcast-title">${t('orders_broadcast_title')}</p>
+      <p class="orders-notify-hint">${t('orders_broadcast_desc')}</p>
+      <div class="orders-broadcast-list" id="ordersBroadcastList">${broadcastRows}</div>
+      <div class="orders-notify-actions">
+        <button class="orders-menu-save-btn" id="ordersBroadcastSaveBtn" onclick="saveBroadcastRecipients()">${t('orders_broadcast_save')}</button>
+      </div>
     </div>`;
 
-  // Apply saved mapping values
+  // ── Per-customer section ─────────────────────────────────────
+  const haUserIds = Object.keys(customers);
+  const perCustomerHtml = haUserIds.length ? (() => {
+    const serviceOptions = services.map(s =>
+      `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+    return `
+      <p class="orders-notify-hint">${t('orders_notify_desc')}</p>
+      <div class="orders-notify-list" id="ordersNotifyList">
+        ${haUserIds.map(uid => `
+          <div class="orders-notify-row">
+            <span class="orders-notify-customer">${esc(customers[uid])}</span>
+            <select class="orders-notify-select" data-uid="${esc(uid)}">
+              <option value="">${t('orders_notify_no_service')}</option>
+              ${serviceOptions}
+            </select>
+          </div>`).join('')}
+      </div>
+      <div class="orders-notify-actions">
+        <button class="orders-menu-save-btn" id="ordersNotifySaveBtn" onclick="saveNotifyMapping()">${t('orders_notify_save')}</button>
+      </div>`;
+  })() : `<p class="orders-notify-hint">${t('orders_notify_no_customers')}</p>`;
+
+  section.innerHTML = broadcastHtml + perCustomerHtml;
+
+  // Apply saved per-customer mapping values
   section.querySelectorAll('[data-uid]').forEach(sel => {
     const saved = mapping[sel.dataset.uid];
     if (saved) sel.value = saved;
   });
+}
+
+export async function saveBroadcastRecipients() {
+  const list = document.getElementById('ordersBroadcastList');
+  if (!list) return;
+  const recipients = [...list.querySelectorAll('input[type="checkbox"]:checked')]
+    .map(cb => cb.dataset.svc).filter(Boolean);
+  const settings = await apiFetch('api/orders/settings').then(r => r.json()).catch(() => ({}));
+  await apiFetch('api/orders/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: settings.enabled ?? true, broadcastRecipients: recipients }),
+  });
+  const btn = document.getElementById('ordersBroadcastSaveBtn');
+  if (btn) {
+    btn.textContent = t('orders_broadcast_saved');
+    setTimeout(() => { btn.textContent = t('orders_broadcast_save'); }, 2000);
+  }
 }
 
 export async function saveNotifyMapping() {

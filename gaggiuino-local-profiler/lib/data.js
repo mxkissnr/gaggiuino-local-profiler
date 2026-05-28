@@ -154,8 +154,8 @@ function loadOrders() {
 function saveOrders(orders) { writeFileSafe(ORDERS_FILE, orders); }
 
 function loadOrdersSettings() {
-    try { return fs.existsSync(ORDERS_SETTINGS_FILE) ? JSON.parse(fs.readFileSync(ORDERS_SETTINGS_FILE, 'utf8')) : { enabled: true }; }
-    catch { return { enabled: true }; }
+    try { return fs.existsSync(ORDERS_SETTINGS_FILE) ? JSON.parse(fs.readFileSync(ORDERS_SETTINGS_FILE, 'utf8')) : { enabled: true, broadcastRecipients: [] }; }
+    catch { return { enabled: true, broadcastRecipients: [] }; }
 }
 function saveOrdersSettings(s) { writeFileSafe(ORDERS_SETTINGS_FILE, s); }
 

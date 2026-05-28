@@ -7,10 +7,21 @@ const {
     loadOrders, saveOrders, loadMenu, saveMenu,
     loadOrdersSettings, saveOrdersSettings,
     loadNotifyMapping, saveNotifyMapping,
-    loadAnnotations, loadTrash, isOrdersEnabled,
+    loadAnnotations, loadTrash, isOrdersEnabled, loadOptions,
 } = require('../lib/data');
 const { sendHaNotify, getNotifyServices } = require('../lib/ha');
 const { log, rateLimit, writeFileSafe } = require('../lib/helpers');
+const state = require('../lib/state');
+
+function _getPreheatInfo() {
+    const opts        = loadOptions();
+    const preheatMins = Math.max(1, parseInt(opts.preheat_time) || 20);
+    const preheatMs   = preheatMins * 60 * 1000;
+    const machineOff  = !state.machineOn && !!opts.switch_entity;
+    if (machineOff || !state.switchOnAt) return { ready: false, remainingMin: preheatMins };
+    const remainingMs  = Math.max(0, preheatMs - (Date.now() - state.switchOnAt));
+    return { ready: remainingMs === 0, remainingMin: Math.max(1, Math.ceil(remainingMs / 60000)) };
+}
 
 // Guard: all order routes require enable_orders: true
 router.use((req, res, next) => {
@@ -58,17 +69,25 @@ router.get('/api/orders/settings', (req, res) => res.json(loadOrdersSettings()))
 router.post('/api/orders/settings', (req, res) => {
     if (typeof req.body?.enabled !== 'boolean') return res.status(400).json({ error: 'enabled (boolean) required' });
     const prev = loadOrdersSettings();
-    const s    = { enabled: req.body.enabled };
+    const s    = { ...prev, enabled: req.body.enabled };
+    if (Array.isArray(req.body.broadcastRecipients)) {
+        s.broadcastRecipients = req.body.broadcastRecipients
+            .filter(v => typeof v === 'string' && v.startsWith('notify.'))
+            .map(v => String(v).slice(0, 100));
+    }
     saveOrdersSettings(s);
     log(`Orders ${s.enabled ? 'enabled' : 'disabled'}`);
     if (s.enabled && !prev.enabled) {
-        const mapping = loadNotifyMapping();
-        const services = [...new Set(Object.values(mapping))].filter(Boolean);
-        services.forEach(svc => sendHaNotify(svc,
-            '☕ Kaffee-Shop geöffnet!',
-            'Du kannst jetzt Getränke bestellen.',
-            'glp_shop_open'));
-        if (services.length) log(`Shop-open notification sent to ${services.length} device(s)`);
+        const recipients = s.broadcastRecipients || [];
+        if (recipients.length) {
+            const { ready, remainingMin } = _getPreheatInfo();
+            const title = ready ? '☕ Kaffee ist jetzt geöffnet!' : '⏳ Kaffee öffnet bald!';
+            const body  = ready
+                ? 'Die Maschine ist bereit — du kannst jetzt bestellen.'
+                : `Die Maschine heizt noch auf. Kaffee öffnet in ca. ${remainingMin} Min.`;
+            recipients.forEach(svc => sendHaNotify(svc, title, body, 'glp_shop_open'));
+            log(`Shop-open broadcast sent to ${recipients.length} device(s)`);
+        }
     }
     res.json(s);
 });

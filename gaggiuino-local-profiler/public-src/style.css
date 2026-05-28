@@ -1184,6 +1184,12 @@
         .orders-notify-select { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:7px; color:var(--gray-200); font-size:.78rem; padding:5px 8px; outline:none; font-family:'Figtree',sans-serif; cursor:pointer; }
         .orders-notify-select:focus { border-color:var(--gray-600); }
         .orders-notify-actions { display:flex; justify-content:flex-end; }
+        .orders-broadcast-section { margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid var(--gray-800); }
+        .orders-broadcast-title { font-size:.8rem; font-weight:700; color:var(--gray-400); letter-spacing:.04em; text-transform:uppercase; margin:0 0 6px; }
+        .orders-broadcast-list { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+        .orders-broadcast-row { display:flex; align-items:center; gap:8px; }
+        .orders-broadcast-row label { font-size:.85rem; color:var(--gray-200); cursor:pointer; }
+        .orders-broadcast-empty { font-size:.8rem; color:var(--gray-600); margin:0 0 10px; }
 
         /* ── Split-flap counter (inline in sidebar header) ── */
         .flap-board {

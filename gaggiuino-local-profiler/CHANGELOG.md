@@ -1,3 +1,6 @@
+## 1.64.0
+- feat: orders — broadcast-recipients config in barista UI; barista selects which HA devices get notified when orders open; preheat-aware message: "opens in ~X min" while warming up, "open now" when ready; `broadcastRecipients` array stored in orders settings; closes #125
+
 ## 1.63.0
 - feat: orders — customer-chosen notify service: `notifyService` field stored on order (validated to `notify.*`); accept/complete/decline prefer `order.notifyService` over per-user barista mapping; glp-order-card v1.6.0 sends the selection; closes #12 (glp-order-card)
 
