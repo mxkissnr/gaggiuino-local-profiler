@@ -11,10 +11,7 @@ export async function updateStatus() {
     ]);
     if (!statusRes.ok) return;
     const s = await statusRes.json();
-    if (s.apiToken && s.apiToken !== S.glpToken) {
-      S.glpToken = s.apiToken;
-      localStorage.setItem('glp_token', S.glpToken);
-    }
+    // Token is no longer returned by /api/status — it comes from /api/token (initToken)
     const dot = document.getElementById('statusDot');
     const timeEl = document.getElementById('syncTime');
     if (s.lastSync) {

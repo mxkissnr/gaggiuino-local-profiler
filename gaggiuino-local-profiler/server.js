@@ -66,11 +66,24 @@ app.use((req, res, next) => {
 app.use('/api/restore', express.json({ limit: '50mb' }));
 app.use(express.json({ limit: '16kb' }));
 
+// Returns true only for requests originating from the HA Supervisor internal network.
+// The Supervisor proxies ingress traffic from 172.30.0.0/16; external LAN clients
+// arrive with their own IP and must not receive the same trust level.
+function isFromSupervisor(req) {
+    const ip = req.socket?.remoteAddress || req.ip || '';
+    // Strip IPv6-mapped IPv4 prefix (::ffff:172.30.x.x)
+    const plain = ip.replace(/^::ffff:/, '');
+    return plain === '127.0.0.1' || plain.startsWith('172.30.');
+}
+
 // API token auth
 app.use((req, res, next) => {
     if (!state.apiToken) return next();
+    // Ingress bypass: only trust X-Ingress-Path when the request genuinely
+    // originates from the HA Supervisor (172.30.x.x), preventing header spoofing
+    // from external LAN clients who can also reach port 8099.
     const ingressPath = req.headers['x-ingress-path'];
-    if (ingressPath !== undefined && ingressPath.startsWith(HA_INGRESS_PATH)) return next();
+    if (ingressPath !== undefined && ingressPath.startsWith(HA_INGRESS_PATH) && isFromSupervisor(req)) return next();
     if (req.path === '/api/status') return next();
     if (!req.path.startsWith('/api/') && req.path !== '/shots.json') return next();
     if (req.headers['x-glp-token'] === state.apiToken) return next();

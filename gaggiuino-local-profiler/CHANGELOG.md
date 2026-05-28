@@ -1,3 +1,7 @@
+## 1.72.0
+- security: **apiToken no longer returned by unauthenticated `/api/status`** — new `/api/token` endpoint returns the token only to requests from the HA Supervisor network (172.30.x.x) or already-authenticated callers; closes #131 (Finding 1)
+- security: **ingress header bypass restricted to Supervisor source IP** — `X-Ingress-Path` is now only trusted when the request originates from `172.30.x.x`; external LAN clients can no longer spoof the header to bypass authentication; closes #131 (Finding 2)
+
 ## 1.71.1
 - fix: firmware version detection — `fetchMachineVersion()` tried only `/api/system/info` (doesn't exist on Gaggiuino); now also tries `/api/firmware` and `/api/about`; additionally extracts firmware from `/api/system/status` response fields every live-poll cycle; as last fallback reads `softwareVersion`/`buildNumber`/`buildDate` directly from the shot JSON at sync time
 

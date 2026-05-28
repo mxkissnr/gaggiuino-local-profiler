@@ -43,6 +43,22 @@ function saveProfilesCache(profiles) {
     }
 })();
 
+// ── Token endpoint ────────────────────────────────────────────────────────
+// Returns the API token to callers that are either:
+//  a) already authenticated (valid X-GLP-Token — covered by middleware), or
+//  b) coming from the HA Supervisor network (ingress proxy from 172.30.x.x).
+// External LAN clients without a token cannot call this endpoint.
+
+router.get('/api/token', (req, res) => {
+    const ip = (req.socket?.remoteAddress || req.ip || '').replace(/^::ffff:/, '');
+    const fromSupervisor = ip === '127.0.0.1' || ip.startsWith('172.30.');
+    const hasValidToken  = req.headers['x-glp-token'] === state.apiToken && !!state.apiToken;
+    if (!fromSupervisor && !hasValidToken) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    res.json({ apiToken: state.apiToken || null });
+});
+
 // ── Status ────────────────────────────────────────────────────────────────
 
 router.get('/api/status', (req, res) => {
@@ -66,7 +82,6 @@ router.get('/api/status', (req, res) => {
         haConnected:    !!HA_TOKEN,
         switchEntity:   opts.switch_entity || null,
         glpVersion:     GLP_VERSION,
-        apiToken:       state.apiToken || null,
         ordersFeature:  isOrdersEnabled(),
     });
 });
