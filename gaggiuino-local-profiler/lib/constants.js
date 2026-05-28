@@ -3,7 +3,7 @@ if (typeof File === 'undefined') {
     try { global.File = require('buffer').File; } catch (_) { global.File = class File {}; }
 }
 
-const GLP_VERSION  = '1.67.1';
+const GLP_VERSION  = '1.68.0';
 const DEFAULT_PORT = 8099;
 
 const DATA_DIR             = '/data';
@@ -31,9 +31,9 @@ const HA_TOKEN              = process.env.SUPERVISOR_TOKEN;
 const ALLOWED_URL_SCHEMES   = ['http:', 'https:'];
 const ALLOWED_IMPORT_HOSTS  = ['kaffeebraun.com', 'www.kaffeebraun.com'];
 
-const TEMP_HISTORY_MAX  = 60;
-const TEMP_STABLE_MIN   = 30;
-const TEMP_STABLE_VAR   = 1.5;
+const TEMP_HISTORY_MAX  = 60;   // max rolling history entries (1 per second)
+const TEMP_STABLE_MIN   = 30;   // minimum window length to consider stability (seconds)
+const TEMP_STABLE_VAR   = 1.5;  // max allowed range (max-min, °C) over the stability window
 const PREHEAT_STATE_TTL = 24 * 60 * 60 * 1000;
 const WARM_TEMP_MIN     = 80;
 const WARM_OFF_MAX_MS   = 5 * 60 * 1000;

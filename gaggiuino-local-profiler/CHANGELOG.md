@@ -1,3 +1,6 @@
+## 1.68.0
+- feat: preheat thermal stability detection improved (#124): `isTempStable()` now uses **range (max−min ≤ 1.5 °C)** over the last 30 seconds instead of statistical variance over the full history — reacts to recent stability even if the machine oscillated earlier; `state.stabilityReady` flag tracks whether preheat was completed by stability or timer; `/api/preheat` response includes `stabilityReady: bool`
+
 ## 1.67.1
 - feat: Library Rezepte — **Wassermenge (g)**, **Eismenge (g)** und **Quellenlink (URL)** als neue Felder; Karte zeigt 💧/🧊 in der Parameterzeile und einen klickbaren 🔗-Link
 

@@ -15,6 +15,7 @@ module.exports = {
     liveSeq:              0,
     switchOnAt:           null,
     switchOffAt:          null,
+    stabilityReady:       false,
     currentTemp:          null,
     currentTargetTemp:    null,
     tempHistory:          [],

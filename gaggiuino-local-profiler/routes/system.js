@@ -200,7 +200,9 @@ router.get('/api/preheat', (req, res) => {
     const elapsed   = Math.floor(elapsedMs / 1000);
     const remaining = Math.max(0, Math.ceil((preheatMs - elapsedMs) / 1000));
     const pct       = Math.min(1, elapsedMs / preheatMs);
-    res.json({ ready: remaining === 0, elapsed, remaining, pct, preheatTime: preheatMins,
+    const ready     = remaining === 0;
+    res.json({ ready, elapsed, remaining, pct, preheatTime: preheatMins,
+               stabilityReady: ready && !!state.stabilityReady,
                temp: state.currentTemp, targetTemp: state.currentTargetTemp });
 });
 

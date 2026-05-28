@@ -31,9 +31,11 @@ function loadPreheatState() {
 
 function isTempStable() {
     if (state.tempHistory.length < TEMP_STABLE_MIN) return false;
-    const mean     = state.tempHistory.reduce((a, b) => a + b, 0) / state.tempHistory.length;
-    const variance = state.tempHistory.reduce((sum, t) => sum + (t - mean) ** 2, 0) / state.tempHistory.length;
-    return variance < TEMP_STABLE_VAR;
+    // Use only the last TEMP_STABLE_MIN readings so recent stability is detected
+    // even if the machine was oscillating earlier. TEMP_STABLE_VAR is a range
+    // threshold (°C): max - min must be ≤ this value.
+    const window = state.tempHistory.slice(-TEMP_STABLE_MIN);
+    return Math.max(...window) - Math.min(...window) <= TEMP_STABLE_VAR;
 }
 
 // ── Live polling ──────────────────────────────────────────────────────────
@@ -53,8 +55,9 @@ function stopLivePolling() {
     clearInterval(state.livePollTimer);
     state.livePollTimer = null;
     state.liveAccum     = null;
-    state.switchOffAt   = Date.now();
-    state.tempHistory   = [];
+    state.switchOffAt     = Date.now();
+    state.stabilityReady  = false;
+    state.tempHistory     = [];
     savePreheatState();
     log('Live polling stopped');
 }
@@ -104,7 +107,8 @@ async function pollViaGaggiuinoStatus() {
             if (state.switchOnAt && tTempVal > 0 && tempVal >= tTempVal - 2 && isTempStable()) {
                 const preheatMs = (Math.max(1, parseInt(opts.preheat_time) || 20)) * 60 * 1000;
                 if (Date.now() - state.switchOnAt < preheatMs) {
-                    state.switchOnAt = Date.now() - preheatMs;
+                    state.switchOnAt      = Date.now() - preheatMs;
+                    state.stabilityReady  = true;
                     savePreheatState();
                     log('Temperature stable -- preheat marked complete');
                 }
