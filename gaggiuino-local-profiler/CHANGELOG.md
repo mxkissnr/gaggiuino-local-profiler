@@ -1,3 +1,6 @@
+## 1.72.4
+- fix: auth middleware now bypasses `/api/token` so the endpoint can apply its own IP-based check — previously the middleware blocked all unauthenticated `/api/*` requests including `/api/token` itself, making it impossible for the integration coordinator to ever obtain a token; closes #133
+
 ## 1.72.3
 - fix: `/api/token` now accepts requests from any private/loopback IP (10.x, 172.16–31.x, 192.168.x, 127.0.0.1) — HA Core may reach the add-on from a Docker bridge IP (172.17.x.x) or host-routed IP that is not in the Supervisor subnet (172.30.x.x); closes #133. The Ingress-Path bypass in the auth middleware remains strictly 172.30.x.x.
 

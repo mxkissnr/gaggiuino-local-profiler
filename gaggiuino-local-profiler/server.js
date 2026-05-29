@@ -85,6 +85,7 @@ app.use((req, res, next) => {
     const ingressPath = req.headers['x-ingress-path'];
     if (ingressPath !== undefined && ingressPath.startsWith(HA_INGRESS_PATH) && isFromSupervisor(req)) return next();
     if (req.path === '/api/status') return next();
+    if (req.path === '/api/token') return next(); // endpoint handles its own IP-based check
     if (!req.path.startsWith('/api/') && req.path !== '/shots.json') return next();
     if (req.headers['x-glp-token'] === state.apiToken) return next();
     res.status(401).json({ error: 'Unauthorized' });
