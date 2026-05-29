@@ -1,3 +1,6 @@
+## 1.73.0
+- feat: analytics — 5 new sections: Summary KPIs (total shots, avg score, total coffee, this week, longest streak), Personal Bests (best shot with link, longest streak, favourite bean/profile, busiest day), Grinder Stats (cards identical to bean stats), Dose & Ratio Distribution histograms, Time of Day bar chart (shots by hour, coloured by avg score); closes #132
+
 ## 1.72.4
 - fix: auth middleware now bypasses `/api/token` so the endpoint can apply its own IP-based check — previously the middleware blocked all unauthenticated `/api/*` requests including `/api/token` itself, making it impossible for the integration coordinator to ever obtain a token; closes #133
 

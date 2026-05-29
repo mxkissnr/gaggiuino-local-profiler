@@ -267,6 +267,29 @@
         .cal-3 { background: rgba(239,68,68,.85); }
         .cal-future { background: transparent; border: none; }
 
+        /* KPI tiles */
+        .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+        .kpi-tile { background: var(--gray-800); border: 1px solid var(--gray-700); border-radius: 8px; padding: 12px 10px; text-align: center; }
+        .kpi-val  { font-size: 1.35rem; font-weight: 700; color: var(--gray-100); line-height: 1.2; }
+        .kpi-lbl  { font-size: .65rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
+
+        /* Personal Bests */
+        .bests-list  { display: flex; flex-direction: column; gap: 6px; }
+        .bests-row   { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--gray-800); gap: 12px; }
+        .bests-row:last-child { border-bottom: none; }
+        .bests-lbl   { font-size: .8rem; color: var(--gray-500); flex-shrink: 0; }
+        .bests-val   { font-size: .85rem; color: var(--gray-200); font-weight: 600; text-align: right; }
+        .bests-count { font-size: .75rem; color: var(--gray-500); font-weight: 400; }
+        .bests-link  { background: transparent; border: 1px solid var(--gray-700); color: var(--gray-400); border-radius: 4px; padding: 2px 7px; cursor: pointer; font-size: .75rem; margin-left: 6px; transition: all .15s; }
+        .bests-link:hover { color: #fff; border-color: var(--gray-500); }
+
+        @media (max-width: 900px) {
+            .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 560px) {
+            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
         /* Bean cards */
         .bean-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 10px; }
         .bean-card {

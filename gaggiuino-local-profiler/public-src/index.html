@@ -566,6 +566,12 @@
     <div id="analytics-view">
         <div class="analytics-container">
 
+            <!-- Summary KPIs -->
+            <div class="analytics-card">
+                <h3 class="analytics-section-title" data-i18n="analytics_summary">Übersicht</h3>
+                <div id="summaryKpis" class="kpi-grid"></div>
+            </div>
+
             <!-- Score Trend -->
             <div class="analytics-card">
                 <div class="analytics-card-head">
@@ -585,6 +591,12 @@
                 <div id="shotCalendar" class="cal-wrapper"></div>
             </div>
 
+            <!-- Personal Bests -->
+            <div class="analytics-card">
+                <h3 class="analytics-section-title" data-i18n="analytics_personal_bests">Persönliche Bestleistungen</h3>
+                <div id="personalBests"></div>
+            </div>
+
             <!-- Bean stats + Profile chart -->
             <div class="analytics-two-col">
                 <div class="analytics-card">
@@ -595,6 +607,30 @@
                     <h3 class="analytics-section-title" data-i18n="analytics_profiles">Profil-Performance</h3>
                     <div id="profileChartWrap" style="height:220px;position:relative"><canvas id="profileChart"></canvas></div>
                 </div>
+            </div>
+
+            <!-- Grinder Stats -->
+            <div class="analytics-card">
+                <h3 class="analytics-section-title" data-i18n="analytics_grinders">Mühlen-Auswertung</h3>
+                <div id="grinderStats"></div>
+            </div>
+
+            <!-- Dose & Ratio Distribution -->
+            <div class="analytics-two-col">
+                <div class="analytics-card">
+                    <h3 class="analytics-section-title" data-i18n="analytics_dose_dist">Dosis-Verteilung (g)</h3>
+                    <div style="height:160px;position:relative"><canvas id="doseDistChart"></canvas></div>
+                </div>
+                <div class="analytics-card">
+                    <h3 class="analytics-section-title" data-i18n="analytics_ratio_dist">Brew-Ratio-Verteilung</h3>
+                    <div style="height:160px;position:relative"><canvas id="ratioDistChart"></canvas></div>
+                </div>
+            </div>
+
+            <!-- Time of Day -->
+            <div class="analytics-card">
+                <h3 class="analytics-section-title" data-i18n="analytics_time_of_day">Tageszeit</h3>
+                <div style="height:160px;position:relative"><canvas id="timeOfDayChart"></canvas></div>
             </div>
 
         </div>
