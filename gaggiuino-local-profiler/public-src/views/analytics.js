@@ -60,7 +60,7 @@ export function buildSummaryKpis() {
     { val: avgScore !== null ? avgScore : '—', lbl: t('analytics_avg_score'), cls: avgScore !== null ? scoreClass(avgScore) : '' },
     { val: total > 0 ? totalCoffee : '—', lbl: t('analytics_total_coffee') },
     { val: thisWeek, lbl: t('analytics_this_week') },
-    { val: streak > 0 ? t('analytics_days')(streak) : '—', lbl: t('analytics_streak') },
+    { val: streak > 0 ? t('analytics_days', streak) : '—', lbl: t('analytics_streak') },
   ];
   el.innerHTML = kpis.map(k =>
     `<div class="kpi-tile"><div class="kpi-val ${k.cls||''}">${k.val}</div><div class="kpi-lbl">${k.lbl}</div></div>`
@@ -105,7 +105,7 @@ export function buildPersonalBests() {
       val: `<span class="${scoreClass(bestScore)}">${bestScore}</span> · ${d}`,
       link: bestShot.id });
   }
-  if (streak > 0) rows.push({ lbl: t('analytics_longest_streak'), val: t('analytics_days')(streak) });
+  if (streak > 0) rows.push({ lbl: t('analytics_longest_streak'), val: t('analytics_days', streak) });
   if (favBean)    rows.push({ lbl: t('analytics_fav_bean'),    val: `${_esc(favBean[0])} <span class="bests-count">${favBean[1]} ${t('bean_stat_shots')}</span>` });
   if (favProfile) rows.push({ lbl: t('analytics_fav_profile'), val: `${_esc(favProfile[0])} <span class="bests-count">${favProfile[1]} ${t('bean_stat_shots')}</span>` });
   if (busiestDay) {

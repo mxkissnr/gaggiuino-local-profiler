@@ -3,13 +3,14 @@ if (typeof File === 'undefined') {
     try { global.File = require('buffer').File; } catch (_) { global.File = class File {}; }
 }
 
-const GLP_VERSION  = '1.73.0';
+const GLP_VERSION  = '1.73.1';
 const DEFAULT_PORT = 8099;
 
 const DATA_DIR             = '/data';
 const TOKEN_FILE           = '/data/api_token.txt';
 const PREHEAT_STATE_FILE   = '/data/preheat_state.json';
 const DATA_FILE            = '/data/shots.json';
+const MAINTENANCE_LOG_FILE = '/data/maintenance_log.json';
 const ANNOTATIONS_FILE     = '/data/annotations.json';
 const TRASH_FILE           = '/data/trash.json';
 const BLOCKLIST_FILE       = '/data/blocklist.json';
@@ -60,7 +61,7 @@ const STATIC_MAINTENANCE_TASKS = new Set(['descaling', 'backflush', 'grouphead',
 module.exports = {
     GLP_VERSION, DEFAULT_PORT,
     DATA_DIR, TOKEN_FILE, PREHEAT_STATE_FILE, DATA_FILE, ANNOTATIONS_FILE,
-    TRASH_FILE, BLOCKLIST_FILE, OPTIONS_FILE, LIBRARY_FILE, MAINTENANCE_FILE,
+    TRASH_FILE, BLOCKLIST_FILE, OPTIONS_FILE, LIBRARY_FILE, MAINTENANCE_FILE, MAINTENANCE_LOG_FILE,
     ORDERS_FILE, MENU_FILE, ORDERS_SETTINGS_FILE, NOTIFY_MAPPING_FILE, PROFILES_CACHE_FILE,
     TRASH_TTL_MS, ORDERS_HISTORY_TTL_MS, MAX_SHOT_ID,
     HA_INGRESS_PATH, HA_API, HA_TOKEN, ALLOWED_URL_SCHEMES, ALLOWED_IMPORT_HOSTS,

@@ -1,3 +1,6 @@
+## 1.73.1
+- fix: analytics crash — `t('analytics_days')` was called without args, the i18n helper immediately invokes function-values, returning `"undefined Tage"` instead of the function; then calling that string as a function threw a TypeError that crashed all of `initAnalytics()`; fixed to `t('analytics_days', n)` in both KPI and personal-bests sections
+
 ## 1.73.0
 - feat: analytics — 5 new sections: Summary KPIs (total shots, avg score, total coffee, this week, longest streak), Personal Bests (best shot with link, longest streak, favourite bean/profile, busiest day), Grinder Stats (cards identical to bean stats), Dose & Ratio Distribution histograms, Time of Day bar chart (shots by hour, coloured by avg score); closes #132
 
