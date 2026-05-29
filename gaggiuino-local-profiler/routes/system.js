@@ -46,14 +46,22 @@ function saveProfilesCache(profiles) {
 // ── Token endpoint ────────────────────────────────────────────────────────
 // Returns the API token to callers that are either:
 //  a) already authenticated (valid X-GLP-Token — covered by middleware), or
-//  b) coming from the HA Supervisor network (ingress proxy from 172.30.x.x).
-// External LAN clients without a token cannot call this endpoint.
+//  b) coming from any private/loopback network (covers HA Core on 172.30.x.x,
+//     Docker bridge on 172.17.x.x, host-routed 192.168.x.x, etc.).
+// Public internet clients cannot reach this endpoint.
+// Note: the Ingress-Path bypass in server.js remains strictly 172.30.x.x.
+function isPrivateIp(ip) {
+    return ip === '127.0.0.1' || ip === '::1' ||
+           ip.startsWith('10.') ||
+           ip.startsWith('192.168.') ||
+           /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
+}
 
 router.get('/api/token', (req, res) => {
     const ip = (req.socket?.remoteAddress || req.ip || '').replace(/^::ffff:/, '');
-    const fromSupervisor = ip === '127.0.0.1' || ip.startsWith('172.30.');
-    const hasValidToken  = req.headers['x-glp-token'] === state.apiToken && !!state.apiToken;
-    if (!fromSupervisor && !hasValidToken) {
+    const fromPrivate   = isPrivateIp(ip);
+    const hasValidToken = req.headers['x-glp-token'] === state.apiToken && !!state.apiToken;
+    if (!fromPrivate && !hasValidToken) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     res.json({ apiToken: state.apiToken || null });

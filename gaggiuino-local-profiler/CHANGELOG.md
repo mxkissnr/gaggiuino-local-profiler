@@ -1,3 +1,6 @@
+## 1.72.3
+- fix: `/api/token` now accepts requests from any private/loopback IP (10.x, 172.16–31.x, 192.168.x, 127.0.0.1) — HA Core may reach the add-on from a Docker bridge IP (172.17.x.x) or host-routed IP that is not in the Supervisor subnet (172.30.x.x); closes #133. The Ingress-Path bypass in the auth middleware remains strictly 172.30.x.x.
+
 ## 1.72.2
 - docs: DOCS.md + DOCS.de.md comprehensive update — NL language added to language table, API token section updated (v1.72.0 /api/token change + direct-URL glp_token), Library tab updated (recipes, bag tracking, decaf), tab names corrected (Einwählen→Dial-in, Bestellungen→Orders in EN), preheat section updated (thermal stability detection), Orders tab updated (queue ETA), UI language section added (DE/EN/IT/FR/ES/NL)
 
