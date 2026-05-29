@@ -75,6 +75,10 @@ router.post('/api/orders/settings', (req, res) => {
             .filter(v => typeof v === 'string' && v.startsWith('notify.'))
             .map(v => String(v).slice(0, 100));
     }
+    if (req.body.baristaNotifyService !== undefined) {
+        const svc = req.body.baristaNotifyService;
+        s.baristaNotifyService = (typeof svc === 'string' && svc.startsWith('notify.')) ? svc.slice(0, 100) : null;
+    }
     saveOrdersSettings(s);
     log(`Orders ${s.enabled ? 'enabled' : 'disabled'}`);
     const recipients = s.broadcastRecipients || [];
@@ -217,6 +221,11 @@ router.post('/api/orders', (req, res) => {
     orders.push(order);
     saveOrders(orders);
     log(`Order ${order.id}: ${order.customer} → ${order.item}`);
+    const baristaSvc = loadOrdersSettings().baristaNotifyService;
+    if (baristaSvc) {
+        const body = order.note ? `${order.customer}: ${order.note}` : order.customer;
+        sendHaNotify(baristaSvc, `☕ ${order.item}`, body, 'glp_new_order');
+    }
     res.json(order);
 });
 

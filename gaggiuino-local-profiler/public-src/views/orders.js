@@ -398,7 +398,8 @@ export async function loadNotifyMappingView() {
     return;
   }
 
-  const savedRecipients = Array.isArray(settings.broadcastRecipients) ? settings.broadcastRecipients : [];
+  const savedRecipients     = Array.isArray(settings.broadcastRecipients) ? settings.broadcastRecipients : [];
+  const savedBaristaSvc     = settings.baristaNotifyService || '';
 
   // ── Broadcast section ────────────────────────────────────────
   const broadcastRows = services.length
@@ -416,6 +417,20 @@ export async function loadNotifyMappingView() {
       <div class="orders-broadcast-list" id="ordersBroadcastList">${broadcastRows}</div>
       <div class="orders-notify-actions">
         <button class="orders-menu-save-btn" id="ordersBroadcastSaveBtn" onclick="saveBroadcastRecipients()">${t('orders_broadcast_save')}</button>
+      </div>
+    </div>`;
+
+  // ── Barista section ──────────────────────────────────────────
+  const baristaOptions = `<option value="">${t('orders_notify_no_service')}</option>` +
+    services.map(s => `<option value="${esc(s.id)}"${savedBaristaSvc === s.id ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
+
+  const baristaHtml = `
+    <div class="orders-broadcast-section">
+      <p class="orders-broadcast-title">${t('orders_barista_title')}</p>
+      <p class="orders-notify-hint">${t('orders_barista_desc')}</p>
+      <select class="orders-notify-select" id="ordersBaristaSelect">${baristaOptions}</select>
+      <div class="orders-notify-actions">
+        <button class="orders-menu-save-btn" id="ordersBaristaSaveBtn" onclick="saveBaristaNotify()">${t('orders_barista_save')}</button>
       </div>
     </div>`;
 
@@ -441,7 +456,7 @@ export async function loadNotifyMappingView() {
       </div>`;
   })() : `<p class="orders-notify-hint">${t('orders_notify_no_customers')}</p>`;
 
-  section.innerHTML = broadcastHtml + perCustomerHtml;
+  section.innerHTML = broadcastHtml + baristaHtml + perCustomerHtml;
 
   // Apply saved per-customer mapping values
   section.querySelectorAll('[data-uid]').forEach(sel => {
@@ -465,6 +480,22 @@ export async function saveBroadcastRecipients() {
   if (btn) {
     btn.textContent = t('orders_broadcast_saved');
     setTimeout(() => { btn.textContent = t('orders_broadcast_save'); }, 2000);
+  }
+}
+
+export async function saveBaristaNotify() {
+  const sel = document.getElementById('ordersBaristaSelect');
+  if (!sel) return;
+  const settings = await apiFetch('api/orders/settings').then(r => r.json()).catch(() => ({}));
+  await apiFetch('api/orders/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: settings.enabled ?? true, baristaNotifyService: sel.value || null }),
+  });
+  const btn = document.getElementById('ordersBaristaSaveBtn');
+  if (btn) {
+    btn.textContent = t('orders_barista_saved');
+    setTimeout(() => { btn.textContent = t('orders_barista_save'); }, 2000);
   }
 }
 

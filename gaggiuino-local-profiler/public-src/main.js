@@ -32,7 +32,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          renderOrdersList, renderOrderCard, renderOrdersMenuAdmin, renderOrdersStats,
          acceptOrder, toggleDeclineRow, submitDecline, completeOrder,
          deleteOrder, clearOrderHistory,
-         loadNotifyMappingView, saveNotifyMapping, saveBroadcastRecipients,
+         loadNotifyMappingView, saveNotifyMapping, saveBroadcastRecipients, saveBaristaNotify,
          _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
@@ -199,6 +199,7 @@ Object.assign(window, {
   loadNotifyMappingView,
   saveNotifyMapping,
   saveBroadcastRecipients,
+  saveBaristaNotify,
   _updateOrdersToggleUI,
   _orderTimeAgo,
 

@@ -1,3 +1,6 @@
+## 1.75.0
+- feat: barista push notification on new order — configure a barista notify device in the Push Notifications section of the Orders tab; the barista receives a push notification (title: item name, body: customer + note) whenever a new order is placed; stored as `baristaNotifyService` in `/data/orders_settings.json`; closes #136
+
 ## 1.74.1
 - perf: `writeFileSafe` now uses `JSON.stringify(data)` instead of `JSON.stringify(data, null, 2)` — removes whitespace/newlines from all persisted JSON files (~25% storage reduction); existing pretty-printed files are unaffected on read and minified on next write; closes #135
 
