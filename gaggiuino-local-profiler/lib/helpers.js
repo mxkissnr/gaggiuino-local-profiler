@@ -23,7 +23,7 @@ setInterval(() => {
 // ── Atomic file write (write to .tmp, then rename — crash-safe) ───────────
 function writeFileSafe(filePath, data) {
     const tmp     = filePath + '.tmp';
-    const content = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+    const content = typeof data === 'string' ? data : JSON.stringify(data);
     fs.writeFileSync(tmp, content, 'utf8');
     fs.renameSync(tmp, filePath);
 }

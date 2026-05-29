@@ -1,3 +1,6 @@
+## 1.74.1
+- perf: `writeFileSafe` now uses `JSON.stringify(data)` instead of `JSON.stringify(data, null, 2)` — removes whitespace/newlines from all persisted JSON files (~25% storage reduction); existing pretty-printed files are unaffected on read and minified on next write; closes #135
+
 ## 1.74.0
 - feat: maintenance log — persistent history of all service events per machine; every "Mark as done" click creates a log entry (date, task, shot count, machine hostname); manual entries can be added via form (task selector, date picker, notes); entries can be deleted; stored in `/data/maintenance_log.json` (max 500 entries); new endpoints: `GET/POST /api/maintenance/log`, `DELETE /api/maintenance/log/:id`; closes #134
 
