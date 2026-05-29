@@ -1147,6 +1147,34 @@
         }
         .maint-done-btn:hover { background:var(--gray-700); color:#fff; border-color:var(--gray-600); }
         .maint-section-title { font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--gray-500); margin:8px 0 4px; grid-column:1/-1; }
+        /* Maintenance Log */
+        .maint-log-section { margin-top:20px; display:flex; flex-direction:column; gap:12px; }
+        .maint-log-header  { display:flex; justify-content:space-between; align-items:center; }
+        .maint-log-add-btn { background:transparent; border:1px solid var(--gray-700); color:var(--gray-400); border-radius:7px; padding:5px 12px; cursor:pointer; font-size:.78rem; font-family:'Figtree',sans-serif; transition:all .15s; }
+        .maint-log-add-btn:hover { color:#fff; border-color:var(--gray-500); }
+        .maint-log-form { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:10px; padding:14px; display:flex; flex-direction:column; gap:10px; }
+        .maint-log-form-row { display:flex; gap:8px; flex-wrap:wrap; }
+        .maint-log-select, .maint-log-date, .maint-log-notes-input {
+            background:var(--gray-800); border:1px solid var(--gray-700); border-radius:6px;
+            color:var(--gray-200); font-size:.82rem; font-family:'Figtree',sans-serif; padding:6px 10px;
+        }
+        .maint-log-select { flex:0 0 auto; }
+        .maint-log-date   { flex:0 0 auto; }
+        .maint-log-notes-input { flex:1; min-width:120px; }
+        .maint-log-form-actions { display:flex; gap:8px; }
+        .maint-log-cancel-btn { background:transparent; border:1px solid var(--gray-700); color:var(--gray-500); border-radius:7px; padding:6px 14px; cursor:pointer; font-size:.8rem; font-family:'Figtree',sans-serif; }
+        .maint-log-cancel-btn:hover { color:var(--gray-300); }
+        .maint-log-list { display:flex; flex-direction:column; gap:6px; }
+        .maint-log-row { display:flex; align-items:flex-start; gap:12px; padding:10px 12px; background:var(--gray-900); border:1px solid var(--gray-800); border-radius:8px; }
+        .maint-log-date-col { flex:0 0 90px; font-size:.78rem; color:var(--gray-500); padding-top:1px; }
+        .maint-log-task-col { flex:1; min-width:0; }
+        .maint-log-task-name { font-size:.85rem; font-weight:600; color:var(--gray-200); }
+        .maint-log-meta { font-size:.72rem; color:var(--gray-600); margin-top:2px; }
+        .maint-log-notes { font-size:.78rem; color:var(--gray-400); margin-top:3px; font-style:italic; }
+        .maint-log-manual-badge { font-size:.6rem; font-weight:700; background:rgba(132,204,22,.12); border:1px solid rgba(132,204,22,.3); color:#84cc16; border-radius:4px; padding:1px 5px; vertical-align:middle; margin-left:5px; }
+        .maint-log-del-btn { flex:0 0 auto; background:transparent; border:none; color:var(--gray-700); cursor:pointer; font-size:.9rem; padding:2px 4px; border-radius:4px; transition:color .15s; }
+        .maint-log-del-btn:hover { color:var(--err); }
+
         .maint-badge {
             display:inline-block; width:7px; height:7px; background:var(--err);
             border-radius:50%; margin-left:5px; vertical-align:middle;

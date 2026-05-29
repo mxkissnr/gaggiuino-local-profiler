@@ -1,3 +1,6 @@
+## 1.74.0
+- feat: maintenance log — persistent history of all service events per machine; every "Mark as done" click creates a log entry (date, task, shot count, machine hostname); manual entries can be added via form (task selector, date picker, notes); entries can be deleted; stored in `/data/maintenance_log.json` (max 500 entries); new endpoints: `GET/POST /api/maintenance/log`, `DELETE /api/maintenance/log/:id`; closes #134
+
 ## 1.73.1
 - fix: analytics crash — `t('analytics_days')` was called without args, the i18n helper immediately invokes function-values, returning `"undefined Tage"` instead of the function; then calling that string as a function threw a TypeError that crashed all of `initAnalytics()`; fixed to `t('analytics_days', n)` in both KPI and personal-bests sections
 

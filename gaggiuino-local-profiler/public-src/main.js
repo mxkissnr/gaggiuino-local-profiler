@@ -24,7 +24,8 @@ import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, 
 import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanStats, buildProfileChart, _renderCalendar } from './views/analytics.js';
 
 import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode,
-         renderMaintenanceCards, maintStatusLabel, _buildMaintCard } from './views/maintenance.js';
+         renderMaintenanceCards, maintStatusLabel, _buildMaintCard,
+         openMaintLogForm, closeMaintLogForm, submitMaintLogEntry, deleteMaintLogEntry } from './views/maintenance.js';
 
 import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled,
          toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify,
@@ -171,6 +172,10 @@ Object.assign(window, {
   renderMaintenanceCards,
   maintStatusLabel,
   _buildMaintCard,
+  openMaintLogForm,
+  closeMaintLogForm,
+  submitMaintLogEntry,
+  deleteMaintLogEntry,
 
   // orders view
   loadOrdersView,

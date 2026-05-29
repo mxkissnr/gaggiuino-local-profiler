@@ -266,6 +266,26 @@
     <!-- Maintenance view -->
     <div id="maintenance-view">
         <div id="maint-cards"></div>
+
+        <!-- Maintenance Log -->
+        <div class="maint-log-section">
+            <div class="maint-log-header">
+                <h3 class="maint-section-title" data-i18n="maint_log_title">Wartungsprotokoll</h3>
+                <button class="maint-log-add-btn" onclick="openMaintLogForm()" data-i18n="maint_log_add">Manuell eintragen</button>
+            </div>
+            <div id="maintLogForm" class="maint-log-form" style="display:none">
+                <div class="maint-log-form-row">
+                    <select id="maintLogTask" class="maint-log-select"></select>
+                    <input type="date" id="maintLogDate" class="maint-log-date">
+                    <input type="text" id="maintLogNotes" class="maint-log-notes-input" data-i18n-placeholder="maint_log_notes_ph" placeholder="z.B. Cafiza 1h">
+                </div>
+                <div class="maint-log-form-actions">
+                    <button class="maint-done-btn" onclick="submitMaintLogEntry()" data-i18n="maint_log_save">Speichern</button>
+                    <button class="maint-log-cancel-btn" onclick="closeMaintLogForm()" data-i18n="maint_log_cancel">Abbrechen</button>
+                </div>
+            </div>
+            <div id="maintLog"></div>
+        </div>
     </div>
 
     <!-- Orders view (barista backend) -->

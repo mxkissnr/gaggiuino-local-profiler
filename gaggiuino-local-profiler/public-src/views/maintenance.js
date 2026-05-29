@@ -17,6 +17,7 @@ export async function loadMaintenanceView() {
   } catch (e) {
     container.innerHTML = `<div class="loading-state" style="color:#ef4444">${t('error_load')}</div>`;
   }
+  loadMaintLog();
 }
 
 export function _buildMaintCard(task, d, title, icon) {
@@ -93,6 +94,7 @@ export async function markMaintDone(task) {
   try {
     const r = await apiFetch(`api/maintenance/${task}/done`, { method: 'POST' });
     renderMaintenanceCards(await r.json());
+    loadMaintLog();
   } catch (e) {}
 }
 
@@ -119,4 +121,102 @@ export async function setMaintMode(task, mode) {
     });
     renderMaintenanceCards(await r.json());
   } catch (e) {}
+}
+
+// ── Maintenance Log ───────────────────────────────────────────────────────
+
+const _logEsc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+export async function loadMaintLog() {
+  const el = document.getElementById('maintLog');
+  if (!el) return;
+  try {
+    const entries = await apiFetch('api/maintenance/log').then(r => r.json());
+    renderMaintLog(entries);
+  } catch { el.innerHTML = ''; }
+}
+
+function taskLabel(task) {
+  if (MAINT_META[task]) return MAINT_META[task].icon + ' ' + t(MAINT_META[task].key);
+  if (task.startsWith('grinder_')) return '⚙ ' + (task.replace('grinder_', 'Grinder '));
+  return task;
+}
+
+export function renderMaintLog(entries) {
+  const el = document.getElementById('maintLog');
+  if (!el) return;
+  if (!entries.length) {
+    el.innerHTML = `<p style="color:#52525b;font-size:.82rem;padding:8px 0">${t('maint_log_empty')}</p>`;
+    return;
+  }
+  const locale = S.currentLang === 'de' ? 'de-DE' : S.currentLang === 'nl' ? 'nl-NL'
+    : S.currentLang === 'it' ? 'it-IT' : S.currentLang === 'fr' ? 'fr-FR'
+    : S.currentLang === 'es' ? 'es-ES' : 'en-GB';
+
+  let html = '<div class="maint-log-list">';
+  for (const e of entries) {
+    const dateStr = new Date(e.ts * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const isManual = e.shotCountAtTime === null;
+    const metaArr = [];
+    if (e.shotCountAtTime !== null) metaArr.push(`${e.shotCountAtTime} ${t('maint_log_shots')}`);
+    if (e.machine) metaArr.push(_logEsc(e.machine));
+    html += `<div class="maint-log-row">
+      <div class="maint-log-date-col">${dateStr}</div>
+      <div class="maint-log-task-col">
+        <div class="maint-log-task-name">${_logEsc(taskLabel(e.task))}${isManual ? `<span class="maint-log-manual-badge">${t('maint_log_manual_badge')}</span>` : ''}</div>
+        ${metaArr.length ? `<div class="maint-log-meta">${metaArr.join(' · ')}</div>` : ''}
+        ${e.notes ? `<div class="maint-log-notes">${_logEsc(e.notes)}</div>` : ''}
+      </div>
+      <button class="maint-log-del-btn" onclick="deleteMaintLogEntry(${e.id})" title="${t('maint_log_confirm_delete')}">🗑</button>
+    </div>`;
+  }
+  el.innerHTML = html + '</div>';
+}
+
+export function openMaintLogForm() {
+  const form = document.getElementById('maintLogForm');
+  if (!form) return;
+  // Populate task dropdown
+  const sel = document.getElementById('maintLogTask');
+  sel.innerHTML = '';
+  for (const [task, meta] of Object.entries(MAINT_META)) {
+    const opt = document.createElement('option');
+    opt.value = task; opt.textContent = meta.icon + ' ' + t(meta.key);
+    sel.appendChild(opt);
+  }
+  // Set date to today
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('maintLogDate').value = today;
+  document.getElementById('maintLogDate').max   = today;
+  document.getElementById('maintLogNotes').value = '';
+  form.style.display = 'flex';
+}
+
+export function closeMaintLogForm() {
+  const form = document.getElementById('maintLogForm');
+  if (form) form.style.display = 'none';
+}
+
+export async function submitMaintLogEntry() {
+  const task  = document.getElementById('maintLogTask').value;
+  const date  = document.getElementById('maintLogDate').value;
+  const notes = document.getElementById('maintLogNotes').value.trim();
+  if (!task || !date) return;
+  try {
+    await apiFetch('api/maintenance/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task, date, notes }),
+    });
+    closeMaintLogForm();
+    loadMaintLog();
+  } catch {}
+}
+
+export async function deleteMaintLogEntry(id) {
+  if (!confirm(t('maint_log_confirm_delete'))) return;
+  try {
+    await apiFetch(`api/maintenance/log/${id}`, { method: 'DELETE' });
+    loadMaintLog();
+  } catch {}
 }

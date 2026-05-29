@@ -1,7 +1,7 @@
 const fs = require('fs');
 const {
     OPTIONS_FILE, ANNOTATIONS_FILE, TRASH_FILE, BLOCKLIST_FILE, LIBRARY_FILE,
-    MAINTENANCE_FILE, ORDERS_FILE, MENU_FILE, ORDERS_SETTINGS_FILE,
+    MAINTENANCE_FILE, MAINTENANCE_LOG_FILE, ORDERS_FILE, MENU_FILE, ORDERS_SETTINGS_FILE,
     NOTIFY_MAPPING_FILE, DATA_FILE,
     ORDERS_HISTORY_TTL_MS, TRASH_TTL_MS,
     DEFAULT_MENU, MAINTENANCE_DEFAULTS, ALLOWED_URL_SCHEMES,
@@ -114,6 +114,33 @@ function loadMaintenance() {
 }
 function saveMaintenance(data) { writeFileSafe(MAINTENANCE_FILE, data); }
 
+// ── Maintenance Log ───────────────────────────────────────────────────────
+
+function loadMaintenanceLog() {
+    try { return fs.existsSync(MAINTENANCE_LOG_FILE) ? JSON.parse(fs.readFileSync(MAINTENANCE_LOG_FILE, 'utf8')) : []; }
+    catch { return []; }
+}
+function saveMaintenanceLog(entries) { writeFileSafe(MAINTENANCE_LOG_FILE, entries); }
+
+function addMaintenanceLogEntry(task, notes, machine) {
+    let shotCount = 0;
+    try { if (fs.existsSync(DATA_FILE)) shotCount = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')).length; } catch {}
+    const entries = loadMaintenanceLog();
+    const entry = {
+        id:              Date.now(),
+        ts:              Math.floor(Date.now() / 1000),
+        date:            new Date().toISOString().split('T')[0],
+        task,
+        machine:         machine || '',
+        shotCountAtTime: shotCount,
+        notes:           notes || '',
+    };
+    entries.unshift(entry);
+    if (entries.length > 500) entries.splice(500);
+    saveMaintenanceLog(entries);
+    return entry;
+}
+
 function computeMaintenanceStats(maint) {
     let shots = [];
     try { if (fs.existsSync(DATA_FILE)) shots = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) {}
@@ -198,6 +225,7 @@ module.exports = {
     loadAnnotations, saveAnnotations, loadTrash, saveTrash,
     loadBlocklist, saveBlocklist, loadLibrary, saveLibrary,
     loadMaintenance, saveMaintenance, computeMaintenanceStats,
+    loadMaintenanceLog, saveMaintenanceLog, addMaintenanceLogEntry,
     loadMenu, saveMenu, loadOrders, saveOrders,
     loadOrdersSettings, saveOrdersSettings,
     loadNotifyMapping, saveNotifyMapping,
