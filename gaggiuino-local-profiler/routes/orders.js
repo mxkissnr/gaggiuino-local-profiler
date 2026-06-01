@@ -273,7 +273,10 @@ router.post('/api/orders/:id/complete', (req, res) => {
         try {
             const annotations = loadAnnotations();
             const key = String(order.shotId);
-            annotations[key] = { ...(annotations[key] || {}), orderedBy: { customer: order.customer, haUserId: order.haUserId, orderId: order.id } };
+            annotations[key] = { ...(annotations[key] || {}), orderedBy: {
+                customer: order.customer, haUserId: order.haUserId, orderId: order.id,
+                item: order.item, variant: order.variant || null, note: order.note || null,
+            } };
             writeFileSafe(ANNOTATIONS_FILE, annotations);
         } catch { /* non-critical */ }
     }

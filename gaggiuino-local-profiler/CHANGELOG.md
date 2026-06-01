@@ -1,3 +1,6 @@
+## 1.76.1
+- fix: order context (drink, variant, note) now stored in shot annotation on order complete — `orderedBy` object in the annotation now includes `item`, `variant`, and `note` in addition to `customer`/`haUserId`/`orderId`; closes #138
+
 ## 1.76.0
 - feat: menu item variants — each drink in the order menu can have optional variants (e.g. Regular / Decaf, Oat / Whole Milk); admin adds/removes variants per item via chip editor in the Orders menu admin; order stores `variant` field; barista view shows variant next to item name; push notification title includes variant; new `variants` field on menu items (`PUT /api/orders/menu/:id`), new `variant` field on orders (`POST /api/orders`); pairs with glp-order-card v1.8.0; closes #137
 
