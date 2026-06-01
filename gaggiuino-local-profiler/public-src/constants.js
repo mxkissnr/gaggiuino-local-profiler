@@ -217,6 +217,8 @@ export const TRANSLATIONS = {
     orders_barista_title:'👨‍🍳 Barista-Benachrichtigung', orders_barista_desc:'Dieses Gerät wird benachrichtigt wenn eine neue Bestellung eingeht.',
     orders_barista_save:'Speichern', orders_barista_saved:'✓ Gespeichert',
     orders_trending_toggle:'Trending ein/aus',
+    orders_variants_label:'Varianten', orders_variant_ph:'Variante …', orders_variant_add_btn:'+',
+    orders_variant_select:'Variante wählen',
     ann_ordered_by:'Bestellt von',
   },
   en: {
@@ -435,6 +437,8 @@ export const TRANSLATIONS = {
     orders_barista_title:'👨‍🍳 Barista notification', orders_barista_desc:'This device is notified when a new order comes in.',
     orders_barista_save:'Save', orders_barista_saved:'✓ Saved',
     orders_trending_toggle:'Toggle trending',
+    orders_variants_label:'Variants', orders_variant_ph:'Variant …', orders_variant_add_btn:'+',
+    orders_variant_select:'Select variant',
     ann_ordered_by:'Ordered by',
   },
   it: {
@@ -653,6 +657,8 @@ export const TRANSLATIONS = {
     orders_barista_title:'👨‍🍳 Notifica barista', orders_barista_desc:'Questo dispositivo viene notificato quando arriva un nuovo ordine.',
     orders_barista_save:'Salva', orders_barista_saved:'✓ Salvato',
     orders_trending_toggle:'Attiva/disattiva trending',
+    orders_variants_label:'Varianti', orders_variant_ph:'Variante …', orders_variant_add_btn:'+',
+    orders_variant_select:'Seleziona variante',
     ann_ordered_by:'Ordinato da',
   },
   fr: {
@@ -871,6 +877,8 @@ export const TRANSLATIONS = {
     orders_barista_title:'👨‍🍳 Notification barista', orders_barista_desc:'Cet appareil est notifié quand une nouvelle commande arrive.',
     orders_barista_save:'Enregistrer', orders_barista_saved:'✓ Enregistré',
     orders_trending_toggle:'Activer/désactiver tendance',
+    orders_variants_label:'Variantes', orders_variant_ph:'Variante …', orders_variant_add_btn:'+',
+    orders_variant_select:'Sélectionner une variante',
     ann_ordered_by:'Commandé par',
   },
   es: {
@@ -1089,6 +1097,8 @@ export const TRANSLATIONS = {
     orders_barista_title:'👨‍🍳 Notificación barista', orders_barista_desc:'Este dispositivo recibe una notificación cuando llega un nuevo pedido.',
     orders_barista_save:'Guardar', orders_barista_saved:'✓ Guardado',
     orders_trending_toggle:'Activar/desactivar tendencia',
+    orders_variants_label:'Variantes', orders_variant_ph:'Variante …', orders_variant_add_btn:'+',
+    orders_variant_select:'Seleccionar variante',
     ann_ordered_by:'Pedido por',
   },
   nl: {
@@ -1307,6 +1317,8 @@ export const TRANSLATIONS = {
     orders_barista_title:'👨‍🍳 Barista-melding', orders_barista_desc:'Dit apparaat ontvangt een melding wanneer er een nieuwe bestelling binnenkomt.',
     orders_barista_save:'Opslaan', orders_barista_saved:'✓ Opgeslagen',
     orders_trending_toggle:'Trending aan/uit',
+    orders_variants_label:'Varianten', orders_variant_ph:'Variant …', orders_variant_add_btn:'+',
+    orders_variant_select:'Selecteer variant',
     ann_ordered_by:'Besteld door',
   },
 };

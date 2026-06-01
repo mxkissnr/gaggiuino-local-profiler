@@ -206,7 +206,7 @@ export function renderOrderCard(o, ctx) {
       : '';
     return `<div class="order-card status-pending">
       <div class="order-card-top">
-        <span class="order-item-name">${esc(o.item)}${isNew ? `<span class="orders-new-badge">${t('orders_new_badge')}</span>` : ''}</span>
+        <span class="order-item-name">${esc(o.item)}${o.variant ? ` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : ''}${isNew ? `<span class="orders-new-badge">${t('orders_new_badge')}</span>` : ''}</span>
         <span class="order-meta">${_orderTimeAgo(o.createdAt)}${queueHint}</span>
       </div>
       <div class="order-customer">${t('orders_for')} <b>${esc(o.customer)}</b>${o.note ? ` · <span class="order-note">${esc(o.note)}</span>` : ''}</div>
@@ -232,7 +232,7 @@ export function renderOrderCard(o, ctx) {
     const declineOpen = S._ordersDeclineOpen[o.id];
     return `<div class="order-card status-accepted">
       <div class="order-card-top">
-        <span class="order-item-name">${esc(o.item)}</span>
+        <span class="order-item-name">${esc(o.item)}${o.variant ? ` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : ''}</span>
         <span class="order-eta-tag">${t('orders_eta_in', minsLeft)}</span>
       </div>
       <div class="order-customer">${t('orders_for')} <b>${esc(o.customer)}</b>${o.note ? ` · <span class="order-note">${esc(o.note)}</span>` : ''}</div>
@@ -251,7 +251,7 @@ export function renderOrderCard(o, ctx) {
   const statusLabel = o.status === 'done' ? t('orders_done') : t('orders_declined');
   return `<div class="order-card status-${o.status}">
     <div class="order-card-top">
-      <span class="order-item-name">${esc(o.item)}</span>
+      <span class="order-item-name">${esc(o.item)}${o.variant ? ` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : ''}</span>
       <span class="order-history-right">
         <span class="order-meta">${statusLabel} · ${_orderTimeAgo(o.completedAt || o.createdAt)}</span>
         <button class="order-hist-del" data-order-delete="${esc(o.id)}" title="${t('orders_delete_entry')}"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
@@ -289,13 +289,26 @@ export async function completeOrder(id) {
 export async function renderOrdersMenuAdmin(menu) {
   const list = document.getElementById('ordersMenuList');
   if (!list) return;
-  list.innerHTML = menu.map(item => `
+  list.innerHTML = menu.map(item => {
+    const variants = item.variants || [];
+    const chipHtml = variants.map(v =>
+      `<span class="orders-menu-variant-chip">${esc(v)}<button class="orders-menu-variant-del" data-menu-id="${esc(item.id)}" data-variant="${esc(v)}" title="✕">×</button></span>`
+    ).join('');
+    return `
     <div class="orders-menu-item">
-      <span>${item.emoji}</span>
-      <span class="orders-menu-item-name">${esc(item.name)}</span>
-      <button class="orders-menu-trend${item.trending ? ' active' : ''}" data-menu-trend="${esc(item.id)}" title="${t('orders_trending_toggle')}">🔥</button>
-      <button class="orders-menu-del" data-menu-del="${esc(item.id)}" title="${t('orders_confirm_delete_item')}">✕</button>
-    </div>`).join('');
+      <div class="orders-menu-item-top">
+        <span>${item.emoji}</span>
+        <span class="orders-menu-item-name">${esc(item.name)}</span>
+        <button class="orders-menu-trend${item.trending ? ' active' : ''}" data-menu-trend="${esc(item.id)}" title="${t('orders_trending_toggle')}">🔥</button>
+        <button class="orders-menu-del" data-menu-del="${esc(item.id)}" title="${t('orders_confirm_delete_item')}">✕</button>
+      </div>
+      <div class="orders-menu-variants">
+        ${chipHtml}
+        <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" placeholder="${t('orders_variant_ph')}">
+        <button class="orders-menu-variant-btn" data-variant-add="${esc(item.id)}">${t('orders_variant_add_btn')}</button>
+      </div>
+    </div>`;
+  }).join('');
   list.querySelectorAll('[data-menu-trend]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id   = btn.dataset.menuTrend;
@@ -313,6 +326,38 @@ export async function renderOrdersMenuAdmin(menu) {
     btn.addEventListener('click', async () => {
       if (!confirm(t('orders_confirm_delete_item'))) return;
       await apiFetch(`api/orders/menu/${btn.dataset.menuDel}`, { method: 'DELETE' });
+      loadOrdersView();
+    });
+  });
+  list.querySelectorAll('[data-variant-add]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id    = btn.dataset.variantAdd;
+      const input = list.querySelector(`#variantInput_${id}`);
+      const val   = input?.value?.trim();
+      if (!val) return;
+      const item  = menu.find(m => m.id === id);
+      if (!item) return;
+      const variants = [...(item.variants || []), val];
+      await apiFetch(`api/orders/menu/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ variants }),
+      });
+      loadOrdersView();
+    });
+  });
+  list.querySelectorAll('.orders-menu-variant-del').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id      = btn.dataset.menuId;
+      const variant = btn.dataset.variant;
+      const item    = menu.find(m => m.id === id);
+      if (!item) return;
+      const variants = (item.variants || []).filter(v => v !== variant);
+      await apiFetch(`api/orders/menu/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ variants }),
+      });
       loadOrdersView();
     });
   });

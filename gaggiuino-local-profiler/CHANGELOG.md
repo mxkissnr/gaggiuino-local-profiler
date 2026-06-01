@@ -1,3 +1,6 @@
+## 1.76.0
+- feat: menu item variants — each drink in the order menu can have optional variants (e.g. Regular / Decaf, Oat / Whole Milk); admin adds/removes variants per item via chip editor in the Orders menu admin; order stores `variant` field; barista view shows variant next to item name; push notification title includes variant; new `variants` field on menu items (`PUT /api/orders/menu/:id`), new `variant` field on orders (`POST /api/orders`); pairs with glp-order-card v1.8.0; closes #137
+
 ## 1.75.0
 - feat: barista push notification on new order — configure a barista notify device in the Push Notifications section of the Orders tab; the barista receives a push notification (title: item name, body: customer + note) whenever a new order is placed; stored as `baristaNotifyService` in `/data/orders_settings.json`; closes #136
 

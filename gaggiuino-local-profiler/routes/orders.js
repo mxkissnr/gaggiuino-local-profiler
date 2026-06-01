@@ -34,10 +34,14 @@ router.use((req, res, next) => {
 router.get('/api/orders/menu', (req, res) => res.json(loadMenu()));
 
 router.post('/api/orders/menu', (req, res) => {
-    const { name, emoji } = req.body || {};
+    const { name, emoji, variants } = req.body || {};
     if (!name?.trim()) return res.status(400).json({ error: 'name required' });
     const menu = loadMenu();
-    const item = { id: `m_${Date.now()}`, name: name.trim(), emoji: emoji?.trim() || '☕', createdAt: Date.now(), trending: false };
+    const item = {
+        id: `m_${Date.now()}`, name: name.trim(), emoji: emoji?.trim() || '☕',
+        createdAt: Date.now(), trending: false,
+        variants: Array.isArray(variants) ? variants.map(v => String(v).trim().slice(0, 50)).filter(Boolean) : [],
+    };
     menu.push(item);
     saveMenu(menu);
     res.json(item);
@@ -50,6 +54,8 @@ router.put('/api/orders/menu/:id', (req, res) => {
     if (req.body?.name?.trim())                       item.name     = req.body.name.trim();
     if (req.body?.emoji?.trim())                      item.emoji    = req.body.emoji.trim();
     if (typeof req.body?.trending === 'boolean')      item.trending = req.body.trending;
+    if (Array.isArray(req.body?.variants))
+        item.variants = req.body.variants.map(v => String(v).trim().slice(0, 50)).filter(Boolean);
     saveMenu(menu);
     res.json(item);
 });
@@ -196,10 +202,12 @@ router.get('/api/orders/mine', (req, res) => {
 router.post('/api/orders', (req, res) => {
     if (!rateLimit(`orders:${req.ip}`, 10)) return res.status(429).json({ error: 'Rate limit exceeded' });
     if (!loadOrdersSettings().enabled) return res.status(503).json({ error: 'orders_disabled' });
-    const { item, note, customer, notifyService } = req.body || {};
+    const { item, note, customer, notifyService, variant } = req.body || {};
     if (!item || !customer?.trim()) return res.status(400).json({ error: 'item and customer required' });
     const menu = loadMenu();
-    if (!menu.find(m => m.name === item)) return res.status(400).json({ error: 'unknown item' });
+    const menuItem = menu.find(m => m.name === item);
+    if (!menuItem) return res.status(400).json({ error: 'unknown item' });
+    const validVariant = variant ? String(variant).trim().slice(0, 50) : null;
 
     // Prefer integration-verified HA user ID over client-supplied body field
     const haUserId = req.headers['x-glp-ha-user-id']
@@ -213,6 +221,7 @@ router.post('/api/orders', (req, res) => {
         customer:  String(customer).trim().slice(0, 50),
         haUserId,
         item,
+        variant:        validVariant,
         note:           note ? String(note).slice(0, 200) : '',
         notifyService:  notifyService && String(notifyService).startsWith('notify.') ? String(notifyService).slice(0, 100) : null,
         status:    'pending',
@@ -220,11 +229,12 @@ router.post('/api/orders', (req, res) => {
     };
     orders.push(order);
     saveOrders(orders);
-    log(`Order ${order.id}: ${order.customer} → ${order.item}`);
+    const itemLabel = order.variant ? `${order.item} · ${order.variant}` : order.item;
+    log(`Order ${order.id}: ${order.customer} → ${itemLabel}`);
     const baristaSvc = loadOrdersSettings().baristaNotifyService;
     if (baristaSvc) {
         const body = order.note ? `${order.customer}: ${order.note}` : order.customer;
-        sendHaNotify(baristaSvc, `☕ ${order.item}`, body, 'glp_new_order');
+        sendHaNotify(baristaSvc, `☕ ${itemLabel}`, body, 'glp_new_order');
     }
     res.json(order);
 });
