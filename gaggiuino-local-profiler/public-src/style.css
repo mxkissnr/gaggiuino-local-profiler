@@ -1267,6 +1267,13 @@
         .orders-menu-variant-btn { background:none; border:1px solid var(--gray-700); border-radius:5px; color:var(--gray-400); font-size:.75rem; padding:3px 8px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; }
         .orders-menu-variant-btn:hover { background:var(--gray-700); color:#fff; }
         .order-variant-badge { font-size:.8rem; color:var(--gray-400); font-weight:400; }
+        .orders-menu-use-beans { background:none; border:1px solid var(--gray-700); border-radius:5px; color:var(--gray-500); font-size:.8rem; padding:2px 7px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; }
+        .orders-menu-use-beans:hover { border-color:var(--gray-500); color:var(--gray-300); }
+        .orders-menu-use-beans.active { border-color:#a78bfa; color:#a78bfa; background:rgba(167,139,250,.08); }
+        .orders-use-beans-note { font-size:.72rem; color:var(--gray-500); font-style:italic; padding-left:2px; }
+        .ann-ordered-by { display:flex; flex-direction:column; gap:2px; margin-top:10px; padding:8px 10px; background:rgba(255,255,255,.03); border:1px solid var(--gray-800); border-radius:8px; }
+        .ann-ordered-by-label { font-size:.7rem; font-weight:700; color:var(--gray-500); letter-spacing:.05em; text-transform:uppercase; }
+        .ann-ordered-by-val { font-size:.83rem; color:var(--gray-200); }
         .orders-menu-add-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
         .orders-menu-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:7px; color:var(--gray-200); font-size:.82rem; padding:6px 10px; outline:none; font-family:'Figtree',sans-serif; }
         .orders-menu-input:focus { border-color:var(--gray-600); }

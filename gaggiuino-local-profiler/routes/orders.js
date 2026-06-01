@@ -7,7 +7,7 @@ const {
     loadOrders, saveOrders, loadMenu, saveMenu,
     loadOrdersSettings, saveOrdersSettings,
     loadNotifyMapping, saveNotifyMapping,
-    loadAnnotations, loadTrash, isOrdersEnabled, loadOptions,
+    loadAnnotations, loadTrash, isOrdersEnabled, loadOptions, loadLibrary,
 } = require('../lib/data');
 const { sendHaNotify, getNotifyServices, getHaPersons } = require('../lib/ha');
 const { log, rateLimit, writeFileSafe } = require('../lib/helpers');
@@ -41,6 +41,7 @@ router.post('/api/orders/menu', (req, res) => {
         id: `m_${Date.now()}`, name: name.trim(), emoji: emoji?.trim() || '☕',
         createdAt: Date.now(), trending: false,
         variants: Array.isArray(variants) ? variants.map(v => String(v).trim().slice(0, 50)).filter(Boolean) : [],
+        useBeans: !!req.body.useBeans,
     };
     menu.push(item);
     saveMenu(menu);
@@ -56,6 +57,7 @@ router.put('/api/orders/menu/:id', (req, res) => {
     if (typeof req.body?.trending === 'boolean')      item.trending = req.body.trending;
     if (Array.isArray(req.body?.variants))
         item.variants = req.body.variants.map(v => String(v).trim().slice(0, 50)).filter(Boolean);
+    if (typeof req.body?.useBeans === 'boolean') item.useBeans = req.body.useBeans;
     saveMenu(menu);
     res.json(item);
 });
@@ -66,6 +68,14 @@ router.delete('/api/orders/menu/:id', (req, res) => {
     if (filtered.length === menu.length) return res.status(404).json({ error: 'not found' });
     saveMenu(filtered);
     res.json({ ok: true });
+});
+
+router.get('/api/orders/active-beans', (req, res) => {
+    const lib = loadLibrary();
+    const active = (lib.beans || [])
+        .filter(b => b.stock_g > 0)
+        .map(b => ({ id: b.id, name: b.name, roaster: b.roaster || null, decaf: !!b.decaf }));
+    res.json(active);
 });
 
 // ── Settings ──────────────────────────────────────────────────────────────

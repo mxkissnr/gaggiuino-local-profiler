@@ -359,7 +359,8 @@ export function renderAnnotationPanel(shot) {
   if (badge) {
     const ob = ann.orderedBy;
     if (ob?.customer) {
-      badge.textContent = `☕ ${t('ann_ordered_by')}: ${ob.customer}`;
+      const drink = ob.item ? (ob.variant ? `${ob.item} · ${ob.variant}` : ob.item) : null;
+      badge.textContent = `☕ ${ob.customer}${drink ? ` · ${drink}` : ''}${ob.note ? ` · ${ob.note}` : ''}`;
       badge.style.display = '';
     } else {
       badge.style.display = 'none';
@@ -578,6 +579,21 @@ export function updateView() {
     document.getElementById('grindAdviceText').textContent = advice.text;
     adviceEl.style.display = '';
   } else { adviceEl.style.display = 'none'; }
+
+  // Ordered-by info block
+  const obEl = document.getElementById('orderedByInfo');
+  if (obEl) {
+    const ob = !shotB && (shotA.annotation?.orderedBy);
+    if (ob?.customer) {
+      const drink = ob.item ? (ob.variant ? `${ob.item} · ${ob.variant}` : ob.item) : null;
+      obEl.innerHTML =
+        `<span class="ann-ordered-by-label">☕ ${t('ann_ordered_by')}</span>` +
+        `<span class="ann-ordered-by-val">${esc(ob.customer)}${drink ? ` · ${esc(drink)}` : ''}${ob.note ? ` · <em>${esc(ob.note)}</em>` : ''}</span>`;
+      obEl.style.display = '';
+    } else {
+      obEl.style.display = 'none';
+    }
+  }
 
   // Shot score
   const scoreBadge = document.getElementById('shotScoreBadge');

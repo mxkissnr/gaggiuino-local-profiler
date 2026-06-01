@@ -219,7 +219,10 @@ export const TRANSLATIONS = {
     orders_trending_toggle:'Trending ein/aus',
     orders_variants_label:'Varianten', orders_variant_ph:'Variante …', orders_variant_add_btn:'+',
     orders_variant_select:'Variante wählen',
+    orders_use_beans_toggle:'Varianten aus Bohnenbibliothek',
+    orders_use_beans_note:'Aktive Bohnen werden als Varianten angezeigt',
     ann_ordered_by:'Bestellt von',
+    ann_ordered_drink:'Getränk',
   },
   en: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
@@ -439,6 +442,9 @@ export const TRANSLATIONS = {
     orders_trending_toggle:'Toggle trending',
     orders_variants_label:'Variants', orders_variant_ph:'Variant …', orders_variant_add_btn:'+',
     orders_variant_select:'Select variant',
+    orders_use_beans_toggle:'Variants from bean library',
+    orders_use_beans_note:'Active beans shown as variants',
+    ann_ordered_drink:'Drink',
     ann_ordered_by:'Ordered by',
   },
   it: {
@@ -659,6 +665,9 @@ export const TRANSLATIONS = {
     orders_trending_toggle:'Attiva/disattiva trending',
     orders_variants_label:'Varianti', orders_variant_ph:'Variante …', orders_variant_add_btn:'+',
     orders_variant_select:'Seleziona variante',
+    orders_use_beans_toggle:'Varianti dalla biblioteca',
+    orders_use_beans_note:'I chicchi attivi vengono mostrati come varianti',
+    ann_ordered_drink:'Bevanda',
     ann_ordered_by:'Ordinato da',
   },
   fr: {
@@ -879,7 +888,10 @@ export const TRANSLATIONS = {
     orders_trending_toggle:'Activer/désactiver tendance',
     orders_variants_label:'Variantes', orders_variant_ph:'Variante …', orders_variant_add_btn:'+',
     orders_variant_select:'Sélectionner une variante',
+    orders_use_beans_toggle:'Variantes depuis la bibliothèque',
+    orders_use_beans_note:'Les grains actifs sont affichés comme variantes',
     ann_ordered_by:'Commandé par',
+    ann_ordered_drink:'Boisson',
   },
   es: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
@@ -1099,7 +1111,10 @@ export const TRANSLATIONS = {
     orders_trending_toggle:'Activar/desactivar tendencia',
     orders_variants_label:'Variantes', orders_variant_ph:'Variante …', orders_variant_add_btn:'+',
     orders_variant_select:'Seleccionar variante',
+    orders_use_beans_toggle:'Variantes de la biblioteca',
+    orders_use_beans_note:'Los granos activos se muestran como variantes',
     ann_ordered_by:'Pedido por',
+    ann_ordered_drink:'Bebida',
   },
   nl: {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistieken', nav_library:'Bibliotheek',
@@ -1319,7 +1334,10 @@ export const TRANSLATIONS = {
     orders_trending_toggle:'Trending aan/uit',
     orders_variants_label:'Varianten', orders_variant_ph:'Variant …', orders_variant_add_btn:'+',
     orders_variant_select:'Selecteer variant',
+    orders_use_beans_toggle:'Varianten uit bonebibliotheek',
+    orders_use_beans_note:'Actieve bonen worden getoond als varianten',
     ann_ordered_by:'Besteld door',
+    ann_ordered_drink:'Drank',
   },
 };
 
