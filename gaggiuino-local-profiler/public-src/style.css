@@ -485,8 +485,10 @@
         .lib-new-bag-input:focus { border-color: var(--gray-600); }
         .lib-bag-history { margin-top: 6px; font-size: .72rem; }
         .lib-bag-history-title { color: var(--gray-500); font-weight: 600; margin-bottom: 4px; }
-        .lib-bag-row { display: flex; gap: 14px; color: var(--gray-600); padding: 2px 0; }
+        .lib-bag-row { display: flex; gap: 14px; align-items: center; color: var(--gray-600); padding: 2px 0; }
         .lib-bag-row.active { color: var(--gray-400); }
+        .lib-bag-del { background: none; border: none; color: var(--gray-700); cursor: pointer; font-size: .75rem; padding: 0 2px; line-height: 1; transition: color .15s; margin-left: auto; }
+        .lib-bag-del:hover { color: var(--err); }
         .lib-bag-history-btn { font-size: .72rem; color: var(--gray-600); margin-top: 4px; }
         /* Recipe workflow */
         .lib-form-grid select { background: var(--gray-900); border: 1px solid var(--gray-700); border-radius: 6px; color: var(--gray-200); font-family: 'Figtree', sans-serif; font-size: .85rem; padding: 7px 10px; outline: none; width: 100%; }

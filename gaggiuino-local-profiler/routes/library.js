@@ -74,6 +74,22 @@ router.post('/api/library/bean/:id/new-bag', (req, res) => {
     res.json(lib.beans[idx]);
 });
 
+router.delete('/api/library/bean/:id/bag/:bagId', (req, res) => {
+    const id    = parseInt(req.params.id, 10);
+    const bagId = parseInt(req.params.bagId, 10);
+    const lib   = loadLibrary();
+    const bean  = lib.beans.find(b => b.id === id);
+    if (!bean) return res.status(404).json({ error: 'not found' });
+    if (!Array.isArray(bean.bags) || bean.bags.length <= 1)
+        return res.status(400).json({ error: 'cannot delete last bag' });
+    bean.bags = bean.bags.filter(bg => bg.id !== bagId);
+    const last = bean.bags[bean.bags.length - 1];
+    bean.roastDate = last.roastDate;
+    bean.stock_g   = last.stock_g;
+    saveLibrary(lib);
+    res.json(bean);
+});
+
 router.post('/api/library/bean/:id/delete', (req, res) => {
     const id  = parseInt(req.params.id, 10);
     const lib = loadLibrary();

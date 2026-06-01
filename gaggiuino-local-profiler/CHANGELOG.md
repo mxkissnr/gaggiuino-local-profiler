@@ -1,3 +1,6 @@
+## 1.77.1
+- feat: delete individual bag from bean bag history — each bag row in the Packungsverlauf now has a ✕ button; deleting the active (most recent) bag automatically rolls back to the previous one; last remaining bag cannot be deleted; closes #141
+
 ## 1.77.0
 - feat: bean-sourced variants — each menu item can be toggled (🫘) to pull variants from the active bean library instead of manually entered strings; active beans (stock_g > 0) are returned by new `GET /api/orders/active-beans`; pairs with glp-order-card v1.9.0; closes #139
 - feat: ordered-by block in shot detail — when a shot is linked to an order, customer + drink + variant + note are now shown in a block above the chart (and in the annotation badge); the info is already stored since v1.76.1; closes #138 (display follow-up)

@@ -84,6 +84,7 @@ export function renderBeanList() {
           <div class="lib-bag-row${i === 0 ? ' active' : ''}">
             <span>${bg.roastDate || '–'}</span>
             <span>${bg.stock_g ? bg.stock_g + ' g' : '–'}</span>
+            <button class="lib-bag-del" onclick="deleteBag(${b.id},${bg.id})" title="${t('lib_bag_delete')}">✕</button>
           </div>`).join('')}
       </div>
       <button class="lib-btn-sm lib-bag-history-btn" onclick="toggleBagHistory(${b.id})" id="bagHistoryBtn${b.id}">▸ ${t('lib_bag_history')}</button>` : '';
@@ -135,6 +136,16 @@ export function openNewBagForm(id) {
 
 export function closeNewBagForm(id) {
   document.getElementById(`newBagForm${id}`).style.display = 'none';
+}
+
+export async function deleteBag(beanId, bagId) {
+  if (!confirm(t('lib_bag_delete') + '?')) return;
+  const r = await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, { method: 'DELETE' });
+  if (!r.ok) return;
+  const saved = await r.json();
+  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
+  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  renderBeanList();
 }
 
 export async function saveNewBag(id) {
