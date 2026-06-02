@@ -88,15 +88,17 @@ export async function loadOrdersView() {
   if (banner) { banner.style.display = machineOff ? '' : 'none'; banner.textContent = t('orders_machine_off'); }
   _updateOrdersToggleUI(settings.enabled);
 
-  const [orders, menu, queueEta] = await Promise.all([
+  const [orders, menu, queueEta, milkStock] = await Promise.all([
     apiFetch('api/orders').then(r => r.json()).catch(() => []),
     apiFetch('api/orders/menu').then(r => r.json()).catch(() => []),
     apiFetch('api/orders/queue-eta').then(r => r.json()).catch(() => null),
+    apiFetch('api/orders/milk-stock').then(r => r.json()).catch(() => []),
   ]);
   S._ordersQueueEta = queueEta;
 
   renderOrdersList(orders);
   renderOrdersMenuAdmin(menu);
+  renderMilkStock(milkStock);
   if (S._ordersStatsOpen) renderOrdersStats(orders);
 
   const pendingOrders = orders.filter(o => o.status === 'pending');
@@ -115,6 +117,26 @@ export function _orderTimeAgo(ts) {
   const min = Math.round((Date.now() - ts) / 60000);
   if (min < 1) return t('orders_just_now');
   return t('orders_ago', min);
+}
+
+export function renderMilkStock(milks) {
+  const el = document.getElementById('orders-milk-stock');
+  if (!el) return;
+  if (!milks?.length) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.innerHTML = `<p class="orders-milk-title">${t('orders_milk_title')}</p>` +
+    milks.map(m => {
+      const cls = m.stockMl <= 0 ? 'empty' : m.remaining < 300 ? 'low' : 'ok';
+      const label = m.stockMl <= 0 ? t('lib_milk_empty')
+        : m.remaining < 300 ? `${m.remaining} ml`
+        : `${m.remaining} ml`;
+      return `<div class="orders-milk-row">
+        <span class="orders-milk-emoji">${esc(m.emoji || '🥛')}</span>
+        <span class="orders-milk-name">${esc(m.name)}</span>
+        ${m.demand > 0 ? `<span style="font-size:.72rem;color:var(--gray-500)">${t('lib_milk_demand', m.demand)}</span>` : ''}
+        <span class="orders-milk-badge ${cls}">${label}</span>
+      </div>`;
+    }).join('');
 }
 
 export function renderOrdersList(orders) {
@@ -300,6 +322,7 @@ export async function renderOrdersMenuAdmin(menu) {
       : `${chipHtml}
          <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" placeholder="${t('orders_variant_ph')}">
          <button class="orders-menu-variant-btn" data-variant-add="${esc(item.id)}">${t('orders_variant_add_btn')}</button>`;
+    const milkMl = item.milkMl || '';
     return `
     <div class="orders-menu-item">
       <div class="orders-menu-item-top">
@@ -310,6 +333,9 @@ export async function renderOrdersMenuAdmin(menu) {
         <button class="orders-menu-del" data-menu-del="${esc(item.id)}" title="${t('orders_confirm_delete_item')}">✕</button>
       </div>
       <div class="orders-menu-variants">${variantSection}</div>
+      <div class="orders-menu-milk-row">
+        🥛 <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${milkMl}" placeholder="0" min="0" step="10" data-milk-ml="${esc(item.id)}"> ${t('orders_milk_per_order')}
+      </div>
     </div>`;
   }).join('');
   list.querySelectorAll('[data-menu-trend]').forEach(btn => {
@@ -330,6 +356,16 @@ export async function renderOrdersMenuAdmin(menu) {
       if (!confirm(t('orders_confirm_delete_item'))) return;
       await apiFetch(`api/orders/menu/${btn.dataset.menuDel}`, { method: 'DELETE' });
       loadOrdersView();
+    });
+  });
+  list.querySelectorAll('[data-milk-ml]').forEach(inp => {
+    inp.addEventListener('change', async () => {
+      const id = inp.dataset.milkMl;
+      await apiFetch(`api/orders/menu/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ milkMl: parseFloat(inp.value) || null }),
+      });
     });
   });
   list.querySelectorAll('[data-menu-use-beans]').forEach(btn => {

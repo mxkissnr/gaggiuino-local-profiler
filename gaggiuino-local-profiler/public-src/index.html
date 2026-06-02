@@ -301,6 +301,7 @@
             <span id="ordersEnabledLabel" class="orders-toggle-state off">–</span>
         </div>
         <div id="orders-machine-off-banner" class="orders-machine-off" style="display:none"></div>
+        <div id="orders-milk-stock" class="orders-milk-section" style="display:none"></div>
         <div class="orders-columns">
             <div class="orders-section">
                 <div class="orders-col-title" data-i18n="orders_queue">Warteschlange</div>
@@ -357,6 +358,7 @@
                 <button class="lib-tab active" id="libTabBeans"    onclick="switchLibTab('beans')" data-i18n="lib_beans">Bohnen</button>
                 <button class="lib-tab"         id="libTabGrinders" onclick="switchLibTab('grinders')" data-i18n="lib_grinders">Mühlen</button>
                 <button class="lib-tab"         id="libTabRecipes"  onclick="switchLibTab('recipes')" data-i18n="lib_recipes">Rezepte</button>
+                <button class="lib-tab"         id="libTabMilk"     onclick="switchLibTab('milk')" data-i18n="lib_milk">Milch</button>
             </div>
             <div class="lib-body">
                 <!-- Beans -->
@@ -510,6 +512,31 @@
                         </div>
                     </div>
                     <button class="lib-add-trigger" id="recipeAddTrigger" onclick="openRecipeForm()" data-i18n="lib_add_recipe">+ Rezept hinzufügen</button>
+                </div>
+                <!-- Milk -->
+                <div class="lib-section" id="libSectionMilk">
+                    <div class="lib-list" id="milkListUI"></div>
+                    <div class="lib-add-form" id="milkAddForm">
+                        <div class="lib-form-grid single">
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_milk_name">Name *</label>
+                                <input type="text" id="milkFormName" data-i18n-placeholder="lib_milk_name_ph" placeholder="z.B. Vollmilch">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_milk_emoji">Emoji</label>
+                                <input type="text" id="milkFormEmoji" placeholder="🥛" maxlength="4" style="width:60px">
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_milk_stock">Vorrat (ml)</label>
+                                <input type="number" id="milkFormStock" placeholder="1000" min="0" step="50">
+                            </div>
+                        </div>
+                        <div class="lib-form-actions">
+                            <button class="lib-btn-sm" onclick="closeMilkForm()" data-i18n="lib_cancel">Abbrechen</button>
+                            <button class="lib-save-btn" onclick="saveMilk()" data-i18n="lib_save">Speichern</button>
+                        </div>
+                    </div>
+                    <button class="lib-add-trigger" id="milkAddTrigger" onclick="openMilkForm()" data-i18n="lib_add_milk">+ Milch hinzufügen</button>
                 </div>
             </div>
         </div>

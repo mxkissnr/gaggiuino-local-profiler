@@ -1,3 +1,6 @@
+## 1.78.0
+- feat: milk tab in library — add milk types (name, emoji, stock in ml), track stock with progress bar and low/empty indicators, restock via inline input; each order menu item gets an optional "ml per order" field; orders view shows a live milk stock panel with demand from pending/accepted queue and remaining stock per milk type; new endpoints: `POST/PUT/DELETE /api/library/milk`, `GET /api/orders/milk-stock`; closes #140
+
 ## 1.77.1
 - feat: delete individual bag from bean bag history — each bag row in the Packungsverlauf now has a ✕ button; deleting the active (most recent) bag automatically rolls back to the previous one; last remaining bag cannot be deleted; closes #141
 

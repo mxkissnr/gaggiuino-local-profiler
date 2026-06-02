@@ -58,6 +58,7 @@ router.put('/api/orders/menu/:id', (req, res) => {
     if (Array.isArray(req.body?.variants))
         item.variants = req.body.variants.map(v => String(v).trim().slice(0, 50)).filter(Boolean);
     if (typeof req.body?.useBeans === 'boolean') item.useBeans = req.body.useBeans;
+    if (req.body?.milkMl !== undefined) item.milkMl = parseFloat(req.body.milkMl) || null;
     saveMenu(menu);
     res.json(item);
 });
@@ -68,6 +69,21 @@ router.delete('/api/orders/menu/:id', (req, res) => {
     if (filtered.length === menu.length) return res.status(404).json({ error: 'not found' });
     saveMenu(filtered);
     res.json({ ok: true });
+});
+
+router.get('/api/orders/milk-stock', (req, res) => {
+    const lib    = loadLibrary();
+    const menu   = loadMenu();
+    const orders = loadOrders().filter(o => ['pending', 'accepted'].includes(o.status));
+    const milks  = (lib.milks || []).map(m => {
+        const demand = orders.reduce((sum, o) => {
+            if (o.variant !== m.name) return sum;
+            const item = menu.find(mi => mi.name === o.item);
+            return sum + (item?.milkMl || 0);
+        }, 0);
+        return { ...m, demand, remaining: Math.max(0, m.stockMl - demand) };
+    });
+    res.json(milks);
 });
 
 router.get('/api/orders/active-beans', (req, res) => {

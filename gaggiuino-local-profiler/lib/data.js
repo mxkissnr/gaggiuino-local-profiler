@@ -81,10 +81,11 @@ function loadLibrary() {
         if (fs.existsSync(LIBRARY_FILE)) {
             const lib = JSON.parse(fs.readFileSync(LIBRARY_FILE, 'utf8'));
             if (!lib.recipes) lib.recipes = [];
+            if (!lib.milks)   lib.milks   = [];
             return lib;
         }
     } catch (e) {}
-    return { beans: [], grinders: [], recipes: [] };
+    return { beans: [], grinders: [], recipes: [], milks: [] };
 }
 function saveLibrary(lib) { writeFileSafe(LIBRARY_FILE, lib); }
 

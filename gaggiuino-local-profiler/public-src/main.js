@@ -43,7 +43,8 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
          openRecipeForm, closeRecipeForm, editRecipe, saveRecipe, deleteRecipe, renderRecipeList,
          addRecipeStep, removeRecipeStep,
          toggleUrlImport, importFromUrl,
-         openScanModal, closeScanModal, _runScanLoop, _handleScanResult } from './views/library.js';
+         openScanModal, closeScanModal, _runScanLoop, _handleScanResult,
+         renderMilkList, openMilkForm, closeMilkForm, saveMilk, restockMilk, deleteMilk } from './views/library.js';
 
 import { renderDialin } from './views/dialin.js';
 
@@ -240,6 +241,12 @@ Object.assign(window, {
   closeScanModal,
   _runScanLoop,
   _handleScanResult,
+  renderMilkList,
+  openMilkForm,
+  closeMilkForm,
+  saveMilk,
+  restockMilk,
+  deleteMilk,
 
   // dialin view
   renderDialin,

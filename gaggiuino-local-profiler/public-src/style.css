@@ -539,6 +539,35 @@
         .lib-url-btn:hover { border-color:var(--gray-500); color:var(--gray-200); }
         .lib-item-source { font-size:.65rem; color:var(--gray-600); margin-top:3px; }
 
+        /* Milk tab */
+        .lib-milk-item { display:flex; flex-direction:column; gap:6px; padding:10px 0; border-bottom:1px solid var(--gray-800); }
+        .lib-milk-top { display:flex; align-items:center; gap:10px; }
+        .lib-milk-name { flex:1; font-size:.9rem; color:var(--gray-200); font-weight:600; }
+        .lib-milk-stock-bar-wrap { height:5px; background:var(--gray-800); border-radius:3px; overflow:hidden; }
+        .lib-milk-stock-bar { height:100%; border-radius:3px; transition:width .3s; }
+        .lib-milk-stock-bar.ok   { background:#22c55e; }
+        .lib-milk-stock-bar.low  { background:#f59e0b; }
+        .lib-milk-stock-bar.empty{ background:#ef4444; }
+        .lib-milk-meta { display:flex; gap:10px; font-size:.72rem; color:var(--gray-500); }
+        .lib-milk-meta b { color:var(--gray-300); }
+        .lib-milk-restock-row { display:flex; gap:6px; align-items:center; }
+        .lib-milk-restock-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:6px; color:var(--gray-200); font-size:.78rem; padding:5px 8px; outline:none; font-family:'Figtree',sans-serif; width:80px; }
+        .lib-milk-restock-input:focus { border-color:var(--gray-600); }
+        .lib-milk-del { background:none; border:none; color:var(--gray-700); cursor:pointer; font-size:.85rem; padding:2px 4px; transition:color .15s; }
+        .lib-milk-del:hover { color:var(--err); }
+        .orders-milk-section { margin-top:14px; }
+        .orders-milk-title { font-size:.75rem; font-weight:700; color:var(--gray-500); letter-spacing:.04em; text-transform:uppercase; margin:0 0 8px; }
+        .orders-milk-row { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--gray-800); font-size:.82rem; }
+        .orders-milk-emoji { font-size:1rem; }
+        .orders-milk-name { flex:1; color:var(--gray-200); }
+        .orders-milk-badge { font-size:.72rem; font-weight:700; padding:2px 7px; border-radius:4px; }
+        .orders-milk-badge.ok    { background:rgba(34,197,94,.15); color:#22c55e; }
+        .orders-milk-badge.low   { background:rgba(245,158,11,.15); color:#f59e0b; }
+        .orders-milk-badge.empty { background:rgba(239,68,68,.15); color:#ef4444; }
+        .orders-menu-milk-row { display:flex; align-items:center; gap:6px; padding-left:2px; font-size:.72rem; color:var(--gray-500); }
+        .orders-menu-milk-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:5px; color:var(--gray-200); font-size:.72rem; padding:3px 7px; outline:none; font-family:'Figtree',sans-serif; width:60px; }
+        .orders-menu-milk-input:focus { border-color:var(--gray-600); }
+
         /* ── Scan modal ── */
         #scanModal { display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.85); flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:20px; }
         #scanModal.open { display:flex; }

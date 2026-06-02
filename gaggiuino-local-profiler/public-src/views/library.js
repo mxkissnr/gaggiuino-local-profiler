@@ -13,8 +13,10 @@ export async function loadLibrary() {
     if (!r.ok) return;
     S.coffeeLibrary = await r.json();
     if (!S.coffeeLibrary.recipes) S.coffeeLibrary.recipes = [];
+    if (!S.coffeeLibrary.milks)   S.coffeeLibrary.milks   = [];
     updateLibraryDatalist();
     renderRecipeList();
+    renderMilkList();
   } catch (e) {}
 }
 
@@ -29,9 +31,11 @@ export function switchLibTab(tab) {
   document.getElementById('libTabBeans').classList.toggle('active',       tab === 'beans');
   document.getElementById('libTabGrinders').classList.toggle('active',    tab === 'grinders');
   document.getElementById('libTabRecipes').classList.toggle('active',     tab === 'recipes');
+  document.getElementById('libTabMilk')?.classList.toggle('active',      tab === 'milk');
   document.getElementById('libSectionBeans').classList.toggle('active',   tab === 'beans');
   document.getElementById('libSectionGrinders').classList.toggle('active', tab === 'grinders');
   document.getElementById('libSectionRecipes').classList.toggle('active', tab === 'recipes');
+  document.getElementById('libSectionMilk')?.classList.toggle('active',  tab === 'milk');
 }
 
 // ── Bean list ─────────────────────────────────────────────────────────────
@@ -620,4 +624,85 @@ export async function deleteRecipe(id) {
   if (!r.ok) return;
   S.coffeeLibrary.recipes = (S.coffeeLibrary.recipes || []).filter(r => r.id !== id);
   renderRecipeList();
+}
+
+// ── Milk ─────────────────────────────────────────────────────────────────
+
+export function renderMilkList() {
+  const el = document.getElementById('milkListUI');
+  if (!el) return;
+  const milks = S.coffeeLibrary?.milks || [];
+  if (!milks.length) { el.innerHTML = ''; return; }
+  el.innerHTML = milks.map(m => {
+    const pct = m.stockMl > 0 ? Math.min(100, m.stockMl / 20) : 0; // 2000ml = 100%
+    const cls = m.stockMl <= 0 ? 'empty' : m.stockMl < 300 ? 'low' : 'ok';
+    return `<div class="lib-milk-item">
+      <div class="lib-milk-top">
+        <span style="font-size:1.3rem">${esc(m.emoji || '🥛')}</span>
+        <span class="lib-milk-name">${esc(m.name)}</span>
+        <button class="lib-milk-del" onclick="deleteMilk(${m.id})" title="${t('lib_milk_delete')}">✕</button>
+      </div>
+      <div class="lib-milk-stock-bar-wrap">
+        <div class="lib-milk-stock-bar ${cls}" style="width:${pct}%"></div>
+      </div>
+      <div class="lib-milk-meta">
+        <span><b>${m.stockMl ?? 0} ml</b> ${t('lib_milk_stock').replace(' (ml)','')}</span>
+        ${m.stockMl < 300 ? `<span style="color:${m.stockMl <= 0 ? '#ef4444' : '#f59e0b'}">${m.stockMl <= 0 ? t('lib_milk_empty') : t('lib_milk_low')}</span>` : ''}
+      </div>
+      <div class="lib-milk-restock-row">
+        <input class="lib-milk-restock-input" type="number" id="milkRestock_${m.id}" placeholder="ml" min="0" step="50">
+        <button class="lib-btn-sm" onclick="restockMilk(${m.id})">${t('lib_milk_restock')}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+export function openMilkForm() {
+  document.getElementById('milkAddForm').style.display = '';
+  document.getElementById('milkAddTrigger').style.display = 'none';
+}
+
+export function closeMilkForm() {
+  document.getElementById('milkAddForm').style.display = 'none';
+  document.getElementById('milkAddTrigger').style.display = '';
+  ['milkFormName','milkFormEmoji','milkFormStock'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+}
+
+export async function saveMilk() {
+  const name    = document.getElementById('milkFormName')?.value.trim();
+  const emoji   = document.getElementById('milkFormEmoji')?.value.trim() || '🥛';
+  const stockMl = parseFloat(document.getElementById('milkFormStock')?.value) || 0;
+  if (!name) return;
+  const r = await apiFetch('api/library/milk', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, emoji, stockMl }),
+  });
+  if (!r.ok) return;
+  const saved = await r.json();
+  if (!S.coffeeLibrary.milks) S.coffeeLibrary.milks = [];
+  S.coffeeLibrary.milks.push(saved);
+  closeMilkForm();
+  renderMilkList();
+}
+
+export async function restockMilk(id) {
+  const val = parseFloat(document.getElementById(`milkRestock_${id}`)?.value);
+  if (!val || val <= 0) return;
+  const r = await apiFetch(`api/library/milk/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stockMl: val }),
+  });
+  if (!r.ok) return;
+  const saved = await r.json();
+  const idx = (S.coffeeLibrary.milks || []).findIndex(m => m.id === id);
+  if (idx !== -1) S.coffeeLibrary.milks[idx] = saved;
+  renderMilkList();
+}
+
+export async function deleteMilk(id) {
+  if (!confirm(t('lib_milk_delete') + '?')) return;
+  const r = await apiFetch(`api/library/milk/${id}`, { method: 'DELETE' });
+  if (!r.ok) return;
+  S.coffeeLibrary.milks = (S.coffeeLibrary.milks || []).filter(m => m.id !== id);
+  renderMilkList();
 }
