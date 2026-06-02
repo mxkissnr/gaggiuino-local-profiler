@@ -7,7 +7,7 @@ Working rules for this repo. Follow these in every session.
 - **Code, comments, commit messages, GitHub issues, PR descriptions** → always English
 - **DOCS.md, README.md** → English (primary)
 - **DOCS.de.md** → German (supplementary, always kept in sync with DOCS.md)
-- **UI strings in index.html** → translated via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES); add new keys to all 5 languages when adding UI text
+- **UI strings in index.html** → translated via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES/NL); add new keys to **all 6 language files** when adding UI text
 
 ## Workflow
 
@@ -79,6 +79,7 @@ README.md                     ← Repo root README (English)
 - All fetch calls use relative URLs (no leading `/`) for HA ingress compatibility
 - Chart.js is loaded from CDN; reuse existing chart instances (destroy before re-creating)
 - `/data/` is the persistent storage directory inside the add-on container
+- i18n: translations live in `public-src/i18n/{de,en,it,fr,es,nl}.js` — each exports a default object; `constants.js` re-exports them as `TRANSLATIONS`; add new keys to **all 6 files**
 
 ## GitHub project
 

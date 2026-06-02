@@ -1,3 +1,6 @@
+## 1.78.0 (+ refactor)
+- refactor: split `constants.js` translations into per-language files — `public-src/i18n/{de,en,it,fr,es,nl}.js`; `constants.js` reduced from 1474 to 99 lines; no behaviour change
+
 ## 1.78.0
 - feat: milk tab in library — add milk types (name, emoji, stock in ml), track stock with progress bar and low/empty indicators, restock via inline input; each order menu item gets an optional "ml per order" field; orders view shows a live milk stock panel with demand from pending/accepted queue and remaining stock per milk type; new endpoints: `POST/PUT/DELETE /api/library/milk`, `GET /api/orders/milk-stock`; closes #140
 
