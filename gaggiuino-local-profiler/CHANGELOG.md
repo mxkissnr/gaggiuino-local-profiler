@@ -1,3 +1,6 @@
+## 1.78.1
+- fix: milk form open/close now uses `classList.add/remove('open')` instead of `style.display` — form was always staying hidden because the CSS default `.lib-add-form { display: none }` overrode the inline style removal
+
 ## 1.78.0 (+ refactor)
 - refactor: split `constants.js` translations into per-language files — `public-src/i18n/{de,en,it,fr,es,nl}.js`; `constants.js` reduced from 1474 to 99 lines; no behaviour change
 
