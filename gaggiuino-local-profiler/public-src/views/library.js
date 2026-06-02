@@ -658,12 +658,12 @@ export function renderMilkList() {
 }
 
 export function openMilkForm() {
-  document.getElementById('milkAddForm').style.display = '';
+  document.getElementById('milkAddForm').classList.add('open');
   document.getElementById('milkAddTrigger').style.display = 'none';
 }
 
 export function closeMilkForm() {
-  document.getElementById('milkAddForm').style.display = 'none';
+  document.getElementById('milkAddForm').classList.remove('open');
   document.getElementById('milkAddTrigger').style.display = '';
   ['milkFormName','milkFormEmoji','milkFormStock'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 }
