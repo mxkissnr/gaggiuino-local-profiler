@@ -833,6 +833,7 @@
         .grind-finer   { border-color: rgba(52,152,219,.3); background: rgba(52,152,219,.06); color: #93c5fd; }
         .grind-coarser { border-color: rgba(243,156,18,.3); background: rgba(243,156,18,.06); color: #fcd34d; }
         .grind-warning { border-color: rgba(239,68,68,.3);  background: rgba(239,68,68,.06);  color: #fca5a5; }
+        .grind-comparative { margin-top: 6px; font-size: .8rem; opacity: .9; }
 
         /* ── Chart tabs ── */
         .chart-tabs { display: flex; gap: 4px; margin-bottom: 12px; align-items: center; }

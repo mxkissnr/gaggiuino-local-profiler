@@ -219,6 +219,67 @@ export function calcShotScore(shot, data) {
 }
 
 // ── Grind advice ──────────────────────────────────────────────────────────
+function _parseGrindNum(s) {
+  if (!s) return null;
+  const m = String(s).match(/(\d+(?:[.,]\d+)?)/);
+  return m ? parseFloat(m[1].replace(',', '.')) : null;
+}
+
+function calcComparativeGrindAdvice(shot, allShots) {
+  const ann     = shot.annotation || {};
+  const coffee  = ann.coffee?.trim().toLowerCase();
+  const grinder = ann.grinder?.trim().toLowerCase();
+  const profile = (shot.profile?.name || shot.profileName || '').toLowerCase();
+  const dose    = parseFloat(ann.dose) || null;
+  const currentGrind = _parseGrindNum(ann.grindSetting);
+  if (!coffee || !grinder) return null;
+
+  const comparable = allShots.filter(s => {
+    if (s.id === shot.id) return false;
+    const a  = s.annotation || {};
+    if (a.coffee?.trim().toLowerCase() !== coffee)   return false;
+    if (a.grinder?.trim().toLowerCase() !== grinder) return false;
+    const sp = (s.profile?.name || s.profileName || '').toLowerCase();
+    if (sp !== profile) return false;
+    if (dose) {
+      const sd = parseFloat(a.dose) || null;
+      if (!sd || Math.abs(sd - dose) > 1) return false;
+    }
+    if (_parseGrindNum(a.grindSetting) === null) return false;
+    return calcShotScore(s, getShotData(s)) !== null;
+  });
+
+  if (comparable.length < 2) return null;
+
+  // Group by grind setting (round to 0.5 steps), compute avg score
+  const byGrind = {};
+  comparable.forEach(s => {
+    const g  = _parseGrindNum(s.annotation.grindSetting);
+    const sc = calcShotScore(s, getShotData(s));
+    const key = Math.round(g * 2) / 2;
+    if (!byGrind[key]) byGrind[key] = [];
+    byGrind[key].push(sc);
+  });
+
+  let bestSetting = null, bestAvg = -1;
+  Object.entries(byGrind).forEach(([key, scores]) => {
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    if (avg > bestAvg) { bestAvg = avg; bestSetting = parseFloat(key); }
+  });
+  if (bestSetting === null) return null;
+
+  const n = comparable.length, bestScore = Math.round(bestAvg);
+  if (currentGrind === null)
+    return { type: 'ok', icon: '📊', text: t('grind_comparative_ok', n, bestSetting, bestScore) };
+
+  const diff = currentGrind - bestSetting;
+  if (Math.abs(diff) < 0.6)
+    return { type: 'ok',      icon: '📊', text: t('grind_comparative_ok',      n, bestSetting, bestScore) };
+  if (diff > 0)
+    return { type: 'finer',   icon: '📊', text: t('grind_comparative_finer',   n, bestSetting, bestScore) };
+  return   { type: 'coarser', icon: '📊', text: t('grind_comparative_coarser', n, bestSetting, bestScore) };
+}
+
 function calcGrindAdvice(shot, data) {
   const secs = (shot.duration || 0) / 10;
   if (secs < 8) return null;
@@ -640,6 +701,19 @@ export function updateView() {
     document.getElementById('grindAdviceText').textContent = advice.text;
     adviceEl.style.display = '';
   } else { adviceEl.style.display = 'none'; }
+
+  const compEl  = document.getElementById('grindAdviceComparative');
+  const compAdv = !shotB ? calcComparativeGrindAdvice(shotA, S.shots) : null;
+  if (compEl) {
+    if (compAdv) {
+      compEl.className = `grind-advice grind-comparative grind-${compAdv.type}`;
+      document.getElementById('grindAdviceComparativeIcon').textContent = compAdv.icon;
+      document.getElementById('grindAdviceComparativeText').textContent = compAdv.text;
+      compEl.style.display = '';
+    } else {
+      compEl.style.display = 'none';
+    }
+  }
 
   // Ordered-by info block
   const obEl = document.getElementById('orderedByInfo');

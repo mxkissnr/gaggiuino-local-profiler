@@ -1,3 +1,6 @@
+## 1.80.0
+- feat: comparative grind recommendation — below the duration-based grind advice a second line appears when ≥2 comparable shots exist (same coffee + grinder + profile, dose ±1 g, annotated grind setting + score); shows which grind setting historically produced the best score and whether to go finer/coarser; grind setting is parsed as a number from free text ("23 Clicks" → 23); closes #143
+
 ## 1.79.0
 - feat: milk stock deduction from shot annotation — new **Milchsorte** selector in the annotation panel (appears when a drink type is selected and milk types exist in the library); when milk type is set for the first time on a shot and the drink has `milkMl` configured, the milk stock is automatically reduced; new endpoints: `GET /api/library/milks`, `POST /api/library/milk/:id/deduct`; closes #142
 
