@@ -219,6 +219,32 @@ export function calcShotScore(shot, data) {
 }
 
 // ── Grind advice ──────────────────────────────────────────────────────────
+function _miniShotChart(shot) {
+  const d  = shot.datapoints || {};
+  const t  = d.timeInShot || [];
+  const series = [
+    { vals: (d.pressure  || []).map((v, i) => ({ x: t[i] / 10, y: v / 10 })).filter(p => p.y > 0), color: '#60a5fa' },
+    { vals: (d.pumpFlow  || []).map((v, i) => ({ x: t[i] / 10, y: v / 10 })).filter(p => p.y >= 0), color: '#fb923c' },
+  ].filter(s => s.vals.length >= 3);
+  if (!series.length) return '<div class="comp-thumb-no-data">–</div>';
+
+  const W = 140, H = 65, pad = 2;
+  const allX = series.flatMap(s => s.vals.map(p => p.x));
+  const allY = series.flatMap(s => s.vals.map(p => p.y));
+  const xMin = Math.min(...allX), xMax = Math.max(...allX) || 1;
+  const yMax = Math.max(...allY, 1);
+
+  const px = x => pad + ((x - xMin) / (xMax - xMin)) * (W - pad * 2);
+  const py = y => H - pad - (y / yMax) * (H - pad * 2);
+
+  const polyline = ({ vals, color }) => {
+    const pts = vals.map(p => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ');
+    return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity=".9"/>`;
+  };
+
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:${H}px;display:block">${series.map(polyline).join('')}</svg>`;
+}
+
 function _parseGrindNum(s) {
   if (!s) return null;
   const m = String(s).match(/(\d+(?:[.,]\d+)?)/);
@@ -720,11 +746,15 @@ export function updateView() {
         const date = new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
         const dur  = s.duration ? `${(s.duration / 10).toFixed(0)}s` : '';
         const cls  = scoreClass(score);
-        return `<div class="comp-shot-row" onclick="goToShot(${s.id})" title="Shot ${s.id}">
-          <span class="comp-shot-date">${date}</span>
-          <span class="comp-shot-grind">⚙ ${grind}</span>
-          <span class="comp-shot-score ${cls}">${score}</span>
-          ${dur ? `<span class="comp-shot-dur">${dur}</span>` : ''}
+        const chart = _miniShotChart(s);
+        return `<div class="comp-thumb" onclick="goToShot(${s.id})" title="Shot ${s.id} — ${date}">
+          <div class="comp-thumb-chart">${chart}</div>
+          <div class="comp-thumb-meta">
+            <span class="comp-shot-date">${date}</span>
+            <span class="comp-shot-grind">⚙ ${grind}</span>
+            <span class="comp-shot-score ${cls}">${score}</span>
+            ${dur ? `<span class="comp-shot-dur">${dur}</span>` : ''}
+          </div>
         </div>`;
       }).join('');
 

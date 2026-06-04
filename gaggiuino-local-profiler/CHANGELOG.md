@@ -1,3 +1,6 @@
+## 1.82.3
+- feat: mini chart thumbnails in comparison shots panel — the expandable grind advice panel now shows shot curves (pressure blue, flow orange) as SVG thumbnails in a grid instead of plain text rows; each thumbnail is clickable and navigates to that shot; closes #149
+
 ## 1.82.2
 - feat: expandable comparison shots in grind advice — the comparative grind advice bar now has a ▸ toggle; clicking it reveals all comparison shots as compact rows (date · grind setting · score · duration), sorted best-first; clicking a row navigates to that shot; closes #148
 

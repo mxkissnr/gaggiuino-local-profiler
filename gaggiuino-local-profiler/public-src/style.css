@@ -861,13 +861,16 @@
         .comp-toggle { background: none; border: none; color: inherit; font-size: .8rem; cursor: pointer; padding: 0 6px 0 0; opacity: .7; flex-shrink: 0; }
         .comp-toggle:hover { opacity: 1; }
         .comp-shots-panel { display: none; width: 100%; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.1); }
-        .grind-comparative.expanded .comp-shots-panel { display: flex; flex-direction: column; gap: 4px; }
-        .comp-shot-row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: .78rem; transition: background .12s; }
-        .comp-shot-row:hover { background: rgba(255,255,255,.07); }
-        .comp-shot-date  { color: var(--gray-500); min-width: 36px; }
-        .comp-shot-grind { color: var(--gray-300); flex: 1; }
-        .comp-shot-score { font-weight: 700; min-width: 28px; text-align: right; }
-        .comp-shot-dur   { color: var(--gray-500); font-size: .72rem; }
+        .grind-comparative.expanded .comp-shots-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+        .comp-thumb { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; overflow: hidden; cursor: pointer; transition: border-color .15s, background .15s; }
+        .comp-thumb:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.2); }
+        .comp-thumb-chart { background: rgba(0,0,0,.2); }
+        .comp-thumb-no-data { height: 65px; display: flex; align-items: center; justify-content: center; color: var(--gray-600); font-size: .75rem; }
+        .comp-thumb-meta { display: flex; align-items: center; gap: 5px; padding: 5px 7px; font-size: .72rem; flex-wrap: wrap; }
+        .comp-shot-date  { color: var(--gray-500); }
+        .comp-shot-grind { color: var(--gray-300); }
+        .comp-shot-score { font-weight: 700; margin-left: auto; }
+        .comp-shot-dur   { color: var(--gray-500); width: 100%; }
 
         /* ── Chart tabs ── */
         .chart-tabs { display: flex; gap: 4px; margin-bottom: 12px; align-items: center; }
