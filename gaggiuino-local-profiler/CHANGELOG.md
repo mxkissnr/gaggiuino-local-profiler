@@ -1,3 +1,6 @@
+## 1.82.4
+- feat: publish pre-built Docker images to ghcr.io — GitHub Actions now builds and pushes amd64/armv7/aarch64 images on every release; HA pulls the pre-built image instead of building locally; eliminates build-cache issues and slow/broken update detection introduced in HA Supervisor 2026.06; closes #150
+
 ## 1.82.3
 - feat: mini chart thumbnails in comparison shots panel — the expandable grind advice panel now shows shot curves (pressure blue, flow orange) as SVG thumbnails in a grid instead of plain text rows; each thumbnail is clickable and navigates to that shot; closes #149
 

@@ -1,0 +1,10 @@
+build_from:
+  amd64: ghcr.io/home-assistant/amd64-base:latest
+  armv7: ghcr.io/home-assistant/armv7-base:latest
+  aarch64: ghcr.io/home-assistant/aarch64-base:latest
+
+labels:
+  org.opencontainers.image.title: "GLP — Gaggiuino Local Profiler"
+  org.opencontainers.image.description: "Local shot profiler for the Gaggiuino espresso machine"
+  org.opencontainers.image.source: "https://github.com/mxkissnr/gaggiuino-local-profiler"
+  org.opencontainers.image.licenses: "MIT"
