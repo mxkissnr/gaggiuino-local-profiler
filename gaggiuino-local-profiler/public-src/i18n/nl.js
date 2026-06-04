@@ -92,7 +92,7 @@ export default {
     grind_comparative_coarser:(n,s,sc)=>`${n} vergelijkbare shots: maalgraad ${s} → score ${sc} — grover malen`,
     grind_comparative_ok:(n,s,sc)=>`${n} vergelijkbare shots bevestigen je maalgraad (gem. score ${sc})`,
     compare_hint:'Selecteer shot voor vergelijking',
-    nav_settings:'⚙', settings_theme:'Thema', theme_dark:'Donker', theme_light:'Licht', settings_language:'Taal',
+    nav_settings:'⚙', settings_theme:'Thema', settings_accent:'Kleurenschema', theme_dark:'Donker', theme_light:'Licht', settings_language:'Taal',
     ann_clone_btn:'↩ Klonen',
     lib_bean_stock:'Voorraad (g)', lib_bean_stock_ph:'bijv. 500',
     lib_bean_decaf:'Cafeïnevrij',

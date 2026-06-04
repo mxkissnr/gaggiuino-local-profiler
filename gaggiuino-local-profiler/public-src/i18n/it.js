@@ -92,7 +92,7 @@ export default {
     grind_comparative_coarser:(n,s,sc)=>`${n} shot comparabili: macinatura ${s} → score ${sc} – macinare più grosso`,
     grind_comparative_ok:(n,s,sc)=>`${n} shot comparabili confermano la macinatura (score med. ${sc})`,
     compare_hint:'Seleziona shot per confronto',
-    nav_settings:'⚙', settings_theme:'Tema', theme_dark:'Scuro', theme_light:'Chiaro', settings_language:'Lingua',
+    nav_settings:'⚙', settings_theme:'Tema', settings_accent:'Schema colori', theme_dark:'Scuro', theme_light:'Chiaro', settings_language:'Lingua',
     ann_clone_btn:'↩ Clona',
     lib_bean_stock:'Scorta (g)', lib_bean_stock_ph:'es. 500',
     lib_bean_decaf:'Decaffeinato',

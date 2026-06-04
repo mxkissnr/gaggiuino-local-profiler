@@ -92,7 +92,7 @@ export default {
     grind_comparative_coarser:(n,s,sc)=>`${n} comparable shots: grind ${s} → score ${sc} — grind coarser`,
     grind_comparative_ok:(n,s,sc)=>`${n} comparable shots confirm your grind setting (avg score ${sc})`,
     compare_hint:'Select shot for comparison',
-    nav_settings:'⚙', settings_theme:'Theme', theme_dark:'Dark', theme_light:'Light', settings_language:'Language',
+    nav_settings:'⚙', settings_theme:'Theme', settings_accent:'Color scheme', theme_dark:'Dark', theme_light:'Light', settings_language:'Language',
     ann_clone_btn:'↩ Clone last',
     lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'e.g. 500',
     lib_bean_decaf:'Decaffeinated',

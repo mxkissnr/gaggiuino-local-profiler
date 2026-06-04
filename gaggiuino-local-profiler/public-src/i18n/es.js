@@ -92,7 +92,7 @@ export default {
     grind_comparative_coarser:(n,s,sc)=>`${n} shots comparables: molturación ${s} → score ${sc} — moler más grueso`,
     grind_comparative_ok:(n,s,sc)=>`${n} shots comparables confirman tu molturación (score med. ${sc})`,
     compare_hint:'Seleccionar shot para comparación',
-    nav_settings:'⚙', settings_theme:'Tema', theme_dark:'Oscuro', theme_light:'Claro', settings_language:'Idioma',
+    nav_settings:'⚙', settings_theme:'Tema', settings_accent:'Esquema de colores', theme_dark:'Oscuro', theme_light:'Claro', settings_language:'Idioma',
     ann_clone_btn:'↩ Clonar',
     lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'ej. 500',
     lib_bean_decaf:'Descafeinado',

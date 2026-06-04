@@ -9,10 +9,21 @@
             --gray-900: #18181b;
             --gray-950: #09090b;
             /* ── Functional ── */
-            --accent: #f59e0b;
             --ok:     #22c55e;
             --err:    #ef4444;
+            /* ── Accent (Amber default) ── */
+            --accent:      #f59e0b;
+            --accent-from: #f59e0b;
+            --accent-to:   #f97316;
+            --accent-text: #000;
+            --accent-glow: rgba(245,158,11,.15);
         }
+
+        /* ── Accent themes ── */
+        [data-accent="ocean"]  { --accent: #38bdf8; --accent-from: #3b82f6; --accent-to: #06b6d4; --accent-text: #000; --accent-glow: rgba(59,130,246,.15); }
+        [data-accent="aurora"] { --accent: #a78bfa; --accent-from: #6366f1; --accent-to: #a855f7; --accent-text: #fff; --accent-glow: rgba(167,139,250,.15); }
+        [data-accent="ember"]  { --accent: #fb923c; --accent-from: #ef4444; --accent-to: #f97316; --accent-text: #fff; --accent-glow: rgba(239,68,68,.15); }
+        [data-accent="forest"] { --accent: #34d399; --accent-from: #22c55e; --accent-to: #10b981; --accent-text: #000; --accent-glow: rgba(34,197,94,.15); }
 
         /* ── Light theme ── */
         [data-theme="light"] {
@@ -24,9 +35,11 @@
             --gray-800: #f4f4f5;
             --gray-900: #fafafa;
             --gray-950: #ffffff;
-            --accent: #d97706;
             --ok:     #16a34a;
             --err:    #dc2626;
+        }
+        [data-theme="light"]:not([data-accent]), [data-theme="light"][data-accent="amber"] {
+            --accent: #d97706; --accent-from: #d97706; --accent-to: #ea580c;
         }
 
         * { box-sizing: border-box; }
@@ -443,13 +456,19 @@
         .drink-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
         .drink-pill { background: rgba(255,255,255,.04); border: 1px solid var(--gray-700); border-radius: 20px; color: var(--gray-400); font-size: .8rem; padding: 5px 12px; cursor: pointer; transition: border-color .15s, color .15s, background .15s; font-family: inherit; white-space: nowrap; }
         .drink-pill:hover { border-color: var(--gray-500); color: var(--gray-200); background: rgba(255,255,255,.07); }
-        .drink-pill.active { background: rgba(245,158,11,.12); border-color: var(--accent); color: var(--accent); font-weight: 500; }
+        .drink-pill.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); font-weight: 500; }
 
         /* ── Theme toggle (settings) ── */
         .theme-toggle-group { display: flex; gap: 8px; flex-wrap: wrap; }
         .theme-btn { background: rgba(255,255,255,.04); border: 1px solid var(--gray-700); border-radius: 8px; color: var(--gray-400); font-size: .85rem; padding: 7px 16px; cursor: pointer; transition: all .15s; font-family: inherit; }
         .theme-btn:hover { border-color: var(--gray-500); color: var(--gray-200); }
-        .theme-btn.active { background: rgba(245,158,11,.12); border-color: var(--accent); color: var(--accent); font-weight: 500; }
+        .theme-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); font-weight: 500; }
+
+        /* ── Accent swatches ── */
+        .accent-swatches { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+        .accent-swatch { width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; transition: transform .18s, border-color .18s; outline: none; }
+        .accent-swatch:hover { transform: scale(1.12); }
+        .accent-swatch.active { border-color: #fff; transform: scale(1.18); box-shadow: 0 0 0 2px rgba(0,0,0,.4); }
 
         /* ── Coffee Library ── */
         .lib-open-btn { background: none; border: 1px solid var(--gray-700); border-radius: 6px; color: var(--gray-400); font-size: .75rem; padding: 3px 8px; cursor: pointer; transition: border-color .15s, color .15s; }
@@ -525,8 +544,8 @@
         .lib-form-field input { background: var(--gray-900); border: 1px solid var(--gray-700); border-radius: 6px; color: var(--gray-200); font-size: .8rem; padding: 6px 8px; }
         .lib-form-field input:focus { outline: none; border-color: var(--gray-500); }
         .lib-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
-        .lib-save-btn { background: var(--accent); border: none; border-radius: 6px; color: var(--gray-900); font-size: .78rem; font-weight: 600; padding: 6px 14px; cursor: pointer; }
-        .lib-save-btn:hover { background: #fbbf24; }
+        .lib-save-btn { background: linear-gradient(135deg, var(--accent-from), var(--accent-to)); border: none; border-radius: 6px; color: var(--accent-text); font-size: .78rem; font-weight: 600; padding: 6px 14px; cursor: pointer; transition: filter .15s; }
+        .lib-save-btn:hover { filter: brightness(1.1); }
         .lib-add-trigger { background: none; border: 1px dashed var(--gray-700); border-radius: 8px; color: var(--gray-500); font-size: .8rem; padding: 8px; width: 100%; cursor: pointer; transition: border-color .15s, color .15s; }
         .lib-add-trigger:hover { border-color: var(--gray-500); color: var(--gray-200); }
         .lib-empty { color: var(--gray-600); font-size: .8rem; text-align: center; padding: 20px 0; }

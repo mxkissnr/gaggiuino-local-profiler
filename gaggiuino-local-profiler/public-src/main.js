@@ -83,6 +83,12 @@ Object.assign(window, {
     document.querySelectorAll('.theme-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.themeVal === theme));
   },
+  setAccentTheme: (name) => {
+    localStorage.setItem('glp_accent_theme', name);
+    document.documentElement.dataset.accent = name;
+    document.querySelectorAll('.accent-swatch').forEach(b =>
+      b.classList.toggle('active', b.dataset.accent === name));
+  },
 
   // api
   initToken,
@@ -350,6 +356,11 @@ document.addEventListener('DOMContentLoaded', () => {
       b.classList.toggle('active', b.dataset.themeVal === theme));
   };
   _applyTheme(localStorage.getItem('glp_theme') || 'dark');
+
+  const _savedAccent = localStorage.getItem('glp_accent_theme') || 'amber';
+  document.documentElement.dataset.accent = _savedAccent;
+  document.querySelectorAll('.accent-swatch').forEach(b =>
+    b.classList.toggle('active', b.dataset.accent === _savedAccent));
 
   // ── Init sequence ──────────────────────────────────────────────────────
   applyTranslations();

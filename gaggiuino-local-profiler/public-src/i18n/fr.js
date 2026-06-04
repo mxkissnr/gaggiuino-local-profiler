@@ -92,7 +92,7 @@ export default {
     grind_comparative_coarser:(n,s,sc)=>`${n} shots comparables: mouture ${s} → score ${sc} — moudre plus grossier`,
     grind_comparative_ok:(n,s,sc)=>`${n} shots comparables confirment votre mouture (score moy. ${sc})`,
     compare_hint:'Sélectionner un shot pour comparaison',
-    nav_settings:'⚙', settings_theme:'Thème', theme_dark:'Sombre', theme_light:'Clair', settings_language:'Langue',
+    nav_settings:'⚙', settings_theme:'Thème', settings_accent:'Schéma de couleurs', theme_dark:'Sombre', theme_light:'Clair', settings_language:'Langue',
     ann_clone_btn:'↩ Cloner',
     lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'ex. 500',
     lib_bean_decaf:'Décaféiné',

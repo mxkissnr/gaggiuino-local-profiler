@@ -92,7 +92,7 @@ export default {
     grind_comparative_coarser:(n,s,sc)=>`${n} Vergleichsshots: Mahlgrad ${s} → Score ${sc} – gröber mahlen`,
     grind_comparative_ok:(n,s,sc)=>`${n} Vergleichsshots bestätigen deinen Mahlgrad (Ø Score ${sc})`,
     compare_hint:'Shot für Vergleich wählen',
-    nav_settings:'⚙', settings_theme:'Theme', theme_dark:'Dark', theme_light:'Hell', settings_language:'Sprache',
+    nav_settings:'⚙', settings_theme:'Theme', settings_accent:'Farbschema', theme_dark:'Dark', theme_light:'Hell', settings_language:'Sprache',
     ann_clone_btn:'↩ Letzten',
     lib_bean_stock:'Vorrat (g)', lib_bean_stock_ph:'z.B. 500',
     lib_bean_decaf:'Entkoffeiniert',

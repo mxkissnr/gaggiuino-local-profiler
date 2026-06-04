@@ -1,3 +1,6 @@
+## 1.82.0
+- feat: accent color themes — 5 selectable color schemes in Settings: Amber (default), Ocean (blue→cyan), Aurora (indigo→purple), Ember (red→orange), Forest (green→teal); accents applied via CSS custom properties (`--accent`, `--accent-from`, `--accent-to`, `--accent-glow`); gradient on save buttons and glow on active pills/tabs; persisted in `localStorage` as `glp_accent_theme`; closes #146
+
 ## 1.81.0
 - feat: score trend warning — if the last 5 scored shots show a declining trend (slope < −1.5 pts/shot via linear regression), a warning banner appears in the Analytics summary; closes #144
 - feat: dial-in summary per bean — bean cards now show how many shots it took to first reach score ≥ 80 (🎯 Dial-in: X Shots); closes #144
