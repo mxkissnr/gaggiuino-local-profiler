@@ -269,15 +269,19 @@ function calcComparativeGrindAdvice(shot, allShots) {
   if (bestSetting === null) return null;
 
   const n = comparable.length, bestScore = Math.round(bestAvg);
+  const shots = comparable
+    .map(s => ({ shot: s, grind: _parseGrindNum(s.annotation.grindSetting), score: calcShotScore(s, getShotData(s)) }))
+    .sort((a, b) => b.score - a.score);
+
   if (currentGrind === null)
-    return { type: 'ok', icon: '📊', text: t('grind_comparative_ok', n, bestSetting, bestScore) };
+    return { type: 'ok',      icon: '📊', text: t('grind_comparative_ok',      n, bestSetting, bestScore), shots };
 
   const diff = currentGrind - bestSetting;
   if (Math.abs(diff) < 0.6)
-    return { type: 'ok',      icon: '📊', text: t('grind_comparative_ok',      n, bestSetting, bestScore) };
+    return { type: 'ok',      icon: '📊', text: t('grind_comparative_ok',      n, bestSetting, bestScore), shots };
   if (diff > 0)
-    return { type: 'finer',   icon: '📊', text: t('grind_comparative_finer',   n, bestSetting, bestScore) };
-  return   { type: 'coarser', icon: '📊', text: t('grind_comparative_coarser', n, bestSetting, bestScore) };
+    return { type: 'finer',   icon: '📊', text: t('grind_comparative_finer',   n, bestSetting, bestScore), shots };
+  return   { type: 'coarser', icon: '📊', text: t('grind_comparative_coarser', n, bestSetting, bestScore), shots };
 }
 
 function calcGrindAdvice(shot, data) {
@@ -706,9 +710,45 @@ export function updateView() {
   const compAdv = !shotB ? calcComparativeGrindAdvice(shotA, S.shots) : null;
   if (compEl) {
     if (compAdv) {
-      compEl.className = `grind-advice grind-comparative grind-${compAdv.type}`;
+      const wasOpen = compEl.classList.contains('expanded');
+      compEl.className = `grind-advice grind-comparative grind-${compAdv.type}${wasOpen ? ' expanded' : ''}`;
       document.getElementById('grindAdviceComparativeIcon').textContent = compAdv.icon;
       document.getElementById('grindAdviceComparativeText').textContent = compAdv.text;
+
+      const locale = LOCALE_MAP[S.currentLang] || 'de-DE';
+      const listHtml = compAdv.shots.map(({ shot: s, grind, score }) => {
+        const date = new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+        const dur  = s.duration ? `${(s.duration / 10).toFixed(0)}s` : '';
+        const cls  = scoreClass(score);
+        return `<div class="comp-shot-row" onclick="goToShot(${s.id})" title="Shot ${s.id}">
+          <span class="comp-shot-date">${date}</span>
+          <span class="comp-shot-grind">⚙ ${grind}</span>
+          <span class="comp-shot-score ${cls}">${score}</span>
+          ${dur ? `<span class="comp-shot-dur">${dur}</span>` : ''}
+        </div>`;
+      }).join('');
+
+      let panel = compEl.querySelector('.comp-shots-panel');
+      if (!panel) {
+        panel = document.createElement('div');
+        panel.className = 'comp-shots-panel';
+        compEl.appendChild(panel);
+      }
+      panel.innerHTML = listHtml;
+
+      const toggle = compEl.querySelector('.comp-toggle');
+      if (!toggle) {
+        const btn = document.createElement('button');
+        btn.className = 'comp-toggle';
+        btn.textContent = '▸';
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          compEl.classList.toggle('expanded');
+          btn.textContent = compEl.classList.contains('expanded') ? '▾' : '▸';
+        };
+        compEl.insertBefore(btn, compEl.querySelector('#grindAdviceComparativeIcon'));
+      }
+
       compEl.style.display = '';
     } else {
       compEl.style.display = 'none';

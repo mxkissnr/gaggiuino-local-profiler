@@ -1,3 +1,6 @@
+## 1.82.2
+- feat: expandable comparison shots in grind advice — the comparative grind advice bar now has a ▸ toggle; clicking it reveals all comparison shots as compact rows (date · grind setting · score · duration), sorted best-first; clicking a row navigates to that shot; closes #148
+
 ## 1.82.1
 - feat: extend accent gradient to tabs, nav, sidebar, score badge — active mode-btn and lib-tab underlines are now gradient (::after pseudo-element); active sidebar shot gets a gradient left border (border-image); score-ok badge uses gradient text (background-clip: text); ss-ok pill uses --accent-glow; closes #147
 

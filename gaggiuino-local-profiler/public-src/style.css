@@ -857,7 +857,17 @@
         .grind-finer   { border-color: rgba(52,152,219,.3); background: rgba(52,152,219,.06); color: #93c5fd; }
         .grind-coarser { border-color: rgba(243,156,18,.3); background: rgba(243,156,18,.06); color: #fcd34d; }
         .grind-warning { border-color: rgba(239,68,68,.3);  background: rgba(239,68,68,.06);  color: #fca5a5; }
-        .grind-comparative { margin-top: 6px; font-size: .8rem; opacity: .9; }
+        .grind-comparative { margin-top: 6px; font-size: .8rem; opacity: .9; flex-wrap: wrap; cursor: default; }
+        .comp-toggle { background: none; border: none; color: inherit; font-size: .8rem; cursor: pointer; padding: 0 6px 0 0; opacity: .7; flex-shrink: 0; }
+        .comp-toggle:hover { opacity: 1; }
+        .comp-shots-panel { display: none; width: 100%; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.1); }
+        .grind-comparative.expanded .comp-shots-panel { display: flex; flex-direction: column; gap: 4px; }
+        .comp-shot-row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: .78rem; transition: background .12s; }
+        .comp-shot-row:hover { background: rgba(255,255,255,.07); }
+        .comp-shot-date  { color: var(--gray-500); min-width: 36px; }
+        .comp-shot-grind { color: var(--gray-300); flex: 1; }
+        .comp-shot-score { font-weight: 700; min-width: 28px; text-align: right; }
+        .comp-shot-dur   { color: var(--gray-500); font-size: .72rem; }
 
         /* ── Chart tabs ── */
         .chart-tabs { display: flex; gap: 4px; margin-bottom: 12px; align-items: center; }
