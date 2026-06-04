@@ -22,6 +22,7 @@ export default {
     ann_tds_ph:'e.g. 9.2', ann_notes:'Notes',
     ann_notes_ph:'Taste, observations, adjustments …',
     ann_drink_type:'Drink', ann_drink_type_none:'— none —',
+    ann_milk_type:'Milk', ann_milk_none:'— none —',
     btn_save:'Save', btn_saved:'✓ Saved',
     grind_finer_urgent:'Grind finer', grind_finer:'Grind slightly finer',
     grind_ok:'Grind setting is good', grind_coarser:'Grind slightly coarser',

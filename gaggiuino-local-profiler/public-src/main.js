@@ -15,7 +15,7 @@ import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggl
          updateView, switchChartTab, updatePQChart,
          openChartFullscreen, closeChartFullscreen, switchFsTab,
          exportCSV, exportAllCSV, exportShot, exportProfile, restoreFromFile,
-         loadDrinkMenu, selectDrinkType } from './views/shots.js';
+         loadDrinkMenu, loadMilkTypes, selectDrinkType, selectMilkType } from './views/shots.js';
 
 import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, clearReferenceShot,
          connectLiveStream, disconnectLiveStream, setLiveBadge, handleLiveData,
@@ -128,7 +128,9 @@ Object.assign(window, {
   saveAnnotation,
   scheduleAutoSave,
   selectDrinkType,
+  selectMilkType,
   loadDrinkMenu,
+  loadMilkTypes,
   updateDegassing,
   updateView,
   switchChartTab,
@@ -354,6 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initToken().then(() => {
     loadDrinkMenu();
+    loadMilkTypes();
     loadData();
     loadLibrary();
     updateStatus();

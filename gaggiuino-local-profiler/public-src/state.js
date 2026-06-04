@@ -32,6 +32,7 @@ export const S = {
   _flapInitDone: false,
   coffeeLibrary: { beans: [], grinders: [] },
   drinkMenu: [],
+  milkTypes: [],
   beanEditId: null,
   grinderEditId: null,
   trendChart: null,

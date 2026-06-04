@@ -22,6 +22,7 @@ export default {
     ann_tds_ph:'bijv. 9.2', ann_notes:'Notities',
     ann_notes_ph:'Smaak, opmerkingen, aanpassingen …',
     ann_drink_type:'Drank', ann_drink_type_none:'— geen —',
+    ann_milk_type:'Melk', ann_milk_none:'— geen —',
     btn_save:'Opslaan', btn_saved:'✓ Opgeslagen',
     grind_finer_urgent:'Fijner malen', grind_finer:'Iets fijner malen',
     grind_ok:'Maalgraad is goed', grind_coarser:'Iets grover malen',

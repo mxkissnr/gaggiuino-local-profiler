@@ -1,3 +1,6 @@
+## 1.79.0
+- feat: milk stock deduction from shot annotation — new **Milchsorte** selector in the annotation panel (appears when a drink type is selected and milk types exist in the library); when milk type is set for the first time on a shot and the drink has `milkMl` configured, the milk stock is automatically reduced; new endpoints: `GET /api/library/milks`, `POST /api/library/milk/:id/deduct`; closes #142
+
 ## 1.78.1
 - fix: milk form open/close now uses `classList.add/remove('open')` instead of `style.display` — form was always staying hidden because the CSS default `.lib-add-form { display: none }` overrode the inline style removal
 

@@ -22,6 +22,7 @@ export default {
     ann_tds_ph:'z.B. 9.2', ann_notes:'Notizen',
     ann_notes_ph:'Geschmack, Beobachtungen, Anpassungen …',
     ann_drink_type:'Getränk', ann_drink_type_none:'— keines —',
+    ann_milk_type:'Milch', ann_milk_none:'— keine —',
     btn_save:'Speichern', btn_saved:'✓ Gespeichert',
     grind_finer_urgent:'Feiner mahlen', grind_finer:'Leicht feiner mahlen',
     grind_ok:'Mahlgrad passt', grind_coarser:'Leicht gröber mahlen',

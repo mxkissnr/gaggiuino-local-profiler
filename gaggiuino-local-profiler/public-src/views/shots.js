@@ -87,6 +87,13 @@ export async function loadDrinkMenu() {
   } catch (e) { /* keep empty — pills won't render */ }
 }
 
+export async function loadMilkTypes() {
+  try {
+    const r = await apiFetch('api/library/milks');
+    if (r.ok) S.milkTypes = await r.json();
+  } catch (e) { /* non-critical */ }
+}
+
 function _renderDrinkPills(selectedId) {
   const container = document.getElementById('drinkPillsContainer');
   const hidden    = document.getElementById('annDrinkType');
@@ -102,9 +109,39 @@ function _renderDrinkPills(selectedId) {
 export function selectDrinkType(id) {
   const hidden = document.getElementById('annDrinkType');
   if (!hidden) return;
-  const newVal = hidden.value === id ? '' : id; // click active pill → deselect
+  const newVal = hidden.value === id ? '' : id;
   _renderDrinkPills(newVal);
+  _updateMilkFieldVisibility();
   scheduleAutoSave();
+}
+
+function _renderMilkPills(selectedId) {
+  const container = document.getElementById('milkPillsContainer');
+  const hidden    = document.getElementById('annMilkType');
+  if (!container) return;
+  if (!S.milkTypes?.length) { container.innerHTML = ''; return; }
+  container.innerHTML = S.milkTypes.map(m =>
+    `<button type="button" class="drink-pill${selectedId === String(m.id) ? ' active' : ''}"
+      onclick="selectMilkType('${esc(String(m.id))}')">${esc(m.emoji || '🥛')} ${esc(m.name)}</button>`
+  ).join('');
+  if (hidden) hidden.value = selectedId || '';
+}
+
+export function selectMilkType(id) {
+  const hidden = document.getElementById('annMilkType');
+  if (!hidden) return;
+  const newVal = hidden.value === id ? '' : id;
+  _renderMilkPills(newVal);
+  scheduleAutoSave();
+}
+
+function _updateMilkFieldVisibility() {
+  const field      = document.getElementById('milkTypeField');
+  if (!field) return;
+  const drinkId    = document.getElementById('annDrinkType')?.value;
+  const menuItem   = S.drinkMenu?.find(m => m.id === drinkId);
+  const hasMilk    = (menuItem?.milkMl > 0) || (S.milkTypes?.length > 0 && drinkId);
+  field.style.display = (S.milkTypes?.length && drinkId) ? '' : 'none';
 }
 
 // ── Shot data helper ──────────────────────────────────────────────────────
@@ -350,8 +387,10 @@ export function renderAnnotationPanel(shot) {
   document.getElementById('annRoastDate').value    = isoToGerman(ann.roastDate || '');
   document.getElementById('annTds').value          = ann.tds          || '';
   document.getElementById('annNotes').value        = ann.notes        || '';
-  // Drink type pills
+  // Drink type + milk type pills
   _renderDrinkPills(ann.drinkType || '');
+  _renderMilkPills(ann.milkType ? String(ann.milkType) : '');
+  _updateMilkFieldVisibility();
   const btn = document.getElementById('saveAnnotationBtn');
   btn.textContent = t('btn_save');
   btn.classList.remove('saved');
@@ -387,6 +426,8 @@ export function quickClone() {
   document.getElementById('annRoastDate').value = rd;
   if (rd) updateDegassing(rd);
   _renderDrinkPills(ann.drinkType || '');
+  _renderMilkPills('');
+  _updateMilkFieldVisibility();
 }
 
 export async function saveAnnotation() {
@@ -404,6 +445,7 @@ export async function saveAnnotation() {
     tds:          parseFloat(document.getElementById('annTds').value) || null,
     notes:        document.getElementById('annNotes').value.trim(),
     drinkType:    document.getElementById('annDrinkType')?.value || null,
+    milkType:     document.getElementById('annMilkType')?.value ? parseInt(document.getElementById('annMilkType').value) : null,
     beanAgeDays:  calcBeanAgeAtShot(coffee, shot?.timestamp) ?? null,
   };
   try {
@@ -413,6 +455,25 @@ export async function saveAnnotation() {
       body: JSON.stringify(payload)
     });
     if (r.ok) {
+      // Deduct milk if milkType is newly set and drinkType has milkMl configured
+      const prevMilkType = shot?.annotation?.milkType ?? null;
+      if (payload.milkType && payload.milkType !== prevMilkType && payload.drinkType) {
+        const menuItem = S.drinkMenu?.find(m => m.id === payload.drinkType);
+        if (menuItem?.milkMl > 0) {
+          apiFetch(`api/library/milk/${payload.milkType}/deduct`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ml: menuItem.milkMl }),
+          }).then(r2 => {
+            if (r2.ok) r2.json().then(updated => {
+              if (S.milkTypes) {
+                const mi = S.milkTypes.findIndex(m => m.id === updated.id);
+                if (mi !== -1) S.milkTypes[mi] = updated;
+              }
+            });
+          }).catch(() => {});
+        }
+      }
       const idx = S.shots.findIndex(s => s.id === S.primaryShotId);
       if (idx !== -1) S.shots[idx].annotation = payload;
       btn.textContent = t('btn_saved');

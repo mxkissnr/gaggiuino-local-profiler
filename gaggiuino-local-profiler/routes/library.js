@@ -100,6 +100,24 @@ router.post('/api/library/bean/:id/delete', (req, res) => {
 
 // ── Milk ──────────────────────────────────────────────────────────────────
 
+router.get('/api/library/milks', (req, res) => {
+    const lib = loadLibrary();
+    res.json((lib.milks || []).map(m => ({ id: m.id, name: m.name, emoji: m.emoji || '🥛', stockMl: m.stockMl })));
+});
+
+router.post('/api/library/milk/:id/deduct', (req, res) => {
+    const id  = parseInt(req.params.id, 10);
+    const ml  = parseFloat(req.body?.ml) || 0;
+    if (ml <= 0) return res.status(400).json({ error: 'ml must be positive' });
+    const lib  = loadLibrary();
+    const milk = lib.milks?.find(m => m.id === id);
+    if (!milk) return res.status(404).json({ error: 'not found' });
+    milk.stockMl   = Math.max(0, (milk.stockMl || 0) - ml);
+    milk.updatedAt = Date.now();
+    saveLibrary(lib);
+    res.json(milk);
+});
+
 router.post('/api/library/milk', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
     const { name, emoji, stockMl } = req.body || {};
