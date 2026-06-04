@@ -272,6 +272,8 @@
         .kpi-tile { background: var(--gray-800); border: 1px solid var(--gray-700); border-radius: 8px; padding: 12px 10px; text-align: center; }
         .kpi-val  { font-size: 1.35rem; font-weight: 700; color: var(--gray-100); line-height: 1.2; }
         .kpi-lbl  { font-size: .65rem; color: var(--gray-600); text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
+        .trend-warning { margin-top: 10px; padding: 8px 12px; border-radius: 7px; font-size: .8rem; background: rgba(239,68,68,.07); border: 1px solid rgba(239,68,68,.25); color: #fca5a5; }
+        .bean-stat-dialin { font-size: .68rem; color: var(--gray-500); margin-top: 4px; }
 
         /* Personal Bests */
         .bests-list  { display: flex; flex-direction: column; gap: 6px; }

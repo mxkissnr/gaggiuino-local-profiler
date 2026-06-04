@@ -6,8 +6,8 @@ const {
     WARM_TEMP_MIN, WARM_OFF_MAX_MS,
 } = require('./constants');
 const { log, writeFileSafe } = require('./helpers');
-const { loadOptions, getMachineUrl, getMachineBaseUrl, getSyncIntervalMs, loadBlocklist } = require('./data');
-const { getSwitchState, HA_TOKEN } = require('./ha');
+const { loadOptions, getMachineUrl, getMachineBaseUrl, getSyncIntervalMs, loadBlocklist, loadOrdersSettings } = require('./data');
+const { getSwitchState, sendHaNotify, HA_TOKEN } = require('./ha');
 const state = require('./state');
 
 // ── Preheat persistence ───────────────────────────────────────────────────
@@ -302,6 +302,7 @@ async function checkAndApplyMachinePower() {
     } else {
         log('Machine off -- live polling and sync paused');
         stopLivePolling();
+        state.preheatNotifySent = false;
     }
 }
 
@@ -311,9 +312,32 @@ async function backgroundHaCheck() {
     if (!state.cachedMachineVersion) fetchMachineVersion();
 }
 
+// ── Preheat-ready barista notification ───────────────────────────────────
+
+let _preheatWatchTimer = null;
+
+function _checkPreheatNotify() {
+    if (!state.machineOn || !state.switchOnAt) return;
+    if (state.preheatNotifySent) return;
+    const opts       = loadOptions();
+    const preheatMs  = Math.max(1, parseInt(opts.preheat_time) || 20) * 60 * 1000;
+    if (Date.now() - state.switchOnAt < preheatMs) return;
+    const svc = loadOrdersSettings().baristaNotifyService;
+    if (!svc) return;
+    sendHaNotify(svc, '☕ Maschine bereit', 'Aufheizzeit abgeschlossen — bereit zum Brühen', 'glp_preheat_ready');
+    state.preheatNotifySent = true;
+    log('Preheat-ready notification sent to barista');
+}
+
+function startPreheatWatcher() {
+    if (_preheatWatchTimer) clearInterval(_preheatWatchTimer);
+    _preheatWatchTimer = setInterval(_checkPreheatNotify, 30000);
+}
+
 module.exports = {
     loadPreheatState, savePreheatState, isTempStable,
     startLivePolling, stopLivePolling, pollLive,
     syncShots, syncAfterBrew, scheduleNextSync,
     fetchMachineVersion, checkAndApplyMachinePower, backgroundHaCheck,
+    startPreheatWatcher,
 };

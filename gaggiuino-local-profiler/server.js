@@ -10,7 +10,7 @@ const state                                          = require('./lib/state');
 const { purgeExpiredTrash }                          = require('./lib/data');
 const { fetchMachineVersion, checkAndApplyMachinePower,
         backgroundHaCheck, scheduleNextSync, syncShots,
-        loadPreheatState }                           = require('./lib/live-sync');
+        loadPreheatState, startPreheatWatcher }      = require('./lib/live-sync');
 
 // ── Init data dir & default files ─────────────────────────────────────────
 try {
@@ -123,6 +123,7 @@ app.listen(PORT, () => {
     log(`Machine URL: ${getMachineUrl(opts)} | sync every ${opts.sync_interval || 5} min`);
     log(`HA integration: ${require('./lib/constants').HA_TOKEN ? 'active (auto-sync via latest_shot_id)' : 'unavailable (no SUPERVISOR_TOKEN)'}`);
     setInterval(backgroundHaCheck, 30000);
+    startPreheatWatcher();
     purgeExpiredTrash();
     setInterval(purgeExpiredTrash, 24 * 60 * 60 * 1000);
     fetchMachineVersion();

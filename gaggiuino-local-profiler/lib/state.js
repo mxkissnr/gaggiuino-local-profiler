@@ -9,6 +9,7 @@ module.exports = {
     lastKnownShotId:      0,
     cachedMachineVersion: null,
     machineOn:            false,
+    preheatNotifySent:    false,
     livePollTimer:        null,
     liveAccum:            null,
     isPollRunning:        false,

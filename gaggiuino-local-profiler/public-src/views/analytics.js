@@ -65,6 +65,31 @@ export function buildSummaryKpis() {
   el.innerHTML = kpis.map(k =>
     `<div class="kpi-tile"><div class="kpi-val ${k.cls||''}">${k.val}</div><div class="kpi-lbl">${k.lbl}</div></div>`
   ).join('');
+
+  // Trend warning: check last 5 scored shots for declining trend
+  const warnEl = document.getElementById('trendWarning');
+  if (warnEl) {
+    const recent = scored.slice(-5);
+    if (recent.length >= 3 && window.calcShotScore && window.getShotData) {
+      const recentScores = recent.map(s => window.calcShotScore(s, window.getShotData(s)));
+      const n = recentScores.length;
+      const xs = recentScores.map((_, i) => i);
+      const xm = (n - 1) / 2;
+      const ym = recentScores.reduce((a, b) => a + b, 0) / n;
+      const slope = xs.reduce((s, x, i) => s + (x - xm) * (recentScores[i] - ym), 0) /
+                    xs.reduce((s, x) => s + (x - xm) ** 2, 0);
+      if (slope < -1.5) {
+        const drop = Math.abs(slope).toFixed(1);
+        warnEl.className = 'trend-warning';
+        warnEl.textContent = t('analytics_trend_warning', n, drop);
+        warnEl.style.display = '';
+      } else {
+        warnEl.style.display = 'none';
+      }
+    } else {
+      warnEl.style.display = 'none';
+    }
+  }
 }
 
 // ── Personal Bests ────────────────────────────────────────────────────────
@@ -414,11 +439,15 @@ export function buildBeanStats() {
   for (const s of S.shots) {
     const name = s.annotation?.coffee;
     if (!name) continue;
-    if (!byBean[name]) byBean[name] = { count: 0, scores: [], durations: [] };
+    if (!byBean[name]) byBean[name] = { count: 0, scores: [], durations: [], dialinShot: null };
     byBean[name].count++;
     if (window.calcShotScore && window.getShotData) {
       const sc = window.calcShotScore(s, window.getShotData(s));
-      if (sc !== null) byBean[name].scores.push(sc);
+      if (sc !== null) {
+        byBean[name].scores.push(sc);
+        if (byBean[name].dialinShot === null && sc >= 80)
+          byBean[name].dialinShot = byBean[name].count;
+      }
     }
     const dur = (s.duration || 0) / 10;
     if (dur > 5) byBean[name].durations.push(dur);
@@ -446,6 +475,7 @@ export function buildBeanStats() {
         ${bestSc !== null ? `<div class="bean-stat"><span class="bean-stat-val">${bestSc}</span><span class="bean-stat-lbl">${t('bean_stat_best')}</span></div>` : ''}
         ${avgDur !== null ? `<div class="bean-stat"><span class="bean-stat-val">${avgDur}s</span><span class="bean-stat-lbl">${t('bean_stat_duration')}</span></div>` : ''}
       </div>
+      ${d.dialinShot !== null ? `<div class="bean-stat-dialin">🎯 ${t('analytics_dialin', d.dialinShot)}</div>` : (d.scores.length >= 3 ? `<div class="bean-stat-dialin" style="color:#52525b">${t('analytics_dialin_none')}</div>` : '')}
     </div>`;
   }
   html += '</div>';
