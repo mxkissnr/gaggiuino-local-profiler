@@ -1,3 +1,6 @@
+## 1.82.1
+- feat: extend accent gradient to tabs, nav, sidebar, score badge — active mode-btn and lib-tab underlines are now gradient (::after pseudo-element); active sidebar shot gets a gradient left border (border-image); score-ok badge uses gradient text (background-clip: text); ss-ok pill uses --accent-glow; closes #147
+
 ## 1.82.0
 - feat: accent color themes — 5 selectable color schemes in Settings: Amber (default), Ocean (blue→cyan), Aurora (indigo→purple), Ember (red→orange), Forest (green→teal); accents applied via CSS custom properties (`--accent`, `--accent-from`, `--accent-to`, `--accent-glow`); gradient on save buttons and glow on active pills/tabs; persisted in `localStorage` as `glp_accent_theme`; closes #146
 
