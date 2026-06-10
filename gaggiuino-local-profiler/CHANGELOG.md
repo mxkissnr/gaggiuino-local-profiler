@@ -82,30 +82,30 @@
 - fix: firmware version detection — `fetchMachineVersion()` tried only `/api/system/info` (doesn't exist on Gaggiuino); now also tries `/api/firmware` and `/api/about`; additionally extracts firmware from `/api/system/status` response fields every live-poll cycle; as last fallback reads `softwareVersion`/`buildNumber`/`buildDate` directly from the shot JSON at sync time
 
 ## 1.71.0
-- feat: Nederlands (NL) als sechste UI-Sprache hinzugefügt — vollständige Übersetzung aller Schlüssel inkl. Library, Rezepte, Bestellungen, Wartung, Charts
+- feat: Nederlands (NL) added as sixth UI language — complete translation of all keys incl. Library, Recipes, Orders, Maintenance, Charts
 
 ## 1.70.1
 - fix: i18n — chart labels, tooltip titles and y-axis descriptions were hardcoded in German; now use `t()` with keys `chart_pressure`, `chart_flow`, `chart_weightflow`, `chart_weight`, `chart_temp`, `chart_target_*`, `chart_time`, `chart_*_unit`; `'gerade eben'` in orders view replaced with `t('orders_just_now')`; all 5 languages covered
 
 ## 1.70.0
-- feat: orders — **Warteschlangen-ETA** (#130): neuer Endpoint `GET /api/orders/queue-eta` berechnet geschätzte Wartezeit pro Bestellung (Summe restlicher accepted-Zeit + Position × durchschnittliche Zubereitungszeit aus letzten 10 Bestellungen); Barista-Ansicht zeigt Queue-Banner wenn ≥2 Bestellungen aktiv und schlägt ETA-Wert im Picker vor; Customer Card (glp-order-card v1.7.0) zeigt Queue-Position und Wartezeit wenn Bestellung pending
+- feat: orders — **queue ETA** (#130): new endpoint `GET /api/orders/queue-eta` calculates estimated wait time per order (sum of remaining accepted-order time + position × avg preparation time from last 10 orders); barista view shows queue banner when ≥2 orders are active and pre-fills ETA picker; customer card (glp-order-card v1.7.0) shows queue position and wait time when order is pending
 
 ## 1.69.0
-- feat: Shots — **Bohnenalter beim Shot** (#129): beim Annotieren wird `beanAgeDays` automatisch berechnet (Shot-Zeitstempel − Röstdatum der aktiven Packung) und in der Annotation gespeichert; Freshness-Badge zeigt jetzt "X Tage beim Shot" statt aktuellem Alter; wenn Bean ausgewählt wird, erscheint ein Hinweis mit dem berechneten Alter; Auto-fill Röstdatum nutzt die Packung die zum Shot-Zeitpunkt aktiv war
+- feat: shots — **bean age at shot time** (#129): `beanAgeDays` is now calculated automatically on annotation (shot timestamp − roast date of the active bag) and stored in the annotation; freshness badge now shows "X days at shot time" instead of current age; selecting a bean shows a hint with the calculated age; roast date auto-fill uses the bag that was active at shot time
 
 ## 1.68.0
 - feat: preheat thermal stability detection improved (#124): `isTempStable()` now uses **range (max−min ≤ 1.5 °C)** over the last 30 seconds instead of statistical variance over the full history — reacts to recent stability even if the machine oscillated earlier; `state.stabilityReady` flag tracks whether preheat was completed by stability or timer; `/api/preheat` response includes `stabilityReady: bool`
 
 ## 1.67.1
-- feat: Library Rezepte — **Wassermenge (g)**, **Eismenge (g)** und **Quellenlink (URL)** als neue Felder; Karte zeigt 💧/🧊 in der Parameterzeile und einen klickbaren 🔗-Link
+- feat: library recipes — **water amount (g)**, **ice amount (g)** and **source URL** as new fields; recipe card shows 💧/🧊 in the parameter row and a clickable 🔗 link
 
 ## 1.67.0
-- feat: Library Rezepte — **Brühmethode** (Espresso / AeroPress / V60 / French Press / Moka / Cold Brew), **Wassertemperatur**, **Mahlgrad** und **Workflow-Schritte** (geordnete Liste mit optionaler Dauer je Schritt); Rezeptkarte zeigt alle Schritte nummeriert an; Schritte live hinzufügen/entfernen im Formular
+- feat: library recipes — **brew method** (Espresso / AeroPress / V60 / French Press / Moka / Cold Brew), **water temperature**, **grind size** and **workflow steps** (ordered list with optional duration per step); recipe card shows all steps numbered; steps can be added/removed live in the form
 
 ## 1.66.0
-- feat: Library — **Decaf-Flag** (#127): Bohnen können als entkoffeiniert markiert werden (Checkbox im Formular, grünes DECAF-Badge auf der Karte)
-- feat: Library — **Chargen-Tracking** (#128): "Neue Packung"-Button auf jeder Bohne; aktuelle Packung + Gesamtverbrauch über alle Packungen; aufklappbarer Packungsverlauf
-- feat: Library — **Rezepte** (#126): neuer "Rezepte"-Tab mit Name, Getränketyp, Dosis/Ausbeute/Zeit, Profil, Bohne, Notizen; vollständiges CRUD
+- feat: library — **decaf flag** (#127): beans can be marked as decaffeinated (checkbox in the form, green DECAF badge on the card)
+- feat: library — **bag tracking** (#128): "New Bag" button per bean; current bag + total consumption across all bags; collapsible bag history
+- feat: library — **recipes** (#126): new "Recipes" tab with name, drink type, dose/yield/time, profile, bean, notes; full CRUD
 
 ## 1.65.2
 - docs: DOCS.md + DOCS.de.md updated — orders push-notification section now documents both broadcast recipients (open/close with preheat-awareness) and per-customer mapping
@@ -547,15 +547,15 @@
 - New: `exportAllCSV()` available for exporting all shots at once
 
 ## 1.17.4
-- Vollbild-Chart (⤢ Button): Zeit- und P·Q-Chart als Fullscreen-Overlay, ideal für Querformat auf Mobile
-- Fix: Corsair-Plugin Null-Check verhindert "Cannot destructure property 'x'" Fehler
-- Fix: Chart.getChart() vor jeder Chart-Erstellung verhindert "canvas already in use" (war Ursache unsichtbarer Charts auf Mobile)
-- Fix: Chart.js Scale-ID `temp` → `y1` behebt rechte Y-Achse (zeigte max=6 statt ~98)
-- Server: Cache-Control no-cache für HTML verhindert Caching in HA-App
+- feat: fullscreen chart (⤢ button) — time and P·Q chart as fullscreen overlay, ideal for landscape on mobile
+- fix: Corsair plugin null-check prevents "Cannot destructure property 'x'" error
+- fix: Chart.getChart() before each chart creation prevents "canvas already in use" (was causing invisible charts on mobile)
+- fix: Chart.js scale ID `temp` → `y1` fixes right Y-axis (was showing max=6 instead of ~98)
+- server: Cache-Control no-cache for HTML prevents caching in HA app
 
 ## 1.17.0
-- Fix: Chart.js Scale-ID `temp` → `y1` – behebt mobilen Rendering-Fehler (rechte Y-Achse zeigte max=6 statt ~98 auf Android/HA-App)
-- Debug-Panel verbessert: try-catch + "timeout ran"-Marker für bessere Fehlerdiagnose
+- fix: Chart.js scale ID `temp` → `y1` — fixes mobile rendering bug (right Y-axis showed max=6 instead of ~98 on Android/HA app)
+- fix: debug panel improved — try-catch + "timeout ran" marker for better error diagnosis
 
 ## 1.16.0
 - Steckdosen-Steuerung: `switch_entity` Konfigurationsoption – ⏻ Button in der Sidebar zum Ein-/Ausschalten der Maschine via HA-Switch
