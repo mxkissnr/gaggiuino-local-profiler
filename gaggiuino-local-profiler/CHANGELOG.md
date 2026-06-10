@@ -16,7 +16,7 @@
 ## 1.81.0
 - feat: score trend warning — if the last 5 scored shots show a declining trend (slope < −1.5 pts/shot via linear regression), a warning banner appears in the Analytics summary; closes #144
 - feat: dial-in summary per bean — bean cards now show how many shots it took to first reach score ≥ 80 (🎯 Dial-in: X Shots); closes #144
-- feat: barista push notification when machine is preheated — once the configured preheat time elapses, the barista device receives "☕ Maschine bereit"; one notification per machine-on cycle; requires `baristaNotifyService` in orders settings; closes #145
+- feat: barista push notification when machine is preheated — once the configured preheat time elapses, the barista device receives "☕ Machine ready"; one notification per machine-on cycle; requires `baristaNotifyService` in orders settings; closes #145
 
 ## 1.80.0
 - feat: comparative grind recommendation — below the duration-based grind advice a second line appears when ≥2 comparable shots exist (same coffee + grinder + profile, dose ±1 g, annotated grind setting + score); shows which grind setting historically produced the best score and whether to go finer/coarser; grind setting is parsed as a number from free text ("23 Clicks" → 23); closes #143

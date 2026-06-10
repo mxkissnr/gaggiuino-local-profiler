@@ -324,7 +324,7 @@ function _checkPreheatNotify() {
     if (Date.now() - state.switchOnAt < preheatMs) return;
     const svc = loadOrdersSettings().baristaNotifyService;
     if (!svc) return;
-    sendHaNotify(svc, '☕ Maschine bereit', 'Aufheizzeit abgeschlossen — bereit zum Brühen', 'glp_preheat_ready');
+    sendHaNotify(svc, '☕ Machine ready', 'Warm-up complete — ready to brew', 'glp_preheat_ready');
     state.preheatNotifySent = true;
     log('Preheat-ready notification sent to barista');
 }
