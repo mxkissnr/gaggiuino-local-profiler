@@ -59,7 +59,7 @@ Installation via HACS: [github.com/mxkissnr/glp-integration](https://github.com/
 
 Eine Custom Lovelace-Karte, die Maschinenstatus, letzten Shot, Aufwärm-Fortschritt, einen Power-Button und eine **Profil-Auswahl** anzeigt. Sie kommuniziert direkt mit Port 8099 und liest die `switch_entity` aus dem `machine_status`-Sensor-Attribut (automatisch von der Integration gesetzt) — keine manuelle Konfiguration erforderlich.
 
-Die Profil-Auswahl erfordert die originale [Gaggiuino HA-Integration](https://github.com/ALERTua/hass-gaggiuino); diese erstellt die `select.gaggiuino_profile`-Entität, die die Karte liest und beschreibt. Die Auswahl wird automatisch ausgeblendet wenn die Entität nicht vorhanden ist.
+Die Profil-Auswahl liest und schreibt `select.gaggiuino_profiler_profile`, bereitgestellt nativ durch die GLP Integration (v1.9.0+). Die Auswahl wird automatisch ausgeblendet wenn die Entität nicht vorhanden ist.
 
 Installation via HACS: [github.com/mxkissnr/glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)
 
@@ -89,10 +89,10 @@ Eine maschinenlesbare OpenAPI-3.0.3-Spezifikation aller Endpunkte ist unter `GET
 
 ## Schnellstart
 
-`machine_url` auf die API-URL des Controllers setzen und Add-on starten.
+`machine_host` auf die IP oder den Hostnamen des Controllers setzen und Add-on starten.
 
 ```yaml
-machine_url: "http://192.168.1.42/api/shots"
+machine_host: "192.168.1.42"                 # IP oder Hostname des Gaggiuino-Controllers
 sync_interval: 5
 switch_entity: "switch.espresso_steckdose"   # optional
 ```
@@ -106,7 +106,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 
 | Option | Beschreibung | Standard |
 |---|---|---|
-| `machine_url` | API-URL des Gaggiuino-Controllers | `http://gaggia.intern/api/shots` |
+| `machine_host` | IP oder Hostname des Gaggiuino-Controllers | `gaggia.intern` |
 | `sync_interval` | Automatischer Sync-Intervall in Minuten (1–60) | `5` |
 | `switch_entity` | HA-Switch-Entität zum Ein-/Ausschalten der Maschine | *(leer)* |
 | `preheat_time` | Aufwärmzeit in Minuten — wie lange nach dem Einschalten bis die Maschine brühbereit ist (1–120) | `20` |

@@ -59,7 +59,7 @@ Install via HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkis
 
 A custom Lovelace card that displays machine status, last shot summary, preheat progress, a power button and a **profile selector**. It talks to port 8099 directly and reads the `switch_entity` from the `machine_status` sensor attribute (set automatically by the integration) — no manual card configuration needed.
 
-The profile selector requires the original [Gaggiuino HA integration](https://github.com/ALERTua/hass-gaggiuino) to be installed; it creates the `select.gaggiuino_profile` entity that the card reads and writes. The selector is automatically hidden when the entity is not present.
+The profile selector reads and writes `select.gaggiuino_profiler_profile`, provided natively by the GLP Integration (v1.9.0+). The selector is automatically hidden when the entity is not present.
 
 Install via HACS: [github.com/mxkissnr/glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)
 
@@ -89,12 +89,12 @@ A machine-readable OpenAPI 3.0.3 specification of all endpoints is served at `GE
 
 ## Quick start
 
-Set `machine_url` to your controller's API URL and start the add-on.
+Set `machine_host` to your controller's IP or hostname and start the add-on.
 
 ```yaml
-machine_url: "http://192.168.1.42/api/shots"
+machine_host: "192.168.1.42"           # IP or hostname of your Gaggiuino controller
 sync_interval: 5
-switch_entity: "switch.espresso_plug"   # optional
+switch_entity: "switch.espresso_plug"  # optional
 ```
 
 Verify connectivity from the HA terminal:
@@ -106,7 +106,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 
 | Option | Description | Default |
 |---|---|---|
-| `machine_url` | API URL of the Gaggiuino controller | `http://gaggia.intern/api/shots` |
+| `machine_host` | IP or hostname of the Gaggiuino controller | `gaggia.intern` |
 | `sync_interval` | Auto-sync interval in minutes (1–60) | `5` |
 | `switch_entity` | HA switch entity to power the machine on/off | *(empty)* |
 | `preheat_time` | Warmup time in minutes — how long after switch-on until the machine is ready to brew (1–120) | `20` |

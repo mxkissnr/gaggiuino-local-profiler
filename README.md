@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/releases/tag/v1.17.8">
+  <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/releases/latest">
     <img src="https://img.shields.io/github/v/tag/mxkissnr/gaggiuino-local-profiler?color=%23f59e0b&label=Version&style=flat-square" alt="Version"/>
   </a>
   <img src="https://img.shields.io/badge/Home%20Assistant-Add--on-41bdf5?logo=home-assistant&style=flat-square" alt="HA Add-on"/>
@@ -55,12 +55,13 @@ Click the button above to add this repository directly to your Home Assistant �
 | 📤 | **CSV Export** | All shots with annotations as CSV |
 | 🔌 | **Smart Plug** | Optional: power machine on/off via HA switch entity |
 | ☕ | **Preheat Timer** | Progress bar + countdown after machine switches on; configurable warmup time; smart reset (ignores brief off/on cycles while still warm) |
-| 🌐 | **Multi-Language UI** | DE / EN / IT / FR / ES — auto-detected from browser, persisted per session |
+| 🌐 | **Multi-Language UI** | DE / EN / IT / FR / ES / NL — auto-detected from browser, persisted per session |
+| 🎨 | **Accent Color Themes** | 5 color schemes: Amber (default), Ocean, Aurora, Ember, Forest — persisted in localStorage |
 | 🔧 | **Grinder Maintenance** | Per-grinder cleaning schedule with configurable shot or day threshold; cards shown alongside machine maintenance tasks |
 | 📷 | **Barcode / QR Scanner** | Scan coffee bag barcodes (EAN/UPC) via camera — name and roaster looked up on Open Food Facts; GLP QR schema for full bean import between installations; each bean card generates a shareable QR code |
 | 🔗 | **kaffeebraun.com Import** | Paste a product URL from kaffeebraun.com — name, roaster, aromas, origin, roast level and processing are imported automatically; imported beans show source and import date |
 | 🌙 | **Light / Dark theme** | Built-in theme toggle (Settings); choice persisted in localStorage; matching `glp-ha-theme.yaml` for the full HA interface |
-| 🎛️ | **Profile Selector** | Lovelace card shows a dropdown to switch the active brew profile via `select.gaggiuino_profile` (requires the Gaggiuino HA integration) |
+| 🎛️ | **Profile Selector** | Lovelace card shows a dropdown to switch the active brew profile via `select.gaggiuino_profiler_profile` (provided by GLP Integration v1.9.0+) |
 | 📋 | **Order Management** | Barista backend tab to manage espresso orders — queue, accept with ETA, complete or decline with reason; configurable menu (emoji + drink name); companion Lovelace card for customers (`glp-order-card`) |
 
 ---
@@ -98,9 +99,9 @@ After installing, go to **Settings → Devices & Services → Add Integration** 
 In the add-on options set your controller URL:
 
 ```yaml
-machine_url: "http://192.168.1.42/api/shots"
+machine_host: "192.168.1.42"           # IP or hostname of your Gaggiuino controller
 sync_interval: 5
-switch_entity: "switch.espresso_plug"   # optional
+switch_entity: "switch.espresso_plug"  # optional
 ```
 
 > **Verify connectivity** from the HA terminal:
@@ -118,7 +119,7 @@ Click **Open Web UI** in the add-on page — or open it directly from your HA si
 
 | Option | Default | Description |
 |---|---|---|
-| `machine_url` | `http://gaggia.intern/api/shots` | API URL of the Gaggiuino controller |
+| `machine_host` | `gaggia.intern` | IP or hostname of the Gaggiuino controller |
 | `sync_interval` | `5` | Auto-sync interval in minutes (1–60) |
 | `switch_entity` | *(empty)* | HA switch entity to power the machine on/off |
 
@@ -145,10 +146,10 @@ aspect_ratio: "16:9"
 
 | Component | Current | Requires |
 |---|---|---|
-| **GLP Add-on** | v1.62.0 | — |
-| **GLP Integration** ([glp-integration](https://github.com/mxkissnr/glp-integration)) | v1.9.0 | Add-on v1.62.0+ |
-| **GLP Lovelace Card** ([glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)) | v1.6.0 | Integration v1.9.0+ |
-| **GLP Order Card** ([glp-order-card](https://github.com/mxkissnr/glp-order-card)) | v1.4.0 | Integration v1.7.0+ |
+| **GLP Add-on** | v1.82.4 | — |
+| **GLP Integration** ([glp-integration](https://github.com/mxkissnr/glp-integration)) | v1.9.6 | Add-on v1.62.0+ |
+| **GLP Lovelace Card** ([glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)) | v1.8.1 | Integration v1.9.0+ |
+| **GLP Order Card** ([glp-order-card](https://github.com/mxkissnr/glp-order-card)) | v1.9.0 | Integration v1.7.0+ |
 
 All four components are optional and independently installable — only install what you need.
 
