@@ -104,8 +104,8 @@ function loadMaintenance() {
             const s   = saved[key] || {};
             result[key] = {
                 lastDate:        s.lastDate        ?? null,
-                threshold_shots: s.threshold_shots ?? 200,
-                threshold_days:  s.threshold_days  ?? null,
+                threshold_shots: 'threshold_shots' in s ? s.threshold_shots : 200,
+                threshold_days:  'threshold_days'  in s ? s.threshold_days  : null,
                 grinderName:     grinder.name,
             };
         }

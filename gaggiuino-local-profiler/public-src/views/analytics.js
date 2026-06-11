@@ -51,8 +51,9 @@ export function buildSummaryKpis() {
   const totalG = S.shots.reduce((sum, s) => sum + (s.annotation?.dose || 0), 0);
   const totalCoffee = totalG >= 1000 ? (totalG / 1000).toFixed(1) + ' kg' : Math.round(totalG) + ' g';
 
-  const weekAgo  = Date.now() / 1000 - 7 * 24 * 3600;
-  const thisWeek = S.shots.filter(s => s.timestamp >= weekAgo).length;
+  const _now = new Date();
+  const weekStartMs = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() - (_now.getDay() + 6) % 7).getTime();
+  const thisWeek = S.shots.filter(s => s.timestamp * 1000 >= weekStartMs).length;
   const streak   = calcLongestStreak(S.shots);
 
   const kpis = [

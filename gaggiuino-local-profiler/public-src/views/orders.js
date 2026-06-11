@@ -99,7 +99,9 @@ export async function loadOrdersView() {
   renderOrdersList(orders);
   renderOrdersMenuAdmin(menu);
   renderMilkStock(milkStock);
-  if (S._ordersStatsOpen) renderOrdersStats(orders);
+  if (S._ordersStatsOpen) {
+    apiFetch('api/orders/stats').then(r => r.json()).then(renderOrdersStats).catch(() => {});
+  }
 
   const pendingOrders = orders.filter(o => o.status === 'pending');
   const badge = document.getElementById('ordersBadge');
@@ -422,48 +424,31 @@ export function toggleOrdersStats() {
   if (S._ordersStatsOpen) loadOrdersView();
 }
 
-export function renderOrdersStats(orders) {
+export function renderOrdersStats(stats) {
   const el = document.getElementById('ordersStatsContent');
   if (!el) return;
-  const done = orders.filter(o => o.status === 'done');
-  if (!done.length) {
+  if (!stats?.total) {
     el.innerHTML = `<div style="color:#52525b;font-size:.8rem;padding:8px 0">${t('orders_stats_no_data')}</div>`;
     return;
   }
 
-  const itemCounts = {};
-  done.forEach(o => { itemCounts[o.item] = (itemCounts[o.item] || 0) + 1; });
-  const mostPopular = Object.entries(itemCounts).sort((a, b) => b[1] - a[1])[0];
-
-  const byCustomer = {};
-  done.forEach(o => {
-    if (!byCustomer[o.customer]) byCustomer[o.customer] = { orders: [], items: {} };
-    byCustomer[o.customer].orders.push(o);
-    byCustomer[o.customer].items[o.item] = (byCustomer[o.customer].items[o.item] || 0) + 1;
-  });
-  const customers = Object.entries(byCustomer).sort((a, b) => b[1].orders.length - a[1].orders.length);
-
   const fmtDate = ts => ts ? new Date(ts).toLocaleDateString() : '–';
-  const cards = customers.map(([name, d]) => {
-    const fav  = Object.entries(d.items).sort((a, b) => b[1] - a[1])[0];
-    const last = Math.max(...d.orders.map(o => o.completedAt || o.createdAt));
-    return `<div class="orders-stats-card">
-      <div class="orders-stats-name" title="${esc(name)}">${esc(name)}</div>
-      <div class="orders-stats-row"><span>${t('orders_stats_total')}</span><span class="orders-stats-val">${d.orders.length} ${t('orders_stats_orders')}</span></div>
-      <div class="orders-stats-row"><span>${t('orders_stats_fav')}</span><span class="orders-stats-val">${fav ? esc(fav[0]) : '–'}</span></div>
-      <div class="orders-stats-row"><span>${t('orders_stats_last')}</span><span class="orders-stats-val">${fmtDate(last)}</span></div>
-    </div>`;
-  }).join('');
+  const cards = (stats.customers || []).map(c => `<div class="orders-stats-card">
+      <div class="orders-stats-name" title="${esc(c.name)}">${esc(c.name)}</div>
+      <div class="orders-stats-row"><span>${t('orders_stats_total')}</span><span class="orders-stats-val">${c.count} ${t('orders_stats_orders')}</span></div>
+      <div class="orders-stats-row"><span>${t('orders_stats_fav')}</span><span class="orders-stats-val">${c.favItem ? esc(c.favItem) : '–'}</span></div>
+      <div class="orders-stats-row"><span>${t('orders_stats_last')}</span><span class="orders-stats-val">${fmtDate(c.lastAt)}</span></div>
+    </div>`).join('');
 
   el.innerHTML = `
     <div class="orders-stats-global">
       <div class="orders-stats-global-item">
         <span class="orders-stats-global-label">${t('orders_stats_total')}</span>
-        <span class="orders-stats-global-val">${done.length}</span>
+        <span class="orders-stats-global-val">${stats.total}</span>
       </div>
       <div class="orders-stats-global-item">
         <span class="orders-stats-global-label">${t('orders_stats_popular')}</span>
-        <span class="orders-stats-global-val">${mostPopular ? esc(mostPopular[0]) + ' ×' + mostPopular[1] : '–'}</span>
+        <span class="orders-stats-global-val">${stats.mostPopular ? esc(stats.mostPopular.item) + ' ×' + stats.mostPopular.count : '–'}</span>
       </div>
     </div>
     <div class="orders-stats-grid">${cards}</div>`;

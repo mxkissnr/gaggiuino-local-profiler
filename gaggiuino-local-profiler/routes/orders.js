@@ -216,6 +216,39 @@ router.get('/api/orders', (req, res) => {
     res.json(orders.slice().reverse().slice(0, 100));
 });
 
+router.get('/api/orders/stats', (req, res) => {
+    const done = loadOrders().filter(o => o.status === 'done');
+    if (!done.length) return res.json({ total: 0, customers: [], mostPopular: null });
+
+    const byCustomer = {};
+    const byItem     = {};
+    for (const o of done) {
+        if (!byCustomer[o.customer]) byCustomer[o.customer] = { count: 0, items: {}, lastAt: 0 };
+        byCustomer[o.customer].count++;
+        byCustomer[o.customer].items[o.item] = (byCustomer[o.customer].items[o.item] || 0) + 1;
+        const ts = o.completedAt || o.createdAt || 0;
+        if (ts > byCustomer[o.customer].lastAt) byCustomer[o.customer].lastAt = ts;
+        byItem[o.item] = (byItem[o.item] || 0) + 1;
+    }
+
+    const customers = Object.entries(byCustomer)
+        .sort((a, b) => b[1].count - a[1].count)
+        .map(([name, d]) => ({
+            name,
+            count:   d.count,
+            favItem: Object.entries(d.items).sort((a, b) => b[1] - a[1])[0]?.[0] || null,
+            lastAt:  d.lastAt,
+        }));
+
+    const mostPopular = Object.entries(byItem).sort((a, b) => b[1] - a[1])[0] || null;
+
+    res.json({
+        total:       done.length,
+        customers,
+        mostPopular: mostPopular ? { item: mostPopular[0], count: mostPopular[1] } : null,
+    });
+});
+
 router.get('/api/orders/mine', (req, res) => {
     const { haUserId } = req.query;
     if (!haUserId) return res.status(400).json({ error: 'haUserId required' });

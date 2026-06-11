@@ -255,7 +255,6 @@ function calcComparativeGrindAdvice(shot, allShots) {
   const ann     = shot.annotation || {};
   const coffee  = ann.coffee?.trim().toLowerCase();
   const grinder = ann.grinder?.trim().toLowerCase();
-  const profile = (shot.profile?.name || shot.profileName || '').toLowerCase();
   const dose    = parseFloat(ann.dose) || null;
   const currentGrind = _parseGrindNum(ann.grindSetting);
   if (!coffee || !grinder) return null;
@@ -265,8 +264,6 @@ function calcComparativeGrindAdvice(shot, allShots) {
     const a  = s.annotation || {};
     if (a.coffee?.trim().toLowerCase() !== coffee)   return false;
     if (a.grinder?.trim().toLowerCase() !== grinder) return false;
-    const sp = (s.profile?.name || s.profileName || '').toLowerCase();
-    if (sp !== profile) return false;
     if (dose) {
       const sd = parseFloat(a.dose) || null;
       if (!sd || Math.abs(sd - dose) > 1) return false;

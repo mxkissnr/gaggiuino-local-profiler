@@ -2,6 +2,7 @@ import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { MAINT_META } from '../constants.js';
+import { esc } from '../utils.js';
 
 export function maintStatusLabel(status) {
   return { ok: t('maint_ok'), soon: t('maint_soon'), due: t('maint_due'), never: t('maint_never') }[status] || '';
@@ -46,7 +47,7 @@ export function _buildMaintCard(task, d, title, icon) {
   card.innerHTML = `
     <div class="maint-card-header">
       <span class="maint-icon">${icon}</span>
-      <span class="maint-title">${title}</span>
+      <span class="maint-title">${esc(title)}</span>
       <span class="maint-status-pill ${d.status}">${maintStatusLabel(d.status)}</span>
     </div>
     <div class="maint-stats">

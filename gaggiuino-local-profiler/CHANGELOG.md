@@ -1,3 +1,10 @@
+## 1.82.5
+- fix: grinder maintenance threshold mode no longer resets to shots after restart — saved `null` was overwritten by the default `200` on reload due to `??` instead of `in`-check; closes #154
+- fix: "This week" KPI now counts shots in the current calendar week (Mon–Sun) instead of a rolling 7-day window; closes #156
+- fix: comparative grind advice now shown for all annotated profiles, not just Adaptive — profile-name filter removed; coffee + grinder + dose match is sufficient; closes #155
+- fix: customer statistics panel now uses a dedicated `/api/orders/stats` endpoint that reads all completed orders without the 100-entry queue cap, so stats are always accurate; closes #153
+- fix: XSS — grinder name in maintenance card title now correctly HTML-escaped
+
 ## 1.82.4
 - feat: publish pre-built Docker images to ghcr.io — GitHub Actions now builds and pushes amd64/armv7/aarch64 images on every release; HA pulls the pre-built image instead of building locally; eliminates build-cache issues and slow/broken update detection introduced in HA Supervisor 2026.06; closes #150
 
