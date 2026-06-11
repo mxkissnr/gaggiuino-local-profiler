@@ -1,3 +1,6 @@
+## 1.82.6
+- fix #155 (corrected): restore same-profile filter for comparative grind advice; profile names are now `.trim()`-normalized before comparison to avoid whitespace mismatches; minimum comparable-shot threshold lowered from 2 → 1 so profiles with fewer annotated shots also show comparisons
+
 ## 1.82.5
 - fix: grinder maintenance threshold mode no longer resets to shots after restart — saved `null` was overwritten by the default `200` on reload due to `??` instead of `in`-check; closes #154
 - fix: "This week" KPI now counts shots in the current calendar week (Mon–Sun) instead of a rolling 7-day window; closes #156
