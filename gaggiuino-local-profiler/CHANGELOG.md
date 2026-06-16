@@ -1,3 +1,6 @@
+## 1.82.7
+- fix: `/api/token` now accepts HA Supervisor token verification as a third auth path — integration sends `Authorization: Bearer {SUPERVISOR_TOKEN}`, add-on verifies against `http://supervisor/info`; this fixes 401 errors on `/shots.json` when Docker NAT exposes the HA core connection from a non-private source IP; closes #158
+
 ## 1.82.6
 - fix #155 (corrected): restore same-profile filter for comparative grind advice; profile names are now `.trim()`-normalized before comparison to avoid whitespace mismatches; minimum comparable-shot threshold lowered from 2 → 1 so profiles with fewer annotated shots also show comparisons
 

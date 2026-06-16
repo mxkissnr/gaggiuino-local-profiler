@@ -44,12 +44,12 @@ function saveProfilesCache(profiles) {
 })();
 
 // ── Token endpoint ────────────────────────────────────────────────────────
-// Returns the API token to callers that are either:
-//  a) already authenticated (valid X-GLP-Token — covered by middleware), or
-//  b) coming from any private/loopback network (covers HA Core on 172.30.x.x,
-//     Docker bridge on 172.17.x.x, host-routed 192.168.x.x, etc.).
-// Public internet clients cannot reach this endpoint.
-// Note: the Ingress-Path bypass in server.js remains strictly 172.30.x.x.
+// Returns the GLP API token to callers that are one of:
+//  a) already authenticated (valid X-GLP-Token — covered by middleware),
+//  b) coming from a private/loopback address (LAN, Docker bridge, host-net), or
+//  c) presenting a valid HA Supervisor token (Authorization: Bearer <token>)
+//     verified by calling http://supervisor/info — only processes inside HA OS
+//     have a Supervisor token, making this safe against external callers.
 function isPrivateIp(ip) {
     return ip === '127.0.0.1' || ip === '::1' ||
            ip.startsWith('10.') ||
@@ -57,14 +57,38 @@ function isPrivateIp(ip) {
            /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
 }
 
-router.get('/api/token', (req, res) => {
+async function isValidSupervisorToken(token) {
+    if (!token) return false;
+    try {
+        const r = await fetch('http://supervisor/info', {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(4000),
+        });
+        return r.ok;
+    } catch (_) {
+        return false;
+    }
+}
+
+router.get('/api/token', async (req, res) => {
     const ip = (req.socket?.remoteAddress || req.ip || '').replace(/^::ffff:/, '');
     const fromPrivate   = isPrivateIp(ip);
     const hasValidToken = req.headers['x-glp-token'] === state.apiToken && !!state.apiToken;
-    if (!fromPrivate && !hasValidToken) {
-        return res.status(401).json({ error: 'Unauthorized' });
+
+    if (fromPrivate || hasValidToken) {
+        return res.json({ apiToken: state.apiToken || null });
     }
-    res.json({ apiToken: state.apiToken || null });
+
+    // Fallback: verify via HA Supervisor API.
+    // Only HA-internal processes (core, add-ons) hold a valid Supervisor token.
+    const authHeader = req.headers['authorization'] || '';
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (bearerToken && await isValidSupervisorToken(bearerToken)) {
+        return res.json({ apiToken: state.apiToken || null });
+    }
+
+    log(`Token request denied — ip=${ip}`);
+    res.status(401).json({ error: 'Unauthorized' });
 });
 
 // ── Status ────────────────────────────────────────────────────────────────
