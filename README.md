@@ -6,7 +6,7 @@
   <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/releases/latest">
     <img src="https://img.shields.io/github/v/tag/mxkissnr/gaggiuino-local-profiler?color=%23f59e0b&label=Version&style=flat-square" alt="Version"/>
   </a>
-  <img src="https://img.shields.io/badge/Home%20Assistant-Add--on-41bdf5?logo=home-assistant&style=flat-square" alt="HA App"/>
+  <img src="https://img.shields.io/badge/Home%20Assistant-App-41bdf5?logo=home-assistant&style=flat-square" alt="HA App"/>
   <img src="https://img.shields.io/badge/arch-amd64%20%7C%20armv7%20%7C%20aarch64-6b7280?style=flat-square" alt="Architectures"/>
   <img src="https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&style=flat-square" alt="Node.js"/>
   <img src="https://img.shields.io/badge/Built%20with-Claude%20by%20Anthropic-D97706?style=flat-square" alt="Built with Claude"/>
@@ -148,8 +148,8 @@ aspect_ratio: "16:9"
 |---|---|---|
 | **GLP App** | v1.82.7 | — |
 | **GLP Integration** ([glp-integration](https://github.com/mxkissnr/glp-integration)) | v1.10.7 | App v1.82.7+ |
-| **GLP Lovelace Card** ([glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)) | v2.6.0 | Integration v1.9.0+ |
-| **GLP Order Card** ([glp-order-card](https://github.com/mxkissnr/glp-order-card)) | v1.10.0 | Integration v1.7.0+ |
+| **GLP Lovelace Card** ([glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)) | v2.6.1 | Integration v1.9.0+ |
+| **GLP Order Card** ([glp-order-card](https://github.com/mxkissnr/glp-order-card)) | v1.10.1 | Integration v1.7.0+ |
 
 All four components are optional and independently installable — only install what you need.
 
