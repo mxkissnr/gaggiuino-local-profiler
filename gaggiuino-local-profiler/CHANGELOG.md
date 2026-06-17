@@ -1,3 +1,6 @@
+## 1.83.0
+- feat: the shot **score** (0–100) is now computed once in the backend (`lib/score.js`) and served on each shot via `/shots.json`, `/api/shots/last` and `/api/shots/:id`. The frontend and the HA integration now read this single value instead of each re-implementing the scoring — one source of truth. Scoring unchanged (weighted pressure, temperature stability, duration, brew ratio, channeling).
+
 ## 1.82.7
 - fix: `/api/token` now accepts HA Supervisor token verification as a third auth path — integration sends `Authorization: Bearer {SUPERVISOR_TOKEN}`, add-on verifies against `http://supervisor/info`; this fixes 401 errors on `/shots.json` when Docker NAT exposes the HA core connection from a non-private source IP; closes #158
 

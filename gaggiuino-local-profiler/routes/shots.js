@@ -6,6 +6,7 @@ const { DATA_FILE, ANNOTATIONS_FILE, MAX_SHOT_ID } = require('../lib/constants')
 const { loadAnnotations, saveAnnotations, loadTrash, saveTrash,
         loadBlocklist, saveBlocklist } = require('../lib/data');
 const { log, writeFileSafe } = require('../lib/helpers');
+const { calcShotScore } = require('../lib/score');
 
 router.get('/shots.json', (req, res) => {
     try {
@@ -20,7 +21,9 @@ router.get('/shots.json', (req, res) => {
         const merged = filtered.map(s => {
             const ann      = annotations[String(s.id)];
             const trashedAt = trash[String(s.id)] || null;
-            return { ...s, ...(ann ? { annotation: ann } : {}), ...(trashedAt ? { trashedAt } : {}) };
+            const m = { ...s, ...(ann ? { annotation: ann } : {}), ...(trashedAt ? { trashedAt } : {}) };
+            m.score = calcShotScore(m);
+            return m;
         });
         res.setHeader('Content-Type', 'application/json');
         res.send(JSON.stringify(merged));
@@ -39,7 +42,9 @@ router.get('/api/shots/last', (req, res) => {
         const last        = shots.filter(s => !trash[String(s.id)]).slice(-1)[0] || null;
         if (!last) return res.json(null);
         const ann = annotations[String(last.id)];
-        res.json(ann ? { ...last, annotation: ann } : last);
+        const m   = ann ? { ...last, annotation: ann } : { ...last };
+        m.score   = calcShotScore(m);
+        res.json(m);
     } catch { res.json(null); }
 });
 
@@ -53,7 +58,9 @@ router.get('/api/shots/:id', (req, res) => {
         const shot        = shots.find(s => String(s.id) === id && !trash[id]) || null;
         if (!shot) return res.json(null);
         const ann = annotations[id];
-        res.json(ann ? { ...shot, annotation: ann } : shot);
+        const m   = ann ? { ...shot, annotation: ann } : { ...shot };
+        m.score   = calcShotScore(m);
+        res.json(m);
     } catch { res.json(null); }
 });
 

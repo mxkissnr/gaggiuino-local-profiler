@@ -7,6 +7,7 @@ import {
   stddev, detectPhases, detectChanneling, isoToGerman, germanToIso, scoreClass
 } from '../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../components/sidebar.js';
+import { calcShotScore as _calcShotScore } from '../../lib/score.js';
 
 // ── Bean age helper ───────────────────────────────────────────────────────
 function _parseDMY(str) {
@@ -163,59 +164,12 @@ export function getShotData(shot) {
 }
 
 // ── Shot score ────────────────────────────────────────────────────────────
-export function calcShotScore(shot, data) {
-  const pVals = data.pressure.map(p => p.y).filter(v => v >= 5);
-  if (pVals.length <= 3) return null;
-
-  const scores = [], weights = [];
-
-  if (pVals.length > 3) {
-    const avgP = pVals.reduce((a, b) => a + b, 0) / pVals.length;
-    let s = avgP >= 7 && avgP <= 9.5 ? 100
-          : avgP < 7                  ? Math.max(20, 100 - (7 - avgP) * 22)
-                                      : Math.max(20, 100 - (avgP - 9.5) * 28);
-    scores.push(Math.round(s)); weights.push(25);
-  }
-
-  const tVals = data.temp.map(p => p.y);
-  if (tVals.length > 5) {
-    const sd = stddev(tVals) || 0;
-    const s  = sd <= 0.3 ? 100 : sd <= 0.7 ? 90 : sd <= 1.5 ? 72
-             : sd <= 3   ? 50  : Math.max(15, 50 - (sd - 3) * 12);
-    scores.push(Math.round(s)); weights.push(20);
-  }
-
-  const secs = (shot.duration || 0) / 10;
-  if (secs > 5) {
-    const s = secs >= 25 && secs <= 35 ? 100
-            : secs >= 20 && secs < 25   ? 82
-            : secs > 35 && secs <= 42   ? 82
-            : secs > 42 && secs <= 55   ? 62
-            : secs < 20 ? Math.max(15, 70 - (20 - secs) * 5)
-                         : Math.max(15, 62 - (secs - 55) * 3);
-    scores.push(Math.round(s)); weights.push(20);
-  }
-
-  const ann = shot.annotation || {};
-  const finalW = max(data.weight.map(p => p.y));
-  if (ann.dose && ann.dose > 0 && finalW) {
-    const r = finalW / ann.dose;
-    const s = r >= 1.8 && r <= 2.5 ? 100
-            : r >= 1.5 && r < 1.8   ? 75
-            : r > 2.5 && r <= 3.2   ? 75
-            : r < 1.5 ? Math.max(15, 55 - (1.5 - r) * 40)
-                       : Math.max(15, 60 - (r - 3.2) * 22);
-    scores.push(Math.round(s)); weights.push(20);
-  }
-
-  const pTimes = data.pressure.map(p => p.x);
-  const pAll   = data.pressure.map(p => p.y);
-  scores.push(detectChanneling(pTimes, pAll) ? 20 : 100);
-  weights.push(15);
-
-  if (!scores.length) return null;
-  const tw = weights.reduce((a, b) => a + b, 0);
-  return Math.round(scores.reduce((s, v, i) => s + v * weights[i], 0) / tw);
+// Single source of truth lives in ../../lib/score.js (shared with the backend, which
+// serves `score` on each shot). Prefer the served value; only compute locally for
+// shots that don't carry one (e.g. synthetic/comparison data).
+export function calcShotScore(shot, _data) {
+  if (shot && shot.score !== undefined) return shot.score;
+  return _calcShotScore(shot);
 }
 
 // ── Grind advice ──────────────────────────────────────────────────────────
