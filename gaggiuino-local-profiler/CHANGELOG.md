@@ -1,3 +1,6 @@
+## 1.84.0
+- feat: shot score now closer to coffee best practice — added an **Extraction Yield** factor (SCA "Golden Cup" 18–22 %, active only when TDS + dose are annotated) and the **temperature** factor now combines stability with accuracy vs the shot's target temperature (fallback band 90–96 °C), so a stable but wrong-temperature shot (e.g. boiler-off) no longer scores full on temperature; closes #161
+
 ## 1.83.1
 - fix: the Docker builder stage now copies `lib/` before `npm run build` — the frontend build imports the shared `lib/score.js`, so the v1.83.0 image build would otherwise fail.
 

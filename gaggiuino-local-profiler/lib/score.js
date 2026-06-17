@@ -38,9 +38,22 @@ function calcShotScore(shot) {
   const tVals = (d.temperature || []).map(v => v / 10);
   if (tVals.length > 5) {
     const sd = _stddev(tVals) || 0;
-    s = sd <= 0.3 ? 100 : sd <= 0.7 ? 90 : sd <= 1.5 ? 72
-      : sd <= 3   ? 50  : Math.max(15, 50 - (sd - 3) * 12);
-    scores.push(Math.round(s)); weights.push(20);
+    const stab = sd <= 0.3 ? 100 : sd <= 0.7 ? 90 : sd <= 1.5 ? 72
+      : sd <= 3 ? 50 : Math.max(15, 50 - (sd - 3) * 12);
+    // accuracy vs the shot's target temperature (fallback band 90–96 °C when no target)
+    const avgT = tVals.reduce((a, b) => a + b, 0) / tVals.length;
+    const tgt  = (d.targetTemperature || []).map(v => v / 10).filter(v => v > 0);
+    let acc;
+    if (tgt.length) {
+      const dev = Math.abs(avgT - tgt.reduce((a, b) => a + b, 0) / tgt.length);
+      acc = dev <= 0.5 ? 100 : dev <= 1 ? 90 : dev <= 2 ? 75
+          : dev <= 4 ? 50 : Math.max(15, 50 - (dev - 4) * 8);
+    } else {
+      const off = avgT >= 90 && avgT <= 96 ? 0 : avgT < 90 ? 90 - avgT : avgT - 96;
+      acc = off === 0 ? 100 : Math.max(15, 100 - off * 10);
+    }
+    s = Math.round((stab + acc) / 2);
+    scores.push(s); weights.push(20);
   }
 
   const secs = (shot.duration || 0) / 10;
@@ -62,6 +75,16 @@ function calcShotScore(shot) {
       : (r >= 1.5 && r < 1.8) || (r > 2.5 && r <= 3.2) ? 75
       : r < 1.5 ? Math.max(15, 55 - (1.5 - r) * 40)
                 : Math.max(15, 60 - (r - 3.2) * 22);
+    scores.push(Math.round(s)); weights.push(20);
+  }
+
+  // Extraction Yield (SCA "Golden Cup" 18–22 %) — only when TDS + dose are known
+  if (ann.dose && ann.dose > 0 && ann.tds && finalW) {
+    const ey = (finalW * ann.tds) / ann.dose;
+    s = ey >= 18 && ey <= 22 ? 100
+      : (ey >= 16 && ey < 18) || (ey > 22 && ey <= 24) ? 75
+      : ey < 16 ? Math.max(15, 60 - (16 - ey) * 10)
+                : Math.max(15, 60 - (ey - 24) * 10);
     scores.push(Math.round(s)); weights.push(20);
   }
 
