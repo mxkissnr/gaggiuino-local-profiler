@@ -1,3 +1,6 @@
+## 1.83.1
+- fix: the Docker builder stage now copies `lib/` before `npm run build` — the frontend build imports the shared `lib/score.js`, so the v1.83.0 image build would otherwise fail.
+
 ## 1.83.0
 - feat: the shot **score** (0–100) is now computed once in the backend (`lib/score.js`) and served on each shot via `/shots.json`, `/api/shots/last` and `/api/shots/:id`. The frontend and the HA integration now read this single value instead of each re-implementing the scoring — one source of truth. Scoring unchanged (weighted pressure, temperature stability, duration, brew ratio, channeling).
 

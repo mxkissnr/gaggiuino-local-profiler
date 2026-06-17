@@ -7,6 +7,7 @@ RUN npm ci
 
 COPY vite.config.js ./
 COPY public-src/ ./public-src/
+COPY lib/ ./lib/
 RUN npm run build
 
 # ── Runtime stage ──────────────────────────────────────────────────────────
