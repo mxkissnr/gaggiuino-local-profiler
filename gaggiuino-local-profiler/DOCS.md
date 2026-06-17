@@ -17,7 +17,7 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces
          │  sync every N min + live polling during brew
          ▼
   ┌──────────────────────────────────┐
-  │         GLP Add-on               │  ← this add-on
+  │         GLP App               │  ← this app
   │  Node.js server, port 8099       │
   │  stores shots in /data/shots.json│
   │  REST API + web UI               │
@@ -40,10 +40,10 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces
            ▼
     HA sensors, automations, energy monitoring, …
 
-† requires enable_orders: true in add-on configuration
+† requires enable_orders: true in app configuration
 ```
 
-### GLP Add-on (this repo)
+### GLP App (this repo)
 
 The central piece. It syncs shot history from the Gaggiuino machine, stores it locally in `/data/shots.json`, and serves:
 - A web UI accessible via HA Ingress (the ☕ panel icon in the HA sidebar)
@@ -51,7 +51,7 @@ The central piece. It syncs shot history from the Gaggiuino machine, stores it l
 
 ### GLP HA Integration
 
-A custom component that polls the add-on every 60 s (configurable). It exposes all GLP data as native HA sensors — shot count, last shot profile, score, duration, weight, maintenance status, preheat state, etc. — so they can be used in automations, energy dashboards, and Lovelace dashboards.
+A custom component that polls the app every 60 s (configurable). It exposes all GLP data as native HA sensors — shot count, last shot profile, score, duration, weight, maintenance status, preheat state, etc. — so they can be used in automations, energy dashboards, and Lovelace dashboards.
 
 Install via HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
 
@@ -65,7 +65,7 @@ Install via HACS: [github.com/mxkissnr/glp-lovelace-card](https://github.com/mxk
 
 ### GLP Order Card
 
-A customer-facing Lovelace card for the order system. Customers browse the drink menu, place an order and track its status in real time. When the barista marks an order as done, the card shows the shot summary with a pressure sparkline. Requires `enable_orders: true` in the add-on configuration.
+A customer-facing Lovelace card for the order system. Customers browse the drink menu, place an order and track its status in real time. When the barista marks an order as done, the card shows the shot summary with a pressure sparkline. Requires `enable_orders: true` in the app configuration.
 
 Install via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/mxkissnr/glp-order-card)
 
@@ -73,13 +73,13 @@ Install via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/mxkiss
 
 All components authenticate automatically via a shared token:
 
-1. The add-on generates a random 64-character token at first start and stores it in `/data/api_token.txt`.
+1. The app generates a random 64-character token at first start and stores it in `/data/api_token.txt`.
 2. `GET /api/token` returns the token to requests originating from the HA Supervisor network (`172.30.x.x`) — i.e. requests going through the HA Ingress proxy. External LAN clients cannot read the token from an unauthenticated endpoint.
 3. The browser UI reads the token via `/api/token` on startup (the request goes through the Supervisor) and includes it as an `X-GLP-Token` header on all subsequent requests.
 4. Requests coming through HA Ingress bypass the token check entirely — HA already authenticated the user.
-5. **GLP Order Card in direct-URL mode** (`glp_url` configured): set `glp_token: <your-token>` in the card YAML. The token is printed in the add-on logs on first start.
+5. **GLP Order Card in direct-URL mode** (`glp_url` configured): set `glp_token: <your-token>` in the card YAML. The token is printed in the app logs on first start.
 
-No manual configuration is required for the HA Ingress path. To rotate the token, delete `/data/api_token.txt` and restart the add-on.
+No manual configuration is required for the HA Ingress path. To rotate the token, delete `/data/api_token.txt` and restart the app.
 
 All persistent data is written atomically (write to `.tmp`, then `fs.renameSync`) so a crash during a write cannot produce a half-written JSON file.
 
@@ -89,7 +89,7 @@ A machine-readable OpenAPI 3.0.3 specification of all endpoints is served at `GE
 
 ## Quick start
 
-Set `machine_host` to your controller's IP or hostname and start the add-on.
+Set `machine_host` to your controller's IP or hostname and start the app.
 
 ```yaml
 machine_host: "192.168.1.42"           # IP or hostname of your Gaggiuino controller
@@ -111,7 +111,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | `switch_entity` | HA switch entity to power the machine on/off | *(empty)* |
 | `preheat_time` | Warmup time in minutes — how long after switch-on until the machine is ready to brew (1–120) | `20` |
 | `enable_orders` | Enable the order management system — barista backend tab + customer order card support; disabled by default | `false` |
-| `port` | Port the add-on server listens on (1024–65535) | `8099` |
+| `port` | Port the app server listens on (1024–65535) | `8099` |
 
 ## Features
 
@@ -133,7 +133,7 @@ Once the machine turns on, a preheat progress bar and countdown are shown in the
 
 ### Import from kaffeebraun.com
 
-In the Library tab, click **🔗 URL** next to "Add Bean", paste any product URL from [kaffeebraun.com](https://kaffeebraun.com) and press Import. The add-on fetches the product page server-side and pre-fills the bean form with:
+In the Library tab, click **🔗 URL** next to "Add Bean", paste any product URL from [kaffeebraun.com](https://kaffeebraun.com) and press Import. The app fetches the product page server-side and pre-fills the bean form with:
 
 - Name and roaster (auto-set to "Kaffee Braun")
 - Aromas / tasting notes

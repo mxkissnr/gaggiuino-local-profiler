@@ -17,7 +17,7 @@ Das GLP-Ökosystem (GLP = Gaggiuino Local Profiler) besteht aus vier unabhängig
          │  Sync alle N Min. + Live-Polling während des Bezugs
          ▼
   ┌──────────────────────────────────┐
-  │       GLP Add-on                 │  ← dieses Add-on
+  │       GLP App                 │  ← dieses App
   │  Node.js-Server, Port 8099       │
   │  speichert Shots in /data/       │
   │  REST-API + Web-Oberfläche       │
@@ -40,10 +40,10 @@ Das GLP-Ökosystem (GLP = Gaggiuino Local Profiler) besteht aus vier unabhängig
            ▼
     HA-Sensoren, Automationen, Energie-Monitoring, …
 
-† erfordert enable_orders: true in der Add-on-Konfiguration
+† erfordert enable_orders: true in der App-Konfiguration
 ```
 
-### GLP Add-on (dieses Repo)
+### GLP App (dieses Repo)
 
 Das zentrale Stück. Es synchronisiert den Shot-Verlauf von der Gaggiuino-Maschine, speichert ihn lokal in `/data/shots.json` und stellt Folgendes bereit:
 - Eine Web-Oberfläche, die über HA Ingress erreichbar ist (das ☕-Panel in der HA-Seitenleiste)
@@ -51,7 +51,7 @@ Das zentrale Stück. Es synchronisiert den Shot-Verlauf von der Gaggiuino-Maschi
 
 ### GLP HA-Integration
 
-Ein Custom Component, das das Add-on alle 60 Sekunden abfragt (konfigurierbar). Es stellt alle GLP-Daten als native HA-Sensoren bereit — Shot-Anzahl, letztes Profil, Score, Dauer, Gewicht, Wartungsstatus, Aufwärmstatus usw. — sodass sie in Automationen, Energie-Dashboards und Lovelace-Dashboards verwendet werden können.
+Ein Custom Component, das das App alle 60 Sekunden abfragt (konfigurierbar). Es stellt alle GLP-Daten als native HA-Sensoren bereit — Shot-Anzahl, letztes Profil, Score, Dauer, Gewicht, Wartungsstatus, Aufwärmstatus usw. — sodass sie in Automationen, Energie-Dashboards und Lovelace-Dashboards verwendet werden können.
 
 Installation via HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
 
@@ -65,7 +65,7 @@ Installation via HACS: [github.com/mxkissnr/glp-lovelace-card](https://github.co
 
 ### GLP Order Card
 
-Eine kunden-seitige Lovelace-Karte für das Bestellsystem. Kunden wählen ein Getränk aus der Karte, geben eine optionale Notiz ein und verfolgen den Bestellstatus in Echtzeit. Wenn der Barista eine Bestellung als fertig markiert, zeigt die Karte eine Shot-Zusammenfassung mit Druckkurve. Erfordert `enable_orders: true` in der Add-on-Konfiguration.
+Eine kunden-seitige Lovelace-Karte für das Bestellsystem. Kunden wählen ein Getränk aus der Karte, geben eine optionale Notiz ein und verfolgen den Bestellstatus in Echtzeit. Wenn der Barista eine Bestellung als fertig markiert, zeigt die Karte eine Shot-Zusammenfassung mit Druckkurve. Erfordert `enable_orders: true` in der App-Konfiguration.
 
 Installation via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/mxkissnr/glp-order-card)
 
@@ -73,13 +73,13 @@ Installation via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/m
 
 Alle Komponenten authentifizieren sich automatisch über einen gemeinsamen Token:
 
-1. Das Add-on generiert beim ersten Start einen zufälligen 64-stelligen Token und speichert ihn in `/data/api_token.txt`.
+1. Das App generiert beim ersten Start einen zufälligen 64-stelligen Token und speichert ihn in `/data/api_token.txt`.
 2. `GET /api/token` gibt den Token zurück — aber nur für Anfragen die aus dem HA-Supervisor-Netz (`172.30.x.x`) stammen, also über den HA-Ingress-Proxy gehen. Externe LAN-Clients können den Token nicht über einen nicht-authentifizierten Endpunkt lesen.
 3. Browser-UI und Integration lesen den Token beim Start über `/api/token` (die Anfrage läuft durch den Supervisor) und schicken ihn danach als `X-GLP-Token`-Header bei allen Anfragen mit.
 4. Anfragen über HA Ingress umgehen die Token-Prüfung vollständig — HA hat den Benutzer bereits authentifiziert.
-5. **GLP Order Card im Direkt-URL-Modus** (`glp_url` konfiguriert): `glp_token: <token>` in der Karten-YAML-Konfiguration setzen. Der Token wird beim ersten Start in den Add-on-Logs ausgegeben.
+5. **GLP Order Card im Direkt-URL-Modus** (`glp_url` konfiguriert): `glp_token: <token>` in der Karten-YAML-Konfiguration setzen. Der Token wird beim ersten Start in den App-Logs ausgegeben.
 
-Keine manuelle Konfiguration für den HA-Ingress-Pfad erforderlich. Um den Token zu erneuern, `/data/api_token.txt` löschen und das Add-on neu starten.
+Keine manuelle Konfiguration für den HA-Ingress-Pfad erforderlich. Um den Token zu erneuern, `/data/api_token.txt` löschen und das App neu starten.
 
 Alle persistenten Daten werden atomar geschrieben (erst `.tmp`, dann `fs.renameSync`), sodass ein Absturz während eines Schreibvorgangs keine halbgeschriebene JSON-Datei hinterlässt.
 
@@ -89,7 +89,7 @@ Eine maschinenlesbare OpenAPI-3.0.3-Spezifikation aller Endpunkte ist unter `GET
 
 ## Schnellstart
 
-`machine_host` auf die IP oder den Hostnamen des Controllers setzen und Add-on starten.
+`machine_host` auf die IP oder den Hostnamen des Controllers setzen und App starten.
 
 ```yaml
 machine_host: "192.168.1.42"                 # IP oder Hostname des Gaggiuino-Controllers
@@ -133,7 +133,7 @@ Nach dem Einschalten zeigt der Live-Tab einen Fortschrittsbalken und einen Count
 
 ### Import von kaffeebraun.com
 
-Im Bibliothek-Tab auf **🔗 URL** neben „Bohne hinzufügen" klicken, eine Produkt-URL von [kaffeebraun.com](https://kaffeebraun.com) einfügen und auf „Importieren" drücken. Das Add-on lädt die Produktseite serverseitig und befüllt das Bohnen-Formular mit:
+Im Bibliothek-Tab auf **🔗 URL** neben „Bohne hinzufügen" klicken, eine Produkt-URL von [kaffeebraun.com](https://kaffeebraun.com) einfügen und auf „Importieren" drücken. Das App lädt die Produktseite serverseitig und befüllt das Bohnen-Formular mit:
 
 - Name und Rösterei (wird automatisch auf „Kaffee Braun" gesetzt)
 - Aromen / Tasting Notes

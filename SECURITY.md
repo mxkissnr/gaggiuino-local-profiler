@@ -18,7 +18,7 @@ I will acknowledge your report within **7 days** and aim to release a fix within
 
 ## Scope
 
-This add-on runs locally on your Home Assistant instance and communicates only with your Gaggiuino machine on the local network. The primary attack surface is:
+This app runs locally on your Home Assistant instance and communicates only with your Gaggiuino machine on the local network. The primary attack surface is:
 
 - The HTTP API (token-protected endpoints)
 - The HA ingress proxy

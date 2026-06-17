@@ -13,7 +13,7 @@ Bug reports, feature ideas and pull requests are welcome!
 ## Reporting a bug
 
 Include:
-- Add-on version (visible in the HA add-on info page)
+- App version (visible in the HA app info page)
 - Expected vs. actual behaviour
 - Relevant Home Assistant log output (`Settings → System → Logs`)
 
@@ -24,7 +24,7 @@ Include:
 | Backend | Node.js / Express — `gaggiuino-local-profiler/server.js` |
 | Frontend | Single-file HTML + inline CSS/JS — `gaggiuino-local-profiler/public/index.html` (no build step) |
 | Routes | `gaggiuino-local-profiler/routes/` — one file per concern |
-| Storage | `/data/*.json` inside the add-on container |
+| Storage | `/data/*.json` inside the app container |
 | Translations | UI strings via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES) — add all 5 languages for new keys |
 | URLs | Always relative (no leading `/`) for HA ingress compatibility |
 

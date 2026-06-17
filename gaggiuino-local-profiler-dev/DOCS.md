@@ -1,6 +1,6 @@
 # Gaggiuino Local Profiler
 
-Local shot profiling dashboard for [Gaggiuino](https://gaggiuino.github.io/)-based espresso machines. The add-on syncs shot data automatically from the controller, visualizes extraction profiles, and provides a real-time live mode — all from within Home Assistant.
+Local shot profiling dashboard for [Gaggiuino](https://gaggiuino.github.io/)-based espresso machines. The app syncs shot data automatically from the controller, visualizes extraction profiles, and provides a real-time live mode — all from within Home Assistant.
 
 ## Features
 
@@ -62,7 +62,7 @@ The **Live tab** is automatically disabled when the machine is off — preventin
 
 ### Shot Archive
 
-1. Start the add-on and open the dashboard via **Open Web UI**
+1. Start the app and open the dashboard via **Open Web UI**
 2. Shots appear in the sidebar after the first sync
 3. Click a shot → profile view with all measurements
 4. **⇄** button → compare mode (select shot B from the sidebar)
@@ -205,4 +205,4 @@ The trash button (🗑) in the sidebar removes a shot and its annotations from t
 
 ## Security
 
-The add-on runs behind the Home Assistant Ingress proxy, which handles authentication. All API endpoints are only accessible through the HA dashboard. HA API access is read-only via the Supervisor token.
+The app runs behind the Home Assistant Ingress proxy, which handles authentication. All API endpoints are only accessible through the HA dashboard. HA API access is read-only via the Supervisor token.

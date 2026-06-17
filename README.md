@@ -6,7 +6,7 @@
   <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/releases/latest">
     <img src="https://img.shields.io/github/v/tag/mxkissnr/gaggiuino-local-profiler?color=%23f59e0b&label=Version&style=flat-square" alt="Version"/>
   </a>
-  <img src="https://img.shields.io/badge/Home%20Assistant-Add--on-41bdf5?logo=home-assistant&style=flat-square" alt="HA Add-on"/>
+  <img src="https://img.shields.io/badge/Home%20Assistant-Add--on-41bdf5?logo=home-assistant&style=flat-square" alt="HA App"/>
   <img src="https://img.shields.io/badge/arch-amd64%20%7C%20armv7%20%7C%20aarch64-6b7280?style=flat-square" alt="Architectures"/>
   <img src="https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&style=flat-square" alt="Node.js"/>
   <img src="https://img.shields.io/badge/Built%20with-Claude%20by%20Anthropic-D97706?style=flat-square" alt="Built with Claude"/>
@@ -72,7 +72,7 @@ Click the button above to add this repository directly to your Home Assistant �
 
 Either click the Quick Install button above, or manually:
 
-1. Go to **Settings → Add-ons → Add-on Store**
+1. Go to **Settings → Apps → App Store**
 2. Click **⋮ → Repositories**
 3. Add:
    ```
@@ -94,9 +94,9 @@ Or manually: HACS → Integrations → ⋮ → Custom repositories → add the U
 
 After installing, go to **Settings → Devices & Services → Add Integration** and search for **Gaggiuino**.
 
-### Step 3 — Configure the add-on
+### Step 3 — Configure the app
 
-In the add-on options set your controller URL:
+In the app options set your controller URL:
 
 ```yaml
 machine_host: "192.168.1.42"           # IP or hostname of your Gaggiuino controller
@@ -111,7 +111,7 @@ switch_entity: "switch.espresso_plug"  # optional
 
 ### Step 4 — Open the dashboard
 
-Click **Open Web UI** in the add-on page — or open it directly from your HA sidebar under **GLP**.
+Click **Open Web UI** in the app page — or open it directly from your HA sidebar under **GLP**.
 
 ---
 
@@ -146,9 +146,9 @@ aspect_ratio: "16:9"
 
 | Component | Current | Requires |
 |---|---|---|
-| **GLP Add-on** | v1.82.7 | — |
-| **GLP Integration** ([glp-integration](https://github.com/mxkissnr/glp-integration)) | v1.10.0 | Add-on v1.82.7+ |
-| **GLP Lovelace Card** ([glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)) | v2.0.0 | Integration v1.9.0+ |
+| **GLP App** | v1.82.7 | — |
+| **GLP Integration** ([glp-integration](https://github.com/mxkissnr/glp-integration)) | v1.10.0 | App v1.82.7+ |
+| **GLP Lovelace Card** ([glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)) | v2.1.0 | Integration v1.9.0+ |
 | **GLP Order Card** ([glp-order-card](https://github.com/mxkissnr/glp-order-card)) | v1.9.0 | Integration v1.7.0+ |
 
 All four components are optional and independently installable — only install what you need.
@@ -161,7 +161,7 @@ All four components are optional and independently installable — only install 
 
 ```
 Home Assistant Host
-├── GLP Add-on  (Node.js / Express, Port 8099)
+├── GLP App  (Node.js / Express, Port 8099)
 │   ├── /data/shots.json          ← Shot data
 │   ├── /data/annotations.json    ← Notes & ratings
 │   └── Supervisor API            ← HA switch control & sensor polling

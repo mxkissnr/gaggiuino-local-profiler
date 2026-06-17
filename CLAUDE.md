@@ -59,14 +59,14 @@ gh release create v<version> --title "v<version>" --notes "..."
 ## Repo structure
 
 ```
-gaggiuino-local-profiler/     ← HA add-on (main deliverable)
+gaggiuino-local-profiler/     ← HA app (main deliverable)
   server.js                   ← Node.js/Express backend
   public/index.html           ← Single-file frontend (all CSS + JS inline)
-  config.yaml                 ← HA add-on manifest + version
+  config.yaml                 ← HA app manifest + version
   CHANGELOG.md
   DOCS.md                     ← English docs
   DOCS.de.md                  ← German docs (extra)
-gaggiuino-local-profiler-dev/ ← Dev add-on (pulls from main branch on start)
+gaggiuino-local-profiler-dev/ ← Dev app (pulls from main branch on start)
 README.md                     ← Repo root README (English)
 ```
 
@@ -78,7 +78,7 @@ README.md                     ← Repo root README (English)
 - `calcShotScore(shot, getShotData(shot))` returns null for test/empty shots
 - All fetch calls use relative URLs (no leading `/`) for HA ingress compatibility
 - Chart.js is loaded from CDN; reuse existing chart instances (destroy before re-creating)
-- `/data/` is the persistent storage directory inside the add-on container
+- `/data/` is the persistent storage directory inside the app container
 - i18n: translations live in `public-src/i18n/{de,en,it,fr,es,nl}.js` — each exports a default object; `constants.js` re-exports them as `TRANSLATIONS`; add new keys to **all 6 files**
 
 ## GitHub project
