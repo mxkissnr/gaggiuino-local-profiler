@@ -22,6 +22,19 @@ async function sendHaNotify(service, title, message, tag) {
     } catch (e) { log(`Notify ${service} failed: ${e.message}`); }
 }
 
+let _haLang = null;
+async function getHaLanguage() {
+    if (_haLang) return _haLang;
+    if (!HA_TOKEN) return 'de';
+    try {
+        const r = await axios.get(`${HA_API}/config`,
+            { headers: { Authorization: `Bearer ${HA_TOKEN}` }, timeout: 5000 });
+        const lang = String(r.data?.language || '').slice(0, 2).toLowerCase();
+        _haLang = ['de', 'en', 'it', 'fr', 'es', 'nl'].includes(lang) ? lang : 'de';
+    } catch { _haLang = 'de'; }
+    return _haLang;
+}
+
 async function getNotifyServices() {
     if (!HA_TOKEN) return [];
     try {
@@ -65,4 +78,4 @@ async function getHaPersons() {
     } catch { return []; }
 }
 
-module.exports = { getSwitchState, sendHaNotify, getNotifyServices, callHaService, getHaState, getHaPersons, HA_TOKEN };
+module.exports = { getSwitchState, sendHaNotify, getNotifyServices, getHaLanguage, callHaService, getHaState, getHaPersons, HA_TOKEN };

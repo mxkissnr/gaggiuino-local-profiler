@@ -1,3 +1,6 @@
+## 1.84.1
+- fix: the „machine ready / warm-up complete“ HA notification was hardcoded English — it is now localized to the Home Assistant instance language (de/en/it/fr/es/nl, fallback German), so a German user no longer gets it in English; closes #162
+
 ## 1.84.0
 - feat: shot score now closer to coffee best practice — added an **Extraction Yield** factor (SCA "Golden Cup" 18–22 %, active only when TDS + dose are annotated) and the **temperature** factor now combines stability with accuracy vs the shot's target temperature (fallback band 90–96 °C), so a stable but wrong-temperature shot (e.g. boiler-off) no longer scores full on temperature; closes #161
 

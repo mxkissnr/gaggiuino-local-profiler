@@ -7,7 +7,8 @@ const {
 } = require('./constants');
 const { log, writeFileSafe } = require('./helpers');
 const { loadOptions, getMachineUrl, getMachineBaseUrl, getSyncIntervalMs, loadBlocklist, loadOrdersSettings } = require('./data');
-const { getSwitchState, sendHaNotify, HA_TOKEN } = require('./ha');
+const { getSwitchState, sendHaNotify, getHaLanguage, HA_TOKEN } = require('./ha');
+const { notifyT } = require('./notify-i18n');
 const state = require('./state');
 
 // ── Preheat persistence ───────────────────────────────────────────────────
@@ -316,7 +317,7 @@ async function backgroundHaCheck() {
 
 let _preheatWatchTimer = null;
 
-function _checkPreheatNotify() {
+async function _checkPreheatNotify() {
     if (!state.machineOn || !state.switchOnAt) return;
     if (state.preheatNotifySent) return;
     const opts       = loadOptions();
@@ -324,7 +325,8 @@ function _checkPreheatNotify() {
     if (Date.now() - state.switchOnAt < preheatMs) return;
     const svc = loadOrdersSettings().baristaNotifyService;
     if (!svc) return;
-    sendHaNotify(svc, '☕ Machine ready', 'Warm-up complete — ready to brew', 'glp_preheat_ready');
+    const lang = await getHaLanguage();
+    sendHaNotify(svc, notifyT(lang, 'preheat_title'), notifyT(lang, 'preheat_body'), 'glp_preheat_ready');
     state.preheatNotifySent = true;
     log('Preheat-ready notification sent to barista');
 }
