@@ -43,8 +43,12 @@ function isTempStable() {
 
 function startLivePolling() {
     if (state.livePollTimer) return;
-    const offMs     = state.switchOffAt ? Date.now() - state.switchOffAt : Infinity;
-    const stillWarm = state.currentTemp !== null && state.currentTemp > WARM_TEMP_MIN && offMs < WARM_OFF_MAX_MS;
+    // switchOffAt === null means machine was never turned off → treat as 0 ms since off (still warm)
+    const offMs    = state.switchOffAt ? Date.now() - state.switchOffAt : 0;
+    const coldOff  = offMs >= WARM_OFF_MAX_MS;
+    const stillWarm = state.currentTemp !== null
+        ? (state.currentTemp > WARM_TEMP_MIN && !coldOff)
+        : (state.switchOnAt !== null && !coldOff);  // app just restarted, temp not yet polled: trust restored state
     if (!state.switchOnAt || !stillWarm) { state.switchOnAt = Date.now(); savePreheatState(); }
     state.tempHistory = [];
     log('Live polling started via /api/system/status');

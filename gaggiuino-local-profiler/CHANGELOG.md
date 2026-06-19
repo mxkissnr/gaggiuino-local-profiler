@@ -1,3 +1,6 @@
+## 1.84.3
+- fix: preheat no longer restarts after a Home Assistant restart — on app start `currentTemp` is null (not yet polled); `startLivePolling()` now trusts the file-restored `switchOnAt` when the machine has not been off long enough to cool; treats `switchOffAt === null` (never turned off) as "still warm"; closes #164
+
 ## 1.84.2
 - fix: changing the coffee name in the annotation panel now always updates the roast date from the coffee library — previously the auto-fill was skipped if a roast date was already present (e.g. after \"Copy from last\"); closes #163
 
