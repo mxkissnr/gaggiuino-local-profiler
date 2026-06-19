@@ -311,9 +311,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeBag?.roastDate) roastDate = activeBag.roastDate;
       }
 
-      // Auto-fill roast date (only if empty)
+      // Auto-fill roast date from library (always update when coffee changes)
       const annRoastDate = document.getElementById('annRoastDate');
-      if (annRoastDate && !annRoastDate.value && roastDate) {
+      if (annRoastDate && roastDate) {
         annRoastDate.value = roastDate;
         updateDegassing(roastDate);
       }

@@ -1,3 +1,6 @@
+## 1.84.2
+- fix: changing the coffee name in the annotation panel now always updates the roast date from the coffee library — previously the auto-fill was skipped if a roast date was already present (e.g. after \"Copy from last\"); closes #163
+
 ## 1.84.1
 - fix: the „machine ready / warm-up complete“ HA notification was hardcoded English — it is now localized to the Home Assistant instance language (de/en/it/fr/es/nl, fallback German), so a German user no longer gets it in English; closes #162
 
