@@ -68,3 +68,7 @@ jobs:
             org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.licenses=MIT
+            io.hass.version=${{ steps.version.outputs.version }}
+            io.hass.type=addon
+            io.hass.arch=${{ matrix.arch }}
+            io.hass.name=GLP — Gaggiuino Local Profiler

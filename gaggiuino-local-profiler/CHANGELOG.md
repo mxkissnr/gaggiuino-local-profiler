@@ -1,3 +1,6 @@
+## 1.84.4
+- fix: add `io.hass.version`, `io.hass.type` and `io.hass.arch` labels to all ghcr.io images — Supervisor 2026.06 changed update detection to use these labels; without them the store could not reliably detect available updates; closes #165
+
 ## 1.84.3
 - fix: preheat no longer restarts after a Home Assistant restart — on app start `currentTemp` is null (not yet polled); `startLivePolling()` now trusts the file-restored `switchOnAt` when the machine has not been off long enough to cool; treats `switchOffAt === null` (never turned off) as "still warm"; closes #164
 
