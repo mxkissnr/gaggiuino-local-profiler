@@ -17,7 +17,7 @@ export default {
     ann_grinder:'Moulin', ann_grinder_ph:'ex. Niche Zero',
     ann_grind_setting:'Mouture', ann_grind_ph:'ex. 23 Clics',
     ann_dose:'Dose (g)', ann_dose_ph:'ex. 18',
-    ann_roast_date:'Date de torréfaction', ann_roast_date_ph:'JJ.MM.AAAA',
+
     ann_tds:'TDS %', ann_tds_optional:'(optionnel)',
     ann_tds_ph:'ex. 9.2', ann_notes:'Notes',
     ann_notes_ph:'Goût, observations, ajustements …',

@@ -1,3 +1,6 @@
+## 1.86.0
+- fix: roast date is no longer an editable field in the shot annotation tab — it is now always derived automatically from the coffee library (respecting the active bag at shot time); this fixes stale dates when using quickClone and ensures the value stays in sync when the coffee is changed; closes #167
+
 ## 1.85.0
 - feat: in-app update check — GLP now polls `GET /api/version` on startup, compares the running version against the latest GitHub release (1 h cache), and shows a dismissible banner when an update is available; closes #166
 - feat: one-click update via HA Supervisor — the banner's "Install now" button calls `POST /api/update` which triggers `POST http://supervisor/addons/self/update`; the add-on restarts automatically; not available when running outside HA

@@ -36,6 +36,22 @@ export function calcBeanAgeAtShot(beanName, shotTimestampSec) {
   return days >= 0 && days <= 730 ? days : null;
 }
 
+function _roastDateFromLibrary(beanName, shotTimestampSec) {
+  if (!beanName || !S.coffeeLibrary) return null;
+  const bean = S.coffeeLibrary.beans?.find(b => b.name.toLowerCase() === beanName.toLowerCase());
+  if (!bean) return null;
+  const shotMs = (shotTimestampSec || Date.now() / 1000) * 1000;
+  const bags   = Array.isArray(bean.bags) ? bean.bags : [];
+  let roastDateStr = bean.roastDate;
+  if (bags.length) {
+    const activeBag = bags
+      .filter(b => (b.openedAt || 0) <= shotMs)
+      .sort((a, b) => b.openedAt - a.openedAt)[0];
+    if (activeBag?.roastDate) roastDateStr = activeBag.roastDate;
+  }
+  return roastDateStr || null;
+}
+
 // ── Auto-save state ───────────────────────────────────────────────────────
 let _autoSaveTimer = null;
 
@@ -51,7 +67,7 @@ export function scheduleAutoSave() {
       grinder:      document.getElementById('annGrinder').value.trim(),
       grindSetting: document.getElementById('annGrindSetting').value.trim(),
       dose:         parseFloat(document.getElementById('annDose').value) || null,
-      roastDate:    germanToIso(document.getElementById('annRoastDate').value) || null,
+      roastDate:    germanToIso(_roastDateFromLibrary(coffee, shot?.timestamp) || '') || null,
       tds:          parseFloat(document.getElementById('annTds').value) || null,
       notes:        document.getElementById('annNotes').value.trim(),
       drinkType:    document.getElementById('annDrinkType')?.value || null,
@@ -429,7 +445,7 @@ export function renderAnnotationPanel(shot) {
   document.getElementById('annGrinder').value      = ann.grinder      || '';
   document.getElementById('annGrindSetting').value = ann.grindSetting || '';
   document.getElementById('annDose').value         = ann.dose         || '';
-  document.getElementById('annRoastDate').value    = isoToGerman(ann.roastDate || '');
+  updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp) || '');
   document.getElementById('annTds').value          = ann.tds          || '';
   document.getElementById('annNotes').value        = ann.notes        || '';
   // Drink type + milk type pills
@@ -467,9 +483,9 @@ export function quickClone() {
   document.getElementById('annGrinder').value      = ann.grinder      || '';
   document.getElementById('annGrindSetting').value = ann.grindSetting || '';
   document.getElementById('annDose').value         = ann.dose         || '';
-  const rd = isoToGerman(ann.roastDate || '');
-  document.getElementById('annRoastDate').value = rd;
-  if (rd) updateDegassing(rd);
+  const currentShot = S.shots.find(s => s.id === S.primaryShotId);
+  const rd = _roastDateFromLibrary(ann.coffee, currentShot?.timestamp);
+  updateDegassing(rd || '');
   _renderDrinkPills(ann.drinkType || '');
   _renderMilkPills('');
   _updateMilkFieldVisibility();
@@ -486,7 +502,7 @@ export async function saveAnnotation() {
     grinder:      document.getElementById('annGrinder').value.trim(),
     grindSetting: document.getElementById('annGrindSetting').value.trim(),
     dose:         parseFloat(document.getElementById('annDose').value) || null,
-    roastDate:    germanToIso(document.getElementById('annRoastDate').value) || null,
+    roastDate:    germanToIso(_roastDateFromLibrary(coffee, shot?.timestamp) || '') || null,
     tds:          parseFloat(document.getElementById('annTds').value) || null,
     notes:        document.getElementById('annNotes').value.trim(),
     drinkType:    document.getElementById('annDrinkType')?.value || null,

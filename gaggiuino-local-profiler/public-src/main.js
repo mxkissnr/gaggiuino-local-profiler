@@ -315,12 +315,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeBag?.roastDate) roastDate = activeBag.roastDate;
       }
 
-      // Auto-fill roast date from library (always update when coffee changes)
-      const annRoastDate = document.getElementById('annRoastDate');
-      if (annRoastDate && roastDate) {
-        annRoastDate.value = roastDate;
-        updateDegassing(roastDate);
-      }
+      // Update degassing tracker from library roast date
+      updateDegassing(roastDate || '');
 
       // Show bean age hint
       const ageDays = calcBeanAgeAtShot(name, shot?.timestamp);

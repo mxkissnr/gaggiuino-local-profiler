@@ -17,7 +17,7 @@ export default {
     ann_grinder:'Macinino', ann_grinder_ph:'es. Niche Zero',
     ann_grind_setting:'Macinatura', ann_grind_ph:'es. 23 Click',
     ann_dose:'Dose (g)', ann_dose_ph:'es. 18',
-    ann_roast_date:'Data torrefazione', ann_roast_date_ph:'GG.MM.AAAA',
+
     ann_tds:'TDS %', ann_tds_optional:'(opzionale)',
     ann_tds_ph:'es. 9.2', ann_notes:'Note',
     ann_notes_ph:'Gusto, osservazioni, aggiustamenti …',

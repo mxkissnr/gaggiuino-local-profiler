@@ -17,7 +17,7 @@ export default {
     ann_grinder:'Molen', ann_grinder_ph:'bijv. Niche Zero',
     ann_grind_setting:'Maalgraad', ann_grind_ph:'bijv. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'bijv. 18',
-    ann_roast_date:'Roosdatum', ann_roast_date_ph:'DD.MM.JJJJ',
+
     ann_tds:'TDS %', ann_tds_optional:'(optioneel)',
     ann_tds_ph:'bijv. 9.2', ann_notes:'Notities',
     ann_notes_ph:'Smaak, opmerkingen, aanpassingen …',

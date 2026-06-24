@@ -17,7 +17,7 @@ export default {
     ann_grinder:'Grinder', ann_grinder_ph:'e.g. Niche Zero',
     ann_grind_setting:'Grind setting', ann_grind_ph:'e.g. 23 Clicks',
     ann_dose:'Dose (g)', ann_dose_ph:'e.g. 18',
-    ann_roast_date:'Roast date', ann_roast_date_ph:'DD.MM.YYYY',
+
     ann_tds:'TDS %', ann_tds_optional:'(optional)',
     ann_tds_ph:'e.g. 9.2', ann_notes:'Notes',
     ann_notes_ph:'Taste, observations, adjustments …',

@@ -17,7 +17,7 @@ export default {
     ann_grinder:'Molino', ann_grinder_ph:'ej. Niche Zero',
     ann_grind_setting:'Molturación', ann_grind_ph:'ej. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'ej. 18',
-    ann_roast_date:'Fecha de tueste', ann_roast_date_ph:'DD.MM.AAAA',
+
     ann_tds:'TDS %', ann_tds_optional:'(opcional)',
     ann_tds_ph:'ej. 9.2', ann_notes:'Notas',
     ann_notes_ph:'Sabor, observaciones, ajustes …',

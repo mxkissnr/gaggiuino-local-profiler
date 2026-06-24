@@ -17,7 +17,7 @@ export default {
     ann_grinder:'Mühle', ann_grinder_ph:'z.B. Niche Zero',
     ann_grind_setting:'Mahlgrad', ann_grind_ph:'z.B. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'z.B. 18',
-    ann_roast_date:'Röstdatum', ann_roast_date_ph:'TT.MM.JJJJ',
+
     ann_tds:'TDS %', ann_tds_optional:'(optional)',
     ann_tds_ph:'z.B. 9.2', ann_notes:'Notizen',
     ann_notes_ph:'Geschmack, Beobachtungen, Anpassungen …',
