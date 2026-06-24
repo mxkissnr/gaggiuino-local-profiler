@@ -8,9 +8,9 @@ const { GLP_VERSION, DEFAULT_PORT, DATA_DIR, DATA_FILE, ANNOTATIONS_FILE,
 const { log, writeFileSafe }                         = require('./lib/helpers');
 const state                                          = require('./lib/state');
 const { purgeExpiredTrash }                          = require('./lib/data');
-const { fetchMachineVersion, checkAndApplyMachinePower,
-        backgroundHaCheck, scheduleNextSync, syncShots,
-        loadPreheatState, startPreheatWatcher }      = require('./lib/live-sync');
+const { loadPreheatState, startPreheatWatcher }                              = require('./lib/preheat');
+const { syncShots, scheduleNextSync }                                        = require('./lib/sync');
+const { fetchMachineVersion, checkAndApplyMachinePower, backgroundHaCheck } = require('./lib/poll');
 
 // ── Init data dir & default files ─────────────────────────────────────────
 try {
@@ -127,5 +127,15 @@ app.listen(PORT, () => {
     purgeExpiredTrash();
     setInterval(purgeExpiredTrash, 24 * 60 * 60 * 1000);
     fetchMachineVersion();
-    checkAndApplyMachinePower().then(() => syncShots().then(ok => scheduleNextSync(ok ? 0 : 1)));
+    (async () => {
+        try { await checkAndApplyMachinePower(); }
+        catch (e) { log(`Machine power check failed on startup: ${e.message}`, true); }
+        try {
+            const ok = await syncShots();
+            scheduleNextSync(ok ? 0 : 1);
+        } catch (e) {
+            log(`Initial sync failed: ${e.message}`, true);
+            scheduleNextSync(1);
+        }
+    })();
 });

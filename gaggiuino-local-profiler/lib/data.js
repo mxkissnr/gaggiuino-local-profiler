@@ -8,6 +8,14 @@ const {
 } = require('./constants');
 const { log, writeFileSafe } = require('./helpers');
 
+function loadJson(file, defaultValue) {
+    try {
+        if (fs.existsSync(file))
+            return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (e) {}
+    return typeof defaultValue === 'function' ? defaultValue() : defaultValue;
+}
+
 // ── Machine URL helpers ───────────────────────────────────────────────────
 
 function loadOptions() {
@@ -47,31 +55,13 @@ function getSyncIntervalMs(opts) {
 
 // ── Shots / Annotations / Trash / Blocklist ───────────────────────────────
 
-function loadAnnotations() {
-    try {
-        if (fs.existsSync(ANNOTATIONS_FILE))
-            return JSON.parse(fs.readFileSync(ANNOTATIONS_FILE, 'utf8'));
-    } catch (e) {}
-    return {};
-}
-function saveAnnotations(a) { writeFileSafe(ANNOTATIONS_FILE, a); }
+function loadAnnotations()   { return loadJson(ANNOTATIONS_FILE, {}); }
+function saveAnnotations(a)  { writeFileSafe(ANNOTATIONS_FILE, a); }
 
-function loadTrash() {
-    try {
-        if (fs.existsSync(TRASH_FILE))
-            return JSON.parse(fs.readFileSync(TRASH_FILE, 'utf8'));
-    } catch (e) {}
-    return {};
-}
-function saveTrash(trash) { writeFileSafe(TRASH_FILE, trash); }
+function loadTrash()         { return loadJson(TRASH_FILE, {}); }
+function saveTrash(trash)    { writeFileSafe(TRASH_FILE, trash); }
 
-function loadBlocklist() {
-    try {
-        if (fs.existsSync(BLOCKLIST_FILE))
-            return JSON.parse(fs.readFileSync(BLOCKLIST_FILE, 'utf8'));
-    } catch (e) {}
-    return [];
-}
+function loadBlocklist()     { return loadJson(BLOCKLIST_FILE, []); }
 function saveBlocklist(list) { writeFileSafe(BLOCKLIST_FILE, list); }
 
 // ── Library ───────────────────────────────────────────────────────────────
@@ -117,10 +107,7 @@ function saveMaintenance(data) { writeFileSafe(MAINTENANCE_FILE, data); }
 
 // ── Maintenance Log ───────────────────────────────────────────────────────
 
-function loadMaintenanceLog() {
-    try { return fs.existsSync(MAINTENANCE_LOG_FILE) ? JSON.parse(fs.readFileSync(MAINTENANCE_LOG_FILE, 'utf8')) : []; }
-    catch { return []; }
-}
+function loadMaintenanceLog()        { return loadJson(MAINTENANCE_LOG_FILE, []); }
 function saveMaintenanceLog(entries) { writeFileSafe(MAINTENANCE_LOG_FILE, entries); }
 
 function addMaintenanceLogEntry(task, notes, machine) {
@@ -166,11 +153,8 @@ function computeMaintenanceStats(maint) {
 
 // ── Orders ────────────────────────────────────────────────────────────────
 
-function loadMenu() {
-    try { return fs.existsSync(MENU_FILE) ? JSON.parse(fs.readFileSync(MENU_FILE, 'utf8')) : DEFAULT_MENU; }
-    catch { return DEFAULT_MENU; }
-}
-function saveMenu(menu) { writeFileSafe(MENU_FILE, menu); }
+function loadMenu()          { return loadJson(MENU_FILE, DEFAULT_MENU); }
+function saveMenu(menu)      { writeFileSafe(MENU_FILE, menu); }
 
 function loadOrders() {
     try {
@@ -184,15 +168,10 @@ function loadOrders() {
 }
 function saveOrders(orders) { writeFileSafe(ORDERS_FILE, orders); }
 
-function loadOrdersSettings() {
-    try { return fs.existsSync(ORDERS_SETTINGS_FILE) ? JSON.parse(fs.readFileSync(ORDERS_SETTINGS_FILE, 'utf8')) : { enabled: true, broadcastRecipients: [] }; }
-    catch { return { enabled: true, broadcastRecipients: [] }; }
-}
+function loadOrdersSettings()  { return loadJson(ORDERS_SETTINGS_FILE, { enabled: true, broadcastRecipients: [] }); }
 function saveOrdersSettings(s) { writeFileSafe(ORDERS_SETTINGS_FILE, s); }
 
-function loadNotifyMapping() {
-    try { return JSON.parse(fs.readFileSync(NOTIFY_MAPPING_FILE, 'utf8')); } catch { return {}; }
-}
+function loadNotifyMapping()  { return loadJson(NOTIFY_MAPPING_FILE, {}); }
 function saveNotifyMapping(m) { writeFileSafe(NOTIFY_MAPPING_FILE, m); }
 
 function isOrdersEnabled() { return !!loadOptions().enable_orders; }

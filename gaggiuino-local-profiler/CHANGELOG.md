@@ -1,3 +1,10 @@
+## [1.87.0] – 2026-06-24
+
+### Changed
+- **Refactor:** `live-sync.js` split into `lib/preheat.js`, `lib/sync.js` and `lib/poll.js` — each module has a single responsibility, clean dependency direction (Closes #168)
+- **Refactor:** `data.js` — generic `loadJson()` helper eliminates repeated try/catch/read/parse boilerplate for 7 simple load functions (Closes #169)
+- **Fix:** Server startup no longer silently skips shot sync when machine power check fails — async IIFE with individual try/catch ensures `scheduleNextSync()` always starts (Closes #170)
+
 ## 1.86.0
 - fix: roast date is no longer an editable field in the shot annotation tab — it is now always derived automatically from the coffee library (respecting the active bag at shot time); this fixes stale dates when using quickClone and ensures the value stays in sync when the coffee is changed; closes #167
 
