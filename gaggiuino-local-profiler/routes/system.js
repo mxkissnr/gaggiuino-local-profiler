@@ -275,6 +275,54 @@ router.get('/api/openapi.json', (req, res) => {
     catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Version / update check ────────────────────────────────────────────────
+
+let _versionCache = null;
+let _versionCacheAt = 0;
+const VERSION_CACHE_MS = 60 * 60 * 1000;
+
+router.get('/api/version', async (req, res) => {
+    const now = Date.now();
+    if (!_versionCache || now - _versionCacheAt > VERSION_CACHE_MS) {
+        try {
+            const r = await fetch(
+                'https://api.github.com/repos/mxkissnr/gaggiuino-local-profiler/releases/latest',
+                { headers: { 'User-Agent': 'GLP-Server' }, signal: AbortSignal.timeout(8000) }
+            );
+            if (r.ok) {
+                const data = await r.json();
+                _versionCache = data.tag_name?.replace(/^v/, '') || null;
+                _versionCacheAt = now;
+            }
+        } catch (_) {}
+    }
+    const latest = _versionCache;
+    const updateAvailable = !!(latest && latest !== GLP_VERSION);
+    res.json({
+        current:          GLP_VERSION,
+        latest:           latest || null,
+        update_available: updateAvailable,
+        release_url:      'https://github.com/mxkissnr/gaggiuino-local-profiler/releases/latest',
+    });
+});
+
+router.post('/api/update', async (req, res) => {
+    if (!HA_TOKEN) return res.status(503).json({ error: 'Not running inside Home Assistant' });
+    try {
+        const r = await fetch('http://supervisor/addons/self/update', {
+            method:  'POST',
+            headers: { Authorization: `Bearer ${HA_TOKEN}` },
+            signal:  AbortSignal.timeout(10000),
+        });
+        if (!r.ok) return res.status(r.status).json({ error: await r.text() });
+        log('Add-on update triggered via Supervisor API');
+        res.json({ ok: true });
+    } catch (e) {
+        log(`Update trigger error: ${e.message}`, true);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ── Debug ─────────────────────────────────────────────────────────────────
 
 router.get('/api/debug/machine', async (req, res) => {

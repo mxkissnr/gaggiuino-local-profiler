@@ -233,4 +233,10 @@ export default {
     orders_use_beans_note:'Active beans shown as variants',
     ann_ordered_drink:'Drink',
     ann_ordered_by:'Ordered by',
+    update_banner:(cur,lat)=>`GLP ${lat} available (current: ${cur})`,
+    update_install:'Install now',
+    update_installing:'Installing …',
+    update_success:'Update started – GLP will restart',
+    update_error:'Error – please update manually',
+    update_changelog:'Changelog',
 };

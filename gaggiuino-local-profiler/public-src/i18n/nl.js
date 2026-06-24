@@ -233,4 +233,10 @@ export default {
     orders_use_beans_note:'Actieve bonen worden getoond als varianten',
     ann_ordered_by:'Besteld door',
     ann_ordered_drink:'Drank',
+    update_banner:(cur,lat)=>`GLP ${lat} beschikbaar (huidig: ${cur})`,
+    update_install:'Nu installeren',
+    update_installing:'Installeren …',
+    update_success:'Update gestart – GLP wordt herstart',
+    update_error:'Fout – werk handmatig bij',
+    update_changelog:'Changelog',
 };

@@ -215,4 +215,10 @@ export default {
     orders_use_beans_toggle:'Varianten aus Bohnenbibliothek',
     orders_use_beans_note:'Aktive Bohnen werden als Varianten angezeigt',
     ann_ordered_by:'Bestellt von', ann_ordered_drink:'Getränk',
+    update_banner:(cur,lat)=>`GLP ${lat} verfügbar (aktuell: ${cur})`,
+    update_install:'Jetzt installieren',
+    update_installing:'Installiere …',
+    update_success:'Update gestartet – GLP startet neu',
+    update_error:'Fehler – bitte manuell aktualisieren',
+    update_changelog:'Changelog',
 };

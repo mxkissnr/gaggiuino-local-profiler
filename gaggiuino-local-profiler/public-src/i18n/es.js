@@ -233,4 +233,10 @@ export default {
     orders_use_beans_note:'Los granos activos se muestran como variantes',
     ann_ordered_by:'Pedido por',
     ann_ordered_drink:'Bebida',
+    update_banner:(cur,lat)=>`GLP ${lat} disponible (actual: ${cur})`,
+    update_install:'Instalar ahora',
+    update_installing:'Instalando …',
+    update_success:'Actualización iniciada – GLP se reiniciará',
+    update_error:'Error – actualice manualmente',
+    update_changelog:'Changelog',
 };

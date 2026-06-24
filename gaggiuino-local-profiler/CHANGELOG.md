@@ -1,3 +1,7 @@
+## 1.85.0
+- feat: in-app update check — GLP now polls `GET /api/version` on startup, compares the running version against the latest GitHub release (1 h cache), and shows a dismissible banner when an update is available; closes #166
+- feat: one-click update via HA Supervisor — the banner's "Install now" button calls `POST /api/update` which triggers `POST http://supervisor/addons/self/update`; the add-on restarts automatically; not available when running outside HA
+
 ## 1.84.4
 - fix: add `io.hass.version`, `io.hass.type` and `io.hass.arch` labels to all ghcr.io images — Supervisor 2026.06 changed update detection to use these labels; without them the store could not reliably detect available updates; closes #165
 

@@ -233,4 +233,10 @@ export default {
     orders_use_beans_note:'I chicchi attivi vengono mostrati come varianti',
     ann_ordered_drink:'Bevanda',
     ann_ordered_by:'Ordinato da',
+    update_banner:(cur,lat)=>`GLP ${lat} disponibile (attuale: ${cur})`,
+    update_install:'Installa ora',
+    update_installing:'Installazione …',
+    update_success:'Aggiornamento avviato – GLP si riavvierà',
+    update_error:'Errore – aggiornare manualmente',
+    update_changelog:'Changelog',
 };

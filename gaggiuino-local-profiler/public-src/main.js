@@ -7,6 +7,7 @@ import { t, setLang, applyTranslations } from './i18n.js';
 import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
          toggleDesktopSidebar, openSidebar, closeSidebar, toggleSidebar, collapseSidebarOnMobile, selectShot } from './components/sidebar.js';
 import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync } from './components/status.js';
+import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
 
 import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggleTrash,
@@ -113,6 +114,9 @@ Object.assign(window, {
   updatePowerButton,
   toggleMachinePower,
   triggerSync,
+
+  // update check
+  checkForUpdate,
 
   // mode switcher
   switchMode,
@@ -371,6 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadData();
     loadLibrary();
     updateStatus();
+    checkForUpdate();
   });
 
   setInterval(updateStatus, 30000);
