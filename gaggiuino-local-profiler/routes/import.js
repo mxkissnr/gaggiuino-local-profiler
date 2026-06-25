@@ -12,6 +12,8 @@ router.get('/api/import/url', async (req, res) => {
     try { parsed = new URL(raw); } catch { return res.status(400).json({ error: 'invalid url' }); }
     if (!ALLOWED_IMPORT_HOSTS.includes(parsed.hostname))
         return res.status(400).json({ error: 'unsupported domain' });
+    if (!['http:', 'https:'].includes(parsed.protocol))
+        return res.status(400).json({ error: 'unsupported protocol' });
     try {
         const r = await axios.get(raw, {
             headers: { 'User-Agent': 'GLP/1.0 (Gaggiuino Local Profiler; private use)' },

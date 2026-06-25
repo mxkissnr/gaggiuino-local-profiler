@@ -17,7 +17,7 @@ function getOpenApiSpec() {
 const { GLP_VERSION, DATA_FILE, HA_API, HA_TOKEN, PROFILES_CACHE_FILE } = require('../lib/constants');
 const { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled, loadMenu } = require('../lib/data');
 const { getSwitchState, callHaService } = require('../lib/ha');
-const { log } = require('../lib/helpers');
+const { log, rateLimit } = require('../lib/helpers');
 const state = require('../lib/state');
 
 // ── Profile cache helpers ─────────────────────────────────────────────────
@@ -72,8 +72,9 @@ async function isValidSupervisorToken(token) {
 
 router.get('/api/token', async (req, res) => {
     const ip = (req.socket?.remoteAddress || req.ip || '').replace(/^::ffff:/, '');
+    if (!rateLimit(`token:${ip}`, 10)) return res.status(429).json({ error: 'Rate limit exceeded' });
     const fromPrivate   = isPrivateIp(ip);
-    const hasValidToken = req.headers['x-glp-token'] === state.apiToken && !!state.apiToken;
+    const hasValidToken = req.glpAuthenticated;
 
     if (fromPrivate || hasValidToken) {
         return res.json({ apiToken: state.apiToken || null });
@@ -102,19 +103,22 @@ router.get('/api/status', (req, res) => {
             shotCount = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')).length;
     } catch (e) {}
     try { machineHostname = new URL(machineUrl).hostname; } catch (e) {}
+    // Sensitive fields only exposed to authenticated callers (H1)
+    const sensitive = req.glpAuthenticated ? {
+        machineUrl, machineHostname,
+        lastSyncError:  state.lastSyncError,
+        switchEntity:   opts.switch_entity || null,
+    } : {};
     res.json({
         shotCount,
-        lastSync:        state.lastSyncTime,
-        lastSyncError:   state.lastSyncError,
-        syncRetryCount:  state.syncRetryCount,
-        machineUrl,
-        machineHostname,
+        lastSync:       state.lastSyncTime,
+        syncRetryCount: state.syncRetryCount,
         machineVersion: state.cachedMachineVersion,
         syncInterval:   opts.sync_interval || 5,
         haConnected:    !!HA_TOKEN,
-        switchEntity:   opts.switch_entity || null,
         glpVersion:     GLP_VERSION,
         ordersFeature:  isOrdersEnabled(),
+        ...sensitive,
     });
 });
 
@@ -325,15 +329,18 @@ router.post('/api/update', async (req, res) => {
 
 // ── Debug ─────────────────────────────────────────────────────────────────
 
-router.get('/api/debug/machine', async (req, res) => {
-    const opts    = loadOptions();
-    const baseUrl = getMachineBaseUrl(opts);
-    try {
-        const r = await axios.get(`${baseUrl}/api/system/status`, { timeout: 5000 });
-        res.json({ ok: true, baseUrl, data: r.data });
-    } catch (e) {
-        res.json({ ok: false, baseUrl, error: e.message });
-    }
-});
+// H2: only available outside production to avoid leaking internal network topology
+if (process.env.NODE_ENV !== 'production') {
+    router.get('/api/debug/machine', async (req, res) => {
+        const opts    = loadOptions();
+        const baseUrl = getMachineBaseUrl(opts);
+        try {
+            const r = await axios.get(`${baseUrl}/api/system/status`, { timeout: 5000 });
+            res.json({ ok: true, baseUrl, data: r.data });
+        } catch (e) {
+            res.json({ ok: false, baseUrl, error: e.message });
+        }
+    });
+}
 
 module.exports = router;

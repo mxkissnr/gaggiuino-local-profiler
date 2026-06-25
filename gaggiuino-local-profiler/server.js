@@ -42,6 +42,17 @@ function loadOrCreateApiToken() {
     }
 }
 
+// Constant-time token comparison to prevent timing attacks (M3)
+function isTokenValid(token) {
+    if (!state.apiToken || !token) return false;
+    try {
+        const a = Buffer.from(token);
+        const b = Buffer.from(state.apiToken);
+        if (a.length !== b.length) return false;
+        return crypto.timingSafeEqual(a, b);
+    } catch { return false; }
+}
+
 // ── Express app ───────────────────────────────────────────────────────────
 const app = express();
 
@@ -50,6 +61,7 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'same-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     // Chart.js and QRCode are loaded from jsdelivr; Figtree font from bunny.net
     // 'unsafe-inline' in script-src is required — the HTML uses onclick="..." handlers throughout
     res.setHeader('Content-Security-Policy',
@@ -78,6 +90,7 @@ function isFromSupervisor(req) {
 
 // API token auth
 app.use((req, res, next) => {
+    req.glpAuthenticated = isTokenValid(req.headers['x-glp-token']);
     if (!state.apiToken) return next();
     // Ingress bypass: only trust X-Ingress-Path when the request genuinely
     // originates from the HA Supervisor (172.30.x.x), preventing header spoofing
@@ -87,7 +100,7 @@ app.use((req, res, next) => {
     if (req.path === '/api/status') return next();
     if (req.path === '/api/token') return next(); // endpoint handles its own IP-based check
     if (!req.path.startsWith('/api/') && req.path !== '/shots.json') return next();
-    if (req.headers['x-glp-token'] === state.apiToken) return next();
+    if (req.glpAuthenticated) return next();
     res.status(401).json({ error: 'Unauthorized' });
 });
 
