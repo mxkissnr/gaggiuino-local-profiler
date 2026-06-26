@@ -1,3 +1,8 @@
+## [1.88.0] – 2026-06-26
+
+### Added
+- **Recipe → Shot linking:** shots can now be linked to a library recipe via a new "Rezept" dropdown in the annotation panel. The selector is hidden when no recipes exist. Each recipe card in the Library now shows a shot count badge and average score across all linked shots (Closes #183)
+
 ## [1.87.3] – 2026-06-26
 
 ### Security

@@ -493,9 +493,17 @@ export function renderRecipeList() {
             ${s.duration_s ? `<span class="lib-recipe-step-dur">${s.duration_s} s</span>` : ''}
           </div>`).join('')}</div>`
       : '';
+    const linkedShots = (S.shots || []).filter(s => s.annotation?.recipeId === r.id);
+    const shotCount   = linkedShots.length;
+    const avgScore    = shotCount > 0
+      ? (linkedShots.reduce((sum, s) => sum + (s.score ?? 0), 0) / shotCount).toFixed(1)
+      : null;
+    const shotsBadge  = shotCount > 0
+      ? `<span class="lib-recipe-shots-badge">${shotCount} Shot${shotCount !== 1 ? 's' : ''}${avgScore !== null ? ` · Ø ${avgScore}` : ''}</span>`
+      : '';
     return `<div class="lib-item">
       <div class="lib-item-info">
-        <div class="lib-item-name">${brewLabel}${esc(r.name)}</div>
+        <div class="lib-item-name">${brewLabel}${esc(r.name)}${shotsBadge}</div>
         ${meta ? `<div class="lib-item-sub">${meta}</div>` : ''}
         ${params.length ? `<div class="lib-recipe-params">${params.map(p => `<span>${p}</span>`).join('')}</div>` : ''}
         ${stepsHtml}

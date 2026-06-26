@@ -23,6 +23,7 @@ export default {
     ann_notes_ph:'Gusto, osservazioni, aggiustamenti …',
     ann_drink_type:'Bevanda', ann_drink_type_none:'— nessuna —',
     ann_milk_type:'Latte', ann_milk_none:'— nessuna —',
+    ann_recipe:'Ricetta', ann_recipe_none:'— nessuna ricetta —',
     btn_save:'Salva', btn_saved:'✓ Salvato',
     grind_finer_urgent:'Macinare più fine', grind_finer:'Macinare leggermente più fine',
     grind_ok:'Macinatura corretta', grind_coarser:'Macinare leggermente più grosso',
