@@ -444,6 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.querySelector('input[type="file"][accept=".json"]').addEventListener('change', e => restoreFromFile(e.target));
   document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
+  document.getElementById('annRecipe')?.addEventListener('change', scheduleAutoSave);
 
   // ── Global click delegation for dynamic content ────────────────────────
   document.body.addEventListener('click', e => {

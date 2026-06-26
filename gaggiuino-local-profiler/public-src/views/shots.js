@@ -437,6 +437,17 @@ export async function permanentDeleteShot(id) {
 }
 
 // ── Annotation panel ──────────────────────────────────────────────────────
+function _renderRecipeSelect(selectedId) {
+  const field  = document.getElementById('recipeField');
+  const select = document.getElementById('annRecipe');
+  if (!field || !select) return;
+  const recipes = S.coffeeLibrary?.recipes || [];
+  if (!recipes.length) { field.style.display = 'none'; return; }
+  field.style.display = '';
+  select.innerHTML = `<option value="">${t('ann_recipe_none')}</option>` +
+    recipes.map(r => `<option value="${r.id}"${r.id === selectedId ? ' selected' : ''}>${esc(r.name)}</option>`).join('');
+}
+
 export function renderAnnotationPanel(shot) {
   const ann = shot.annotation || {};
   S.currentRating = ann.rating || 0;
@@ -448,10 +459,11 @@ export function renderAnnotationPanel(shot) {
   updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp) || '');
   document.getElementById('annTds').value          = ann.tds          || '';
   document.getElementById('annNotes').value        = ann.notes        || '';
-  // Drink type + milk type pills
+  // Drink type + milk type pills + recipe select
   _renderDrinkPills(ann.drinkType || '');
   _renderMilkPills(ann.milkType ? String(ann.milkType) : '');
   _updateMilkFieldVisibility();
+  _renderRecipeSelect(ann.recipeId || null);
   const btn = document.getElementById('saveAnnotationBtn');
   btn.textContent = t('btn_save');
   btn.classList.remove('saved');
@@ -489,6 +501,7 @@ export function quickClone() {
   _renderDrinkPills(ann.drinkType || '');
   _renderMilkPills('');
   _updateMilkFieldVisibility();
+  _renderRecipeSelect(ann.recipeId || null);
 }
 
 export async function saveAnnotation() {
@@ -507,6 +520,7 @@ export async function saveAnnotation() {
     notes:        document.getElementById('annNotes').value.trim(),
     drinkType:    document.getElementById('annDrinkType')?.value || null,
     milkType:     document.getElementById('annMilkType')?.value ? parseInt(document.getElementById('annMilkType').value) : null,
+    recipeId:     parseInt(document.getElementById('annRecipe')?.value) || null,
     beanAgeDays:  calcBeanAgeAtShot(coffee, shot?.timestamp) ?? null,
   };
   try {
