@@ -1,0 +1,72 @@
+import { S }                    from '../../state.js';
+import { mapToXY }              from '../../utils.js';
+import { calcShotScore as _calcShotScore } from '../../../lib/score.js';
+
+// ── Bean age ───────────────────────────────────────────────────────────────
+
+function _parseDMY(str) {
+  if (!str) return NaN;
+  const p = str.split('.');
+  if (p.length !== 3) return NaN;
+  return new Date(+p[2], +p[1] - 1, +p[0]).getTime();
+}
+
+export function _roastDateFromLibrary(beanName, shotTimestampSec) {
+  if (!beanName || !S.coffeeLibrary) return null;
+  const bean = S.coffeeLibrary.beans?.find(b => b.name.toLowerCase() === beanName.toLowerCase());
+  if (!bean) return null;
+  const shotMs = (shotTimestampSec || Date.now() / 1000) * 1000;
+  const bags   = Array.isArray(bean.bags) ? bean.bags : [];
+  let roastDateStr = bean.roastDate;
+  if (bags.length) {
+    const activeBag = bags
+      .filter(b => (b.openedAt || 0) <= shotMs)
+      .sort((a, b) => b.openedAt - a.openedAt)[0];
+    if (activeBag?.roastDate) roastDateStr = activeBag.roastDate;
+  }
+  return roastDateStr || null;
+}
+
+export function calcBeanAgeAtShot(beanName, shotTimestampSec) {
+  if (!beanName || !shotTimestampSec || !S.coffeeLibrary) return null;
+  const bean = S.coffeeLibrary.beans?.find(b => b.name.toLowerCase() === beanName.toLowerCase());
+  if (!bean) return null;
+  const shotMs = shotTimestampSec * 1000;
+  const bags   = Array.isArray(bean.bags) ? bean.bags : [];
+  let roastDateStr = bean.roastDate;
+  if (bags.length) {
+    const activeBag = bags
+      .filter(b => (b.openedAt || 0) <= shotMs)
+      .sort((a, b) => b.openedAt - a.openedAt)[0];
+    if (activeBag?.roastDate) roastDateStr = activeBag.roastDate;
+  }
+  const roastMs = _parseDMY(roastDateStr);
+  if (isNaN(roastMs)) return null;
+  const days = Math.round((shotMs - roastMs) / 86400000);
+  return days >= 0 && days <= 730 ? days : null;
+}
+
+// ── Shot data ─────────────────────────────────────────────────────────────
+
+export function getShotData(shot) {
+  if (!shot) return null;
+  const d = shot.datapoints || {};
+  const t = d.timeInShot || [];
+  return {
+    rawTimes:       t.map(v => v / 10),
+    pressure:       mapToXY(t, d.pressure),
+    targetPressure: mapToXY(t, d.targetPressure),
+    flow:           mapToXY(t, d.pumpFlow),
+    targetFlow:     mapToXY(t, d.targetPumpFlow),
+    weight:         mapToXY(t, d.shotWeight || d.weight),
+    weightFlow:     mapToXY(t, d.weightFlow),
+    temp:           mapToXY(t, d.temperature),
+    targetTemp:     mapToXY(t, d.targetTemperature),
+  };
+}
+
+// Prefer the server-computed score; only recompute locally for synthetic data.
+export function calcShotScore(shot, _data) {
+  if (shot && shot.score !== undefined) return shot.score;
+  return _calcShotScore(shot);
+}

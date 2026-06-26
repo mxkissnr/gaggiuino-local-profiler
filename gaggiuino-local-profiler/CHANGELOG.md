@@ -1,3 +1,11 @@
+## [1.90.0] – 2026-06-26
+
+### Added
+- **Coffee bean dropdown** — the coffee field in the annotation panel is now a `<select>` populated from the bean library instead of a free-text input. Custom names not in the library are preserved as a trailing option. Closes #192
+
+### Changed (Architecture)
+- **Frontend module split** — `public-src/views/shots.js` split into `utils.js`, `grind.js`, `annotation.js`, `charts.js`, `index.js` with a barrel re-export for tree-shaking and cleaner ownership boundaries. Closes #191
+
 ## [1.89.1] – 2026-06-26
 
 ### Fixed
