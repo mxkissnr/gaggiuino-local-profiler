@@ -1,29 +1,53 @@
-FROM node:20-alpine AS builder
+# Build stage — always runs on host platform (amd64); no QEMU, pure JS tooling
+FROM --platform=$BUILDPLATFORM node:20-slim AS builder
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-# Build tools needed to compile better-sqlite3 native addon
-RUN apk add --no-cache --virtual .build-deps python3 make g++ && \
-    npm ci && \
-    apk del .build-deps
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm ci
 
 COPY vite.config.js ./
 COPY public-src/ ./public-src/
 COPY lib/ ./lib/
 RUN npm run build
 
-# ── Runtime stage ──────────────────────────────────────────────────────────
-FROM node:20-alpine
+# Dependency stage — cross-compiles native modules for the target arch; no QEMU
+FROM --platform=$BUILDPLATFORM node:20-slim AS prod-deps
+ARG TARGETARCH
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+
+# Native cross-compilers for each supported arch
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 make \
+      gcc g++ \
+      gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+      gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
+    && rm -rf /var/lib/apt/lists/*
+
+# Map Docker TARGETARCH → cross-compiler and npm arch name, then install
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64)  NPM_ARCH=x64;   CC_X=gcc;                        CXX_X=g++                       ;; \
+      arm64)  NPM_ARCH=arm64; CC_X=aarch64-linux-gnu-gcc;      CXX_X=aarch64-linux-gnu-g++     ;; \
+      arm)    NPM_ARCH=arm;   CC_X=arm-linux-gnueabihf-gcc;    CXX_X=arm-linux-gnueabihf-g++   ;; \
+      *)      NPM_ARCH=x64;   CC_X=gcc;                        CXX_X=g++                       ;; \
+    esac; \
+    CC=$CC_X CXX=$CXX_X npm_config_target_arch=$NPM_ARCH npm ci --omit=dev
+
+# Runtime stage — only copies pre-built artifacts; no compilation at all
+FROM node:20-slim
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-# Build tools needed to compile better-sqlite3 native addon; removed after install
-RUN apk add --no-cache --virtual .build-deps python3 make g++ && \
-    npm ci --omit=dev && \
-    apk del .build-deps
+RUN apt-get update && apt-get install -y --no-install-recommends wget \
+    && rm -rf /var/lib/apt/lists/*
 
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY package.json ./
 COPY server.js ./
 COPY lib/ ./lib/
 COPY routes/ ./routes/

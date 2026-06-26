@@ -1,3 +1,8 @@
+## [1.90.4] – 2026-06-26
+
+### Fixed
+- **aarch64 Docker build** — QEMU crashed with `SIGILL` (Illegal Instruction) when Alpine's `g++` used SVE2 instructions the emulator doesn't support. Switched base image from `node:20-alpine` to `node:20-slim` (Debian) and restructured the Dockerfile to use `--platform=$BUILDPLATFORM` for all build/install stages. A dedicated `prod-deps` stage cross-compiles `better-sqlite3` natively on amd64 using `aarch64-linux-gnu-gcc` / `arm-linux-gnueabihf-gcc` for each target arch — no QEMU emulation involved. The runtime stage only copies pre-built artifacts. Closes #200
+
 ## [1.90.3] – 2026-06-26
 
 ### Fixed
