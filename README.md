@@ -53,6 +53,7 @@ Click the button above to add this repository directly to your Home Assistant �
 | ⛶ | **Fullscreen Chart** | Expand chart to fullscreen with auto landscape rotation on mobile |
 | 💾 | **.shot Export** | Export in Decent Espresso format (Visualizer.coffee compatible) |
 | 📤 | **CSV Export** | All shots with annotations as CSV |
+| 🖼️ | **Share Card** | Export any shot as a 1080×1080 PNG card — score, pressure curve, metadata and GLP branding. Share button uses the native Web Share API on mobile or downloads the PNG on desktop. |
 | 🔌 | **Smart Plug** | Optional: power machine on/off via HA switch entity |
 | ☕ | **Preheat Timer** | Progress bar + countdown after machine switches on; configurable warmup time; smart reset (ignores brief off/on cycles while still warm) |
 | 🌐 | **Multi-Language UI** | DE / EN / IT / FR / ES / NL — auto-detected from browser, persisted per session |
