@@ -599,6 +599,34 @@ function _downloadJSON_blob(content, filename, mime) {
   URL.revokeObjectURL(url);
 }
 
+// ── Share card ────────────────────────────────────────────────────────────
+
+export async function shareCard() {
+  const shotId = S.primaryShotId;
+  if (!shotId) return;
+  try {
+    const r = await apiFetch(`api/shots/${shotId}/card`);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || r.statusText);
+    }
+    const blob = await r.blob();
+    const file = new File([blob], `glp-shot-${shotId}.png`, { type: 'image/png' });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: t('share_card_title') });
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement('a');
+      a.href = url;
+      a.download = `glp-shot-${shotId}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') alert(t('error_generic', e.message));
+  }
+}
+
 // ── Backup / Restore ──────────────────────────────────────────────────────
 
 export async function restoreFromFile(input) {

@@ -240,4 +240,6 @@ export default {
     update_success:'Aggiornamento avviato – GLP si riavvierà',
     update_error:'Errore – aggiornare manualmente',
     update_changelog:'Changelog',
+    share_card:'Condividi',
+    share_card_title:'Il mio espresso',
 };

@@ -15,7 +15,7 @@ import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggl
          renderAnnotationPanel, renderStars, quickClone, saveAnnotation, scheduleAutoSave, updateDegassing, calcBeanAgeAtShot,
          updateView, switchChartTab, updatePQChart,
          openChartFullscreen, closeChartFullscreen, switchFsTab,
-         exportCSV, exportAllCSV, exportShot, exportProfile, restoreFromFile,
+         exportCSV, exportAllCSV, exportShot, exportProfile, shareCard, restoreFromFile,
          loadDrinkMenu, loadMilkTypes, selectDrinkType, selectMilkType } from './views/shots.js';
 
 import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, clearReferenceShot,
@@ -387,6 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('exportAllCsvBtn').addEventListener('click', exportAllCSV);
   document.getElementById('exportShotBtn').addEventListener('click', exportShot);
   document.getElementById('exportProfileBtn').addEventListener('click', exportProfile);
+  document.getElementById('shareCardBtn').addEventListener('click', shareCard);
   document.getElementById('tabZeit').addEventListener('click', () => switchChartTab('zeit'));
   document.getElementById('tabPQ').addEventListener('click', () => switchChartTab('pq'));
   document.getElementById('expandChartBtn').addEventListener('click', openChartFullscreen);
