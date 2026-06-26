@@ -62,7 +62,7 @@ function getDb() {
         CREATE INDEX IF NOT EXISTS idx_maint_log_ts ON maintenance_log(ts DESC);
 
         CREATE TABLE IF NOT EXISTS orders (
-            id          INTEGER PRIMARY KEY,
+            id          TEXT PRIMARY KEY,
             data        TEXT NOT NULL DEFAULT '{}'
         );
 
@@ -72,9 +72,22 @@ function getDb() {
         );
     `);
 
+    fixSchema(_db);
     migrate(_db);
 
     return _db;
+}
+
+// Fix orders table created with INTEGER PRIMARY KEY before order IDs were known to be strings.
+// Safe to drop because migration never sets the 'migrated' flag when it fails, so the table
+// is always empty when this runs.
+function fixSchema(db) {
+    const col = db.prepare("SELECT type FROM pragma_table_info('orders') WHERE name='id'").get();
+    if (col && col.type === 'INTEGER') {
+        db.exec("DROP TABLE IF EXISTS orders");
+        db.exec("CREATE TABLE orders (id TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}')");
+        log('DB: fixed orders table schema (id: INTEGER → TEXT)');
+    }
 }
 
 // ── Migration from flat JSON files ────────────────────────────────────────
@@ -128,7 +141,7 @@ function migrate(db) {
             if (ann) insertAnnotation.run(id, JSON.stringify(ann));
         }
         for (const [id, ts] of Object.entries(trash)) {
-            insertTrash.run(parseInt(id), ts);
+            insertTrash.run(parseInt(id), typeof ts === 'number' ? ts : Date.now());
         }
 
         const blocklist = readJson(JSON_FILES.blocklist, []);
@@ -165,7 +178,12 @@ function migrate(db) {
         db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES ('migrated', '\"1\"')").run();
     });
 
-    migrateAll();
+    try {
+        migrateAll();
+    } catch (e) {
+        log(`Init error: ${e.message} — migration rolled back, will retry on next start`, true);
+        return;
+    }
 
     const shotCount = db.prepare('SELECT COUNT(*) AS n FROM shots').get().n;
     log(`DB: migration complete — ${shotCount} shots, ${Object.keys(annotations).length} annotations`);

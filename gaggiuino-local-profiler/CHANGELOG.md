@@ -1,3 +1,8 @@
+## [1.90.3] – 2026-06-26
+
+### Fixed
+- **Critical: JSON→SQLite migration failed on first start** — the `orders` table was declared with `id INTEGER PRIMARY KEY`, but order IDs are strings (`ord_…`). SQLite threw `datatype mismatch`, rolled back the entire migration, and left the database empty. Added `fixSchema()` to detect and repair the wrong column type at startup (safe: the table is always empty when this runs since migration never completed). Also hardened the `trash` migration to coerce legacy non-integer `deleted_at` values. Closes #198
+
 ## [1.90.2] – 2026-06-26
 
 ### Fixed
