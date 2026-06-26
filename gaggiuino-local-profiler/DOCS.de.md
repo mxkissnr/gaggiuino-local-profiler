@@ -25,7 +25,7 @@ Das GLP-Ökosystem (GLP = Gaggiuino Local Profiler) besteht aus vier unabhängig
            │                    ▲
            │  fragt ab          │  HA Ingress (Browser, authentifiziert)
            │  /api/status       │  Port 8099 direkt (Integration, Karten)
-           │  /shots.json       │
+           │  /api/shots        │
            │  /api/preheat      ├──────────────────────────┐
            │  /api/maintenance  │                          │
            │  /api/orders †     │                          │
@@ -45,7 +45,7 @@ Das GLP-Ökosystem (GLP = Gaggiuino Local Profiler) besteht aus vier unabhängig
 
 ### GLP App (dieses Repo)
 
-Das zentrale Stück. Es synchronisiert den Shot-Verlauf von der Gaggiuino-Maschine, speichert ihn lokal in `/data/shots.json` und stellt Folgendes bereit:
+Das zentrale Stück. Es synchronisiert den Shot-Verlauf von der Gaggiuino-Maschine, speichert ihn in einer lokalen SQLite-Datenbank (`/data/glp.db`) und stellt Folgendes bereit:
 - Eine Web-Oberfläche, die über HA Ingress erreichbar ist (das ☕-Panel in der HA-Seitenleiste)
 - Eine REST-API auf Port 8099, die von der Integration und den Lovelace-Karten genutzt wird
 
@@ -81,7 +81,7 @@ Alle Komponenten authentifizieren sich automatisch über einen gemeinsamen Token
 
 Keine manuelle Konfiguration für den HA-Ingress-Pfad erforderlich. Um den Token zu erneuern, `/data/api_token.txt` löschen und das App neu starten.
 
-Alle persistenten Daten werden atomar geschrieben (erst `.tmp`, dann `fs.renameSync`), sodass ein Absturz während eines Schreibvorgangs keine halbgeschriebene JSON-Datei hinterlässt.
+Alle persistenten Daten werden in SQLite (`/data/glp.db`) mit aktiviertem WAL-Journal-Modus gespeichert — Schreibvorgänge sind standardmäßig absturzsicher, ohne dass ein inkonsistenter Zustand entstehen kann.
 
 ### API-Spec
 
