@@ -384,7 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnMaintenance').addEventListener('click', () => switchMode('maintenance'));
   document.getElementById('btnOrders').addEventListener('click', () => switchMode('orders'));
   document.getElementById('btnSettings').addEventListener('click', () => switchMode('settings'));
-  document.getElementById('exportAllCsvBtn').addEventListener('click', exportCSV);
+  document.getElementById('exportAllCsvBtn').addEventListener('click', exportAllCSV);
   document.getElementById('exportShotBtn').addEventListener('click', exportShot);
   document.getElementById('exportProfileBtn').addEventListener('click', exportProfile);
   document.getElementById('tabZeit').addEventListener('click', () => switchChartTab('zeit'));
