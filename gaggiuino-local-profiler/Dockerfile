@@ -3,7 +3,10 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# Build tools needed to compile better-sqlite3 native addon
+RUN apk add --no-cache --virtual .build-deps python3 make g++ && \
+    npm ci && \
+    apk del .build-deps
 
 COPY vite.config.js ./
 COPY public-src/ ./public-src/
@@ -16,7 +19,10 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# Build tools needed to compile better-sqlite3 native addon; removed after install
+RUN apk add --no-cache --virtual .build-deps python3 make g++ && \
+    npm ci --omit=dev && \
+    apk del .build-deps
 
 COPY server.js ./
 COPY lib/ ./lib/
