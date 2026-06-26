@@ -22,20 +22,20 @@
 
 <!-- ── Sidebar ── -->
 <div id="sidebar">
-    <h2><button id="sidebarToggle" onclick="toggleSidebar()">☰</button>☕ Shots <span id="shot-count"></span><div class="flap-board" id="flapDigits"></div><button id="collapseBtn" onclick="toggleDesktopSidebar()" data-i18n-title="sidebar_collapse" title="Sidebar einklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z"/></svg></button></h2>
+    <h2><button id="sidebarToggle">☰</button>☕ Shots <span id="shot-count"></span><div class="flap-board" id="flapDigits"></div><button id="collapseBtn" data-i18n-title="sidebar_collapse" title="Sidebar einklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z"/></svg></button></h2>
     <div class="sidebar-hint" data-i18n-html="sidebar_hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
     <div id="search-container">
-        <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …" oninput="filterShots(this.value)">
+        <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …">
     </div>
     <div id="sort-bar">
-        <button class="sort-btn active" id="sortNewest" onclick="setSortMode('newest')">Neueste</button>
-        <button class="sort-btn" id="sortScore"  onclick="setSortMode('score')">Score ↓</button>
-        <button class="sort-btn" id="sortRating" onclick="setSortMode('rating')">⭐ Bewertung</button>
-        <button class="sort-btn" id="sortDur"    onclick="setSortMode('duration')">Dauer</button>
+        <button class="sort-btn active" id="sortNewest">Neueste</button>
+        <button class="sort-btn" id="sortScore">Score ↓</button>
+        <button class="sort-btn" id="sortRating">⭐ Bewertung</button>
+        <button class="sort-btn" id="sortDur">Dauer</button>
     </div>
     <div id="shots"></div>
     <div id="trash-section" style="display:none">
-        <button id="trash-toggle" onclick="toggleTrash()">
+        <button id="trash-toggle">
             🗑 Papierkorb
             <span class="trash-count" id="trash-count">0</span>
         </button>
@@ -50,34 +50,34 @@
                 <span id="glpVersionBadge" style="color:#52525b;font-size:.7rem;user-select:none;flex-shrink:0"></span>
             </div>
             <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-                <button id="powerBtn" onclick="toggleMachinePower()" style="display:none" title="">⏻</button>
-                <button id="syncBtn" onclick="triggerSync()">↻ Sync</button>
+                <button id="powerBtn" style="display:none" title="">⏻</button>
+                <button id="syncBtn">↻ Sync</button>
             </div>
         </div>
     </div>
 </div>
 
-<div id="sidebar-backdrop" onclick="closeSidebar()"></div>
+<div id="sidebar-backdrop"></div>
 
 <!-- ── Main ── -->
 <div id="main">
 
     <!-- Mode switcher -->
     <div id="mode-bar">
-        <button id="mobileMenuBtn" onclick="openSidebar()">☰</button>
-        <button id="expandSidebarBtn" onclick="toggleDesktopSidebar()" data-i18n-title="sidebar_expand" title="Sidebar aufklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/></svg></button>
+        <button id="mobileMenuBtn">☰</button>
+        <button id="expandSidebarBtn" data-i18n-title="sidebar_expand" title="Sidebar aufklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/></svg></button>
         <div id="mode-bar-scroll">
-            <button class="mode-btn" id="btnLive" onclick="switchMode('live')" style="display:none">
+            <button class="mode-btn" id="btnLive" style="display:none">
                 <span class="live-dot"></span>Live
             </button>
-            <button class="mode-btn active" id="btnShots" onclick="switchMode('shots')">Shots</button>
-            <button class="mode-btn" id="btnAnalytics" onclick="switchMode('analytics')">Analytics</button>
-            <button class="mode-btn" id="btnDialin"    onclick="switchMode('dialin')">Einwählen</button>
-            <button class="mode-btn" id="btnLibrary"   onclick="switchMode('library')">Bibliothek</button>
-            <button class="mode-btn" id="btnMaintenance" onclick="switchMode('maintenance')">Wartung<span id="maintBadge" class="maint-badge" style="display:none"></span></button>
-            <button class="mode-btn" id="btnOrders" onclick="switchMode('orders')" style="display:none">Bestellungen<span id="ordersBadge" class="maint-badge" style="display:none"></span></button>
+            <button class="mode-btn active" id="btnShots">Shots</button>
+            <button class="mode-btn" id="btnAnalytics">Analytics</button>
+            <button class="mode-btn" id="btnDialin">Einwählen</button>
+            <button class="mode-btn" id="btnLibrary">Bibliothek</button>
+            <button class="mode-btn" id="btnMaintenance">Wartung<span id="maintBadge" class="maint-badge" style="display:none"></span></button>
+            <button class="mode-btn" id="btnOrders" style="display:none">Bestellungen<span id="ordersBadge" class="maint-badge" style="display:none"></span></button>
         </div>
-        <button class="mode-btn" id="btnSettings"  onclick="switchMode('settings')">⚙</button>
+        <button class="mode-btn" id="btnSettings">⚙</button>
     </div>
 
     <!-- Shots view -->
@@ -101,9 +101,9 @@
                         <div id="shotScoreVal" class="score-num">–</div>
                         <div class="score-lbl">Score</div>
                     </div>
-                    <button class="export-btn" onclick="exportCSV()" title="Alle Shots als CSV exportieren">↓ CSV</button>
-                    <button class="export-btn" id="exportShotBtn" onclick="exportShot()" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
-                    <button class="export-btn" id="exportProfileBtn" onclick="exportProfile()" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
+                    <button class="export-btn" id="exportAllCsvBtn" title="Alle Shots als CSV exportieren">↓ CSV</button>
+                    <button class="export-btn" id="exportShotBtn" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
+                    <button class="export-btn" id="exportProfileBtn" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
                 </div>
             </div>
 
@@ -177,9 +177,9 @@
             </div>
 
             <div class="chart-tabs">
-                <button class="chart-tab active" id="tabZeit" onclick="switchChartTab('zeit')" data-i18n="tab_time">⏱ Zeit</button>
-                <button class="chart-tab" id="tabPQ" onclick="switchChartTab('pq')" data-i18n="tab_pq">P·Q Kurve</button>
-                <button id="expandChartBtn" onclick="openChartFullscreen()" data-i18n-title="btn_fullscreen_tooltip" title="Vollbild">⤢</button>
+                <button class="chart-tab active" id="tabZeit" data-i18n="tab_time">⏱ Zeit</button>
+                <button class="chart-tab" id="tabPQ" data-i18n="tab_pq">P·Q Kurve</button>
+                <button id="expandChartBtn" data-i18n-title="btn_fullscreen_tooltip" title="Vollbild">⤢</button>
             </div>
             <div id="zeitContainer" class="chart-container">
                 <canvas id="espressoShotChart"></canvas>
@@ -192,10 +192,10 @@
             <div id="chartFullscreen">
                 <div class="fs-header">
                     <div class="fs-tabs">
-                        <button class="chart-tab active" id="fsTabZeit" onclick="switchFsTab('zeit')" data-i18n="tab_time">⏱ Zeit</button>
-                        <button class="chart-tab" id="fsTabPQ" onclick="switchFsTab('pq')" data-i18n="tab_pq">P·Q Kurve</button>
+                        <button class="chart-tab active" id="fsTabZeit" data-i18n="tab_time">⏱ Zeit</button>
+                        <button class="chart-tab" id="fsTabPQ" data-i18n="tab_pq">P·Q Kurve</button>
                     </div>
-                    <button id="closeFullscreenBtn" onclick="closeChartFullscreen()" data-i18n="btn_fullscreen_close">✕ Schließen</button>
+                    <button id="closeFullscreenBtn" data-i18n="btn_fullscreen_close">✕ Schließen</button>
                 </div>
                 <div class="fs-body">
                     <canvas id="espressoShotChartFs" style="width:100%;height:100%"></canvas>
@@ -207,7 +207,7 @@
                 <div class="annotation-header">
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                         <span class="annotation-title" data-i18n="ann_title">Notizen & Bewertung</span>
-                        <button class="lib-open-btn" onclick="quickClone()" data-i18n="ann_clone_btn" title="">↩ Letzten</button>
+                        <button class="lib-open-btn" id="quickCloneBtn" data-i18n="ann_clone_btn" title="">↩ Letzten</button>
                     </div>
                     <div class="star-rating" id="starRating">
                         <span class="star" data-val="1">★</span>
@@ -230,22 +230,22 @@
                     </div>
                     <div class="annotation-field">
                         <label data-i18n="ann_coffee">Kaffee / Bohne</label>
-                        <input type="text" id="annCoffee" data-i18n-placeholder="ann_coffee_ph" placeholder="z.B. Ethiopia Yirgacheffe" list="beanList" autocomplete="off" oninput="scheduleAutoSave()">
+                        <input type="text" id="annCoffee" data-i18n-placeholder="ann_coffee_ph" placeholder="z.B. Ethiopia Yirgacheffe" list="beanList" autocomplete="off">
                         <datalist id="beanList"></datalist>
                         <div id="beanAgeHint" class="bean-age-hint" style="display:none"></div>
                     </div>
                     <div class="annotation-field">
                         <label data-i18n="ann_grinder">Mühle</label>
-                        <input type="text" id="annGrinder" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" list="grinderList" autocomplete="off" oninput="scheduleAutoSave()">
+                        <input type="text" id="annGrinder" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" list="grinderList" autocomplete="off">
                         <datalist id="grinderList"></datalist>
                     </div>
                     <div class="annotation-field">
                         <label data-i18n="ann_grind_setting">Mahlgrad</label>
-                        <input type="text" id="annGrindSetting" data-i18n-placeholder="ann_grind_ph" placeholder="z.B. 23 Clicks" oninput="scheduleAutoSave()">
+                        <input type="text" id="annGrindSetting" data-i18n-placeholder="ann_grind_ph" placeholder="z.B. 23 Clicks">
                     </div>
                     <div class="annotation-field">
                         <label data-i18n="ann_dose">Dosis (g)</label>
-                        <input type="number" id="annDose" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0" oninput="scheduleAutoSave()">
+                        <input type="number" id="annDose" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0">
                     </div>
                     <div class="annotation-field">
                         <div id="degassingTracker" class="degassing-bar-wrap" style="display:none">
@@ -255,15 +255,15 @@
                     </div>
                     <div class="annotation-field">
                         <label>TDS % <span id="annTdsOptional" style="color:#52525b;font-weight:normal" data-i18n="ann_tds_optional">(optional)</span></label>
-                        <input type="number" id="annTds" data-i18n-placeholder="ann_tds_ph" placeholder="z.B. 9.2" step="0.1" min="0" max="25" oninput="scheduleAutoSave()">
+                        <input type="number" id="annTds" data-i18n-placeholder="ann_tds_ph" placeholder="z.B. 9.2" step="0.1" min="0" max="25">
                     </div>
                     <div class="annotation-field full-width">
                         <label data-i18n="ann_notes">Notizen</label>
-                        <textarea id="annNotes" data-i18n-placeholder="ann_notes_ph" placeholder="Geschmack, Beobachtungen, Anpassungen …" oninput="scheduleAutoSave()"></textarea>
+                        <textarea id="annNotes" data-i18n-placeholder="ann_notes_ph" placeholder="Geschmack, Beobachtungen, Anpassungen …"></textarea>
                     </div>
                 </div>
                 <div class="annotation-actions">
-                    <button class="save-btn" id="saveAnnotationBtn" onclick="saveAnnotation()" data-i18n="btn_save">Speichern</button>
+                    <button class="save-btn" id="saveAnnotationBtn" data-i18n="btn_save">Speichern</button>
                     <span id="autoSaveStatus" class="autosave-status"></span>
                     <div id="orderedByBadge" class="ordered-by-badge" style="display:none"></div>
                 </div>
@@ -280,7 +280,7 @@
         <div class="maint-log-section">
             <div class="maint-log-header">
                 <h3 class="maint-section-title" data-i18n="maint_log_title">Wartungsprotokoll</h3>
-                <button class="maint-log-add-btn" onclick="openMaintLogForm()" data-i18n="maint_log_add">Manuell eintragen</button>
+                <button class="maint-log-add-btn" id="openMaintLogBtn" data-i18n="maint_log_add">Manuell eintragen</button>
             </div>
             <div id="maintLogForm" class="maint-log-form" style="display:none">
                 <div class="maint-log-form-row">
@@ -289,8 +289,8 @@
                     <input type="text" id="maintLogNotes" class="maint-log-notes-input" data-i18n-placeholder="maint_log_notes_ph" placeholder="z.B. Cafiza 1h">
                 </div>
                 <div class="maint-log-form-actions">
-                    <button class="maint-done-btn" onclick="submitMaintLogEntry()" data-i18n="maint_log_save">Speichern</button>
-                    <button class="maint-log-cancel-btn" onclick="closeMaintLogForm()" data-i18n="maint_log_cancel">Abbrechen</button>
+                    <button class="maint-done-btn" id="submitMaintLogBtn" data-i18n="maint_log_save">Speichern</button>
+                    <button class="maint-log-cancel-btn" id="cancelMaintLogBtn" data-i18n="maint_log_cancel">Abbrechen</button>
                 </div>
             </div>
             <div id="maintLog"></div>
@@ -302,7 +302,7 @@
         <div class="orders-toggle-row">
             <span class="orders-toggle-label" data-i18n="orders_accept_toggle">Bestellannahme</span>
             <label class="toggle-switch">
-                <input type="checkbox" id="ordersEnabledToggle" onchange="setOrdersEnabled(this.checked)">
+                <input type="checkbox" id="ordersEnabledToggle">
                 <span class="toggle-track"></span>
             </label>
             <span id="ordersEnabledLabel" class="orders-toggle-state off">–</span>
@@ -327,7 +327,7 @@
             <div class="orders-history-list" id="orders-history-list"></div>
         </div>
         <div class="orders-menu-section">
-            <div class="orders-menu-title" onclick="toggleOrdersMenu()">
+            <div class="orders-menu-title" id="ordersMenuTitle">
                 <span data-i18n="orders_menu_title">Menü verwalten</span>
                 <span id="ordersMenuToggle">▾</span>
             </div>
@@ -336,12 +336,12 @@
                 <div class="orders-menu-add-row">
                     <input class="orders-menu-input emoji" id="ordersMenuEmoji" placeholder="☕" maxlength="2">
                     <input class="orders-menu-input" id="ordersMenuName" style="flex:1" placeholder="Name …" data-i18n-ph="orders_menu_name_ph">
-                    <button class="orders-menu-save-btn" onclick="addOrderMenuItem()" data-i18n="orders_menu_save">Hinzufügen</button>
+                    <button class="orders-menu-save-btn" id="addOrderMenuItemBtn" data-i18n="orders_menu_save">Hinzufügen</button>
                 </div>
             </div>
         </div>
         <div class="orders-menu-section" id="ordersStatsSection">
-            <div class="orders-menu-title" onclick="toggleOrdersStats()">
+            <div class="orders-menu-title" id="ordersStatsTitle">
                 <span data-i18n="orders_stats_title">Kunden-Statistik</span>
                 <span id="ordersStatsToggle">▸</span>
             </div>
@@ -350,7 +350,7 @@
             </div>
         </div>
         <div class="orders-menu-section" id="ordersNotifySection">
-            <div class="orders-menu-title" onclick="toggleOrdersNotify()">
+            <div class="orders-menu-title" id="ordersNotifyTitle">
                 <span data-i18n="orders_notify_title">Push-Benachrichtigungen</span>
                 <span id="ordersNotifyToggle">▸</span>
             </div>
@@ -362,10 +362,10 @@
     <div id="library-view">
         <div class="lib-page">
             <div class="lib-tabs">
-                <button class="lib-tab active" id="libTabBeans"    onclick="switchLibTab('beans')" data-i18n="lib_beans">Bohnen</button>
-                <button class="lib-tab"         id="libTabGrinders" onclick="switchLibTab('grinders')" data-i18n="lib_grinders">Mühlen</button>
-                <button class="lib-tab"         id="libTabRecipes"  onclick="switchLibTab('recipes')" data-i18n="lib_recipes">Rezepte</button>
-                <button class="lib-tab"         id="libTabMilk"     onclick="switchLibTab('milk')" data-i18n="lib_milk">Milch</button>
+                <button class="lib-tab active" id="libTabBeans" data-i18n="lib_beans">Bohnen</button>
+                <button class="lib-tab" id="libTabGrinders" data-i18n="lib_grinders">Mühlen</button>
+                <button class="lib-tab" id="libTabRecipes" data-i18n="lib_recipes">Rezepte</button>
+                <button class="lib-tab" id="libTabMilk" data-i18n="lib_milk">Milch</button>
             </div>
             <div class="lib-body">
                 <!-- Beans -->
@@ -401,18 +401,18 @@
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" onclick="closeBeanForm()" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" onclick="saveBean()" data-i18n="lib_save">Speichern</button>
+                            <button class="lib-btn-sm" id="closeBeanFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button class="lib-save-btn" id="saveBeanBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
                     <div class="lib-trigger-row">
-                        <button class="lib-add-trigger" id="beanAddTrigger" onclick="openBeanForm()" data-i18n="lib_add_bean">+ Bohne hinzufügen</button>
-                        <button class="lib-scan-trigger" onclick="openScanModal()" data-i18n="lib_scan_barcode">⬛ Scan</button>
-                        <button class="lib-scan-trigger" onclick="toggleUrlImport()" data-i18n="lib_url_import">🔗 URL</button>
+                        <button class="lib-add-trigger" id="beanAddTrigger" data-i18n="lib_add_bean">+ Bohne hinzufügen</button>
+                        <button class="lib-scan-trigger" id="openScanModalBtn" data-i18n="lib_scan_barcode">⬛ Scan</button>
+                        <button class="lib-scan-trigger" id="toggleUrlImportBtn" data-i18n="lib_url_import">🔗 URL</button>
                     </div>
                     <div class="lib-url-row" id="urlImportRow" style="display:none">
-                        <input class="lib-url-input" id="urlImportInput" data-i18n-placeholder="lib_url_placeholder" placeholder="kaffeebraun.com/…" onkeydown="if(event.key==='Enter')importFromUrl()">
-                        <button class="lib-url-btn" onclick="importFromUrl()" data-i18n="lib_url_btn">Importieren</button>
+                        <input class="lib-url-input" id="urlImportInput" data-i18n-placeholder="lib_url_placeholder" placeholder="kaffeebraun.com/…">
+                        <button class="lib-url-btn" id="importFromUrlBtn" data-i18n="lib_url_btn">Importieren</button>
                     </div>
                 </div>
                 <!-- Grinders -->
@@ -430,11 +430,11 @@
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" onclick="closeGrinderForm()" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" onclick="saveGrinder()" data-i18n="lib_save">Speichern</button>
+                            <button class="lib-btn-sm" id="closeGrinderFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button class="lib-save-btn" id="saveGrinderBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
-                    <button class="lib-add-trigger" id="grinderAddTrigger" onclick="openGrinderForm()" data-i18n="lib_add_grinder">+ Mühle hinzufügen</button>
+                    <button class="lib-add-trigger" id="grinderAddTrigger" data-i18n="lib_add_grinder">+ Mühle hinzufügen</button>
                 </div>
                 <!-- Recipes -->
                 <div class="lib-section" id="libSectionRecipes">
@@ -509,16 +509,16 @@
                         <div class="lib-recipe-steps-section">
                             <div class="lib-recipe-steps-header">
                                 <span data-i18n="lib_recipe_steps">Workflow-Schritte</span>
-                                <button class="lib-btn-sm" onclick="addRecipeStep()" data-i18n="lib_recipe_add_step">+ Schritt</button>
+                                <button class="lib-btn-sm" id="addRecipeStepBtn" data-i18n="lib_recipe_add_step">+ Schritt</button>
                             </div>
                             <div id="recipeStepsList"></div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" onclick="closeRecipeForm()" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" onclick="saveRecipe()" data-i18n="lib_save">Speichern</button>
+                            <button class="lib-btn-sm" id="closeRecipeFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button class="lib-save-btn" id="saveRecipeBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
-                    <button class="lib-add-trigger" id="recipeAddTrigger" onclick="openRecipeForm()" data-i18n="lib_add_recipe">+ Rezept hinzufügen</button>
+                    <button class="lib-add-trigger" id="recipeAddTrigger" data-i18n="lib_add_recipe">+ Rezept hinzufügen</button>
                 </div>
                 <!-- Milk -->
                 <div class="lib-section" id="libSectionMilk">
@@ -539,11 +539,11 @@
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" onclick="closeMilkForm()" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" onclick="saveMilk()" data-i18n="lib_save">Speichern</button>
+                            <button class="lib-btn-sm" id="closeMilkFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button class="lib-save-btn" id="saveMilkBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
-                    <button class="lib-add-trigger" id="milkAddTrigger" onclick="openMilkForm()" data-i18n="lib_add_milk">+ Milch hinzufügen</button>
+                    <button class="lib-add-trigger" id="milkAddTrigger" data-i18n="lib_add_milk">+ Milch hinzufügen</button>
                 </div>
             </div>
         </div>
@@ -596,10 +596,10 @@
 
         <div id="live-ref-bar">
             <span class="live-ref-label" data-i18n="ref_label">Referenz:</span>
-            <select id="refShotSelect" onchange="onRefShotChange(this.value)">
+            <select id="refShotSelect">
                 <option value="" data-i18n="ref_none">— kein Referenz-Shot —</option>
             </select>
-            <button id="refClearBtn" onclick="clearReferenceShot()" style="display:none" data-i18n="ref_clear">✕ Löschen</button>
+            <button id="refClearBtn" style="display:none" data-i18n="ref_clear">✕ Löschen</button>
         </div>
 
         <div id="live-idle" style="display:none">
@@ -634,9 +634,9 @@
                 <div class="analytics-card-head">
                     <h3 class="analytics-section-title" data-i18n="analytics_trend">Score-Trend</h3>
                     <div class="analytics-filter-row">
-                        <button class="analytics-filter-btn active" id="trendBtn30"  onclick="setTrendWindow(30)" data-i18n="analytics_trend_30">30 Shots</button>
-                        <button class="analytics-filter-btn"        id="trendBtn90"  onclick="setTrendWindow(90)" data-i18n="analytics_trend_90">90 Shots</button>
-                        <button class="analytics-filter-btn"        id="trendBtnAll" onclick="setTrendWindow(0)"  data-i18n="analytics_trend_all">Alle</button>
+                        <button class="analytics-filter-btn active" id="trendBtn30" data-i18n="analytics_trend_30">30 Shots</button>
+                        <button class="analytics-filter-btn" id="trendBtn90" data-i18n="analytics_trend_90">90 Shots</button>
+                        <button class="analytics-filter-btn" id="trendBtnAll" data-i18n="analytics_trend_all">Alle</button>
                     </div>
                 </div>
                 <div style="height:200px;position:relative"><canvas id="trendChart"></canvas></div>
@@ -697,7 +697,7 @@
     <div id="dialin-view">
         <div class="dialin-header">
             <h3 style="margin:0;font-size:.95rem;color:#e4e4e7" data-i18n="dialin_title">Einwählen</h3>
-            <select id="dialinCount" class="dialin-count-select" onchange="renderDialin()">
+            <select id="dialinCount" class="dialin-count-select">
                 <option value="3">3 Shots</option>
                 <option value="5" selected>5 Shots</option>
                 <option value="10">10 Shots</option>
@@ -711,27 +711,27 @@
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="settings_theme">Theme</h3>
             <div class="theme-toggle-group" id="themeToggleGroup">
-                <button class="theme-btn" data-theme-val="dark"  onclick="setTheme('dark')" >🌙 <span data-i18n="theme_dark">Dark</span></button>
-                <button class="theme-btn" data-theme-val="light" onclick="setTheme('light')">☀️ <span data-i18n="theme_light">Light</span></button>
+                <button class="theme-btn" data-theme-val="dark">🌙 <span data-i18n="theme_dark">Dark</span></button>
+                <button class="theme-btn" data-theme-val="light">☀️ <span data-i18n="theme_light">Light</span></button>
             </div>
             <h3 class="settings-card-title" style="margin-top:14px" data-i18n="settings_accent">Farbschema</h3>
             <div class="accent-swatches" id="accentSwatches">
-                <button class="accent-swatch" data-accent="amber"  onclick="setAccentTheme('amber')"  title="Amber"  style="background:linear-gradient(135deg,#f59e0b,#f97316)"></button>
-                <button class="accent-swatch" data-accent="ocean"  onclick="setAccentTheme('ocean')"  title="Ocean"  style="background:linear-gradient(135deg,#3b82f6,#06b6d4)"></button>
-                <button class="accent-swatch" data-accent="aurora" onclick="setAccentTheme('aurora')" title="Aurora" style="background:linear-gradient(135deg,#6366f1,#a855f7)"></button>
-                <button class="accent-swatch" data-accent="ember"  onclick="setAccentTheme('ember')"  title="Ember"  style="background:linear-gradient(135deg,#ef4444,#f97316)"></button>
-                <button class="accent-swatch" data-accent="forest" onclick="setAccentTheme('forest')" title="Forest" style="background:linear-gradient(135deg,#22c55e,#10b981)"></button>
+                <button class="accent-swatch" data-accent="amber"  title="Amber"  style="background:linear-gradient(135deg,#f59e0b,#f97316)"></button>
+                <button class="accent-swatch" data-accent="ocean"  title="Ocean"  style="background:linear-gradient(135deg,#3b82f6,#06b6d4)"></button>
+                <button class="accent-swatch" data-accent="aurora" title="Aurora" style="background:linear-gradient(135deg,#6366f1,#a855f7)"></button>
+                <button class="accent-swatch" data-accent="ember"  title="Ember"  style="background:linear-gradient(135deg,#ef4444,#f97316)"></button>
+                <button class="accent-swatch" data-accent="forest" title="Forest" style="background:linear-gradient(135deg,#22c55e,#10b981)"></button>
             </div>
         </div>
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="settings_language">Sprache</h3>
             <div class="settings-lang-group">
-                <button class="lang-option-btn" data-lang="de" onclick="setLang('de')">Deutsch</button>
-                <button class="lang-option-btn" data-lang="en" onclick="setLang('en')">English</button>
-                <button class="lang-option-btn" data-lang="it" onclick="setLang('it')">Italiano</button>
-                <button class="lang-option-btn" data-lang="fr" onclick="setLang('fr')">Français</button>
-                <button class="lang-option-btn" data-lang="es" onclick="setLang('es')">Español</button>
-                <button class="lang-option-btn" data-lang="nl" onclick="setLang('nl')">Nederlands</button>
+                <button class="lang-option-btn" data-lang="de">Deutsch</button>
+                <button class="lang-option-btn" data-lang="en">English</button>
+                <button class="lang-option-btn" data-lang="it">Italiano</button>
+                <button class="lang-option-btn" data-lang="fr">Français</button>
+                <button class="lang-option-btn" data-lang="es">Español</button>
+                <button class="lang-option-btn" data-lang="nl">Nederlands</button>
             </div>
         </div>
         <div class="settings-card">
@@ -740,7 +740,7 @@
             <a id="backupDownloadBtn" href="api/backup" class="backup-btn" data-i18n="backup_download">Backup herunterladen</a>
             <label class="backup-btn" style="cursor:pointer" data-i18n="backup_restore">
                 Aus Backup wiederherstellen …
-                <input type="file" accept=".json" style="display:none" onchange="restoreFromFile(this)">
+                <input type="file" accept=".json" style="display:none">
             </label>
         </div>
     </div>
@@ -758,7 +758,7 @@
     <p style="color:#52525b;font-size:.7rem;text-align:center;margin:0">
         <span data-i18n="scan_attribution">Produktdaten von</span> <a href="https://world.openfoodfacts.org" target="_blank" style="color:#71717a">Open Food Facts</a> (ODbL)
     </p>
-    <button class="scan-close-btn" onclick="closeScanModal()" data-i18n="scan_close">Schließen</button>
+    <button class="scan-close-btn" id="closeScanModalBtn" data-i18n="scan_close">Schließen</button>
 </div>
 
 <script type="module" src="./main.js"></script>

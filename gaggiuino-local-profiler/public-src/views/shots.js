@@ -118,7 +118,7 @@ function _renderDrinkPills(selectedId) {
   if (!S.drinkMenu?.length) { container.innerHTML = ''; return; }
   container.innerHTML = S.drinkMenu.map(m =>
     `<button type="button" class="drink-pill${selectedId === m.id ? ' active' : ''}"
-      onclick="selectDrinkType('${esc(m.id)}')">${esc(m.emoji)} ${esc(m.name)}</button>`
+      data-action="select-drink" data-id="${esc(m.id)}">${esc(m.emoji)} ${esc(m.name)}</button>`
   ).join('');
   if (hidden) hidden.value = selectedId || '';
 }
@@ -139,7 +139,7 @@ function _renderMilkPills(selectedId) {
   if (!S.milkTypes?.length) { container.innerHTML = ''; return; }
   container.innerHTML = S.milkTypes.map(m =>
     `<button type="button" class="drink-pill${selectedId === String(m.id) ? ' active' : ''}"
-      onclick="selectMilkType('${esc(String(m.id))}')">${esc(m.emoji || '🥛')} ${esc(m.name)}</button>`
+      data-action="select-milk" data-id="${esc(String(m.id))}">${esc(m.emoji || '🥛')} ${esc(m.name)}</button>`
   ).join('');
   if (hidden) hidden.value = selectedId || '';
 }
@@ -316,7 +316,7 @@ export async function loadData() {
   } catch (e) {
     shotsEl.innerHTML =
       `<div class="loading-state" style="color:#ef4444">Verbindungsfehler<br>` +
-      `<button onclick="loadData()" style="margin-top:10px;padding:4px 12px;cursor:pointer;` +
+      `<button data-action="reload-data" style="margin-top:10px;padding:4px 12px;cursor:pointer;` +
       `background:rgba(63,63,70,.5);color:#a1a1aa;border:1px solid #3f3f46;border-radius:6px;` +
       `font-family:Figtree,sans-serif;font-size:.8rem">${t('btn_reload')}</button></div>`;
     return;
@@ -380,8 +380,8 @@ export function renderTrash() {
         <div class="trash-item-name">${esc(name)}</div>
         <div class="trash-item-days">Shot ${shot.id} · ${t('trash_days_left', daysLeft)}</div>
       </div>
-      <button class="trash-restore-btn" onclick="restoreShot(${shot.id})">${t('trash_restore_label')}</button>
-      <button class="trash-delete-btn" title="${t('trash_delete_title')}" onclick="permanentDeleteShot(${shot.id})"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
+      <button class="trash-restore-btn" data-action="restore-shot" data-id="${shot.id}">${t('trash_restore_label')}</button>
+      <button class="trash-delete-btn" title="${t('trash_delete_title')}" data-action="perm-delete-shot" data-id="${shot.id}"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
     `;
     listEl.appendChild(row);
   });
@@ -717,7 +717,7 @@ export function updateView() {
         const dur  = s.duration ? `${(s.duration / 10).toFixed(0)}s` : '';
         const cls  = scoreClass(score);
         const chart = _miniShotChart(s);
-        return `<div class="comp-thumb" onclick="goToShot(${s.id})" title="Shot ${s.id} — ${date}">
+        return `<div class="comp-thumb" data-action="goto-shot" data-id="${s.id}" title="Shot ${s.id} — ${date}">
           <div class="comp-thumb-chart">${chart}</div>
           <div class="comp-thumb-meta">
             <span class="comp-shot-date">${date}</span>

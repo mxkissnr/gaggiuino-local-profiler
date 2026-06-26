@@ -1,3 +1,19 @@
+## [1.87.2] – 2026-06-26
+
+### Security
+- **M1:** Removed all `onclick`/`oninput`/`onchange` inline event handlers from the frontend — replaced with `addEventListener` wiring and `data-action` event delegation; `'unsafe-inline'` removed from `script-src` in the Content-Security-Policy header (Closes #171)
+
+## [1.87.1] – 2026-06-25
+
+### Security
+- **H1:** `/api/status` no longer exposes `machineUrl`, `machineHostname`, `lastSyncError`, or `switchEntity` to unauthenticated callers — sensitive fields are only included when a valid `x-glp-token` is present (Closes #177)
+- **H2:** `/api/debug/machine` is now gated behind `NODE_ENV !== 'production'` — the endpoint is unavailable in production builds (Closes #178)
+- **H3:** Import URL validation now rejects non-HTTP(S) protocols (`ftp://`, `javascript://`, etc.) in addition to the existing hostname allowlist check (Closes #172)
+- **M2:** `/api/token` endpoint now enforces a rate limit of 10 requests/minute per IP (Closes #173)
+- **M3:** API token comparison in the auth middleware now uses `crypto.timingSafeEqual()` instead of `===`, preventing timing side-channel attacks (Closes #174)
+- **M4:** `/api/restore` now validates each shot object before writing — requires `id` (positive integer) and `timestamp` (number, if present) (Closes #175)
+- **M5:** Added `Permissions-Policy: camera=(), microphone=(), geolocation=()` response header (Closes #176)
+
 ## [1.87.0] – 2026-06-24
 
 ### Changed

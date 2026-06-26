@@ -34,6 +34,11 @@ router.post('/api/restore', (req, res) => {
             return res.status(400).json({ error: 'Invalid backup file' });
         if (b.shots.length > MAX_SHOT_ID)
             return res.status(400).json({ error: `Backup contains too many shots (max ${MAX_SHOT_ID})` });
+        const validShots = b.shots.every(s =>
+            s !== null && typeof s === 'object' &&
+            Number.isInteger(s.id) && s.id > 0 &&
+            (s.timestamp === undefined || typeof s.timestamp === 'number'));
+        if (!validShots) return res.status(400).json({ error: 'Invalid shot data in backup' });
         if (Array.isArray(b.shots))          writeFileSafe(DATA_FILE,       b.shots);
         if (b.annotations && typeof b.annotations === 'object')
                                              writeFileSafe(ANNOTATIONS_FILE, b.annotations);
