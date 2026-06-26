@@ -1,145 +1,86 @@
-const express = require('express');
-const fs      = require('fs');
-const router  = express.Router();
+const express  = require('express');
+const router   = express.Router();
 
-const { DATA_FILE, ANNOTATIONS_FILE, MAX_SHOT_ID } = require('../lib/constants');
-const { loadAnnotations, saveAnnotations, loadTrash, saveTrash,
-        loadBlocklist, saveBlocklist } = require('../lib/data');
-const { log, writeFileSafe } = require('../lib/helpers');
-const { calcShotScore } = require('../lib/score');
+const shotService              = require('../lib/services/ShotService');
+const { validate }             = require('../lib/middleware/validate');
+const { annotationSchema }     = require('../lib/validation/schemas');
+const { MAX_SHOT_ID }          = require('../lib/constants');
+const { log }                  = require('../lib/helpers');
 
-router.get('/shots.json', (req, res) => {
+function parseId(param) {
+    const id = parseInt(param, 10);
+    return (isNaN(id) || id < 1 || id > MAX_SHOT_ID) ? null : id;
+}
+
+router.get('/shots.json', (req, res, next) => {
     try {
-        let shots = [];
-        if (fs.existsSync(DATA_FILE)) shots = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-        const annotations  = loadAnnotations();
-        const trash        = loadTrash();
         const includeTrash = req.query.trash === '1';
-        const filtered = includeTrash
-            ? shots.filter(s => trash[String(s.id)])
-            : shots.filter(s => !trash[String(s.id)]);
-        const merged = filtered.map(s => {
-            const ann      = annotations[String(s.id)];
-            const trashedAt = trash[String(s.id)] || null;
-            const m = { ...s, ...(ann ? { annotation: ann } : {}), ...(trashedAt ? { trashedAt } : {}) };
-            m.score = calcShotScore(m);
-            return m;
-        });
-        res.setHeader('Content-Type', 'application/json');
-        res.send(JSON.stringify(merged));
-    } catch (err) {
-        log(`Read error: ${err.message}`, true);
-        res.status(500).json({ error: 'Fehler beim Laden' });
-    }
+        const shots = includeTrash ? shotService.getTrash() : shotService.getAll();
+        const result = shots.map(s => ({ ...s, score: shotService.computeScore(s) }));
+        res.json(result);
+    } catch (err) { next(err); }
 });
 
-router.get('/api/shots/last', (req, res) => {
+router.get('/api/shots/last', (req, res, next) => {
     try {
-        if (!fs.existsSync(DATA_FILE)) return res.json(null);
-        const shots       = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-        const trash       = loadTrash();
-        const annotations = loadAnnotations();
-        const last        = shots.filter(s => !trash[String(s.id)]).slice(-1)[0] || null;
+        const shots = shotService.getAll();
+        const last  = shots.length ? shots[shots.length - 1] : null;
         if (!last) return res.json(null);
-        const ann = annotations[String(last.id)];
-        const m   = ann ? { ...last, annotation: ann } : { ...last };
-        m.score   = calcShotScore(m);
-        res.json(m);
-    } catch { res.json(null); }
+        res.json({ ...last, score: shotService.computeScore(last) });
+    } catch (err) { next(err); }
 });
 
-router.get('/api/shots/:id', (req, res) => {
+router.get('/api/shots/:id', (req, res, next) => {
     try {
-        if (!fs.existsSync(DATA_FILE)) return res.json(null);
-        const shots       = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-        const trash       = loadTrash();
-        const annotations = loadAnnotations();
-        const id          = req.params.id;
-        const shot        = shots.find(s => String(s.id) === id && !trash[id]) || null;
+        const id   = parseId(req.params.id);
+        if (!id) return res.json(null);
+        const shot = shotService.getById(id);
         if (!shot) return res.json(null);
-        const ann = annotations[id];
-        const m   = ann ? { ...shot, annotation: ann } : { ...shot };
-        m.score   = calcShotScore(m);
-        res.json(m);
-    } catch { res.json(null); }
+        res.json({ ...shot, score: shotService.computeScore(shot) });
+    } catch (err) { next(err); }
 });
 
-router.post('/api/shots/:id/annotate', (req, res) => {
-    const id = parseInt(req.params.id);
-    if (isNaN(id) || id < 1 || id > MAX_SHOT_ID)
-        return res.status(400).json({ error: 'Ungültige Shot-ID' });
+router.post('/api/shots/:id/annotate', validate(annotationSchema), (req, res, next) => {
     try {
-        const annotations = loadAnnotations();
-        const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
-        const num = (v, min, max) => (typeof v === 'number' && v >= min && v <= max) ? v : null;
-        annotations[String(id)] = {
-            rating:       Number.isInteger(req.body.rating) && req.body.rating >= 1 && req.body.rating <= 5
-                              ? req.body.rating : null,
-            coffee:       str(req.body.coffee,       200),
-            grinder:      str(req.body.grinder,      200),
-            grindSetting: str(req.body.grindSetting, 100),
-            dose:         num(req.body.dose,    0.1, 100),
-            roastDate:    str(req.body.roastDate, 10),
-            tds:          num(req.body.tds,     0.1,  30),
-            notes:        str(req.body.notes,       2000),
-            drinkType:    str(req.body.drinkType,     50) || null,
-        };
-        saveAnnotations(annotations);
+        const id = parseId(req.params.id);
+        if (!id) return res.status(400).json({ error: 'Invalid shot ID' });
+        shotService.saveAnnotation(id, req.body);
         res.json({ ok: true });
-    } catch (err) {
-        log(`Annotation error: ${err.message}`, true);
-        res.status(500).json({ error: 'Fehler beim Speichern' });
-    }
+    } catch (err) { next(err); }
 });
 
-router.post('/api/shots/:id/trash', (req, res) => {
-    const id = parseInt(req.params.id);
-    if (isNaN(id) || id < 1 || id > MAX_SHOT_ID)
-        return res.status(400).json({ error: 'Invalid shot ID' });
+router.post('/api/shots/:id/trash', (req, res, next) => {
     try {
-        const trash = loadTrash();
-        trash[String(id)] = Date.now();
-        saveTrash(trash);
+        const id = parseId(req.params.id);
+        if (!id) return res.status(400).json({ error: 'Invalid shot ID' });
+        shotService.trashShot(id);
         log(`Shot ${id} moved to trash`);
         res.json({ ok: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { next(err); }
 });
 
-router.post('/api/shots/:id/restore', (req, res) => {
-    const id = parseInt(req.params.id);
-    if (isNaN(id) || id < 1 || id > MAX_SHOT_ID)
-        return res.status(400).json({ error: 'Invalid shot ID' });
+router.post('/api/shots/:id/restore', (req, res, next) => {
     try {
-        const trash = loadTrash();
-        delete trash[String(id)];
-        saveTrash(trash);
+        const id = parseId(req.params.id);
+        if (!id) return res.status(400).json({ error: 'Invalid shot ID' });
+        shotService.restoreShot(id);
         log(`Shot ${id} restored from trash`);
         res.json({ ok: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { next(err); }
 });
 
-router.post('/api/shots/:id/delete', (req, res) => {
-    const id = parseInt(req.params.id);
-    if (isNaN(id) || id < 1 || id > MAX_SHOT_ID)
-        return res.status(400).json({ error: 'Invalid shot ID' });
+router.post('/api/shots/:id/delete', (req, res, next) => {
     try {
-        let shots = [];
-        if (fs.existsSync(DATA_FILE)) shots = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-        const before = shots.length;
-        shots = shots.filter(s => s.id !== id);
-        if (shots.length === before) return res.status(404).json({ error: 'Shot not found' });
-        writeFileSafe(DATA_FILE, shots);
-        const annotations = loadAnnotations();
-        delete annotations[String(id)];
-        saveAnnotations(annotations);
-        const blocklist = loadBlocklist();
-        if (!blocklist.includes(id)) { blocklist.push(id); saveBlocklist(blocklist); }
+        const id = parseId(req.params.id);
+        if (!id) return res.status(400).json({ error: 'Invalid shot ID' });
+        const shot = shotService.getById(id);
+        if (!shot) return res.status(404).json({ error: 'Shot not found' });
+        shotService.permanentDelete(id);
+        const bl = shotService.getBlocklist();
+        if (!bl.includes(id)) shotService.saveBlocklist([...bl, id]);
         log(`Shot ${id} deleted (added to blocklist)`);
         res.json({ ok: true });
-    } catch (err) {
-        log(`Delete error: ${err.message}`, true);
-        res.status(500).json({ error: 'Failed to delete' });
-    }
+    } catch (err) { next(err); }
 });
 
 module.exports = router;

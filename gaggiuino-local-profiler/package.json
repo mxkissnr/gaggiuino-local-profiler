@@ -4,15 +4,24 @@
   "main": "server.js",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "axios": "1.16.1",
+    "better-sqlite3": "12.11.1",
     "cheerio": "1.2.0",
     "express": "5.2.1",
-    "js-yaml": "4.1.1"
+    "js-yaml": "4.1.1",
+    "zod": "3.25.64"
   },
   "devDependencies": {
-    "vite": "6.4.2"
+    "vite": "6.4.2",
+    "vitest": "3.2.4"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true,
+    "esbuild@0.25.12": true
   }
 }
