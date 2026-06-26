@@ -6,6 +6,11 @@
 ### Changed (Architecture)
 - **Frontend module split** — `public-src/views/shots.js` split into `utils.js`, `grind.js`, `annotation.js`, `charts.js`, `index.js` with a barrel re-export for tree-shaking and cleaner ownership boundaries. Closes #191
 
+## [1.89.1] – 2026-06-26
+
+### Fixed
+- Docker build failure on Alpine: `better-sqlite3` native addon now compiles correctly (added `python3 make g++` as virtual build packages, removed after install to keep image lean)
+
 ## [1.89.0] – 2026-06-26
 
 ### Changed (Architecture)
