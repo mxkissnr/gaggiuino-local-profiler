@@ -3,26 +3,21 @@ const fs       = require('fs');
 const path     = require('path');
 const crypto   = require('crypto');
 
-const { GLP_VERSION, DEFAULT_PORT, DATA_DIR, DATA_FILE, ANNOTATIONS_FILE,
-        LIBRARY_FILE, TOKEN_FILE, HA_INGRESS_PATH } = require('./lib/constants');
+const { GLP_VERSION, DEFAULT_PORT, DATA_DIR, TOKEN_FILE, HA_INGRESS_PATH } = require('./lib/constants');
 const { log, writeFileSafe }                         = require('./lib/helpers');
 const state                                          = require('./lib/state');
-const { purgeExpiredTrash }                          = require('./lib/data');
+const { getDb }                                      = require('./lib/db');
+const shotService                                    = require('./lib/services/ShotService');
+const { errorHandler }                               = require('./lib/middleware/error');
 const { loadPreheatState, startPreheatWatcher }                              = require('./lib/preheat');
 const { syncShots, scheduleNextSync }                                        = require('./lib/sync');
 const { fetchMachineVersion, checkAndApplyMachinePower, backgroundHaCheck } = require('./lib/poll');
 
-// ── Init data dir & default files ─────────────────────────────────────────
+// ── Init data dir & SQLite DB ────────────────────────────────────────────
 try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    if (!fs.existsSync(DATA_FILE)) {
-        writeFileSafe(DATA_FILE, []);
-        log(`Database initialized: ${DATA_FILE}`);
-    } else {
-        log(`Database loaded: ${DATA_FILE}`);
-    }
-    if (!fs.existsSync(ANNOTATIONS_FILE)) writeFileSafe(ANNOTATIONS_FILE, {});
-    if (!fs.existsSync(LIBRARY_FILE))     writeFileSafe(LIBRARY_FILE, { beans: [], grinders: [] });
+    getDb(); // initialises schema + migrates JSON files on first run
+    log('Database ready');
 } catch (err) {
     log(`Init error: ${err.message}`, true);
 }
@@ -112,6 +107,9 @@ app.use(require('./routes/system'));
 app.use(require('./routes/backup'));
 app.use(require('./routes/import'));
 
+// ── Centralized error handling ────────────────────────────────────────────
+app.use(errorHandler);
+
 // ── Static files ──────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public'), {
     setHeaders(res, filePath) {
@@ -136,8 +134,8 @@ app.listen(PORT, () => {
     log(`HA integration: ${require('./lib/constants').HA_TOKEN ? 'active (auto-sync via latest_shot_id)' : 'unavailable (no SUPERVISOR_TOKEN)'}`);
     setInterval(backgroundHaCheck, 30000);
     startPreheatWatcher();
-    purgeExpiredTrash();
-    setInterval(purgeExpiredTrash, 24 * 60 * 60 * 1000);
+    shotService.purgeExpiredTrash();
+    setInterval(() => shotService.purgeExpiredTrash(), 24 * 60 * 60 * 1000);
     fetchMachineVersion();
     (async () => {
         try { await checkAndApplyMachinePower(); }
