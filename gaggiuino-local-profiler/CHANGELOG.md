@@ -1,3 +1,8 @@
+## [1.88.1] – 2026-06-26
+
+### Fixed
+- Recipe dropdown in annotation panel now matches the visual style of all other input fields (dark background, themed border, Figtree font)
+
 ## [1.88.0] – 2026-06-26
 
 ### Added
