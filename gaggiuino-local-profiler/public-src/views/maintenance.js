@@ -33,13 +33,13 @@ export function _buildMaintCard(task, d, title, icon) {
   const threshHtml = `<div class="maint-thresholds">
     <div class="maint-mode-toggle">
       <button class="maint-mode-btn${mode === 'shots' ? ' active' : ''}"
-          onclick="setMaintMode('${task}','shots')">${t('maint_by_shots')}</button>
+          data-action="set-maint-mode" data-task="${task}" data-mode="shots">${t('maint_by_shots')}</button>
       <button class="maint-mode-btn${mode === 'days' ? ' active' : ''}"
-          onclick="setMaintMode('${task}','days')">${t('maint_by_days')}</button>
+          data-action="set-maint-mode" data-task="${task}" data-mode="days">${t('maint_by_days')}</button>
     </div>
     <label class="maint-threshold-field">
       <input type="number" min="1" max="9999" value="${val}"
-          onchange="saveMaintThreshold('${task}','${mode === 'shots' ? 'threshold_shots' : 'threshold_days'}',this.value)">
+          data-action="save-maint-threshold" data-task="${task}" data-field="${mode === 'shots' ? 'threshold_shots' : 'threshold_days'}">
     </label>
   </div>`;
   const card = document.createElement('div');
@@ -57,7 +57,7 @@ export function _buildMaintCard(task, d, title, icon) {
       <div class="maint-bar-fill ${d.status}" style="width:${Math.round(d.pct * 100)}%"></div>
     </div>
     ${threshHtml}
-    <button class="maint-done-btn" onclick="markMaintDone('${task}')">✓ ${t('maint_done_btn')}</button>
+    <button class="maint-done-btn" data-action="mark-maint-done" data-task="${task}">✓ ${t('maint_done_btn')}</button>
   `;
   return card;
 }
@@ -168,7 +168,7 @@ export function renderMaintLog(entries) {
         ${metaArr.length ? `<div class="maint-log-meta">${metaArr.join(' · ')}</div>` : ''}
         ${e.notes ? `<div class="maint-log-notes">${_logEsc(e.notes)}</div>` : ''}
       </div>
-      <button class="maint-log-del-btn" onclick="deleteMaintLogEntry(${e.id})" title="${t('maint_log_confirm_delete')}">🗑</button>
+      <button class="maint-log-del-btn" data-action="delete-maint-log" data-id="${e.id}" title="${t('maint_log_confirm_delete')}">🗑</button>
     </div>`;
   }
   el.innerHTML = html + '</div>';

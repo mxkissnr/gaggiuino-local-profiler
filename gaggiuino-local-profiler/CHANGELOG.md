@@ -1,3 +1,8 @@
+## [1.87.2] – 2026-06-26
+
+### Security
+- **M1:** Removed all `onclick`/`oninput`/`onchange` inline event handlers from the frontend — replaced with `addEventListener` wiring and `data-action` event delegation; `'unsafe-inline'` removed from `script-src` in the Content-Security-Policy header (Closes #171)
+
 ## [1.87.1] – 2026-06-25
 
 ### Security

@@ -88,10 +88,10 @@ export function renderBeanList() {
           <div class="lib-bag-row${i === 0 ? ' active' : ''}">
             <span>${bg.roastDate || '–'}</span>
             <span>${bg.stock_g ? bg.stock_g + ' g' : '–'}</span>
-            <button class="lib-bag-del" onclick="deleteBag(${b.id},${bg.id})" title="${t('lib_bag_delete')}">✕</button>
+            <button class="lib-bag-del" data-action="delete-bag" data-bean-id="${b.id}" data-bag-id="${bg.id}" title="${t('lib_bag_delete')}">✕</button>
           </div>`).join('')}
       </div>
-      <button class="lib-btn-sm lib-bag-history-btn" onclick="toggleBagHistory(${b.id})" id="bagHistoryBtn${b.id}">▸ ${t('lib_bag_history')}</button>` : '';
+      <button class="lib-btn-sm lib-bag-history-btn" data-action="toggle-bag-history" data-id="${b.id}" id="bagHistoryBtn${b.id}">▸ ${t('lib_bag_history')}</button>` : '';
 
     return `<div class="lib-item">
       <div class="lib-item-info">
@@ -102,10 +102,10 @@ export function renderBeanList() {
         ${b.source ? `<div class="lib-item-source">${t('lib_imported_from', b.source, b.importedAt || '')}</div>` : ''}
       </div>
       <div class="lib-item-actions">
-        <button class="lib-btn-sm" onclick="openNewBagForm(${b.id})" title="${t('lib_new_bag')}">${t('lib_new_bag')}</button>
-        <button class="lib-btn-sm" onclick="toggleBeanQR(${b.id})" title="${t('bean_qr_label')}">QR</button>
-        <button class="lib-btn-sm lib-btn-icon" onclick="editBean(${b.id})" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm del lib-btn-icon" onclick="deleteBean(${b.id})" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
+        <button class="lib-btn-sm" data-action="open-new-bag" data-id="${b.id}" title="${t('lib_new_bag')}">${t('lib_new_bag')}</button>
+        <button class="lib-btn-sm" data-action="toggle-bean-qr" data-id="${b.id}" title="${t('bean_qr_label')}">QR</button>
+        <button class="lib-btn-sm lib-btn-icon" data-action="edit-bean" data-id="${b.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-bean" data-id="${b.id}" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
       <div id="newBagForm${b.id}" class="lib-new-bag-form" style="display:none">
         <div class="lib-new-bag-fields">
@@ -113,8 +113,8 @@ export function renderBeanList() {
           <input type="number" class="lib-new-bag-input" id="newBagStock${b.id}" placeholder="${t('lib_bag_stock')}" min="0" step="1">
         </div>
         <div class="lib-form-actions">
-          <button class="lib-btn-sm" onclick="closeNewBagForm(${b.id})">${t('lib_cancel')}</button>
-          <button class="lib-save-btn" onclick="saveNewBag(${b.id})">${t('lib_new_bag_save')}</button>
+          <button class="lib-btn-sm" data-action="close-new-bag" data-id="${b.id}">${t('lib_cancel')}</button>
+          <button class="lib-save-btn" data-action="save-new-bag" data-id="${b.id}">${t('lib_new_bag_save')}</button>
         </div>
       </div>
       <div class="bean-qr-wrap" id="beanQR${b.id}" style="display:none">
@@ -202,8 +202,8 @@ export function renderGrinderList() {
         ${g.notes ? `<div class="lib-item-sub">${esc(g.notes)}</div>` : ''}
       </div>
       <div class="lib-item-actions">
-        <button class="lib-btn-sm lib-btn-icon" onclick="editGrinder(${g.id})" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm del lib-btn-icon" onclick="deleteGrinder(${g.id})" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
+        <button class="lib-btn-sm lib-btn-icon" data-action="edit-grinder" data-id="${g.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder" data-id="${g.id}" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
     </div>`).join('');
 }
@@ -503,8 +503,8 @@ export function renderRecipeList() {
         ${r.sourceUrl ? `<div class="lib-item-source"><a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">🔗 Quelle</a></div>` : ''}
       </div>
       <div class="lib-item-actions">
-        <button class="lib-btn-sm lib-btn-icon" onclick="editRecipe(${r.id})" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm del lib-btn-icon" onclick="deleteRecipe(${r.id})" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
+        <button class="lib-btn-sm lib-btn-icon" data-action="edit-recipe" data-id="${r.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-recipe" data-id="${r.id}" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
     </div>`;
   }).join('');
@@ -521,7 +521,7 @@ function _stepRowHtml(i, text = '', dur = '') {
     <span class="lib-step-num">${i + 1}</span>
     <input class="lib-step-text" placeholder="${t('lib_recipe_step_ph')}" value="${esc(text)}">
     <input class="lib-step-dur" type="number" min="0" step="1" placeholder="${t('lib_recipe_step_dur')}" value="${dur ?? ''}">
-    <button class="lib-btn-sm del lib-btn-icon" onclick="removeRecipeStep(${i})">${ICON_TRASH}</button>
+    <button class="lib-btn-sm del lib-btn-icon" data-action="remove-recipe-step" data-idx="${i}">${ICON_TRASH}</button>
   </div>`;
 }
 
@@ -539,7 +539,9 @@ export function removeRecipeStep(i) {
   document.querySelectorAll('#recipeStepsList .lib-step-row').forEach((row, idx) => {
     row.id = `recipeStep${idx}`;
     row.querySelector('.lib-step-num').textContent = idx + 1;
-    row.querySelector('.lib-btn-sm.del').setAttribute('onclick', `removeRecipeStep(${idx})`);
+    const delBtn = row.querySelector('.lib-btn-sm.del');
+    delBtn.dataset.action = 'remove-recipe-step';
+    delBtn.dataset.idx = String(idx);
   });
 }
 
@@ -640,7 +642,7 @@ export function renderMilkList() {
       <div class="lib-milk-top">
         <span style="font-size:1.3rem">${esc(m.emoji || '🥛')}</span>
         <span class="lib-milk-name">${esc(m.name)}</span>
-        <button class="lib-milk-del" onclick="deleteMilk(${m.id})" title="${t('lib_milk_delete')}">✕</button>
+        <button class="lib-milk-del" data-action="delete-milk" data-id="${m.id}" title="${t('lib_milk_delete')}">✕</button>
       </div>
       <div class="lib-milk-stock-bar-wrap">
         <div class="lib-milk-stock-bar ${cls}" style="width:${pct}%"></div>
@@ -651,7 +653,7 @@ export function renderMilkList() {
       </div>
       <div class="lib-milk-restock-row">
         <input class="lib-milk-restock-input" type="number" id="milkRestock_${m.id}" placeholder="ml" min="0" step="50">
-        <button class="lib-btn-sm" onclick="restockMilk(${m.id})">${t('lib_milk_restock')}</button>
+        <button class="lib-btn-sm" data-action="restock-milk" data-id="${m.id}">${t('lib_milk_restock')}</button>
       </div>
     </div>`;
   }).join('');

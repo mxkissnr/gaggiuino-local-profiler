@@ -281,7 +281,7 @@ export function renderOrderCard(o, ctx) {
         <button class="order-hist-del" data-order-delete="${esc(o.id)}" title="${t('orders_delete_entry')}"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
       </span>
     </div>
-    <div class="order-customer">${t('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? ` · <span class="order-decline-tag">${esc(o.declineReason)}</span>` : ''}${o.shotId != null ? ` <span class="order-shot-link" onclick="goToShot(${o.shotId})">Shot #${o.shotId}</span>` : ''}</div>
+    <div class="order-customer">${t('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? ` · <span class="order-decline-tag">${esc(o.declineReason)}</span>` : ''}${o.shotId != null ? ` <span class="order-shot-link" data-action="goto-shot" data-id="${o.shotId}">Shot #${o.shotId}</span>` : ''}</div>
   </div>`;
 }
 
@@ -498,7 +498,7 @@ export async function loadNotifyMappingView() {
       <p class="orders-notify-hint">${t('orders_broadcast_desc')}</p>
       <div class="orders-broadcast-list" id="ordersBroadcastList">${broadcastRows}</div>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersBroadcastSaveBtn" onclick="saveBroadcastRecipients()">${t('orders_broadcast_save')}</button>
+        <button class="orders-menu-save-btn" id="ordersBroadcastSaveBtn">${t('orders_broadcast_save')}</button>
       </div>
     </div>`;
 
@@ -512,7 +512,7 @@ export async function loadNotifyMappingView() {
       <p class="orders-notify-hint">${t('orders_barista_desc')}</p>
       <select class="orders-notify-select" id="ordersBaristaSelect">${baristaOptions}</select>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersBaristaSaveBtn" onclick="saveBaristaNotify()">${t('orders_barista_save')}</button>
+        <button class="orders-menu-save-btn" id="ordersBaristaSaveBtn">${t('orders_barista_save')}</button>
       </div>
     </div>`;
 
@@ -534,11 +534,15 @@ export async function loadNotifyMappingView() {
           </div>`).join('')}
       </div>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersNotifySaveBtn" onclick="saveNotifyMapping()">${t('orders_notify_save')}</button>
+        <button class="orders-menu-save-btn" id="ordersNotifySaveBtn">${t('orders_notify_save')}</button>
       </div>`;
   })() : `<p class="orders-notify-hint">${t('orders_notify_no_customers')}</p>`;
 
   section.innerHTML = broadcastHtml + baristaHtml + perCustomerHtml;
+
+  document.getElementById('ordersBroadcastSaveBtn')?.addEventListener('click', saveBroadcastRecipients);
+  document.getElementById('ordersBaristaSaveBtn')?.addEventListener('click', saveBaristaNotify);
+  document.getElementById('ordersNotifySaveBtn')?.addEventListener('click', saveNotifyMapping);
 
   // Apply saved per-customer mapping values
   section.querySelectorAll('[data-uid]').forEach(sel => {

@@ -50,7 +50,7 @@ export function renderDialin() {
       yield_ ? [t('dialin_yield'), yield_] : null,
     ].filter(Boolean).slice(0, 5);
 
-    return `<div class="dialin-card" onclick="goToShot(${s.id})">
+    return `<div class="dialin-card" data-action="goto-shot" data-id="${s.id}">
       <div class="dialin-card-head">
         <div>
           <div class="dialin-profile">${esc(profile)}</div>

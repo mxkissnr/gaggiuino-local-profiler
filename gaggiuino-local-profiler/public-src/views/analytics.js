@@ -141,7 +141,7 @@ export function buildPersonalBests() {
 
   el.innerHTML = `<div class="bests-list">${rows.map(r =>
     `<div class="bests-row"><span class="bests-lbl">${r.lbl}</span><span class="bests-val">${r.val}${
-      r.link ? ` <button class="bests-link" onclick="goToShot(${r.link})">→</button>` : ''}</span></div>`
+      r.link ? ` <button class="bests-link" data-action="goto-shot" data-id="${r.link}">→</button>` : ''}</span></div>`
   ).join('')}</div>`;
 }
 
@@ -424,7 +424,7 @@ export function _renderCalendar() {
       const title    = day.count === 0 ? dateStr
                      : `${dateStr}: ${day.count} Shot${day.count > 1 ? 's' : ''}${day.avgSc !== null ? ` · Ø ${day.avgSc}` : ''}`;
       const clickable = !isFuture && day.count > 0 && day.lastId !== null;
-      html += `<div class="${isFuture ? 'cal-future' : cls(day.count)} cal-day${clickable ? ' cal-day-link' : ''}" style="${cellSz}" title="${title}"${clickable ? ` onclick="goToShot(${day.lastId})"` : ''}></div>`;
+      html += `<div class="${isFuture ? 'cal-future' : cls(day.count)} cal-day${clickable ? ' cal-day-link' : ''}" style="${cellSz}" title="${title}"${clickable ? ` data-action="goto-shot" data-id="${day.lastId}"` : ''}></div>`;
     }
     html += `</div>`;
   }

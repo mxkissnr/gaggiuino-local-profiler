@@ -362,6 +362,132 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.accent-swatch').forEach(b =>
     b.classList.toggle('active', b.dataset.accent === _savedAccent));
 
+  // ── Static element wiring ──────────────────────────────────────────────
+  document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
+  document.getElementById('collapseBtn').addEventListener('click', toggleDesktopSidebar);
+  document.getElementById('expandSidebarBtn').addEventListener('click', toggleDesktopSidebar);
+  document.getElementById('mobileMenuBtn').addEventListener('click', openSidebar);
+  document.getElementById('sidebar-backdrop').addEventListener('click', closeSidebar);
+  document.getElementById('shotSearch').addEventListener('input', e => filterShots(e.target.value));
+  document.getElementById('sortNewest').addEventListener('click', () => setSortMode('newest'));
+  document.getElementById('sortScore').addEventListener('click', () => setSortMode('score'));
+  document.getElementById('sortRating').addEventListener('click', () => setSortMode('rating'));
+  document.getElementById('sortDur').addEventListener('click', () => setSortMode('duration'));
+  document.getElementById('trash-toggle').addEventListener('click', toggleTrash);
+  document.getElementById('powerBtn').addEventListener('click', toggleMachinePower);
+  document.getElementById('syncBtn').addEventListener('click', triggerSync);
+  document.getElementById('btnLive').addEventListener('click', () => switchMode('live'));
+  document.getElementById('btnShots').addEventListener('click', () => switchMode('shots'));
+  document.getElementById('btnAnalytics').addEventListener('click', () => switchMode('analytics'));
+  document.getElementById('btnDialin').addEventListener('click', () => switchMode('dialin'));
+  document.getElementById('btnLibrary').addEventListener('click', () => switchMode('library'));
+  document.getElementById('btnMaintenance').addEventListener('click', () => switchMode('maintenance'));
+  document.getElementById('btnOrders').addEventListener('click', () => switchMode('orders'));
+  document.getElementById('btnSettings').addEventListener('click', () => switchMode('settings'));
+  document.getElementById('exportAllCsvBtn').addEventListener('click', exportCSV);
+  document.getElementById('exportShotBtn').addEventListener('click', exportShot);
+  document.getElementById('exportProfileBtn').addEventListener('click', exportProfile);
+  document.getElementById('tabZeit').addEventListener('click', () => switchChartTab('zeit'));
+  document.getElementById('tabPQ').addEventListener('click', () => switchChartTab('pq'));
+  document.getElementById('expandChartBtn').addEventListener('click', openChartFullscreen);
+  document.getElementById('fsTabZeit').addEventListener('click', () => switchFsTab('zeit'));
+  document.getElementById('fsTabPQ').addEventListener('click', () => switchFsTab('pq'));
+  document.getElementById('closeFullscreenBtn').addEventListener('click', closeChartFullscreen);
+  document.getElementById('quickCloneBtn').addEventListener('click', quickClone);
+  document.getElementById('saveAnnotationBtn').addEventListener('click', saveAnnotation);
+  ['annCoffee','annGrinder','annGrindSetting','annDose','annTds','annNotes'].forEach(id => {
+    document.getElementById(id).addEventListener('input', scheduleAutoSave);
+  });
+  document.getElementById('openMaintLogBtn').addEventListener('click', openMaintLogForm);
+  document.getElementById('submitMaintLogBtn').addEventListener('click', submitMaintLogEntry);
+  document.getElementById('cancelMaintLogBtn').addEventListener('click', closeMaintLogForm);
+  document.getElementById('ordersEnabledToggle').addEventListener('change', e => setOrdersEnabled(e.target.checked));
+  document.getElementById('ordersMenuTitle').addEventListener('click', toggleOrdersMenu);
+  document.getElementById('ordersStatsTitle').addEventListener('click', toggleOrdersStats);
+  document.getElementById('ordersNotifyTitle').addEventListener('click', toggleOrdersNotify);
+  document.getElementById('addOrderMenuItemBtn').addEventListener('click', addOrderMenuItem);
+  document.getElementById('libTabBeans').addEventListener('click', () => switchLibTab('beans'));
+  document.getElementById('libTabGrinders').addEventListener('click', () => switchLibTab('grinders'));
+  document.getElementById('libTabRecipes').addEventListener('click', () => switchLibTab('recipes'));
+  document.getElementById('libTabMilk').addEventListener('click', () => switchLibTab('milk'));
+  document.getElementById('closeBeanFormBtn').addEventListener('click', closeBeanForm);
+  document.getElementById('saveBeanBtn').addEventListener('click', saveBean);
+  document.getElementById('beanAddTrigger').addEventListener('click', openBeanForm);
+  document.getElementById('openScanModalBtn').addEventListener('click', openScanModal);
+  document.getElementById('toggleUrlImportBtn').addEventListener('click', toggleUrlImport);
+  document.getElementById('urlImportInput').addEventListener('keydown', e => { if (e.key === 'Enter') importFromUrl(); });
+  document.getElementById('importFromUrlBtn').addEventListener('click', importFromUrl);
+  document.getElementById('closeGrinderFormBtn').addEventListener('click', closeGrinderForm);
+  document.getElementById('saveGrinderBtn').addEventListener('click', saveGrinder);
+  document.getElementById('grinderAddTrigger').addEventListener('click', openGrinderForm);
+  document.getElementById('addRecipeStepBtn').addEventListener('click', addRecipeStep);
+  document.getElementById('closeRecipeFormBtn').addEventListener('click', closeRecipeForm);
+  document.getElementById('saveRecipeBtn').addEventListener('click', saveRecipe);
+  document.getElementById('recipeAddTrigger').addEventListener('click', openRecipeForm);
+  document.getElementById('closeMilkFormBtn').addEventListener('click', closeMilkForm);
+  document.getElementById('saveMilkBtn').addEventListener('click', saveMilk);
+  document.getElementById('milkAddTrigger').addEventListener('click', openMilkForm);
+  document.getElementById('refShotSelect').addEventListener('change', e => onRefShotChange(e.target.value));
+  document.getElementById('refClearBtn').addEventListener('click', clearReferenceShot);
+  document.getElementById('trendBtn30').addEventListener('click', () => setTrendWindow(30));
+  document.getElementById('trendBtn90').addEventListener('click', () => setTrendWindow(90));
+  document.getElementById('trendBtnAll').addEventListener('click', () => setTrendWindow(0));
+  document.getElementById('dialinCount').addEventListener('change', renderDialin);
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', () => setTheme(btn.dataset.themeVal));
+  });
+  document.querySelectorAll('.accent-swatch').forEach(btn => {
+    btn.addEventListener('click', () => setAccentTheme(btn.dataset.accent));
+  });
+  document.querySelectorAll('.lang-option-btn').forEach(btn => {
+    btn.addEventListener('click', () => setLang(btn.dataset.lang));
+  });
+  document.querySelector('input[type="file"][accept=".json"]').addEventListener('change', e => restoreFromFile(e.target));
+  document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
+
+  // ── Global click delegation for dynamic content ────────────────────────
+  document.body.addEventListener('click', e => {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    const action = el.dataset.action;
+    const numId = () => Number(el.dataset.id);
+    const strId = () => el.dataset.id;
+    switch (action) {
+      case 'open-new-bag':       openNewBagForm(numId()); break;
+      case 'close-new-bag':      closeNewBagForm(numId()); break;
+      case 'save-new-bag':       saveNewBag(numId()); break;
+      case 'toggle-bag-history': toggleBagHistory(numId()); break;
+      case 'delete-bag':         deleteBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
+      case 'edit-bean':          editBean(numId()); break;
+      case 'delete-bean':        deleteBean(numId()); break;
+      case 'edit-grinder':       editGrinder(numId()); break;
+      case 'delete-grinder':     deleteGrinder(numId()); break;
+      case 'edit-recipe':        editRecipe(numId()); break;
+      case 'delete-recipe':      deleteRecipe(numId()); break;
+      case 'remove-recipe-step': removeRecipeStep(Number(el.dataset.idx)); break;
+      case 'delete-milk':        deleteMilk(numId()); break;
+      case 'restock-milk':       restockMilk(numId()); break;
+      case 'restore-shot':       restoreShot(numId()); break;
+      case 'perm-delete-shot':   permanentDeleteShot(numId()); break;
+      case 'select-drink':       selectDrinkType(strId()); break;
+      case 'select-milk':        selectMilkType(strId()); break;
+      case 'reload-data':        loadData(); break;
+      case 'set-maint-mode':     setMaintMode(el.dataset.task, el.dataset.mode); break;
+      case 'mark-maint-done':    markMaintDone(el.dataset.task); break;
+      case 'delete-maint-log':   deleteMaintLogEntry(numId()); break;
+      case 'goto-shot':          goToShot(numId()); break;
+    }
+  });
+
+  document.body.addEventListener('change', e => {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    if (el.dataset.action === 'save-maint-threshold') {
+      saveMaintThreshold(el.dataset.task, el.dataset.field, el.value);
+    }
+  });
+
   // ── Init sequence ──────────────────────────────────────────────────────
   applyTranslations();
 
