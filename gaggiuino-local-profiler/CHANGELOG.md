@@ -1,3 +1,13 @@
+## [1.89.0] – 2026-06-26
+
+### Changed (Architecture)
+- **SQLite persistence** — 15 flat JSON files replaced by `better-sqlite3` (WAL mode, indexed queries, atomic writes). Existing data migrates automatically on first start.
+- **Repository layer** — `lib/repositories/` abstracts all storage: `ShotRepository`, `LibraryRepository`, `OrderRepository`
+- **Service layer** — `lib/services/` holds all business logic with no direct I/O: `ShotService`, `LibraryService`, `OrderService`
+- **Zod validation** — schemas at all API boundaries (`lib/validation/schemas.js`), generic middleware in `lib/middleware/validate.js`
+- **Centralized error handling** — `lib/middleware/error.js`, consistent `{ error }` JSON responses
+- **Vitest** — 11 unit tests for score calculation and Zod schemas (`npm test`)
+
 ## [1.88.1] – 2026-06-26
 
 ### Fixed
