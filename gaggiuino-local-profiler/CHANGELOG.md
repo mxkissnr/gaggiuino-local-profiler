@@ -1,3 +1,8 @@
+## [1.90.1] – 2026-06-26
+
+### Fixed
+- **Mobile UX** — larger touch targets on annotation panel: stars padded to ~44px tap area, drink/milk pills min-height 40px, Save button full-width and stacked on mobile (≤768px). Chart height reduced to 240px on small phones (≤480px) to give annotation panel more visible room. Closes #194
+
 ## [1.90.0] – 2026-06-26
 
 ### Added
