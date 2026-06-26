@@ -1,9 +1,13 @@
-// Thin compatibility layer — machine config helpers only.
-// All data access now lives in lib/repositories/ and lib/services/.
+// Compatibility layer — machine config helpers + shims for routes not yet
+// updated to import directly from lib/services/ or lib/repositories/.
 
 const fs = require('fs');
 const { OPTIONS_FILE, ALLOWED_URL_SCHEMES } = require('./constants');
 const { log } = require('./helpers');
+const { getDb } = require('./db');
+const orderRepo  = require('./repositories/OrderRepository');
+const shotRepo   = require('./repositories/ShotRepository');
+const libService = require('./services/LibraryService');
 
 function loadOptions() {
     try {
@@ -42,6 +46,42 @@ function getSyncIntervalMs(opts) {
 
 function isOrdersEnabled() { return !!loadOptions().enable_orders; }
 
+// ── Order shims ───────────────────────────────────────────────────────────────
+function loadOrders()          { return orderRepo.findActive(); }
+function saveOrders(orders) {
+    const db = getDb();
+    db.transaction(() => {
+        db.prepare('DELETE FROM orders').run();
+        const ins = db.prepare('INSERT INTO orders (id, data) VALUES (?,?)');
+        for (const o of orders) ins.run(o.id, JSON.stringify(o));
+    })();
+}
+function loadMenu()            { return orderRepo.getMenu(); }
+function saveMenu(m)           { orderRepo.saveMenu(m); }
+function loadOrdersSettings()  { return orderRepo.getSettings(); }
+function saveOrdersSettings(s) { orderRepo.saveSettings(s); }
+function loadNotifyMapping()   { return orderRepo.getNotifyMapping(); }
+function saveNotifyMapping(m)  { orderRepo.saveNotifyMapping(m); }
+
+// ── Library shims ─────────────────────────────────────────────────────────────
+function loadLibrary()         { return libService.getLibrary(); }
+function saveLibrary(lib)      { libService.saveLibrary(lib); }
+
+// ── Shot / annotation shims ───────────────────────────────────────────────────
+function loadAnnotations() {
+    const db   = getDb();
+    const rows = db.prepare('SELECT shot_id, data FROM annotations').all();
+    const out  = {};
+    for (const r of rows) out[String(r.shot_id)] = JSON.parse(r.data);
+    return out;
+}
+function loadTrash() { return shotRepo.getTrash(); }
+
 module.exports = {
     loadOptions, getMachineUrl, getMachineBaseUrl, getSyncIntervalMs, isOrdersEnabled,
+    loadOrders, saveOrders, loadMenu, saveMenu,
+    loadOrdersSettings, saveOrdersSettings,
+    loadNotifyMapping, saveNotifyMapping,
+    loadLibrary, saveLibrary,
+    loadAnnotations, loadTrash,
 };

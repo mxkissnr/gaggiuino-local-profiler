@@ -1,3 +1,8 @@
+## [1.90.2] – 2026-06-26
+
+### Fixed
+- **Critical: all data appeared missing** — after the Clean Architecture refactor (v1.89.0), `lib/data.js` was stripped to machine-config helpers only, but `routes/orders.js`, `routes/library.js`, `routes/system.js` and `lib/preheat.js` still imported `loadOrders`, `loadLibrary`, `loadMenu`, `loadOrdersSettings` etc. from it. Every one of those calls threw `TypeError: X is not a function`, making orders, library and menu endpoints return errors. Data was always safe in SQLite — only the function exports were missing. Closes #196
+
 ## [1.90.1] – 2026-06-26
 
 ### Fixed
