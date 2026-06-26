@@ -80,19 +80,17 @@ Either click the Quick Install button above, or manually:
    ```
 4. Search for **Gaggiuino Local Profiler** and click **Install**
 
-### Step 2 — Add the Gaggiuino integration (optional, for Auto-Sync)
+### Step 2 — Install the GLP Integration (recommended)
 
-The [Gaggiuino Home Assistant Integration](https://github.com/Homeassistant-Gaggiuino/Gaggiuino-HomeAssistant) enables automatic shot sync via `sensor.gaggiuino_latest_shot_id`.
+The [GLP HA Integration](https://github.com/mxkissnr/glp-integration) exposes all app data as native HA sensors — usable in automations, energy dashboards and Lovelace cards. Required for the GLP Shot Card and GLP Order Card.
 
 **Install via HACS:**
 
-<a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=Homeassistant-Gaggiuino&repository=Gaggiuino-HomeAssistant&category=integration">
-  <img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Add Integration via HACS" height="40"/>
+<a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=mxkissnr&repository=glp-integration&category=integration">
+  <img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Add GLP Integration via HACS" height="40"/>
 </a>
 
-Or manually: HACS → Integrations → ⋮ → Custom repositories → add the URL above.
-
-After installing, go to **Settings → Devices & Services → Add Integration** and search for **Gaggiuino**.
+After installing, go to **Settings → Devices & Services → Add Integration** and search for **Gaggiuino Local Profiler**.
 
 ### Step 3 — Configure the app
 
@@ -146,7 +144,7 @@ aspect_ratio: "16:9"
 
 | Component | Current | Requires |
 |---|---|---|
-| **GLP App** | v1.84.4 | — |
+| **GLP App** | v1.90.4 | — |
 | **GLP Integration** ([glp-integration](https://github.com/mxkissnr/glp-integration)) | v1.14.1 | App v1.82.7+ |
 | **GLP Lovelace Card** ([glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)) | v2.12.3 | Integration v1.9.0+ |
 | **GLP Order Card** ([glp-order-card](https://github.com/mxkissnr/glp-order-card)) | v1.10.2 | Integration v1.7.0+ |
@@ -162,8 +160,7 @@ All four components are optional and independently installable — only install 
 ```
 Home Assistant Host
 ├── GLP App  (Node.js / Express, Port 8099)
-│   ├── /data/shots.json          ← Shot data
-│   ├── /data/annotations.json    ← Notes & ratings
+│   ├── /data/glp.db              ← SQLite database (shots, annotations, library, …)
 │   └── Supervisor API            ← HA switch control & sensor polling
 │
 └── Gaggiuino Controller

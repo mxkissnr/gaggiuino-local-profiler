@@ -19,7 +19,7 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces
   ┌──────────────────────────────────┐
   │         GLP App               │  ← this app
   │  Node.js server, port 8099       │
-  │  stores shots in /data/shots.json│
+  │  stores data in /data/glp.db     │
   │  REST API + web UI               │
   └────────┬─────────────────────────┘
            │                    ▲
@@ -45,7 +45,7 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces
 
 ### GLP App (this repo)
 
-The central piece. It syncs shot history from the Gaggiuino machine, stores it locally in `/data/shots.json`, and serves:
+The central piece. It syncs shot history from the Gaggiuino machine, stores it in a local SQLite database (`/data/glp.db`), and serves:
 - A web UI accessible via HA Ingress (the ☕ panel icon in the HA sidebar)
 - A REST API on port 8099 consumed by the integration and the Lovelace cards
 
@@ -81,7 +81,7 @@ All components authenticate automatically via a shared token:
 
 No manual configuration is required for the HA Ingress path. To rotate the token, delete `/data/api_token.txt` and restart the app.
 
-All persistent data is written atomically (write to `.tmp`, then `fs.renameSync`) so a crash during a write cannot produce a half-written JSON file.
+All persistent data is stored in SQLite (`/data/glp.db`) with WAL journal mode enabled — writes are crash-safe by default, with no half-written state possible.
 
 ### API spec
 
