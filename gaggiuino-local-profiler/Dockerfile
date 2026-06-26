@@ -36,7 +36,11 @@ RUN set -eux; \
       arm)    NPM_ARCH=arm;   CC_X=arm-linux-gnueabihf-gcc;    CXX_X=arm-linux-gnueabihf-g++   ;; \
       *)      NPM_ARCH=x64;   CC_X=gcc;                        CXX_X=g++                       ;; \
     esac; \
-    CC=$CC_X CXX=$CXX_X npm_config_target_arch=$NPM_ARCH npm ci --omit=dev
+    CC=$CC_X CXX=$CXX_X npm_config_target_arch=$NPM_ARCH npm ci --omit=dev; \
+    case "${TARGETARCH}" in \
+      arm64) npm install --no-save --ignore-scripts @napi-rs/canvas-linux-arm64-gnu    ;; \
+      arm)   npm install --no-save --ignore-scripts @napi-rs/canvas-linux-arm-gnueabihf ;; \
+    esac
 
 # Runtime stage — only copies pre-built artifacts; no compilation at all
 FROM node:20-slim

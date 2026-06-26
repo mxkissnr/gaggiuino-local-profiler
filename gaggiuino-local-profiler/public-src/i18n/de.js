@@ -222,4 +222,6 @@ export default {
     update_success:'Update gestartet – GLP startet neu',
     update_error:'Fehler – bitte manuell aktualisieren',
     update_changelog:'Changelog',
+    share_card:'Teilen',
+    share_card_title:'Mein Espresso-Shot',
 };

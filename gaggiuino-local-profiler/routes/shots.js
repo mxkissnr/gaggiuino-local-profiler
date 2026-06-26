@@ -6,6 +6,7 @@ const { validate }             = require('../lib/middleware/validate');
 const { annotationSchema }     = require('../lib/validation/schemas');
 const { MAX_SHOT_ID }          = require('../lib/constants');
 const { log }                  = require('../lib/helpers');
+const { generateShareCard, isAvailable: cardAvailable } = require('../lib/card');
 
 function parseId(param) {
     const id = parseInt(param, 10);
@@ -37,6 +38,21 @@ router.get('/api/shots/:id', (req, res, next) => {
         const shot = shotService.getById(id);
         if (!shot) return res.json(null);
         res.json({ ...shot, score: shotService.computeScore(shot) });
+    } catch (err) { next(err); }
+});
+
+router.get('/api/shots/:id/card', (req, res, next) => {
+    try {
+        if (!cardAvailable()) return res.status(503).json({ error: 'card module not available' });
+        const id = parseId(req.params.id);
+        if (!id) return res.status(400).json({ error: 'Invalid shot ID' });
+        const shot = shotService.getById(id);
+        if (!shot) return res.status(404).json({ error: 'Shot not found' });
+        const score = shotService.computeScore(shot);
+        const png = generateShareCard(shot, score);
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Content-Disposition', `inline; filename="glp-shot-${id}.png"`);
+        res.send(png);
     } catch (err) { next(err); }
 });
 

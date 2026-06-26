@@ -9,6 +9,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.1",
     "axios": "1.16.1",
     "better-sqlite3": "12.11.1",
     "cheerio": "1.2.0",

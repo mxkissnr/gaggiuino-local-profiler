@@ -1,3 +1,8 @@
+## [1.91.0] – 2026-06-26
+
+### Added
+- **Shot share card** — new `GET /api/shots/:id/card` endpoint renders a 1080×1080 PNG image of the shot: score badge, pressure curve with glow, profile name, bean, dose/yield/ratio/duration and GLP branding. A **Teilen** button in the shot detail toolbar triggers a native share sheet on mobile (Web Share API) or downloads the PNG on desktop. Powered by `@napi-rs/canvas` (pre-built N-API binaries, no system Cairo needed). Closes #204
+
 ## [1.90.4] – 2026-06-26
 
 ### Fixed
