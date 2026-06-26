@@ -1,3 +1,8 @@
+## [1.89.1] – 2026-06-26
+
+### Fixed
+- Docker build failure on Alpine: `better-sqlite3` native addon now compiles correctly (added `python3 make g++` as virtual build packages, removed after install to keep image lean)
+
 ## [1.89.0] – 2026-06-26
 
 ### Changed (Architecture)
