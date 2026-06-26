@@ -48,10 +48,11 @@ router.get('/api/shots/:id/card', (req, res, next) => {
         if (!id) return res.status(400).json({ error: 'Invalid shot ID' });
         const shot = shotService.getById(id);
         if (!shot) return res.status(404).json({ error: 'Shot not found' });
-        const score = shotService.computeScore(shot);
-        const png = generateShareCard(shot, score);
+        const format = req.query.format === 'story' ? 'story' : 'square';
+        const score  = shotService.computeScore(shot);
+        const png    = generateShareCard(shot, score, format);
         res.setHeader('Content-Type', 'image/png');
-        res.setHeader('Content-Disposition', `inline; filename="glp-shot-${id}.png"`);
+        res.setHeader('Content-Disposition', `inline; filename="glp-shot-${id}-${format}.png"`);
         res.send(png);
     } catch (err) { next(err); }
 });

@@ -387,7 +387,21 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('exportAllCsvBtn').addEventListener('click', exportAllCSV);
   document.getElementById('exportShotBtn').addEventListener('click', exportShot);
   document.getElementById('exportProfileBtn').addEventListener('click', exportProfile);
-  document.getElementById('shareCardBtn').addEventListener('click', shareCard);
+  // Share-card format picker: toggle dropdown, pick format on option click
+  document.getElementById('shareCardBtn').addEventListener('click', () => {
+    const menu = document.getElementById('cardFmtMenu');
+    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+  });
+  document.getElementById('cardFmtMenu').addEventListener('click', e => {
+    const opt = e.target.closest('.card-fmt-opt');
+    if (!opt) return;
+    document.getElementById('cardFmtMenu').style.display = 'none';
+    shareCard(opt.dataset.format);
+  });
+  document.addEventListener('click', e => {
+    if (!document.getElementById('cardFmtWrap').contains(e.target))
+      document.getElementById('cardFmtMenu').style.display = 'none';
+  });
   document.getElementById('tabZeit').addEventListener('click', () => switchChartTab('zeit'));
   document.getElementById('tabPQ').addEventListener('click', () => switchChartTab('pq'));
   document.getElementById('expandChartBtn').addEventListener('click', openChartFullscreen);

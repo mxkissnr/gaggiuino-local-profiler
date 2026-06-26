@@ -104,7 +104,13 @@
                     <button class="export-btn" id="exportAllCsvBtn" title="Alle Shots als CSV exportieren">↓ CSV</button>
                     <button class="export-btn" id="exportShotBtn" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
                     <button class="export-btn" id="exportProfileBtn" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
-                    <button class="export-btn" id="shareCardBtn" data-i18n="share_card" title="Shot als PNG-Karte exportieren / teilen">Teilen</button>
+                    <div class="card-fmt-wrap" id="cardFmtWrap">
+                      <button class="export-btn" id="shareCardBtn" data-i18n="share_card" title="Shot als PNG-Karte exportieren / teilen">Teilen</button>
+                      <div class="card-fmt-menu" id="cardFmtMenu">
+                        <button class="card-fmt-opt" data-format="square" data-i18n="card_fmt_square">Quadrat (1:1)</button>
+                        <button class="card-fmt-opt" data-format="story"  data-i18n="card_fmt_story">Story (9:16)</button>
+                      </div>
+                    </div>
                 </div>
             </div>
 

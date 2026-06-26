@@ -1,3 +1,11 @@
+## [1.92.0] – 2026-06-27
+
+### Added
+- **Share card format picker** — the Teilen button now opens a dropdown with two format options: "Quadrat (1:1)" (1080×1080, same as before) and "Story (9:16)" (1080×1920, optimised for Instagram Stories with a taller chart area). The API endpoint accepts `?format=story` or `?format=square`. Closes #208
+
+### Fixed
+- **Phase labels overlapping** — "Preinfusion" / "Extraktion" labels now only render when their respective chart zone is wide enough (> 90 px), preventing overlap on shots with very short preinfusion phases.
+
 ## [1.91.1] – 2026-06-26
 
 ### Fixed

@@ -601,24 +601,25 @@ function _downloadJSON_blob(content, filename, mime) {
 
 // ── Share card ────────────────────────────────────────────────────────────
 
-export async function shareCard() {
+export async function shareCard(format = 'square') {
   const shotId = S.primaryShotId;
   if (!shotId) return;
   try {
-    const r = await apiFetch(`api/shots/${shotId}/card`);
+    const r = await apiFetch(`api/shots/${shotId}/card?format=${encodeURIComponent(format)}`);
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       throw new Error(err.error || r.statusText);
     }
-    const blob = await r.blob();
-    const file = new File([blob], `glp-shot-${shotId}.png`, { type: 'image/png' });
+    const blob     = await r.blob();
+    const filename = `glp-shot-${shotId}-${format}.png`;
+    const file     = new File([blob], filename, { type: 'image/png' });
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({ files: [file], title: t('share_card_title') });
     } else {
       const url = URL.createObjectURL(blob);
       const a   = document.createElement('a');
-      a.href = url;
-      a.download = `glp-shot-${shotId}.png`;
+      a.href     = url;
+      a.download = filename;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }

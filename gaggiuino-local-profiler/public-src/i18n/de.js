@@ -224,4 +224,6 @@ export default {
     update_changelog:'Changelog',
     share_card:'Teilen',
     share_card_title:'Mein Espresso-Shot',
+    card_fmt_square:'Quadrat (1:1)',
+    card_fmt_story:'Story (9:16)',
 };

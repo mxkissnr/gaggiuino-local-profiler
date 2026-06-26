@@ -242,4 +242,6 @@ export default {
     update_changelog:'Changelog',
     share_card:'Compartir',
     share_card_title:'Mi espresso',
+    card_fmt_square:'Cuadrado (1:1)',
+    card_fmt_story:'Historia (9:16)',
 };

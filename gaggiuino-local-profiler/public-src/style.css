@@ -933,6 +933,34 @@
         }
         .export-btn:hover { background: var(--gray-800); color: #fff; }
 
+        /* ── Share-card format picker ── */
+        .card-fmt-wrap { position: relative; display: inline-block; }
+        .card-fmt-menu {
+            position: absolute;
+            top: calc(100% + 4px);
+            right: 0;
+            background: var(--gray-900);
+            border: 1px solid var(--gray-700);
+            border-radius: 6px;
+            min-width: 140px;
+            z-index: 200;
+            overflow: hidden;
+        }
+        .card-fmt-opt {
+            display: block;
+            width: 100%;
+            background: none;
+            border: none;
+            color: var(--gray-300);
+            padding: 9px 14px;
+            text-align: left;
+            font-size: .75rem;
+            font-family: 'Figtree', sans-serif;
+            cursor: pointer;
+            transition: background .15s;
+        }
+        .card-fmt-opt:hover { background: var(--gray-800); color: #fff; }
+
         /* ── Channeling warning ── */
         .channeling-warn {
             display: inline-block;
