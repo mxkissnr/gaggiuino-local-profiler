@@ -431,7 +431,8 @@
             margin-bottom: 4px;
         }
         .annotation-field input,
-        .annotation-field textarea {
+        .annotation-field textarea,
+        .annotation-field select {
             width: 100%;
             background: var(--gray-800);
             border: 1px solid var(--gray-700);
@@ -442,9 +443,12 @@
             padding: 7px 10px;
             outline: none;
             transition: border-color .2s;
+            appearance: none;
+            cursor: pointer;
         }
         .annotation-field input:focus,
-        .annotation-field textarea:focus { border-color: var(--gray-500); }
+        .annotation-field textarea:focus,
+        .annotation-field select:focus { border-color: var(--gray-500); }
         .annotation-field textarea { resize: vertical; min-height: 58px; }
         .annotation-field.full-width { grid-column: 1 / -1; }
         .annotation-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; }
