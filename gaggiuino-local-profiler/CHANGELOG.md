@@ -1,3 +1,10 @@
+## [1.91.1] – 2026-06-26
+
+### Fixed
+- **Share card: text invisible** — `GlobalFonts.loadSystemFonts()` returned 0 on headless Linux (no fontconfig paths registered). Switched to explicit `GlobalFonts.registerFromPath()` for Liberation Sans / DejaVu Sans with multi-path fallback. All text (GLP header, score, profile, metadata, footer) now renders correctly. Closes #205
+- **arm64/armv7 Docker builds failed with EBADPLATFORM** — `npm install @napi-rs/canvas-linux-arm64-gnu` was rejected on the x64 builder because npm validates `cpu` field against the host. Fixed by adding `--force` to bypass the platform check during cross-compilation. Closes #205
+- **Share card redesign** — Cleaner layout matching GLP UI style: score badge with ring glow, Liberation Sans font (bundled via `fonts-liberation` in runtime image), header with shot ID + date, larger chart area, metadata in pill cards. Closes #205
+
 ## [1.91.0] – 2026-06-26
 
 ### Added

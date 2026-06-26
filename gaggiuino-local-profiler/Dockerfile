@@ -38,8 +38,8 @@ RUN set -eux; \
     esac; \
     CC=$CC_X CXX=$CXX_X npm_config_target_arch=$NPM_ARCH npm ci --omit=dev; \
     case "${TARGETARCH}" in \
-      arm64) npm install --no-save --ignore-scripts @napi-rs/canvas-linux-arm64-gnu    ;; \
-      arm)   npm install --no-save --ignore-scripts @napi-rs/canvas-linux-arm-gnueabihf ;; \
+      arm64) npm install --no-save --ignore-scripts --force @napi-rs/canvas-linux-arm64-gnu    ;; \
+      arm)   npm install --no-save --ignore-scripts --force @napi-rs/canvas-linux-arm-gnueabihf ;; \
     esac
 
 # Runtime stage — only copies pre-built artifacts; no compilation at all
@@ -47,7 +47,7 @@ FROM node:20-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends wget \
+RUN apt-get update && apt-get install -y --no-install-recommends wget fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=prod-deps /app/node_modules ./node_modules
