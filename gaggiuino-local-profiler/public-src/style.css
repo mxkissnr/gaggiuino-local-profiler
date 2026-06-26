@@ -1168,6 +1168,13 @@
             #collapseBtn       { margin-right: 0; }
             .mode-btn          { padding: 12px 14px; font-size: .8rem; }
             .score-num         { font-size: 1.5rem; }
+
+            /* Annotation panel — mobile improvements */
+            .annotation-panel  { padding: 14px; margin-top: 16px; }
+            .annotation-actions { flex-direction: column; align-items: stretch; gap: 8px; }
+            .save-btn          { width: 100%; padding: 11px; font-size: .9rem; text-align: center; }
+            .star              { padding: 6px 7px; font-size: 1.7rem; }
+            .drink-pill        { min-height: 40px; padding: 8px 14px; font-size: .85rem; display: flex; align-items: center; }
         }
         @media (max-width: 480px) {
             .live-stats { grid-template-columns: repeat(2, 1fr); }
@@ -1176,6 +1183,11 @@
             #dialin-view, #settings-view, #orders-view { padding: 12px; }
             .maint-card { padding: 14px; }
             .mode-btn { padding: 12px 10px; font-size: .75rem; }
+
+            /* Smaller chart to give annotation panel more room */
+            .chart-container, .live-chart-container { height: 240px; }
+            .annotation-panel  { padding: 12px; }
+            .export-btn        { padding: 5px 8px; font-size: .72rem; }
         }
 
         /* ── Maintenance view ── */
