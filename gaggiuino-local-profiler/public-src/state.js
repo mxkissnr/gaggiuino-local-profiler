@@ -54,3 +54,21 @@ export const S = {
   _ordersDeclineOpen: {},
   _ordersStatsOpen: false,
 };
+
+// ── Reactive pub/sub ──────────────────────────────────────────────────────
+// Lightweight wrapper: setState() mutates S and notifies subscribers for
+// that key. Direct S mutations (S.shots = [...]) continue to work as before
+// and don't notify — use setState() for reactive updates going forward.
+
+const _subs = new Map();
+
+export function subscribe(key, callback) {
+  if (!_subs.has(key)) _subs.set(key, new Set());
+  _subs.get(key).add(callback);
+  return () => _subs.get(key)?.delete(callback);
+}
+
+export function setState(key, value) {
+  S[key] = value;
+  _subs.get(key)?.forEach(cb => cb(value));
+}
