@@ -8,8 +8,12 @@ const router  = express.Router();
 let _openApiSpec = null;
 function getOpenApiSpec() {
     if (!_openApiSpec) {
-        const raw = fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8');
-        _openApiSpec = yaml.load(raw);
+        try {
+            const raw = fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8');
+            _openApiSpec = yaml.load(raw);
+        } catch (_) {
+            return {};
+        }
     }
     return _openApiSpec;
 }

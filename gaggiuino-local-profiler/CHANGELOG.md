@@ -1,3 +1,9 @@
+## [1.87.3] – 2026-06-26
+
+### Security
+- **L1:** Pinned all npm dependencies to exact versions — removes implicit auto-upgrade risk from `^`-ranges (Closes #180)
+- **L2:** `getOpenApiSpec()` now catches `readFileSync` errors and returns `{}` instead of crashing the process when `openapi.yaml` is missing (Closes #181)
+
 ## [1.87.2] – 2026-06-26
 
 ### Security
