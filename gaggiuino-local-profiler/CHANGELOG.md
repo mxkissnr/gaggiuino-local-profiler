@@ -1,3 +1,10 @@
+## [1.92.1] – 2026-06-27
+
+### Fixed
+- **Share card: GLP logo missing** — `icon.png` was not copied into the Docker runtime image. Added `COPY icon.png ./` to the Dockerfile runtime stage.
+- **Format picker dropdown always visible** — `.card-fmt-menu` was missing `display: none`, so the dropdown appeared expanded on page load. Fixed in CSS.
+- **DOSIS row duplicated in stats** — DOSIS → YIELD · RATIO appeared in both the card header and the stats grid. Removed from the stats grid (header is sufficient). Closes #211
+
 ## [1.92.0] – 2026-06-27
 
 ### Added

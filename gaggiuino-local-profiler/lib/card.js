@@ -563,11 +563,6 @@ async function generateShareCard(shot, score, format = 'square') {
         maxWF ? `/ ${maxWF} max` : ''
     ]);
     rightRows.push(['DAUER', fmtDurSec(totalSec), '']);
-    if (dose || yieldG) rightRows.push([
-        'DOSIS → YIELD · RATIO',
-        [dose ? `${dose}g` : '', yieldG ? `→ ${yieldG}g` : '', ratio ? `· ${ratio}` : ''].filter(Boolean).join(' '),
-        ''
-    ]);
 
     const nRows = Math.max(leftRows.length, rightRows.length);
     const rowH  = statsH / nRows;

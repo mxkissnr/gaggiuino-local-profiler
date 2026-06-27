@@ -936,6 +936,7 @@
         /* ── Share-card format picker ── */
         .card-fmt-wrap { position: relative; display: inline-block; }
         .card-fmt-menu {
+            display: none;
             position: absolute;
             top: calc(100% + 4px);
             right: 0;
@@ -946,6 +947,7 @@
             z-index: 200;
             overflow: hidden;
         }
+        .card-fmt-wrap.open .card-fmt-menu { display: block; }
         .card-fmt-opt {
             display: block;
             width: 100%;

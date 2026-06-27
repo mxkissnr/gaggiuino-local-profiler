@@ -53,6 +53,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget fonts-libe
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY server.js ./
+COPY icon.png ./
 COPY lib/ ./lib/
 COPY routes/ ./routes/
 COPY openapi.yaml ./
