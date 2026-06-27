@@ -1,11 +1,27 @@
 'use strict';
 
-const fs = require('fs');
+const fs   = require('fs');
+const path = require('path');
 
 let createCanvas = null;
 let GlobalFonts  = null;
+let loadImage    = null;
+
+// Cache the GLP logo once loaded
+let _glpIconPromise = null;
+function getGlpIcon() {
+    if (!loadImage) return Promise.resolve(null);
+    if (!_glpIconPromise) {
+        const iconPath = path.join(__dirname, '..', 'icon.png');
+        _glpIconPromise = fs.existsSync(iconPath)
+            ? loadImage(fs.readFileSync(iconPath)).catch(() => null)
+            : Promise.resolve(null);
+    }
+    return _glpIconPromise;
+}
+
 try {
-    ({ createCanvas, GlobalFonts } = require('@napi-rs/canvas'));
+    ({ createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas'));
     const FONT_CANDIDATES = [
         '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
         '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
@@ -32,27 +48,22 @@ try {
     createCanvas = null;
 }
 
-// ── Exact GLP web UI colors (from shots/index.js datasets) ─────────────────
+// Card color palette — black/white base, colored lines for chart data
 const GLP = {
-    bg:        '#100806',
-    bgDark:    '#0a0503',
-    bgCard:    '#1a0c07',
-    bgChart:   '#0d0604',
-    amber:     '#f59e0b',
-    amberDim:  '#7a3d08',
-    cream:     '#f0d9b5',
-    creamDim:  '#a07840',
-    creamMute: '#5a3818',
-    border:    '#27272a',
-    borderBr:  '#3d1a08',
-    // Series colors — copied exactly from GLP shots/index.js
+    bg:        '#000000',   // pure black background
+    bgCard:    '#111111',   // slightly lighter for cards/header/footer
+    bgChart:   '#0a0a0a',   // chart area
+    text:      '#ffffff',   // primary text
+    textDim:   '#888888',   // secondary text
+    textMute:  '#444444',   // muted labels
+    border:    '#2a2a2a',   // card borders, grid
+    borderDim: '#1e1e1e',   // very subtle borders
+    // Data series colors — keep colored for readability on black background
     cPressure:    '#3498db',
     cFlow:        '#f39c12',
     cWeightFlow:  '#9b59b6',
     cWeight:      '#2ecc71',
     cTemp:        '#e74c3c',
-    green:        '#22c55e',
-    red:          '#ef4444',
 };
 
 const W = 1080, H = 1080, PX = 52;
@@ -63,15 +74,20 @@ function F(size, bold = false) {
 }
 
 function scoreColor(s) {
-    if (s == null) return GLP.creamDim;
-    if (s >= 80)   return GLP.green;
-    if (s >= 60)   return GLP.amber;
-    return GLP.red;
+    if (s == null) return GLP.textMute;
+    if (s >= 80)   return '#ffffff';
+    if (s >= 60)   return '#aaaaaa';
+    return '#666666';
 }
 
 function avg(arr) {
     if (!arr || !arr.length) return null;
     return arr.reduce((a, b) => a + b, 0) / arr.length;
+}
+
+function fmtDurSec(s) {
+    const sec = Math.round(s);
+    return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 }
 
 function fmtDur(ds) {
@@ -122,8 +138,9 @@ function detectPreinfusionEnd(pressure) {
     return null;
 }
 
-function generateShareCard(shot, score, format = 'square') {
+async function generateShareCard(shot, score, format = 'square') {
     if (!createCanvas) throw new Error('canvas module not available');
+    const glpIcon = await getGlpIcon();
 
     const W = 1080;
     const H = format === 'story' ? 1920 : 1080;
@@ -160,83 +177,93 @@ function generateShareCard(shot, score, format = 'square') {
     const yieldG      = wt != null ? +(+wt).toFixed(1) : null;
     const ratio       = dose && yieldG ? `1:${(yieldG / dose).toFixed(1)}` : null;
     const dur         = fmtDur(shot.duration);
-    const avgPres     = pressure.length ? +(avg(pressure.filter(v => v > 1.5))).toFixed(1)  : null;
-    const avgTemp     = temp.length     ? +(avg(temp.filter(v => v > 50))).toFixed(1)       : null;
-    const finalWeight = weight.length   ? +(weight[weight.length - 1]).toFixed(1)           : null;
+    const avgPres     = pressure.length   ? +(avg(pressure.filter(v => v > 1.5))).toFixed(1)   : null;
+    const maxPres     = pressure.length   ? +(Math.max(...pressure.filter(v => v > 0))).toFixed(1) : null;
+    const avgTemp     = temp.length       ? +(avg(temp.filter(v => v > 50))).toFixed(1)        : null;
+    const finalWeight = weight.length     ? +(weight[weight.length - 1]).toFixed(1)            : null;
+    const avgFlow     = flow.length       ? +(avg(flow.filter(v => v > 0.3))).toFixed(1)       : null;
+    const avgWF       = weightFlow.length ? +(avg(weightFlow.filter(v => v > 0.2))).toFixed(1) : null;
+    const maxWF       = weightFlow.length ? +(Math.max(...weightFlow.filter(v => v > 0))).toFixed(1) : null;
     const machine     = ann.machine || shot.machine || '';
+
+    const tgtPressVal = tgtPress.length ? +(tgtPress.filter(v => v > 0).slice(-1)[0] ?? 0).toFixed(1) : null;
+    const tgtFlowVal  = tgtFlow.length  ? +(tgtFlow.filter(v => v > 0).slice(-1)[0] ?? 0).toFixed(1)  : null;
+    const tgtTempVal  = tgtTemp.length  ? +(tgtTemp.filter(v => v > 0).slice(-1)[0] ?? 0).toFixed(1)  : null;
+
+    function tSD(arr) {
+        if (!arr || arr.length < 2) return null;
+        const m = arr.reduce((a, b) => a + b, 0) / arr.length;
+        return +(Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length)).toFixed(1);
+    }
+    const tempSD = temp.length ? tSD(temp.filter(v => v > 50)) : null;
 
     const dateStr = shot.timestamp
         ? new Date(shot.timestamp * 1000).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' })
         : '';
     const shotId  = shot.id ? `Shot #${shot.id}` : '';
-    const sColor  = scoreColor(score);
-    const preEnd  = detectPreinfusionEnd(pressure);
+    const sColor       = scoreColor(score);
+    const preEnd       = detectPreinfusionEnd(pressure);
+    const preinfEndSec = preEnd !== null && times.length > preEnd ? times[preEnd] : (preEnd !== null ? preEnd / Math.max(nPts - 1, 1) * totalSec : null);
+    const extDurSec    = preinfEndSec !== null ? Math.max(0, totalSec - preinfEndSec) : null;
 
     // ── BACKGROUND ─────────────────────────────────────────────────────────
     ctx.fillStyle = GLP.bg;
     ctx.fillRect(0, 0, W, H);
 
     // ── HEADER BAR ─────────────────────────────────────────────────────────
-    const HH = 90;
+    const HH = 76;
     ctx.fillStyle = GLP.bgCard;
     ctx.fillRect(0, 0, W, HH);
-    ctx.strokeStyle = GLP.borderBr;
+    ctx.strokeStyle = GLP.border;
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, HH); ctx.lineTo(W, HH); ctx.stroke();
 
-    // GLP wordmark
-    ctx.fillStyle = GLP.amber;
-    ctx.font = F(50, true);
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
-    ctx.fillText('GLP', PX, HH / 2);
-
-    // Shot pill
-    if (shotId) {
-        const pillX = PX + 108, pillY = HH / 2 - 15;
-        roundRect(ctx, pillX, pillY, 128, 30, 5);
-        ctx.fillStyle = 'rgba(120,60,8,0.5)';
-        ctx.fill();
-        ctx.strokeStyle = GLP.amberDim;
-        ctx.lineWidth = 1; ctx.stroke();
-        ctx.fillStyle = GLP.amber;
-        ctx.font = F(18);
+    // GLP logo (icon.png) — or fallback to bold text
+    const iconSize = Math.round(HH * 0.72);
+    const iconY    = (HH - iconSize) / 2;
+    if (glpIcon) {
+        ctx.drawImage(glpIcon, PX, iconY, iconSize, iconSize);
+    } else {
+        ctx.fillStyle = GLP.text;
+        ctx.font = F(44, true);
         ctx.textBaseline = 'middle';
-        ctx.fillText(shotId, pillX + 9, HH / 2);
+        ctx.textAlign = 'left';
+        ctx.fillText('GLP', PX, HH / 2);
     }
 
-    // Date top-right
-    ctx.fillStyle = GLP.creamDim;
-    ctx.font = F(21);
+    // Shot number + date top-right
+    const headerRight = [shotId, dateStr].filter(Boolean).join('  ·  ');
+    ctx.fillStyle = GLP.textDim;
+    ctx.font = F(20);
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    ctx.fillText(dateStr, W - PX, HH / 2);
+    ctx.fillText(headerRight, W - PX, HH / 2);
     ctx.textAlign = 'left';
 
     // ── SCORE BADGE ────────────────────────────────────────────────────────
     if (score != null) {
-        const scx = W - PX - 52, scy = HH + 86, r = 66;
+        const scx = W - PX - 46, scy = HH + 74, r = 58;
         // Background disc
         ctx.beginPath();
         ctx.arc(scx, scy, r, 0, Math.PI * 2);
-        ctx.fillStyle = GLP.bgCard;
+        ctx.fillStyle = '#1a1a1a';
         ctx.fill();
         // Ring
         ctx.beginPath();
         ctx.arc(scx, scy, r, -Math.PI / 2, 1.5 * Math.PI);
         ctx.strokeStyle = sColor;
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 3;
         ctx.stroke();
         // Number
-        ctx.fillStyle = sColor;
-        ctx.font = F(52, true);
+        ctx.fillStyle = GLP.text;
+        ctx.font = F(46, true);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(score), scx, scy - 7);
+        ctx.fillText(String(score), scx, scy - 6);
         // Label
-        ctx.font = F(16);
-        ctx.fillStyle = sColor;
-        ctx.fillText('SCORE', scx, scy + 28);
+        ctx.font = F(14);
+        ctx.fillStyle = GLP.textMute;
+        ctx.fillText('SCORE', scx, scy + 24);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
     }
@@ -246,22 +273,22 @@ function generateShareCard(shot, score, format = 'square') {
     ctx.textBaseline = 'alphabetic';
 
     let pName = profileName;
-    ctx.font = F(58, true);
+    ctx.font = F(52, true);
     while (ctx.measureText(pName).width > nameMaxW && pName.length > 4)
         pName = pName.slice(0, -4) + '…';
-    ctx.fillStyle = GLP.cream;
-    ctx.fillText(pName, PX, HH + 56);
+    ctx.fillStyle = GLP.text;
+    ctx.fillText(pName, PX, HH + 50);
 
-    let subY = HH + 98;
+    let subY = HH + 82;
     const subParts = [bean, machine].filter(Boolean);
     if (subParts.length) {
-        ctx.fillStyle = GLP.creamDim;
-        ctx.font = F(27);
+        ctx.fillStyle = GLP.textDim;
+        ctx.font = F(24);
         let subLine = subParts.join('  ·  ');
         while (ctx.measureText(subLine).width > nameMaxW + 140 && subLine.length > 4)
             subLine = subLine.slice(0, -4) + '…';
         ctx.fillText(subLine, PX, subY);
-        subY += 38;
+        subY += 32;
     }
 
     // Dose → Yield · Ratio · Dur line
@@ -272,38 +299,44 @@ function generateShareCard(shot, score, format = 'square') {
     if (dur)    doseParts.push(`· ${dur}`);
 
     if (doseParts.length) {
-        const doseY = subY + 18;
-        ctx.fillStyle = GLP.creamMute;
-        ctx.font = F(26);
+        const doseY = subY + 14;
+        ctx.fillStyle = GLP.textMute;
+        ctx.font = F(22);
         ctx.fillText('DOSIS', PX, doseY);
-        ctx.fillStyle = GLP.cream;
-        ctx.font = F(26, true);
-        ctx.fillText(doseParts.join('  '), PX + 88, doseY);
+        ctx.fillStyle = GLP.text;
+        ctx.font = F(22, true);
+        ctx.fillText(doseParts.join('  '), PX + 78, doseY);
         subY = doseY;
     }
 
-    // Separator
-    const sepY = subY + 24;
+    // Separator — thin white line fading right
+    const sepY = subY + 20;
     const sg = ctx.createLinearGradient(PX, 0, W - PX, 0);
-    sg.addColorStop(0,   GLP.amber);
-    sg.addColorStop(0.7, GLP.amberDim);
-    sg.addColorStop(1,   'rgba(60,20,5,0)');
+    sg.addColorStop(0,   'rgba(255,255,255,0.5)');
+    sg.addColorStop(0.6, 'rgba(255,255,255,0.15)');
+    sg.addColorStop(1,   'rgba(255,255,255,0)');
     ctx.strokeStyle = sg;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(PX, sepY); ctx.lineTo(W - PX, sepY); ctx.stroke();
 
     // ── CHART ──────────────────────────────────────────────────────────────
     // Chart coordinate system with margins for axes + legend
     const CHART_L  = 44;   // left margin (Y axis labels)
     const CHART_R  = 44;   // right margin (right Y axis)
-    const CHART_T  = 28;   // top margin (phase labels)
+    const CHART_T  = 26;   // top margin (phase label chips)
     const CHART_B  = 28;   // bottom margin (X axis)
     const LEGEND_H = 50;
 
-    const outerX = PX - 8;
-    const outerY = sepY + 12;
-    const outerW = W - 2 * PX + 16;
-    const outerH = Math.round(410 * SCALE);  // taller for story format
+    const outerX    = PX - 8;
+    const outerY    = sepY + 10;
+    const outerW    = W - 2 * PX + 16;
+    const STATS_H   = 200;
+    const FOOT_H    = 52;
+    // Dynamic height: chart fills remaining space so the card has no empty area
+    const outerH    = Math.max(
+        Math.round(240 * SCALE),
+        H - outerY - STATS_H - 16 - FOOT_H
+    );
 
     const plotX  = outerX + CHART_L;
     const plotY  = outerY + CHART_T;
@@ -334,9 +367,8 @@ function generateShareCard(shot, score, format = 'square') {
         ctx.setLineDash(bar === 0 ? [] : [3, 4]);
         ctx.beginPath(); ctx.moveTo(plotX, gy); ctx.lineTo(plotX + plotW, gy); ctx.stroke();
         ctx.setLineDash([]);
-        // Left axis label
         if (bar > 0) {
-            ctx.fillStyle = '#a1a1aa';
+            ctx.fillStyle = GLP.textMute;
             ctx.font = F(17);
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
@@ -345,10 +377,10 @@ function generateShareCard(shot, score, format = 'square') {
     });
     ctx.textAlign = 'left';
 
-    // Right Y axis ticks (20 40 60 80 100)
+    // Right Y axis ticks (20 40 60 80)
     [20, 40, 60, 80].forEach(v => {
         const gy = yRight(v);
-        ctx.fillStyle = '#71717a';
+        ctx.fillStyle = GLP.textMute;
         ctx.font = F(15);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
@@ -359,14 +391,14 @@ function generateShareCard(shot, score, format = 'square') {
     const xTickStep = totalSec <= 40 ? 5 : totalSec <= 90 ? 10 : 20;
     for (let t = 0; t <= totalSec; t += xTickStep) {
         const gx = plotX + (t / totalSec) * plotW;
-        ctx.strokeStyle = '#3a3a3a';
+        ctx.strokeStyle = GLP.border;
         ctx.lineWidth = 1;
         ctx.setLineDash([2, 4]);
         ctx.beginPath(); ctx.moveTo(gx, plotY); ctx.lineTo(gx, plotY + plotH); ctx.stroke();
         ctx.setLineDash([]);
         const m = Math.floor(t / 60), s = t % 60;
         const label = m > 0 ? `${m}:${String(s).padStart(2,'0')}` : `${s}s`;
-        ctx.fillStyle = '#71717a';
+        ctx.fillStyle = GLP.textMute;
         ctx.font = F(16);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
@@ -378,17 +410,14 @@ function generateShareCard(shot, score, format = 'square') {
     roundRect(ctx, plotX, plotY, plotW, plotH, 0);
     ctx.clip();
 
-    // Phase backgrounds
+    // Phase backgrounds + divider (inside clip)
     if (preEnd !== null && nPts > 0) {
         const pxEnd = xTime(preEnd);
-        // Preinfusion tint
-        ctx.fillStyle = 'rgba(52,120,200,0.08)';
+        ctx.fillStyle = 'rgba(52,152,219,0.08)';
         ctx.fillRect(plotX, plotY, pxEnd - plotX, plotH);
-        // Extraction tint
-        ctx.fillStyle = 'rgba(200,100,20,0.06)';
+        ctx.fillStyle = 'rgba(243,156,18,0.06)';
         ctx.fillRect(pxEnd, plotY, plotX + plotW - pxEnd, plotH);
-        // Phase divider line
-        ctx.strokeStyle = 'rgba(120,120,120,0.35)';
+        ctx.strokeStyle = 'rgba(200,200,200,0.2)';
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 4]);
         ctx.beginPath(); ctx.moveTo(pxEnd, plotY); ctx.lineTo(pxEnd, plotY + plotH); ctx.stroke();
@@ -423,17 +452,33 @@ function generateShareCard(shot, score, format = 'square') {
 
     ctx.restore();
 
-    // Phase labels — only show when the zone is wide enough to avoid overlap
+    // Phase label chips in the chart top margin (above the plot area)
     if (preEnd !== null && nPts > 0) {
-        const pxEnd     = xTime(preEnd);
-        const preWidth  = pxEnd - plotX;
-        const extWidth  = plotX + plotW - pxEnd;
-        ctx.fillStyle   = 'rgba(160,160,200,0.65)';
-        ctx.font        = F(16);
+        const pxEnd    = xTime(preEnd);
+        const preWidth = pxEnd - plotX;
+        const extWidth = plotX + plotW - pxEnd;
+        const chipH    = 18, chipPad = 7;
+        const chipY    = outerY + (CHART_T - chipH) / 2;
+        ctx.font = F(12);
         ctx.textBaseline = 'middle';
-        ctx.textAlign   = 'left';
-        if (preWidth > 90)  ctx.fillText('Preinfusion', plotX + 6,  outerY + CHART_T / 2);
-        if (extWidth > 90)  ctx.fillText('Extraktion',  pxEnd + 6,  outerY + CHART_T / 2);
+        ctx.textAlign    = 'left';
+
+        if (preWidth > 90) {
+            const lw = ctx.measureText('Preinfusion').width + chipPad * 2;
+            roundRect(ctx, plotX + 4, chipY, lw, chipH, 3);
+            ctx.fillStyle = 'rgba(52,152,219,0.2)';
+            ctx.fill();
+            ctx.fillStyle = 'rgba(52,152,219,0.9)';
+            ctx.fillText('Preinfusion', plotX + 4 + chipPad, chipY + chipH / 2);
+        }
+        if (extWidth > 90) {
+            const lw = ctx.measureText('Extraktion').width + chipPad * 2;
+            roundRect(ctx, pxEnd + 4, chipY, lw, chipH, 3);
+            ctx.fillStyle = 'rgba(243,156,18,0.2)';
+            ctx.fill();
+            ctx.fillStyle = 'rgba(243,156,18,0.9)';
+            ctx.fillText('Extraktion', pxEnd + 4 + chipPad, chipY + chipH / 2);
+        }
     }
 
     // ── LEGEND ─────────────────────────────────────────────────────────────
@@ -469,69 +514,146 @@ function generateShareCard(shot, score, format = 'square') {
                 ctx.fillStyle = it.color;
                 ctx.fillRect(lx, legY - 6, 12, 12);
             }
-            ctx.fillStyle = '#a1a1aa';
+            ctx.fillStyle = GLP.textMute;
             ctx.textAlign = 'left';
             ctx.fillText(it.label, lx + 16, legY);
             lx += itemWidths[i];
         });
     }
 
-    // ── STATS BAR ──────────────────────────────────────────────────────────
-    const statsY = outerY + outerH + 14;
-    const statsItems = [];
-    if (avgPres     != null) statsItems.push(['DRUCK  Ø',  `${avgPres} bar`]);
-    if (avgTemp     != null) statsItems.push(['TEMP  Ø',   `${avgTemp} °C`]);
-    if (dur)                 statsItems.push(['DAUER',     dur]);
-    if (finalWeight != null) statsItems.push(['GEWICHT',   `${finalWeight}g`]);
-    else if (yieldG != null) statsItems.push(['YIELD',     `${yieldG}g`]);
+    // ── STATS GRID — matches GLP web UI layout (Image #21) ────────────────
+    const statsY   = outerY + outerH + 8;
+    const statsH   = STATS_H;
+    const sX       = PX - 8;          // left edge of stats card
+    const sW       = W - 2 * PX + 16; // width of stats card
+    const colW     = sW / 2;
+    const lX       = sX + 16;         // left col text start
+    const rX       = sX + colW + 16;  // right col text start
+    const lastWF   = weightFlow.filter(v => v > 0).slice(-1)[0] != null
+        ? +(weightFlow.filter(v => v > 0).slice(-1)[0]).toFixed(1) : null;
 
-    if (statsItems.length) {
-        const statsH = 100;
-        const cellW  = (W - 2 * PX) / statsItems.length;
+    // Build rows: [label, mainVal, subVal, special]
+    // special = 'phasen' renders chips instead of text
+    const leftRows = [];
+    if (avgPres != null) leftRows.push([
+        'DRUCK  (Ø / MAX ZIEL)',
+        `${avgPres} bar`,
+        (tgtPressVal && tgtPressVal > 0) ? `/ ${tgtPressVal} bar` : (maxPres ? `/ ${maxPres} max` : '')
+    ]);
+    if (avgFlow != null) leftRows.push([
+        'PUMPENFLUSS  (Ø / ZIEL)',
+        `${avgFlow} ml/s`,
+        (tgtFlowVal && tgtFlowVal > 0) ? `/ ${tgtFlowVal} ml/s` : ''
+    ]);
+    if (avgTemp != null) leftRows.push([
+        'TEMPERATUR  (Ø ±Σ / ZIEL)',
+        `${avgTemp} °C`,
+        [tempSD ? `±${tempSD}` : '', (tgtTempVal && tgtTempVal > 0) ? `/ ${tgtTempVal} °C` : ''].filter(Boolean).join('  ')
+    ]);
+    const rightRows = [];
+    const weightVal = finalWeight ?? yieldG;
+    if (weightVal != null) rightRows.push([
+        'GEWICHT  (GESAMT / FLUSS ENDE)',
+        `${weightVal} g`,
+        lastWF ? `/ ${lastWF} ml/s` : ''
+    ]);
+    if (avgWF != null) rightRows.push([
+        'GEWICHTSFLUSS  (Ø / MAX)',
+        `${avgWF} ml/s`,
+        maxWF ? `/ ${maxWF} max` : ''
+    ]);
+    rightRows.push(['DAUER', fmtDurSec(totalSec), '']);
+    if (dose || yieldG) rightRows.push([
+        'DOSIS → YIELD · RATIO',
+        [dose ? `${dose}g` : '', yieldG ? `→ ${yieldG}g` : '', ratio ? `· ${ratio}` : ''].filter(Boolean).join(' '),
+        ''
+    ]);
 
-        roundRect(ctx, PX - 8, statsY, W - 2 * PX + 16, statsH, 8);
-        ctx.fillStyle = GLP.bgCard;
-        ctx.fill();
-        ctx.strokeStyle = GLP.border;
-        ctx.lineWidth = 1;
-        ctx.stroke();
+    const nRows = Math.max(leftRows.length, rightRows.length);
+    const rowH  = statsH / nRows;
 
-        statsItems.forEach(([label, val], i) => {
-            const cx2 = PX + i * cellW;
-            if (i > 0) {
+    roundRect(ctx, sX, statsY, sW, statsH, 8);
+    ctx.fillStyle = GLP.bgCard;
+    ctx.fill();
+    ctx.strokeStyle = GLP.border;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Vertical divider
+    ctx.beginPath();
+    ctx.moveTo(sX + colW, statsY + 10);
+    ctx.lineTo(sX + colW, statsY + statsH - 10);
+    ctx.stroke();
+
+    const drawStatsCol = (rows, textX) => {
+        rows.forEach(([lbl, val, sub, special], r) => {
+            const ry = statsY + r * rowH;
+            if (r > 0) {
                 ctx.strokeStyle = GLP.border;
-                ctx.lineWidth = 1;
+                ctx.lineWidth   = 1;
                 ctx.beginPath();
-                ctx.moveTo(cx2 - 1, statsY + 10);
-                ctx.lineTo(cx2 - 1, statsY + statsH - 10);
+                ctx.moveTo(textX - 4, ry);
+                ctx.lineTo(textX + colW - 24, ry);
                 ctx.stroke();
             }
-            ctx.fillStyle = GLP.creamMute;
-            ctx.font = F(17);
-            ctx.textAlign = 'center';
+            ctx.textAlign    = 'left';
             ctx.textBaseline = 'alphabetic';
-            ctx.fillText(label, cx2 + cellW / 2, statsY + 30);
-            ctx.fillStyle = GLP.cream;
-            ctx.font = F(34, true);
-            ctx.fillText(val, cx2 + cellW / 2, statsY + 78);
+            ctx.fillStyle    = GLP.textMute;
+            ctx.font         = F(12);
+            ctx.fillText(lbl, textX, ry + 15);
+
+            if (special === 'phasen') {
+                // Draw phase chips
+                const chipH = 18, chipPad = 6, chipY2 = ry + 20;
+                ctx.font = F(12);
+                ctx.textBaseline = 'middle';
+                let cx = textX;
+                const chips = [];
+                if (preinfEndSec != null) chips.push({ t: `Preinfusion  ${fmtDurSec(preinfEndSec)}`, c: '52,152,219' });
+                if (extDurSec    != null) chips.push({ t: `Extraktion  ${fmtDurSec(extDurSec)}`,    c: '243,156,18' });
+                chips.forEach(({ t, c }) => {
+                    const tw = ctx.measureText(t).width;
+                    const cw = tw + chipPad * 2;
+                    roundRect(ctx, cx, chipY2, cw, chipH, 3);
+                    ctx.fillStyle = `rgba(${c},0.18)`;
+                    ctx.fill();
+                    ctx.fillStyle = `rgba(${c},0.9)`;
+                    ctx.fillText(t, cx + chipPad, chipY2 + chipH / 2);
+                    cx += cw + 8;
+                });
+                ctx.textBaseline = 'alphabetic';
+            } else {
+                ctx.font = F(20, true);
+                const valW = ctx.measureText(val).width;
+                ctx.fillStyle = GLP.text;
+                ctx.fillText(val, textX, ry + 38);
+                if (sub) {
+                    ctx.fillStyle = GLP.textMute;
+                    ctx.font      = F(13);
+                    ctx.fillText(sub, textX + valW + 8, ry + 38);
+                }
+            }
         });
-        ctx.textAlign = 'left';
-    }
+    };
+
+    drawStatsCol(leftRows,  lX);
+    drawStatsCol(rightRows, rX);
+    ctx.textAlign = 'left';
 
     // ── FOOTER ─────────────────────────────────────────────────────────────
-    const footY = H - 50;
+    const footY = H - 38;
     ctx.fillStyle = GLP.bgCard;
     ctx.fillRect(0, footY - 12, W, H - footY + 12);
-    ctx.strokeStyle = GLP.borderBr;
+    ctx.strokeStyle = GLP.border;
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, footY - 12); ctx.lineTo(W, footY - 12); ctx.stroke();
 
-    ctx.fillStyle = GLP.amberDim;
+    ctx.fillStyle = GLP.textMute;
     ctx.font = F(20);
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
     ctx.fillText('Gaggiuino Local Profiler', PX, footY + 6);
-    ctx.fillStyle = GLP.creamMute;
+    ctx.fillStyle = GLP.textMute;
     ctx.textAlign = 'right';
     ctx.fillText('glp.local', W - PX, footY + 6);
     ctx.textAlign = 'left';

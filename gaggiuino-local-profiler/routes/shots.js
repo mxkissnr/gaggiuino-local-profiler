@@ -41,7 +41,7 @@ router.get('/api/shots/:id', (req, res, next) => {
     } catch (err) { next(err); }
 });
 
-router.get('/api/shots/:id/card', (req, res, next) => {
+router.get('/api/shots/:id/card', async (req, res, next) => {
     try {
         if (!cardAvailable()) return res.status(503).json({ error: 'card module not available' });
         const id = parseId(req.params.id);
@@ -50,7 +50,7 @@ router.get('/api/shots/:id/card', (req, res, next) => {
         if (!shot) return res.status(404).json({ error: 'Shot not found' });
         const format = req.query.format === 'story' ? 'story' : 'square';
         const score  = shotService.computeScore(shot);
-        const png    = generateShareCard(shot, score, format);
+        const png    = await generateShareCard(shot, score, format);
         res.setHeader('Content-Type', 'image/png');
         res.setHeader('Content-Disposition', `inline; filename="glp-shot-${id}-${format}.png"`);
         res.send(png);
