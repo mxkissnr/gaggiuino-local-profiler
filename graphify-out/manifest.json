@@ -1,0 +1,522 @@
+{
+  ".claude/settings.json": {
+    "mtime": 1779520826.5686111,
+    "ast_hash": "7fc79c5914ca7a40f4c9652f0d3da6f8",
+    "semantic_hash": ""
+  },
+  ".claude/settings.local.json": {
+    "mtime": 1779722346.6558826,
+    "ast_hash": "f578778315b521f47887216fcbcb1953",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler-dev/package.json": {
+    "mtime": 1779520416.196607,
+    "ast_hash": "7f769b625956ea0f2019d0166e64cedc",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler-dev/run.sh": {
+    "mtime": 1782475956.3647072,
+    "ast_hash": "39ca17381656ee299be78904c2bdd93a",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler-dev/server.js": {
+    "mtime": 1782475956.3647072,
+    "ast_hash": "0a509c711c253a118dcf707d8b9175a0",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/constants.js": {
+    "mtime": 1782519496.4129694,
+    "ast_hash": "0f1cb8db9b0979055651a2b8a04d91ab",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/data.js": {
+    "mtime": 1782478014.7021558,
+    "ast_hash": "d4121247556965ef33dfa7acaae45b61",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/ha.js": {
+    "mtime": 1782475956.3689094,
+    "ast_hash": "182171ffe209cc91a5a694677f288ed6",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/helpers.js": {
+    "mtime": 1782475956.3689094,
+    "ast_hash": "4b09eb5cb6af518ec1ada5ea609e0304",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/live-sync.js": {
+    "mtime": 1782475956.3689094,
+    "ast_hash": "2045c6419dcbf537873b92575635e204",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/notify-i18n.js": {
+    "mtime": 1782475956.3703718,
+    "ast_hash": "e66c86409ce9c292d5ff1dd8102af302",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/score.js": {
+    "mtime": 1782475956.371282,
+    "ast_hash": "eee651371ef2cdadaf19e2067a7ef9f0",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/state.js": {
+    "mtime": 1782475956.3722322,
+    "ast_hash": "1e4194acac3417b23b04794738925436",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/package.json": {
+    "mtime": 1782501362.5928433,
+    "ast_hash": "dd34001b97e031308212baa83f999100",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/api.js": {
+    "mtime": 1782475956.3722322,
+    "ast_hash": "e1408b0be87c96c7e9ad17946113d26a",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/components/mode.js": {
+    "mtime": 1782475956.3751824,
+    "ast_hash": "fda85f7131c2f5e5c256c3c09df4b5ca",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/components/sidebar.js": {
+    "mtime": 1782475956.3754914,
+    "ast_hash": "9be0dfd102be6fcaf9ad38a89b6ad44a",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/components/status.js": {
+    "mtime": 1782475956.3754914,
+    "ast_hash": "3d137461d9f095425d77800fccaae12c",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/components/update-check.js": {
+    "mtime": 1782475956.3754914,
+    "ast_hash": "6d790f8bac7de9721b242c9dec4d5628",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/constants.js": {
+    "mtime": 1782475956.3754914,
+    "ast_hash": "d3c87e74a9c5898f63bd6b93f3015eda",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/i18n.js": {
+    "mtime": 1782475956.3754914,
+    "ast_hash": "a143deae553c96e255e58da7a03f5652",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/i18n/de.js": {
+    "mtime": 1782516858.6644387,
+    "ast_hash": "67bf0993a26400398656687e89efe7f0",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/i18n/en.js": {
+    "mtime": 1782516873.4285846,
+    "ast_hash": "d934a26398044a81a6d05ac515429711",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/i18n/es.js": {
+    "mtime": 1782516874.5685956,
+    "ast_hash": "3df1b1a5bff1cbc9dd5b0ed4f736d401",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/i18n/fr.js": {
+    "mtime": 1782516875.7886076,
+    "ast_hash": "f9c850306b6c3bd9f3b2df35a567d3c5",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/i18n/it.js": {
+    "mtime": 1782516876.8886182,
+    "ast_hash": "1ab66bed93a059ae66ac7951a443a6a3",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/i18n/nl.js": {
+    "mtime": 1782516878.1646307,
+    "ast_hash": "052e1d8bc00bf7003bb4e353bc141ce6",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/main.js": {
+    "mtime": 1782516826.664109,
+    "ast_hash": "559206496ee3a3725c17266c6ed2bb5d",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/state.js": {
+    "mtime": 1782475956.3771496,
+    "ast_hash": "f7fe84bf194fb957bf66f13dc2a84ccf",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/utils.js": {
+    "mtime": 1782475956.3771496,
+    "ast_hash": "480319f59fde13818d0570c6a3592a38",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/views/analytics.js": {
+    "mtime": 1782475956.3771496,
+    "ast_hash": "078907c7de57ac704898053784565dd6",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/views/dialin.js": {
+    "mtime": 1782475956.3804379,
+    "ast_hash": "a5a51cd3d0e33d694e35177d9849f559",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/views/library.js": {
+    "mtime": 1782475956.3804379,
+    "ast_hash": "4ce3ed0ad67e97bd3b1f52ef54453f5d",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/views/live.js": {
+    "mtime": 1782475956.3804379,
+    "ast_hash": "962753abe0ede770600fb0a034c5287b",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/views/maintenance.js": {
+    "mtime": 1782475956.3804379,
+    "ast_hash": "33b2152029d0066066b5ee94a3350162",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/views/orders.js": {
+    "mtime": 1782475956.3804379,
+    "ast_hash": "c386f80b7edd4683490c19ad89bed604",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/views/shots.js": {
+    "mtime": 1782475956.3804379,
+    "ast_hash": "b18c243296ef18aa10c812e27cfcd24e",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/routes/backup.js": {
+    "mtime": 1782475956.3815918,
+    "ast_hash": "7740a793d101ff88660d55fb4de8b971",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/routes/import.js": {
+    "mtime": 1782475956.3820832,
+    "ast_hash": "7bf8ef994ac600622138189a214c97cf",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/routes/library.js": {
+    "mtime": 1782475956.3820832,
+    "ast_hash": "f23e782fdd3a28a14e3a7176e86213fd",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/routes/maintenance.js": {
+    "mtime": 1782475956.3820832,
+    "ast_hash": "80d48608cf713fbaa73fdcf46306246c",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/routes/orders.js": {
+    "mtime": 1782475956.3820832,
+    "ast_hash": "715287003d680e8dab8397ec27d4cb60",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/routes/shots.js": {
+    "mtime": 1782517746.5082347,
+    "ast_hash": "0a8ad72b129da1801534a836cfc02b33",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/routes/system.js": {
+    "mtime": 1782475956.3820832,
+    "ast_hash": "cbcce04f1221d5f0e69781dca7f9801c",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/server.js": {
+    "mtime": 1782475956.3820832,
+    "ast_hash": "3bb6a9158370eaf4ea0aec866dbd4db0",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/vite.config.js": {
+    "mtime": 1782475956.3840528,
+    "ast_hash": "942e72d4a0519564f6b6c90f3759974a",
+    "semantic_hash": ""
+  },
+  ".github/ISSUE_TEMPLATE/bug_report.yml": {
+    "mtime": 1782475956.3612885,
+    "ast_hash": "a5d10168a61e65c13dd92023632e891b",
+    "semantic_hash": ""
+  },
+  ".github/ISSUE_TEMPLATE/feature_request.yml": {
+    "mtime": 1782475956.361795,
+    "ast_hash": "2e5986cbfea311f457042e506168c403",
+    "semantic_hash": ""
+  },
+  ".github/pull_request_template.md": {
+    "mtime": 1782475956.361795,
+    "ast_hash": "30585066e7278ad00cb347dd49ba3c12",
+    "semantic_hash": ""
+  },
+  ".github/workflows/build.yaml": {
+    "mtime": 1782475956.361795,
+    "ast_hash": "bf0300d69f24b728d5daa40954ceaaa0",
+    "semantic_hash": ""
+  },
+  "CLAUDE.md": {
+    "mtime": 1782475956.361795,
+    "ast_hash": "fe636b0ed5c2a7173458f4025e557558",
+    "semantic_hash": ""
+  },
+  "CODE_OF_CONDUCT.md": {
+    "mtime": 1782475956.361795,
+    "ast_hash": "b16ca019e6f446e857f73a7d882c6d0d",
+    "semantic_hash": ""
+  },
+  "CONTRIBUTING.md": {
+    "mtime": 1782475956.361795,
+    "ast_hash": "97bad4f15c3eb5cedb110ac2c337c492",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1782501362.5888433,
+    "ast_hash": "f7dbca25dccedbf72d773d780527e286",
+    "semantic_hash": ""
+  },
+  "SECURITY.md": {
+    "mtime": 1782475956.3647072,
+    "ast_hash": "2b25d09552f7ee8b737002a4a7a6bc77",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler-dev/CHANGELOG.md": {
+    "mtime": 1779459529.3240232,
+    "ast_hash": "810611c71210988af16e6ec79a37206d",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler-dev/DOCS.de.md": {
+    "mtime": 1782475956.3647072,
+    "ast_hash": "bfaad82ed048a487e44143ccf08d12db",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler-dev/DOCS.md": {
+    "mtime": 1782475956.3647072,
+    "ast_hash": "15f8d79824e4f028ed18757136704975",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler-dev/config.yaml": {
+    "mtime": 1779459529.3240232,
+    "ast_hash": "be37ea5fa1e6450fa83355eb2308d8aa",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler-dev/public/index.html": {
+    "mtime": 1782475956.3647072,
+    "ast_hash": "0687b3faf11e88a404a3706ea05dbf4f",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/CHANGELOG.md": {
+    "mtime": 1782519506.6004555,
+    "ast_hash": "24a88d315692fe2bffd0ef2763366281",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/DOCS.de.md": {
+    "mtime": 1782518936.8282526,
+    "ast_hash": "cd92b78539a3b069df52963044e87c6e",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/DOCS.md": {
+    "mtime": 1782518930.4842038,
+    "ast_hash": "365c1895f2885bf6f0f238ffc61806b7",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/build.yaml": {
+    "mtime": 1782475956.3647072,
+    "ast_hash": "bcb1c892376c539ea31c91d3e6a81d5c",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/config.yaml": {
+    "mtime": 1782519496.414835,
+    "ast_hash": "08011734ede8fa51bbbaf2a535234911",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/openapi.yaml": {
+    "mtime": 1782475956.3722322,
+    "ast_hash": "9833e063706662d629c7c1e40e9195c9",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/index.html": {
+    "mtime": 1782516772.3475006,
+    "ast_hash": "4529cb77ad2ed137c677c6a45ba064a7",
+    "semantic_hash": ""
+  },
+  "glp-ha-theme.yaml": {
+    "mtime": 1782475956.3840528,
+    "ast_hash": "6e1ec8354844016d4791b3b40d79b3b2",
+    "semantic_hash": ""
+  },
+  "repository.yaml": {
+    "mtime": 1779289162.3290722,
+    "ast_hash": "c7f8f8667029fd6ae91fd8ff2111bd1b",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler-dev/icon.png": {
+    "mtime": 1779459529.3240232,
+    "ast_hash": "18f6d1267d6372424f464ccba656ed59",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler-dev/icon.svg": {
+    "mtime": 1779459529.3240232,
+    "ast_hash": "4c7699ebaa6f286bd1d220704989e07e",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler-dev/logo.svg": {
+    "mtime": 1779459529.3240232,
+    "ast_hash": "a7d2e46a74978eb352d78ae6ea3d0703",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/icon.png": {
+    "mtime": 1779390874.5117502,
+    "ast_hash": "18f6d1267d6372424f464ccba656ed59",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/icon.svg": {
+    "mtime": 1779389922.718018,
+    "ast_hash": "4c7699ebaa6f286bd1d220704989e07e",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/logo.svg": {
+    "mtime": 1782475956.3722322,
+    "ast_hash": "a3071c2a2b356075149ab5578bcf15d4",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/public/icon.png": {
+    "mtime": 1782475956.3771496,
+    "ast_hash": "18f6d1267d6372424f464ccba656ed59",
+    "semantic_hash": ""
+  },
+  ".memsearch/memory/2026-06-24.md": {
+    "mtime": 1782337726.5027537,
+    "ast_hash": "a5cbb3ebd11eda5db714e905b7992212",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/poll.js": {
+    "mtime": 1782475956.3703718,
+    "ast_hash": "e2c5d475db7a8544907583e63ecb5d81",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/preheat.js": {
+    "mtime": 1782475956.3703718,
+    "ast_hash": "02258107b804296bb74ae1debfc4ea75",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/sync.js": {
+    "mtime": 1782475956.3722322,
+    "ast_hash": "92e97bf4109002b9f079574fbe7c3d7a",
+    "semantic_hash": ""
+  },
+  ".memsearch/memory/2026-06-25.md": {
+    "mtime": 1782408188.0298266,
+    "ast_hash": "53e427193833483c0a8f22d6fe4ad9f8",
+    "semantic_hash": ""
+  },
+  ".memsearch/memory/2026-06-26.md": {
+    "mtime": 1782502152.6491773,
+    "ast_hash": "3350d46fac48dae6b27903daede981e4",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/db.js": {
+    "mtime": 1782478509.7585263,
+    "ast_hash": "24118b6a6b1fa333976032296f2f4317",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/middleware/error.js": {
+    "mtime": 1782475956.3689094,
+    "ast_hash": "d5f384d3ee2ad7b03a2e5cdd46563654",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/middleware/validate.js": {
+    "mtime": 1782475956.3703718,
+    "ast_hash": "686fcb9e762a9355318321acc23847e8",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/repositories/LibraryRepository.js": {
+    "mtime": 1782475956.3703718,
+    "ast_hash": "89edd3145862a4469870ed86f978ff96",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/repositories/OrderRepository.js": {
+    "mtime": 1782475956.371282,
+    "ast_hash": "e57237336ba59e3b2ef080c35f7ea762",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/repositories/ShotRepository.js": {
+    "mtime": 1782475956.371282,
+    "ast_hash": "31a8c0f47dcca78083be54bd2cfaaac3",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/repositories/index.js": {
+    "mtime": 1782475956.371282,
+    "ast_hash": "183653eb059381fc30f43b534b5f39e3",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/services/LibraryService.js": {
+    "mtime": 1782475956.371282,
+    "ast_hash": "f0e8dacda226dc30bb4225142b70f65e",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/services/OrderService.js": {
+    "mtime": 1782475956.3722322,
+    "ast_hash": "3bc64c6455aaa34c242f73e96dd4948e",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/services/ShotService.js": {
+    "mtime": 1782475956.3722322,
+    "ast_hash": "fefafc0025ca2fc4c3de16421a8d0b5b",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/services/index.js": {
+    "mtime": 1782475956.3722322,
+    "ast_hash": "e60145e3bb84ac8b0a6ae8c71f2a4b43",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/validation/schemas.js": {
+    "mtime": 1782475956.3722322,
+    "ast_hash": "58c5b3faff163a56eb3d876e1da6dcc6",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/score.test.js": {
+    "mtime": 1782475956.3820832,
+    "ast_hash": "4ad21aab47a40d0bdbd15d956f3d629f",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/validation.test.js": {
+    "mtime": 1782475956.3840528,
+    "ast_hash": "d91c1a752e65c9faa607c6d4af52f235",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/vitest.config.js": {
+    "mtime": 1782475956.3840528,
+    "ast_hash": "e469bbb3d09e4b7e4a1c3c8beaa0310f",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/views/shots/annotation.js": {
+    "mtime": 1782475956.3804379,
+    "ast_hash": "d968f91db087d7e9ffbafdb0d6522108",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/views/shots/charts.js": {
+    "mtime": 1782475956.3815918,
+    "ast_hash": "3bedaa661fd5401e24796d33bdd29bc4",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/views/shots/grind.js": {
+    "mtime": 1782475956.3815918,
+    "ast_hash": "ea04ce033c17f2c475c08b3de396511a",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/views/shots/index.js": {
+    "mtime": 1782516845.7883084,
+    "ast_hash": "7fd8310dc27da18b9bea45ee4d891f7e",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/views/shots/utils.js": {
+    "mtime": 1782475956.3815918,
+    "ast_hash": "a97ac8ce2c9fbb53cc7a66830732a885",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/card.js": {
+    "mtime": 1782519483.1202874,
+    "ast_hash": "7437b37738853275ec48494a5a2f77df",
+    "semantic_hash": ""
+  },
+  ".memsearch/memory/2026-06-27.md": {
+    "mtime": 1782518955.0123923,
+    "ast_hash": "ae09ccd1fe349d3ce93a1285775c167c",
+    "semantic_hash": ""
+  }
+}

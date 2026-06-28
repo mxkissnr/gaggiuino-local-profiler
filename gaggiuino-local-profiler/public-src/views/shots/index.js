@@ -44,13 +44,8 @@ export async function loadData() {
   if (S.shots.length > 0) {
     empty.style.display     = 'none';
     chartArea.style.display = 'flex';
-    const savedPrimary = parseInt(localStorage.getItem('glp_primaryShotId'));
     const savedCompare = parseInt(localStorage.getItem('glp_compareShotId'));
-    if (savedPrimary && S.shots.find(s => s.id === savedPrimary)) {
-      S.primaryShotId = savedPrimary;
-    } else if (!S.primaryShotId || !S.shots.find(s => s.id === S.primaryShotId)) {
-      S.primaryShotId = S.shots[S.shots.length - 1].id;
-    }
+    S.primaryShotId = S.shots[S.shots.length - 1].id;
     if (savedCompare && S.shots.find(s => s.id === savedCompare) && savedCompare !== S.primaryShotId) {
       S.compareShotId = savedCompare;
     }

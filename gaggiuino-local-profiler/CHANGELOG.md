@@ -1,3 +1,8 @@
+## [1.93.0] – 2026-06-28
+
+### Changed
+- **Always open newest shot on startup** — the app now always selects the most recently recorded shot when loaded, instead of restoring the last viewed shot. Closes #212
+
 ## [1.92.1] – 2026-06-27
 
 ### Fixed
