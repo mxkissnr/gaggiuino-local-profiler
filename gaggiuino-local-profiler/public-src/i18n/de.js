@@ -106,6 +106,7 @@ export default {
     lib_bag_history:'Packungsverlauf', lib_bag_delete:'Packung löschen',
     lib_bag_roast_date:'Röstdatum',
     lib_bag_stock:'Anfangsgewicht (g)',
+    lib_stock_edit_btn:'Bestand anpassen',
     lib_recipes:'Rezepte', lib_milk:'Milch',
     lib_add_milk:'+ Milch hinzufügen', lib_milk_name:'Name *', lib_milk_name_ph:'z.B. Vollmilch',
     lib_milk_stock:'Vorrat (ml)', lib_milk_emoji:'Emoji', lib_milk_restock:'Auffüllen',

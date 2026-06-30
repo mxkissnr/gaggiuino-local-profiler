@@ -106,6 +106,7 @@ export default {
     lib_bag_history:'Storico confezioni', lib_bag_delete:'Elimina confezione',
     lib_bag_roast_date:'Data torrefazione',
     lib_bag_stock:'Peso iniziale (g)',
+    lib_stock_edit_btn:'Modifica scorta',
     lib_recipes:'Ricette', lib_milk:'Latte',
     lib_add_milk:'+ Aggiungi latte', lib_milk_name:'Nome *', lib_milk_name_ph:'es. Latte intero',
     lib_milk_stock:'Scorta (ml)', lib_milk_emoji:'Emoji', lib_milk_restock:'Rifornisci',

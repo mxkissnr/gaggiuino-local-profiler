@@ -41,6 +41,7 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder,
          toggleBeanQR, generateBeanQR,
          toggleBagHistory, openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
+         openBeanStockEdit, closeBeanStockEdit, saveBeanStock,
          openRecipeForm, closeRecipeForm, editRecipe, saveRecipe, deleteRecipe, renderRecipeList,
          addRecipeStep, removeRecipeStep,
          toggleUrlImport, importFromUrl,
@@ -239,6 +240,9 @@ Object.assign(window, {
   closeNewBagForm,
   saveNewBag,
   deleteBag,
+  openBeanStockEdit,
+  closeBeanStockEdit,
+  saveBeanStock,
   openRecipeForm,
   closeRecipeForm,
   editRecipe,
@@ -474,6 +478,9 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'save-new-bag':       saveNewBag(numId()); break;
       case 'toggle-bag-history': toggleBagHistory(numId()); break;
       case 'delete-bag':         deleteBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'open-stock-edit':    openBeanStockEdit(numId()); break;
+      case 'close-stock-edit':   closeBeanStockEdit(); break;
+      case 'save-stock-edit':    saveBeanStock(numId()); break;
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
       case 'edit-bean':          editBean(numId()); break;
       case 'delete-bean':        deleteBean(numId()); break;

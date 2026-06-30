@@ -106,6 +106,7 @@ export default {
     lib_bag_history:'Zakgeschiedenis', lib_bag_delete:'Zak verwijderen',
     lib_bag_roast_date:'Roosdatum',
     lib_bag_stock:'Startgewicht (g)',
+    lib_stock_edit_btn:'Voorraad aanpassen',
     lib_recipes:'Recepten', lib_milk:'Melk',
     lib_add_milk:'+ Melk toevoegen', lib_milk_name:'Naam *', lib_milk_name_ph:'bijv. Volle melk',
     lib_milk_stock:'Voorraad (ml)', lib_milk_emoji:'Emoji', lib_milk_restock:'Aanvullen',

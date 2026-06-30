@@ -67,11 +67,20 @@ export function renderBeanList() {
     if (b.stock_g) {
       const remaining = Math.round(b.stock_g - activeBagConsumed);
       const isLow = remaining < 100;
+      const editingStock = S._beanStockEditId === b.id;
       invHtml = `<div class="lib-inv-stats">
         <span>${t('lib_inv_consumed', activeBagConsumed)}</span>
         <span class="lib-inv-remaining${isLow ? ' low' : ''}">${t('lib_inv_remaining', remaining)}</span>
         ${isLow ? `<span class="lib-inv-reorder">${t('lib_inv_reorder')}</span>` : ''}
         ${bags.length > 1 ? `<span class="lib-inv-total">${t('lib_inv_total_consumed', totalConsumed)} · ${t('lib_inv_bags', bags.length)}</span>` : ''}
+        ${editingStock
+          ? `<div class="lib-stock-edit-row">
+               <input type="number" class="lib-new-bag-input" id="stockEditInput${b.id}" value="${b.stock_g}" min="0" step="1" placeholder="${t('lib_bag_stock')}">
+               <button class="lib-save-btn" data-action="save-stock-edit" data-id="${b.id}">${t('lib_save')}</button>
+               <button class="lib-btn-sm" data-action="close-stock-edit" data-id="${b.id}">${t('lib_cancel')}</button>
+             </div>`
+          : `<button class="lib-btn-sm lib-stock-edit-btn" data-action="open-stock-edit" data-id="${b.id}" title="${t('lib_stock_edit_btn')}">${t('lib_stock_edit_btn')}</button>`
+        }
       </div>`;
     } else if (totalConsumed > 0) {
       invHtml = `<div class="lib-inv-stats">
@@ -164,6 +173,32 @@ export async function saveNewBag(id) {
   const saved = await r.json();
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  renderBeanList();
+}
+
+export function openBeanStockEdit(id) {
+  S._beanStockEditId = id;
+  renderBeanList();
+}
+
+export function closeBeanStockEdit() {
+  S._beanStockEditId = null;
+  renderBeanList();
+}
+
+export async function saveBeanStock(id) {
+  const val = parseFloat(document.getElementById(`stockEditInput${id}`)?.value);
+  if (isNaN(val) || val < 0) return;
+  const r = await apiFetch(`api/library/bean/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stock_g: val }),
+  });
+  if (!r.ok) return;
+  const saved = await r.json();
+  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
+  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  S._beanStockEditId = null;
   renderBeanList();
 }
 

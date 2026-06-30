@@ -1,3 +1,12 @@
+## [1.94.0] – 2026-06-30
+
+### Added
+- **Order card: hide sold-out bean items** — menu items with `useBeans: true` no longer appear in the customer order card when all active beans have stock = 0. They reappear automatically once stock is replenished. Closes #213
+- **Library: inline bean stock editor** — an "Adjust stock" button next to the remaining-stock display lets you correct or override the current bag's weight (g) without opening a new bag. Calls `PUT /api/library/bean/:id` and syncs the active bag. Closes #214
+- **Orders: presence-aware broadcast** — open/closed shop notifications are only sent to recipients whose HA person entity is currently `home`. Recipients with no person mapping are always notified. Closes #215
+
+---
+
 ## [1.93.0] – 2026-06-28
 
 ### Changed

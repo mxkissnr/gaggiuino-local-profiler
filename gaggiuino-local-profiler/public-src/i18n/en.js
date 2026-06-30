@@ -106,6 +106,7 @@ export default {
     lib_bag_history:'Bag history', lib_bag_delete:'Delete bag',
     lib_bag_roast_date:'Roast date',
     lib_bag_stock:'Initial weight (g)',
+    lib_stock_edit_btn:'Adjust stock',
     lib_recipes:'Recipes', lib_milk:'Milk',
     lib_add_milk:'+ Add milk', lib_milk_name:'Name *', lib_milk_name_ph:'e.g. Whole milk',
     lib_milk_stock:'Stock (ml)', lib_milk_emoji:'Emoji', lib_milk_restock:'Restock',

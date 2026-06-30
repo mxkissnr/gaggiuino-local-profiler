@@ -74,6 +74,7 @@ async function getHaPersons() {
             .map(e => ({
                 haUserId: e.attributes.user_id,
                 name:     e.attributes.friendly_name || e.entity_id.replace('person.', ''),
+                state:    e.state || 'not_home',
             }));
     } catch { return []; }
 }

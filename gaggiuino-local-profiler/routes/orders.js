@@ -23,6 +23,48 @@ function _getPreheatInfo() {
     return { ready: remainingMs === 0, remainingMin: Math.max(1, Math.ceil(remainingMs / 60000)) };
 }
 
+async function _broadcastShopState(s, prev, recipients) {
+    const opened = s.enabled && !prev.enabled;
+    const closed = !s.enabled && prev.enabled;
+    if (!opened && !closed) return;
+
+    // Filter recipients to those whose person entity is currently home.
+    // Recipients with no person mapping are always included (no presence data).
+    let filtered = recipients;
+    try {
+        const persons = await getHaPersons();
+        if (persons.length) {
+            const mapping = loadNotifyMapping();
+            const svcToState = {};
+            persons.forEach(p => {
+                const svc = mapping[p.haUserId];
+                if (svc) svcToState[svc] = p.state;
+            });
+            filtered = recipients.filter(svc =>
+                !(svc in svcToState) || svcToState[svc] === 'home'
+            );
+        }
+    } catch { /* fall back to all recipients on error */ }
+
+    if (!filtered.length) return;
+
+    if (opened) {
+        const { ready, remainingMin } = _getPreheatInfo();
+        const title = ready ? '☕ Kaffee ist jetzt geöffnet!' : '⏳ Kaffee öffnet bald!';
+        const body  = ready
+            ? 'Die Maschine ist bereit — Bestellungen über das Menü Kaffeebar aufgeben.'
+            : `Die Maschine heizt noch auf. Kaffee öffnet in ca. ${remainingMin} Min. — Bestellungen über das Menü Kaffeebar.`;
+        filtered.forEach(svc => sendHaNotify(svc, title, body, 'glp_shop_open'));
+        log(`Shop-open broadcast sent to ${filtered.length}/${recipients.length} device(s) (home filter)`);
+    } else {
+        filtered.forEach(svc => sendHaNotify(svc,
+            '🚫 Kaffeebar geschlossen',
+            'Die Bestellannahme wurde beendet.',
+            'glp_shop_closed'));
+        log(`Shop-closed broadcast sent to ${filtered.length}/${recipients.length} device(s) (home filter)`);
+    }
+}
+
 // Guard: all order routes require enable_orders: true
 router.use((req, res, next) => {
     if (!isOrdersEnabled()) return res.status(404).json({ error: 'orders feature not enabled' });
@@ -114,24 +156,10 @@ router.post('/api/orders/settings', (req, res) => {
     saveOrdersSettings(s);
     log(`Orders ${s.enabled ? 'enabled' : 'disabled'}`);
     const recipients = s.broadcastRecipients || [];
-    if (recipients.length) {
-        if (s.enabled && !prev.enabled) {
-            const { ready, remainingMin } = _getPreheatInfo();
-            const title = ready ? '☕ Kaffee ist jetzt geöffnet!' : '⏳ Kaffee öffnet bald!';
-            const body  = ready
-                ? 'Die Maschine ist bereit — Bestellungen über das Menü Kaffeebar aufgeben.'
-                : `Die Maschine heizt noch auf. Kaffee öffnet in ca. ${remainingMin} Min. — Bestellungen über das Menü Kaffeebar.`;
-            recipients.forEach(svc => sendHaNotify(svc, title, body, 'glp_shop_open'));
-            log(`Shop-open broadcast sent to ${recipients.length} device(s)`);
-        } else if (!s.enabled && prev.enabled) {
-            recipients.forEach(svc => sendHaNotify(svc,
-                '🚫 Kaffeebar geschlossen',
-                'Die Bestellannahme wurde beendet.',
-                'glp_shop_closed'));
-            log(`Shop-closed broadcast sent to ${recipients.length} device(s)`);
-        }
-    }
     res.json(s);
+    if (recipients.length) {
+        _broadcastShopState(s, prev, recipients);
+    }
 });
 
 // ── Queue ETA ─────────────────────────────────────────────────────────────

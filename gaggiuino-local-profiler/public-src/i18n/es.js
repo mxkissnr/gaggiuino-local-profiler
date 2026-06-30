@@ -106,6 +106,7 @@ export default {
     lib_bag_history:'Historial de bolsas', lib_bag_delete:'Eliminar bolsa',
     lib_bag_roast_date:'Fecha de tostado',
     lib_bag_stock:'Peso inicial (g)',
+    lib_stock_edit_btn:'Ajustar stock',
     lib_recipes:'Recetas', lib_milk:'Leche',
     lib_add_milk:'+ Agregar leche', lib_milk_name:'Nombre *', lib_milk_name_ph:'ej. Leche entera',
     lib_milk_stock:'Stock (ml)', lib_milk_emoji:'Emoji', lib_milk_restock:'Reabastecer',

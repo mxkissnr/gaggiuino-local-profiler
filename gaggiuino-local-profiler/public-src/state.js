@@ -34,6 +34,7 @@ export const S = {
   drinkMenu: [],
   milkTypes: [],
   beanEditId: null,
+  _beanStockEditId: null,
   grinderEditId: null,
   trendChart: null,
   profileBarChart: null,

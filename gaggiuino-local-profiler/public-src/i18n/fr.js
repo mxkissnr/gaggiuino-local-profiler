@@ -106,6 +106,7 @@ export default {
     lib_bag_history:'Historique sachets', lib_bag_delete:'Supprimer le sachet',
     lib_bag_roast_date:'Date de torréfaction',
     lib_bag_stock:'Poids initial (g)',
+    lib_stock_edit_btn:'Ajuster le stock',
     lib_recipes:'Recettes', lib_milk:'Lait',
     lib_add_milk:'+ Ajouter du lait', lib_milk_name:'Nom *', lib_milk_name_ph:'ex. Lait entier',
     lib_milk_stock:'Stock (ml)', lib_milk_emoji:'Emoji', lib_milk_restock:'Réapprovisionner',
