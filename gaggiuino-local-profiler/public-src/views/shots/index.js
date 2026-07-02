@@ -158,10 +158,10 @@ export function updateView() {
   const maxTempB = shotB ? (max((shotB.datapoints?.temperature || []).map(v => v / 10)) || 0) : 0;
   const tempMaxScale = Math.ceil(Math.max(maxTempA, maxTempB) + 5) || 100;
 
-  const nameA = shotA.profile?.name || shotA.profileName || 'Unknown Profile';
+  const nameA = shotA.profile?.name || shotA.profileName || t('profile_unknown');
   if (shotB) {
-    const nameB = shotB.profile?.name || shotB.profileName || 'Unknown Profile';
-    document.getElementById('topTitle').innerText   = `Vergleich: Shot ${shotA.id} vs. Shot ${shotB.id}`;
+    const nameB = shotB.profile?.name || shotB.profileName || t('profile_unknown');
+    document.getElementById('topTitle').innerText   = t('compare_title', shotA.id, shotB.id);
     document.getElementById('valProfile').innerText = `${nameA} vs. ${nameB}`;
   } else {
     document.getElementById('topTitle').innerText   = `${nameA} – Shot ${shotA.id}`;
@@ -243,8 +243,8 @@ export function updateView() {
   const phaseSubtitle = document.getElementById('phaseSubtitle');
   if (phases) {
     const phaseHtml =
-      `<span class="phase-tag">Preinfusion <span>${formatTimeLabel(phases.preinfusion)}</span></span>` +
-      `<span class="phase-tag">Extraktion <span>${formatTimeLabel(phases.extraction)}</span></span>`;
+      `<span class="phase-tag">${t('phase_preinfusion')} <span>${formatTimeLabel(phases.preinfusion)}</span></span>` +
+      `<span class="phase-tag">${t('phase_extraction')} <span>${formatTimeLabel(phases.extraction)}</span></span>`;
     document.getElementById('phases').innerHTML = phaseHtml;
     phasesItem.style.display = '';
     if (phaseSubtitle) { phaseSubtitle.innerHTML = phaseHtml; phaseSubtitle.style.display = ''; }

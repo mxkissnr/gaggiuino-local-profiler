@@ -11,7 +11,10 @@ import es from '../public-src/i18n/es.js';
 import nl from '../public-src/i18n/nl.js';
 
 const LANGS = { de, en, it: itLang, fr, es, nl };
-const NEW_KEYS = ['machine_ready', 'export_csv_title', 'export_shot_title', 'share_card_tooltip'];
+const NEW_KEYS = [
+    'machine_ready', 'export_csv_title', 'export_shot_title', 'share_card_tooltip',
+    'compare_title', 'please_wait', 'profile_unknown',
+];
 
 describe('i18n language files', () => {
     it('all 6 languages export the same key set', () => {
@@ -27,6 +30,15 @@ describe('i18n language files', () => {
                 expect(obj, `${name}.js missing ${key}`).toHaveProperty(key);
                 expect(obj[key], `${name}.js ${key} is empty`).toBeTruthy();
             }
+        }
+    });
+
+    it('compare_title is a function that interpolates both shot ids', () => {
+        for (const [name, obj] of Object.entries(LANGS)) {
+            expect(typeof obj.compare_title, `${name}.js compare_title should be a function`).toBe('function');
+            const rendered = obj.compare_title(11, 22);
+            expect(rendered, `${name}.js compare_title output`).toContain('11');
+            expect(rendered, `${name}.js compare_title output`).toContain('22');
         }
     });
 });
@@ -55,5 +67,37 @@ describe('index.html i18n wiring', () => {
     it('backup download control is no longer a plain <a href> (would 401 outside HA ingress)', () => {
         expect(html).not.toMatch(/<a[^>]*id="backupDownloadBtn"[^>]*href=/);
         expect(html).toMatch(/<button[^>]*id="backupDownloadBtn"/);
+    });
+});
+
+describe('shot detail view i18n wiring', () => {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(join(__dirname, '../public-src/views/shots/index.js'), 'utf8');
+
+    it('phase-tag chips use t() instead of hardcoded German labels', () => {
+        expect(src).not.toMatch(/class="phase-tag">Preinfusion /);
+        expect(src).not.toMatch(/class="phase-tag">Extraktion /);
+        expect(src).toContain("t('phase_preinfusion')");
+        expect(src).toContain("t('phase_extraction')");
+    });
+
+    it('compare title and unknown-profile fallback go through t() instead of hardcoded strings', () => {
+        expect(src).not.toContain('Vergleich: Shot');
+        expect(src).not.toContain("'Unknown Profile'");
+        expect(src).toContain("t('compare_title'");
+        expect(src).toContain("t('profile_unknown')");
+    });
+});
+
+describe('setLang() re-renders the open shot view', () => {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(join(__dirname, '../public-src/i18n.js'), 'utf8');
+
+    it('calls window.updateView() when switching language while on the shots view', () => {
+        // Regression guard: the Chart.js legend, grind advice and phase tags are only
+        // rebuilt when the shot detail re-renders — applyTranslations()'s DOM scan can't
+        // reach canvas-drawn text, so a language switch used to leave them stuck in
+        // whatever language was active when the shot was first opened.
+        expect(src).toMatch(/currentMode === 'shots'.*window\.updateView/);
     });
 });

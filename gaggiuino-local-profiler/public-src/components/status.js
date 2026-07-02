@@ -90,7 +90,7 @@ export async function triggerSync() {
     const r = await apiFetch('api/sync', { method: 'POST' });
     if (r.status === 429) {
       const d = await r.json();
-      btn.textContent = d.error || 'Warten …';
+      btn.textContent = d.error || t('please_wait');
       setTimeout(() => { btn.textContent = t('btn_sync'); btn.disabled = false; }, 3000);
       return;
     }

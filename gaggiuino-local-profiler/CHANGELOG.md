@@ -1,3 +1,10 @@
+## [1.94.2] – 2026-07-02
+
+### Fixed
+- **Shot detail view stayed in the previous language after switching UI language** — the Chart.js legend (pressure/flow/weight/temperature + target lines) and the grind-advice message are built once via `t()` when a shot is rendered; they're drawn to canvas/computed text, not scanned by `applyTranslations()`, so a language switch while a shot was already open left them frozen. `setLang()` now also rebuilds the open shot view (`window.updateView()`) when the shots tab is active. Closes #216
+- **Phase-tag chips, compare-shots title and "Unknown Profile" fallback were hardcoded German**, bypassing the i18n system entirely (unlike the chart's own phase overlay bands, which already used `phase_preinfusion`/`phase_extraction` correctly). Wired to existing/new translation keys (`compare_title`, `profile_unknown`) across all 6 languages. Closes #216
+- **Sync button's rate-limit message** fell back to hardcoded `'Warten …'` when the server didn't return an error string — now uses the new `please_wait` key. Closes #216
+
 ## [1.94.1] – 2026-07-02
 
 ### Fixed

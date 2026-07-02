@@ -13,6 +13,9 @@ export function setLang(lang) {
   applyTranslations();
   // Lazy imports to avoid circular deps — call via window assignments set in main.js
   if (window.renderSidebar) window.renderSidebar();
+  // Shot detail (Chart.js legend, phase tags, grind advice) is rendered to canvas/innerHTML
+  // once per shot selection, not scanned by applyTranslations() — must be rebuilt explicitly.
+  if (S.currentMode === 'shots' && window.updateView) window.updateView();
   if (S.currentMode === 'analytics' && window.initAnalytics) window.initAnalytics();
   if (S.currentMode === 'library') {
     if (window.renderBeanList) window.renderBeanList();
