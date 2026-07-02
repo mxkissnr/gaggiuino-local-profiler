@@ -30,6 +30,7 @@ export default {
     grind_coarser_urgent:'Gröber mahlen', grind_channeling:'Puck-Vorbereitung prüfen',
     live_title:'Live Shot', live_connecting:'Verbinde …', live_brewing:'Brewing …',
     live_waiting:'Warte auf Bezug …', live_disabled:'Live deaktiviert (Maschine aus)',
+    machine_ready:'Maschine bereit',
     ref_label:'Referenz:', ref_none:'— kein Referenz-Shot —', ref_clear:'✕ Löschen',
     ref_pressure:'Ref: Druck', ref_flow:'Ref: Fluss', ref_weight:'Ref: Gewicht', ref_temp:'Ref: Temp',
     chart_pressure:'Druck', chart_flow:'Pumpenfluss', chart_weightflow:'Gewichtsfluss',
@@ -154,6 +155,8 @@ export default {
     preheat_warming:'Aufheizen …', preheat_ready:'Brühbereit ☕',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} verbleibend`,
     btn_export_profile_tooltip:'Gaggiuino-Profil aus Shot exportieren',
+    export_csv_title:'Alle Shots als CSV exportieren',
+    export_shot_title:'Aktuellen Shot als .shot exportieren (Decent Espresso Format)',
     profile_export_no_data:'Keine Profildaten in diesem Shot vorhanden.',
     sidebar_hint:'Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).',
     sidebar_collapse:'Sidebar einklappen', sidebar_expand:'Sidebar aufklappen',
@@ -227,4 +230,5 @@ export default {
     share_card_title:'Mein Espresso-Shot',
     card_fmt_square:'Quadrat (1:1)',
     card_fmt_story:'Story (9:16)',
+    share_card_tooltip:'Shot als PNG-Karte exportieren / teilen',
 };

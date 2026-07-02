@@ -8,14 +8,11 @@ const DB_PATH = path.join(DATA_DIR, 'glp.db');
 
 let _db = null;
 
-function getDb() {
-    if (_db) return _db;
-
-    _db = new Database(DB_PATH);
-    _db.pragma('journal_mode = WAL');
-    _db.pragma('foreign_keys = ON');
-
-    _db.exec(`
+// Extracted so tests can stand up an isolated (e.g. in-memory) database with
+// the same schema instead of duplicating this SQL.
+function initSchema(db) {
+    db.pragma('foreign_keys = ON');
+    db.exec(`
         CREATE TABLE IF NOT EXISTS shots (
             id          INTEGER PRIMARY KEY,
             timestamp   INTEGER NOT NULL,
@@ -71,6 +68,14 @@ function getDb() {
             value       TEXT NOT NULL DEFAULT '{}'
         );
     `);
+}
+
+function getDb() {
+    if (_db) return _db;
+
+    _db = new Database(DB_PATH);
+    _db.pragma('journal_mode = WAL');
+    initSchema(_db);
 
     fixSchema(_db);
     migrate(_db);
@@ -136,7 +141,7 @@ function migrate(db) {
     const migrateAll = db.transaction(() => {
         for (const shot of shots) {
             const { id, timestamp, duration, profile_name, profileName, ...rest } = shot;
-            insertShot.run(id, timestamp, duration ?? null, profile_name ?? profileName ?? null, JSON.stringify(rest));
+            insertShot.run(id, timestamp ?? null, duration ?? null, profile_name ?? profileName ?? null, JSON.stringify(rest));
             const ann = annotations[String(id)];
             if (ann) insertAnnotation.run(id, JSON.stringify(ann));
         }
@@ -189,4 +194,4 @@ function migrate(db) {
     log(`DB: migration complete — ${shotCount} shots, ${Object.keys(annotations).length} annotations`);
 }
 
-module.exports = { getDb };
+module.exports = { getDb, initSchema };

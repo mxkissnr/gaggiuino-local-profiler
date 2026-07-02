@@ -1,3 +1,10 @@
+## [1.94.1] – 2026-07-02
+
+### Fixed
+- **Critical: a single malformed shot in a restore could wipe existing data** — `POST /api/restore` explicitly allowed shots with a missing `timestamp` to pass validation, then wiped `shots`/`annotations`/`trash`/`blocklist` in a transaction that committed *before* the reinsert loop ran outside any transaction. Since `timestamp` is `NOT NULL`, a reinsert failure left the library empty with no way back. Wipe and reinsert are now one atomic transaction (any failure rolls back everything), validation rejects missing/non-numeric timestamps outright, and the error response now names the specific offending shot instead of a generic message. Added defensive `?? null` fallbacks in `ShotRepository` and the legacy JSON migration path as well. Closes #215
+- **Backup download 401'd for any client not proxied through HA ingress** — the download button was a plain `<a href="api/backup">`; a native anchor navigation can't attach the `X-GLP-Token` header, so any access outside HA Supervisor ingress (e.g. a direct LAN URL) got a raw `{"error":"Unauthorized"}` instead of a file. Now fetches through the same token-aware `apiFetch()` used elsewhere and triggers the download from the resulting blob. Closes #215
+- **Several UI strings never translated regardless of selected language** — the "Live Shot" heading, the Live view's idle-state heading, the CSV/.shot export button tooltips, and the share-card button tooltip were never wired into the i18n system (`live_title` existed but was unused; the others had no key at all). Added the missing `data-i18n`/`data-i18n-title` attributes and the new `machine_ready`, `export_csv_title`, `export_shot_title` and `share_card_tooltip` keys to all 6 language files. Closes #215
+
 ## [1.94.0] – 2026-06-30
 
 ### Added

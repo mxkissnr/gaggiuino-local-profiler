@@ -30,6 +30,7 @@ export default {
     grind_coarser_urgent:'Macinare più grosso', grind_channeling:'Controllare la preparazione del puck',
     live_title:'Shot Live', live_connecting:'Connessione …', live_brewing:'Estrazione …',
     live_waiting:'In attesa dello shot …', live_disabled:'Live disabilitato (macchina spenta)',
+    machine_ready:'Macchina pronta',
     ref_label:'Riferimento:', ref_none:'— nessuno shot di riferimento —', ref_clear:'✕ Rimuovi',
     ref_pressure:'Rif: Pressione', ref_flow:'Rif: Flusso', ref_weight:'Rif: Peso', ref_temp:'Rif: Temp',
     chart_pressure:'Pressione', chart_flow:'Flusso', chart_weightflow:'Flusso peso',
@@ -165,6 +166,8 @@ export default {
     preheat_warming:'Riscaldamento …', preheat_ready:'Pronto per estrarre ☕',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} rimanenti`,
     btn_export_profile_tooltip:'Esporta profilo Gaggiuino dallo shot',
+    export_csv_title:'Esporta tutti gli shot come CSV',
+    export_shot_title:'Esporta lo shot corrente come .shot (formato Decent Espresso)',
     profile_export_no_data:'Nessun dato di profilo disponibile in questo shot.',
     sidebar_hint:'Clicca sul nome per Shot A. Usa <b>⇄</b> per il confronto (Shot B).',
     sidebar_collapse:'Comprimi la barra laterale', sidebar_expand:'Espandi la barra laterale',
@@ -245,4 +248,5 @@ export default {
     share_card_title:'Il mio espresso',
     card_fmt_square:'Quadrato (1:1)',
     card_fmt_story:'Storia (9:16)',
+    share_card_tooltip:'Esporta/condividi lo shot come card PNG',
 };

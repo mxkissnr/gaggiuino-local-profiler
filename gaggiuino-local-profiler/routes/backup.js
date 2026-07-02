@@ -43,11 +43,15 @@ router.post('/api/restore', (req, res, next) => {
             return res.status(400).json({ error: 'Invalid backup file' });
         if (b.shots.length > MAX_SHOT_ID)
             return res.status(400).json({ error: `Backup contains too many shots (max ${MAX_SHOT_ID})` });
-        const validShots = b.shots.every(s =>
-            s !== null && typeof s === 'object' &&
-            Number.isInteger(s.id) && s.id > 0 &&
-            (s.timestamp === undefined || typeof s.timestamp === 'number'));
-        if (!validShots) return res.status(400).json({ error: 'Invalid shot data in backup' });
+        for (let i = 0; i < b.shots.length; i++) {
+            const s = b.shots[i];
+            if (s === null || typeof s !== 'object')
+                return res.status(400).json({ error: `Backup shot #${i} is not a valid object` });
+            if (!Number.isInteger(s.id) || s.id <= 0)
+                return res.status(400).json({ error: `Backup shot #${i} has an invalid id (${s.id})` });
+            if (typeof s.timestamp !== 'number')
+                return res.status(400).json({ error: `Backup shot #${i} (id=${s.id}) has an invalid or missing timestamp` });
+        }
 
         const db = getDb();
         db.transaction(() => {
@@ -55,16 +59,16 @@ router.post('/api/restore', (req, res, next) => {
             db.prepare('DELETE FROM annotations').run();
             db.prepare('DELETE FROM trash').run();
             db.prepare('DELETE FROM blocklist').run();
-        })();
 
-        for (const shot of b.shots) shotService.upsertShot(shot);
-        if (b.annotations && typeof b.annotations === 'object') {
-            for (const [id, ann] of Object.entries(b.annotations)) {
-                shotService.saveAnnotation(parseInt(id), ann);
+            for (const shot of b.shots) shotService.upsertShot(shot);
+            if (b.annotations && typeof b.annotations === 'object') {
+                for (const [id, ann] of Object.entries(b.annotations)) {
+                    shotService.saveAnnotation(parseInt(id), ann);
+                }
             }
-        }
-        if (b.coffee_library) libService.saveLibrary(b.coffee_library);
-        if (Array.isArray(b.blocklist)) shotService.saveBlocklist(b.blocklist.map(Number));
+            if (b.coffee_library) libService.saveLibrary(b.coffee_library);
+            if (Array.isArray(b.blocklist)) shotService.saveBlocklist(b.blocklist.map(Number));
+        })();
 
         log(`Restore completed from backup v${b.version || '?'} (${b.shots.length} shots)`);
         res.json({ ok: true, shots: b.shots.length });

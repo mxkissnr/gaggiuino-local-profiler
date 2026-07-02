@@ -15,7 +15,7 @@ import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggl
          renderAnnotationPanel, renderStars, quickClone, saveAnnotation, scheduleAutoSave, updateDegassing, calcBeanAgeAtShot,
          updateView, switchChartTab, updatePQChart,
          openChartFullscreen, closeChartFullscreen, switchFsTab,
-         exportCSV, exportAllCSV, exportShot, exportProfile, shareCard, restoreFromFile,
+         exportCSV, exportAllCSV, exportShot, exportProfile, shareCard, restoreFromFile, downloadBackup,
          loadDrinkMenu, loadMilkTypes, selectDrinkType, selectMilkType } from './views/shots.js';
 
 import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, clearReferenceShot,
@@ -462,6 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => setLang(btn.dataset.lang));
   });
   document.querySelector('input[type="file"][accept=".json"]').addEventListener('change', e => restoreFromFile(e.target));
+  document.getElementById('backupDownloadBtn').addEventListener('click', downloadBackup);
   document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
   document.getElementById('annRecipe')?.addEventListener('change', scheduleAutoSave);
 

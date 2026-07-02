@@ -625,6 +625,29 @@ export async function shareCard(format = 'square') {
 
 // ── Backup / Restore ──────────────────────────────────────────────────────
 
+// Plain <a href="api/backup"> links can't carry the X-GLP-Token header, so a
+// direct browser navigation 401s for any client that isn't proxied through HA
+// ingress (which injects its own trust headers). Fetch through apiFetch (which
+// does attach the token) and trigger the download from the resulting blob instead.
+export async function downloadBackup() {
+  try {
+    const r = await apiFetch('api/backup');
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert(t('backup_error', err.error || r.status));
+      return;
+    }
+    const bundle = await r.json();
+    const blob   = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    const url    = URL.createObjectURL(blob);
+    const a      = document.createElement('a');
+    a.href = url;
+    a.download = `glp-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { alert(t('backup_error', e.message)); }
+}
+
 export async function restoreFromFile(input) {
   const file = input.files[0];
   if (!file) return;

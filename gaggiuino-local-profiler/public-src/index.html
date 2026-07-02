@@ -101,11 +101,11 @@
                         <div id="shotScoreVal" class="score-num">–</div>
                         <div class="score-lbl">Score</div>
                     </div>
-                    <button class="export-btn" id="exportAllCsvBtn" title="Alle Shots als CSV exportieren">↓ CSV</button>
-                    <button class="export-btn" id="exportShotBtn" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
+                    <button class="export-btn" id="exportAllCsvBtn" data-i18n-title="export_csv_title" title="Alle Shots als CSV exportieren">↓ CSV</button>
+                    <button class="export-btn" id="exportShotBtn" data-i18n-title="export_shot_title" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
                     <button class="export-btn" id="exportProfileBtn" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
                     <div class="card-fmt-wrap" id="cardFmtWrap">
-                      <button class="export-btn" id="shareCardBtn" data-i18n="share_card" title="Shot als PNG-Karte exportieren / teilen">Teilen</button>
+                      <button class="export-btn" id="shareCardBtn" data-i18n="share_card" data-i18n-title="share_card_tooltip" title="Shot als PNG-Karte exportieren / teilen">Teilen</button>
                       <div class="card-fmt-menu" id="cardFmtMenu">
                         <button class="card-fmt-opt" data-format="square" data-i18n="card_fmt_square">Quadrat (1:1)</button>
                         <button class="card-fmt-opt" data-format="story"  data-i18n="card_fmt_story">Story (9:16)</button>
@@ -563,7 +563,7 @@
     <!-- Live view -->
     <div id="live-view">
         <div id="live-header">
-            <h1>Live Shot</h1>
+            <h1 data-i18n="live_title">Live Shot</h1>
             <div id="live-status-badge">
                 <span class="badge-dot"></span>
                 <span id="live-status-text">Verbinde …</span>
@@ -624,7 +624,7 @@
                 </div>
             </div>
             <div class="idle-icon">☕</div>
-            <h2>Maschine bereit</h2>
+            <h2 data-i18n="machine_ready">Maschine bereit</h2>
             <p id="liveIdleText" data-i18n="live_idle_text">Sobald ein Bezug startet, erscheinen hier die Echtzeit-Daten.</p>
         </div>
     </div><!-- #live-view -->
@@ -748,7 +748,7 @@
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="backup_title">Backup & Restore</h3>
             <p class="settings-card-desc" data-i18n="backup_desc">Alle Shots, Notizen und die Kaffee-Bibliothek als JSON-Datei sichern oder wiederherstellen.</p>
-            <a id="backupDownloadBtn" href="api/backup" class="backup-btn" data-i18n="backup_download">Backup herunterladen</a>
+            <button id="backupDownloadBtn" type="button" class="backup-btn" data-i18n="backup_download">Backup herunterladen</button>
             <label class="backup-btn" style="cursor:pointer" data-i18n="backup_restore">
                 Aus Backup wiederherstellen …
                 <input type="file" accept=".json" style="display:none">

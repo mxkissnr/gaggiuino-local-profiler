@@ -45,7 +45,7 @@ class ShotRepository {
         const { id, timestamp, duration, profile_name, profileName, annotation, ...rest } = shot;
         db.prepare(
             'INSERT OR REPLACE INTO shots (id, timestamp, duration, profile_name, data) VALUES (?,?,?,?,?)'
-        ).run(id, timestamp, duration ?? null, profile_name ?? profileName ?? null, JSON.stringify(rest));
+        ).run(id, timestamp ?? null, duration ?? null, profile_name ?? profileName ?? null, JSON.stringify(rest));
         if (annotation !== undefined) {
             db.prepare('INSERT OR REPLACE INTO annotations (shot_id, data) VALUES (?,?)').run(id, JSON.stringify(annotation));
         }
@@ -60,7 +60,7 @@ class ShotRepository {
         db.transaction(() => {
             for (const shot of shots) {
                 const { id, timestamp, duration, profile_name, profileName, annotation, ...rest } = shot;
-                ins.run(id, timestamp, duration ?? null, profile_name ?? profileName ?? null, JSON.stringify(rest));
+                ins.run(id, timestamp ?? null, duration ?? null, profile_name ?? profileName ?? null, JSON.stringify(rest));
             }
         })();
     }
