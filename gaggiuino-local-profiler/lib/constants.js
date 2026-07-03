@@ -3,25 +3,16 @@ if (typeof File === 'undefined') {
     try { global.File = require('buffer').File; } catch (_) { global.File = class File {}; }
 }
 
-const GLP_VERSION  = '1.94.2';
+const GLP_VERSION  = '1.94.3';
 const DEFAULT_PORT = 8099;
 
 const DATA_DIR             = '/data';
 const TOKEN_FILE           = '/data/api_token.txt';
 const PREHEAT_STATE_FILE   = '/data/preheat_state.json';
-const DATA_FILE            = '/data/shots.json';
-const MAINTENANCE_LOG_FILE = '/data/maintenance_log.json';
-const ANNOTATIONS_FILE     = '/data/annotations.json';
-const TRASH_FILE           = '/data/trash.json';
-const BLOCKLIST_FILE       = '/data/blocklist.json';
 const OPTIONS_FILE         = '/data/options.json';
-const LIBRARY_FILE         = '/data/coffee_library.json';
-const MAINTENANCE_FILE     = '/data/maintenance.json';
-const ORDERS_FILE          = '/data/orders.json';
-const MENU_FILE            = '/data/menu.json';
-const ORDERS_SETTINGS_FILE = '/data/orders_settings.json';
-const NOTIFY_MAPPING_FILE  = '/data/notify_mapping.json';
 const PROFILES_CACHE_FILE  = '/data/profiles_cache.json';
+// Legacy per-entity JSON files live on only as one-time migration sources —
+// their paths are owned by lib/db.js (JSON_FILES); nothing else may touch them.
 
 const TRASH_TTL_MS          = 30 * 24 * 60 * 60 * 1000;
 const ORDERS_HISTORY_TTL_MS = 7  * 24 * 60 * 60 * 1000;
@@ -60,9 +51,7 @@ const STATIC_MAINTENANCE_TASKS = new Set(['descaling', 'backflush', 'grouphead',
 
 module.exports = {
     GLP_VERSION, DEFAULT_PORT,
-    DATA_DIR, TOKEN_FILE, PREHEAT_STATE_FILE, DATA_FILE, ANNOTATIONS_FILE,
-    TRASH_FILE, BLOCKLIST_FILE, OPTIONS_FILE, LIBRARY_FILE, MAINTENANCE_FILE, MAINTENANCE_LOG_FILE,
-    ORDERS_FILE, MENU_FILE, ORDERS_SETTINGS_FILE, NOTIFY_MAPPING_FILE, PROFILES_CACHE_FILE,
+    DATA_DIR, TOKEN_FILE, PREHEAT_STATE_FILE, OPTIONS_FILE, PROFILES_CACHE_FILE,
     TRASH_TTL_MS, ORDERS_HISTORY_TTL_MS, MAX_SHOT_ID,
     HA_INGRESS_PATH, HA_API, HA_TOKEN, ALLOWED_URL_SCHEMES, ALLOWED_IMPORT_HOSTS,
     TEMP_HISTORY_MAX, TEMP_STABLE_MIN, TEMP_STABLE_VAR, PREHEAT_STATE_TTL,

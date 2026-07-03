@@ -131,6 +131,17 @@ class ShotRepository {
         const row = getDb().prepare('SELECT MAX(id) AS max FROM shots').get();
         return row?.max ?? 0;
     }
+
+    count() {
+        return getDb().prepare('SELECT COUNT(*) AS n FROM shots').get().n;
+    }
+
+    getLatestId() {
+        const row = getDb().prepare(
+            'SELECT id FROM shots WHERE id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1'
+        ).get();
+        return row?.id ?? null;
+    }
 }
 
 module.exports = new ShotRepository();

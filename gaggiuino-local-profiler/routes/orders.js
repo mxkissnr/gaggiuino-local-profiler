@@ -1,16 +1,15 @@
 const express = require('express');
-const fs      = require('fs');
 const router  = express.Router();
 
-const { ANNOTATIONS_FILE, DATA_FILE } = require('../lib/constants');
 const {
     loadOrders, saveOrders, loadMenu, saveMenu,
     loadOrdersSettings, saveOrdersSettings,
     loadNotifyMapping, saveNotifyMapping,
-    loadAnnotations, loadTrash, isOrdersEnabled, loadOptions, loadLibrary,
+    isOrdersEnabled, loadOptions, loadLibrary,
 } = require('../lib/data');
+const shotRepo = require('../lib/repositories/ShotRepository');
 const { sendHaNotify, getNotifyServices, getHaPersons } = require('../lib/ha');
-const { log, rateLimit, writeFileSafe } = require('../lib/helpers');
+const { log, rateLimit } = require('../lib/helpers');
 const state = require('../lib/state');
 
 function _getPreheatInfo() {
@@ -65,8 +64,11 @@ async function _broadcastShopState(s, prev, recipients) {
     }
 }
 
-// Guard: all order routes require enable_orders: true
-router.use((req, res, next) => {
+// Guard: all order routes require enable_orders: true.
+// Must stay scoped to /api/orders — an unscoped router.use() runs for every
+// request passing through this router and would 404 the routes and static
+// frontend mounted after it in server.js whenever orders are disabled.
+router.use('/api/orders', (req, res, next) => {
     if (!isOrdersEnabled()) return res.status(404).json({ error: 'orders feature not enabled' });
     next();
 });
@@ -349,22 +351,15 @@ router.post('/api/orders/:id/complete', (req, res) => {
     if (!order) return res.status(404).json({ error: 'not found' });
     order.status      = 'done';
     order.completedAt = Date.now();
-    try {
-        if (fs.existsSync(DATA_FILE)) {
-            const trash = loadTrash();
-            const shots = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')).filter(s => !trash[String(s.id)]);
-            order.shotId = shots[shots.length - 1]?.id ?? null;
-        }
-    } catch { order.shotId = null; }
+    try { order.shotId = shotRepo.getLatestId(); } catch { order.shotId = null; }
     if (order.shotId != null) {
         try {
-            const annotations = loadAnnotations();
-            const key = String(order.shotId);
-            annotations[key] = { ...(annotations[key] || {}), orderedBy: {
+            const annotation = shotRepo.getAnnotation(order.shotId);
+            annotation.orderedBy = {
                 customer: order.customer, haUserId: order.haUserId, orderId: order.id,
                 item: order.item, variant: order.variant || null, note: order.note || null,
-            } };
-            writeFileSafe(ANNOTATIONS_FILE, annotations);
+            };
+            shotRepo.saveAnnotation(order.shotId, annotation);
         } catch { /* non-critical */ }
     }
     saveOrders(orders);

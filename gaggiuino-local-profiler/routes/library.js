@@ -1,10 +1,9 @@
 const express = require('express');
-const fs      = require('fs');
 const router  = express.Router();
 
-const { MAINTENANCE_FILE } = require('../lib/constants');
 const { loadLibrary, saveLibrary } = require('../lib/data');
-const { rateLimit, writeFileSafe } = require('../lib/helpers');
+const libraryService = require('../lib/services/LibraryService');
+const { rateLimit } = require('../lib/helpers');
 
 router.get('/api/library', (req, res) => {
     res.json(loadLibrary());
@@ -184,10 +183,11 @@ router.post('/api/library/grinder/:id/delete', (req, res) => {
     lib.grinders = lib.grinders.filter(g => g.id !== id);
     saveLibrary(lib);
     try {
-        const maint = fs.existsSync(MAINTENANCE_FILE)
-            ? JSON.parse(fs.readFileSync(MAINTENANCE_FILE, 'utf8')) : {};
-        delete maint[`grinder_${id}`];
-        writeFileSafe(MAINTENANCE_FILE, maint);
+        const maint = libraryService.getMaintenance();
+        if (`grinder_${id}` in maint) {
+            delete maint[`grinder_${id}`];
+            libraryService.saveMaintenance(maint);
+        }
     } catch (e) {}
     res.json({ ok: true });
 });

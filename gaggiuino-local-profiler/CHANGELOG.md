@@ -1,3 +1,9 @@
+## [1.94.3] – 2026-07-03
+
+### Fixed
+- **Four routes still read/wrote the frozen legacy JSON files instead of SQLite**, causing real data loss since the migration: `/api/status` counted shots from the stale `shots.json` (the HA `shot_count` sensor was stuck at the migration snapshot), order completion looked up the latest shot id in the stale file (order→shot links pointed at old shots or `null`), the `orderedBy` customer attribution was written to `annotations.json` while all reads come from the DB (silently lost), and grinder deletion removed its maintenance entry from `maintenance.json` instead of the DB (orphaned rows). All four call sites now go through `ShotRepository`/`LibraryService`; the dead legacy `*_FILE` constants were removed. Closes #217
+- **With `enable_orders: false` (the default) the whole app 404'd**: the orders guard was an unscoped `router.use()`, which runs for every request passing through the router — `/api/status`, backup, import and even the static frontend (all mounted after the orders router) were swallowed. The guard is now scoped to `/api/orders`. Closes #221
+
 ## [1.94.2] – 2026-07-02
 
 ### Fixed

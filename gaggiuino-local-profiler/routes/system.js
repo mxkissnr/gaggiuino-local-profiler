@@ -18,7 +18,8 @@ function getOpenApiSpec() {
     return _openApiSpec;
 }
 
-const { GLP_VERSION, DATA_FILE, HA_API, HA_TOKEN, PROFILES_CACHE_FILE } = require('../lib/constants');
+const { GLP_VERSION, HA_API, HA_TOKEN, PROFILES_CACHE_FILE } = require('../lib/constants');
+const shotRepo = require('../lib/repositories/ShotRepository');
 const { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled, loadMenu } = require('../lib/data');
 const { getSwitchState, callHaService } = require('../lib/ha');
 const { log, rateLimit } = require('../lib/helpers');
@@ -102,10 +103,7 @@ router.get('/api/status', (req, res) => {
     const opts          = loadOptions();
     const machineUrl    = getMachineUrl(opts);
     let shotCount = 0, machineHostname = '';
-    try {
-        if (fs.existsSync(DATA_FILE))
-            shotCount = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')).length;
-    } catch (e) {}
+    try { shotCount = shotRepo.count(); } catch (e) {}
     try { machineHostname = new URL(machineUrl).hostname; } catch (e) {}
     // Sensitive fields only exposed to authenticated callers (H1)
     const sensitive = req.glpAuthenticated ? {
