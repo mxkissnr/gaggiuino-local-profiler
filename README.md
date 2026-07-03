@@ -63,7 +63,7 @@ Click the button above to add this repository directly to your Home Assistant �
 | 🔗 | **kaffeebraun.com Import** | Paste a product URL from kaffeebraun.com — name, roaster, aromas, origin, roast level and processing are imported automatically; imported beans show source and import date |
 | 🌙 | **Light / Dark theme** | Built-in theme toggle (Settings); choice persisted in localStorage; matching `glp-ha-theme.yaml` for the full HA interface |
 | 🎛️ | **Profile Selector** | Lovelace card shows a dropdown to switch the active brew profile via `select.gaggiuino_profiler_profile` (provided by GLP Integration v1.9.0+) |
-| 📋 | **Order Management** | Barista backend tab to manage espresso orders — queue, accept with ETA, complete or decline with reason; configurable menu (emoji + drink name); companion Lovelace card for customers (`glp-order-card`) |
+| 📋 | **Order Management** | Barista backend tab to manage espresso orders — queue, accept with ETA, complete or decline with reason; configurable menu (emoji + drink name); bean variants offered only while actually in stock, with customer-facing bean descriptions (taste notes, origin, processing); companion Lovelace card for customers (`glp-order-card`) |
 
 ---
 

@@ -660,6 +660,33 @@ paths:
       responses:
         "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
 
+  /api/orders/active-beans:
+    get:
+      tags: [Orders]
+      summary: Beans from the coffee library that are still in stock
+      description: >
+        Stock-tracked beans whose active bag is not yet fully consumed
+        (remaining = stock_g minus summed annotated doses since the active
+        bag was opened). Used by the order card as bean variants.
+      responses:
+        "200":
+          description: Array of in-stock beans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:        { type: integer }
+                    name:      { type: string }
+                    roaster:   { type: string, nullable: true }
+                    decaf:     { type: boolean }
+                    remaining: { type: integer, description: Remaining grams in the active bag }
+                    notes:     { type: string, nullable: true, description: Taste notes (customer-facing) }
+                    origin:    { type: string, nullable: true }
+                    process:   { type: string, nullable: true }
+
   /api/orders/menu:
     get:
       tags: [Orders]

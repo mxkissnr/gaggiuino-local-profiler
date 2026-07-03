@@ -148,6 +148,17 @@ describe('GET /api/orders/active-beans', () => {
         expect(beans[0].remaining).toBe(232); // 250 - 18, the pre-bag shot does not count
     });
 
+    it('exposes customer-facing description fields', async () => {
+        saveLibrary({ beans: [
+            { id: 1, name: 'El Cubanito', stock_g: 500, roaster: 'Kaffee Braun',
+              notes: 'Brauner Zucker, Nuss, Tabaknote', origin: 'Kuba', process: 'Natural' },
+        ], grinders: [], recipes: [] });
+        const [bean] = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
+        expect(bean).toMatchObject({
+            notes: 'Brauner Zucker, Nuss, Tabaknote', origin: 'Kuba', process: 'Natural',
+        });
+    });
+
     it('keeps excluding beans without stock tracking', async () => {
         saveLibrary({ beans: [{ id: 1, name: 'Untracked' }], grinders: [], recipes: [] });
         const beans = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();

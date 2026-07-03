@@ -1,3 +1,8 @@
+## [1.95.0] – 2026-07-03
+
+### Added
+- **Bean descriptions for the order card** — `/api/orders/active-beans` now includes each bean's customer-facing description data from the coffee library (`notes` = taste notes, `origin`, `process`), so the order card can show customers what characterizes a coffee. The endpoint is now also documented in `openapi.yaml`. Closes #220
+
 ## [1.94.5] – 2026-07-03
 
 ### Fixed

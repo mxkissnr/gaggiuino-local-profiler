@@ -67,6 +67,8 @@ Installation via HACS: [github.com/mxkissnr/glp-lovelace-card](https://github.co
 
 Eine kunden-seitige Lovelace-Karte für das Bestellsystem. Kunden wählen ein Getränk aus der Karte, geben eine optionale Notiz ein und verfolgen den Bestellstatus in Echtzeit. Wenn der Barista eine Bestellung als fertig markiert, zeigt die Karte eine Shot-Zusammenfassung mit Druckkurve. Erfordert `enable_orders: true` in der App-Konfiguration.
 
+Bohnen-Varianten kommen aus der Kaffee-Bibliothek über `/api/orders/active-beans`: Angeboten werden nur Bohnen, die tatsächlich noch vorrätig sind (Rest = Packungsvorrat minus der in Shot-Annotationen erfassten Dosen), und jede Bohne liefert ihre kundengerechte Beschreibung mit (Geschmacksnoten, Herkunft, Aufbereitung), damit die Karte zeigen kann, was den Kaffee ausmacht.
+
 Installation via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/mxkissnr/glp-order-card)
 
 ### API-Token

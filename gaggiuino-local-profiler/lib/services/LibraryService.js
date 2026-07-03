@@ -43,6 +43,8 @@ class LibraryService {
             .map(({ bean, remaining }) => ({
                 id: bean.id, name: bean.name, roaster: bean.roaster || null,
                 decaf: !!bean.decaf, remaining,
+                // customer-facing description data for the order card
+                notes: bean.notes || null, origin: bean.origin || null, process: bean.process || null,
             }));
     }
 
