@@ -136,6 +136,19 @@ class ShotRepository {
         return getDb().prepare('SELECT COUNT(*) AS n FROM shots').get().n;
     }
 
+    // Lightweight (coffee, dose, timestamp) rows for bean-consumption math —
+    // avoids hydrating full shot payloads just to sum annotated doses.
+    getAnnotatedDoses() {
+        return getDb().prepare(`
+            SELECT json_extract(a.data, '$.coffee') AS coffee,
+                   json_extract(a.data, '$.dose')   AS dose,
+                   s.timestamp                      AS timestamp
+            FROM annotations a JOIN shots s ON s.id = a.shot_id
+            WHERE json_extract(a.data, '$.coffee') IS NOT NULL
+              AND s.id NOT IN (SELECT shot_id FROM trash)
+        `).all();
+    }
+
     getLatestId() {
         const row = getDb().prepare(
             'SELECT id FROM shots WHERE id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1'

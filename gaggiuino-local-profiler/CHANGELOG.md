@@ -1,3 +1,8 @@
+## [1.94.5] – 2026-07-03
+
+### Fixed
+- **Empty beans were still offered in the order card** — `/api/orders/active-beans` only checked `stock_g > 0`, i.e. the initial bag weight, while the library view computes the real remainder (stock minus the summed annotated doses of matching shots since the active bag was opened). A fully consumed bag (0 g left, "Reorder" badge showing) therefore stayed orderable. The remainder is now computed server-side with the same semantics (`LibraryService.computeBeanRemaining`), sold-out beans are filtered out, and each active bean reports its `remaining` grams. Closes #219
+
 ## [1.94.4] – 2026-07-03
 
 ### Fixed

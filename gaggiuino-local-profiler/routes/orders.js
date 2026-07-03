@@ -7,7 +7,8 @@ const {
     loadNotifyMapping, saveNotifyMapping,
     isOrdersEnabled, loadOptions, loadLibrary,
 } = require('../lib/data');
-const shotRepo = require('../lib/repositories/ShotRepository');
+const shotRepo       = require('../lib/repositories/ShotRepository');
+const libraryService = require('../lib/services/LibraryService');
 const { sendHaNotify, getNotifyServices, getHaPersons } = require('../lib/ha');
 const { log, rateLimit } = require('../lib/helpers');
 const state = require('../lib/state');
@@ -131,11 +132,7 @@ router.get('/api/orders/milk-stock', (req, res) => {
 });
 
 router.get('/api/orders/active-beans', (req, res) => {
-    const lib = loadLibrary();
-    const active = (lib.beans || [])
-        .filter(b => b.stock_g > 0)
-        .map(b => ({ id: b.id, name: b.name, roaster: b.roaster || null, decaf: !!b.decaf }));
-    res.json(active);
+    res.json(libraryService.getActiveBeans());
 });
 
 // ── Settings ──────────────────────────────────────────────────────────────

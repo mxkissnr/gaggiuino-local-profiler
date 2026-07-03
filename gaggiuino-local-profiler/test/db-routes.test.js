@@ -111,6 +111,50 @@ describe('orders-disabled guard', () => {
     });
 });
 
+describe('GET /api/orders/active-beans', () => {
+    const bag = (openedAt) => ({ id: 1, roastDate: '2026-06-01', stock_g: 250, openedAt });
+
+    it('hides beans whose active bag is fully consumed', async () => {
+        saveLibrary({ beans: [
+            { id: 1, name: 'Lucky Punch', stock_g: 250, bags: [bag(0)] },
+            { id: 2, name: 'El Cubanito', stock_g: 500, bags: [bag(0)] },
+        ], grinders: [], recipes: [] });
+        // 14 shots à 18 g = 252 g -> Lucky Punch is empty; El Cubanito untouched
+        shotRepo.upsertMany(Array.from({ length: 14 }, (_, i) => (
+            { id: i + 1, timestamp: 1000 + i, duration: 250 }
+        )));
+        for (let i = 1; i <= 14; i++) shotRepo.saveAnnotation(i, { coffee: 'lucky punch', dose: '18' });
+
+        const r     = await fetch(`${baseUrl}/api/orders/active-beans`);
+        const beans = await r.json();
+        expect(beans.map(b => b.name)).toEqual(['El Cubanito']);
+        expect(beans[0].remaining).toBe(500);
+    });
+
+    it('only counts consumption since the active bag was opened', async () => {
+        const openedAt = 5000 * 1000; // ms — shots before this belong to earlier bags
+        saveLibrary({ beans: [
+            { id: 1, name: 'Dolce', stock_g: 250, bags: [bag(0), bag(openedAt)] },
+        ], grinders: [], recipes: [] });
+        shotRepo.upsertMany([
+            { id: 1, timestamp: 1000, duration: 250 }, // old bag
+            { id: 2, timestamp: 6000, duration: 250 }, // active bag
+        ]);
+        shotRepo.saveAnnotation(1, { coffee: 'Dolce', dose: 18 });
+        shotRepo.saveAnnotation(2, { coffee: 'Dolce', dose: 18 });
+
+        const beans = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
+        expect(beans).toHaveLength(1);
+        expect(beans[0].remaining).toBe(232); // 250 - 18, the pre-bag shot does not count
+    });
+
+    it('keeps excluding beans without stock tracking', async () => {
+        saveLibrary({ beans: [{ id: 1, name: 'Untracked' }], grinders: [], recipes: [] });
+        const beans = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
+        expect(beans).toEqual([]);
+    });
+});
+
 describe('POST /api/library/grinder/:id/delete', () => {
     it('removes the grinder maintenance entry from the database', async () => {
         saveLibrary({ beans: [], grinders: [{ id: 42, name: 'DF64' }], recipes: [] });
