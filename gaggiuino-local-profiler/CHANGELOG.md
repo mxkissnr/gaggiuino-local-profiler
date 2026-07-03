@@ -1,3 +1,8 @@
+## [1.94.4] – 2026-07-03
+
+### Fixed
+- **Restoring a backup from file did nothing** — the "Restore from backup" label carried `data-i18n` while containing the hidden `<input type="file">` as a child; the first `applyTranslations()` run replaces the node's `textContent` and thereby deleted the file input from the DOM, so clicking the button had no effect. The translated text now lives in its own `<span>`, and a regression test asserts that no `[data-i18n]` element in `index.html` contains child elements (the `<b>` inside `empty_desc` was cleaned up along the way). Closes #218
+
 ## [1.94.3] – 2026-07-03
 
 ### Fixed

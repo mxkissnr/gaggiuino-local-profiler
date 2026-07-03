@@ -86,7 +86,7 @@
         <div id="empty-state">
             <div class="es-icon">☕</div>
             <h2 data-i18n="empty_title">Keine Shots vorhanden</h2>
-            <p data-i18n="empty_desc">Stelle sicher, dass die Gaggiuino-Maschine unter der konfigurierten URL erreichbar ist und nutze <b>↻ Sync</b>.</p>
+            <p data-i18n="empty_desc">Stelle sicher, dass die Gaggiuino-Maschine unter der konfigurierten URL erreichbar ist und nutze ↻ Sync.</p>
         </div>
 
         <div id="chart-area">
@@ -749,8 +749,10 @@
             <h3 class="settings-card-title" data-i18n="backup_title">Backup & Restore</h3>
             <p class="settings-card-desc" data-i18n="backup_desc">Alle Shots, Notizen und die Kaffee-Bibliothek als JSON-Datei sichern oder wiederherstellen.</p>
             <button id="backupDownloadBtn" type="button" class="backup-btn" data-i18n="backup_download">Backup herunterladen</button>
-            <label class="backup-btn" style="cursor:pointer" data-i18n="backup_restore">
-                Aus Backup wiederherstellen …
+            <!-- Translation text must live in its own span: applyTranslations sets
+                 textContent on [data-i18n] nodes, which would wipe the file input -->
+            <label class="backup-btn" style="cursor:pointer">
+                <span data-i18n="backup_restore">Aus Backup wiederherstellen …</span>
                 <input type="file" accept=".json" style="display:none">
             </label>
         </div>

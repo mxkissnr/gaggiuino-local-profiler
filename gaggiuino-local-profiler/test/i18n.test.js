@@ -68,6 +68,22 @@ describe('index.html i18n wiring', () => {
         expect(html).not.toMatch(/<a[^>]*id="backupDownloadBtn"[^>]*href=/);
         expect(html).toMatch(/<button[^>]*id="backupDownloadBtn"/);
     });
+
+    it('the restore label keeps its file input out of the data-i18n text node', () => {
+        // applyTranslations() would wipe a child <input> when it sets textContent
+        expect(html).toMatch(/<span data-i18n="backup_restore">/);
+        expect(html).not.toMatch(/<label[^>]*data-i18n="backup_restore"/);
+    });
+
+    it('no [data-i18n] element contains child elements (textContent replacement would drop them)', () => {
+        // Applies to plain data-i18n only; data-i18n-title/-placeholder/-html are safe.
+        const re = /<(\w+)((?:(?!data-i18n-)[^>])*\sdata-i18n="[^"]+"[^>]*)>([\s\S]*?)<\/\1>/g;
+        const offenders = [];
+        for (const m of html.matchAll(re)) {
+            if (/<\w+/.test(m[3])) offenders.push(m[0].slice(0, 100));
+        }
+        expect(offenders, `child elements inside [data-i18n] nodes:\n${offenders.join('\n')}`).toEqual([]);
+    });
 });
 
 describe('shot detail view i18n wiring', () => {
