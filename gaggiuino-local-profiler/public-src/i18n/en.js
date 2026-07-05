@@ -49,6 +49,7 @@ export default {
     lib_bean_origin:'Origin', lib_bean_variety:'Variety', lib_bean_process:'Processing', lib_bean_origin_none:'– none –',
     bean_flavors_label:'Tasting notes', bean_flavors_ph:'Apricot, caramel …', bean_flavors_hint:'Enter or comma adds a note',
     bean_roast_type:'Roast profile', roast_type_none:'– not set –', roast_type_espresso:'Espresso', roast_type_filter:'Filter', roast_type_omni:'Omni',
+    bean_region_label:'Region', bean_region_ph:'Sidama, Bensa …',
     lib_grinder_name:'Name *', lib_grinder_notes:'Notes',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Quijote Kaffee',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',

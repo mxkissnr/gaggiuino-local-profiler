@@ -144,6 +144,29 @@ class LibraryService {
         return changed;
     }
 
+    // Fire-and-forget after bean save: resolve the growing region to
+    // coordinates for the origin map. Never blocks the response; results
+    // land in bean.location on a later library read.
+    async geocodeBean(beanId) {
+        const { geocodeRegion } = require('../geo');
+        const lib  = this.getLibrary();
+        const bean = (lib.beans || []).find(b => b.id === beanId);
+        if (!bean || !bean.region) return;
+        let countryName = '';
+        if (bean.origin) {
+            try { countryName = new Intl.DisplayNames(['en'], { type: 'region' }).of(bean.origin) || ''; }
+            catch { /* raw code is fine as fallback */ }
+        }
+        const location = await geocodeRegion(bean.region, countryName);
+        // re-load: the bean may have changed while we were waiting
+        const fresh = this.getLibrary();
+        const target = (fresh.beans || []).find(b => b.id === beanId);
+        if (!target || target.region !== bean.region) return;
+        target.location = location;
+        this.saveLibrary(fresh);
+        if (location) log(`Geocoded bean "${bean.name}" region "${bean.region}" -> ${location.lat},${location.lon}`);
+    }
+
     // One-time low-stock push per bag: after a shot annotation, when the
     // named bean's remaining falls below the threshold, notify the barista
     // device (same channel as the preheat notification). The notified flag

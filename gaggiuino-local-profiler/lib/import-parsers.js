@@ -94,15 +94,16 @@ function parseHoploProduct(product) {
     });
     const countryPart = title.includes(' - ') ? title.split(' - ').pop().trim() : '';
     const origin      = mapOriginToCode(countryPart) || mapOriginToCode(fields['Herkunft']);
-    // Geschmack becomes structured flavor tags; the growing region stays in notes.
-    const noteParts   = [
-        fields['Herkunft'] ? `Herkunft: ${fields['Herkunft']}` : '',
-    ].filter(Boolean);
+    // Herkunft here is the growing region/district — structured field since #235.
+    // When it is itself just a mappable country name, don't duplicate it.
+    const region = fields['Herkunft'] && !mapOriginToCode(fields['Herkunft'])
+        ? fields['Herkunft'] : null;
     return {
         name:       title,
         roaster:    product.vendor || 'Hoppenworth & Ploch',
-        notes:      noteParts.join(' · '),
+        notes:      '',
         flavors:    splitFlavors(fields['Geschmack']),
+        region,
         origin:     origin || null,
         variety:    fields['Varietät'] || null,
         process:    fields['Prozess'] || null,

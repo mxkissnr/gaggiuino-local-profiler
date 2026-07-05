@@ -49,6 +49,7 @@ export default {
     lib_bean_origin:'Origen', lib_bean_variety:'Variedad', lib_bean_process:'Proceso', lib_bean_origin_none:'– ninguno –',
     bean_flavors_label:'Notas de cata', bean_flavors_ph:'Albaricoque, caramelo …', bean_flavors_hint:'Intro o coma añade una nota',
     bean_roast_type:'Tueste', roast_type_none:'– sin definir –', roast_type_espresso:'Espresso', roast_type_filter:'Filtro', roast_type_omni:'Omni',
+    bean_region_label:'Región', bean_region_ph:'Sidama, Bensa …',
     lib_grinder_name:'Nombre *', lib_grinder_notes:'Notas',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Tostadero Madrid',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',

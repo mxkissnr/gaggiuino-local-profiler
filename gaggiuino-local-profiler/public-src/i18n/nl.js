@@ -49,6 +49,7 @@ export default {
     lib_bean_origin:'Herkomst', lib_bean_variety:'Variëteit', lib_bean_process:'Verwerking', lib_bean_origin_none:'– geen –',
     bean_flavors_label:'Smaaknotities', bean_flavors_ph:'Abrikoos, karamel …', bean_flavors_hint:'Enter of komma voegt toe',
     bean_roast_type:'Branding', roast_type_none:'– niet ingesteld –', roast_type_espresso:'Espresso', roast_type_filter:'Filter', roast_type_omni:'Omni',
+    bean_region_label:'Regio', bean_region_ph:'Sidama, Bensa …',
     lib_grinder_name:'Naam *', lib_grinder_notes:'Notities',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Brandkoffie Amsterdam',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',

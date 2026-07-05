@@ -23,7 +23,7 @@ describe('parseHoploProduct', () => {
         expect(bean.flavors).toContain('Schwarzer Tee');
         expect(bean.flavors).not.toContain('Aprikose, Limonade');
         expect(bean.notes).not.toContain('Aprikose');
-        expect(bean.notes).toContain('Herkunft: Nyabihu District'); // region stays in notes
+        expect(bean.region).toBe('Nyabihu District'); // growing region is structured
         expect(bean.decaf).toBeUndefined();
     });
 

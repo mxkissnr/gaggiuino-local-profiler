@@ -49,6 +49,7 @@ export default {
     lib_bean_origin:'Origine', lib_bean_variety:'Variété', lib_bean_process:'Traitement', lib_bean_origin_none:'– aucune –',
     bean_flavors_label:'Notes de dégustation', bean_flavors_ph:'Abricot, caramel …', bean_flavors_hint:'Entrée ou virgule ajoute une note',
     bean_roast_type:'Torréfaction', roast_type_none:'– non défini –', roast_type_espresso:'Espresso', roast_type_filter:'Filtre', roast_type_omni:'Omni',
+    bean_region_label:'Région', bean_region_ph:'Sidama, Bensa …',
     lib_grinder_name:'Nom *', lib_grinder_notes:'Notes',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Torréfacteur Paris',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clics',
