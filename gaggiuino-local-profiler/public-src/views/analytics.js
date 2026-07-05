@@ -1,6 +1,6 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
-import { LOCALE_MAP } from '../constants.js';
+import { LOCALE_MAP, COFFEE_COUNTRIES, countryName, flagEmoji } from '../constants.js';
 import { scoreClass } from '../utils.js';
 
 // ── Analytics entry point ─────────────────────────────────────────────────
@@ -10,6 +10,7 @@ export function initAnalytics() {
   buildCalendar();
   buildPersonalBests();
   buildBeanStats();
+  buildWorldMap();
   buildProfileChart();
   buildGrinderStats();
   buildDistribution();
@@ -481,6 +482,114 @@ export function buildBeanStats() {
   }
   html += '</div>';
   el.innerHTML = html;
+}
+
+// ── Origin world map ──────────────────────────────────────────────────────
+// Choropleth of coffee origins: shots are joined to library beans by name
+// (case-insensitive, same precedent as the stock math) and colored by shot
+// count; beans with an origin but no shots yet are still highlighted.
+// chartjs-chart-geo comes from the CDN; the topojson is served locally
+// (CSP connect-src 'self') and cached after the first Analytics visit.
+let _worldTopo = null;
+let _geoRegistered = false;
+
+export async function buildWorldMap() {
+  const wrap = document.getElementById('worldMapWrap');
+  if (!wrap) return;
+
+  // Offline HA hosts have no CDN: show the empty-state hint instead of crashing
+  if (typeof ChartGeo === 'undefined') {
+    wrap.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_map_empty')}</p>`;
+    return;
+  }
+  if (!_geoRegistered) {
+    Chart.register(ChartGeo.ChoroplethController, ChartGeo.GeoFeature, ChartGeo.ColorScale, ChartGeo.ProjectionScale);
+    _geoRegistered = true;
+  }
+
+  // bean name (lowercased) → origin code, restricted to known coffee countries
+  const nameToOrigin = new Map();
+  for (const b of (S.coffeeLibrary.beans || [])) {
+    if (b.origin && COFFEE_COUNTRIES.some(c => c.code === b.origin))
+      nameToOrigin.set(String(b.name || '').toLowerCase(), b.origin);
+  }
+
+  // code → { shots, beans:Set } — beans with an origin count even without shots
+  const byCode = {};
+  for (const [name, code] of nameToOrigin) {
+    if (!byCode[code]) byCode[code] = { shots: 0, beans: new Set() };
+    byCode[code].beans.add(name);
+  }
+  for (const s of S.shots) {
+    const code = nameToOrigin.get(String(s.annotation?.coffee || '').toLowerCase());
+    if (code) byCode[code].shots++;
+  }
+
+  if (Object.keys(byCode).length === 0) {
+    if (S.worldMapChart) { S.worldMapChart.destroy(); S.worldMapChart = null; }
+    wrap.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_map_empty')}</p>`;
+    return;
+  }
+  if (!wrap.querySelector('canvas')) wrap.innerHTML = '<canvas id="worldMapChart"></canvas>';
+
+  if (!_worldTopo) {
+    try { _worldTopo = await (await fetch('countries-110m.json')).json(); }
+    catch {
+      wrap.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_map_empty')}</p>`;
+      return;
+    }
+  }
+
+  const numToCode = new Map(COFFEE_COUNTRIES.map(c => [c.num, c.code]));
+  const features  = ChartGeo.topojson.feature(_worldTopo, _worldTopo.objects.countries).features;
+  const maxShots  = Math.max(1, ...Object.values(byCode).map(d => d.shots));
+  const data = features.map(f => {
+    const code = numToCode.get(String(f.id));
+    const d    = code ? byCode[code] : null;
+    // beans without shots get a visible floor so their country still lights up
+    return { feature: f, value: d ? Math.max(d.shots, maxShots * 0.15) : 0, _code: code, _stats: d };
+  });
+
+  const ctx = document.getElementById('worldMapChart');
+  if (S.worldMapChart) { S.worldMapChart.destroy(); S.worldMapChart = null; }
+
+  S.worldMapChart = new Chart(ctx, {
+    type: 'choropleth',
+    data: {
+      labels:   features.map(f => f.properties.name),
+      datasets: [{
+        data,
+        borderColor: 'rgba(63,63,70,.8)',
+        borderWidth: 0.5,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      showOutline: false, showGraticule: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          filter: item => !!item.raw?._stats,
+          callbacks: {
+            label: (c) => {
+              const { _code, _stats } = c.raw;
+              if (!_stats) return null;
+              const name  = `${flagEmoji(_code)} ${countryName(_code, S.currentLang)}`.trim();
+              const beans = [..._stats.beans].join(', ');
+              return `${name}: ${_stats.shots} ${t('analytics_map_shots')} (${beans})`;
+            },
+          },
+        },
+      },
+      scales: {
+        projection: { axis: 'x', projection: 'equalEarth' },
+        color: {
+          axis: 'x', display: false,
+          interpolate: v => v > 0 ? `rgba(34,197,94,${(0.2 + 0.6 * v).toFixed(2)})` : 'rgba(63,63,70,.35)',
+        },
+      },
+    },
+  });
 }
 
 export function buildProfileChart() {

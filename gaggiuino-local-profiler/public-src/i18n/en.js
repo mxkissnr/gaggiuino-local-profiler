@@ -76,6 +76,8 @@ export default {
     analytics_dose_dist:'Dose Distribution (g)', analytics_ratio_dist:'Brew Ratio Distribution',
     analytics_no_distribution:'Not enough annotated shots.',
     analytics_time_of_day:'Time of Day', analytics_no_time:'No shot time data yet.',
+    analytics_world_map:'Coffee World Map', analytics_map_shots:'shots',
+    analytics_map_empty:'Set an origin country on your beans in the Library to see them on the map.',
     bean_stat_shots:'Shots', bean_stat_avg:'Avg Score', bean_stat_best:'Best', bean_stat_duration:'Avg Duration',
     confirm_trash:'Move shot to trash?',
     confirm_delete:(id,name,date)=>`Delete shot ${id}?\n${name} · ${date}\n\nThis action cannot be undone.`,

@@ -15,6 +15,7 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,600&display=swap" rel="stylesheet"/>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-geo@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 </head>
 
@@ -689,6 +690,12 @@
                     <h3 class="analytics-section-title" data-i18n="analytics_profiles">Profil-Performance</h3>
                     <div id="profileChartWrap" style="height:220px;position:relative"><canvas id="profileChart"></canvas></div>
                 </div>
+            </div>
+
+            <!-- Origin world map -->
+            <div class="analytics-card">
+                <h3 class="analytics-section-title" data-i18n="analytics_world_map">Kaffee-Weltkarte</h3>
+                <div id="worldMapWrap" style="height:320px;position:relative"><canvas id="worldMapChart"></canvas></div>
             </div>
 
             <!-- Grinder Stats -->

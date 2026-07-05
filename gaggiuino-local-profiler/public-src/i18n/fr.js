@@ -76,6 +76,8 @@ export default {
     analytics_dose_dist:'Distribution dose (g)', analytics_ratio_dist:'Distribution brew ratio',
     analytics_no_distribution:'Pas assez de shots annotés.',
     analytics_time_of_day:'Heure de la journée', analytics_no_time:'Pas encore de données horaires.',
+    analytics_world_map:'Carte mondiale du café', analytics_map_shots:'shots',
+    analytics_map_empty:"Renseigne le pays d'origine de tes grains dans la Bibliothèque pour les voir sur la carte.",
     bean_stat_shots:'Shots', bean_stat_avg:'Score moy.', bean_stat_best:'Meilleur', bean_stat_duration:'Durée moy.',
     confirm_trash:'Déplacer le shot dans la corbeille ?',
     confirm_delete:(id,name,date)=>`Supprimer le shot ${id} ?\n${name} · ${date}\n\nCette action est irréversible.`,
