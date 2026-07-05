@@ -3,6 +3,23 @@ const { mapOriginToCode } = require('./coffee-countries');
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+// Splits a tasting-notes string into flavor tags: separators , and ;, trailing
+// parenthesized qualifiers ("Schwarzer Tee (Filter)") stripped, deduped.
+function splitFlavors(text) {
+    if (typeof text !== 'string') return [];
+    const seen = new Set();
+    const out  = [];
+    for (const raw of text.split(/[;,]/)) {
+        const s = raw.replace(/\s*\([^)]*\)\s*$/, '').trim();
+        if (!s || s.length > 50) continue;
+        const key = s.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(s);
+    }
+    return out;
+}
+
 // ── kaffeebraun.com (Shopware) ────────────────────────────────────────────
 // Parses the product detail page HTML. Returns null when no product found.
 function parseKaffeebraun(html) {
@@ -20,8 +37,8 @@ function parseKaffeebraun(html) {
     // Herkunft maps to the structured origin field when it is a single known
     // country; blends/unknown strings stay in notes.
     const origin    = mapOriginToCode(props['Herkunft']);
+    // Aroma becomes structured flavor tags; only the leftovers stay in notes.
     const noteParts = [
-        props['Aroma'],
         props['Herkunft'] && !origin ? `Herkunft: ${props['Herkunft']}`            : '',
         roastLabel                   ? `Röstgrad: ${roastLabel} (${roastScore}/5)` : '',
     ].filter(Boolean);
@@ -29,6 +46,7 @@ function parseKaffeebraun(html) {
         name,
         roaster:    'Kaffee Braun',
         notes:      noteParts.join(' · '),
+        flavors:    splitFlavors(props['Aroma']),
         origin:     origin || null,
         variety:    props['Varietät'] || null,
         process:    props['Aufbereitungsart'] || null,
@@ -64,14 +82,15 @@ function parseHoploProduct(product) {
     });
     const countryPart = title.includes(' - ') ? title.split(' - ').pop().trim() : '';
     const origin      = mapOriginToCode(countryPart) || mapOriginToCode(fields['Herkunft']);
+    // Geschmack becomes structured flavor tags; the growing region stays in notes.
     const noteParts   = [
-        fields['Geschmack'],
         fields['Herkunft'] ? `Herkunft: ${fields['Herkunft']}` : '',
     ].filter(Boolean);
     return {
         name:       title,
         roaster:    product.vendor || 'Hoppenworth & Ploch',
         notes:      noteParts.join(' · '),
+        flavors:    splitFlavors(fields['Geschmack']),
         origin:     origin || null,
         variety:    fields['Varietät'] || null,
         process:    fields['Prozess'] || null,
@@ -81,4 +100,4 @@ function parseHoploProduct(product) {
     };
 }
 
-module.exports = { parseKaffeebraun, parseHoploProduct, hoploJsonUrl };
+module.exports = { parseKaffeebraun, parseHoploProduct, hoploJsonUrl, splitFlavors };

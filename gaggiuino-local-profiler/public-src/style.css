@@ -510,6 +510,16 @@
         .lib-fresh-badge.fresh-peak      { color: #22c55e; border-color: rgba(34,197,94,.35);  background: rgba(34,197,94,.1); }
         .lib-fresh-badge.fresh-fading    { color: #f97316; border-color: rgba(249,115,22,.35); background: rgba(249,115,22,.1); }
         .lib-fresh-badge.fresh-old       { color: #ef4444; border-color: rgba(239,68,68,.35);  background: rgba(239,68,68,.1); }
+        /* Flavor chips (form input + static display) */
+        .lib-form-field-wide { grid-column: 1 / -1; }
+        .lib-form-hint { font-size: .68rem; color: var(--gray-500); margin-top: 2px; }
+        .flavor-chips-wrap { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; background: var(--gray-900); border: 1px solid var(--gray-700); border-radius: 6px; padding: 5px 8px; }
+        .flavor-chips-wrap input { background: transparent; border: none; outline: none; color: var(--gray-200); font-size: .82rem; flex: 1; min-width: 110px; padding: 3px 0; }
+        .flavor-chip { display: inline-flex; align-items: center; gap: 4px; background: rgba(168,85,247,.12); border: 1px solid rgba(168,85,247,.3); color: #c084fc; border-radius: 5px; padding: 2px 7px; font-size: .72rem; font-weight: 600; }
+        .flavor-chip-x { background: none; border: none; color: inherit; cursor: pointer; font-size: .68rem; padding: 0; opacity: .7; }
+        .flavor-chip-x:hover { opacity: 1; }
+        .flavor-chip-static { padding: 1px 6px; font-size: .66rem; }
+        .lib-flavor-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
         .lib-form-field-check { display: flex; align-items: center; padding-top: 20px; }
         .lib-check-label { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: .85rem; color: var(--gray-300); }
         .lib-check-label input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--ok); cursor: pointer; }

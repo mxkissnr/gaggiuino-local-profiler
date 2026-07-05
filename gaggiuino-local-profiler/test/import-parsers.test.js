@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-const { parseKaffeebraun, parseHoploProduct, hoploJsonUrl } = require('../lib/import-parsers');
+const { parseKaffeebraun, parseHoploProduct, hoploJsonUrl, splitFlavors } = require('../lib/import-parsers');
 
 const hoploFixture = JSON.parse(readFileSync(new URL('./fixtures/hoplo-shyira.json', import.meta.url), 'utf8'));
 
@@ -18,7 +18,11 @@ describe('parseHoploProduct', () => {
             process: 'Washed',
             source:  'hoppenworth-ploch.de',
         });
-        expect(bean.notes).toContain('Aprikose');
+        // tasting notes are structured flavor tags now, qualifiers stripped
+        expect(bean.flavors).toContain('Aprikose');
+        expect(bean.flavors).toContain('Schwarzer Tee');
+        expect(bean.flavors).not.toContain('Aprikose, Limonade');
+        expect(bean.notes).not.toContain('Aprikose');
         expect(bean.notes).toContain('Herkunft: Nyabihu District'); // region stays in notes
         expect(bean.decaf).toBeUndefined();
     });
@@ -67,6 +71,12 @@ describe('parseKaffeebraun', () => {
         expect(bean.notes).toContain('Röstgrad: kräftig (4/5)');
     });
 
+    it('turns the Aroma spans into flavor tags instead of a notes blob', () => {
+        const bean = parseKaffeebraun(page);
+        expect(bean.flavors).toEqual(['Nuss', 'Tabak']);
+        expect(bean.notes).not.toContain('Nuss');
+    });
+
     it('keeps blends in the notes', () => {
         const blend = parseKaffeebraun(page.replace('Äthiopien', 'Brasilien, Indien'));
         expect(blend.origin).toBeNull();
@@ -75,5 +85,17 @@ describe('parseKaffeebraun', () => {
 
     it('returns null when the page has no product', () => {
         expect(parseKaffeebraun('<html><body>nope</body></html>')).toBeNull();
+    });
+});
+
+describe('splitFlavors', () => {
+    it('splits on comma/semicolon, strips qualifiers, dedupes', () => {
+        expect(splitFlavors('Aprikose, Limonade, Schwarzer Tee (Filter); Rote Johannisbeere, getrocknete Aprikose (Espresso)'))
+            .toEqual(['Aprikose', 'Limonade', 'Schwarzer Tee', 'Rote Johannisbeere', 'getrocknete Aprikose']);
+    });
+
+    it('handles empty and non-string input', () => {
+        expect(splitFlavors('')).toEqual([]);
+        expect(splitFlavors(undefined)).toEqual([]);
     });
 });

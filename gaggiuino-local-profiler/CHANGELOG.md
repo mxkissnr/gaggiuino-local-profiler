@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Added
+- **Structured tasting notes (flavors)** — beans get a `flavors[]` tag list with a chips input in the form (Enter/comma adds, ✕ removes, Backspace on empty input removes the last chip; max 20 tags, deduped). Imports fill it automatically: kaffeebraun aroma properties and Hoppenworth & Ploch Geschmack lists become tags (qualifiers like "(Filter)" stripped) instead of a notes blob — the notes field stays free for personal notes. A startup migration moves the aroma segment of previously imported beans into flavors (shape heuristics protect personal notes; manual beans are never touched). Flavor chips render on the bean card and `beans-info` exposes `flavors` for the cards. Closes #233
+
 ## [1.96.1] – 2026-07-05
 
 ### Fixed

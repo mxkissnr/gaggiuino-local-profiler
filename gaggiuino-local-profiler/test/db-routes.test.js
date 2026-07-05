@@ -196,6 +196,21 @@ describe('bean origin/variety/process fields', () => {
         expect(await r.json()).toMatchObject({ origin: 'BR', variety: 'Bourbon', process: 'Natural' });
     });
 
+    it('stores flavors deduped and capped, round-trips via PUT', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Tasty', flavors: ['Aprikose', ' aprikose ', 'Karamell', 42, ''] }),
+        });
+        const bean = await r.json();
+        expect(bean.flavors).toEqual(['Aprikose', 'Karamell']);
+
+        const put = await fetch(`${baseUrl}/api/library/bean/${bean.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ flavors: Array.from({ length: 30 }, (_, i) => `f${i}`) }),
+        });
+        expect((await put.json()).flavors).toHaveLength(20); // cap
+    });
+
     it('exposes variety on /api/orders/active-beans', async () => {
         saveLibrary({ beans: [
             { id: 1, name: 'El Cubanito', stock_g: 500, variety: 'Robusta', origin: 'CU',

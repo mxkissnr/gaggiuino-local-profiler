@@ -13,6 +13,24 @@ function sanitizeOrigin(v) {
     return /^[A-Z]{2}$/.test(code) ? code : '';
 }
 
+// Flavors are short tags (chips UI); dedupe case-insensitively, cap counts.
+function sanitizeFlavors(v) {
+    if (!Array.isArray(v)) return [];
+    const seen = new Set();
+    const out  = [];
+    for (const item of v) {
+        if (typeof item !== 'string') continue;
+        const s = item.trim().slice(0, 50);
+        if (!s) continue;
+        const key = s.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(s);
+        if (out.length >= 20) break;
+    }
+    return out;
+}
+
 router.get('/api/library', (req, res) => {
     res.json(loadLibrary());
 });
@@ -25,7 +43,7 @@ router.get('/api/library/beans-info', (req, res, next) => {
 
 router.post('/api/library/bean', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
-    const { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, source, importedAt } = req.body;
+    const { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors, source, importedAt } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
     const s    = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -35,6 +53,7 @@ router.post('/api/library/bean', (req, res) => {
         id: Date.now(), name: s(name, 200), roaster: s(roaster, 200),
         roastDate: s(roastDate, 10), notes: s(notes, 1000),
         origin: sanitizeOrigin(origin), variety: s(variety, 200), process: s(process, 200),
+        flavors: sanitizeFlavors(flavors),
         stock_g: parsedStock,
         decaf: !!decaf,
         bags: parsedStock || s(roastDate, 10)
@@ -54,7 +73,7 @@ router.put('/api/library/bean/:id', (req, res) => {
     const idx = lib.beans.findIndex(b => b.id === id);
     if (idx === -1) return res.status(404).json({ error: 'not found' });
     const s = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : undefined;
-    const { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process } = req.body;
+    const { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors } = req.body;
     if (name !== undefined)      lib.beans[idx].name      = s(name, 200) || lib.beans[idx].name;
     if (roaster !== undefined)   lib.beans[idx].roaster   = s(roaster, 200);
     if (roastDate !== undefined) lib.beans[idx].roastDate = s(roastDate, 10);
@@ -62,6 +81,7 @@ router.put('/api/library/bean/:id', (req, res) => {
     if (origin !== undefined)    lib.beans[idx].origin    = sanitizeOrigin(origin);
     if (variety !== undefined)   lib.beans[idx].variety   = s(variety, 200) ?? '';
     if (process !== undefined)   lib.beans[idx].process   = s(process, 200) ?? '';
+    if (flavors !== undefined)   lib.beans[idx].flavors   = sanitizeFlavors(flavors);
     if (stock_g !== undefined)   lib.beans[idx].stock_g   = parseFloat(stock_g) || null;
     if (decaf !== undefined)     lib.beans[idx].decaf     = !!decaf;
     // Keep active bag in sync with top-level fields

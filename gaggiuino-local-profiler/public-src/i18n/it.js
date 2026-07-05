@@ -47,6 +47,7 @@ export default {
     lib_add_bean:'+ Aggiungi grani', lib_add_grinder:'+ Aggiungi macinino',
     lib_bean_name:'Nome *', lib_bean_roaster:'Torrefazione', lib_bean_roast_date:'Data torrefazione', lib_bean_notes:'Note',
     lib_bean_origin:'Origine', lib_bean_variety:'Varietà', lib_bean_process:'Lavorazione', lib_bean_origin_none:'– nessuna –',
+    bean_flavors_label:'Note di degustazione', bean_flavors_ph:'Albicocca, caramello …', bean_flavors_hint:'Invio o virgola aggiunge una nota',
     lib_grinder_name:'Nome *', lib_grinder_notes:'Note',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Torrefazione Roma',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Click',

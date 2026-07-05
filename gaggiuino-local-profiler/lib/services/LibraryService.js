@@ -106,10 +106,41 @@ class LibraryService {
                 origin:    bean.origin  || null,
                 variety:   bean.variety || null,
                 process:   bean.process || null,
+                flavors:   Array.isArray(bean.flavors) && bean.flavors.length ? bean.flavors : null,
                 roastDate: activeBag?.roastDate || bean.roastDate || null,
                 decaf:     !!bean.decaf,
             };
         });
+    }
+
+    // Imported beans stored their aroma list as the first notes segment before
+    // flavors existed. Idempotent startup migration: only beans with `source`
+    // (imported) and empty flavors; the segment must look like an aroma list
+    // (no key prefix, no sentence punctuation, short comma tokens) so personal
+    // notes are never touched.
+    migrateNotesToFlavors() {
+        const lib = this.getLibrary();
+        let changed = 0;
+        for (const bean of lib.beans || []) {
+            if (!bean.source) continue;
+            if (Array.isArray(bean.flavors) && bean.flavors.length) continue;
+            if (typeof bean.notes !== 'string' || !bean.notes) continue;
+            const segments = bean.notes.split('·').map(s => s.trim()).filter(Boolean);
+            const first = segments[0];
+            if (!first) continue;
+            if (/^(Herkunft|Röstgrad|Aufbereitung|Prozess|Varietät|Importeur|Ernte):/i.test(first)) continue;
+            if (/[.!?]/.test(first) || first.length > 120) continue;
+            const tokens = first.split(',').map(s => s.trim()).filter(Boolean);
+            if (!tokens.length || tokens.length > 8 || tokens.some(t => t.length > 40)) continue;
+            bean.flavors = tokens;
+            bean.notes   = segments.slice(1).join(' · ');
+            changed++;
+        }
+        if (changed) {
+            this.saveLibrary(lib);
+            log(`Migrated notes aroma segment into flavors on ${changed} bean(s)`);
+        }
+        return changed;
     }
 
     // One-time low-stock push per bag: after a shot annotation, when the

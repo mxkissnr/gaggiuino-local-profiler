@@ -17,7 +17,9 @@ const { fetchMachineVersion, checkAndApplyMachinePower, backgroundHaCheck } = re
 try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
     getDb(); // initialises schema + migrates JSON files on first run
-    require('./lib/services/LibraryService').migrateImportedNotes();
+    const libraryService = require('./lib/services/LibraryService');
+    libraryService.migrateImportedNotes();
+    libraryService.migrateNotesToFlavors();
     log('Database ready');
 } catch (err) {
     log(`Init error: ${err.message}`, true);

@@ -115,6 +115,7 @@ export function renderBeanList() {
           b.origin ? `${flagEmoji(b.origin)} ${countryName(b.origin, S.currentLang)}`.trim() : '',
           b.variety, b.process, b.roaster, b.roastDate, b.notes,
         ].filter(Boolean).map(esc).join(' · ')}</div>
+        ${Array.isArray(b.flavors) && b.flavors.length ? `<div class="lib-flavor-row">${b.flavors.map(f => `<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`).join('')}</div>` : ''}
         ${invHtml}
         ${bagHistoryHtml}
         ${b.source ? `<div class="lib-item-source">${t('lib_imported_from', b.source, b.importedAt || '')}</div>` : ''}
@@ -252,6 +253,63 @@ export function renderGrinderList() {
     </div>`).join('');
 }
 
+// ── Flavor chips input ────────────────────────────────────────────────────
+// Module-level working array; rendered into #beanFormFlavorChips before the
+// text input. Enter/comma commits the typed value, × removes a chip.
+let _formFlavors = [];
+let _flavorInputBound = false;
+
+function renderFlavorChips() {
+  const wrap = document.getElementById('beanFormFlavorChips');
+  if (!wrap) return;
+  wrap.querySelectorAll('.flavor-chip').forEach(el => el.remove());
+  const input = document.getElementById('beanFormFlavorInput');
+  for (const [i, f] of _formFlavors.entries()) {
+    const chip = document.createElement('span');
+    chip.className = 'flavor-chip';
+    chip.innerHTML = `${esc(f)} <button type="button" class="flavor-chip-x" data-flavor-idx="${i}">✕</button>`;
+    wrap.insertBefore(chip, input);
+  }
+}
+
+function commitFlavorInput() {
+  const input = document.getElementById('beanFormFlavorInput');
+  if (!input) return;
+  const val = input.value.trim().replace(/,+$/, '').trim();
+  input.value = '';
+  if (!val || val.length > 50 || _formFlavors.length >= 20) return;
+  if (_formFlavors.some(f => f.toLowerCase() === val.toLowerCase())) return;
+  _formFlavors.push(val);
+  renderFlavorChips();
+}
+
+function setFormFlavors(flavors) {
+  _formFlavors = Array.isArray(flavors) ? [...flavors] : [];
+  renderFlavorChips();
+}
+
+function bindFlavorInput() {
+  if (_flavorInputBound) return;
+  const input = document.getElementById('beanFormFlavorInput');
+  const wrap  = document.getElementById('beanFormFlavorChips');
+  if (!input || !wrap) return;
+  _flavorInputBound = true;
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commitFlavorInput(); }
+    else if (e.key === 'Backspace' && !input.value && _formFlavors.length) {
+      _formFlavors.pop();
+      renderFlavorChips();
+    }
+  });
+  input.addEventListener('blur', commitFlavorInput);
+  wrap.addEventListener('click', e => {
+    const btn = e.target.closest('.flavor-chip-x');
+    if (!btn) return;
+    _formFlavors.splice(Number(btn.dataset.flavorIdx), 1);
+    renderFlavorChips();
+  });
+}
+
 // ── Bean form ─────────────────────────────────────────────────────────────
 function populateOriginSelect(selected) {
   const sel = document.getElementById('beanFormOrigin');
@@ -287,6 +345,9 @@ export function openBeanForm(bean) {
   populateSuggestionDatalists();
   document.getElementById('beanFormVariety').value   = bean?.variety || '';
   document.getElementById('beanFormProcess').value   = bean?.process || '';
+  bindFlavorInput();
+  setFormFlavors(bean?.flavors);
+  document.getElementById('beanFormFlavorInput').value = '';
   document.getElementById('beanAddForm').classList.add('open');
   document.getElementById('beanAddTrigger').style.display = 'none';
   document.getElementById('beanFormName').focus();
@@ -315,8 +376,9 @@ export async function saveBean() {
   const origin    = document.getElementById('beanFormOrigin').value;
   const variety   = document.getElementById('beanFormVariety').value.trim();
   const process   = document.getElementById('beanFormProcess').value.trim();
+  commitFlavorInput(); // take a still-typed flavor along
   if (!name) { document.getElementById('beanFormName').focus(); return; }
-  const payload = { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process };
+  const payload = { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors: _formFlavors };
   if (!S.beanEditId && S._urlImportSource) { payload.source = S._urlImportSource; payload.importedAt = S._urlImportedAt; }
   const body = JSON.stringify(payload);
   const url  = S.beanEditId ? `api/library/bean/${S.beanEditId}` : 'api/library/bean';
@@ -426,6 +488,7 @@ export async function importFromUrl() {
     if (data.variety) document.getElementById('beanFormVariety').value = data.variety;
     if (data.process) document.getElementById('beanFormProcess').value = data.process;
     if (data.decaf)   document.getElementById('beanFormDecaf').checked = true;
+    if (Array.isArray(data.flavors) && data.flavors.length) setFormFlavors(data.flavors);
     input.value = '';
     document.getElementById('urlImportRow').style.display = 'none';
   } catch {
