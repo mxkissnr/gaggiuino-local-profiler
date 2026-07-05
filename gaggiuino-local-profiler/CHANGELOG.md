@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Fixed
+- **Maintenance log showed the raw grinder ID instead of the grinder's name** (e.g. "Grinder 1779521986327" instead of "Kingrinder K6") — log entries only store the internal task key `grinder_<id>` and the frontend label merely stripped the prefix. `getMaintenanceLog()` now enriches grinder entries with `grinderName` from the coffee library (the same enrichment the maintenance cards already use), and the log renderer prefers it; deleted grinders keep the previous fallback label. Closes #222
+
 ## [1.95.0] – 2026-07-03
 
 ### Added

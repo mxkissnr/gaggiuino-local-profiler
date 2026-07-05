@@ -19,10 +19,11 @@ const realData = require(dataPath);
 let ordersEnabled = true;
 require.cache[dataPath].exports = { ...realData, isOrdersEnabled: () => ordersEnabled };
 
-const express       = require('express');
-const systemRouter  = require('../routes/system');
-const ordersRouter  = require('../routes/orders');
-const libraryRouter = require('../routes/library');
+const express           = require('express');
+const systemRouter      = require('../routes/system');
+const ordersRouter      = require('../routes/orders');
+const libraryRouter     = require('../routes/library');
+const maintenanceRouter = require('../routes/maintenance');
 const shotRepo      = require('../lib/repositories/ShotRepository');
 const libraryService = require('../lib/services/LibraryService');
 const { saveOrders, saveLibrary } = require('../lib/data');
@@ -33,6 +34,7 @@ function makeApp() {
     const app = express();
     app.use(express.json());
     app.use(libraryRouter);
+    app.use(maintenanceRouter);
     app.use(ordersRouter);
     app.use(systemRouter);
     app.use((err, req, res, _next) => res.status(err.status || 500).json({ error: err.message }));
@@ -42,7 +44,7 @@ function makeApp() {
 let server, baseUrl;
 
 beforeEach(async () => {
-    getDb().exec('DELETE FROM shots; DELETE FROM annotations; DELETE FROM trash; DELETE FROM orders; DELETE FROM maintenance; DELETE FROM library;');
+    getDb().exec('DELETE FROM shots; DELETE FROM annotations; DELETE FROM trash; DELETE FROM orders; DELETE FROM maintenance; DELETE FROM maintenance_log; DELETE FROM library;');
     server = makeApp().listen(0);
     await new Promise(resolve => server.once('listening', resolve));
     baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -163,6 +165,27 @@ describe('GET /api/orders/active-beans', () => {
         saveLibrary({ beans: [{ id: 1, name: 'Untracked' }], grinders: [], recipes: [] });
         const beans = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
         expect(beans).toEqual([]);
+    });
+});
+
+describe('GET /api/maintenance/log', () => {
+    it('enriches grinder log entries with the grinder name', async () => {
+        saveLibrary({ beans: [], grinders: [{ id: 1779521986327, name: 'Kingrinder K6' }], recipes: [] });
+        const done = await fetch(`${baseUrl}/api/maintenance/grinder_1779521986327/done`, { method: 'POST' });
+        expect(done.status).toBe(200);
+
+        const [entry] = await (await fetch(`${baseUrl}/api/maintenance/log`)).json();
+        expect(entry).toMatchObject({ task: 'grinder_1779521986327', grinderName: 'Kingrinder K6' });
+    });
+
+    it('omits grinderName when the grinder was deleted since', async () => {
+        saveLibrary({ beans: [], grinders: [{ id: 42, name: 'DF64' }], recipes: [] });
+        await fetch(`${baseUrl}/api/maintenance/grinder_42/done`, { method: 'POST' });
+        saveLibrary({ beans: [], grinders: [], recipes: [] });
+
+        const [entry] = await (await fetch(`${baseUrl}/api/maintenance/log`)).json();
+        expect(entry.task).toBe('grinder_42');
+        expect(entry.grinderName).toBeUndefined();
     });
 });
 

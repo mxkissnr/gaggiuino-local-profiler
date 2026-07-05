@@ -50,6 +50,7 @@ class LibraryRepository {
 
     getMaintenanceLog() {
         const rows = getDb().prepare('SELECT * FROM maintenance_log ORDER BY ts DESC').all();
+        const grinderNames = new Map(this.getLibrary().grinders.map(g => [`grinder_${g.id}`, g.name]));
         return rows.map(r => ({
             id:             r.id,
             ts:             r.ts,
@@ -58,6 +59,7 @@ class LibraryRepository {
             machine:        r.machine,
             shotCountAtTime: r.shot_count,
             notes:          r.notes,
+            ...(grinderNames.has(r.task) ? { grinderName: grinderNames.get(r.task) } : {}),
         }));
     }
 

@@ -137,9 +137,10 @@ export async function loadMaintLog() {
   } catch { el.innerHTML = ''; }
 }
 
-function taskLabel(task) {
+function taskLabel(entry) {
+  const task = entry.task;
   if (MAINT_META[task]) return MAINT_META[task].icon + ' ' + t(MAINT_META[task].key);
-  if (task.startsWith('grinder_')) return '⚙ ' + (task.replace('grinder_', 'Grinder '));
+  if (task.startsWith('grinder_')) return '⚙ ' + (entry.grinderName || task.replace('grinder_', 'Grinder '));
   return task;
 }
 
@@ -164,7 +165,7 @@ export function renderMaintLog(entries) {
     html += `<div class="maint-log-row">
       <div class="maint-log-date-col">${dateStr}</div>
       <div class="maint-log-task-col">
-        <div class="maint-log-task-name">${_logEsc(taskLabel(e.task))}${isManual ? `<span class="maint-log-manual-badge">${t('maint_log_manual_badge')}</span>` : ''}</div>
+        <div class="maint-log-task-name">${_logEsc(taskLabel(e))}${isManual ? `<span class="maint-log-manual-badge">${t('maint_log_manual_badge')}</span>` : ''}</div>
         ${metaArr.length ? `<div class="maint-log-meta">${metaArr.join(' · ')}</div>` : ''}
         ${e.notes ? `<div class="maint-log-notes">${_logEsc(e.notes)}</div>` : ''}
       </div>
