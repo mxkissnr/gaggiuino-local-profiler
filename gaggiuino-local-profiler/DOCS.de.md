@@ -139,8 +139,8 @@ Im Bibliothek-Tab auf **🔗 URL** neben „Bohne hinzufügen" klicken, eine Pro
 
 - Name und Rösterei (wird automatisch auf „Kaffee Braun" gesetzt)
 - Aromen / Tasting Notes
-- Herkunft
-- Aufbereitungsart
+- Herkunft — Einzelland-Herkünfte werden auf das strukturierte Herkunftsland-Feld gemappt (Flagge + lokalisierter Name); Blends bleiben in den Notizen
+- Aufbereitungsart — befüllt das strukturierte Aufbereitungs-Feld
 - Röstgrad (Label und Punktzahl)
 
 Importierte Bohnen zeigen in der Bibliothekskarte eine kleine Zeile **„Importiert von kaffeebraun.com · Datum"**, damit man immer weiß woher die Daten stammen und wann sie importiert wurden.

@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Added
+- **URL import fills the structured origin and processing fields** — single-country `Herkunft` values from kaffeebraun.com product pages are mapped to the ISO origin code (reverse lookup over German + English country names via `Intl.DisplayNames`, plus aliases like Hawaii); blends ("Brasilien, Indien") keep the previous notes behavior. `Aufbereitungsart` now lands in the processing field instead of the notes. Closes #224
 - **Structured bean origin, variety and processing** — the coffee library bean form gains three new fields: **origin** as a country picker over ~46 coffee-growing countries (stored as ISO 3166-1 alpha-2 code, displayed with flag emoji and country name localized via `Intl.DisplayNames` — no translation maintenance), **variety** (free text with suggestions: Arabica, Robusta, Geisha, Bourbon, …) and **processing** (Washed, Natural, Honey, Anaerobic — previously a ghost field only fillable via API). All three render in the bean list line and flow into `/api/orders/active-beans` (`variety` is new there) for the order card. Non-ISO origin values are rejected server-side; the structured code is the join key for the upcoming origin world map. Closes #223
 
 ### Fixed

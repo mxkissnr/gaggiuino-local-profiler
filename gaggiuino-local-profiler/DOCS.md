@@ -139,8 +139,8 @@ In the Library tab, click **🔗 URL** next to "Add Bean", paste any product URL
 
 - Name and roaster (auto-set to "Kaffee Braun")
 - Aromas / tasting notes
-- Origin (Herkunft)
-- Processing method (Aufbereitungsart)
+- Origin (Herkunft) — single-country origins are mapped to the structured origin country field (flag + localized name); blends stay in the notes
+- Processing method (Aufbereitungsart) — fills the structured processing field
 - Roast level label and score
 
 Imported beans show a small **"Imported from kaffeebraun.com · date"** line in the library card so you always know where the data came from and when.

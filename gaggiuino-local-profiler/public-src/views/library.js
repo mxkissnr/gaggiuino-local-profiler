@@ -417,6 +417,8 @@ export async function importFromUrl() {
     if (data.name)    document.getElementById('beanFormName').value    = data.name;
     if (data.roaster) document.getElementById('beanFormRoaster').value = data.roaster;
     if (data.notes)   document.getElementById('beanFormNotes').value   = data.notes;
+    if (data.origin)  document.getElementById('beanFormOrigin').value  = data.origin;
+    if (data.process) document.getElementById('beanFormProcess').value = data.process;
     input.value = '';
     document.getElementById('urlImportRow').style.display = 'none';
   } catch {

@@ -4,6 +4,7 @@ const cheerio  = require('cheerio');
 const router   = express.Router();
 
 const { ALLOWED_IMPORT_HOSTS } = require('../lib/constants');
+const { mapOriginToCode }      = require('../lib/coffee-countries');
 
 router.get('/api/import/url', async (req, res) => {
     const raw = req.query.url;
@@ -30,16 +31,21 @@ router.get('/api/import/url', async (req, res) => {
         });
         const roastLabel = $('.degree.roest .description').first().text().trim();
         const roastScore = $('.degree.roest .value-score').first().text().trim();
-        const noteParts  = [
+        // Herkunft maps to the structured origin field when it is a single known
+        // country; blends/unknown strings stay in notes. Aufbereitungsart is a
+        // structured field since #223 and no longer duplicated in notes.
+        const origin    = mapOriginToCode(props['Herkunft']);
+        const noteParts = [
             props['Aroma'],
-            props['Herkunft']         ? `Herkunft: ${props['Herkunft']}`             : '',
-            props['Aufbereitungsart'] ? `Aufbereitung: ${props['Aufbereitungsart']}` : '',
-            roastLabel                ? `Röstgrad: ${roastLabel} (${roastScore}/5)`  : '',
+            props['Herkunft'] && !origin ? `Herkunft: ${props['Herkunft']}`            : '',
+            roastLabel                   ? `Röstgrad: ${roastLabel} (${roastScore}/5)` : '',
         ].filter(Boolean);
         res.json({
             name,
             roaster:    'Kaffee Braun',
             notes:      noteParts.join(' · '),
+            origin:     origin || null,
+            process:    props['Aufbereitungsart'] || null,
             source:     'kaffeebraun.com',
             importedAt: new Date().toISOString().slice(0, 10),
         });
