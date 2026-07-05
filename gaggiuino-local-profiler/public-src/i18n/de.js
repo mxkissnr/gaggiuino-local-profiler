@@ -174,7 +174,7 @@ export default {
     maint_log_add:'Manuell eintragen', maint_log_save:'Speichern', maint_log_cancel:'Abbrechen',
     maint_log_notes_ph:'z.B. Cafiza 1h', maint_log_confirm_delete:'Eintrag löschen?',
     maint_log_shots:'Shots bei Wartung', maint_log_machine:'Maschine', maint_log_manual_badge:'manuell',
-    lib_scan_barcode:'⬛ Scan', lib_url_import:'🔗 URL', lib_url_placeholder:'kaffeebraun.com/…',
+    lib_scan_barcode:'⬛ Scan', lib_url_import:'🔗 URL', lib_url_placeholder:'kaffeebraun.com / hoppenworth-ploch.de …',
     lib_url_btn:'Importieren', lib_url_importing:'Importiere …',
     lib_url_error:'Fehler beim Importieren', lib_url_unsupported:'Nicht unterstützte Website',
     lib_imported_from:(src,date)=>`Importiert von ${src} · ${date}`,

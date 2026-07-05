@@ -1,10 +1,14 @@
 const express  = require('express');
 const axios    = require('axios');
-const cheerio  = require('cheerio');
 const router   = express.Router();
 
 const { ALLOWED_IMPORT_HOSTS } = require('../lib/constants');
-const { mapOriginToCode }      = require('../lib/coffee-countries');
+const { parseKaffeebraun, parseHoploProduct, hoploJsonUrl } = require('../lib/import-parsers');
+
+const FETCH_OPTS = {
+    headers: { 'User-Agent': 'GLP/1.0 (Gaggiuino Local Profiler; private use)' },
+    timeout: 8000,
+};
 
 router.get('/api/import/url', async (req, res) => {
     const raw = req.query.url;
@@ -16,39 +20,18 @@ router.get('/api/import/url', async (req, res) => {
     if (!['http:', 'https:'].includes(parsed.protocol))
         return res.status(400).json({ error: 'unsupported protocol' });
     try {
-        const r = await axios.get(raw, {
-            headers: { 'User-Agent': 'GLP/1.0 (Gaggiuino Local Profiler; private use)' },
-            timeout: 8000,
-        });
-        const $ = cheerio.load(r.data);
-        const name = $('.product-detail-name').first().text().trim();
-        if (!name) return res.status(404).json({ error: 'product not found on page' });
-        const props = {};
-        $('tr.properties-row').each((_, row) => {
-            const key = $(row).find('th.properties-label').text().replace(':', '').trim();
-            const val = $(row).find('td.properties-value span').map((_, el) => $(el).text().trim()).get().join(', ');
-            if (key && val) props[key] = val;
-        });
-        const roastLabel = $('.degree.roest .description').first().text().trim();
-        const roastScore = $('.degree.roest .value-score').first().text().trim();
-        // Herkunft maps to the structured origin field when it is a single known
-        // country; blends/unknown strings stay in notes. Aufbereitungsart is a
-        // structured field since #223 and no longer duplicated in notes.
-        const origin    = mapOriginToCode(props['Herkunft']);
-        const noteParts = [
-            props['Aroma'],
-            props['Herkunft'] && !origin ? `Herkunft: ${props['Herkunft']}`            : '',
-            roastLabel                   ? `Röstgrad: ${roastLabel} (${roastScore}/5)` : '',
-        ].filter(Boolean);
-        res.json({
-            name,
-            roaster:    'Kaffee Braun',
-            notes:      noteParts.join(' · '),
-            origin:     origin || null,
-            process:    props['Aufbereitungsart'] || null,
-            source:     'kaffeebraun.com',
-            importedAt: new Date().toISOString().slice(0, 10),
-        });
+        let bean;
+        if (parsed.hostname.endsWith('hoppenworth-ploch.de')) {
+            const jsonUrl = hoploJsonUrl(parsed);
+            if (!jsonUrl) return res.status(400).json({ error: 'not a product url' });
+            const r = await axios.get(jsonUrl, FETCH_OPTS);
+            bean = parseHoploProduct(r.data);
+        } else {
+            const r = await axios.get(raw, FETCH_OPTS);
+            bean = parseKaffeebraun(r.data);
+        }
+        if (!bean) return res.status(404).json({ error: 'product not found on page' });
+        res.json(bean);
     } catch (e) {
         res.status(500).json({ error: 'fetch failed' });
     }

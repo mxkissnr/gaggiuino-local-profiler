@@ -187,7 +187,7 @@ export default {
     maint_log_shots:'Shot al servizio', maint_log_machine:'Macchina', maint_log_manual_badge:'manuale',
     lib_scan_barcode:'⬛ Scan',
     lib_url_import:'🔗 URL',
-    lib_url_placeholder:'kaffeebraun.com/…',
+    lib_url_placeholder:'kaffeebraun.com / hoppenworth-ploch.de …',
     lib_url_btn:'Importa',
     lib_url_importing:'Importazione …',
     lib_url_error:'Errore di importazione',

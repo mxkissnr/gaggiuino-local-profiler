@@ -21,7 +21,8 @@ const HA_INGRESS_PATH       = '/api/hassio_ingress/gaggiuino_local_profiler';
 const HA_API                = 'http://supervisor/core/api';
 const HA_TOKEN              = process.env.SUPERVISOR_TOKEN;
 const ALLOWED_URL_SCHEMES   = ['http:', 'https:'];
-const ALLOWED_IMPORT_HOSTS  = ['kaffeebraun.com', 'www.kaffeebraun.com'];
+const ALLOWED_IMPORT_HOSTS  = ['kaffeebraun.com', 'www.kaffeebraun.com',
+    'hoppenworth-ploch.de', 'www.hoppenworth-ploch.de'];
 
 const TEMP_HISTORY_MAX  = 60;   // max rolling history entries (1 per second)
 const TEMP_STABLE_MIN   = 30;   // minimum window length to consider stability (seconds)
