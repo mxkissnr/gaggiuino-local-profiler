@@ -206,6 +206,35 @@ describe('bean origin/variety/process fields', () => {
     });
 });
 
+describe('GET /api/library/beans-info', () => {
+    it('returns descriptive fields with the active bag roast date', async () => {
+        saveLibrary({ beans: [
+            { id: 1, name: 'Shyira', roaster: 'H&P', origin: 'RW', variety: 'Red Bourbon', process: 'Washed',
+              roastDate: '2026-05-01', bags: [
+                { id: 10, roastDate: '2026-05-01', stock_g: 250, openedAt: 0 },
+                { id: 11, roastDate: '2026-06-20', stock_g: 250, openedAt: 1000 },
+              ] },
+            { id: 2, name: 'Untracked' },
+        ], grinders: [], recipes: [] });
+        const beans = await (await fetch(`${baseUrl}/api/library/beans-info`)).json();
+        expect(beans).toHaveLength(2); // no stock filtering
+        expect(beans[0]).toMatchObject({
+            name: 'Shyira', origin: 'RW', variety: 'Red Bourbon', process: 'Washed',
+            roastDate: '2026-06-20', decaf: false,
+        });
+        expect(beans[1]).toMatchObject({ name: 'Untracked', origin: null, roastDate: null });
+    });
+
+    it('stays reachable with orders disabled', async () => {
+        ordersEnabled = false;
+        try {
+            saveLibrary({ beans: [{ id: 1, name: 'Dolce' }], grinders: [], recipes: [] });
+            const r = await fetch(`${baseUrl}/api/library/beans-info`);
+            expect(r.status).toBe(200);
+        } finally { ordersEnabled = true; }
+    });
+});
+
 describe('GET /api/maintenance/log', () => {
     it('enriches grinder log entries with the grinder name', async () => {
         saveLibrary({ beans: [], grinders: [{ id: 1779521986327, name: 'Kingrinder K6' }], recipes: [] });

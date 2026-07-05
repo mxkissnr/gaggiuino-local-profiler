@@ -50,6 +50,25 @@ class LibraryService {
             }));
     }
 
+    // Lightweight bean metadata for external consumers (Lovelace shot card):
+    // descriptive fields only, no stock math. roastDate prefers the active bag.
+    getBeansInfo() {
+        return (this.getLibrary().beans || []).map(bean => {
+            const bags      = Array.isArray(bean.bags) ? bean.bags : [];
+            const activeBag = bags.length ? bags[bags.length - 1] : null;
+            return {
+                id:        bean.id,
+                name:      bean.name,
+                roaster:   bean.roaster || null,
+                origin:    bean.origin  || null,
+                variety:   bean.variety || null,
+                process:   bean.process || null,
+                roastDate: activeBag?.roastDate || bean.roastDate || null,
+                decaf:     !!bean.decaf,
+            };
+        });
+    }
+
     // One-time low-stock push per bag: after a shot annotation, when the
     // named bean's remaining falls below the threshold, notify the barista
     // device (same channel as the preheat notification). The notified flag

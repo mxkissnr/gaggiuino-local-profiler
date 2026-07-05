@@ -17,6 +17,12 @@ router.get('/api/library', (req, res) => {
     res.json(loadLibrary());
 });
 
+// Lightweight bean metadata for external cards (shot card) — read-only,
+// deliberately not behind the enable_orders guard.
+router.get('/api/library/beans-info', (req, res, next) => {
+    try { res.json(libraryService.getBeansInfo()); } catch (err) { next(err); }
+});
+
 router.post('/api/library/bean', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
     const { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, source, importedAt } = req.body;

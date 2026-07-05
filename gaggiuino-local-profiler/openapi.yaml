@@ -357,6 +357,34 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Library' }
 
+  /api/library/beans-info:
+    get:
+      tags: [Library]
+      summary: Lightweight bean metadata for external cards
+      description: >
+        All beans with their descriptive fields (no stock math). Used by the
+        Lovelace shot card to enrich the shot's bean name with origin flag,
+        variety and roast age. roastDate comes from the active bag, falling
+        back to the bean-level date.
+      responses:
+        "200":
+          description: Array of bean metadata
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:        { type: integer }
+                    name:      { type: string }
+                    roaster:   { type: string, nullable: true }
+                    origin:    { type: string, nullable: true, description: ISO 3166-1 alpha-2 country code }
+                    variety:   { type: string, nullable: true }
+                    process:   { type: string, nullable: true }
+                    roastDate: { type: string, nullable: true }
+                    decaf:     { type: boolean }
+
   /api/library/bean:
     post:
       tags: [Library]
@@ -373,6 +401,9 @@ paths:
                 roaster:    { type: string, maxLength: 200 }
                 roastDate:  { type: string, format: date }
                 notes:      { type: string, maxLength: 1000 }
+                origin:     { type: string, maxLength: 2, description: ISO 3166-1 alpha-2 country code }
+                variety:    { type: string, maxLength: 200 }
+                process:    { type: string, maxLength: 200 }
                 stock_g:    { type: number }
                 source:     { type: string, maxLength: 200 }
                 importedAt: { type: string, format: date }
@@ -686,6 +717,7 @@ paths:
                     notes:     { type: string, nullable: true, description: Taste notes (customer-facing) }
                     origin:    { type: string, nullable: true }
                     process:   { type: string, nullable: true }
+                    variety:   { type: string, nullable: true }
 
   /api/orders/menu:
     get:
