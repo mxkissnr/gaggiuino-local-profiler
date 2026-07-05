@@ -1,6 +1,6 @@
 import { S }                               from '../../state.js';
 import { t }                               from '../../i18n.js';
-import { detectChanneling }                from '../../utils.js';
+import { detectChanneling, calcBrewRatio } from '../../utils.js';
 import { getShotData, calcShotScore }      from './utils.js';
 
 // ── Mini chart thumbnail ───────────────────────────────────────────────────
@@ -51,9 +51,17 @@ export function calcGrindAdvice(shot, data) {
   if (secs < 23) return { type: 'finer',   icon: '↓', text: t('grind_short_slight', secs.toFixed(0)) };
   if (secs > 50) return { type: 'coarser', icon: '↑', text: t('grind_long', secs.toFixed(0)) };
   if (secs > 42) return { type: 'coarser', icon: '↑', text: t('grind_long_slight', secs.toFixed(0)) };
+  // Duration is fine — check the brew ratio against the classic espresso
+  // window (1:1.8–1:2.2). Yield is machine-stopped, so this is dose/yield
+  // guidance rather than a grind direction.
+  const ratio = calcBrewRatio(shot, data);
+  if (ratio !== null && ratio > 2.3)
+    return { type: 'warning', icon: '⚖', text: t('dialin_ratio_high', ratio.toFixed(1)) };
+  if (ratio !== null && ratio < 1.7)
+    return { type: 'warning', icon: '⚖', text: t('dialin_ratio_low', ratio.toFixed(1)) };
   const pVals = pAll.filter(v => v >= 5);
   const avgP  = pVals.length ? pVals.reduce((a, b) => a + b, 0) / pVals.length : 0;
-  return { type: 'ok', icon: '✓', text: `Mahlgrad passt – ${secs.toFixed(0)} s${avgP > 0 ? `, ${avgP.toFixed(1)} bar Ø` : ''}` };
+  return { type: 'ok', icon: '✓', text: `${t('grind_ok')} – ${secs.toFixed(0)} s${avgP > 0 ? `, ${avgP.toFixed(1)} bar Ø` : ''}` };
 }
 
 export function calcComparativeGrindAdvice(shot, allShots) {

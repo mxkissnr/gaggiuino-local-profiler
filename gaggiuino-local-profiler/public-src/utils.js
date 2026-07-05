@@ -39,6 +39,18 @@ export function freshnessState(days) {
   return 'old';
 }
 
+// ── Brew ratio ────────────────────────────────────────────────────────────
+// Final weight / annotated dose; null when either side is missing or absurd.
+export function calcBrewRatio(shot, data) {
+  const dose = parseFloat(shot?.annotation?.dose);
+  if (!dose || dose < 5 || dose > 30) return null;
+  const w = data?.weight;
+  const yieldG = w?.length ? w[w.length - 1].y : null;
+  if (!yieldG || yieldG < 5) return null;
+  const ratio = yieldG / dose;
+  return ratio > 0.5 && ratio < 6 ? ratio : null;
+}
+
 // ── Math helpers ──────────────────────────────────────────────────────────
 export function avg(arr) {
   if (!arr?.length) return null;

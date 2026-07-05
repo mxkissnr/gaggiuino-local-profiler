@@ -78,6 +78,8 @@ export default {
     analytics_time_of_day:'Time of Day', analytics_no_time:'No shot time data yet.',
     analytics_world_map:'Coffee World Map', analytics_map_shots:'shots',
     analytics_map_empty:'Set an origin country on your beans in the Library to see them on the map.',
+    dialin_ratio_high:(r)=>`Ratio 1:${r} — above the classic espresso window (1:1.8–2.2)`,
+    dialin_ratio_low:(r)=>`Ratio 1:${r} — below the classic espresso window (1:1.8–2.2)`,
     bean_stat_shots:'Shots', bean_stat_avg:'Avg Score', bean_stat_best:'Best', bean_stat_duration:'Avg Duration',
     confirm_trash:'Move shot to trash?',
     confirm_delete:(id,name,date)=>`Delete shot ${id}?\n${name} · ${date}\n\nThis action cannot be undone.`,

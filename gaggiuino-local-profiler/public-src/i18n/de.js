@@ -78,6 +78,8 @@ export default {
     analytics_time_of_day:'Tageszeit', analytics_no_time:'Noch keine Shot-Zeitdaten.',
     analytics_world_map:'Kaffee-Weltkarte', analytics_map_shots:'Shots',
     analytics_map_empty:'Trage in der Bibliothek Herkunftsländer für deine Bohnen ein, um sie hier auf der Karte zu sehen.',
+    dialin_ratio_high:(r)=>`Ratio 1:${r} — über dem klassischen Espresso-Fenster (1:1.8–2.2)`,
+    dialin_ratio_low:(r)=>`Ratio 1:${r} — unter dem klassischen Espresso-Fenster (1:1.8–2.2)`,
     bean_stat_shots:'Shots', bean_stat_avg:'Ø Score', bean_stat_best:'Best', bean_stat_duration:'Ø Dauer',
     confirm_trash:'Shot in den Papierkorb verschieben?',
     confirm_delete:(id,name,date)=>`Shot ${id} löschen?\n${name} · ${date}\n\nDieser Vorgang kann nicht rückgängig gemacht werden.`,

@@ -78,6 +78,8 @@ export default {
     analytics_time_of_day:'Tijdstip van de dag', analytics_no_time:'Nog geen tijdsdata.',
     analytics_world_map:'Koffiewereldkaart', analytics_map_shots:'shots',
     analytics_map_empty:'Stel een herkomstland in voor je bonen in de Bibliotheek om ze op de kaart te zien.',
+    dialin_ratio_high:(r)=>`Ratio 1:${r} — boven het klassieke espressovenster (1:1.8–2.2)`,
+    dialin_ratio_low:(r)=>`Ratio 1:${r} — onder het klassieke espressovenster (1:1.8–2.2)`,
     bean_stat_shots:'Shots', bean_stat_avg:'Score gem.', bean_stat_best:'Beste', bean_stat_duration:'Duur gem.',
     confirm_trash:'Shot naar prullenbak verplaatsen?',
     confirm_delete:(id,name,date)=>`Shot ${id} verwijderen?\n${name} · ${date}\n\nDeze actie kan niet ongedaan worden.`,

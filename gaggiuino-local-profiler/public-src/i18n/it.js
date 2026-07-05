@@ -78,6 +78,8 @@ export default {
     analytics_time_of_day:'Orario', analytics_no_time:'Nessun dato orario ancora.',
     analytics_world_map:'Mappa mondiale del caffè', analytics_map_shots:'shot',
     analytics_map_empty:'Imposta il paese di origine dei tuoi grani nella Libreria per vederli sulla mappa.',
+    dialin_ratio_high:(r)=>`Ratio 1:${r} — sopra la finestra classica dell'espresso (1:1.8–2.2)`,
+    dialin_ratio_low:(r)=>`Ratio 1:${r} — sotto la finestra classica dell'espresso (1:1.8–2.2)`,
     bean_stat_shots:'Shot', bean_stat_avg:'Score med.', bean_stat_best:'Migliore', bean_stat_duration:'Durata med.',
     confirm_trash:'Spostare lo shot nel cestino?',
     confirm_delete:(id,name,date)=>`Eliminare lo shot ${id}?\n${name} · ${date}\n\nOperazione non annullabile.`,
