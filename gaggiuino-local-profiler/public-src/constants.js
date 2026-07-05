@@ -55,6 +55,13 @@ export const MAINT_META = {
   waterfilter: { icon: '💧', key: 'maint_waterfilter' },
 };
 
+// Guided maintenance walkthroughs: i18n keys per step. Tasks without an entry
+// have no guide button.
+export const GUIDED_MAINT_STEPS = {
+  backflush: ['guided_backflush_1', 'guided_backflush_2', 'guided_backflush_3', 'guided_backflush_4', 'guided_backflush_5'],
+  descaling: ['guided_descaling_1', 'guided_descaling_2', 'guided_descaling_3', 'guided_descaling_4', 'guided_descaling_5', 'guided_descaling_6'],
+};
+
 // ── Phase background plugin ───────────────────────────────────────────────
 export const phasePlugin = {
   id: 'phases',

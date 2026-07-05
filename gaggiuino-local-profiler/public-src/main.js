@@ -26,7 +26,8 @@ import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBea
 
 import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode,
          renderMaintenanceCards, maintStatusLabel, _buildMaintCard,
-         openMaintLogForm, closeMaintLogForm, submitMaintLogEntry, deleteMaintLogEntry } from './views/maintenance.js';
+         openMaintLogForm, closeMaintLogForm, submitMaintLogEntry, deleteMaintLogEntry,
+         openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState } from './views/maintenance.js';
 
 import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled,
          toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify,
@@ -499,12 +500,16 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'reload-data':        loadData(); break;
       case 'set-maint-mode':     setMaintMode(el.dataset.task, el.dataset.mode); break;
       case 'mark-maint-done':    markMaintDone(el.dataset.task); break;
+      case 'open-guided-maint':  openGuidedMaint(el.dataset.task); break;
+      case 'guided-maint-done':  submitGuidedMaint(); break;
+      case 'guided-maint-cancel': closeGuidedMaint(); break;
       case 'delete-maint-log':   deleteMaintLogEntry(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
     }
   });
 
   document.body.addEventListener('change', e => {
+    if (e.target.classList?.contains('guided-maint-check')) { updateGuidedMaintDoneState(); return; }
     const el = e.target.closest('[data-action]');
     if (!el) return;
     if (el.dataset.action === 'save-maint-threshold') {

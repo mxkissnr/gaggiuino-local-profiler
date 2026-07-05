@@ -307,6 +307,18 @@
             </div>
             <div id="maintLog"></div>
         </div>
+
+        <!-- Guided maintenance walkthrough -->
+        <div id="guidedMaintModal" class="guided-maint-overlay" style="display:none">
+            <div class="guided-maint-modal">
+                <h3 class="maint-section-title" id="guidedMaintTitle"></h3>
+                <div id="guidedMaintSteps"></div>
+                <div class="maint-log-form-actions">
+                    <button class="maint-done-btn" id="guidedMaintDoneBtn" data-action="guided-maint-done" disabled></button>
+                    <button class="maint-log-cancel-btn" data-action="guided-maint-cancel" data-i18n="lib_cancel">Abbrechen</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Orders view (barista backend) -->

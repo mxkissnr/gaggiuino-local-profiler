@@ -1,7 +1,7 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
-import { MAINT_META } from '../constants.js';
+import { MAINT_META, GUIDED_MAINT_STEPS } from '../constants.js';
 import { esc } from '../utils.js';
 
 export function maintStatusLabel(status) {
@@ -58,8 +58,50 @@ export function _buildMaintCard(task, d, title, icon) {
     </div>
     ${threshHtml}
     <button class="maint-done-btn" data-action="mark-maint-done" data-task="${task}">✓ ${t('maint_done_btn')}</button>
+    ${GUIDED_MAINT_STEPS[task] ? `<button class="maint-guide-btn" data-action="open-guided-maint" data-task="${task}">📋 ${t('guided_open')}</button>` : ''}
   `;
   return card;
+}
+
+// ── Guided walkthrough ────────────────────────────────────────────────────
+
+let _guidedTask = null;
+
+export function openGuidedMaint(task) {
+  const steps = GUIDED_MAINT_STEPS[task];
+  const modal = document.getElementById('guidedMaintModal');
+  if (!steps || !modal) return;
+  _guidedTask = task;
+  document.getElementById('guidedMaintTitle').textContent =
+    (MAINT_META[task]?.icon || '') + ' ' + t(MAINT_META[task]?.key || task);
+  document.getElementById('guidedMaintSteps').innerHTML = steps.map((key, i) => `
+    <label class="guided-maint-step">
+      <input type="checkbox" class="guided-maint-check">
+      <span class="guided-maint-step-num">${i + 1}</span>
+      <span>${esc(t(key))}</span>
+    </label>`).join('');
+  const doneBtn = document.getElementById('guidedMaintDoneBtn');
+  doneBtn.textContent = '✓ ' + t('maint_done_btn');
+  doneBtn.disabled = true;
+  modal.style.display = 'flex';
+}
+
+export function updateGuidedMaintDoneState() {
+  const boxes = [...document.querySelectorAll('#guidedMaintSteps .guided-maint-check')];
+  const btn   = document.getElementById('guidedMaintDoneBtn');
+  if (btn) btn.disabled = !boxes.length || !boxes.every(b => b.checked);
+}
+
+export function closeGuidedMaint() {
+  _guidedTask = null;
+  const modal = document.getElementById('guidedMaintModal');
+  if (modal) modal.style.display = 'none';
+}
+
+export async function submitGuidedMaint() {
+  if (!_guidedTask) return;
+  await markMaintDone(_guidedTask);
+  closeGuidedMaint();
 }
 
 export function renderMaintenanceCards(data) {
