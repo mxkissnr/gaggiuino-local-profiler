@@ -48,6 +48,7 @@ export default {
     lib_bean_name:'Name *', lib_bean_roaster:'Rösterei', lib_bean_roast_date:'Röstdatum', lib_bean_notes:'Notizen',
     lib_bean_origin:'Herkunft', lib_bean_variety:'Varietät', lib_bean_process:'Aufbereitung', lib_bean_origin_none:'– keine –',
     bean_flavors_label:'Geschmacksnoten', bean_flavors_ph:'Aprikose, Karamell …', bean_flavors_hint:'Enter oder Komma fügt hinzu',
+    bean_roast_type:'Röstung', roast_type_none:'– keine Angabe –', roast_type_espresso:'Espresso', roast_type_filter:'Filter', roast_type_omni:'Omni',
     lib_grinder_name:'Name *', lib_grinder_notes:'Notizen',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Quijote Kaffee',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',

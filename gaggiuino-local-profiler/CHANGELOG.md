@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Added
+- **Roast profile field** — beans carry `roastType` (espresso / filter / omni) as a select in the form and a blue badge next to the bean name. Imports derive it from the shop tags (Hoppenworth & Ploch, and elbgold once added): espresso tag → espresso, filter tag → filter, both → omni. `beans-info` exposes it for the cards. Closes #234
 - **Structured tasting notes (flavors)** — beans get a `flavors[]` tag list with a chips input in the form (Enter/comma adds, ✕ removes, Backspace on empty input removes the last chip; max 20 tags, deduped). Imports fill it automatically: kaffeebraun aroma properties and Hoppenworth & Ploch Geschmack lists become tags (qualifiers like "(Filter)" stripped) instead of a notes blob — the notes field stays free for personal notes. A startup migration moves the aroma segment of previously imported beans into flavors (shape heuristics protect personal notes; manual beans are never touched). Flavor chips render on the bean card and `beans-info` exposes `flavors` for the cards. Closes #233
 
 ## [1.96.1] – 2026-07-05

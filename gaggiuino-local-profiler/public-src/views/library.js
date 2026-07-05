@@ -110,7 +110,7 @@ export function renderBeanList() {
 
     return `<div class="lib-item">
       <div class="lib-item-info">
-        <div class="lib-item-name">${esc(b.name)}${freshBadge}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}</div>
+        <div class="lib-item-name">${esc(b.name)}${freshBadge}${b.roastType ? ` <span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : ''}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}</div>
         <div class="lib-item-sub">${[
           b.origin ? `${flagEmoji(b.origin)} ${countryName(b.origin, S.currentLang)}`.trim() : '',
           b.variety, b.process, b.roaster, b.roastDate, b.notes,
@@ -348,6 +348,7 @@ export function openBeanForm(bean) {
   bindFlavorInput();
   setFormFlavors(bean?.flavors);
   document.getElementById('beanFormFlavorInput').value = '';
+  document.getElementById('beanFormRoastType').value = bean?.roastType || '';
   document.getElementById('beanAddForm').classList.add('open');
   document.getElementById('beanAddTrigger').style.display = 'none';
   document.getElementById('beanFormName').focus();
@@ -376,9 +377,10 @@ export async function saveBean() {
   const origin    = document.getElementById('beanFormOrigin').value;
   const variety   = document.getElementById('beanFormVariety').value.trim();
   const process   = document.getElementById('beanFormProcess').value.trim();
+  const roastType = document.getElementById('beanFormRoastType').value;
   commitFlavorInput(); // take a still-typed flavor along
   if (!name) { document.getElementById('beanFormName').focus(); return; }
-  const payload = { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors: _formFlavors };
+  const payload = { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors: _formFlavors, roastType };
   if (!S.beanEditId && S._urlImportSource) { payload.source = S._urlImportSource; payload.importedAt = S._urlImportedAt; }
   const body = JSON.stringify(payload);
   const url  = S.beanEditId ? `api/library/bean/${S.beanEditId}` : 'api/library/bean';
@@ -489,6 +491,7 @@ export async function importFromUrl() {
     if (data.process) document.getElementById('beanFormProcess').value = data.process;
     if (data.decaf)   document.getElementById('beanFormDecaf').checked = true;
     if (Array.isArray(data.flavors) && data.flavors.length) setFormFlavors(data.flavors);
+    if (data.roastType) document.getElementById('beanFormRoastType').value = data.roastType;
     input.value = '';
     document.getElementById('urlImportRow').style.display = 'none';
   } catch {

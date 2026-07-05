@@ -107,6 +107,7 @@ class LibraryService {
                 variety:   bean.variety || null,
                 process:   bean.process || null,
                 flavors:   Array.isArray(bean.flavors) && bean.flavors.length ? bean.flavors : null,
+                roastType: bean.roastType || null,
                 roastDate: activeBag?.roastDate || bean.roastDate || null,
                 decaf:     !!bean.decaf,
             };

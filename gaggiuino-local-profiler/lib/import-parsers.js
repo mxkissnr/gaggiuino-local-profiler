@@ -3,6 +3,18 @@ const { mapOriginToCode } = require('./coffee-countries');
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+// Maps Shopify shop tags to the roast type: both espresso and filter → omni.
+function roastTypeFromTags(tags) {
+    if (!Array.isArray(tags)) return '';
+    const joined   = tags.join(' ').toLowerCase();
+    const espresso = /espresso/.test(joined);
+    const filter   = /filter/.test(joined);
+    if (espresso && filter) return 'omni';
+    if (espresso) return 'espresso';
+    if (filter)   return 'filter';
+    return '';
+}
+
 // Splits a tasting-notes string into flavor tags: separators , and ;, trailing
 // parenthesized qualifiers ("Schwarzer Tee (Filter)") stripped, deduped.
 function splitFlavors(text) {
@@ -94,10 +106,11 @@ function parseHoploProduct(product) {
         origin:     origin || null,
         variety:    fields['Varietät'] || null,
         process:    fields['Prozess'] || null,
+        roastType:  roastTypeFromTags(product.tags) || null,
         decaf:      /\bdecaf\b/i.test(title) || undefined,
         source:     'hoppenworth-ploch.de',
         importedAt: today(),
     };
 }
 
-module.exports = { parseKaffeebraun, parseHoploProduct, hoploJsonUrl, splitFlavors };
+module.exports = { parseKaffeebraun, parseHoploProduct, hoploJsonUrl, splitFlavors, roastTypeFromTags };

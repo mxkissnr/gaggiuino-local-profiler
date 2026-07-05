@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-const { parseKaffeebraun, parseHoploProduct, hoploJsonUrl, splitFlavors } = require('../lib/import-parsers');
+const { parseKaffeebraun, parseHoploProduct, hoploJsonUrl, splitFlavors, roastTypeFromTags } = require('../lib/import-parsers');
 
 const hoploFixture = JSON.parse(readFileSync(new URL('./fixtures/hoplo-shyira.json', import.meta.url), 'utf8'));
 
@@ -85,6 +85,21 @@ describe('parseKaffeebraun', () => {
 
     it('returns null when the page has no product', () => {
         expect(parseKaffeebraun('<html><body>nope</body></html>')).toBeNull();
+    });
+});
+
+describe('roastTypeFromTags', () => {
+    it('maps shop tags: filter-only, espresso-only, both → omni', () => {
+        expect(roastTypeFromTags(['Filter'])).toBe('filter');
+        expect(roastTypeFromTags(['Heller Espresso', 'new'])).toBe('espresso');
+        expect(roastTypeFromTags(['Filter', 'Heller Espresso'])).toBe('omni');
+        expect(roastTypeFromTags(['Bestseller'])).toBe('');
+        expect(roastTypeFromTags(undefined)).toBe('');
+    });
+
+    it('is applied by the hoplo parser (fixture has Filter + Heller Espresso → omni)', () => {
+        const bean = parseHoploProduct(hoploFixture);
+        expect(bean.roastType).toBe('omni');
     });
 });
 

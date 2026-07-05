@@ -427,6 +427,15 @@
                                 <input type="text" id="beanFormProcess" list="processSuggestions" placeholder="Washed, Natural …">
                                 <datalist id="processSuggestions"></datalist>
                             </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="bean_roast_type">Röstung</label>
+                                <select id="beanFormRoastType">
+                                    <option value="" data-i18n="roast_type_none">– keine Angabe –</option>
+                                    <option value="espresso" data-i18n="roast_type_espresso">Espresso-Röstung</option>
+                                    <option value="filter" data-i18n="roast_type_filter">Filter-Röstung</option>
+                                    <option value="omni" data-i18n="roast_type_omni">Omni-Röstung</option>
+                                </select>
+                            </div>
                             <div class="lib-form-field lib-form-field-wide">
                                 <label data-i18n="bean_flavors_label">Geschmacksnoten</label>
                                 <div class="flavor-chips-wrap" id="beanFormFlavorChips">

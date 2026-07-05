@@ -196,6 +196,20 @@ describe('bean origin/variety/process fields', () => {
         expect(await r.json()).toMatchObject({ origin: 'BR', variety: 'Bourbon', process: 'Natural' });
     });
 
+    it('whitelists roastType and drops unknown values', async () => {
+        const ok = await (await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Roasty', roastType: 'filter' }),
+        })).json();
+        expect(ok.roastType).toBe('filter');
+
+        const bad = await (await fetch(`${baseUrl}/api/library/bean/${ok.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roastType: 'nuclear' }),
+        })).json();
+        expect(bad.roastType).toBe('');
+    });
+
     it('stores flavors deduped and capped, round-trips via PUT', async () => {
         const r = await fetch(`${baseUrl}/api/library/bean`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
