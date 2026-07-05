@@ -2,6 +2,7 @@ const express  = require('express');
 const router   = express.Router();
 
 const shotService              = require('../lib/services/ShotService');
+const libraryService           = require('../lib/services/LibraryService');
 const { validate }             = require('../lib/middleware/validate');
 const { annotationSchema }     = require('../lib/validation/schemas');
 const { MAX_SHOT_ID }          = require('../lib/constants');
@@ -62,6 +63,8 @@ router.post('/api/shots/:id/annotate', validate(annotationSchema), (req, res, ne
         const id = parseId(req.params.id);
         if (!id) return res.status(400).json({ error: 'Invalid shot ID' });
         shotService.saveAnnotation(id, req.body);
+        // fire-and-forget: never let a notification failure break the save
+        libraryService.checkLowStockNotify(req.body?.coffee).catch(() => {});
         res.json({ ok: true });
     } catch (err) { next(err); }
 });

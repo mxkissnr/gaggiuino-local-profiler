@@ -1,6 +1,7 @@
 const repo    = require('../repositories/LibraryRepository');
 const shotRepo = require('../repositories/ShotRepository');
 const { log } = require('../helpers');
+const { LOW_STOCK_THRESHOLD_G } = require('../constants');
 
 class LibraryService {
     getLibrary()         { return repo.getLibrary(); }
@@ -47,6 +48,36 @@ class LibraryService {
                 notes: bean.notes || null, origin: bean.origin || null, process: bean.process || null,
                 variety: bean.variety || null,
             }));
+    }
+
+    // One-time low-stock push per bag: after a shot annotation, when the
+    // named bean's remaining falls below the threshold, notify the barista
+    // device (same channel as the preheat notification). The notified flag
+    // lives on the active bag, so a new bag re-arms automatically.
+    async checkLowStockNotify(coffeeName) {
+        if (!coffeeName) return;
+        const lib  = this.getLibrary();
+        const name = String(coffeeName).toLowerCase();
+        const bean = (lib.beans || []).find(b => String(b.name || '').toLowerCase() === name);
+        if (!bean) return;
+        const bags      = Array.isArray(bean.bags) ? bean.bags : [];
+        const activeBag = bags.length ? bags[bags.length - 1] : null;
+        if (!activeBag || activeBag.lowStockNotifiedAt) return;
+        const remaining = this.computeBeanRemaining(bean, shotRepo.getAnnotatedDoses());
+        if (remaining === null || remaining >= LOW_STOCK_THRESHOLD_G) return;
+        const { loadOrdersSettings }           = require('../data');
+        const { sendHaNotify, getHaLanguage }  = require('../ha');
+        const { notifyT }                      = require('../notify-i18n');
+        const svc = loadOrdersSettings().baristaNotifyService;
+        if (!svc) return;
+        const lang = await getHaLanguage();
+        await sendHaNotify(svc,
+            notifyT(lang, 'low_stock_title'),
+            notifyT(lang, 'low_stock_body', bean.name, Math.max(remaining, 0)),
+            `glp_low_stock_${bean.id}`);
+        activeBag.lowStockNotifiedAt = Date.now();
+        this.saveLibrary(lib);
+        log(`Low-stock notification sent for bean "${bean.name}" (${remaining} g left)`);
     }
 
     computeMaintenanceStats(maint) {

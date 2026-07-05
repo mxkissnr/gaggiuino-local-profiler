@@ -24,6 +24,8 @@ const ALLOWED_URL_SCHEMES   = ['http:', 'https:'];
 const ALLOWED_IMPORT_HOSTS  = ['kaffeebraun.com', 'www.kaffeebraun.com',
     'hoppenworth-ploch.de', 'www.hoppenworth-ploch.de'];
 
+const LOW_STOCK_THRESHOLD_G = 100; // remaining grams below which a bean counts as low stock
+
 const TEMP_HISTORY_MAX  = 60;   // max rolling history entries (1 per second)
 const TEMP_STABLE_MIN   = 30;   // minimum window length to consider stability (seconds)
 const TEMP_STABLE_VAR   = 1.5;  // max allowed range (max-min, °C) over the stability window
@@ -58,4 +60,5 @@ module.exports = {
     TEMP_HISTORY_MAX, TEMP_STABLE_MIN, TEMP_STABLE_VAR, PREHEAT_STATE_TTL,
     WARM_TEMP_MIN, WARM_OFF_MAX_MS,
     DEFAULT_MENU, MAINTENANCE_DEFAULTS, STATIC_MAINTENANCE_TASKS,
+    LOW_STOCK_THRESHOLD_G,
 };
