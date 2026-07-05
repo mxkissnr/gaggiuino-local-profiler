@@ -1,4 +1,4 @@
-## [Unreleased]
+## [1.96.0] – 2026-07-05
 
 ### Added
 - **`GET /api/library/beans-info`** — read-only bean metadata endpoint (id, name, roaster, origin, variety, process, active-bag roast date, decaf; no stock math, not behind the orders guard) for external consumers. The Lovelace shot card v2.13.0 uses it to enrich the shot's bean line with origin flag, variety and roast age. Documented in `openapi.yaml`. Closes #231
