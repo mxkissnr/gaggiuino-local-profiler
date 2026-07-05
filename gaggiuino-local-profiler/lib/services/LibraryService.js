@@ -45,6 +45,7 @@ class LibraryService {
                 decaf: !!bean.decaf, remaining,
                 // customer-facing description data for the order card
                 notes: bean.notes || null, origin: bean.origin || null, process: bean.process || null,
+                variety: bean.variety || null,
             }));
     }
 

@@ -401,6 +401,20 @@
                                 <input type="text" id="beanFormNotes" placeholder="Blaubeere, Jasmin …">
                             </div>
                             <div class="lib-form-field">
+                                <label data-i18n="lib_bean_origin">Herkunft</label>
+                                <select id="beanFormOrigin"></select>
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_bean_variety">Varietät</label>
+                                <input type="text" id="beanFormVariety" list="varietySuggestions" placeholder="Arabica, Geisha …">
+                                <datalist id="varietySuggestions"></datalist>
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_bean_process">Aufbereitung</label>
+                                <input type="text" id="beanFormProcess" list="processSuggestions" placeholder="Washed, Natural …">
+                                <datalist id="processSuggestions"></datalist>
+                            </div>
+                            <div class="lib-form-field">
                                 <label data-i18n="lib_bean_stock">Vorrat (g)</label>
                                 <input type="number" id="beanFormStock" data-i18n-placeholder="lib_bean_stock_ph" placeholder="z.B. 500" step="1" min="0">
                             </div>

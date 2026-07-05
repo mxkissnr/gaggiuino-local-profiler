@@ -46,6 +46,7 @@ export default {
     lib_beans:'Granos', lib_grinders:'Molinos',
     lib_add_bean:'+ Añadir grano', lib_add_grinder:'+ Añadir molino',
     lib_bean_name:'Nombre *', lib_bean_roaster:'Tostadero', lib_bean_roast_date:'Fecha de tueste', lib_bean_notes:'Notas',
+    lib_bean_origin:'Origen', lib_bean_variety:'Variedad', lib_bean_process:'Proceso', lib_bean_origin_none:'– ninguno –',
     lib_grinder_name:'Nombre *', lib_grinder_notes:'Notas',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Tostadero Madrid',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',

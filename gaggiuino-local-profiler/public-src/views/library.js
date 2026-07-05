@@ -2,6 +2,7 @@ import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { esc } from '../utils.js';
+import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, countryName, flagEmoji } from '../constants.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
@@ -105,7 +106,10 @@ export function renderBeanList() {
     return `<div class="lib-item">
       <div class="lib-item-info">
         <div class="lib-item-name">${esc(b.name)}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}</div>
-        <div class="lib-item-sub">${[b.roaster, b.roastDate, b.notes].filter(Boolean).map(esc).join(' · ')}</div>
+        <div class="lib-item-sub">${[
+          b.origin ? `${flagEmoji(b.origin)} ${countryName(b.origin, S.currentLang)}`.trim() : '',
+          b.variety, b.process, b.roaster, b.roastDate, b.notes,
+        ].filter(Boolean).map(esc).join(' · ')}</div>
         ${invHtml}
         ${bagHistoryHtml}
         ${b.source ? `<div class="lib-item-source">${t('lib_imported_from', b.source, b.importedAt || '')}</div>` : ''}
@@ -244,6 +248,28 @@ export function renderGrinderList() {
 }
 
 // ── Bean form ─────────────────────────────────────────────────────────────
+function populateOriginSelect(selected) {
+  const sel = document.getElementById('beanFormOrigin');
+  if (!sel) return;
+  const options = COFFEE_COUNTRIES
+    .map(c => ({ code: c.code, label: `${flagEmoji(c.code)} ${countryName(c.code, S.currentLang)}` }))
+    .sort((a, b) => a.label.localeCompare(b.label, S.currentLang));
+  sel.innerHTML = `<option value="">${t('lib_bean_origin_none')}</option>`
+    + options.map(o => `<option value="${o.code}">${esc(o.label)}</option>`).join('');
+  // Legacy free-text origins (never written by the UI, but be defensive): keep them selectable
+  if (selected && !COFFEE_COUNTRIES.some(c => c.code === selected)) {
+    sel.innerHTML += `<option value="${esc(selected)}">${esc(selected)}</option>`;
+  }
+  sel.value = selected || '';
+}
+
+function populateSuggestionDatalists() {
+  const v = document.getElementById('varietySuggestions');
+  const p = document.getElementById('processSuggestions');
+  if (v && !v.children.length) v.innerHTML = VARIETY_SUGGESTIONS.map(s => `<option value="${s}">`).join('');
+  if (p && !p.children.length) p.innerHTML = PROCESS_SUGGESTIONS.map(s => `<option value="${s}">`).join('');
+}
+
 export function openBeanForm(bean) {
   S.beanEditId = bean ? bean.id : null;
   document.getElementById('beanFormName').value      = bean?.name      || '';
@@ -252,6 +278,10 @@ export function openBeanForm(bean) {
   document.getElementById('beanFormNotes').value     = bean?.notes     || '';
   document.getElementById('beanFormStock').value     = bean?.stock_g   || '';
   document.getElementById('beanFormDecaf').checked   = !!bean?.decaf;
+  populateOriginSelect(bean?.origin || '');
+  populateSuggestionDatalists();
+  document.getElementById('beanFormVariety').value   = bean?.variety || '';
+  document.getElementById('beanFormProcess').value   = bean?.process || '';
   document.getElementById('beanAddForm').classList.add('open');
   document.getElementById('beanAddTrigger').style.display = 'none';
   document.getElementById('beanFormName').focus();
@@ -277,8 +307,11 @@ export async function saveBean() {
   const notes     = document.getElementById('beanFormNotes').value.trim();
   const stock_g   = parseFloat(document.getElementById('beanFormStock').value) || null;
   const decaf     = document.getElementById('beanFormDecaf').checked;
+  const origin    = document.getElementById('beanFormOrigin').value;
+  const variety   = document.getElementById('beanFormVariety').value.trim();
+  const process   = document.getElementById('beanFormProcess').value.trim();
   if (!name) { document.getElementById('beanFormName').focus(); return; }
-  const payload = { name, roaster, roastDate, notes, stock_g, decaf };
+  const payload = { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process };
   if (!S.beanEditId && S._urlImportSource) { payload.source = S._urlImportSource; payload.importedAt = S._urlImportedAt; }
   const body = JSON.stringify(payload);
   const url  = S.beanEditId ? `api/library/bean/${S.beanEditId}` : 'api/library/bean';

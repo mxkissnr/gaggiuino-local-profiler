@@ -46,6 +46,7 @@ export default {
     lib_beans:'Bonen', lib_grinders:'Molens',
     lib_add_bean:'+ Boon toevoegen', lib_add_grinder:'+ Molen toevoegen',
     lib_bean_name:'Naam *', lib_bean_roaster:'Brander', lib_bean_roast_date:'Roosdatum', lib_bean_notes:'Notities',
+    lib_bean_origin:'Herkomst', lib_bean_variety:'Variëteit', lib_bean_process:'Verwerking', lib_bean_origin_none:'– geen –',
     lib_grinder_name:'Naam *', lib_grinder_notes:'Notities',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Brandkoffie Amsterdam',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',

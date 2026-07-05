@@ -46,6 +46,7 @@ export default {
     lib_beans:'Bohnen', lib_grinders:'Mühlen',
     lib_add_bean:'+ Bohne hinzufügen', lib_add_grinder:'+ Mühle hinzufügen',
     lib_bean_name:'Name *', lib_bean_roaster:'Rösterei', lib_bean_roast_date:'Röstdatum', lib_bean_notes:'Notizen',
+    lib_bean_origin:'Herkunft', lib_bean_variety:'Varietät', lib_bean_process:'Aufbereitung', lib_bean_origin_none:'– keine –',
     lib_grinder_name:'Name *', lib_grinder_notes:'Notizen',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Quijote Kaffee',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',

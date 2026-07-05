@@ -168,6 +168,44 @@ describe('GET /api/orders/active-beans', () => {
     });
 });
 
+describe('bean origin/variety/process fields', () => {
+    it('stores origin as an uppercased ISO alpha-2 code and keeps variety/process', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Yirgacheffe', origin: 'et', variety: 'Heirloom', process: 'Washed' }),
+        });
+        expect(r.status).toBe(200);
+        const bean = await r.json();
+        expect(bean).toMatchObject({ origin: 'ET', variety: 'Heirloom', process: 'Washed' });
+    });
+
+    it('drops non-ISO origin values instead of storing free text', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Mystery', origin: 'Äthiopien' }),
+        });
+        expect((await r.json()).origin).toBe('');
+    });
+
+    it('updates the new fields via PUT', async () => {
+        saveLibrary({ beans: [{ id: 7, name: 'Dolce', origin: '', variety: '', process: '' }], grinders: [], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/library/bean/7`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ origin: 'br', variety: 'Bourbon', process: 'Natural' }),
+        });
+        expect(await r.json()).toMatchObject({ origin: 'BR', variety: 'Bourbon', process: 'Natural' });
+    });
+
+    it('exposes variety on /api/orders/active-beans', async () => {
+        saveLibrary({ beans: [
+            { id: 1, name: 'El Cubanito', stock_g: 500, variety: 'Robusta', origin: 'CU',
+              bags: [{ id: 1, roastDate: '2026-06-01', stock_g: 500, openedAt: 0 }] },
+        ], grinders: [], recipes: [] });
+        const [bean] = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
+        expect(bean).toMatchObject({ variety: 'Robusta', origin: 'CU' });
+    });
+});
+
 describe('GET /api/maintenance/log', () => {
     it('enriches grinder log entries with the grinder name', async () => {
         saveLibrary({ beans: [], grinders: [{ id: 1779521986327, name: 'Kingrinder K6' }], recipes: [] });
