@@ -1,7 +1,7 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
-import { esc } from '../utils.js';
+import { esc, roastAgeDays, freshnessState } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, countryName, flagEmoji } from '../constants.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
@@ -103,9 +103,14 @@ export function renderBeanList() {
       </div>
       <button class="lib-btn-sm lib-bag-history-btn" data-action="toggle-bag-history" data-id="${b.id}" id="bagHistoryBtn${b.id}">▸ ${t('lib_bag_history')}</button>` : '';
 
+    const roastAge = roastAgeDays(activeBag?.roastDate || b.roastDate);
+    const freshBadge = roastAge != null
+      ? ` <span class="lib-fresh-badge fresh-${freshnessState(roastAge)}" title="${esc(t('freshness_title', roastAge))}">${roastAge}d</span>`
+      : '';
+
     return `<div class="lib-item">
       <div class="lib-item-info">
-        <div class="lib-item-name">${esc(b.name)}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}</div>
+        <div class="lib-item-name">${esc(b.name)}${freshBadge}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}</div>
         <div class="lib-item-sub">${[
           b.origin ? `${flagEmoji(b.origin)} ${countryName(b.origin, S.currentLang)}`.trim() : '',
           b.variety, b.process, b.roaster, b.roastDate, b.notes,

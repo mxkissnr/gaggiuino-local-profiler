@@ -504,6 +504,12 @@
         .lib-inv-reorder { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); color: var(--err); border-radius: 4px; padding: 1px 5px; font-size: .65rem; font-weight: 600; }
         .lib-inv-total { color: var(--gray-700); font-size: .68rem; }
         .lib-decaf-badge { display: inline-block; background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.3); color: #22c55e; border-radius: 4px; padding: 1px 5px; font-size: .6rem; font-weight: 700; vertical-align: middle; margin-left: 4px; }
+        .lib-fresh-badge { display: inline-block; border-radius: 4px; padding: 1px 5px; font-size: .6rem; font-weight: 700; vertical-align: middle; margin-left: 4px; border: 1px solid; }
+        .lib-fresh-badge.fresh-degassing { color: #a1a1aa; border-color: rgba(161,161,170,.35); background: rgba(161,161,170,.1); }
+        .lib-fresh-badge.fresh-almost    { color: #eab308; border-color: rgba(234,179,8,.35);  background: rgba(234,179,8,.1); }
+        .lib-fresh-badge.fresh-peak      { color: #22c55e; border-color: rgba(34,197,94,.35);  background: rgba(34,197,94,.1); }
+        .lib-fresh-badge.fresh-fading    { color: #f97316; border-color: rgba(249,115,22,.35); background: rgba(249,115,22,.1); }
+        .lib-fresh-badge.fresh-old       { color: #ef4444; border-color: rgba(239,68,68,.35);  background: rgba(239,68,68,.1); }
         .lib-form-field-check { display: flex; align-items: center; padding-top: 20px; }
         .lib-check-label { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: .85rem; color: var(--gray-300); }
         .lib-check-label input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--ok); cursor: pointer; }

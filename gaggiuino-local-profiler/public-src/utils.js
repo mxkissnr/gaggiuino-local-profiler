@@ -9,6 +9,36 @@ export function esc(str) {
     .replace(/'/g, '&#39;');
 }
 
+// ── Roast freshness ───────────────────────────────────────────────────────
+// Roast dates appear in two formats across the app: DD.MM.YYYY (bean form,
+// TT.MM.JJJJ placeholder) and YYYY-MM-DD (ISO, bags & imports). Returns whole
+// days since roast, or null when unparseable / implausible (>2 years).
+export function roastAgeDays(str, nowMs = Date.now()) {
+  if (!str || typeof str !== 'string') return null;
+  let d = null;
+  let m = str.trim().match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2,4})$/);
+  if (m) {
+    const y = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
+    d = new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));
+  } else {
+    m = str.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+  }
+  if (!d || isNaN(d)) return null;
+  const days = Math.floor((nowMs - d.getTime()) / 86400000);
+  return days >= 0 && days <= 730 ? days : null;
+}
+
+// Same windows as the degassing tracker in the annotation panel.
+export function freshnessState(days) {
+  if (days == null) return null;
+  if (days < 4)   return 'degassing';
+  if (days < 7)   return 'almost';
+  if (days <= 21) return 'peak';
+  if (days <= 35) return 'fading';
+  return 'old';
+}
+
 // ── Math helpers ──────────────────────────────────────────────────────────
 export function avg(arr) {
   if (!arr?.length) return null;
