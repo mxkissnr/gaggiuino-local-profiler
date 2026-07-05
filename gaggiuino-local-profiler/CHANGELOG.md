@@ -1,3 +1,8 @@
+## [1.96.1] – 2026-07-05
+
+### Fixed
+- **Legacy imported beans get their structured fields filled automatically** — beans imported before 1.96.0 carried "Herkunft: X" and "Aufbereitung: Y" as free text in the notes (the structured fields did not exist yet). An idempotent startup migration extracts mappable origins into the origin field and processing into the process field, removing the fragments from notes, so existing beans appear on the world map without re-entering data. The ", ," artifacts the old import join produced from empty aroma spans are cleaned along the way, and the kaffeebraun parser now filters empty spans before joining. Closes #232
+
 ## [1.96.0] – 2026-07-05
 
 ### Added

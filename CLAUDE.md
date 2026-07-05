@@ -35,7 +35,7 @@ If you catch yourself writing code without an issue number in hand: stop, create
 - Breaking change → bump first number (rare)
 
 Always update **both**:
-- `gaggiuino-local-profiler/server.js` → `const GLP_VERSION = '...'`
+- `gaggiuino-local-profiler/lib/constants.js` → `const GLP_VERSION  = '...'`
 - `gaggiuino-local-profiler/config.yaml` → `version: "..."`
 
 ## Commits
@@ -55,6 +55,13 @@ git push origin main
 git push origin v<version>
 gh release create v<version> --title "v<version>" --notes "..."
 ```
+
+## Release & documentation rules (since 2026-07-05)
+
+- **A release ends at the GitHub release.** Do NOT deploy to Home Assistant — Max installs add-on/HACS updates himself.
+- **GLP documentation lives ONLY in the GLP repos.** Never write GLP release notes into mkab-infra/CHANGELOG.md.
+- **Update the GitHub wiki every feature round** (`git clone git@github.com:mxkissnr/gaggiuino-local-profiler.wiki.git`): pages are bilingual (`Page.md` + `Page-de.md`, always both). Minimum when touched by features: Coffee-Library, Analytics, Features, Home.
+- **Keep README screenshots current** when the UI changes: `node scripts/screenshots.mjs` regenerates `docs/screenshots/*.png`.
 
 ## Repo structure
 

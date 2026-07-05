@@ -12,7 +12,7 @@ function parseKaffeebraun(html) {
     const props = {};
     $('tr.properties-row').each((_, row) => {
         const key = $(row).find('th.properties-label').text().replace(':', '').trim();
-        const val = $(row).find('td.properties-value span').map((_, el) => $(el).text().trim()).get().join(', ');
+        const val = $(row).find('td.properties-value span').map((_, el) => $(el).text().trim()).get().filter(Boolean).join(', ');
         if (key && val) props[key] = val;
     });
     const roastLabel = $('.degree.roest .description').first().text().trim();

@@ -50,6 +50,49 @@ class LibraryService {
             }));
     }
 
+    // Beans imported before 1.96.0 carry "Herkunft: X" / "Aufbereitung: Y" as
+    // free text in notes (the structured fields did not exist yet) and the old
+    // import join left ", ," artifacts from empty spans. Idempotent startup
+    // migration: extract into the structured fields when they are empty and
+    // clean the artifacts.
+    migrateImportedNotes() {
+        const { mapOriginToCode } = require('../coffee-countries');
+        const lib = this.getLibrary();
+        let changed = 0;
+        for (const bean of lib.beans || []) {
+            if (typeof bean.notes !== 'string' || !bean.notes) continue;
+            let dirty = false;
+            let segments = bean.notes.split('·').map(s => s.trim()).filter(Boolean);
+            segments = segments.filter(seg => {
+                const hm = seg.match(/^Herkunft:\s*(.+)$/i);
+                if (hm && !bean.origin) {
+                    const code = mapOriginToCode(hm[1].trim());
+                    if (code) { bean.origin = code; dirty = true; return false; }
+                    return true;
+                }
+                const pm = seg.match(/^Aufbereitung:\s*(.+)$/i);
+                if (pm && !bean.process) {
+                    bean.process = pm[1].trim().slice(0, 200);
+                    dirty = true;
+                    return false;
+                }
+                return true;
+            });
+            // ", ," artifacts only — leave ordinary commas (incl. decimals) alone
+            const cleaned = segments.map(seg => /,\s*,/.test(seg)
+                ? seg.split(',').map(s => s.trim()).filter(Boolean).join(', ')
+                : seg
+            ).join(' · ');
+            if (cleaned !== bean.notes) { bean.notes = cleaned; dirty = true; }
+            if (dirty) changed++;
+        }
+        if (changed) {
+            this.saveLibrary(lib);
+            log(`Migrated imported notes into structured fields on ${changed} bean(s)`);
+        }
+        return changed;
+    }
+
     // Lightweight bean metadata for external consumers (Lovelace shot card):
     // descriptive fields only, no stock math. roastDate prefers the active bag.
     getBeansInfo() {
