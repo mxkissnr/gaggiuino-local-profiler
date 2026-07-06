@@ -53,6 +53,7 @@ export default {
     flavor_wheel_btn:'Ouvrir la roue des arômes', flavor_wheel_unmatched:'Arômes non associés',
     flavor_wheel_unavailable:'Roue des arômes indisponible (pas de connexion internet ?)',
     flavor_wheel_credit:'Hiérarchie des arômes dérivée de la SCA/WCR Coffee Taster\'s Flavor Wheel (2016)',
+    bean_rating_tooltip:(n)=>`Moy. sur ${n} shot${n!==1?'s':''}`,
     lib_grinder_name:'Nom *', lib_grinder_notes:'Notes',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Torréfacteur Paris',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clics',

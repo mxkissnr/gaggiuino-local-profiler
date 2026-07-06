@@ -53,6 +53,7 @@ export default {
     flavor_wheel_btn:'Abrir rueda de sabores', flavor_wheel_unmatched:'Sabores sin asignar',
     flavor_wheel_unavailable:'Rueda de sabores no disponible (¿sin conexión a internet?)',
     flavor_wheel_credit:'Jerarquía de sabores derivada de la SCA/WCR Coffee Taster\'s Flavor Wheel (2016)',
+    bean_rating_tooltip:(n)=>`Media de ${n} shot${n!==1?'s':''}`,
     lib_grinder_name:'Nombre *', lib_grinder_notes:'Notas',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Tostadero Madrid',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',

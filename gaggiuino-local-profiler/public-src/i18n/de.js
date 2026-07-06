@@ -53,6 +53,7 @@ export default {
     flavor_wheel_btn:'Aroma-Rad öffnen', flavor_wheel_unmatched:'Nicht zugeordnete Aromen',
     flavor_wheel_unavailable:'Aroma-Rad momentan nicht verfügbar (keine Internetverbindung?)',
     flavor_wheel_credit:'Aromen-Hierarchie abgeleitet vom SCA/WCR Coffee Taster\'s Flavor Wheel (2016)',
+    bean_rating_tooltip:(n)=>`Ø aus ${n} Shot${n!==1?'s':''}`,
     lib_grinder_name:'Name *', lib_grinder_notes:'Notizen',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Quijote Kaffee',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',

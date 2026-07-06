@@ -51,6 +51,22 @@ export function calcBrewRatio(shot, data) {
   return ratio > 0.5 && ratio < 6 ? ratio : null;
 }
 
+// ── Bean rating ───────────────────────────────────────────────────────────
+// Average star rating (1-5) across all shots annotated with this bean name
+// (case-insensitive, same join precedent as computeBeanRemaining). Returns
+// { avg, count } or null when no rated shot matches.
+export function calcBeanRating(beanName, shots) {
+  if (!beanName || !Array.isArray(shots)) return null;
+  const name = beanName.toLowerCase();
+  const ratings = shots
+    .filter(s => (s.annotation?.coffee || '').toLowerCase() === name)
+    .map(s => parseFloat(s.annotation?.rating))
+    .filter(r => r >= 1 && r <= 5);
+  if (!ratings.length) return null;
+  const mean = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+  return { avg: Math.round(mean * 10) / 10, count: ratings.length };
+}
+
 // ── Math helpers ──────────────────────────────────────────────────────────
 export function avg(arr) {
   if (!arr?.length) return null;

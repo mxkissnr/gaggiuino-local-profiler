@@ -53,6 +53,7 @@ export default {
     flavor_wheel_btn:'Smaakwiel openen', flavor_wheel_unmatched:'Niet-gekoppelde smaken',
     flavor_wheel_unavailable:'Smaakwiel momenteel niet beschikbaar (geen internetverbinding?)',
     flavor_wheel_credit:'Smaakhiërarchie afgeleid van het SCA/WCR Coffee Taster\'s Flavor Wheel (2016)',
+    bean_rating_tooltip:(n)=>`Gem. van ${n} shot${n!==1?'s':''}`,
     lib_grinder_name:'Naam *', lib_grinder_notes:'Notities',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Brandkoffie Amsterdam',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',

@@ -53,6 +53,7 @@ export default {
     flavor_wheel_btn:'Open flavor wheel', flavor_wheel_unmatched:'Unmatched flavors',
     flavor_wheel_unavailable:'Flavor wheel currently unavailable (no internet connection?)',
     flavor_wheel_credit:'Flavor hierarchy derived from the SCA/WCR Coffee Taster\'s Flavor Wheel (2016)',
+    bean_rating_tooltip:(n)=>`Avg of ${n} shot${n!==1?'s':''}`,
     lib_grinder_name:'Name *', lib_grinder_notes:'Notes',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Quijote Kaffee',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',

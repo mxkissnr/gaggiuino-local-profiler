@@ -53,6 +53,7 @@ export default {
     flavor_wheel_btn:'Apri la ruota degli aromi', flavor_wheel_unmatched:'Aromi non abbinati',
     flavor_wheel_unavailable:'Ruota degli aromi non disponibile (nessuna connessione internet?)',
     flavor_wheel_credit:'Gerarchia aromatica derivata dalla SCA/WCR Coffee Taster\'s Flavor Wheel (2016)',
+    bean_rating_tooltip:(n)=>`Media su ${n} shot`,
     lib_grinder_name:'Nome *', lib_grinder_notes:'Note',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Torrefazione Roma',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Click',
