@@ -48,6 +48,20 @@ function sanitizePrice(v) {
     return Number.isFinite(n) && n >= 0 && n <= 500 ? Math.round(n * 100) / 100 : null;
 }
 
+// Roaster brew recommendation — manual-only (no import source provides these
+// as structured data; see DOCS). Sensible ranges: 80-100°C covers filter
+// through near-boiling pour-over, 5-300s covers espresso through cold-adjacent
+// filter brews.
+function sanitizeBrewTemp(v) {
+    const n = parseFloat(v);
+    return Number.isFinite(n) && n >= 80 && n <= 100 ? Math.round(n * 10) / 10 : null;
+}
+
+function sanitizeBrewTime(v) {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) && n >= 5 && n <= 300 ? n : null;
+}
+
 router.get('/api/library', (req, res) => {
     res.json(loadLibrary());
 });
@@ -61,7 +75,8 @@ router.get('/api/library/beans-info', (req, res, next) => {
 router.post('/api/library/bean', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
     const { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors, roastType, region, imageUrl,
-        altitude_m, importer, harvest, price_eur, producer, certification, source, importedAt } = req.body;
+        altitude_m, importer, harvest, price_eur, producer, certification, source, importedAt,
+        brewTempC, brewRatio, brewTimeS, brewNotes } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
     const s    = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -78,6 +93,8 @@ router.post('/api/library/bean', (req, res) => {
         importer: s(importer, 200), harvest: s(harvest, 50),
         price_eur: sanitizePrice(price_eur),
         producer: s(producer, 200), certification: s(certification, 200),
+        brewTempC: sanitizeBrewTemp(brewTempC), brewRatio: s(brewRatio, 20),
+        brewTimeS: sanitizeBrewTime(brewTimeS), brewNotes: s(brewNotes, 300),
         stock_g: parsedStock,
         decaf: !!decaf,
         bags: parsedStock || s(roastDate, 10)
@@ -101,7 +118,8 @@ router.put('/api/library/bean/:id', (req, res) => {
     if (idx === -1) return res.status(404).json({ error: 'not found' });
     const s = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : undefined;
     const { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors, roastType, region,
-        altitude_m, importer, harvest, price_eur, producer, certification } = req.body;
+        altitude_m, importer, harvest, price_eur, producer, certification,
+        brewTempC, brewRatio, brewTimeS, brewNotes } = req.body;
     if (name !== undefined)      lib.beans[idx].name      = s(name, 200) || lib.beans[idx].name;
     if (roaster !== undefined)   lib.beans[idx].roaster   = s(roaster, 200);
     if (roastDate !== undefined) lib.beans[idx].roastDate = s(roastDate, 10);
@@ -117,6 +135,10 @@ router.put('/api/library/bean/:id', (req, res) => {
     if (price_eur !== undefined)     lib.beans[idx].price_eur     = sanitizePrice(price_eur);
     if (producer !== undefined)      lib.beans[idx].producer      = s(producer, 200) ?? '';
     if (certification !== undefined) lib.beans[idx].certification = s(certification, 200) ?? '';
+    if (brewTempC !== undefined) lib.beans[idx].brewTempC = sanitizeBrewTemp(brewTempC);
+    if (brewRatio !== undefined) lib.beans[idx].brewRatio = s(brewRatio, 20) ?? '';
+    if (brewTimeS !== undefined) lib.beans[idx].brewTimeS = sanitizeBrewTime(brewTimeS);
+    if (brewNotes !== undefined) lib.beans[idx].brewNotes = s(brewNotes, 300) ?? '';
     let regionChanged = false;
     if (region !== undefined) {
         const newRegion = s(region, 200) ?? '';

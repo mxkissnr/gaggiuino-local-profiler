@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Added
+- **Manual brew recommendation fields on beans** — `brewTempC` (80-100°C), `brewRatio` (free text, e.g. "1:2.2"), `brewTimeS` (5-300s) and `brewNotes`, shown on the bean card only when at least one is set. Manual-only: checked kaffeebraun.com, hoppenworth-ploch.de and elbgold.com and none expose structured brew parameters per product (elbgold only links to a generic, non-per-bean brew guide page). Closes #248
 - **Grinders get burr type, purchase date and a photo** — the grinder form and card gain `burrType` (free text with suggestions) and `purchaseDate` fields, plus a directly-uploaded photo (there's no URL import for grinders like beans have): `POST /api/library/grinder/:id/image` accepts the raw image bytes via `express.raw()`, validated against the same content-type whitelist and size cap as bean images, stored as `grinder-<id>.<ext>` so it can never collide with a bean image filename in the same directory. Closes #247
 - **Shots sidebar groups older months, collapsibly** — shots older than the current calendar month now collapse into a "Month YYYY" section (same collapse pattern as the bean bag history), while the current month stays a flat list. Only applies when sorted by "Newest" — score/rating/duration sorting keeps the flat list since month-grouping wouldn't make sense there. Closes #245
 

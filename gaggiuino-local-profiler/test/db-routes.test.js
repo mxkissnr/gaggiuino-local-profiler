@@ -283,6 +283,42 @@ describe('bean extra fields (altitude/importer/harvest/price/producer/certificat
     });
 });
 
+describe('bean brew recommendation fields (manual-only)', () => {
+    it('sanitizes and round-trips all four fields', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: 'Brew Bean', brewTempC: '94', brewRatio: '1:2.2', brewTimeS: '28',
+                brewNotes: 'a bit hotter than usual',
+            }),
+        });
+        const bean = await r.json();
+        expect(bean).toMatchObject({
+            brewTempC: 94, brewRatio: '1:2.2', brewTimeS: 28, brewNotes: 'a bit hotter than usual',
+        });
+
+        const put = await fetch(`${baseUrl}/api/library/bean/${bean.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brewTempC: '150', brewTimeS: '1' }),
+        });
+        const updated = await put.json();
+        expect(updated.brewTempC).toBeNull(); // out of the 80-100°C range
+        expect(updated.brewTimeS).toBeNull(); // below the 5s minimum
+    });
+
+    it('leaves brew fields unset (not zero/empty strings) when omitted', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Plain Bean' }),
+        });
+        const bean = await r.json();
+        expect(bean.brewTempC).toBeNull();
+        expect(bean.brewTimeS).toBeNull();
+        expect(bean.brewRatio).toBe('');
+        expect(bean.brewNotes).toBe('');
+    });
+});
+
 describe('bean origin/variety/process fields', () => {
     it('stores origin as an uppercased ISO alpha-2 code and keeps variety/process', async () => {
         const r = await fetch(`${baseUrl}/api/library/bean`, {

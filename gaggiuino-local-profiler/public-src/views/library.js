@@ -124,6 +124,15 @@ export function renderBeanList() {
     const extraHtml = extraParts.length
       ? `<div class="lib-item-sub lib-item-extra">${extraParts.map(esc).join(' · ')}</div>` : '';
 
+    const brewParts = [
+      b.brewTempC ? t('bean_brew_temp_display', b.brewTempC) : '',
+      b.brewRatio,
+      b.brewTimeS ? t('bean_brew_time_display', b.brewTimeS) : '',
+    ].filter(Boolean);
+    const brewHtml = brewParts.length || b.brewNotes
+      ? `<div class="lib-item-sub lib-item-brew">☕ ${[...brewParts, b.brewNotes].filter(Boolean).map(esc).join(' · ')}</div>`
+      : '';
+
     return `<div class="lib-item">
       ${b.image ? `<img class="lib-bean-thumb" data-bean-id="${b.id}" alt="">` : ''}
       <div class="lib-item-info">
@@ -133,6 +142,7 @@ export function renderBeanList() {
           b.region, b.variety, b.process, b.roaster, b.roastDate, b.notes,
         ].filter(Boolean).map(esc).join(' · ')}</div>
         ${extraHtml}
+        ${brewHtml}
         ${ratingHtml}
         ${Array.isArray(b.flavors) && b.flavors.length ? `<div class="lib-flavor-row">${b.flavors.map(f => `<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`).join('')}</div>` : ''}
         ${invHtml}
@@ -402,6 +412,10 @@ export function openBeanForm(bean) {
   document.getElementById('beanFormPrice').value         = bean?.price_eur ?? '';
   document.getElementById('beanFormProducer').value      = bean?.producer || '';
   document.getElementById('beanFormCertification').value = bean?.certification || '';
+  document.getElementById('beanFormBrewTemp').value  = bean?.brewTempC ?? '';
+  document.getElementById('beanFormBrewRatio').value = bean?.brewRatio || '';
+  document.getElementById('beanFormBrewTime').value  = bean?.brewTimeS ?? '';
+  document.getElementById('beanFormBrewNotes').value = bean?.brewNotes || '';
   document.getElementById('beanAddForm').classList.add('open');
   document.getElementById('beanAddTrigger').style.display = 'none';
   document.getElementById('beanFormName').focus();
@@ -439,11 +453,16 @@ export async function saveBean() {
   const price_eur     = document.getElementById('beanFormPrice').value;
   const producer      = document.getElementById('beanFormProducer').value.trim();
   const certification = document.getElementById('beanFormCertification').value.trim();
+  const brewTempC  = document.getElementById('beanFormBrewTemp').value;
+  const brewRatio  = document.getElementById('beanFormBrewRatio').value.trim();
+  const brewTimeS  = document.getElementById('beanFormBrewTime').value;
+  const brewNotes  = document.getElementById('beanFormBrewNotes').value.trim();
   commitFlavorInput(); // take a still-typed flavor along
   if (!name) { document.getElementById('beanFormName').focus(); return; }
   const payload = {
     name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors: _formFlavors, roastType, region,
     altitude_m, importer, harvest, price_eur, producer, certification,
+    brewTempC, brewRatio, brewTimeS, brewNotes,
   };
   if (!S.beanEditId && S._urlImportSource) {
     payload.source     = S._urlImportSource;
