@@ -81,6 +81,7 @@ export default {
     analytics_time_of_day:'Time of Day', analytics_no_time:'No shot time data yet.',
     analytics_world_map:'Coffee World Map', analytics_map_shots:'shots',
     analytics_map_empty:'Set an origin country on your beans in the Library to see them on the map.',
+    analytics_map_zoom_hint:'Scroll/pinch to zoom, drag to pan',
     dialin_ratio_high:(r)=>`Ratio 1:${r} — above the classic espresso window (1:1.8–2.2)`,
     dialin_ratio_low:(r)=>`Ratio 1:${r} — below the classic espresso window (1:1.8–2.2)`,
     guided_open:'Guide',

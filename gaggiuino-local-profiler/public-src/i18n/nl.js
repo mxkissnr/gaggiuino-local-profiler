@@ -81,6 +81,7 @@ export default {
     analytics_time_of_day:'Tijdstip van de dag', analytics_no_time:'Nog geen tijdsdata.',
     analytics_world_map:'Koffiewereldkaart', analytics_map_shots:'shots',
     analytics_map_empty:'Stel een herkomstland in voor je bonen in de Bibliotheek om ze op de kaart te zien.',
+    analytics_map_zoom_hint:'Scrollen/knijpen om te zoomen, slepen om te verschuiven',
     dialin_ratio_high:(r)=>`Ratio 1:${r} — boven het klassieke espressovenster (1:1.8–2.2)`,
     dialin_ratio_low:(r)=>`Ratio 1:${r} — onder het klassieke espressovenster (1:1.8–2.2)`,
     guided_open:'Handleiding',

@@ -29,6 +29,24 @@ export const COFFEE_COUNTRIES = [
   { code: 'ZM', num: '894' }, { code: 'ZW', num: '716' },
 ];
 
+// Fallback map point per origin country [lon, lat] — used when a bean has no
+// geocoded region yet. Hand-picked toward the coffee-growing area rather than
+// the capital where it matters (US → Hawaii/Kona, not Washington DC).
+export const COUNTRY_CENTROIDS = {
+  AO: [17.87, -11.20], BI: [29.92, -3.37],  BO: [-63.59, -16.29], BR: [-51.93, -14.24],
+  CD: [21.76, -4.04],  CI: [-5.55, 7.54],   CM: [12.35, 7.37],    CN: [101.5, 24.5],
+  CO: [-74.30, 4.57],  CR: [-83.75, 9.75],  CU: [-77.78, 21.52],  DO: [-70.16, 18.74],
+  EC: [-78.18, -1.83], ET: [40.49, 9.15],   GH: [-1.02, 7.95],    GT: [-90.23, 15.78],
+  HN: [-86.24, 15.20], HT: [-72.29, 18.97], ID: [113.92, -0.79],  IN: [78.96, 20.59],
+  JM: [-77.30, 18.11], KE: [37.91, -0.02],  KH: [104.99, 12.57],  LA: [102.50, 19.86],
+  LK: [80.77, 7.87],   MM: [95.96, 21.91],  MW: [34.30, -13.25],  MX: [-96.7, 17.1],
+  MZ: [35.53, -18.67], NI: [-85.21, 12.87], NP: [84.12, 28.39],   PA: [-80.78, 8.54],
+  PE: [-75.02, -9.19], PG: [143.96, -6.31], PH: [121.77, 12.88],  RW: [29.87, -1.94],
+  SV: [-88.90, 13.79], TH: [100.99, 15.87], TL: [125.73, -8.87],  TZ: [34.89, -6.37],
+  UG: [32.29, 1.37],   US: [-155.5, 19.6],  VE: [-66.59, 6.42],   VN: [108.28, 14.06],
+  YE: [48.52, 15.55],  ZM: [27.85, -13.13], ZW: [29.15, -19.02],
+};
+
 export const VARIETY_SUGGESTIONS = ['Arabica', 'Robusta', 'Blend', 'Bourbon', 'Geisha',
   'Typica', 'Caturra', 'Catuai', 'SL28', 'SL34', 'Pacamara', 'Maragogype'];
 

@@ -81,6 +81,7 @@ export default {
     analytics_time_of_day:'Tageszeit', analytics_no_time:'Noch keine Shot-Zeitdaten.',
     analytics_world_map:'Kaffee-Weltkarte', analytics_map_shots:'Shots',
     analytics_map_empty:'Trage in der Bibliothek Herkunftsländer für deine Bohnen ein, um sie hier auf der Karte zu sehen.',
+    analytics_map_zoom_hint:'Scrollen/Pinchen zum Zoomen, Ziehen zum Verschieben',
     dialin_ratio_high:(r)=>`Ratio 1:${r} — über dem klassischen Espresso-Fenster (1:1.8–2.2)`,
     dialin_ratio_low:(r)=>`Ratio 1:${r} — unter dem klassischen Espresso-Fenster (1:1.8–2.2)`,
     guided_open:'Anleitung',

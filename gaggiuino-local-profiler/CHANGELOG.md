@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### Changed
+- **Interactive world map** — the Statistics origin map now runs on Apache ECharts instead of chartjs-chart-geo: scroll/pinch to zoom, drag to pan, and each bean shows as a pulsing point at its geocoded region (or a jittered country centroid as fallback) alongside the shot-count choropleth. The vendored topojson is unchanged, converted client-side via topojson-client; both libraries come from the CDN with the same offline guard and empty state as before. Closes #237
+
 ### Added
 - **Import provider: elbgold.com** — the URL import now also accepts Hamburg roaster elbgold's Shopify product pages. Since elbgold ships no structured spec table (just German prose), extraction is best-effort: tasting notes from a "Noten von …" sentence, growing region from a "Herkunft – …" heading, origin country by scanning the whole description for exactly one coffee-growing country name (`findCountryInText` in `lib/coffee-countries.js` — ambiguous/multi-country text stays unmapped), roast profile from the Espresso/Filter shop tags, decaf from the title. The Shopify product-JSON rewrite (`shopifyJsonUrl`) is now shared between Hoppenworth & Ploch and elbgold. Closes #236
 - **Growing region + automatic geocoding** — beans get a `region` field (form input; the Hoppenworth & Ploch import stores its Herkunft district there instead of the notes). After saving, the backend resolves "region, country" to coordinates via Nominatim (fire-and-forget, custom user agent, ≥1.1 s request spacing, kv-cached including misses) and stores them as `bean.location` — the upcoming interactive map places bean points there. Changing the region re-geocodes; hosts without internet simply keep the country-level fallback. Closes #235

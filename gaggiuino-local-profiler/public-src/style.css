@@ -256,6 +256,7 @@
             min-width: 0;
         }
         .analytics-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .world-map-hint { position: absolute; bottom: 4px; right: 8px; font-size: .62rem; color: var(--gray-500); pointer-events: none; }
         .analytics-section-title { margin: 0 0 16px 0; font-size: .95rem; font-weight: 600; color: var(--gray-200); }
         .analytics-card-head .analytics-section-title { margin-bottom: 0; }
         .analytics-two-col { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }

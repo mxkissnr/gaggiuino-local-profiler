@@ -1,6 +1,6 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
-import { LOCALE_MAP, COFFEE_COUNTRIES, countryName, flagEmoji } from '../constants.js';
+import { LOCALE_MAP, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName, flagEmoji } from '../constants.js';
 import { scoreClass } from '../utils.js';
 
 // ── Analytics entry point ─────────────────────────────────────────────────
@@ -485,52 +485,61 @@ export function buildBeanStats() {
 }
 
 // ── Origin world map ──────────────────────────────────────────────────────
-// Choropleth of coffee origins: shots are joined to library beans by name
-// (case-insensitive, same precedent as the stock math) and colored by shot
-// count; beans with an origin but no shots yet are still highlighted.
-// chartjs-chart-geo comes from the CDN; the topojson is served locally
+// Choropleth + region points of coffee origins: shots are joined to library
+// beans by name (case-insensitive, same precedent as the stock math) and
+// colored by shot count; beans with an origin but no shots yet are still
+// highlighted. Rendered with Apache ECharts (roam/zoom + scatter points),
+// registered from the same vendored topojson via topojson-client. Both
+// libraries come from the CDN; the topojson is served locally
 // (CSP connect-src 'self') and cached after the first Analytics visit.
 let _worldTopo = null;
-let _geoRegistered = false;
+let _worldMapRegistered = false;
+let _echartsInstance = null;
+let _resizeBound = false;
+
+function _echartsAvailable() {
+  return typeof echarts !== 'undefined' && typeof topojson !== 'undefined';
+}
 
 export async function buildWorldMap() {
   const wrap = document.getElementById('worldMapWrap');
   if (!wrap) return;
 
   // Offline HA hosts have no CDN: show the empty-state hint instead of crashing
-  if (typeof ChartGeo === 'undefined') {
+  if (!_echartsAvailable()) {
+    if (_echartsInstance) { _echartsInstance.dispose(); _echartsInstance = null; }
     wrap.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_map_empty')}</p>`;
     return;
   }
-  if (!_geoRegistered) {
-    Chart.register(ChartGeo.ChoroplethController, ChartGeo.GeoFeature, ChartGeo.ColorScale, ChartGeo.ProjectionScale);
-    _geoRegistered = true;
-  }
 
-  // bean name (lowercased) → origin code, restricted to known coffee countries
-  const nameToOrigin = new Map();
+  // bean name (lowercased) → bean, restricted to known coffee countries
+  const nameToBean = new Map();
   for (const b of (S.coffeeLibrary.beans || [])) {
     if (b.origin && COFFEE_COUNTRIES.some(c => c.code === b.origin))
-      nameToOrigin.set(String(b.name || '').toLowerCase(), b.origin);
+      nameToBean.set(String(b.name || '').toLowerCase(), b);
   }
 
   // code → { shots, beans:Set } — beans with an origin count even without shots
   const byCode = {};
-  for (const [name, code] of nameToOrigin) {
+  for (const bean of nameToBean.values()) {
+    const code = bean.origin;
     if (!byCode[code]) byCode[code] = { shots: 0, beans: new Set() };
-    byCode[code].beans.add(name);
+    byCode[code].beans.add(bean.name);
   }
   for (const s of S.shots) {
-    const code = nameToOrigin.get(String(s.annotation?.coffee || '').toLowerCase());
-    if (code) byCode[code].shots++;
+    const bean = nameToBean.get(String(s.annotation?.coffee || '').toLowerCase());
+    if (bean) byCode[bean.origin].shots++;
   }
 
   if (Object.keys(byCode).length === 0) {
-    if (S.worldMapChart) { S.worldMapChart.destroy(); S.worldMapChart = null; }
+    if (_echartsInstance) { _echartsInstance.dispose(); _echartsInstance = null; }
     wrap.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_map_empty')}</p>`;
     return;
   }
-  if (!wrap.querySelector('canvas')) wrap.innerHTML = '<canvas id="worldMapChart"></canvas>';
+  if (!wrap.querySelector('.world-map-canvas')) {
+    wrap.innerHTML = `<div class="world-map-canvas" style="width:100%;height:100%"></div>
+      <div class="world-map-hint">${t('analytics_map_zoom_hint')}</div>`;
+  }
 
   if (!_worldTopo) {
     try { _worldTopo = await (await fetch('countries-110m.json')).json(); }
@@ -540,56 +549,88 @@ export async function buildWorldMap() {
     }
   }
 
-  const numToCode = new Map(COFFEE_COUNTRIES.map(c => [c.num, c.code]));
-  const features  = ChartGeo.topojson.feature(_worldTopo, _worldTopo.objects.countries).features;
-  const maxShots  = Math.max(1, ...Object.values(byCode).map(d => d.shots));
-  const data = features.map(f => {
-    const code = numToCode.get(String(f.id));
-    const d    = code ? byCode[code] : null;
-    // beans without shots get a visible floor so their country still lights up
-    return { feature: f, value: d ? Math.max(d.shots, maxShots * 0.15) : 0, _code: code, _stats: d };
-  });
+  if (!_worldMapRegistered) {
+    const geo = topojson.feature(_worldTopo, _worldTopo.objects.countries);
+    const numToCode = new Map(COFFEE_COUNTRIES.map(c => [c.num, c.code]));
+    for (const f of geo.features) f.properties = { ...f.properties, code: numToCode.get(String(f.id)) || null };
+    echarts.registerMap('world', geo);
+    _worldMapRegistered = true;
+  }
 
-  const ctx = document.getElementById('worldMapChart');
-  if (S.worldMapChart) { S.worldMapChart.destroy(); S.worldMapChart = null; }
+  const maxShots = Math.max(1, ...Object.values(byCode).map(d => d.shots));
+  const mapData = Object.entries(byCode).map(([code, d]) => ({
+    name: code,
+    value: Math.max(d.shots, maxShots * 0.15), // visible floor so bean-only countries still light up
+    _stats: d,
+  }));
 
-  S.worldMapChart = new Chart(ctx, {
-    type: 'choropleth',
-    data: {
-      labels:   features.map(f => f.properties.name),
-      datasets: [{
-        data,
-        borderColor: 'rgba(63,63,70,.8)',
-        borderWidth: 0.5,
-      }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      showOutline: false, showGraticule: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          filter: item => !!item.raw?._stats,
-          callbacks: {
-            label: (c) => {
-              const { _code, _stats } = c.raw;
-              if (!_stats) return null;
-              const name  = `${flagEmoji(_code)} ${countryName(_code, S.currentLang)}`.trim();
-              const beans = [..._stats.beans].join(', ');
-              return `${name}: ${_stats.shots} ${t('analytics_map_shots')} (${beans})`;
-            },
-          },
-        },
+  // Scatter points: bean.location if geocoded, else the country centroid
+  // (jittered a few tenths of a degree per extra bean so points don't stack).
+  const seenAtCentroid = {};
+  const points = [];
+  for (const bean of nameToBean.values()) {
+    let coord = bean.location ? [bean.location.lon, bean.location.lat] : null;
+    if (!coord) {
+      const centroid = COUNTRY_CENTROIDS[bean.origin];
+      if (!centroid) continue;
+      const n = (seenAtCentroid[bean.origin] = (seenAtCentroid[bean.origin] || 0) + 1) - 1;
+      const jitter = n * 0.35;
+      coord = [centroid[0] + (n % 2 === 0 ? jitter : -jitter), centroid[1] + (n % 3) * 0.2];
+    }
+    const shots = byCode[bean.origin]?.beans.has(bean.name)
+      ? S.shots.filter(s => String(s.annotation?.coffee || '').toLowerCase() === bean.name.toLowerCase()).length
+      : 0;
+    points.push({ name: bean.name, value: [...coord, shots], _region: bean.region || null });
+  }
+
+  const container = wrap.querySelector('.world-map-canvas');
+  if (!_echartsInstance) _echartsInstance = echarts.init(container);
+
+  _echartsInstance.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      formatter: (params) => {
+        if (params.seriesType === 'map') {
+          const stats = params.data?._stats;
+          if (!stats) return null;
+          const name  = `${flagEmoji(params.name)} ${countryName(params.name, S.currentLang)}`.trim();
+          return `${name}: ${stats.shots} ${t('analytics_map_shots')} (${[...stats.beans].join(', ')})`;
+        }
+        const region = params.data?._region;
+        return `${params.name}${region ? ' · ' + region : ''}`;
       },
-      scales: {
-        projection: { axis: 'x', projection: 'equalEarth' },
-        color: {
-          axis: 'x', display: false,
-          interpolate: v => v > 0 ? `rgba(34,197,94,${(0.2 + 0.6 * v).toFixed(2)})` : 'rgba(63,63,70,.35)',
-        },
-      },
     },
-  });
+    geo: {
+      map: 'world', roam: true, scaleLimit: { min: 1, max: 12 },
+      itemStyle: { areaColor: 'rgba(63,63,70,.35)', borderColor: 'rgba(63,63,70,.8)', borderWidth: 0.5 },
+      emphasis: { itemStyle: { areaColor: 'rgba(63,63,70,.55)' }, label: { show: false } },
+    },
+    series: [
+      {
+        type: 'map', map: 'world', geoIndex: 0,
+        data: mapData,
+        itemStyle: { borderColor: 'rgba(63,63,70,.8)', borderWidth: 0.5 },
+        emphasis: { label: { show: false } },
+      },
+      {
+        type: 'effectScatter', coordinateSystem: 'geo',
+        data: points,
+        symbolSize: 7,
+        itemStyle: { color: '#22c55e', shadowBlur: 8, shadowColor: 'rgba(34,197,94,.6)' },
+        rippleEffect: { scale: 2.5 },
+      },
+    ],
+    visualMap: {
+      show: false, seriesIndex: 0, min: 0, max: maxShots,
+      inRange: { color: ['rgba(63,63,70,.35)', 'rgba(34,197,94,.85)'] },
+    },
+  }, true);
+
+  if (!_resizeBound) {
+    window.addEventListener('resize', () => _echartsInstance?.resize());
+    _resizeBound = true;
+  }
+  _echartsInstance.resize();
 }
 
 export function buildProfileChart() {

@@ -81,6 +81,7 @@ export default {
     analytics_time_of_day:'Hora del día', analytics_no_time:'Aún no hay datos horarios.',
     analytics_world_map:'Mapa mundial del café', analytics_map_shots:'shots',
     analytics_map_empty:'Asigna un país de origen a tus granos en la Biblioteca para verlos en el mapa.',
+    analytics_map_zoom_hint:'Desplaza/pellizca para hacer zoom, arrastra para mover',
     dialin_ratio_high:(r)=>`Ratio 1:${r} — por encima de la ventana clásica de espresso (1:1.8–2.2)`,
     dialin_ratio_low:(r)=>`Ratio 1:${r} — por debajo de la ventana clásica de espresso (1:1.8–2.2)`,
     guided_open:'Guía',
