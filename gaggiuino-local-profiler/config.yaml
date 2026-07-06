@@ -1,5 +1,5 @@
 name: "GLP — Gaggiuino Local Profiler"
-version: "1.100.0"
+version: "1.101.0"
 slug: "gaggiuino_local_profiler"
 description: "Local shot profiler for the Gaggiuino espresso machine — records, stores and visualises your espresso shots."
 url: "https://github.com/mxkissnr/gaggiuino-local-profiler"

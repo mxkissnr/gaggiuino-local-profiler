@@ -1,3 +1,8 @@
+## [1.101.0] – 2026-07-06
+
+### Added
+- **dev-stats: real per-model pricing + rendered charts** — `scripts/dev-stats.mjs` shipped every model price as `null` (by design — "fill in your own rates"), so `DEVELOPMENT.md`'s cost section had shown "unknown" since it was introduced in v1.98.0. `scripts/dev-stats.pricing.json` now ships filled in with blended (3:1 input:output) USD/1M-token rates for the models that actually show up in this repo's history (Sonnet 4.6, Opus 4.8, Fable 5, Sonnet 5 — the last at its introductory rate through 2026-08-31), so the estimate renders a real illustrative figure by default; still fully overridable with your own plan/API rates. The script also renders two small dark-theme PNG charts via `@napi-rs/canvas` (commits-per-repo, Claude-model-breakdown-by-commits) into `docs/dev-stats/`, embedded in the generated `DEVELOPMENT.md` and linked from the root README. Closes #258
+
 ## [1.100.0] – 2026-07-06
 
 ### Added

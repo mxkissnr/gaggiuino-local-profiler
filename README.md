@@ -189,6 +189,17 @@ Home Assistant Host
 
 ---
 
+## Development at a glance
+
+<p align="center">
+  <img src="docs/dev-stats/commits-per-repo.png" alt="Commits per repo" width="49%"/>
+  <img src="docs/dev-stats/model-breakdown.png" alt="Claude model breakdown by commits" width="49%"/>
+</p>
+
+Full numbers (timeline, per-model breakdown, cost estimate) generated live from git history: see [DEVELOPMENT.md](DEVELOPMENT.md).
+
+---
+
 <p align="center">
   <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/wiki">📖 Documentation (EN)</a> ·
   <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/wiki/Home-de">📖 Dokumentation (DE)</a> ·
