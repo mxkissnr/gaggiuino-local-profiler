@@ -1,16 +1,16 @@
 # Graph Report - gaggiuino-local-profiler  (2026-07-06)
 
 ## Corpus Check
-- 117 files · ~148,571 words
+- 121 files · ~154,891 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1412 nodes · 2641 edges · 75 communities (69 shown, 6 thin omitted)
+- 1445 nodes · 2720 edges · 78 communities (71 shown, 7 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 17 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0cf95ff5`
+- Built from commit: `fa40605b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -82,54 +82,57 @@
 - [[_COMMUNITY_Community 69|Community 69]]
 - [[_COMMUNITY_Community 70|Community 70]]
 - [[_COMMUNITY_Community 71|Community 71]]
+- [[_COMMUNITY_Community 72|Community 72]]
 - [[_COMMUNITY_Community 73|Community 73]]
-- [[_COMMUNITY_Community 79|Community 79]]
-- [[_COMMUNITY_Community 81|Community 81]]
+- [[_COMMUNITY_Community 75|Community 75]]
+- [[_COMMUNITY_Community 76|Community 76]]
+- [[_COMMUNITY_Community 77|Community 77]]
+- [[_COMMUNITY_Community 78|Community 78]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `t()` - 93 edges
-2. `apiFetch()` - 65 edges
+1. `t()` - 94 edges
+2. `apiFetch()` - 66 edges
 3. `getDb()` - 56 edges
-4. `log()` - 42 edges
+4. `log()` - 43 edges
 5. `Session 14:02` - 25 edges
 6. `updateView()` - 23 edges
-7. `S` - 20 edges
-8. `ShotRepository` - 19 edges
-9. `esc()` - 19 edges
-10. `loadOptions()` - 18 edges
+7. `esc()` - 21 edges
+8. `S` - 20 edges
+9. `ShotRepository` - 19 edges
+10. `LibraryService` - 19 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `shotToCSVRow()` --calls--> `avg()`  [INFERRED]
-  gaggiuino-local-profiler/public-src/views/shots/index.js → gaggiuino-local-profiler/lib/card.js
-- `updateView()` --calls--> `avg()`  [INFERRED]
-  gaggiuino-local-profiler/public-src/views/shots/index.js → gaggiuino-local-profiler/lib/card.js
 - `seed()` --calls--> `imagePath()`  [INFERRED]
   gaggiuino-local-profiler/scripts/screenshots.mjs → gaggiuino-local-profiler/lib/services/ImageService.js
 - `updateDegassing()` --calls--> `parseDMY()`  [EXTRACTED]
   gaggiuino-local-profiler/public-src/views/shots/annotation.js → gaggiuino-local-profiler/public-src/utils.js
+- `shotToCSVRow()` --calls--> `avg()`  [INFERRED]
+  gaggiuino-local-profiler/public-src/views/shots/index.js → gaggiuino-local-profiler/lib/card.js
+- `updateView()` --calls--> `avg()`  [INFERRED]
+  gaggiuino-local-profiler/public-src/views/shots/index.js → gaggiuino-local-profiler/lib/card.js
 - `_checkPreheatNotify()` --calls--> `loadOptions()`  [EXTRACTED]
   gaggiuino-local-profiler/lib/preheat.js → gaggiuino-local-profiler/lib/data.js
 
 ## Import Cycles
 - None detected.
 
-## Communities (75 total, 6 thin omitted)
+## Communities (78 total, 7 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.01
 Nodes (180): 1.0.0, 1.10.0, 1.10.1, 1.10.2, 1.11.0, 1.11.1, 1.12.0, 1.13.0 (+172 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.11
-Nodes (13): loadMenu(), axios, express, fs, { getSwitchState, callHaService }, { GLP_VERSION, HA_API, HA_TOKEN, PROFILES_CACHE_FILE }, { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled, loadMenu }, { log, rateLimit } (+5 more)
+Cohesion: 0.08
+Nodes (18): axios, callHaService(), getNotifyServices(), getSwitchState(), { HA_API, HA_TOKEN }, { log }, axios, express (+10 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.23
-Nodes (12): avg(), detectPreinfusionEnd(), F(), fmtDur(), fmtDurSec(), fs, generateShareCard(), getGlpIcon() (+4 more)
+Cohesion: 0.24
+Nodes (11): detectPreinfusionEnd(), F(), fmtDur(), fmtDurSec(), fs, generateShareCard(), getGlpIcon(), GLP (+3 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.07
-Nodes (50): bindFlavorInput(), BREW_METHOD_LABELS, closeBeanForm(), closeBeanStockEdit(), closeGrinderForm(), closeMilkForm(), closeNewBagForm(), closeRecipeForm() (+42 more)
+Cohesion: 0.06
+Nodes (59): _cache, invalidateBeanImage(), invalidateGrinderImage(), _load(), loadBeanImageBlobUrl(), loadGrinderImageBlobUrl(), generateBeanQR(), parseGlpQrParams() (+51 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.05
@@ -140,20 +143,20 @@ Cohesion: 0.12
 Nodes (26): ALLOWED_URL_SCHEMES, app, axios, backgroundHaCheck(), express, fetchMachineVersion(), fs, getMachineBaseUrl() (+18 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.10
-Nodes (20): loadOrdersSettings(), axios, callHaService(), getHaLanguage(), getNotifyServices(), { HA_API, HA_TOKEN }, { log }, sendHaNotify() (+12 more)
+Cohesion: 0.15
+Nodes (15): loadOrdersSettings(), getHaLanguage(), sendHaNotify(), N, notifyT(), _checkPreheatNotify(), fs, { getHaLanguage, sendHaNotify } (+7 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.09
 Nodes (21): API Endpoints (internal), API Endpoints (internal), Configuration, Data Storage, Data Storage, Deleting Shots, Example, Extraction Yield (EY) (+13 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.13
-Nodes (33): goToShot(), switchMode(), applyTranslations(), setLang(), buildTrendChart(), setTrendWindow(), acceptOrder(), addOrderMenuItem() (+25 more)
+Cohesion: 0.14
+Nodes (31): goToShot(), switchMode(), applyTranslations(), setLang(), acceptOrder(), addOrderMenuItem(), clearOrderHistory(), completeOrder() (+23 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.11
-Nodes (35): loadOrCreateApiToken(), getMachineBaseUrl(), getSyncIntervalMs(), loadOptions(), getSwitchState(), log(), writeFileSafe(), axios (+27 more)
+Cohesion: 0.12
+Nodes (33): getMachineBaseUrl(), getMachineUrl(), getSyncIntervalMs(), isOrdersEnabled(), loadOptions(), log(), axios, backgroundHaCheck() (+25 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.13
@@ -164,8 +167,8 @@ Cohesion: 0.29
 Nodes (7): [1.87.0] – 2026-06-24, [1.93.0] – 2026-06-28, [1.97.0] – 2026-07-06, Added, Changed, Changed, Changed
 
 ### Community 14 - "Community 14"
-Cohesion: 0.18
-Nodes (17): _buildMonthGroup(), closeSidebar(), collapseSidebarOnMobile(), filterShots(), _flapFlip(), _monthLabel(), openSidebar(), renderSidebar() (+9 more)
+Cohesion: 0.19
+Nodes (22): avg(), avg(), avgActive(), detectChanneling(), detectPhases(), fmt(), max(), safeLast() (+14 more)
 
 ### Community 15 - "Community 15"
 Cohesion: 0.10
@@ -180,20 +183,16 @@ Cohesion: 0.09
 Nodes (21): API-Spec, API-Token, Architektur — wie die Komponenten zusammenspielen, Barcode- und QR-Scanner, Features, Gaggiuino Local Profiler, GLP App (dieses Repo), GLP HA-Integration (+13 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.29
-Nodes (10): toggleMachinePower(), triggerSync(), updatePowerButton(), updateStatus(), checkForUpdate(), showUpdateBanner(), apiFetch(), initToken() (+2 more)
-
-### Community 19 - "Community 19"
-Cohesion: 0.31
-Nodes (15): germanToIso(), quickClone(), renderAnnotationPanel(), _renderBeanSelect(), _renderDrinkPills(), _renderMilkPills(), _renderRecipeSelect(), renderStars() (+7 more)
+Cohesion: 0.12
+Nodes (18): axios, enqueue(), geocodeRegion(), { getDb }, { GLP_VERSION }, loadCache(), { log }, _queue (+10 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.11
-Nodes (14): app, crypto, { errorHandler }, express, { fetchMachineVersion, checkAndApplyMachinePower, backgroundHaCheck }, fs, { getDb }, { GLP_VERSION, DEFAULT_PORT, DATA_DIR, TOKEN_FILE, HA_INGRESS_PATH } (+6 more)
+Cohesion: 0.10
+Nodes (16): app, crypto, { errorHandler }, express, { fetchMachineVersion, checkAndApplyMachinePower, backgroundHaCheck }, fs, { getDb }, { GLP_VERSION, DEFAULT_PORT, DATA_DIR, TOKEN_FILE, HA_INGRESS_PATH } (+8 more)
 
 ### Community 21 - "Community 21"
-Cohesion: 0.10
-Nodes (21): [1.88.0] – 2026-06-26, [1.89.0] – 2026-06-26, [1.90.0] – 2026-06-26, [1.91.0] – 2026-06-26, [1.92.0] – 2026-06-27, [1.94.0] – 2026-06-30, [1.95.0] – 2026-07-03, [1.96.0] – 2026-07-05 (+13 more)
+Cohesion: 0.08
+Nodes (24): [1.88.0] – 2026-06-26, [1.89.0] – 2026-06-26, [1.90.0] – 2026-06-26, [1.91.0] – 2026-06-26, [1.92.0] – 2026-06-27, [1.94.0] – 2026-06-30, [1.95.0] – 2026-07-03, [1.96.0] – 2026-07-05 (+16 more)
 
 ### Community 22 - "Community 22"
 Cohesion: 0.12
@@ -212,8 +211,8 @@ Cohesion: 0.13
 Nodes (14): Acknowledgements, 🏗️ Architecture, 🔗 Component Compatibility, ⚙️ Configuration, 🏠 Embed in HA Dashboard, ✨ Features, 🚀 Installation, License (+6 more)
 
 ### Community 26 - "Community 26"
-Cohesion: 0.14
-Nodes (21): ALLOWED_IMAGE_HOSTS, axios, { BEAN_IMAGE_DIR, ALLOWED_IMAGE_HOSTS, BEAN_IMAGE_MAX_BYTES }, CONTENT_TYPE_EXT, deleteBeanImage(), deleteImage(), fetchBeanImage(), fs (+13 more)
+Cohesion: 0.18
+Nodes (11): closeMilkForm(), closeRecipeForm(), _collectSteps(), deleteMilk(), deleteRecipe(), loadLibrary(), renderMilkList(), renderRecipeList() (+3 more)
 
 ### Community 27 - "Community 27"
 Cohesion: 0.22
@@ -244,12 +243,12 @@ Cohesion: 0.50
 Nodes (4): [1.87.2] – 2026-06-26, [1.87.3] – 2026-06-26, Security, Security
 
 ### Community 38 - "Community 38"
-Cohesion: 0.13
-Nodes (28): COFFEE_COUNTRY_CODES, findCountryInText(), mapOriginToCode(), nameToCode, cheerio, extractAltitudeM(), hoploJsonUrl(), { mapOriginToCode, findCountryInText } (+20 more)
+Cohesion: 0.08
+Nodes (39): COFFEE_COUNTRY_CODES, findCountriesInText(), mapOriginToCode(), nameToCode, ALLOWED_IMPORT_HOSTS, FLAVOR_TERMS_DE, cheerio, escapeRegex() (+31 more)
 
 ### Community 39 - "Community 39"
-Cohesion: 0.15
-Nodes (11): validate(), { ZodError }, { annotationSchema }, express, { generateShareCard, isAvailable: cardAvailable }, libraryService, { log }, { MAX_SHOT_ID } (+3 more)
+Cohesion: 0.31
+Nodes (15): germanToIso(), quickClone(), renderAnnotationPanel(), _renderBeanSelect(), _renderDrinkPills(), _renderMilkPills(), _renderRecipeSelect(), renderStars() (+7 more)
 
 ### Community 41 - "Community 41"
 Cohesion: 0.21
@@ -257,27 +256,27 @@ Nodes (14): appRoot, constantsPath, crc32(), __dirname, main(), makeShotDatapoin
 
 ### Community 42 - "Community 42"
 Cohesion: 0.10
-Nodes (26): fs, { getDb }, isOrdersEnabled(), libService, loadAnnotations(), loadNotifyMapping(), loadOrders(), loadTrash() (+18 more)
+Nodes (26): fs, { getDb }, libService, loadAnnotations(), loadMenu(), loadNotifyMapping(), loadOrders(), loadTrash() (+18 more)
 
 ### Community 43 - "Community 43"
 Cohesion: 0.08
 Nodes (25): 14:05, 14:11, 14:12, 14:12, 14:14, 14:15, 14:17, 14:18 (+17 more)
 
 ### Community 47 - "Community 47"
-Cohesion: 0.10
-Nodes (26): COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName(), flagEmoji(), GUIDED_MAINT_STEPS, _isCountryCode(), MAINT_META, PROCESS_SUGGESTIONS (+18 more)
+Cohesion: 0.36
+Nodes (9): clearChartOnTouchEnd(), formatTimeLabel(), closeChartFullscreen(), getPQData(), openChartFullscreen(), renderFsChart(), switchChartTab(), switchFsTab() (+1 more)
 
 ### Community 48 - "Community 48"
 Cohesion: 0.09
-Nodes (20): saveLibrary(), saveOrders(), Database, dataPath, dbPath, express, { getDb }, imageServicePath (+12 more)
+Nodes (20): saveLibrary(), saveMenu(), Database, dataPath, dbPath, express, { getDb }, imageServicePath (+12 more)
 
 ### Community 49 - "Community 49"
 Cohesion: 0.18
-Nodes (19): _buildMaintCard(), closeGuidedMaint(), closeMaintLogForm(), deleteMaintLogEntry(), loadMaintenanceView(), loadMaintLog(), _logEsc(), maintStatusLabel() (+11 more)
+Nodes (22): t(), downloadBackup(), renderDialin(), toggleBagHistory(), _buildMaintCard(), closeGuidedMaint(), closeMaintLogForm(), deleteMaintLogEntry() (+14 more)
 
 ### Community 50 - "Community 50"
-Cohesion: 0.16
-Nodes (24): avg(), avgActive(), detectChanneling(), detectPhases(), fmt(), max(), safeLast(), scoreClass() (+16 more)
+Cohesion: 0.15
+Nodes (20): _buildMonthGroup(), _buildShotWrapper(), closeSidebar(), collapseSidebarOnMobile(), filterShots(), _flapFlip(), _monthLabel(), openSidebar() (+12 more)
 
 ### Community 51 - "Community 51"
 Cohesion: 0.22
@@ -296,32 +295,32 @@ Cohesion: 0.50
 Nodes (4): 20:41, 20:42, 20:43, Session 20:40
 
 ### Community 55 - "Community 55"
-Cohesion: 0.06
-Nodes (22): getDb(), axios, enqueue(), geocodeRegion(), { getDb }, { GLP_VERSION }, loadCache(), { log } (+14 more)
+Cohesion: 0.12
+Nodes (3): getDb(), OrderRepository, ShotRepository
 
 ### Community 56 - "Community 56"
-Cohesion: 0.18
-Nodes (5): LibraryService, require, require, sendHaNotify, require
+Cohesion: 0.20
+Nodes (3): LibraryService, require, require
 
 ### Community 57 - "Community 57"
-Cohesion: 0.19
-Nodes (14): clearChartOnTouchEnd(), corsairPlugin, LOCALE_MAP, phasePlugin, S, _subs, formatTimeLabel(), closeChartFullscreen() (+6 more)
+Cohesion: 0.17
+Nodes (8): corsairPlugin, GUIDED_MAINT_STEPS, MAINT_META, phasePlugin, PROCESS_SUGGESTIONS, VARIETY_SUGGESTIONS, LANGS, NEW_KEYS
 
 ### Community 58 - "Community 58"
-Cohesion: 0.18
-Nodes (10): backupRouter, Database, dbPath, express, { getDb }, makeApp(), memDb, realDb (+2 more)
+Cohesion: 0.13
+Nodes (13): { getDb }, _hydrate(), { TRASH_TTL_MS }, backupRouter, Database, dbPath, express, { getDb } (+5 more)
 
 ### Community 59 - "Community 59"
-Cohesion: 0.15
-Nodes (11): _fileLocks, fs, rateLimit(), _rlWindows, express, { getDb }, { GLP_VERSION, MAX_SHOT_ID }, libService (+3 more)
+Cohesion: 0.14
+Nodes (27): COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName(), flagEmoji(), _isCountryCode(), scoreClass(), buildBeanStats(), buildCalendar() (+19 more)
 
 ### Community 60 - "Community 60"
 Cohesion: 0.10
-Nodes (19): ALLOWED_IMPORT_HOSTS, ALLOWED_URL_SCHEMES, DEFAULT_MENU, MAINTENANCE_DEFAULTS, { getDb }, { MAINTENANCE_DEFAULTS }, { DEFAULT_MENU, ORDERS_HISTORY_TTL_MS }, { getDb } (+11 more)
+Nodes (18): loadOrCreateApiToken(), ALLOWED_URL_SCHEMES, _fileLocks, fs, rateLimit(), _rlWindows, writeFileSafe(), express (+10 more)
 
 ### Community 61 - "Community 61"
-Cohesion: 0.24
-Nodes (9): { annotationSchema, beanSchema, orderSchema }, require, annotationSchema, beanSchema, grinderSchema, maintenanceLogSchema, orderSchema, recipeSchema (+1 more)
+Cohesion: 0.16
+Nodes (19): toggleMachinePower(), triggerSync(), updatePowerButton(), updateStatus(), checkForUpdate(), showUpdateBanner(), apiFetch(), initToken() (+11 more)
 
 ### Community 62 - "Community 62"
 Cohesion: 0.36
@@ -332,64 +331,76 @@ Cohesion: 0.21
 Nodes (12): appRepoRoot, __dirname, fmtDate(), git(), glpProjectRoot, loadPricing(), main(), PRICING_PATH (+4 more)
 
 ### Community 64 - "Community 64"
-Cohesion: 0.15
-Nodes (11): Database, dataPath, dbPath, { getDb }, haPath, libraryService, memDb, realData (+3 more)
+Cohesion: 0.14
+Nodes (8): calcBeanRating(), calcBrewRatio(), freshnessState(), isoToGerman(), parseDMY(), roastAgeDays(), shouldShowFreshBadge(), now
 
 ### Community 65 - "Community 65"
-Cohesion: 0.24
-Nodes (12): closeFlavorWheel(), disposeFlavorWheel(), hslFor(), openFlavorWheel(), renderFlavorWheel(), toSunburstData(), FLAVOR_ALIASES, FLAVOR_WHEEL (+4 more)
+Cohesion: 0.23
+Nodes (14): closeFlavorWheel(), disposeFlavorWheel(), openFlavorWheel(), renderFlavorWheel(), toSunburstData(), FLAVOR_ALIASES, FLAVOR_WHEEL, buildIndex() (+6 more)
 
 ### Community 66 - "Community 66"
 Cohesion: 0.10
-Nodes (11): loadLibrary(), { BEAN_IMAGE_MAX_BYTES }, express, { imagePath, CONTENT_TYPE_EXT, deleteBeanImage, deleteImage, saveUploadedImage }, libraryService, { loadLibrary, saveLibrary }, { rateLimit }, ROAST_TYPES (+3 more)
+Nodes (13): loadLibrary(), { BEAN_IMAGE_MAX_BYTES }, express, { imagePath, CONTENT_TYPE_EXT, deleteBeanImage, deleteImage, saveUploadedImage }, libraryService, { loadLibrary, saveLibrary }, { rateLimit }, ROAST_TYPES (+5 more)
 
 ### Community 67 - "Community 67"
-Cohesion: 0.31
-Nodes (8): mapToXY(), calcComparativeGrindAdvice(), _miniShotChart(), _parseGrindNum(), calcBeanAgeAtShot(), calcShotScore(), getShotData(), _parseDMY()
+Cohesion: 0.18
+Nodes (11): { DATA_DIR }, Database, DB_PATH, fixSchema(), fs, initSchema(), JSON_FILES, { log } (+3 more)
+
+### Community 68 - "Community 68"
+Cohesion: 0.13
+Nodes (13): Database, dataPath, dbPath, { getDb }, haPath, libraryService, memDb, realData (+5 more)
 
 ### Community 69 - "Community 69"
-Cohesion: 0.17
-Nodes (16): _buildShotWrapper(), t(), esc(), downloadBackup(), loadData(), permanentDeleteShot(), restoreFromFile(), restoreShot() (+8 more)
+Cohesion: 0.18
+Nodes (11): TRANSLATIONS, S, _subs, mapToXY(), scoreColor(), calcComparativeGrindAdvice(), _miniShotChart(), _parseGrindNum() (+3 more)
 
 ### Community 70 - "Community 70"
-Cohesion: 0.11
-Nodes (17): { DATA_DIR }, Database, DB_PATH, fixSchema(), fs, initSchema(), JSON_FILES, { log } (+9 more)
+Cohesion: 0.15
+Nodes (11): validate(), { ZodError }, { annotationSchema }, express, { generateShareCard, isAvailable: cardAvailable }, libraryService, { log }, { MAX_SHOT_ID } (+3 more)
 
 ### Community 71 - "Community 71"
-Cohesion: 0.22
-Nodes (8): STATIC_MAINTENANCE_TASKS, getMachineUrl(), express, libraryService, { loadOptions, getMachineUrl }, machineHostname(), router, { STATIC_MAINTENANCE_TASKS }
+Cohesion: 0.11
+Nodes (16): DEFAULT_MENU, MAINTENANCE_DEFAULTS, STATIC_MAINTENANCE_TASKS, { getDb }, { MAINTENANCE_DEFAULTS }, { DEFAULT_MENU, ORDERS_HISTORY_TTL_MS }, { getDb }, express (+8 more)
+
+### Community 72 - "Community 72"
+Cohesion: 0.24
+Nodes (9): { annotationSchema, beanSchema, orderSchema }, require, annotationSchema, beanSchema, grinderSchema, maintenanceLogSchema, orderSchema, recipeSchema (+1 more)
 
 ### Community 73 - "Community 73"
 Cohesion: 0.40
 Nodes (4): Claude model breakdown (by commit co-author line), Development Stats, Rough cost estimate (illustrative only — not real billing data), Timeline
 
-### Community 79 - "Community 79"
-Cohesion: 0.24
-Nodes (10): _cache, invalidateGrinderImage(), _load(), loadBeanImageBlobUrl(), loadGrinderImageBlobUrl(), deleteGrinder(), loadBeanThumbnails(), loadGrinderThumbnails() (+2 more)
+### Community 75 - "Community 75"
+Cohesion: 0.23
+Nodes (11): deleteBeanImage(), deleteImage(), imagePath(), saveUploadedImage(), axiosGet, axiosPath, constantsPath, { fetchBeanImage, deleteBeanImage, imagePath, isAllowedImageUrl, saveUploadedImage, deleteImage } (+3 more)
 
-### Community 81 - "Community 81"
-Cohesion: 0.14
-Nodes (8): calcBeanRating(), calcBrewRatio(), freshnessState(), isoToGerman(), parseDMY(), roastAgeDays(), scoreColor(), now
+### Community 76 - "Community 76"
+Cohesion: 0.22
+Nodes (10): ALLOWED_IMAGE_HOSTS, axios, { BEAN_IMAGE_DIR, ALLOWED_IMAGE_HOSTS, BEAN_IMAGE_MAX_BYTES }, CONTENT_TYPE_EXT, fetchBeanImage(), fs, isAllowedImageUrl(), { log } (+2 more)
+
+### Community 78 - "Community 78"
+Cohesion: 0.29
+Nodes (6): Database, dbPath, { getDb }, libraryService, memDb, realDb
 
 ## Knowledge Gaps
-- **704 isolated node(s):** `name`, `version`, `main`, `express`, `axios` (+699 more)
+- **713 isolated node(s):** `name`, `version`, `main`, `express`, `axios` (+708 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `calcShotScore()` connect `Community 62` to `Community 57`, `Community 67`, `Community 60`, `Community 39`?**
-  _High betweenness centrality (0.082) - this node is a cross-community bridge._
-- **Why does `getDb()` connect `Community 55` to `Community 64`, `Community 70`, `Community 71`, `Community 42`, `Community 48`, `Community 20`, `Community 58`, `Community 59`, `Community 60`?**
-  _High betweenness centrality (0.046) - this node is a cross-community bridge._
-- **Why does `log()` connect `Community 10` to `Community 1`, `Community 70`, `Community 71`, `Community 7`, `Community 39`, `Community 42`, `Community 6`, `Community 20`, `Community 55`, `Community 56`, `Community 26`, `Community 59`, `Community 60`?**
-  _High betweenness centrality (0.031) - this node is a cross-community bridge._
+- **Why does `calcShotScore()` connect `Community 62` to `Community 60`, `Community 69`, `Community 70`, `Community 14`?**
+  _High betweenness centrality (0.083) - this node is a cross-community bridge._
+- **Why does `getDb()` connect `Community 55` to `Community 67`, `Community 68`, `Community 71`, `Community 42`, `Community 77`, `Community 78`, `Community 48`, `Community 18`, `Community 20`, `Community 58`, `Community 60`?**
+  _High betweenness centrality (0.040) - this node is a cross-community bridge._
+- **Why does `log()` connect `Community 10` to `Community 1`, `Community 67`, `Community 70`, `Community 7`, `Community 71`, `Community 6`, `Community 42`, `Community 76`, `Community 18`, `Community 20`, `Community 56`, `Community 60`?**
+  _High betweenness centrality (0.027) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `main` to the rest of the system?**
-  _704 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _713 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.011049723756906077 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.10526315789473684 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08307692307692308 - nodes in this community are weakly interconnected._
 - **Should `Community 3` be split into smaller, more focused modules?**
-  _Cohesion score 0.07058823529411765 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.061955965181771634 - nodes in this community are weakly interconnected._
