@@ -53,7 +53,7 @@ export default {
     flavor_wheel_btn:'Aroma-Rad öffnen', flavor_wheel_unmatched:'Nicht zugeordnete Aromen',
     flavor_wheel_unavailable:'Aroma-Rad momentan nicht verfügbar (keine Internetverbindung?)',
     flavor_wheel_credit:'Aromen-Hierarchie abgeleitet vom SCA/WCR Coffee Taster\'s Flavor Wheel (2016)',
-    flavor_wheel_close:'Schließen', flavor_wheel_overview:'Übersicht',
+    flavor_wheel_overview:'Übersicht',
     bean_rating_tooltip:(n)=>`Ø aus ${n} Shot${n!==1?'s':''}`,
     bean_altitude_label:'Höhenlage (m)', bean_altitude_ph:'z.B. 1900', bean_altitude_display:(m)=>`${m} m ü. M.`,
     bean_importer_label:'Importeur', bean_importer_ph:'Rehm Coffee', bean_importer_display:(v)=>`Import: ${v}`,

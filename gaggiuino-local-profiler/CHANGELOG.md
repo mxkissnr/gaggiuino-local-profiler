@@ -1,3 +1,8 @@
+## [1.103.1] – 2026-07-06
+
+### Fixed
+- **Flavor wheel modal could scroll on mobile/PWA, and still had a redundant close button.** The modal inherited `.guided-maint-modal`'s `overflow-y:auto`, so on short viewports the whole modal — including the interactive chart — scrolled as one block, which is broken UX for a drag/click chart. The wheel canvas now flexes to fill exactly the remaining space instead of forcing an outer scrollbar, and the unmatched-flavors chip list gets its own small scrollable area instead of pushing the modal past the viewport. Also removed the bottom "Schließen" button added in #263 — the ✕ in the header and tap-outside-to-close already cover it, and reaching a button below a non-scrolling chart wasn't reliable either. Closes #264
+
 ## [1.103.0] – 2026-07-06
 
 ### Added

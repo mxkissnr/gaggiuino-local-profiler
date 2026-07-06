@@ -1324,20 +1324,27 @@
         .guided-maint-step:has(input:checked) span { color:var(--gray-500); text-decoration:line-through; }
         .guided-maint-step-num { color:var(--gray-500); font-weight:700; flex-shrink:0; }
         /* Flavor wheel modal */
-        .flavor-wheel-modal { max-width:min(680px, 96vw); }
-        .fw-header { display:flex; align-items:center; gap:10px; }
+        /* max-height/overflow-y override .guided-maint-modal's scrolling default —
+           the wheel is an interactive chart (drag/click), scrolling the modal
+           around it while mid-gesture is broken UX, so it must always fit
+           within the viewport instead. */
+        .flavor-wheel-modal { max-width:min(680px, 96vw); max-height:92dvh; overflow-y:hidden; }
+        .fw-header { display:flex; align-items:center; gap:10px; flex-shrink:0; }
         .fw-close-x { margin-left:auto; background:none; border:none; color:var(--gray-400); font-size:1.1rem; line-height:1; padding:6px; cursor:pointer; flex-shrink:0; }
         .fw-close-x:hover, .fw-close-x:focus-visible { color:#fff; }
         .fw-bean-image { width:44px; height:44px; border-radius:8px; object-fit:cover; flex-shrink:0; }
-        .fw-breadcrumb { display:flex; flex-wrap:wrap; align-items:center; gap:3px; font-size:.72rem; }
+        .fw-breadcrumb { display:flex; flex-wrap:wrap; align-items:center; gap:3px; font-size:.72rem; flex-shrink:0; }
         .fw-crumb { background:none; border:none; color:var(--gray-400); cursor:pointer; padding:2px 4px; border-radius:4px; font-size:inherit; font-weight:600; }
         .fw-crumb:last-child { color:#fff; }
         .fw-crumb:hover, .fw-crumb:focus-visible { background:var(--gray-800); color:#fff; }
         .fw-crumb-sep { color:var(--gray-600); }
-        .fw-canvas { width:100%; height:min(560px, 66vh); cursor:pointer; }
+        /* flex:1 + min-height:0 lets the chart shrink to whatever space is left
+           after the fixed-size header/breadcrumb/credit, instead of forcing
+           the modal to overflow and scroll on short viewports. */
+        .fw-canvas { width:100%; flex:1 1 auto; min-height:0; cursor:pointer; }
         .fw-unmatched-label { font-size:.7rem; color:var(--gray-500); margin-bottom:4px; }
-        .fw-unmatched-chips { display:flex; flex-wrap:wrap; gap:4px; }
-        .fw-credit { font-size:.62rem; color:var(--gray-600); text-align:center; }
+        .fw-unmatched-chips { display:flex; flex-wrap:wrap; gap:4px; max-height:15vh; overflow-y:auto; flex-shrink:0; }
+        .fw-credit { font-size:.62rem; color:var(--gray-600); text-align:center; flex-shrink:0; }
         .maint-section-title { font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--gray-500); margin:8px 0 4px; grid-column:1/-1; }
         /* Maintenance Log */
         .maint-log-section { margin-top:20px; display:flex; flex-direction:column; gap:12px; }
