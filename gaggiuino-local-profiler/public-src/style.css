@@ -1327,8 +1327,12 @@
         /* max-height/overflow-y override .guided-maint-modal's scrolling default —
            the wheel is an interactive chart (drag/click), scrolling the modal
            around it while mid-gesture is broken UX, so it must always fit
-           within the viewport instead. */
-        .flavor-wheel-modal { max-width:min(680px, 96vw); max-height:92dvh; overflow-y:hidden; }
+           within the viewport instead. `height` (not just max-height) is
+           required here: .fw-canvas below relies on flex:1 to fill the
+           remaining space, but a flex column sized by `height:auto` (content)
+           never has positive free space to grow into — the canvas would
+           collapse to 0px before echarts even has a size to init() against. */
+        .flavor-wheel-modal { max-width:min(680px, 96vw); height:min(680px, 92dvh); max-height:92dvh; overflow-y:hidden; }
         .fw-header { display:flex; align-items:center; gap:10px; flex-shrink:0; }
         .fw-close-x { margin-left:auto; background:none; border:none; color:var(--gray-400); font-size:1.1rem; line-height:1; padding:6px; cursor:pointer; flex-shrink:0; }
         .fw-close-x:hover, .fw-close-x:focus-visible { color:#fff; }

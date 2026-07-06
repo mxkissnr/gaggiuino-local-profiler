@@ -1,3 +1,8 @@
+## [1.104.0] – 2026-07-06
+
+### Changed
+- **Flavor wheel: only the matched path gets a label now, not every segment.** The v1.103.0 redesign made every category/subcategory/descriptor fully colored and labeled at all times to match the real SCA/WCR wheel's look — in practice that buried the handful of segments that actually mattered for a given bean under dozens of overlapping labels, distinguishable only by bold text and a slightly brighter border. Now only a bean's matched flavors and their ancestor categories (`markLit`'s existing lit-chain) get a label and full color saturation; everything else stays a narrow, desaturated, unlabeled sliver — the wheel's full shape is still there for reference, but stops competing with the matches for attention. `hslFor()` in `flavor-match.js` gained an optional third `lit` parameter (default `true`, so existing 2-arg callers are unaffected). Closes #265
+
 ## [1.103.1] – 2026-07-06
 
 ### Fixed

@@ -118,8 +118,13 @@ describe('hslFor', () => {
     expect(hslFor(0, 10)).toBe('hsl(0, 62%, 72%)'); // would be 142% uncapped
   });
 
-  it('stays fully saturated regardless of match state — the wheel no longer grays out unmatched segments', () => {
+  it('defaults to fully saturated (matched-path segments)', () => {
     expect(hslFor(120, 2)).toBe('hsl(120, 62%, 62%)');
+    expect(hslFor(120, 2, true)).toBe('hsl(120, 62%, 62%)');
+  });
+
+  it('desaturates unmatched segments (lit=false) while keeping the same lightness', () => {
+    expect(hslFor(120, 2, false)).toBe('hsl(120, 14%, 62%)');
   });
 });
 

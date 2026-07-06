@@ -17,11 +17,14 @@ function toSunburstData(node, depth, hue, lang) {
   const entry = {
     id: node.id,
     name: label,
-    // Every node stays fully colored and labeled, like the real SCA/WCR
-    // reference wheel — matches are highlighted (bold text + brighter
-    // border), not surfaced by graying out everything that isn't one.
-    itemStyle: { color: hslFor(hue, depth), borderColor: lit ? '#fff' : '#111113', borderWidth: lit ? 2.5 : 1.5 },
-    label: { show: true, color: labelColorFor(depth), fontSize: depth === 1 ? 13 : depth === 2 ? 11 : 10, fontWeight: lit ? 'bold' : 'normal' },
+    // Only the matched path (this bean's actual flavor tags + their
+    // ancestor categories, via markLit) is shown large/labeled/fully
+    // colored. Everything else stays a narrow, muted, unlabeled sliver —
+    // the full wheel shape is still there for context, but it no longer
+    // competes with the handful of segments that actually matter for this
+    // bean (see hslFor for the color side of this).
+    itemStyle: { color: hslFor(hue, depth, lit), borderColor: lit ? '#fff' : '#111113', borderWidth: lit ? 2.5 : 1.5 },
+    label: { show: !!lit, color: labelColorFor(depth), fontSize: depth === 1 ? 13 : depth === 2 ? 11 : 10, fontWeight: 'bold' },
   };
   if (node.children?.length) {
     entry.children = node.children.map(c => toSunburstData(c, depth + 1, hue, lang));
