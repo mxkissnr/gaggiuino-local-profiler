@@ -5,7 +5,8 @@ import { initToken, apiFetch } from './api.js';
 import { t, setLang, applyTranslations } from './i18n.js';
 
 import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
-         toggleDesktopSidebar, openSidebar, closeSidebar, toggleSidebar, collapseSidebarOnMobile, selectShot } from './components/sidebar.js';
+         toggleDesktopSidebar, openSidebar, closeSidebar, toggleSidebar, collapseSidebarOnMobile, selectShot,
+         toggleMonthGroup } from './components/sidebar.js';
 import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
@@ -479,7 +480,8 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'open-new-bag':       openNewBagForm(numId()); break;
       case 'close-new-bag':      closeNewBagForm(numId()); break;
       case 'save-new-bag':       saveNewBag(numId()); break;
-      case 'toggle-bag-history': toggleBagHistory(numId()); break;
+      case 'toggle-bag-history':   toggleBagHistory(numId()); break;
+      case 'toggle-month-group':  toggleMonthGroup(strId()); break;
       case 'delete-bag':         deleteBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'open-stock-edit':    openBeanStockEdit(numId()); break;
       case 'close-stock-edit':   closeBeanStockEdit(); break;

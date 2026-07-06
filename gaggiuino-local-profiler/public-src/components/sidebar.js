@@ -6,6 +6,46 @@ import { esc, scoreClass } from '../utils.js';
 // These are imported lazily via window to avoid circular dependencies
 // updateView is on window, calcShotScore/getShotData are set from shots.js
 
+// Only chronological order groups sensibly by month — score/rating/duration
+// sort would scatter unrelated shots under confusing month headers.
+function _monthKey(shot) {
+  const d = new Date(shot.timestamp * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function _monthLabel(key) {
+  const [y, m] = key.split('-').map(Number);
+  const d = new Date(y, m - 1, 1);
+  return d.toLocaleDateString(LOCALE_MAP[S.currentLang] || 'de-DE', { month: 'long', year: 'numeric' });
+}
+
+function _buildMonthGroup(key) {
+  if (!S._expandedMonths) S._expandedMonths = new Set();
+  const expanded = S._expandedMonths.has(key);
+  const header = document.createElement('button');
+  header.type = 'button';
+  header.className = 'sidebar-month-header';
+  header.dataset.action = 'toggle-month-group';
+  header.dataset.id = key;
+  header.textContent = `${expanded ? '▾' : '▸'} ${_monthLabel(key)}`;
+  const body = document.createElement('div');
+  body.className = 'sidebar-month-body';
+  body.id = `monthGroup-${key}`;
+  body.style.display = expanded ? '' : 'none';
+  return { header, body };
+}
+
+export function toggleMonthGroup(key) {
+  if (!S._expandedMonths) S._expandedMonths = new Set();
+  const body = document.getElementById(`monthGroup-${key}`);
+  const btn  = document.querySelector(`[data-action="toggle-month-group"][data-id="${key}"]`);
+  if (!body) return;
+  const willExpand = body.style.display === 'none';
+  body.style.display = willExpand ? '' : 'none';
+  if (btn) btn.textContent = `${willExpand ? '▾' : '▸'} ${_monthLabel(key)}`;
+  if (willExpand) S._expandedMonths.add(key); else S._expandedMonths.delete(key);
+}
+
 export function renderSidebar() {
   const el = document.getElementById('shots');
   el.innerHTML = '';
@@ -13,7 +53,34 @@ export function renderSidebar() {
   if (countEl) countEl.textContent = `(${S.shots.length})`;
   updateFlapCounter(S.shots.length);
 
-  sortedShots().forEach(shot => {
+  const shots = sortedShots();
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const groupByMonth = S.currentSort === 'newest';
+
+  let group = null;
+  let groupKey = null;
+  shots.forEach(shot => {
+    const wrapper = _buildShotWrapper(shot);
+    if (!groupByMonth || _monthKey(shot) === currentMonthKey) {
+      el.appendChild(wrapper);
+      return;
+    }
+    const key = _monthKey(shot);
+    if (key !== groupKey) {
+      group = _buildMonthGroup(key);
+      el.appendChild(group.header);
+      el.appendChild(group.body);
+      groupKey = key;
+    }
+    group.body.appendChild(wrapper);
+  });
+
+  updateSidebarHighlighting();
+  if (S.currentFilter) filterShots(S.currentFilter);
+}
+
+function _buildShotWrapper(shot) {
     const wrapper = document.createElement('div');
     wrapper.className = 'shot-wrapper';
     wrapper.id = `wrapper-${shot.id}`;
@@ -78,10 +145,7 @@ export function renderSidebar() {
     wrapper.appendChild(divShot);
     wrapper.appendChild(btnCmp);
     wrapper.appendChild(btnDel);
-    el.appendChild(wrapper);
-  });
-  updateSidebarHighlighting();
-  if (S.currentFilter) filterShots(S.currentFilter);
+    return wrapper;
 }
 
 export function toggleCompare(id) {
@@ -105,6 +169,13 @@ export function updateSidebarHighlighting() {
 export function filterShots(query) {
   S.currentFilter = query;
   const q = query.trim().toLowerCase();
+  // While actively searching, force all month groups open so matches inside
+  // a collapsed group are actually visible; restore collapse state once
+  // the query is cleared.
+  document.querySelectorAll('.sidebar-month-body').forEach(body => {
+    const key = body.id.replace('monthGroup-', '');
+    body.style.display = q ? '' : (S._expandedMonths?.has(key) ? '' : 'none');
+  });
   document.querySelectorAll('#shots .shot-wrapper').forEach(wrapper => {
     const id = parseInt(wrapper.id.replace('wrapper-', ''));
     const shot = S.shots.find(s => s.id === id);

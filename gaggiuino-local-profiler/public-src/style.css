@@ -116,6 +116,21 @@
         .date-sidebar         { color: var(--gray-500); font-size: .72rem; margin-top: 3px; }
         .sidebar-stars        { color: var(--accent); font-size: .72rem; letter-spacing: 1px; margin-top: 3px; }
 
+        .sidebar-month-header {
+            width: 100%;
+            text-align: left;
+            background: rgba(39,39,42,.5);
+            color: var(--gray-400);
+            border: none;
+            border-bottom: 1px solid rgba(63,63,70,.3);
+            padding: 8px 12px 8px 20px;
+            font-size: .78rem;
+            font-weight: 600;
+            text-transform: capitalize;
+            cursor: pointer;
+        }
+        .sidebar-month-header:hover { background: rgba(39,39,42,.8); color: var(--gray-300); }
+
         .compare-btn {
             background: rgba(63,63,70,.5);
             color: var(--gray-400);
