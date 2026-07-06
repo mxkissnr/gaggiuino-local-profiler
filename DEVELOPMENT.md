@@ -8,15 +8,15 @@ The GLP ecosystem (this app + 3 companion repos) has been in development since *
 
 | Repo | First commit | Last commit | Commits | Claude co-authored |
 |---|---|---|---|---|
-| gaggiuino-local-profiler | 2026-05-20 | 2026-07-06 | 378 | 310 (82%) |
-| glp-integration | 2026-05-22 | 2026-07-05 | 58 | 52 (90%) |
-| glp-lovelace-card | 2026-05-24 | 2026-07-05 | 65 | 60 (92%) |
+| gaggiuino-local-profiler | 2026-05-20 | 2026-07-06 | 380 | 310 (82%) |
+| glp-integration | 2026-05-22 | 2026-07-06 | 59 | 52 (88%) |
+| glp-lovelace-card | 2026-05-24 | 2026-07-06 | 66 | 60 (91%) |
 | glp-order-card | 2026-05-25 | 2026-07-05 | 37 | 34 (92%) |
-| **Combined** | **2026-05-20** | **2026-07-06** | **538** | **456 (85%)** |
+| **Combined** | **2026-05-20** | **2026-07-06** | **542** | **456 (84%)** |
 
 ![Commits per repo](docs/dev-stats/commits-per-repo.png)
 
-Combined line changes (insertions + deletions across all commits): **170.787**, of which **164.006** landed in Claude-co-authored commits.
+Combined line changes (insertions + deletions across all commits): **170.877**, of which **164.006** landed in Claude-co-authored commits.
 
 Commits without a Claude co-author line are presumed human-only (manual fixes, merges, config tweaks) — not independently verified.
 
