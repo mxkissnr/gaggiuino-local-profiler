@@ -40,7 +40,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
-         openBeanForm, closeBeanForm, editBean, saveBean, deleteBean,
+         openBeanForm, closeBeanForm, editBean, saveBean, deleteBean, uploadBeanImage,
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage,
          toggleBeanQR, generateBeanQR,
          toggleBagHistory, openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
@@ -444,6 +444,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('grinderAddTrigger').addEventListener('click', openGrinderForm);
   document.getElementById('grinderFormImage').addEventListener('change', function () {
     if (S.grinderEditId) uploadGrinderImage(S.grinderEditId, this);
+  });
+  document.getElementById('beanFormImage').addEventListener('change', function () {
+    if (S.beanEditId) uploadBeanImage(S.beanEditId, this);
   });
   document.getElementById('addRecipeStepBtn').addEventListener('click', addRecipeStep);
   document.getElementById('closeRecipeFormBtn').addEventListener('click', closeRecipeForm);

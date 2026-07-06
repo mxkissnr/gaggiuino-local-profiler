@@ -529,3 +529,39 @@ describe('grinder extra fields (burrType/purchaseDate) and photo upload', () => 
         expect(r.status).toBe(400);
     });
 });
+
+describe('bean photo manual upload fallback (auto-import can silently fail)', () => {
+    it('uploads a photo and serves it back', async () => {
+        saveLibrary({ beans: [{ id: 42, name: 'Dolce' }], grinders: [], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/library/bean/42/image`, {
+            method: 'POST', headers: { 'Content-Type': 'image/png' }, body: Buffer.from('fake-png-bytes'),
+        });
+        expect(r.status).toBe(200);
+        expect((await r.json()).image).toBe('jpg'); // mocked saveUploadedImage always returns 'jpg'
+    });
+
+    it('rejects an upload for a nonexistent bean', async () => {
+        saveLibrary({ beans: [], grinders: [], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/library/bean/999/image`, {
+            method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: Buffer.from('x'),
+        });
+        expect(r.status).toBe(404);
+    });
+
+    it('rejects an unsupported content type (express.raw skips parsing it)', async () => {
+        saveLibrary({ beans: [{ id: 9, name: 'Dolce' }], grinders: [], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/library/bean/9/image`, {
+            method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'not an image',
+        });
+        expect(r.status).toBe(400);
+    });
+
+    it('replacing an existing photo still returns 200 and the new extension', async () => {
+        saveLibrary({ beans: [{ id: 10, name: 'Dolce', image: 'png' }], grinders: [], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/library/bean/10/image`, {
+            method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: Buffer.from('new-bytes'),
+        });
+        expect(r.status).toBe(200);
+        expect((await r.json()).image).toBe('jpg');
+    });
+});

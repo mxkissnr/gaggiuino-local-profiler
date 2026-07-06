@@ -64,6 +64,7 @@ export default {
     bean_brew_ratio_label:'Zetverhouding', bean_brew_ratio_ph:'1:2.2',
     bean_brew_time_label:'Zettijd (s)', bean_brew_time_ph:'bijv. 28',
     bean_brew_notes_label:'Zettip', bean_brew_notes_ph:'iets heter dan normaal',
+    bean_image_label:'Foto', bean_image_hint:'Als de automatische import mislukt is',
     bean_brew_temp_display:(c)=>`${c}°C`, bean_brew_time_display:(s)=>`${s}s`,
     lib_grinder_name:'Naam *', lib_grinder_notes:'Notities',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Brandkoffie Amsterdam',

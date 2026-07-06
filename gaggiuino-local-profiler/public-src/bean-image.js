@@ -30,3 +30,7 @@ export function loadGrinderImageBlobUrl(grinderId) {
 export function invalidateGrinderImage(grinderId) {
   _cache.delete(`grinder:${grinderId}`);
 }
+
+export function invalidateBeanImage(beanId) {
+  _cache.delete(`bean:${beanId}`);
+}

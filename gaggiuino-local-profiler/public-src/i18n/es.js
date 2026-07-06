@@ -64,6 +64,7 @@ export default {
     bean_brew_ratio_label:'Ratio de preparación', bean_brew_ratio_ph:'1:2.2',
     bean_brew_time_label:'Tiempo de preparación (s)', bean_brew_time_ph:'ej. 28',
     bean_brew_notes_label:'Nota de preparación', bean_brew_notes_ph:'un poco más caliente de lo normal',
+    bean_image_label:'Foto', bean_image_hint:'Si la importación automática falló',
     bean_brew_temp_display:(c)=>`${c}°C`, bean_brew_time_display:(s)=>`${s}s`,
     lib_grinder_name:'Nombre *', lib_grinder_notes:'Notas',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Tostadero Madrid',

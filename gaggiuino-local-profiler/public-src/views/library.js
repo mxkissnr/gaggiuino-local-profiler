@@ -3,7 +3,7 @@ import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { esc, roastAgeDays, freshnessState, calcBeanRating } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, countryName, flagEmoji } from '../constants.js';
-import { loadBeanImageBlobUrl, loadGrinderImageBlobUrl, invalidateGrinderImage } from '../bean-image.js';
+import { loadBeanImageBlobUrl, loadGrinderImageBlobUrl, invalidateGrinderImage, invalidateBeanImage } from '../bean-image.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
@@ -416,6 +416,7 @@ export function openBeanForm(bean) {
   document.getElementById('beanFormBrewRatio').value = bean?.brewRatio || '';
   document.getElementById('beanFormBrewTime').value  = bean?.brewTimeS ?? '';
   document.getElementById('beanFormBrewNotes').value = bean?.brewNotes || '';
+  document.getElementById('beanFormImageField').style.display = bean ? '' : 'none';
   document.getElementById('beanAddForm').classList.add('open');
   document.getElementById('beanAddTrigger').style.display = 'none';
   document.getElementById('beanFormName').focus();
@@ -538,6 +539,21 @@ export async function saveGrinder() {
   updateLibraryDatalist();
   closeGrinderForm();
   renderGrinderList();
+}
+
+export async function uploadBeanImage(id, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const r = await apiFetch(`api/library/bean/${id}/image`, {
+    method: 'POST', headers: { 'Content-Type': file.type }, body: file,
+  });
+  input.value = '';
+  if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
+  const saved = await r.json();
+  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
+  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  invalidateBeanImage(id);
+  renderBeanList();
 }
 
 export async function uploadGrinderImage(id, input) {

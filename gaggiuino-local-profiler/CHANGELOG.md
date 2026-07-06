@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **Beans can now have a photo uploaded manually** — auto-import (via the shop's product image URL) is fire-and-forget and its failure is invisible: a redirect bounce, unexpected content-type or timeout leaves the bean with no photo and no indication anything went wrong (reported as "hoplo bean image not showing"). `POST /api/library/bean/:id/image` (mirrors the v1.98.0 grinder photo upload route) lets you upload a photo directly from your device as a fallback — same content-type whitelist and size cap, no URL fetch involved. Closes #251
 - **Elbgold import now finds tasting notes even without a "Noten von ..." sentence** — some product descriptions describe taste in free prose under a "Sensorik" heading instead of the one sentence pattern the parser looked for, silently returning no flavors. Added a fallback keyword scan (`lib/flavor-terms.js`, a small curated German cupping-term list) over the prose following a Sensorik/Geschmack/Aromen heading, used only when the primary pattern finds nothing. Best-effort, same as the rest of elbgold's free-text extraction. Closes #250
 
 ## [1.98.0] – 2026-07-06

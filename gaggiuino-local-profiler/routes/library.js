@@ -218,6 +218,26 @@ router.get('/api/library/bean/:id/image', (req, res) => {
     res.sendFile(imagePath(id, ext), err => { if (err && !res.headersSent) res.status(404).json({ error: 'no image' }); });
 });
 
+// Manual upload fallback — the auto-import fetch (setBeanImage/fetchBeanImage)
+// is fire-and-forget and can silently fail (redirect, unexpected content-type,
+// timeout) with no visibility to the user. Mirrors the grinder photo upload
+// route; no URL fetch here, so no SSRF surface.
+router.post('/api/library/bean/:id/image',
+    express.raw({ type: Object.keys(CONTENT_TYPE_EXT), limit: BEAN_IMAGE_MAX_BYTES }),
+    (req, res) => {
+        const id   = parseInt(req.params.id, 10);
+        const lib  = loadLibrary();
+        const bean = lib.beans.find(b => b.id === id);
+        if (!bean) return res.status(404).json({ error: 'not found' });
+        if (!Buffer.isBuffer(req.body) || req.body.length === 0) return res.status(400).json({ error: 'no image data' });
+        const ext = saveUploadedImage('', id, req.body, req.get('Content-Type'));
+        if (!ext) return res.status(400).json({ error: 'unsupported image' });
+        if (bean.image && bean.image !== ext) deleteBeanImage(id, bean.image);
+        bean.image = ext;
+        saveLibrary(lib);
+        res.json(bean);
+    });
+
 // ── Milk ──────────────────────────────────────────────────────────────────
 
 router.get('/api/library/milks', (req, res) => {

@@ -488,6 +488,11 @@
                                 <label data-i18n="bean_brew_notes_label">Zubereitungshinweis</label>
                                 <input type="text" id="beanFormBrewNotes" data-i18n-placeholder="bean_brew_notes_ph" placeholder="etwas heißer als üblich" maxlength="300">
                             </div>
+                            <div class="lib-form-field" id="beanFormImageField" style="display:none">
+                                <label data-i18n="bean_image_label">Bild</label>
+                                <input type="file" id="beanFormImage" accept="image/jpeg,image/png,image/webp,image/gif">
+                                <span class="lib-form-hint" data-i18n="bean_image_hint">Falls der automatische Import fehlschlägt</span>
+                            </div>
                             <div class="lib-form-field">
                                 <label data-i18n="lib_bean_stock">Vorrat (g)</label>
                                 <input type="number" id="beanFormStock" data-i18n-placeholder="lib_bean_stock_ph" placeholder="z.B. 500" step="1" min="0">

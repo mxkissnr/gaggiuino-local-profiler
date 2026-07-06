@@ -64,6 +64,7 @@ export default {
     bean_brew_ratio_label:'Rapporto di infusione', bean_brew_ratio_ph:'1:2.2',
     bean_brew_time_label:'Tempo di infusione (s)', bean_brew_time_ph:'es. 28',
     bean_brew_notes_label:'Nota di preparazione', bean_brew_notes_ph:'un po\' più caldo del solito',
+    bean_image_label:'Foto', bean_image_hint:"Se l'importazione automatica non riesce",
     bean_brew_temp_display:(c)=>`${c}°C`, bean_brew_time_display:(s)=>`${s}s`,
     lib_grinder_name:'Nome *', lib_grinder_notes:'Note',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Torrefazione Roma',

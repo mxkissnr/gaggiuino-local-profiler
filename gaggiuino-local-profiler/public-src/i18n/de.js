@@ -64,6 +64,7 @@ export default {
     bean_brew_ratio_label:'Brühverhältnis', bean_brew_ratio_ph:'1:2.2',
     bean_brew_time_label:'Brühzeit (s)', bean_brew_time_ph:'z.B. 28',
     bean_brew_notes_label:'Zubereitungshinweis', bean_brew_notes_ph:'etwas heißer als üblich',
+    bean_image_label:'Bild', bean_image_hint:'Falls der automatische Import fehlschlägt',
     bean_brew_temp_display:(c)=>`${c}°C`, bean_brew_time_display:(s)=>`${s}s`,
     lib_grinder_name:'Name *', lib_grinder_notes:'Notizen',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Quijote Kaffee',
