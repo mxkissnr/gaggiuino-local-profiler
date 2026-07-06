@@ -253,6 +253,8 @@ export default {
     orders_variant_select:'Variante wählen',
     orders_use_beans_toggle:'Varianten aus Bohnenbibliothek',
     orders_use_beans_note:'Aktive Bohnen werden als Varianten angezeigt',
+    orders_use_milks_toggle:'Varianten aus Milchbibliothek',
+    orders_use_milks_note:'Aktive Milchsorten werden als Varianten angezeigt',
     ann_ordered_by:'Bestellt von', ann_ordered_drink:'Getränk',
     update_banner:(cur,lat)=>`GLP ${lat} verfügbar (aktuell: ${cur})`,
     update_install:'Jetzt installieren',

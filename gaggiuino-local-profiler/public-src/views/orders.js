@@ -316,11 +316,14 @@ export async function renderOrdersMenuAdmin(menu) {
   list.innerHTML = menu.map(item => {
     const variants   = item.variants || [];
     const useBeans   = !!item.useBeans;
+    const useMilks   = !!item.useMilks;
     const chipHtml   = variants.map(v =>
       `<span class="orders-menu-variant-chip">${esc(v)}<button class="orders-menu-variant-del" data-menu-id="${esc(item.id)}" data-variant="${esc(v)}" title="✕">×</button></span>`
     ).join('');
     const variantSection = useBeans
       ? `<span class="orders-use-beans-note">🫘 ${t('orders_use_beans_note')}</span>`
+      : useMilks
+      ? `<span class="orders-use-beans-note">🥛 ${t('orders_use_milks_note')}</span>`
       : `${chipHtml}
          <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" placeholder="${t('orders_variant_ph')}">
          <button class="orders-menu-variant-btn" data-variant-add="${esc(item.id)}">${t('orders_variant_add_btn')}</button>`;
@@ -331,6 +334,7 @@ export async function renderOrdersMenuAdmin(menu) {
         <span>${item.emoji}</span>
         <span class="orders-menu-item-name">${esc(item.name)}</span>
         <button class="orders-menu-use-beans${useBeans ? ' active' : ''}" data-menu-use-beans="${esc(item.id)}" title="${t('orders_use_beans_toggle')}">🫘</button>
+        <button class="orders-menu-use-milks${useMilks ? ' active' : ''}" data-menu-use-milks="${esc(item.id)}" title="${t('orders_use_milks_toggle')}">🥛</button>
         <button class="orders-menu-trend${item.trending ? ' active' : ''}" data-menu-trend="${esc(item.id)}" title="${t('orders_trending_toggle')}">🔥</button>
         <button class="orders-menu-del" data-menu-del="${esc(item.id)}" title="${t('orders_confirm_delete_item')}">✕</button>
       </div>
@@ -379,6 +383,19 @@ export async function renderOrdersMenuAdmin(menu) {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ useBeans: !item.useBeans }),
+      });
+      loadOrdersView();
+    });
+  });
+  list.querySelectorAll('[data-menu-use-milks]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id   = btn.dataset.menuUseMilks;
+      const item = menu.find(m => m.id === id);
+      if (!item) return;
+      await apiFetch(`api/orders/menu/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ useMilks: !item.useMilks }),
       });
       loadOrdersView();
     });

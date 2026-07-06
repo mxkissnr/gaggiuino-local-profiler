@@ -34,7 +34,7 @@ const libraryRouter     = require('../routes/library');
 const maintenanceRouter = require('../routes/maintenance');
 const shotRepo      = require('../lib/repositories/ShotRepository');
 const libraryService = require('../lib/services/LibraryService');
-const { saveOrders, saveLibrary } = require('../lib/data');
+const { saveOrders, saveLibrary, saveMenu } = require('../lib/data');
 const { getDb }     = require('../lib/db');
 
 function makeApp() {
@@ -197,6 +197,59 @@ describe('GET /api/orders/active-beans', () => {
         saveLibrary({ beans: [{ id: 1, name: 'Untracked' }], grinders: [], recipes: [] });
         const beans = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
         expect(beans).toEqual([]);
+    });
+});
+
+describe('GET /api/orders/active-milks', () => {
+    it('excludes milks that are out of stock', async () => {
+        saveLibrary({ beans: [], grinders: [], recipes: [], milks: [
+            { id: 1, name: 'Oat', stockMl: 500 },
+            { id: 2, name: 'Whole Milk', stockMl: 0 },
+        ] });
+        const milks = await (await fetch(`${baseUrl}/api/orders/active-milks`)).json();
+        expect(milks.map(m => m.name)).toEqual(['Oat']);
+        expect(milks[0].remaining).toBe(500);
+    });
+});
+
+describe('POST /api/orders/:id/complete — milk deduction', () => {
+    it('deducts the menu item\'s configured milkMl from the matching milk (case-insensitive)', async () => {
+        saveLibrary({ beans: [], grinders: [], recipes: [], milks: [
+            { id: 1, name: 'Oat', stockMl: 500 },
+        ] });
+        saveMenu([{ id: 'm1', name: 'Latte', emoji: '☕', milkMl: 200 }]);
+        saveOrders([{ id: 'ord1', item: 'Latte', variant: 'oat', customer: 'Max', status: 'accepted', createdAt: Date.now() }]);
+
+        const r = await fetch(`${baseUrl}/api/orders/ord1/complete`, { method: 'POST' });
+        expect(r.status).toBe(200);
+
+        const milks = await (await fetch(`${baseUrl}/api/orders/active-milks`)).json();
+        expect(milks[0].remaining).toBe(300);
+    });
+
+    it('clamps at zero and does not throw when the order outweighs remaining stock', async () => {
+        saveLibrary({ beans: [], grinders: [], recipes: [], milks: [
+            { id: 1, name: 'Oat', stockMl: 100 },
+        ] });
+        saveMenu([{ id: 'm1', name: 'Latte', emoji: '☕', milkMl: 200 }]);
+        saveOrders([{ id: 'ord1', item: 'Latte', variant: 'Oat', customer: 'Max', status: 'accepted', createdAt: Date.now() }]);
+
+        const r = await fetch(`${baseUrl}/api/orders/ord1/complete`, { method: 'POST' });
+        expect(r.status).toBe(200);
+        const milks = await (await fetch(`${baseUrl}/api/orders/active-milks`)).json();
+        expect(milks).toEqual([]); // stockMl clamped to 0 -> filtered out of active milks
+    });
+
+    it('does not touch milk stock when the item has no milkMl configured', async () => {
+        saveLibrary({ beans: [], grinders: [], recipes: [], milks: [
+            { id: 1, name: 'Oat', stockMl: 500 },
+        ] });
+        saveMenu([{ id: 'm1', name: 'Espresso', emoji: '☕' }]);
+        saveOrders([{ id: 'ord1', item: 'Espresso', variant: null, customer: 'Max', status: 'accepted', createdAt: Date.now() }]);
+
+        await fetch(`${baseUrl}/api/orders/ord1/complete`, { method: 'POST' });
+        const milks = await (await fetch(`${baseUrl}/api/orders/active-milks`)).json();
+        expect(milks[0].remaining).toBe(500);
     });
 });
 

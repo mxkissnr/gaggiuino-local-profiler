@@ -270,6 +270,8 @@ export default {
     orders_variant_select:'Selecteer variant',
     orders_use_beans_toggle:'Varianten uit bonebibliotheek',
     orders_use_beans_note:'Actieve bonen worden getoond als varianten',
+    orders_use_milks_toggle:'Varianten uit melkbibliotheek',
+    orders_use_milks_note:'Actieve melksoorten worden getoond als varianten',
     ann_ordered_by:'Besteld door',
     ann_ordered_drink:'Drank',
     update_banner:(cur,lat)=>`GLP ${lat} beschikbaar (huidig: ${cur})`,

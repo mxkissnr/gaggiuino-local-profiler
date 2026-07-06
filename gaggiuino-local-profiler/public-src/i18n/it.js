@@ -270,6 +270,8 @@ export default {
     orders_variant_select:'Seleziona variante',
     orders_use_beans_toggle:'Varianti dalla biblioteca',
     orders_use_beans_note:'I chicchi attivi vengono mostrati come varianti',
+    orders_use_milks_toggle:'Varianti dalla biblioteca del latte',
+    orders_use_milks_note:'I latti attivi vengono mostrati come varianti',
     ann_ordered_drink:'Bevanda',
     ann_ordered_by:'Ordinato da',
     update_banner:(cur,lat)=>`GLP ${lat} disponibile (attuale: ${cur})`,

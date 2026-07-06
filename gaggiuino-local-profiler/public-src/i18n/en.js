@@ -270,6 +270,8 @@ export default {
     orders_variant_select:'Select variant',
     orders_use_beans_toggle:'Variants from bean library',
     orders_use_beans_note:'Active beans shown as variants',
+    orders_use_milks_toggle:'Variants from milk library',
+    orders_use_milks_note:'Active milks shown as variants',
     ann_ordered_drink:'Drink',
     ann_ordered_by:'Ordered by',
     update_banner:(cur,lat)=>`GLP ${lat} available (current: ${cur})`,

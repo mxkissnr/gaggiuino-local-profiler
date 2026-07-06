@@ -87,6 +87,7 @@ router.post('/api/orders/menu', (req, res) => {
         createdAt: Date.now(), trending: false,
         variants: Array.isArray(variants) ? variants.map(v => String(v).trim().slice(0, 50)).filter(Boolean) : [],
         useBeans: !!req.body.useBeans,
+        useMilks: !!req.body.useMilks,
     };
     menu.push(item);
     saveMenu(menu);
@@ -103,6 +104,7 @@ router.put('/api/orders/menu/:id', (req, res) => {
     if (Array.isArray(req.body?.variants))
         item.variants = req.body.variants.map(v => String(v).trim().slice(0, 50)).filter(Boolean);
     if (typeof req.body?.useBeans === 'boolean') item.useBeans = req.body.useBeans;
+    if (typeof req.body?.useMilks === 'boolean') item.useMilks = req.body.useMilks;
     if (req.body?.milkMl !== undefined) item.milkMl = parseFloat(req.body.milkMl) || null;
     saveMenu(menu);
     res.json(item);
@@ -133,6 +135,10 @@ router.get('/api/orders/milk-stock', (req, res) => {
 
 router.get('/api/orders/active-beans', (req, res) => {
     res.json(libraryService.getActiveBeans());
+});
+
+router.get('/api/orders/active-milks', (req, res) => {
+    res.json(libraryService.getActiveMilks());
 });
 
 // ── Settings ──────────────────────────────────────────────────────────────
@@ -351,6 +357,12 @@ router.post('/api/orders/:id/complete', (req, res) => {
     if (!order) return res.status(404).json({ error: 'not found' });
     order.status      = 'done';
     order.completedAt = Date.now();
+    if (order.variant) {
+        try {
+            const item = loadMenu().find(m => m.name === order.item);
+            if (item?.milkMl > 0) libraryService.deductMilkByName(order.variant, item.milkMl);
+        } catch { /* non-critical */ }
+    }
     try { order.shotId = shotRepo.getLatestId(); } catch { order.shotId = null; }
     if (order.shotId != null) {
         try {

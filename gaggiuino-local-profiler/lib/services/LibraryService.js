@@ -50,6 +50,30 @@ class LibraryService {
             }));
     }
 
+    // Milks that still have stock, shaped for the order card — mirrors
+    // getActiveBeans(), but milk stock is an explicit running total (deducted
+    // on order completion) rather than inferred from shot annotations.
+    getActiveMilks() {
+        return (this.getLibrary().milks || [])
+            .filter(m => (m.stockMl || 0) > 0)
+            .map(m => ({ id: m.id, name: m.name, emoji: m.emoji || null, remaining: m.stockMl }));
+    }
+
+    // Deducts ml from a milk by name (case-insensitive, same join precedent as
+    // bean/grinder name matching elsewhere). No-op if no matching milk or the
+    // milk is already out of stock. Returns the updated milk, or null.
+    deductMilkByName(name, ml) {
+        if (!name || !(ml > 0)) return null;
+        const lib  = this.getLibrary();
+        const key  = String(name).toLowerCase();
+        const milk = (lib.milks || []).find(m => String(m.name || '').toLowerCase() === key);
+        if (!milk) return null;
+        milk.stockMl = Math.max(0, (milk.stockMl || 0) - ml);
+        milk.updatedAt = Date.now();
+        this.saveLibrary(lib);
+        return milk;
+    }
+
     // Beans imported before 1.96.0 carry "Herkunft: X" / "Aufbereitung: Y" as
     // free text in notes (the structured fields did not exist yet) and the old
     // import join left ", ," artifacts from empty spans. Idempotent startup

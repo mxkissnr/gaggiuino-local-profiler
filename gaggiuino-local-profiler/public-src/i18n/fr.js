@@ -270,6 +270,8 @@ export default {
     orders_variant_select:'Sélectionner une variante',
     orders_use_beans_toggle:'Variantes depuis la bibliothèque',
     orders_use_beans_note:'Les grains actifs sont affichés comme variantes',
+    orders_use_milks_toggle:'Variantes depuis la bibliothèque de lait',
+    orders_use_milks_note:'Les laits actifs sont affichés comme variantes',
     ann_ordered_by:'Commandé par',
     ann_ordered_drink:'Boisson',
     update_banner:(cur,lat)=>`GLP ${lat} disponible (actuel : ${cur})`,
