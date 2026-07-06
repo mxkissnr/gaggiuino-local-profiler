@@ -53,6 +53,7 @@ export default {
     flavor_wheel_btn:'Abrir rueda de sabores', flavor_wheel_unmatched:'Sabores sin asignar',
     flavor_wheel_unavailable:'Rueda de sabores no disponible (¿sin conexión a internet?)',
     flavor_wheel_credit:'Jerarquía de sabores derivada de la SCA/WCR Coffee Taster\'s Flavor Wheel (2016)',
+    flavor_wheel_close:'Cerrar', flavor_wheel_overview:'Resumen',
     bean_rating_tooltip:(n)=>`Media de ${n} shot${n!==1?'s':''}`,
     bean_altitude_label:'Altitud (m)', bean_altitude_ph:'ej. 1900', bean_altitude_display:(m)=>`${m} m s.n.m.`,
     bean_importer_label:'Importador', bean_importer_ph:'Rehm Coffee', bean_importer_display:(v)=>`Import: ${v}`,

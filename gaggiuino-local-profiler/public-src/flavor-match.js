@@ -75,6 +75,60 @@ export function markLit(node, matched) {
   return node._lit;
 }
 
+// ── Zoom navigation helpers ──────────────────────────────────────────────
+// Pure tree-walking helpers backing the wheel's click-to-zoom + breadcrumb
+// navigation (see flavor-wheel.js) — kept here so they stay unit-testable
+// under vitest, same reasoning as the color helpers above.
+
+let _parentOf = null; // id -> parent id, or null for a top-level category
+function buildParentMap() {
+  if (_parentOf) return _parentOf;
+  buildIndex(); // ensures FLAVOR_WHEEL is available; _parentOf built from the same tree
+  _parentOf = new Map();
+  const walk = (node, parent) => {
+    _parentOf.set(node.id, parent);
+    (node.children || []).forEach(c => walk(c, node.id));
+  };
+  FLAVOR_WHEEL.forEach(cat => walk(cat, null));
+  return _parentOf;
+}
+
+export function parentIdOf(nodeId) {
+  return buildParentMap().get(nodeId) ?? null;
+}
+
+export function nodeById(nodeId) {
+  buildIndex();
+  return _byId.get(nodeId) || null;
+}
+
+// Root-to-node id path (inclusive of nodeId), e.g. ['fruity', 'berry', 'blackberry'].
+export function pathToNode(nodeId) {
+  const path = [];
+  for (let id = nodeId; id != null; id = parentIdOf(id)) path.unshift(id);
+  return path;
+}
+
+// Finds the deepest node (that still has children of its own — a sunburst
+// zoomed into a childless leaf has nothing to draw) which contains every
+// matched flavor, so the wheel can open already zoomed into the relevant
+// branch instead of the full 9-category overview. `categories` must already
+// have `_lit` set (markLit). Returns null when matches span more than one
+// top-level category — zooming to any single one would hide the others.
+export function findAutoZoomTarget(categories) {
+  const litTop = categories.filter(c => c._lit);
+  if (litTop.length !== 1) return null;
+  let current = litTop[0];
+  let target = null;
+  while (true) {
+    if (current.children?.length) target = current.id;
+    const litChildren = (current.children || []).filter(c => c._lit);
+    if (litChildren.length !== 1) break;
+    current = litChildren[0];
+  }
+  return target;
+}
+
 // ── Sunburst color helpers ───────────────────────────────────────────────
 // Pure (no DOM/ECharts dependency), kept here alongside the other
 // wheel-adjacent pure logic so they stay unit-testable — flavor-wheel.js

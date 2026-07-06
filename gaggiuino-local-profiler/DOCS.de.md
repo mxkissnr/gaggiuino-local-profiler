@@ -157,6 +157,8 @@ Dasselbe Feld akzeptiert auch Produkt-URLs von [elbgold.com](https://elbgold.com
 
 Jede Bohne mit Geschmacks-Tags zeigt in der Bibliothek einen 🎡-Button. Er öffnet ein Sunburst-Diagramm der Kaffee-Aroma-Hierarchie — die Kategorienstruktur folgt dem SCA/WCR *Coffee Taster's Flavor Wheel* (2016); dies sind eigens abgeleitete Daten, übersetzt in alle 6 UI-Sprachen (DE, EN, IT, FR, ES, NL), nicht die Original-Grafik. Die Aromen aus den Tags der Bohne werden gegen das Rad gematcht (exakter Label-Treffer in jeder der 6 Sprachen, eine deutsche Alias-Tabelle für zusammengesetzte/umgangssprachliche Begriffe, dann Wortgrenzen-Textcontainment) und zusammen mit ihren übergeordneten Kategorien hervorgehoben; der Rest bleibt gedimmt. Nicht zugeordnete Aromen werden als einfache Chips unter dem Diagramm gelistet, damit nichts stillschweigend verloren geht.
 
+Fallen alle gematchten Aromen unter einen einzigen Zweig — der Normalfall bei ein bis zwei Geschmacksnotizen —, öffnet sich das Rad direkt hineingezoomt in diesen Zweig statt in die volle 9-Kategorien-Übersicht, damit der relevante Ausschnitt von Anfang an genug Platz für lesbaren Text hat. Tippen bzw. Klicken auf ein Segment mit Unterkategorien zoomt hinein, ein Klick auf einen Eintrag im Breadcrumb-Pfad über dem Diagramm springt dorthin zurück — beides funktioniert identisch per Touch und mit der Maus.
+
 ### Barcode- und QR-Scanner
 
 Im Bibliothek-Tab auf **⬛ Scan** neben „Bohne hinzufügen" tippen, um den Kamera-Scanner zu öffnen.

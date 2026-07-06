@@ -1,3 +1,9 @@
+## [1.100.0] – 2026-07-06
+
+### Added
+- **Flavor wheel: click/tap-to-zoom with breadcrumb navigation** — the wheel was still hard to read even after v1.99.0's contrast/anti-overlap fix, because the matched wedges were simply too small at the default zoomed-out scale (reported: a two-ring flavor label overlapping into the neighboring wedge). Tapping or clicking any wedge with sub-flavors now zooms into it (fills the whole circle, giving matched labels real room), and a breadcrumb bar above the chart ("Overview › Category › Subcategory") jumps back to any ancestor — identical behavior on touch and with a mouse, no gesture discovery needed. If a bean's matched flavors all fall under a single branch (the common case), the wheel opens already zoomed there instead of the full 9-category overview. Outer-ring labels (depth 2/3) now rotate tangentially instead of radially, which reads better on thin wedges; a hover/tap tooltip covers any label still hidden by anti-overlap. New pure helpers (`parentIdOf`, `pathToNode`, `nodeById`, `findAutoZoomTarget`) live in `flavor-match.js` alongside the existing color helpers so the zoom-target logic stays unit-testable. Modal and canvas are also bigger (560→680px / 420→560px caps). Closes #257
+- **Cosmetic**: the flavor wheel's "Cancel" button now reads "Close" — it's a read-only view, canceling never made sense there. Closes #257
+
 ## [1.99.0] – 2026-07-06
 
 ### Added
