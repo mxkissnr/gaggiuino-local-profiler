@@ -663,33 +663,70 @@ export async function importFromUrl() {
     }
     if (!r.ok) throw new Error();
     const data = await r.json();
-    S._urlImportSource   = data.source    || null;
-    S._urlImportedAt     = data.importedAt || null;
-    S._urlImportImageUrl = data.imageUrl  || null;
-    openBeanForm();
-    if (data.name)    document.getElementById('beanFormName').value    = data.name;
-    if (data.roaster) document.getElementById('beanFormRoaster').value = data.roaster;
-    if (data.notes)   document.getElementById('beanFormNotes').value   = data.notes;
-    if (Array.isArray(data.origins) && data.origins.length) setFormOrigins({ origins: data.origins });
-    else if (data.origin) setFormOrigins({ origin: data.origin });
-    if (data.variety) document.getElementById('beanFormVariety').value = data.variety;
-    if (data.process) document.getElementById('beanFormProcess').value = data.process;
-    if (data.decaf)   document.getElementById('beanFormDecaf').checked = true;
-    if (Array.isArray(data.flavors) && data.flavors.length) setFormFlavors(data.flavors);
-    if (data.roastType) document.getElementById('beanFormRoastType').value = data.roastType;
-    if (data.region)    document.getElementById('beanFormRegion').value    = data.region;
-    if (data.altitude_m) document.getElementById('beanFormAltitude').value = data.altitude_m;
-    if (data.importer)   document.getElementById('beanFormImporter').value = data.importer;
-    if (data.harvest)    document.getElementById('beanFormHarvest').value  = data.harvest;
-    if (data.price_eur)  document.getElementById('beanFormPrice').value    = data.price_eur;
-    input.value = '';
-    document.getElementById('urlImportRow').style.display = 'none';
+    const finish = variant => {
+      _applyUrlImport(data, variant);
+      input.value = '';
+      document.getElementById('urlImportRow').style.display = 'none';
+    };
+    if (Array.isArray(data.variants) && data.variants.length > 1) openVariantPicker(data.variants, finish);
+    else finish(null);
   } catch {
     alert(t('lib_url_error'));
   } finally {
     btn.textContent = t('lib_url_btn');
     btn.disabled = false;
   }
+}
+
+// Shops commonly offer several sizes at different prices — a chosen variant's
+// price/weight override the parser's own best-guess price_eur (based on
+// Shopify's arbitrary "default" variant) so the price actually matches what
+// the user is recording as stock_g.
+function _applyUrlImport(data, variant) {
+  S._urlImportSource   = data.source    || null;
+  S._urlImportedAt     = data.importedAt || null;
+  S._urlImportImageUrl = data.imageUrl  || null;
+  openBeanForm();
+  if (data.name)    document.getElementById('beanFormName').value    = data.name;
+  if (data.roaster) document.getElementById('beanFormRoaster').value = data.roaster;
+  if (data.notes)   document.getElementById('beanFormNotes').value   = data.notes;
+  if (Array.isArray(data.origins) && data.origins.length) setFormOrigins({ origins: data.origins });
+  else if (data.origin) setFormOrigins({ origin: data.origin });
+  if (data.variety) document.getElementById('beanFormVariety').value = data.variety;
+  if (data.process) document.getElementById('beanFormProcess').value = data.process;
+  if (data.decaf)   document.getElementById('beanFormDecaf').checked = true;
+  if (Array.isArray(data.flavors) && data.flavors.length) setFormFlavors(data.flavors);
+  if (data.roastType) document.getElementById('beanFormRoastType').value = data.roastType;
+  if (data.region)    document.getElementById('beanFormRegion').value    = data.region;
+  if (data.altitude_m) document.getElementById('beanFormAltitude').value = data.altitude_m;
+  if (data.importer)   document.getElementById('beanFormImporter').value = data.importer;
+  if (data.harvest)    document.getElementById('beanFormHarvest').value  = data.harvest;
+  if (variant) {
+    document.getElementById('beanFormPrice').value = (variant.price / 100).toFixed(2);
+    document.getElementById('beanFormStock').value = variant.weight;
+  } else if (data.price_eur) {
+    document.getElementById('beanFormPrice').value = data.price_eur;
+  }
+}
+
+function openVariantPicker(variants, onPick) {
+  const row  = document.getElementById('variantPickerRow');
+  const list = document.getElementById('variantPickerList');
+  const confirmBtn = document.getElementById('variantPickerConfirm');
+  if (!row || !list || !confirmBtn) { onPick(variants[0]); return; }
+  list.innerHTML = variants.map((v, i) => `
+    <label class="lib-variant-picker-option">
+      <input type="radio" name="variantPick" value="${i}" ${i === 0 ? 'checked' : ''}>
+      ${esc(v.title || '?')} — ${(v.price / 100).toFixed(2)} €
+    </label>`).join('');
+  row.style.display = '';
+  const handler = () => {
+    const idx = Number(list.querySelector('input[name="variantPick"]:checked')?.value || 0);
+    row.style.display = 'none';
+    confirmBtn.removeEventListener('click', handler);
+    onPick(variants[idx]);
+  };
+  confirmBtn.addEventListener('click', handler);
 }
 
 // ── Barcode / QR scanner ──────────────────────────────────────────────────

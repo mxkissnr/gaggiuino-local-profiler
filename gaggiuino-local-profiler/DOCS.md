@@ -147,7 +147,7 @@ Imported beans show a small **"Imported from kaffeebraun.com · date"** line in 
 
 ### Import from hoppenworth-ploch.de
 
-The same **🔗 URL** field also accepts product URLs from [hoppenworth-ploch.de](https://hoppenworth-ploch.de) (Hoppenworth & Ploch, Frankfurt). The import uses the shop's structured product data and pre-fills: name (e.g. "Shyira Washed - Ruanda"), roaster, tasting notes as **flavor tags**, **origin country** (mapped from the title), growing **region**, **variety**, **processing**, **roast profile** (from the Espresso/Filter shop tags), and the **decaf** flag for DECAF products.
+The same **🔗 URL** field also accepts product URLs from [hoppenworth-ploch.de](https://hoppenworth-ploch.de) (Hoppenworth & Ploch, Frankfurt). The import uses the shop's structured product data and pre-fills: name (e.g. "Shyira Washed - Ruanda"), roaster, tasting notes as **flavor tags**, **origin country** (mapped from the title), growing **region**, **variety**, **processing**, **roast profile** (from the Espresso/Filter shop tags), and the **decaf** flag for DECAF products. When the shop offers the same bean in more than one size at different prices, a picker asks which size you bought before the form is filled — the chosen size's price and weight are used together, so they always match.
 
 ### Import from elbgold.com
 

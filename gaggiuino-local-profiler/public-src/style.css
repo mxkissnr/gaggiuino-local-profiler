@@ -608,6 +608,10 @@
         .lib-url-btn { background:none; border:1px solid var(--gray-700); border-radius:8px; color:var(--gray-500); font-size:.78rem; padding:7px 12px; cursor:pointer; white-space:nowrap; transition:border-color .15s,color .15s; }
         .lib-url-btn:hover { border-color:var(--gray-500); color:var(--gray-200); }
         .lib-item-source { font-size:.65rem; color:var(--gray-600); margin-top:3px; }
+        .lib-variant-picker { margin-top:6px; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:8px; padding:10px 12px; }
+        .lib-variant-picker-label { font-size:.78rem; color:var(--gray-300); margin-bottom:6px; }
+        .lib-variant-picker-option { display:flex; align-items:center; gap:6px; font-size:.78rem; color:var(--gray-200); padding:4px 0; cursor:pointer; }
+        .lib-variant-picker-option input { accent-color: var(--accent); }
 
         /* Milk tab */
         .lib-milk-item { display:flex; flex-direction:column; gap:6px; padding:10px 0; border-bottom:1px solid var(--gray-800); }

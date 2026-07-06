@@ -147,7 +147,7 @@ Importierte Bohnen zeigen in der Bibliothekskarte eine kleine Zeile **„Importi
 
 ### Import von hoppenworth-ploch.de
 
-Dasselbe **🔗 URL**-Feld akzeptiert auch Produkt-URLs von [hoppenworth-ploch.de](https://hoppenworth-ploch.de) (Hoppenworth & Ploch, Frankfurt). Der Import nutzt die strukturierten Produktdaten des Shops und befüllt: Name (z.B. „Shyira Washed - Ruanda"), Rösterei, Tasting Notes als **Geschmacks-Tags**, **Herkunftsland** (aus dem Titel gemappt), Anbau-**Region**, **Varietät**, **Aufbereitung**, **Röstung** (aus den Espresso/Filter-Shop-Tags) und das **Decaf**-Flag bei DECAF-Produkten.
+Dasselbe **🔗 URL**-Feld akzeptiert auch Produkt-URLs von [hoppenworth-ploch.de](https://hoppenworth-ploch.de) (Hoppenworth & Ploch, Frankfurt). Der Import nutzt die strukturierten Produktdaten des Shops und befüllt: Name (z.B. „Shyira Washed - Ruanda"), Rösterei, Tasting Notes als **Geschmacks-Tags**, **Herkunftsland** (aus dem Titel gemappt), Anbau-**Region**, **Varietät**, **Aufbereitung**, **Röstung** (aus den Espresso/Filter-Shop-Tags) und das **Decaf**-Flag bei DECAF-Produkten. Bietet der Shop dieselbe Bohne in mehreren Größen zu unterschiedlichen Preisen an, fragt ein Picker vor dem Ausfüllen des Formulars welche Größe gekauft wurde — Preis und Gewicht der gewählten Größe werden zusammen übernommen, damit sie immer zusammenpassen.
 
 ### Import von elbgold.com
 

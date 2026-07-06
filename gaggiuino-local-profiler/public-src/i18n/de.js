@@ -214,6 +214,7 @@ export default {
     maint_log_shots:'Shots bei Wartung', maint_log_machine:'Maschine', maint_log_manual_badge:'manuell',
     lib_scan_barcode:'⬛ Scan', lib_url_import:'🔗 URL', lib_url_placeholder:'kaffeebraun.com / hoppenworth-ploch.de …',
     lib_url_btn:'Importieren', lib_url_importing:'Importiere …',
+    lib_variant_picker_label:'Welche Packungsgröße hast du gekauft?', lib_variant_picker_confirm:'Übernehmen',
     lib_url_error:'Fehler beim Importieren', lib_url_unsupported:'Nicht unterstützte Website',
     lib_imported_from:(src,date)=>`Importiert von ${src} · ${date}`,
     scan_title:'Barcode / QR scannen', scan_attribution:'Produktdaten von', scan_close:'Schließen',

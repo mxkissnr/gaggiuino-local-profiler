@@ -227,6 +227,7 @@ export default {
     lib_url_import:'🔗 URL',
     lib_url_placeholder:'kaffeebraun.com / hoppenworth-ploch.de …',
     lib_url_btn:'Import',
+    lib_variant_picker_label:'Which size did you buy?', lib_variant_picker_confirm:'Use this',
     lib_url_importing:'Importing …',
     lib_url_error:'Import failed',
     lib_url_unsupported:'Unsupported website',
