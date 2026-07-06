@@ -45,6 +45,8 @@ RUN set -eux; \
 # Runtime stage — only copies pre-built artifacts; no compilation at all
 FROM node:20-slim
 
+ENV NODE_ENV=production
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends wget fonts-liberation \

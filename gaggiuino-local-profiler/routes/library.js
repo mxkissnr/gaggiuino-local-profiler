@@ -6,85 +6,10 @@ const libraryService = require('../lib/services/LibraryService');
 const { imagePath, CONTENT_TYPE_EXT, deleteBeanImage, deleteImage, saveUploadedImage } = require('../lib/services/ImageService');
 const { BEAN_IMAGE_MAX_BYTES } = require('../lib/constants');
 const { rateLimit } = require('../lib/helpers');
-
-// Origin is an ISO 3166-1 alpha-2 country code (join key for the origin map);
-// anything else is dropped rather than stored.
-function sanitizeOrigin(v) {
-    if (typeof v !== 'string') return '';
-    const code = v.trim().toUpperCase();
-    return /^[A-Z]{2}$/.test(code) ? code : '';
-}
-
-// Blend-capable origins: an array of { code, percent? }. Percent is an
-// optional weighting used by the world map (see LibraryService/analytics);
-// it does not need to sum to 100 across entries — it's a weight, not a
-// validated composition. Deduped by code, capped at 5 (blends realistically
-// rarely exceed 3-4 components).
-function sanitizeOrigins(v) {
-    if (!Array.isArray(v)) return [];
-    const seen = new Set();
-    const out  = [];
-    for (const item of v) {
-        const code = sanitizeOrigin(item?.code);
-        if (!code || seen.has(code)) continue;
-        seen.add(code);
-        let percent = null;
-        if (item?.percent !== undefined && item.percent !== null && item.percent !== '') {
-            const n = parseFloat(item.percent);
-            if (Number.isFinite(n) && n >= 0 && n <= 100) percent = Math.round(n * 10) / 10;
-        }
-        out.push(percent !== null ? { code, percent } : { code });
-        if (out.length >= 5) break;
-    }
-    return out;
-}
-
-const ROAST_TYPES = new Set(['espresso', 'filter', 'omni']);
-function sanitizeRoastType(v) {
-    return typeof v === 'string' && ROAST_TYPES.has(v) ? v : '';
-}
-
-// Flavors are short tags (chips UI); dedupe case-insensitively, cap counts.
-function sanitizeFlavors(v) {
-    if (!Array.isArray(v)) return [];
-    const seen = new Set();
-    const out  = [];
-    for (const item of v) {
-        if (typeof item !== 'string') continue;
-        const s = item.trim().slice(0, 50);
-        if (!s) continue;
-        const key = s.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push(s);
-        if (out.length >= 20) break;
-    }
-    return out;
-}
-
-function sanitizeAltitude(v) {
-    const n = parseInt(v, 10);
-    return Number.isFinite(n) && n >= 0 && n <= 3000 ? n : null;
-}
-
-function sanitizePrice(v) {
-    const n = parseFloat(v);
-    return Number.isFinite(n) && n >= 0 && n <= 500 ? Math.round(n * 100) / 100 : null;
-}
-
-// Roaster brew recommendation — manual-only (no import source provides these
-// as structured data; see DOCS). Sensible ranges: 80-100°C covers filter
-// through near-boiling pour-over, 5-300s covers espresso through cold-adjacent
-// filter brews.
-function sanitizeBrewTemp(v) {
-    const n = parseFloat(v);
-    return Number.isFinite(n) && n >= 80 && n <= 100 ? Math.round(n * 10) / 10 : null;
-}
-
-function sanitizeBrewTime(v) {
-    const n = parseInt(v, 10);
-    return Number.isFinite(n) && n >= 5 && n <= 300 ? n : null;
-}
+const {
+    sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeFlavors,
+    sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime,
+} = require('../lib/sanitize-bean');
 
 router.get('/api/library', (req, res) => {
     res.json(loadLibrary());

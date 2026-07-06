@@ -3,7 +3,7 @@ if (typeof File === 'undefined') {
     try { global.File = require('buffer').File; } catch (_) { global.File = class File {}; }
 }
 
-const GLP_VERSION  = '1.104.0';
+const GLP_VERSION  = '1.104.1';
 const DEFAULT_PORT = 8099;
 
 const DATA_DIR             = '/data';
@@ -29,7 +29,8 @@ const ALLOWED_IMPORT_HOSTS  = ['kaffeebraun.com', 'www.kaffeebraun.com',
 // its CDN — never an arbitrary URL a client sends.
 const ALLOWED_IMAGE_HOSTS  = [...ALLOWED_IMPORT_HOSTS, 'cdn.shopify.com'];
 const BEAN_IMAGE_DIR       = '/data/bean-images';
-const BEAN_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024;
+const BEAN_IMAGE_MAX_BYTES  = 1.5 * 1024 * 1024;
+const IMPORT_FETCH_MAX_BYTES = 5 * 1024 * 1024; // product JSON/HTML pages, generous for Shopify's inline data
 
 const LOW_STOCK_THRESHOLD_G = 100; // remaining grams below which a bean counts as low stock
 
@@ -68,5 +69,5 @@ module.exports = {
     WARM_TEMP_MIN, WARM_OFF_MAX_MS,
     DEFAULT_MENU, MAINTENANCE_DEFAULTS, STATIC_MAINTENANCE_TASKS,
     LOW_STOCK_THRESHOLD_G,
-    ALLOWED_IMAGE_HOSTS, BEAN_IMAGE_DIR, BEAN_IMAGE_MAX_BYTES,
+    ALLOWED_IMAGE_HOSTS, BEAN_IMAGE_DIR, BEAN_IMAGE_MAX_BYTES, IMPORT_FETCH_MAX_BYTES,
 };

@@ -1,3 +1,8 @@
+## [1.104.1] – 2026-07-06
+
+### Fixed
+- **Security audit round: 3 findings closed.** (1) `/api/restore` only structurally validated `shots[]` — `coffee_library` and `annotations` were persisted without the same sanitizers the regular POST/PUT bean/grinder/recipe/annotate routes apply, so a crafted backup could inject unsanitized strings that later render in the frontend. Extracted the bean/grinder/recipe field sanitizers from `routes/library.js` into a shared `lib/sanitize-bean.js` (used by both the regular routes and restore now, instead of drifting duplicates), and restore annotations now go through `annotationSchema.safeParse()` like the regular annotate route. Closes #268. (2) The import product-page fetch (`routes/import.js`) checked the host allowlist only against the initial URL — axios followed redirects by default, so a 30x from an allowed shop domain (or MITM over the plain `http:` this route also allows) could point the fetch at an internal address without re-validation. Added `maxRedirects: 0` and a `maxContentLength` cap, matching the hardening `ImageService.fetchBeanImage` already had. Closes #269. (3) `npm audit` flagged 3 production-dependency vulnerabilities (`form-data` high/CRLF-injection, `undici` high/TLS-bypass, `js-yaml` moderate/DoS) plus 2 dev-dependency ones (`vite`, `vitest`) — all fixed via `npm audit fix` / non-major version bumps within the same major line. `npm audit` now reports 0 vulnerabilities. Closes #270.
+
 ## [1.104.0] – 2026-07-06
 
 ### Changed

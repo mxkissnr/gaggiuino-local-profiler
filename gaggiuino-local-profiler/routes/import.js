@@ -2,12 +2,18 @@ const express  = require('express');
 const axios    = require('axios');
 const router   = express.Router();
 
-const { ALLOWED_IMPORT_HOSTS } = require('../lib/constants');
+const { ALLOWED_IMPORT_HOSTS, IMPORT_FETCH_MAX_BYTES } = require('../lib/constants');
 const { parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, shopifyJsonUrl } = require('../lib/import-parsers');
 
+// maxRedirects: 0 matters here — the host allowlist below is only checked
+// against the *initial* URL, so without this a 30x from an allowed shop
+// domain (or a MITM on plain http:) could silently redirect the fetch to an
+// internal address. Mirrors the same hardening in ImageService.fetchBeanImage.
 const FETCH_OPTS = {
     headers: { 'User-Agent': 'GLP/1.0 (Gaggiuino Local Profiler; private use)' },
     timeout: 8000,
+    maxRedirects: 0,
+    maxContentLength: IMPORT_FETCH_MAX_BYTES,
 };
 
 // Shopify variants often combine two option dimensions (e.g. size × grind

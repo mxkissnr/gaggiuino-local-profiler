@@ -5,6 +5,23 @@ const libService   = require('../lib/services/LibraryService');
 const { GLP_VERSION, MAX_SHOT_ID } = require('../lib/constants');
 const { log, rateLimit }           = require('../lib/helpers');
 const { getDb }                    = require('../lib/db');
+const { annotationSchema }         = require('../lib/validation/schemas');
+const { sanitizeBeanFields, sanitizeGrinderFields, sanitizeRecipeFields } = require('../lib/sanitize-bean');
+
+// A restored coffee_library bypasses the regular POST/PUT bean/grinder/recipe
+// routes entirely (it's written straight to the DB), so it never went through
+// their field sanitizers — a crafted backup could otherwise inject
+// unsanitized strings (e.g. into bean.notes/flavors) that later render
+// unescaped in the frontend. Re-run the same per-field sanitizers here.
+function sanitizeRestoredLibrary(lib) {
+    if (!lib || typeof lib !== 'object') return lib;
+    return {
+        ...lib,
+        beans:    Array.isArray(lib.beans) ? lib.beans.map(sanitizeBeanFields) : lib.beans,
+        grinders: Array.isArray(lib.grinders) ? lib.grinders.map(sanitizeGrinderFields) : lib.grinders,
+        recipes:  Array.isArray(lib.recipes) ? lib.recipes.map(sanitizeRecipeFields) : lib.recipes,
+    };
+}
 
 router.get('/api/backup', (req, res, next) => {
     try {
@@ -63,10 +80,11 @@ router.post('/api/restore', (req, res, next) => {
             for (const shot of b.shots) shotService.upsertShot(shot);
             if (b.annotations && typeof b.annotations === 'object') {
                 for (const [id, ann] of Object.entries(b.annotations)) {
-                    shotService.saveAnnotation(parseInt(id), ann);
+                    const parsed = annotationSchema.safeParse(ann);
+                    if (parsed.success) shotService.saveAnnotation(parseInt(id), parsed.data);
                 }
             }
-            if (b.coffee_library) libService.saveLibrary(b.coffee_library);
+            if (b.coffee_library) libService.saveLibrary(sanitizeRestoredLibrary(b.coffee_library));
             if (Array.isArray(b.blocklist)) shotService.saveBlocklist(b.blocklist.map(Number));
         })();
 

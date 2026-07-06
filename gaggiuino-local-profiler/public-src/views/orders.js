@@ -331,7 +331,7 @@ export async function renderOrdersMenuAdmin(menu) {
     return `
     <div class="orders-menu-item">
       <div class="orders-menu-item-top">
-        <span>${item.emoji}</span>
+        <span>${esc(item.emoji)}</span>
         <span class="orders-menu-item-name">${esc(item.name)}</span>
         <button class="orders-menu-use-beans${useBeans ? ' active' : ''}" data-menu-use-beans="${esc(item.id)}" title="${t('orders_use_beans_toggle')}">🫘</button>
         <button class="orders-menu-use-milks${useMilks ? ' active' : ''}" data-menu-use-milks="${esc(item.id)}" title="${t('orders_use_milks_toggle')}">🥛</button>

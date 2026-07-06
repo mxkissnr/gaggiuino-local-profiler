@@ -13,6 +13,17 @@ const { sendHaNotify, getNotifyServices, getHaPersons } = require('../lib/ha');
 const { log, rateLimit } = require('../lib/helpers');
 const state = require('../lib/state');
 
+// Menu item emoji is user-supplied and rendered in the UI — cap length
+// (generous for multi-codepoint ZWJ emoji sequences) and reject anything
+// containing HTML-special characters so a stray `<img onerror=...>` can't
+// be stored even though the view also escapes it on render (defense in depth).
+function sanitizeEmoji(raw, fallback) {
+    const trimmed = String(raw ?? '').trim();
+    if (!trimmed) return fallback;
+    if (trimmed.length > 8 || /[<>&"']/.test(trimmed)) return fallback;
+    return trimmed;
+}
+
 function _getPreheatInfo() {
     const opts        = loadOptions();
     const preheatMins = Math.max(1, parseInt(opts.preheat_time) || 20);
@@ -83,7 +94,7 @@ router.post('/api/orders/menu', (req, res) => {
     if (!name?.trim()) return res.status(400).json({ error: 'name required' });
     const menu = loadMenu();
     const item = {
-        id: `m_${Date.now()}`, name: name.trim(), emoji: emoji?.trim() || '☕',
+        id: `m_${Date.now()}`, name: name.trim(), emoji: sanitizeEmoji(emoji, '☕'),
         createdAt: Date.now(), trending: false,
         variants: Array.isArray(variants) ? variants.map(v => String(v).trim().slice(0, 50)).filter(Boolean) : [],
         useBeans: !!req.body.useBeans,
@@ -99,7 +110,7 @@ router.put('/api/orders/menu/:id', (req, res) => {
     const item = menu.find(m => m.id === req.params.id);
     if (!item) return res.status(404).json({ error: 'not found' });
     if (req.body?.name?.trim())                       item.name     = req.body.name.trim();
-    if (req.body?.emoji?.trim())                      item.emoji    = req.body.emoji.trim();
+    if (req.body?.emoji?.trim())                      item.emoji    = sanitizeEmoji(req.body.emoji, item.emoji);
     if (typeof req.body?.trending === 'boolean')      item.trending = req.body.trending;
     if (Array.isArray(req.body?.variants))
         item.variants = req.body.variants.map(v => String(v).trim().slice(0, 50)).filter(Boolean);
