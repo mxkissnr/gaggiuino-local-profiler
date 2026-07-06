@@ -104,6 +104,15 @@ Verbindung im HA-Terminal testen:
 curl http://<gaggiuino-ip>/api/shots/latest
 ```
 
+## Als App installieren
+
+Der Port von GLP (`8099` standardmäßig) wird vom Add-on direkt freigegeben — man muss nicht über das Home-Assistant-Dashboard gehen, um darauf zuzugreifen. `http://<ha-host>:8099` direkt im Handy-Browser öffnen und dann zum Homescreen hinzufügen, für eine eigenständige App (eigenes Icon, keine Browser-Adressleiste):
+
+- **Android (Chrome)**: Menü (⋮) öffnen → **App installieren** (Chrome zeigt den Install-Banner oft auch automatisch an).
+- **iOS (Safari)**: Teilen-Icon antippen → **Zum Home-Bildschirm**.
+
+Die App läuft in beiden Fällen im Standalone-Modus, über das bestehende Home-Assistant-Add-on-Backend — nichts weiter zu konfigurieren.
+
 ## Konfigurationsoptionen
 
 | Option | Beschreibung | Standard |

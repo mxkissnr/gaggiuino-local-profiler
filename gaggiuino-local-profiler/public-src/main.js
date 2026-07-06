@@ -1,5 +1,10 @@
 import './style.css';
 
+// Installability only — see public-src/public/sw.js for why it doesn't cache.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
 import { S } from './state.js';
 import { initToken, apiFetch } from './api.js';
 import { t, setLang, applyTranslations } from './i18n.js';
