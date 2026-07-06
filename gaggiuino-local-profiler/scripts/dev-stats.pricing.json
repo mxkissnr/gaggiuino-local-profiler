@@ -1,0 +1,7 @@
+{
+  "_comment": "USD per 1,000,000 tokens, blended input/output average \u2014 purely illustrative. Fill in your actual plan/API rates for models you want priced; anything left null is treated as \"unpriced\" and excluded from the cost total (not treated as free).",
+  "Claude Fable 5": null,
+  "Claude Opus 4.8": null,
+  "Claude Sonnet 4.6": null,
+  "Claude Sonnet 5": null
+}

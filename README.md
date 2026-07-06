@@ -175,7 +175,8 @@ Home Assistant Host
   <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/wiki">📖 Documentation (EN)</a> ·
   <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/wiki/Home-de">📖 Dokumentation (DE)</a> ·
   <a href="gaggiuino-local-profiler/CHANGELOG.md">📋 Changelog</a> ·
-  <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/issues">🐛 Issues</a>
+  <a href="https://github.com/mxkissnr/gaggiuino-local-profiler/issues">🐛 Issues</a> ·
+  <a href="DEVELOPMENT.md">📊 Dev Stats</a>
 </p>
 
 ---
