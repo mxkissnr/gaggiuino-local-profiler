@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### Added
+- **Coffee flavor wheel** — a 🎡 button on beans with tasting notes opens a sunburst chart of the coffee flavor hierarchy (structure after the SCA/WCR Coffee Taster's Flavor Wheel, 2016 — our own derived data with German + English labels, no original artwork used) with the bean's matched flavors and their ancestor categories highlighted, everything else dimmed. Matching goes exact label → German alias table (`Zartbitterschokolade` → dark chocolate, `Nougat` → hazelnut, …) → word-boundary containment (`getrocknete Aprikose` → apricot), diacritics-insensitive; unmatched flavors are listed as plain chips below the wheel. Rendered with ECharts (already loaded for the world map); the matching logic lives in `flavor-match.js`, framework-free and unit-tested independently of the DOM. Closes #238
+
 ### Changed
 - **Interactive world map** — the Statistics origin map now runs on Apache ECharts instead of chartjs-chart-geo: scroll/pinch to zoom, drag to pan, and each bean shows as a pulsing point at its geocoded region (or a jittered country centroid as fallback) alongside the shot-count choropleth. The vendored topojson is unchanged, converted client-side via topojson-client; both libraries come from the CDN with the same offline guard and empty state as before. Closes #237
 

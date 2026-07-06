@@ -190,6 +190,8 @@ Inspired by [BeanConqueror](https://github.com/graphefruit/beanconqueror) by gra
 
 Built on top of the [Gaggiuino](https://gaggiuino.github.io/) project. The machine sensor integration in glp-integration was inspired by [ALERTua/hass-gaggiuino](https://github.com/ALERTua/hass-gaggiuino) — the original Home Assistant integration for Gaggiuino. Thank you to [@ALERTua](https://github.com/ALERTua) for pioneering the HA connectivity concepts that made this possible.
 
+The in-app flavor wheel's category structure follows the SCA (Specialty Coffee Association) / WCR (World Coffee Research) *Coffee Taster's Flavor Wheel* (2016). `public-src/flavor-data.js` is our own derived dataset (English + German labels and a German alias table) — no artwork from the original wheel is used or reproduced.
+
 ---
 
 <p align="center">

@@ -28,6 +28,7 @@ import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode,
          renderMaintenanceCards, maintStatusLabel, _buildMaintCard,
          openMaintLogForm, closeMaintLogForm, submitMaintLogEntry, deleteMaintLogEntry,
          openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState } from './views/maintenance.js';
+import { openFlavorWheel, closeFlavorWheel } from './components/flavor-wheel.js';
 
 import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled,
          toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify,
@@ -503,6 +504,8 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'open-guided-maint':  openGuidedMaint(el.dataset.task); break;
       case 'guided-maint-done':  submitGuidedMaint(); break;
       case 'guided-maint-cancel': closeGuidedMaint(); break;
+      case 'open-flavor-wheel':   openFlavorWheel(numId()); break;
+      case 'close-flavor-wheel':  closeFlavorWheel(); break;
       case 'delete-maint-log':   deleteMaintLogEntry(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
     }
