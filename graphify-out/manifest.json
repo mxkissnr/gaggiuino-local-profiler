@@ -25,8 +25,8 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/constants.js": {
-    "mtime": 1782519496.4129694,
-    "ast_hash": "0f1cb8db9b0979055651a2b8a04d91ab",
+    "mtime": 1783330521.000213,
+    "ast_hash": "f31949f45fe9f4e93288db50dd4d2a89",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/data.js": {
@@ -35,8 +35,8 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/ha.js": {
-    "mtime": 1782475956.3689094,
-    "ast_hash": "182171ffe209cc91a5a694677f288ed6",
+    "mtime": 1783009419.50935,
+    "ast_hash": "5348f34834833bd0fcef4cd1ba65efbf",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/helpers.js": {
@@ -50,8 +50,8 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/notify-i18n.js": {
-    "mtime": 1782475956.3703718,
-    "ast_hash": "e66c86409ce9c292d5ff1dd8102af302",
+    "mtime": 1783263734.1755438,
+    "ast_hash": "f4520df2de44db1b6273d54cbf3c4666",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/score.js": {
@@ -65,8 +65,8 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/package.json": {
-    "mtime": 1782501362.5928433,
-    "ast_hash": "dd34001b97e031308212baa83f999100",
+    "mtime": 1783330521.000213,
+    "ast_hash": "76a870084c9207ff4a49c43d0caf95c9",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/api.js": {
@@ -80,13 +80,13 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/components/sidebar.js": {
-    "mtime": 1782475956.3754914,
-    "ast_hash": "9be0dfd102be6fcaf9ad38a89b6ad44a",
+    "mtime": 1783330521.000213,
+    "ast_hash": "dadb39a45590f0c2b0fb993aeaca08fb",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/components/status.js": {
-    "mtime": 1782475956.3754914,
-    "ast_hash": "3d137461d9f095425d77800fccaae12c",
+    "mtime": 1783023736.7811944,
+    "ast_hash": "250b8885a21ac17ec6667c1985b9ffe8",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/components/update-check.js": {
@@ -95,63 +95,63 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/constants.js": {
-    "mtime": 1782475956.3754914,
-    "ast_hash": "d3c87e74a9c5898f63bd6b93f3015eda",
+    "mtime": 1783315533.9674804,
+    "ast_hash": "f3543488e661aeea4accae8d252daeb7",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/i18n.js": {
-    "mtime": 1782475956.3754914,
-    "ast_hash": "a143deae553c96e255e58da7a03f5652",
+    "mtime": 1783023736.7811944,
+    "ast_hash": "7d7956d0c77b23ed07099d9625e31a67",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/i18n/de.js": {
-    "mtime": 1782516858.6644387,
-    "ast_hash": "67bf0993a26400398656687e89efe7f0",
+    "mtime": 1783330521.000213,
+    "ast_hash": "8deb44ea8ba5778678e89e73a1832524",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/i18n/en.js": {
-    "mtime": 1782516873.4285846,
-    "ast_hash": "d934a26398044a81a6d05ac515429711",
+    "mtime": 1783330521.000213,
+    "ast_hash": "f39b8ddc551c6f5c65b1e93af4b3ac8a",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/i18n/es.js": {
-    "mtime": 1782516874.5685956,
-    "ast_hash": "3df1b1a5bff1cbc9dd5b0ed4f736d401",
+    "mtime": 1783330521.000213,
+    "ast_hash": "a540db179ff06023d712ad5f400b8cbc",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/i18n/fr.js": {
-    "mtime": 1782516875.7886076,
-    "ast_hash": "f9c850306b6c3bd9f3b2df35a567d3c5",
+    "mtime": 1783330521.000213,
+    "ast_hash": "96e4bf119b16f4bf27fa03aae188089a",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/i18n/it.js": {
-    "mtime": 1782516876.8886182,
-    "ast_hash": "1ab66bed93a059ae66ac7951a443a6a3",
+    "mtime": 1783330521.000213,
+    "ast_hash": "d518ee94091284a65eba765d88d12cb6",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/i18n/nl.js": {
-    "mtime": 1782516878.1646307,
-    "ast_hash": "052e1d8bc00bf7003bb4e353bc141ce6",
+    "mtime": 1783330521.000213,
+    "ast_hash": "e92600c2ebba63b13d3f9ddd80556c64",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/main.js": {
-    "mtime": 1782516826.664109,
-    "ast_hash": "559206496ee3a3725c17266c6ed2bb5d",
+    "mtime": 1783330521.000213,
+    "ast_hash": "875e1d6a35f89ae78e814202dee2dd0f",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/state.js": {
-    "mtime": 1782475956.3771496,
-    "ast_hash": "f7fe84bf194fb957bf66f13dc2a84ccf",
+    "mtime": 1783009419.51335,
+    "ast_hash": "792b55fe95854a057be5d46ce00177c3",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/utils.js": {
-    "mtime": 1782475956.3771496,
-    "ast_hash": "480319f59fde13818d0570c6a3592a38",
+    "mtime": 1783330521.000213,
+    "ast_hash": "a403e0cf215107352b09040858714f17",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/views/analytics.js": {
-    "mtime": 1782475956.3771496,
-    "ast_hash": "078907c7de57ac704898053784565dd6",
+    "mtime": 1783315533.9714806,
+    "ast_hash": "12103e4ffc2581b48fbcb45ccfb4cee8",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/views/dialin.js": {
@@ -160,8 +160,8 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/views/library.js": {
-    "mtime": 1782475956.3804379,
-    "ast_hash": "4ce3ed0ad67e97bd3b1f52ef54453f5d",
+    "mtime": 1783330521.000213,
+    "ast_hash": "3f0e29c8c5fb4cfb5de2a1b30bddaa7a",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/views/live.js": {
@@ -170,13 +170,13 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/views/maintenance.js": {
-    "mtime": 1782475956.3804379,
-    "ast_hash": "33b2152029d0066066b5ee94a3350162",
+    "mtime": 1783263734.1795437,
+    "ast_hash": "d303475cf2930bf35f21ff12aafbd4a3",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/views/orders.js": {
-    "mtime": 1782475956.3804379,
-    "ast_hash": "c386f80b7edd4683490c19ad89bed604",
+    "mtime": 1783330521.004213,
+    "ast_hash": "157e8ad590779d97af2feb1a805e2a21",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/views/shots.js": {
@@ -185,18 +185,18 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/routes/backup.js": {
-    "mtime": 1782475956.3815918,
-    "ast_hash": "7740a793d101ff88660d55fb4de8b971",
+    "mtime": 1783009751.6800456,
+    "ast_hash": "5eb65f93b701ba386a59a76bc6797185",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/routes/import.js": {
-    "mtime": 1782475956.3820832,
-    "ast_hash": "7bf8ef994ac600622138189a214c97cf",
+    "mtime": 1783315533.9714806,
+    "ast_hash": "007cc80d707e7f6149d5598fad9c8c43",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/routes/library.js": {
-    "mtime": 1782475956.3820832,
-    "ast_hash": "f23e782fdd3a28a14e3a7176e86213fd",
+    "mtime": 1783330521.004213,
+    "ast_hash": "c01be98532c7e3e998f5b9a6b07a3075",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/routes/maintenance.js": {
@@ -205,23 +205,23 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/routes/orders.js": {
-    "mtime": 1782475956.3820832,
-    "ast_hash": "715287003d680e8dab8397ec27d4cb60",
+    "mtime": 1783330521.004213,
+    "ast_hash": "e74bd3e8d0d04f3fe0e0bd17686a8df8",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/routes/shots.js": {
-    "mtime": 1782517746.5082347,
-    "ast_hash": "0a8ad72b129da1801534a836cfc02b33",
+    "mtime": 1783263734.1795437,
+    "ast_hash": "e388a23f66474a0aaa8baaf4f0a030c2",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/routes/system.js": {
-    "mtime": 1782475956.3820832,
-    "ast_hash": "cbcce04f1221d5f0e69781dca7f9801c",
+    "mtime": 1783090827.723424,
+    "ast_hash": "9bf9a1018911ab7f3806c21088d0f5ed",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/server.js": {
-    "mtime": 1782475956.3820832,
-    "ast_hash": "3bb6a9158370eaf4ea0aec866dbd4db0",
+    "mtime": 1783315533.9714806,
+    "ast_hash": "90032b5d3e7f0d9931807b3976252733",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/vite.config.js": {
@@ -250,8 +250,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1782475956.361795,
-    "ast_hash": "fe636b0ed5c2a7173458f4025e557558",
+    "mtime": 1783281021.9089081,
+    "ast_hash": "6cad9cf331e78168ced56a7761c6b81e",
     "semantic_hash": ""
   },
   "CODE_OF_CONDUCT.md": {
@@ -265,8 +265,8 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1782501362.5888433,
-    "ast_hash": "f7dbca25dccedbf72d773d780527e286",
+    "mtime": 1783330520.9962127,
+    "ast_hash": "9d2f1f8a9489570de60b91d7a414dce4",
     "semantic_hash": ""
   },
   "SECURITY.md": {
@@ -300,18 +300,18 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/CHANGELOG.md": {
-    "mtime": 1782519506.6004555,
-    "ast_hash": "24a88d315692fe2bffd0ef2763366281",
+    "mtime": 1783330520.9962127,
+    "ast_hash": "7108373fd29debff2ebd59ce13d7089c",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/DOCS.de.md": {
-    "mtime": 1782518936.8282526,
-    "ast_hash": "cd92b78539a3b069df52963044e87c6e",
+    "mtime": 1783330520.9962127,
+    "ast_hash": "0f71f7d8d93b19e8601b0d26cd909bce",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/DOCS.md": {
-    "mtime": 1782518930.4842038,
-    "ast_hash": "365c1895f2885bf6f0f238ffc61806b7",
+    "mtime": 1783330520.9962127,
+    "ast_hash": "fc50cb73d9fff6c94653163a340b14e6",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/build.yaml": {
@@ -320,18 +320,18 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/config.yaml": {
-    "mtime": 1782519496.414835,
-    "ast_hash": "08011734ede8fa51bbbaf2a535234911",
+    "mtime": 1783330520.9962127,
+    "ast_hash": "218b65c3f2cfad2fdab141252c054c2b",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/openapi.yaml": {
-    "mtime": 1782475956.3722322,
-    "ast_hash": "9833e063706662d629c7c1e40e9195c9",
+    "mtime": 1783263734.1755438,
+    "ast_hash": "8eec4cf9bc46b1f53d23a5c9a32aa60d",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/index.html": {
-    "mtime": 1782516772.3475006,
-    "ast_hash": "4529cb77ad2ed137c677c6a45ba064a7",
+    "mtime": 1783330521.000213,
+    "ast_hash": "2efb9f33848b313d24ca79d2232733fb",
     "semantic_hash": ""
   },
   "glp-ha-theme.yaml": {
@@ -380,7 +380,7 @@
     "semantic_hash": ""
   },
   ".memsearch/memory/2026-06-24.md": {
-    "mtime": 1782337726.5027537,
+    "mtime": 1783009419.5053937,
     "ast_hash": "a5cbb3ebd11eda5db714e905b7992212",
     "semantic_hash": ""
   },
@@ -400,18 +400,18 @@
     "semantic_hash": ""
   },
   ".memsearch/memory/2026-06-25.md": {
-    "mtime": 1782408188.0298266,
+    "mtime": 1783009419.5060043,
     "ast_hash": "53e427193833483c0a8f22d6fe4ad9f8",
     "semantic_hash": ""
   },
   ".memsearch/memory/2026-06-26.md": {
-    "mtime": 1782502152.6491773,
+    "mtime": 1783009419.5060043,
     "ast_hash": "3350d46fac48dae6b27903daede981e4",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/db.js": {
-    "mtime": 1782478509.7585263,
-    "ast_hash": "24118b6a6b1fa333976032296f2f4317",
+    "mtime": 1783009751.6760457,
+    "ast_hash": "c7f775a84468399d35bcddeea7f197b3",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/middleware/error.js": {
@@ -425,8 +425,8 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/repositories/LibraryRepository.js": {
-    "mtime": 1782475956.3703718,
-    "ast_hash": "89edd3145862a4469870ed86f978ff96",
+    "mtime": 1783263734.1755438,
+    "ast_hash": "6a0be36e649dc6b2d836468990f06337",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/repositories/OrderRepository.js": {
@@ -435,8 +435,8 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/repositories/ShotRepository.js": {
-    "mtime": 1782475956.371282,
-    "ast_hash": "31a8c0f47dcca78083be54bd2cfaaac3",
+    "mtime": 1783090827.723424,
+    "ast_hash": "24c92ac0208895653bfc309af9fc35f9",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/repositories/index.js": {
@@ -445,8 +445,8 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/services/LibraryService.js": {
-    "mtime": 1782475956.371282,
-    "ast_hash": "f0e8dacda226dc30bb4225142b70f65e",
+    "mtime": 1783330521.000213,
+    "ast_hash": "9e6e0812f3820aab281c5a645200d3a8",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/services/OrderService.js": {
@@ -465,8 +465,8 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/validation/schemas.js": {
-    "mtime": 1782475956.3722322,
-    "ast_hash": "58c5b3faff163a56eb3d876e1da6dcc6",
+    "mtime": 1783263734.1755438,
+    "ast_hash": "e65e7d5ee2b2c1d5e67ff13707d3e81f",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/test/score.test.js": {
@@ -495,13 +495,13 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/views/shots/grind.js": {
-    "mtime": 1782475956.3815918,
-    "ast_hash": "ea04ce033c17f2c475c08b3de396511a",
+    "mtime": 1783263734.1795437,
+    "ast_hash": "cc07683237dc3a5ab25f216aede37f7a",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/views/shots/index.js": {
-    "mtime": 1782516845.7883084,
-    "ast_hash": "7fd8310dc27da18b9bea45ee4d891f7e",
+    "mtime": 1783330521.004213,
+    "ast_hash": "27ff63cae6d05ac3b2eaaa5de1671bd0",
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/public-src/views/shots/utils.js": {
@@ -510,13 +510,198 @@
     "semantic_hash": ""
   },
   "gaggiuino-local-profiler/lib/card.js": {
-    "mtime": 1782519483.1202874,
+    "mtime": 1783009419.5060043,
     "ast_hash": "7437b37738853275ec48494a5a2f77df",
     "semantic_hash": ""
   },
   ".memsearch/memory/2026-06-27.md": {
-    "mtime": 1782518955.0123923,
-    "ast_hash": "ae09ccd1fe349d3ce93a1285775c167c",
+    "mtime": 1783009419.5060043,
+    "ast_hash": "5075e9f950b4a123a07f3d046f519eaf",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/backup.test.js": {
+    "mtime": 1783009751.6800456,
+    "ast_hash": "469c5a4a6c557cff11a49182ce96e4d1",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/i18n.test.js": {
+    "mtime": 1783090827.723424,
+    "ast_hash": "e8bec476269c339a34f3985c42a3d23e",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/db-routes.test.js": {
+    "mtime": 1783330521.0049083,
+    "ast_hash": "7c373043ee8bc3fb7fbbb6feb629acf1",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/coffee-countries.js": {
+    "mtime": 1783315533.9674804,
+    "ast_hash": "8716f5b13422cf4c96d59a162dcdecde",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/coffee-countries.test.js": {
+    "mtime": 1783263734.1795437,
+    "ast_hash": "87e94e57571ff72884ba25ac1b28aabc",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/import-parsers.js": {
+    "mtime": 1783315533.9674804,
+    "ast_hash": "46f063134a795b9a4cfacbb150f649e4",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/fixtures/hoplo-shyira.json": {
+    "mtime": 1783263734.1795437,
+    "ast_hash": "53267cb810c3c19702aaeda61c9c764c",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/import-parsers.test.js": {
+    "mtime": 1783315533.9714806,
+    "ast_hash": "4622d94f79684ec98031ab8371170af2",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/public/countries-110m.json": {
+    "mtime": 1783263734.1795437,
+    "ast_hash": "0aa0a4363768f1e281ef8b92100c2592",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/freshness.test.js": {
+    "mtime": 1783263734.1795437,
+    "ast_hash": "c31e39b3858a78e9a615f6a5124ab307",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/low-stock-notify.test.js": {
+    "mtime": 1783263734.1795437,
+    "ast_hash": "1b037bb5badcb959c96355950475b2d7",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/brew-ratio.test.js": {
+    "mtime": 1783263734.1795437,
+    "ast_hash": "507017eedccb4ea98d74b8bce84924d8",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/notes-migration.test.js": {
+    "mtime": 1783315533.9714806,
+    "ast_hash": "c0e897b78757c6c6a4080c46386cf111",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/geo.js": {
+    "mtime": 1783315533.9674804,
+    "ast_hash": "ce0c6c89b526681f43a2a0bbec4f0fce",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/geo.test.js": {
+    "mtime": 1783315533.9714806,
+    "ast_hash": "18be4246c7bed3e3ba44a07ca842224a",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/fixtures/elbgold-bombe.json": {
+    "mtime": 1783315533.9714806,
+    "ast_hash": "e997aa5eab9c8d3fa799323b2668faae",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/fixtures/elbgold-kenia-decaf.json": {
+    "mtime": 1783315533.9714806,
+    "ast_hash": "ffc8e49c0919177e7e74953dd98b5b59",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/fixtures/elbgold-la-maravilla.json": {
+    "mtime": 1783315533.9714806,
+    "ast_hash": "84c6375a6e801a5d29c4e0dde80839b0",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/components/flavor-wheel.js": {
+    "mtime": 1783315533.9674804,
+    "ast_hash": "5b9b4a91bc641d371937d9a3263a40df",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/flavor-data.js": {
+    "mtime": 1783315533.9674804,
+    "ast_hash": "f674b425cb03aafa28542dec74327b45",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/flavor-match.js": {
+    "mtime": 1783315533.9714806,
+    "ast_hash": "f3d97b5ac8658f10298655f207c0d539",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/flavor-match.test.js": {
+    "mtime": 1783315533.9714806,
+    "ast_hash": "409c03c0529e29e4a4804345c6eb3967",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/lib/services/ImageService.js": {
+    "mtime": 1783330521.000213,
+    "ast_hash": "a91274c0804ba200692c92b87bcc3f9b",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/public-src/bean-image.js": {
+    "mtime": 1783330521.000213,
+    "ast_hash": "8172cfb6af8d6d51f0d1fd7b55090bbe",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/bean-image.test.js": {
+    "mtime": 1783330521.0049083,
+    "ast_hash": "0f43203fbd9195a6168c3cde77123e8e",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/bean-rating.test.js": {
+    "mtime": 1783315533.9714806,
+    "ast_hash": "8d49dd357d605e844b960961e92932b2",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/test/share-or-download.test.js": {
+    "mtime": 1783330521.0049083,
+    "ast_hash": "2d6ba119d24cf4cbf3786853a7e52ce5",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/scripts/dev-stats.mjs": {
+    "mtime": 1783330521.004213,
+    "ast_hash": "74dc7ac58b7373f25c783dea409435e9",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/scripts/dev-stats.pricing.json": {
+    "mtime": 1783330521.0049083,
+    "ast_hash": "4eaaaea2ec5d09402a4019da89a2ac47",
+    "semantic_hash": ""
+  },
+  "DEVELOPMENT.md": {
+    "mtime": 1783330520.9962127,
+    "ast_hash": "c2069722f091ce70f22841e5b7cd372a",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/scripts/screenshots.mjs": {
+    "mtime": 1783330521.0049083,
+    "ast_hash": "8649b77cf09e0ecfcf77868e8248ac1e",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/docs/screenshots/analytics.png": {
+    "mtime": 1783330520.9981043,
+    "ast_hash": "eff33ad83353347c0092f4dc34ecdd55",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/docs/screenshots/dialin.png": {
+    "mtime": 1783330520.998763,
+    "ast_hash": "6de9fc7e886bc3f627feafa6c654534d",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/docs/screenshots/flavor-wheel.png": {
+    "mtime": 1783330520.998763,
+    "ast_hash": "8ce3176de07cb5649756cafc7814a69d",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/docs/screenshots/library.png": {
+    "mtime": 1783330520.998763,
+    "ast_hash": "370f16811e9da72f471dc7360c7a7da1",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/docs/screenshots/maintenance.png": {
+    "mtime": 1783330521.000213,
+    "ast_hash": "b5d0c1c6270af9259e83a7b82a9d0655",
+    "semantic_hash": ""
+  },
+  "gaggiuino-local-profiler/docs/screenshots/shots.png": {
+    "mtime": 1783330521.000213,
+    "ast_hash": "16def9036049c45351c5c0d54e27f172",
     "semantic_hash": ""
   }
 }
