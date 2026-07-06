@@ -1,3 +1,8 @@
+## [1.102.1] – 2026-07-06
+
+### Fixed
+- **Reverted the v1.102.0 installable-PWA service worker — it broke the live shot graph in the Home Assistant mobile companion app.** v1.102.0 added `manifest.json` + a service worker so "Add to Home Screen" would give a standalone app instead of a bookmarked tab. In production this broke the live shot graph inside the HA companion app, which loads GLP through HA ingress — most likely the service worker's fetch interception misbehaving inside that embedded ingress WebView (the live view just polls `/api/system/status` every second via plain `fetch()`, not a persistent stream, so this isn't a streaming-response issue). Separately, the PWA goal wasn't even fully met on a real device either: Android Edge over the LAN's plain `http://` address only offered "Add to shortcut," never the full "Install app" — expected, since service workers (and Chromium's full install criteria) require a secure context, which a plain-HTTP LAN address never is. Reverted entirely (`manifest.json`, `sw.js`, the registration in `main.js`, and the "Install as an app" docs section) back to v1.101.0 behavior. See #260.
+
 ## [1.101.0] – 2026-07-06
 
 ### Added
