@@ -107,6 +107,30 @@ describe('POST /api/orders/:id/complete', () => {
     });
 });
 
+describe('GET /api/orders/stats', () => {
+    it('groups case/whitespace variants of the same customer into one card', async () => {
+        const now = Date.now();
+        saveOrders([
+            { id: 'a', item: 'Espresso', customer: 'Max', status: 'done', createdAt: now, completedAt: now },
+            { id: 'b', item: 'Espresso', customer: 'max', status: 'done', createdAt: now + 1000, completedAt: now + 1000 },
+            { id: 'c', item: 'Cappuccino', customer: 'Max ', status: 'done', createdAt: now + 2000, completedAt: now + 2000 },
+        ]);
+        const stats = await (await fetch(`${baseUrl}/api/orders/stats`)).json();
+        expect(stats.customers).toHaveLength(1);
+        expect(stats.customers[0]).toMatchObject({ name: 'Max ', count: 3, favItem: 'Espresso', lastAt: now + 2000 });
+    });
+
+    it('keeps distinct customers separate', async () => {
+        const now = Date.now();
+        saveOrders([
+            { id: 'a', item: 'Espresso', customer: 'Max', status: 'done', createdAt: now, completedAt: now },
+            { id: 'b', item: 'Espresso', customer: 'Anna', status: 'done', createdAt: now + 1000, completedAt: now + 1000 },
+        ]);
+        const stats = await (await fetch(`${baseUrl}/api/orders/stats`)).json();
+        expect(stats.customers.map(c => c.name).sort()).toEqual(['Anna', 'Max']);
+    });
+});
+
 describe('orders-disabled guard', () => {
     it('does not swallow non-orders routes mounted after the orders router', async () => {
         ordersEnabled = false;

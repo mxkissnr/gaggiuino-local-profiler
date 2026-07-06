@@ -247,21 +247,24 @@ router.get('/api/orders/stats', (req, res) => {
     const done = loadOrders().filter(o => o.status === 'done');
     if (!done.length) return res.json({ total: 0, customers: [], mostPopular: null });
 
+    // Group by a normalized key so "Max"/"max"/"Max " count as one customer;
+    // the display name shown is whichever spelling appeared most recently.
     const byCustomer = {};
     const byItem     = {};
     for (const o of done) {
-        if (!byCustomer[o.customer]) byCustomer[o.customer] = { count: 0, items: {}, lastAt: 0 };
-        byCustomer[o.customer].count++;
-        byCustomer[o.customer].items[o.item] = (byCustomer[o.customer].items[o.item] || 0) + 1;
+        const key = String(o.customer || '').trim().toLowerCase();
+        if (!byCustomer[key]) byCustomer[key] = { name: o.customer, count: 0, items: {}, lastAt: 0 };
+        byCustomer[key].count++;
+        byCustomer[key].items[o.item] = (byCustomer[key].items[o.item] || 0) + 1;
         const ts = o.completedAt || o.createdAt || 0;
-        if (ts > byCustomer[o.customer].lastAt) byCustomer[o.customer].lastAt = ts;
+        if (ts >= byCustomer[key].lastAt) { byCustomer[key].lastAt = ts; byCustomer[key].name = o.customer; }
         byItem[o.item] = (byItem[o.item] || 0) + 1;
     }
 
-    const customers = Object.entries(byCustomer)
-        .sort((a, b) => b[1].count - a[1].count)
-        .map(([name, d]) => ({
-            name,
+    const customers = Object.values(byCustomer)
+        .sort((a, b) => b.count - a.count)
+        .map(d => ({
+            name:    d.name,
             count:   d.count,
             favItem: Object.entries(d.items).sort((a, b) => b[1] - a[1])[0]?.[0] || null,
             lastAt:  d.lastAt,

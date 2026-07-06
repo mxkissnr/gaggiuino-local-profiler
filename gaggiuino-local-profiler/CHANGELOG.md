@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Fixed
+- **Orders customer stats no longer split the same customer into multiple cards** — `GET /api/orders/stats` grouped completed orders by the raw, only lightly-sanitized `customer` string, so "Max", "max" and "Max " (case/whitespace variants of the same person) each got their own stats card. Grouping now uses a normalized key (trimmed + lowercased); the displayed name is whichever spelling appeared most recently. Closes #243
+
 ## [1.97.0] – 2026-07-06
 
 ### Added
