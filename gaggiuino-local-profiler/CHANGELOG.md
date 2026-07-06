@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **CSV/.shot/backup exports work on mobile now** — `downloadCSV()`, the `.shot` export and `downloadBackup()` used a bare `Blob` + `<a download>` + `click()` pattern with no fallback, which mobile Safari and in-app/PWA browsers are known to silently swallow. All four export call sites (including the already-working share-card PNG button) now go through a shared `shareOrDownloadBlob()` helper: prefer the native Web Share sheet when the platform supports sharing files, respect a user-cancelled share, and fall back to the anchor-click download (still the right choice on desktop) when sharing isn't available or fails for another reason. Closes #244
 - **Orders customer stats no longer split the same customer into multiple cards** — `GET /api/orders/stats` grouped completed orders by the raw, only lightly-sanitized `customer` string, so "Max", "max" and "Max " (case/whitespace variants of the same person) each got their own stats card. Grouping now uses a normalized key (trimmed + lowercased); the displayed name is whichever spelling appeared most recently. Closes #243
 
 ## [1.97.0] – 2026-07-06

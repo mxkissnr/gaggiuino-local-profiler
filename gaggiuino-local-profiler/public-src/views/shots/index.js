@@ -4,7 +4,7 @@ import { apiFetch }                                           from '../../api.js
 import { LOCALE_MAP, phasePlugin, corsairPlugin, clearChartOnTouchEnd } from '../../constants.js';
 import {
   esc, avg, avgActive, max, safeLast, fmt, formatTimeLabel,
-  stddev, detectPhases, detectChanneling, scoreClass
+  stddev, detectPhases, detectChanneling, scoreClass, shareOrDownloadBlob
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting }           from '../../components/sidebar.js';
 import { getShotData, calcShotScore }                         from './utils.js';
@@ -445,32 +445,29 @@ function shotToCSVRow(shot) {
   ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
 }
 
-function downloadCSV(rows, filename) {
+async function downloadCSV(rows, filename) {
   const header = ['Shot ID','Date','Profile','Duration (s)','Avg Pressure (bar)','Max Weight (g)',
                   'Dose (g)','Ratio','Avg Temp (C)','Rating','Coffee','Grinder','Grind Setting','Notes'];
   const csv  = [header.join(','), ...rows].join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
+  await shareOrDownloadBlob(blob, filename, { title: t('export_csv_title') });
 }
 
-export function exportCSV() {
+export async function exportCSV() {
   const shot = S.shots.find(s => s.id === S.primaryShotId);
   if (!shot) return;
   const date    = new Date(shot.timestamp * 1000).toISOString().slice(0, 10);
   const profile = (shot.profile?.name || shot.profileName || 'shot').replace(/[^a-z0-9]/gi, '_');
-  downloadCSV([shotToCSVRow(shot)], `glp_shot_${date}_${profile}.csv`);
+  await downloadCSV([shotToCSVRow(shot)], `glp_shot_${date}_${profile}.csv`);
 }
 
-export function exportAllCSV() {
-  downloadCSV(S.shots.map(shotToCSVRow), 'glp_all_shots.csv');
+export async function exportAllCSV() {
+  await downloadCSV(S.shots.map(shotToCSVRow), 'glp_all_shots.csv');
 }
 
 // ── .shot export ──────────────────────────────────────────────────────────
 
-export function exportShot() {
+export async function exportShot() {
   const shot = S.shots.find(s => s.id === S.primaryShotId);
   if (!shot) return;
   const d   = shot.datapoints || {};
@@ -502,12 +499,12 @@ export function exportShot() {
     `espresso_water_dispensed ${lastW}`,
   ].filter(Boolean).join('\n');
 
-  _downloadJSON_blob(lines, `shot_${shot.id}_${date.slice(0, 10)}.shot`, 'text/plain;charset=utf-8;');
+  await _downloadJSON_blob(lines, `shot_${shot.id}_${date.slice(0, 10)}.shot`, 'text/plain;charset=utf-8;');
 }
 
 // ── Profile export ────────────────────────────────────────────────────────
 
-export function exportProfile() {
+export async function exportProfile() {
   const shot = S.shots.find(s => s.id === S.primaryShotId);
   if (!shot) return;
 
@@ -520,7 +517,7 @@ export function exportProfile() {
     if (!out.recipe.coffeeOut && ann.dose) out.recipe.coffeeOut = parseFloat(ann.dose) * 2;
     if (out.recipe.coffeeIn && out.recipe.coffeeOut)
       out.recipe.ratio = Math.round(out.recipe.coffeeOut / out.recipe.coffeeIn * 100) / 100;
-    _downloadJSON(out, (out.name || shot.profileName || `shot_${shot.id}`).replace(/[^a-z0-9_\-]/gi, '_') + '.json');
+    await _downloadJSON(out, (out.name || shot.profileName || `shot_${shot.id}`).replace(/[^a-z0-9_\-]/gi, '_') + '.json');
     return;
   }
 
@@ -579,19 +576,16 @@ export function exportProfile() {
       ratio:     ann.dose ? Math.round(yieldG / parseFloat(ann.dose) * 100) / 100 : 2
     }
   };
-  _downloadJSON(out, (out.name).replace(/[^a-z0-9_\-]/gi, '_') + '.json');
+  await _downloadJSON(out, (out.name).replace(/[^a-z0-9_\-]/gi, '_') + '.json');
 }
 
-function _downloadJSON(obj, filename) {
-  _downloadJSON_blob(JSON.stringify(obj, null, 2), filename, 'application/json');
+async function _downloadJSON(obj, filename) {
+  await _downloadJSON_blob(JSON.stringify(obj, null, 2), filename, 'application/json');
 }
 
-function _downloadJSON_blob(content, filename, mime) {
+async function _downloadJSON_blob(content, filename, mime) {
   const blob = new Blob([content], { type: mime });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
+  await shareOrDownloadBlob(blob, filename, { title: filename });
 }
 
 // ── Share card ────────────────────────────────────────────────────────────
@@ -607,17 +601,7 @@ export async function shareCard(format = 'square') {
     }
     const blob     = await r.blob();
     const filename = `glp-shot-${shotId}-${format}.png`;
-    const file     = new File([blob], filename, { type: 'image/png' });
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: t('share_card_title') });
-    } else {
-      const url = URL.createObjectURL(blob);
-      const a   = document.createElement('a');
-      a.href     = url;
-      a.download = filename;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }
+    await shareOrDownloadBlob(blob, filename, { title: t('share_card_title'), fallbackOnError: false });
   } catch (e) {
     if (e.name !== 'AbortError') alert(t('error_generic', e.message));
   }
@@ -637,14 +621,10 @@ export async function downloadBackup() {
       alert(t('backup_error', err.error || r.status));
       return;
     }
-    const bundle = await r.json();
-    const blob   = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
-    const url    = URL.createObjectURL(blob);
-    const a      = document.createElement('a');
-    a.href = url;
-    a.download = `glp-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const bundle   = await r.json();
+    const blob     = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    const filename = `glp-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    await shareOrDownloadBlob(blob, filename, { title: filename });
   } catch (e) { alert(t('backup_error', e.message)); }
 }
 

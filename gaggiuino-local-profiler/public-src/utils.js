@@ -67,6 +67,34 @@ export function calcBeanRating(beanName, shots) {
   return { avg: Math.round(mean * 10) / 10, count: ratings.length };
 }
 
+// ── Share-or-download a file blob ──────────────────────────────────────────
+// Plain Blob + <a download> + click() is unreliable on mobile Safari and
+// in-app browsers (silently no-ops instead of saving the file). Prefer the
+// native Web Share sheet when the platform supports sharing files, falling
+// back to the classic anchor-click download otherwise (typically desktop).
+//
+// fallbackOnError: when navigator.share() itself fails for a reason other
+// than the user cancelling (AbortError), default behavior falls back to the
+// anchor download so the user still gets their file; pass false to instead
+// let the error propagate to the caller (e.g. to show its own alert).
+export async function shareOrDownloadBlob(blob, filename, { title, fallbackOnError = true } = {}) {
+  const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title });
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return; // user cancelled — respect it, no fallback
+      if (!fallbackOnError) throw e;
+      // else: fall through to the anchor-download fallback below
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // ── Math helpers ──────────────────────────────────────────────────────────
 export function avg(arr) {
   if (!arr?.length) return null;
