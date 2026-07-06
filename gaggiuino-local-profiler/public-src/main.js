@@ -3,6 +3,7 @@ import './style.css';
 import { S } from './state.js';
 import { initToken, apiFetch } from './api.js';
 import { t, setLang, applyTranslations } from './i18n.js';
+import { generateBeanQR } from './glp-qr.js';
 
 import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
          toggleDesktopSidebar, openSidebar, closeSidebar, toggleSidebar, collapseSidebarOnMobile, selectShot,
@@ -42,7 +43,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
          openBeanForm, closeBeanForm, editBean, saveBean, deleteBean, uploadBeanImage,
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage,
-         toggleBeanQR, generateBeanQR,
+         toggleBeanQR,
          toggleBagHistory, openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
          openBeanStockEdit, closeBeanStockEdit, saveBeanStock,
          openRecipeForm, closeRecipeForm, editRecipe, saveRecipe, deleteRecipe, renderRecipeList,

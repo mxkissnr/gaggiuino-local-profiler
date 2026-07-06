@@ -241,7 +241,7 @@ export default {
     scan_found:(name)=>`Trouvé : ${name}`,
     scan_error:'Erreur de scan — réessayer',
     scan_glp_imported:'QR GLP importé',
-    bean_qr_label:'Code QR pour ce café',
+    bean_qr_label:'Code QR pour ce café', bean_qr_error:"Impossible de générer le code QR (trop de données ?)",
     nav_orders:'Commandes',
     orders_queue:"File d'attente", orders_inprogress:'En cours', orders_history:'Historique',
     orders_empty:'Aucune commande ouverte',

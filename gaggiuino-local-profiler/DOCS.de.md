@@ -162,8 +162,8 @@ Jede Bohne mit Geschmacks-Tags zeigt in der Bibliothek einen 🎡-Button. Er öf
 Im Bibliothek-Tab auf **⬛ Scan** neben „Bohne hinzufügen" tippen, um den Kamera-Scanner zu öffnen.
 
 - **EAN/UPC-Barcode** (z.B. auf einer Supermarkt-Kaffeepackung) — GLP schlägt den Code bei [Open Food Facts](https://world.openfoodfacts.org) nach und befüllt Name, Rösterei und Notizen vor. Specialty-Kaffees sind oft nicht in der Datenbank — Rest manuell ausfüllen.
-- **GLP-QR-Code** — QR-Code einer anderen GLP-Installation scannen für vollständigen Direktimport.
-- Jede Bohne in der Bibliothek hat einen **QR-Button** der einen teilbaren QR-Code mit allen Bohnen-Feldern erzeugt.
+- **GLP-QR-Code** — QR-Code einer anderen GLP-Installation scannen für einen Direktimport von Name, Rösterei, Röstdatum und Notizen.
+- Jede Bohne in der Bibliothek hat einen **QR-Button** der einen teilbaren QR-Code mit Name, Rösterei, Röstdatum und Notizen erzeugt (Notizen werden gekürzt, damit der Code zuverlässig scanbar bleibt).
 
 Erfordert einen Chromium-basierten Browser (nutzt die native BarcodeDetector Web API). Firefox und Safari werden nicht unterstützt.
 

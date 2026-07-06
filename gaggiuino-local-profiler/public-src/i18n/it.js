@@ -241,7 +241,7 @@ export default {
     scan_found:(name)=>`Trovato: ${name}`,
     scan_error:'Errore scansione — riprova',
     scan_glp_imported:'QR GLP importato',
-    bean_qr_label:'Codice QR per questo caffè',
+    bean_qr_label:'Codice QR per questo caffè', bean_qr_error:'Impossibile generare il codice QR (troppi dati?)',
     nav_orders:'Ordini',
     orders_queue:'In attesa', orders_inprogress:'In preparazione', orders_history:'Cronologia',
     orders_empty:'Nessun ordine aperto',

@@ -241,7 +241,7 @@ export default {
     scan_found:(name)=>`Gevonden: ${name}`,
     scan_error:'Scanfout — opnieuw proberen',
     scan_glp_imported:'GLP QR geïmporteerd',
-    bean_qr_label:'QR-code voor deze koffie',
+    bean_qr_label:'QR-code voor deze koffie', bean_qr_error:'QR-code kon niet worden gemaakt (te veel data?)',
     nav_orders:'Bestellingen',
     orders_queue:'Wachtrij', orders_inprogress:'In voorbereiding', orders_history:'Geschiedenis',
     orders_empty:'Geen openstaande bestellingen',

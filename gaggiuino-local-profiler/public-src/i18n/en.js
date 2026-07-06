@@ -241,7 +241,7 @@ export default {
     scan_found:(name)=>`Found: ${name}`,
     scan_error:'Scan error — please try again',
     scan_glp_imported:'GLP QR imported',
-    bean_qr_label:'QR code for this bean',
+    bean_qr_label:'QR code for this bean', bean_qr_error:'Could not generate QR code (too much data?)',
     nav_orders:'Orders',
     orders_queue:'Queue', orders_inprogress:'In Progress', orders_history:'History',
     orders_empty:'No open orders',

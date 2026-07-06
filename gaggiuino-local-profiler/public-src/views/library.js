@@ -4,6 +4,7 @@ import { apiFetch } from '../api.js';
 import { esc, roastAgeDays, freshnessState, calcBeanRating } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, countryName, flagEmoji } from '../constants.js';
 import { loadBeanImageBlobUrl, loadGrinderImageBlobUrl, invalidateGrinderImage, invalidateBeanImage } from '../bean-image.js';
+import { generateBeanQR, parseGlpQrParams } from '../glp-qr.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
@@ -273,16 +274,15 @@ export function toggleBeanQR(id) {
   if (!bean) return;
   wrap.style.display = 'flex';
   const canvas = document.getElementById(`beanQRCanvas${id}`);
-  QRCode.toCanvas(canvas, generateBeanQR(bean), { width: 140, margin: 1, color: { dark: '#e4e4e7', light: '#18181b' } });
-}
-
-export function generateBeanQR(bean) {
-  const params = new URLSearchParams();
-  if (bean.name)      params.set('name',      bean.name);
-  if (bean.roaster)   params.set('roaster',   bean.roaster);
-  if (bean.roastDate) params.set('roastDate', bean.roastDate);
-  if (bean.notes)     params.set('notes',     bean.notes);
-  return `glp://coffee?${params.toString()}`;
+  // toCanvas() with no callback returns a Promise — without this .catch(),
+  // a rejection (e.g. QR data-capacity exceeded by a long notes field) was
+  // an unhandled rejection: the canvas stayed silently blank, no error ever
+  // reached the user.
+  QRCode.toCanvas(canvas, generateBeanQR(bean), { width: 140, margin: 1, errorCorrectionLevel: 'L', color: { dark: '#e4e4e7', light: '#18181b' } })
+    .catch(() => {
+      wrap.style.display = 'none';
+      alert(t('bean_qr_error'));
+    });
 }
 
 // ── Grinder list ──────────────────────────────────────────────────────────
@@ -778,15 +778,14 @@ export async function _runScanLoop() {
 }
 
 export async function _handleScanResult(raw, status) {
-  // GLP QR schema: glp://coffee?name=...&roaster=...&notes=...&roastDate=...
-  if (raw.startsWith('glp://coffee')) {
-    const params = new URLSearchParams(raw.replace('glp://coffee?', ''));
+  const glp = parseGlpQrParams(raw);
+  if (glp) {
     closeScanModal();
     openBeanForm();
-    if (params.get('name'))      document.getElementById('beanFormName').value      = params.get('name');
-    if (params.get('roaster'))   document.getElementById('beanFormRoaster').value   = params.get('roaster');
-    if (params.get('roastDate')) document.getElementById('beanFormRoastDate').value = params.get('roastDate');
-    if (params.get('notes'))     document.getElementById('beanFormNotes').value     = params.get('notes');
+    if (glp.name)      document.getElementById('beanFormName').value      = glp.name;
+    if (glp.roaster)   document.getElementById('beanFormRoaster').value   = glp.roaster;
+    if (glp.roastDate) document.getElementById('beanFormRoastDate').value = glp.roastDate;
+    if (glp.notes)     document.getElementById('beanFormNotes').value     = glp.notes;
     status.textContent = t('scan_glp_imported');
     status.className = 'found';
     return;
