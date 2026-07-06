@@ -1,3 +1,8 @@
+## [1.102.2] – 2026-07-06
+
+### Fixed
+- **Version housekeeping for the v1.102.1 rollback.** The manual revert + version bump only updated `config.yaml`, leaving `lib/constants.js`'s `GLP_VERSION` at the old `1.101.0` — the running app would have reported the wrong version. Synced both, and backfilled the changelog entry and a GitHub issue (#260) for the regression, since the emergency rollback understandably skipped that paperwork.
+
 ## [1.102.1] – 2026-07-06
 
 ### Fixed
