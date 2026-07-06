@@ -155,7 +155,7 @@ The same field also accepts product URLs from [elbgold.com](https://elbgold.com)
 
 ### Coffee flavor wheel
 
-Any bean with tasting-note tags shows a 🎡 button in the library. It opens a sunburst chart of the coffee flavor hierarchy — the category structure follows the SCA/WCR *Coffee Taster's Flavor Wheel* (2016); this is our own derived data (English + German labels), not the original artwork. Flavors from the bean's tags are matched against the wheel (exact label, a German alias table for compound/colloquial terms, then word-boundary text containment) and highlighted together with their parent categories; everything else is dimmed. Flavors that couldn't be matched are listed as plain chips below the chart so nothing gets silently dropped.
+Any bean with tasting-note tags shows a 🎡 button in the library. It opens a sunburst chart of the coffee flavor hierarchy — the category structure follows the SCA/WCR *Coffee Taster's Flavor Wheel* (2016); this is our own derived data, translated into all 6 UI languages (DE, EN, IT, FR, ES, NL), not the original artwork. Flavors from the bean's tags are matched against the wheel (exact label in any of the 6 languages, a German alias table for compound/colloquial terms, then word-boundary text containment) and highlighted together with their parent categories; everything else is dimmed. Flavors that couldn't be matched are listed as plain chips below the chart so nothing gets silently dropped.
 
 ### Barcode and QR scanner
 

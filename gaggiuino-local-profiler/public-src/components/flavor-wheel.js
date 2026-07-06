@@ -1,5 +1,5 @@
 import { FLAVOR_WHEEL } from '../flavor-data.js';
-import { matchFlavors, markLit } from '../flavor-match.js';
+import { matchFlavors, markLit, hslFor, labelColorFor } from '../flavor-match.js';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
@@ -9,19 +9,13 @@ export { matchFlavors, normalizeFlavor } from '../flavor-match.js';
 
 // ── Sunburst rendering ──────────────────────────────────────────────────────
 
-function hslFor(hue, depth, dimmed) {
-  if (dimmed) return `hsla(${hue}, 8%, 55%, .18)`;
-  const lightness = 42 + depth * 10;
-  return `hsl(${hue}, 62%, ${Math.min(lightness, 72)}%)`;
-}
-
 function toSunburstData(node, depth, hue, lang) {
-  const label = lang === 'de' ? node.de : node.en;
+  const label = node[lang] || node.en;
   const lit   = node._lit;
   const entry = {
     name: label,
     itemStyle: { color: hslFor(hue, depth, !lit) },
-    label: { show: depth === 1 || lit, color: lit ? '#fff' : 'rgba(255,255,255,.35)', fontSize: depth === 1 ? 12 : 10 },
+    label: { show: depth === 1 || lit, color: labelColorFor(depth, lit), fontSize: depth === 1 ? 12 : 10 },
   };
   if (node.children?.length) {
     entry.children = node.children.map(c => toSunburstData(c, depth + 1, hue, lang));
@@ -50,6 +44,9 @@ export function renderFlavorWheel(container, flavors, lang) {
       data, sort: null,
       emphasis: { focus: 'ancestor' },
       itemStyle: { borderColor: '#111113', borderWidth: 1.5 },
+      // minAngle/hideOverlap: crowded outer rings (many matched leaf flavors
+      // under one subcategory) could otherwise overlap or run off tiny wedges.
+      label: { minAngle: 8, hideOverlap: true },
       levels: [{}, { r0: '14%', r: '38%' }, { r0: '38%', r: '68%' }, { r0: '68%', r: '92%' }],
     }],
   });
@@ -86,7 +83,7 @@ export function openFlavorWheel(beanId) {
 
   modal.style.display = 'flex';
   const container = document.getElementById('flavorWheelCanvas');
-  const lang = ['de', 'en'].includes(S.currentLang) ? S.currentLang : 'en';
+  const lang = ['de', 'en', 'it', 'fr', 'es', 'nl'].includes(S.currentLang) ? S.currentLang : 'en';
   if (!renderFlavorWheel(container, bean.flavors, lang)) {
     container.innerHTML = `<p style="color:#52525b;font-size:.85rem;text-align:center">${t('flavor_wheel_unavailable')}</p>`;
   }

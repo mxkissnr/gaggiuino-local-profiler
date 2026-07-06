@@ -155,7 +155,7 @@ Dasselbe Feld akzeptiert auch Produkt-URLs von [elbgold.com](https://elbgold.com
 
 ### Kaffee-Aroma-Rad
 
-Jede Bohne mit Geschmacks-Tags zeigt in der Bibliothek einen 🎡-Button. Er öffnet ein Sunburst-Diagramm der Kaffee-Aroma-Hierarchie — die Kategorienstruktur folgt dem SCA/WCR *Coffee Taster's Flavor Wheel* (2016); dies sind eigens abgeleitete Daten (Englisch + Deutsch), nicht die Original-Grafik. Die Aromen aus den Tags der Bohne werden gegen das Rad gematcht (exakter Label-Treffer, eine deutsche Alias-Tabelle für zusammengesetzte/umgangssprachliche Begriffe, dann Wortgrenzen-Textcontainment) und zusammen mit ihren übergeordneten Kategorien hervorgehoben; der Rest bleibt gedimmt. Nicht zugeordnete Aromen werden als einfache Chips unter dem Diagramm gelistet, damit nichts stillschweigend verloren geht.
+Jede Bohne mit Geschmacks-Tags zeigt in der Bibliothek einen 🎡-Button. Er öffnet ein Sunburst-Diagramm der Kaffee-Aroma-Hierarchie — die Kategorienstruktur folgt dem SCA/WCR *Coffee Taster's Flavor Wheel* (2016); dies sind eigens abgeleitete Daten, übersetzt in alle 6 UI-Sprachen (DE, EN, IT, FR, ES, NL), nicht die Original-Grafik. Die Aromen aus den Tags der Bohne werden gegen das Rad gematcht (exakter Label-Treffer in jeder der 6 Sprachen, eine deutsche Alias-Tabelle für zusammengesetzte/umgangssprachliche Begriffe, dann Wortgrenzen-Textcontainment) und zusammen mit ihren übergeordneten Kategorien hervorgehoben; der Rest bleibt gedimmt. Nicht zugeordnete Aromen werden als einfache Chips unter dem Diagramm gelistet, damit nichts stillschweigend verloren geht.
 
 ### Barcode- und QR-Scanner
 
