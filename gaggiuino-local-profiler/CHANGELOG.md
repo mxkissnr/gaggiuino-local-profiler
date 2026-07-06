@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Fixed
+- **Elbgold import now finds tasting notes even without a "Noten von ..." sentence** — some product descriptions describe taste in free prose under a "Sensorik" heading instead of the one sentence pattern the parser looked for, silently returning no flavors. Added a fallback keyword scan (`lib/flavor-terms.js`, a small curated German cupping-term list) over the prose following a Sensorik/Geschmack/Aromen heading, used only when the primary pattern finds nothing. Best-effort, same as the rest of elbgold's free-text extraction. Closes #250
+
 ## [1.98.0] – 2026-07-06
 
 ### Added

@@ -1,5 +1,6 @@
 const cheerio = require('cheerio');
 const { mapOriginToCode, findCountryInText } = require('./coffee-countries');
+const { FLAVOR_TERMS_DE } = require('./flavor-terms');
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -57,6 +58,27 @@ function splitFlavors(text) {
         out.push(s);
     }
     return out;
+}
+
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// Fallback for elbgold products with no "Noten von ..." sentence — scans the
+// prose following a Sensorik/Geschmack/Aromen heading against a small curated
+// German vocabulary (lib/flavor-terms.js). Best-effort only: a curated list
+// can't cover every term future product copy might use, and the user reviews
+// the pre-filled form regardless.
+function extractFlavorKeywords(text) {
+    if (typeof text !== 'string') return [];
+    const headingMatch = text.match(/(?:Sensorik|Geschmack|Aromen?)\s*[–—:-]?\s*[^.]{0,60}/i);
+    if (!headingMatch) return [];
+    const start   = headingMatch.index + headingMatch[0].length;
+    const stopIdx = text.indexOf('Hier findest Du', start);
+    const window  = text.slice(start, stopIdx > -1 ? stopIdx : start + 600);
+    const found = [];
+    for (const term of FLAVOR_TERMS_DE) {
+        if (new RegExp(`\\b${escapeRegex(term)}\\w*`, 'i').test(window)) found.push(term);
+    }
+    return splitFlavors(found.join(', ')).slice(0, 8);
 }
 
 // ── kaffeebraun.com (Shopware) ────────────────────────────────────────────
@@ -186,6 +208,10 @@ function parseElbgoldProduct(product) {
             .map(f => f.replace(/^mit\s+(einem|einer)?\s*/i, '').trim())
             .filter(f => f && f.length <= 40)
             .slice(0, 8);
+    } else {
+        // Not every product uses a "Noten von" sentence — some describe taste
+        // in free prose under a "Sensorik" heading instead.
+        flavors = extractFlavorKeywords(text);
     }
 
     const tagText = (product.tags || []).join(' ');
@@ -216,4 +242,5 @@ function parseElbgoldProduct(product) {
 module.exports = {
     parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, hoploJsonUrl, shopifyJsonUrl,
     splitFlavors, roastTypeFromTags, normalizeImageUrl, extractAltitudeM, priceFromProduct,
+    extractFlavorKeywords,
 };

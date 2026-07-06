@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-const { parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, hoploJsonUrl, shopifyJsonUrl, splitFlavors, roastTypeFromTags, extractAltitudeM, priceFromProduct } = require('../lib/import-parsers');
+const { parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, hoploJsonUrl, shopifyJsonUrl, splitFlavors, roastTypeFromTags, extractAltitudeM, priceFromProduct, extractFlavorKeywords } = require('../lib/import-parsers');
 
 const hoploFixture = JSON.parse(readFileSync(new URL('./fixtures/hoplo-shyira.json', import.meta.url), 'utf8'));
 const elbgold = h => JSON.parse(readFileSync(new URL(`./fixtures/elbgold-${h}.json`, import.meta.url), 'utf8'));
@@ -71,10 +71,37 @@ describe('parseElbgoldProduct', () => {
         expect(bean.decaf).toBe(true);
         expect(bean.origin).toBe('KE');
         expect(bean.region).toBe('Nyeri');
+        // no "Noten von" sentence in this product's copy — falls back to a
+        // Sensorik-heading keyword scan instead of coming back empty
+        expect(bean.flavors).toContain('Mandarine');
+        expect(bean.flavors).toContain('Karamell');
     });
 
     it('returns null without a title', () => {
         expect(parseElbgoldProduct({})).toBeNull();
+    });
+});
+
+describe('extractFlavorKeywords', () => {
+    it('scans prose after a Sensorik heading for known cupping terms', () => {
+        const text = 'Sensorik – ruhig und strukturiert In der Tasse zeigt sich der Kaffee zugänglich. '
+            + 'Die Basis bilden Kakaonibs und dunkles Karamell. Mandarine erscheint als süß-zitrischer Akzent. '
+            + 'Hier findest Du unsere Brewguides.';
+        const flavors = extractFlavorKeywords(text);
+        expect(flavors).toContain('Kakaonibs');
+        expect(flavors).toContain('Karamell');
+        expect(flavors).toContain('Mandarine');
+    });
+
+    it('stops scanning at the shared Brewguide footer sentence', () => {
+        const text = 'Sensorik – klar. Etwas Kirsche. Hier findest Du unsere Brewguides. '
+            + 'Ein völlig anderes Produkt erwähnt an dieser Stelle Vanille.';
+        expect(extractFlavorKeywords(text)).not.toContain('Vanille');
+    });
+
+    it('returns an empty array when there is no Sensorik/Geschmack/Aromen heading at all', () => {
+        expect(extractFlavorKeywords('Ein Espresso ohne jede Geschmacksbeschreibung.')).toEqual([]);
+        expect(extractFlavorKeywords('irrelevant text with no heading and no Kirsche mention either')).toEqual([]);
     });
 });
 

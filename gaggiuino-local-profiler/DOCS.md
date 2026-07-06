@@ -151,7 +151,7 @@ The same **🔗 URL** field also accepts product URLs from [hoppenworth-ploch.de
 
 ### Import from elbgold.com
 
-The same field also accepts product URLs from [elbgold.com](https://elbgold.com) (Hamburg). Unlike the other two sources, elbgold's product pages carry no structured spec table — the description is free German prose — so the import is **best-effort**: name and roaster ("elbgold") are exact; tasting notes are parsed from a "Noten von …" sentence; the growing region comes from a "Herkunft – …" heading; the origin country is detected by scanning the full description for exactly one coffee-growing country name (ambiguous or multi-country text is left unmapped); roast profile comes from the Espresso/Filter shop tags; decaf is detected from the title. Always review the pre-filled form before saving.
+The same field also accepts product URLs from [elbgold.com](https://elbgold.com) (Hamburg). Unlike the other two sources, elbgold's product pages carry no structured spec table — the description is free German prose — so the import is **best-effort**: name and roaster ("elbgold") are exact; tasting notes are parsed from a "Noten von …" sentence, or — when that's absent — a fallback keyword scan over the prose following a "Sensorik"/"Geschmack"/"Aromen" heading against a small curated German vocabulary (not exhaustive; some products' wording may still yield nothing); the growing region comes from a "Herkunft – …" heading; the origin country is detected by scanning the full description for exactly one coffee-growing country name (ambiguous or multi-country text is left unmapped); roast profile comes from the Espresso/Filter shop tags; decaf is detected from the title. Always review the pre-filled form before saving.
 
 ### Coffee flavor wheel
 
