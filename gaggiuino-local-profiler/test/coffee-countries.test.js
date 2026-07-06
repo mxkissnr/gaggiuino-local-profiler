@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-const { mapOriginToCode, COFFEE_COUNTRY_CODES } = require('../lib/coffee-countries');
+const { mapOriginToCode, COFFEE_COUNTRY_CODES, findCountriesInText } = require('../lib/coffee-countries');
 
 describe('mapOriginToCode', () => {
     it('maps German country names from roaster pages', () => {
@@ -39,5 +39,32 @@ describe('mapOriginToCode', () => {
                 expect(mapOriginToCode(name), `${lang} name for ${code}`).toBe(code);
             }
         }
+    });
+});
+
+describe('findCountriesInText', () => {
+    it('returns a single-element array for prose naming exactly one country', () => {
+        expect(findCountriesInText('Dieser Kaffee kommt aus Äthiopien.')).toEqual(['ET']);
+    });
+
+    it('returns an empty array when no country is mentioned', () => {
+        expect(findCountriesInText('Ein Espresso ohne jede Herkunftsangabe.')).toEqual([]);
+        expect(findCountriesInText('')).toEqual([]);
+        expect(findCountriesInText(undefined)).toEqual([]);
+    });
+
+    it('detects a genuine two-country blend, in first-appearance order', () => {
+        expect(findCountriesInText('Ein Blend aus Brasilien und Indien.')).toEqual(['BR', 'IN']);
+        expect(findCountriesInText('Ein Blend aus Indien und Brasilien.')).toEqual(['IN', 'BR']);
+    });
+
+    it('treats more than maxCount distinct countries as noise, not a blend', () => {
+        const boilerplate = 'Wir importieren aus Brasilien, Kolumbien, Äthiopien, Kenia und Vietnam.';
+        expect(findCountriesInText(boilerplate)).toEqual([]); // 5 distinct > default maxCount of 3
+        expect(findCountriesInText(boilerplate, 5)).toHaveLength(5); // raising maxCount allows it
+    });
+
+    it('tolerates a trailing genitive s', () => {
+        expect(findCountriesInText('Der Charakter Äthiopiens bleibt erhalten.')).toEqual(['ET']);
     });
 });

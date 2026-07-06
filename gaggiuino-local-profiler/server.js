@@ -20,6 +20,7 @@ try {
     const libraryService = require('./lib/services/LibraryService');
     libraryService.migrateImportedNotes();
     libraryService.migrateNotesToFlavors();
+    libraryService.migrateOriginToOrigins();
     log('Database ready');
 } catch (err) {
     log(`Init error: ${err.message}`, true);

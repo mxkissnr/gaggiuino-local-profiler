@@ -536,6 +536,9 @@
         .flavor-chip-x { background: none; border: none; color: inherit; cursor: pointer; font-size: .68rem; padding: 0; opacity: .7; }
         .flavor-chip-x:hover { opacity: 1; }
         .flavor-chip-static { padding: 1px 6px; font-size: .66rem; }
+        .origin-chip { background: rgba(56,189,248,.12); border-color: rgba(56,189,248,.3); color: #7dd3fc; }
+        .flavor-chips-wrap .origin-chip-percent { width: 34px; min-width: 0; flex: none; text-align: center; background: rgba(255,255,255,.08); border-radius: 3px; padding: 1px 2px; -moz-appearance: textfield; }
+        .origin-chip-percent::-webkit-outer-spin-button, .origin-chip-percent::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .lib-flavor-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
         .lib-bean-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; margin-right: 10px; background: var(--gray-800); }
         .lib-grinder-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; margin-right: 10px; background: var(--gray-800); }

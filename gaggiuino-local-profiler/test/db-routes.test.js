@@ -346,7 +346,86 @@ describe('bean origin/variety/process fields', () => {
         });
         expect(await r.json()).toMatchObject({ origin: 'BR', variety: 'Bourbon', process: 'Natural' });
     });
+});
 
+describe('bean blend origins (origins[] array)', () => {
+    it('stores multiple origins, deduped, with optional per-country percent', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: 'Bombe Blend',
+                origins: [{ code: 'br', percent: '70' }, { code: 'in', percent: '30' }, { code: 'br' }],
+            }),
+        });
+        const bean = await r.json();
+        expect(bean.origins).toEqual([{ code: 'BR', percent: 70 }, { code: 'IN', percent: 30 }]);
+        expect(bean.origin).toBe('BR'); // derived: first origin, backward-compat for external consumers
+    });
+
+    it('caps at 5 origins and drops invalid codes', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: 'Kitchen Sink',
+                origins: [{ code: 'br' }, { code: 'in' }, { code: 'et' }, { code: 'co' }, { code: 'ke' }, { code: 'vn' }, { code: 'not-a-code' }],
+            }),
+        });
+        const bean = await r.json();
+        expect(bean.origins).toHaveLength(5);
+    });
+
+    it('treats an out-of-range percent as unset rather than storing it', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Weird %', origins: [{ code: 'br', percent: '150' }] }),
+        });
+        expect((await r.json()).origins).toEqual([{ code: 'BR' }]);
+    });
+
+    it('updates origins via PUT, replacing the derived legacy origin field', async () => {
+        saveLibrary({ beans: [{ id: 20, name: 'Old Single', origin: 'ET', origins: [{ code: 'ET' }] }], grinders: [], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/library/bean/20`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ origins: [{ code: 'br' }, { code: 'in' }] }),
+        });
+        const bean = await r.json();
+        expect(bean.origins).toEqual([{ code: 'BR' }, { code: 'IN' }]);
+        expect(bean.origin).toBe('BR');
+    });
+
+    it('a legacy single-field PUT still replaces origins with a single-element array', async () => {
+        saveLibrary({ beans: [{ id: 21, name: 'Blend', origin: 'BR', origins: [{ code: 'BR' }, { code: 'IN' }] }], grinders: [], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/library/bean/21`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ origin: 'et' }),
+        });
+        const bean = await r.json();
+        expect(bean.origins).toEqual([{ code: 'ET' }]);
+        expect(bean.origin).toBe('ET');
+    });
+});
+
+describe('LibraryService.migrateOriginToOrigins', () => {
+    it('wraps a legacy single origin into an origins array, idempotently', () => {
+        saveLibrary({ beans: [
+            { id: 1, name: 'A', origin: 'ET' },
+            { id: 2, name: 'B', origin: '' },
+            { id: 3, name: 'C', origin: 'BR', origins: [{ code: 'BR' }] }, // already migrated
+        ], grinders: [], recipes: [] });
+
+        const changed = libraryService.migrateOriginToOrigins();
+        expect(changed).toBe(2); // only the two beans without an origins array yet
+
+        const lib = libraryService.getLibrary();
+        expect(lib.beans.find(b => b.id === 1).origins).toEqual([{ code: 'ET' }]);
+        expect(lib.beans.find(b => b.id === 2).origins).toEqual([]);
+        expect(lib.beans.find(b => b.id === 3).origins).toEqual([{ code: 'BR' }]); // untouched
+
+        expect(libraryService.migrateOriginToOrigins()).toBe(0); // idempotent second call
+    });
+});
+
+describe('bean roastType/flavors/variety (misc fields)', () => {
     it('whitelists roastType and drops unknown values', async () => {
         const ok = await (await fetch(`${baseUrl}/api/library/bean`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },

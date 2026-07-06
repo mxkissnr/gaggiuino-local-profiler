@@ -169,6 +169,24 @@ class LibraryService {
         return changed;
     }
 
+    // Beans predate the blend-capable origins[] array and only have a single
+    // `origin` string. Idempotent (guarded by Array.isArray) — safe to call
+    // on every boot.
+    migrateOriginToOrigins() {
+        const lib = this.getLibrary();
+        let changed = 0;
+        for (const bean of lib.beans || []) {
+            if (Array.isArray(bean.origins)) continue;
+            bean.origins = bean.origin ? [{ code: bean.origin }] : [];
+            changed++;
+        }
+        if (changed) {
+            this.saveLibrary(lib);
+            log(`Migrated origin to origins on ${changed} bean(s)`);
+        }
+        return changed;
+    }
+
     // Fire-and-forget after bean save: download the imported image once and
     // record its extension. Never blocks the response; a failed download
     // simply leaves the bean without an image.

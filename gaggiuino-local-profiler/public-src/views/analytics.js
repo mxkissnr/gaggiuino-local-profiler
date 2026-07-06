@@ -512,23 +512,49 @@ export async function buildWorldMap() {
     return;
   }
 
-  // bean name (lowercased) → bean, restricted to known coffee countries
+  // bean name (lowercased) → { bean, origins:[{code, weight}] }, restricted to
+  // known coffee countries. A blend's weights come from its per-country
+  // percent when set (normalized to sum to 1), else split equally across its
+  // origin countries — so one shot of a 2-country blend contributes 0.5 to
+  // each by default, or e.g. 0.7/0.3 when weighted.
   const nameToBean = new Map();
   for (const b of (S.coffeeLibrary.beans || [])) {
-    if (b.origin && COFFEE_COUNTRIES.some(c => c.code === b.origin))
-      nameToBean.set(String(b.name || '').toLowerCase(), b);
+    const rawOrigins = Array.isArray(b.origins) && b.origins.length
+      ? b.origins : (b.origin ? [{ code: b.origin }] : []);
+    const valid = rawOrigins.filter(o => COFFEE_COUNTRIES.some(c => c.code === o.code));
+    if (!valid.length) continue;
+    const totalPercent = valid.reduce((sum, o) => sum + (o.percent || 0), 0);
+    const origins = valid.map(o => ({
+      code: o.code,
+      weight: totalPercent > 0 ? (o.percent || 0) / totalPercent : 1 / valid.length,
+    }));
+    nameToBean.set(String(b.name || '').toLowerCase(), { bean: b, origins });
   }
 
-  // code → { shots, beans:Set } — beans with an origin count even without shots
+  // code → { shots, beans:Set, beanShots:Map } — beans with an origin count
+  // even without shots; beanShots tracks each bean's own weighted
+  // contribution to this country (only interesting — i.e. non-integer —
+  // for blends), used to annotate the tooltip.
   const byCode = {};
-  for (const bean of nameToBean.values()) {
-    const code = bean.origin;
-    if (!byCode[code]) byCode[code] = { shots: 0, beans: new Set() };
-    byCode[code].beans.add(bean.name);
+  for (const { bean, origins } of nameToBean.values()) {
+    for (const o of origins) {
+      if (!byCode[o.code]) byCode[o.code] = { shots: 0, beans: new Set(), beanShots: new Map() };
+      byCode[o.code].beans.add(bean.name);
+      if (!byCode[o.code].beanShots.has(bean.name)) byCode[o.code].beanShots.set(bean.name, 0);
+    }
   }
   for (const s of S.shots) {
-    const bean = nameToBean.get(String(s.annotation?.coffee || '').toLowerCase());
-    if (bean) byCode[bean.origin].shots++;
+    const entry = nameToBean.get(String(s.annotation?.coffee || '').toLowerCase());
+    if (!entry) continue;
+    for (const o of entry.origins) {
+      const stats = byCode[o.code];
+      stats.shots += o.weight;
+      stats.beanShots.set(entry.bean.name, stats.beanShots.get(entry.bean.name) + o.weight);
+    }
+  }
+  for (const stats of Object.values(byCode)) {
+    stats.shots = Math.round(stats.shots * 10) / 10;
+    for (const [name, val] of stats.beanShots) stats.beanShots.set(name, Math.round(val * 10) / 10);
   }
 
   if (Object.keys(byCode).length === 0) {
@@ -568,16 +594,20 @@ export async function buildWorldMap() {
   // (jittered a few tenths of a degree per extra bean so points don't stack).
   const seenAtCentroid = {};
   const points = [];
-  for (const bean of nameToBean.values()) {
+  for (const { bean, origins } of nameToBean.values()) {
+    // Even a blend gets exactly one map point — from its geocoded growing
+    // region if resolved, else a centroid fallback keyed on its primary
+    // (first-listed) origin country.
+    const primaryCode = origins[0].code;
     let coord = bean.location ? [bean.location.lon, bean.location.lat] : null;
     if (!coord) {
-      const centroid = COUNTRY_CENTROIDS[bean.origin];
+      const centroid = COUNTRY_CENTROIDS[primaryCode];
       if (!centroid) continue;
-      const n = (seenAtCentroid[bean.origin] = (seenAtCentroid[bean.origin] || 0) + 1) - 1;
+      const n = (seenAtCentroid[primaryCode] = (seenAtCentroid[primaryCode] || 0) + 1) - 1;
       const jitter = n * 0.35;
       coord = [centroid[0] + (n % 2 === 0 ? jitter : -jitter), centroid[1] + (n % 3) * 0.2];
     }
-    const shots = byCode[bean.origin]?.beans.has(bean.name)
+    const shots = byCode[primaryCode]?.beans.has(bean.name)
       ? S.shots.filter(s => String(s.annotation?.coffee || '').toLowerCase() === bean.name.toLowerCase()).length
       : 0;
     points.push({ name: bean.name, value: [...coord, shots], _region: bean.region || null });
@@ -593,8 +623,15 @@ export async function buildWorldMap() {
         if (params.seriesType === 'map') {
           const stats = params.data?._stats;
           if (!stats) return null;
-          const name  = `${flagEmoji(params.name)} ${countryName(params.name, S.currentLang)}`.trim();
-          return `${name}: ${stats.shots} ${t('analytics_map_shots')} (${[...stats.beans].join(', ')})`;
+          const name = `${flagEmoji(params.name)} ${countryName(params.name, S.currentLang)}`.trim();
+          // Annotate a bean's weighted contribution only when it's a blend
+          // (non-integer share) — a single-origin bean's full count is
+          // already implied by the total, no need to repeat it per-bean.
+          const beanList = [...stats.beans].map(beanName => {
+            const share = stats.beanShots.get(beanName);
+            return Number.isInteger(share) ? beanName : `${beanName} (${share})`;
+          }).join(', ');
+          return `${name}: ${stats.shots} ${t('analytics_map_shots')} (${beanList})`;
         }
         const region = params.data?._region;
         return `${params.name}${region ? ' · ' + region : ''}`;

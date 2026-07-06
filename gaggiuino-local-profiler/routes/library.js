@@ -15,6 +15,30 @@ function sanitizeOrigin(v) {
     return /^[A-Z]{2}$/.test(code) ? code : '';
 }
 
+// Blend-capable origins: an array of { code, percent? }. Percent is an
+// optional weighting used by the world map (see LibraryService/analytics);
+// it does not need to sum to 100 across entries — it's a weight, not a
+// validated composition. Deduped by code, capped at 5 (blends realistically
+// rarely exceed 3-4 components).
+function sanitizeOrigins(v) {
+    if (!Array.isArray(v)) return [];
+    const seen = new Set();
+    const out  = [];
+    for (const item of v) {
+        const code = sanitizeOrigin(item?.code);
+        if (!code || seen.has(code)) continue;
+        seen.add(code);
+        let percent = null;
+        if (item?.percent !== undefined && item.percent !== null && item.percent !== '') {
+            const n = parseFloat(item.percent);
+            if (Number.isFinite(n) && n >= 0 && n <= 100) percent = Math.round(n * 10) / 10;
+        }
+        out.push(percent !== null ? { code, percent } : { code });
+        if (out.length >= 5) break;
+    }
+    return out;
+}
+
 const ROAST_TYPES = new Set(['espresso', 'filter', 'omni']);
 function sanitizeRoastType(v) {
     return typeof v === 'string' && ROAST_TYPES.has(v) ? v : '';
@@ -74,7 +98,7 @@ router.get('/api/library/beans-info', (req, res, next) => {
 
 router.post('/api/library/bean', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
-    const { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors, roastType, region, imageUrl,
+    const { name, roaster, roastDate, notes, stock_g, decaf, origin, origins, variety, process, flavors, roastType, region, imageUrl,
         altitude_m, importer, harvest, price_eur, producer, certification, source, importedAt,
         brewTempC, brewRatio, brewTimeS, brewNotes } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
@@ -82,10 +106,18 @@ router.post('/api/library/bean', (req, res) => {
     const s    = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
     const lib  = loadLibrary();
     const parsedStock = parseFloat(stock_g) || null;
+    // origins[] is the source of truth; a lone legacy `origin` string (e.g.
+    // from the GLP QR import schema) is wrapped into a single-element array.
+    let sanitizedOrigins = sanitizeOrigins(origins);
+    if (!sanitizedOrigins.length) {
+        const code = sanitizeOrigin(origin);
+        if (code) sanitizedOrigins = [{ code }];
+    }
     const bean = {
         id: Date.now(), name: s(name, 200), roaster: s(roaster, 200),
         roastDate: s(roastDate, 10), notes: s(notes, 1000),
-        origin: sanitizeOrigin(origin), variety: s(variety, 200), process: s(process, 200),
+        origin: sanitizedOrigins[0]?.code || '', origins: sanitizedOrigins,
+        variety: s(variety, 200), process: s(process, 200),
         flavors: sanitizeFlavors(flavors),
         roastType: sanitizeRoastType(roastType),
         region: s(region, 200),
@@ -117,14 +149,21 @@ router.put('/api/library/bean/:id', (req, res) => {
     const idx = lib.beans.findIndex(b => b.id === id);
     if (idx === -1) return res.status(404).json({ error: 'not found' });
     const s = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : undefined;
-    const { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors, roastType, region,
+    const { name, roaster, roastDate, notes, stock_g, decaf, origin, origins, variety, process, flavors, roastType, region,
         altitude_m, importer, harvest, price_eur, producer, certification,
         brewTempC, brewRatio, brewTimeS, brewNotes } = req.body;
     if (name !== undefined)      lib.beans[idx].name      = s(name, 200) || lib.beans[idx].name;
     if (roaster !== undefined)   lib.beans[idx].roaster   = s(roaster, 200);
     if (roastDate !== undefined) lib.beans[idx].roastDate = s(roastDate, 10);
     if (notes !== undefined)     lib.beans[idx].notes     = s(notes, 1000);
-    if (origin !== undefined)    lib.beans[idx].origin    = sanitizeOrigin(origin);
+    if (origins !== undefined) {
+        lib.beans[idx].origins = sanitizeOrigins(origins);
+        lib.beans[idx].origin  = lib.beans[idx].origins[0]?.code || '';
+    } else if (origin !== undefined) {
+        const code = sanitizeOrigin(origin);
+        lib.beans[idx].origins = code ? [{ code }] : [];
+        lib.beans[idx].origin  = code;
+    }
     if (variety !== undefined)   lib.beans[idx].variety   = s(variety, 200) ?? '';
     if (process !== undefined)   lib.beans[idx].process   = s(process, 200) ?? '';
     if (flavors !== undefined)   lib.beans[idx].flavors   = sanitizeFlavors(flavors);

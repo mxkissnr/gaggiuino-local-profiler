@@ -1,5 +1,5 @@
 const cheerio = require('cheerio');
-const { mapOriginToCode, findCountryInText } = require('./coffee-countries');
+const { mapOriginToCode, findCountriesInText } = require('./coffee-countries');
 const { FLAVOR_TERMS_DE } = require('./flavor-terms');
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -216,17 +216,19 @@ function parseElbgoldProduct(product) {
 
     const tagText = (product.tags || []).join(' ');
     // Title/region are the most specific country signal; fall back to the
-    // full prose only when they name nothing (the single-match rule in
-    // findCountryInText guards against blends either way).
-    const origin = findCountryInText(`${title} ${region || ''}`)
-        || findCountryInText(text);
+    // full prose only when they name nothing. Up to 3 distinct countries are
+    // treated as a genuine blend; more than that is treated as noise (see
+    // findCountriesInText) and origins stays empty.
+    let originCodes = findCountriesInText(`${title} ${region || ''}`);
+    if (!originCodes.length) originCodes = findCountriesInText(text);
     return {
         name:       title,
         roaster:    product.vendor || 'elbgold',
         notes:      '',
         flavors,
         region,
-        origin:     origin || null,
+        origin:     originCodes[0] || null,
+        origins:    originCodes.map(code => ({ code })),
         variety:    null,
         process:    null,
         roastType:  roastTypeFromTags(product.tags) || null,

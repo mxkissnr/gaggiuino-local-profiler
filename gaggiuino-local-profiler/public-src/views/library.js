@@ -8,6 +8,18 @@ import { loadBeanImageBlobUrl, loadGrinderImageBlobUrl, invalidateGrinderImage, 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
 
+// Bean origin display — beans predating the blend feature (or ones without an
+// origins[] array yet) fall back to the legacy singular `origin` field.
+function originDisplay(bean) {
+  const origins = Array.isArray(bean.origins) && bean.origins.length
+    ? bean.origins
+    : (bean.origin ? [{ code: bean.origin }] : []);
+  return origins.map(o => {
+    const label = `${flagEmoji(o.code)} ${countryName(o.code, S.currentLang)}`.trim();
+    return o.percent != null ? `${label} ${o.percent}%` : label;
+  }).join(' + ');
+}
+
 // ── Library load ──────────────────────────────────────────────────────────
 export async function loadLibrary() {
   try {
@@ -138,7 +150,7 @@ export function renderBeanList() {
       <div class="lib-item-info">
         <div class="lib-item-name">${esc(b.name)}${freshBadge}${b.roastType ? ` <span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : ''}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}</div>
         <div class="lib-item-sub">${[
-          b.origin ? `${flagEmoji(b.origin)} ${countryName(b.origin, S.currentLang)}`.trim() : '',
+          originDisplay(b),
           b.region, b.variety, b.process, b.roaster, b.roastDate, b.notes,
         ].filter(Boolean).map(esc).join(' · ')}</div>
         ${extraHtml}
@@ -366,8 +378,13 @@ function bindFlavorInput() {
   });
 }
 
-// ── Bean form ─────────────────────────────────────────────────────────────
-function populateOriginSelect(selected) {
+// ── Bean form: origin (blend-capable chips, mirrors the flavor chips) ──────
+// Each chip is a country code with an optional weighting percent, used by
+// the world map to split a blend's shots across its origin countries.
+let _formOrigins = [];
+let _originInputBound = false;
+
+function populateOriginSelect() {
   const sel = document.getElementById('beanFormOrigin');
   if (!sel) return;
   const options = COFFEE_COUNTRIES
@@ -375,11 +392,53 @@ function populateOriginSelect(selected) {
     .sort((a, b) => a.label.localeCompare(b.label, S.currentLang));
   sel.innerHTML = `<option value="">${t('lib_bean_origin_none')}</option>`
     + options.map(o => `<option value="${o.code}">${esc(o.label)}</option>`).join('');
-  // Legacy free-text origins (never written by the UI, but be defensive): keep them selectable
-  if (selected && !COFFEE_COUNTRIES.some(c => c.code === selected)) {
-    sel.innerHTML += `<option value="${esc(selected)}">${esc(selected)}</option>`;
-  }
-  sel.value = selected || '';
+  sel.value = '';
+}
+
+function renderOriginChips() {
+  const wrap = document.getElementById('beanFormOriginChips');
+  if (!wrap) return;
+  wrap.innerHTML = _formOrigins.map((o, i) => `
+    <span class="flavor-chip origin-chip">${flagEmoji(o.code)} ${esc(countryName(o.code, S.currentLang))}
+      <input type="number" class="origin-chip-percent" data-origin-idx="${i}" min="0" max="100" step="1" placeholder="%" value="${o.percent ?? ''}">
+      <button type="button" class="flavor-chip-x" data-origin-idx-remove="${i}">✕</button>
+    </span>`).join('');
+}
+
+function setFormOrigins(bean) {
+  const origins = Array.isArray(bean?.origins) && bean.origins.length
+    ? bean.origins
+    : (bean?.origin ? [{ code: bean.origin }] : []);
+  _formOrigins = origins.map(o => ({ ...o }));
+  renderOriginChips();
+}
+
+function bindOriginInput() {
+  if (_originInputBound) return;
+  const sel  = document.getElementById('beanFormOrigin');
+  const wrap = document.getElementById('beanFormOriginChips');
+  if (!sel || !wrap) return;
+  _originInputBound = true;
+  sel.addEventListener('change', () => {
+    const code = sel.value;
+    sel.value = '';
+    if (!code || _formOrigins.some(o => o.code === code) || _formOrigins.length >= 5) return;
+    _formOrigins.push({ code });
+    renderOriginChips();
+  });
+  wrap.addEventListener('click', e => {
+    const btn = e.target.closest('[data-origin-idx-remove]');
+    if (!btn) return;
+    _formOrigins.splice(Number(btn.dataset.originIdxRemove), 1);
+    renderOriginChips();
+  });
+  wrap.addEventListener('change', e => {
+    const input = e.target.closest('.origin-chip-percent');
+    if (!input) return;
+    const i = Number(input.dataset.originIdx);
+    const n = parseFloat(input.value);
+    _formOrigins[i].percent = Number.isFinite(n) && n >= 0 && n <= 100 ? n : undefined;
+  });
 }
 
 function populateSuggestionDatalists() {
@@ -397,7 +456,9 @@ export function openBeanForm(bean) {
   document.getElementById('beanFormNotes').value     = bean?.notes     || '';
   document.getElementById('beanFormStock').value     = bean?.stock_g   || '';
   document.getElementById('beanFormDecaf').checked   = !!bean?.decaf;
-  populateOriginSelect(bean?.origin || '');
+  populateOriginSelect();
+  bindOriginInput();
+  setFormOrigins(bean);
   populateSuggestionDatalists();
   document.getElementById('beanFormVariety').value   = bean?.variety || '';
   document.getElementById('beanFormProcess').value   = bean?.process || '';
@@ -443,7 +504,6 @@ export async function saveBean() {
   const notes     = document.getElementById('beanFormNotes').value.trim();
   const stock_g   = parseFloat(document.getElementById('beanFormStock').value) || null;
   const decaf     = document.getElementById('beanFormDecaf').checked;
-  const origin    = document.getElementById('beanFormOrigin').value;
   const variety   = document.getElementById('beanFormVariety').value.trim();
   const process   = document.getElementById('beanFormProcess').value.trim();
   const roastType = document.getElementById('beanFormRoastType').value;
@@ -461,7 +521,7 @@ export async function saveBean() {
   commitFlavorInput(); // take a still-typed flavor along
   if (!name) { document.getElementById('beanFormName').focus(); return; }
   const payload = {
-    name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors: _formFlavors, roastType, region,
+    name, roaster, roastDate, notes, stock_g, decaf, origins: _formOrigins, variety, process, flavors: _formFlavors, roastType, region,
     altitude_m, importer, harvest, price_eur, producer, certification,
     brewTempC, brewRatio, brewTimeS, brewNotes,
   };
@@ -610,7 +670,8 @@ export async function importFromUrl() {
     if (data.name)    document.getElementById('beanFormName').value    = data.name;
     if (data.roaster) document.getElementById('beanFormRoaster').value = data.roaster;
     if (data.notes)   document.getElementById('beanFormNotes').value   = data.notes;
-    if (data.origin)  document.getElementById('beanFormOrigin').value  = data.origin;
+    if (Array.isArray(data.origins) && data.origins.length) setFormOrigins({ origins: data.origins });
+    else if (data.origin) setFormOrigins({ origin: data.origin });
     if (data.variety) document.getElementById('beanFormVariety').value = data.variety;
     if (data.process) document.getElementById('beanFormProcess').value = data.process;
     if (data.decaf)   document.getElementById('beanFormDecaf').checked = true;

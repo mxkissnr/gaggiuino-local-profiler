@@ -33,13 +33,15 @@ function mapOriginToCode(text) {
 }
 
 // Scans free prose (e.g. an elbgold product description) for country names.
-// Returns the code only when exactly ONE distinct country appears — blends
-// and ambiguous texts return null. A trailing genitive "s" is tolerated
-// ("Äthiopiens" matches Äthiopien).
-function findCountryInText(text) {
-    if (typeof text !== 'string' || !text) return null;
+// Returns an array of distinct country codes found, in first-appearance
+// order, up to maxCount. More than maxCount distinct matches is treated as
+// noise (boilerplate mentioning many countries) rather than a real blend,
+// and returns []. A trailing genitive "s" is tolerated ("Äthiopiens" matches
+// Äthiopien).
+function findCountriesInText(text, maxCount = 3) {
+    if (typeof text !== 'string' || !text) return [];
     const lower = ' ' + text.toLowerCase() + ' ';
-    const found = new Set();
+    const firstIdx = new Map(); // code -> earliest match position, for ordering
     const isLetter = c => /[a-zäöüß]/.test(c || '');
     for (const [name, code] of nameToCode) {
         let idx = lower.indexOf(name);
@@ -49,11 +51,15 @@ function findCountryInText(text) {
             const after2 = lower[idx + name.length + 1];
             const boundaryOk = !isLetter(before)
                 && (!isLetter(after) || (after === 's' && !isLetter(after2)));
-            if (boundaryOk) { found.add(code); break; }
+            if (boundaryOk) {
+                if (!firstIdx.has(code) || idx < firstIdx.get(code)) firstIdx.set(code, idx);
+                break;
+            }
             idx = lower.indexOf(name, idx + 1);
         }
     }
-    return found.size === 1 ? [...found][0] : null;
+    const order = [...firstIdx.entries()].sort((a, b) => a[1] - b[1]).map(([code]) => code);
+    return order.length >= 1 && order.length <= maxCount ? order : [];
 }
 
-module.exports = { COFFEE_COUNTRY_CODES, mapOriginToCode, findCountryInText };
+module.exports = { COFFEE_COUNTRY_CODES, mapOriginToCode, findCountriesInText };
