@@ -1,5 +1,5 @@
 const cheerio = require('cheerio');
-const { mapOriginToCode } = require('./coffee-countries');
+const { mapOriginToCode, findCountryInText } = require('./coffee-countries');
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -67,12 +67,17 @@ function parseKaffeebraun(html) {
     };
 }
 
-// ── hoppenworth-ploch.de (Shopify) ────────────────────────────────────────
+// ── Shopify shops (hoppenworth-ploch.de, elbgold.com) ─────────────────────
 // Any pasted product URL is rewritten to Shopify's product JSON endpoint —
 // far more robust than scraping the themed HTML page.
-function hoploJsonUrl(parsedUrl) {
+function shopifyJsonUrl(parsedUrl, host) {
     const m = parsedUrl.pathname.match(/\/products\/([a-z0-9-]+)/i);
-    return m ? `https://hoppenworth-ploch.de/products/${m[1]}.js` : null;
+    return m ? `https://${host}/products/${m[1]}.js` : null;
+}
+
+// Backwards-compatible alias used by existing call sites/tests.
+function hoploJsonUrl(parsedUrl) {
+    return shopifyJsonUrl(parsedUrl, 'hoppenworth-ploch.de');
 }
 
 // Parses the Shopify product JSON. The description HTML carries a structured
@@ -114,4 +119,54 @@ function parseHoploProduct(product) {
     };
 }
 
-module.exports = { parseKaffeebraun, parseHoploProduct, hoploJsonUrl, splitFlavors, roastTypeFromTags };
+// ── elbgold.com (Shopify) ─────────────────────────────────────────────────
+// No spec table — the description is German prose (Word-paste spans). All
+// extraction is best-effort; the user reviews the pre-filled form anyway.
+function parseElbgoldProduct(product) {
+    const title = String(product?.title || '').trim();
+    if (!title) return null;
+    const $     = cheerio.load(product.description || '');
+    const text  = $.text().replace(/\s+/g, ' ').trim();
+
+    // "Herkunft – Sidama, Bensa, Bombe" lives in a <strong> heading
+    let region = null;
+    $('strong, b, h2, h3, h4').each((_, el) => {
+        if (region) return;
+        const t = $(el).text().replace(/\s+/g, ' ').trim();
+        const m = t.match(/^Herkunft\s*[–—:-]\s*(.{2,80})$/);
+        if (m) region = m[1].trim();
+    });
+
+    // "Noten von gerösteter Mandel, Kirsche und Nougat, mit …" → flavor tags
+    let flavors = [];
+    const notesMatch = text.match(/Noten von ([^.!?]{3,140})/i);
+    if (notesMatch) {
+        flavors = splitFlavors(notesMatch[1].replace(/\s+und\s+/gi, ','))
+            .map(f => f.replace(/^mit\s+(einem|einer)?\s*/i, '').trim())
+            .filter(f => f && f.length <= 40)
+            .slice(0, 8);
+    }
+
+    const tagText = (product.tags || []).join(' ');
+    // Title/region are the most specific country signal; fall back to the
+    // full prose only when they name nothing (the single-match rule in
+    // findCountryInText guards against blends either way).
+    const origin = findCountryInText(`${title} ${region || ''}`)
+        || findCountryInText(text);
+    return {
+        name:       title,
+        roaster:    product.vendor || 'elbgold',
+        notes:      '',
+        flavors,
+        region,
+        origin:     origin || null,
+        variety:    null,
+        process:    null,
+        roastType:  roastTypeFromTags(product.tags) || null,
+        decaf:      /\bdecaf|entkoffeiniert\b/i.test(`${title} ${tagText}`) || undefined,
+        source:     'elbgold.com',
+        importedAt: today(),
+    };
+}
+
+module.exports = { parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, hoploJsonUrl, shopifyJsonUrl, splitFlavors, roastTypeFromTags };

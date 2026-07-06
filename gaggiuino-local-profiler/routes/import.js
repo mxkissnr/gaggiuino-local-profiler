@@ -3,7 +3,7 @@ const axios    = require('axios');
 const router   = express.Router();
 
 const { ALLOWED_IMPORT_HOSTS } = require('../lib/constants');
-const { parseKaffeebraun, parseHoploProduct, hoploJsonUrl } = require('../lib/import-parsers');
+const { parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, shopifyJsonUrl } = require('../lib/import-parsers');
 
 const FETCH_OPTS = {
     headers: { 'User-Agent': 'GLP/1.0 (Gaggiuino Local Profiler; private use)' },
@@ -21,11 +21,15 @@ router.get('/api/import/url', async (req, res) => {
         return res.status(400).json({ error: 'unsupported protocol' });
     try {
         let bean;
-        if (parsed.hostname.endsWith('hoppenworth-ploch.de')) {
-            const jsonUrl = hoploJsonUrl(parsed);
+        const shopifyParser = parsed.hostname.endsWith('hoppenworth-ploch.de') ? parseHoploProduct
+            : parsed.hostname.endsWith('elbgold.com') ? parseElbgoldProduct
+            : null;
+        if (shopifyParser) {
+            const host    = parsed.hostname.replace(/^www\./, '');
+            const jsonUrl = shopifyJsonUrl(parsed, host);
             if (!jsonUrl) return res.status(400).json({ error: 'not a product url' });
             const r = await axios.get(jsonUrl, FETCH_OPTS);
-            bean = parseHoploProduct(r.data);
+            bean = shopifyParser(r.data);
         } else {
             const r = await axios.get(raw, FETCH_OPTS);
             bean = parseKaffeebraun(r.data);

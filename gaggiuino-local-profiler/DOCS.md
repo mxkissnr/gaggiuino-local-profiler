@@ -138,7 +138,7 @@ Once the machine turns on, a preheat progress bar and countdown are shown in the
 In the Library tab, click **🔗 URL** next to "Add Bean", paste any product URL from [kaffeebraun.com](https://kaffeebraun.com) and press Import. The app fetches the product page server-side and pre-fills the bean form with:
 
 - Name and roaster (auto-set to "Kaffee Braun")
-- Aromas / tasting notes
+- Aromas as **flavor tags** (chips)
 - Origin (Herkunft) — single-country origins are mapped to the structured origin country field (flag + localized name); blends stay in the notes
 - Processing method (Aufbereitungsart) — fills the structured processing field
 - Roast level label and score
@@ -147,7 +147,11 @@ Imported beans show a small **"Imported from kaffeebraun.com · date"** line in 
 
 ### Import from hoppenworth-ploch.de
 
-The same **🔗 URL** field also accepts product URLs from [hoppenworth-ploch.de](https://hoppenworth-ploch.de) (Hoppenworth & Ploch, Frankfurt). The import uses the shop's structured product data and pre-fills: name (e.g. "Shyira Washed - Ruanda"), roaster, tasting notes, **origin country** (mapped from the title), growing **region** (kept in the notes), **variety**, **processing**, and the **decaf** flag for DECAF products.
+The same **🔗 URL** field also accepts product URLs from [hoppenworth-ploch.de](https://hoppenworth-ploch.de) (Hoppenworth & Ploch, Frankfurt). The import uses the shop's structured product data and pre-fills: name (e.g. "Shyira Washed - Ruanda"), roaster, tasting notes as **flavor tags**, **origin country** (mapped from the title), growing **region**, **variety**, **processing**, **roast profile** (from the Espresso/Filter shop tags), and the **decaf** flag for DECAF products.
+
+### Import from elbgold.com
+
+The same field also accepts product URLs from [elbgold.com](https://elbgold.com) (Hamburg). Unlike the other two sources, elbgold's product pages carry no structured spec table — the description is free German prose — so the import is **best-effort**: name and roaster ("elbgold") are exact; tasting notes are parsed from a "Noten von …" sentence; the growing region comes from a "Herkunft – …" heading; the origin country is detected by scanning the full description for exactly one coffee-growing country name (ambiguous or multi-country text is left unmapped); roast profile comes from the Espresso/Filter shop tags; decaf is detected from the title. Always review the pre-filled form before saving.
 
 ### Barcode and QR scanner
 

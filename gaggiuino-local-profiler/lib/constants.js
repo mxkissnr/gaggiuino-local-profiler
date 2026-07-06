@@ -22,7 +22,8 @@ const HA_API                = 'http://supervisor/core/api';
 const HA_TOKEN              = process.env.SUPERVISOR_TOKEN;
 const ALLOWED_URL_SCHEMES   = ['http:', 'https:'];
 const ALLOWED_IMPORT_HOSTS  = ['kaffeebraun.com', 'www.kaffeebraun.com',
-    'hoppenworth-ploch.de', 'www.hoppenworth-ploch.de'];
+    'hoppenworth-ploch.de', 'www.hoppenworth-ploch.de',
+    'elbgold.com', 'www.elbgold.com'];
 
 const LOW_STOCK_THRESHOLD_G = 100; // remaining grams below which a bean counts as low stock
 

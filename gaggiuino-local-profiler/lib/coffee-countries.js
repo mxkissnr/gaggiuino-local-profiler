@@ -32,4 +32,28 @@ function mapOriginToCode(text) {
     return nameToCode.get(text.trim().toLowerCase()) || null;
 }
 
-module.exports = { COFFEE_COUNTRY_CODES, mapOriginToCode };
+// Scans free prose (e.g. an elbgold product description) for country names.
+// Returns the code only when exactly ONE distinct country appears — blends
+// and ambiguous texts return null. A trailing genitive "s" is tolerated
+// ("Äthiopiens" matches Äthiopien).
+function findCountryInText(text) {
+    if (typeof text !== 'string' || !text) return null;
+    const lower = ' ' + text.toLowerCase() + ' ';
+    const found = new Set();
+    const isLetter = c => /[a-zäöüß]/.test(c || '');
+    for (const [name, code] of nameToCode) {
+        let idx = lower.indexOf(name);
+        while (idx !== -1) {
+            const before = lower[idx - 1];
+            const after  = lower[idx + name.length];
+            const after2 = lower[idx + name.length + 1];
+            const boundaryOk = !isLetter(before)
+                && (!isLetter(after) || (after === 's' && !isLetter(after2)));
+            if (boundaryOk) { found.add(code); break; }
+            idx = lower.indexOf(name, idx + 1);
+        }
+    }
+    return found.size === 1 ? [...found][0] : null;
+}
+
+module.exports = { COFFEE_COUNTRY_CODES, mapOriginToCode, findCountryInText };

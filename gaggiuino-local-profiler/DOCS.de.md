@@ -138,7 +138,7 @@ Nach dem Einschalten zeigt der Live-Tab einen Fortschrittsbalken und einen Count
 Im Bibliothek-Tab auf **🔗 URL** neben „Bohne hinzufügen" klicken, eine Produkt-URL von [kaffeebraun.com](https://kaffeebraun.com) einfügen und auf „Importieren" drücken. Das App lädt die Produktseite serverseitig und befüllt das Bohnen-Formular mit:
 
 - Name und Rösterei (wird automatisch auf „Kaffee Braun" gesetzt)
-- Aromen / Tasting Notes
+- Aromen als **Geschmacks-Tags** (Chips)
 - Herkunft — Einzelland-Herkünfte werden auf das strukturierte Herkunftsland-Feld gemappt (Flagge + lokalisierter Name); Blends bleiben in den Notizen
 - Aufbereitungsart — befüllt das strukturierte Aufbereitungs-Feld
 - Röstgrad (Label und Punktzahl)
@@ -147,7 +147,11 @@ Importierte Bohnen zeigen in der Bibliothekskarte eine kleine Zeile **„Importi
 
 ### Import von hoppenworth-ploch.de
 
-Dasselbe **🔗 URL**-Feld akzeptiert auch Produkt-URLs von [hoppenworth-ploch.de](https://hoppenworth-ploch.de) (Hoppenworth & Ploch, Frankfurt). Der Import nutzt die strukturierten Produktdaten des Shops und befüllt: Name (z.B. „Shyira Washed - Ruanda"), Rösterei, Tasting Notes, **Herkunftsland** (aus dem Titel gemappt), Anbau-**Region** (bleibt in den Notizen), **Varietät**, **Aufbereitung** und das **Decaf**-Flag bei DECAF-Produkten.
+Dasselbe **🔗 URL**-Feld akzeptiert auch Produkt-URLs von [hoppenworth-ploch.de](https://hoppenworth-ploch.de) (Hoppenworth & Ploch, Frankfurt). Der Import nutzt die strukturierten Produktdaten des Shops und befüllt: Name (z.B. „Shyira Washed - Ruanda"), Rösterei, Tasting Notes als **Geschmacks-Tags**, **Herkunftsland** (aus dem Titel gemappt), Anbau-**Region**, **Varietät**, **Aufbereitung**, **Röstung** (aus den Espresso/Filter-Shop-Tags) und das **Decaf**-Flag bei DECAF-Produkten.
+
+### Import von elbgold.com
+
+Dasselbe Feld akzeptiert auch Produkt-URLs von [elbgold.com](https://elbgold.com) (Hamburg). Anders als bei den beiden anderen Quellen liefern elbgolds Produktseiten keine strukturierte Spec-Tabelle — die Beschreibung ist freier deutscher Fließtext — daher ist der Import **Best-Effort**: Name und Rösterei ("elbgold") sind exakt; Tasting Notes werden aus einem „Noten von …"-Satz extrahiert; die Anbau-Region kommt aus einer „Herkunft – …"-Überschrift; das Herkunftsland wird erkannt, indem die gesamte Beschreibung nach genau einem Kaffeeanbauland durchsucht wird (mehrdeutiger oder Mehrländer-Text bleibt ungemappt); die Röstung kommt aus den Espresso/Filter-Shop-Tags; Decaf wird aus dem Titel erkannt. Das vorbefüllte Formular vor dem Speichern immer prüfen.
 
 ### Barcode- und QR-Scanner
 

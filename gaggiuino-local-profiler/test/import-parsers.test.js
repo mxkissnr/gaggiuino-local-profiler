@@ -3,9 +3,10 @@ import { readFileSync } from 'fs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-const { parseKaffeebraun, parseHoploProduct, hoploJsonUrl, splitFlavors, roastTypeFromTags } = require('../lib/import-parsers');
+const { parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, hoploJsonUrl, shopifyJsonUrl, splitFlavors, roastTypeFromTags } = require('../lib/import-parsers');
 
 const hoploFixture = JSON.parse(readFileSync(new URL('./fixtures/hoplo-shyira.json', import.meta.url), 'utf8'));
+const elbgold = h => JSON.parse(readFileSync(new URL(`./fixtures/elbgold-${h}.json`, import.meta.url), 'utf8'));
 
 describe('parseHoploProduct', () => {
     it('extracts structured fields from the Shopify product JSON', () => {
@@ -39,6 +40,37 @@ describe('parseHoploProduct', () => {
     });
 });
 
+describe('parseElbgoldProduct', () => {
+    it('extracts region from the Herkunft heading and country from prose (BOMBE → Ethiopia)', () => {
+        const bean = parseElbgoldProduct(elbgold('bombe'));
+        expect(bean).toMatchObject({
+            name: 'BOMBE', roaster: 'elbgold', roastType: 'espresso', source: 'elbgold.com',
+        });
+        expect(bean.region).toContain('Sidama');
+        expect(bean.origin).toBe('ET'); // Äthiopien appears in the prose
+        expect(bean.flavors.length).toBeGreaterThan(0);
+        expect(bean.decaf).toBeUndefined();
+    });
+
+    it('extracts "Noten von …" flavors (LA MARAVILLA)', () => {
+        const bean = parseElbgoldProduct(elbgold('la-maravilla'));
+        expect(bean.flavors).toContain('Kirsche');
+        expect(bean.flavors).toContain('Nougat');
+        expect(bean.region).toContain('La Maravilla');
+    });
+
+    it('detects decaf from the title (KENIA DECAF → KE)', () => {
+        const bean = parseElbgoldProduct(elbgold('kenia-decaf'));
+        expect(bean.decaf).toBe(true);
+        expect(bean.origin).toBe('KE');
+        expect(bean.region).toBe('Nyeri');
+    });
+
+    it('returns null without a title', () => {
+        expect(parseElbgoldProduct({})).toBeNull();
+    });
+});
+
 describe('hoploJsonUrl', () => {
     it('rewrites product URLs (also with collection prefixes) to the JSON endpoint', () => {
         expect(hoploJsonUrl(new URL('https://hoppenworth-ploch.de/products/shyira-washed-ruanda')))
@@ -49,6 +81,11 @@ describe('hoploJsonUrl', () => {
 
     it('returns null for non-product URLs', () => {
         expect(hoploJsonUrl(new URL('https://hoppenworth-ploch.de/collections/kaffee'))).toBeNull();
+    });
+
+    it('generalizes to other Shopify hosts (elbgold)', () => {
+        expect(shopifyJsonUrl(new URL('https://elbgold.com/collections/espresso/products/bombe'), 'elbgold.com'))
+            .toBe('https://elbgold.com/products/bombe.js');
     });
 });
 
