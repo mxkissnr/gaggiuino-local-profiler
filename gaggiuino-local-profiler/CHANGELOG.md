@@ -1,4 +1,4 @@
-## [Unreleased]
+## [1.99.0] – 2026-07-06
 
 ### Added
 - **Flavor wheel translated into all 6 UI languages, plus a readability fix** — the wheel's category/flavor labels only ever had DE/EN text; users on IT/FR/ES/NL saw everything forced to English. All ~60 nodes in `flavor-data.js` now have translations in all 6 languages, and matching works regardless of which language a bean's flavor tags were entered in. Also fixed low-contrast label text (was hardcoded white regardless of the segment's actual background lightness — light pastel segments at the outer rings could be hard to read) and added anti-overlap label options for crowded rings. `FLAVOR_ALIASES` (German colloquial terms) stays German-only for now; equivalent alias tables for the 4 new languages are backlog. Closes #256
