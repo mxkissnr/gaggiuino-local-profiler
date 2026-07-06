@@ -19,6 +19,14 @@ const realData = require(dataPath);
 let ordersEnabled = true;
 require.cache[dataPath].exports = { ...realData, isOrdersEnabled: () => ordersEnabled };
 
+// Bean image downloads are network I/O — mocked here for route-wiring tests;
+// ImageService's own validation/download logic has dedicated unit tests in
+// test/bean-image.test.js.
+const imageServicePath = require.resolve('../lib/services/ImageService');
+const realImageService = require(imageServicePath);
+const fetchBeanImageMock = (beanId, url) => url.includes('evil') ? Promise.resolve(null) : Promise.resolve('jpg');
+require.cache[imageServicePath].exports = { ...realImageService, fetchBeanImage: fetchBeanImageMock, deleteBeanImage: () => {} };
+
 const express           = require('express');
 const systemRouter      = require('../routes/system');
 const ordersRouter      = require('../routes/orders');
@@ -232,6 +240,39 @@ describe('bean origin/variety/process fields', () => {
         ], grinders: [], recipes: [] });
         const [bean] = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
         expect(bean).toMatchObject({ variety: 'Robusta', origin: 'CU' });
+    });
+});
+
+describe('bean image (POST imageUrl -> fire-and-forget download -> serve)', () => {
+    const tick = () => new Promise(r => setTimeout(r, 10));
+
+    it('sets bean.image after an allowed imageUrl download resolves', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Picture Perfect', imageUrl: 'https://cdn.shopify.com/img.jpg' }),
+        });
+        const bean = await r.json();
+        expect(bean.image).toBeUndefined(); // response returns before the async download finishes
+        await tick();
+        const lib = await (await fetch(`${baseUrl}/api/library`)).json();
+        expect(lib.beans.find(b => b.id === bean.id).image).toBe('jpg');
+    });
+
+    it('leaves bean.image unset when the download is rejected', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'No Picture', imageUrl: 'https://evil.example.com/img.jpg' }),
+        });
+        const bean = await r.json();
+        await tick();
+        const lib = await (await fetch(`${baseUrl}/api/library`)).json();
+        expect(lib.beans.find(b => b.id === bean.id).image).toBeUndefined();
+    });
+
+    it('GET .../image 404s when the bean has no image', async () => {
+        saveLibrary({ beans: [{ id: 1, name: 'Plain' }], grinders: [], recipes: [] });
+        expect((await fetch(`${baseUrl}/api/library/bean/1/image`)).status).toBe(404);
+        expect((await fetch(`${baseUrl}/api/library/bean/999/image`)).status).toBe(404);
     });
 });
 

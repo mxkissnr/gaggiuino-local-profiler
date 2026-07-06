@@ -15,6 +15,16 @@ function roastTypeFromTags(tags) {
     return '';
 }
 
+// Protocol-relative shop CDN URLs ("//cdn.shopify.com/...") → https; leaves
+// absolute http(s) URLs untouched, anything else becomes null.
+function normalizeImageUrl(url) {
+    if (typeof url !== 'string' || !url.trim()) return null;
+    const s = url.trim();
+    if (s.startsWith('//')) return 'https:' + s;
+    if (/^https?:\/\//i.test(s)) return s;
+    return null;
+}
+
 // Splits a tasting-notes string into flavor tags: separators , and ;, trailing
 // parenthesized qualifiers ("Schwarzer Tee (Filter)") stripped, deduped.
 function splitFlavors(text) {
@@ -46,6 +56,7 @@ function parseKaffeebraun(html) {
     });
     const roastLabel = $('.degree.roest .description').first().text().trim();
     const roastScore = $('.degree.roest .value-score').first().text().trim();
+    const imageUrl   = normalizeImageUrl($('meta[property="og:image"]').attr('content'));
     // Herkunft maps to the structured origin field when it is a single known
     // country; blends/unknown strings stay in notes.
     const origin    = mapOriginToCode(props['Herkunft']);
@@ -62,6 +73,7 @@ function parseKaffeebraun(html) {
         origin:     origin || null,
         variety:    props['Varietät'] || null,
         process:    props['Aufbereitungsart'] || null,
+        imageUrl,
         source:     'kaffeebraun.com',
         importedAt: today(),
     };
@@ -113,6 +125,7 @@ function parseHoploProduct(product) {
         variety:    fields['Varietät'] || null,
         process:    fields['Prozess'] || null,
         roastType:  roastTypeFromTags(product.tags) || null,
+        imageUrl:   normalizeImageUrl(product.featured_image),
         decaf:      /\bdecaf\b/i.test(title) || undefined,
         source:     'hoppenworth-ploch.de',
         importedAt: today(),
@@ -163,10 +176,11 @@ function parseElbgoldProduct(product) {
         variety:    null,
         process:    null,
         roastType:  roastTypeFromTags(product.tags) || null,
+        imageUrl:   normalizeImageUrl(product.featured_image),
         decaf:      /\bdecaf|entkoffeiniert\b/i.test(`${title} ${tagText}`) || undefined,
         source:     'elbgold.com',
         importedAt: today(),
     };
 }
 
-module.exports = { parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, hoploJsonUrl, shopifyJsonUrl, splitFlavors, roastTypeFromTags };
+module.exports = { parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, hoploJsonUrl, shopifyJsonUrl, splitFlavors, roastTypeFromTags, normalizeImageUrl };

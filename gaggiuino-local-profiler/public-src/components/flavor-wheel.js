@@ -3,6 +3,7 @@ import { matchFlavors, markLit } from '../flavor-match.js';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
+import { loadBeanImageBlobUrl } from '../bean-image.js';
 
 export { matchFlavors, normalizeFlavor } from '../flavor-match.js';
 
@@ -69,7 +70,12 @@ export function openFlavorWheel(beanId) {
 
   document.getElementById('flavorWheelTitle').textContent = bean.name;
   const imgEl = document.getElementById('flavorWheelImage');
-  if (imgEl) imgEl.style.display = 'none'; // populated once bean images (T8) land
+  if (imgEl) {
+    imgEl.style.display = 'none';
+    if (bean.image) {
+      loadBeanImageBlobUrl(bean.id).then(url => { if (url) { imgEl.src = url; imgEl.style.display = ''; } });
+    }
+  }
 
   const { unmatched } = matchFlavors(bean.flavors);
   const unmatchedWrap = document.getElementById('flavorWheelUnmatched');

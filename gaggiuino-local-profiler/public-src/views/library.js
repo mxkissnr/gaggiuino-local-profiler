@@ -3,6 +3,7 @@ import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { esc, roastAgeDays, freshnessState } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, countryName, flagEmoji } from '../constants.js';
+import { loadBeanImageBlobUrl } from '../bean-image.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
@@ -109,6 +110,7 @@ export function renderBeanList() {
       : '';
 
     return `<div class="lib-item">
+      ${b.image ? `<img class="lib-bean-thumb" data-bean-id="${b.id}" alt="">` : ''}
       <div class="lib-item-info">
         <div class="lib-item-name">${esc(b.name)}${freshBadge}${b.roastType ? ` <span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : ''}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}</div>
         <div class="lib-item-sub">${[
@@ -143,6 +145,17 @@ export function renderBeanList() {
       </div>
     </div>`;
   }).join('');
+
+  loadBeanThumbnails();
+}
+
+// Bean images need the auth token, so <img src> can't point at the API
+// directly (see bean-image.js) — set the blob-url src async after render.
+function loadBeanThumbnails() {
+  document.querySelectorAll('.lib-bean-thumb[data-bean-id]').forEach(img => {
+    const id = Number(img.dataset.beanId);
+    loadBeanImageBlobUrl(id).then(url => { if (url) img.src = url; });
+  });
 }
 
 export function toggleBagHistory(id) {
@@ -357,9 +370,10 @@ export function openBeanForm(bean) {
 }
 
 export function closeBeanForm() {
-  S.beanEditId       = null;
-  S._urlImportSource = null;
-  S._urlImportedAt   = null;
+  S.beanEditId        = null;
+  S._urlImportSource   = null;
+  S._urlImportedAt     = null;
+  S._urlImportImageUrl = null;
   document.getElementById('beanAddForm').classList.remove('open');
   document.getElementById('beanAddTrigger').style.display = '';
 }
@@ -384,7 +398,11 @@ export async function saveBean() {
   commitFlavorInput(); // take a still-typed flavor along
   if (!name) { document.getElementById('beanFormName').focus(); return; }
   const payload = { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors: _formFlavors, roastType, region };
-  if (!S.beanEditId && S._urlImportSource) { payload.source = S._urlImportSource; payload.importedAt = S._urlImportedAt; }
+  if (!S.beanEditId && S._urlImportSource) {
+    payload.source     = S._urlImportSource;
+    payload.importedAt = S._urlImportedAt;
+    if (S._urlImportImageUrl) payload.imageUrl = S._urlImportImageUrl;
+  }
   const body = JSON.stringify(payload);
   const url  = S.beanEditId ? `api/library/bean/${S.beanEditId}` : 'api/library/bean';
   const r    = await apiFetch(url, { method: S.beanEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
@@ -483,8 +501,9 @@ export async function importFromUrl() {
     }
     if (!r.ok) throw new Error();
     const data = await r.json();
-    S._urlImportSource = data.source    || null;
-    S._urlImportedAt   = data.importedAt || null;
+    S._urlImportSource   = data.source    || null;
+    S._urlImportedAt     = data.importedAt || null;
+    S._urlImportImageUrl = data.imageUrl  || null;
     openBeanForm();
     if (data.name)    document.getElementById('beanFormName').value    = data.name;
     if (data.roaster) document.getElementById('beanFormRoaster').value = data.roaster;

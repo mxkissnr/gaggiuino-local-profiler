@@ -25,6 +25,12 @@ const ALLOWED_IMPORT_HOSTS  = ['kaffeebraun.com', 'www.kaffeebraun.com',
     'hoppenworth-ploch.de', 'www.hoppenworth-ploch.de',
     'elbgold.com', 'www.elbgold.com'];
 
+// Bean images are only ever downloaded from an import source's own host or
+// its CDN — never an arbitrary URL a client sends.
+const ALLOWED_IMAGE_HOSTS  = [...ALLOWED_IMPORT_HOSTS, 'cdn.shopify.com'];
+const BEAN_IMAGE_DIR       = '/data/bean-images';
+const BEAN_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024;
+
 const LOW_STOCK_THRESHOLD_G = 100; // remaining grams below which a bean counts as low stock
 
 const TEMP_HISTORY_MAX  = 60;   // max rolling history entries (1 per second)
@@ -62,4 +68,5 @@ module.exports = {
     WARM_TEMP_MIN, WARM_OFF_MAX_MS,
     DEFAULT_MENU, MAINTENANCE_DEFAULTS, STATIC_MAINTENANCE_TASKS,
     LOW_STOCK_THRESHOLD_G,
+    ALLOWED_IMAGE_HOSTS, BEAN_IMAGE_DIR, BEAN_IMAGE_MAX_BYTES,
 };

@@ -522,6 +522,7 @@
         .flavor-chip-x:hover { opacity: 1; }
         .flavor-chip-static { padding: 1px 6px; font-size: .66rem; }
         .lib-flavor-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+        .lib-bean-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; margin-right: 10px; background: var(--gray-800); }
         .lib-form-field-check { display: flex; align-items: center; padding-top: 20px; }
         .lib-check-label { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: .85rem; color: var(--gray-300); }
         .lib-check-label input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--ok); cursor: pointer; }

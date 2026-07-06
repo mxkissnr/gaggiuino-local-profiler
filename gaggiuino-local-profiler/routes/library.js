@@ -3,6 +3,7 @@ const router  = express.Router();
 
 const { loadLibrary, saveLibrary } = require('../lib/data');
 const libraryService = require('../lib/services/LibraryService');
+const { imagePath, CONTENT_TYPE_EXT, deleteBeanImage } = require('../lib/services/ImageService');
 const { rateLimit } = require('../lib/helpers');
 
 // Origin is an ISO 3166-1 alpha-2 country code (join key for the origin map);
@@ -48,7 +49,7 @@ router.get('/api/library/beans-info', (req, res, next) => {
 
 router.post('/api/library/bean', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
-    const { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors, roastType, region, source, importedAt } = req.body;
+    const { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors, roastType, region, imageUrl, source, importedAt } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
     const s    = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -71,8 +72,9 @@ router.post('/api/library/bean', (req, res) => {
     if (importedAt) bean.importedAt = s(importedAt, 10);
     lib.beans.push(bean);
     saveLibrary(lib);
-    // fire-and-forget: resolve region to map coordinates
+    // fire-and-forget: resolve region to map coordinates, download the image
     if (bean.region) libraryService.geocodeBean(bean.id).catch(() => {});
+    if (typeof imageUrl === 'string' && imageUrl) libraryService.setBeanImage(bean.id, imageUrl).catch(() => {});
     res.json(bean);
 });
 
@@ -146,11 +148,29 @@ router.delete('/api/library/bean/:id/bag/:bagId', (req, res) => {
 });
 
 router.post('/api/library/bean/:id/delete', (req, res) => {
-    const id  = parseInt(req.params.id, 10);
-    const lib = loadLibrary();
+    const id   = parseInt(req.params.id, 10);
+    const lib  = loadLibrary();
+    const bean = lib.beans.find(b => b.id === id);
+    if (bean?.image) deleteBeanImage(id, bean.image);
     lib.beans = lib.beans.filter(b => b.id !== id);
     saveLibrary(lib);
     res.json({ ok: true });
+});
+
+// Serves a downloaded bean image (see LibraryService.setBeanImage). 404 when
+// the bean has none. Filename is derived from the numeric id, never from a
+// client-supplied path, so no traversal is possible.
+const VALID_IMAGE_EXTS = new Set(Object.values(CONTENT_TYPE_EXT));
+
+router.get('/api/library/bean/:id/image', (req, res) => {
+    const id   = parseInt(req.params.id, 10);
+    const lib  = loadLibrary();
+    const bean = lib.beans.find(b => b.id === id);
+    const ext  = bean?.image;
+    if (!ext || !VALID_IMAGE_EXTS.has(ext)) return res.status(404).json({ error: 'no image' });
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.type(ext);
+    res.sendFile(imagePath(id, ext), err => { if (err && !res.headersSent) res.status(404).json({ error: 'no image' }); });
 });
 
 // ── Milk ──────────────────────────────────────────────────────────────────

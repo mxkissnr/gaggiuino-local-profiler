@@ -66,7 +66,7 @@ app.use((req, res, next) => {
         "script-src 'self' https://cdn.jsdelivr.net; " +
         "style-src 'self' 'unsafe-inline' https://fonts.bunny.net; " +
         "font-src 'self' data: https://fonts.bunny.net; " +
-        "img-src 'self' data:; " +
+        "img-src 'self' data: blob:; " +
         "connect-src 'self';");
     next();
 });

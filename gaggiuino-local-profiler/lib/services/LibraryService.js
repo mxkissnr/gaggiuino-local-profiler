@@ -108,6 +108,7 @@ class LibraryService {
                 process:   bean.process || null,
                 flavors:   Array.isArray(bean.flavors) && bean.flavors.length ? bean.flavors : null,
                 roastType: bean.roastType || null,
+                hasImage:  !!bean.image,
                 roastDate: activeBag?.roastDate || bean.roastDate || null,
                 decaf:     !!bean.decaf,
             };
@@ -142,6 +143,21 @@ class LibraryService {
             log(`Migrated notes aroma segment into flavors on ${changed} bean(s)`);
         }
         return changed;
+    }
+
+    // Fire-and-forget after bean save: download the imported image once and
+    // record its extension. Never blocks the response; a failed download
+    // simply leaves the bean without an image.
+    async setBeanImage(beanId, imageUrl) {
+        const { fetchBeanImage, deleteBeanImage } = require('./ImageService');
+        const ext = await fetchBeanImage(beanId, imageUrl);
+        if (!ext) return;
+        const lib  = this.getLibrary();
+        const bean = (lib.beans || []).find(b => b.id === beanId);
+        if (!bean) { deleteBeanImage(beanId, ext); return; }
+        if (bean.image && bean.image !== ext) deleteBeanImage(beanId, bean.image);
+        bean.image = ext;
+        this.saveLibrary(lib);
     }
 
     // Fire-and-forget after bean save: resolve the growing region to
