@@ -1,8 +1,3 @@
-## [1.102.0] – 2026-07-06
-
-### Added
-- **Installable PWA** — GLP's backend was already effectively decoupled from Home Assistant (own token auth, direct machine sync, port 8099 reachable outside HA ingress), the only missing piece for a real "app" feel was a proper installable PWA. Added `public-src/public/manifest.json` (`display: standalone`, using the existing 512x512 icon — already satisfies Chrome's installability requirement, no new image assets needed) and a minimal `sw.js` service worker (install/activate + a pure passthrough `fetch` handler, deliberately with no caching, since this app shows live shot data and a caching SW would risk stale readings). "Add to Home Screen" on Android Chrome now gives a standalone window with its own icon instead of a bookmarked tab; iOS Safari already used the existing `apple-touch-icon` and is unaffected. Docs gained a short "Install as an app" section noting that direct port-8099 access already works without going through the HA dashboard. Closes #259
-
 ## [1.101.0] – 2026-07-06
 
 ### Added

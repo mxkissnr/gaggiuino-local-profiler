@@ -104,15 +104,6 @@ Verify connectivity from the HA terminal:
 curl http://<gaggiuino-ip>/api/shots/latest
 ```
 
-## Install as an app
-
-GLP's port (`8099` by default) is exposed directly by the add-on — you don't have to go through the Home Assistant dashboard to reach it. Open `http://<ha-host>:8099` directly in your phone's browser, then add it to your home screen for a standalone app (own icon, no browser address bar):
-
-- **Android (Chrome)**: open the menu (⋮) → **Install app** (or Chrome may offer an install banner automatically).
-- **iOS (Safari)**: tap the Share icon → **Add to Home Screen**.
-
-The app runs in standalone mode either way, using the existing Home Assistant add-on backend — nothing else to configure.
-
 ## Configuration options
 
 | Option | Description | Default |
