@@ -1,3 +1,8 @@
+## [1.104.2] – 2026-07-06
+
+### Fixed
+- **Auth middleware failed open if the API token couldn't be loaded.** `server.js`'s auth gate had `if (!state.apiToken) return next();` — a disk error preventing the token from loading/generating at startup would have let every request through unauthenticated instead of being denied. Only an edge case (`loadOrCreateApiToken()` always runs before `app.listen()` in the normal path), but fail-open is the wrong default for an auth check. Now returns 503 instead. Closes #272
+
 ## [1.104.1] – 2026-07-06
 
 ### Fixed

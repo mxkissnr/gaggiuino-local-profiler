@@ -89,7 +89,10 @@ function isFromSupervisor(req) {
 // API token auth
 app.use((req, res, next) => {
     req.glpAuthenticated = isTokenValid(req.headers['x-glp-token']);
-    if (!state.apiToken) return next();
+    // Fail closed, not open: if the token couldn't be loaded/created (disk
+    // error at startup), deny everything instead of letting every request
+    // through unauthenticated.
+    if (!state.apiToken) return res.status(503).json({ error: 'API token unavailable' });
     // Ingress bypass: only trust X-Ingress-Path when the request genuinely
     // originates from the HA Supervisor (172.30.x.x), preventing header spoofing
     // from external LAN clients who can also reach port 8099.
