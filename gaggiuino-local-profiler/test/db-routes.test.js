@@ -176,6 +176,31 @@ describe('GET /api/orders/active-beans', () => {
     });
 });
 
+describe('bean extra fields (altitude/importer/harvest/price/producer/certification)', () => {
+    it('sanitizes and round-trips all six fields', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: 'Full Bean', altitude_m: '1900', importer: 'Rehm Coffee', harvest: '04-06.25',
+                price_eur: '14.9', producer: 'Finca La Maravilla', certification: 'Bio, Fairtrade',
+            }),
+        });
+        const bean = await r.json();
+        expect(bean).toMatchObject({
+            altitude_m: 1900, importer: 'Rehm Coffee', harvest: '04-06.25',
+            price_eur: 14.9, producer: 'Finca La Maravilla', certification: 'Bio, Fairtrade',
+        });
+
+        const put = await fetch(`${baseUrl}/api/library/bean/${bean.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ altitude_m: '5000', price_eur: '-3' }),
+        });
+        const updated = await put.json();
+        expect(updated.altitude_m).toBeNull(); // out of the 0-3000 range
+        expect(updated.price_eur).toBeNull();  // negative rejected
+    });
+});
+
 describe('bean origin/variety/process fields', () => {
     it('stores origin as an uppercased ISO alpha-2 code and keeps variety/process', async () => {
         const r = await fetch(`${baseUrl}/api/library/bean`, {

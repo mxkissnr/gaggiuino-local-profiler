@@ -115,6 +115,15 @@ export function renderBeanList() {
       <span class="lib-rating-num">${rating.avg.toFixed(1)}</span>
     </div>` : '';
 
+    const extraParts = [
+      b.altitude_m ? t('bean_altitude_display', b.altitude_m) : '',
+      b.producer, b.importer ? t('bean_importer_display', b.importer) : '',
+      b.harvest ? t('bean_harvest_display', b.harvest) : '',
+      b.certification, b.price_eur ? `${b.price_eur.toFixed(2)} €` : '',
+    ].filter(Boolean);
+    const extraHtml = extraParts.length
+      ? `<div class="lib-item-sub lib-item-extra">${extraParts.map(esc).join(' · ')}</div>` : '';
+
     return `<div class="lib-item">
       ${b.image ? `<img class="lib-bean-thumb" data-bean-id="${b.id}" alt="">` : ''}
       <div class="lib-item-info">
@@ -123,6 +132,7 @@ export function renderBeanList() {
           b.origin ? `${flagEmoji(b.origin)} ${countryName(b.origin, S.currentLang)}`.trim() : '',
           b.region, b.variety, b.process, b.roaster, b.roastDate, b.notes,
         ].filter(Boolean).map(esc).join(' · ')}</div>
+        ${extraHtml}
         ${ratingHtml}
         ${Array.isArray(b.flavors) && b.flavors.length ? `<div class="lib-flavor-row">${b.flavors.map(f => `<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`).join('')}</div>` : ''}
         ${invHtml}
@@ -371,6 +381,12 @@ export function openBeanForm(bean) {
   document.getElementById('beanFormFlavorInput').value = '';
   document.getElementById('beanFormRoastType').value = bean?.roastType || '';
   document.getElementById('beanFormRegion').value    = bean?.region || '';
+  document.getElementById('beanFormAltitude').value      = bean?.altitude_m ?? '';
+  document.getElementById('beanFormImporter').value      = bean?.importer || '';
+  document.getElementById('beanFormHarvest').value       = bean?.harvest || '';
+  document.getElementById('beanFormPrice').value         = bean?.price_eur ?? '';
+  document.getElementById('beanFormProducer').value      = bean?.producer || '';
+  document.getElementById('beanFormCertification').value = bean?.certification || '';
   document.getElementById('beanAddForm').classList.add('open');
   document.getElementById('beanAddTrigger').style.display = 'none';
   document.getElementById('beanFormName').focus();
@@ -402,9 +418,18 @@ export async function saveBean() {
   const process   = document.getElementById('beanFormProcess').value.trim();
   const roastType = document.getElementById('beanFormRoastType').value;
   const region    = document.getElementById('beanFormRegion').value.trim();
+  const altitude_m    = document.getElementById('beanFormAltitude').value;
+  const importer      = document.getElementById('beanFormImporter').value.trim();
+  const harvest       = document.getElementById('beanFormHarvest').value.trim();
+  const price_eur     = document.getElementById('beanFormPrice').value;
+  const producer      = document.getElementById('beanFormProducer').value.trim();
+  const certification = document.getElementById('beanFormCertification').value.trim();
   commitFlavorInput(); // take a still-typed flavor along
   if (!name) { document.getElementById('beanFormName').focus(); return; }
-  const payload = { name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors: _formFlavors, roastType, region };
+  const payload = {
+    name, roaster, roastDate, notes, stock_g, decaf, origin, variety, process, flavors: _formFlavors, roastType, region,
+    altitude_m, importer, harvest, price_eur, producer, certification,
+  };
   if (!S.beanEditId && S._urlImportSource) {
     payload.source     = S._urlImportSource;
     payload.importedAt = S._urlImportedAt;
@@ -522,6 +547,10 @@ export async function importFromUrl() {
     if (Array.isArray(data.flavors) && data.flavors.length) setFormFlavors(data.flavors);
     if (data.roastType) document.getElementById('beanFormRoastType').value = data.roastType;
     if (data.region)    document.getElementById('beanFormRegion').value    = data.region;
+    if (data.altitude_m) document.getElementById('beanFormAltitude').value = data.altitude_m;
+    if (data.importer)   document.getElementById('beanFormImporter').value = data.importer;
+    if (data.harvest)    document.getElementById('beanFormHarvest').value  = data.harvest;
+    if (data.price_eur)  document.getElementById('beanFormPrice').value    = data.price_eur;
     input.value = '';
     document.getElementById('urlImportRow').style.display = 'none';
   } catch {

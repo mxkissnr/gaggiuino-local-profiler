@@ -25,6 +25,23 @@ function normalizeImageUrl(url) {
     return null;
 }
 
+// Best-effort altitude from German prose: "1.850 m" or a range like "1.950
+// bis 2.150 Meter" (range is averaged). Requires the thousands-dot shape
+// typical of altitude figures to avoid matching unrelated numbers.
+function extractAltitudeM(text) {
+    if (typeof text !== 'string') return null;
+    const range = text.match(/(\d{1,2})[.,](\d{3})\s*(?:bis|–|-)\s*(\d{1,2})[.,](\d{3})\s*m(?:eter)?n?\b/i);
+    if (range) return Math.round((parseInt(range[1] + range[2]) + parseInt(range[3] + range[4])) / 2);
+    const single = text.match(/(\d{1,2})[.,](\d{3})\s*m(?:eter)?n?\b/i);
+    return single ? parseInt(single[1] + single[2]) : null;
+}
+
+// Shopify's product JSON reports price in cents.
+function priceFromProduct(product) {
+    const cents = product?.price;
+    return typeof cents === 'number' && cents > 0 ? Math.round(cents) / 100 : null;
+}
+
 // Splits a tasting-notes string into flavor tags: separators , and ;, trailing
 // parenthesized qualifiers ("Schwarzer Tee (Filter)") stripped, deduped.
 function splitFlavors(text) {
@@ -115,6 +132,13 @@ function parseHoploProduct(product) {
     // When it is itself just a mappable country name, don't duplicate it.
     const region = fields['Herkunft'] && !mapOriginToCode(fields['Herkunft'])
         ? fields['Herkunft'] : null;
+    // "Ernte: 04-06.25" sits in its own <p>, not one of the "Auf einen Blick" <li>s.
+    let harvest = null;
+    $('p').each((_, el) => {
+        if (harvest) return;
+        const m = $(el).text().replace(/\s+/g, ' ').trim().match(/^Ernte:\s*(.+)$/);
+        if (m) harvest = m[1].trim();
+    });
     return {
         name:       title,
         roaster:    product.vendor || 'Hoppenworth & Ploch',
@@ -126,6 +150,10 @@ function parseHoploProduct(product) {
         process:    fields['Prozess'] || null,
         roastType:  roastTypeFromTags(product.tags) || null,
         imageUrl:   normalizeImageUrl(product.featured_image),
+        importer:   fields['Importeur'] || null,
+        harvest,
+        altitude_m: extractAltitudeM($.text()),
+        price_eur:  priceFromProduct(product),
         decaf:      /\bdecaf\b/i.test(title) || undefined,
         source:     'hoppenworth-ploch.de',
         importedAt: today(),
@@ -177,10 +205,15 @@ function parseElbgoldProduct(product) {
         process:    null,
         roastType:  roastTypeFromTags(product.tags) || null,
         imageUrl:   normalizeImageUrl(product.featured_image),
+        altitude_m: extractAltitudeM(text),
+        price_eur:  priceFromProduct(product),
         decaf:      /\bdecaf|entkoffeiniert\b/i.test(`${title} ${tagText}`) || undefined,
         source:     'elbgold.com',
         importedAt: today(),
     };
 }
 
-module.exports = { parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, hoploJsonUrl, shopifyJsonUrl, splitFlavors, roastTypeFromTags, normalizeImageUrl };
+module.exports = {
+    parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, hoploJsonUrl, shopifyJsonUrl,
+    splitFlavors, roastTypeFromTags, normalizeImageUrl, extractAltitudeM, priceFromProduct,
+};

@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-const { parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, hoploJsonUrl, shopifyJsonUrl, splitFlavors, roastTypeFromTags } = require('../lib/import-parsers');
+const { parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, hoploJsonUrl, shopifyJsonUrl, splitFlavors, roastTypeFromTags, extractAltitudeM, priceFromProduct } = require('../lib/import-parsers');
 
 const hoploFixture = JSON.parse(readFileSync(new URL('./fixtures/hoplo-shyira.json', import.meta.url), 'utf8'));
 const elbgold = h => JSON.parse(readFileSync(new URL(`./fixtures/elbgold-${h}.json`, import.meta.url), 'utf8'));
@@ -26,6 +26,13 @@ describe('parseHoploProduct', () => {
         expect(bean.notes).not.toContain('Aprikose');
         expect(bean.region).toBe('Nyabihu District'); // growing region is structured
         expect(bean.decaf).toBeUndefined();
+    });
+
+    it('extracts importer, harvest and altitude from the "Auf einen Blick" block', () => {
+        const bean = parseHoploProduct(hoploFixture);
+        expect(bean.importer).toBe('Rehm Coffee');
+        expect(bean.harvest).toBe('04-06.25');
+        expect(bean.altitude_m).toBe(1850);
     });
 
     it('detects the DECAF title prefix', () => {
@@ -149,5 +156,41 @@ describe('splitFlavors', () => {
     it('handles empty and non-string input', () => {
         expect(splitFlavors('')).toEqual([]);
         expect(splitFlavors(undefined)).toEqual([]);
+    });
+});
+
+describe('extractAltitudeM', () => {
+    it('extracts a single altitude figure', () => {
+        expect(extractAltitudeM('Auf 1.850 m wachsen die Kirschen.')).toBe(1850);
+    });
+
+    it('averages a range', () => {
+        expect(extractAltitudeM('wachsen hier auf 1.950 bis 2.150 Metern Höhe')).toBe(2050);
+    });
+
+    it('returns null without a plausible altitude figure', () => {
+        expect(extractAltitudeM('Seit 2017 am Markt.')).toBeNull();
+        expect(extractAltitudeM('')).toBeNull();
+        expect(extractAltitudeM(undefined)).toBeNull();
+    });
+
+    it('matches the real elbgold fixtures', () => {
+        const cheerio = require('cheerio');
+        for (const [handle, expected] of [['bombe', 2050], ['la-maravilla', 1725], ['kenia-decaf', 1900]]) {
+            const text = cheerio.load(elbgold(handle).description).text().replace(/\s+/g, ' ');
+            expect(extractAltitudeM(text), handle).toBe(expected);
+        }
+    });
+});
+
+describe('priceFromProduct', () => {
+    it('converts Shopify cents to euros', () => {
+        expect(priceFromProduct({ price: 1490 })).toBe(14.9);
+    });
+
+    it('returns null for missing or non-positive price', () => {
+        expect(priceFromProduct({})).toBeNull();
+        expect(priceFromProduct({ price: 0 })).toBeNull();
+        expect(priceFromProduct({ price: '1490' })).toBeNull();
     });
 });
