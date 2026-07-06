@@ -1,4 +1,4 @@
-## [Unreleased]
+## [1.98.0] – 2026-07-06
 
 ### Added
 - **README screenshots + `scripts/screenshots.mjs`** — regenerates `docs/screenshots/*.png` (Shots, Library, Flavor Wheel, Analytics world map, Maintenance, Dial-in) by booting a throwaway instance (its own tmp data dir and port, never touching `/data` or 8099), seeding demo beans/grinder/shots, and driving a headless Chromium (Playwright) through each view. README now embeds a preview; the GitHub wiki (Coffee-Library, Analytics, Usage, EN+DE) links the same images. Also fixes two stale `gaggiuino-profiler-integration` wiki links (now `glp-integration`) that an earlier docs pass missed. Closes #242
