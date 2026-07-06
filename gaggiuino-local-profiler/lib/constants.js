@@ -3,7 +3,7 @@ if (typeof File === 'undefined') {
     try { global.File = require('buffer').File; } catch (_) { global.File = class File {}; }
 }
 
-const GLP_VERSION  = '1.96.1';
+const GLP_VERSION  = '1.97.0';
 const DEFAULT_PORT = 8099;
 
 const DATA_DIR             = '/data';
