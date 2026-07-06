@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { roastAgeDays, freshnessState } from '../public-src/utils.js';
+import { roastAgeDays, freshnessState, shouldShowFreshBadge } from '../public-src/utils.js';
 
 const DAY = 86400000;
 const now = new Date(2026, 6, 5, 12).getTime(); // 2026-07-05 noon, local time
@@ -35,5 +35,22 @@ describe('freshnessState', () => {
         expect(freshnessState(35)).toBe('fading');
         expect(freshnessState(36)).toBe('old');
         expect(freshnessState(null)).toBeNull();
+    });
+});
+
+describe('shouldShowFreshBadge', () => {
+    it('keeps showing the badge for beans with no stock tracking at all', () => {
+        expect(shouldShowFreshBadge(0, null)).toBe(true);
+        expect(shouldShowFreshBadge(null, null)).toBe(true);
+    });
+
+    it('keeps showing the badge for a stock-tracked bean that still has stock', () => {
+        expect(shouldShowFreshBadge(250, 50)).toBe(true);
+        expect(shouldShowFreshBadge(250, 1)).toBe(true);
+    });
+
+    it('hides the badge for a stock-tracked bean that is depleted or over-consumed', () => {
+        expect(shouldShowFreshBadge(250, 0)).toBe(false);
+        expect(shouldShowFreshBadge(250, -20)).toBe(false);
     });
 });

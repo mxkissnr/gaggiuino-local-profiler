@@ -1,7 +1,7 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
-import { esc, roastAgeDays, freshnessState, calcBeanRating } from '../utils.js';
+import { esc, roastAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, countryName, flagEmoji } from '../constants.js';
 import { loadBeanImageBlobUrl, loadGrinderImageBlobUrl, invalidateGrinderImage, invalidateBeanImage } from '../bean-image.js';
 import { generateBeanQR, parseGlpQrParams } from '../glp-qr.js';
@@ -78,9 +78,9 @@ export function renderBeanList() {
       return (match && d && afterOpen) ? sum + d : sum;
     }, 0)) : totalConsumed;
 
+    const remaining = b.stock_g ? Math.round(b.stock_g - activeBagConsumed) : null;
     let invHtml = '';
     if (b.stock_g) {
-      const remaining = Math.round(b.stock_g - activeBagConsumed);
       const isLow = remaining < 100;
       const editingStock = S._beanStockEditId === b.id;
       invHtml = `<div class="lib-inv-stats">
@@ -118,7 +118,7 @@ export function renderBeanList() {
       <button class="lib-btn-sm lib-bag-history-btn" data-action="toggle-bag-history" data-id="${b.id}" id="bagHistoryBtn${b.id}">▸ ${t('lib_bag_history')}</button>` : '';
 
     const roastAge = roastAgeDays(activeBag?.roastDate || b.roastDate);
-    const freshBadge = roastAge != null
+    const freshBadge = (roastAge != null && shouldShowFreshBadge(b.stock_g, remaining))
       ? ` <span class="lib-fresh-badge fresh-${freshnessState(roastAge)}" title="${esc(t('freshness_title', roastAge))}">${roastAge}d</span>`
       : '';
 

@@ -39,6 +39,13 @@ export function freshnessState(days) {
   return 'old';
 }
 
+// A stock-tracked bean with nothing left shouldn't nag about freshness — the
+// badge is only meaningful while there's still coffee to brew. Beans with no
+// stock tracking at all (stock_g unset, remaining is null) keep showing it.
+export function shouldShowFreshBadge(stock_g, remaining) {
+  return !(stock_g > 0 && remaining !== null && remaining <= 0);
+}
+
 // ── Brew ratio ────────────────────────────────────────────────────────────
 // Final weight / annotated dose; null when either side is missing or absurd.
 export function calcBrewRatio(shot, data) {
