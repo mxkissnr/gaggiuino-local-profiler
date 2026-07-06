@@ -135,17 +135,19 @@ export function findAutoZoomTarget(categories) {
 // imports state.js, which touches localStorage at module scope and can't be
 // imported under vitest's node test environment.
 
-export function hslFor(hue, depth, dimmed) {
-  if (dimmed) return `hsla(${hue}, 8%, 55%, .18)`;
-  const lightness = 42 + depth * 10;
-  return `hsl(${hue}, 62%, ${Math.min(lightness, 72)}%)`;
+// The real SCA/WCR wheel stays fully colored everywhere — categories aren't
+// grayed out just because nothing in them matched this bean's tags. Matches
+// are highlighted separately (bolder text + a brighter border — see
+// toSunburstData in flavor-wheel.js), not by dimming everything else.
+export function hslFor(hue, depth) {
+  const lightness = Math.min(42 + depth * 10, 72);
+  return `hsl(${hue}, 62%, ${lightness}%)`;
 }
 
 // Label text was hardcoded white regardless of the segment's own background
 // (up to 72% lightness at depth 3 — white-on-light-pastel is low contrast).
 // Pick dark text once the background gets light enough for it to read.
-export function labelColorFor(depth, lit) {
-  if (!lit) return 'rgba(255,255,255,.35)';
+export function labelColorFor(depth) {
   const lightness = Math.min(42 + depth * 10, 72);
   return lightness >= 60 ? '#18181b' : '#fff';
 }

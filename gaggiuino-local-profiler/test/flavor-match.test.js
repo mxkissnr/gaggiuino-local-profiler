@@ -103,28 +103,23 @@ describe('matchFlavors', () => {
 });
 
 describe('labelColorFor', () => {
-  it('dims unmatched (not-lit) segments regardless of depth', () => {
-    expect(labelColorFor(1, false)).toBe('rgba(255,255,255,.35)');
-    expect(labelColorFor(3, false)).toBe('rgba(255,255,255,.35)');
-  });
-
-  it('picks dark text once the segment background gets light enough to need it', () => {
+  it('picks dark text once the segment background gets light enough to need it, regardless of match state', () => {
     // depth 1: hslFor lightness = 52% -> white still reads fine
-    expect(labelColorFor(1, true)).toBe('#fff');
+    expect(labelColorFor(1)).toBe('#fff');
     // depth 3: hslFor lightness capped at 72% -> light pastel needs dark text
-    expect(labelColorFor(3, true)).toBe('#18181b');
+    expect(labelColorFor(3)).toBe('#18181b');
   });
 });
 
 describe('hslFor', () => {
   it('caps lightness at 72% regardless of depth', () => {
-    expect(hslFor(0, 1, false)).toBe('hsl(0, 62%, 52%)');
-    expect(hslFor(0, 3, false)).toBe('hsl(0, 62%, 72%)');
-    expect(hslFor(0, 10, false)).toBe('hsl(0, 62%, 72%)'); // would be 142% uncapped
+    expect(hslFor(0, 1)).toBe('hsl(0, 62%, 52%)');
+    expect(hslFor(0, 3)).toBe('hsl(0, 62%, 72%)');
+    expect(hslFor(0, 10)).toBe('hsl(0, 62%, 72%)'); // would be 142% uncapped
   });
 
-  it('returns a translucent desaturated color for dimmed segments', () => {
-    expect(hslFor(120, 2, true)).toBe('hsla(120, 8%, 55%, .18)');
+  it('stays fully saturated regardless of match state — the wheel no longer grays out unmatched segments', () => {
+    expect(hslFor(120, 2)).toBe('hsl(120, 62%, 62%)');
   });
 });
 

@@ -1,3 +1,13 @@
+## [1.103.0] – 2026-07-06
+
+### Added
+- **Flavor wheel: redesigned to match the real SCA/WCR wheel's look** — after several rounds of readability feedback, every category, subcategory and descriptor now stays fully colored and labeled all the time (previously only top categories and actual matches were labeled, everything else dimmed to near-invisible) — the wheel is a legible reference chart again, not a sparse highlight diagram. Matches now stand out via bold text and a brighter border instead of graying out everything around them. Outer-ring labels switched from tangential (curved, lying along the ring) to radial (spoke-pointing, tilt-your-head-to-read) — the original wheel's signature look. `hslFor()`/`labelColorFor()` in `flavor-match.js` simplified accordingly (no more `dimmed`/`lit` branching on color, just depth-based contrast). Closes #257 (finally) — for real this time, confirmed against the actual SCA/WCR reference.
+
+### Fixed
+- **Self-healing cleanup for the v1.102.0 zombie service worker** — the v1.102.1 revert removed the service worker server-side, but a client that had already registered it (e.g. the HA mobile companion app) kept running the old, broken one regardless — unregistering the server's own registration call does nothing for a worker a browser already has active. `main.js` now unconditionally calls `getRegistrations()` + `unregister()` on every load, so any still-affected client self-heals the next time it opens the app, no manual cache-clearing needed. Closes #261
+- **Comparative grind-advice toggle ("▸ N Vergleichsshots") did nothing** — the button has carried `data-action="toggle-comp-grind"` since it was introduced, but that action was never added to the delegated click handler in `main.js`, so tapping it was a no-op; reported as "can't open the comparison shots anymore". Closes #262
+- **Flavor wheel modal had no reachable way to close it on mobile** — the only close control was a button below the (possibly tall, touch-interactive) chart, requiring a scroll past it; reported as getting stuck in the wheel. Added a visible "✕" in the modal header and tap/click-outside-the-modal-to-close. Closes #263
+
 ## [1.102.2] – 2026-07-06
 
 ### Fixed

@@ -1,5 +1,16 @@
 import './style.css';
 
+// One-time cleanup for the v1.102.0 service worker (reverted in v1.102.1):
+// a client that already registered it keeps it active indefinitely — the
+// server no longer trying to re-register does nothing for those clients.
+// Unregistering unconditionally on every load self-heals them; safe to run
+// even for clients that never had one (getRegistrations() is then empty).
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations()
+    .then(regs => Promise.all(regs.map(r => r.unregister())))
+    .catch(() => {});
+}
+
 import { S } from './state.js';
 import { initToken, apiFetch } from './api.js';
 import { t, setLang, applyTranslations } from './i18n.js';
@@ -474,6 +485,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('input[type="file"][accept=".json"]').addEventListener('change', e => restoreFromFile(e.target));
   document.getElementById('backupDownloadBtn').addEventListener('click', downloadBackup);
   document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
+  // Tapping the dimmed backdrop (not the modal content itself) closes it —
+  // there was no way back out of the flavor wheel on mobile without this.
+  document.getElementById('flavorWheelModal')?.addEventListener('click', e => {
+    if (e.target.id === 'flavorWheelModal') closeFlavorWheel();
+  });
   document.getElementById('annRecipe')?.addEventListener('change', scheduleAutoSave);
 
   // ── Global click delegation for dynamic content ────────────────────────
@@ -518,6 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'zoom-flavor-wheel':   zoomFlavorWheelTo(strId()); break;
       case 'delete-maint-log':   deleteMaintLogEntry(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
+      case 'toggle-comp-grind':  document.getElementById('grindAdviceComparative')?.classList.toggle('expanded'); break;
     }
   });
 

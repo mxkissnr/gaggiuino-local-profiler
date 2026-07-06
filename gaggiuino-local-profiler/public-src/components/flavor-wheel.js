@@ -17,8 +17,11 @@ function toSunburstData(node, depth, hue, lang) {
   const entry = {
     id: node.id,
     name: label,
-    itemStyle: { color: hslFor(hue, depth, !lit) },
-    label: { show: depth === 1 || lit, color: labelColorFor(depth, lit), fontSize: depth === 1 ? 13 : (lit ? 12 : 10) },
+    // Every node stays fully colored and labeled, like the real SCA/WCR
+    // reference wheel — matches are highlighted (bold text + brighter
+    // border), not surfaced by graying out everything that isn't one.
+    itemStyle: { color: hslFor(hue, depth), borderColor: lit ? '#fff' : '#111113', borderWidth: lit ? 2.5 : 1.5 },
+    label: { show: true, color: labelColorFor(depth), fontSize: depth === 1 ? 13 : depth === 2 ? 11 : 10, fontWeight: lit ? 'bold' : 'normal' },
   };
   if (node.children?.length) {
     entry.children = node.children.map(c => toSunburstData(c, depth + 1, hue, lang));
@@ -94,8 +97,11 @@ export function renderFlavorWheel(container, flavors, lang, breadcrumbEl) {
         // emphasis state, since clicking triggers focus:'ancestor' up to it.
         { label: { show: false }, itemStyle: { color: 'transparent' }, emphasis: { label: { show: false }, itemStyle: { color: 'transparent' } } },
         { r0: '14%', r: '38%' },
-        { r0: '38%', r: '68%', label: { rotate: 'tangential' } },
-        { r0: '68%', r: '92%', label: { rotate: 'tangential' } },
+        // Radial (spoke-pointing) labels on the outer two rings, matching
+        // the real SCA/WCR wheel's signature look — you tilt the wheel to
+        // read the far side, same as the paper original.
+        { r0: '38%', r: '68%', label: { rotate: 'radial' } },
+        { r0: '68%', r: '92%', label: { rotate: 'radial' } },
       ],
     }],
   });
