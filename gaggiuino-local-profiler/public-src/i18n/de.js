@@ -63,6 +63,8 @@ export default {
     lib_grinder_name:'Name *', lib_grinder_notes:'Notizen',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Quijote Kaffee',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',
+    lib_grinder_burr_type:'Mahlwerk', lib_grinder_burr_type_ph:'Konisch Stahl',
+    lib_grinder_purchase_date:'Kaufdatum', lib_grinder_image:'Bild',
     lib_cancel:'Abbrechen', lib_save:'Speichern',
     lib_empty_beans:'Noch keine Bohnen gespeichert', lib_empty_grinders:'Noch keine Mühlen gespeichert',
     lib_btn_edit:'Bearbeiten', lib_btn_delete:'Löschen',

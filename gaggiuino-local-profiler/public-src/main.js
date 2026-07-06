@@ -41,7 +41,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
          openBeanForm, closeBeanForm, editBean, saveBean, deleteBean,
-         openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder,
+         openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage,
          toggleBeanQR, generateBeanQR,
          toggleBagHistory, openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
          openBeanStockEdit, closeBeanStockEdit, saveBeanStock,
@@ -442,6 +442,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('closeGrinderFormBtn').addEventListener('click', closeGrinderForm);
   document.getElementById('saveGrinderBtn').addEventListener('click', saveGrinder);
   document.getElementById('grinderAddTrigger').addEventListener('click', openGrinderForm);
+  document.getElementById('grinderFormImage').addEventListener('change', function () {
+    if (S.grinderEditId) uploadGrinderImage(S.grinderEditId, this);
+  });
   document.getElementById('addRecipeStepBtn').addEventListener('click', addRecipeStep);
   document.getElementById('closeRecipeFormBtn').addEventListener('click', closeRecipeForm);
   document.getElementById('saveRecipeBtn').addEventListener('click', saveRecipe);

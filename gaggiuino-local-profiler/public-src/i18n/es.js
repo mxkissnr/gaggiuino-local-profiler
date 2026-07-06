@@ -63,6 +63,8 @@ export default {
     lib_grinder_name:'Nombre *', lib_grinder_notes:'Notas',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Tostadero Madrid',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',
+    lib_grinder_burr_type:'Tipo de muelas', lib_grinder_burr_type_ph:'Cónicas de acero',
+    lib_grinder_purchase_date:'Fecha de compra', lib_grinder_image:'Foto',
     lib_cancel:'Cancelar', lib_save:'Guardar',
     lib_empty_beans:'No hay granos guardados', lib_empty_grinders:'No hay molinos guardados',
     lib_btn_edit:'Editar', lib_btn_delete:'Eliminar',

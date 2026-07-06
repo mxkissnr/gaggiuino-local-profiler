@@ -22,7 +22,7 @@ const axiosPath = require.resolve('axios');
 const axiosGet  = vi.fn();
 require.cache[axiosPath] = { exports: { get: axiosGet, default: { get: axiosGet } } };
 
-const { fetchBeanImage, deleteBeanImage, imagePath, isAllowedImageUrl } = require('../lib/services/ImageService');
+const { fetchBeanImage, deleteBeanImage, imagePath, isAllowedImageUrl, saveUploadedImage, deleteImage } = require('../lib/services/ImageService');
 
 beforeEach(() => axiosGet.mockReset());
 afterAll(() => rmSync(tmpDir, { recursive: true, force: true }));
@@ -83,5 +83,40 @@ describe('deleteBeanImage', () => {
         deleteBeanImage(7, 'webp');
         expect(existsSync(imagePath(7, 'webp'))).toBe(false);
         expect(() => deleteBeanImage(7, 'webp')).not.toThrow();
+    });
+});
+
+// Direct-upload path used by grinder photos (no URL fetch, so no SSRF
+// surface — but the same content-type whitelist and size cap apply).
+describe('saveUploadedImage', () => {
+    it('writes the buffer under a prefixed filename and returns the extension', () => {
+        const ext = saveUploadedImage('grinder-', 42, Buffer.from('fake-png-bytes'), 'image/png');
+        expect(ext).toBe('png');
+        expect(existsSync(imagePath(42, 'png', 'grinder-'))).toBe(true);
+        // a bean image with the same numeric id never collides
+        expect(imagePath(42, 'png', 'grinder-')).not.toBe(imagePath(42, 'png'));
+    });
+
+    it('rejects unsupported content types', () => {
+        expect(saveUploadedImage('grinder-', 43, Buffer.from('<html>'), 'text/html')).toBeNull();
+    });
+
+    it('rejects oversized buffers', () => {
+        const big = Buffer.alloc(2048, 1); // exceeds the 1024-byte test cap
+        expect(saveUploadedImage('grinder-', 44, big, 'image/jpeg')).toBeNull();
+    });
+
+    it('rejects empty buffers', () => {
+        expect(saveUploadedImage('grinder-', 45, Buffer.alloc(0), 'image/jpeg')).toBeNull();
+    });
+});
+
+describe('deleteImage (prefixed)', () => {
+    it('removes a prefixed file and is a no-op when already gone', () => {
+        saveUploadedImage('grinder-', 46, Buffer.from('x'), 'image/webp');
+        expect(existsSync(imagePath(46, 'webp', 'grinder-'))).toBe(true);
+        deleteImage(46, 'webp', 'grinder-');
+        expect(existsSync(imagePath(46, 'webp', 'grinder-'))).toBe(false);
+        expect(() => deleteImage(46, 'webp', 'grinder-')).not.toThrow();
     });
 });

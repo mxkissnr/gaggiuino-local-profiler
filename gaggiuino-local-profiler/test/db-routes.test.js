@@ -25,7 +25,12 @@ require.cache[dataPath].exports = { ...realData, isOrdersEnabled: () => ordersEn
 const imageServicePath = require.resolve('../lib/services/ImageService');
 const realImageService = require(imageServicePath);
 const fetchBeanImageMock = (beanId, url) => url.includes('evil') ? Promise.resolve(null) : Promise.resolve('jpg');
-require.cache[imageServicePath].exports = { ...realImageService, fetchBeanImage: fetchBeanImageMock, deleteBeanImage: () => {} };
+const saveUploadedImageMock = (prefix, id, buffer, contentType) =>
+    contentType === 'image/jpeg' || contentType === 'image/png' ? 'jpg' : null;
+require.cache[imageServicePath].exports = {
+    ...realImageService, fetchBeanImage: fetchBeanImageMock, deleteBeanImage: () => {},
+    saveUploadedImage: saveUploadedImageMock, deleteImage: () => {},
+};
 
 const express           = require('express');
 const systemRouter      = require('../routes/system');
@@ -438,5 +443,53 @@ describe('POST /api/library/grinder/:id/delete', () => {
         const r = await fetch(`${baseUrl}/api/library/grinder/42/delete`, { method: 'POST' });
         expect(r.status).toBe(200);
         expect(libraryService.getMaintenance().grinder_42).toBeUndefined();
+    });
+});
+
+describe('grinder extra fields (burrType/purchaseDate) and photo upload', () => {
+    it('sanitizes and round-trips burrType/purchaseDate', async () => {
+        const r = await fetch(`${baseUrl}/api/library/grinder`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'DF64', burrType: 'Konisch Stahl', purchaseDate: '01.03.2026' }),
+        });
+        const grinder = await r.json();
+        expect(grinder).toMatchObject({ burrType: 'Konisch Stahl', purchaseDate: '01.03.2026' });
+
+        const r2 = await fetch(`${baseUrl}/api/library/grinder/${grinder.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ burrType: 'Flach Keramik' }),
+        });
+        expect((await r2.json()).burrType).toBe('Flach Keramik');
+    });
+
+    it('uploads a photo and serves it back', async () => {
+        saveLibrary({ beans: [], grinders: [{ id: 42, name: 'DF64' }], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/library/grinder/42/image`, {
+            method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: Buffer.from('fake-jpeg-bytes'),
+        });
+        expect(r.status).toBe(200);
+        expect((await r.json()).image).toBe('jpg');
+    });
+
+    it('rejects an upload for a nonexistent grinder', async () => {
+        saveLibrary({ beans: [], grinders: [], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/library/grinder/999/image`, {
+            method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: Buffer.from('x'),
+        });
+        expect(r.status).toBe(404);
+    });
+
+    it('404s the image route when no photo has been uploaded', async () => {
+        saveLibrary({ beans: [], grinders: [{ id: 7, name: 'K6' }], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/library/grinder/7/image`);
+        expect(r.status).toBe(404);
+    });
+
+    it('rejects an unsupported content type (express.raw skips parsing it)', async () => {
+        saveLibrary({ beans: [], grinders: [{ id: 8, name: 'K6' }], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/library/grinder/8/image`, {
+            method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'not an image',
+        });
+        expect(r.status).toBe(400);
     });
 });

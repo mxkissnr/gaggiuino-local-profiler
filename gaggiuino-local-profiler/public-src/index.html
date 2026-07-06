@@ -511,6 +511,24 @@
                                 <label data-i18n="lib_grinder_notes">Notizen</label>
                                 <input type="text" id="grinderFormNotes" data-i18n-placeholder="lib_grinder_notes_ph" placeholder="Espresso: 23 Clicks">
                             </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_grinder_burr_type">Mahlwerk</label>
+                                <input type="text" id="grinderFormBurrType" list="burrTypeSuggestions" data-i18n-placeholder="lib_grinder_burr_type_ph" placeholder="Konisch Stahl">
+                                <datalist id="burrTypeSuggestions">
+                                    <option value="Konisch Stahl"></option>
+                                    <option value="Konisch Keramik"></option>
+                                    <option value="Flach Stahl"></option>
+                                    <option value="Flach Keramik"></option>
+                                </datalist>
+                            </div>
+                            <div class="lib-form-field">
+                                <label data-i18n="lib_grinder_purchase_date">Kaufdatum</label>
+                                <input type="text" id="grinderFormPurchaseDate" placeholder="TT.MM.JJJJ">
+                            </div>
+                            <div class="lib-form-field" id="grinderFormImageField" style="display:none">
+                                <label data-i18n="lib_grinder_image">Bild</label>
+                                <input type="file" id="grinderFormImage" accept="image/jpeg,image/png,image/webp,image/gif">
+                            </div>
                         </div>
                         <div class="lib-form-actions">
                             <button class="lib-btn-sm" id="closeGrinderFormBtn" data-i18n="lib_cancel">Abbrechen</button>

@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Added
+- **Grinders get burr type, purchase date and a photo** — the grinder form and card gain `burrType` (free text with suggestions) and `purchaseDate` fields, plus a directly-uploaded photo (there's no URL import for grinders like beans have): `POST /api/library/grinder/:id/image` accepts the raw image bytes via `express.raw()`, validated against the same content-type whitelist and size cap as bean images, stored as `grinder-<id>.<ext>` so it can never collide with a bean image filename in the same directory. Closes #247
 - **Shots sidebar groups older months, collapsibly** — shots older than the current calendar month now collapse into a "Month YYYY" section (same collapse pattern as the bean bag history), while the current month stays a flat list. Only applies when sorted by "Newest" — score/rating/duration sorting keeps the flat list since month-grouping wouldn't make sense there. Closes #245
 
 ### Fixed

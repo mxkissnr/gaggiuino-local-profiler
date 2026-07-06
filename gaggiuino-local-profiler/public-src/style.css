@@ -538,6 +538,7 @@
         .flavor-chip-static { padding: 1px 6px; font-size: .66rem; }
         .lib-flavor-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
         .lib-bean-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; margin-right: 10px; background: var(--gray-800); }
+        .lib-grinder-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; margin-right: 10px; background: var(--gray-800); }
         .lib-rating-row { display: flex; align-items: center; gap: 1px; margin-top: 4px; }
         .lib-star { color: var(--gray-700); font-size: .8rem; }
         .lib-star.on { color: #eab308; }

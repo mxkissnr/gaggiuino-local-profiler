@@ -26,8 +26,10 @@ function isAllowedImageUrl(url) {
     } catch { return false; }
 }
 
-function imagePath(beanId, ext) {
-    return path.join(BEAN_IMAGE_DIR, `${beanId}.${ext}`);
+// prefix distinguishes entity types sharing BEAN_IMAGE_DIR (e.g. 'grinder-')
+// so a grinder id can never collide with a bean id's filename.
+function imagePath(id, ext, prefix = '') {
+    return path.join(BEAN_IMAGE_DIR, `${prefix}${id}.${ext}`);
 }
 
 // Downloads a bean image once, validating hard against SSRF: exact host
@@ -60,9 +62,27 @@ async function fetchBeanImage(beanId, imageUrl) {
     }
 }
 
-function deleteBeanImage(beanId, ext) {
+function deleteImage(id, ext, prefix = '') {
     if (!ext) return;
-    try { fs.unlinkSync(imagePath(beanId, ext)); } catch { /* already gone */ }
+    try { fs.unlinkSync(imagePath(id, ext, prefix)); } catch { /* already gone */ }
 }
 
-module.exports = { fetchBeanImage, deleteBeanImage, imagePath, isAllowedImageUrl, normalizeImageUrl, CONTENT_TYPE_EXT };
+function deleteBeanImage(beanId, ext) { deleteImage(beanId, ext); }
+
+// Saves a directly-uploaded image buffer (e.g. a grinder photo picked from
+// the user's device) — no URL fetch, so no SSRF surface, but the same
+// content-type whitelist and size cap apply. Returns the extension on
+// success, or null when the content-type isn't an accepted image type or the
+// buffer exceeds the size cap.
+function saveUploadedImage(prefix, id, buffer, contentType) {
+    const ext = CONTENT_TYPE_EXT[String(contentType || '').split(';')[0].trim()];
+    if (!ext || !Buffer.isBuffer(buffer) || buffer.length === 0 || buffer.length > BEAN_IMAGE_MAX_BYTES) return null;
+    fs.mkdirSync(BEAN_IMAGE_DIR, { recursive: true });
+    fs.writeFileSync(imagePath(id, ext, prefix), buffer);
+    return ext;
+}
+
+module.exports = {
+    fetchBeanImage, deleteBeanImage, deleteImage, saveUploadedImage,
+    imagePath, isAllowedImageUrl, normalizeImageUrl, CONTENT_TYPE_EXT,
+};

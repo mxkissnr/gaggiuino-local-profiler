@@ -3,7 +3,7 @@ import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { esc, roastAgeDays, freshnessState, calcBeanRating } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, countryName, flagEmoji } from '../constants.js';
-import { loadBeanImageBlobUrl } from '../bean-image.js';
+import { loadBeanImageBlobUrl, loadGrinderImageBlobUrl, invalidateGrinderImage } from '../bean-image.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
@@ -271,17 +271,32 @@ export function renderGrinderList() {
     el.innerHTML = `<div class="lib-empty">${t('lib_empty_grinders')}</div>`;
     return;
   }
-  el.innerHTML = S.coffeeLibrary.grinders.map(g => `
+  el.innerHTML = S.coffeeLibrary.grinders.map(g => {
+    const extra = [g.burrType, g.purchaseDate].filter(Boolean).join(' · ');
+    return `
     <div class="lib-item">
+      ${g.image ? `<img class="lib-grinder-thumb" data-grinder-id="${g.id}" alt="">` : ''}
       <div class="lib-item-info">
         <div class="lib-item-name">${esc(g.name)}</div>
+        ${extra ? `<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : ''}
         ${g.notes ? `<div class="lib-item-sub">${esc(g.notes)}</div>` : ''}
       </div>
       <div class="lib-item-actions">
         <button class="lib-btn-sm lib-btn-icon" data-action="edit-grinder" data-id="${g.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
         <button class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder" data-id="${g.id}" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+  loadGrinderThumbnails();
+}
+
+// Grinder images need the auth token, so <img src> can't point at the API
+// directly (see bean-image.js) — set the blob-url src async after render.
+function loadGrinderThumbnails() {
+  document.querySelectorAll('.lib-grinder-thumb[data-grinder-id]').forEach(img => {
+    const id = Number(img.dataset.grinderId);
+    loadGrinderImageBlobUrl(id).then(url => { if (url) img.src = url; });
+  });
 }
 
 // ── Flavor chips input ────────────────────────────────────────────────────
@@ -465,6 +480,9 @@ export function openGrinderForm(grinder) {
   S.grinderEditId = grinder ? grinder.id : null;
   document.getElementById('grinderFormName').value  = grinder?.name  || '';
   document.getElementById('grinderFormNotes').value = grinder?.notes || '';
+  document.getElementById('grinderFormBurrType').value     = grinder?.burrType || '';
+  document.getElementById('grinderFormPurchaseDate').value = grinder?.purchaseDate || '';
+  document.getElementById('grinderFormImageField').style.display = grinder ? '' : 'none';
   document.getElementById('grinderAddForm').classList.add('open');
   document.getElementById('grinderAddTrigger').style.display = 'none';
   document.getElementById('grinderFormName').focus();
@@ -482,10 +500,12 @@ export function editGrinder(id) {
 }
 
 export async function saveGrinder() {
-  const name  = document.getElementById('grinderFormName').value.trim();
-  const notes = document.getElementById('grinderFormNotes').value.trim();
+  const name         = document.getElementById('grinderFormName').value.trim();
+  const notes        = document.getElementById('grinderFormNotes').value.trim();
+  const burrType     = document.getElementById('grinderFormBurrType').value.trim();
+  const purchaseDate = document.getElementById('grinderFormPurchaseDate').value.trim();
   if (!name) { document.getElementById('grinderFormName').focus(); return; }
-  const body = JSON.stringify({ name, notes });
+  const body = JSON.stringify({ name, notes, burrType, purchaseDate });
   const url  = S.grinderEditId ? `api/library/grinder/${S.grinderEditId}` : 'api/library/grinder';
   const r    = await apiFetch(url, { method: S.grinderEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
   if (!r.ok) return;
@@ -498,6 +518,21 @@ export async function saveGrinder() {
   }
   updateLibraryDatalist();
   closeGrinderForm();
+  renderGrinderList();
+}
+
+export async function uploadGrinderImage(id, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const r = await apiFetch(`api/library/grinder/${id}/image`, {
+    method: 'POST', headers: { 'Content-Type': file.type }, body: file,
+  });
+  input.value = '';
+  if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
+  const saved = await r.json();
+  const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === id);
+  if (idx !== -1) S.coffeeLibrary.grinders[idx] = saved;
+  invalidateGrinderImage(id);
   renderGrinderList();
 }
 

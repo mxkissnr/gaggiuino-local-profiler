@@ -63,6 +63,8 @@ export default {
     lib_grinder_name:'Nome *', lib_grinder_notes:'Note',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Torrefazione Roma',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Click',
+    lib_grinder_burr_type:'Tipo di macine', lib_grinder_burr_type_ph:'Conico acciaio',
+    lib_grinder_purchase_date:'Data di acquisto', lib_grinder_image:'Foto',
     lib_cancel:'Annulla', lib_save:'Salva',
     lib_empty_beans:'Nessun grano salvato', lib_empty_grinders:'Nessun macinino salvato',
     lib_btn_edit:'Modifica', lib_btn_delete:'Elimina',

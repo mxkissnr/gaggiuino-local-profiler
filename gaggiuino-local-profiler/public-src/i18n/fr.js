@@ -63,6 +63,8 @@ export default {
     lib_grinder_name:'Nom *', lib_grinder_notes:'Notes',
     lib_bean_name_ph:'Ethiopia Yirgacheffe', lib_bean_roaster_ph:'Torréfacteur Paris',
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clics',
+    lib_grinder_burr_type:'Type de meules', lib_grinder_burr_type_ph:'Coniques acier',
+    lib_grinder_purchase_date:"Date d'achat", lib_grinder_image:'Photo',
     lib_cancel:'Annuler', lib_save:'Enregistrer',
     lib_empty_beans:'Aucun grain enregistré', lib_empty_grinders:'Aucun moulin enregistré',
     lib_btn_edit:'Modifier', lib_btn_delete:'Supprimer',
