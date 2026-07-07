@@ -162,7 +162,7 @@ async function seed(baseUrl) {
     // The frontend reads shot.profile.name (nested) / shot.profileName, not
     // the flat profile_name DB column — see public-src/views/shots/index.js.
     const shots = [
-        { id: 1, timestamp: now - 3 * 86400, duration: 280, profile: { name: 'Filter V60' }, datapoints },
+        { id: 1, timestamp: now - 3 * 86400, duration: 280, profile: { name: 'Blooming Shot' }, datapoints },
         { id: 2, timestamp: now - 2 * 86400, duration: 280, profile: { name: 'Standard Espresso' }, datapoints },
         { id: 3, timestamp: now - 86400,     duration: 280, profile: { name: 'Standard Espresso' }, datapoints },
         { id: 4, timestamp: now,             duration: 280, profile: { name: 'Standard Espresso' }, datapoints },
