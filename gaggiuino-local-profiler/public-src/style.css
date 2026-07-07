@@ -110,6 +110,10 @@
         .shot-wrapper.active .shot        { border-left-color: transparent; border-image: linear-gradient(180deg, var(--accent-from), var(--accent-to)) 1; }
         .shot-wrapper.compare-active .shot{ border-left-color: #3498db; }
 
+        .shot-row  { display: flex; align-items: center; gap: 10px; }
+        .shot-text { flex: 1; min-width: 0; }
+        .shot-thumb { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--gray-800); }
+
         .profile-name-sidebar { font-size: .95rem; font-weight: 600; color: #fff; margin-bottom: 1px; }
         .coffee-name-sidebar  { font-size: .8rem; color: var(--gray-400); margin-bottom: 2px; }
         .shotid-sidebar       { color: var(--gray-400); font-size: .8rem; }
@@ -452,6 +456,9 @@
         .star-rating { display: flex; gap: 3px; }
         .star { font-size: 1.4rem; cursor: pointer; color: var(--gray-700); transition: color .12s; user-select: none; line-height: 1; }
         .star.active, .star:hover { color: var(--accent); }
+
+        .annotation-photo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+        .shot-photo-thumb { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: var(--gray-800); }
 
         .annotation-fields {
             display: grid;

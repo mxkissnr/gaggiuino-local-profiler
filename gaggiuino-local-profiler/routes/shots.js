@@ -5,9 +5,12 @@ const shotService              = require('../lib/services/ShotService');
 const libraryService           = require('../lib/services/LibraryService');
 const { validate }             = require('../lib/middleware/validate');
 const { annotationSchema }     = require('../lib/validation/schemas');
-const { MAX_SHOT_ID }          = require('../lib/constants');
+const { MAX_SHOT_ID, BEAN_IMAGE_MAX_BYTES } = require('../lib/constants');
 const { log }                  = require('../lib/helpers');
 const { generateShareCard, isAvailable: cardAvailable } = require('../lib/card');
+const { imagePath, CONTENT_TYPE_EXT, deleteImage, saveUploadedImage } = require('../lib/services/ImageService');
+
+const VALID_IMAGE_EXTS = new Set(Object.values(CONTENT_TYPE_EXT));
 
 function parseId(param) {
     const id = parseInt(param, 10);
@@ -101,6 +104,49 @@ router.post('/api/shots/:id/delete', (req, res, next) => {
         log(`Shot ${id} deleted (added to blocklist)`);
         res.json({ ok: true });
     } catch (err) { next(err); }
+});
+
+// Serves a shot photo (e.g. cup/crema picture) uploaded by the user. 404 when
+// the shot has none. Filename is derived from the numeric id with a 'shot-'
+// prefix, so it never collides with bean (no prefix) or grinder ('grinder-')
+// images sharing BEAN_IMAGE_DIR — mirrors routes/library.js's bean/grinder
+// image routes.
+router.get('/api/shots/:id/image', (req, res) => {
+    const id   = parseId(req.params.id);
+    const shot = id ? shotService.getById(id) : null;
+    const ext  = shot?.image;
+    if (!ext || !VALID_IMAGE_EXTS.has(ext)) return res.status(404).json({ error: 'no image' });
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.type(ext);
+    res.sendFile(imagePath(id, ext, 'shot-'), err => { if (err && !res.headersSent) res.status(404).json({ error: 'no image' }); });
+});
+
+// Direct upload from the user's device — same pattern as the bean/grinder
+// photo upload routes. No URL fetch, so no SSRF surface; just the shared
+// content-type whitelist and size cap.
+router.post('/api/shots/:id/image',
+    express.raw({ type: Object.keys(CONTENT_TYPE_EXT), limit: BEAN_IMAGE_MAX_BYTES }),
+    (req, res) => {
+        const id = parseId(req.params.id);
+        if (!id) return res.status(400).json({ error: 'Invalid shot ID' });
+        const shot = shotService.getById(id);
+        if (!shot) return res.status(404).json({ error: 'Shot not found' });
+        if (!Buffer.isBuffer(req.body) || req.body.length === 0) return res.status(400).json({ error: 'no image data' });
+        const ext = saveUploadedImage('shot-', id, req.body, req.get('Content-Type'));
+        if (!ext) return res.status(400).json({ error: 'unsupported image' });
+        if (shot.image && shot.image !== ext) deleteImage(id, shot.image, 'shot-');
+        const updated = shotService.setImage(id, ext);
+        res.json({ ...updated, score: shotService.computeScore(updated) });
+    });
+
+router.delete('/api/shots/:id/image', (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid shot ID' });
+    const shot = shotService.getById(id);
+    if (!shot) return res.status(404).json({ error: 'Shot not found' });
+    if (shot.image) deleteImage(id, shot.image, 'shot-');
+    const updated = shotService.clearImage(id);
+    res.json({ ok: true, shot: updated });
 });
 
 module.exports = router;

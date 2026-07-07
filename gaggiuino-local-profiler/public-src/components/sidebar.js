@@ -2,6 +2,7 @@ import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { LOCALE_MAP } from '../constants.js';
 import { esc, scoreClass } from '../utils.js';
+import { loadShotImageBlobUrl } from '../bean-image.js';
 
 // These are imported lazily via window to avoid circular dependencies
 // updateView is on window, calcShotScore/getShotData are set from shots.js
@@ -78,6 +79,17 @@ export function renderSidebar() {
 
   updateSidebarHighlighting();
   if (S.currentFilter) filterShots(S.currentFilter);
+  loadShotThumbnails();
+}
+
+// Shot images need the auth token, so <img src> can't point at the API
+// directly (see bean-image.js) — set the blob-url src async after render,
+// mirroring loadBeanThumbnails() in views/library.js.
+function loadShotThumbnails() {
+  document.querySelectorAll('.shot-thumb[data-shot-id]').forEach(img => {
+    const id = parseInt(img.dataset.shotId);
+    loadShotImageBlobUrl(id).then(url => { if (url) img.src = url; });
+  });
 }
 
 function _buildShotWrapper(shot) {
@@ -105,12 +117,18 @@ function _buildShotWrapper(shot) {
     const drinkHtml = drinkItem
       ? `<span class="sidebar-drink-badge">${drinkItem.emoji} ${esc(drinkItem.name)}</span>`
       : '';
+    const thumbHtml = shot.image ? `<img class="shot-thumb" data-shot-id="${shot.id}" alt="">` : '';
     divShot.innerHTML = `
-      <div class="profile-name-sidebar">${esc(profileName)}${scorePill}</div>
-      ${coffeeHtml}
-      <div class="shotid-sidebar">Shot ${esc(String(shot.id))}${ann.grinder ? ` · ${esc(ann.grinder)}` : ''}${drinkHtml}</div>
-      <div class="date-sidebar">${esc(date.toLocaleString(LOCALE_MAP[S.currentLang] || 'de-DE'))}</div>
-      ${starsHtml}
+      <div class="shot-row">
+        ${thumbHtml}
+        <div class="shot-text">
+          <div class="profile-name-sidebar">${esc(profileName)}${scorePill}</div>
+          ${coffeeHtml}
+          <div class="shotid-sidebar">Shot ${esc(String(shot.id))}${ann.grinder ? ` · ${esc(ann.grinder)}` : ''}${drinkHtml}</div>
+          <div class="date-sidebar">${esc(date.toLocaleString(LOCALE_MAP[S.currentLang] || 'de-DE'))}</div>
+          ${starsHtml}
+        </div>
+      </div>
     `;
 
     divShot.onclick = e => {

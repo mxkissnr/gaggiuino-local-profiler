@@ -52,6 +52,29 @@ class ShotRepository {
         return this.findById(id);
     }
 
+    // Merges a single field into the shot's JSON blob without touching the
+    // rest of the payload — unlike upsert(), which replaces the whole blob
+    // and would be unsafe for a partial update like "set the photo extension".
+    setImage(shotId, ext) {
+        const db  = getDb();
+        const row = db.prepare('SELECT data FROM shots WHERE id = ?').get(shotId);
+        if (!row) return null;
+        const data = JSON.parse(row.data);
+        data.image = ext;
+        db.prepare('UPDATE shots SET data = ? WHERE id = ?').run(JSON.stringify(data), shotId);
+        return this.findById(shotId);
+    }
+
+    clearImage(shotId) {
+        const db  = getDb();
+        const row = db.prepare('SELECT data FROM shots WHERE id = ?').get(shotId);
+        if (!row) return null;
+        const data = JSON.parse(row.data);
+        delete data.image;
+        db.prepare('UPDATE shots SET data = ? WHERE id = ?').run(JSON.stringify(data), shotId);
+        return this.findById(shotId);
+    }
+
     upsertMany(shots) {
         const db  = getDb();
         const ins = db.prepare(

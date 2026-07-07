@@ -26,6 +26,7 @@ import { switchMode, goToShot } from './components/mode.js';
 import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggleTrash,
          trashShot, restoreShot, permanentDeleteShot,
          renderAnnotationPanel, renderStars, quickClone, saveAnnotation, scheduleAutoSave, updateDegassing, calcBeanAgeAtShot,
+         uploadShotImage, removeShotImage,
          updateView, switchChartTab, updatePQChart,
          openChartFullscreen, closeChartFullscreen, switchFsTab,
          exportCSV, exportAllCSV, exportShot, exportProfile, shareCard, restoreFromFile, downloadBackup,
@@ -456,6 +457,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('closeFullscreenBtn').addEventListener('click', closeChartFullscreen);
   document.getElementById('quickCloneBtn').addEventListener('click', quickClone);
   document.getElementById('saveAnnotationBtn').addEventListener('click', saveAnnotation);
+  document.getElementById('annPhotoInput').addEventListener('change', function () { uploadShotImage(this); });
+  document.getElementById('annPhotoRemoveBtn').addEventListener('click', removeShotImage);
   ['annCoffee','annGrinder','annGrindSetting','annDose','annTds','annNotes'].forEach(id => {
     document.getElementById(id).addEventListener('input', scheduleAutoSave);
   });

@@ -1,10 +1,10 @@
 import { apiFetch } from './api.js';
 
-// Bean/grinder images require the auth token, so <img src="api/...​"> can't be
-// used directly — fetch as a blob and hand back an object URL instead. Cached
-// per entity for the page lifetime; grinder photos can be re-uploaded, so
-// invalidateGrinderImage() clears a stale cache entry after a new upload.
-const _cache = new Map(); // 'bean:<id>' | 'grinder:<id>' -> Promise<string|null>
+// Bean/grinder/shot images require the auth token, so <img src="api/...​">
+// can't be used directly — fetch as a blob and hand back an object URL
+// instead. Cached per entity for the page lifetime; photos can be
+// re-uploaded/removed, so invalidate*Image() clears a stale cache entry.
+const _cache = new Map(); // 'bean:<id>' | 'grinder:<id>' | 'shot:<id>' -> Promise<string|null>
 
 function _load(key, url) {
   if (_cache.has(key)) return _cache.get(key);
@@ -33,4 +33,12 @@ export function invalidateGrinderImage(grinderId) {
 
 export function invalidateBeanImage(beanId) {
   _cache.delete(`bean:${beanId}`);
+}
+
+export function loadShotImageBlobUrl(shotId) {
+  return _load(`shot:${shotId}`, `api/shots/${shotId}/image`);
+}
+
+export function invalidateShotImage(shotId) {
+  _cache.delete(`shot:${shotId}`);
 }

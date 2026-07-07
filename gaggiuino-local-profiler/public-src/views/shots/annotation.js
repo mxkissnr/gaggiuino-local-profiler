@@ -4,6 +4,7 @@ import { apiFetch }                       from '../../api.js';
 import { esc, germanToIso }              from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { calcBeanAgeAtShot, _roastDateFromLibrary } from './utils.js';
+import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 
 // ── Auto-save ─────────────────────────────────────────────────────────────
 
@@ -171,8 +172,57 @@ export function updateDegassing(val) {
   label.textContent     = text;
 }
 
+// ── Shot photo ────────────────────────────────────────────────────────────
+
+function _renderShotPhoto(shot) {
+  const thumb  = document.getElementById('annPhotoThumb');
+  const remove = document.getElementById('annPhotoRemoveBtn');
+  if (!thumb || !remove) return;
+  if (shot.image) {
+    thumb.style.display  = '';
+    remove.style.display = '';
+    loadShotImageBlobUrl(shot.id).then(url => { if (url) thumb.src = url; });
+  } else {
+    thumb.style.display  = 'none';
+    thumb.removeAttribute('src');
+    remove.style.display = 'none';
+  }
+}
+
+export async function uploadShotImage(input) {
+  const file = input.files[0];
+  if (!file || !S.primaryShotId) return;
+  const id = S.primaryShotId;
+  const r = await apiFetch(`api/shots/${id}/image`, {
+    method: 'POST', headers: { 'Content-Type': file.type }, body: file,
+  });
+  input.value = '';
+  if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
+  const saved = await r.json();
+  const idx = S.shots.findIndex(s => s.id === id);
+  if (idx !== -1) S.shots[idx].image = saved.image;
+  invalidateShotImage(id);
+  _renderShotPhoto(saved);
+  renderSidebar();
+  updateSidebarHighlighting();
+}
+
+export async function removeShotImage() {
+  if (!S.primaryShotId) return;
+  const id = S.primaryShotId;
+  const r = await apiFetch(`api/shots/${id}/image`, { method: 'DELETE' });
+  if (!r.ok) return;
+  const idx = S.shots.findIndex(s => s.id === id);
+  if (idx !== -1) delete S.shots[idx].image;
+  invalidateShotImage(id);
+  _renderShotPhoto({ id, image: null });
+  renderSidebar();
+  updateSidebarHighlighting();
+}
+
 export function renderAnnotationPanel(shot) {
   const ann = shot.annotation || {};
+  _renderShotPhoto(shot);
   S.currentRating = ann.rating || 0;
   renderStars(S.currentRating);
   _renderBeanSelect(ann.coffee || null);

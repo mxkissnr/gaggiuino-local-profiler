@@ -13,6 +13,9 @@ class ShotService {
         return repo.getAnnotation(shotId);
     }
 
+    setImage(id, ext)  { return repo.setImage(id, ext); }
+    clearImage(id)     { return repo.clearImage(id); }
+
     trashShot(id) {
         if (!repo.findById(id)) throw Object.assign(new Error('Shot not found'), { status: 404 });
         repo.moveToTrash(id);

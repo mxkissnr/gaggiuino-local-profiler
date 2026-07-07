@@ -139,6 +139,7 @@ export default {
     profile_unknown:'Perfil desconocido',
     nav_settings:'⚙', settings_theme:'Tema', settings_accent:'Esquema de colores', theme_dark:'Oscuro', theme_light:'Claro', settings_language:'Idioma',
     ann_clone_btn:'↩ Clonar',
+    ann_photo_upload:'Añadir una foto a este shot', ann_photo_remove:'Eliminar foto',
     lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'ej. 500',
     lib_bean_decaf:'Descafeinado',
     lib_inv_consumed:(n)=>`${n} g usados`, lib_inv_remaining:(n)=>`${n} g restantes`, lib_inv_reorder:'Repedir',
