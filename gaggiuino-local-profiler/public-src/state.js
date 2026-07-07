@@ -54,6 +54,8 @@ export const S = {
   _ordersEtaSelected: {},
   _ordersDeclineOpen: {},
   _ordersStatsOpen: false,
+  machineReachable: null,
+  isDemo: false,
 };
 
 // ── Reactive pub/sub ──────────────────────────────────────────────────────

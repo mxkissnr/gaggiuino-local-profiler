@@ -11,6 +11,7 @@ import { getShotData, calcShotScore }                         from './utils.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel }                              from './annotation.js';
 import { updatePQChart }                                      from './charts.js';
+import { updateOnboardingPanel }                               from '../../components/onboarding.js';
 
 // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ export async function loadData() {
     empty.style.display     = 'flex';
     chartArea.style.display = 'none';
   }
+  updateOnboardingPanel();
 }
 
 // ── Trash ─────────────────────────────────────────────────────────────────

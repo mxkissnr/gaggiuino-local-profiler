@@ -5,6 +5,10 @@ module.exports = {
     lastSyncTime:         null,
     lastSyncError:        null,
     syncRetryCount:       0,
+    // Machine connection state (first-run onboarding, see #274). null = never checked.
+    machineReachable:     null,
+    lastMachineError:     null,
+    lastMachineSuccess:   null,
     lastManualSync:       0,
     lastKnownShotId:      0,
     cachedMachineVersion: null,

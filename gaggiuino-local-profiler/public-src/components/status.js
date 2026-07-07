@@ -2,6 +2,7 @@ import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { LOCALE_MAP } from '../constants.js';
 import { apiFetch } from '../api.js';
+import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge } from './onboarding.js';
 
 export async function updateStatus() {
   try {
@@ -32,6 +33,9 @@ export async function updateStatus() {
     }
     const ordersBtn = document.getElementById('btnOrders');
     if (ordersBtn) ordersBtn.style.display = s.ordersFeature ? '' : 'none';
+    updateMachineBanner(s);
+    updateOnboardingPanel();
+    if ('isDemo' in s) updateDemoBadge(s.isDemo);
     if (switchRes?.ok) updatePowerButton(await switchRes.json());
     else updatePowerButton({ configured: false });
   } catch (e) {}

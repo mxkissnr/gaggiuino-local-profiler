@@ -20,6 +20,9 @@ async function syncShots() {
     const machineUrl = getMachineUrl(opts);
     try {
         const latestResponse  = await axios.get(`${machineUrl}/latest`, { timeout: 10000 });
+        state.machineReachable   = true;
+        state.lastMachineError   = null;
+        state.lastMachineSuccess = Date.now();
         const latestMachineId = latestResponse.data?.[0]?.lastShotId;
         if (latestMachineId == null) {
             log('Sync: machine /latest returned no lastShotId — skipped', true);
@@ -62,6 +65,8 @@ async function syncShots() {
     } catch (err) {
         state.lastSyncError = err.message.replace(/https?:\/\/\S+/g, '[url]');
         state.lastSyncTime  = new Date().toISOString();
+        state.machineReachable = false;
+        state.lastMachineError = state.lastSyncError;
         log(`Sync error: ${err.message}`, true);
         return false;
     }
@@ -89,13 +94,22 @@ async function fetchMachineVersion() {
     if (state.cachedMachineVersion) return;
     const baseUrl   = getMachineBaseUrl(loadOptions());
     const endpoints = ['/api/system/info', '/api/firmware', '/api/about'];
+    let lastErr = null, anySuccess = false;
     for (const path of endpoints) {
         try {
             const res = await axios.get(`${baseUrl}${path}`, { timeout: 3000 });
+            anySuccess = true;
+            state.machineReachable   = true;
+            state.lastMachineError   = null;
+            state.lastMachineSuccess = Date.now();
             const d   = res.data || {};
             const ver = d.version || d.firmware || d.softwareVersion || d.fw_version || d.buildNumber || d.buildDate || null;
             if (ver) { state.cachedMachineVersion = String(ver); log(`Gaggiuino firmware (${path}): ${state.cachedMachineVersion}`); return; }
-        } catch (_) {}
+        } catch (e) { lastErr = e; }
+    }
+    if (lastErr && !anySuccess) {
+        state.machineReachable = false;
+        state.lastMachineError = lastErr.message.replace(/https?:\/\/\S+/g, '[url]');
     }
 }
 

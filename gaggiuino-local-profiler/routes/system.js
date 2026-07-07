@@ -24,6 +24,7 @@ const { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled, loadMenu
 const { getSwitchState, callHaService } = require('../lib/ha');
 const { log, rateLimit } = require('../lib/helpers');
 const state = require('../lib/state');
+const demoService = require('../lib/services/DemoService');
 
 // ── Profile cache helpers ─────────────────────────────────────────────────
 
@@ -108,20 +109,49 @@ router.get('/api/status', (req, res) => {
     // Sensitive fields only exposed to authenticated callers (H1)
     const sensitive = req.glpAuthenticated ? {
         machineUrl, machineHostname,
-        lastSyncError:  state.lastSyncError,
-        switchEntity:   opts.switch_entity || null,
+        lastSyncError:    state.lastSyncError,
+        lastMachineError: state.lastMachineError,
+        switchEntity:     opts.switch_entity || null,
+        isDemo:           demoService.isDemoActive(),
     } : {};
     res.json({
         shotCount,
-        lastSync:       state.lastSyncTime,
-        syncRetryCount: state.syncRetryCount,
-        machineVersion: state.cachedMachineVersion,
-        syncInterval:   opts.sync_interval || 5,
-        haConnected:    !!HA_TOKEN,
-        glpVersion:     GLP_VERSION,
-        ordersFeature:  isOrdersEnabled(),
+        lastSync:           state.lastSyncTime,
+        syncRetryCount:     state.syncRetryCount,
+        machineVersion:     state.cachedMachineVersion,
+        syncInterval:       opts.sync_interval || 5,
+        haConnected:        !!HA_TOKEN,
+        glpVersion:         GLP_VERSION,
+        ordersFeature:      isOrdersEnabled(),
+        machineReachable:   state.machineReachable,
+        lastMachineSuccess: state.lastMachineSuccess,
         ...sensitive,
     });
+});
+
+// ── Demo mode (#274) ─────────────────────────────────────────────────────
+
+router.post('/api/demo/seed', (req, res) => {
+    try {
+        if (!demoService.isEmpty()) return res.status(409).json({ error: 'Database is not empty' });
+        demoService.seedDemoData();
+        log('Demo data seeded');
+        res.json({ ok: true, isDemo: true });
+    } catch (e) {
+        log(`Demo seed error: ${e.message}`, true);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/api/demo/end', (req, res) => {
+    try {
+        demoService.endDemo();
+        log('Demo data removed');
+        res.json({ ok: true, isDemo: false });
+    } catch (e) {
+        log(`Demo end error: ${e.message}`, true);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // ── Manual sync ───────────────────────────────────────────────────────────

@@ -47,6 +47,9 @@ async function pollViaGaggiuinoStatus() {
     const baseUrl = getMachineBaseUrl(opts);
     try {
         const statusRes = await axios.get(`${baseUrl}/api/system/status`, { timeout: 3000 });
+        state.machineReachable   = true;
+        state.lastMachineError   = null;
+        state.lastMachineSuccess = Date.now();
         const raw       = statusRes.data;
         const status    = Array.isArray(raw) ? raw[0] : raw;
 
@@ -128,6 +131,8 @@ async function pollViaGaggiuinoStatus() {
             state.liveAccum.datapoints.targetTemperature.push(Math.round(tTempVal * 10));
         }
     } catch (err) {
+        state.machineReachable = false;
+        state.lastMachineError = err.message.replace(/https?:\/\/\S+/g, '[url]');
         log(`Live poll error: ${err.message}`, true);
     }
 }

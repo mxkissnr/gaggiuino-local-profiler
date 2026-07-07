@@ -65,6 +65,8 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
 
 import { renderDialin } from './views/dialin.js';
 
+import { loadDemoData, endDemo } from './components/onboarding.js';
+
 // ── Toast helper ──────────────────────────────────────────────────────────
 function showToast(msg, duration = 3000) {
   let el = document.getElementById('glpToast');
@@ -395,6 +397,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('trash-toggle').addEventListener('click', toggleTrash);
   document.getElementById('powerBtn').addEventListener('click', toggleMachinePower);
   document.getElementById('syncBtn').addEventListener('click', triggerSync);
+  document.getElementById('onboardingDemoBtn').addEventListener('click', loadDemoData);
+  document.getElementById('glpDemoEndBtn').addEventListener('click', endDemo);
   document.getElementById('btnLive').addEventListener('click', () => switchMode('live'));
   document.getElementById('btnShots').addEventListener('click', () => switchMode('shots'));
   document.getElementById('btnAnalytics').addEventListener('click', () => switchMode('analytics'));

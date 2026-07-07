@@ -108,7 +108,7 @@ curl http://<gaggiuino-ip>/api/shots/latest
 
 | Option | Description | Default |
 |---|---|---|
-| `machine_host` | IP or hostname of the Gaggiuino controller | `gaggia.intern` |
+| `machine_host` | IP or hostname of the Gaggiuino controller | `gaggiuino.local` |
 | `sync_interval` | Auto-sync interval in minutes (1–60) | `5` |
 | `switch_entity` | HA switch entity to power the machine on/off | *(empty)* |
 | `preheat_time` | Warmup time in minutes — how long after switch-on until the machine is ready to brew (1–120) | `20` |
@@ -126,6 +126,14 @@ curl http://<gaggiuino-ip>/api/shots/latest
 | **Dial-in** | Dial-in assistant: compare a target shot with recent attempts. The shot view's grind advice additionally flags brew ratios outside the classic espresso window (1:1.8–2.2) when the duration itself is fine. |
 | **Maintenance** | Five machine maintenance reminders (descaling, backflush, group head service, gaskets & screens, water filter) plus a per-grinder cleaning schedule. All tasks have configurable shot or day thresholds, progress bars and a "Done now" button. Backflush and descaling additionally offer a **guided walkthrough**: a step-by-step checklist that unlocks the done button once every step is ticked and then logs the task. Below the cards: a **Maintenance Log** that records every service event — date, task, shot count at time and machine hostname. Entries are created automatically when marking a task done; past events can be back-filled via the "Add entry" form (task, date, notes). Each entry can be deleted. Stored in `/data/maintenance_log.json`. |
 | **Orders** | Barista order management backend *(requires `enable_orders: true`)*. Toggle order acceptance on/off, manage the drink menu (emoji + name + optional **variants** — either manually entered strings, automatically sourced from the active bean library via the 🫘 toggle, or from the active milk library via the 🥛 toggle, persisted in `/data/menu.json`), an optional milk amount per order (**ml**) that is deducted from the matching milk in the library on order completion — milks with no stock left drop out of the active list, see the live order queue with auto-suggested ETAs based on current queue length, and history. Accept orders with an ETA picker (pre-filled with queue estimate), or decline with a free-text reason. Customer statistics panel shows total orders and per-customer breakdown. **Push notifications** (collapsible section): three independent sub-sections — (1) **Broadcast recipients**: select one or more `notify.mobile_app_*` devices that receive a broadcast when orders open ("☕ open — order via the Kaffeebar menu"; preheat-aware: "opens in ~X min" while warming up) or close ("🚫 closed"); (2) **Barista notification**: one device that is notified instantly when any new order is placed (title: drink name, body: customer + note), when the machine finishes warming up ("☕ Machine ready — Warm-up complete — ready to brew"), and once per bag when a bean's remaining stock drops below 100 g ("🫘 Bean running low"); (3) **Per-customer mapping**: assign a specific device to each HA user (all `person.*` entities are listed, plus anyone who has already placed an order) — that device is notified when their individual order is accepted, completed, or declined. Requires `homeassistant_api: true` and the HA Companion app. Customer-facing order placement is handled by the [GLP Order Card](https://github.com/mxkissnr/glp-order-card). |
+
+### First-run onboarding & demo mode
+
+If the Gaggiuino controller can't be reached (wrong/unreachable `machine_host`), GLP shows a dismissible banner at the top of the page naming the configured host, with a link to the [wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki) for setup help. Dismissal is per browser session.
+
+When the database has no shots yet **and** the machine has never been reachable, the Shots view shows a **first-run onboarding panel** instead of the plain empty state: three setup steps (set `machine_host`, ensure the Gaggiuino is on the network, restart the add-on) plus a **"Load demo data"** button.
+
+Loading demo data seeds a static sample dataset — about a dozen shots with plausible pressure/flow/temperature curves and ratings, three sample beans (including a blend using the multi-origin `origins[]` field), and one recipe — so the Shots, Analytics (world map, score trend, bean stats), and flavor wheel views are populated for evaluation. While demo data is present, a **"Demo mode"** badge with an **"End demo"** button is shown in the sidebar; ending demo mode deletes exactly the seeded rows. Demo data can only be loaded into an otherwise empty database (no existing shots/beans/recipes).
 
 ### Live tab, switch entity and preheat timer
 

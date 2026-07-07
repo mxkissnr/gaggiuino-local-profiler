@@ -21,7 +21,7 @@ ports_description:
 panel_icon: mdi:coffee
 panel_title: "GLP"
 options:
-  machine_host: "gaggia.intern"
+  machine_host: "gaggiuino.local"
   sync_interval: 5
   switch_entity: ""
   preheat_time: 20

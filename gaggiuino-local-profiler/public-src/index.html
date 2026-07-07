@@ -45,6 +45,10 @@
     </div>
 
     <div id="sidebar-footer">
+        <div id="glpDemoBadge">
+            <span data-i18n="demo_mode_badge">Demo-Modus</span>
+            <button id="glpDemoEndBtn" data-i18n="demo_mode_end">Demo beenden</button>
+        </div>
         <div class="footer-row">
             <div style="display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden">
                 <span class="status-dot unknown" id="statusDot"></span>
@@ -89,6 +93,14 @@
             <div class="es-icon">☕</div>
             <h2 data-i18n="empty_title">Keine Shots vorhanden</h2>
             <p data-i18n="empty_desc">Stelle sicher, dass die Gaggiuino-Maschine unter der konfigurierten URL erreichbar ist und nutze ↻ Sync.</p>
+            <div id="onboarding-panel" style="display:none">
+                <ol id="onboarding-steps">
+                    <li data-i18n="onboarding_step1">machine_host in den Add-on-Optionen setzen</li>
+                    <li data-i18n="onboarding_step2">Sicherstellen, dass die Gaggiuino-Maschine im Netzwerk erreichbar ist</li>
+                    <li data-i18n="onboarding_step3">Add-on neu starten</li>
+                </ol>
+                <button id="onboardingDemoBtn" class="lib-save-btn" data-i18n="onboarding_demo_btn">Demo-Daten laden</button>
+            </div>
         </div>
 
         <div id="chart-area">
