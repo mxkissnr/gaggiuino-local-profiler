@@ -7,6 +7,7 @@
 
 ### Fixed
 - **`/api/token` trusted any RFC1918 address, handing the full API token (including `/api/restore` access) to any device on the LAN or Docker bridge with zero authentication.** `isPrivateIp()` matched all of `10.0.0.0/8`, `192.168.0.0/16` and `172.16.0.0/12` — far broader than intended, since only the HA Supervisor's own internal network actually needs this trust level. Narrowed to loopback + `172.30.0.0/16` (the same boundary `server.js`'s ingress bypass already used), now shared via `isSupervisorIp()` in `lib/helpers.js`. The HA integration is unaffected — it already authenticates via its Supervisor Bearer token, not the private-IP path. Other direct-URL integrations (e.g. the Order Card) now get the token from the new Settings → API Token panel instead. Closes #276
+- **CI didn't run tests or a build check.** `.github/workflows/build.yaml` only builds Docker images on release. Added `.github/workflows/test.yaml`, running `npm test` and `npm run build` on every push to `dev`/`main` and on pull requests. Also fixed `package.json`'s `version` field, which had been stuck at `1.2.4` while `config.yaml`/`lib/constants.js` moved on; a new `test/version-sync.test.js` now fails CI if the three drift apart again. Closes #277
 
 ## [1.104.3] – 2026-07-07
 
