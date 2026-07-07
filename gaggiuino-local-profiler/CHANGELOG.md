@@ -1,3 +1,8 @@
+## Unreleased
+
+### Changed
+- **Coffee World Map visual redesign.** The Analytics world map used a generic green instead of the app's amber/orange accent, always framed the entire globe even when bean data was clustered in a couple of regions, hid the shot-count color legend, and only showed bean info on hover. Now reads `--accent-from`/`--accent-to` live via `getComputedStyle` for scatter points and the choropleth gradient (so it follows whichever theme/accent color is active), shows the `visualMap` legend styled for the dark UI, auto-frames the initial camera on a bounding box computed from the countries/points that actually have data (`computeMapBoundingView()`, capped so a single country doesn't zoom in absurdly far; `roam: true` still lets you pan/zoom manually afterward), always-visible labels on scatter points that have at least one shot logged, and a darker map background so land reads more clearly against ocean. `public-src/views/analytics.js`. Closes #278
+
 ## [1.105.0] – 2026-07-07
 
 ### Added

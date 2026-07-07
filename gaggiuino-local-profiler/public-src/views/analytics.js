@@ -501,6 +501,46 @@ function _echartsAvailable() {
   return typeof echarts !== 'undefined' && typeof topojson !== 'undefined';
 }
 
+// Converts a #rrggbb (or #rgb) hex color to an rgba() string at the given
+// alpha; falls back to the raw input unchanged if it isn't hex (e.g. an
+// already-rgba CSS custom property value).
+function _hexToRgba(hex, alpha) {
+  const m = /^#?([a-f\d]{3}|[a-f\d]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return hex;
+  let h = m[1];
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const num = parseInt(h, 16);
+  const r = (num >> 16) & 255, g = (num >> 8) & 255, b = num & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Pure helper (unit-testable): given a list of [lon, lat] coordinates with
+// data on the map, returns a { center, zoom } that frames them instead of
+// defaulting to the whole globe. `zoom` is clamped to a sane range so a
+// single country (or a single point) doesn't zoom in absurdly far, and
+// stays within the geo.scaleLimit used by buildWorldMap (max 12).
+export function computeMapBoundingView(coords) {
+  const valid = (coords || []).filter(c => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1]));
+  if (!valid.length) return { center: undefined, zoom: 1 };
+  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  for (const [lon, lat] of valid) {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+  const center = [(minLon + maxLon) / 2, (minLat + maxLat) / 2];
+  const lonSpan = maxLon - minLon;
+  const latSpan = maxLat - minLat;
+  // Latitude degrees read visually "taller" than longitude degrees on an
+  // equirectangular-ish projection, so weight them more when picking the
+  // limiting axis; floor the span so a single point still gets some padding.
+  const span = Math.max(lonSpan, latSpan * 1.8, 8);
+  const padded = span * 1.6;
+  const zoom = Math.min(6, Math.max(1, 360 / padded));
+  return { center, zoom };
+}
+
 export async function buildWorldMap() {
   const wrap = document.getElementById('worldMapWrap');
   if (!wrap) return;
@@ -610,14 +650,32 @@ export async function buildWorldMap() {
     const shots = byCode[primaryCode]?.beans.has(bean.name)
       ? S.shots.filter(s => String(s.annotation?.coffee || '').toLowerCase() === bean.name.toLowerCase()).length
       : 0;
-    points.push({ name: bean.name, value: [...coord, shots], _region: bean.region || null });
+    // Always-visible label for beans that actually have shots logged (kept
+    // off for zero-shot points so the map doesn't get cluttered with beans
+    // that are only sitting in the Library with an origin set).
+    const label = shots > 0
+      ? { show: true, formatter: '{b}', position: 'right', distance: 5, fontSize: 9, fontWeight: 500 }
+      : undefined;
+    points.push({ name: bean.name, value: [...coord, shots], _region: bean.region || null, label });
   }
+
+  // Brand colors, read live from the CSS custom properties so the map
+  // follows whichever accent/theme the user has picked (not just amber).
+  const cs = getComputedStyle(document.documentElement);
+  const accentTo = (cs.getPropertyValue('--accent-to') || '#f97316').trim() || '#f97316';
+  const mutedText = (cs.getPropertyValue('--gray-500') || '#71717a').trim() || '#71717a';
 
   const container = wrap.querySelector('.world-map-canvas');
   if (!_echartsInstance) _echartsInstance = echarts.init(container);
 
+  const boundingCoords = [
+    ...Object.keys(byCode).map(code => COUNTRY_CENTROIDS[code]).filter(Boolean),
+    ...points.map(p => [p.value[0], p.value[1]]),
+  ];
+  const { center, zoom } = computeMapBoundingView(boundingCoords);
+
   _echartsInstance.setOption({
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(9,9,11,.55)',
     tooltip: {
       formatter: (params) => {
         if (params.seriesType === 'map') {
@@ -638,28 +696,32 @@ export async function buildWorldMap() {
       },
     },
     geo: {
-      map: 'world', roam: true, scaleLimit: { min: 1, max: 12 },
-      itemStyle: { areaColor: 'rgba(63,63,70,.35)', borderColor: 'rgba(63,63,70,.8)', borderWidth: 0.5 },
-      emphasis: { itemStyle: { areaColor: 'rgba(63,63,70,.55)' }, label: { show: false } },
+      map: 'world', roam: true, scaleLimit: { min: 1, max: 12 }, center, zoom,
+      itemStyle: { areaColor: 'rgba(82,82,91,.4)', borderColor: 'rgba(113,113,122,.7)', borderWidth: 0.5 },
+      emphasis: { itemStyle: { areaColor: 'rgba(82,82,91,.6)' }, label: { show: false } },
     },
     series: [
       {
         type: 'map', map: 'world', geoIndex: 0,
         data: mapData,
-        itemStyle: { borderColor: 'rgba(63,63,70,.8)', borderWidth: 0.5 },
+        itemStyle: { borderColor: 'rgba(113,113,122,.7)', borderWidth: 0.5 },
         emphasis: { label: { show: false } },
       },
       {
         type: 'effectScatter', coordinateSystem: 'geo',
         data: points,
         symbolSize: 7,
-        itemStyle: { color: '#22c55e', shadowBlur: 8, shadowColor: 'rgba(34,197,94,.6)' },
+        itemStyle: { color: accentTo, shadowBlur: 8, shadowColor: _hexToRgba(accentTo, .6) },
+        label: { show: false, color: mutedText, textBorderColor: 'rgba(9,9,11,.7)', textBorderWidth: 2 },
         rippleEffect: { scale: 2.5 },
       },
     ],
     visualMap: {
-      show: false, seriesIndex: 0, min: 0, max: maxShots,
-      inRange: { color: ['rgba(63,63,70,.35)', 'rgba(34,197,94,.85)'] },
+      show: true, seriesIndex: 0, min: 0, max: maxShots,
+      right: 10, top: 10, itemWidth: 10, itemHeight: 60,
+      text: [String(maxShots), '0'],
+      textStyle: { color: mutedText, fontSize: 9 },
+      inRange: { color: ['rgba(82,82,91,.4)', accentTo] },
     },
   }, true);
 
