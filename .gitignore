@@ -1,2 +1,8 @@
 gaggiuino-local-profiler/node_modules/
 gaggiuino-local-profiler/public/
+
+.memsearch/
+graphify-out/
+.claude/settings.local.json
+__pycache__/
+*.pyc
