@@ -1,4 +1,7 @@
-## [1.104.2] – 2026-07-06
+## [1.104.3] – 2026-07-07
+
+### Fixed
+- **Container no longer runs as root.** The runtime stage had no `USER` directive; the process ran as UID 0 by default. Fixed via the standard HA add-on pattern instead of a plain `USER` line: the container still starts as root (needed to `chown` the `/data` bind mount, since HA installs don't guarantee it's owned by a specific UID), then immediately drops to the unprivileged `node` user (built into the `node:20-slim` base image) via `gosu` before the actual Node process ever runs. Added `docker-entrypoint.sh`. Closes #271
 
 ### Fixed
 - **Auth middleware failed open if the API token couldn't be loaded.** `server.js`'s auth gate had `if (!state.apiToken) return next();` — a disk error preventing the token from loading/generating at startup would have let every request through unauthenticated instead of being denied. Only an edge case (`loadOrCreateApiToken()` always runs before `app.listen()` in the normal path), but fail-open is the wrong default for an auth check. Now returns 503 instead. Closes #272

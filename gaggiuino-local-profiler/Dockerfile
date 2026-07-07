@@ -49,7 +49,7 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends wget fonts-liberation \
+RUN apt-get update && apt-get install -y --no-install-recommends wget fonts-liberation gosu \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=prod-deps /app/node_modules ./node_modules
@@ -60,10 +60,16 @@ COPY lib/ ./lib/
 COPY routes/ ./routes/
 COPY openapi.yaml ./
 COPY --from=builder /app/public ./public
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8099
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD wget -q --spider http://localhost:8099/ || exit 1
 
+# Container starts as root (needed to chown the /data bind mount at runtime,
+# see docker-entrypoint.sh) and immediately drops to the unprivileged `node`
+# user before running the actual app — the process itself never runs as root.
+ENTRYPOINT [ "docker-entrypoint.sh" ]
 CMD [ "node", "server.js" ]
