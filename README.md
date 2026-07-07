@@ -21,6 +21,27 @@
 
 ---
 
+> **Heads-up — this requires a Gaggiuino-modified machine.** GLP does not work with stock espresso machines. [Gaggiuino](https://gaggiuino.github.io/) is an open-source hardware mod (custom controller, pressure/temperature sensors) for Gaggia Classic and similar machines. If your machine doesn't run Gaggiuino firmware yet, start there first.
+
+## Why GLP?
+
+You love your Gaggiuino machine, but your shot data disappears into the void? GLP brings live extraction charts, a searchable coffee library and full analytics straight into Home Assistant — completely local, no cloud, no account. From *"what was that bean from last week again?"* to a real shot archive with automatic scoring, compare view and flavor wheel: everything runs on your HA server, and your data stays yours.
+
+## 🔗 The GLP Ecosystem
+
+| Component | Version | Requires |
+|---|---|---|
+| **GLP App** (this repo) | ![Version](https://img.shields.io/github/v/tag/mxkissnr/gaggiuino-local-profiler?label=&color=22c55e) | Gaggiuino machine + HA OS/Supervised |
+| [**GLP Integration**](https://github.com/mxkissnr/glp-integration) | ![Version](https://img.shields.io/github/v/release/mxkissnr/glp-integration?label=&color=22c55e) | App v1.82.7+ · [HACS](https://hacs.xyz) |
+| [**GLP Shot Card**](https://github.com/mxkissnr/glp-lovelace-card) | ![Version](https://img.shields.io/github/v/release/mxkissnr/glp-lovelace-card?label=&color=22c55e) | Integration v1.9.0+ |
+| [**GLP Order Card**](https://github.com/mxkissnr/glp-order-card) | ![Version](https://img.shields.io/github/v/release/mxkissnr/glp-order-card?label=&color=22c55e) | Integration v1.7.0+ |
+
+All four components are optional and independently installable — only install what you need.
+
+> **No longer requires ALERTua/hass-gaggiuino** — as of GLP Integration v1.9.0 all machine sensors (temperature, pressure, water level, weight, profiles, switch states) are provided natively.
+
+---
+
 ## ⚡ Quick Install
 
 <p>
@@ -103,7 +124,7 @@ Either click the Quick Install button above, or manually:
 
 The [GLP HA Integration](https://github.com/mxkissnr/glp-integration) exposes all app data as native HA sensors — usable in automations, energy dashboards and Lovelace cards. Required for the GLP Shot Card and GLP Order Card.
 
-**Install via HACS:**
+**Install via HACS:** HACS is the community store for Home Assistant — one-time setup guide at [hacs.xyz](https://hacs.xyz) if you don't have it yet.
 
 <a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=mxkissnr&repository=glp-integration&category=integration">
   <img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Add GLP Integration via HACS" height="40"/>
@@ -156,21 +177,6 @@ type: iframe
 url: /api/hassio_ingress/gaggiuino_local_profiler/
 aspect_ratio: "16:9"
 ```
-
----
-
-## 🔗 Component Compatibility
-
-| Component | Current | Requires |
-|---|---|---|
-| **GLP App** | v1.90.4 | — |
-| **GLP Integration** ([glp-integration](https://github.com/mxkissnr/glp-integration)) | v1.14.1 | App v1.82.7+ |
-| **GLP Lovelace Card** ([glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)) | v2.12.3 | Integration v1.9.0+ |
-| **GLP Order Card** ([glp-order-card](https://github.com/mxkissnr/glp-order-card)) | v1.10.2 | Integration v1.7.0+ |
-
-All four components are optional and independently installable — only install what you need.
-
-> **No longer requires ALERTua/hass-gaggiuino** — as of GLP Integration v1.9.0 all machine sensors (temperature, pressure, water level, weight, profiles, switch states) are provided natively.
 
 ---
 
