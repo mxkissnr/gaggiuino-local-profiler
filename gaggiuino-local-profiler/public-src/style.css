@@ -572,6 +572,10 @@
         .lib-star { color: var(--gray-700); font-size: .8rem; }
         .lib-star.on { color: #eab308; }
         .lib-rating-num { color: var(--gray-500); font-size: .7rem; margin-left: 5px; }
+        .lib-best-combo-row { display: flex; align-items: center; gap: 5px; margin-top: 4px; font-size: .75rem; flex-wrap: wrap; }
+        .lib-best-combo-label { color: var(--gray-500); }
+        .lib-best-combo-value { color: var(--gray-200); font-weight: 600; }
+        .lib-best-combo-score { color: var(--ok); }
         .lib-form-field-check { display: flex; align-items: center; padding-top: 20px; }
         .lib-check-label { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: .85rem; color: var(--gray-300); }
         .lib-check-label input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--ok); cursor: pointer; }

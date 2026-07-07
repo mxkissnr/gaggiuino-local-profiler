@@ -5,6 +5,7 @@ import { esc, roastAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, countryName, flagEmoji } from '../constants.js';
 import { loadBeanImageBlobUrl, loadGrinderImageBlobUrl, invalidateGrinderImage, invalidateBeanImage } from '../bean-image.js';
 import { generateBeanQR, parseGlpQrParams } from '../glp-qr.js';
+import { calcBestGrindCombosForBean } from './shots/grind.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
@@ -128,6 +129,16 @@ export function renderBeanList() {
       <span class="lib-rating-num">${rating.avg.toFixed(1)}</span>
     </div>` : '';
 
+    // Only the single best combo is shown — with several grinders/grind
+    // settings tested per bean this can get noisy fast, and "the one thing
+    // to try next" is more useful at a glance than a ranked list.
+    const bestCombos = calcBestGrindCombosForBean(b.name, S.shots);
+    const bestComboHtml = bestCombos ? `<div class="lib-best-combo-row" title="${esc(t('bean_best_combo_tooltip', bestCombos[0].shotCount))}">
+      <span class="lib-best-combo-label">${t('bean_best_combo_label')}</span>
+      <span class="lib-best-combo-value">${esc(t('bean_best_combo_value', bestCombos[0].grinder, bestCombos[0].grindSetting))}</span>
+      <span class="lib-best-combo-score">${t('bean_best_combo_score', bestCombos[0].avgScore)}</span>
+    </div>` : '';
+
     const extraParts = [
       b.altitude_m ? t('bean_altitude_display', b.altitude_m) : '',
       b.producer, b.importer ? t('bean_importer_display', b.importer) : '',
@@ -157,6 +168,7 @@ export function renderBeanList() {
         ${extraHtml}
         ${brewHtml}
         ${ratingHtml}
+        ${bestComboHtml}
         ${Array.isArray(b.flavors) && b.flavors.length ? `<div class="lib-flavor-row">${b.flavors.map(f => `<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`).join('')}</div>` : ''}
         ${invHtml}
         ${bagHistoryHtml}
