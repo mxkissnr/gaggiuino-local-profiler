@@ -351,6 +351,8 @@
         .lang-option-btn.active { border-color:var(--err); color:#fff; }
         .backup-btn { background:var(--gray-800); border:1px solid var(--gray-700); color:var(--gray-200); padding:10px 14px; border-radius:8px; cursor:pointer; font-size:.85rem; font-family:'Figtree',sans-serif; text-align:left; transition:background .15s; text-decoration:none; display:block; }
         .backup-btn:hover { background:var(--gray-700); }
+        .api-token-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+        .api-token-value { flex:1; min-width:0; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:8px; padding:10px 14px; font-size:.78rem; color:var(--gray-200); word-break:break-all; }
 
         /* ── Degassing tracker ── */
         .degassing-bar-wrap { margin-top:6px; }

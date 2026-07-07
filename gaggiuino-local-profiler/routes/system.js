@@ -22,7 +22,7 @@ const { GLP_VERSION, HA_API, HA_TOKEN, PROFILES_CACHE_FILE } = require('../lib/c
 const shotRepo = require('../lib/repositories/ShotRepository');
 const { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled, loadMenu } = require('../lib/data');
 const { getSwitchState, callHaService } = require('../lib/ha');
-const { log, rateLimit } = require('../lib/helpers');
+const { log, rateLimit, isSupervisorIp } = require('../lib/helpers');
 const state = require('../lib/state');
 const demoService = require('../lib/services/DemoService');
 
@@ -52,17 +52,18 @@ function saveProfilesCache(profiles) {
 // ── Token endpoint ────────────────────────────────────────────────────────
 // Returns the GLP API token to callers that are one of:
 //  a) already authenticated (valid X-GLP-Token — covered by middleware),
-//  b) coming from a private/loopback address (LAN, Docker bridge, host-net), or
+//  b) coming from the HA Supervisor-internal network (loopback or
+//     172.30.0.0/16 — see isSupervisorIp in lib/helpers.js; this is the same
+//     boundary server.js uses for the ingress bypass, and does NOT include
+//     ordinary LAN/Docker-bridge addresses — ANY device that can reach this
+//     port used to be able to pull the token unauthenticated (issue #276)),
+//     or
 //  c) presenting a valid HA Supervisor token (Authorization: Bearer <token>)
 //     verified by calling http://supervisor/info — only processes inside HA OS
 //     have a Supervisor token, making this safe against external callers.
-function isPrivateIp(ip) {
-    return ip === '127.0.0.1' || ip === '::1' ||
-           ip.startsWith('10.') ||
-           ip.startsWith('192.168.') ||
-           /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
-}
-
+// Callers outside these categories (e.g. the Order Card in direct-URL mode,
+// or any browser hitting the app's LAN IP directly) must copy the token
+// manually from Settings → API Token in the web UI.
 async function isValidSupervisorToken(token) {
     if (!token) return false;
     try {
@@ -79,10 +80,10 @@ async function isValidSupervisorToken(token) {
 router.get('/api/token', async (req, res) => {
     const ip = (req.socket?.remoteAddress || req.ip || '').replace(/^::ffff:/, '');
     if (!rateLimit(`token:${ip}`, 10)) return res.status(429).json({ error: 'Rate limit exceeded' });
-    const fromPrivate   = isPrivateIp(ip);
-    const hasValidToken = req.glpAuthenticated;
+    const fromSupervisor = isSupervisorIp(ip);
+    const hasValidToken  = req.glpAuthenticated;
 
-    if (fromPrivate || hasValidToken) {
+    if (fromSupervisor || hasValidToken) {
         return res.json({ apiToken: state.apiToken || null });
     }
 

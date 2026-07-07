@@ -76,12 +76,21 @@ Install via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/mxkiss
 All components authenticate automatically via a shared token:
 
 1. The app generates a random 64-character token at first start and stores it in `/data/api_token.txt`.
-2. `GET /api/token` returns the token to requests originating from the HA Supervisor network (`172.30.x.x`) — i.e. requests going through the HA Ingress proxy. External LAN clients cannot read the token from an unauthenticated endpoint.
+2. `GET /api/token` returns the token to requests originating from the HA Supervisor-internal network (loopback or `172.30.0.0/16`) — i.e. requests going through the HA Ingress proxy, or a valid Supervisor Bearer token (used by the HA integration). External LAN clients cannot read the token from an unauthenticated endpoint.
 3. The browser UI reads the token via `/api/token` on startup (the request goes through the Supervisor) and includes it as an `X-GLP-Token` header on all subsequent requests.
 4. Requests coming through HA Ingress bypass the token check entirely — HA already authenticated the user.
-5. **GLP Order Card in direct-URL mode** (`glp_url` configured): set `glp_token: <your-token>` in the card YAML. The token is printed in the app logs on first start.
+5. **GLP Order Card in direct-URL mode** (`glp_url` configured): set `glp_token: <your-token>` in the card YAML. Copy the token from **Settings → API Token** in the app UI (open the app once through HA Ingress, or on a session that already holds a valid token).
 
 No manual configuration is required for the HA Ingress path. To rotate the token, delete `/data/api_token.txt` and restart the app.
+
+#### Trust model
+
+The API token grants full API access — including `/api/restore`, which wipes and replaces the entire database. Because of that, `/api/token` only ever hands out the token to two kinds of caller:
+
+- **Supervisor-internal callers**: loopback and the HA Supervisor's own network (`172.30.0.0/16`). This covers the HA Ingress proxy (browser UI) and the GLP HA Integration, which authenticates with its Supervisor Bearer token.
+- **Already-authenticated sessions**: a request that already carries a valid `X-GLP-Token` header.
+
+Ordinary LAN or Docker-bridge addresses are *not* trusted — a device merely being able to reach port 8099 is no longer enough to obtain the token. Any other integration that needs the token directly (e.g. the Order Card in direct-URL mode) must be given it explicitly: open the app through HA Ingress, go to **Settings → API Token**, and use the copy button.
 
 All persistent data is stored in SQLite (`/data/glp.db`) with WAL journal mode enabled — writes are crash-safe by default, with no half-written state possible.
 

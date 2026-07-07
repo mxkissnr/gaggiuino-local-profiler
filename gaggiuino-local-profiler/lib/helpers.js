@@ -6,6 +6,16 @@ function log(message, isError = false) {
     else         console.log(`[${now}] ${message}`);
 }
 
+// ── HA Supervisor-internal network check ──────────────────────────────────
+// Trusted origins for supervisor-only fast paths: loopback (same host) and
+// the HA Supervisor's internal ingress/add-on network. The Supervisor proxies
+// ingress traffic and add-on-to-add-on calls from 172.30.0.0/16 — external
+// LAN clients arrive with their own IP and must not receive this trust level.
+function isSupervisorIp(ip) {
+    const plain = (ip || '').replace(/^::ffff:/, '');
+    return plain === '127.0.0.1' || plain === '::1' || plain.startsWith('172.30.');
+}
+
 // ── Simple in-memory rate limiter ─────────────────────────────────────────
 const _rlWindows = new Map();
 function rateLimit(key, maxPerMinute) {
@@ -37,4 +47,4 @@ async function withFileLock(key, fn) {
     try { return await fn(); } finally { _fileLocks.delete(key); resolve(); }
 }
 
-module.exports = { log, rateLimit, writeFileSafe, withFileLock };
+module.exports = { log, rateLimit, writeFileSafe, withFileLock, isSupervisorIp };

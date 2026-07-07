@@ -4,7 +4,7 @@ const path     = require('path');
 const crypto   = require('crypto');
 
 const { GLP_VERSION, DEFAULT_PORT, DATA_DIR, TOKEN_FILE, HA_INGRESS_PATH } = require('./lib/constants');
-const { log, writeFileSafe }                         = require('./lib/helpers');
+const { log, writeFileSafe, isSupervisorIp }         = require('./lib/helpers');
 const state                                          = require('./lib/state');
 const { getDb }                                      = require('./lib/db');
 const shotService                                    = require('./lib/services/ShotService');
@@ -80,10 +80,7 @@ app.use(express.json({ limit: '16kb' }));
 // The Supervisor proxies ingress traffic from 172.30.0.0/16; external LAN clients
 // arrive with their own IP and must not receive the same trust level.
 function isFromSupervisor(req) {
-    const ip = req.socket?.remoteAddress || req.ip || '';
-    // Strip IPv6-mapped IPv4 prefix (::ffff:172.30.x.x)
-    const plain = ip.replace(/^::ffff:/, '');
-    return plain === '127.0.0.1' || plain.startsWith('172.30.');
+    return isSupervisorIp(req.socket?.remoteAddress || req.ip || '');
 }
 
 // API token auth

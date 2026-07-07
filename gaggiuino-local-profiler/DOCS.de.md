@@ -76,12 +76,21 @@ Installation via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/m
 Alle Komponenten authentifizieren sich automatisch über einen gemeinsamen Token:
 
 1. Das App generiert beim ersten Start einen zufälligen 64-stelligen Token und speichert ihn in `/data/api_token.txt`.
-2. `GET /api/token` gibt den Token zurück — aber nur für Anfragen die aus dem HA-Supervisor-Netz (`172.30.x.x`) stammen, also über den HA-Ingress-Proxy gehen. Externe LAN-Clients können den Token nicht über einen nicht-authentifizierten Endpunkt lesen.
+2. `GET /api/token` gibt den Token zurück — aber nur für Anfragen aus dem HA-Supervisor-internen Netz (Loopback oder `172.30.0.0/16`), also über den HA-Ingress-Proxy, oder für Anfragen mit einem gültigen Supervisor-Bearer-Token (genutzt von der HA-Integration). Externe LAN-Clients können den Token nicht über einen nicht-authentifizierten Endpunkt lesen.
 3. Browser-UI und Integration lesen den Token beim Start über `/api/token` (die Anfrage läuft durch den Supervisor) und schicken ihn danach als `X-GLP-Token`-Header bei allen Anfragen mit.
 4. Anfragen über HA Ingress umgehen die Token-Prüfung vollständig — HA hat den Benutzer bereits authentifiziert.
-5. **GLP Order Card im Direkt-URL-Modus** (`glp_url` konfiguriert): `glp_token: <token>` in der Karten-YAML-Konfiguration setzen. Der Token wird beim ersten Start in den App-Logs ausgegeben.
+5. **GLP Order Card im Direkt-URL-Modus** (`glp_url` konfiguriert): `glp_token: <token>` in der Karten-YAML-Konfiguration setzen. Den Token findest du unter **Einstellungen → API Token** in der App-Oberfläche (App einmal über HA Ingress öffnen, oder eine Sitzung nutzen, die bereits einen gültigen Token besitzt).
 
 Keine manuelle Konfiguration für den HA-Ingress-Pfad erforderlich. Um den Token zu erneuern, `/data/api_token.txt` löschen und das App neu starten.
+
+#### Vertrauensmodell
+
+Der API-Token gewährt vollen API-Zugriff — inklusive `/api/restore`, das die gesamte Datenbank löscht und ersetzt. Deshalb gibt `/api/token` den Token nur an zwei Arten von Anfragen heraus:
+
+- **Supervisor-interne Anfragen**: Loopback und das HA-Supervisor-eigene Netz (`172.30.0.0/16`). Das deckt den HA-Ingress-Proxy (Browser-UI) sowie die GLP-HA-Integration ab, die sich mit ihrem Supervisor-Bearer-Token authentifiziert.
+- **Bereits authentifizierte Sitzungen**: eine Anfrage, die bereits einen gültigen `X-GLP-Token`-Header mitschickt.
+
+Gewöhnliche LAN- oder Docker-Bridge-Adressen sind **nicht** vertrauenswürdig — dass ein Gerät Port 8099 erreichen kann, reicht nicht mehr aus, um den Token zu erhalten. Jede andere Integration, die den Token direkt benötigt (z. B. die Order Card im Direkt-URL-Modus), muss ihn explizit erhalten: App einmal über HA Ingress öffnen, zu **Einstellungen → API Token** gehen und über den Kopieren-Button übernehmen.
 
 Alle persistenten Daten werden in SQLite (`/data/glp.db`) mit aktiviertem WAL-Journal-Modus gespeichert — Schreibvorgänge sind standardmäßig absturzsicher, ohne dass ein inkonsistenter Zustand entstehen kann.
 

@@ -88,6 +88,26 @@ function showToast(msg, duration = 3000) {
   el._t = setTimeout(() => { el.style.opacity = '0'; }, duration);
 }
 
+// ── API token (Settings view) ──────────────────────────────────────────────
+// Shown only once a session actually holds a token — i.e. it came through HA
+// Ingress or a Supervisor-internal caller. Unauthenticated LAN callers never
+// reach this point since S.glpToken stays empty for them (see api.js).
+function renderApiTokenCard() {
+  const card = document.getElementById('apiTokenCard');
+  const valueEl = document.getElementById('apiTokenValue');
+  if (!card || !valueEl) return;
+  if (!S.glpToken) { card.style.display = 'none'; return; }
+  valueEl.textContent = S.glpToken;
+  card.style.display = '';
+}
+
+function copyApiToken() {
+  if (!S.glpToken) return;
+  navigator.clipboard?.writeText(S.glpToken)
+    .then(() => showToast(t('settings_api_token_copied')))
+    .catch(() => {});
+}
+
 // ── Expose everything on window (for HTML onclick handlers) ───────────────
 Object.assign(window, {
   // state & i18n
@@ -494,6 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.querySelector('input[type="file"][accept=".json"]').addEventListener('change', e => restoreFromFile(e.target));
   document.getElementById('backupDownloadBtn').addEventListener('click', downloadBackup);
+  document.getElementById('apiTokenCopyBtn').addEventListener('click', copyApiToken);
   document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
@@ -567,6 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadLibrary();
     updateStatus();
     checkForUpdate();
+    renderApiTokenCard();
   });
 
   setInterval(updateStatus, 30000);

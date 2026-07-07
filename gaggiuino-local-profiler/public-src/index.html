@@ -921,6 +921,17 @@
                 <input type="file" accept=".json" style="display:none">
             </label>
         </div>
+        <!-- Only shown once a valid session token was obtained (ingress or
+             already-authenticated) — the endpoint no longer hands out the
+             token to unauthenticated LAN callers, see #276 -->
+        <div class="settings-card" id="apiTokenCard" style="display:none">
+            <h3 class="settings-card-title" data-i18n="settings_api_token">API Token</h3>
+            <p class="settings-card-desc" data-i18n="settings_api_token_desc">Für Integrationen wie die Order Card im Direkt-URL-Modus (ohne HA Ingress) benötigst du diesen Token als glp_token in der YAML-Konfiguration.</p>
+            <div class="api-token-row">
+                <code id="apiTokenValue" class="api-token-value"></code>
+                <button id="apiTokenCopyBtn" type="button" class="backup-btn" data-i18n="settings_api_token_copy">Kopieren</button>
+            </div>
+        </div>
     </div>
 
 </div><!-- /main -->
