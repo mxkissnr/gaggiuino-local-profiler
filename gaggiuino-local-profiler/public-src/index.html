@@ -409,6 +409,7 @@
                 <div class="lib-section active" id="libSectionBeans">
                     <div class="lib-list" id="beanListUI"></div>
                     <div class="lib-add-form" id="beanAddForm">
+                        <div class="lib-import-notice" id="beanFormImportNotice" style="display:none"></div>
                         <div class="lib-form-grid">
                             <div class="lib-form-field">
                                 <label data-i18n="lib_bean_name">Name *</label>
@@ -527,10 +528,23 @@
                         <button class="lib-add-trigger" id="beanAddTrigger" data-i18n="lib_add_bean">+ Bohne hinzufügen</button>
                         <button class="lib-scan-trigger" id="openScanModalBtn" data-i18n="lib_scan_barcode">⬛ Scan</button>
                         <button class="lib-scan-trigger" id="toggleUrlImportBtn" data-i18n="lib_url_import">🔗 URL</button>
+                        <button class="lib-scan-trigger" id="toggleImportSettingsBtn" data-i18n="lib_import_settings_btn">⚙ Quellen</button>
                     </div>
                     <div class="lib-url-row" id="urlImportRow" style="display:none">
                         <input class="lib-url-input" id="urlImportInput" data-i18n-placeholder="lib_url_placeholder" placeholder="kaffeebraun.com/…">
                         <button class="lib-url-btn" id="importFromUrlBtn" data-i18n="lib_url_btn">Importieren</button>
+                    </div>
+                    <div class="lib-import-settings" id="importSettingsRow" style="display:none">
+                        <div class="lib-import-settings-title" data-i18n="lib_import_settings_title">Import-Quellen</div>
+                        <div id="importSettingsProviders"></div>
+                        <div class="lib-import-settings-custom">
+                            <div class="lib-import-settings-subtitle" data-i18n="lib_import_settings_custom_label">Eigene Shopify-Shops</div>
+                            <div id="importSettingsCustomList"></div>
+                            <div class="lib-import-settings-add">
+                                <input type="text" id="importSettingsDomainInput" data-i18n-placeholder="lib_import_settings_add_domain_ph" placeholder="shop.example.com">
+                                <button class="lib-btn-sm" id="importSettingsAddDomainBtn" data-i18n="lib_import_settings_add_domain_btn">Hinzufügen</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="lib-variant-picker" id="variantPickerRow" style="display:none">
                         <div class="lib-variant-picker-label" data-i18n="lib_variant_picker_label">Welche Packungsgröße hast du gekauft?</div>

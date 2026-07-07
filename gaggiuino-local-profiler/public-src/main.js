@@ -60,6 +60,7 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
          openRecipeForm, closeRecipeForm, editRecipe, saveRecipe, deleteRecipe, renderRecipeList,
          addRecipeStep, removeRecipeStep,
          toggleUrlImport, importFromUrl,
+         toggleImportSettings, addCustomShopifyDomain,
          openScanModal, closeScanModal, _runScanLoop, _handleScanResult,
          renderMilkList, openMilkForm, closeMilkForm, saveMilk, restockMilk, deleteMilk } from './views/library.js';
 
@@ -270,6 +271,8 @@ Object.assign(window, {
   removeRecipeStep,
   toggleUrlImport,
   importFromUrl,
+  toggleImportSettings,
+  addCustomShopifyDomain,
   openScanModal,
   closeScanModal,
   _runScanLoop,
@@ -455,6 +458,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('toggleUrlImportBtn').addEventListener('click', toggleUrlImport);
   document.getElementById('urlImportInput').addEventListener('keydown', e => { if (e.key === 'Enter') importFromUrl(); });
   document.getElementById('importFromUrlBtn').addEventListener('click', importFromUrl);
+  document.getElementById('toggleImportSettingsBtn').addEventListener('click', toggleImportSettings);
+  document.getElementById('importSettingsAddDomainBtn').addEventListener('click', addCustomShopifyDomain);
+  document.getElementById('importSettingsDomainInput').addEventListener('keydown', e => { if (e.key === 'Enter') addCustomShopifyDomain(); });
   document.getElementById('closeGrinderFormBtn').addEventListener('click', closeGrinderForm);
   document.getElementById('saveGrinderBtn').addEventListener('click', saveGrinder);
   document.getElementById('grinderAddTrigger').addEventListener('click', openGrinderForm);

@@ -8,6 +8,7 @@ const { getDb } = require('./db');
 const orderRepo  = require('./repositories/OrderRepository');
 const shotRepo   = require('./repositories/ShotRepository');
 const libService = require('./services/LibraryService');
+const importSettingsRepo = require('./repositories/ImportSettingsRepository');
 
 function loadOptions() {
     try {
@@ -77,6 +78,10 @@ function loadAnnotations() {
 }
 function loadTrash() { return shotRepo.getTrash(); }
 
+// ── Import settings shims ─────────────────────────────────────────────────────
+function loadImportSettings()      { return importSettingsRepo.getSettings(); }
+function saveImportSettings(s)     { importSettingsRepo.saveSettings(s); }
+
 module.exports = {
     loadOptions, getMachineUrl, getMachineBaseUrl, getSyncIntervalMs, isOrdersEnabled,
     loadOrders, saveOrders, loadMenu, saveMenu,
@@ -84,4 +89,5 @@ module.exports = {
     loadNotifyMapping, saveNotifyMapping,
     loadLibrary, saveLibrary,
     loadAnnotations, loadTrash,
+    loadImportSettings, saveImportSettings,
 };

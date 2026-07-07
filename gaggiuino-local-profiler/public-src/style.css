@@ -629,6 +629,19 @@
         .lib-variant-picker-label { font-size:.78rem; color:var(--gray-300); margin-bottom:6px; }
         .lib-variant-picker-option { display:flex; align-items:center; gap:6px; font-size:.78rem; color:var(--gray-200); padding:4px 0; cursor:pointer; }
         .lib-variant-picker-option input { accent-color: var(--accent); }
+        .lib-import-notice { margin-bottom:10px; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:8px; padding:8px 10px; font-size:.75rem; color:var(--gray-300); }
+        .lib-import-notice-hint { color:var(--gray-500); margin-top:3px; }
+        .lib-import-settings { flex-direction:column; gap:8px; margin-top:6px; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:8px; padding:10px 12px; }
+        .lib-import-settings-title { font-size:.8rem; color:var(--gray-200); font-weight:600; }
+        .lib-import-settings-subtitle { font-size:.75rem; color:var(--gray-400); margin-top:6px; }
+        .lib-import-settings-provider { display:flex; align-items:center; gap:6px; font-size:.78rem; color:var(--gray-200); padding:4px 0; cursor:pointer; }
+        .lib-import-settings-provider input { accent-color: var(--accent); }
+        .lib-import-settings-host { color:var(--gray-500); }
+        .lib-import-settings-domain { display:flex; align-items:center; justify-content:space-between; font-size:.78rem; color:var(--gray-200); padding:3px 0; }
+        .lib-import-settings-remove { background:none; border:none; color:var(--gray-500); cursor:pointer; font-size:.9rem; padding:0 4px; }
+        .lib-import-settings-remove:hover { color:var(--gray-200); }
+        .lib-import-settings-add { display:flex; gap:6px; margin-top:6px; }
+        .lib-import-settings-add input { flex:1; background:var(--gray-950); border:1px solid var(--gray-700); border-radius:8px; color:var(--gray-200); font-size:.78rem; padding:6px 9px; outline:none; font-family:'Figtree',sans-serif; }
 
         /* Milk tab */
         .lib-milk-item { display:flex; flex-direction:column; gap:6px; padding:10px 0; border-bottom:1px solid var(--gray-800); }

@@ -450,6 +450,8 @@ function populateSuggestionDatalists() {
 
 export function openBeanForm(bean) {
   S.beanEditId = bean ? bean.id : null;
+  const importNotice = document.getElementById('beanFormImportNotice');
+  if (importNotice) { importNotice.style.display = 'none'; importNotice.innerHTML = ''; }
   document.getElementById('beanFormName').value      = bean?.name      || '';
   document.getElementById('beanFormRoaster').value   = bean?.roaster   || '';
   document.getElementById('beanFormRoastDate').value = bean?.roastDate || '';
@@ -682,11 +684,38 @@ export async function importFromUrl() {
 // price/weight override the parser's own best-guess price_eur (based on
 // Shopify's arbitrary "default" variant) so the price actually matches what
 // the user is recording as stock_g.
+const BUILTIN_IMPORT_METHODS = new Set(['builtin:kaffeebraun', 'builtin:hoppenworth-ploch', 'builtin:elbgold']);
+
+// Labels the method that produced the pre-filled data so the user knows how
+// much to trust it — a built-in shop parser is well-tested, while the
+// generic fallbacks (custom Shopify domain, guessed Shopify endpoint,
+// JSON-LD, bare OpenGraph tags) are best-effort and worth double-checking.
+function _importMethodLabel(method, host) {
+  if (!method) return null;
+  if (BUILTIN_IMPORT_METHODS.has(method)) return t('lib_import_method_builtin', host || '');
+  if (method === 'custom-shopify')  return t('lib_import_method_custom_shopify', host || '');
+  if (method === 'generic-shopify') return t('lib_import_method_generic_shopify', host || '');
+  if (method === 'jsonld')          return t('lib_import_method_jsonld', host || '');
+  if (method === 'opengraph')       return t('lib_import_method_opengraph', host || '');
+  return null;
+}
+
+function _renderImportNotice(method, host) {
+  const el = document.getElementById('beanFormImportNotice');
+  if (!el) return;
+  const label = _importMethodLabel(method, host);
+  if (!label) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const unverified = !BUILTIN_IMPORT_METHODS.has(method);
+  el.innerHTML = `<div>${esc(label)}</div>${unverified ? `<div class="lib-import-notice-hint">${esc(t('lib_import_unverified_hint'))}</div>` : ''}`;
+  el.style.display = '';
+}
+
 function _applyUrlImport(data, variant) {
   S._urlImportSource   = data.source    || null;
   S._urlImportedAt     = data.importedAt || null;
   S._urlImportImageUrl = data.imageUrl  || null;
   openBeanForm();
+  _renderImportNotice(data.importMethod, data.source);
   if (data.name)    document.getElementById('beanFormName').value    = data.name;
   if (data.roaster) document.getElementById('beanFormRoaster').value = data.roaster;
   if (data.notes)   document.getElementById('beanFormNotes').value   = data.notes;
@@ -727,6 +756,86 @@ function openVariantPicker(variants, onPick) {
     onPick(variants[idx]);
   };
   confirmBtn.addEventListener('click', handler);
+}
+
+// ── Import provider settings ────────────────────────────────────────────────
+export async function toggleImportSettings() {
+  const row = document.getElementById('importSettingsRow');
+  const visible = row.style.display !== 'none';
+  row.style.display = visible ? 'none' : 'flex';
+  if (!visible) await _loadAndRenderImportSettings();
+}
+
+async function _loadAndRenderImportSettings() {
+  const r = await apiFetch('api/import/settings');
+  if (!r.ok) return;
+  const data = await r.json();
+  S._importSettings = data;
+  _renderImportSettingsPanel(data);
+}
+
+function _renderImportSettingsPanel(data) {
+  const providersEl = document.getElementById('importSettingsProviders');
+  const customEl    = document.getElementById('importSettingsCustomList');
+  providersEl.innerHTML = data.providers.map(p => `
+    <label class="lib-import-settings-provider">
+      <input type="checkbox" data-provider-id="${esc(p.id)}" ${p.enabled ? 'checked' : ''}>
+      ${esc(p.label)} <span class="lib-import-settings-host">(${esc(p.hostSuffix)})</span>
+    </label>`).join('');
+  providersEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => _saveProviderToggle(cb.dataset.providerId, cb.checked));
+  });
+  customEl.innerHTML = data.customShopifyDomains.length
+    ? data.customShopifyDomains.map(d => `
+        <div class="lib-import-settings-domain">
+          <span>${esc(d)}</span>
+          <button class="lib-import-settings-remove" data-domain="${esc(d)}" aria-label="${esc(t('lib_import_settings_remove'))}">×</button>
+        </div>`).join('')
+    : `<div class="lib-form-hint">${esc(t('lib_import_settings_none'))}</div>`;
+  customEl.querySelectorAll('.lib-import-settings-remove').forEach(btn => {
+    btn.addEventListener('click', () => _removeCustomShopifyDomain(btn.dataset.domain));
+  });
+}
+
+async function _saveProviderToggle(providerId, enabled) {
+  const current = S._importSettings || { providers: [], customShopifyDomains: [] };
+  const disabledProviders = current.providers
+    .map(p => p.id === providerId ? { ...p, enabled } : p)
+    .filter(p => !p.enabled)
+    .map(p => p.id);
+  const r = await apiFetch('api/import/settings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ disabledProviders, customShopifyDomains: current.customShopifyDomains }),
+  });
+  if (r.ok) await _loadAndRenderImportSettings();
+}
+
+export async function addCustomShopifyDomain() {
+  const input = document.getElementById('importSettingsDomainInput');
+  const domain = input.value.trim();
+  if (!domain) return;
+  const current = S._importSettings || { providers: [], customShopifyDomains: [] };
+  const domains = [...new Set([...current.customShopifyDomains, domain])];
+  const r = await apiFetch('api/import/settings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ customShopifyDomains: domains }),
+  });
+  if (r.ok) {
+    input.value = '';
+    await _loadAndRenderImportSettings();
+  } else {
+    alert(t('lib_import_settings_invalid_domain'));
+  }
+}
+
+async function _removeCustomShopifyDomain(domain) {
+  const current = S._importSettings || { providers: [], customShopifyDomains: [] };
+  const domains = current.customShopifyDomains.filter(d => d !== domain);
+  const r = await apiFetch('api/import/settings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ customShopifyDomains: domains }),
+  });
+  if (r.ok) await _loadAndRenderImportSettings();
 }
 
 // ── Barcode / QR scanner ──────────────────────────────────────────────────
