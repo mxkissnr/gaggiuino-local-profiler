@@ -588,10 +588,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Init sequence ──────────────────────────────────────────────────────
   applyTranslations();
 
-  initToken().then(() => {
+  initToken().then(async () => {
     loadDrinkMenu();
     loadMilkTypes();
-    loadData();
+    await loadData();
     loadLibrary();
     updateStatus();
     checkForUpdate();

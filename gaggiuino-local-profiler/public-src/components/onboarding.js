@@ -9,11 +9,15 @@ const DISMISS_KEY = 'glp_onboarding_banner_dismissed';
 // Dismissible per session (sessionStorage), styled the same way as the
 // update-available banner (components/update-check.js) so both can coexist
 // stacked at the top of the page.
-export function updateMachineBanner(status) {
-  S.machineReachable = status.machineReachable;
+export function updateMachineBanner(status = null) {
+  // status is optional: callers that just want to re-evaluate the banner after
+  // S.shots changed (e.g. loadData() once shots finish loading) can call this
+  // with no argument to reuse the last known machineReachable/hostname state,
+  // instead of waiting for the next status poll.
+  if (status) S.machineReachable = status.machineReachable;
 
   const existing = document.getElementById('glpOnboardingBanner');
-  const shouldShow = S.shots.length === 0 && status.machineReachable === false && !sessionStorage.getItem(DISMISS_KEY);
+  const shouldShow = S.shots.length === 0 && S.machineReachable === false && !sessionStorage.getItem(DISMISS_KEY);
 
   if (!shouldShow) {
     existing?.remove();
@@ -31,7 +35,7 @@ export function updateMachineBanner(status) {
     fontSize: '.875rem', fontWeight: '500', boxShadow: '0 2px 8px rgba(0,0,0,.35)',
   });
 
-  const host = status.machineHostname || 'machine_host';
+  const host = status?.machineHostname || 'machine_host';
   const msg = document.createElement('span');
   msg.style.flex = '1';
   msg.textContent = t('onboarding_banner_msg', host);

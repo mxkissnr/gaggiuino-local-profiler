@@ -11,7 +11,7 @@ import { getShotData, calcShotScore }                         from './utils.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel }                              from './annotation.js';
 import { updatePQChart }                                      from './charts.js';
-import { updateOnboardingPanel }                               from '../../components/onboarding.js';
+import { updateMachineBanner, updateOnboardingPanel }          from '../../components/onboarding.js';
 
 // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -56,6 +56,9 @@ export async function loadData() {
     chartArea.style.display = 'none';
   }
   updateOnboardingPanel();
+  // Re-evaluate the machine-unreachable banner as soon as shots finish loading,
+  // instead of waiting for the next 30s updateStatus() poll (#288).
+  updateMachineBanner();
 }
 
 // ── Trash ─────────────────────────────────────────────────────────────────

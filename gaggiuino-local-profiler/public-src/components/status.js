@@ -12,6 +12,12 @@ export async function updateStatus() {
     ]);
     if (!statusRes.ok) return;
     const s = await statusRes.json();
+    // Update the machine-unreachable banner and onboarding panel first, right after
+    // the status response is parsed, so a later exception in this function (e.g. from
+    // DOM lookups or JSON parsing further below) can never leave them stuck in a stale
+    // state — see #288.
+    updateMachineBanner(s);
+    updateOnboardingPanel();
     // Token is no longer returned by /api/status — it comes from /api/token (initToken)
     const dot = document.getElementById('statusDot');
     const timeEl = document.getElementById('syncTime');
@@ -33,8 +39,6 @@ export async function updateStatus() {
     }
     const ordersBtn = document.getElementById('btnOrders');
     if (ordersBtn) ordersBtn.style.display = s.ordersFeature ? '' : 'none';
-    updateMachineBanner(s);
-    updateOnboardingPanel();
     if ('isDemo' in s) updateDemoBadge(s.isDemo);
     if (switchRes?.ok) updatePowerButton(await switchRes.json());
     else updatePowerButton({ configured: false });
