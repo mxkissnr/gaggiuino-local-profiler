@@ -13,7 +13,7 @@ export function updateMachineBanner(status) {
   S.machineReachable = status.machineReachable;
 
   const existing = document.getElementById('glpOnboardingBanner');
-  const shouldShow = status.machineReachable === false && !sessionStorage.getItem(DISMISS_KEY);
+  const shouldShow = S.shots.length === 0 && status.machineReachable === false && !sessionStorage.getItem(DISMISS_KEY);
 
   if (!shouldShow) {
     existing?.remove();
