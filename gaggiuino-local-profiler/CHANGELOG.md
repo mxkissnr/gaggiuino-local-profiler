@@ -1,4 +1,4 @@
-## Unreleased
+## [1.107.0] – 2026-07-08
 
 ### Added
 - **Batch/lot number per coffee bag.** Roasters assign a batch/lot number ("Chargennummer") per production run, which can differ between bags of the same bean bought at different times — so it's tracked on the bag object (`bean.bags[].batchNumber`), not on the bean itself. Editable in the bean form (synced to the currently active bag, same as roast date/stock) and in the "+ New bag" form when logging a new delivery; shown in the bag history list and, for the active bag, alongside the bean's other extra details. Manual-entry only — the Hoplo import parser doesn't expose a batch/lot number, so there's no import wiring. `routes/library.js`, `public-src/views/library.js`, `public-src/index.html`. Closes #285
