@@ -1406,6 +1406,13 @@
         .crop-editor-zoom-icon { color:var(--gray-500); font-size:.9rem; user-select:none; }
         .crop-editor-zoom-slider { flex:1; accent-color:var(--accent); }
         .crop-editor-actions { display:flex; justify-content:flex-end; gap:8px; width:100%; }
+
+        /* Fullscreen image lightbox (#287) */
+        .lightbox-overlay { position:fixed; inset:0; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; z-index:1200; padding:16px; cursor:zoom-out; }
+        .lightbox-img { max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; cursor:default; }
+        .lightbox-close { position:fixed; top:16px; right:16px; width:40px; height:40px; border-radius:50%; border:1px solid var(--gray-700); background:var(--gray-900); color:var(--gray-200); font-size:1.1rem; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+        .lightbox-close:hover { background:var(--gray-800); color:#fff; }
+        .shot-photo-thumb[data-clickable] { cursor:pointer; }
         .fw-unmatched-label { font-size:.7rem; color:var(--gray-500); margin-bottom:4px; }
         .fw-unmatched-chips { display:flex; flex-wrap:wrap; gap:4px; max-height:15vh; overflow-y:auto; flex-shrink:0; }
         .fw-credit { font-size:.62rem; color:var(--gray-600); text-align:center; flex-shrink:0; }

@@ -6,6 +6,7 @@ import { renderSidebar, updateSidebarHighlighting } from '../../components/sideb
 import { calcBeanAgeAtShot, _roastDateFromLibrary } from './utils.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
+import { openLightbox } from '../../components/lightbox.js';
 
 // ── Auto-save ─────────────────────────────────────────────────────────────
 
@@ -182,12 +183,20 @@ function _renderShotPhoto(shot) {
   if (shot.image) {
     thumb.style.display  = '';
     remove.style.display = '';
+    thumb.setAttribute('data-clickable', '');
     loadShotImageBlobUrl(shot.id).then(url => { if (url) thumb.src = url; });
   } else {
     thumb.style.display  = 'none';
     thumb.removeAttribute('src');
+    thumb.removeAttribute('data-clickable');
     remove.style.display = 'none';
   }
+}
+
+export function openShotPhotoLightbox() {
+  const thumb = document.getElementById('annPhotoThumb');
+  if (!thumb || !thumb.hasAttribute('data-clickable') || !thumb.src) return;
+  openLightbox(thumb.src);
 }
 
 export async function uploadShotImage(input) {

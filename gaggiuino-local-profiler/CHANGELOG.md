@@ -1,3 +1,8 @@
+## Unreleased
+
+### Added
+- **Click-to-enlarge shot photo; shot photo on the share card.** The round shot-photo thumbnail in the annotation panel now opens a fullscreen lightbox on click (new reusable `public-src/components/lightbox.js`: dark overlay, image scaled to fit via `object-fit: contain`, closeable via backdrop click, close button, or Escape) — wired to `#annPhotoThumb`, reusing the already-cached blob URL so the image isn't fetched twice. Separately, `generateShareCard()` (`lib/card.js`) now renders the shot photo — when present — as a small circular avatar in the hero section, positioned left of the origin stamp chip and bean headline (photo → origin chip → bean name), loaded the same defensive way as the GLP logo so a missing/corrupt file never breaks card generation; omitting a photo renders identically to before, with no reserved dead space. `public-src/components/lightbox.js`, `public-src/views/shots/annotation.js`, `public-src/main.js`, `public-src/style.css`, `public-src/i18n/{de,en,it,fr,es,nl}.js`, `lib/card.js`. Closes #287
+
 ## [1.108.0] – 2026-07-08
 
 ### Fixed

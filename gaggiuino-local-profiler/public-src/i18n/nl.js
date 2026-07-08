@@ -144,7 +144,7 @@ export default {
     profile_unknown:'Onbekend profiel',
     nav_settings:'⚙', settings_theme:'Thema', settings_accent:'Kleurenschema', theme_dark:'Donker', theme_light:'Licht', settings_language:'Taal',
     ann_clone_btn:'↩ Klonen',
-    ann_photo_upload:'Voeg een foto toe aan dit shot', ann_photo_remove:'Foto verwijderen',
+    ann_photo_upload:'Voeg een foto toe aan dit shot', ann_photo_remove:'Foto verwijderen', lightbox_close:'Sluiten',
     lib_bean_stock:'Voorraad (g)', lib_bean_stock_ph:'bijv. 500',
     lib_bean_decaf:'Cafeïnevrij',
     lib_inv_consumed:(n)=>`${n} g verbruikt`, lib_inv_remaining:(n)=>`${n} g over`, lib_inv_reorder:'Nabestellen',

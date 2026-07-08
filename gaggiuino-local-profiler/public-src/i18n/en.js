@@ -144,7 +144,7 @@ export default {
     profile_unknown:'Unknown Profile',
     nav_settings:'⚙', settings_theme:'Theme', settings_accent:'Color scheme', theme_dark:'Dark', theme_light:'Light', settings_language:'Language',
     ann_clone_btn:'↩ Clone last',
-    ann_photo_upload:'Add a photo to this shot', ann_photo_remove:'Remove photo',
+    ann_photo_upload:'Add a photo to this shot', ann_photo_remove:'Remove photo', lightbox_close:'Close',
     lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'e.g. 500',
     lib_bean_decaf:'Decaffeinated',
     lib_inv_consumed:(n)=>`${n} g used`, lib_inv_remaining:(n)=>`${n} g remaining`, lib_inv_reorder:'Reorder',

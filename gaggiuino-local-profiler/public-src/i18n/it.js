@@ -144,7 +144,7 @@ export default {
     profile_unknown:'Profilo sconosciuto',
     nav_settings:'⚙', settings_theme:'Tema', settings_accent:'Schema colori', theme_dark:'Scuro', theme_light:'Chiaro', settings_language:'Lingua',
     ann_clone_btn:'↩ Clona',
-    ann_photo_upload:'Aggiungi una foto a questo shot', ann_photo_remove:'Rimuovi foto',
+    ann_photo_upload:'Aggiungi una foto a questo shot', ann_photo_remove:'Rimuovi foto', lightbox_close:'Chiudi',
     lib_bean_stock:'Scorta (g)', lib_bean_stock_ph:'es. 500',
     lib_bean_decaf:'Decaffeinato',
     lib_inv_consumed:(n)=>`${n} g usati`, lib_inv_remaining:(n)=>`${n} g rimanenti`, lib_inv_reorder:'Riordinare',

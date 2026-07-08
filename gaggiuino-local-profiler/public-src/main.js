@@ -26,7 +26,7 @@ import { switchMode, goToShot } from './components/mode.js';
 import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggleTrash,
          trashShot, restoreShot, permanentDeleteShot,
          renderAnnotationPanel, renderStars, quickClone, saveAnnotation, scheduleAutoSave, updateDegassing, calcBeanAgeAtShot,
-         uploadShotImage, removeShotImage,
+         uploadShotImage, removeShotImage, openShotPhotoLightbox,
          updateView, switchChartTab, updatePQChart,
          openChartFullscreen, closeChartFullscreen, switchFsTab,
          exportCSV, exportAllCSV, exportShot, exportProfile, shareCard, restoreFromFile, downloadBackup,
@@ -460,6 +460,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('annPhotoPickBtn').addEventListener('click', () => document.getElementById('annPhotoInput').click());
   document.getElementById('annPhotoInput').addEventListener('change', function () { uploadShotImage(this); });
   document.getElementById('annPhotoRemoveBtn').addEventListener('click', removeShotImage);
+  document.getElementById('annPhotoThumb').addEventListener('click', openShotPhotoLightbox);
   ['annCoffee','annGrinder','annGrindSetting','annDose','annTds','annNotes'].forEach(id => {
     document.getElementById(id).addEventListener('input', scheduleAutoSave);
   });

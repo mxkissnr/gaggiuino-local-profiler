@@ -3,6 +3,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { COFFEE_COUNTRY_CODES } = require('./coffee-countries');
+const { imagePath } = require('./services/ImageService');
 
 let createCanvas = null;
 let GlobalFonts  = null;
@@ -19,6 +20,17 @@ function getGlpIcon() {
             : Promise.resolve(null);
     }
     return _glpIconPromise;
+}
+
+// Loads the shot's uploaded photo (if any), same defensive pattern as
+// getGlpIcon() — a missing/corrupt file must never break card generation.
+// Not cached (unlike the logo) since it varies per shot.
+function getShotPhoto(shot) {
+    if (!loadImage || !shot?.id || !shot?.image) return Promise.resolve(null);
+    const photoPath = imagePath(shot.id, shot.image, 'shot-');
+    return fs.existsSync(photoPath)
+        ? loadImage(fs.readFileSync(photoPath)).catch(() => null)
+        : Promise.resolve(null);
 }
 
 try {
@@ -213,7 +225,8 @@ function detectPreinfusionEnd(pressure) {
 
 async function generateShareCard(shot, score, format = 'square') {
     if (!createCanvas) throw new Error('canvas module not available');
-    const glpIcon = await getGlpIcon();
+    const glpIcon    = await getGlpIcon();
+    const shotPhoto  = await getShotPhoto(shot);
     // Lazily required: LibraryService touches the DB at require-time in some
     // environments, and card generation shouldn't depend on that succeeding.
     let library = null;
@@ -381,13 +394,36 @@ async function generateShareCard(shot, score, format = 'square') {
     ctx.textBaseline = 'alphabetic';
 
     const headlineBaseline = headerBottom + 54;
+    const chipCY = headlineBaseline - 16;
+
+    // Photo "avatar" — small circular shot photo leading into the bean name,
+    // present only when the shot has one (no reserved space otherwise).
+    const PHOTO_D   = 60, PHOTO_R = PHOTO_D / 2;
+    const photoLead = shotPhoto ? PHOTO_D + 14 : 0;
+    if (shotPhoto) {
+        const pcx = PX + PHOTO_R, pcy = chipCY;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(pcx, pcy, PHOTO_R, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(shotPhoto, pcx - PHOTO_R, pcy - PHOTO_R, PHOTO_D, PHOTO_D);
+        ctx.restore();
+        ctx.beginPath();
+        ctx.arc(pcx, pcy, PHOTO_R, 0, Math.PI * 2);
+        ctx.strokeStyle = GLP.border;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
     let chipW = 0;
     if (originCode) {
         ctx.font = F(18, true);
         chipW = ctx.measureText(originCode).width + 26;
     }
-    const headlineX     = PX + (originCode ? chipW + 14 : 0);
-    const headlineMaxW  = nameMaxW - (originCode ? chipW + 14 : 0);
+    const leadW         = photoLead + (originCode ? chipW + 14 : 0);
+    const headlineX     = PX + leadW;
+    const headlineMaxW  = nameMaxW - leadW;
 
     let headline = bean || profileName;
     ctx.font = F(52, true);
@@ -395,9 +431,9 @@ async function generateShareCard(shot, score, format = 'square') {
         headline = headline.slice(0, -4) + '…';
 
     if (originCode) {
-        const chipH  = 34;
-        const chipCY = headlineBaseline - 16;
-        roundRect(ctx, PX, chipCY - chipH / 2, chipW, chipH, chipH / 2);
+        const chipH = 34;
+        const chipX = PX + photoLead;
+        roundRect(ctx, chipX, chipCY - chipH / 2, chipW, chipH, chipH / 2);
         ctx.fillStyle = GLP.accentTint + '0.14)';
         ctx.fill();
         ctx.strokeStyle = GLP.accentTint + '0.35)';
@@ -407,7 +443,7 @@ async function generateShareCard(shot, score, format = 'square') {
         ctx.font = F(18, true);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(originCode, PX + chipW / 2, chipCY);
+        ctx.fillText(originCode, chipX + chipW / 2, chipCY);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
     }
