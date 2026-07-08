@@ -8,7 +8,7 @@ const { BEAN_IMAGE_MAX_BYTES } = require('../lib/constants');
 const { rateLimit } = require('../lib/helpers');
 const {
     sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeFlavors,
-    sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime,
+    sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime, safeUrl,
 } = require('../lib/sanitize-bean');
 
 router.get('/api/library', (req, res) => {
@@ -24,7 +24,7 @@ router.get('/api/library/beans-info', (req, res, next) => {
 router.post('/api/library/bean', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
     const { name, roaster, roastDate, notes, stock_g, decaf, origin, origins, variety, process, flavors, roastType, region, imageUrl,
-        altitude_m, importer, harvest, price_eur, producer, certification, source, importedAt,
+        altitude_m, importer, harvest, price_eur, producer, certification, source, importedAt, sourceUrl,
         brewTempC, brewRatio, brewTimeS, brewNotes, batchNumber } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
@@ -60,6 +60,7 @@ router.post('/api/library/bean', (req, res) => {
     };
     if (source)     bean.source     = s(source, 200);
     if (importedAt) bean.importedAt = s(importedAt, 10);
+    if (sourceUrl)  bean.sourceUrl  = safeUrl(sourceUrl);
     lib.beans.push(bean);
     saveLibrary(lib);
     // fire-and-forget: resolve region to map coordinates, download the image

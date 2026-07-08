@@ -46,6 +46,7 @@ export const S = {
   currentFilter: '',
   _urlImportSource: null,
   _urlImportedAt: null,
+  _urlImportSourceUrl: null,
   _scanStream: null,
   _scanDetector: null,
   _scanActive: false,

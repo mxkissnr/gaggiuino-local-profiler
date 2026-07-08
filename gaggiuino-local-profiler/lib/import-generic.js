@@ -77,6 +77,38 @@ function parseJsonLd(html) {
     };
 }
 
+// Meta text below this length is considered too thin to reliably carry
+// origin/flavor info — worth also scanning the visible page body (see
+// BODY_SCAN_MAX_CHARS below).
+const THIN_TEXT_CHARS = 80;
+// Caps how much of the page body we scan for origin/flavor keywords, to
+// avoid pulling in unrelated nav/footer/chrome text from arbitrary shops.
+const BODY_SCAN_MAX_CHARS = 5000;
+
+// Visible body text used as a fallback when meta tags are too thin. Prefers
+// <main>/<article> (common product-description containers) over the whole
+// <body> when one is present and non-trivial, to reduce nav/footer noise.
+function bodyScanText($) {
+    let $scope = $('main, article').first();
+    if (!$scope.length || $scope.text().trim().length < THIN_TEXT_CHARS) $scope = $('body');
+    return $scope.text().replace(/\s+/g, ' ').trim().slice(0, BODY_SCAN_MAX_CHARS);
+}
+
+// Merges a fallback list into a primary list, keeping the primary's items
+// first and only appending genuinely new (case-insensitive) entries — so a
+// meta-only hit is never discarded, just possibly extended by the body scan.
+function mergeUnique(primary, fallback, max) {
+    const seen = new Set(primary.map(v => v.toLowerCase()));
+    const merged = [...primary];
+    for (const v of fallback) {
+        const key = v.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(v);
+    }
+    return typeof max === 'number' ? merged.slice(0, max) : merged;
+}
+
 // Last-resort fallback: og:title/og:image/og:description meta tags, which
 // virtually every storefront (of any platform) sets for product pages.
 function parseOpenGraph(html) {
@@ -84,19 +116,65 @@ function parseOpenGraph(html) {
     const title = $('meta[property="og:title"]').attr('content')?.trim();
     if (!title) return null;
     const description = $('meta[property="og:description"]').attr('content')?.trim() || '';
-    const image = $('meta[property="og:image"]').attr('content');
-    const text  = `${title} ${description}`;
-    const originCodes = findCountriesInText(text);
+    const image     = $('meta[property="og:image"]').attr('content');
+    const siteName  = $('meta[property="og:site_name"]').attr('content')?.trim();
+    const priceRaw  = $('meta[property="og:price:amount"]').attr('content')
+        ?? $('meta[property="product:price:amount"]').attr('content');
+    let price_eur = null;
+    if (priceRaw != null) {
+        const p = parseFloat(priceRaw);
+        if (!Number.isNaN(p)) price_eur = p;
+    }
+
+    const text = `${title} ${description}`;
+    let originCodes = findCountriesInText(text);
+    let flavors     = extractFlavorKeywords(text);
+
+    // Meta description is often too short/generic to carry any tasting-note
+    // or origin info — fall back to scanning the visible page body, which is
+    // where most roaster pages actually put that prose.
+    if (text.trim().length < THIN_TEXT_CHARS || (!originCodes.length && !flavors.length)) {
+        const bodyText = bodyScanText($);
+        if (bodyText) {
+            const combined     = `${title} ${bodyText}`;
+            const bodyOrigins  = findCountriesInText(combined);
+            const bodyFlavors  = extractFlavorKeywords(combined);
+            originCodes = mergeUnique(originCodes, bodyOrigins);
+            flavors     = mergeUnique(flavors, bodyFlavors, 8);
+        }
+    }
+
     return {
         name:       title,
-        roaster:    null,
+        roaster:    siteName || null,
         notes:      description.slice(0, 500),
-        flavors:    extractFlavorKeywords(text),
+        flavors,
         origin:     originCodes[0] || null,
         origins:    originCodes.map(code => ({ code })),
         imageUrl:   normalizeImageUrl(image),
+        price_eur,
         importedAt: today(),
     };
 }
 
-module.exports = { parseGenericShopifyProduct, parseJsonLd, parseOpenGraph };
+// Case-insensitive match against a candidate's sourceUrl (exact) or its
+// name+roaster combination — used to warn (non-blockingly) that an import
+// looks like a bean already in the library. Returns the matching bean, or
+// null.
+function findDuplicateBean({ name, roaster, sourceUrl }, beans) {
+    if (!Array.isArray(beans)) return null;
+    const url = typeof sourceUrl === 'string' ? sourceUrl.trim() : '';
+    if (url) {
+        const byUrl = beans.find(b => typeof b.sourceUrl === 'string' && b.sourceUrl.trim() === url);
+        if (byUrl) return byUrl;
+    }
+    const normName    = String(name || '').trim().toLowerCase();
+    const normRoaster = String(roaster || '').trim().toLowerCase();
+    if (!normName) return null;
+    return beans.find(b =>
+        String(b.name || '').trim().toLowerCase() === normName &&
+        String(b.roaster || '').trim().toLowerCase() === normRoaster
+    ) || null;
+}
+
+module.exports = { parseGenericShopifyProduct, parseJsonLd, parseOpenGraph, findDuplicateBean };

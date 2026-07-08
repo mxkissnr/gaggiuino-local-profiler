@@ -178,9 +178,11 @@ For any URL that isn't one of the 3 built-ins or a domain you've added, the impo
 
 1. **Generic Shopify** — every Shopify storefront exposes a `<product-url>/products/<handle>.js` endpoint; if the URL matches, its JSON is parsed the same way as the built-in Shopify shops (name, roaster, description-derived flavors/origins, image, price, size variants).
 2. **JSON-LD** — many shops embed a `schema.org/Product` block (`<script type="application/ld+json">`) with name, image, description and price, regardless of the storefront platform.
-3. **Webpage metadata** — as a last resort, the `og:title`/`og:image`/`og:description` meta tags almost every product page sets, with the same flavor-keyword and origin-country detection run on the combined text.
+3. **Webpage metadata** — as a last resort, the `og:title`/`og:image`/`og:description` meta tags almost every product page sets, plus `og:site_name` as a roaster guess and `og:price:amount`/`product:price:amount` for price, with the same flavor-keyword and origin-country detection run on the combined text. If that text is too thin to find anything (short, or no origin/flavor hit), the visible page body is scanned as well (capped, preferring a `<main>`/`<article>` container) without discarding anything the meta tags already found.
 
 The import result shows which of these methods produced the data (e.g. "Source: generic Shopify (shop.example.com)", "Source: JSON-LD (…)", "Source: webpage metadata (…)"). Anything other than a built-in parser is best-effort — always review the pre-filled fields before saving.
+
+Every import is also checked against your existing library for a likely duplicate — the same URL imported before, or a bean with the same name and roaster — and shows a non-blocking "⚠ May already be in your library: …" hint if one is found; you can still import anyway (e.g. a new bag of the same bean).
 
 Fetches are hardened against SSRF: only `https://` URLs are accepted, and the target hostname (and every redirect hop) is resolved and rejected if it points at a private, loopback, link-local or carrier-grade-NAT address instead of a public one.
 

@@ -644,6 +644,7 @@
         .lib-variant-picker-option input { accent-color: var(--accent); }
         .lib-import-notice { margin-bottom:10px; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:8px; padding:8px 10px; font-size:.75rem; color:var(--gray-300); }
         .lib-import-notice-hint { color:var(--gray-500); margin-top:3px; }
+        .lib-import-notice-warning { background:rgba(245,158,11,.1); border-color:rgba(245,158,11,.35); color:#f59e0b; }
         .lib-import-settings { flex-direction:column; gap:8px; margin-top:6px; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:8px; padding:10px 12px; }
         .lib-import-settings-title { font-size:.8rem; color:var(--gray-200); font-weight:600; }
         .lib-import-settings-subtitle { font-size:.75rem; color:var(--gray-400); margin-top:6px; }

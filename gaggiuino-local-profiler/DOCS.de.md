@@ -178,9 +178,11 @@ Für jede URL, die keiner der 3 eingebauten Quellen oder einer selbst hinzugefü
 
 1. **Generisches Shopify** — jeder Shopify-Shop stellt einen Endpunkt `<Produkt-URL>/products/<handle>.js` bereit; passt die URL, wird dessen JSON genauso geparst wie bei den eingebauten Shopify-Shops (Name, Rösterei, aus der Beschreibung abgeleitete Aromen/Herkünfte, Bild, Preis, Größenvarianten).
 2. **JSON-LD** — viele Shops betten einen `schema.org/Product`-Block ein (`<script type="application/ld+json">`) mit Name, Bild, Beschreibung und Preis, unabhängig von der Shop-Plattform.
-3. **Webseiten-Metadaten** — als letzter Ausweg werden die `og:title`/`og:image`/`og:description`-Meta-Tags genutzt, die fast jede Produktseite setzt, mit derselben Stichwort- und Herkunftsland-Erkennung auf dem kombinierten Text.
+3. **Webseiten-Metadaten** — als letzter Ausweg werden die `og:title`/`og:image`/`og:description`-Meta-Tags genutzt, die fast jede Produktseite setzt, dazu `og:site_name` als Rösterei-Vermutung und `og:price:amount`/`product:price:amount` für den Preis, mit derselben Stichwort- und Herkunftsland-Erkennung auf dem kombinierten Text. Ist dieser Text zu dünn, um etwas zu finden (kurz, oder kein Herkunfts-/Aroma-Treffer), wird zusätzlich der sichtbare Seiteninhalt durchsucht (gedeckelt, bevorzugt ein `<main>`/`<article>`-Container), ohne bereits aus den Meta-Tags gefundene Treffer zu verwerfen.
 
 Das Import-Ergebnis zeigt an, welche dieser Methoden die Daten geliefert hat (z.B. „Quelle: generischer Shopify-Import (shop.example.com)", „Quelle: JSON-LD (…)", „Quelle: Webseiten-Metadaten (…)"). Alles außer den eingebauten Parsern ist Best-Effort — das vorbefüllte Formular vor dem Speichern immer prüfen.
+
+Jeder Import wird außerdem gegen die bestehende Bibliothek auf ein mögliches Duplikat geprüft — dieselbe zuvor importierte URL, oder eine Bohne mit gleichem Namen und gleicher Rösterei — und zeigt bei einem Treffer den nicht-blockierenden Hinweis „⚠ Möglicherweise bereits in der Bibliothek: …"; der Import kann trotzdem fortgesetzt werden (z. B. bei einer neuen Packung derselben Bohne).
 
 Abrufe sind gegen SSRF gehärtet: es werden nur `https://`-URLs akzeptiert, und der Ziel-Hostname (sowie jeder Redirect-Hop) wird aufgelöst und abgelehnt, falls er auf eine private, Loopback-, Link-Local- oder Carrier-Grade-NAT-Adresse statt auf eine öffentliche zeigt.
 

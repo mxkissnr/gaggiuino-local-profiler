@@ -5,9 +5,9 @@ const router   = express.Router();
 const { IMPORT_FETCH_MAX_BYTES } = require('../lib/constants');
 const { shopifyJsonUrl } = require('../lib/import-parsers');
 const { BUILTIN_PROVIDERS, matchProvider } = require('../lib/import-providers');
-const { parseGenericShopifyProduct, parseJsonLd, parseOpenGraph } = require('../lib/import-generic');
+const { parseGenericShopifyProduct, parseJsonLd, parseOpenGraph, findDuplicateBean } = require('../lib/import-generic');
 const { assertPublicHost, SsrfBlockedError } = require('../lib/ssrf-guard');
-const { loadImportSettings, saveImportSettings } = require('../lib/data');
+const { loadImportSettings, saveImportSettings, loadLibrary } = require('../lib/data');
 
 const FETCH_OPTS = {
     headers: { 'User-Agent': 'GLP/1.0 (Gaggiuino Local Profiler; private use)' },
@@ -144,6 +144,11 @@ router.get('/api/import/url', async (req, res) => {
 
         if (!bean) return res.status(404).json({ error: 'product not found on page' });
         bean.importMethod = method;
+        bean.sourceUrl = raw;
+
+        const dup = findDuplicateBean(bean, loadLibrary().beans);
+        if (dup) bean.duplicateWarning = { id: dup.id, name: dup.name, roaster: dup.roaster || '' };
+
         res.json(bean);
     } catch (e) {
         if (e instanceof SsrfBlockedError) return res.status(400).json({ error: 'blocked address' });

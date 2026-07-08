@@ -234,6 +234,7 @@ export default {
     lib_import_method_jsonld:host=>`Quelle: JSON-LD (${host})`,
     lib_import_method_opengraph:host=>`Quelle: Webseiten-Metadaten (${host})`,
     lib_import_unverified_hint:'Automatisch erkannte Daten — bitte vor dem Speichern prüfen.',
+    lib_import_duplicate_warning:(name)=>`⚠ Möglicherweise bereits in der Bibliothek: ${name}`,
     lib_import_settings_btn:'⚙ Quellen', lib_import_settings_title:'Import-Quellen',
     lib_import_settings_custom_label:'Eigene Shopify-Shops',
     lib_import_settings_add_domain_ph:'shop.example.com', lib_import_settings_add_domain_btn:'Hinzufügen',

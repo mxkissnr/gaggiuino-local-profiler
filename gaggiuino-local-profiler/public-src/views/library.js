@@ -469,6 +469,8 @@ export function openBeanForm(bean) {
   S.beanEditId = bean ? bean.id : null;
   const importNotice = document.getElementById('beanFormImportNotice');
   if (importNotice) { importNotice.style.display = 'none'; importNotice.innerHTML = ''; }
+  const dupWarning = document.getElementById('beanFormDuplicateWarning');
+  if (dupWarning) { dupWarning.style.display = 'none'; dupWarning.innerHTML = ''; }
   document.getElementById('beanFormName').value      = bean?.name      || '';
   document.getElementById('beanFormRoaster').value   = bean?.roaster   || '';
   document.getElementById('beanFormRoastDate').value = bean?.roastDate || '';
@@ -509,6 +511,7 @@ export function closeBeanForm() {
   S._urlImportSource   = null;
   S._urlImportedAt     = null;
   S._urlImportImageUrl = null;
+  S._urlImportSourceUrl = null;
   document.getElementById('beanAddForm').classList.remove('open');
   document.getElementById('beanAddTrigger').style.display = '';
 }
@@ -551,6 +554,7 @@ export async function saveBean() {
     payload.source     = S._urlImportSource;
     payload.importedAt = S._urlImportedAt;
     if (S._urlImportImageUrl) payload.imageUrl = S._urlImportImageUrl;
+    if (S._urlImportSourceUrl) payload.sourceUrl = S._urlImportSourceUrl;
   }
   const body = JSON.stringify(payload);
   const url  = S.beanEditId ? `api/library/bean/${S.beanEditId}` : 'api/library/bean';
@@ -734,12 +738,25 @@ function _renderImportNotice(method, host) {
   el.style.display = '';
 }
 
+// Non-blocking hint that the parsed bean looks like one already in the
+// library (same source URL previously imported, or same name+roaster) — the
+// user decides whether to still import (e.g. a fresh bag of the same bean).
+function _renderDuplicateWarning(duplicateWarning) {
+  const el = document.getElementById('beanFormDuplicateWarning');
+  if (!el) return;
+  if (!duplicateWarning) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.textContent = t('lib_import_duplicate_warning', duplicateWarning.name);
+  el.style.display = '';
+}
+
 function _applyUrlImport(data, variant) {
-  S._urlImportSource   = data.source    || null;
-  S._urlImportedAt     = data.importedAt || null;
-  S._urlImportImageUrl = data.imageUrl  || null;
+  S._urlImportSource    = data.source    || null;
+  S._urlImportedAt      = data.importedAt || null;
+  S._urlImportImageUrl  = data.imageUrl  || null;
+  S._urlImportSourceUrl = data.sourceUrl || null;
   openBeanForm();
   _renderImportNotice(data.importMethod, data.source);
+  _renderDuplicateWarning(data.duplicateWarning);
   if (data.name)    document.getElementById('beanFormName').value    = data.name;
   if (data.roaster) document.getElementById('beanFormRoaster').value = data.roaster;
   if (data.notes)   document.getElementById('beanFormNotes').value   = data.notes;

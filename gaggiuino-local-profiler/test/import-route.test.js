@@ -21,7 +21,7 @@ require.cache[axiosPath] = { exports: { get: axiosGet, default: { get: axiosGet 
 
 const express      = require('express');
 const importRouter = require('../routes/import');
-const { saveImportSettings, loadImportSettings } = require('../lib/data');
+const { saveImportSettings, loadImportSettings, loadLibrary, saveLibrary } = require('../lib/data');
 
 // `dns` is a core singleton — monkeypatch its `.promises.lookup` in place
 // (no require.cache trick needed, unlike the axios npm package above).
@@ -185,6 +185,55 @@ describe('GET /api/import/url — generic fallback chain', () => {
         axiosGet.mockResolvedValue({ status: 200, headers: {}, data: '<html><head></head><body>nothing here</body></html>' });
         const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent('https://emptypage.example/x')}`);
         expect(r.status).toBe(404);
+    });
+
+    it('reads og:site_name as roaster and og:price:amount as price_eur in the OpenGraph fallback', async () => {
+        const html = `<html><head>
+            <meta property="og:title" content="Kenya AA">
+            <meta property="og:site_name" content="Kenya Roasters GmbH">
+            <meta property="og:price:amount" content="15.90">
+        </head><body></body></html>`;
+        axiosGet.mockResolvedValue({ status: 200, headers: {}, data: html });
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent('https://yetanothershop2.example/product/kenya')}`);
+        const data = await r.json();
+        expect(data.roaster).toBe('Kenya Roasters GmbH');
+        expect(data.price_eur).toBe(15.9);
+    });
+});
+
+describe('GET /api/import/url — duplicate warning', () => {
+    it('warns when the imported URL was already imported into an existing bean', async () => {
+        const lib = loadLibrary();
+        lib.beans.push({ id: 999, name: 'Some Existing Bean', roaster: 'Whoever', sourceUrl: 'https://dupshop.example/products/repeat' });
+        saveLibrary(lib);
+        axiosGet.mockResolvedValue({ status: 200, headers: {}, data: {
+            title: 'Some New Title', vendor: 'Whoever', description: '',
+        }});
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent('https://dupshop.example/products/repeat')}`);
+        const data = await r.json();
+        expect(data.duplicateWarning).toMatchObject({ id: 999, name: 'Some Existing Bean' });
+    });
+
+    it('warns on a case-insensitive name+roaster match even for a different URL', async () => {
+        const lib = loadLibrary();
+        lib.beans.push({ id: 998, name: 'Ethiopia Washed', roaster: 'Random Roastery' });
+        saveLibrary(lib);
+        axiosGet.mockResolvedValue({ status: 200, headers: {}, data: {
+            title: 'ethiopia washed', vendor: 'random roastery', description: '',
+        }});
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent('https://freshshop.example/products/ethiopia')}`);
+        const data = await r.json();
+        expect(data.duplicateWarning).toMatchObject({ id: 998 });
+    });
+
+    it('does not warn for a genuinely new bean', async () => {
+        axiosGet.mockResolvedValue({ status: 200, headers: {}, data: {
+            title: 'Brand New Bean', vendor: 'Nobody Yet', description: '',
+        }});
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent('https://newshop.example/products/brand-new')}`);
+        const data = await r.json();
+        expect(data.duplicateWarning).toBeUndefined();
+        expect(data.sourceUrl).toBe('https://newshop.example/products/brand-new');
     });
 });
 

@@ -249,6 +249,7 @@ export default {
     lib_import_method_jsonld:host=>`Bron: JSON-LD (${host})`,
     lib_import_method_opengraph:host=>`Bron: paginametadata (${host})`,
     lib_import_unverified_hint:'Automatisch gedetecteerde gegevens — controleer voor het opslaan.',
+    lib_import_duplicate_warning:(name)=>`⚠ Mogelijk al in je bibliotheek: ${name}`,
     lib_import_settings_btn:'⚙ Bronnen', lib_import_settings_title:'Importbronnen',
     lib_import_settings_custom_label:'Eigen Shopify-winkels',
     lib_import_settings_add_domain_ph:'shop.example.com', lib_import_settings_add_domain_btn:'Toevoegen',

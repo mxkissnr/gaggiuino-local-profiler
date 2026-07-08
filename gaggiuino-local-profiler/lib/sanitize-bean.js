@@ -122,6 +122,7 @@ function sanitizeBeanFields(bean) {
         brewRatio: s(bean.brewRatio, 20),
         brewTimeS: sanitizeBrewTime(bean.brewTimeS),
         brewNotes: s(bean.brewNotes, 300),
+        sourceUrl: safeUrl(bean.sourceUrl),
     };
 }
 
@@ -175,5 +176,5 @@ function sanitizeRecipeFields(recipe) {
 module.exports = {
     sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeFlavors,
     sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime,
-    sanitizeBeanFields, sanitizeGrinderFields, sanitizeRecipeFields,
+    sanitizeBeanFields, sanitizeGrinderFields, sanitizeRecipeFields, safeUrl,
 };
