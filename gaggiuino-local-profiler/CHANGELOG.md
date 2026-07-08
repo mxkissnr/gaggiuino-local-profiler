@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Fixed
+- **Coffee World Map: shot-count gradient replaced with flat presence fill; overlapping point labels now auto-hide.** Country fill previously used a `visualMap`-driven gradient keyed on shot count (`value: Math.max(d.shots, maxShots * 0.15)`), which read as an intensity scale rather than a simple "coffee comes from here" indicator. Countries with any origin data now get a flat `--accent-to` fill (`value: 1`, `itemStyle.areaColor` on the `map` series); the `visualMap` legend is removed. The tooltip (shot count, bean list) is unchanged. Also added `labelLayout: { hideOverlap: true }` to the `effectScatter` series so bean labels for closely clustered origins (e.g. multiple Brazilian beans near São Paulo) no longer stack into garbled overlapping text. `public-src/views/analytics.js`. Closes #283
+
 ## [1.106.0] – 2026-07-08
 
 ### Added

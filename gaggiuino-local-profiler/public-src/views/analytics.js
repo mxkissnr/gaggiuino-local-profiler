@@ -623,10 +623,9 @@ export async function buildWorldMap() {
     _worldMapRegistered = true;
   }
 
-  const maxShots = Math.max(1, ...Object.values(byCode).map(d => d.shots));
   const mapData = Object.entries(byCode).map(([code, d]) => ({
     name: code,
-    value: Math.max(d.shots, maxShots * 0.15), // visible floor so bean-only countries still light up
+    value: 1, // presence only — fill color is boolean, not shot-count driven
     _stats: d,
   }));
 
@@ -704,7 +703,7 @@ export async function buildWorldMap() {
       {
         type: 'map', map: 'world', geoIndex: 0,
         data: mapData,
-        itemStyle: { borderColor: 'rgba(113,113,122,.7)', borderWidth: 0.5 },
+        itemStyle: { areaColor: accentTo, borderColor: 'rgba(113,113,122,.7)', borderWidth: 0.5 },
         emphasis: { label: { show: false } },
       },
       {
@@ -713,16 +712,10 @@ export async function buildWorldMap() {
         symbolSize: 7,
         itemStyle: { color: accentTo, shadowBlur: 8, shadowColor: _hexToRgba(accentTo, .6) },
         label: { show: false, color: mutedText, textBorderColor: 'rgba(9,9,11,.7)', textBorderWidth: 2 },
+        labelLayout: { hideOverlap: true },
         rippleEffect: { scale: 2.5 },
       },
     ],
-    visualMap: {
-      show: true, seriesIndex: 0, min: 0, max: maxShots,
-      right: 10, top: 10, itemWidth: 10, itemHeight: 60,
-      text: [String(maxShots), '0'],
-      textStyle: { color: mutedText, fontSize: 9 },
-      inRange: { color: ['rgba(82,82,91,.4)', accentTo] },
-    },
   }, true);
 
   if (!_resizeBound) {
