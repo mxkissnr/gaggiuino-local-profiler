@@ -25,7 +25,7 @@ router.post('/api/library/bean', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
     const { name, roaster, roastDate, notes, stock_g, decaf, origin, origins, variety, process, flavors, roastType, region, imageUrl,
         altitude_m, importer, harvest, price_eur, producer, certification, source, importedAt,
-        brewTempC, brewRatio, brewTimeS, brewNotes } = req.body;
+        brewTempC, brewRatio, brewTimeS, brewNotes, batchNumber } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
     const s    = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -54,8 +54,8 @@ router.post('/api/library/bean', (req, res) => {
         brewTimeS: sanitizeBrewTime(brewTimeS), brewNotes: s(brewNotes, 300),
         stock_g: parsedStock,
         decaf: !!decaf,
-        bags: parsedStock || s(roastDate, 10)
-            ? [{ id: Date.now() + 1, roastDate: s(roastDate, 10), stock_g: parsedStock, openedAt: Date.now() }]
+        bags: parsedStock || s(roastDate, 10) || s(batchNumber, 50)
+            ? [{ id: Date.now() + 1, roastDate: s(roastDate, 10), stock_g: parsedStock, openedAt: Date.now(), batchNumber: s(batchNumber, 50) }]
             : [],
     };
     if (source)     bean.source     = s(source, 200);
@@ -76,7 +76,7 @@ router.put('/api/library/bean/:id', (req, res) => {
     const s = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : undefined;
     const { name, roaster, roastDate, notes, stock_g, decaf, origin, origins, variety, process, flavors, roastType, region,
         altitude_m, importer, harvest, price_eur, producer, certification,
-        brewTempC, brewRatio, brewTimeS, brewNotes } = req.body;
+        brewTempC, brewRatio, brewTimeS, brewNotes, batchNumber } = req.body;
     if (name !== undefined)      lib.beans[idx].name      = s(name, 200) || lib.beans[idx].name;
     if (roaster !== undefined)   lib.beans[idx].roaster   = s(roaster, 200);
     if (roastDate !== undefined) lib.beans[idx].roastDate = s(roastDate, 10);
@@ -113,10 +113,11 @@ router.put('/api/library/bean/:id', (req, res) => {
     if (stock_g !== undefined)   lib.beans[idx].stock_g   = parseFloat(stock_g) || null;
     if (decaf !== undefined)     lib.beans[idx].decaf     = !!decaf;
     // Keep active bag in sync with top-level fields
-    if ((roastDate !== undefined || stock_g !== undefined) && lib.beans[idx].bags?.length) {
+    if ((roastDate !== undefined || stock_g !== undefined || batchNumber !== undefined) && lib.beans[idx].bags?.length) {
         const last = lib.beans[idx].bags[lib.beans[idx].bags.length - 1];
-        if (roastDate !== undefined) last.roastDate = s(roastDate, 10);
-        if (stock_g !== undefined)   last.stock_g   = parseFloat(stock_g) || null;
+        if (roastDate !== undefined)    last.roastDate   = s(roastDate, 10);
+        if (stock_g !== undefined)      last.stock_g     = parseFloat(stock_g) || null;
+        if (batchNumber !== undefined)  last.batchNumber = s(batchNumber, 50) ?? '';
     }
     saveLibrary(lib);
     if (regionChanged && lib.beans[idx].region) libraryService.geocodeBean(id).catch(() => {});
@@ -129,9 +130,10 @@ router.post('/api/library/bean/:id/new-bag', (req, res) => {
     const idx = lib.beans.findIndex(b => b.id === id);
     if (idx === -1) return res.status(404).json({ error: 'not found' });
     const s        = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : '';
-    const roastDate = s(req.body?.roastDate, 10);
-    const stock_g   = parseFloat(req.body?.stock_g) || null;
-    const bag = { id: Date.now(), roastDate, stock_g, openedAt: Date.now() };
+    const roastDate   = s(req.body?.roastDate, 10);
+    const stock_g     = parseFloat(req.body?.stock_g) || null;
+    const batchNumber = s(req.body?.batchNumber, 50);
+    const bag = { id: Date.now(), roastDate, stock_g, openedAt: Date.now(), batchNumber };
     if (!Array.isArray(lib.beans[idx].bags)) lib.beans[idx].bags = [];
     lib.beans[idx].bags.push(bag);
     lib.beans[idx].roastDate = roastDate;

@@ -319,6 +319,71 @@ describe('bean brew recommendation fields (manual-only)', () => {
     });
 });
 
+describe('bag batch number (manual-only, per-bag)', () => {
+    it('saves batchNumber on the initial bag created via POST and round-trips it', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Batch Bean', roastDate: '2026-06-01', stock_g: 250, batchNumber: 'L2405-13' }),
+        });
+        const bean = await r.json();
+        expect(bean.bags).toHaveLength(1);
+        expect(bean.bags[0].batchNumber).toBe('L2405-13');
+    });
+
+    it('does not break bag creation when batchNumber is omitted', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'No Batch Bean', roastDate: '2026-06-01', stock_g: 250 }),
+        });
+        const bean = await r.json();
+        expect(bean.bags).toHaveLength(1);
+        expect(bean.bags[0].batchNumber).toBe('');
+    });
+
+    it('caps batchNumber length like other optional string fields', async () => {
+        const long = 'X'.repeat(80);
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Long Batch Bean', roastDate: '2026-06-01', batchNumber: long }),
+        });
+        const bean = await r.json();
+        expect(bean.bags[0].batchNumber).toHaveLength(50);
+        expect(bean.bags[0].batchNumber).toBe(long.slice(0, 50));
+    });
+
+    it('updates the active bag batchNumber via PUT', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Editable Batch Bean', roastDate: '2026-06-01', stock_g: 250, batchNumber: 'L2405-13' }),
+        });
+        const bean = await r.json();
+
+        const put = await fetch(`${baseUrl}/api/library/bean/${bean.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ batchNumber: 'L2409-07' }),
+        });
+        const updated = await put.json();
+        expect(updated.bags[0].batchNumber).toBe('L2409-07');
+    });
+
+    it('accepts batchNumber on POST .../new-bag', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Multi-bag Bean', roastDate: '2026-05-01', stock_g: 250, batchNumber: 'L2405-13' }),
+        });
+        const bean = await r.json();
+
+        const newBag = await fetch(`${baseUrl}/api/library/bean/${bean.id}/new-bag`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roastDate: '2026-06-20', stock_g: 250, batchNumber: 'L2406-20' }),
+        });
+        const withNewBag = await newBag.json();
+        expect(withNewBag.bags).toHaveLength(2);
+        expect(withNewBag.bags[0].batchNumber).toBe('L2405-13');
+        expect(withNewBag.bags[1].batchNumber).toBe('L2406-20');
+    });
+});
+
 describe('bean origin/variety/process fields', () => {
     it('stores origin as an uppercased ISO alpha-2 code and keeps variety/process', async () => {
         const r = await fetch(`${baseUrl}/api/library/bean`, {

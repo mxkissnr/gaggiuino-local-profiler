@@ -113,6 +113,7 @@ export function renderBeanList() {
           <div class="lib-bag-row${i === 0 ? ' active' : ''}">
             <span>${bg.roastDate || '–'}</span>
             <span>${bg.stock_g ? bg.stock_g + ' g' : '–'}</span>
+            <span>${bg.batchNumber ? esc(bg.batchNumber) : '–'}</span>
             <button class="lib-bag-del" data-action="delete-bag" data-bean-id="${b.id}" data-bag-id="${bg.id}" title="${t('lib_bag_delete')}">✕</button>
           </div>`).join('')}
       </div>
@@ -144,6 +145,7 @@ export function renderBeanList() {
       b.producer, b.importer ? t('bean_importer_display', b.importer) : '',
       b.harvest ? t('bean_harvest_display', b.harvest) : '',
       b.certification, b.price_eur ? `${b.price_eur.toFixed(2)} €` : '',
+      activeBag?.batchNumber ? t('bag_batch_number_display', activeBag.batchNumber) : '',
     ].filter(Boolean);
     const extraHtml = extraParts.length
       ? `<div class="lib-item-sub lib-item-extra">${extraParts.map(esc).join(' · ')}</div>` : '';
@@ -185,6 +187,7 @@ export function renderBeanList() {
         <div class="lib-new-bag-fields">
           <input type="text" class="lib-new-bag-input" id="newBagRoastDate${b.id}" placeholder="${t('lib_bag_roast_date')} (TT.MM.JJJJ)">
           <input type="number" class="lib-new-bag-input" id="newBagStock${b.id}" placeholder="${t('lib_bag_stock')}" min="0" step="1">
+          <input type="text" class="lib-new-bag-input" id="newBagBatchNumber${b.id}" placeholder="${t('lib_bag_batch_number')}" maxlength="50">
         </div>
         <div class="lib-form-actions">
           <button class="lib-btn-sm" data-action="close-new-bag" data-id="${b.id}">${t('lib_cancel')}</button>
@@ -238,12 +241,13 @@ export async function deleteBag(beanId, bagId) {
 }
 
 export async function saveNewBag(id) {
-  const roastDate = document.getElementById(`newBagRoastDate${id}`)?.value.trim() || '';
-  const stock_g   = parseFloat(document.getElementById(`newBagStock${id}`)?.value) || null;
+  const roastDate   = document.getElementById(`newBagRoastDate${id}`)?.value.trim() || '';
+  const stock_g     = parseFloat(document.getElementById(`newBagStock${id}`)?.value) || null;
+  const batchNumber = document.getElementById(`newBagBatchNumber${id}`)?.value.trim() || '';
   const r = await apiFetch(`api/library/bean/${id}/new-bag`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ roastDate, stock_g }),
+    body: JSON.stringify({ roastDate, stock_g, batchNumber }),
   });
   if (!r.ok) return;
   const saved = await r.json();
@@ -469,6 +473,8 @@ export function openBeanForm(bean) {
   document.getElementById('beanFormRoastDate').value = bean?.roastDate || '';
   document.getElementById('beanFormNotes').value     = bean?.notes     || '';
   document.getElementById('beanFormStock').value     = bean?.stock_g   || '';
+  const activeEditBag = Array.isArray(bean?.bags) && bean.bags.length ? bean.bags[bean.bags.length - 1] : null;
+  document.getElementById('beanFormBatchNumber').value = activeEditBag?.batchNumber || '';
   document.getElementById('beanFormDecaf').checked   = !!bean?.decaf;
   populateOriginSelect();
   bindOriginInput();
@@ -517,6 +523,7 @@ export async function saveBean() {
   const roastDate = document.getElementById('beanFormRoastDate').value.trim();
   const notes     = document.getElementById('beanFormNotes').value.trim();
   const stock_g   = parseFloat(document.getElementById('beanFormStock').value) || null;
+  const batchNumber = document.getElementById('beanFormBatchNumber').value.trim();
   const decaf     = document.getElementById('beanFormDecaf').checked;
   const variety   = document.getElementById('beanFormVariety').value.trim();
   const process   = document.getElementById('beanFormProcess').value.trim();
@@ -537,7 +544,7 @@ export async function saveBean() {
   const payload = {
     name, roaster, roastDate, notes, stock_g, decaf, origins: _formOrigins, variety, process, flavors: _formFlavors, roastType, region,
     altitude_m, importer, harvest, price_eur, producer, certification,
-    brewTempC, brewRatio, brewTimeS, brewNotes,
+    brewTempC, brewRatio, brewTimeS, brewNotes, batchNumber,
   };
   if (!S.beanEditId && S._urlImportSource) {
     payload.source     = S._urlImportSource;
