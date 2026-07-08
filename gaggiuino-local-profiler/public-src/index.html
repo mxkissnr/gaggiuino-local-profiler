@@ -240,7 +240,8 @@
                 </div>
                 <div class="annotation-photo-row" id="annotationPhotoRow">
                     <img class="shot-photo-thumb" id="annPhotoThumb" alt="" style="display:none">
-                    <input type="file" id="annPhotoInput" accept="image/jpeg,image/png,image/webp,image/gif" data-i18n-title="ann_photo_upload" title="Foto zu diesem Shot hinzufügen">
+                    <input type="file" id="annPhotoInput" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
+                    <button type="button" class="lib-open-btn" id="annPhotoPickBtn" data-i18n="photo_pick_btn" data-i18n-title="ann_photo_upload" title="Foto zu diesem Shot hinzufügen">Foto auswählen</button>
                     <button type="button" class="lib-btn-sm del" id="annPhotoRemoveBtn" data-i18n="ann_photo_remove" style="display:none">Foto entfernen</button>
                 </div>
                 <div class="annotation-fields">
@@ -510,7 +511,10 @@
                             </div>
                             <div class="lib-form-field" id="beanFormImageField" style="display:none">
                                 <label data-i18n="bean_image_label">Bild</label>
-                                <input type="file" id="beanFormImage" accept="image/jpeg,image/png,image/webp,image/gif">
+                                <input type="file" id="beanFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
+                                <div class="photo-picker-row">
+                                    <button type="button" class="lib-open-btn" id="beanFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                </div>
                                 <span class="lib-form-hint" data-i18n="bean_image_hint">Falls der automatische Import fehlschlägt</span>
                             </div>
                             <div class="lib-form-field">
@@ -590,7 +594,10 @@
                             </div>
                             <div class="lib-form-field" id="grinderFormImageField" style="display:none">
                                 <label data-i18n="lib_grinder_image">Bild</label>
-                                <input type="file" id="grinderFormImage" accept="image/jpeg,image/png,image/webp,image/gif">
+                                <input type="file" id="grinderFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
+                                <div class="photo-picker-row">
+                                    <button type="button" class="lib-open-btn" id="grinderFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                </div>
                             </div>
                         </div>
                         <div class="lib-form-actions">

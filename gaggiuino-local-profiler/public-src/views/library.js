@@ -4,6 +4,7 @@ import { apiFetch } from '../api.js';
 import { esc, roastAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, countryName, flagEmoji } from '../constants.js';
 import { loadBeanImageBlobUrl, loadGrinderImageBlobUrl, invalidateGrinderImage, invalidateBeanImage } from '../bean-image.js';
+import { openImageCropEditor } from '../components/image-crop.js';
 import { generateBeanQR, parseGlpQrParams } from '../glp-qr.js';
 import { calcBestGrindCombosForBean } from './shots/grind.js';
 
@@ -625,10 +626,12 @@ export async function saveGrinder() {
 export async function uploadBeanImage(id, input) {
   const file = input.files[0];
   if (!file) return;
-  const r = await apiFetch(`api/library/bean/${id}/image`, {
-    method: 'POST', headers: { 'Content-Type': file.type }, body: file,
-  });
+  const blob = await openImageCropEditor(file, { shape: 'square' });
   input.value = '';
+  if (!blob) return;
+  const r = await apiFetch(`api/library/bean/${id}/image`, {
+    method: 'POST', headers: { 'Content-Type': blob.type }, body: blob,
+  });
   if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
   const saved = await r.json();
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
@@ -640,10 +643,12 @@ export async function uploadBeanImage(id, input) {
 export async function uploadGrinderImage(id, input) {
   const file = input.files[0];
   if (!file) return;
-  const r = await apiFetch(`api/library/grinder/${id}/image`, {
-    method: 'POST', headers: { 'Content-Type': file.type }, body: file,
-  });
+  const blob = await openImageCropEditor(file, { shape: 'square' });
   input.value = '';
+  if (!blob) return;
+  const r = await apiFetch(`api/library/grinder/${id}/image`, {
+    method: 'POST', headers: { 'Content-Type': blob.type }, body: blob,
+  });
   if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
   const saved = await r.json();
   const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === id);

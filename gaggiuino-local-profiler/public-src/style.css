@@ -458,7 +458,7 @@
         .star.active, .star:hover { color: var(--accent); }
 
         .annotation-photo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-        .shot-photo-thumb { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: var(--gray-800); }
+        .shot-photo-thumb { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: var(--gray-800); flex-shrink: 0; }
 
         .annotation-fields {
             display: grid;
@@ -1389,6 +1389,23 @@
            after the fixed-size header/breadcrumb/credit, instead of forcing
            the modal to overflow and scroll on short viewports. */
         .fw-canvas { width:100%; flex:1 1 auto; min-height:0; cursor:pointer; }
+
+        /* Photo picker button (replaces native <input type=file>, #286) */
+        .photo-picker-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+        .photo-picker-filename { font-size:.72rem; color:var(--gray-500); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px; }
+
+        /* Zoom + pan crop editor modal (#286) */
+        .crop-editor-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:1100; padding:16px; }
+        .crop-editor-modal { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:12px; padding:18px; max-width:360px; width:100%; display:flex; flex-direction:column; align-items:center; gap:14px; }
+        .crop-editor-title { font-size:.85rem; font-weight:600; color:var(--gray-200); margin:0; }
+        .crop-editor-canvas { touch-action:none; cursor:grab; background:var(--gray-950); max-width:100%; }
+        .crop-editor-canvas:active { cursor:grabbing; }
+        .crop-editor-canvas-circle { border-radius:50%; }
+        .crop-editor-canvas-square { border-radius:8px; }
+        .crop-editor-zoom-row { display:flex; align-items:center; gap:8px; width:100%; }
+        .crop-editor-zoom-icon { color:var(--gray-500); font-size:.9rem; user-select:none; }
+        .crop-editor-zoom-slider { flex:1; accent-color:var(--accent); }
+        .crop-editor-actions { display:flex; justify-content:flex-end; gap:8px; width:100%; }
         .fw-unmatched-label { font-size:.7rem; color:var(--gray-500); margin-bottom:4px; }
         .fw-unmatched-chips { display:flex; flex-wrap:wrap; gap:4px; max-height:15vh; overflow-y:auto; flex-shrink:0; }
         .fw-credit { font-size:.62rem; color:var(--gray-600); text-align:center; flex-shrink:0; }

@@ -457,6 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('closeFullscreenBtn').addEventListener('click', closeChartFullscreen);
   document.getElementById('quickCloneBtn').addEventListener('click', quickClone);
   document.getElementById('saveAnnotationBtn').addEventListener('click', saveAnnotation);
+  document.getElementById('annPhotoPickBtn').addEventListener('click', () => document.getElementById('annPhotoInput').click());
   document.getElementById('annPhotoInput').addEventListener('change', function () { uploadShotImage(this); });
   document.getElementById('annPhotoRemoveBtn').addEventListener('click', removeShotImage);
   ['annCoffee','annGrinder','annGrindSetting','annDose','annTds','annNotes'].forEach(id => {
@@ -487,9 +488,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('closeGrinderFormBtn').addEventListener('click', closeGrinderForm);
   document.getElementById('saveGrinderBtn').addEventListener('click', saveGrinder);
   document.getElementById('grinderAddTrigger').addEventListener('click', openGrinderForm);
+  document.getElementById('grinderFormImagePickBtn').addEventListener('click', () => document.getElementById('grinderFormImage').click());
   document.getElementById('grinderFormImage').addEventListener('change', function () {
     if (S.grinderEditId) uploadGrinderImage(S.grinderEditId, this);
   });
+  document.getElementById('beanFormImagePickBtn').addEventListener('click', () => document.getElementById('beanFormImage').click());
   document.getElementById('beanFormImage').addEventListener('change', function () {
     if (S.beanEditId) uploadBeanImage(S.beanEditId, this);
   });

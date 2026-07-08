@@ -326,4 +326,6 @@ export default {
     demo_mode_badge:'Demomodus',
     demo_mode_end:'Demo beëindigen',
     demo_mode_end_confirm:'Demomodus beëindigen en alle demo-data verwijderen?',
+    photo_pick_btn:'Foto kiezen', photo_change_btn:'Foto wijzigen',
+    crop_editor_title:'Foto bijsnijden', crop_editor_apply:'Toepassen', crop_editor_zoom:'Zoom',
 };

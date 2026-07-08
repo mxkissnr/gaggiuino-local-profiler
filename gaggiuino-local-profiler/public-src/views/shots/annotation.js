@@ -5,6 +5,7 @@ import { esc, germanToIso }              from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { calcBeanAgeAtShot, _roastDateFromLibrary } from './utils.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
+import { openImageCropEditor } from '../../components/image-crop.js';
 
 // ── Auto-save ─────────────────────────────────────────────────────────────
 
@@ -193,10 +194,12 @@ export async function uploadShotImage(input) {
   const file = input.files[0];
   if (!file || !S.primaryShotId) return;
   const id = S.primaryShotId;
-  const r = await apiFetch(`api/shots/${id}/image`, {
-    method: 'POST', headers: { 'Content-Type': file.type }, body: file,
-  });
+  const blob = await openImageCropEditor(file, { shape: 'circle' });
   input.value = '';
+  if (!blob) return;
+  const r = await apiFetch(`api/shots/${id}/image`, {
+    method: 'POST', headers: { 'Content-Type': blob.type }, body: blob,
+  });
   if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
   const saved = await r.json();
   const idx = S.shots.findIndex(s => s.id === id);
