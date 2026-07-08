@@ -2,6 +2,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const { COFFEE_COUNTRY_CODES } = require('./coffee-countries');
 
 let createCanvas = null;
 let GlobalFonts  = null;
@@ -48,22 +49,22 @@ try {
     createCanvas = null;
 }
 
-// Card color palette — black/white base, colored lines for chart data
+// Card color palette — matches the app's own CSS tokens (public-src/style.css
+// :root, default amber theme) so the shared card looks like part of the app
+// rather than an invented separate brand.
 const GLP = {
-    bg:        '#000000',   // pure black background
-    bgCard:    '#111111',   // slightly lighter for cards/header/footer
-    bgChart:   '#0a0a0a',   // chart area
-    text:      '#ffffff',   // primary text
-    textDim:   '#888888',   // secondary text
-    textMute:  '#444444',   // muted labels
-    border:    '#2a2a2a',   // card borders, grid
-    borderDim: '#1e1e1e',   // very subtle borders
-    // Data series colors — keep colored for readability on black background
-    cPressure:    '#3498db',
-    cFlow:        '#f39c12',
-    cWeightFlow:  '#9b59b6',
-    cWeight:      '#2ecc71',
-    cTemp:        '#e74c3c',
+    bg:        '#09090b',   // --gray-950
+    bgCard:    '#18181b',   // --gray-900
+    bgChart:   '#27272a',   // --gray-800
+    text:      '#e4e4e7',   // --gray-200
+    textDim:   '#a1a1aa',   // --gray-400
+    textMute:  '#71717a',   // --gray-500
+    border:    '#3f3f46',   // --gray-700
+    borderDim: '#27272a',   // --gray-800
+    cPressure: '#3498db', cFlow: '#f39c12', cWeightFlow: '#9b59b6', cWeight: '#2ecc71', cTemp: '#e74c3c',
+    accentFrom: '#f59e0b', accentTo: '#f97316',
+    accentTint: 'rgba(245,158,11,',  // e.g. GLP.accentTint + '0.12)' for chip backgrounds
+    star: '#f59e0b', starDim: '#3f3f46',
 };
 
 const W = 1080, H = 1080, PX = 52;
@@ -75,9 +76,81 @@ function F(size, bold = false) {
 
 function scoreColor(s) {
     if (s == null) return GLP.textMute;
-    if (s >= 80)   return '#ffffff';
-    if (s >= 60)   return '#aaaaaa';
-    return '#666666';
+    if (s >= 80)   return GLP.accentFrom;
+    if (s >= 60)   return GLP.textDim;
+    return GLP.textMute;
+}
+
+// score >= 90 → outstanding, >= 80 → nailed it, >= 60 → solid, else → still
+// dialing in. Returns null when there's no score to react to (test/empty shots).
+function scoreTierPhrase(score) {
+    if (score == null) return null;
+    if (score >= 90) return 'Herausragender Shot';
+    if (score >= 80) return 'Richtig gut getroffen';
+    if (score >= 60) return 'Solider Shot';
+    return 'Dial-in lohnt sich noch';
+}
+
+// Weight gets its own chart scale instead of sharing 0-100 with temperature —
+// a 20g floor keeps tiny/empty shots from zooming the axis absurdly.
+function computeWeightMax(weight) {
+    const scaled = (weight || []).filter(Boolean).map(v => v * 1.15);
+    return Math.max(20, ...scaled) || 20;
+}
+
+// Average of the extraction-phase temperature readings (values <= 50 are
+// startup/idle noise, not the actual shot temperature).
+function computeTempMid(temp) {
+    return avg((temp || []).filter(v => v > 50));
+}
+
+function clamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+}
+
+// Looks up a bean's first resolvable coffee-growing-country code by exact
+// (case-insensitive) name match against the library, the same matching
+// convention buildWorldMap() uses in public-src/views/analytics.js. `library`
+// is injected so this stays testable without requiring the live DB-backed
+// LibraryService.
+function resolveBeanOriginCode(coffeeName, library) {
+    if (!coffeeName || !library) return null;
+    const name = String(coffeeName).trim().toLowerCase();
+    if (!name) return null;
+    const bean = (library.beans || []).find(b => String(b.name || '').toLowerCase() === name);
+    if (!bean) return null;
+    const origins = Array.isArray(bean.origins) && bean.origins.length
+        ? bean.origins
+        : (bean.origin ? [{ code: bean.origin }] : []);
+    const code = origins[0]?.code;
+    return code && COFFEE_COUNTRY_CODES.includes(code) ? code : null;
+}
+
+// Points of a standard 5-point star, alternating outer/inner radius, starting
+// at the top and going clockwise. Pure geometry so the shape can be verified
+// without a canvas.
+function starPoints(cx, cy, outerR, innerR = outerR * 0.42, spikes = 5) {
+    const pts  = [];
+    const step = Math.PI / spikes;
+    let rot = -Math.PI / 2;
+    pts.push({ x: cx + Math.cos(rot) * outerR, y: cy + Math.sin(rot) * outerR });
+    for (let i = 0; i < spikes; i++) {
+        rot += step;
+        pts.push({ x: cx + Math.cos(rot) * innerR, y: cy + Math.sin(rot) * innerR });
+        rot += step;
+        pts.push({ x: cx + Math.cos(rot) * outerR, y: cy + Math.sin(rot) * outerR });
+    }
+    return pts;
+}
+
+function drawStar(ctx, cx, cy, r, filled, color, dimColor) {
+    const pts = starPoints(cx, cy, r);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.fillStyle = filled ? color : dimColor;
+    ctx.fill();
 }
 
 function avg(arr) {
@@ -141,6 +214,10 @@ function detectPreinfusionEnd(pressure) {
 async function generateShareCard(shot, score, format = 'square') {
     if (!createCanvas) throw new Error('canvas module not available');
     const glpIcon = await getGlpIcon();
+    // Lazily required: LibraryService touches the DB at require-time in some
+    // environments, and card generation shouldn't depend on that succeeding.
+    let library = null;
+    try { library = require('./services/LibraryService').getLibrary(); } catch { library = null; }
 
     const W = 1080;
     const H = format === 'story' ? 1920 : 1080;
@@ -185,6 +262,8 @@ async function generateShareCard(shot, score, format = 'square') {
     const avgWF       = weightFlow.length ? +(avg(weightFlow.filter(v => v > 0.2))).toFixed(1) : null;
     const maxWF       = weightFlow.length ? +(Math.max(...weightFlow.filter(v => v > 0))).toFixed(1) : null;
     const machine     = ann.machine || shot.machine || '';
+    const rating      = ann.rating != null ? Math.round(ann.rating) : null;
+    const originCode  = resolveBeanOriginCode(bean, library);
 
     const tgtPressVal = tgtPress.length ? +(tgtPress.filter(v => v > 0).slice(-1)[0] ?? 0).toFixed(1) : null;
     const tgtFlowVal  = tgtFlow.length  ? +(tgtFlow.filter(v => v > 0).slice(-1)[0] ?? 0).toFixed(1)  : null;
@@ -210,17 +289,26 @@ async function generateShareCard(shot, score, format = 'square') {
     ctx.fillStyle = GLP.bg;
     ctx.fillRect(0, 0, W, H);
 
-    // ── HEADER BAR ─────────────────────────────────────────────────────────
-    const HH = 76;
+    // ── ACCENT BAR + HEADER ────────────────────────────────────────────────
+    const BAR_H = 4;
+    const barGrad = ctx.createLinearGradient(0, 0, W, 0);
+    barGrad.addColorStop(0, GLP.accentFrom);
+    barGrad.addColorStop(1, GLP.accentTo);
+    ctx.fillStyle = barGrad;
+    ctx.fillRect(0, 0, W, BAR_H);
+
+    const HH       = 76;
+    const headerY  = BAR_H;
     ctx.fillStyle = GLP.bgCard;
-    ctx.fillRect(0, 0, W, HH);
+    ctx.fillRect(0, headerY, W, HH);
     ctx.strokeStyle = GLP.border;
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, HH); ctx.lineTo(W, HH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, headerY + HH); ctx.lineTo(W, headerY + HH); ctx.stroke();
+    const headerBottom = headerY + HH;
 
     // GLP logo (icon.png) — or fallback to bold text
     const iconSize = Math.round(HH * 0.72);
-    const iconY    = (HH - iconSize) / 2;
+    const iconY    = headerY + (HH - iconSize) / 2;
     if (glpIcon) {
         ctx.drawImage(glpIcon, PX, iconY, iconSize, iconSize);
     } else {
@@ -228,7 +316,7 @@ async function generateShareCard(shot, score, format = 'square') {
         ctx.font = F(44, true);
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
-        ctx.fillText('GLP', PX, HH / 2);
+        ctx.fillText('GLP', PX, headerY + HH / 2);
     }
 
     // Shot number + date top-right
@@ -237,58 +325,128 @@ async function generateShareCard(shot, score, format = 'square') {
     ctx.font = F(20);
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    ctx.fillText(headerRight, W - PX, HH / 2);
+    ctx.fillText(headerRight, W - PX, headerY + HH / 2);
     ctx.textAlign = 'left';
 
     // ── SCORE BADGE ────────────────────────────────────────────────────────
+    const scoreR = 74;
+    const scx = W - PX - 88, scy = headerBottom + 90;
     if (score != null) {
-        const scx = W - PX - 46, scy = HH + 74, r = 58;
         // Background disc
         ctx.beginPath();
-        ctx.arc(scx, scy, r, 0, Math.PI * 2);
-        ctx.fillStyle = '#1a1a1a';
+        ctx.arc(scx, scy, scoreR, 0, Math.PI * 2);
+        ctx.fillStyle = GLP.bgCard;
         ctx.fill();
-        // Ring
+        // Ring — progress arc proportional to score/100 (linear gradient once
+        // the shot is actually dialed in, flat scoreColor() otherwise), plus a
+        // dim track for the remainder. No shadow/glow — the app never uses that.
+        // (createConicGradient rendered near-invisible on @napi-rs/canvas —
+        // stick to the linear-gradient technique proven in the approved mockup.)
+        const frac = Math.max(0, Math.min(1, score / 100));
         ctx.beginPath();
-        ctx.arc(scx, scy, r, -Math.PI / 2, 1.5 * Math.PI);
-        ctx.strokeStyle = sColor;
-        ctx.lineWidth = 3;
+        ctx.arc(scx, scy, scoreR, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+        if (score >= 80) {
+            const ring = ctx.createLinearGradient(scx - scoreR, scy - scoreR, scx + scoreR, scy + scoreR);
+            ring.addColorStop(0, GLP.accentFrom);
+            ring.addColorStop(1, GLP.accentTo);
+            ctx.strokeStyle = ring;
+        } else {
+            ctx.strokeStyle = sColor;
+        }
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+        // Dim track for the remainder of the ring
+        ctx.beginPath();
+        ctx.arc(scx, scy, scoreR, -Math.PI / 2 + frac * Math.PI * 2, 1.5 * Math.PI);
+        ctx.strokeStyle = GLP.border;
+        ctx.lineWidth = 5;
         ctx.stroke();
         // Number
         ctx.fillStyle = GLP.text;
-        ctx.font = F(46, true);
+        ctx.font = F(56, true);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(score), scx, scy - 6);
+        ctx.fillText(String(score), scx, scy - 8);
         // Label
-        ctx.font = F(14);
+        ctx.font = F(15);
         ctx.fillStyle = GLP.textMute;
-        ctx.fillText('SCORE', scx, scy + 24);
+        ctx.fillText('SCORE', scx, scy + 28);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
     }
 
-    // ── PROFILE + BEAN ─────────────────────────────────────────────────────
-    const nameMaxW = W - 2 * PX - (score != null ? 170 : 20);
+    // ── HERO: bean name, origin stamp, score-tier phrase, rating, profile ──
+    const nameMaxW = W - 2 * PX - (score != null ? scoreR * 2 + 40 : 20);
     ctx.textBaseline = 'alphabetic';
 
-    let pName = profileName;
-    ctx.font = F(52, true);
-    while (ctx.measureText(pName).width > nameMaxW && pName.length > 4)
-        pName = pName.slice(0, -4) + '…';
-    ctx.fillStyle = GLP.text;
-    ctx.fillText(pName, PX, HH + 50);
+    const headlineBaseline = headerBottom + 54;
+    let chipW = 0;
+    if (originCode) {
+        ctx.font = F(18, true);
+        chipW = ctx.measureText(originCode).width + 26;
+    }
+    const headlineX     = PX + (originCode ? chipW + 14 : 0);
+    const headlineMaxW  = nameMaxW - (originCode ? chipW + 14 : 0);
 
-    let subY = HH + 82;
-    const subParts = [bean, machine].filter(Boolean);
-    if (subParts.length) {
+    let headline = bean || profileName;
+    ctx.font = F(52, true);
+    while (ctx.measureText(headline).width > headlineMaxW && headline.length > 4)
+        headline = headline.slice(0, -4) + '…';
+
+    if (originCode) {
+        const chipH  = 34;
+        const chipCY = headlineBaseline - 16;
+        roundRect(ctx, PX, chipCY - chipH / 2, chipW, chipH, chipH / 2);
+        ctx.fillStyle = GLP.accentTint + '0.14)';
+        ctx.fill();
+        ctx.strokeStyle = GLP.accentTint + '0.35)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = GLP.accentFrom;
+        ctx.font = F(18, true);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(originCode, PX + chipW / 2, chipCY);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+    }
+
+    ctx.fillStyle = GLP.text;
+    ctx.font = F(52, true);
+    ctx.fillText(headline, headlineX, headlineBaseline);
+
+    let cursorY = headlineBaseline + 32;
+
+    const phrase = scoreTierPhrase(score);
+    if (phrase) {
         ctx.fillStyle = GLP.textDim;
         ctx.font = F(24);
-        let subLine = subParts.join('  ·  ');
-        while (ctx.measureText(subLine).width > nameMaxW + 140 && subLine.length > 4)
-            subLine = subLine.slice(0, -4) + '…';
-        ctx.fillText(subLine, PX, subY);
-        subY += 32;
+        ctx.fillText(phrase, PX, cursorY);
+        cursorY += 34;
+    }
+
+    if (rating) {
+        const starR = 11, starGap = 8;
+        const starsY = cursorY - 8;
+        let sx = PX + starR;
+        for (let i = 0; i < 5; i++) {
+            drawStar(ctx, sx, starsY, starR, i < rating, GLP.star, GLP.starDim);
+            sx += starR * 2 + starGap;
+        }
+        cursorY = starsY + starR + 24;
+    }
+
+    const secondParts = [profileName, machine].filter(Boolean);
+    let subY = cursorY;
+    if (secondParts.length) {
+        ctx.fillStyle = GLP.textDim;
+        ctx.font = F(24);
+        let secondLine = secondParts.join('  ·  ');
+        while (ctx.measureText(secondLine).width > nameMaxW + 140 && secondLine.length > 4)
+            secondLine = secondLine.slice(0, -4) + '…';
+        ctx.fillText(secondLine, PX, cursorY);
+        subY = cursorY + 32;
     }
 
     // Dose → Yield · Ratio · Dur line
@@ -309,12 +467,12 @@ async function generateShareCard(shot, score, format = 'square') {
         subY = doseY;
     }
 
-    // Separator — thin white line fading right
+    // Separator — thin accent line fading right
     const sepY = subY + 20;
     const sg = ctx.createLinearGradient(PX, 0, W - PX, 0);
-    sg.addColorStop(0,   'rgba(255,255,255,0.5)');
-    sg.addColorStop(0.6, 'rgba(255,255,255,0.15)');
-    sg.addColorStop(1,   'rgba(255,255,255,0)');
+    sg.addColorStop(0,   GLP.accentTint + '0.5)');
+    sg.addColorStop(0.6, GLP.accentTint + '0.15)');
+    sg.addColorStop(1,   GLP.accentTint + '0)');
     ctx.strokeStyle = sg;
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(PX, sepY); ctx.lineTo(W - PX, sepY); ctx.stroke();
@@ -328,15 +486,24 @@ async function generateShareCard(shot, score, format = 'square') {
     const LEGEND_H = 50;
 
     const outerX    = PX - 8;
-    const outerY    = sepY + 10;
+    let outerY       = sepY + 10;
     const outerW    = W - 2 * PX + 16;
     const STATS_H   = 200;
     const FOOT_H    = 52;
-    // Dynamic height: chart fills remaining space so the card has no empty area
-    const outerH    = Math.max(
-        Math.round(240 * SCALE),
-        H - outerY - STATS_H - 16 - FOOT_H
-    );
+    // Chart fills remaining space so the card has no empty area — except in
+    // story format, where filling all the way down stretches the chart into
+    // a tall, distorted shape. There it's capped near-square (like the shot
+    // graph reads everywhere else in the app) and the freed vertical space is
+    // split evenly above/below the chart+stats block instead of left as one
+    // gap.
+    const availH = H - outerY - STATS_H - 16 - FOOT_H;
+    let outerH = Math.max(Math.round(240 * SCALE), availH);
+    if (format === 'story') {
+        const capped = Math.min(outerH, outerW);
+        const freed  = Math.max(0, outerH - capped);
+        outerH = capped;
+        outerY += freed / 2;
+    }
 
     const plotX  = outerX + CHART_L;
     const plotY  = outerY + CHART_T;
@@ -351,13 +518,17 @@ async function generateShareCard(shot, score, format = 'square') {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Y axis scales
-    const LEFT_MAX  = 12;   // bar / (ml/s)
-    const RIGHT_MAX = Math.max(100, ...temp.filter(Boolean), ...weight.filter(Boolean)) || 100;
+    // Y axis scales — pressure/flow keep a fixed 0-12 bar/(ml/s) scale;
+    // weight and temperature each get their own scale instead of sharing one
+    // 0-100 range (which used to waste most of the chart height on weight).
+    const LEFT_MAX   = 12;   // bar / (ml/s)
+    const WEIGHT_MAX = computeWeightMax(weight);
+    const tempMid    = computeTempMid(temp) ?? 93;
 
-    const yLeft  = v => plotY + plotH - Math.max(0, Math.min(v / LEFT_MAX, 1)) * plotH;
-    const yRight = v => plotY + plotH - Math.max(0, Math.min(v / RIGHT_MAX, 1)) * plotH;
-    const xTime  = i => plotX + (i / Math.max(nPts - 1, 1)) * plotW;
+    const yLeft   = v => plotY + plotH - Math.max(0, Math.min(v / LEFT_MAX, 1)) * plotH;
+    const yWeight = v => plotY + plotH - clamp(v / WEIGHT_MAX, 0, 1) * plotH;
+    const yTemp   = v => plotY + plotH * (1 - 0.32) - clamp((v - tempMid + 4) / 8, 0, 1) * (plotH * 0.32);
+    const xTime   = i => plotX + (i / Math.max(nPts - 1, 1)) * plotW;
 
     // Grid lines (horizontal, at 0 3 6 9 12 on left axis)
     [0, 3, 6, 9, 12].forEach(bar => {
@@ -377,15 +548,16 @@ async function generateShareCard(shot, score, format = 'square') {
     });
     ctx.textAlign = 'left';
 
-    // Right Y axis ticks (20 40 60 80)
-    [20, 40, 60, 80].forEach(v => {
-        const gy = yRight(v);
+    // Right Y axis ticks — weight values, step size scaled to the range
+    const weightStep = WEIGHT_MAX <= 35 ? 10 : WEIGHT_MAX <= 55 ? 15 : 20;
+    for (let v = weightStep; v < WEIGHT_MAX; v += weightStep) {
+        const gy = yWeight(v);
         ctx.fillStyle = GLP.textMute;
         ctx.font = F(15);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(v), outerX + outerW - CHART_R + 5, gy);
-    });
+        ctx.fillText(`${v}g`, outerX + outerW - CHART_R + 5, gy);
+    }
 
     // X axis — time ticks every 5s
     const xTickStep = totalSec <= 40 ? 5 : totalSec <= 90 ? 10 : 20;
@@ -441,14 +613,26 @@ async function generateShareCard(shot, score, format = 'square') {
     // Draw target lines (dashed, behind main lines)
     drawSeries(tgtPress,  yLeft,  GLP.cPressure,   1.5, [5, 5]);
     drawSeries(tgtFlow,   yLeft,  GLP.cFlow,        1.5, [5, 5]);
-    drawSeries(tgtTemp,   yRight, GLP.cTemp,        1.5, [5, 5]);
+    drawSeries(tgtTemp,   yTemp,  GLP.cTemp,        1.5, [5, 5]);
 
     // Draw main lines (solid, GLP colors, no glow)
-    drawSeries(weightFlow, yLeft,  GLP.cWeightFlow, 2,   null);
-    drawSeries(flow,       yLeft,  GLP.cFlow,       2,   null);
-    drawSeries(weight,     yRight, GLP.cWeight,     2,   null);
-    drawSeries(temp,       yRight, GLP.cTemp,       2.5, null);
-    drawSeries(pressure,   yLeft,  GLP.cPressure,   2.5, null);
+    drawSeries(weightFlow, yLeft,   GLP.cWeightFlow, 2,   null);
+    drawSeries(flow,       yLeft,   GLP.cFlow,       2,   null);
+    drawSeries(weight,     yWeight, GLP.cWeight,     2,   null);
+    drawSeries(temp,       yTemp,   GLP.cTemp,       2.5, null);
+    drawSeries(pressure,   yLeft,   GLP.cPressure,   2.5, null);
+
+    // Small label pinning down what the compressed temp band represents —
+    // muted and top-right, next to the weight axis ticks, not competing with
+    // the red temperature line itself.
+    if (avgTemp != null) {
+        ctx.fillStyle = GLP.textMute;
+        ctx.font = F(13);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`${Math.round(avgTemp)}°C ±4`, outerX + outerW - CHART_R + 5, plotY + 2);
+        ctx.textBaseline = 'alphabetic';
+    }
 
     ctx.restore();
 
@@ -489,35 +673,43 @@ async function generateShareCard(shot, score, format = 'square') {
     if (weight.length     > 2) legendItems.push({ color: GLP.cWeight,     label: 'Gewicht',      dash: false });
     if (temp.length       > 2) legendItems.push({ color: GLP.cTemp,       label: 'Temperatur',   dash: false });
     if (tgtPress.length   > 2) legendItems.push({ color: GLP.cPressure,   label: 'Ziel Druck',   dash: true });
-    if (tgtFlow.length    > 2) legendItems.push({ color: GLP.cFlow,       label: 'Ziel Fluss',   dash: true });
+    if (tgtFlow.length    > 2) legendItems.push({ color: GLP.cFlow,       label: 'Ziel Fluss',    dash: true });
     if (tgtTemp.length    > 2) legendItems.push({ color: GLP.cTemp,       label: 'Ziel Temp',    dash: true });
 
     if (legendItems.length) {
-        const legY = outerY + outerH - LEGEND_H / 2;
-        ctx.font = F(17);
+        const legY    = outerY + outerH - LEGEND_H / 2;
+        const chipH   = 26, chipPad = 10, dotR = 5, gap = 10;
+        ctx.font = F(15);
         ctx.textBaseline = 'middle';
-        // Measure total width
-        const itemWidths = legendItems.map(it => 14 + 4 + ctx.measureText(it.label).width + 14);
-        const totalLegW  = itemWidths.reduce((a, b) => a + b, 0);
+        const chipWidths = legendItems.map(it => dotR * 2 + 8 + ctx.measureText(it.label).width + chipPad * 2);
+        const totalLegW  = chipWidths.reduce((a, b) => a + b, 0) + gap * (legendItems.length - 1);
         let lx = outerX + (outerW - totalLegW) / 2;
 
         legendItems.forEach((it, i) => {
+            const cw = chipWidths[i];
+            roundRect(ctx, lx, legY - chipH / 2, cw, chipH, chipH / 2);
+            ctx.fillStyle = GLP.bgChart;
+            ctx.fill();
+            ctx.strokeStyle = GLP.borderDim;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            const dotX = lx + chipPad + dotR;
+            ctx.beginPath();
+            ctx.arc(dotX, legY, dotR, 0, Math.PI * 2);
             if (it.dash) {
-                // dashed line swatch
                 ctx.strokeStyle = it.color;
-                ctx.lineWidth = 2;
-                ctx.setLineDash([4, 3]);
-                ctx.beginPath(); ctx.moveTo(lx, legY); ctx.lineTo(lx + 14, legY); ctx.stroke();
-                ctx.setLineDash([]);
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
             } else {
-                // solid square swatch
                 ctx.fillStyle = it.color;
-                ctx.fillRect(lx, legY - 6, 12, 12);
+                ctx.fill();
             }
-            ctx.fillStyle = GLP.textMute;
+
+            ctx.fillStyle = GLP.textDim;
             ctx.textAlign = 'left';
-            ctx.fillText(it.label, lx + 16, legY);
-            lx += itemWidths[i];
+            ctx.fillText(it.label, dotX + dotR + 8, legY);
+            lx += cw + gap;
         });
     }
 
@@ -648,12 +840,35 @@ async function generateShareCard(shot, score, format = 'square') {
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
     ctx.fillText('Gaggiuino Local Profiler', PX, footY + 6);
-    ctx.fillStyle = GLP.textMute;
-    ctx.textAlign = 'right';
-    ctx.fillText('glp.local', W - PX, footY + 6);
+
+    // "Made with GLP" pill — same soft-tint chip convention as the rest of the app
+    const pillText = 'Made with GLP';
+    ctx.font = F(16, true);
+    const pillPad = 12;
+    const pillW = ctx.measureText(pillText).width + pillPad * 2;
+    const pillH = 30;
+    const pillX = W - PX - pillW, pillY = footY + 6 - pillH / 2;
+    roundRect(ctx, pillX, pillY, pillW, pillH, pillH / 2);
+    ctx.fillStyle = GLP.accentTint + '0.14)';
+    ctx.fill();
+    ctx.strokeStyle = GLP.accentTint + '0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = GLP.accentFrom;
+    ctx.textAlign = 'center';
+    ctx.fillText(pillText, pillX + pillW / 2, footY + 6);
     ctx.textAlign = 'left';
 
     return canvas.toBuffer('image/png');
 }
 
-module.exports = { generateShareCard, isAvailable: () => createCanvas !== null };
+module.exports = {
+    generateShareCard,
+    isAvailable: () => createCanvas !== null,
+    // Exported for unit testing of the pure logic pieces
+    scoreTierPhrase,
+    computeWeightMax,
+    computeTempMid,
+    resolveBeanOriginCode,
+    starPoints,
+};
