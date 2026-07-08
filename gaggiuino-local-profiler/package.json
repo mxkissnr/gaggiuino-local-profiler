@@ -1,6 +1,6 @@
 {
   "name": "gaggiuino-local-profiler-backend",
-  "version": "1.105.0",
+  "version": "1.106.0",
   "main": "server.js",
   "scripts": {
     "build": "vite build",

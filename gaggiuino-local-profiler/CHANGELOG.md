@@ -1,4 +1,4 @@
-## Unreleased
+## [1.106.0] – 2026-07-08
 
 ### Added
 - **Best grinder+grind-setting combo per bean in the Coffee Library.** Each bean card now shows, when there's enough data, which grinder + grind setting produced its best-scoring shots (e.g. "Best combo: Niche Zero @ 18 · Ø score 92"). `calcBestGrindCombosForBean(beanName, allShots)` in `public-src/views/shots/grind.js` generalizes the existing single-shot `calcComparativeGrindAdvice` comparison logic to aggregate a bean's entire shot history, grouping by (grinder, grind setting rounded to the nearest 0.5) and averaging `calcShotScore` per group; a group needs at least 3 shots to be shown (fewer makes the average too noisy to trust), and only the single best combo is surfaced per bean to keep the card uncluttered. Rendered in `public-src/views/library.js`. Closes #281
