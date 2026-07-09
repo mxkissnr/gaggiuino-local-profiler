@@ -8,7 +8,7 @@ const { BEAN_IMAGE_MAX_BYTES } = require('../lib/constants');
 const { rateLimit } = require('../lib/helpers');
 const {
     sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeSpecies, sanitizeFlavors,
-    sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime, safeUrl,
+    sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime, sanitizeEnabled, safeUrl,
 } = require('../lib/sanitize-bean');
 
 router.get('/api/library', (req, res) => {
@@ -25,7 +25,7 @@ router.post('/api/library/bean', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
     const { name, roaster, roastDate, notes, stock_g, decaf, origin, origins, variety, species, process, flavors, roastType, region, imageUrl,
         altitude_m, importer, harvest, price_eur, producer, certification, source, importedAt, sourceUrl,
-        brewTempC, brewRatio, brewTimeS, brewNotes, batchNumber } = req.body;
+        brewTempC, brewRatio, brewTimeS, brewNotes, batchNumber, enabled } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
         return res.status(400).json({ error: 'name required' });
     const s    = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -54,6 +54,7 @@ router.post('/api/library/bean', (req, res) => {
         brewTimeS: sanitizeBrewTime(brewTimeS), brewNotes: s(brewNotes, 300),
         stock_g: parsedStock,
         decaf: !!decaf,
+        enabled: sanitizeEnabled(enabled),
         bags: parsedStock || s(roastDate, 10) || s(batchNumber, 50)
             ? [{ id: Date.now() + 1, roastDate: s(roastDate, 10), stock_g: parsedStock, openedAt: Date.now(), batchNumber: s(batchNumber, 50) }]
             : [],
@@ -77,7 +78,7 @@ router.put('/api/library/bean/:id', (req, res) => {
     const s = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : undefined;
     const { name, roaster, roastDate, notes, stock_g, decaf, origin, origins, variety, species, process, flavors, roastType, region,
         altitude_m, importer, harvest, price_eur, producer, certification,
-        brewTempC, brewRatio, brewTimeS, brewNotes, batchNumber } = req.body;
+        brewTempC, brewRatio, brewTimeS, brewNotes, batchNumber, enabled } = req.body;
     if (name !== undefined)      lib.beans[idx].name      = s(name, 200) || lib.beans[idx].name;
     if (roaster !== undefined)   lib.beans[idx].roaster   = s(roaster, 200);
     if (roastDate !== undefined) lib.beans[idx].roastDate = s(roastDate, 10);
@@ -114,6 +115,7 @@ router.put('/api/library/bean/:id', (req, res) => {
     }
     if (stock_g !== undefined)   lib.beans[idx].stock_g   = parseFloat(stock_g) || null;
     if (decaf !== undefined)     lib.beans[idx].decaf     = !!decaf;
+    if (enabled !== undefined)   lib.beans[idx].enabled   = sanitizeEnabled(enabled);
     // Keep active bag in sync with top-level fields
     if ((roastDate !== undefined || stock_g !== undefined || batchNumber !== undefined) && lib.beans[idx].bags?.length) {
         const last = lib.beans[idx].bags[lib.beans[idx].bags.length - 1];
@@ -168,6 +170,19 @@ router.post('/api/library/bean/:id/delete', (req, res) => {
     lib.beans = lib.beans.filter(b => b.id !== id);
     saveLibrary(lib);
     res.json({ ok: true });
+});
+
+// Manual override for the order card's bean picker, independent of stock (see
+// LibraryService.getActiveBeans): flips bean.enabled. Toggle rather than a
+// PUT with an explicit value — simplest wiring for a single UI button.
+router.post('/api/library/bean/:id/toggle-active', (req, res) => {
+    const id   = parseInt(req.params.id, 10);
+    const lib  = loadLibrary();
+    const bean = lib.beans.find(b => b.id === id);
+    if (!bean) return res.status(404).json({ error: 'not found' });
+    bean.enabled = bean.enabled === false ? true : false;
+    saveLibrary(lib);
+    res.json(bean);
 });
 
 // Serves a downloaded bean image (see LibraryService.setBeanImage). 404 when

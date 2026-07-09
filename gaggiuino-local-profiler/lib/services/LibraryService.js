@@ -35,12 +35,16 @@ class LibraryService {
         return Math.round(bean.stock_g - Math.round(consumed));
     }
 
-    // Beans that are actually still in stock, shaped for the order card
+    // Beans that are actually still in stock, shaped for the order card.
+    // bean.enabled is a manual override, independent of stock — a bean can
+    // have stock left but the user doesn't want it offered right now. Checked
+    // with `!== false` (not `=== true`) so beans without the field (all
+    // pre-existing beans) keep showing up.
     getActiveBeans() {
         const doseRows = shotRepo.getAnnotatedDoses();
         return (this.getLibrary().beans || [])
             .map(b => ({ bean: b, remaining: this.computeBeanRemaining(b, doseRows) }))
-            .filter(({ remaining }) => remaining !== null && remaining > 0)
+            .filter(({ remaining, bean }) => remaining !== null && remaining > 0 && bean.enabled !== false)
             .map(({ bean, remaining }) => ({
                 id: bean.id, name: bean.name, roaster: bean.roaster || null,
                 decaf: !!bean.decaf, remaining,
@@ -119,6 +123,11 @@ class LibraryService {
 
     // Lightweight bean metadata for external consumers (Lovelace shot card):
     // descriptive fields only, no stock math. roastDate prefers the active bag.
+    // Deliberately NOT gated by bean.enabled: this is a "describe this bean"
+    // lookup for shots that already reference the bean by name (e.g. past
+    // shots logged while it was enabled), not an "offer for selection" list
+    // like getActiveBeans() — disabling a bean shouldn't make historical shot
+    // cards unable to resolve its metadata.
     getBeansInfo() {
         return (this.getLibrary().beans || []).map(bean => {
             const bags      = Array.isArray(bean.bags) ? bean.bags : [];

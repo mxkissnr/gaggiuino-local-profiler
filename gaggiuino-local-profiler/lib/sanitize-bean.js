@@ -69,6 +69,13 @@ function sanitizeFlavors(v) {
     return out;
 }
 
+// Manual "offer for ordering" override, independent of stock. Missing/undefined
+// (all pre-existing beans) must keep meaning enabled, so only an explicit
+// false-ish value turns it off — this is NOT a `=== true` coercion.
+function sanitizeEnabled(v) {
+    return !(v === false || v === 'false' || v === 0 || v === '0');
+}
+
 function sanitizeAltitude(v) {
     const n = parseInt(v, 10);
     return Number.isFinite(n) && n >= 0 && n <= 3000 ? n : null;
@@ -131,6 +138,7 @@ function sanitizeBeanFields(bean) {
         brewTimeS: sanitizeBrewTime(bean.brewTimeS),
         brewNotes: s(bean.brewNotes, 300),
         sourceUrl: safeUrl(bean.sourceUrl),
+        enabled: sanitizeEnabled(bean.enabled),
     };
 }
 
@@ -183,6 +191,6 @@ function sanitizeRecipeFields(recipe) {
 
 module.exports = {
     sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeSpecies, sanitizeFlavors,
-    sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime,
+    sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime, sanitizeEnabled,
     sanitizeBeanFields, sanitizeGrinderFields, sanitizeRecipeFields, safeUrl,
 };

@@ -81,6 +81,8 @@ export default {
     lib_cancel:'Annuleren', lib_save:'Opslaan',
     lib_empty_beans:'Nog geen bonen opgeslagen', lib_empty_grinders:'Nog geen molens opgeslagen',
     lib_btn_edit:'Bewerken', lib_btn_delete:'Verwijderen',
+    lib_btn_disable:'Uitschakelen voor bestellingen', lib_btn_enable:'Inschakelen voor bestellingen',
+    lib_bean_disabled_badge:'Uitgeschakeld',
     lib_confirm_delete_bean:'Boon uit de bibliotheek verwijderen?',
     lib_confirm_delete_grinder:'Molen uit de bibliotheek verwijderen?',
     analytics_trend:'Score Trend', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Alle',

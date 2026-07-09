@@ -81,6 +81,8 @@ export default {
     lib_cancel:'Cancel', lib_save:'Save',
     lib_empty_beans:'No beans saved yet', lib_empty_grinders:'No grinders saved yet',
     lib_btn_edit:'Edit', lib_btn_delete:'Delete',
+    lib_btn_disable:'Disable for ordering', lib_btn_enable:'Enable for ordering',
+    lib_bean_disabled_badge:'Disabled',
     lib_confirm_delete_bean:'Remove bean from library?',
     lib_confirm_delete_grinder:'Remove grinder from library?',
     analytics_trend:'Score Trend', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'All',

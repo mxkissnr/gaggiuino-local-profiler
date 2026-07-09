@@ -53,7 +53,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
-         openBeanForm, closeBeanForm, editBean, saveBean, deleteBean, uploadBeanImage,
+         openBeanForm, closeBeanForm, editBean, saveBean, deleteBean, toggleBeanActive, uploadBeanImage,
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage,
          toggleBeanQR,
          toggleBagHistory, openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
@@ -550,6 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
       case 'edit-bean':          editBean(numId()); break;
       case 'delete-bean':        deleteBean(numId()); break;
+      case 'toggle-bean-active': toggleBeanActive(numId()); break;
       case 'edit-grinder':       editGrinder(numId()); break;
       case 'delete-grinder':     deleteGrinder(numId()); break;
       case 'edit-recipe':        editRecipe(numId()); break;

@@ -81,6 +81,8 @@ export default {
     lib_cancel:'Annuler', lib_save:'Enregistrer',
     lib_empty_beans:'Aucun grain enregistré', lib_empty_grinders:'Aucun moulin enregistré',
     lib_btn_edit:'Modifier', lib_btn_delete:'Supprimer',
+    lib_btn_disable:'Désactiver pour les commandes', lib_btn_enable:'Activer pour les commandes',
+    lib_bean_disabled_badge:'Désactivé',
     lib_confirm_delete_bean:'Supprimer le grain de la bibliothèque ?',
     lib_confirm_delete_grinder:'Supprimer le moulin de la bibliothèque ?',
     analytics_trend:'Tendance Score', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Tous',

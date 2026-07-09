@@ -81,6 +81,8 @@ export default {
     lib_cancel:'Abbrechen', lib_save:'Speichern',
     lib_empty_beans:'Noch keine Bohnen gespeichert', lib_empty_grinders:'Noch keine Mühlen gespeichert',
     lib_btn_edit:'Bearbeiten', lib_btn_delete:'Löschen',
+    lib_btn_disable:'Für Bestellungen deaktivieren', lib_btn_enable:'Für Bestellungen aktivieren',
+    lib_bean_disabled_badge:'Deaktiviert',
     lib_confirm_delete_bean:'Bohne aus der Bibliothek löschen?',
     lib_confirm_delete_grinder:'Mühle aus der Bibliothek löschen?',
     analytics_trend:'Score-Trend', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Alle',

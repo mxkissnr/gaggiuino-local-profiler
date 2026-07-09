@@ -203,6 +203,56 @@ describe('GET /api/orders/active-beans', () => {
         const beans = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
         expect(beans).toEqual([]);
     });
+
+    it('excludes a bean with stock but enabled: false (manual override)', async () => {
+        saveLibrary({ beans: [
+            { id: 1, name: 'Dolce', stock_g: 250, bags: [bag(0)], enabled: false },
+        ], grinders: [], recipes: [] });
+        const beans = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
+        expect(beans).toEqual([]);
+    });
+
+    it('includes a bean with stock and no enabled field (backward compatibility)', async () => {
+        saveLibrary({ beans: [
+            { id: 1, name: 'Dolce', stock_g: 250, bags: [bag(0)] },
+        ], grinders: [], recipes: [] });
+        const beans = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
+        expect(beans.map(b => b.name)).toEqual(['Dolce']);
+    });
+
+    it('excludes a bean that is both enabled: false and out of stock (no regression)', async () => {
+        saveLibrary({ beans: [
+            { id: 1, name: 'Dolce', stock_g: 0, bags: [bag(0)], enabled: false },
+        ], grinders: [], recipes: [] });
+        const beans = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
+        expect(beans).toEqual([]);
+    });
+});
+
+describe('POST /api/library/bean/:id/toggle-active', () => {
+    it('flips enabled from absent (treated as true) to false, and persists', async () => {
+        saveLibrary({ beans: [{ id: 1, name: 'Dolce', stock_g: 250 }], grinders: [], recipes: [] });
+
+        const r1 = await fetch(`${baseUrl}/api/library/bean/1/toggle-active`, { method: 'POST' });
+        expect(r1.status).toBe(200);
+        expect((await r1.json()).enabled).toBe(false);
+
+        const lib = await (await fetch(`${baseUrl}/api/library`)).json();
+        expect(lib.beans[0].enabled).toBe(false);
+    });
+
+    it('flips enabled back to true on a second toggle', async () => {
+        saveLibrary({ beans: [{ id: 1, name: 'Dolce', stock_g: 250, enabled: false }], grinders: [], recipes: [] });
+
+        const r = await fetch(`${baseUrl}/api/library/bean/1/toggle-active`, { method: 'POST' });
+        expect((await r.json()).enabled).toBe(true);
+    });
+
+    it('404s for an unknown bean id', async () => {
+        saveLibrary({ beans: [], grinders: [], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/library/bean/999/toggle-active`, { method: 'POST' });
+        expect(r.status).toBe(404);
+    });
 });
 
 describe('GET /api/orders/active-milks', () => {

@@ -81,6 +81,8 @@ export default {
     lib_cancel:'Annulla', lib_save:'Salva',
     lib_empty_beans:'Nessun grano salvato', lib_empty_grinders:'Nessun macinino salvato',
     lib_btn_edit:'Modifica', lib_btn_delete:'Elimina',
+    lib_btn_disable:'Disattiva per gli ordini', lib_btn_enable:'Attiva per gli ordini',
+    lib_bean_disabled_badge:'Disattivato',
     lib_confirm_delete_bean:'Rimuovere il grano dalla libreria?',
     lib_confirm_delete_grinder:'Rimuovere il macinino dalla libreria?',
     analytics_trend:'Andamento Score', analytics_trend_30:'30 Shot', analytics_trend_90:'90 Shot', analytics_trend_all:'Tutti',
