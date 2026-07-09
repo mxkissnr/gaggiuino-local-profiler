@@ -17,6 +17,7 @@ const beanSchema = z.object({
     roaster:   z.string().max(200).optional().default(''),
     origin:    z.string().max(200).optional().default(''),
     variety:   z.string().max(200).optional().default(''),
+    species:   z.enum(['', 'Arabica', 'Robusta', 'Liberica', 'Blend']).optional().default(''),
     process:   z.string().max(200).optional().default(''),
     roastDate: z.string().optional().default(''),
     weight:    z.number().positive().optional().nullable(),

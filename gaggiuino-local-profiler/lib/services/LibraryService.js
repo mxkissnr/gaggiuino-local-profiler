@@ -46,7 +46,7 @@ class LibraryService {
                 decaf: !!bean.decaf, remaining,
                 // customer-facing description data for the order card
                 notes: bean.notes || null, origin: bean.origin || null, process: bean.process || null,
-                variety: bean.variety || null,
+                variety: bean.variety || null, species: bean.species || null,
             }));
     }
 
@@ -129,6 +129,7 @@ class LibraryService {
                 roaster:   bean.roaster || null,
                 origin:    bean.origin  || null,
                 variety:   bean.variety || null,
+                species:   bean.species || null,
                 process:   bean.process || null,
                 flavors:   Array.isArray(bean.flavors) && bean.flavors.length ? bean.flavors : null,
                 roastType: bean.roastType || null,
@@ -183,6 +184,33 @@ class LibraryService {
         if (changed) {
             this.saveLibrary(lib);
             log(`Migrated origin to origins on ${changed} bean(s)`);
+        }
+        return changed;
+    }
+
+    // The "Varietät" field used to hold species names (Arabica/Robusta/Blend)
+    // alongside real cultivars (Bourbon, Geisha, ...) — see SPECIES_OPTIONS
+    // vs VARIETY_SUGGESTIONS in public-src/constants.js. Idempotent startup
+    // migration: only exact species matches (case-insensitive, trimmed) are
+    // moved; anything else (e.g. "Red Bourbon") is left untouched — no fuzzy
+    // matching, since variety is free text and guessing would misfire.
+    migrateVarietyToSpecies() {
+        const SPECIES_BY_KEY = { arabica: 'Arabica', robusta: 'Robusta', blend: 'Blend' };
+        const lib = this.getLibrary();
+        let changed = 0;
+        for (const bean of lib.beans || []) {
+            if (bean.species) continue;
+            if (typeof bean.variety !== 'string') continue;
+            const key = bean.variety.trim().toLowerCase();
+            const species = SPECIES_BY_KEY[key];
+            if (!species) continue;
+            bean.species = species;
+            bean.variety = '';
+            changed++;
+        }
+        if (changed) {
+            this.saveLibrary(lib);
+            log(`Migrated variety to species on ${changed} bean(s)`);
         }
         return changed;
     }

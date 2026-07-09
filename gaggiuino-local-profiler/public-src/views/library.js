@@ -166,7 +166,7 @@ export function renderBeanList() {
         <div class="lib-item-name">${esc(b.name)}${freshBadge}${b.roastType ? ` <span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : ''}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}</div>
         <div class="lib-item-sub">${[
           originDisplay(b),
-          b.region, b.variety, b.process, b.roaster, b.roastDate, b.notes,
+          b.region, b.species, b.variety, b.process, b.roaster, b.roastDate, b.notes,
         ].filter(Boolean).map(esc).join(' · ')}</div>
         ${extraHtml}
         ${brewHtml}
@@ -484,6 +484,7 @@ export function openBeanForm(bean) {
   setFormOrigins(bean);
   populateSuggestionDatalists();
   document.getElementById('beanFormVariety').value   = bean?.variety || '';
+  document.getElementById('beanFormSpecies').value   = bean?.species || '';
   document.getElementById('beanFormProcess').value   = bean?.process || '';
   bindFlavorInput();
   setFormFlavors(bean?.flavors);
@@ -530,6 +531,7 @@ export async function saveBean() {
   const batchNumber = document.getElementById('beanFormBatchNumber').value.trim();
   const decaf     = document.getElementById('beanFormDecaf').checked;
   const variety   = document.getElementById('beanFormVariety').value.trim();
+  const species   = document.getElementById('beanFormSpecies').value;
   const process   = document.getElementById('beanFormProcess').value.trim();
   const roastType = document.getElementById('beanFormRoastType').value;
   const region    = document.getElementById('beanFormRegion').value.trim();
@@ -546,7 +548,7 @@ export async function saveBean() {
   commitFlavorInput(); // take a still-typed flavor along
   if (!name) { document.getElementById('beanFormName').focus(); return; }
   const payload = {
-    name, roaster, roastDate, notes, stock_g, decaf, origins: _formOrigins, variety, process, flavors: _formFlavors, roastType, region,
+    name, roaster, roastDate, notes, stock_g, decaf, origins: _formOrigins, variety, species, process, flavors: _formFlavors, roastType, region,
     altitude_m, importer, harvest, price_eur, producer, certification,
     brewTempC, brewRatio, brewTimeS, brewNotes, batchNumber,
   };

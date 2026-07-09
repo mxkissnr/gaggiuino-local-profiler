@@ -490,6 +490,36 @@ describe('LibraryService.migrateOriginToOrigins', () => {
     });
 });
 
+describe('LibraryService.migrateVarietyToSpecies', () => {
+    it('moves exact species matches out of variety, leaves cultivars and pre-set species untouched', () => {
+        saveLibrary({ beans: [
+            { id: 1, name: 'A', variety: 'Arabica' },
+            { id: 2, name: 'B', variety: 'ARABICA' },
+            { id: 3, name: 'C', variety: 'robusta' },
+            { id: 4, name: 'D', variety: 'Blend' },
+            { id: 5, name: 'E', variety: 'Red Bourbon' }, // cultivar, not a species — untouched
+            { id: 6, name: 'F', variety: 'Heirloom' },     // untouched
+            { id: 7, name: 'G', variety: 'Arabica', species: 'Robusta' }, // species already set — untouched
+        ], grinders: [], recipes: [] });
+
+        const changed = libraryService.migrateVarietyToSpecies();
+        expect(changed).toBe(4); // beans 1-4 only
+
+        const lib = libraryService.getLibrary();
+        expect(lib.beans.find(b => b.id === 1)).toMatchObject({ species: 'Arabica', variety: '' });
+        expect(lib.beans.find(b => b.id === 2)).toMatchObject({ species: 'Arabica', variety: '' });
+        expect(lib.beans.find(b => b.id === 3)).toMatchObject({ species: 'Robusta', variety: '' });
+        expect(lib.beans.find(b => b.id === 4)).toMatchObject({ species: 'Blend', variety: '' });
+        expect(lib.beans.find(b => b.id === 5)).toMatchObject({ variety: 'Red Bourbon' });
+        expect(lib.beans.find(b => b.id === 5).species).toBeFalsy();
+        expect(lib.beans.find(b => b.id === 6)).toMatchObject({ variety: 'Heirloom' });
+        expect(lib.beans.find(b => b.id === 6).species).toBeFalsy();
+        expect(lib.beans.find(b => b.id === 7)).toMatchObject({ variety: 'Arabica', species: 'Robusta' });
+
+        expect(libraryService.migrateVarietyToSpecies()).toBe(0); // idempotent second call
+    });
+});
+
 describe('bean roastType/flavors/variety (misc fields)', () => {
     it('whitelists roastType and drops unknown values', async () => {
         const ok = await (await fetch(`${baseUrl}/api/library/bean`, {
@@ -503,6 +533,20 @@ describe('bean roastType/flavors/variety (misc fields)', () => {
             body: JSON.stringify({ roastType: 'nuclear' }),
         })).json();
         expect(bad.roastType).toBe('');
+    });
+
+    it('whitelists species and drops unknown values', async () => {
+        const ok = await (await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Speciesy', species: 'Robusta' }),
+        })).json();
+        expect(ok.species).toBe('Robusta');
+
+        const bad = await (await fetch(`${baseUrl}/api/library/bean/${ok.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ species: 'Red Bourbon' }),
+        })).json();
+        expect(bad.species).toBe('');
     });
 
     it('stores flavors deduped and capped, round-trips via PUT', async () => {

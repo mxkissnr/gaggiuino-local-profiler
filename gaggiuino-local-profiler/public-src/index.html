@@ -441,8 +441,18 @@
                                 <span class="lib-form-hint" data-i18n="bean_origin_hint">Mehrere Länder = Blend; optionaler %-Anteil pro Land</span>
                             </div>
                             <div class="lib-form-field">
+                                <label data-i18n="bean_species_label">Spezies</label>
+                                <select id="beanFormSpecies">
+                                    <option value="" data-i18n="species_none">– keine Angabe –</option>
+                                    <option value="Arabica" data-i18n="species_arabica">Arabica</option>
+                                    <option value="Robusta" data-i18n="species_robusta">Robusta</option>
+                                    <option value="Liberica" data-i18n="species_liberica">Liberica</option>
+                                    <option value="Blend" data-i18n="species_blend">Blend</option>
+                                </select>
+                            </div>
+                            <div class="lib-form-field">
                                 <label data-i18n="lib_bean_variety">Varietät</label>
-                                <input type="text" id="beanFormVariety" list="varietySuggestions" placeholder="Arabica, Geisha …">
+                                <input type="text" id="beanFormVariety" list="varietySuggestions" placeholder="Geisha, Bourbon …">
                                 <datalist id="varietySuggestions"></datalist>
                             </div>
                             <div class="lib-form-field">

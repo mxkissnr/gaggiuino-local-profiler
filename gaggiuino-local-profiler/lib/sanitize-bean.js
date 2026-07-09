@@ -44,6 +44,13 @@ function sanitizeRoastType(v) {
     return typeof v === 'string' && ROAST_TYPES.has(v) ? v : '';
 }
 
+// Botanical species — distinct from variety/cultivar (see VARIETY_SUGGESTIONS
+// vs SPECIES_OPTIONS in public-src/constants.js). Whitelisted like roastType.
+const SPECIES = new Set(['Arabica', 'Robusta', 'Liberica', 'Blend']);
+function sanitizeSpecies(v) {
+    return typeof v === 'string' && SPECIES.has(v) ? v : '';
+}
+
 // Flavors are short tags (chips UI); dedupe case-insensitively, cap counts.
 function sanitizeFlavors(v) {
     if (!Array.isArray(v)) return [];
@@ -108,6 +115,7 @@ function sanitizeBeanFields(bean) {
         origin: sanitizedOrigins[0]?.code || '',
         origins: sanitizedOrigins,
         variety: s(bean.variety, 200),
+        species: sanitizeSpecies(bean.species),
         process: s(bean.process, 200),
         flavors: sanitizeFlavors(bean.flavors),
         roastType: sanitizeRoastType(bean.roastType),
@@ -174,7 +182,7 @@ function sanitizeRecipeFields(recipe) {
 }
 
 module.exports = {
-    sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeFlavors,
+    sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeSpecies, sanitizeFlavors,
     sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime,
     sanitizeBeanFields, sanitizeGrinderFields, sanitizeRecipeFields, safeUrl,
 };

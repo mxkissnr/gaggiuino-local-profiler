@@ -49,6 +49,7 @@ export default {
     lib_bean_origin:'Herkomst', lib_bean_variety:'Variëteit', lib_bean_process:'Verwerking', lib_bean_origin_none:'+ Land toevoegen',
     bean_flavors_label:'Smaaknotities', bean_flavors_ph:'Abrikoos, karamel …', bean_flavors_hint:'Enter of komma voegt toe', bean_origin_hint:'Meerdere landen = een blend; optioneel %-aandeel per land',
     bean_roast_type:'Branding', roast_type_none:'– niet ingesteld –', roast_type_espresso:'Espresso', roast_type_filter:'Filter', roast_type_omni:'Omni',
+    bean_species_label:'Soort', species_none:'– niet ingesteld –', species_arabica:'Arabica', species_robusta:'Robusta', species_liberica:'Liberica', species_blend:'Blend',
     bean_region_label:'Regio', bean_region_ph:'Sidama, Bensa …',
     flavor_wheel_btn:'Smaakwiel openen', flavor_wheel_unmatched:'Niet-gekoppelde smaken',
     flavor_wheel_unavailable:'Smaakwiel momenteel niet beschikbaar (geen internetverbinding?)',

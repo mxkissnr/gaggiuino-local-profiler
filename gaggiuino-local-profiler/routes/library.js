@@ -7,7 +7,7 @@ const { imagePath, CONTENT_TYPE_EXT, deleteBeanImage, deleteImage, saveUploadedI
 const { BEAN_IMAGE_MAX_BYTES } = require('../lib/constants');
 const { rateLimit } = require('../lib/helpers');
 const {
-    sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeFlavors,
+    sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeSpecies, sanitizeFlavors,
     sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime, safeUrl,
 } = require('../lib/sanitize-bean');
 
@@ -23,7 +23,7 @@ router.get('/api/library/beans-info', (req, res, next) => {
 
 router.post('/api/library/bean', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
-    const { name, roaster, roastDate, notes, stock_g, decaf, origin, origins, variety, process, flavors, roastType, region, imageUrl,
+    const { name, roaster, roastDate, notes, stock_g, decaf, origin, origins, variety, species, process, flavors, roastType, region, imageUrl,
         altitude_m, importer, harvest, price_eur, producer, certification, source, importedAt, sourceUrl,
         brewTempC, brewRatio, brewTimeS, brewNotes, batchNumber } = req.body;
     if (!name || typeof name !== 'string' || !name.trim())
@@ -42,7 +42,7 @@ router.post('/api/library/bean', (req, res) => {
         id: Date.now(), name: s(name, 200), roaster: s(roaster, 200),
         roastDate: s(roastDate, 10), notes: s(notes, 1000),
         origin: sanitizedOrigins[0]?.code || '', origins: sanitizedOrigins,
-        variety: s(variety, 200), process: s(process, 200),
+        variety: s(variety, 200), species: sanitizeSpecies(species), process: s(process, 200),
         flavors: sanitizeFlavors(flavors),
         roastType: sanitizeRoastType(roastType),
         region: s(region, 200),
@@ -75,7 +75,7 @@ router.put('/api/library/bean/:id', (req, res) => {
     const idx = lib.beans.findIndex(b => b.id === id);
     if (idx === -1) return res.status(404).json({ error: 'not found' });
     const s = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : undefined;
-    const { name, roaster, roastDate, notes, stock_g, decaf, origin, origins, variety, process, flavors, roastType, region,
+    const { name, roaster, roastDate, notes, stock_g, decaf, origin, origins, variety, species, process, flavors, roastType, region,
         altitude_m, importer, harvest, price_eur, producer, certification,
         brewTempC, brewRatio, brewTimeS, brewNotes, batchNumber } = req.body;
     if (name !== undefined)      lib.beans[idx].name      = s(name, 200) || lib.beans[idx].name;
@@ -91,6 +91,7 @@ router.put('/api/library/bean/:id', (req, res) => {
         lib.beans[idx].origin  = code;
     }
     if (variety !== undefined)   lib.beans[idx].variety   = s(variety, 200) ?? '';
+    if (species !== undefined)   lib.beans[idx].species   = sanitizeSpecies(species);
     if (process !== undefined)   lib.beans[idx].process   = s(process, 200) ?? '';
     if (flavors !== undefined)   lib.beans[idx].flavors   = sanitizeFlavors(flavors);
     if (roastType !== undefined) lib.beans[idx].roastType = sanitizeRoastType(roastType);

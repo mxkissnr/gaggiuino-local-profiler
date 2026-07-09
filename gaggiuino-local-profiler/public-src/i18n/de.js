@@ -49,6 +49,7 @@ export default {
     lib_bean_origin:'Herkunft', lib_bean_variety:'Varietät', lib_bean_process:'Aufbereitung', lib_bean_origin_none:'+ Land hinzufügen',
     bean_flavors_label:'Geschmacksnoten', bean_flavors_ph:'Aprikose, Karamell …', bean_flavors_hint:'Enter oder Komma fügt hinzu', bean_origin_hint:'Mehrere Länder = Blend; optionaler %-Anteil pro Land',
     bean_roast_type:'Röstung', roast_type_none:'– keine Angabe –', roast_type_espresso:'Espresso', roast_type_filter:'Filter', roast_type_omni:'Omni',
+    bean_species_label:'Spezies', species_none:'– keine Angabe –', species_arabica:'Arabica', species_robusta:'Robusta', species_liberica:'Liberica', species_blend:'Blend',
     bean_region_label:'Region', bean_region_ph:'Sidama, Bensa …',
     flavor_wheel_btn:'Aroma-Rad öffnen', flavor_wheel_unmatched:'Nicht zugeordnete Aromen',
     flavor_wheel_unavailable:'Aroma-Rad momentan nicht verfügbar (keine Internetverbindung?)',

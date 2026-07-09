@@ -47,8 +47,12 @@ export const COUNTRY_CENTROIDS = {
   YE: [48.52, 15.55],  ZM: [27.85, -13.13], ZW: [29.15, -19.02],
 };
 
-export const VARIETY_SUGGESTIONS = ['Arabica', 'Robusta', 'Blend', 'Bourbon', 'Geisha',
+export const VARIETY_SUGGESTIONS = ['Bourbon', 'Geisha',
   'Typica', 'Caturra', 'Catuai', 'SL28', 'SL34', 'Pacamara', 'Maragogype'];
+
+// Coffee species — botanical, distinct from the cultivars/varieties above
+// (e.g. Red Bourbon is a cultivar within Arabica, not a separate species).
+export const SPECIES_OPTIONS = ['Arabica', 'Robusta', 'Liberica', 'Blend'];
 
 export const PROCESS_SUGGESTIONS = ['Washed', 'Natural', 'Honey', 'Anaerobic'];
 

@@ -21,6 +21,7 @@ try {
     libraryService.migrateImportedNotes();
     libraryService.migrateNotesToFlavors();
     libraryService.migrateOriginToOrigins();
+    libraryService.migrateVarietyToSpecies();
     log('Database ready');
 } catch (err) {
     log(`Init error: ${err.message}`, true);
