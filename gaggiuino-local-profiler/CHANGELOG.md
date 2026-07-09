@@ -1,3 +1,8 @@
+## Unreleased
+
+### Fixed
+- **Coffee World Map: horizontal lines cutting across the whole map, from countries whose 110m outline crosses the antimeridian.** Russia's Arctic archipelago ring and Fiji's ring each wrap from ~180°E to ~180°W; `topojson.feature()`'s conversion doesn't cut rings at the date line, so the two far-apart points ended up connected by a straight line spanning the full map width. `buildWorldMap()` (`public-src/views/analytics.js`) now runs every feature's geometry through `splitAntimeridianRing()` before registering the map: rings with an interior seam crossing (Russia, Fiji) are split into separate polygons, each closed independently; a ring whose *own* closing edge crosses the seam (a circumpolar coastline like Antarctica's, which sweeps through every longitude) is closed by routing along the map border via the nearest pole instead of cutting straight across. New `test/world-map-antimeridian.test.js`. Known minor residual: a ring with more than two seam crossings (e.g. Russia's Far East near Chukotka) can still show a faint diagonal artifact confined to that corner — full general-purpose antimeridian polygon clipping wasn't in scope for this rendering-quality fix. Closes #290
+
 ## [1.109.0] – 2026-07-08
 
 ### Added

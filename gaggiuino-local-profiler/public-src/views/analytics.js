@@ -541,6 +541,127 @@ export function computeMapBoundingView(coords) {
   return { center, zoom };
 }
 
+// Pure helper (unit-testable): splits a ring's [lon, lat] coordinate array
+// wherever two consecutive points jump by more than 180° of longitude — the
+// signature of a landmass crossing the antimeridian in raw topojson→GeoJSON
+// output. topojson.feature() does not cut rings at the seam, so ECharts ends
+// up drawing a straight line across the whole map connecting e.g. lon=178.7
+// to lon=-180. This inserts an interpolated point at lon=±180 at the split
+// and returns each side as its own closed ring, so the caller can promote
+// each into a separate polygon instead of one ring drawing a seam-spanning
+// line. Pragmatic, not geodetically exact — good enough to kill the artifact.
+// Closes a ring piece (appends its own first point) so first === last. If a
+// direct close would itself cross the seam (the piece's start and end sit on
+// opposite ±180 sides — this happens for a piece that both entered and exited
+// through the antimeridian, e.g. a circumpolar coastline like Antarctica's),
+// route the closing edge along the map border via the nearest pole instead
+// of drawing straight across the map.
+function _closeRingPiece(seg) {
+  const first = seg[0], lastPt = seg[seg.length - 1];
+  if (first[0] === lastPt[0] && first[1] === lastPt[1]) return seg;
+  if (Math.abs(first[0] - lastPt[0]) > 180) {
+    const pole = lastPt[1] < 0 ? -90 : 90;
+    const sideOut = lastPt[0] > 0 ? 180 : -180;
+    const sideIn  = first[0] > 0 ? 180 : -180;
+    seg.push([sideOut, pole], [sideIn, pole], first);
+  } else {
+    seg.push(first);
+  }
+  return seg;
+}
+
+export function splitAntimeridianRing(ring) {
+  if (!Array.isArray(ring) || ring.length < 2) return [ring];
+  // A ring's own closing edge (last point deep-equal to the first) can be
+  // the one that jumps the seam — a circumpolar coastline (e.g. Antarctica's
+  // 110m outline) that sweeps through every longitude and happens to be
+  // encoded starting/ending exactly at the antimeridian. That's not two
+  // separate landmasses either side of the date line (unlike Russia/Fiji),
+  // so it isn't split into pieces — instead _closeRingPiece() below routes
+  // that closing edge along the map border (nearest pole) instead of cutting
+  // straight across, the standard way flat equirectangular maps render a
+  // polygon that touches both the left and right edges.
+  const last = ring[ring.length - 1];
+  const closesAtStart = last[0] === ring[0][0] && last[1] === ring[0][1];
+  const scanEnd = closesAtStart ? ring.length - 1 : ring.length;
+  const segments = [[ring[0]]];
+  for (let i = 1; i < scanEnd; i++) {
+    const [lon1, lat1] = ring[i - 1];
+    const [lon2, lat2] = ring[i];
+    const dLon = lon2 - lon1;
+    if (Math.abs(dLon) > 180) {
+      // Crossing the seam: close the current segment on this side, start a
+      // new one on the other side, both anchored at the same interpolated
+      // latitude on their respective edge (+180 or -180).
+      const side1 = lon1 > 0 ? 180 : -180;
+      const side2 = lon2 > 0 ? 180 : -180;
+      segments[segments.length - 1].push([side1, lat2]);
+      segments.push([[side2, lat2]]);
+    } else {
+      segments[segments.length - 1].push([lon2, lat2]);
+    }
+  }
+  if (segments.length === 1) {
+    return [closesAtStart ? _closeRingPiece(segments[0]) : segments[0]];
+  }
+  // A jump landing exactly on a closed ring's own closing edge produces a
+  // degenerate 1-point trailing segment — not a renderable ring. Drop
+  // segments with fewer than 2 distinct points before closing.
+  const usable = segments.filter(seg => seg.length >= 2);
+  if (usable.length === 0) return [ring];
+  // Every surviving piece needs to be independently closed — a piece that
+  // both entered and exited through the seam (start and end on opposite
+  // ±180 sides) must NOT be closed by a direct chord back to its own start,
+  // same fix as the circumpolar single-ring case above.
+  return usable.map(_closeRingPiece);
+}
+
+// Splits a single polygon's rings (outer + holes) at the antimeridian. If no
+// ring in the polygon crosses the seam, returns the polygon unchanged (as a
+// single-element array so the caller can flatten uniformly). If any ring
+// does cross, every resulting piece — from the outer ring or a hole — is
+// promoted to its own independent single-ring polygon; the original
+// outer/hole relationship isn't preserved for split pieces, which is a
+// deliberate simplification (see buildWorldMap comment) since perfect
+// topology at the seam isn't the goal, just killing the line artifact.
+function _splitPolygonAtAntimeridian(rings) {
+  const allPieces = [];
+  let anySplit = false;
+  for (const ring of rings) {
+    const pieces = splitAntimeridianRing(ring);
+    if (pieces.length > 1) anySplit = true;
+    allPieces.push(...pieces);
+  }
+  if (!anySplit) return [rings];
+  return allPieces.map(piece => [piece]);
+}
+
+// Applies antimeridian splitting to an entire GeoJSON geometry (Polygon or
+// MultiPolygon), promoting any split-off ring pieces into standalone
+// polygons of a MultiPolygon rather than leaving them as extra rings of one
+// polygon (which would be misread as holes). Other geometry types pass
+// through unchanged.
+function _splitGeometryAtAntimeridian(geometry) {
+  if (!geometry) return geometry;
+  if (geometry.type === 'Polygon') {
+    const polys = _splitPolygonAtAntimeridian(geometry.coordinates);
+    if (polys.length === 1) return geometry;
+    return { type: 'MultiPolygon', coordinates: polys };
+  }
+  if (geometry.type === 'MultiPolygon') {
+    const outPolys = [];
+    let changed = false;
+    for (const rings of geometry.coordinates) {
+      const polys = _splitPolygonAtAntimeridian(rings);
+      if (polys.length !== 1) changed = true;
+      outPolys.push(...polys);
+    }
+    if (!changed) return geometry;
+    return { type: 'MultiPolygon', coordinates: outPolys };
+  }
+  return geometry;
+}
+
 export async function buildWorldMap() {
   const wrap = document.getElementById('worldMapWrap');
   if (!wrap) return;
@@ -617,6 +738,11 @@ export async function buildWorldMap() {
 
   if (!_worldMapRegistered) {
     const geo = topojson.feature(_worldTopo, _worldTopo.objects.countries);
+    // Some countries' geometries cross the ±180° antimeridian (e.g. Russia,
+    // Fiji); topojson.feature() doesn't cut rings there, which makes ECharts
+    // draw a straight line across the whole map connecting the two edges.
+    // Split those rings before they're used for anything.
+    for (const f of geo.features) f.geometry = _splitGeometryAtAntimeridian(f.geometry);
     const numToCode = new Map(COFFEE_COUNTRIES.map(c => [c.num, c.code]));
     for (const f of geo.features) f.properties = { ...f.properties, code: numToCode.get(String(f.id)) || null };
     echarts.registerMap('world', geo);
