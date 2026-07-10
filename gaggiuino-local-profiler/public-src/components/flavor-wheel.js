@@ -45,7 +45,7 @@ function toSunburstData(node, depth, lang, bgHex) {
   // below): unpredictable subsets of lit nodes at those depths could
   // otherwise collide with each other's in-wedge text, so the native label
   // is suppressed here regardless of `lit`.
-  const labelCfg = { show: depth === 1 ? !!lit : false, color: contrastTextColor(realColor), fontSize: depth === 1 ? 13 : depth === 3 ? 10 : 11, fontWeight: 'bold' };
+  const labelCfg = { show: depth === 1 ? !!lit : false, color: contrastTextColor(realColor), fontSize: depth === 1 ? 11 : depth === 3 ? 10 : 11, fontWeight: 'bold' };
   const entry = {
     id: node.id,
     name: label,
