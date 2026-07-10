@@ -21,7 +21,7 @@
 
 ---
 
-> **Heads-up — this requires a Gaggiuino-modified machine.** GLP does not work with stock espresso machines. [Gaggiuino](https://gaggiuino.github.io/) is an open-source hardware mod (custom controller, pressure/temperature sensors) for Gaggia Classic and similar machines. If your machine doesn't run Gaggiuino firmware yet, start there first.
+> **Heads-up — this requires a Gaggiuino-modified machine.** GLP does not work with stock espresso machines. [Gaggiuino](https://gaggiuino.github.io/) is a hardware mod (custom controller, pressure/temperature sensors) for Gaggia Classic and similar machines. If your machine doesn't run Gaggiuino firmware yet, start there first.
 
 ## Why GLP?
 

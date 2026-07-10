@@ -1267,6 +1267,17 @@
             #chart-area, #live-view { padding: 16px; }
             .sprofiler-header { margin-bottom: 10px; }
             .sprofiler-header h1 { font-size: 1.3rem; }
+            /* The title block (flex:1;min-width:0) and the score/export-buttons
+               block (flex-shrink:0) are both set via inline style="" in index.html
+               (display:flex;flex-wrap:wrap on the parent). flex-wrap only kicks in once
+               shrinkable items can't shrink further — but flex:1;min-width:0 lets the
+               title block shrink almost to nothing instead of wrapping, so on narrow
+               viewports the title/subtitle get squeezed into a sliver and visually
+               overlap the score badge/buttons instead of wrapping onto their own row.
+               Forcing both children to flex-basis:100% makes each claim the full row
+               width, so they stack as two clean rows. */
+            .sprofiler-header > div:first-child { flex: 1 1 100% !important; }
+            .sprofiler-header > div:last-child   { flex: 1 1 100% !important; flex-wrap: wrap; justify-content: flex-end; }
             .sprofiler-meta-grid { gap: 0; flex-direction: column; }
             .meta-column       { max-width: 100%; }
             .meta-column[style*="text-align: right"] { text-align: left !important; }
@@ -1391,7 +1402,11 @@
         /* flex:1 + min-height:0 lets the chart shrink to whatever space is left
            after the fixed-size header/breadcrumb/credit, instead of forcing
            the modal to overflow and scroll on short viewports. */
-        .fw-canvas { width:100%; flex:1 1 auto; min-height:0; cursor:pointer; }
+        .fw-canvas { width:100%; flex:1 1 auto; min-height:0; cursor:pointer; position:relative; }
+        /* Leader-line label overlay for depth 2/3 flavor wheel labels (#299)
+           — absolutely positioned over the ECharts canvas at the same size;
+           pointer-events:none so clicks/hover keep reaching the chart. */
+        .fw-label-overlay { position:absolute; inset:0; pointer-events:none; }
 
         /* Photo picker button (replaces native <input type=file>, #286) */
         .photo-picker-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
