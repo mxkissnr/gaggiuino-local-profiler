@@ -1391,7 +1391,11 @@
         /* flex:1 + min-height:0 lets the chart shrink to whatever space is left
            after the fixed-size header/breadcrumb/credit, instead of forcing
            the modal to overflow and scroll on short viewports. */
-        .fw-canvas { width:100%; flex:1 1 auto; min-height:0; cursor:pointer; }
+        .fw-canvas { width:100%; flex:1 1 auto; min-height:0; cursor:pointer; position:relative; }
+        /* Leader-line label overlay for depth 2/3 flavor wheel labels (#299)
+           — absolutely positioned over the ECharts canvas at the same size;
+           pointer-events:none so clicks/hover keep reaching the chart. */
+        .fw-label-overlay { position:absolute; inset:0; pointer-events:none; }
 
         /* Photo picker button (replaces native <input type=file>, #286) */
         .photo-picker-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
