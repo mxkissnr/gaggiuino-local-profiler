@@ -133,18 +133,21 @@ function renderLeaderOverlay() {
 
   // All labels aim for the same target radius (regardless of which ring
   // their wedge is actually on) so mid- and outer-ring labels relax against
-  // each other in one shared column instead of two disconnected ones.
+  // each other on one shared circle instead of two disconnected columns.
   const targetR = Math.min(w, h) / 2 - 6;
   const elbowPad = 14;
   const textMargin = 4;
+  const labelPad = 6;
   // Measured (not just estimated) text width per label, so a long label
   // (e.g. "Zartbitterschokolade") gets pulled in from the edge instead of
-  // running past the container and getting silently clipped.
+  // running past the container and getting silently clipped, and claims an
+  // angular half-width proportional to its own size instead of a fixed slot.
   const measureCtx = document.createElement('canvas').getContext('2d');
   measureCtx.font = "600 10px 'Figtree', sans-serif";
+  const widths = new Map(anchors.map(a => [a.id, measureCtx.measureText(a.text).width]));
   const placed = layoutLeaderLabels(anchors.map(a => ({
-    id: a.id, angle: a.angle, labelY: Math.sin(a.angle) * targetR,
-  })), { minGap: 18 });
+    id: a.id, angle: a.angle, halfW: (widths.get(a.id) / 2 + labelPad) / targetR,
+  })));
 
   // Leader-line text now sits on the modal background, not on its wedge's
   // own fill color, so it must be contrast-safe against `_bgHex` instead of
@@ -158,18 +161,27 @@ function renderLeaderOverlay() {
     const anchorY = src.cy + Math.sin(src.angle) * src.r;
     const elbowX = src.cx + Math.cos(src.angle) * (src.r + elbowPad);
     const elbowY = src.cy + Math.sin(src.angle) * (src.r + elbowPad);
-    const textWidth = measureCtx.measureText(src.text).width;
-    let labelX = p.side === 'right' ? src.cx + targetR : src.cx - targetR;
-    if (p.side === 'right') {
+    const textWidth = widths.get(src.id);
+    const cosA = Math.cos(p.angle);
+    const anchor = cosA > 0.15 ? 'start' : cosA < -0.15 ? 'end' : 'middle';
+
+    let labelX = src.cx + Math.cos(p.angle) * targetR;
+    let labelY = src.cy + Math.sin(p.angle) * targetR;
+    // Clamp to the container bounds — the relaxed angle can occasionally
+    // place a label's text past the edge for an outlier in a dense
+    // cluster, which would otherwise get silently clipped by the SVG's
+    // viewBox. The clamp direction depends on which way the text runs from
+    // its anchor point.
+    if (anchor === 'start') {
       labelX = Math.min(labelX, w - 2 - textMargin - textWidth);
-    } else {
+    } else if (anchor === 'end') {
       labelX = Math.max(labelX, textMargin + textWidth + 2);
+    } else {
+      // Centered text extends textWidth/2 on both sides of labelX.
+      const half = textWidth / 2;
+      labelX = Math.min(Math.max(labelX, textMargin + half), w - 2 - textMargin - half);
     }
-    // Clamp to the container bounds — the relaxed y can occasionally land a
-    // couple px past the edge for an outlier in a dense cluster (see
-    // horizontal clamp above for the same reasoning), which would otherwise
-    // get silently clipped by the SVG's viewBox.
-    const labelY = Math.min(h - 8, Math.max(8, src.cy + p.y));
+    labelY = Math.min(h - 8, Math.max(8, labelY));
 
     const line = document.createElementNS(SVG_NS, 'polyline');
     line.setAttribute('points', `${anchorX},${anchorY} ${elbowX},${elbowY} ${labelX},${labelY}`);
@@ -188,12 +200,12 @@ function renderLeaderOverlay() {
     _overlaySvg.appendChild(dot);
 
     const text = document.createElementNS(SVG_NS, 'text');
-    text.setAttribute('x', labelX + (p.side === 'right' ? 4 : -4));
+    text.setAttribute('x', labelX + (anchor === 'start' ? 4 : anchor === 'end' ? -4 : 0));
     text.setAttribute('y', labelY);
     text.setAttribute('fill', textColor);
     text.setAttribute('font-size', '10');
     text.setAttribute('font-weight', '600');
-    text.setAttribute('text-anchor', p.side === 'right' ? 'start' : 'end');
+    text.setAttribute('text-anchor', anchor);
     text.setAttribute('dominant-baseline', 'middle');
     text.textContent = src.text;
     _overlaySvg.appendChild(text);
@@ -269,7 +281,14 @@ export function renderFlavorWheel(container, flavors, lang, breadcrumbEl) {
         // visible ring unless explicitly zeroed out here — same for the
         // emphasis state, since clicking triggers focus:'ancestor' up to it.
         { label: { show: false }, itemStyle: { color: 'transparent' }, emphasis: { label: { show: false }, itemStyle: { color: 'transparent' } } },
-        { r0: '14%', r: '38%' },
+        // Depth 1 (the 9 top categories) keeps its label horizontal
+        // regardless of wedge position — ECharts' sunburst defaults to
+        // `rotate:'radial'` for every level unless overridden, which turns
+        // near-vertical for wedges away from 12/6 o'clock and makes longer
+        // names (e.g. "Nussig / Kakao") unreadable. `overflow:'break'` with
+        // a fixed `width` wraps those long names onto a second line instead
+        // of clipping or squeezing them.
+        { r0: '14%', r: '38%', label: { rotate: 0, overflow: 'break', width: 64 } },
         // Radial (spoke-pointing) labels on the outer two rings, matching
         // the real SCA/WCR wheel's signature look — you tilt the wheel to
         // read the far side, same as the paper original.
