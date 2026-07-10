@@ -69,13 +69,15 @@ let _overlaySvg = null; // leader-line label overlay (see renderLeaderOverlay)
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-// ── Leader-line label overlay (depth 2/3) ───────────────────────────────
+// ── Label overlay (depth 2/3) ────────────────────────────────────────────
 // Native ECharts in-wedge labels are disabled for depth 2/3 (see
-// toSunburstData above) in favor of leader lines drawn on a transparent SVG
-// laid directly over the ECharts canvas: text sits horizontally at the
-// container's edge, connected to its wedge by a thin line, with
-// hemisphere + vertical-relaxation collision avoidance (flavor-wheel-labels.js)
-// so any combination of simultaneously lit flavors stays readable.
+// toSunburstData above) in favor of labels drawn on a transparent SVG laid
+// directly over the ECharts canvas: text sits horizontally at the
+// container's edge, associated with its wedge purely by a color-matched
+// swatch (no connector line — matches the real SCA/WCR flavor wheel
+// poster), with hemisphere + angular-relaxation collision avoidance
+// (flavor-wheel-labels.js) so any combination of simultaneously lit
+// flavors stays readable.
 //
 // Wedge geometry is read straight from ECharts' own computed sunburst
 // layout (series.getData().tree.root, each TreeNode's getLayout()) rather
@@ -98,7 +100,6 @@ function collectLeaderAnchors() {
         anchors.push({
           id,
           angle: (layout.startAngle + layout.endAngle) / 2,
-          r: layout.r,
           cx: layout.cx,
           cy: layout.cy,
           text: node[_lang] || node.en,
@@ -135,9 +136,14 @@ function renderLeaderOverlay() {
   // their wedge is actually on) so mid- and outer-ring labels relax against
   // each other on one shared circle instead of two disconnected columns.
   const targetR = Math.min(w, h) / 2 - 6;
-  const elbowPad = 14;
   const textMargin = 4;
   const labelPad = 6;
+  // Color swatch that stands in for the removed leader line: the real
+  // SCA/WCR flavor wheel poster has no connector lines at all, just a
+  // small colored square ahead of each label matching its segment's color.
+  const swatchSize = 10;
+  const swatchGap = 4;
+  const blockExtra = swatchSize + swatchGap; // swatch + gap to the text
   // Measured (not just estimated) text width per label, so a long label
   // (e.g. "Zartbitterschokolade") gets pulled in from the edge instead of
   // running past the container and getting silently clipped, and claims an
@@ -149,18 +155,14 @@ function renderLeaderOverlay() {
     id: a.id, angle: a.angle, halfW: (widths.get(a.id) / 2 + labelPad) / targetR,
   })));
 
-  // Leader-line text now sits on the modal background, not on its wedge's
-  // own fill color, so it must be contrast-safe against `_bgHex` instead of
+  // Label text sits on the modal background, not on its wedge's own fill
+  // color, so it must be contrast-safe against `_bgHex` instead of
   // per-segment contrastTextColor(realColor) like the old in-wedge labels.
   const textColor = contrastTextColor(_bgHex);
 
   for (const p of placed) {
     const src = anchors.find(a => a.id === p.id);
     if (!src) continue;
-    const anchorX = src.cx + Math.cos(src.angle) * src.r;
-    const anchorY = src.cy + Math.sin(src.angle) * src.r;
-    const elbowX = src.cx + Math.cos(src.angle) * (src.r + elbowPad);
-    const elbowY = src.cy + Math.sin(src.angle) * (src.r + elbowPad);
     const textWidth = widths.get(src.id);
     const cosA = Math.cos(p.angle);
     const anchor = cosA > 0.15 ? 'start' : cosA < -0.15 ? 'end' : 'middle';
@@ -168,39 +170,53 @@ function renderLeaderOverlay() {
     let labelX = src.cx + Math.cos(p.angle) * targetR;
     let labelY = src.cy + Math.sin(p.angle) * targetR;
     // Clamp to the container bounds — the relaxed angle can occasionally
-    // place a label's text past the edge for an outlier in a dense
+    // place a label's block past the edge for an outlier in a dense
     // cluster, which would otherwise get silently clipped by the SVG's
-    // viewBox. The clamp direction depends on which way the text runs from
-    // its anchor point.
+    // viewBox. The clamp direction depends on which way the block runs from
+    // its reference point, and now accounts for the swatch's width too
+    // (swatch + text move as one unit).
     if (anchor === 'start') {
-      labelX = Math.min(labelX, w - 2 - textMargin - textWidth);
+      labelX = Math.min(labelX, w - 2 - textMargin - blockExtra - textWidth);
     } else if (anchor === 'end') {
       labelX = Math.max(labelX, textMargin + textWidth + 2);
     } else {
-      // Centered text extends textWidth/2 on both sides of labelX.
-      const half = textWidth / 2;
+      // Centered block: swatch + gap + text, swatch on the left.
+      const blockWidth = blockExtra + textWidth;
+      const half = blockWidth / 2;
       labelX = Math.min(Math.max(labelX, textMargin + half), w - 2 - textMargin - half);
     }
     labelY = Math.min(h - 8, Math.max(8, labelY));
 
-    const line = document.createElementNS(SVG_NS, 'polyline');
-    line.setAttribute('points', `${anchorX},${anchorY} ${elbowX},${elbowY} ${labelX},${labelY}`);
-    line.setAttribute('fill', 'none');
-    line.setAttribute('stroke', 'rgba(161,161,170,.55)');
-    line.setAttribute('stroke-width', '1');
-    _overlaySvg.appendChild(line);
+    // No leader line and no anchor dot in this design — the real SCA/WCR
+    // poster relies purely on color matching between each label's swatch
+    // and its segment's fill, with no visual connector to the wedge.
+    let swatchX, textX;
+    if (anchor === 'start') {
+      // Text runs right from labelX; swatch leads (sits to its left).
+      swatchX = labelX;
+      textX = labelX + blockExtra;
+    } else if (anchor === 'end') {
+      // Text runs left, ending at labelX; swatch leads (sits to its right).
+      textX = labelX;
+      swatchX = labelX + swatchGap;
+    } else {
+      // Centered block: swatch on the left, text centered to its right.
+      const blockWidth = blockExtra + textWidth;
+      swatchX = labelX - blockWidth / 2;
+      textX = swatchX + blockExtra + textWidth / 2;
+    }
 
-    // Small color-coded dot at the wedge itself, so which line belongs to
-    // which segment stays unambiguous even when several leaders cross.
-    const dot = document.createElementNS(SVG_NS, 'circle');
-    dot.setAttribute('cx', anchorX);
-    dot.setAttribute('cy', anchorY);
-    dot.setAttribute('r', '2.5');
-    dot.setAttribute('fill', src.color);
-    _overlaySvg.appendChild(dot);
+    const rect = document.createElementNS(SVG_NS, 'rect');
+    rect.setAttribute('x', swatchX);
+    rect.setAttribute('y', labelY - swatchSize / 2);
+    rect.setAttribute('width', swatchSize);
+    rect.setAttribute('height', swatchSize);
+    rect.setAttribute('rx', '2');
+    rect.setAttribute('fill', src.color);
+    _overlaySvg.appendChild(rect);
 
     const text = document.createElementNS(SVG_NS, 'text');
-    text.setAttribute('x', labelX + (anchor === 'start' ? 4 : anchor === 'end' ? -4 : 0));
+    text.setAttribute('x', textX);
     text.setAttribute('y', labelY);
     text.setAttribute('fill', textColor);
     text.setAttribute('font-size', '10');
