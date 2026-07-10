@@ -84,6 +84,20 @@ function isFromSupervisor(req) {
     return isSupervisorIp(req.socket?.remoteAddress || req.ip || '');
 }
 
+// True only for requests that genuinely arrive through HA Ingress (Supervisor
+// IP + X-Ingress-Path header — same trust check the auth bypass below uses).
+// Also used to decide whether index.html gets the PWA manifest link / service
+// worker registration: the HA Companion App loads GLP through Ingress inside
+// an embedded WebView, and the v1.102.0 PWA service worker broke its live
+// shot graph there (see CHANGELOG "Reverted the v1.102.0 installable-PWA
+// service worker"). Gating server-side — not just client-side — means the
+// Companion App's WebView can never see the manifest link or SW registration
+// call at all, so it structurally cannot regress the same way again.
+function isIngressRequest(req) {
+    const ingressPath = req.headers['x-ingress-path'];
+    return ingressPath !== undefined && ingressPath.startsWith(HA_INGRESS_PATH) && isFromSupervisor(req);
+}
+
 // API token auth
 app.use((req, res, next) => {
     req.glpAuthenticated = isTokenValid(req.headers['x-glp-token']);
@@ -94,8 +108,7 @@ app.use((req, res, next) => {
     // Ingress bypass: only trust X-Ingress-Path when the request genuinely
     // originates from the HA Supervisor (172.30.x.x), preventing header spoofing
     // from external LAN clients who can also reach port 8099.
-    const ingressPath = req.headers['x-ingress-path'];
-    if (ingressPath !== undefined && ingressPath.startsWith(HA_INGRESS_PATH) && isFromSupervisor(req)) return next();
+    if (isIngressRequest(req)) return next();
     if (req.path === '/api/status') return next();
     if (req.path === '/api/token') return next(); // endpoint handles its own IP-based check
     if (!req.path.startsWith('/api/') && req.path !== '/shots.json') return next();
@@ -114,6 +127,28 @@ app.use(require('./routes/import'));
 
 // ── Centralized error handling ────────────────────────────────────────────
 app.use(errorHandler);
+
+// ── index.html: server-templated PWA gating ─────────────────────────────────
+// Serves the built index.html, injecting the manifest link only for requests
+// that did NOT arrive through HA Ingress (see isIngressRequest above). This
+// runs ahead of express.static so the templated response wins over the
+// static file of the same name. manifest.json/sw.js themselves are still
+// served as plain static files even under Ingress — harmless, since a page
+// that never gets the manifest link or SW registration call never fetches
+// them either.
+app.get(['/', '/index.html'], (req, res, next) => {
+    const filePath = path.join(__dirname, 'public', 'index.html');
+    fs.readFile(filePath, 'utf8', (err, html) => {
+        if (err) return next();
+        if (!isIngressRequest(req)) {
+            html = html.replace('</head>', '    <link rel="manifest" href="manifest.json">\n</head>');
+        }
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.type('html').send(html);
+    });
+});
 
 // ── Static files ──────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public'), {

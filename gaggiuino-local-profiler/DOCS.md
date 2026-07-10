@@ -113,6 +113,19 @@ Verify connectivity from the HA terminal:
 curl http://<gaggiuino-ip>/api/shots/latest
 ```
 
+## Install as an App (PWA)
+
+GLP can be installed as a standalone app (own icon, no browser address bar) when you open it directly — not through the Home Assistant dashboard/Ingress panel:
+
+- **Android (Chrome)**: open the menu (⋮) → **Install app** (Chrome may also show an install banner automatically).
+- **Desktop (Chrome/Edge)**: click the install icon in the address bar, or menu → **Install GLP…**.
+- **iOS (Safari)**: tap the Share icon → **Add to Home Screen**.
+
+Two important limitations:
+
+- **Requires HTTPS.** Service workers need a secure context — a plain `http://` address on your LAN is not enough, even if you access GLP directly on its own port. You'll only get the install option if GLP sits behind your own HTTPS reverse proxy (or on a host Chrome otherwise treats as secure, like `localhost`).
+- **Does not work through the HA Companion App / Ingress panel — by design.** GLP loads through Ingress there, and the manifest link + service worker registration are deliberately never sent to Ingress requests (see below). Inside the Companion App, GLP keeps running exactly as it does today: a normal embedded panel, no install prompt, no offline shell. This is intentional, not a bug — an earlier attempt at PWA support (v1.102.0) registered its service worker unconditionally and broke the Companion App's live shot graph; this version fixes that class of bug at the source instead of trying to detect it client-side.
+
 ## Configuration options
 
 | Option | Description | Default |
