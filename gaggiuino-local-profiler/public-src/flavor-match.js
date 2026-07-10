@@ -1,6 +1,7 @@
 // Pure flavor-matching logic — no DOM/state imports so it can be unit-tested
 // directly under Node (see flavor-wheel.js for the rendering/modal side).
 import { FLAVOR_WHEEL, FLAVOR_ALIASES } from './flavor-data.js';
+import { SCA_FLAVOR_COLORS } from './sca-flavor-colors.js';
 
 export function normalizeFlavor(s) {
   return String(s || '')
@@ -135,20 +136,61 @@ export function findAutoZoomTarget(categories) {
 // imports state.js, which touches localStorage at module scope and can't be
 // imported under vitest's node test environment.
 
-// Segments on the matched path (node._lit, see markLit) stay fully
-// saturated; everything else is desaturated to a narrow, muted sliver so the
-// full wheel shape stays visible for context without competing with the
-// actual matches for attention — see toSunburstData in flavor-wheel.js.
-export function hslFor(hue, depth, lit = true) {
-  const lightness  = Math.min(42 + depth * 10, 72);
-  const saturation = lit ? 62 : 14;
-  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-}
-
 // Label text was hardcoded white regardless of the segment's own background
 // (up to 72% lightness at depth 3 — white-on-light-pastel is low contrast).
 // Pick dark text once the background gets light enough for it to read.
 export function labelColorFor(depth) {
   const lightness = Math.min(42 + depth * 10, 72);
   return lightness >= 60 ? '#18181b' : '#fff';
+}
+
+const NEUTRAL_FALLBACK = '#71717a'; // gray-500, only hit if a node id is somehow missing from SCA_FLAVOR_COLORS
+
+// The real per-node SCA/WCR wheel color for a node's fill (see
+// sca-flavor-colors.js) — falls back to a neutral gray for any node id that
+// somehow isn't in the map (should not happen; all 111 FLAVOR_WHEEL nodes
+// are covered).
+export function colorForNode(id) {
+  return SCA_FLAVOR_COLORS[id] || NEUTRAL_FALLBACK;
+}
+
+function hexToRgb(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex) || [];
+  return { r: parseInt(m[1] || '00', 16), g: parseInt(m[2] || '00', 16), b: parseInt(m[3] || '00', 16) };
+}
+
+function rgbToHex(r, g, b) {
+  const c = n => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, '0');
+  return `#${c(r)}${c(g)}${c(b)}`;
+}
+
+// Blends `hex` toward `bgHex` by `alpha` (0 = fully bg, 1 = fully hex) —
+// used to mute unmatched segments toward the modal's dark background while
+// still hinting at the node's real hue, instead of the old flat-desaturated
+// gray look.
+export function muteHex(hex, bgHex, alpha = 0.35) {
+  const a = hexToRgb(hex);
+  const b = hexToRgb(bgHex);
+  return rgbToHex(
+    b.r + (a.r - b.r) * alpha,
+    b.g + (a.g - b.g) * alpha,
+    b.b + (a.b - b.b) * alpha,
+  );
+}
+
+// Perceived lightness (0-1), simple weighted average — good enough for a
+// legibility threshold, not color-accurate work.
+function perceivedLightness(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+// Depth-3 (outermost ring) labels sit outside their wedge on the modal's
+// dark background, colored to match their own node — but some real SCA
+// colors (e.g. blackberry, molasses, rubber) are near-black and unreadable
+// there. Lighten only the ones that are actually too dark; leave everything
+// else at its true color.
+export function labelHexFor(hex) {
+  if (perceivedLightness(hex) >= 0.35) return hex;
+  return muteHex('#ffffff', hex, 0.55); // blend 55% white into the dark color
 }

@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Added
+- **Flavor wheel: real SCA/WCR poster colors + colored outer-ring labels.** The flavor wheel sunburst (`public-src/components/flavor-wheel.js`) previously computed segment fills procedurally (`hslFor`: evenly-spaced pastel hues per top-level category), which didn't resemble the real SCA/WCR Coffee Taster's Flavor Wheel (2016) artwork the taxonomy is already modeled after. New `public-src/sca-flavor-colors.js` maps all 111 `FLAVOR_WHEEL` node ids to their real hand-picked hex colors (105 matched directly by English label against the MIT-licensed `hc-oss/coffee-flavor-wheel` color dataset; the 6 nodes that are our own extensions beyond the strict official wheel — apricot, stone_fruit, mandarin, lemonade, hay_straw, meaty_brothy — fall back to their resolved parent color). Matched segments now render their true color; unmatched segments are blended toward the modal background (new `muteHex()` in `flavor-match.js`) instead of the old flat-desaturated gray, so the full wheel still hints at its real hues. The outermost (depth-3) ring's labels now sit outside their wedge in text colored to match it — mirroring the real paper poster — lightened via a new `labelHexFor()` helper when the real color is too dark to read against the dark modal background (e.g. blackberry, molasses); depth 1-2 labels keep their existing white/near-black on-wedge styling. `hslFor` and the now-unused per-category `hue` field (`flavor-data.js`) were removed as dead code. `public-src/sca-flavor-colors.js` (new), `public-src/flavor-match.js`, `public-src/flavor-data.js`, `public-src/components/flavor-wheel.js`, `test/flavor-match.test.js`. Closes #293
+
 ## [1.110.0] – 2026-07-09
 
 ### Added

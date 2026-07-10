@@ -10,7 +10,7 @@
 
 export const FLAVOR_WHEEL = [
   {
-    id: 'fruity', en: 'Fruity', de: 'Fruchtig', it: 'Fruttato', fr: 'Fruité', es: 'Afrutado', nl: 'Fruitig', hue: 0,
+    id: 'fruity', en: 'Fruity', de: 'Fruchtig', it: 'Fruttato', fr: 'Fruité', es: 'Afrutado', nl: 'Fruitig',
     children: [
       { id: 'berry', en: 'Berry', de: 'Beere', it: 'Bacca', fr: 'Baie', es: 'Baya', nl: 'Bes', children: [
         { id: 'blackberry', en: 'Blackberry', de: 'Brombeere', it: 'Mora', fr: 'Mûre', es: 'Zarzamora', nl: 'Braam' },
@@ -45,7 +45,7 @@ export const FLAVOR_WHEEL = [
     ],
   },
   {
-    id: 'sour_fermented', en: 'Sour / Fermented', de: 'Säuerlich / Fermentiert', it: 'Acido / Fermentato', fr: 'Acide / Fermenté', es: 'Ácido / Fermentado', nl: 'Zuur / Gegist', hue: 30,
+    id: 'sour_fermented', en: 'Sour / Fermented', de: 'Säuerlich / Fermentiert', it: 'Acido / Fermentato', fr: 'Acide / Fermenté', es: 'Ácido / Fermentado', nl: 'Zuur / Gegist',
     children: [
       { id: 'sour', en: 'Sour', de: 'Säuerlich', it: 'Acido', fr: 'Acide', es: 'Ácido', nl: 'Zuur', children: [
         { id: 'sour_aromatics', en: 'Sour Aromatics', de: 'Säuerliche Aromatik', it: 'Aromi acidi', fr: 'Arômes acides', es: 'Aromas ácidos', nl: 'Zure aroma\'s' },
@@ -62,7 +62,7 @@ export const FLAVOR_WHEEL = [
     ],
   },
   {
-    id: 'green_vegetative', en: 'Green / Vegetative', de: 'Grün / Vegetabil', it: 'Verde / Vegetale', fr: 'Vert / Végétal', es: 'Verde / Vegetal', nl: 'Groen / Vegetatief', hue: 90,
+    id: 'green_vegetative', en: 'Green / Vegetative', de: 'Grün / Vegetabil', it: 'Verde / Vegetale', fr: 'Vert / Végétal', es: 'Verde / Vegetal', nl: 'Groen / Vegetatief',
     children: [
       { id: 'olive_oil', en: 'Olive Oil', de: 'Olivenöl', it: 'Olio d\'oliva', fr: 'Huile d\'olive', es: 'Aceite de oliva', nl: 'Olijfolie' },
       { id: 'raw', en: 'Raw', de: 'Roh', it: 'Crudo', fr: 'Cru', es: 'Crudo', nl: 'Rauw' },
@@ -79,7 +79,7 @@ export const FLAVOR_WHEEL = [
     ],
   },
   {
-    id: 'other', en: 'Other', de: 'Sonstiges', it: 'Altro', fr: 'Autre', es: 'Otro', nl: 'Overig', hue: 150,
+    id: 'other', en: 'Other', de: 'Sonstiges', it: 'Altro', fr: 'Autre', es: 'Otro', nl: 'Overig',
     children: [
       { id: 'papery_musty', en: 'Papery / Musty', de: 'Papierig / Muffig', it: 'Cartaceo / Ammuffito', fr: 'Papier / Moisi', es: 'A papel / Mohoso', nl: 'Papierachtig / Muf', children: [
         { id: 'stale', en: 'Stale', de: 'Abgestanden', it: 'Stantio', fr: 'Rassis', es: 'Rancio', nl: 'Muf' },
@@ -103,7 +103,7 @@ export const FLAVOR_WHEEL = [
     ],
   },
   {
-    id: 'roasted', en: 'Roasted', de: 'Röstig', it: 'Tostato', fr: 'Torréfié', es: 'Tostado', nl: 'Geroosterd', hue: 200,
+    id: 'roasted', en: 'Roasted', de: 'Röstig', it: 'Tostato', fr: 'Torréfié', es: 'Tostado', nl: 'Geroosterd',
     children: [
       { id: 'pipe_tobacco', en: 'Pipe Tobacco', de: 'Pfeifentabak', it: 'Tabacco da pipa', fr: 'Tabac à pipe', es: 'Tabaco de pipa', nl: 'Pijptabak' },
       { id: 'tobacco', en: 'Tobacco', de: 'Tabak', it: 'Tabacco', fr: 'Tabac', es: 'Tabaco', nl: 'Tabak' },
@@ -120,7 +120,7 @@ export const FLAVOR_WHEEL = [
     ],
   },
   {
-    id: 'spices', en: 'Spices', de: 'Gewürze', it: 'Spezie', fr: 'Épices', es: 'Especias', nl: 'Kruiden', hue: 260,
+    id: 'spices', en: 'Spices', de: 'Gewürze', it: 'Spezie', fr: 'Épices', es: 'Especias', nl: 'Kruiden',
     children: [
       { id: 'pungent', en: 'Pungent', de: 'Scharf', it: 'Pungente', fr: 'Piquant', es: 'Picante', nl: 'Scherp' },
       { id: 'pepper', en: 'Pepper', de: 'Pfeffer', it: 'Pepe', fr: 'Poivre', es: 'Pimienta', nl: 'Peper' },
@@ -133,7 +133,7 @@ export const FLAVOR_WHEEL = [
     ],
   },
   {
-    id: 'nutty_cocoa', en: 'Nutty / Cocoa', de: 'Nussig / Kakao', it: 'Di nocciola / Cacao', fr: 'Noisette / Cacao', es: 'A frutos secos / Cacao', nl: 'Nootachtig / Cacao', hue: 300,
+    id: 'nutty_cocoa', en: 'Nutty / Cocoa', de: 'Nussig / Kakao', it: 'Di nocciola / Cacao', fr: 'Noisette / Cacao', es: 'A frutos secos / Cacao', nl: 'Nootachtig / Cacao',
     children: [
       { id: 'nutty', en: 'Nutty', de: 'Nussig', it: 'Di nocciola', fr: 'Noisette', es: 'A frutos secos', nl: 'Nootachtig', children: [
         { id: 'peanuts', en: 'Peanuts', de: 'Erdnuss', it: 'Arachidi', fr: 'Cacahuètes', es: 'Cacahuetes', nl: 'Pinda\'s' },
@@ -147,7 +147,7 @@ export const FLAVOR_WHEEL = [
     ],
   },
   {
-    id: 'sweet', en: 'Sweet', de: 'Süß', it: 'Dolce', fr: 'Sucré', es: 'Dulce', nl: 'Zoet', hue: 340,
+    id: 'sweet', en: 'Sweet', de: 'Süß', it: 'Dolce', fr: 'Sucré', es: 'Dulce', nl: 'Zoet',
     children: [
       { id: 'brown_sugar', en: 'Brown Sugar', de: 'Brauner Zucker', it: 'Zucchero di canna', fr: 'Sucre roux', es: 'Azúcar moreno', nl: 'Bruine suiker', children: [
         { id: 'molasses', en: 'Molasses', de: 'Melasse', it: 'Melassa', fr: 'Mélasse', es: 'Melaza', nl: 'Melasse' },
@@ -162,7 +162,7 @@ export const FLAVOR_WHEEL = [
     ],
   },
   {
-    id: 'floral', en: 'Floral', de: 'Blumig', it: 'Floreale', fr: 'Floral', es: 'Floral', nl: 'Bloemig', hue: 20,
+    id: 'floral', en: 'Floral', de: 'Blumig', it: 'Floreale', fr: 'Floral', es: 'Floral', nl: 'Bloemig',
     children: [
       { id: 'black_tea', en: 'Black Tea', de: 'Schwarztee', it: 'Tè nero', fr: 'Thé noir', es: 'Té negro', nl: 'Zwarte thee' },
       { id: 'floral_sub', en: 'Floral', de: 'Blumig', it: 'Floreale', fr: 'Floral', es: 'Floral', nl: 'Bloemig', children: [

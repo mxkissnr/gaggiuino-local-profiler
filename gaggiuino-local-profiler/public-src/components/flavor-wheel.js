@@ -1,5 +1,5 @@
 import { FLAVOR_WHEEL } from '../flavor-data.js';
-import { matchFlavors, markLit, hslFor, labelColorFor, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../flavor-match.js';
+import { matchFlavors, markLit, colorForNode, muteHex, labelColorFor, labelHexFor, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../flavor-match.js';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
@@ -11,23 +11,48 @@ export { matchFlavors, normalizeFlavor } from '../flavor-match.js';
 
 const WHEEL_ROOT_ID = '__flavor_wheel_root__'; // virtual root name (see SunburstSeries: {name, children: data})
 
-function toSunburstData(node, depth, hue, lang) {
+// Modal background the muted/unmatched fills and outer-ring label colors
+// blend toward — read once per render from the actual modal box so it
+// tracks the active dark/light theme instead of a hardcoded guess.
+function rgbStringToHex(rgbStr, fallback) {
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgbStr || '');
+  if (!m) return fallback;
+  const hex = n => Number(n).toString(16).padStart(2, '0');
+  return `#${hex(m[1])}${hex(m[2])}${hex(m[3])}`;
+}
+
+function resolveModalBgHex(container) {
+  const modalBox = container?.closest?.('.flavor-wheel-modal');
+  const bg = modalBox ? getComputedStyle(modalBox).backgroundColor : null;
+  return rgbStringToHex(bg, '#18181b');
+}
+
+function toSunburstData(node, depth, lang, bgHex) {
   const label = node[lang] || node.en;
   const lit   = node._lit;
+  const realColor = colorForNode(node.id);
+  // Only the matched path (this bean's actual flavor tags + their ancestor
+  // categories, via markLit) is shown fully colored/labeled. Everything
+  // else stays a narrow, muted sliver blended toward the modal background —
+  // the full wheel shape is still there for context and still hints at its
+  // real hue, without competing with the handful of segments that actually
+  // matter for this bean.
+  const fillColor = lit ? realColor : muteHex(realColor, bgHex, 0.35);
+  // Depth 3 (outermost ring) mirrors the real SCA poster: the label sits
+  // outside the colored wedge, in text colored to match the wedge (lightened
+  // if the real color is too dark to read on the modal background). Depth
+  // 1/2 keep the existing white/near-black on-wedge text.
+  const labelCfg = depth === 3
+    ? { show: !!lit, position: 'outside', color: labelHexFor(realColor), fontSize: 10, fontWeight: 'bold' }
+    : { show: !!lit, color: labelColorFor(depth), fontSize: depth === 1 ? 13 : 11, fontWeight: 'bold' };
   const entry = {
     id: node.id,
     name: label,
-    // Only the matched path (this bean's actual flavor tags + their
-    // ancestor categories, via markLit) is shown large/labeled/fully
-    // colored. Everything else stays a narrow, muted, unlabeled sliver —
-    // the full wheel shape is still there for context, but it no longer
-    // competes with the handful of segments that actually matter for this
-    // bean (see hslFor for the color side of this).
-    itemStyle: { color: hslFor(hue, depth, lit), borderColor: lit ? '#fff' : '#111113', borderWidth: lit ? 2.5 : 1.5 },
-    label: { show: !!lit, color: labelColorFor(depth), fontSize: depth === 1 ? 13 : depth === 2 ? 11 : 10, fontWeight: 'bold' },
+    itemStyle: { color: fillColor, borderColor: lit ? '#fff' : '#111113', borderWidth: lit ? 2.5 : 1.5 },
+    label: labelCfg,
   };
   if (node.children?.length) {
-    entry.children = node.children.map(c => toSunburstData(c, depth + 1, hue, lang));
+    entry.children = node.children.map(c => toSunburstData(c, depth + 1, lang, bgHex));
   } else {
     entry.value = 1;
   }
@@ -69,7 +94,8 @@ export function renderFlavorWheel(container, flavors, lang, breadcrumbEl) {
   if (typeof echarts === 'undefined') return false;
   const { matched } = matchFlavors(flavors);
   FLAVOR_WHEEL.forEach(cat => markLit(cat, matched));
-  const data = FLAVOR_WHEEL.map(cat => toSunburstData(cat, 1, cat.hue, lang));
+  const bgHex = resolveModalBgHex(container);
+  const data = FLAVOR_WHEEL.map(cat => toSunburstData(cat, 1, lang, bgHex));
 
   _lang = lang;
   _breadcrumbEl = breadcrumbEl || null;

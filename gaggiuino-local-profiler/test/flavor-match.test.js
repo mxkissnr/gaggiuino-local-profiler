@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { FLAVOR_WHEEL, FLAVOR_ALIASES } from '../public-src/flavor-data.js';
-import { matchFlavors, normalizeFlavor, hslFor, labelColorFor, markLit, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../public-src/flavor-match.js';
+import { SCA_FLAVOR_COLORS } from '../public-src/sca-flavor-colors.js';
+import { matchFlavors, normalizeFlavor, colorForNode, muteHex, labelHexFor, labelColorFor, markLit, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../public-src/flavor-match.js';
 
 function collectIds(nodes, seen = new Set()) {
   for (const n of nodes) {
@@ -111,20 +112,58 @@ describe('labelColorFor', () => {
   });
 });
 
-describe('hslFor', () => {
-  it('caps lightness at 72% regardless of depth', () => {
-    expect(hslFor(0, 1)).toBe('hsl(0, 62%, 52%)');
-    expect(hslFor(0, 3)).toBe('hsl(0, 62%, 72%)');
-    expect(hslFor(0, 10)).toBe('hsl(0, 62%, 72%)'); // would be 142% uncapped
+describe('colorForNode', () => {
+  it('returns the real SCA color for every FLAVOR_WHEEL node', () => {
+    (function walk(nodes) {
+      for (const n of nodes) {
+        expect(colorForNode(n.id)).toBe(SCA_FLAVOR_COLORS[n.id]);
+        if (n.children) walk(n.children);
+      }
+    })(FLAVOR_WHEEL);
   });
 
-  it('defaults to fully saturated (matched-path segments)', () => {
-    expect(hslFor(120, 2)).toBe('hsl(120, 62%, 62%)');
-    expect(hslFor(120, 2, true)).toBe('hsl(120, 62%, 62%)');
+  it('falls back to a neutral gray for an unknown id', () => {
+    expect(colorForNode('does_not_exist')).toBe('#71717a');
   });
 
-  it('desaturates unmatched segments (lit=false) while keeping the same lightness', () => {
-    expect(hslFor(120, 2, false)).toBe('hsl(120, 14%, 62%)');
+  it('every FLAVOR_WHEEL node id has an entry in SCA_FLAVOR_COLORS', () => {
+    (function walk(nodes) {
+      for (const n of nodes) {
+        expect(SCA_FLAVOR_COLORS[n.id], n.id).toBeTruthy();
+        if (n.children) walk(n.children);
+      }
+    })(FLAVOR_WHEEL);
+  });
+});
+
+describe('muteHex', () => {
+  it('returns bgHex exactly at alpha=0', () => {
+    expect(muteHex('#ff0000', '#18181b', 0)).toBe('#18181b');
+  });
+
+  it('returns hex exactly at alpha=1', () => {
+    expect(muteHex('#ff0000', '#18181b', 1)).toBe('#ff0000');
+  });
+
+  it('blends partway toward the background at alpha=0.5', () => {
+    expect(muteHex('#ffffff', '#000000', 0.5)).toBe('#808080');
+  });
+});
+
+describe('labelHexFor', () => {
+  it('leaves a bright color unchanged', () => {
+    expect(labelHexFor('#f8f7e5')).toBe('#f8f7e5'); // jasmine — pale, already legible
+  });
+
+  it('lightens a near-black real color for legibility', () => {
+    const result = labelHexFor('#090819'); // blackberry
+    expect(result).not.toBe('#090819');
+    // lightened result should be meaningfully brighter than the input
+    const lum = hex => {
+      const n = parseInt(hex.slice(1), 16);
+      return ((n >> 16 & 255) * 0.299 + (n >> 8 & 255) * 0.587 + (n & 255) * 0.114) / 255;
+    };
+    expect(lum(result)).toBeGreaterThan(lum('#090819'));
   });
 });
 
