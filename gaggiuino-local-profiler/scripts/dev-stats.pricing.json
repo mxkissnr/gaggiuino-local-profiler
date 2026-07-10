@@ -1,7 +1,8 @@
 {
-  "_comment": "USD per 1,000,000 tokens, blended input/output average \u2014 purely illustrative. Weighted 3:1 input:output (agentic coding sends far more context/input tokens than it generates output), from published Anthropic API list pricing as of 2026-07. Claude Sonnet 5 uses its introductory rate ($2/$10 per MTok through 2026-08-31, then $3/$15) \u2014 revisit after that date. Fill in your own plan/API rates for models you want priced differently; anything left null is treated as \"unpriced\" and excluded from the cost total (not treated as free).",
+  "_comment": "USD per 1,000,000 tokens, blended input/output average — purely illustrative. Weighted 3:1 input:output (agentic coding sends far more context/input tokens than it generates output), from published Anthropic API list pricing as of 2026-07. Claude Sonnet 5 uses its introductory rate ($2/$10 per MTok through 2026-08-31, then $3/$15) — revisit after that date. Fill in your own plan/API rates for models you want priced differently; anything left null is treated as \"unpriced\" and excluded from the cost total (not treated as free).",
   "Claude Fable 5": 20,
   "Claude Opus 4.8": 10,
   "Claude Sonnet 4.6": 6,
-  "Claude Sonnet 5": 4
+  "Claude Sonnet 5": 4,
+  "Claude": null
 }
