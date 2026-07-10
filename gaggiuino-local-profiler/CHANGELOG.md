@@ -3,6 +3,12 @@
 ### Fixed
 - **Flavor wheel: contrast-safe outer-ring label text; mobile label cutoff.** v1.111.0's segment colors were good, but label text coloring was still a fixed-per-depth/derived scheme (`labelColorFor`, `labelHexFor`) rather than a real per-segment contrast check, and the outermost (depth-3) ring's `position: 'outside'` label placement pushed text past the container edge on narrow (mobile) viewports. New `contrastTextColor(hex)` (`public-src/flavor-match.js`) picks `'#000000'` or `'#ffffff'` per segment via a YIQ luma threshold against that segment's real fill color — a general-purpose, reusable contrast utility, not flavor-wheel-specific. `toSunburstData()` (`public-src/components/flavor-wheel.js`) now uses it uniformly across all three ring depths (only `fontSize` still varies by depth) and drops `position: 'outside'` on depth-3 labels, reverting to standard in-segment placement like depths 1-2. `labelColorFor` and `labelHexFor` (and the now-unused `perceivedLightness` helper) were removed as dead code. `public-src/flavor-match.js`, `public-src/components/flavor-wheel.js`, `test/flavor-match.test.js`. Closes #294
 
+## [1.111.2] – 2026-07-10
+
+### Fixed
+- **Newest shot didn't appear without a manual reload if you weren't on the Shots tab.** `loadData()` (`public-src/views/shots/index.js`) was only triggered on initial page load, a manual sync click, shot deletion, and — only when the Live view had been open — 4s after brew end (`views/live.js`). The global 30s status poller (`updateStatus`, `public-src/components/status.js`) only refreshed the status dot/banner/power button, never the shot list, so a shot finished while on the Library or Analytics tab stayed invisible until a manual page reload. `updateStatus()` now tracks the server-reported shot count (`/api/status` → `shotCount`) across polls and calls `window.loadData()` whenever it increases, regardless of the active tab. `public-src/components/status.js`. Closes #296
+- **"Imported from X" bean-library text wasn't a clickable link to the source.** Each imported bean's `lib_imported_from` line (`public-src/views/library.js`) rendered the domain as plain text even though the bean already carries a `sourceUrl` field captured during URL import. The domain now links to `bean.sourceUrl` (new tab, `rel="noopener"`) when present, falling back to plain text otherwise. `public-src/views/library.js`. Closes #296
+
 ## [1.111.0] – 2026-07-10
 
 ### Added

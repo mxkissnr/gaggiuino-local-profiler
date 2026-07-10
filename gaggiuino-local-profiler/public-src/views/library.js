@@ -178,7 +178,9 @@ export function renderBeanList() {
         ${Array.isArray(b.flavors) && b.flavors.length ? `<div class="lib-flavor-row">${b.flavors.map(f => `<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`).join('')}</div>` : ''}
         ${invHtml}
         ${bagHistoryHtml}
-        ${b.source ? `<div class="lib-item-source">${t('lib_imported_from', b.source, b.importedAt || '')}</div>` : ''}
+        ${b.source ? `<div class="lib-item-source">${t('lib_imported_from',
+          b.sourceUrl ? `<a href="${esc(b.sourceUrl)}" target="_blank" rel="noopener">${esc(b.source)}</a>` : esc(b.source),
+          esc(b.importedAt || ''))}</div>` : ''}
       </div>
       <div class="lib-item-actions">
         <button class="lib-btn-sm" data-action="open-new-bag" data-id="${b.id}" title="${t('lib_new_bag')}">${t('lib_new_bag')}</button>

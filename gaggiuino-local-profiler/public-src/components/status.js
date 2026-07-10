@@ -4,6 +4,12 @@ import { LOCALE_MAP } from '../constants.js';
 import { apiFetch } from '../api.js';
 import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge } from './onboarding.js';
 
+// Tracks the server-side shot count as of the last status poll, so the periodic
+// poll below can detect a newly-finished shot even when the user isn't on the
+// shots view (and thus never got the live.js post-brew loadData() trigger) —
+// see #296.
+let knownShotCount = null;
+
 export async function updateStatus() {
   try {
     const [statusRes, switchRes] = await Promise.all([
@@ -18,6 +24,12 @@ export async function updateStatus() {
     // state — see #288.
     updateMachineBanner(s);
     updateOnboardingPanel();
+    if (typeof s.shotCount === 'number') {
+      if (knownShotCount !== null && s.shotCount > knownShotCount && window.loadData) {
+        window.loadData();
+      }
+      knownShotCount = s.shotCount;
+    }
     // Token is no longer returned by /api/status — it comes from /api/token (initToken)
     const dot = document.getElementById('statusDot');
     const timeEl = document.getElementById('syncTime');
