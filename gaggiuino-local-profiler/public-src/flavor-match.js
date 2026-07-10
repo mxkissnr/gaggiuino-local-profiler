@@ -136,14 +136,6 @@ export function findAutoZoomTarget(categories) {
 // imports state.js, which touches localStorage at module scope and can't be
 // imported under vitest's node test environment.
 
-// Label text was hardcoded white regardless of the segment's own background
-// (up to 72% lightness at depth 3 — white-on-light-pastel is low contrast).
-// Pick dark text once the background gets light enough for it to read.
-export function labelColorFor(depth) {
-  const lightness = Math.min(42 + depth * 10, 72);
-  return lightness >= 60 ? '#18181b' : '#fff';
-}
-
 const NEUTRAL_FALLBACK = '#71717a'; // gray-500, only hit if a node id is somehow missing from SCA_FLAVOR_COLORS
 
 // The real per-node SCA/WCR wheel color for a node's fill (see
@@ -178,19 +170,12 @@ export function muteHex(hex, bgHex, alpha = 0.35) {
   );
 }
 
-// Perceived lightness (0-1), simple weighted average — good enough for a
-// legibility threshold, not color-accurate work.
-function perceivedLightness(hex) {
+// Contrast-safe label color for text sitting directly on `hex` — YIQ luma
+// threshold (standard formula, simpler than full WCAG relative luminance,
+// same practical result at the extremes that matter here). Use this instead
+// of a fixed text color for any label/text drawn on a data-driven background.
+export function contrastTextColor(hex) {
   const { r, g, b } = hexToRgb(hex);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-}
-
-// Depth-3 (outermost ring) labels sit outside their wedge on the modal's
-// dark background, colored to match their own node — but some real SCA
-// colors (e.g. blackberry, molasses, rubber) are near-black and unreadable
-// there. Lighten only the ones that are actually too dark; leave everything
-// else at its true color.
-export function labelHexFor(hex) {
-  if (perceivedLightness(hex) >= 0.35) return hex;
-  return muteHex('#ffffff', hex, 0.55); // blend 55% white into the dark color
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 128 ? '#000000' : '#ffffff';
 }

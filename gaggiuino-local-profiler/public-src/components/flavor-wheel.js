@@ -1,5 +1,5 @@
 import { FLAVOR_WHEEL } from '../flavor-data.js';
-import { matchFlavors, markLit, colorForNode, muteHex, labelColorFor, labelHexFor, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../flavor-match.js';
+import { matchFlavors, markLit, colorForNode, muteHex, contrastTextColor, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../flavor-match.js';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
@@ -38,13 +38,13 @@ function toSunburstData(node, depth, lang, bgHex) {
   // real hue, without competing with the handful of segments that actually
   // matter for this bean.
   const fillColor = lit ? realColor : muteHex(realColor, bgHex, 0.35);
-  // Depth 3 (outermost ring) mirrors the real SCA poster: the label sits
-  // outside the colored wedge, in text colored to match the wedge (lightened
-  // if the real color is too dark to read on the modal background). Depth
-  // 1/2 keep the existing white/near-black on-wedge text.
-  const labelCfg = depth === 3
-    ? { show: !!lit, position: 'outside', color: labelHexFor(realColor), fontSize: 10, fontWeight: 'bold' }
-    : { show: !!lit, color: labelColorFor(depth), fontSize: depth === 1 ? 13 : 11, fontWeight: 'bold' };
+  // Every depth's label sits inside its own wedge, in a contrast-safe color
+  // (black or white, picked per-segment against that segment's real fill —
+  // see contrastTextColor) rather than a fixed/derived color. Depth 3 used to
+  // render outside the wedge to mirror the real SCA poster, but position:
+  // 'outside' pushed labels past the container edge on narrow (mobile)
+  // viewports, so it's back to standard in-segment placement like depths 1/2.
+  const labelCfg = { show: !!lit, color: contrastTextColor(realColor), fontSize: depth === 1 ? 13 : depth === 3 ? 10 : 11, fontWeight: 'bold' };
   const entry = {
     id: node.id,
     name: label,

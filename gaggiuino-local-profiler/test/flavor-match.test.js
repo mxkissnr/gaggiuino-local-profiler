@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { FLAVOR_WHEEL, FLAVOR_ALIASES } from '../public-src/flavor-data.js';
 import { SCA_FLAVOR_COLORS } from '../public-src/sca-flavor-colors.js';
-import { matchFlavors, normalizeFlavor, colorForNode, muteHex, labelHexFor, labelColorFor, markLit, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../public-src/flavor-match.js';
+import { matchFlavors, normalizeFlavor, colorForNode, muteHex, contrastTextColor, markLit, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../public-src/flavor-match.js';
 
 function collectIds(nodes, seen = new Set()) {
   for (const n of nodes) {
@@ -103,15 +103,6 @@ describe('matchFlavors', () => {
   });
 });
 
-describe('labelColorFor', () => {
-  it('picks dark text once the segment background gets light enough to need it, regardless of match state', () => {
-    // depth 1: hslFor lightness = 52% -> white still reads fine
-    expect(labelColorFor(1)).toBe('#fff');
-    // depth 3: hslFor lightness capped at 72% -> light pastel needs dark text
-    expect(labelColorFor(3)).toBe('#18181b');
-  });
-});
-
 describe('colorForNode', () => {
   it('returns the real SCA color for every FLAVOR_WHEEL node', () => {
     (function walk(nodes) {
@@ -150,20 +141,21 @@ describe('muteHex', () => {
   });
 });
 
-describe('labelHexFor', () => {
-  it('leaves a bright color unchanged', () => {
-    expect(labelHexFor('#f8f7e5')).toBe('#f8f7e5'); // jasmine — pale, already legible
+describe('contrastTextColor', () => {
+  it('picks black text on a very light background', () => {
+    expect(contrastTextColor('#f5e050')).toBe('#000000'); // bright yellow
   });
 
-  it('lightens a near-black real color for legibility', () => {
-    const result = labelHexFor('#090819'); // blackberry
-    expect(result).not.toBe('#090819');
-    // lightened result should be meaningfully brighter than the input
-    const lum = hex => {
-      const n = parseInt(hex.slice(1), 16);
-      return ((n >> 16 & 255) * 0.299 + (n >> 8 & 255) * 0.587 + (n & 255) * 0.114) / 255;
-    };
-    expect(lum(result)).toBeGreaterThan(lum('#090819'));
+  it('picks white text on a very dark background', () => {
+    expect(contrastTextColor('#3a2410')).toBe('#ffffff'); // dark brown
+  });
+
+  it('picks black text on pure white', () => {
+    expect(contrastTextColor('#ffffff')).toBe('#000000');
+  });
+
+  it('picks white text on pure black', () => {
+    expect(contrastTextColor('#000000')).toBe('#ffffff');
   });
 });
 
