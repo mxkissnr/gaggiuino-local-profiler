@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Fixed
+- **Mobile: shot score now pinned top-right, export buttons left-aligned with the title.** Follow-up to #301's mobile header overlap fix. The score badge sat inline before the export buttons, pushing the button row's start position around depending on wrap; it's now absolutely positioned top-right of `.sprofiler-header`, and the button row starts its own line, flush-left with the title/subtitle above it. `public-src/style.css`. Closes #305
+
 ## [1.113.4] – 2026-07-10
 
 ### Added

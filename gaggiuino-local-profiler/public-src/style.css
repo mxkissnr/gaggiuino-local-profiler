@@ -1276,8 +1276,14 @@
                overlap the score badge/buttons instead of wrapping onto their own row.
                Forcing both children to flex-basis:100% makes each claim the full row
                width, so they stack as two clean rows. */
-            .sprofiler-header > div:first-child { flex: 1 1 100% !important; }
-            .sprofiler-header > div:last-child   { flex: 1 1 100% !important; flex-wrap: wrap; justify-content: flex-end; }
+            /* Score badge sits top-right, pinned to the header itself rather
+               than inline with the export buttons — the button row then
+               starts its own line, left-aligned flush with the title above
+               it, instead of being pushed right by flex-end/the badge. */
+            .sprofiler-header { position: relative; }
+            .sprofiler-header > div:first-child { flex: 1 1 100% !important; padding-right: 56px; }
+            .sprofiler-header > div:last-child   { flex: 1 1 100% !important; flex-wrap: wrap; justify-content: flex-start; }
+            .score-badge { position: absolute; top: 0; right: 0; }
             .sprofiler-meta-grid { gap: 0; flex-direction: column; }
             .meta-column       { max-width: 100%; }
             .meta-column[style*="text-align: right"] { text-align: left !important; }
