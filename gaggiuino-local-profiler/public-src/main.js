@@ -11,6 +11,17 @@ if ('serviceWorker' in navigator) {
     .catch(() => {});
 }
 
+// Installable PWA (v1.112.0): register the app-shell service worker, but only
+// when the server actually injected the manifest link into this page — see
+// server.js's isIngressRequest()/index.html route. Requests arriving through
+// HA Ingress (the Companion App's embedded WebView) never get that link, so
+// this branch never runs there, which is the structural fix for the
+// v1.102.0 regression (that SW's fetch interception broke the Companion
+// App's live shot graph — see CHANGELOG).
+if ('serviceWorker' in navigator && document.querySelector('link[rel="manifest"]')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
 import { S } from './state.js';
 import { initToken, apiFetch } from './api.js';
 import { t, setLang, applyTranslations } from './i18n.js';
