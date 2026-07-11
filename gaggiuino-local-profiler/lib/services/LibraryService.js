@@ -292,6 +292,23 @@ class LibraryService {
         log(`Low-stock notification sent for bean "${bean.name}" (${remaining} g left)`);
     }
 
+    // Burr wear since the last burr swap, independent of the calendar-based
+    // cleaning maintenance above: burrs dull with cumulative throughput, not
+    // time. Matches shots by annotated grinder name (case-insensitive, same
+    // convention as computeBeanRemaining) and, when burrsResetAt is set,
+    // only counts shots ground after that reset.
+    computeGrinderWearStats(grinder) {
+        const shots   = shotRepo.findAllExcludingTrash();
+        const name    = String(grinder?.name || '').toLowerCase();
+        const resetTs = grinder?.burrsResetAt ? new Date(grinder.burrsResetAt).getTime() : 0;
+        const matching = shots.filter(s => {
+            if (String(s.annotation?.grinder || '').toLowerCase() !== name) return false;
+            return s.timestamp * 1000 > resetTs;
+        });
+        const gramsSinceBurrs = matching.reduce((sum, s) => sum + (parseFloat(s.annotation?.dose) || 0), 0);
+        return { shotsSinceBurrs: matching.length, gramsSinceBurrs: Math.round(gramsSinceBurrs * 10) / 10 };
+    }
+
     computeMaintenanceStats(maint) {
         const shots = shotRepo.findAllExcludingTrash();
         const now   = Date.now();

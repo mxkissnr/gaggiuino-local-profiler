@@ -85,6 +85,7 @@ export default {
     lib_bean_disabled_badge:'Uitgeschakeld',
     lib_confirm_delete_bean:'Boon uit de bibliotheek verwijderen?',
     lib_confirm_delete_grinder:'Molen uit de bibliotheek verwijderen?',
+    lib_grinder_wear:(n,g)=>`🔩 ${n} shots · ${g} sinds laatste steenwissel`, lib_grinder_reset_burrs:'Stenen vervangen', lib_grinder_confirm_reset_burrs:'Slijtageteller resetten? Markeert de steenwissel als vandaag uitgevoerd.',
     analytics_trend:'Score Trend', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Alle',
     analytics_calendar:'Shot Kalender', analytics_beans:'Boon Statistieken', analytics_profiles:'Profiel Prestaties',
     analytics_no_trend:'Niet genoeg gescoorde shots voor trend.',

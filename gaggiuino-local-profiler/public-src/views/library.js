@@ -328,6 +328,10 @@ export function renderGrinderList() {
         <div class="lib-item-name">${esc(g.name)}</div>
         ${extra ? `<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : ''}
         ${g.notes ? `<div class="lib-item-sub">${esc(g.notes)}</div>` : ''}
+        ${g.wear ? `<div class="lib-item-sub lib-grinder-wear">
+          <span>${t('lib_grinder_wear', g.wear.shotsSinceBurrs, formatWearGrams(g.wear.gramsSinceBurrs))}</span>
+          <button class="lib-btn-sm lib-grinder-reset-burrs" data-action="reset-grinder-burrs" data-id="${g.id}">${t('lib_grinder_reset_burrs')}</button>
+        </div>` : ''}
       </div>
       <div class="lib-item-actions">
         <button class="lib-btn-sm lib-btn-icon" data-action="edit-grinder" data-id="${g.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
@@ -336,6 +340,11 @@ export function renderGrinderList() {
     </div>`;
   }).join('');
   loadGrinderThumbnails();
+}
+
+// Mirrors the g/kg formatting used by the analytics "Total Coffee" tile.
+function formatWearGrams(g) {
+  return g >= 1000 ? (g / 1000).toFixed(1) + ' kg' : Math.round(g) + ' g';
 }
 
 // Grinder images need the auth token, so <img src> can't point at the API
@@ -641,12 +650,24 @@ export async function saveGrinder() {
   const saved = await r.json();
   if (S.grinderEditId) {
     const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === S.grinderEditId);
-    if (idx !== -1) S.coffeeLibrary.grinders[idx] = saved;
+    // The PUT response doesn't recompute wear stats — keep the existing ones
+    // until the next full library load rather than dropping the card.
+    if (idx !== -1) S.coffeeLibrary.grinders[idx] = { ...saved, wear: S.coffeeLibrary.grinders[idx].wear };
   } else {
     S.coffeeLibrary.grinders.push(saved);
   }
   updateLibraryDatalist();
   closeGrinderForm();
+  renderGrinderList();
+}
+
+export async function resetGrinderBurrs(id) {
+  if (!confirm(t('lib_grinder_confirm_reset_burrs'))) return;
+  const r = await apiFetch(`api/library/grinder/${id}/reset-burrs`, { method: 'POST' });
+  if (!r.ok) return;
+  const saved = await r.json();
+  const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === id);
+  if (idx !== -1) S.coffeeLibrary.grinders[idx] = saved;
   renderGrinderList();
 }
 

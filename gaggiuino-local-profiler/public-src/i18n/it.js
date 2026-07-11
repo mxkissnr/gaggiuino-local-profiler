@@ -85,6 +85,7 @@ export default {
     lib_bean_disabled_badge:'Disattivato',
     lib_confirm_delete_bean:'Rimuovere il grano dalla libreria?',
     lib_confirm_delete_grinder:'Rimuovere il macinino dalla libreria?',
+    lib_grinder_wear:(n,g)=>`🔩 ${n} shot · ${g} dall'ultima sostituzione delle macine`, lib_grinder_reset_burrs:'Macine sostituite', lib_grinder_confirm_reset_burrs:'Azzerare il contatore di usura? Segna la sostituzione delle macine come fatta oggi.',
     analytics_trend:'Andamento Score', analytics_trend_30:'30 Shot', analytics_trend_90:'90 Shot', analytics_trend_all:'Tutti',
     analytics_calendar:'Calendario Shot', analytics_beans:'Statistiche Grani', analytics_profiles:'Performance Profili',
     analytics_no_trend:'Non abbastanza shot con score per il trend.',

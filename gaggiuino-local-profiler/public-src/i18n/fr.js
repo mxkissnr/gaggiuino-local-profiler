@@ -85,6 +85,7 @@ export default {
     lib_bean_disabled_badge:'Désactivé',
     lib_confirm_delete_bean:'Supprimer le grain de la bibliothèque ?',
     lib_confirm_delete_grinder:'Supprimer le moulin de la bibliothèque ?',
+    lib_grinder_wear:(n,g)=>`🔩 ${n} shots · ${g} depuis le dernier changement de meules`, lib_grinder_reset_burrs:'Meules remplacées', lib_grinder_confirm_reset_burrs:'Réinitialiser le compteur d\'usure ? Marque le changement de meules comme effectué aujourd\'hui.',
     analytics_trend:'Tendance Score', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Tous',
     analytics_calendar:'Calendrier des Shots', analytics_beans:'Stats par Grain', analytics_profiles:'Performance des Profils',
     analytics_no_trend:'Pas assez de shots avec score pour la tendance.',

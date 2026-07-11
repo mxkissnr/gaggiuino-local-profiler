@@ -85,6 +85,7 @@ export default {
     lib_bean_disabled_badge:'Desactivado',
     lib_confirm_delete_bean:'¿Eliminar el grano de la biblioteca?',
     lib_confirm_delete_grinder:'¿Eliminar el molino de la biblioteca?',
+    lib_grinder_wear:(n,g)=>`🔩 ${n} shots · ${g} desde el último cambio de muelas`, lib_grinder_reset_burrs:'Muelas renovadas', lib_grinder_confirm_reset_burrs:'¿Reiniciar el contador de desgaste? Marca el cambio de muelas como hecho hoy.',
     analytics_trend:'Tendencia Score', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Todos',
     analytics_calendar:'Calendario de Shots', analytics_beans:'Estadísticas por Grano', analytics_profiles:'Rendimiento de Perfiles',
     analytics_no_trend:'No hay suficientes shots con score.',

@@ -85,6 +85,7 @@ export default {
     lib_bean_disabled_badge:'Disabled',
     lib_confirm_delete_bean:'Remove bean from library?',
     lib_confirm_delete_grinder:'Remove grinder from library?',
+    lib_grinder_wear:(n,g)=>`🔩 ${n} shots · ${g} since last burr swap`, lib_grinder_reset_burrs:'Burrs replaced', lib_grinder_confirm_reset_burrs:'Reset wear counter? Marks the burr swap as done today.',
     analytics_trend:'Score Trend', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'All',
     analytics_calendar:'Shot Calendar', analytics_beans:'Bean Stats', analytics_profiles:'Profile Performance',
     analytics_no_trend:'Not enough scored shots for trend.',

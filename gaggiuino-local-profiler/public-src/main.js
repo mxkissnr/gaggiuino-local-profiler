@@ -65,7 +65,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
          openBeanForm, closeBeanForm, editBean, saveBean, deleteBean, toggleBeanActive, uploadBeanImage,
-         openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage,
+         openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage, resetGrinderBurrs,
          toggleBeanQR,
          toggleBagHistory, openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
          openBeanStockEdit, closeBeanStockEdit, saveBeanStock,
@@ -596,6 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'toggle-bean-active': toggleBeanActive(numId()); break;
       case 'edit-grinder':       editGrinder(numId()); break;
       case 'delete-grinder':     deleteGrinder(numId()); break;
+      case 'reset-grinder-burrs': resetGrinderBurrs(numId()); break;
       case 'edit-recipe':        editRecipe(numId()); break;
       case 'delete-recipe':      deleteRecipe(numId()); break;
       case 'remove-recipe-step': removeRecipeStep(Number(el.dataset.idx)); break;

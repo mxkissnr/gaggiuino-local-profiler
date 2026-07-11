@@ -540,6 +540,8 @@
           .lib-item-info { width: 100%; }
           .lib-item-actions { width: 100%; justify-content: flex-end; border-top: 1px solid rgba(63,63,70,.5); padding-top: 6px; margin-top: 4px; }
         }
+        .lib-grinder-wear { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; white-space: normal; }
+        .lib-grinder-reset-burrs { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 5px; font-size: .68rem; padding: 2px 7px; }
         .lib-inv-stats { font-size: .7rem; color: var(--gray-600); margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; }
         .lib-inv-remaining { color: var(--gray-500); }
         .lib-inv-remaining.low { color: var(--err); }
