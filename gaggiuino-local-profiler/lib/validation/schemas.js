@@ -50,6 +50,65 @@ const orderSchema = z.object({
     notes:      z.string().max(500).optional().default(''),
 }).passthrough();
 
+// ── Machine profile (#307) ──────────────────────────────────────────────
+// Mirrors lib/gaggiuino-ws-client.js's toWireProfile(): type/curve accept
+// either the machine's enum strings ("PRESSURE", "LINEAR", ...) or their
+// numeric wire values, since the app sends strings but a raw numeric value
+// (e.g. round-tripped from the machine) must also validate.
+const phaseTypeSchema  = z.union([z.enum(['FLOW', 'PRESSURE', 'MANUAL']), z.number().int().min(0).max(2)]);
+const curveSchema      = z.union([z.enum(['EASE_IN_OUT', 'EASE_IN', 'EASE_OUT', 'LINEAR', 'INSTANT']), z.number().int().min(0).max(4)]);
+
+const transitionSchema = z.object({
+    start:  z.number().optional(),
+    end:    z.number().optional(),
+    curve:  curveSchema.optional(),
+    time:   z.number().optional(),
+    volume: z.number().optional(),
+}).optional();
+
+const phaseStopConditionsSchema = z.object({
+    time:               z.number().optional(),
+    pressureAbove:      z.number().optional(),
+    pressureBelow:      z.number().optional(),
+    flowAbove:          z.number().optional(),
+    flowBelow:          z.number().optional(),
+    weight:             z.number().optional(),
+    waterPumpedInPhase: z.number().optional(),
+}).optional();
+
+const phaseSchema = z.object({
+    name:             z.string().max(100).optional(),
+    type:             phaseTypeSchema,
+    target:           transitionSchema,
+    restriction:      z.number().optional(),
+    stopConditions:   phaseStopConditionsSchema,
+    waterTemperature: z.number().optional(),
+    skip:             z.boolean().optional(),
+});
+
+const globalStopConditionsSchema = z.object({
+    time:                       z.number().optional(),
+    weight:                     z.number().optional(),
+    waterPumped:                z.number().optional(),
+    switchToManualPressureCtrl: z.boolean().optional(),
+    switchToManuaFlowCtrl:      z.boolean().optional(),
+}).optional();
+
+const brewRecipeSchema = z.object({
+    coffeeIn:  z.number().optional(),
+    coffeeOut: z.number().optional(),
+    ratio:     z.number().optional(),
+}).optional();
+
+const profileSchema = z.object({
+    id:                   z.number().int().optional(),
+    name:                 z.string().min(1).max(200),
+    phases:               z.array(phaseSchema).min(1),
+    globalStopConditions: globalStopConditionsSchema,
+    waterTemperature:     z.number().optional(),
+    recipe:               brewRecipeSchema,
+});
+
 module.exports = {
     annotationSchema,
     beanSchema,
@@ -57,4 +116,5 @@ module.exports = {
     recipeSchema,
     maintenanceLogSchema,
     orderSchema,
+    profileSchema,
 };

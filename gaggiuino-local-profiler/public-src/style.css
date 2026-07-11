@@ -1396,6 +1396,28 @@
            never has positive free space to grow into — the canvas would
            collapse to 0px before echarts even has a size to init() against. */
         .flavor-wheel-modal { max-width:min(680px, 96vw); height:min(680px, 92dvh); max-height:92dvh; overflow-y:hidden; }
+
+        /* Machine profile editor modal (#307) — same fixed-height/flex-child
+           pattern as .flavor-wheel-modal above, but wider (dense 2-column
+           phase grid needs more horizontal room) and the scrollable content
+           is the phase list + preview chart rather than a canvas-based
+           interactive widget. */
+        .profile-editor-modal { max-width:min(760px, 96vw); height:min(760px, 92dvh); max-height:92dvh; overflow-y:hidden; }
+        .pe-scroll { flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+        .pe-preview { margin-top:14px; height:180px; flex-shrink:0; }
+        .pe-preview canvas { width:100%; height:100%; }
+        .pp-row { background:var(--gray-800); border-radius:8px; padding:10px; margin-bottom:8px; }
+        .pp-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+        .pp-num { color:var(--gray-500); font-weight:700; flex-shrink:0; }
+        .pp-name { flex:1 1 140px; min-width:100px; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:6px; color:var(--gray-200); font-size:.8rem; padding:6px 8px; }
+        .pp-type { flex:0 0 auto; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:6px; color:var(--gray-200); font-size:.8rem; padding:6px 8px; }
+        .pp-skip-label { flex:0 0 auto; }
+        .pp-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:6px; }
+        @media (min-width: 560px) { .pp-grid { grid-template-columns:repeat(4, 1fr); } }
+        .pp-field { display:flex; flex-direction:column; gap:3px; }
+        .pp-field label { font-size:.62rem; color:var(--gray-500); }
+        .pp-field input, .pp-field select { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:6px; color:var(--gray-200); font-size:.78rem; padding:5px 6px; }
+        .pp-field input:focus, .pp-field select:focus { outline:none; border-color:var(--gray-500); }
         .fw-header { display:flex; align-items:center; gap:10px; flex-shrink:0; }
         .fw-close-x { margin-left:auto; background:none; border:none; color:var(--gray-400); font-size:1.1rem; line-height:1; padding:6px; cursor:pointer; flex-shrink:0; }
         .fw-close-x:hover, .fw-close-x:focus-visible { color:#fff; }

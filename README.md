@@ -84,6 +84,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Maint
 | ☕ | **Grind Recommendation** | Automatic advice based on shot duration and channeling |
 | 📅 | **Roast Date & Freshness** | Days since roast as colored badge (green: 7–21 days optimal) |
 | ☕ | **Coffee Library** | Persistent bean and grinder database with autocomplete; roast date auto-fills; variety, processing, roast type, growing region, altitude, importer, harvest, price, producer, certification and a manual brew recommendation (temperature/ratio/time) — all shown only when set |
+| 🎛 | **Machine Profile Editor** | Visual editor for Gaggiuino machine profiles in a new "Profiles" tab — name, recipe, and a full phase editor (type, target curve, restriction, stop conditions) with a live preview chart; "Create profile" on a bean card pre-fills a profile suggestion derived from that bean's decaf/process/roast attributes; sends directly to the machine over its WebSocket API |
 | 🎡 | **Flavor Wheel** | Interactive aroma sunburst per bean, built from structured tasting-note tags — see [Acknowledgements](#acknowledgements) for the SCA/WCR data credit |
 | ⭐ | **Bean Rating** | Star rating per bean, computed automatically as the average of that bean's shot ratings — no manual field |
 | 🖼️ | **Bean, Grinder & Shot Photos** | Bean photo imported once from the shop on URL import; grinder photo uploaded directly from your device — plus grinder burr type and purchase date; each shot can also have its own photo (e.g. the cup/crema), shown as a small round thumbnail in the sidebar |

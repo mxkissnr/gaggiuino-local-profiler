@@ -409,6 +409,7 @@
                 <button class="lib-tab" id="libTabGrinders" data-i18n="lib_grinders">Mühlen</button>
                 <button class="lib-tab" id="libTabRecipes" data-i18n="lib_recipes">Rezepte</button>
                 <button class="lib-tab" id="libTabMilk" data-i18n="lib_milk">Milch</button>
+                <button class="lib-tab" id="libTabProfiles" data-i18n="lib_profiles">Profile</button>
             </div>
             <div class="lib-body">
                 <!-- Beans -->
@@ -727,9 +728,69 @@
                     </div>
                     <button class="lib-add-trigger" id="milkAddTrigger" data-i18n="lib_add_milk">+ Milch hinzufügen</button>
                 </div>
+                <!-- Profiles -->
+                <div class="lib-section" id="libSectionProfiles">
+                    <div class="lib-list" id="profileListUI"></div>
+                    <button class="lib-add-trigger" id="profileAddTrigger" data-i18n="lib_add_profile">+ Neues Profil</button>
+                </div>
             </div>
         </div>
     </div><!-- #library-view -->
+
+    <datalist id="profileList"></datalist>
+
+    <!-- Machine profile editor modal (#307) -->
+    <div id="profileEditorModal" class="guided-maint-overlay" style="display:none">
+        <div class="guided-maint-modal profile-editor-modal">
+            <div class="fw-header">
+                <h3 class="maint-section-title" data-i18n="profile_editor_title" style="margin:0">Profil-Editor</h3>
+                <button type="button" class="fw-close-x" id="closeProfileFormBtn" aria-label="Close">✕</button>
+            </div>
+            <div class="pe-scroll">
+                <div class="lib-form-grid">
+                    <div class="lib-form-field">
+                        <label data-i18n="profile_form_name">Name *</label>
+                        <input type="text" id="profileFormName" placeholder="Sertao Decaf">
+                    </div>
+                    <div class="lib-form-field">
+                        <label data-i18n="profile_form_water_temp">Wassertemperatur (°C)</label>
+                        <input type="number" id="profileFormWaterTemp" step="0.5" min="80" max="100" placeholder="93">
+                    </div>
+                    <div class="lib-form-field">
+                        <label data-i18n="profile_form_coffee_in">Dosis (g)</label>
+                        <input type="number" id="profileFormCoffeeIn" step="0.1" min="0" placeholder="18">
+                    </div>
+                    <div class="lib-form-field">
+                        <label data-i18n="profile_form_coffee_out">Ausbeute (g)</label>
+                        <input type="number" id="profileFormCoffeeOut" step="0.1" min="0" placeholder="36">
+                    </div>
+                    <div class="lib-form-field">
+                        <label data-i18n="profile_form_ratio">Ratio</label>
+                        <input type="number" id="profileFormRatio" step="0.1" min="0" placeholder="2">
+                    </div>
+                    <div class="lib-form-field">
+                        <label data-i18n="profile_form_weight">Stopp-Gewicht (g)</label>
+                        <input type="number" id="profileFormWeight" step="0.1" min="0" placeholder="39.6">
+                    </div>
+                </div>
+                <div class="lib-recipe-steps-section">
+                    <div class="lib-recipe-steps-header">
+                        <span data-i18n="profile_phases_title">Phasen</span>
+                        <button class="lib-btn-sm" id="profileApplySuggestionBtn" data-i18n="profile_apply_suggestion" style="display:none">Bohnen-Vorschlag anwenden</button>
+                        <button class="lib-btn-sm" id="addProfilePhaseBtn" data-i18n="profile_add_phase">+ Phase</button>
+                    </div>
+                    <div id="profilePhaseList"></div>
+                </div>
+                <div class="pe-preview">
+                    <canvas id="profilePreviewChart"></canvas>
+                </div>
+            </div>
+            <div class="lib-form-actions">
+                <button class="lib-btn-sm" id="cancelProfileFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                <button class="lib-save-btn" id="sendProfileToMachineBtn" data-i18n="profile_send_to_machine">An Maschine senden</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Flavor wheel modal -->
     <div id="flavorWheelModal" class="guided-maint-overlay" style="display:none">

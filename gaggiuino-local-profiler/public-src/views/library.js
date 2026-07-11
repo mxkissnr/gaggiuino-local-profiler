@@ -51,10 +51,12 @@ export function switchLibTab(tab) {
   document.getElementById('libTabGrinders').classList.toggle('active',    tab === 'grinders');
   document.getElementById('libTabRecipes').classList.toggle('active',     tab === 'recipes');
   document.getElementById('libTabMilk')?.classList.toggle('active',      tab === 'milk');
+  document.getElementById('libTabProfiles')?.classList.toggle('active',  tab === 'profiles');
   document.getElementById('libSectionBeans').classList.toggle('active',   tab === 'beans');
   document.getElementById('libSectionGrinders').classList.toggle('active', tab === 'grinders');
   document.getElementById('libSectionRecipes').classList.toggle('active', tab === 'recipes');
   document.getElementById('libSectionMilk')?.classList.toggle('active',  tab === 'milk');
+  document.getElementById('libSectionProfiles')?.classList.toggle('active', tab === 'profiles');
 }
 
 // ── Bean list ─────────────────────────────────────────────────────────────
@@ -185,6 +187,7 @@ export function renderBeanList() {
       <div class="lib-item-actions">
         <button class="lib-btn-sm" data-action="open-new-bag" data-id="${b.id}" title="${t('lib_new_bag')}">${t('lib_new_bag')}</button>
         ${Array.isArray(b.flavors) && b.flavors.length ? `<button class="lib-btn-sm" data-action="open-flavor-wheel" data-id="${b.id}" title="${t('flavor_wheel_btn')}">🎡</button>` : ''}
+        <button class="lib-btn-sm" data-action="create-profile-from-bean" data-id="${b.id}" title="${t('profile_create_from_bean')}">🎛</button>
         <button class="lib-btn-sm" data-action="toggle-bean-qr" data-id="${b.id}" title="${t('bean_qr_label')}">QR</button>
         <button class="lib-btn-sm lib-btn-icon" data-action="toggle-bean-active" data-id="${b.id}" title="${t(disabled ? 'lib_btn_enable' : 'lib_btn_disable')}">${disabled ? ICON_EYE_OFF : ICON_EYE}</button>
         <button class="lib-btn-sm lib-btn-icon" data-action="edit-bean" data-id="${b.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>

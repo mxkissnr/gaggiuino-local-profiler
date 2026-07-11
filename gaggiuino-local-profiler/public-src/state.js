@@ -57,6 +57,10 @@ export const S = {
   _ordersStatsOpen: false,
   machineReachable: null,
   isDemo: false,
+  machineProfiles: [],
+  profileEditId: null,
+  profileEditBeanId: null,
+  profilePreviewChart: null,
 };
 
 // ── Reactive pub/sub ──────────────────────────────────────────────────────

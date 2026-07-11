@@ -76,6 +76,11 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
          openScanModal, closeScanModal, _runScanLoop, _handleScanResult,
          renderMilkList, openMilkForm, closeMilkForm, saveMilk, restockMilk, deleteMilk } from './views/library.js';
 
+import { loadMachineProfileList, updateProfileDatalist, renderProfileList,
+         editProfile, deleteMachineProfile, openProfileForm, closeProfileForm, openNewProfileForm,
+         createProfileFromBean, applyBeanSuggestion, addProfilePhase, removeProfilePhase,
+         sendProfileToMachine, renderProfilePreviewChart } from './views/library-profile-editor.js';
+
 import { renderDialin } from './views/dialin.js';
 
 import { loadDemoData, endDemo } from './components/onboarding.js';
@@ -316,6 +321,22 @@ Object.assign(window, {
   restockMilk,
   deleteMilk,
 
+  // profile editor view
+  loadMachineProfileList,
+  updateProfileDatalist,
+  renderProfileList,
+  editProfile,
+  deleteMachineProfile,
+  openProfileForm,
+  closeProfileForm,
+  openNewProfileForm,
+  createProfileFromBean,
+  applyBeanSuggestion,
+  addProfilePhase,
+  removeProfilePhase,
+  sendProfileToMachine,
+  renderProfilePreviewChart,
+
   // dialin view
   renderDialin,
 
@@ -487,6 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('libTabGrinders').addEventListener('click', () => switchLibTab('grinders'));
   document.getElementById('libTabRecipes').addEventListener('click', () => switchLibTab('recipes'));
   document.getElementById('libTabMilk').addEventListener('click', () => switchLibTab('milk'));
+  document.getElementById('libTabProfiles').addEventListener('click', () => switchLibTab('profiles'));
   document.getElementById('closeBeanFormBtn').addEventListener('click', closeBeanForm);
   document.getElementById('saveBeanBtn').addEventListener('click', saveBean);
   document.getElementById('beanAddTrigger').addEventListener('click', openBeanForm);
@@ -515,6 +537,16 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('closeMilkFormBtn').addEventListener('click', closeMilkForm);
   document.getElementById('saveMilkBtn').addEventListener('click', saveMilk);
   document.getElementById('milkAddTrigger').addEventListener('click', openMilkForm);
+  document.getElementById('profileAddTrigger').addEventListener('click', openNewProfileForm);
+  document.getElementById('closeProfileFormBtn').addEventListener('click', closeProfileForm);
+  document.getElementById('cancelProfileFormBtn').addEventListener('click', closeProfileForm);
+  document.getElementById('addProfilePhaseBtn').addEventListener('click', addProfilePhase);
+  document.getElementById('profileApplySuggestionBtn').addEventListener('click', applyBeanSuggestion);
+  document.getElementById('sendProfileToMachineBtn').addEventListener('click', sendProfileToMachine);
+  // Live preview: any field/phase edit re-synthesizes the chart from the
+  // current DOM state (same DOM-as-state source of truth as _collectPhases()).
+  document.getElementById('profileEditorModal').addEventListener('input', renderProfilePreviewChart);
+  document.getElementById('profileEditorModal').addEventListener('change', renderProfilePreviewChart);
   document.getElementById('refShotSelect').addEventListener('change', e => onRefShotChange(e.target.value));
   document.getElementById('refClearBtn').addEventListener('click', clearReferenceShot);
   document.getElementById('trendBtn30').addEventListener('click', () => setTrendWindow(30));
@@ -569,6 +601,10 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'remove-recipe-step': removeRecipeStep(Number(el.dataset.idx)); break;
       case 'delete-milk':        deleteMilk(numId()); break;
       case 'restock-milk':       restockMilk(numId()); break;
+      case 'edit-profile':          editProfile(numId()); break;
+      case 'delete-profile':        deleteMachineProfile(numId()); break;
+      case 'remove-profile-phase':  removeProfilePhase(Number(el.dataset.idx)); break;
+      case 'create-profile-from-bean': createProfileFromBean(numId()); break;
       case 'restore-shot':       restoreShot(numId()); break;
       case 'perm-delete-shot':   permanentDeleteShot(numId()); break;
       case 'select-drink':       selectDrinkType(strId()); break;
@@ -605,6 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadMilkTypes();
     await loadData();
     loadLibrary();
+    loadMachineProfileList();
     updateStatus();
     checkForUpdate();
     renderApiTokenCard();

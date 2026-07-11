@@ -26,6 +26,7 @@ const { getSwitchState, callHaService } = require('../lib/ha');
 const { log, rateLimit, isSupervisorIp } = require('../lib/helpers');
 const state = require('../lib/state');
 const demoService = require('../lib/services/DemoService');
+const { profileSchema } = require('../lib/validation/schemas');
 
 // ── Profile cache helpers ─────────────────────────────────────────────────
 
@@ -284,9 +285,10 @@ router.get('/api/machine/profile/:id', async (req, res) => {
 });
 
 router.post('/api/machine/profile', async (req, res) => {
-    const profile = req.body || {};
-    if (!profile.name || !Array.isArray(profile.phases) || !profile.phases.length)
-        return res.status(400).json({ error: 'name and at least one phase are required' });
+    const parsed = profileSchema.safeParse(req.body || {});
+    if (!parsed.success)
+        return res.status(400).json({ error: 'invalid profile', details: parsed.error.issues });
+    const profile = parsed.data;
     const opts    = loadOptions();
     const baseUrl = getMachineBaseUrl(opts);
     if (!baseUrl) return res.status(503).json({ error: 'machine URL not configured' });
@@ -301,9 +303,10 @@ router.post('/api/machine/profile', async (req, res) => {
 });
 
 router.put('/api/machine/profile/:id', async (req, res) => {
-    const profile = { ...(req.body || {}), id: parseInt(req.params.id) };
-    if (!profile.name || !Array.isArray(profile.phases) || !profile.phases.length)
-        return res.status(400).json({ error: 'name and at least one phase are required' });
+    const parsed = profileSchema.safeParse({ ...(req.body || {}), id: parseInt(req.params.id) });
+    if (!parsed.success)
+        return res.status(400).json({ error: 'invalid profile', details: parsed.error.issues });
+    const profile = parsed.data;
     const opts    = loadOptions();
     const baseUrl = getMachineBaseUrl(opts);
     if (!baseUrl) return res.status(503).json({ error: 'machine URL not configured' });
