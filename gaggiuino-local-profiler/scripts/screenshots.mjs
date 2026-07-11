@@ -186,6 +186,11 @@ async function main() {
     const browser = await chromium.launch();
     const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
+    // The update-check banner does a real GitHub API call and renders whenever
+    // the checked-out version is ahead of the latest published release (the
+    // normal case mid-release, before this version's own tag exists yet) —
+    // it overlays the top of the page and intercepts clicks on the nav bar.
+    await page.addStyleTag({ content: '#glpUpdateBanner{display:none!important}' });
     await page.waitForTimeout(500); // let async post-load renders (thumbnails, charts) settle
 
     await page.click('#btnShots');
