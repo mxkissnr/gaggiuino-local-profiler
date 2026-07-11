@@ -4,6 +4,7 @@ const fs      = require('fs');
 const path    = require('path');
 const yaml    = require('js-yaml');
 const router  = express.Router();
+const gaggiuinoWs = require('../lib/gaggiuino-ws-client');
 
 let _openApiSpec = null;
 function getOpenApiSpec() {
@@ -258,6 +259,75 @@ router.post('/api/machine/profile/set', async (req, res) => {
     } catch (e) {
         log(`Profile set error: ${e.message}`, true);
         res.status(500).json({ error: e.message });
+    }
+});
+
+// The machine has no REST endpoint for writing profiles — create/update/
+// delete only work over its WebSocket/protobuf channel (lib/gaggiuino-ws-client.js).
+// Profile shape: { name, phases:[{name,type,target:{start,end,curve,time,volume},
+// restriction,stopConditions:{...},skip,waterTemperature}], globalStopConditions,
+// waterTemperature, recipe:{coffeeIn,coffeeOut,ratio}, id (update only) } —
+// type/curve accept either the machine's enum strings ("PRESSURE","LINEAR", ...)
+// or their numeric wire values.
+
+router.get('/api/machine/profile/:id', async (req, res) => {
+    const opts    = loadOptions();
+    const baseUrl = getMachineBaseUrl(opts);
+    if (!baseUrl) return res.status(503).json({ error: 'machine URL not configured' });
+    try {
+        const profile = await gaggiuinoWs.getProfileById(baseUrl, parseInt(req.params.id));
+        res.json(profile);
+    } catch (e) {
+        log(`Machine profile detail fetch failed: ${e.message}`, true);
+        res.status(502).json({ error: e.message });
+    }
+});
+
+router.post('/api/machine/profile', async (req, res) => {
+    const profile = req.body || {};
+    if (!profile.name || !Array.isArray(profile.phases) || !profile.phases.length)
+        return res.status(400).json({ error: 'name and at least one phase are required' });
+    const opts    = loadOptions();
+    const baseUrl = getMachineBaseUrl(opts);
+    if (!baseUrl) return res.status(503).json({ error: 'machine URL not configured' });
+    try {
+        const created = await gaggiuinoWs.createProfile(baseUrl, profile);
+        log(`Created machine profile "${created.name}" (id ${created.id})`);
+        res.json(created);
+    } catch (e) {
+        log(`Machine profile create failed: ${e.message}`, true);
+        res.status(502).json({ error: e.message });
+    }
+});
+
+router.put('/api/machine/profile/:id', async (req, res) => {
+    const profile = { ...(req.body || {}), id: parseInt(req.params.id) };
+    if (!profile.name || !Array.isArray(profile.phases) || !profile.phases.length)
+        return res.status(400).json({ error: 'name and at least one phase are required' });
+    const opts    = loadOptions();
+    const baseUrl = getMachineBaseUrl(opts);
+    if (!baseUrl) return res.status(503).json({ error: 'machine URL not configured' });
+    try {
+        const updated = await gaggiuinoWs.updateProfile(baseUrl, profile);
+        log(`Updated machine profile "${updated.name}" (id ${updated.id})`);
+        res.json(updated);
+    } catch (e) {
+        log(`Machine profile update failed: ${e.message}`, true);
+        res.status(502).json({ error: e.message });
+    }
+});
+
+router.delete('/api/machine/profile/:id', async (req, res) => {
+    const opts    = loadOptions();
+    const baseUrl = getMachineBaseUrl(opts);
+    if (!baseUrl) return res.status(503).json({ error: 'machine URL not configured' });
+    try {
+        const remaining = await gaggiuinoWs.deleteProfile(baseUrl, parseInt(req.params.id));
+        log(`Deleted machine profile id ${req.params.id}`);
+        res.json({ ok: true, remaining });
+    } catch (e) {
+        log(`Machine profile delete failed: ${e.message}`, true);
+        res.status(502).json({ error: e.message });
     }
 });
 

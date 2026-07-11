@@ -44,6 +44,59 @@ components:
       properties:
         error: { type: string, example: "not found" }
 
+    MachineProfileInput:
+      type: object
+      required: [name, phases]
+      description: >
+        Mirrors the Gaggiuino machine's own profile shape 1:1 (see
+        lib/gaggiuino-proto.js). `type`/`curve` accept either the machine's
+        enum name strings ("PRESSURE"/"FLOW"/"MANUAL",
+        "LINEAR"/"EASE_IN"/"EASE_OUT"/"EASE_IN_OUT"/"INSTANT") or their
+        numeric wire values.
+      properties:
+        name: { type: string }
+        phases:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              type: { type: string, example: PRESSURE }
+              target:
+                type: object
+                properties:
+                  start: { type: number }
+                  end: { type: number }
+                  curve: { type: string, example: LINEAR }
+                  time: { type: integer, description: milliseconds }
+                  volume: { type: number }
+              restriction: { type: number }
+              stopConditions:
+                type: object
+                properties:
+                  time: { type: integer, description: milliseconds }
+                  pressureAbove: { type: number }
+                  pressureBelow: { type: number }
+                  flowAbove: { type: number }
+                  flowBelow: { type: number }
+                  weight: { type: number }
+                  waterPumpedInPhase: { type: number }
+              skip: { type: boolean }
+              waterTemperature: { type: number }
+        globalStopConditions:
+          type: object
+          properties:
+            time: { type: integer, description: milliseconds }
+            weight: { type: number }
+            waterPumped: { type: number }
+        waterTemperature: { type: number }
+        recipe:
+          type: object
+          properties:
+            coffeeIn: { type: number }
+            coffeeOut: { type: number }
+            ratio: { type: number }
+
     # ── Shots ──────────────────────────────────────────────────────────────
 
     Annotation:
@@ -937,6 +990,56 @@ paths:
         "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
         "400": { description: option required }
         "503": { description: HA token unavailable }
+
+  /api/machine/profile/{id}:
+    get:
+      tags: [System]
+      summary: Full detail of one machine profile (all phases), read directly over the machine's WebSocket/protobuf channel — no REST equivalent exists on the machine itself
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Profile detail (name, phases, globalStopConditions, waterTemperature, recipe) }
+        "502": { description: Machine unreachable or returned an error }
+        "503": { description: machine URL not configured }
+    put:
+      tags: [System]
+      summary: Update an existing machine profile (name/phases/stop conditions), written over the machine's WebSocket/protobuf channel — the machine has no REST write endpoint
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineProfileInput' }
+      responses:
+        "200": { description: "{ id, name } as confirmed by the machine" }
+        "400": { description: name and at least one phase are required }
+        "502": { description: Machine unreachable, returned an error, or did not confirm the update }
+        "503": { description: machine URL not configured }
+    delete:
+      tags: [System]
+      summary: Delete a machine profile, over the WebSocket/protobuf channel
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: "{ ok: true, remaining: [...] }" }
+        "502": { description: Machine unreachable or did not confirm deletion }
+        "503": { description: machine URL not configured }
+
+  /api/machine/profile:
+    post:
+      tags: [System]
+      summary: Create a new machine profile, over the machine's WebSocket/protobuf channel — the machine has no REST write endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineProfileInput' }
+      responses:
+        "200": { description: "{ id, name } — id is assigned by the machine" }
+        "400": { description: name and at least one phase are required }
+        "502": { description: Machine unreachable, returned an error, or did not confirm the create }
+        "503": { description: machine URL not configured }
 
   /api/preheat:
     get:

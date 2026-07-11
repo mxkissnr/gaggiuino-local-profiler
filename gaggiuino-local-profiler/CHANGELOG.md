@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### Added
+- **Machine profile create/update/delete — backend API only, no GLP UI yet.** The machine has no REST endpoint for writing profiles, only reading/selecting; create/update/delete only work over the machine's own WebSocket (`ws://<host>/ws`) with binary Protobuf messages, reverse-engineered from the machine's own web UI bundle and verified live against a real machine (all four operations round-tripped correctly). New `lib/gaggiuino-proto.js` (message schema, verbatim field numbers), `lib/gaggiuino-ws-client.js` (WS client), routes `GET/POST/PUT/DELETE /api/machine/profile[/:id]`. This is the backend layer only — no way yet to create/edit profiles from the GLP UI itself, that's a follow-up round. `lib/gaggiuino-proto.js` (new), `lib/gaggiuino-ws-client.js` (new), `routes/system.js`, `test/gaggiuino-ws-client.test.js` (new), `openapi.yaml`. Closes #306
+
+## [1.113.5] – 2026-07-10
+
 ### Fixed
 - **Mobile: shot score now pinned top-right, export buttons left-aligned with the title.** Follow-up to #301's mobile header overlap fix. The score badge sat inline before the export buttons, pushing the button row's start position around depending on wrap; it's now absolutely positioned top-right of `.sprofiler-header`, and the button row starts its own line, flush-left with the title/subtitle above it. `public-src/style.css`. Closes #305
 
