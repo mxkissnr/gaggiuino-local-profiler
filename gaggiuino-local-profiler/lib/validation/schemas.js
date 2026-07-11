@@ -5,7 +5,12 @@ const annotationSchema = z.object({
     grindSetting:  z.string().max(50).optional(),
     notes:         z.string().max(2000).optional(),
     drinkType:     z.string().max(50).optional(),
-    milkType:      z.string().max(50).optional(),
+    // Milk ids are numeric (Date.now(), see routes/library.js POST /api/library/milk),
+    // and the frontend always sends milkType as parseInt(...) — a string type here
+    // rejected every annotate call that included a selected milk with a 400, which
+    // silently broke both the annotation save and the milk-stock deduction nested
+    // inside its success handler.
+    milkType:      z.number().int().nullable().optional(),
     rating:        z.number().int().min(1).max(5).nullable().optional(),
     score:         z.number().nullable().optional(),
     recipeId:      z.number().int().nullable().optional(),

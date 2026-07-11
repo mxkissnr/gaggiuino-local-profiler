@@ -12,6 +12,33 @@ import { openLightbox } from '../../components/lightbox.js';
 
 let _autoSaveTimer = null;
 
+// Deducts milk stock for a newly-assigned (or changed) drink+milk combo.
+// Gated on drinkType OR milkType actually changing vs. the previously saved
+// annotation, not just milkType changing — otherwise re-assigning the same
+// milk to a newly-picked drink (the common case, since most people always
+// use the same milk) would never fire. Shared by both the debounced
+// auto-save and the explicit Save button so neither path can silently skip
+// the deduction the other one handles.
+export function _maybeDeductMilk(shot, payload) {
+  const prevMilkType  = shot?.annotation?.milkType ?? null;
+  const prevDrinkType = shot?.annotation?.drinkType ?? null;
+  if (!payload.milkType || !payload.drinkType) return;
+  if (payload.milkType === prevMilkType && payload.drinkType === prevDrinkType) return;
+  const menuItem = S.drinkMenu?.find(m => m.id === payload.drinkType);
+  if (!(menuItem?.milkMl > 0)) return;
+  apiFetch(`api/library/milk/${payload.milkType}/deduct`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ml: menuItem.milkMl }),
+  }).then(r2 => {
+    if (r2.ok) r2.json().then(updated => {
+      if (S.milkTypes) {
+        const mi = S.milkTypes.findIndex(m => m.id === updated.id);
+        if (mi !== -1) S.milkTypes[mi] = updated;
+      }
+    });
+  }).catch(() => {});
+}
+
 export function scheduleAutoSave() {
   clearTimeout(_autoSaveTimer);
   _autoSaveTimer = setTimeout(async () => {
@@ -28,6 +55,8 @@ export function scheduleAutoSave() {
       tds:          parseFloat(document.getElementById('annTds').value) || null,
       notes:        document.getElementById('annNotes').value.trim(),
       drinkType:    document.getElementById('annDrinkType')?.value || null,
+      milkType:     document.getElementById('annMilkType')?.value ? parseInt(document.getElementById('annMilkType').value) : null,
+      recipeId:     parseInt(document.getElementById('annRecipe')?.value) || null,
       beanAgeDays:  calcBeanAgeAtShot(coffee, shot?.timestamp) ?? null,
     };
     try {
@@ -35,6 +64,7 @@ export function scheduleAutoSave() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       });
       if (r.ok) {
+        _maybeDeductMilk(shot, payload);
         const idx = S.shots.findIndex(s => s.id === S.primaryShotId);
         if (idx !== -1) S.shots[idx].annotation = payload;
         renderSidebar();
@@ -305,23 +335,7 @@ export async function saveAnnotation() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
     if (r.ok) {
-      const prevMilkType = shot?.annotation?.milkType ?? null;
-      if (payload.milkType && payload.milkType !== prevMilkType && payload.drinkType) {
-        const menuItem = S.drinkMenu?.find(m => m.id === payload.drinkType);
-        if (menuItem?.milkMl > 0) {
-          apiFetch(`api/library/milk/${payload.milkType}/deduct`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ml: menuItem.milkMl }),
-          }).then(r2 => {
-            if (r2.ok) r2.json().then(updated => {
-              if (S.milkTypes) {
-                const mi = S.milkTypes.findIndex(m => m.id === updated.id);
-                if (mi !== -1) S.milkTypes[mi] = updated;
-              }
-            });
-          }).catch(() => {});
-        }
-      }
+      _maybeDeductMilk(shot, payload);
       const idx = S.shots.findIndex(s => s.id === S.primaryShotId);
       if (idx !== -1) S.shots[idx].annotation = payload;
       btn.textContent = t('btn_saved');
