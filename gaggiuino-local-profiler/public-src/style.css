@@ -1436,7 +1436,6 @@
         .dw-score-chip { color:#fff; font-weight:700; font-size:1rem; padding:6px 12px; border-radius:10px; flex-shrink:0; }
         .dw-score-meta { font-size:.8rem; color:var(--gray-400); }
         .dw-suggestion { font-size:.9rem; color:var(--gray-200); background:var(--gray-800); border-radius:8px; padding:10px 12px; }
-        .dw-suggestion-icon { font-weight:700; margin-right:4px; }
         .dw-actions { display:flex; flex-direction:column; gap:8px; }
         .dw-override-row { display:flex; gap:6px; }
         .dw-override-row input { flex:1 1 auto; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:6px; color:var(--gray-200); font-size:.8rem; padding:6px 8px; }

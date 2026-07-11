@@ -339,7 +339,6 @@ function _renderRound(s) {
   if (s.reviewRound) {
     const rr  = s.reviewRound;
     const sug = rr.suggestion;
-    const dirIcon = sug.type === 'finer' ? '↓' : sug.type === 'coarser' ? '↑' : sug.type === 'converged' ? '✓' : '•';
     const sugText = (sug.type === 'finer' || sug.type === 'coarser')
       ? t(sug.reason, rr.grindSetting, sug.nextGrind)
       : t(sug.reason);
@@ -349,7 +348,7 @@ function _renderRound(s) {
         <div class="dw-score-chip" style="background:${_scoreColor(rr.score)}">${rr.score ?? '–'}</div>
         <div class="dw-score-meta">${rr.seconds.toFixed(0)} s${rr.ratio ? ` · 1:${rr.ratio.toFixed(1)}` : ''}${rr.channeling ? ` · ${t('grind_channeling_full')}` : ''}</div>
       </div>
-      <div class="dw-suggestion"><span class="dw-suggestion-icon">${dirIcon}</span> ${esc(sugText)}</div>
+      <div class="dw-suggestion">${esc(sugText)}</div>
       <div class="dw-actions">
         <button class="lib-save-btn" data-action="dialin-accept-next">${t('dialin_wizard_accept_next')}</button>
         <div class="dw-override-row">
