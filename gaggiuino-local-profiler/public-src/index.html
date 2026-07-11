@@ -961,13 +961,27 @@
     <div id="dialin-view">
         <div class="dialin-header">
             <h3 style="margin:0;font-size:.95rem;color:#e4e4e7" data-i18n="dialin_title">Einwählen</h3>
-            <select id="dialinCount" class="dialin-count-select">
-                <option value="3">3 Shots</option>
-                <option value="5" selected>5 Shots</option>
-                <option value="10">10 Shots</option>
-            </select>
+            <div class="dialin-header-actions">
+                <button class="lib-btn-sm" id="startDialinWizardBtn" data-action="start-dialin" data-i18n="dialin_wizard_start_btn">Geführtes Einwählen starten</button>
+                <select id="dialinCount" class="dialin-count-select">
+                    <option value="3">3 Shots</option>
+                    <option value="5" selected>5 Shots</option>
+                    <option value="10">10 Shots</option>
+                </select>
+            </div>
         </div>
         <div id="dialinGrid" class="dialin-grid"></div>
+    </div>
+
+    <!-- Guided Dial-In wizard modal (#310) -->
+    <div id="dialinWizardModal" class="guided-maint-overlay" style="display:none">
+        <div class="guided-maint-modal dialin-wizard-modal">
+            <div class="fw-header">
+                <h3 class="maint-section-title" data-i18n="dialin_wizard_title" style="margin:0">Geführtes Einwählen</h3>
+                <button type="button" class="fw-close-x" data-action="dialin-close" aria-label="Close">✕</button>
+            </div>
+            <div id="dwBody" class="dw-body"></div>
+        </div>
     </div>
 
     <!-- Settings view -->

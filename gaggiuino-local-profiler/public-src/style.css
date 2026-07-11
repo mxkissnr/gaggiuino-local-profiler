@@ -1420,6 +1420,33 @@
         .pp-field label { font-size:.62rem; color:var(--gray-500); }
         .pp-field input, .pp-field select { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:6px; color:var(--gray-200); font-size:.78rem; padding:5px 6px; }
         .pp-field input:focus, .pp-field select:focus { outline:none; border-color:var(--gray-500); }
+        /* Guided Dial-In wizard modal (#310) — same fixed-height/flex-child
+           pattern as .profile-editor-modal, but narrower (it's a linear
+           step flow, not a dense multi-column form). */
+        .dialin-wizard-modal { max-width:min(480px, 96vw); height:min(620px, 88dvh); max-height:88dvh; overflow-y:hidden; }
+        .dw-body { flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:12px; }
+        .dw-setup { display:flex; flex-direction:column; gap:10px; }
+        .dw-round-label { font-size:.75rem; color:var(--gray-500); font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
+        .dw-grind-display { font-size:2.2rem; font-weight:700; color:var(--gray-100); text-align:center; padding:14px 0; }
+        .dw-waiting { text-align:center; color:var(--gray-500); font-size:.85rem; padding:16px 0; }
+        .dw-candidate { background:var(--gray-800); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:8px; }
+        .dw-candidate-title { font-size:.8rem; font-weight:600; color:var(--gray-200); }
+        .dw-candidate-actions { display:flex; gap:8px; flex-wrap:wrap; }
+        .dw-score-row { display:flex; align-items:center; gap:10px; }
+        .dw-score-chip { color:#fff; font-weight:700; font-size:1rem; padding:6px 12px; border-radius:10px; flex-shrink:0; }
+        .dw-score-meta { font-size:.8rem; color:var(--gray-400); }
+        .dw-suggestion { font-size:.9rem; color:var(--gray-200); background:var(--gray-800); border-radius:8px; padding:10px 12px; }
+        .dw-suggestion-icon { font-weight:700; margin-right:4px; }
+        .dw-actions { display:flex; flex-direction:column; gap:8px; }
+        .dw-override-row { display:flex; gap:6px; }
+        .dw-override-row input { flex:1 1 auto; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:6px; color:var(--gray-200); font-size:.8rem; padding:6px 8px; }
+        .dw-chip-strip { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+        .dw-chip { border:1.5px solid var(--gray-600); border-radius:8px; padding:3px 8px; font-size:.72rem; color:var(--gray-300); }
+        .dw-summary { display:flex; flex-direction:column; gap:12px; }
+        .dw-summary-title { font-size:1.05rem; font-weight:700; color:var(--gray-100); }
+        .dw-summary-reason { font-size:.85rem; color:var(--gray-400); }
+        .dw-summary-best { display:flex; align-items:center; gap:10px; }
+        .dialin-header-actions { display:flex; align-items:center; gap:8px; }
         .fw-header { display:flex; align-items:center; gap:10px; flex-shrink:0; }
         .fw-close-x { margin-left:auto; background:none; border:none; color:var(--gray-400); font-size:1.1rem; line-height:1; padding:6px; cursor:pointer; flex-shrink:0; }
         .fw-close-x:hover, .fw-close-x:focus-visible { color:#fff; }

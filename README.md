@@ -82,6 +82,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Maint
 | 📊 | **P·Q Diagram** | Pressure vs. flow chart — reveals extraction signature |
 | ⚗️ | **EY Calculation** | Extraction Yield % when TDS and dose are entered |
 | ☕ | **Grind Recommendation** | Automatic advice based on shot duration and channeling |
+| 🎯 | **Guided Dial-In Wizard** | Step-by-step "set grind → pull shot → evaluate → next grind" loop, opened from the Dial-in tab or a bean card; binary-search grind suggestions against a 25–32 s extraction-time target, explicit shot-match confirmation (never silent), and a "save as known grind" once dialed in |
 | 📅 | **Roast Date & Freshness** | Days since roast as colored badge (green: 7–21 days optimal) |
 | ☕ | **Coffee Library** | Persistent bean and grinder database with autocomplete; roast date auto-fills; variety, processing, roast type, growing region, altitude, importer, harvest, price, producer, certification and a manual brew recommendation (temperature/ratio/time) — all shown only when set |
 | 🎛 | **Machine Profile Editor** | Visual editor for Gaggiuino machine profiles in a new "Profiles" tab — name, recipe, and a full phase editor (type, target curve, restriction, stop conditions) with a live preview chart; "Create profile" on a bean card pre-fills a profile suggestion derived from that bean's decaf/process/roast attributes; sends directly to the machine over its WebSocket API |

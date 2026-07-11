@@ -309,6 +309,26 @@ class LibraryService {
         return { shotsSinceBurrs: matching.length, gramsSinceBurrs: Math.round(gramsSinceBurrs * 10) / 10 };
     }
 
+    // Guided Dial-In (#310): remembers the last-good grind setting per
+    // (bean, grinder) so the wizard can prefill a starting grind even before
+    // there's enough shot history for calcBestGrindCombosForBean. Matched by
+    // grinder name case-insensitive, same convention as computeBeanRemaining
+    // / calcBestGrindCombosForBean. Newest entry first, capped at 10 so the
+    // array can't grow unbounded across grinder swaps over the years.
+    upsertKnownGrindSetting(beanId, grinder, grindSetting) {
+        const lib  = this.getLibrary();
+        const bean = (lib.beans || []).find(b => b.id === beanId);
+        if (!bean) return null;
+        if (!Array.isArray(bean.knownGrindSettings)) bean.knownGrindSettings = [];
+        const key = String(grinder || '').trim().toLowerCase();
+        bean.knownGrindSettings = bean.knownGrindSettings.filter(
+            e => String(e.grinder || '').trim().toLowerCase() !== key);
+        bean.knownGrindSettings.unshift({ grinder: String(grinder || '').trim(), grindSetting, updatedAt: Date.now() });
+        bean.knownGrindSettings = bean.knownGrindSettings.slice(0, 10);
+        this.saveLibrary(lib);
+        return bean;
+    }
+
     computeMaintenanceStats(maint) {
         const shots = shotRepo.findAllExcludingTrash();
         const now   = Date.now();

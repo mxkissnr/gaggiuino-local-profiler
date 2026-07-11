@@ -189,6 +189,21 @@ router.post('/api/library/bean/:id/toggle-active', (req, res) => {
     res.json(bean);
 });
 
+// Guided Dial-In (#310): remembers the winning (grinder, grindSetting) combo
+// for a bean once a session converges, so the next dial-in for the same
+// bean+grinder can start from a known-good grind instead of from scratch.
+router.post('/api/library/bean/:id/known-grind', (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const { grinder, grindSetting } = req.body || {};
+    if (!grinder || typeof grinder !== 'string' || !grinder.trim())
+        return res.status(400).json({ error: 'grinder required' });
+    if (grindSetting === undefined || grindSetting === null || grindSetting === '')
+        return res.status(400).json({ error: 'grindSetting required' });
+    const bean = libraryService.upsertKnownGrindSetting(id, grinder.trim().slice(0, 200), String(grindSetting).trim().slice(0, 50));
+    if (!bean) return res.status(404).json({ error: 'not found' });
+    res.json(bean);
+});
+
 // Serves a downloaded bean image (see LibraryService.setBeanImage). 404 when
 // the bean has none. Filename is derived from the numeric id, never from a
 // client-supplied path, so no traversal is possible.

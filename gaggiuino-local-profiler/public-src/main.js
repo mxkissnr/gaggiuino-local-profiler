@@ -83,6 +83,10 @@ import { loadMachineProfileList, updateProfileDatalist, renderProfileList,
 
 import { renderDialin } from './views/dialin.js';
 
+import { openDialinWizard, closeDialinWizard, startDialinFromBean, renderDialinWizard,
+         dialinConfirmShot, dialinAcceptNext, dialinOverride, dialinEnd, dialinSaveKnownGrind,
+         dialinClose } from './views/dialin-wizard.js';
+
 import { loadDemoData, endDemo } from './components/onboarding.js';
 
 // ── Toast helper ──────────────────────────────────────────────────────────
@@ -339,6 +343,18 @@ Object.assign(window, {
 
   // dialin view
   renderDialin,
+
+  // guided dial-in wizard
+  openDialinWizard,
+  closeDialinWizard,
+  startDialinFromBean,
+  renderDialinWizard,
+  dialinConfirmShot,
+  dialinAcceptNext,
+  dialinOverride,
+  dialinEnd,
+  dialinSaveKnownGrind,
+  dialinClose,
 
   // toast
   showToast,
@@ -622,6 +638,14 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'delete-maint-log':   deleteMaintLogEntry(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
       case 'toggle-comp-grind':  document.getElementById('grindAdviceComparative')?.classList.toggle('expanded'); break;
+      case 'start-dialin':           openDialinWizard(); break;
+      case 'start-dialin-from-bean': startDialinFromBean(numId()); break;
+      case 'dialin-confirm-shot':    dialinConfirmShot(numId(), el.dataset.match === '1'); break;
+      case 'dialin-accept-next':     dialinAcceptNext(); break;
+      case 'dialin-override':        dialinOverride(); break;
+      case 'dialin-end':             dialinEnd(); break;
+      case 'dialin-save-known-grind': dialinSaveKnownGrind(); break;
+      case 'dialin-close':           dialinClose(); break;
     }
   });
 

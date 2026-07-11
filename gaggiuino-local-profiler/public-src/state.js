@@ -61,6 +61,12 @@ export const S = {
   profileEditId: null,
   profileEditBeanId: null,
   profilePreviewChart: null,
+  // Guided Dial-In (#310) — session is client-only, mirrored to localStorage
+  // so a reload doesn't lose an in-progress dial-in (see dialin-wizard.js).
+  dialinSession: (() => {
+    try { return JSON.parse(localStorage.getItem('glp_dialin_session') || 'null'); }
+    catch { return null; }
+  })(),
 };
 
 // ── Reactive pub/sub ──────────────────────────────────────────────────────
