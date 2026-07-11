@@ -85,7 +85,7 @@ export default {
     lib_bean_disabled_badge:'Deaktiviert',
     lib_confirm_delete_bean:'Bohne aus der Bibliothek löschen?',
     lib_confirm_delete_grinder:'Mühle aus der Bibliothek löschen?',
-    lib_grinder_wear:(n,g)=>`🔩 ${n} Shots · ${g} seit letztem Grat-Wechsel`, lib_grinder_reset_burrs:'Grate erneuert', lib_grinder_confirm_reset_burrs:'Verschleiß-Zähler zurücksetzen? Grat-Wechsel jetzt als heute vermerken.',
+    lib_grinder_wear:(n,g)=>`🔩 ${n} Shots · ${g} seit letztem Mahlscheiben-Wechsel`, lib_grinder_reset_burrs:'Mahlscheiben erneuert', lib_grinder_confirm_reset_burrs:'Verschleiß-Zähler zurücksetzen? Mahlscheiben-Wechsel jetzt als heute vermerken.',
     analytics_trend:'Score-Trend', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Alle',
     analytics_calendar:'Shot-Kalender', analytics_beans:'Bohnen-Auswertung', analytics_profiles:'Profil-Performance',
     analytics_no_trend:'Nicht genug Shots mit Score für den Trend.',
