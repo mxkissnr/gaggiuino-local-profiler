@@ -87,6 +87,10 @@ import { openDialinWizard, closeDialinWizard, startDialinFromBean, renderDialinW
          dialinConfirmShot, dialinAcceptNext, dialinOverride, dialinEnd, dialinSaveKnownGrind,
          dialinClose } from './views/dialin-wizard.js';
 
+import { startProfileDialinFromList, profileDialinClose,
+         profileDialinToggleSymptom, profileDialinAcceptNext, profileDialinOverride,
+         profileDialinEnd, profileDialinConfirmShot } from './views/profile-dialin-wizard.js';
+
 import { loadDemoData, endDemo } from './components/onboarding.js';
 
 // ── Toast helper ──────────────────────────────────────────────────────────
@@ -355,6 +359,15 @@ Object.assign(window, {
   dialinEnd,
   dialinSaveKnownGrind,
   dialinClose,
+
+  // profile dial-in wizard
+  startProfileDialinFromList,
+  profileDialinClose,
+  profileDialinToggleSymptom,
+  profileDialinAcceptNext,
+  profileDialinOverride,
+  profileDialinEnd,
+  profileDialinConfirmShot,
 
   // toast
   showToast,
@@ -646,6 +659,13 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'dialin-end':             dialinEnd(); break;
       case 'dialin-save-known-grind': dialinSaveKnownGrind(); break;
       case 'dialin-close':           dialinClose(); break;
+      case 'start-profile-dialin':      startProfileDialinFromList(numId()); break;
+      case 'profile-dialin-symptom':    profileDialinToggleSymptom(el.dataset.symptom); break;
+      case 'profile-dialin-confirm-shot': profileDialinConfirmShot(numId(), el.dataset.match === '1'); break;
+      case 'profile-dialin-accept-next':  profileDialinAcceptNext(); break;
+      case 'profile-dialin-override':     profileDialinOverride(); break;
+      case 'profile-dialin-end':          profileDialinEnd(); break;
+      case 'profile-dialin-close':        profileDialinClose(); break;
     }
   });
 

@@ -169,6 +169,14 @@ Once a shot is confirmed, it's scored and the wizard suggests the next grind set
 
 At the end (converged or manually stopped), the best-scoring round can be saved as the bean's **known grind setting** for that grinder, feeding back into the starting-grind suggestion the next time the same bean/grinder combo is dialed in.
 
+### Profile Dial-In wizard
+
+The **🎯** button on any profile in the Profiles tab's list opens a sibling wizard to the Guided Dial-In above — same session/candidate-confirm architecture, but tunes a machine profile's phases instead of a grind setting, for when a freshly created or bean-suggested profile isn't quite right yet.
+
+Each round: confirm the trial shot (never auto-matched, same reasoning as the grind wizard — you might pull one for a guest mid-session), see its score, and pick how it tasted (balanced / sour / bitter / watery / channeling). The pick maps to exactly one concrete phase adjustment: sour/underdeveloped lengthens the Preinfusion phase or raises the Ramp phase's target pressure; bitter/over-extracted lowers the water temperature, the Ramp pressure, or shortens the Decline phase; watery/thin lowers the target ratio or raises the Decline phase's flow restriction; channeling lengthens or raises the Preinfusion phase's saturation threshold (distribution/tamping still matters — a profile change alone can't fully fix channeling). The step size behaves like a binary search on that one field, same philosophy as the grind wizard: it halves whenever the suggested direction reverses. Accepting a round sends the updated profile straight back to the machine before the next round starts waiting — there's no separate save step, the machine always reflects the session's current profile. The session converges on two consecutive "balanced" picks, two consecutive scores of 80+, or a 6-round safety valve.
+
+This first version deliberately doesn't parse the phase data embedded on a shot record as a tuning signal — that field's exact shape hasn't been confirmed against real hardware — so the suggestion logic relies only on the shot's overall score and your own taste judgment, not an automated curve comparison.
+
 ### First-run onboarding & demo mode
 
 If the Gaggiuino controller can't be reached (wrong/unreachable `machine_host`), GLP shows a dismissible banner at the top of the page naming the configured host, with a link to the [wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki) for setup help. Dismissal is per browser session.

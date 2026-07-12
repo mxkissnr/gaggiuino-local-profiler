@@ -47,6 +47,7 @@ export function renderProfileList() {
         <div class="lib-item-name">${esc(p.name)}</div>
       </div>
       <div class="lib-item-actions">
+        <button class="lib-btn-sm" data-action="start-profile-dialin" data-id="${p.id}" title="${t('profile_dialin_start')}">🎯</button>
         <button class="lib-btn-sm lib-btn-icon" data-action="edit-profile" data-id="${p.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
         <button class="lib-btn-sm del lib-btn-icon" data-action="delete-profile" data-id="${p.id}" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>

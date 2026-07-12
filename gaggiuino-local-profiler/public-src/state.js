@@ -67,6 +67,13 @@ export const S = {
     try { return JSON.parse(localStorage.getItem('glp_dialin_session') || 'null'); }
     catch { return null; }
   })(),
+  // Profile Dial-In (#313) — same client-only, localStorage-mirrored pattern
+  // as dialinSession, adapted for tuning a machine profile's phases (see
+  // profile-dialin-wizard.js) instead of a single grind number.
+  profileDialinSession: (() => {
+    try { return JSON.parse(localStorage.getItem('glp_profile_dialin_session') || 'null'); }
+    catch { return null; }
+  })(),
 };
 
 // ── Reactive pub/sub ──────────────────────────────────────────────────────

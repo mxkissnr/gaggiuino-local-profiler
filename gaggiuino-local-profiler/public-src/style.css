@@ -1445,6 +1445,11 @@
         .dw-summary-title { font-size:1.05rem; font-weight:700; color:var(--gray-100); }
         .dw-summary-reason { font-size:.85rem; color:var(--gray-400); }
         .dw-summary-best { display:flex; align-items:center; gap:10px; }
+        .pdw-profile-name { font-size:1rem; font-weight:700; color:var(--gray-100); text-align:center; padding:6px 0; }
+        .pdw-symptom-label { font-size:.75rem; color:var(--gray-500); font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
+        .pdw-symptom-row { display:flex; flex-wrap:wrap; gap:6px; }
+        .pdw-symptom-btn { background:var(--gray-800); border:1.5px solid var(--gray-700); border-radius:8px; color:var(--gray-300); font-size:.78rem; padding:6px 10px; cursor:pointer; }
+        .pdw-symptom-btn.active { background:var(--accent-color, #f59e0b); border-color:var(--accent-color, #f59e0b); color:#1c1917; font-weight:700; }
         .dialin-header-actions { display:flex; align-items:center; gap:8px; }
         .fw-header { display:flex; align-items:center; gap:10px; flex-shrink:0; }
         .fw-close-x { margin-left:auto; background:none; border:none; color:var(--gray-400); font-size:1.1rem; line-height:1; padding:6px; cursor:pointer; flex-shrink:0; }
