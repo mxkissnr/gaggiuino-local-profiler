@@ -1,3 +1,8 @@
+## [1.118.2] – 2026-07-12
+
+### Changed
+- **Flavor wheel: reverted to highlighting only a bean's own matched flavors, muting the rest — the full-poster-always-colored redesign from v1.118.0 wasn't actually what was wanted once seen live.** Only a bean's tasting notes (plus their ancestor categories) now render at full SCA/WCR color with a label and a glowing border; everything else is muted 35% toward the modal background, same behavior as before v1.118.0. Kept the two genuine improvements from the full-poster attempt: depth 2/3 labels still use ECharts' native `rotate:'radial'` placement (reads better than the old off-wedge leader-line overlay) and stay white-on-dark-outline for contrast — both now only apply to the handful of lit nodes instead of ~100 nodes, so there's no label-density problem to manage. `public-src/components/flavor-wheel.js`.
+
 ## [1.118.1] – 2026-07-12
 
 ### Fixed
