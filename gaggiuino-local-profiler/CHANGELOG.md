@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Changed
+- **Flavor wheel redesigned to match the real SCA/WCR poster: every segment always full-color and labeled, bean's own flavors highlighted via glow instead of dimming the rest.** Previously only a bean's matched ("lit") flavors were shown at full saturation with a label — everything else was darkened toward the modal background with no label at all, the opposite of the printed poster's look. `toSunburstData()` now always fills every segment with its real SCA/WCR hex color (`public-src/sca-flavor-colors.js`, unchanged); lit segments are called out instead via a thicker white border plus a matching glow (`itemStyle.shadowBlur/shadowColor`). Depth-1 (top category) labels are always shown; depth 2/3 switched from a custom SVG leader-label overlay with angular collision-avoidance (`public-src/flavor-wheel-labels.js`, removed — deleted along with its test) back to ECharts' native `rotate:'radial'` per-wedge labels, always shown, matching the poster's spoke-following outer-ring text. The overlay approach couldn't fit ~100 simultaneous horizontal labels around the wheel's circumference regardless of tuning (74 leaf labels alone need far more linear space than the ring provides); radial per-wedge placement sidesteps the problem entirely since each label only competes for space within its own wedge's angle, and the series' `minAngle`/`hideOverlap` gracefully drop only the labels on wedges genuinely too thin to hold legible text. `public-src/components/flavor-wheel.js`, `public-src/style.css`. Closes #311
+
 ## [1.117.0] – 2026-07-11
 
 ### Added
