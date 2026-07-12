@@ -11,6 +11,19 @@ export { matchFlavors, normalizeFlavor } from '../flavor-match.js';
 
 const WHEEL_ROOT_ID = '__flavor_wheel_root__'; // virtual root name (see SunburstSeries: {name, children: data})
 
+// A handful of real SCA/WCR colors are near-white (e.g. jasmine, papery —
+// the color evokes the ingredient) — a white divider border on those
+// wedges is nearly invisible against their own near-white fill, making
+// them look like they bleed into their neighbors. Use a darker, still
+// unobtrusive divider only for those, everything else keeps the normal
+// white poster-style border.
+function isNearWhite(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+  if (!m) return false;
+  const [r, g, b] = [m[1], m[2], m[3]].map(h => parseInt(h, 16));
+  return (r * 299 + g * 587 + b * 114) / 1000 > 235;
+}
+
 function toSunburstData(node, depth, lang) {
   const label = node[lang] || node.en;
   const lit   = node._lit;
@@ -43,7 +56,7 @@ function toSunburstData(node, depth, lang) {
     fontSize: (depth === 1 ? 11 : depth === 3 ? 9 : 10) + (lit ? 1 : 0),
     fontWeight: 'bold',
   };
-  const itemStyle = { color: fillColor, borderColor: '#fff', borderWidth: 1 };
+  const itemStyle = { color: fillColor, borderColor: isNearWhite(fillColor) ? '#71717a' : '#fff', borderWidth: 1 };
   if (lit) {
     // Bean's own flavors pop against the now fully-colored rest of the
     // wheel via a brighter/thicker border and a matching glow.
