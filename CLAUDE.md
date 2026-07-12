@@ -65,6 +65,10 @@ gh release create v<version> --title "v<version>" --notes "..."
 - **Regenerate dev-stats at every release, not just when they look stale.** Run whatever the current dev-stats script is (see `scripts/`) and re-check DOCS.md/DOCS.de.md/README.md against the actual feature set shipped in that release — stale stats and stale feature docs are a recurring failure mode here.
 - **Every commit involving Claude/an AI agent — including release/chore commits, not just feature commits — must carry a `Co-Authored-By:` trailer naming the SPECIFIC model, not a bare "Claude".** Format: `Co-Authored-By: Claude <model name> <noreply@anthropic.com>`, e.g. `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` or `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` — whichever model actually authored that commit. `DEVELOPMENT.md`'s model-breakdown table groups commits by this exact string, so a generic "Claude" silently pollutes the stats as an unidentifiable bucket. This has been silently skipped/genericized multiple times; every dispatch prompt (release agents included) must explicitly state which model string to use.
 
+## Gaggiuino project boundaries
+
+GLP is purely a client of the Gaggiuino machine's own WebSocket/REST API — never a firmware fork. No active firmware changes, no embedding/redistributing Gaggiuino's own code, JS bundles or other assets in the GLP repo (not even for research — throwaway downloads belong in the scratchpad, never in the repo). Gaggiuino's firmware is CC-BY-NC 4.0; GLP itself stays GPLv3 and non-commercial. Use "Gaggiuino" as a name/mark only descriptively ("for Gaggiuino machines"), never implying official affiliation. Goal: never get in the way of or harm the Gaggiuino developers — when in doubt, build more conservatively and ask Max rather than deciding unilaterally.
+
 ## Repo structure
 
 ```

@@ -11,63 +11,58 @@ export { matchFlavors, normalizeFlavor } from '../flavor-match.js';
 
 const WHEEL_ROOT_ID = '__flavor_wheel_root__'; // virtual root name (see SunburstSeries: {name, children: data})
 
-// A handful of real SCA/WCR colors are near-white (e.g. jasmine, papery —
-// the color evokes the ingredient) — a white divider border on those
-// wedges is nearly invisible against their own near-white fill, making
-// them look like they bleed into their neighbors. Use a darker, still
-// unobtrusive divider only for those, everything else keeps the normal
-// white poster-style border.
-function isNearWhite(hex) {
-  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
-  if (!m) return false;
-  const [r, g, b] = [m[1], m[2], m[3]].map(h => parseInt(h, 16));
-  return (r * 299 + g * 587 + b * 114) / 1000 > 235;
+// Modal background the muted/unmatched fills blend toward — read once per
+// render from the actual modal box so it tracks the active dark/light theme
+// instead of a hardcoded guess.
+function rgbStringToHex(rgbStr, fallback) {
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgbStr || '');
+  if (!m) return fallback;
+  const hex = n => Number(n).toString(16).padStart(2, '0');
+  return `#${hex(m[1])}${hex(m[2])}${hex(m[3])}`;
 }
 
-function toSunburstData(node, depth, lang) {
+function resolveModalBgHex(container) {
+  const modalBox = container?.closest?.('.flavor-wheel-modal');
+  const bg = modalBox ? getComputedStyle(modalBox).backgroundColor : null;
+  return rgbStringToHex(bg, '#18181b');
+}
+
+// Alpha-blends `hex` toward `bgHex` by `amount` (0 = unchanged, 1 = fully bg).
+function muteHex(hex, bgHex, amount) {
+  const c = h => /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h || '') || [];
+  const [, r1, g1, b1] = c(hex);
+  const [, r2, g2, b2] = c(bgHex);
+  if (!r1 || !r2) return hex;
+  const mix = (a, b) => Math.round(parseInt(a, 16) * (1 - amount) + parseInt(b, 16) * amount).toString(16).padStart(2, '0');
+  return `#${mix(r1, r2)}${mix(g1, g2)}${mix(b1, b2)}`;
+}
+
+function toSunburstData(node, depth, lang, bgHex) {
   const label = node[lang] || node.en;
   const lit   = node._lit;
   const realColor = colorForNode(node.id);
-  // The full wheel always renders at full saturation, matching the real
-  // SCA/WCR poster — every segment is shown in its true category color, not
-  // just the bean's own matched flavors. Lit (bean-matched) segments are
-  // called out instead via a thicker, brighter border plus a glow
-  // (shadowBlur/shadowColor) rather than by dimming everything else.
-  const fillColor = realColor;
-  // Every depth's native in-wedge label is always shown now (matching the
-  // poster's near-full label coverage) — depth 1 stays horizontal (see the
-  // `levels` config below), depth 2/3 use ECharts' native `rotate:'radial'`
-  // so each label sits directly on/against its own wedge along its spoke,
-  // exactly like the real SCA/WCR poster's outer rings. This replaces an
-  // earlier custom SVG leader-label overlay: at ~100 simultaneous labels a
-  // shared-circumference horizontal layout physically can't fit everyone
-  // (74 leaf labels alone need far more linear space than the ring's
-  // circumference provides, regardless of collision-avoidance tuning) —
-  // radial per-wedge placement sidesteps that since each label only
-  // competes for space within its own wedge's angle, and the series-level
-  // `minAngle`/`hideOverlap` below gracefully drops labels on wedges too
-  // thin to fit legibly instead of jamming them in unreadable.
+  // Only the bean's own matched flavors (plus their ancestor categories,
+  // via markLit) render at full poster saturation — everything else is
+  // muted toward the modal background so the handful of segments that
+  // actually matter for this bean stand out, instead of competing for
+  // attention with ~100 unrelated ones.
+  const fillColor = lit ? realColor : muteHex(realColor, bgHex, 0.35);
+  // Only lit nodes get a label at all — depth 2/3 use ECharts' native
+  // `rotate:'radial'` (see the `levels` config below) so each label sits
+  // directly on/against its own wedge along its spoke, matching the real
+  // SCA/WCR poster's outer rings; since only a handful of nodes are ever
+  // lit at once there's no density problem the way there was when every
+  // segment was labeled.
   const labelCfg = {
-    show: true,
-    // All labels are white now (mixed black/white per-wedge contrast text
-    // read as visually inconsistent) — a dark text outline keeps it legible
-    // even on the wheel's few near-white fills (jasmine, papery) instead of
-    // needing per-wedge black/white switching.
+    show: lit,
     color: '#fff',
     textBorderColor: 'rgba(0,0,0,.65)',
     textBorderWidth: 2,
-    fontSize: (depth === 1 ? 11 : depth === 3 ? 9 : 10) + (lit ? 1 : 0),
+    fontSize: (depth === 1 ? 11 : depth === 3 ? 9 : 10) + 1,
     fontWeight: 'bold',
   };
-  const itemStyle = { color: fillColor, borderColor: isNearWhite(fillColor) ? '#71717a' : '#fff', borderWidth: 1 };
-  if (lit) {
-    // Bean's own flavors pop against the now fully-colored rest of the
-    // wheel via a brighter/thicker border and a matching glow.
-    itemStyle.borderColor = '#fff';
-    itemStyle.borderWidth = 3;
-    itemStyle.shadowBlur = 12;
-    itemStyle.shadowColor = realColor;
-  }
+  const itemStyle = { color: fillColor, borderColor: lit ? '#fff' : '#111113', borderWidth: lit ? 3 : 1 };
+  if (lit) itemStyle.shadowBlur = 12, itemStyle.shadowColor = realColor;
   const entry = {
     id: node.id,
     name: label,
@@ -75,7 +70,7 @@ function toSunburstData(node, depth, lang) {
     label: labelCfg,
   };
   if (node.children?.length) {
-    entry.children = node.children.map(c => toSunburstData(c, depth + 1, lang));
+    entry.children = node.children.map(c => toSunburstData(c, depth + 1, lang, bgHex));
   } else {
     entry.value = 1;
   }
@@ -117,7 +112,8 @@ export function renderFlavorWheel(container, flavors, lang, breadcrumbEl) {
   if (typeof echarts === 'undefined') return false;
   const { matched } = matchFlavors(flavors);
   FLAVOR_WHEEL.forEach(cat => markLit(cat, matched));
-  const data = FLAVOR_WHEEL.map(cat => toSunburstData(cat, 1, lang));
+  const bgHex = resolveModalBgHex(container);
+  const data = FLAVOR_WHEEL.map(cat => toSunburstData(cat, 1, lang, bgHex));
 
   _lang = lang;
   _breadcrumbEl = breadcrumbEl || null;
@@ -134,12 +130,10 @@ export function renderFlavorWheel(container, flavors, lang, breadcrumbEl) {
       nodeClick: false,
       emphasis: { focus: 'ancestor' },
       itemStyle: { borderColor: '#111113', borderWidth: 1.5 },
-      // minAngle stays low (not ECharts' 8° default) since the outer ring
-      // alone averages ~4.86°/wedge across ~74 leaf descriptors — a higher
-      // value would silently hide most of them. hideOverlap still prunes
-      // whatever genuinely can't fit without colliding, poster-density or
-      // not.
-      label: { minAngle: 2.5, hideOverlap: true },
+      // Only lit nodes ever render a label (see toSunburstData), so there's
+      // no high-density label field to protect against here — hideOverlap
+      // still guards the rare case where two lit neighbors' labels collide.
+      label: { hideOverlap: true },
       levels: [
         // depth 0 is echarts' own synthetic wrapper node (created internally
         // from `series.name` + our 9-category array) — it has no data of its
