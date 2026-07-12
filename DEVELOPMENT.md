@@ -8,15 +8,15 @@ The GLP ecosystem (this app + 3 companion repos) has been in development since *
 
 | Repo | First commit | Last commit | Commits | Claude co-authored |
 |---|---|---|---|---|
-| gaggiuino-local-profiler | 2026-05-20 | 2026-07-12 | 454 | 359 (79%) |
-| glp-integration | 2026-05-22 | 2026-07-10 | 69 | 55 (80%) |
+| gaggiuino-local-profiler | 2026-05-20 | 2026-07-12 | 456 | 361 (79%) |
+| glp-integration | 2026-05-22 | 2026-07-12 | 71 | 56 (79%) |
 | glp-lovelace-card | 2026-05-24 | 2026-07-10 | 74 | 65 (88%) |
 | glp-order-card | 2026-05-25 | 2026-07-10 | 45 | 39 (87%) |
-| **Combined** | **2026-05-20** | **2026-07-12** | **642** | **518 (81%)** |
+| **Combined** | **2026-05-20** | **2026-07-12** | **646** | **521 (81%)** |
 
 ![Commits per repo](docs/dev-stats/commits-per-repo.png)
 
-Combined line changes (insertions + deletions across all commits): **227.541**, of which **172.602** landed in Claude-co-authored commits.
+Combined line changes (insertions + deletions across all commits): **228.673**, of which **173.734** landed in Claude-co-authored commits.
 
 Commits without a Claude co-author line are presumed human-only (manual fixes, merges, config tweaks) — not independently verified.
 
@@ -25,7 +25,7 @@ Commits without a Claude co-author line are presumed human-only (manual fixes, m
 | Model | Commits |
 |---|---|
 | Claude Sonnet 4.6 | 348 |
-| Claude Sonnet 5 | 80 |
+| Claude Sonnet 5 | 83 |
 | Claude Opus 4.8 | 47 |
 | Claude Fable 5 | 32 |
 | Claude | 11 |
@@ -38,7 +38,7 @@ The exact co-author string varies by era as model names changed over the project
 
 This is **not** measured token usage or an actual invoice. It multiplies changed lines (insertions + deletions) in Claude-co-authored commits by an assumed 25 tokens/line (covers the conversation and planning overhead around a diff, not just the diff bytes), then applies the price table in `scripts/dev-stats.pricing.json` — which ships with every price set to `null` until you fill in your own plan/API rates.
 
-**Estimated cost: ~$28.31** across 168.805 priced lines (+ 3.797 lines from unpriced models, excluded from this total).
+**Estimated cost: ~$28.44** across 169.933 priced lines (+ 3.801 lines from unpriced models, excluded from this total).
 
 ---
 *This file is generated. Do not hand-edit — re-run `node scripts/dev-stats.mjs` instead.*
