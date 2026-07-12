@@ -1,3 +1,8 @@
+## [1.119.2] – 2026-07-12
+
+### Security
+- **Three low-risk fixes from the Round 5 security+architecture audit.** (1) The `/api/restore` route's 50MB JSON body parser was registered before the auth middleware, so an unauthenticated caller could force a full parse of a large payload before being rejected with 401 — the two `express.json()` registrations in `server.js` now run after auth (the auth middleware only reads headers/path, never the body, so this is behavior-neutral for authenticated requests). (2) `lib/middleware/error.js` returned `err.message` verbatim to the client on every error including 5xx, which could leak internal details (paths, DB errors); 5xx responses now return a generic "Internal server error" while the real message still goes to the server log — 4xx messages (validation errors) are unchanged. (3) `CLAUDE.md`'s repo-structure section still described the frontend as single-file inline HTML, stale since the Vite (`public-src/`) migration — corrected to reflect `public-src/`/`public/`/`lib/`/`routes/`. `test/error-handler.test.js` (new) and `test/server-middleware-order.test.js` (new) cover both fixes directly. Closes #315
+
 ## [1.119.1] – 2026-07-12
 
 ### Added

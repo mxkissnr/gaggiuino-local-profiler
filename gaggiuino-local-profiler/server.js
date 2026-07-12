@@ -73,10 +73,6 @@ app.use((req, res, next) => {
     next();
 });
 
-// Restore needs a larger body limit — register BEFORE the global json middleware
-app.use('/api/restore', express.json({ limit: '50mb' }));
-app.use(express.json({ limit: '16kb' }));
-
 // Returns true only for requests originating from the HA Supervisor internal network.
 // The Supervisor proxies ingress traffic from 172.30.0.0/16; external LAN clients
 // arrive with their own IP and must not receive the same trust level.
@@ -115,6 +111,12 @@ app.use((req, res, next) => {
     if (req.glpAuthenticated) return next();
     res.status(401).json({ error: 'Unauthorized' });
 });
+
+// Body parsers run AFTER auth so an unauthenticated caller can't force a full
+// parse of a large payload (esp. /api/restore's 50mb limit) before being
+// rejected — the auth middleware above only reads headers/path, never body.
+app.use('/api/restore', express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '16kb' }));
 
 // ── Routes ────────────────────────────────────────────────────────────────
 app.use(require('./routes/shots'));

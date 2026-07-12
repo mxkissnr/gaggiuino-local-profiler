@@ -74,7 +74,10 @@ GLP is purely a client of the Gaggiuino machine's own WebSocket/REST API — nev
 ```
 gaggiuino-local-profiler/     ← HA app (main deliverable)
   server.js                   ← Node.js/Express backend
-  public/index.html           ← Single-file frontend (all CSS + JS inline)
+  routes/                     ← Express route handlers
+  lib/                        ← Backend services, repositories, helpers
+  public-src/                 ← Vite frontend source (views/, components/, i18n/, main.js)
+  public/                     ← Vite build output (generated via `npm run build`, not edited directly)
   config.yaml                 ← HA app manifest + version
   CHANGELOG.md
   DOCS.md                     ← English docs
