@@ -48,12 +48,20 @@ export function suggestProfileFromBean(bean) {
         name: 'Bloom',
         type: 'PRESSURE',
         target: { start: 0, end: 0, curve: 'INSTANT' },
-        stopConditions: { time: 5000 },
+        // pressureBelow makes this genuinely adaptive (stops once the puck's
+        // residual pressure has relaxed below 1.5 bar, matching real
+        // official "Adaptive" community profiles) — time: 5000 stays as a
+        // safety-net timeout, not the primary stop trigger.
+        stopConditions: { time: 5000, pressureBelow: 1.5 },
       },
       {
         name: 'Ramp',
         type: 'PRESSURE',
         target: { start: 0, end: rampPressure, curve: 'LINEAR', time: 4000 },
+        // restriction is the flow safety ceiling (channeling protection) on
+        // a PRESSURE phase — official Dark/Light Roast community profiles
+        // stage this same way: tighter ceiling for gentler/darker profiles.
+        restriction: gentle ? 2 : 3,
         stopConditions: { time: 4000 },
       },
       {

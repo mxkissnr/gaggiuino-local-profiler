@@ -340,7 +340,7 @@ export default {
     curve_ease_in_out:'Ease In/Out', curve_ease_in:'Ease In', curve_ease_out:'Ease Out',
     curve_linear:'Linear', curve_instant:'Sofort',
     profile_send_to_machine:'An Maschine senden',
-    profile_preview_label:'Vorschau', profile_preview_x_axis:'Zeit (s)', profile_preview_y_axis:'Druck / Fluss',
+    profile_preview_label_pressure:'Druck (bar)', profile_preview_label_flow:'Fluss (ml/s)', profile_preview_x_axis:'Zeit (s)', profile_preview_y_axis:'Druck / Fluss',
     // Guided Dial-In wizard (#310)
     dialin_wizard_start_btn:'Geführtes Einwählen starten',
     dialin_wizard_start_from_bean:'Geführtes Einwählen',

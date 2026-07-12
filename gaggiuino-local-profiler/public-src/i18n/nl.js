@@ -358,7 +358,7 @@ export default {
     curve_ease_in_out:'Ease In/Out', curve_ease_in:'Ease In', curve_ease_out:'Ease Out',
     curve_linear:'Lineair', curve_instant:'Direct',
     profile_send_to_machine:'Naar machine sturen',
-    profile_preview_label:'Voorbeeld', profile_preview_x_axis:'Tijd (s)', profile_preview_y_axis:'Druk / Flow',
+    profile_preview_label_pressure:'Druk (bar)', profile_preview_label_flow:'Flow (ml/s)', profile_preview_x_axis:'Tijd (s)', profile_preview_y_axis:'Druk / Flow',
     // Guided Dial-In wizard (#310)
     dialin_wizard_start_btn:'Geleide inregeling starten',
     dialin_wizard_start_from_bean:'Geleide inregeling',

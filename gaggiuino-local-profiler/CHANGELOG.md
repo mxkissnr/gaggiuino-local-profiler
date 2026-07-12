@@ -1,3 +1,11 @@
+## [1.118.1] – 2026-07-12
+
+### Fixed
+- **Profile editor preview chart: pressure→flow phase transitions no longer look like a value crash, plus a phase carry-over bug.** Two stacked issues in the live preview chart added with #307. (1) `renderProfilePreviewChart` plotted PRESSURE phases (bar) and FLOW phases (ml/s) as a single line on one Y-axis with no unit distinction — a transition like 7 bar → ~1.6 ml/s read as the value crashing to near-zero, when it's actually just a different physical unit. Now rendered as two separate datasets ("Druck (bar)" / "Fluss (ml/s)", with a legend), each null outside its own phase's time range so no false connecting line is drawn across the other unit's segment. (2) `_synthesizeSeries` defaulted a blank `target.start` to `0` unconditionally; it now carries over the previous phase's resolved `target.end` when both phases share the same type (PRESSURE/PRESSURE or FLOW/FLOW) — a phase-type change or the first phase still falls back to `0`, since there's no sensible carry-over across a unit change. `_synthesizeSeries` is now exported for testing. `public-src/views/library-profile-editor.js`, `public-src/i18n/*.js` (all 6), `test/library-profile-editor.test.js` (new). Closes #312
+
+### Changed
+- **`profile-suggestion.js`: two data-quality gaps closed against real official Gaggiuino community profiles**, found while auditing the official community profile set (Adaptive Dark/Light Roast, Blooming Espresso, and others). Max's fixed 4-phase skeleton (Preinfusion → Bloom → Ramp → Decline Flow) is unchanged — only two parameters real community profiles consistently set were added: the Bloom phase now stops on `pressureBelow: 1.5` (residual puck pressure relaxed) in addition to the existing `time: 5000` safety-net timeout, making it genuinely adaptive as its name already implied; the Ramp phase now sets `restriction: gentle ? 2 : 3` — the flow safety ceiling (channeling protection) on a PRESSURE phase, staged the same way official Dark/Light Roast community profiles stage it (tighter ceiling for gentler/darker-roast profiles), reusing the existing `gentle` (decaf/natural) branch. `public-src/profile-suggestion.js`, `test/profile-suggestion.test.js`. Closes #312
+
 ## [1.118.0] – 2026-07-12
 
 ### Changed

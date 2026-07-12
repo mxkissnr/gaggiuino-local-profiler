@@ -61,4 +61,16 @@ describe('suggestProfileFromBean', () => {
     expect(withRatio.globalStopConditions.weight).toBeCloseTo(18 * 2.2, 5);
     expect(withoutRatio.globalStopConditions.weight).toBe(18 * 2);
   });
+
+  it('Bloom phase is adaptive: stops on pressureBelow 1.5 bar in addition to the 5s safety-net timeout', () => {
+    const p = suggestProfileFromBean({ name: 'Washed Ethiopia' });
+    expect(findPhase(p, 'Bloom').stopConditions).toEqual({ time: 5000, pressureBelow: 1.5 });
+  });
+
+  it('Ramp phase gets a channeling-protection restriction, tighter for gentle (decaf/natural) beans', () => {
+    const decaf = suggestProfileFromBean({ name: 'Sertao', decaf: true });
+    const other = suggestProfileFromBean({ name: 'Standard Washed' });
+    expect(findPhase(decaf, 'Ramp').restriction).toBe(2);
+    expect(findPhase(other, 'Ramp').restriction).toBe(3);
+  });
 });

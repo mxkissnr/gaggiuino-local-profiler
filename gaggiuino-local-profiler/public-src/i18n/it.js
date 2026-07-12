@@ -358,7 +358,7 @@ export default {
     curve_ease_in_out:'Ease In/Out', curve_ease_in:'Ease In', curve_ease_out:'Ease Out',
     curve_linear:'Lineare', curve_instant:'Istantaneo',
     profile_send_to_machine:'Invia alla macchina',
-    profile_preview_label:'Anteprima', profile_preview_x_axis:'Tempo (s)', profile_preview_y_axis:'Pressione / Flusso',
+    profile_preview_label_pressure:'Pressione (bar)', profile_preview_label_flow:'Flusso (ml/s)', profile_preview_x_axis:'Tempo (s)', profile_preview_y_axis:'Pressione / Flusso',
     // Guided Dial-In wizard (#310)
     dialin_wizard_start_btn:'Avvia calibrazione guidata',
     dialin_wizard_start_from_bean:'Calibrazione guidata',

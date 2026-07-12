@@ -267,13 +267,21 @@ function _curveInterpolate(curve, frac) {
   }
 }
 
-function _synthesizeSeries(phases) {
+// Exported for testing — pure, no DOM.
+export function _synthesizeSeries(phases) {
   const points = [];
   let tMs = 0;
+  let prevType = null;
+  let prevEnd  = null;
   for (const p of phases) {
     if (p.skip) continue;
-    const target   = p.target || {};
-    const start    = target.start ?? 0;
+    const target = p.target || {};
+    // A blank target.start should carry over the previous phase's resolved
+    // end value when both phases share the same type (PRESSURE/PRESSURE or
+    // FLOW/FLOW) — otherwise a phase-type change or the first phase has no
+    // sensible carry-over and falls back to 0, as before.
+    const carryOver = prevType !== null && prevType === p.type ? prevEnd : 0;
+    const start    = target.start ?? carryOver;
     const end      = target.end ?? start;
     const duration = target.time || (p.stopConditions?.time) || 1000;
     const steps    = Math.max(2, Math.round(duration / 250));
@@ -283,6 +291,8 @@ function _synthesizeSeries(phases) {
       points.push({ x: (tMs + frac * duration) / 1000, y: value, type: p.type });
     }
     tMs += duration;
+    prevType = p.type;
+    prevEnd  = end;
   }
   return points;
 }
@@ -298,24 +308,52 @@ export function renderProfilePreviewChart() {
   const series = _synthesizeSeries(phases);
   if (!series.length) return;
 
+  // PRESSURE (bar) and FLOW (ml/s) are different physical units — plotting
+  // them as one line made a phase-type transition (e.g. 7 bar → ~1.6 ml/s)
+  // look like a value "crash" even though nothing is wrong. Split into two
+  // datasets with distinct colors/legend labels, using null for the other
+  // dataset's x-range (with spanGaps off) so no false connecting line is
+  // drawn across a different-unit phase — the unit change reads as a break,
+  // not a fault. MANUAL-type points render on the flow line (closest
+  // existing visual bucket; MANUAL is rare and unitless here).
+  const pressurePoints = series.map(pt => ({ x: pt.x, y: pt.type === 'PRESSURE' ? pt.y : null }));
+  const flowPoints     = series.map(pt => ({ x: pt.x, y: pt.type !== 'PRESSURE' ? pt.y : null }));
+
   S.profilePreviewChart = new Chart(ctx, {
     type: 'line',
     data: {
-      datasets: [{
-        label: t('profile_preview_label'),
-        data: series.map(pt => ({ x: pt.x, y: pt.y })),
-        borderColor: '#3498db',
-        backgroundColor: 'transparent',
-        borderWidth: 2,
-        tension: 0.15,
-        pointStyle: false,
-        stepped: false,
-      }],
+      datasets: [
+        {
+          label: t('profile_preview_label_pressure'),
+          data: pressurePoints,
+          borderColor: '#3498db',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          tension: 0.15,
+          pointStyle: false,
+          stepped: false,
+          spanGaps: false,
+        },
+        {
+          label: t('profile_preview_label_flow'),
+          data: flowPoints,
+          borderColor: '#e67e22',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          tension: 0.15,
+          pointStyle: false,
+          stepped: false,
+          spanGaps: false,
+        },
+      ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
+      plugins: {
+        legend: { display: true },
+      },
       scales: {
         x: { type: 'linear', title: { display: true, text: t('profile_preview_x_axis') } },
         y: { title: { display: true, text: t('profile_preview_y_axis') } },
