@@ -157,7 +157,9 @@ function _phaseRowHtml(i, p = {}) {
         <select class="pp-target-curve">${CURVES.map(c => `<option value="${c}" ${c === curve ? 'selected' : ''}>${t('curve_' + c.toLowerCase())}</option>`).join('')}</select>
       </div>
       <div class="pp-field"><label>${t('profile_phase_target_time')}</label><input type="number" step="1" class="pp-target-time" value="${target.time ?? ''}"></div>
+      <div class="pp-field"><label>${t('profile_phase_target_volume')}</label><input type="number" step="0.1" class="pp-target-volume" value="${target.volume ?? ''}"></div>
       <div class="pp-field"><label>${t('profile_phase_restriction')}</label><input type="number" step="0.1" class="pp-restriction" value="${p.restriction ?? ''}"></div>
+      <div class="pp-field"><label>${t('profile_phase_water_temperature')}</label><input type="number" step="0.1" class="pp-water-temp" value="${p.waterTemperature ?? ''}"></div>
       <div class="pp-field"><label>${t('profile_stop_time')}</label><input type="number" step="1" class="pp-stop-time" value="${stop.time ?? ''}"></div>
       <div class="pp-field"><label>${t('profile_stop_pressure_above')}</label><input type="number" step="0.1" class="pp-stop-pressure-above" value="${stop.pressureAbove ?? ''}"></div>
       <div class="pp-field"><label>${t('profile_stop_pressure_below')}</label><input type="number" step="0.1" class="pp-stop-pressure-below" value="${stop.pressureBelow ?? ''}"></div>
@@ -192,17 +194,32 @@ export function removeProfilePhase(i) {
   renderProfilePreviewChart();
 }
 
-function _collectPhases() {
+// target.volume and phase-level waterTemperature are z.number().optional()
+// in phaseSchema — unlike the required-with-0-fallback fields above, an
+// empty input here must round-trip to "key absent" (JSON.stringify drops
+// undefined values), not to 0, so a blank field truly means "not set".
+function _optionalNumber(row, selector) {
+  const raw = row.querySelector(selector)?.value;
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  const n = parseFloat(raw);
+  return Number.isNaN(n) ? undefined : n;
+}
+
+// Exported for testing — reads phase rows from the DOM (module-level
+// document global), no separate JS state kept in sync.
+export function _collectPhases() {
   return [...document.querySelectorAll('#profilePhaseList .pp-row')].map(row => ({
     name: row.querySelector('.pp-name')?.value.trim() || '',
     type: row.querySelector('.pp-type')?.value || 'FLOW',
     target: {
-      start: parseFloat(row.querySelector('.pp-target-start')?.value) || 0,
-      end:   parseFloat(row.querySelector('.pp-target-end')?.value) || 0,
-      curve: row.querySelector('.pp-target-curve')?.value || 'LINEAR',
-      time:  parseFloat(row.querySelector('.pp-target-time')?.value) || 0,
+      start:  parseFloat(row.querySelector('.pp-target-start')?.value) || 0,
+      end:    parseFloat(row.querySelector('.pp-target-end')?.value) || 0,
+      curve:  row.querySelector('.pp-target-curve')?.value || 'LINEAR',
+      time:   parseFloat(row.querySelector('.pp-target-time')?.value) || 0,
+      volume: _optionalNumber(row, '.pp-target-volume'),
     },
     restriction: parseFloat(row.querySelector('.pp-restriction')?.value) || 0,
+    waterTemperature: _optionalNumber(row, '.pp-water-temp'),
     stopConditions: {
       time:               parseFloat(row.querySelector('.pp-stop-time')?.value) || 0,
       pressureAbove:      parseFloat(row.querySelector('.pp-stop-pressure-above')?.value) || 0,

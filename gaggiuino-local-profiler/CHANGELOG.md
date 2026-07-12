@@ -1,3 +1,8 @@
+## [1.119.1] – 2026-07-12
+
+### Added
+- **Profile editor: two missing protocol fields made editable — `target.volume` and phase-level `waterTemperature`.** Both were already fully supported by the protocol/backend (`transitionSchema`'s `volume`, `phaseSchema`'s `waterTemperature`) but had no UI. `target.volume` (ml) now sits alongside the existing target duration field; phase `waterTemperature` (°C) sits alongside `restriction` as a phase-top-level override, separate from the profile-wide water temperature. Both are optional numeric fields — a blank input round-trips to the field being absent (`undefined`), not `0`, matching their `z.number().optional()` schema. Intentionally not plotted on the preview chart: a volume-based stop can't be meaningfully drawn on the time axis without a known flow rate. `public-src/views/library-profile-editor.js`, `public-src/i18n/*.js` (all 6), `test/library-profile-editor.test.js`. Closes #314
+
 ## [1.119.0] – 2026-07-12
 
 ### Added
