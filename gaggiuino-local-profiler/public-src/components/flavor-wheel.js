@@ -1,5 +1,5 @@
 import { FLAVOR_WHEEL } from '../flavor-data.js';
-import { matchFlavors, markLit, colorForNode, contrastTextColor, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../flavor-match.js';
+import { matchFlavors, markLit, colorForNode, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../flavor-match.js';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
@@ -49,10 +49,13 @@ function toSunburstData(node, depth, lang) {
   // thin to fit legibly instead of jamming them in unreadable.
   const labelCfg = {
     show: true,
-    // Lit labels stay pure white regardless of their wedge's own contrast
-    // color, one size up, so they read as a deliberate highlight rather
-    // than blending into the now fully-colored rest of the wheel.
-    color: lit ? '#fff' : contrastTextColor(realColor),
+    // All labels are white now (mixed black/white per-wedge contrast text
+    // read as visually inconsistent) — a dark text outline keeps it legible
+    // even on the wheel's few near-white fills (jasmine, papery) instead of
+    // needing per-wedge black/white switching.
+    color: '#fff',
+    textBorderColor: 'rgba(0,0,0,.65)',
+    textBorderWidth: 2,
     fontSize: (depth === 1 ? 11 : depth === 3 ? 9 : 10) + (lit ? 1 : 0),
     fontWeight: 'bold',
   };
