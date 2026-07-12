@@ -1,3 +1,8 @@
+## [1.120.0] – 2026-07-12
+
+### Added
+- **`origins[]` (multi-origin blend data) exposed on `GET /api/orders/active-beans`.** Since v1.99.0, beans support blend origins via `bean.origins[]` (`{code, percent?}`), but `LibraryService.getActiveBeans()` only ever returned the derived single-string `origin`, so the Order Card had no way to render a blend's multiple countries. The mapped bean object now also carries `origins` — the bean's own `origins[]` when set, otherwise a single-entry array built from the legacy `origin` string, or `[]` if neither is set. The existing `origin` field is unchanged, so older Order Card versions keep working exactly as before. `lib/services/LibraryService.js`, `test/db-routes.test.js`. Closes #316
+
 ## [1.119.2] – 2026-07-12
 
 ### Security

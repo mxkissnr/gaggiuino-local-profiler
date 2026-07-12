@@ -67,7 +67,7 @@ Install via HACS: [github.com/mxkissnr/glp-lovelace-card](https://github.com/mxk
 
 A customer-facing Lovelace card for the order system. Customers browse the drink menu, place an order and track its status in real time. When the barista marks an order as done, the card shows the shot summary with a pressure sparkline. Requires `enable_orders: true` in the app configuration.
 
-Bean variants come from the coffee library via `/api/orders/active-beans`: only beans that are actually still in stock are offered (remaining = bag stock minus the doses logged in shot annotations), and each bean carries its customer-facing description (taste notes, origin, processing) so the card can show what characterizes the coffee. A bean can also be manually excluded from the picker without deleting it or touching its stock — see the eye/eye-off toggle in the Coffee Library below.
+Bean variants come from the coffee library via `/api/orders/active-beans`: only beans that are actually still in stock are offered (remaining = bag stock minus the doses logged in shot annotations), and each bean carries its customer-facing description (taste notes, origin, processing) so the card can show what characterizes the coffee. Blend beans carry their full multi-origin data as `origins[]` (`{code, percent?}`) alongside the legacy single-string `origin`, so a Card version that supports it can render all of a blend's countries. A bean can also be manually excluded from the picker without deleting it or touching its stock — see the eye/eye-off toggle in the Coffee Library below.
 
 Install via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/mxkissnr/glp-order-card)
 

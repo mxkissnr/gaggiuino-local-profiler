@@ -51,6 +51,12 @@ class LibraryService {
                 // customer-facing description data for the order card
                 notes: bean.notes || null, origin: bean.origin || null, process: bean.process || null,
                 variety: bean.variety || null, species: bean.species || null,
+                // full multi-origin blend data (falls back to the single `origin`
+                // string for beans without origins[]); `origin` above is kept for
+                // back-compat with older Order Card versions that don't know it
+                origins: Array.isArray(bean.origins) && bean.origins.length
+                    ? bean.origins
+                    : (bean.origin ? [{ code: bean.origin }] : []),
             }));
     }
 

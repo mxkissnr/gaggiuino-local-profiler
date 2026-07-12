@@ -198,6 +198,24 @@ describe('GET /api/orders/active-beans', () => {
         });
     });
 
+    it('exposes origins[] for a blend bean, alongside the legacy single origin', async () => {
+        saveLibrary({ beans: [
+            { id: 1, name: 'Blend Especial', stock_g: 500,
+              origin: 'Brasilien', origins: [{ code: 'BR', percent: 60 }, { code: 'CO', percent: 40 }] },
+        ], grinders: [], recipes: [] });
+        const [bean] = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
+        expect(bean.origin).toBe('Brasilien');
+        expect(bean.origins).toEqual([{ code: 'BR', percent: 60 }, { code: 'CO', percent: 40 }]);
+    });
+
+    it('falls back origins[] to a single-entry array built from the legacy origin string', async () => {
+        saveLibrary({ beans: [
+            { id: 1, name: 'El Cubanito', stock_g: 500, origin: 'Kuba' },
+        ], grinders: [], recipes: [] });
+        const [bean] = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
+        expect(bean.origins).toEqual([{ code: 'Kuba' }]);
+    });
+
     it('keeps excluding beans without stock tracking', async () => {
         saveLibrary({ beans: [{ id: 1, name: 'Untracked' }], grinders: [], recipes: [] });
         const beans = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
