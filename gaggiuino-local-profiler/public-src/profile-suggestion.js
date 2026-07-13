@@ -3,9 +3,24 @@
 // Max's own "Sertao Decaf" profile (score-98 shots, already running on his
 // machine) has a structure he explicitly wants reused as-is for every bean:
 // adaptive preinfusion (stops on time/pressure/volume, whichever comes
-// first), a bloom pause, a linear pressure ramp, then a declining-flow
-// finish. Only the *parameters* — temperature, target pressure, preinfusion
+// first), a bloom pause, a linear pressure ramp, then a flow-target finish
+// phase (named "Decline Flow" for the pressure trend it produces — see
+// below). Only the *parameters* — temperature, target pressure, preinfusion
 // duration, ratio — vary per bean, never the 4-phase skeleton itself.
+//
+// #328: every phase below is checked field-by-field against Max's actual
+// exported "Sertão Decaf.json" (gentle/decaf reference) and "Adaptive.json"
+// (non-gentle reference) profiles, after #323's "fix" to the Decline Flow
+// phase turned out to be a regression — it assumed a literal high-to-low
+// flow *target* makes a "declining finish", but both of Max's real,
+// hardware-verified profiles have `target.start: 0` on that phase too. The
+// "Decline" in the name refers to the shot's PRESSURE trend: once the
+// preceding PRESSURE-type Ramp phase hits its peak, this FLOW-type phase
+// takes over and lets pressure fall naturally (puck resistance drops
+// through the shot) while commanding a modest, RISING flow-target curve —
+// not a declining one. `restriction` on this phase is a pressure ceiling
+// (matches the Ramp phase's own peak pressure in both real profiles) so the
+// transition between phases has no step.
 //
 // WHY the decaf/natural branch differs: decaffeination and natural
 // (dry-processed) beans both leave a more porous, uneven puck than a washed
@@ -45,35 +60,36 @@ export function suggestProfileFromBean(bean) {
         },
       },
       {
+        // #328: real profiles use a plain fixed-time bloom, no pressure-based
+        // early stop — reverted the speculative pressureBelow addition.
         name: 'Bloom',
         type: 'PRESSURE',
         target: { start: 0, end: 0, curve: 'INSTANT' },
-        // pressureBelow makes this genuinely adaptive (stops once the puck's
-        // residual pressure has relaxed below 1.5 bar, matching real
-        // official "Adaptive" community profiles) — time: 5000 stays as a
-        // safety-net timeout, not the primary stop trigger.
-        stopConditions: { time: 5000, pressureBelow: 1.5 },
+        stopConditions: { time: 5000 },
       },
       {
         name: 'Ramp',
         type: 'PRESSURE',
-        target: { start: 0, end: rampPressure, curve: 'LINEAR', time: 4000 },
-        // restriction is the flow safety ceiling (channeling protection) on
-        // a PRESSURE phase — official Dark/Light Roast community profiles
-        // stage this same way: tighter ceiling for gentler/darker profiles.
-        restriction: gentle ? 2 : 3,
-        stopConditions: { time: 4000 },
+        // #328: ramp duration is 4s in Sertão Decaf (gentle) and 5s in
+        // Adaptive (non-gentle) — branching it matches both real profiles
+        // exactly, same pattern as the existing rampPressure/waterTemperature
+        // split. Neither real profile puts a flow-ceiling restriction on
+        // this phase (#323 had speculatively added one) — reverted.
+        target: { start: 0, end: rampPressure, curve: 'LINEAR', time: gentle ? 4000 : 5000 },
+        stopConditions: { time: gentle ? 4000 : 5000 },
       },
       {
         name: 'Decline Flow',
         type: 'FLOW',
-        // start at the Ramp phase's own flow ceiling (its restriction value)
-        // and taper to 1.6 ml/s: a declining finish counteracts falling puck
-        // resistance in the shot's second half, and starting from the
-        // ramp's ceiling avoids a flow step between phases — #323, a
-        // missing target.start here defaulted to 0, making this render/run
-        // as an ascending 0 -> 1.6 ml/s ramp instead of a decline.
-        target: { start: gentle ? 2.0 : 3.0, end: 1.6, curve: 'LINEAR', time: 25000 },
+        // #328: target.start reverted to 0 (matches both real profiles —
+        // see the file-level comment on why "Decline" refers to the
+        // pressure trend, not this phase's own flow-target curve).
+        // target.end is 1.6 in Sertão Decaf (gentle) and 2.5 in Adaptive
+        // (non-gentle) — branched the same way as rampPressure.
+        target: { start: 0, end: gentle ? 1.6 : 2.5, curve: 'LINEAR', time: 25000 },
+        // restriction is a pressure ceiling on a FLOW phase — matches the
+        // Ramp phase's own peak pressure in both real profiles, avoiding a
+        // pressure step between phases.
         restriction: rampPressure,
       },
     ],

@@ -624,8 +624,9 @@
         @media (max-width: 640px) { .lib-form-grid { grid-template-columns: 1fr; } }
         .lib-form-field { display: flex; flex-direction: column; gap: 4px; }
         .lib-form-field label { font-size: .7rem; color: var(--gray-400); }
-        .lib-form-field input { background: var(--gray-900); border: 1px solid var(--gray-700); border-radius: 6px; color: var(--gray-200); font-size: .8rem; padding: 6px 8px; }
-        .lib-form-field input:focus { outline: none; border-color: var(--gray-500); }
+        .lib-form-field input, .lib-form-field select { background: var(--gray-900); border: 1px solid var(--gray-700); border-radius: 6px; color: var(--gray-200); font-size: .8rem; padding: 6px 8px; font-family: 'Figtree', sans-serif; }
+        .lib-form-field select { cursor: pointer; }
+        .lib-form-field input:focus, .lib-form-field select:focus { outline: none; border-color: var(--gray-500); }
         .lib-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
         .lib-save-btn { background: linear-gradient(135deg, var(--accent-from), var(--accent-to)); border: none; border-radius: 6px; color: var(--accent-text); font-size: .78rem; font-weight: 600; padding: 6px 14px; cursor: pointer; transition: filter .15s; }
         .lib-save-btn:hover { filter: brightness(1.1); }

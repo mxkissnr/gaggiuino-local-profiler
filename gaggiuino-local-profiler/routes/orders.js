@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 
 const {
-    loadOrders, loadAllOrders, saveOrders, loadMenu, saveMenu,
+    loadOrders, loadAllOrders, saveOrders, deleteOrder, loadMenu, saveMenu,
     loadOrdersSettings, saveOrdersSettings,
     loadNotifyMapping, saveNotifyMapping,
     isOrdersEnabled, loadOptions, loadLibrary,
@@ -415,17 +415,22 @@ router.post('/api/orders/:id/decline', (req, res) => {
 // ── History delete ────────────────────────────────────────────────────────
 
 router.delete('/api/orders/history', (req, res) => {
-    const orders = loadOrders().filter(o => !['done', 'declined'].includes(o.status));
-    saveOrders(orders);
+    // #327: must clear done/declined orders regardless of age — loadOrders()
+    // (findActive()) only sees done orders within the 7-day TTL window, so
+    // using it here would leave older done orders permanently stuck (never
+    // reachable by a future clear once saveOrders() stopped deleting them
+    // as a side effect of every unrelated mutation).
+    for (const o of loadAllOrders()) {
+        if (['done', 'declined'].includes(o.status)) deleteOrder(o.id);
+    }
     res.json({ ok: true });
 });
 
 router.delete('/api/orders/:id', (req, res) => {
-    const orders = loadOrders();
-    const order  = orders.find(o => o.id === req.params.id);
+    const order = loadAllOrders().find(o => o.id === req.params.id);
     if (!order) return res.status(404).json({ error: 'not found' });
     if (!['done', 'declined'].includes(order.status)) return res.status(400).json({ error: 'can only delete completed orders' });
-    saveOrders(orders.filter(o => o.id !== req.params.id));
+    deleteOrder(order.id);
     res.json({ ok: true });
 });
 

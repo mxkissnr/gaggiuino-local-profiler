@@ -50,14 +50,13 @@ function isOrdersEnabled() { return !!loadOptions().enable_orders; }
 // ── Order shims ───────────────────────────────────────────────────────────────
 function loadOrders()          { return orderRepo.findActive(); }
 function loadAllOrders()       { return orderRepo.findAll(); }
-function saveOrders(orders) {
-    const db = getDb();
-    db.transaction(() => {
-        db.prepare('DELETE FROM orders').run();
-        const ins = db.prepare('INSERT INTO orders (id, data) VALUES (?,?)');
-        for (const o of orders) ins.run(o.id, JSON.stringify(o));
-    })();
-}
+// #327: this used to DELETE FROM orders then reinsert only `orders` — every
+// call site passes an array derived from loadOrders() (the 7-day-filtered
+// active view), so that wiped any done/declined order older than 7 days
+// from the DB on every single order mutation. saveAll() is upsert-only
+// (INSERT OR REPLACE) and never deletes rows absent from the array.
+function saveOrders(orders)    { orderRepo.saveAll(orders); }
+function deleteOrder(id)       { orderRepo.delete(id); }
 function loadMenu()            { return orderRepo.getMenu(); }
 function saveMenu(m)           { orderRepo.saveMenu(m); }
 function loadOrdersSettings()  { return orderRepo.getSettings(); }
@@ -85,7 +84,7 @@ function saveImportSettings(s)     { importSettingsRepo.saveSettings(s); }
 
 module.exports = {
     loadOptions, getMachineUrl, getMachineBaseUrl, getSyncIntervalMs, isOrdersEnabled,
-    loadOrders, loadAllOrders, saveOrders, loadMenu, saveMenu,
+    loadOrders, loadAllOrders, saveOrders, deleteOrder, loadMenu, saveMenu,
     loadOrdersSettings, saveOrdersSettings,
     loadNotifyMapping, saveNotifyMapping,
     loadLibrary, saveLibrary,

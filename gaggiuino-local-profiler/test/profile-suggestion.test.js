@@ -67,32 +67,42 @@ describe('suggestProfileFromBean', () => {
     expect(unparseable.globalStopConditions.weight).toBe(18 * 2);
   });
 
-  // #323: a missing target.start on the Decline Flow phase defaulted to 0,
-  // making it render/run as an ASCENDING 0 -> 1.6 ml/s ramp instead of a
-  // declining finish. start must now be a real flow value above end, taken
-  // from the Ramp phase's own flow ceiling (its restriction).
-  it('Decline Flow phase actually declines: target.start is above target.end, matching the Ramp restriction', () => {
+  // #328: #323's "fix" (target.start = Ramp restriction, declining numerically)
+  // turned out to be a regression — Max's real "Sertão Decaf" and "Adaptive"
+  // profiles both have target.start: 0 on this phase. Reverted; target.end
+  // now branches 1.6 (gentle, matches Sertão Decaf) / 2.5 (else, matches
+  // Adaptive), and restriction (a pressure ceiling on this FLOW phase) still
+  // matches the Ramp phase's own peak pressure, per both real profiles.
+  it('Decline Flow phase target.start is 0, target.end matches the real reference profiles', () => {
     const decaf = suggestProfileFromBean({ name: 'Sertao', decaf: true });
     const other = suggestProfileFromBean({ name: 'Standard Washed' });
     const decafDecline = findPhase(decaf, 'Decline Flow');
     const otherDecline = findPhase(other, 'Decline Flow');
-    expect(decafDecline.target.start).toBeGreaterThan(decafDecline.target.end);
-    expect(otherDecline.target.start).toBeGreaterThan(otherDecline.target.end);
-    expect(decafDecline.target.start).toBe(findPhase(decaf, 'Ramp').restriction);
-    expect(otherDecline.target.start).toBe(findPhase(other, 'Ramp').restriction);
+    expect(decafDecline.target.start).toBe(0);
+    expect(otherDecline.target.start).toBe(0);
     expect(decafDecline.target.end).toBe(1.6);
-    expect(otherDecline.target.end).toBe(1.6);
+    expect(otherDecline.target.end).toBe(2.5);
+    expect(decafDecline.restriction).toBe(findPhase(decaf, 'Ramp').target.end);
+    expect(otherDecline.restriction).toBe(findPhase(other, 'Ramp').target.end);
   });
 
-  it('Bloom phase is adaptive: stops on pressureBelow 1.5 bar in addition to the 5s safety-net timeout', () => {
+  // #328: reverted #323's speculative pressureBelow addition — neither real
+  // reference profile has an adaptive/pressure-triggered bloom stop.
+  it('Bloom phase is a plain fixed-time stop, no pressure trigger', () => {
     const p = suggestProfileFromBean({ name: 'Washed Ethiopia' });
-    expect(findPhase(p, 'Bloom').stopConditions).toEqual({ time: 5000, pressureBelow: 1.5 });
+    expect(findPhase(p, 'Bloom').stopConditions).toEqual({ time: 5000 });
   });
 
-  it('Ramp phase gets a channeling-protection restriction, tighter for gentle (decaf/natural) beans', () => {
+  // #328: reverted #323's speculative Ramp restriction — neither real
+  // reference profile has a flow ceiling on the Ramp phase. Ramp duration
+  // does genuinely differ between the two real profiles (4s gentle / 5s
+  // else), so that's branched instead.
+  it('Ramp phase has no flow-ceiling restriction; its duration matches the real reference profiles', () => {
     const decaf = suggestProfileFromBean({ name: 'Sertao', decaf: true });
     const other = suggestProfileFromBean({ name: 'Standard Washed' });
-    expect(findPhase(decaf, 'Ramp').restriction).toBe(2);
-    expect(findPhase(other, 'Ramp').restriction).toBe(3);
+    expect(findPhase(decaf, 'Ramp').restriction).toBeUndefined();
+    expect(findPhase(other, 'Ramp').restriction).toBeUndefined();
+    expect(findPhase(decaf, 'Ramp').target.time).toBe(4000);
+    expect(findPhase(other, 'Ramp').target.time).toBe(5000);
   });
 });

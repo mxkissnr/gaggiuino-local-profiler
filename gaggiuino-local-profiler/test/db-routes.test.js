@@ -150,6 +150,32 @@ describe('GET /api/orders/stats', () => {
         expect(stats.customers).toHaveLength(1);
         expect(stats.customers[0]).toMatchObject({ name: 'Max', count: 2 });
     });
+
+    // #327: saveOrders() used to DELETE FROM orders and reinsert only its
+    // argument array — every route passed it loadOrders() (the 7-day-filtered
+    // active view), so any unrelated order mutation silently wiped done orders
+    // older than 7 days from the database entirely, not just from the active
+    // view. saveOrders() must now be upsert-only (never delete rows absent
+    // from its argument).
+    it('does not delete an old done order from the DB when an unrelated order is mutated', async () => {
+        const now     = Date.now();
+        const veryOld = now - 30 * 24 * 60 * 60 * 1000; // 30 days ago, outside findActive()'s 7-day window
+        saveOrders([
+            { id: 'old', item: 'Espresso', customer: 'Max', status: 'done', createdAt: veryOld, completedAt: veryOld },
+            { id: 'pending1', item: 'Cappuccino', customer: 'Anna', status: 'pending', createdAt: now },
+        ]);
+
+        // Mutate an unrelated, currently-active order — this is the operation
+        // that used to wipe 'old' out of the DB as a side effect.
+        const r = await fetch(`${baseUrl}/api/orders/pending1/accept`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eta: 5 }),
+        });
+        expect(r.status).toBe(200);
+
+        const stats = await (await fetch(`${baseUrl}/api/orders/stats`)).json();
+        expect(stats.total).toBe(1);
+        expect(stats.customers[0]).toMatchObject({ name: 'Max', count: 1 });
+    });
 });
 
 describe('orders-disabled guard', () => {
