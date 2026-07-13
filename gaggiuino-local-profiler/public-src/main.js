@@ -37,6 +37,7 @@ import { switchMode, goToShot } from './components/mode.js';
 import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggleTrash,
          trashShot, restoreShot, permanentDeleteShot,
          renderAnnotationPanel, renderStars, quickClone, saveAnnotation, scheduleAutoSave, updateDegassing, calcBeanAgeAtShot,
+         suggestGrindDoseForBean,
          uploadShotImage, removeShotImage, openShotPhotoLightbox,
          updateView, switchChartTab, updatePQChart,
          openChartFullscreen, closeChartFullscreen, switchFsTab,
@@ -408,6 +409,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const bean = S.coffeeLibrary.beans?.find(b => b.name === name);
       if (!bean) { if (hintEl) hintEl.style.display = 'none'; return; }
+
+      // Prefill grinder/grind setting/dose from this bean's own history
+      // (best scored combo, then known-good grind, then its last shot) —
+      // never the literal previous shot, which may have used a different bean.
+      const suggested = suggestGrindDoseForBean(name, S.coffeeLibrary, S.shots);
+      const grinderEl = document.getElementById('annGrinder');
+      const grindEl   = document.getElementById('annGrindSetting');
+      const doseEl    = document.getElementById('annDose');
+      if (suggested.grinder      && grinderEl) grinderEl.value = suggested.grinder;
+      if (suggested.grindSetting && grindEl)   grindEl.value   = suggested.grindSetting;
+      if (suggested.dose         && doseEl)    doseEl.value    = suggested.dose;
 
       // Find roast date from the active bag at shot time
       const shot   = S.primaryShotId ? S.shots?.find(s => s.id === S.primaryShotId) : null;

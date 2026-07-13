@@ -1,3 +1,8 @@
+## [1.122.0] – 2026-07-13
+
+### Changed
+- **Annotation panel now prefills grinder/grind setting/dose from the selected bean's own history, not the literal last shot.** Since beans get varied often, "↩ Clone last" and manual bean selection used to carry over whatever grinder/grind setting the chronologically previous shot happened to use — usually the wrong bean's settings. New `suggestGrindDoseForBean()` reuses the same bean-aware memory the Guided Dial-In wizard already maintains (best-scoring historical grinder+grind combo for the bean, falling back to `bean.knownGrindSettings`, falling back to that bean's own last shot), extended with a dose fallback from the bean's last shot since neither existing memory source tracks dose. Fires both on manual bean selection (`#annCoffee` change) and inside "Clone last"; drink type/recipe still come from the literal last shot since those aren't bean-specific. `public-src/views/shots/grind.js`, `public-src/views/shots/annotation.js`, `public-src/main.js`, `test/suggest-grind-dose.test.js` (new). Closes #332
+
 ## [1.121.3] – 2026-07-13
 
 ### Fixed

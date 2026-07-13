@@ -4,6 +4,7 @@ import { apiFetch }                       from '../../api.js';
 import { esc, germanToIso }              from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { calcBeanAgeAtShot, _roastDateFromLibrary } from './utils.js';
+import { suggestGrindDoseForBean } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
@@ -301,9 +302,14 @@ export function quickClone() {
   const ann        = prev.annotation || {};
   const currentShot = S.shots.find(s => s.id === S.primaryShotId);
   _renderBeanSelect(ann.coffee || null);
-  document.getElementById('annGrinder').value      = ann.grinder      || '';
-  document.getElementById('annGrindSetting').value = ann.grindSetting || '';
-  document.getElementById('annDose').value         = ann.dose         || '';
+  // Grinder/grind setting/dose come from this bean's own history, not
+  // blindly from prev — prev may have used a different bean entirely.
+  const suggested = ann.coffee
+    ? suggestGrindDoseForBean(ann.coffee, S.coffeeLibrary, S.shots)
+    : { grinder: '', grindSetting: '', dose: '' };
+  document.getElementById('annGrinder').value      = suggested.grinder      || ann.grinder      || '';
+  document.getElementById('annGrindSetting').value = suggested.grindSetting || ann.grindSetting || '';
+  document.getElementById('annDose').value         = suggested.dose         || ann.dose         || '';
   updateDegassing(_roastDateFromLibrary(ann.coffee, currentShot?.timestamp) || '');
   _renderDrinkPills(ann.drinkType || '');
   _renderMilkPills('');
