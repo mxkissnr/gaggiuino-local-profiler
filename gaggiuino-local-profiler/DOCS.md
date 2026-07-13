@@ -151,6 +151,8 @@ Two important limitations:
 
 ### Machine profile editor
 
+> **⚠ Experimental / work in progress:** the bean-based profile suggestion ("Profil aus Bohne", the 🎛 Create profile button) is usable but not finished — it's a starting point derived from one fixed 4-phase skeleton, not a guarantee of a good shot for every bean. Always review the generated phases (and the live preview chart) before sending a suggested profile to the machine.
+
 The **Profiles** tab in the Coffee Library lists the brew profiles currently stored on the machine (read via `GET /api/machine/profiles`), with edit and delete actions. "+ New profile" opens the profile editor blank; a **🎛 Create profile** button on each bean card opens it pre-filled with a suggestion derived from that bean.
 
 The editor covers a profile's name, water temperature, recipe (dose/yield/ratio) and its phases — each phase has a name, type (Flow/Pressure/Manual), a target (start/end/curve/time/volume), a flow/pressure restriction, an optional per-phase water temperature override and stop conditions (time, pressure/flow thresholds, weight, water pumped). Phases can be added, removed and reordered; a live preview chart redraws as you edit, synthesizing a time series from the phase curves the same way the machine itself would run them.
@@ -160,6 +162,8 @@ The editor covers a profile's name, water temperature, recipe (dose/yield/ratio)
 "Send to machine" asks for confirmation, then creates or updates the profile directly on the Gaggiuino controller over its WebSocket API (the machine has no REST endpoint for writing profiles) — a failed send surfaces an error toast rather than failing silently.
 
 ### Guided Dial-In wizard
+
+> **⚠ Experimental / work in progress:** the guided dial-in wizard is usable but still evolving — its grind suggestions are a starting point based on a target extraction-time band, not a guaranteed dial-in. Treat suggested grind steps as a helpful nudge, not gospel, and always confirm shots make sense before accepting a round.
 
 The Dial-in tab's **"Start guided dial-in"** button (or the **🎯** button on any bean card in the Library) opens a step-by-step wizard for dialing in a new bean or grinder, instead of pulling shots and comparing them manually. The Gaggiuino machine has no way to control grind — the wizard only ever tells you what to set on your grinder, it never automates anything.
 
@@ -234,6 +238,8 @@ Any bean with tasting-note tags shows a 🎡 button in the library. It opens a s
 If every matched flavor falls under a single branch — the common case, one or two tasting notes — the wheel opens already zoomed into that branch instead of the full 9-category overview, so the relevant wedge has room for readable text from the start. Tap or click any wedge (with sub-flavors) to zoom into it, or any crumb in the breadcrumb above the chart to jump back to it — both work identically on touch and with a mouse.
 
 ### Machine profile editor
+
+> **⚠ Experimental / work in progress:** the bean-based profile suggestion (🎛 Create profile) is usable but not finished — treat it as a starting point, not a guarantee of a good shot. Always review the generated phases and the live preview chart before sending a suggestion to the machine.
 
 The **Profiles** tab in the Coffee Library lists your Gaggiuino machine's profiles (fetched over the machine's WebSocket API) with edit/delete controls, plus a "+ New profile" button. The editor covers a profile's name, water temperature, recipe (dose/yield/ratio) and a full **phase editor** — each phase has a name, type (Flow / Pressure / Manual), a target transition (start/end/curve/duration/volume), a restriction value, an optional per-phase water temperature override, stop conditions (time, pressure above/below, flow above/below, weight, water pumped) and a skip toggle. Phases can be added and removed freely; a **live preview chart** redraws as you edit, synthesizing a time series from each phase's target curve so you can see the shape of the shot before sending it to the machine.
 

@@ -151,6 +151,8 @@ Zwei wichtige Einschränkungen:
 
 ### Maschinenprofil-Editor
 
+> **⚠ Experimentell / Work in Progress:** Der Bohnen-basierte Profilvorschlag ("Profil aus Bohne", der 🎛 Profil erstellen-Button) ist nutzbar, aber nicht ausgereift — er liefert einen Ausgangspunkt aus einem festen 4-Phasen-Skelett, keine Garantie für einen guten Shot bei jeder Bohne. Immer die generierten Phasen (und die Live-Vorschau-Grafik) prüfen, bevor ein vorgeschlagenes Profil an die Maschine gesendet wird.
+
 Der **Profile**-Tab in der Kaffeebibliothek listet die aktuell auf der Maschine gespeicherten Brühprofile auf (gelesen über `GET /api/machine/profiles`), mit Bearbeiten- und Löschen-Aktionen. „+ Neues Profil" öffnet den Editor leer; ein **🎛 Profil erstellen**-Button auf jeder Bohnenkarte öffnet ihn mit einem Vorschlag anhand dieser Bohne vorausgefüllt.
 
 Der Editor deckt Name, Wassertemperatur, Rezept (Dosis/Ausbeute/Ratio) und die Phasen eines Profils ab — jede Phase hat einen Namen, Typ (Fluss/Druck/Manuell), ein Ziel (Start/Ende/Kurve/Zeit/Volumen), eine Fluss-/Druck-Restriktion, eine optionale phasen-eigene Wassertemperatur-Übersteuerung und Stopp-Bedingungen (Zeit, Druck-/Fluss-Schwellenwerte, Gewicht, gefördertes Wasser). Phasen können hinzugefügt, entfernt und neu geordnet werden; eine Live-Vorschau-Chart zeichnet sich beim Bearbeiten neu, indem sie aus den Phasen-Kurven eine Zeitreihe synthetisiert, so wie die Maschine sie selbst durchlaufen würde.
@@ -160,6 +162,8 @@ Der Editor deckt Name, Wassertemperatur, Rezept (Dosis/Ausbeute/Ratio) und die P
 „An Maschine senden" fragt vorher um Bestätigung, dann wird das Profil direkt auf dem Gaggiuino-Controller über dessen WebSocket-API erstellt oder geändert (die Maschine hat keinen REST-Endpunkt zum Schreiben von Profilen) — ein fehlgeschlagenes Senden zeigt eine Fehlermeldung statt still zu scheitern.
 
 ### Geführter Einwähl-Assistent
+
+> **⚠ Experimentell / Work in Progress:** Der geführte Einwähl-Assistent ist nutzbar, entwickelt sich aber noch weiter — die Mahlgrad-Vorschläge sind ein Ausgangspunkt basierend auf einem Ziel-Extraktionszeitfenster, keine garantierte Einwähl-Lösung. Vorgeschlagene Mahlgrad-Schritte als hilfreichen Hinweis verstehen, nicht als unumstößliche Wahrheit, und immer prüfen, ob ein Shot plausibel ist, bevor eine Runde angenommen wird.
 
 Der **„Geführtes Einwählen starten"**-Button im Einwählen-Tab (oder der **🎯**-Button auf jeder Bohnenkarte in der Bibliothek) öffnet einen Schritt-für-Schritt-Assistenten zum Einwählen einer neuen Bohne oder Mühle, statt Shots manuell zu ziehen und zu vergleichen. Die Gaggiuino-Maschine kann den Mahlgrad nicht steuern — der Assistent sagt nur, was an der Mühle einzustellen ist, automatisiert aber nichts.
 
@@ -234,6 +238,8 @@ Jede Bohne mit Geschmacks-Tags zeigt in der Bibliothek einen 🎡-Button. Er öf
 Fallen alle gematchten Aromen unter einen einzigen Zweig — der Normalfall bei ein bis zwei Geschmacksnotizen —, öffnet sich das Rad direkt hineingezoomt in diesen Zweig statt in die volle 9-Kategorien-Übersicht, damit der relevante Ausschnitt von Anfang an genug Platz für lesbaren Text hat. Tippen bzw. Klicken auf ein Segment mit Unterkategorien zoomt hinein, ein Klick auf einen Eintrag im Breadcrumb-Pfad über dem Diagramm springt dorthin zurück — beides funktioniert identisch per Touch und mit der Maus.
 
 ### Maschinenprofil-Editor
+
+> **⚠ Experimentell / Work in Progress:** Der Bohnen-basierte Profilvorschlag (🎛 Profil erstellen) ist nutzbar, aber nicht ausgereift — als Ausgangspunkt verstehen, nicht als Garantie für einen guten Shot. Immer die generierten Phasen und die Live-Vorschau-Grafik prüfen, bevor ein Vorschlag an die Maschine gesendet wird.
 
 Der **Profile**-Tab in der Kaffee-Bibliothek listet die Profile der Gaggiuino-Maschine (über deren WebSocket-API abgerufen) mit Bearbeiten-/Löschen-Buttons, plus einem "+ Neues Profil"-Button. Der Editor deckt Name, Wassertemperatur, Rezept (Dosis/Ausbeute/Ratio) und einen vollständigen **Phasen-Editor** ab — jede Phase hat einen Namen, einen Typ (Fluss / Druck / Manuell), einen Ziel-Übergang (Start/Ende/Kurve/Dauer/Volumen), einen Restriktionswert, eine optionale phasen-eigene Wassertemperatur-Übersteuerung, Stopp-Bedingungen (Zeit, Druck über/unter, Fluss über/unter, Gewicht, gepumptes Wasser) und einen Überspringen-Schalter. Phasen lassen sich frei hinzufügen und entfernen; eine **Live-Vorschau-Grafik** zeichnet sich bei jeder Änderung neu und synthetisiert eine Zeitreihe aus der Ziel-Kurve jeder Phase, sodass die Form des Shots sichtbar wird, bevor er an die Maschine gesendet wird.
 
