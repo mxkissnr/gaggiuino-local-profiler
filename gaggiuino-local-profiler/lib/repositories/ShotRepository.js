@@ -20,9 +20,15 @@ const SELECT_BASE = `
 `;
 
 class ShotRepository {
-    findAll() {
+    // machineId is optional everywhere below and defaults to undefined (no
+    // filtering) to keep every pre-existing call site — which never passed a
+    // machine — returning exactly what it did before multi-machine support
+    // (#317). Pass machineId explicitly to scope to one machine.
+    findAll(machineId) {
         const db   = getDb();
-        const rows = db.prepare(`${SELECT_BASE} ORDER BY s.timestamp ASC`).all();
+        const rows = machineId
+            ? db.prepare(`${SELECT_BASE} WHERE s.machine_id = ? ORDER BY s.timestamp ASC`).all(machineId)
+            : db.prepare(`${SELECT_BASE} ORDER BY s.timestamp ASC`).all();
         return rows.map(_hydrate);
     }
 
@@ -32,20 +38,29 @@ class ShotRepository {
         return _hydrate(row);
     }
 
-    findAllExcludingTrash() {
+    findAllExcludingTrash(machineId) {
         const db   = getDb();
-        const rows = db.prepare(
-            `${SELECT_BASE} WHERE s.id NOT IN (SELECT shot_id FROM trash) ORDER BY s.timestamp ASC`
-        ).all();
+        const rows = machineId
+            ? db.prepare(
+                `${SELECT_BASE} WHERE s.machine_id = ? AND s.id NOT IN (SELECT shot_id FROM trash) ORDER BY s.timestamp ASC`
+              ).all(machineId)
+            : db.prepare(
+                `${SELECT_BASE} WHERE s.id NOT IN (SELECT shot_id FROM trash) ORDER BY s.timestamp ASC`
+              ).all();
         return rows.map(_hydrate);
     }
 
+    // shot.machineId (optional, defaults to 1 = the default/legacy machine)
+    // selects which machine owns this row; shot.id must already be a
+    // globally-unique id (the default machine keeps its native shot ids,
+    // additional machines use lib/machines.toGlobalShotId to avoid
+    // collisions) — see the shots table comment in lib/db.js.
     upsert(shot) {
         const db = getDb();
-        const { id, timestamp, duration, profile_name, profileName, annotation, ...rest } = shot;
+        const { id, timestamp, duration, profile_name, profileName, annotation, machineId, ...rest } = shot;
         db.prepare(
-            'INSERT OR REPLACE INTO shots (id, timestamp, duration, profile_name, data) VALUES (?,?,?,?,?)'
-        ).run(id, timestamp ?? null, duration ?? null, profile_name ?? profileName ?? null, JSON.stringify(rest));
+            'INSERT OR REPLACE INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (?,?,?,?,?,?)'
+        ).run(id, timestamp ?? null, duration ?? null, profile_name ?? profileName ?? null, JSON.stringify(rest), machineId ?? 1);
         if (annotation !== undefined) {
             db.prepare('INSERT OR REPLACE INTO annotations (shot_id, data) VALUES (?,?)').run(id, JSON.stringify(annotation));
         }
@@ -78,14 +93,19 @@ class ShotRepository {
     upsertMany(shots) {
         const db  = getDb();
         const ins = db.prepare(
-            'INSERT OR REPLACE INTO shots (id, timestamp, duration, profile_name, data) VALUES (?,?,?,?,?)'
+            'INSERT OR REPLACE INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (?,?,?,?,?,?)'
         );
         db.transaction(() => {
             for (const shot of shots) {
-                const { id, timestamp, duration, profile_name, profileName, annotation, ...rest } = shot;
-                ins.run(id, timestamp ?? null, duration ?? null, profile_name ?? profileName ?? null, JSON.stringify(rest));
+                const { id, timestamp, duration, profile_name, profileName, annotation, machineId, ...rest } = shot;
+                ins.run(id, timestamp ?? null, duration ?? null, profile_name ?? profileName ?? null, JSON.stringify(rest), machineId ?? 1);
             }
         })();
+    }
+
+    getMachineId(shotId) {
+        const row = getDb().prepare('SELECT machine_id FROM shots WHERE id = ?').get(shotId);
+        return row ? row.machine_id : null;
     }
 
     deleteById(id) {

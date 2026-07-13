@@ -18,9 +18,27 @@ function initSchema(db) {
             timestamp   INTEGER NOT NULL,
             duration    INTEGER,
             profile_name TEXT,
-            data        TEXT NOT NULL DEFAULT '{}'
+            data        TEXT NOT NULL DEFAULT '{}',
+            machine_id  INTEGER NOT NULL DEFAULT 1
         );
         CREATE INDEX IF NOT EXISTS idx_shots_timestamp ON shots(timestamp);
+
+        -- Multi-machine registry (#317). shots.id stays a single global integer:
+        -- the default machine (id 1) keeps its native machine shot ids unchanged
+        -- (backward compat — existing URLs/images/annotations keep working
+        -- untouched), additional machines get a synthetic id
+        -- (machineId * MACHINE_ID_OFFSET + nativeId, see lib/machines/index.js)
+        -- so no PRIMARY KEY rebuild is needed anywhere.
+        CREATE TABLE IF NOT EXISTS machines (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            name          TEXT NOT NULL,
+            type          TEXT NOT NULL CHECK(type IN ('gaggiuino','gaggimate')),
+            host          TEXT NOT NULL,
+            switch_entity TEXT,
+            is_default    INTEGER NOT NULL DEFAULT 0,
+            enabled       INTEGER NOT NULL DEFAULT 1,
+            created_at    INTEGER NOT NULL
+        );
 
         CREATE TABLE IF NOT EXISTS annotations (
             shot_id     INTEGER PRIMARY KEY REFERENCES shots(id) ON DELETE CASCADE,
@@ -43,8 +61,10 @@ function initSchema(db) {
         );
 
         CREATE TABLE IF NOT EXISTS maintenance (
-            key         TEXT PRIMARY KEY,
-            data        TEXT NOT NULL DEFAULT '{}'
+            machine_id  INTEGER NOT NULL DEFAULT 1,
+            key         TEXT NOT NULL,
+            data        TEXT NOT NULL DEFAULT '{}',
+            PRIMARY KEY (machine_id, key)
         );
 
         CREATE TABLE IF NOT EXISTS maintenance_log (
@@ -54,13 +74,15 @@ function initSchema(db) {
             task        TEXT NOT NULL,
             machine     TEXT DEFAULT '',
             shot_count  INTEGER DEFAULT 0,
-            notes       TEXT DEFAULT ''
+            notes       TEXT DEFAULT '',
+            machine_id  INTEGER NOT NULL DEFAULT 1
         );
         CREATE INDEX IF NOT EXISTS idx_maint_log_ts ON maintenance_log(ts DESC);
 
         CREATE TABLE IF NOT EXISTS orders (
             id          TEXT PRIMARY KEY,
-            data        TEXT NOT NULL DEFAULT '{}'
+            data        TEXT NOT NULL DEFAULT '{}',
+            machine_id  INTEGER NOT NULL DEFAULT 1
         );
 
         CREATE TABLE IF NOT EXISTS kv (
@@ -79,8 +101,48 @@ function getDb() {
 
     fixSchema(_db);
     migrate(_db);
+    migrateMachineColumns(_db);
 
     return _db;
+}
+
+// Adds machine_id scoping columns (#317) without ever rebuilding shots'/
+// orders'/maintenance_log's PRIMARY KEY — see the shots table comment above.
+// Idempotent: pragma-checks each column/table before touching it, same
+// pattern as fixSchema().
+function migrateMachineColumns(db) {
+    const hasColumn = (table, col) =>
+        !!db.prepare(`SELECT 1 FROM pragma_table_info(?) WHERE name = ?`).get(table, col);
+
+    for (const table of ['shots', 'orders', 'maintenance_log']) {
+        if (!hasColumn(table, 'machine_id')) {
+            db.exec(`ALTER TABLE ${table} ADD COLUMN machine_id INTEGER NOT NULL DEFAULT 1`);
+            log(`DB: added machine_id column to ${table}`);
+        }
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS idx_shots_machine ON shots(machine_id)');
+
+    // maintenance is keyed by task name only (e.g. 'descaling') — needs a
+    // composite (machine_id, key) primary key so each machine can track its
+    // own schedule. Table is tiny (a handful of rows), so a full rebuild is
+    // low-risk, unlike the shots table.
+    if (!hasColumn('maintenance', 'machine_id')) {
+        db.transaction(() => {
+            db.exec(`
+                CREATE TABLE maintenance_new (
+                    machine_id  INTEGER NOT NULL DEFAULT 1,
+                    key         TEXT NOT NULL,
+                    data        TEXT NOT NULL DEFAULT '{}',
+                    PRIMARY KEY (machine_id, key)
+                );
+                INSERT INTO maintenance_new (machine_id, key, data)
+                    SELECT 1, key, data FROM maintenance;
+                DROP TABLE maintenance;
+                ALTER TABLE maintenance_new RENAME TO maintenance;
+            `);
+        })();
+        log('DB: migrated maintenance table to (machine_id, key) composite key');
+    }
 }
 
 // Fix orders table created with INTEGER PRIMARY KEY before order IDs were known to be strings.

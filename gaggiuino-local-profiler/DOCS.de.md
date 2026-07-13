@@ -130,12 +130,29 @@ Zwei wichtige Einschränkungen:
 
 | Option | Beschreibung | Standard |
 |---|---|---|
-| `machine_host` | IP oder Hostname des Gaggiuino-Controllers | `gaggiuino.local` |
+| `machine_host` | **Veraltet seit v2.0.0** — IP oder Hostname des Gaggiuino-Controllers. Wird nur einmalig beim ersten Start genutzt, um die Standardmaschine in der neuen [Multi-Maschinen-Registry](#multi-maschinen-modus-v200) zu erzeugen; danach Maschinen über die Settings-Ansicht der App verwalten, nicht über diese Option. | `gaggiuino.local` |
 | `sync_interval` | Automatischer Sync-Intervall in Minuten (1–60) | `5` |
 | `switch_entity` | HA-Switch-Entität zum Ein-/Ausschalten der Maschine | *(leer)* |
 | `preheat_time` | Aufwärmzeit in Minuten — wie lange nach dem Einschalten bis die Maschine brühbereit ist (1–120) | `20` |
 | `enable_orders` | Bestellsystem aktivieren — Barista-Backend-Tab + Kunden-Bestellkarte; standardmäßig deaktiviert | `false` |
 | `port` | Port, auf dem der Server lauscht (1024–65535) | `8099` |
+
+## Multi-Maschinen-Modus (v2.0.0)
+
+GLP kann mehr als eine Espressomaschine aus einer einzigen Add-on-Instanz heraus verwalten — kein zweites Add-on nötig. Jede Maschine ist entweder:
+
+- **Gaggiuino** — der ursprüngliche REST- + Protobuf-WebSocket-Maschinentyp, für den diese App gebaut wurde. Voller Funktionsumfang: Shot-Sync, Live-Status, Profil erstellen/lesen/ändern/löschen, Profil auswählen.
+- **GaggiMate** ([jniebuhr/gaggimate](https://github.com/jniebuhr/gaggimate)) — ein anderer ESP32-Controller mit JSON-WebSocket-API und binären Shot-History-Dateien. Der GaggiMate-Adapter von GLP ist in v2.0.0 **experimentell**: Live-Status und Shot-History-Sync werden unterstützt; Profile sind nur lesbar (Erstellen/Bearbeiten von GaggiMate-Profilen aus GLP ist ein Stretch-Goal für eine spätere Version); Brühen kann aus GLP heraus nicht gestartet werden (GaggiMates eigene API hat keinen Start/Stop-Befehl — nur bei einer Gaggiuino-Maschine, und auch dort nur über den physischen Brühschalter, kann GLP einen Brühvorgang erkennen; GLP selbst sendet nie einen Startbefehl).
+
+| | Gaggiuino | GaggiMate |
+|---|---|---|
+| Shot-Sync | ✅ | ✅ |
+| Live-Status (Temp/Druck/Fluss) | ✅ | ✅ |
+| Profil lesen | ✅ | ✅ |
+| Profil erstellen/ändern/löschen | ✅ | 🚧 nur lesend in v2.0.0 |
+| Brühen aus GLP starten | ❌ (Maschine hat auch keine Start-API) | ❌ (keine Start-API) |
+
+Beim Upgrade von einer Installation vor v2.0.0 werden die bestehenden Add-on-Optionen `machine_host`/`switch_entity` automatisch in Maschine #1 übernommen (benannt „Gaggiuino", als **Standardmaschine** markiert) — keine manuellen Schritte nötig, jede bestehende URL, Shot-ID, jedes Bild und jede Annotation funktioniert unverändert weiter. Weitere Maschinen werden über die **Settings**-Ansicht der App angelegt (Name, Typ, Host, optionale HA-Switch-Entität); vor dem Speichern gibt es jeweils einen „Verbindung testen"-Button. Die Standardmaschine behält ihre ursprüngliche REST-API-Oberfläche unverändert; ein Maschinen-Umschalter (nur sichtbar, sobald eine zweite Maschine existiert) legt fest, welche Maschine in Live/Shots/Analytics angezeigt wird.
 
 ## Features
 

@@ -114,6 +114,15 @@ const profileSchema = z.object({
     recipe:               brewRecipeSchema,
 });
 
+// ── Machine registry (#317) ─────────────────────────────────────────────
+const machineSchema = z.object({
+    name:         z.string().min(1).max(100),
+    type:         z.enum(['gaggiuino', 'gaggimate']),
+    host:         z.string().min(1).max(255),
+    switchEntity: z.string().max(200).optional().nullable(),
+    enabled:      z.boolean().optional().default(true),
+});
+
 module.exports = {
     annotationSchema,
     beanSchema,
@@ -122,4 +131,5 @@ module.exports = {
     maintenanceLogSchema,
     orderSchema,
     profileSchema,
+    machineSchema,
 };

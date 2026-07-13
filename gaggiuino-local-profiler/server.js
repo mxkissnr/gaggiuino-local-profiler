@@ -22,6 +22,7 @@ try {
     libraryService.migrateNotesToFlavors();
     libraryService.migrateOriginToOrigins();
     libraryService.migrateVarietyToSpecies();
+    require('./lib/machines/registry').ensureDefaultMachine(); // #317: seed machine #1 from legacy options
     log('Database ready');
 } catch (err) {
     log(`Init error: ${err.message}`, true);
@@ -124,6 +125,7 @@ app.use(require('./routes/library'));
 app.use(require('./routes/maintenance'));
 app.use(require('./routes/orders'));
 app.use(require('./routes/system'));
+app.use(require('./routes/machines'));
 app.use(require('./routes/backup'));
 app.use(require('./routes/import'));
 

@@ -130,12 +130,29 @@ Two important limitations:
 
 | Option | Description | Default |
 |---|---|---|
-| `machine_host` | IP or hostname of the Gaggiuino controller | `gaggiuino.local` |
+| `machine_host` | **Deprecated since v2.0.0** — IP or hostname of the Gaggiuino controller. Used only once, on first start, to seed the default machine in the new [multi-machine registry](#multi-machine-v200) below; edit machines afterward from the app's Settings UI, not this option. | `gaggiuino.local` |
 | `sync_interval` | Auto-sync interval in minutes (1–60) | `5` |
 | `switch_entity` | HA switch entity to power the machine on/off | *(empty)* |
 | `preheat_time` | Warmup time in minutes — how long after switch-on until the machine is ready to brew (1–120) | `20` |
 | `enable_orders` | Enable the order management system — barista backend tab + customer order card support; disabled by default | `false` |
 | `port` | Port the app server listens on (1024–65535) | `8099` |
+
+## Multi-machine (v2.0.0)
+
+GLP can manage more than one espresso machine from a single add-on instance — no second add-on install needed. Each machine is either:
+
+- **Gaggiuino** — the original REST + protobuf-WebSocket machine type this app was built for. Full support: shot sync, live status, profile create/read/update/delete, profile select.
+- **GaggiMate** ([jniebuhr/gaggimate](https://github.com/jniebuhr/gaggimate)) — a different ESP32 controller with a JSON WebSocket API and binary shot-history files. GLP's GaggiMate adapter is **experimental** in v2.0.0: live status and shot history sync are supported; profile editing is read-only (creating/editing GaggiMate profiles from GLP is a stretch goal for a later release); brew cannot be started from GLP (GaggiMate's own API has no start/stop command — only a Gaggiuino machine, and only via its physical brew switch, can be triggered from GLP, and even then GLP itself never sends a start command, only detects it).
+
+| | Gaggiuino | GaggiMate |
+|---|---|---|
+| Shot sync | ✅ | ✅ |
+| Live status (temp/pressure/flow) | ✅ | ✅ |
+| Profile read | ✅ | ✅ |
+| Profile create/update/delete | ✅ | 🚧 read-only in v2.0.0 |
+| Brew start from GLP | ❌ (machine has no start API either) | ❌ (no start API) |
+
+On upgrade from a pre-2.0.0 install, the existing `machine_host`/`switch_entity` add-on options are automatically migrated into machine #1 (named "Gaggiuino", marked as the **default machine**) — no manual steps, and every existing URL, shot id, image and annotation keeps working exactly as before. Add further machines from the app's **Settings** view (name, type, host, optional HA switch entity); each gets a "Test connection" button before saving. The default machine keeps its original REST API surface untouched; a machine switcher (only shown once a second machine exists) lets you pick which machine's Live/Shots/Analytics you're looking at.
 
 ## Features
 

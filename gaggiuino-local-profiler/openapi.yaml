@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GLP REST API
-  version: 1.55.0
+  version: 2.0.0
   description: >
     REST API for the **Gaggiuino Local Profiler** Home Assistant add-on.
     Provides shot storage, coffee library, maintenance tracking, a barista
@@ -245,6 +245,41 @@ components:
         glpVersion:     { type: string }
         apiToken:       { type: string, nullable: true }
         ordersFeature:  { type: boolean }
+        machines:
+          type: array
+          description: All configured machines (#317). The fields above always describe the default machine, unchanged, for backward compatibility.
+          items:
+            type: object
+            properties:
+              id:        { type: integer }
+              name:      { type: string }
+              type:      { type: string, enum: [gaggiuino, gaggimate] }
+              isDefault: { type: boolean }
+              enabled:   { type: boolean }
+              reachable: { type: boolean, nullable: true, description: "Only populated for the default machine in v2.0.0" }
+              on:        { type: boolean, nullable: true }
+
+    Machine:
+      type: object
+      properties:
+        id:           { type: integer }
+        name:         { type: string }
+        type:         { type: string, enum: [gaggiuino, gaggimate] }
+        host:         { type: string }
+        switchEntity: { type: string, nullable: true }
+        isDefault:    { type: boolean }
+        enabled:      { type: boolean }
+        createdAt:    { type: integer, description: Unix ms }
+
+    MachineInput:
+      type: object
+      required: [name, type, host]
+      properties:
+        name:         { type: string }
+        type:         { type: string, enum: [gaggiuino, gaggimate] }
+        host:         { type: string, description: "Hostname or host:port, e.g. gaggiuino.local or 192.168.1.50" }
+        switchEntity: { type: string, nullable: true, description: "HA switch entity id for this machine's power outlet" }
+        enabled:      { type: boolean, default: true }
 
     PreheatStatus:
       type: object
@@ -1041,6 +1076,63 @@ paths:
         "502": { description: Machine unreachable, returned an error, or did not confirm the create }
         "503": { description: machine URL not configured }
 
+  /api/machines:
+    get:
+      tags: [Machines]
+      summary: List all configured machines (#317). Seeds machine #1 from the legacy machine_host/switch_entity options on first call if the registry is still empty.
+      responses:
+        "200":
+          description: Array of machines
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Machine' } }
+    post:
+      tags: [Machines]
+      summary: Add a machine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineInput' }
+      responses:
+        "200": { description: Created machine, content: { application/json: { schema: { $ref: '#/components/schemas/Machine' } } } }
+        "400": { description: Invalid machine payload, or host resolves to a private/blocked address }
+
+  /api/machines/{id}:
+    put:
+      tags: [Machines]
+      summary: Update a machine (partial update — omitted fields keep their current value)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineInput' }
+      responses:
+        "200": { description: Updated machine }
+        "400": { description: Invalid payload, or host resolves to a private/blocked address }
+        "404": { description: Machine not found }
+    delete:
+      tags: [Machines]
+      summary: Remove a machine. The default machine (isDefault true) cannot be deleted.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: "{ ok: true }" }
+        "400": { description: Attempted to delete the default machine }
+        "404": { description: Machine not found }
+
+  /api/machines/{id}/test:
+    post:
+      tags: [Machines]
+      summary: Reachability probe — connects to the machine via its adapter and reports live status or the connection error
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: "{ ok: true, reachable: boolean, status? , error? }" }
+        "404": { description: Machine not found }
+
   /api/preheat:
     get:
       tags: [System]
@@ -1171,6 +1263,8 @@ tags:
     description: Barista order system (requires enable_orders in add-on config)
   - name: System
     description: Add-on status, manual sync, machine switch, live data, preheat
+  - name: Machines
+    description: "Multi-machine registry (#317) — add/remove/test additional Gaggiuino or GaggiMate machines"
   - name: Backup
     description: Full backup and restore
   - name: Import

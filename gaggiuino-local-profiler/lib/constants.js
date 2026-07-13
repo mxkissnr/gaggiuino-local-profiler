@@ -3,7 +3,7 @@ if (typeof File === 'undefined') {
     try { global.File = require('buffer').File; } catch (_) { global.File = class File {}; }
 }
 
-const GLP_VERSION  = '1.122.0';
+const GLP_VERSION  = '2.0.0';
 const DEFAULT_PORT = 8099;
 
 const DATA_DIR             = '/data';
@@ -16,7 +16,11 @@ const PROFILES_CACHE_FILE  = '/data/profiles_cache.json';
 
 const TRASH_TTL_MS          = 30 * 24 * 60 * 60 * 1000;
 const ORDERS_HISTORY_TTL_MS = 7  * 24 * 60 * 60 * 1000;
-const MAX_SHOT_ID           = 100000;
+// Raised from 100000 (#317) to make room for synthetic multi-machine shot
+// ids: additional machines (machine id > 1) get id = machineId *
+// MACHINE_ID_OFFSET + nativeId (see lib/machines/index.js) so their shots
+// never collide with the default machine's native ids, which stay untouched.
+const MAX_SHOT_ID           = 99_999_999;
 const HA_INGRESS_PATH       = '/api/hassio_ingress/gaggiuino_local_profiler';
 const HA_API                = 'http://supervisor/core/api';
 const HA_TOKEN              = process.env.SUPERVISOR_TOKEN;

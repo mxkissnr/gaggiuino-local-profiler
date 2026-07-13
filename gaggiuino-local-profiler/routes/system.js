@@ -27,6 +27,7 @@ const { log, rateLimit, isSupervisorIp } = require('../lib/helpers');
 const state = require('../lib/state');
 const demoService = require('../lib/services/DemoService');
 const { profileSchema } = require('../lib/validation/schemas');
+const registry = require('../lib/machines/registry');
 
 // ── Profile cache helpers ─────────────────────────────────────────────────
 
@@ -117,6 +118,18 @@ router.get('/api/status', (req, res) => {
         switchEntity:     opts.switch_entity || null,
         isDemo:           demoService.isDemoActive(),
     } : {};
+    // Multi-machine (#317): flat legacy fields above always describe the
+    // default machine, unchanged, for backward compatibility. `machines`
+    // is additive — old clients that don't read it are unaffected.
+    let machines = [];
+    try {
+        registry.ensureDefaultMachine();
+        machines = registry.listMachines().map(m => ({
+            id: m.id, name: m.name, type: m.type, isDefault: m.isDefault, enabled: m.enabled,
+            reachable: m.isDefault ? state.machineReachable : null,
+            on:        m.isDefault ? state.machineOn        : null,
+        }));
+    } catch (e) {}
     res.json({
         shotCount,
         lastSync:           state.lastSyncTime,
@@ -128,6 +141,7 @@ router.get('/api/status', (req, res) => {
         ordersFeature:      isOrdersEnabled(),
         machineReachable:   state.machineReachable,
         lastMachineSuccess: state.lastMachineSuccess,
+        machines,
         ...sensitive,
     });
 });
