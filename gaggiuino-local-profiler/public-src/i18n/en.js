@@ -154,6 +154,7 @@ export default {
     settings_machine_test:'Test connection', settings_machine_save:'Save', settings_machine_cancel:'Cancel', settings_machine_default:'Default',
     settings_machine_edit:'Edit', settings_machine_delete:'Delete', settings_machine_delete_confirm:'Really remove this machine?',
     settings_machine_testing:'Testing connection…', settings_machine_test_ok:'✓ Reachable', settings_machine_test_fail:'✗ Not reachable', settings_machine_test_save_first:'Save first',
+    settings_machine_type_gaggimate:'GaggiMate (experimental)', settings_machine_experimental_badge:'⚠ Experimental',
     ann_clone_btn:'↩ Clone last',
     ann_photo_upload:'Add a photo to this shot', ann_photo_remove:'Remove photo', lightbox_close:'Close',
     lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'e.g. 500',

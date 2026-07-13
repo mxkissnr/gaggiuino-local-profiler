@@ -379,6 +379,7 @@
         .machine-row-name { font-weight:600; color:var(--gray-200); }
         .machine-row-type { font-size:.75rem; color:var(--gray-500); background:var(--gray-900); border-radius:6px; padding:2px 8px; }
         .machine-row-badge { font-size:.7rem; color:#fff; background:var(--err); border-radius:6px; padding:2px 8px; }
+        .machine-row-badge-experimental { font-size:.7rem; color:#f59e0b; background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.35); border-radius:6px; padding:2px 8px; }
         .machine-row-actions { margin-left:auto; display:flex; gap:8px; }
         .machine-row-actions button { background:none; border:none; color:var(--gray-400); cursor:pointer; font-size:.78rem; font-family:'Figtree',sans-serif; padding:2px 4px; }
         .machine-row-actions button:hover { color:var(--gray-200); }

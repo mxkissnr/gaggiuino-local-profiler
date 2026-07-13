@@ -174,6 +174,75 @@ describe('v1 -> v2 schema migration (pre-existing single-machine DB)', () => {
     });
 });
 
+describe('migrateMachineColumns pre-migration backup', () => {
+    const fs   = require('fs');
+    const os   = require('os');
+    const path = require('path');
+    let tmpDir, tmpDbPath;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'glp-migration-test-'));
+        tmpDbPath = path.join(tmpDir, 'glp.db');
+    });
+    afterEach(() => { fs.rmSync(tmpDir, { recursive: true, force: true }); });
+
+    it('writes a pre-migration backup file when a real v1 DB file needs migrating', () => {
+        const v1 = new Database(tmpDbPath);
+        v1.exec(`
+            CREATE TABLE shots (id INTEGER PRIMARY KEY, timestamp INTEGER NOT NULL, duration INTEGER,
+                profile_name TEXT, data TEXT NOT NULL DEFAULT '{}');
+            CREATE TABLE orders (id TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}');
+            CREATE TABLE maintenance (key TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}');
+            CREATE TABLE maintenance_log (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, date TEXT NOT NULL,
+                task TEXT NOT NULL, machine TEXT DEFAULT '', shot_count INTEGER DEFAULT 0, notes TEXT DEFAULT '');
+        `);
+        v1.prepare("INSERT INTO shots (id, timestamp, profile_name) VALUES (1, 1000, 'Espresso')").run();
+        v1.close();
+
+        // Re-open the same on-disk file (mirrors getDb() opening DB_PATH) and
+        // run the real migration against it.
+        const db = new Database(tmpDbPath);
+        realDb.migrateMachineColumns(db, tmpDbPath);
+        db.close();
+
+        const backups = fs.readdirSync(tmpDir).filter(f => f.startsWith('pre-v2-migration-'));
+        expect(backups).toHaveLength(1);
+
+        // The backup is a real, openable snapshot of the pre-migration data.
+        const backupDb = new Database(path.join(tmpDir, backups[0]));
+        const shot = backupDb.prepare('SELECT * FROM shots WHERE id = 1').get();
+        expect(shot.profile_name).toBe('Espresso');
+        expect(() => backupDb.prepare("SELECT machine_id FROM shots").get()).toThrow(); // pre-migration shape
+        backupDb.close();
+    });
+
+    it('does not write a second backup on a subsequent start once already migrated', () => {
+        const v1 = new Database(tmpDbPath);
+        v1.exec(`
+            CREATE TABLE shots (id INTEGER PRIMARY KEY, timestamp INTEGER NOT NULL, duration INTEGER,
+                profile_name TEXT, data TEXT NOT NULL DEFAULT '{}');
+            CREATE TABLE orders (id TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}');
+            CREATE TABLE maintenance (key TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}');
+            CREATE TABLE maintenance_log (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, date TEXT NOT NULL,
+                task TEXT NOT NULL, machine TEXT DEFAULT '', shot_count INTEGER DEFAULT 0, notes TEXT DEFAULT '');
+        `);
+        realDb.migrateMachineColumns(v1, tmpDbPath);
+        realDb.migrateMachineColumns(v1, tmpDbPath); // second start, already migrated
+        v1.close();
+
+        const backups = fs.readdirSync(tmpDir).filter(f => f.startsWith('pre-v2-migration-'));
+        expect(backups).toHaveLength(1);
+    });
+
+    it('does not attempt a backup for a brand-new install with no DB file on disk yet', () => {
+        const memDb = new Database(':memory:');
+        realDb.initSchema(memDb);
+        expect(() => realDb.migrateMachineColumns(memDb, tmpDbPath)).not.toThrow();
+        expect(fs.existsSync(tmpDbPath)).toBe(false); // nothing was ever created
+        memDb.close();
+    });
+});
+
 describe('ShotRepository machine scoping', () => {
     let memDb;
     beforeEach(() => {

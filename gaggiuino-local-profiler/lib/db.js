@@ -109,10 +109,26 @@ function getDb() {
 // Adds machine_id scoping columns (#317) without ever rebuilding shots'/
 // orders'/maintenance_log's PRIMARY KEY — see the shots table comment above.
 // Idempotent: pragma-checks each column/table before touching it, same
-// pattern as fixSchema().
-function migrateMachineColumns(db) {
+// pattern as fixSchema(). dbPath defaults to the real on-disk DB_PATH but is
+// injectable so tests can exercise the backup step against a temp file
+// instead of the real /data/glp.db.
+function migrateMachineColumns(db, dbPath = DB_PATH) {
     const hasColumn = (table, col) =>
         !!db.prepare(`SELECT 1 FROM pragma_table_info(?) WHERE name = ?`).get(table, col);
+
+    // v2.0.0 upgrade safety net: this is the one migration in this file that
+    // touches every existing install's real shot/order history, unattended,
+    // on first start after upgrade. Snapshot the whole DB file before making
+    // any change, once, only when a migration is actually about to run (never
+    // on a fresh install with no file yet, never again on subsequent starts
+    // once machine_id already exists everywhere).
+    const needsMigration = ['shots', 'orders', 'maintenance_log'].some(t => !hasColumn(t, 'machine_id'))
+        || !hasColumn('maintenance', 'machine_id');
+    if (needsMigration && fs.existsSync(dbPath)) {
+        const backupPath = path.join(path.dirname(dbPath), `pre-v2-migration-${Date.now()}.db`);
+        fs.copyFileSync(dbPath, backupPath);
+        log(`DB: multi-machine migration starting — pre-migration backup written to ${backupPath}`);
+    }
 
     for (const table of ['shots', 'orders', 'maintenance_log']) {
         if (!hasColumn(table, 'machine_id')) {
@@ -256,4 +272,4 @@ function migrate(db) {
     log(`DB: migration complete — ${shotCount} shots, ${Object.keys(annotations).length} annotations`);
 }
 
-module.exports = { getDb, initSchema };
+module.exports = { getDb, initSchema, migrateMachineColumns };

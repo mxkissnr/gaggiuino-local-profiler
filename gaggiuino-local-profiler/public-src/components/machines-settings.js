@@ -98,6 +98,7 @@ export function renderMachinesList() {
     row.innerHTML = `
       <span class="machine-row-name">${escapeHtml(m.name)}</span>
       <span class="machine-row-type">${m.type === 'gaggimate' ? 'GaggiMate' : 'Gaggiuino'}</span>
+      ${m.type === 'gaggimate' ? `<span class="machine-row-badge-experimental" title="${escapeHtml(t('settings_machine_type_gaggimate'))}">${t('settings_machine_experimental_badge')}</span>` : ''}
       ${m.isDefault ? `<span class="machine-row-badge">${t('settings_machine_default')}</span>` : ''}
       <span class="machine-row-actions">
         <button type="button" class="machine-edit-btn">${t('settings_machine_edit')}</button>
