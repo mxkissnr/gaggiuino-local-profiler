@@ -1,5 +1,8 @@
 ## [1.121.0] – 2026-07-13
 
+### Added
+- **Guided Dial-In wizard: grinder field is now a select of your library grinders** instead of free text — preselects the prefilled/known grinder (`prefill.grinderName` or the bean's known-grind-setting grinder), with an "Other…" option that reveals a free-text fallback for a grinder not yet in the library. Falls back to the previous plain text input when the library has no grinders at all. `public-src/views/dialin-wizard.js`, `public-src/main.js`, `public-src/i18n/*.js` (all 6). Closes #322
+
 ### Fixed
 - **Order queue age showed raw minutes forever** (e.g. "Vor 3904 Min" for an order almost three days old). `_orderTimeAgo()` (`public-src/views/orders.js`) now tiers the display: minutes under an hour, hours under a day, days beyond that. New `orders_ago_hours`/`orders_ago_days` i18n keys in all 6 languages. `public-src/views/orders.js`, `public-src/i18n/*.js`. Closes #320
 - **Customer statistics ("Kunden-Statistik") silently capped at the last 7 days** despite being labelled lifetime totals. `GET /api/orders/stats` read from `loadOrders()` → `OrderRepository.findActive()`, which filters *done* orders older than `ORDERS_HISTORY_TTL_MS` (7 days) — correct for the live order queue, wrong for stats. Added `OrderRepository.findAll()` (no age filter) and a `loadAllOrders()` shim, used only by the stats endpoint; the live queue (`findActive()`) is unchanged. `lib/repositories/OrderRepository.js`, `lib/data.js`, `routes/orders.js`, `test/db-routes.test.js` (new case: a 30-day-old done order is now counted). Closes #321

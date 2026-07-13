@@ -365,6 +365,7 @@ export default {
     dialin_wizard_start_from_bean:'Réglage guidé',
     dialin_wizard_title:'Réglage guidé',
     dialin_wizard_setup_bean:'Café', dialin_wizard_setup_grinder:'Moulin',
+    dialin_wizard_grinder_other:'Autre…', dialin_wizard_grinder_other_ph:'Saisir le nom du moulin',
     dialin_wizard_setup_dose:'Dose (g)', dialin_wizard_setup_ratio:'Ratio cible',
     dialin_wizard_setup_start_grind:'Réglage de mouture initial',
     dialin_wizard_setup_start_btn:'Démarrer la manche 1',

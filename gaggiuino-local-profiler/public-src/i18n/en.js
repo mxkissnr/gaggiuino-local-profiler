@@ -365,6 +365,7 @@ export default {
     dialin_wizard_start_from_bean:'Guided dial-in',
     dialin_wizard_title:'Guided Dial-In',
     dialin_wizard_setup_bean:'Bean', dialin_wizard_setup_grinder:'Grinder',
+    dialin_wizard_grinder_other:'Other…', dialin_wizard_grinder_other_ph:'Enter grinder name',
     dialin_wizard_setup_dose:'Dose (g)', dialin_wizard_setup_ratio:'Target ratio',
     dialin_wizard_setup_start_grind:'Starting grind setting',
     dialin_wizard_setup_start_btn:'Start round 1',

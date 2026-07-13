@@ -365,6 +365,7 @@ export default {
     dialin_wizard_start_from_bean:'Calibración guiada',
     dialin_wizard_title:'Calibración guiada',
     dialin_wizard_setup_bean:'Café', dialin_wizard_setup_grinder:'Molinillo',
+    dialin_wizard_grinder_other:'Otro…', dialin_wizard_grinder_other_ph:'Introduce el nombre del molinillo',
     dialin_wizard_setup_dose:'Dosis (g)', dialin_wizard_setup_ratio:'Ratio objetivo',
     dialin_wizard_setup_start_grind:'Punto de molienda inicial',
     dialin_wizard_setup_start_btn:'Iniciar ronda 1',

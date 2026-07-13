@@ -347,6 +347,7 @@ export default {
     dialin_wizard_start_from_bean:'Geführtes Einwählen',
     dialin_wizard_title:'Geführtes Einwählen',
     dialin_wizard_setup_bean:'Bohne', dialin_wizard_setup_grinder:'Mühle',
+    dialin_wizard_grinder_other:'Andere …', dialin_wizard_grinder_other_ph:'Mühlenname eingeben',
     dialin_wizard_setup_dose:'Dosis (g)', dialin_wizard_setup_ratio:'Ziel-Ratio',
     dialin_wizard_setup_start_grind:'Start-Mahlgrad',
     dialin_wizard_setup_start_btn:'Runde 1 starten',

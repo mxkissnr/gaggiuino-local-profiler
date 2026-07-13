@@ -146,7 +146,19 @@ export function dialinAcceptNext() {
 
   if (s.status === 'setup') {
     s.bean        = document.getElementById('dwBean')?.value.trim() || '';
-    s.grinder     = document.getElementById('dwGrinder')?.value.trim() || '';
+    // #322: grinder is a <select> when the library has grinders (with an
+    // "other…" option falling back to the free-text #dwGrinderOther input),
+    // otherwise a plain text #dwGrinder input — same fallback as before.
+    {
+      const grinderEl = document.getElementById('dwGrinder');
+      if (grinderEl?.tagName === 'SELECT') {
+        s.grinder = grinderEl.value === '__other__'
+          ? (document.getElementById('dwGrinderOther')?.value.trim() || '')
+          : grinderEl.value;
+      } else {
+        s.grinder = grinderEl?.value.trim() || '';
+      }
+    }
     s.dose        = parseFloat(document.getElementById('dwDose')?.value) || null;
     s.targetRatio = parseFloat(document.getElementById('dwRatio')?.value) || 2;
     s.pendingGrind = document.getElementById('dwStartGrind')?.value.trim() || '';
@@ -302,6 +314,36 @@ function _checkForCandidate(s) {
   if (candidate) s.candidateShotId = candidate.id;
 }
 
+// #322: grinder field is a select of library grinders (matching lib.grinders)
+// when any exist, preselecting the prefilled/known grinder — with an
+// "other…" option that reveals a free-text fallback input, since not every
+// grinder is necessarily in the library yet. Falls back to a plain text
+// input (as before) when the library has no grinders at all.
+function _renderGrinderField(s) {
+  const grinders = S.coffeeLibrary?.grinders || [];
+  if (!grinders.length) {
+    return `<input type="text" id="dwGrinder" value="${esc(s.grinder)}">`;
+  }
+  const knownNames = new Set(grinders.map(g => g.name));
+  const isOther = !!s.grinder && !knownNames.has(s.grinder);
+  return `
+    <select id="dwGrinder" data-action="dialin-grinder-select">
+      ${grinders.map(g => `<option value="${esc(g.name)}"${!isOther && s.grinder === g.name ? ' selected' : ''}>${esc(g.name)}</option>`).join('')}
+      <option value="__other__"${isOther ? ' selected' : ''}>${t('dialin_wizard_grinder_other')}</option>
+    </select>
+    <input type="text" id="dwGrinderOther" placeholder="${t('dialin_wizard_grinder_other_ph')}"
+      style="${isOther ? '' : 'display:none'};margin-top:6px" value="${isOther ? esc(s.grinder) : ''}">`;
+}
+
+// Toggles the free-text fallback input's visibility when the grinder select
+// changes — wired via the document-level [data-action] change delegation.
+export function dialinGrinderChange() {
+  const select = document.getElementById('dwGrinder');
+  const other  = document.getElementById('dwGrinderOther');
+  if (!select || !other || select.tagName !== 'SELECT') return;
+  other.style.display = select.value === '__other__' ? '' : 'none';
+}
+
 function _renderSetup(s) {
   const beans = S.coffeeLibrary?.beans || [];
   return `<div class="dw-setup">
@@ -312,7 +354,7 @@ function _renderSetup(s) {
     </div>
     <div class="lib-form-field">
       <label>${t('dialin_wizard_setup_grinder')}</label>
-      <input type="text" id="dwGrinder" value="${esc(s.grinder)}">
+      ${_renderGrinderField(s)}
     </div>
     <div class="lib-form-field">
       <label>${t('dialin_wizard_setup_dose')}</label>

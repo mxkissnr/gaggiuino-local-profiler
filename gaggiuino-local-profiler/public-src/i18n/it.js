@@ -365,6 +365,7 @@ export default {
     dialin_wizard_start_from_bean:'Calibrazione guidata',
     dialin_wizard_title:'Calibrazione guidata',
     dialin_wizard_setup_bean:'Caffè', dialin_wizard_setup_grinder:'Macinacaffè',
+    dialin_wizard_grinder_other:'Altro…', dialin_wizard_grinder_other_ph:'Inserisci il nome del macinacaffè',
     dialin_wizard_setup_dose:'Dose (g)', dialin_wizard_setup_ratio:'Ratio obiettivo',
     dialin_wizard_setup_start_grind:'Macinatura iniziale',
     dialin_wizard_setup_start_btn:'Avvia round 1',

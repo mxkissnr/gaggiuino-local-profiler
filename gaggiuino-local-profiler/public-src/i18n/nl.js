@@ -365,6 +365,7 @@ export default {
     dialin_wizard_start_from_bean:'Geleide inregeling',
     dialin_wizard_title:'Geleide inregeling',
     dialin_wizard_setup_bean:'Bonen', dialin_wizard_setup_grinder:'Molen',
+    dialin_wizard_grinder_other:'Anders…', dialin_wizard_grinder_other_ph:'Molennaam invoeren',
     dialin_wizard_setup_dose:'Dosis (g)', dialin_wizard_setup_ratio:'Doelratio',
     dialin_wizard_setup_start_grind:'Startmaalstand',
     dialin_wizard_setup_start_btn:'Ronde 1 starten',

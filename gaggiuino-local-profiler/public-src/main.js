@@ -83,7 +83,7 @@ import { loadMachineProfileList, updateProfileDatalist, renderProfileList,
 
 import { renderDialin } from './views/dialin.js';
 
-import { openDialinWizard, closeDialinWizard, startDialinFromBean, renderDialinWizard,
+import { openDialinWizard, closeDialinWizard, startDialinFromBean, renderDialinWizard, dialinGrinderChange,
          dialinConfirmShot, dialinAcceptNext, dialinOverride, dialinEnd, dialinSaveKnownGrind,
          dialinClose } from './views/dialin-wizard.js';
 
@@ -675,6 +675,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!el) return;
     if (el.dataset.action === 'save-maint-threshold') {
       saveMaintThreshold(el.dataset.task, el.dataset.field, el.value);
+    }
+    if (el.dataset.action === 'dialin-grinder-select') {
+      dialinGrinderChange();
     }
   });
 
