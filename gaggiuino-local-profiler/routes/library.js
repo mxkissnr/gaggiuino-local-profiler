@@ -337,7 +337,7 @@ router.post('/api/library/grinder/:id/reset-burrs', (req, res) => {
     const lib = loadLibrary();
     const idx = lib.grinders.findIndex(g => g.id === id);
     if (idx === -1) return res.status(404).json({ error: 'not found' });
-    lib.grinders[idx].burrsResetAt = new Date().toISOString().split('T')[0];
+    lib.grinders[idx].burrsResetAt = new Date().toISOString();
     saveLibrary(lib);
     res.json({ ...lib.grinders[idx], wear: libraryService.computeGrinderWearStats(lib.grinders[idx]) });
 });

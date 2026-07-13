@@ -46,6 +46,20 @@ describe('computeGrinderWearStats', () => {
         expect(stats.gramsSinceBurrs).toBe(19);
     });
 
+    it('excludes a same-day shot pulled before the reset instant, not just before the calendar day', () => {
+        const resetInstant = Date.UTC(2024, 5, 15, 12, 0, 0); // 2024-06-15 12:00 UTC
+        seedShots([
+            { id: 1, timestamp: Date.UTC(2024, 5, 15, 8, 0, 0) / 1000, grinder: 'Niche Zero', dose: '18' }, // same day, before reset
+            { id: 2, timestamp: Date.UTC(2024, 5, 15, 16, 0, 0) / 1000, grinder: 'Niche Zero', dose: '19' }, // same day, after reset
+        ]);
+        const stats = libraryService.computeGrinderWearStats({
+            name: 'Niche Zero',
+            burrsResetAt: new Date(resetInstant).toISOString(),
+        });
+        expect(stats.shotsSinceBurrs).toBe(1);
+        expect(stats.gramsSinceBurrs).toBe(19);
+    });
+
     it('returns zero stats for a grinder with no matching shots', () => {
         seedShots([{ id: 1, timestamp: 100, grinder: 'Other Grinder', dose: '18' }]);
         const stats = libraryService.computeGrinderWearStats({ name: 'Niche Zero' });

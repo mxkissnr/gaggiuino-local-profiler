@@ -25,7 +25,7 @@ router.post('/api/maintenance/:task/done', (req, res, next) => {
     try {
         if (!isValidTask(req.params.task)) return res.status(404).json({ error: 'Unknown task' });
         const maint = libraryService.getMaintenance();
-        maint[req.params.task].lastDate = new Date().toISOString().split('T')[0];
+        maint[req.params.task].lastDate = new Date().toISOString();
         libraryService.saveMaintenance(maint);
         libraryService.addMaintenanceLogEntry(req.params.task, req.body?.notes || '', machineHostname());
         res.json(libraryService.computeMaintenanceStats(maint));

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
@@ -764,6 +764,30 @@ describe('GET /api/maintenance/log', () => {
         const [entry] = await (await fetch(`${baseUrl}/api/maintenance/log`)).json();
         expect(entry.task).toBe('grinder_42');
         expect(entry.grinderName).toBeUndefined();
+    });
+});
+
+describe('POST /api/maintenance/:task/done (shotsSince precision)', () => {
+    afterAll(() => vi.useRealTimers());
+
+    it('excludes a same-day shot pulled before the "done" instant, not just before the calendar day', async () => {
+        const doneInstant = Date.UTC(2024, 5, 15, 12, 0, 0); // 2024-06-15 12:00 UTC
+        shotRepo.upsertMany([
+            { id: 1, timestamp: Date.UTC(2024, 5, 15, 8, 0, 0) / 1000, duration: 250 }, // same day, before "done"
+        ]);
+
+        vi.useFakeTimers();
+        vi.setSystemTime(doneInstant);
+        const done = await fetch(`${baseUrl}/api/maintenance/waterfilter/done`, { method: 'POST' });
+        expect(done.status).toBe(200);
+        vi.useRealTimers();
+
+        shotRepo.upsertMany([
+            { id: 2, timestamp: Date.UTC(2024, 5, 15, 16, 0, 0) / 1000, duration: 250 }, // same day, after "done"
+        ]);
+
+        const stats = await (await fetch(`${baseUrl}/api/maintenance`)).json();
+        expect(stats.waterfilter.shotsSince).toBe(1);
     });
 });
 

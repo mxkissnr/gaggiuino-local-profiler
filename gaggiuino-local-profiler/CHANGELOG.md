@@ -1,3 +1,8 @@
+## [1.121.3] – 2026-07-13
+
+### Fixed
+- **Marking a maintenance task done (or resetting grinder burrs) could count shots pulled earlier the same day, before the action, as "since" it.** `POST /api/maintenance/:task/done` and `POST /api/library/grinder/:id/reset-burrs` stored only a day-granularity date (`new Date().toISOString().split('T')[0]`), so `computeMaintenanceStats()`/`computeGrinderWearStats()` compared shots against UTC-midnight of that day instead of the actual moment the action happened — e.g. replacing the water filter at noon after already pulling shots that morning showed those pre-swap shots as "since replacement" instead of 0. Now stores the full timestamp (`new Date().toISOString()`); affects all maintenance tasks (descaling, backflush, grouphead, gaskets, waterfilter, grinder cleaning) plus grinder burr-wear tracking, since they share this calculation. Manual date-picker fields (roast date, purchase date, backdated maintenance log entries) are unaffected — they're intentionally day-only. `routes/maintenance.js`, `routes/library.js`, `test/db-routes.test.js`, `test/grinder-wear.test.js` (new regression tests). Closes #331
+
 ## [1.121.2] – 2026-07-13
 
 ### Fixed
