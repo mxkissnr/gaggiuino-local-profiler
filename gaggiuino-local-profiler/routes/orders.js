@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 
 const {
-    loadOrders, saveOrders, loadMenu, saveMenu,
+    loadOrders, loadAllOrders, saveOrders, loadMenu, saveMenu,
     loadOrdersSettings, saveOrdersSettings,
     loadNotifyMapping, saveNotifyMapping,
     isOrdersEnabled, loadOptions, loadLibrary,
@@ -261,7 +261,10 @@ router.get('/api/orders', (req, res) => {
 });
 
 router.get('/api/orders/stats', (req, res) => {
-    const done = loadOrders().filter(o => o.status === 'done');
+    // #321: loadOrders()/findActive() drops done orders older than the 7-day
+    // ORDERS_HISTORY_TTL_MS live-queue window — stats are labelled lifetime
+    // totals, so they must read from the unfiltered table instead.
+    const done = loadAllOrders().filter(o => o.status === 'done');
     if (!done.length) return res.json({ total: 0, customers: [], mostPopular: null });
 
     // Group by a normalized key so "Max"/"max"/"Max " count as one customer;

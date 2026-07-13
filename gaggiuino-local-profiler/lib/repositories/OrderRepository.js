@@ -14,6 +14,16 @@ class OrderRepository {
             );
     }
 
+    // Unlike findActive(), never filters done/declined orders by age — used
+    // by /api/orders/stats (#321), which is labelled as lifetime customer
+    // totals and must not silently drop anything older than the 7-day
+    // ORDERS_HISTORY_TTL_MS window findActive() applies for the live queue.
+    findAll() {
+        const db   = getDb();
+        const rows = db.prepare('SELECT data FROM orders').all();
+        return rows.map(r => JSON.parse(r.data));
+    }
+
     findById(id) {
         const db  = getDb();
         const row = db.prepare('SELECT data FROM orders WHERE id = ?').get(id);

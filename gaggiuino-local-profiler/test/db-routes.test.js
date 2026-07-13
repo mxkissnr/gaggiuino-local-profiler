@@ -134,6 +134,22 @@ describe('GET /api/orders/stats', () => {
         const stats = await (await fetch(`${baseUrl}/api/orders/stats`)).json();
         expect(stats.customers.map(c => c.name).sort()).toEqual(['Anna', 'Max']);
     });
+
+    // #321: findActive() (used by the live order queue) drops done orders
+    // older than ORDERS_HISTORY_TTL_MS (7 days) — stats are labelled lifetime
+    // totals and must not lose them, unlike the queue.
+    it('counts done orders older than the 7-day live-queue history window', async () => {
+        const now = Date.now();
+        const veryOld = now - 30 * 24 * 60 * 60 * 1000; // 30 days ago
+        saveOrders([
+            { id: 'old', item: 'Espresso', customer: 'Max', status: 'done', createdAt: veryOld, completedAt: veryOld },
+            { id: 'new', item: 'Espresso', customer: 'Max', status: 'done', createdAt: now, completedAt: now },
+        ]);
+        const stats = await (await fetch(`${baseUrl}/api/orders/stats`)).json();
+        expect(stats.total).toBe(2);
+        expect(stats.customers).toHaveLength(1);
+        expect(stats.customers[0]).toMatchObject({ name: 'Max', count: 2 });
+    });
 });
 
 describe('orders-disabled guard', () => {

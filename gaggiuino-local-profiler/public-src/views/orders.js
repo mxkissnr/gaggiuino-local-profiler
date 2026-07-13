@@ -115,10 +115,17 @@ export async function loadOrdersView() {
   S._knownPendingIds = new Set(pendingOrders.map(o => o.id));
 }
 
+// Tiered relative time (#320) — raw minutes was unreadable once an order
+// sat for hours/days (e.g. "Vor 3904 Min"): minutes under an hour, hours
+// under a day, days beyond that.
 export function _orderTimeAgo(ts) {
   const min = Math.round((Date.now() - ts) / 60000);
   if (min < 1) return t('orders_just_now');
-  return t('orders_ago', min);
+  if (min < 60) return t('orders_ago', min);
+  const hours = Math.round(min / 60);
+  if (hours < 24) return t('orders_ago_hours', hours);
+  const days = Math.round(hours / 24);
+  return t('orders_ago_days', days);
 }
 
 export function renderMilkStock(milks) {

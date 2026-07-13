@@ -280,7 +280,7 @@ export default {
     orders_menu_title:'Gestionar menú', orders_menu_add:'+ Agregar bebida',
     orders_menu_name_ph:'Nombre …', orders_menu_emoji_ph:'☕', orders_menu_save:'Agregar',
     orders_for:'para', orders_note_ph:'Nota …',
-    orders_ago:(m)=>`Hace ${m} min`, orders_eta_in:(m)=>`Listo en ${m} min`,
+    orders_ago:(m)=>`Hace ${m} min`, orders_ago_hours:(h)=>`Hace ${h} h`, orders_ago_days:(d)=>`Hace ${d} d`, orders_eta_in:(m)=>`Listo en ${m} min`,
     orders_queue_pos:(pos,eta)=>`Pos. ${pos} · ~${eta} min`,
     orders_queue_banner:(n,eta)=>`🕐 ${n} pedido${n!==1?'s':''} en cola · ~${eta} min en total`,
     orders_suggested_eta:(m)=>`Sugerido: ${m} min`,

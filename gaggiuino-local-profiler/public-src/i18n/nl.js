@@ -280,7 +280,7 @@ export default {
     orders_menu_title:'Menu beheren', orders_menu_add:'+ Drank toevoegen',
     orders_menu_name_ph:'Naam …', orders_menu_emoji_ph:'☕', orders_menu_save:'Toevoegen',
     orders_for:'voor', orders_note_ph:'Notitie …',
-    orders_ago:(m)=>`${m} min geleden`, orders_eta_in:(m)=>`Klaar in ${m} min`,
+    orders_ago:(m)=>`${m} min geleden`, orders_ago_hours:(h)=>`${h} u geleden`, orders_ago_days:(d)=>`${d} d geleden`, orders_eta_in:(m)=>`Klaar in ${m} min`,
     orders_queue_pos:(pos,eta)=>`Pos. ${pos} · ~${eta} min`,
     orders_queue_banner:(n,eta)=>`🕐 ${n} bestelling${n!==1?'en':''} in wachtrij · ~${eta} min totaal`,
     orders_suggested_eta:(m)=>`Suggestie: ${m} min`,

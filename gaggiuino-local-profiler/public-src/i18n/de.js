@@ -264,7 +264,7 @@ export default {
     orders_menu_title:'Menü verwalten', orders_menu_add:'+ Getränk hinzufügen',
     orders_menu_name_ph:'Name …', orders_menu_emoji_ph:'☕', orders_menu_save:'Hinzufügen',
     orders_for:'für', orders_note_ph:'Notiz …',
-    orders_ago:(m)=>`Vor ${m} Min`, orders_eta_in:(m)=>`Fertig in ${m} Min`,
+    orders_ago:(m)=>`Vor ${m} Min`, orders_ago_hours:(h)=>`Vor ${h} Std.`, orders_ago_days:(d)=>`Vor ${d} Tagen`, orders_eta_in:(m)=>`Fertig in ${m} Min`,
     orders_queue_pos:(pos,eta)=>`Pos. ${pos} · ~${eta} Min`,
     orders_queue_banner:(n,eta)=>`🕐 ${n} Bestellung${n!==1?'en':''} in der Warteschlange · ~${eta} Min gesamt`,
     orders_suggested_eta:(m)=>`Vorschlag: ${m} Min`,

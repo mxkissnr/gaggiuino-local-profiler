@@ -49,6 +49,7 @@ function isOrdersEnabled() { return !!loadOptions().enable_orders; }
 
 // ── Order shims ───────────────────────────────────────────────────────────────
 function loadOrders()          { return orderRepo.findActive(); }
+function loadAllOrders()       { return orderRepo.findAll(); }
 function saveOrders(orders) {
     const db = getDb();
     db.transaction(() => {
@@ -84,7 +85,7 @@ function saveImportSettings(s)     { importSettingsRepo.saveSettings(s); }
 
 module.exports = {
     loadOptions, getMachineUrl, getMachineBaseUrl, getSyncIntervalMs, isOrdersEnabled,
-    loadOrders, saveOrders, loadMenu, saveMenu,
+    loadOrders, loadAllOrders, saveOrders, loadMenu, saveMenu,
     loadOrdersSettings, saveOrdersSettings,
     loadNotifyMapping, saveNotifyMapping,
     loadLibrary, saveLibrary,
