@@ -273,6 +273,17 @@ function _flapFlip(container, str) {
   });
 }
 
+// #333: loadData() and loadMachines() both race to call renderSidebar() on
+// startup with no fixed order — if loadMachines() resolves first (its
+// default-machine bootstrap re-filters S.shots from a still-empty
+// S.allShots), the resulting 0-count call used to be treated as "the" first
+// call, scheduling a deferred flip that then clobbered the real count back
+// to zero once it arrived. Tracking the pending timeout lets a later call
+// cancel it and win instead, the same way the header text (set synchronously
+// on every renderSidebar() call, never deferred) already always shows the
+// latest count.
+let _flapInitTimeout = null;
+
 export function updateFlapCounter(count) {
   const container = document.getElementById('flapDigits');
   if (!container) return;
@@ -288,8 +299,9 @@ export function updateFlapCounter(count) {
   }
   if (!S._flapInitDone) {
     S._flapInitDone = true;
-    setTimeout(() => _flapFlip(container, str), 350);
+    _flapInitTimeout = setTimeout(() => { _flapInitTimeout = null; _flapFlip(container, str); }, 350);
   } else {
+    if (_flapInitTimeout) { clearTimeout(_flapInitTimeout); _flapInitTimeout = null; }
     _flapFlip(container, str);
   }
 }

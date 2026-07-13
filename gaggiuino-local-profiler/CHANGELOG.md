@@ -1,3 +1,8 @@
+## [2.0.1] – 2026-07-13
+
+### Fixed
+- **Sidebar shot counter (flap digits) stuck at "0000" after upgrading to v2.0.0**, even though the header text next to it (`Shots (N)`) correctly showed the real count. Regression from #325: `loadData()` and `loadMachines()` both fire around startup with no fixed order, and `loadMachines()`'s first-run default-machine bootstrap calls `applyActiveMachineChange()`, which re-filters `S.shots` from a possibly-still-empty `S.allShots` and calls `renderSidebar()`. If that 0-count call happened first, `updateFlapCounter()`'s one-time deferred startup animation (350ms) got scheduled against it — and then fired *after* the real count had already been shown correctly, clobbering it back to zero. `updateFlapCounter()` now cancels a still-pending deferred flip when a later call arrives, so whichever call is genuinely last always wins, matching how the header text already behaved. `public-src/components/sidebar.js`. Closes #333
+
 ## [2.0.0] – 2026-07-13
 
 ### Added
