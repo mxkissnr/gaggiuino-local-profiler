@@ -5,7 +5,13 @@ export const S = {
     return lang;
   })(),
   glpToken: localStorage.getItem('glp_token') || '',
+  // S.shots is the currently *visible* (machine-filtered) set every existing
+  // view (sidebar, analytics, ...) already reads; S.allShots is the full
+  // unfiltered fetch from the server, re-filtered into S.shots whenever
+  // S.activeMachineId changes (#325) — see filterShotsByMachine() below and
+  // applyActiveMachineChange() in components/machines-settings.js.
   shots: [],
+  allShots: [],
   trashedShots: [],
   chart: null,
   primaryShotId: null,
@@ -96,4 +102,14 @@ export function subscribe(key, callback) {
 export function setState(key, value) {
   S[key] = value;
   _subs.get(key)?.forEach(cb => cb(value));
+}
+
+// Multi-machine shot filtering (#325). `activeMachineId` of null (machines
+// not loaded yet) or the sentinel 'all' means "show everything" — a shot
+// with no machineId at all (e.g. cached/pre-#317 data) is treated as
+// belonging to the default machine (id 1), matching the backend's own
+// default-machine convention.
+export function filterShotsByMachine(shots, activeMachineId) {
+  if (activeMachineId == null || activeMachineId === 'all') return shots;
+  return shots.filter(s => (s.machineId ?? 1) === activeMachineId);
 }

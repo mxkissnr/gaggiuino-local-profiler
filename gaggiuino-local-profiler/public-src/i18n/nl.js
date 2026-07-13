@@ -29,6 +29,8 @@ export default {
     grind_ok:'Maalgraad is goed', grind_coarser:'Iets grover malen',
     grind_coarser_urgent:'Grover malen', grind_channeling:'Puck voorbereiding controleren',
     live_title:'Shot Live', live_connecting:'Verbinden …', live_brewing:'Extraheren …',
+    live_machine_unavailable:'Live-weergave is nog niet beschikbaar voor deze machine.',
+    machine_switcher_title:'Machine', machine_switcher_all:'Alle machines',
     live_waiting:'Wachten op shot …', live_disabled:'Live uitgeschakeld (machine uit)',
     machine_ready:'Machine klaar',
     ref_label:'Referentie:', ref_none:'— geen referentieshot —', ref_clear:'✕ Verwijderen',

@@ -1,4 +1,4 @@
-import { S }                                                  from '../../state.js';
+import { S, filterShotsByMachine }                            from '../../state.js';
 import { t }                                                  from '../../i18n.js';
 import { apiFetch }                                           from '../../api.js';
 import { LOCALE_MAP, phasePlugin, corsairPlugin, clearChartOnTouchEnd } from '../../constants.js';
@@ -36,7 +36,12 @@ export async function loadData() {
     return;
   }
 
-  S.shots = fetched;
+  // Multi-machine filtering (#325): S.allShots is the true unfiltered
+  // fetch; S.shots (what every existing view already reads) becomes the
+  // machine-filtered projection, re-derived whenever the active machine
+  // changes (see applyActiveMachineChange() in components/machines-settings.js).
+  S.allShots = fetched;
+  S.shots = filterShotsByMachine(fetched, S.activeMachineId);
   renderSidebar();
   loadTrashData();
 

@@ -83,6 +83,7 @@
             <button class="mode-btn" id="btnMaintenance">Wartung<span id="maintBadge" class="maint-badge" style="display:none"></span></button>
             <button class="mode-btn" id="btnOrders" style="display:none">Bestellungen<span id="ordersBadge" class="maint-badge" style="display:none"></span></button>
         </div>
+        <select id="machineSwitcher" class="machine-switcher" style="display:none" data-action="switch-machine" data-i18n-title="machine_switcher_title" title="Maschine"></select>
         <button class="mode-btn" id="btnSettings">⚙</button>
     </div>
 
@@ -817,6 +818,10 @@
             </div>
         </div>
         <div id="live-meta">–</div>
+
+        <div id="liveMachineUnavailableBanner" style="display:none">
+            <p data-i18n="live_machine_unavailable">Live-Ansicht ist für diese Maschine noch nicht verfügbar.</p>
+        </div>
 
         <div id="live-content">
             <div class="live-stats">

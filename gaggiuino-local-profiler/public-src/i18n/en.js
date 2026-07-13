@@ -29,6 +29,8 @@ export default {
     grind_ok:'Grind setting is good', grind_coarser:'Grind slightly coarser',
     grind_coarser_urgent:'Grind coarser', grind_channeling:'Check puck prep',
     live_title:'Live Shot', live_connecting:'Connecting …', live_brewing:'Brewing …',
+    live_machine_unavailable:'Live view is not available for this machine yet.',
+    machine_switcher_title:'Machine', machine_switcher_all:'All machines',
     live_waiting:'Waiting for shot …', live_disabled:'Live disabled (machine off)',
     machine_ready:'Machine ready',
     ref_label:'Reference:', ref_none:'— no reference shot —', ref_clear:'✕ Clear',

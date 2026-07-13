@@ -94,7 +94,7 @@ import { startProfileDialinFromList, profileDialinClose,
 
 import { loadDemoData, endDemo } from './components/onboarding.js';
 
-import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm } from './components/machines-settings.js';
+import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine } from './components/machines-settings.js';
 
 // ── Toast helper ──────────────────────────────────────────────────────────
 function showToast(msg, duration = 3000) {
@@ -697,6 +697,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (el.dataset.action === 'dialin-grinder-select') {
       dialinGrinderChange();
+    }
+    if (el.dataset.action === 'switch-machine') {
+      switchActiveMachine(el.value);
     }
   });
 

@@ -29,6 +29,8 @@ export default {
     grind_ok:'Macinatura corretta', grind_coarser:'Macinare leggermente più grosso',
     grind_coarser_urgent:'Macinare più grosso', grind_channeling:'Controllare la preparazione del puck',
     live_title:'Shot Live', live_connecting:'Connessione …', live_brewing:'Estrazione …',
+    live_machine_unavailable:'La vista Live non è ancora disponibile per questa macchina.',
+    machine_switcher_title:'Macchina', machine_switcher_all:'Tutte le macchine',
     live_waiting:'In attesa dello shot …', live_disabled:'Live disabilitato (macchina spenta)',
     machine_ready:'Macchina pronta',
     ref_label:'Riferimento:', ref_none:'— nessuno shot di riferimento —', ref_clear:'✕ Rimuovi',

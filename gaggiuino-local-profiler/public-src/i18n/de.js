@@ -29,6 +29,8 @@ export default {
     grind_ok:'Mahlgrad passt', grind_coarser:'Leicht gröber mahlen',
     grind_coarser_urgent:'Gröber mahlen', grind_channeling:'Puck-Vorbereitung prüfen',
     live_title:'Live Shot', live_connecting:'Verbinde …', live_brewing:'Brewing …',
+    live_machine_unavailable:'Live-Ansicht ist für diese Maschine noch nicht verfügbar.',
+    machine_switcher_title:'Maschine', machine_switcher_all:'Alle Maschinen',
     live_waiting:'Warte auf Bezug …', live_disabled:'Live deaktiviert (Maschine aus)',
     machine_ready:'Maschine bereit',
     ref_label:'Referenz:', ref_none:'— kein Referenz-Shot —', ref_clear:'✕ Löschen',

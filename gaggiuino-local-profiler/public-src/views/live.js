@@ -2,6 +2,19 @@ import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { mapToXY, formatTimeLabel } from '../utils.js';
+import { getDefaultMachineId } from '../components/machines-settings.js';
+
+// Multi-machine live gating (#325) — only the default machine has real
+// live-status polling wired up (lib/poll.js/lib/sync.js's multi-machine
+// loop for additional machines is a follow-up, not built yet). 'all' and a
+// not-yet-loaded activeMachineId both count as "assume default machine" so
+// single-machine installs (the vast majority) are entirely unaffected.
+function _isActiveMachineLiveCapable() {
+  const active = S.activeMachineId;
+  if (active == null || active === 'all') return true;
+  const defaultId = getDefaultMachineId();
+  return defaultId == null || active === defaultId;
+}
 
 // ── Live chart init ───────────────────────────────────────────────────────
 export function initLiveChart() {
@@ -116,6 +129,17 @@ export function clearReferenceShot() {
 }
 
 export function connectLiveStream() {
+  const banner  = document.getElementById('liveMachineUnavailableBanner');
+  const content = document.getElementById('live-content');
+  if (!_isActiveMachineLiveCapable()) {
+    disconnectLiveStream();
+    if (banner)  banner.style.display  = '';
+    if (content) content.style.display = 'none';
+    setLiveBadge('error', t('live_machine_unavailable'));
+    return;
+  }
+  if (banner)  banner.style.display  = 'none';
+  if (content) content.style.display = '';
   disconnectLiveStream();
   initLiveChart();
   setLiveBadge('connecting');

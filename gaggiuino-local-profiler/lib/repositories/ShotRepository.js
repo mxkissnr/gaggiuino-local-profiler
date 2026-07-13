@@ -10,12 +10,17 @@ function _hydrate(row) {
         duration:    row.duration,
         profile_name: row.profile_name,
         ...rest,
+        // machineId (#325): surfaced to the frontend so it can filter/badge
+        // shots per machine. upsert()/upsertMany() always destructure
+        // machineId out of the JSON blob before storing, so `rest` never
+        // carries a stale copy of this field.
+        machineId:   row.machine_id,
         annotation:  row.ann_data ? JSON.parse(row.ann_data) : (rest.annotation ?? {}),
     };
 }
 
 const SELECT_BASE = `
-    SELECT s.id, s.timestamp, s.duration, s.profile_name, s.data, a.data AS ann_data
+    SELECT s.id, s.timestamp, s.duration, s.profile_name, s.data, s.machine_id, a.data AS ann_data
     FROM shots s LEFT JOIN annotations a ON a.shot_id = s.id
 `;
 

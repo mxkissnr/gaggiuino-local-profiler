@@ -1,10 +1,11 @@
-// Multi-machine registry UI (#319) — Settings tab "Maschinen" card: list,
-// add, edit, delete and test-connect the machines this GLP instance
-// manages, against the /api/machines API added in #317. S.activeMachineId
-// is persisted so a future machine-scoped view (Live/Shots/Analytics
-// filtering) has a stable place to read "which machine am I looking at"
-// from; per-view filtering itself is a follow-up, not wired in this round.
-import { S, setState } from '../state.js';
+// Multi-machine registry UI (#319, #325) — Settings tab "Maschinen" card:
+// list, add, edit, delete and test-connect the machines this GLP instance
+// manages, against the /api/machines API added in #317. Also renders the
+// topbar machine switcher and drives S.activeMachineId, which
+// filterShotsByMachine() (state.js) and applyActiveMachineChange() below
+// use to keep the Shots list / Analytics / Live view scoped to the
+// selected machine.
+import { S, setState, filterShotsByMachine } from '../state.js';
 import { apiFetch } from '../api.js';
 import { t } from '../i18n.js';
 
@@ -14,12 +15,19 @@ function escapeHtml(s) {
 
 (function restoreActiveMachine() {
   const stored = localStorage.getItem('glp_active_machine');
-  if (stored) S.activeMachineId = parseInt(stored, 10);
+  if (stored) S.activeMachineId = stored === 'all' ? 'all' : parseInt(stored, 10);
 })();
 
 export function setActiveMachine(id) {
   setState('activeMachineId', id);
   try { localStorage.setItem('glp_active_machine', String(id)); } catch {}
+}
+
+// The default machine's id, or null before /api/machines has ever loaded —
+// used by views/live.js to decide whether the currently active machine has
+// real live-polling support (only the default machine does, in this round).
+export function getDefaultMachineId() {
+  return (S.machines || []).find(m => m.isDefault)?.id ?? null;
 }
 
 export async function loadMachines() {
@@ -31,9 +39,53 @@ export async function loadMachines() {
     if (!S.activeMachineId) {
       const def = machines.find(m => m.isDefault) || machines[0];
       if (def) setActiveMachine(def.id);
+      // loadData() and loadMachines() both fire around startup with no
+      // fixed order — if shots already loaded before the default machine
+      // was known, S.shots was filtered against a null activeMachineId
+      // (i.e. unfiltered). Re-filter now that it's set; a no-op for
+      // single-machine installs and for the case where loadData() simply
+      // hasn't run yet (S.allShots still empty).
+      applyActiveMachineChange();
     }
     renderMachinesList();
+    renderMachineSwitcher();
   } catch (e) { /* offline/first-run — settings card just stays empty */ }
+}
+
+// Topbar switcher (#325) — only shown once >1 machine is registered, so a
+// single-machine install never sees it. "All machines" is always the first
+// option once the switcher is visible.
+export function renderMachineSwitcher() {
+  const el = document.getElementById('machineSwitcher');
+  if (!el) return;
+  const machines = S.machines || [];
+  if (machines.length < 2) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
+  el.innerHTML = `<option value="all">${escapeHtml(t('machine_switcher_all'))}</option>` +
+    machines.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  el.value = String(S.activeMachineId ?? 'all');
+  el.style.display = '';
+}
+
+export function switchActiveMachine(rawValue) {
+  const value = rawValue === 'all' ? 'all' : parseInt(rawValue, 10);
+  setActiveMachine(value);
+  applyActiveMachineChange();
+}
+
+// Re-filters the cached shot list and refreshes whichever view is
+// currently open (#325) — called after switchActiveMachine() and once
+// machines first finish loading.
+export function applyActiveMachineChange() {
+  S.shots = filterShotsByMachine(S.allShots || [], S.activeMachineId);
+  if (window.renderSidebar) window.renderSidebar();
+  if (S.shots.length && !S.shots.some(s => s.id === S.primaryShotId)) {
+    S.primaryShotId = S.shots[S.shots.length - 1].id;
+    S.compareShotId = null;
+  }
+  if (window.updateView) window.updateView();
+  if (S.currentMode === 'analytics' && window.initAnalytics) window.initAnalytics();
+  if (S.currentMode === 'live' && window.connectLiveStream) window.connectLiveStream();
 }
 
 export function renderMachinesList() {

@@ -190,6 +190,21 @@ describe('ShotRepository machine scoping', () => {
         expect(shotRepo.getMachineId(1)).toBe(1);
     });
 
+    // #325: the frontend needs machineId on every shot to filter/badge the
+    // shots list and analytics per machine — findById/findAll must surface
+    // it, not just the internal getMachineId() lookup.
+    it('findById/findAll include machineId on the hydrated shot object (frontend needs it for #325 filtering)', () => {
+        const shotRepo = require('../lib/repositories/ShotRepository');
+        shotRepo.upsert({ id: 1, timestamp: 1000, duration: 250, machineId: 1 });
+        shotRepo.upsert({ id: 20_000_005, timestamp: 2000, duration: 250, machineId: 2 });
+
+        expect(shotRepo.findById(1).machineId).toBe(1);
+        expect(shotRepo.findById(20_000_005).machineId).toBe(2);
+        const all = shotRepo.findAll();
+        expect(all.find(s => s.id === 1).machineId).toBe(1);
+        expect(all.find(s => s.id === 20_000_005).machineId).toBe(2);
+    });
+
     it('upsert stores an explicit machineId and findAll(machineId) scopes correctly', () => {
         const shotRepo = require('../lib/repositories/ShotRepository');
         shotRepo.upsert({ id: 1, timestamp: 1000, duration: 250, machineId: 1 });

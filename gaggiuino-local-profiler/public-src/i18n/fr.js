@@ -29,6 +29,8 @@ export default {
     grind_ok:'La mouture est bonne', grind_coarser:'Moudre légèrement plus grossier',
     grind_coarser_urgent:'Moudre plus grossier', grind_channeling:'Vérifier la préparation du puck',
     live_title:'Shot Live', live_connecting:'Connexion …', live_brewing:'Extraction …',
+    live_machine_unavailable:"La vue en direct n'est pas encore disponible pour cette machine.",
+    machine_switcher_title:'Machine', machine_switcher_all:'Toutes les machines',
     live_waiting:'En attente du shot …', live_disabled:'Live désactivé (machine éteinte)',
     machine_ready:'Machine prête',
     ref_label:'Référence:', ref_none:'— pas de shot de référence —', ref_clear:'✕ Effacer',

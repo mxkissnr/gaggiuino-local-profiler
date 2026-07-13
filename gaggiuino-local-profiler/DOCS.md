@@ -152,7 +152,9 @@ GLP can manage more than one espresso machine from a single add-on instance — 
 | Profile create/update/delete | ✅ | 🚧 read-only in v2.0.0 |
 | Brew start from GLP | ❌ (machine has no start API either) | ❌ (no start API) |
 
-On upgrade from a pre-2.0.0 install, the existing `machine_host`/`switch_entity` add-on options are automatically migrated into machine #1 (named "Gaggiuino", marked as the **default machine**) — no manual steps, and every existing URL, shot id, image and annotation keeps working exactly as before. Add further machines from the app's **Settings** view (name, type, host, optional HA switch entity); each gets a "Test connection" button before saving. The default machine keeps its original REST API surface untouched; a machine switcher (only shown once a second machine exists) lets you pick which machine's Live/Shots/Analytics you're looking at.
+On upgrade from a pre-2.0.0 install, the existing `machine_host`/`switch_entity` add-on options are automatically migrated into machine #1 (named "Gaggiuino", marked as the **default machine**) — no manual steps, and every existing URL, shot id, image and annotation keeps working exactly as before. Add further machines from the app's **Settings** view (name, type, host, optional HA switch entity); each gets a "Test connection" button before saving. The default machine keeps its original REST API surface untouched.
+
+A machine switcher in the topbar (only shown once a second machine is registered) lets you pick "All machines" or one specific machine — Shots list and Analytics scope to that choice, and in "All machines" mode each shot in the list carries a small machine-name badge. **Live view is currently only available for the default machine** — additional machines don't have a live-status polling loop yet, so switching to one while on the Live tab shows an explanatory message instead of stale/fake data.
 
 ## Features
 

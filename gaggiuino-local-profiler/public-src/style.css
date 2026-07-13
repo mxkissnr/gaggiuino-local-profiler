@@ -246,6 +246,21 @@
         .mode-btn:hover    { color: var(--gray-200); }
         .mode-btn.active   { color: #fff; border-bottom-color: transparent; position: relative; }
         .mode-btn.active::after { content:''; position:absolute; bottom:-1px; left:0; right:0; height:2px; background:linear-gradient(90deg, var(--accent-from), var(--accent-to)); border-radius:1px; }
+
+        /* Multi-machine switcher (#325) — only shown once >1 machine is registered */
+        .machine-switcher {
+            background: var(--gray-800); border: 1px solid var(--gray-700); color: var(--gray-200);
+            border-radius: 8px; padding: 6px 10px; font-family: 'Figtree', sans-serif; font-size: .8rem;
+            cursor: pointer; margin: 0 8px; flex-shrink: 0; max-width: 160px;
+        }
+        #liveMachineUnavailableBanner {
+            background: var(--gray-900); border: 1px solid var(--gray-700); border-radius: 10px;
+            padding: 16px; margin: 0 0 16px; color: var(--gray-400); font-size: .85rem; text-align: center;
+        }
+        .shot-machine-badge {
+            display: inline-block; font-size: .68rem; color: var(--gray-500); background: var(--gray-800);
+            border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+        }
         #btnLive .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--gray-600); margin-right: 6px; transition: background .3s; }
         #btnLive.live-brewing .live-dot { background: var(--err); animation: pulse 1.2s infinite; }
         #btnLive.live-ready   .live-dot { background: var(--ok); }

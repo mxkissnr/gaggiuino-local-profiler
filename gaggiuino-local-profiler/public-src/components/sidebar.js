@@ -118,11 +118,17 @@ function _buildShotWrapper(shot) {
       ? `<span class="sidebar-drink-badge">${drinkItem.emoji} ${esc(drinkItem.name)}</span>`
       : '';
     const thumbHtml = shot.image ? `<img class="shot-thumb" data-shot-id="${shot.id}" alt="">` : '';
+    // Multi-machine badge (#325): only shown in "all machines" mode with
+    // more than one machine registered — a machine-scoped list already
+    // implies every visible shot is from that machine, so the badge would
+    // be redundant noise there.
+    const machineBadge = (S.machines?.length > 1 && S.activeMachineId === 'all' && shot.machineId != null)
+      ? `<span class="shot-machine-badge">${esc((S.machines.find(m => m.id === shot.machineId) || {}).name || '?')}</span>` : '';
     divShot.innerHTML = `
       <div class="shot-row">
         ${thumbHtml}
         <div class="shot-text">
-          <div class="profile-name-sidebar">${esc(profileName)}${scorePill}</div>
+          <div class="profile-name-sidebar">${esc(profileName)}${scorePill}${machineBadge}</div>
           ${coffeeHtml}
           <div class="shotid-sidebar">Shot ${esc(String(shot.id))}${ann.grinder ? ` · ${esc(ann.grinder)}` : ''}${drinkHtml}</div>
           <div class="date-sidebar">${esc(date.toLocaleString(LOCALE_MAP[S.currentLang] || 'de-DE'))}</div>

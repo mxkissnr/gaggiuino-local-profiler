@@ -29,6 +29,8 @@ export default {
     grind_ok:'La molturación es correcta', grind_coarser:'Moler ligeramente más grueso',
     grind_coarser_urgent:'Moler más grueso', grind_channeling:'Revisar preparación del puck',
     live_title:'Shot Live', live_connecting:'Conectando …', live_brewing:'Extrayendo …',
+    live_machine_unavailable:'La vista en directo aún no está disponible para esta máquina.',
+    machine_switcher_title:'Máquina', machine_switcher_all:'Todas las máquinas',
     live_waiting:'Esperando shot …', live_disabled:'Live desactivado (máquina apagada)',
     machine_ready:'Máquina lista',
     ref_label:'Referencia:', ref_none:'— sin shot de referencia —', ref_clear:'✕ Quitar',
