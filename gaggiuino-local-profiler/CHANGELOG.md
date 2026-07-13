@@ -1,3 +1,9 @@
+## [2.1.0] – 2026-07-13
+
+### Added
+- **Per-machine shot count in Settings → Machines**, computed client-side from the already-loaded shot list (each shot carries `machineId`) — no backend change. `public-src/components/machines-settings.js`, `public-src/i18n/*.js` (all 6, new `settings_machine_shot_count`).
+- **Coffee library now respects the topbar machine switcher.** With a specific machine selected (not "All machines"), the bean/grinder lists only show items actually used on that machine — a bean/grinder with shot history on *other* machines but none on the active one is hidden, but one with *no* shot history anywhere (e.g. freshly added) always stays visible. Pure client-side filter reusing the existing machine-scoped `S.shots` from #325 — no new data model, no per-bean/grinder machine assignment. `public-src/views/library.js`, `public-src/components/machines-settings.js`, `public-src/components/mode.js`, `public-src/i18n/*.js` (all 6, new `lib_empty_beans_machine`/`lib_empty_grinders_machine`). Closes #334
+
 ## [2.0.1] – 2026-07-13
 
 ### Fixed

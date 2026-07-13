@@ -42,6 +42,10 @@ export function switchMode(mode) {
     if (window.renderGrinderList) window.renderGrinderList();
   }
   if (mode === 'maintenance') { if (window.loadMaintenanceView) window.loadMaintenanceView(); }
+  // #334: re-render on every entry so the per-machine shot count reflects
+  // S.allShots as of now, not whatever it was at the initial loadMachines()
+  // call (which can race loadData() on startup — see #333).
+  if (mode === 'settings')    { if (window.renderMachinesList) window.renderMachinesList(); }
   if (mode === 'orders') {
     if (window.loadOrdersView) window.loadOrdersView();
     if (window.startOrdersPolling) window.startOrdersPolling();

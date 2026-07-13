@@ -378,6 +378,7 @@
         .machine-row { display:flex; align-items:center; gap:10px; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:8px; padding:10px 14px; flex-wrap:wrap; }
         .machine-row-name { font-weight:600; color:var(--gray-200); }
         .machine-row-type { font-size:.75rem; color:var(--gray-500); background:var(--gray-900); border-radius:6px; padding:2px 8px; }
+        .machine-row-shot-count { font-size:.75rem; color:var(--gray-500); }
         .machine-row-badge { font-size:.7rem; color:#fff; background:var(--err); border-radius:6px; padding:2px 8px; }
         .machine-row-badge-experimental { font-size:.7rem; color:#f59e0b; background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.35); border-radius:6px; padding:2px 8px; }
         .machine-row-actions { margin-left:auto; display:flex; gap:8px; }

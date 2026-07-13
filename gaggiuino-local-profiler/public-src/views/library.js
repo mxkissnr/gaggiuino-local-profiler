@@ -59,15 +59,31 @@ export function switchLibTab(tab) {
   document.getElementById('libSectionProfiles')?.classList.toggle('active', tab === 'profiles');
 }
 
+// #334: when a specific machine is selected in the topbar switcher (not
+// "All machines"), hide a bean/grinder that has shot history on *other*
+// machines but none on the active one — a bean/grinder never brewed
+// anywhere yet (e.g. freshly added) always stays visible, so it doesn't
+// vanish the moment you filter to a machine. S.shots is already the
+// machine-filtered projection of S.allShots (see state.js), so this is a
+// pure client-side filter — no new data model, no backend change.
+function _usedOnActiveMachine(matchFn) {
+  if (S.activeMachineId == null || S.activeMachineId === 'all') return true;
+  if (!(S.allShots || []).some(matchFn)) return true; // never brewed anywhere
+  return (S.shots || []).some(matchFn);
+}
+
 // ── Bean list ─────────────────────────────────────────────────────────────
 export function renderBeanList() {
   const el = document.getElementById('beanListUI');
   if (!el) return;
-  if (!S.coffeeLibrary.beans.length) {
-    el.innerHTML = `<div class="lib-empty">${t('lib_empty_beans')}</div>`;
+  const beans = S.coffeeLibrary.beans.filter(b =>
+    _usedOnActiveMachine(s => (s.annotation?.coffee || '').toLowerCase() === b.name.toLowerCase()));
+  if (!beans.length) {
+    const key = S.coffeeLibrary.beans.length ? 'lib_empty_beans_machine' : 'lib_empty_beans';
+    el.innerHTML = `<div class="lib-empty">${t(key)}</div>`;
     return;
   }
-  el.innerHTML = S.coffeeLibrary.beans.map(b => {
+  el.innerHTML = beans.map(b => {
     // Total consumption across all bags (all shots matching bean name)
     const totalConsumed = Math.round(S.shots.reduce((sum, s) => {
       const d = parseFloat(s.annotation?.dose);
@@ -316,11 +332,14 @@ export function toggleBeanQR(id) {
 export function renderGrinderList() {
   const el = document.getElementById('grinderListUI');
   if (!el) return;
-  if (!S.coffeeLibrary.grinders.length) {
-    el.innerHTML = `<div class="lib-empty">${t('lib_empty_grinders')}</div>`;
+  const grinders = S.coffeeLibrary.grinders.filter(g =>
+    _usedOnActiveMachine(s => (s.annotation?.grinder || '').toLowerCase() === g.name.toLowerCase()));
+  if (!grinders.length) {
+    const key = S.coffeeLibrary.grinders.length ? 'lib_empty_grinders_machine' : 'lib_empty_grinders';
+    el.innerHTML = `<div class="lib-empty">${t(key)}</div>`;
     return;
   }
-  el.innerHTML = S.coffeeLibrary.grinders.map(g => {
+  el.innerHTML = grinders.map(g => {
     const extra = [g.burrType, g.purchaseDate].filter(Boolean).join(' · ');
     return `
     <div class="lib-item">

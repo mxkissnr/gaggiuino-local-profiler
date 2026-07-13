@@ -86,6 +86,12 @@ export function applyActiveMachineChange() {
   if (window.updateView) window.updateView();
   if (S.currentMode === 'analytics' && window.initAnalytics) window.initAnalytics();
   if (S.currentMode === 'live' && window.connectLiveStream) window.connectLiveStream();
+  // #334: library bean/grinder lists are filtered by active machine too —
+  // re-render so switching machine while already on that tab updates live.
+  if (S.currentMode === 'library') {
+    if (window.renderBeanList) window.renderBeanList();
+    if (window.renderGrinderList) window.renderGrinderList();
+  }
 }
 
 export function renderMachinesList() {
@@ -93,11 +99,17 @@ export function renderMachinesList() {
   if (!list) return;
   list.innerHTML = '';
   (S.machines || []).forEach(m => {
+    // #334: per-machine shot count, computed client-side from S.allShots
+    // (already carries machineId per shot, see ShotRepository) — no backend
+    // change needed. A shot with no machineId at all belongs to the default
+    // machine, matching the backend's own convention.
+    const shotCount = (S.allShots || []).filter(s => (s.machineId ?? 1) === m.id).length;
     const row = document.createElement('div');
     row.className = 'machine-row';
     row.innerHTML = `
       <span class="machine-row-name">${escapeHtml(m.name)}</span>
       <span class="machine-row-type">${m.type === 'gaggimate' ? 'GaggiMate' : 'Gaggiuino'}</span>
+      <span class="machine-row-shot-count">${t('settings_machine_shot_count', shotCount)}</span>
       ${m.type === 'gaggimate' ? `<span class="machine-row-badge-experimental" title="${escapeHtml(t('settings_machine_type_gaggimate'))}">${t('settings_machine_experimental_badge')}</span>` : ''}
       ${m.isDefault ? `<span class="machine-row-badge">${t('settings_machine_default')}</span>` : ''}
       <span class="machine-row-actions">

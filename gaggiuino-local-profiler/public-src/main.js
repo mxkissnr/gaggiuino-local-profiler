@@ -94,7 +94,7 @@ import { startProfileDialinFromList, profileDialinClose,
 
 import { loadDemoData, endDemo } from './components/onboarding.js';
 
-import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine } from './components/machines-settings.js';
+import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, renderMachinesList } from './components/machines-settings.js';
 
 // ── Toast helper ──────────────────────────────────────────────────────────
 function showToast(msg, duration = 3000) {
@@ -289,6 +289,7 @@ Object.assign(window, {
   switchLibTab,
   renderBeanList,
   renderGrinderList,
+  renderMachinesList,
   openBeanForm,
   closeBeanForm,
   editBean,
