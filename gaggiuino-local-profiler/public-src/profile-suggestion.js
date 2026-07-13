@@ -67,12 +67,20 @@ export function suggestProfileFromBean(bean) {
       {
         name: 'Decline Flow',
         type: 'FLOW',
-        target: { end: 1.6, curve: 'LINEAR', time: 25000 },
+        // start at the Ramp phase's own flow ceiling (its restriction value)
+        // and taper to 1.6 ml/s: a declining finish counteracts falling puck
+        // resistance in the shot's second half, and starting from the
+        // ramp's ceiling avoids a flow step between phases — #323, a
+        // missing target.start here defaulted to 0, making this render/run
+        // as an ascending 0 -> 1.6 ml/s ramp instead of a decline.
+        target: { start: gentle ? 2.0 : 3.0, end: 1.6, curve: 'LINEAR', time: 25000 },
         restriction: rampPressure,
       },
     ],
     globalStopConditions: {
-      weight: coffeeIn * (bean?.brewRatio ? 2.2 : 2),
+      // #323: was `bean?.brewRatio ? 2.2 : 2`, ignoring the actually-parsed
+      // ratio while recipe.coffeeOut above already uses it — now consistent.
+      weight: coffeeIn * (ratio || 2),
     },
   };
 }

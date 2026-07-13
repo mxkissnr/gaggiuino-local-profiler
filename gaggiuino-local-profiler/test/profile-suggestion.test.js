@@ -55,11 +55,33 @@ describe('suggestProfileFromBean', () => {
     expect(p.recipe).toEqual({ coffeeIn: 18, coffeeOut: 36, ratio: 2 });
   });
 
-  it('globalStopConditions weight uses a 2.2x dose multiplier when brewRatio is set, 2x otherwise', () => {
-    const withRatio    = suggestProfileFromBean({ name: 'A', brewRatio: '1:2' });
+  // #323: globalStopConditions.weight used to hard-code a 2.2x multiplier
+  // whenever brewRatio was set at all, ignoring its actual parsed value —
+  // inconsistent with recipe.coffeeOut just above, which does use it.
+  it('globalStopConditions weight uses the bean\'s own parsed ratio (coffeeIn * ratio), 2x default otherwise', () => {
+    const withRatio    = suggestProfileFromBean({ name: 'A', brewRatio: '1:2.5' });
     const withoutRatio = suggestProfileFromBean({ name: 'B' });
-    expect(withRatio.globalStopConditions.weight).toBeCloseTo(18 * 2.2, 5);
+    const unparseable   = suggestProfileFromBean({ name: 'C', brewRatio: 'strong' });
+    expect(withRatio.globalStopConditions.weight).toBeCloseTo(18 * 2.5, 5);
     expect(withoutRatio.globalStopConditions.weight).toBe(18 * 2);
+    expect(unparseable.globalStopConditions.weight).toBe(18 * 2);
+  });
+
+  // #323: a missing target.start on the Decline Flow phase defaulted to 0,
+  // making it render/run as an ASCENDING 0 -> 1.6 ml/s ramp instead of a
+  // declining finish. start must now be a real flow value above end, taken
+  // from the Ramp phase's own flow ceiling (its restriction).
+  it('Decline Flow phase actually declines: target.start is above target.end, matching the Ramp restriction', () => {
+    const decaf = suggestProfileFromBean({ name: 'Sertao', decaf: true });
+    const other = suggestProfileFromBean({ name: 'Standard Washed' });
+    const decafDecline = findPhase(decaf, 'Decline Flow');
+    const otherDecline = findPhase(other, 'Decline Flow');
+    expect(decafDecline.target.start).toBeGreaterThan(decafDecline.target.end);
+    expect(otherDecline.target.start).toBeGreaterThan(otherDecline.target.end);
+    expect(decafDecline.target.start).toBe(findPhase(decaf, 'Ramp').restriction);
+    expect(otherDecline.target.start).toBe(findPhase(other, 'Ramp').restriction);
+    expect(decafDecline.target.end).toBe(1.6);
+    expect(otherDecline.target.end).toBe(1.6);
   });
 
   it('Bloom phase is adaptive: stops on pressureBelow 1.5 bar in addition to the 5s safety-net timeout', () => {
