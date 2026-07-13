@@ -28,6 +28,37 @@ gh project item-add 2 --owner mxkissnr --url <issue-url>
 
 If you catch yourself writing code without an issue number in hand: stop, create the issue first, then continue.
 
+## Regression policy
+
+> **A feature or fix must never break already-working functionality.** This
+> is a hard constraint, not a trade-off against shipping speed.
+
+Concretely:
+- Before "fixing" something that looks wrong, verify against real ground
+  truth (an actual shot/profile/data export from Max, existing passing
+  tests, or the machine's own documented protocol) — not just plausible
+  general theory. A plausible-sounding fix that isn't checked against real
+  data can silently introduce a regression that looks like an improvement.
+  (Precedent: #323's "fix" to the bean-to-profile suggestion's Decline Flow
+  phase direction was based on general extraction-theory reasoning and
+  reverted real behavior that matched Max's own live-verified profiles —
+  caught only when Max supplied the actual profile JSON for comparison.)
+- When changing a function that's called from multiple places (e.g. a
+  shared repository/data-layer helper), check every call site's assumptions
+  before changing the function's contract — don't assume the call site you
+  're looking at is the only one. (Precedent: #327 — `saveOrders()` silently
+  deleted any DB row not present in its argument array; every caller passed
+  it an already-filtered subset, so the function's real behavior was "wipe
+  the whole table" even though no single call site looked destructive in
+  isolation.)
+- If a fix could plausibly have been silently losing/corrupting data before
+  the fix (not just showing a wrong value), say so explicitly and check for
+  a recovery path (e.g. `/api/backup` exports) — don't just fix and move on
+  as if it were a display bug.
+- Run the full existing test suite after every change, not just tests
+  related to the change, and treat any newly-failing test as a stop
+  condition, not noise to explain away.
+
 ## Versioning
 
 - Patch fix → bump third number: `1.20.0 → 1.20.1`
