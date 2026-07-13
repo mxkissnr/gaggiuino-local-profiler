@@ -1,3 +1,8 @@
+## [1.121.2] – 2026-07-13
+
+### Fixed
+- **In-app add-on update button returned 403 Forbidden.** `POST /api/update` calls `http://supervisor/addons/self/update` using the add-on's Supervisor token, but `config.yaml` only granted `homeassistant_api: true` (Core API access) — Supervisor management endpoints like `/addons/self/update` need `hassio_api: true`, which was never set. This means the self-update path (triggered from the GLP integration's own `update` entity in Home Assistant) has been non-functional since it was introduced; the direct Supervisor "Update" path in the HA Add-on Store always worked fine since it doesn't route through the add-on's own token. `config.yaml`. Closes #330
+
 ## [1.121.1] – 2026-07-13
 
 ### Fixed
