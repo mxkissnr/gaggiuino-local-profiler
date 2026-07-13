@@ -38,6 +38,9 @@
 ### Added
 - **Guided Dial-In wizard: grinder field is now a select of your library grinders** instead of free text — preselects the prefilled/known grinder (`prefill.grinderName` or the bean's known-grind-setting grinder), with an "Other…" option that reveals a free-text fallback for a grinder not yet in the library. Falls back to the previous plain text input when the library has no grinders at all. `public-src/views/dialin-wizard.js`, `public-src/main.js`, `public-src/i18n/*.js` (all 6). Closes #322
 
+### Added
+- **`POST /api/orders` accepts an optional `machine` field** (display-only name/slug), so the [GLP Order Card](https://github.com/mxkissnr/glp-order-card) can tag an order with which machine it's for in multi-machine setups. Stored on the order and returned as-is; not yet scoped against the machine registry's numeric ids (that wiring is a follow-up once `orders.machine_id`, added by the #317 migration, is actually read by this route). Omitting `machine` behaves exactly as before (`null`). `routes/orders.js`, `test/db-routes.test.js`. Supports glp-order-card #29
+
 ### Documentation
 - **Marked the bean → profile suggestion and the Guided Dial-In wizard as experimental / work in progress** — both are usable but not finished (suggestions are a starting point, not a guarantee). Added a visible callout to their sections in `DOCS.md` and `DOCS.de.md` (kept in sync) and marked both rows in the `README.md` feature table. Closes #324
 

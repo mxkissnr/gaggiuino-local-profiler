@@ -311,7 +311,7 @@ router.get('/api/orders/mine', (req, res) => {
 router.post('/api/orders', (req, res) => {
     if (!rateLimit(`orders:${req.ip}`, 10)) return res.status(429).json({ error: 'Rate limit exceeded' });
     if (!loadOrdersSettings().enabled) return res.status(503).json({ error: 'orders_disabled' });
-    const { item, note, customer, notifyService, variant } = req.body || {};
+    const { item, note, customer, notifyService, variant, machine } = req.body || {};
     if (!item || !customer?.trim()) return res.status(400).json({ error: 'item and customer required' });
     const menu = loadMenu();
     const menuItem = menu.find(m => m.name === item);
@@ -333,6 +333,11 @@ router.post('/api/orders', (req, res) => {
         variant:        validVariant,
         note:           note ? String(note).slice(0, 200) : '',
         notifyService:  notifyService && String(notifyService).startsWith('notify.') ? String(notifyService).slice(0, 100) : null,
+        // Optional machine target (glp-order-card #29) — a display-only
+        // name/slug for now (full machineId scoping of orders is a
+        // follow-up once orders.machine_id, added in #317's migration, is
+        // actually wired into this route).
+        machine:   machine ? String(machine).trim().slice(0, 100) : null,
         status:    'pending',
         eta: null, acceptedAt: null, completedAt: null, declineReason: null,
     };

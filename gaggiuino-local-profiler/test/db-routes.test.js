@@ -78,6 +78,32 @@ describe('GET /api/status', () => {
     });
 });
 
+describe('POST /api/orders', () => {
+    // #29 (glp-order-card): optional machine name/slug target, display-only
+    // for now — stored on the order but not yet scoped against the
+    // machine registry's numeric ids.
+    it('accepts and persists an optional machine field', async () => {
+        saveMenu([{ id: 'm1', name: 'Espresso', emoji: '☕' }]);
+        const r = await fetch(`${baseUrl}/api/orders`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item: 'Espresso', customer: 'Max', machine: 'Kitchen GaggiMate' }),
+        });
+        expect(r.status).toBe(200);
+        const order = await r.json();
+        expect(order.machine).toBe('Kitchen GaggiMate');
+    });
+
+    it('defaults machine to null when omitted (backward compat)', async () => {
+        saveMenu([{ id: 'm1', name: 'Espresso', emoji: '☕' }]);
+        const r = await fetch(`${baseUrl}/api/orders`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item: 'Espresso', customer: 'Max' }),
+        });
+        expect(r.status).toBe(200);
+        expect((await r.json()).machine).toBeNull();
+    });
+});
+
 describe('POST /api/orders/:id/complete', () => {
     it('links the latest non-trashed shot from the database', async () => {
         shotRepo.upsertMany([
