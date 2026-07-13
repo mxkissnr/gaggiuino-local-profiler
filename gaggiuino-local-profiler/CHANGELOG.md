@@ -1,3 +1,8 @@
+## [2.1.1] – 2026-07-13
+
+### Fixed
+- **CRITICAL: could not add any machine with a real LAN host — the entire point of multi-machine mode has been broken since v2.0.0's release.** `POST /api/machines`/`PUT /api/machines/:id` validated the host with `assertPublicHost()` (`lib/ssrf-guard.js`), which blocks private/RFC1918 addresses — the correct threat model for the bean-import route it was originally built for (arbitrary, user-supplied external URLs), but exactly backwards for a machine host, which is the app owner's own trusted local-network configuration and is *expected* to be a private address (`10.x`, `192.168.x`, `gaggia.intern`, ...). Every attempt to add a second machine via Settings → Machines silently failed — `saveMachineForm()` (`public-src/components/machines-settings.js`) did nothing at all when the save request wasn't `ok`, so there was no visible error either. Only the default machine (seeded directly via `registry.createMachine()` at migration time, bypassing this route entirely) ever worked. Added a narrower `assertMachineHost()`/`isLoopbackOrMetadataAddress()` (blocks only loopback, link-local and the cloud-metadata address — not RFC1918 ranges) for machine hosts specifically; `assertPublicHost()`/`isPrivateAddress()` are unchanged for the import route's actual SSRF threat model. `saveMachineForm()` now also surfaces the actual server error to the user instead of failing silently. `lib/ssrf-guard.js`, `routes/machines.js`, `public-src/components/machines-settings.js`, `public-src/i18n/*.js` (all 6, new `settings_machine_save_error`), `test/ssrf-guard.test.js` (new), `test/machines-api.test.js` (existing test previously encoded the bug as "correct" behavior — corrected). Closes #336
+
 ## [2.1.0] – 2026-07-13
 
 ### Added

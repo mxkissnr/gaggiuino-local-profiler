@@ -42,21 +42,66 @@ function isPrivateAddress(ip) {
     return true; // unrecognised format — fail closed
 }
 
-// Throws SsrfBlockedError when the host resolves to (or literally is) a
-// blocked address. Throws a plain Error when the hostname can't be resolved
-// at all (treated as an ordinary fetch failure by callers, not a security
-// rejection). Resolves with no return value when the host is safe to fetch.
-async function assertPublicHost(hostname) {
+// Narrower than isPrivateAddress(): blocks only loopback, link-local (incl.
+// the 169.254.169.254 cloud-metadata address) and unspecified addresses —
+// NOT the RFC1918 ranges (10.x, 172.16-31.x, 192.168.x) or CGNAT, since
+// those are exactly where a real Gaggiuino/GaggiMate machine lives (#336).
+// Used for machine hosts, which are the app owner's own trusted local
+// network configuration, not untrusted external content — the opposite
+// threat model from the bean-import route's assertPublicHost() below.
+function isLoopbackOrMetadataIPv4(ip) {
+    const parts = ip.split('.').map(Number);
+    if (parts.length !== 4 || parts.some(p => Number.isNaN(p) || p < 0 || p > 255)) return true; // fail closed on garbage
+    const [a, b] = parts;
+    if (a === 0 || a === 127) return true;
+    if (a === 169 && b === 254) return true; // link-local, incl. cloud metadata
+    return false;
+}
+
+function isLoopbackOrMetadataIPv6(ip) {
+    const lower = ip.toLowerCase();
+    if (lower === '::1' || lower === '::') return true;
+    if (lower.startsWith('::ffff:')) {
+        const v4 = lower.slice(7);
+        if (net.isIPv4(v4)) return isLoopbackOrMetadataIPv4(v4);
+    }
+    if (/^fe[89ab][0-9a-f]:/.test(lower)) return true; // fe80::/10 link-local
+    return false;
+}
+
+function isLoopbackOrMetadataAddress(ip) {
+    if (net.isIPv4(ip)) return isLoopbackOrMetadataIPv4(ip);
+    if (net.isIPv6(ip)) return isLoopbackOrMetadataIPv6(ip);
+    return true; // unrecognised format — fail closed
+}
+
+// Resolves hostname and throws SsrfBlockedError if any resolved (or literal)
+// address fails `isBlocked`. Throws a plain Error when the hostname can't be
+// resolved at all (treated as an ordinary fetch failure by callers, not a
+// security rejection). Resolves with no return value when safe.
+async function _assertHostPasses(hostname, isBlocked) {
     const bare = hostname.replace(/^\[|\]$/g, '');
     if (net.isIP(bare)) {
-        if (isPrivateAddress(bare)) throw new SsrfBlockedError(`blocked address: ${bare}`);
+        if (isBlocked(bare)) throw new SsrfBlockedError(`blocked address: ${bare}`);
         return;
     }
     const addresses = await dns.promises.lookup(bare, { all: true });
     if (!addresses || !addresses.length) throw new Error(`could not resolve host: ${bare}`);
     for (const { address } of addresses) {
-        if (isPrivateAddress(address)) throw new SsrfBlockedError(`blocked address: ${address} (${bare})`);
+        if (isBlocked(address)) throw new SsrfBlockedError(`blocked address: ${address} (${bare})`);
     }
 }
 
-module.exports = { assertPublicHost, isPrivateAddress, SsrfBlockedError };
+// Used by routes/import.js: hostname comes from arbitrary, user-supplied
+// external content, so private/internal targets must be blocked.
+async function assertPublicHost(hostname) {
+    return _assertHostPasses(hostname, isPrivateAddress);
+}
+
+// Used by routes/machines.js: hostname is the app owner's own trusted LAN
+// machine configuration — only loopback/link-local/metadata are blocked.
+async function assertMachineHost(hostname) {
+    return _assertHostPasses(hostname, isLoopbackOrMetadataAddress);
+}
+
+module.exports = { assertPublicHost, assertMachineHost, isPrivateAddress, isLoopbackOrMetadataAddress, SsrfBlockedError };

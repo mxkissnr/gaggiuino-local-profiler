@@ -12,9 +12,14 @@ require.cache[dbPath].exports = { getDb: () => memDb, initSchema: realDb.initSch
 
 // SSRF-guard resolves hostnames via DNS — stub it so 'gaggiuino.local'-style
 // test hosts resolve to a public-looking address instead of hitting real DNS.
+// Machine hosts use assertMachineHost() (#336), which — unlike the bean-import
+// route's assertPublicHost() — allows private/LAN addresses (that's where a
+// real Gaggiuino/GaggiMate controller lives) and blocks only loopback/
+// link-local/cloud-metadata.
 const dns = require('dns');
 vi.spyOn(dns.promises, 'lookup').mockImplementation(async (hostname) => {
-    if (hostname === 'blocked.internal') return [{ address: '192.168.1.5', family: 4 }];
+    if (hostname === 'lan.internal') return [{ address: '192.168.1.5', family: 4 }];
+    if (hostname === 'blocked.internal') return [{ address: '169.254.169.254', family: 4 }];
     return [{ address: '203.0.113.10', family: 4 }];
 });
 
@@ -71,7 +76,17 @@ describe('POST /api/machines', () => {
         expect(r.status).toBe(400);
     });
 
-    it('rejects a host that resolves to a private address (SSRF guard)', async () => {
+    it('allows a host that resolves to a private LAN address (#336 — real machines live there)', async () => {
+        const r = await fetch(`${baseUrl}/api/machines`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'X', type: 'gaggiuino', host: 'lan.internal' }),
+        });
+        expect(r.status).toBe(200);
+        const machine = await r.json();
+        expect(machine.host).toBe('lan.internal');
+    });
+
+    it('rejects a host that resolves to a loopback/link-local/metadata address (SSRF guard)', async () => {
         const r = await fetch(`${baseUrl}/api/machines`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: 'X', type: 'gaggiuino', host: 'blocked.internal' }),

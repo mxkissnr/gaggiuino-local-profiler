@@ -157,6 +157,7 @@ export default {
     settings_machine_testing:'Teste Verbindung …', settings_machine_test_ok:'✓ Erreichbar', settings_machine_test_fail:'✗ Nicht erreichbar', settings_machine_test_save_first:'Bitte zuerst speichern',
     settings_machine_type_gaggimate:'GaggiMate (experimentell)', settings_machine_experimental_badge:'⚠ Experimentell',
     settings_machine_shot_count:(n)=>`${n} Shot${n === 1 ? '' : 's'}`,
+    settings_machine_save_error:(msg)=>`Fehler: ${msg}`,
     ann_clone_btn:'↩ Letzten',
     ann_photo_upload:'Foto zu diesem Shot hinzufügen', ann_photo_remove:'Foto entfernen', lightbox_close:'Schließen',
     lib_bean_stock:'Vorrat (g)', lib_bean_stock_ph:'z.B. 500',

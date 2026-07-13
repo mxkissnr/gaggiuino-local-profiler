@@ -150,8 +150,14 @@ export async function saveMachineForm() {
   if (!payload.name || !payload.host) return;
   const url    = id ? `api/machines/${id}` : 'api/machines';
   const method = id ? 'PUT' : 'POST';
+  const resultEl = document.getElementById('machineFormTestResult');
   const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-  if (r.ok) { closeMachineForm(); loadMachines(); }
+  if (r.ok) { closeMachineForm(); loadMachines(); return; }
+  // #336: used to fail silently here (no visible error at all), which made
+  // the SSRF-guard-blocks-LAN-hosts bug far harder to diagnose than it
+  // needed to be — always surface the server's actual error now.
+  const data = await r.json().catch(() => ({}));
+  if (resultEl) resultEl.textContent = t('settings_machine_save_error', data.error || r.status);
 }
 
 export async function deleteMachine(id) {

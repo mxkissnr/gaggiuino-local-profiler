@@ -157,6 +157,7 @@ export default {
     settings_machine_testing:'Verbinding testen…', settings_machine_test_ok:'✓ Bereikbaar', settings_machine_test_fail:'✗ Niet bereikbaar', settings_machine_test_save_first:'Eerst opslaan',
     settings_machine_type_gaggimate:'GaggiMate (experimenteel)', settings_machine_experimental_badge:'⚠ Experimenteel',
     settings_machine_shot_count:(n)=>`${n} shot${n === 1 ? '' : 's'}`,
+    settings_machine_save_error:(msg)=>`Fout: ${msg}`,
     ann_clone_btn:'↩ Klonen',
     ann_photo_upload:'Voeg een foto toe aan dit shot', ann_photo_remove:'Foto verwijderen', lightbox_close:'Sluiten',
     lib_bean_stock:'Voorraad (g)', lib_bean_stock_ph:'bijv. 500',
