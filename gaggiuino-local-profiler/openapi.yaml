@@ -215,8 +215,9 @@ components:
         acceptedAt:    { type: integer, description: Unix ms, nullable: true }
         completedAt:   { type: integer, description: Unix ms, nullable: true }
         declineReason: { type: string, nullable: true }
-        shotId:        { type: integer, description: Last shot ID when order completed, nullable: true }
-        machine:       { type: string, maxLength: 100, nullable: true, description: "Optional machine name/slug target (#317/glp-order-card #29), display-only in v2.0.0" }
+        shotId:        { type: integer, description: "Last shot ID when order completed — resolved from the order's own machineId (#326), not the global latest shot", nullable: true }
+        machine:       { type: string, maxLength: 100, nullable: true, description: "Optional machine name/slug target as supplied by the client (#317/glp-order-card #29)" }
+        machineId:     { type: integer, nullable: true, description: "machine's registry id, resolved server-side from `machine` (#326) — always set on orders placed since #326, falls back to the default machine when `machine` is unset/unmatched" }
 
     OrdersSettings:
       type: object
@@ -655,6 +656,10 @@ paths:
         - name: status
           in: query
           schema: { type: string, enum: [pending, accepted, done, declined] }
+        - name: machine
+          in: query
+          schema: { type: integer }
+          description: "Scope to one machine's orders by its registry id (#326). Omitted = all machines."
       responses:
         "200":
           description: Array of orders
@@ -681,7 +686,7 @@ paths:
                 customer: { type: string, maxLength: 50 }
                 note:     { type: string, maxLength: 200 }
                 haUserId: { type: string, maxLength: 100, description: Overridden by X-GLP-HA-User-ID header if present }
-                machine:  { type: string, maxLength: 100, description: "Optional machine name/slug target (#317/glp-order-card #29) — display-only in v2.0.0, not yet scoped against the machine registry's numeric ids" }
+                machine:  { type: string, maxLength: 100, description: "Optional machine name/slug target (#317/glp-order-card #29). Resolved server-side (#326) into machineId against the machine registry — falls back to the default machine when unset or unmatched." }
       responses:
         "200": { description: Created order, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
         "400": { description: Validation error }

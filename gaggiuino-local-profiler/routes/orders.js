@@ -9,9 +9,26 @@ const {
 } = require('../lib/data');
 const shotRepo       = require('../lib/repositories/ShotRepository');
 const libraryService = require('../lib/services/LibraryService');
+const machineRegistry = require('../lib/machines/registry');
 const { sendHaNotify, getNotifyServices, getHaPersons } = require('../lib/ha');
 const { log, rateLimit } = require('../lib/helpers');
 const state = require('../lib/state');
+
+// #326: resolves an order's `machine` display name/slug (glp-order-card
+// #29) into the machine registry's actual numeric id, so orders are
+// genuinely scoped/attributed to a machine instead of only display-tagged.
+// Falls back to the default machine (never null) when the name doesn't
+// match any registered machine, or wasn't supplied at all — every existing
+// order (placed before #326, or from a single-machine setup that never
+// sets `machine`) resolves to the default machine, matching its own
+// machine_id column default of 1.
+function resolveMachineId(machineName) {
+    const fallback = machineRegistry.getDefaultMachine()?.id ?? 1;
+    if (!machineName) return fallback;
+    const needle = String(machineName).trim().toLowerCase();
+    const match  = machineRegistry.listMachines().find(m => m.name.toLowerCase() === needle);
+    return match ? match.id : fallback;
+}
 
 // Menu item emoji is user-supplied and rendered in the UI — cap length
 // (generous for multi-codepoint ZWJ emoji sequences) and reject anything
@@ -183,7 +200,13 @@ router.post('/api/orders/settings', (req, res) => {
 const DEFAULT_PREP_TIME = 4; // minutes per order, used when no historical data
 
 router.get('/api/orders/queue-eta', (req, res) => {
-    const orders  = loadOrders();
+    // #326: a queue backed up on one machine shouldn't distort another
+    // machine's ETA estimate.
+    let orders = loadOrders();
+    if (req.query.machine) {
+        const machineId = parseInt(req.query.machine, 10);
+        orders = orders.filter(o => _matchesMachine(o, machineId));
+    }
     const now     = Date.now();
     const accepted = orders.filter(o => o.status === 'accepted');
     const pending  = orders.filter(o => o.status === 'pending')
@@ -254,9 +277,22 @@ router.post('/api/orders/notify-mapping', (req, res) => {
 
 // ── Orders list / mine ────────────────────────────────────────────────────
 
+// #326: optional ?machine=<id> scopes to one machine's orders — omitted
+// keeps the previous "all machines" behavior (orders predating #326 have
+// no machineId in their JSON at all, treated as the default machine here
+// too, matching resolveMachineId()'s own fallback).
+function _matchesMachine(order, machineIdParam) {
+    if (!machineIdParam) return true;
+    return (order.machineId ?? 1) === machineIdParam;
+}
+
 router.get('/api/orders', (req, res) => {
     let orders = loadOrders();
     if (req.query.status) orders = orders.filter(o => o.status === req.query.status);
+    if (req.query.machine) {
+        const machineId = parseInt(req.query.machine, 10);
+        orders = orders.filter(o => _matchesMachine(o, machineId));
+    }
     res.json(orders.slice().reverse().slice(0, 100));
 });
 
@@ -264,8 +300,33 @@ router.get('/api/orders/stats', (req, res) => {
     // #321: loadOrders()/findActive() drops done orders older than the 7-day
     // ORDERS_HISTORY_TTL_MS live-queue window — stats are labelled lifetime
     // totals, so they must read from the unfiltered table instead.
-    const done = loadAllOrders().filter(o => o.status === 'done');
-    if (!done.length) return res.json({ total: 0, customers: [], mostPopular: null });
+    let done = loadAllOrders().filter(o => o.status === 'done');
+
+    // #326: byMachine breakdown (always computed, before any ?machine=
+    // filtering below) — omitted from the response on a single-machine
+    // install (nothing useful to show), always included once orders
+    // reference more than one machine.
+    const machineCounts = {};
+    for (const o of done) {
+        const mid = o.machineId ?? 1;
+        machineCounts[mid] = (machineCounts[mid] || 0) + 1;
+    }
+    const distinctMachineIds = Object.keys(machineCounts);
+    let byMachine = null;
+    if (distinctMachineIds.length > 1) {
+        const machinesById = new Map(machineRegistry.listMachines().map(m => [m.id, m]));
+        byMachine = distinctMachineIds.map(idStr => {
+            const id = parseInt(idStr, 10);
+            return { machineId: id, machineName: machinesById.get(id)?.name || null, count: machineCounts[idStr] };
+        }).sort((a, b) => b.count - a.count);
+    }
+
+    if (req.query.machine) {
+        const machineId = parseInt(req.query.machine, 10);
+        done = done.filter(o => _matchesMachine(o, machineId));
+    }
+
+    if (!done.length) return res.json({ total: 0, customers: [], mostPopular: null, byMachine });
 
     // Group by a normalized key so "Max"/"max"/"Max " count as one customer;
     // the display name shown is whichever spelling appeared most recently.
@@ -296,6 +357,7 @@ router.get('/api/orders/stats', (req, res) => {
         total:       done.length,
         customers,
         mostPopular: mostPopular ? { item: mostPopular[0], count: mostPopular[1] } : null,
+        byMachine,
     });
 });
 
@@ -333,11 +395,13 @@ router.post('/api/orders', (req, res) => {
         variant:        validVariant,
         note:           note ? String(note).slice(0, 200) : '',
         notifyService:  notifyService && String(notifyService).startsWith('notify.') ? String(notifyService).slice(0, 100) : null,
-        // Optional machine target (glp-order-card #29) — a display-only
-        // name/slug for now (full machineId scoping of orders is a
-        // follow-up once orders.machine_id, added in #317's migration, is
-        // actually wired into this route).
+        // Machine target (glp-order-card #29 / #326) — `machine` stays the
+        // display name/slug the card sent (or null); `machineId` is it
+        // resolved against the registry, always a real id (falls back to
+        // the default machine), used for actual fulfillment routing and
+        // stats scoping below.
         machine:   machine ? String(machine).trim().slice(0, 100) : null,
+        machineId: resolveMachineId(machine),
         status:    'pending',
         eta: null, acceptedAt: null, completedAt: null, declineReason: null,
     };
@@ -382,7 +446,12 @@ router.post('/api/orders/:id/complete', (req, res) => {
             if (item?.milkMl > 0) libraryService.deductMilkByName(order.variant, item.milkMl);
         } catch { /* non-critical */ }
     }
-    try { order.shotId = shotRepo.getLatestId(); } catch { order.shotId = null; }
+    // #326: route to the latest shot on the order's own target machine
+    // rather than the global latest shot — order.machineId always resolves
+    // to a real machine (falls back to the default one), so this is a
+    // behavior-preserving change for every order placed before #326 /
+    // every single-machine setup (machineId 1 === the only machine there).
+    try { order.shotId = shotRepo.getLatestId(order.machineId); } catch { order.shotId = null; }
     if (order.shotId != null) {
         try {
             const annotation = shotRepo.getAnnotation(order.shotId);

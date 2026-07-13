@@ -30,16 +30,22 @@ class OrderRepository {
         return row ? JSON.parse(row.data) : null;
     }
 
+    // #326: also persists machine_id (added by #317's migration, previously
+    // write-only from the migration itself) so an order's machine target can
+    // be queried/filtered at the SQL level, not just read back out of the
+    // JSON blob. Defaults to 1 (the default machine) for orders that predate
+    // #326 or never resolved a machine — never null, matching resolveMachineId().
     save(order) {
-        getDb().prepare('INSERT OR REPLACE INTO orders (id, data) VALUES (?,?)').run(order.id, JSON.stringify(order));
+        getDb().prepare('INSERT OR REPLACE INTO orders (id, data, machine_id) VALUES (?,?,?)')
+            .run(order.id, JSON.stringify(order), order.machineId ?? 1);
         return order;
     }
 
     saveAll(orders) {
         const db  = getDb();
-        const ins = db.prepare('INSERT OR REPLACE INTO orders (id, data) VALUES (?,?)');
+        const ins = db.prepare('INSERT OR REPLACE INTO orders (id, data, machine_id) VALUES (?,?,?)');
         db.transaction(() => {
-            for (const o of orders) ins.run(o.id, JSON.stringify(o));
+            for (const o of orders) ins.run(o.id, JSON.stringify(o), o.machineId ?? 1);
         })();
     }
 

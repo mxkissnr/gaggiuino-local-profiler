@@ -39,6 +39,7 @@ const libraryRouter     = require('../routes/library');
 const maintenanceRouter = require('../routes/maintenance');
 const shotRepo      = require('../lib/repositories/ShotRepository');
 const libraryService = require('../lib/services/LibraryService');
+const machineRegistry = require('../lib/machines/registry');
 const { saveOrders, saveLibrary, saveMenu } = require('../lib/data');
 const { getDb }     = require('../lib/db');
 
@@ -57,7 +58,7 @@ function makeApp() {
 let server, baseUrl;
 
 beforeEach(async () => {
-    getDb().exec('DELETE FROM shots; DELETE FROM annotations; DELETE FROM trash; DELETE FROM orders; DELETE FROM maintenance; DELETE FROM maintenance_log; DELETE FROM library;');
+    getDb().exec('DELETE FROM shots; DELETE FROM annotations; DELETE FROM trash; DELETE FROM orders; DELETE FROM maintenance; DELETE FROM maintenance_log; DELETE FROM library; DELETE FROM machines;');
     server = makeApp().listen(0);
     await new Promise(resolve => server.once('listening', resolve));
     baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -201,6 +202,113 @@ describe('GET /api/orders/stats', () => {
         const stats = await (await fetch(`${baseUrl}/api/orders/stats`)).json();
         expect(stats.total).toBe(1);
         expect(stats.customers[0]).toMatchObject({ name: 'Max', count: 1 });
+    });
+
+    // #326: byMachine breakdown + ?machine= scoping.
+    it('omits byMachine on a single-machine install (nothing useful to show)', async () => {
+        const now = Date.now();
+        saveOrders([{ id: 'a', item: 'Espresso', customer: 'Max', status: 'done', createdAt: now, completedAt: now, machineId: 1 }]);
+        const stats = await (await fetch(`${baseUrl}/api/orders/stats`)).json();
+        expect(stats.byMachine).toBeNull();
+    });
+
+    it('includes a byMachine breakdown once orders reference more than one machine', async () => {
+        machineRegistry.ensureDefaultMachine();
+        const second = machineRegistry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: 'kitchen.local' });
+        const now = Date.now();
+        saveOrders([
+            { id: 'a', item: 'Espresso', customer: 'Max', status: 'done', createdAt: now, completedAt: now, machineId: 1 },
+            { id: 'b', item: 'Espresso', customer: 'Max', status: 'done', createdAt: now + 1, completedAt: now + 1, machineId: 1 },
+            { id: 'c', item: 'Espresso', customer: 'Anna', status: 'done', createdAt: now + 2, completedAt: now + 2, machineId: second.id },
+        ]);
+        const stats = await (await fetch(`${baseUrl}/api/orders/stats`)).json();
+        expect(stats.byMachine).toEqual([
+            { machineId: 1, machineName: 'Gaggiuino', count: 2 },
+            { machineId: second.id, machineName: 'Kitchen GaggiMate', count: 1 },
+        ]);
+    });
+
+    it('?machine=<id> scopes customers/total to just that machine', async () => {
+        const second = machineRegistry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: 'kitchen.local' });
+        const now = Date.now();
+        saveOrders([
+            { id: 'a', item: 'Espresso', customer: 'Max', status: 'done', createdAt: now, completedAt: now, machineId: 1 },
+            { id: 'b', item: 'Espresso', customer: 'Anna', status: 'done', createdAt: now + 1, completedAt: now + 1, machineId: second.id },
+        ]);
+        const stats = await (await fetch(`${baseUrl}/api/orders/stats?machine=${second.id}`)).json();
+        expect(stats.total).toBe(1);
+        expect(stats.customers.map(c => c.name)).toEqual(['Anna']);
+    });
+});
+
+describe('POST /api/orders — machine resolution (#326)', () => {
+    it('resolves a matching machine name to its registry id (case-insensitive)', async () => {
+        const second = machineRegistry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: 'kitchen.local' });
+        saveMenu([{ id: 'm1', name: 'Espresso', emoji: '☕' }]);
+        const r = await fetch(`${baseUrl}/api/orders`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item: 'Espresso', customer: 'Anna', machine: 'kitchen gaggimate' }),
+        });
+        const order = await r.json();
+        expect(order.machine).toBe('kitchen gaggimate');
+        expect(order.machineId).toBe(second.id);
+    });
+
+    it('falls back to the default machine id for an unknown/omitted machine name', async () => {
+        machineRegistry.ensureDefaultMachine();
+        saveMenu([{ id: 'm1', name: 'Espresso', emoji: '☕' }]);
+        const r1 = await fetch(`${baseUrl}/api/orders`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item: 'Espresso', customer: 'Max', machine: 'Nonexistent Machine' }),
+        });
+        expect((await r1.json()).machineId).toBe(1);
+
+        const r2 = await fetch(`${baseUrl}/api/orders`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item: 'Espresso', customer: 'Max' }),
+        });
+        expect((await r2.json()).machineId).toBe(1);
+    });
+});
+
+describe('POST /api/orders/:id/complete — machine-scoped fulfillment routing (#326)', () => {
+    it('links the latest shot on the order\'s own target machine, not the global latest', async () => {
+        const second = machineRegistry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: 'kitchen.local' });
+        // Default machine's latest shot is id 5 (native ids stay untouched);
+        // the second machine's latest shot uses the #317 synthetic id scheme.
+        shotRepo.upsertMany([
+            { id: 5, timestamp: 1000, duration: 250, machineId: 1 },
+            { id: second.id * 10_000_000 + 1, timestamp: 2000, duration: 260, machineId: second.id },
+        ]);
+        saveOrders([{ id: 'ord1', item: 'Espresso', customer: 'Anna', status: 'accepted', createdAt: Date.now(), machineId: second.id }]);
+
+        const r = await fetch(`${baseUrl}/api/orders/ord1/complete`, { method: 'POST' });
+        expect(r.status).toBe(200);
+        expect((await r.json()).shotId).toBe(second.id * 10_000_000 + 1);
+    });
+
+    it('an order with no machineId (pre-#326) still links the global latest shot, unchanged', async () => {
+        shotRepo.upsertMany([
+            { id: 10, timestamp: 1000, duration: 250 },
+            { id: 11, timestamp: 2000, duration: 260 },
+        ]);
+        saveOrders([{ id: 'ord2', item: 'Espresso', customer: 'Max', status: 'accepted', createdAt: Date.now() }]);
+        const r = await fetch(`${baseUrl}/api/orders/ord2/complete`, { method: 'POST' });
+        expect((await r.json()).shotId).toBe(11);
+    });
+});
+
+describe('GET /api/orders — ?machine= filtering (#326)', () => {
+    it('scopes the order list to the given machine', async () => {
+        const second = machineRegistry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: 'kitchen.local' });
+        saveOrders([
+            { id: 'a', item: 'Espresso', customer: 'Max', status: 'pending', createdAt: Date.now(), machineId: 1 },
+            { id: 'b', item: 'Espresso', customer: 'Anna', status: 'pending', createdAt: Date.now(), machineId: second.id },
+        ]);
+        const r = await fetch(`${baseUrl}/api/orders?machine=${second.id}`);
+        const orders = await r.json();
+        expect(orders).toHaveLength(1);
+        expect(orders[0].id).toBe('b');
     });
 });
 

@@ -197,10 +197,18 @@ class ShotRepository {
         `).all();
     }
 
-    getLatestId() {
-        const row = getDb().prepare(
-            'SELECT id FROM shots WHERE id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1'
-        ).get();
+    // machineId optional (#326) — omitted keeps the original global-latest
+    // behavior every pre-existing call site relies on; pass it to scope
+    // order-fulfillment routing (routes/orders.js's /:id/complete) to the
+    // shot actually pulled on the order's target machine.
+    getLatestId(machineId) {
+        const row = machineId
+            ? getDb().prepare(
+                'SELECT id FROM shots WHERE machine_id = ? AND id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1'
+              ).get(machineId)
+            : getDb().prepare(
+                'SELECT id FROM shots WHERE id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1'
+              ).get();
         return row?.id ?? null;
     }
 }

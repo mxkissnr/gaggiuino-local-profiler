@@ -55,6 +55,10 @@ function loadAllOrders()       { return orderRepo.findAll(); }
 // active view), so that wiped any done/declined order older than 7 days
 // from the DB on every single order mutation. saveAll() is upsert-only
 // (INSERT OR REPLACE) and never deletes rows absent from the array.
+// #326: saveAll()/save() also persist machine_id (the orders table's
+// machine_id column, added by #317's migration but unused until now) so an
+// order's machine target can be queried/filtered at the SQL level, not just
+// read back out of the JSON blob — see OrderRepository.
 function saveOrders(orders)    { orderRepo.saveAll(orders); }
 function deleteOrder(id)       { orderRepo.delete(id); }
 function loadMenu()            { return orderRepo.getMenu(); }
