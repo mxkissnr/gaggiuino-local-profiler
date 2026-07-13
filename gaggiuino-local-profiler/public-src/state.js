@@ -57,6 +57,10 @@ export const S = {
   _ordersStatsOpen: false,
   machineReachable: null,
   isDemo: false,
+  // Multi-machine registry (#319) — S.machines mirrors GET /api/machines;
+  // activeMachineId is restored from localStorage in machines-settings.js.
+  machines: [],
+  activeMachineId: null,
   machineProfiles: [],
   profileEditId: null,
   profileEditBeanId: null,

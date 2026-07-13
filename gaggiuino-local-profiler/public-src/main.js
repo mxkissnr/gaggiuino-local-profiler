@@ -94,6 +94,8 @@ import { startProfileDialinFromList, profileDialinClose,
 
 import { loadDemoData, endDemo } from './components/onboarding.js';
 
+import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm } from './components/machines-settings.js';
+
 // ── Toast helper ──────────────────────────────────────────────────────────
 function showToast(msg, duration = 3000) {
   let el = document.getElementById('glpToast');
@@ -606,6 +608,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('input[type="file"][accept=".json"]').addEventListener('change', e => restoreFromFile(e.target));
   document.getElementById('backupDownloadBtn').addEventListener('click', downloadBackup);
   document.getElementById('apiTokenCopyBtn').addEventListener('click', copyApiToken);
+  document.getElementById('addMachineBtn')?.addEventListener('click', () => openMachineForm(null));
+  document.getElementById('machineFormCancelBtn')?.addEventListener('click', closeMachineForm);
+  document.getElementById('machineFormSaveBtn')?.addEventListener('click', saveMachineForm);
+  document.getElementById('machineFormTestBtn')?.addEventListener('click', testMachineForm);
+  loadMachines();
   document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.

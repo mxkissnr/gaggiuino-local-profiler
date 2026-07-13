@@ -1012,6 +1012,34 @@
                 <button class="accent-swatch" data-accent="forest" title="Forest" style="background:linear-gradient(135deg,#22c55e,#10b981)"></button>
             </div>
         </div>
+        <!-- Multi-machine registry (#319) -->
+        <div class="settings-card" id="machinesCard">
+            <h3 class="settings-card-title" data-i18n="settings_machines">Maschinen</h3>
+            <p class="settings-card-desc" data-i18n="settings_machines_desc">Verwalte die Espressomaschinen, die diese App überwacht.</p>
+            <div id="machinesList" class="machines-list"></div>
+            <button id="addMachineBtn" type="button" class="backup-btn" data-i18n="settings_machines_add">+ Maschine hinzufügen</button>
+        </div>
+        <div class="settings-card" id="machineFormCard" style="display:none">
+            <h3 class="settings-card-title" id="machineFormTitle" data-i18n="settings_machines_add">+ Maschine hinzufügen</h3>
+            <input type="hidden" id="machineFormId">
+            <label class="machine-form-label" data-i18n="settings_machine_name">Name</label>
+            <input type="text" id="machineFormName" class="machine-form-input">
+            <label class="machine-form-label" data-i18n="settings_machine_type">Typ</label>
+            <select id="machineFormType" class="machine-form-input">
+                <option value="gaggiuino">Gaggiuino</option>
+                <option value="gaggimate">GaggiMate</option>
+            </select>
+            <label class="machine-form-label" data-i18n="settings_machine_host">Host</label>
+            <input type="text" id="machineFormHost" class="machine-form-input" placeholder="gaggiuino.local">
+            <label class="machine-form-label" data-i18n="settings_machine_switch">HA Switch-Entität (optional)</label>
+            <input type="text" id="machineFormSwitch" class="machine-form-input" placeholder="switch.espresso">
+            <div class="machine-form-actions">
+                <button id="machineFormTestBtn" type="button" class="backup-btn" data-i18n="settings_machine_test">Verbindung testen</button>
+                <button id="machineFormSaveBtn" type="button" class="backup-btn" data-i18n="settings_machine_save">Speichern</button>
+                <button id="machineFormCancelBtn" type="button" class="backup-btn" data-i18n="settings_machine_cancel">Abbrechen</button>
+            </div>
+            <div id="machineFormTestResult" class="machine-form-test-result"></div>
+        </div>
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="settings_language">Sprache</h3>
             <div class="settings-lang-group">

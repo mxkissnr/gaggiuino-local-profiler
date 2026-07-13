@@ -358,6 +358,21 @@
         .api-token-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
         .api-token-value { flex:1; min-width:0; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:8px; padding:10px 14px; font-size:.78rem; color:var(--gray-200); word-break:break-all; }
 
+        /* Multi-machine registry (#319) */
+        .machines-list { display:flex; flex-direction:column; gap:8px; }
+        .machine-row { display:flex; align-items:center; gap:10px; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:8px; padding:10px 14px; flex-wrap:wrap; }
+        .machine-row-name { font-weight:600; color:var(--gray-200); }
+        .machine-row-type { font-size:.75rem; color:var(--gray-500); background:var(--gray-900); border-radius:6px; padding:2px 8px; }
+        .machine-row-badge { font-size:.7rem; color:#fff; background:var(--err); border-radius:6px; padding:2px 8px; }
+        .machine-row-actions { margin-left:auto; display:flex; gap:8px; }
+        .machine-row-actions button { background:none; border:none; color:var(--gray-400); cursor:pointer; font-size:.78rem; font-family:'Figtree',sans-serif; padding:2px 4px; }
+        .machine-row-actions button:hover { color:var(--gray-200); }
+        .machine-form-label { font-size:.78rem; color:var(--gray-500); margin-bottom:-6px; }
+        .machine-form-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:8px; padding:9px 12px; font-size:.85rem; color:var(--gray-200); font-family:'Figtree',sans-serif; }
+        .machine-form-actions { display:flex; gap:8px; flex-wrap:wrap; }
+        .machine-form-actions .backup-btn { display:inline-block; }
+        .machine-form-test-result { font-size:.78rem; color:var(--gray-400); min-height:1em; }
+
         /* ── Degassing tracker ── */
         .degassing-bar-wrap { margin-top:6px; }
         .degassing-bar-track { height:6px; border-radius:3px; background:var(--gray-800); position:relative; overflow:visible; }

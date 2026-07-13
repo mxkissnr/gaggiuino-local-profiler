@@ -6,6 +6,8 @@
 - **Settings → Machines UI** to add, edit, test-connect and remove machines from the registry, and a topbar machine switcher with per-view filtering. `public-src/components/machines-settings.js`, `public-src/main.js`.
 - **Orders are now machine-aware end to end**: `POST /api/orders` accepts an optional `machine` field, resolved to a real registry id and persisted on the order row; fulfillment (`POST /api/orders/:id/complete`) links the latest shot from the order's own target machine instead of the global latest shot; `GET /api/orders/stats` gained a `byMachine` breakdown; `GET /api/orders`/`queue-eta` accept an optional `?machine=` filter. `routes/orders.js`, `lib/repositories/ShotRepository.js`, `lib/data.js`.
 
+- **Settings → Machines: manage the multi-machine registry from the app UI.** New "Maschinen" card in Settings lists all configured machines (name, type badge, default badge), with add/edit/delete and a "Test connection" button per machine, backed by the `/api/machines` API from #317. `S.machines`/`S.activeMachineId` added to app state (persisted in `localStorage`) as groundwork for a future machine-scoped Live/Shots/Analytics view — not wired into those views yet in this release, Settings-based management only. `public-src/components/machines-settings.js` (new), `public-src/index.html`, `public-src/main.js`, `public-src/state.js`, `public-src/style.css`, `public-src/i18n/*.js` (all 6). Closes #319
+
 ### Changed
 - **Breaking (data model only, not the API): `MAX_SHOT_ID` raised from 100,000 to 99,999,999** to make room for the multi-machine synthetic shot id scheme above. Existing shot ids (all well under the old ceiling) are unaffected.
 
