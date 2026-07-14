@@ -52,7 +52,7 @@ jobs:
           echo "Building version $VERSION for ${{ matrix.arch }}"
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./gaggiuino-local-profiler
           platforms: ${{ matrix.platform }}
