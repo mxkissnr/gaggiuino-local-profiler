@@ -1,3 +1,12 @@
+## [2.2.4] – 2026-07-14
+
+### Fixed
+- **Shot titles showed the raw synthetic multi-machine id** (e.g. "Shot 20000003") instead of a human-friendly number. Shots on non-default machines get a synthetic global id (`machineId * 10,000,000 + nativeId`) so ids never collide across machines — correct internally, but confusing to show when the machine name is already in the subtitle. `ShotRepository._hydrate()` now exposes a `nativeId` field (via the existing `toNativeShotId()` helper), used for display in the shot title, compare title, and sidebar list; the raw `id` is unchanged everywhere else (API calls, exports, dataset attributes). Closes #359
+- **`lightbox.js` built its overlay via unescaped `innerHTML` string interpolation** — CodeQL (newly enabled this round) flagged this as a high-severity DOM XSS risk: a URL containing quote/angle-bracket characters could break out of the `src` attribute and inject arbitrary HTML/script. Current callers only ever pass a browser-normalized blob URL, but the function was unsafe by construction. Rebuilt via `createElement`/property assignment instead, which can never be parsed as HTML regardless of content. Closes #369
+
+### Added
+- **Sidebar shot thumbnail now opens full-size on click**, using the same reusable lightbox already used by the annotation panel's own photo, instead of just selecting that shot row. Closes #367
+
 ## [2.2.3] – 2026-07-14
 
 ### Fixed
