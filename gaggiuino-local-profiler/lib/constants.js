@@ -64,6 +64,15 @@ const MAINTENANCE_DEFAULTS = {
 
 const STATIC_MAINTENANCE_TASKS = new Set(['descaling', 'backflush', 'grouphead', 'gaskets', 'waterfilter']);
 
+// waterfilter and grinder_* tasks track shared equipment (one water filter /
+// one grinder used across machines, #338) — they never split per machine and
+// always live under the sentinel machine_id 1 in the `maintenance` table,
+// regardless of which machine is currently active. descaling/backflush/
+// grouphead/gaskets are boiler/group-head specific and DO split per machine.
+function isGlobalMaintenanceTask(key) {
+    return key === 'waterfilter' || key.startsWith('grinder_');
+}
+
 module.exports = {
     GLP_VERSION, DEFAULT_PORT,
     DATA_DIR, TOKEN_FILE, PREHEAT_STATE_FILE, OPTIONS_FILE, PROFILES_CACHE_FILE,
@@ -71,7 +80,7 @@ module.exports = {
     HA_INGRESS_PATH, HA_API, HA_TOKEN, ALLOWED_URL_SCHEMES, ALLOWED_IMPORT_HOSTS,
     TEMP_HISTORY_MAX, TEMP_STABLE_MIN, TEMP_STABLE_VAR, PREHEAT_STATE_TTL,
     WARM_TEMP_MIN, WARM_OFF_MAX_MS,
-    DEFAULT_MENU, MAINTENANCE_DEFAULTS, STATIC_MAINTENANCE_TASKS,
+    DEFAULT_MENU, MAINTENANCE_DEFAULTS, STATIC_MAINTENANCE_TASKS, isGlobalMaintenanceTask,
     LOW_STOCK_THRESHOLD_G,
     ALLOWED_IMAGE_HOSTS, BEAN_IMAGE_DIR, BEAN_IMAGE_MAX_BYTES, IMPORT_FETCH_MAX_BYTES,
 };

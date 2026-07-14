@@ -1,5 +1,9 @@
 const { getDb }            = require('../db');
-const { MAINTENANCE_DEFAULTS } = require('../constants');
+const { MAINTENANCE_DEFAULTS, isGlobalMaintenanceTask } = require('../constants');
+
+// waterfilter/grinder_* rows always live under this sentinel machine_id (#338)
+// since that equipment is shared across machines — see isGlobalMaintenanceTask().
+const GLOBAL_MAINTENANCE_MACHINE_ID = 1;
 
 class LibraryRepository {
     getLibrary() {
@@ -18,9 +22,15 @@ class LibraryRepository {
         getDb().prepare("INSERT OR REPLACE INTO library (key, data) VALUES ('main', ?)").run(JSON.stringify(lib));
     }
 
-    getMaintenance() {
+    getMaintenance(machineId = 1) {
         const db      = getDb();
-        const rows    = db.prepare('SELECT key, data FROM maintenance').all();
+        // Fetch rows for both the requested machine and the global sentinel,
+        // then keep each key from the set it actually belongs to — avoids
+        // per-machine descaling/backflush/etc. rows leaking across machines
+        // while still surfacing the shared waterfilter/grinder_* rows (#338).
+        const rows    = db.prepare('SELECT key, data, machine_id FROM maintenance WHERE machine_id IN (?, ?)')
+            .all(machineId, GLOBAL_MAINTENANCE_MACHINE_ID)
+            .filter(r => isGlobalMaintenanceTask(r.key) ? r.machine_id === GLOBAL_MAINTENANCE_MACHINE_ID : r.machine_id === machineId);
         const saved   = Object.fromEntries(rows.map(r => [r.key, JSON.parse(r.data)]));
         const result  = JSON.parse(JSON.stringify(MAINTENANCE_DEFAULTS));
         for (const key of Object.keys(result)) {
@@ -40,11 +50,14 @@ class LibraryRepository {
         return result;
     }
 
-    saveMaintenance(data) {
+    saveMaintenance(data, machineId = 1) {
         const db  = getDb();
-        const ins = db.prepare('INSERT OR REPLACE INTO maintenance (key, data) VALUES (?,?)');
+        const ins = db.prepare('INSERT OR REPLACE INTO maintenance (machine_id, key, data) VALUES (?,?,?)');
         db.transaction(() => {
-            for (const [key, val] of Object.entries(data)) ins.run(key, JSON.stringify(val));
+            for (const [key, val] of Object.entries(data)) {
+                const targetMachineId = isGlobalMaintenanceTask(key) ? GLOBAL_MAINTENANCE_MACHINE_ID : machineId;
+                ins.run(targetMachineId, key, JSON.stringify(val));
+            }
         })();
     }
 
@@ -63,7 +76,7 @@ class LibraryRepository {
         }));
     }
 
-    addMaintenanceLogEntry(task, notes, machine, shotCount) {
+    addMaintenanceLogEntry(task, notes, machine, shotCount, machineId = 1) {
         const db    = getDb();
         const entry = {
             id:      Date.now(),
@@ -73,10 +86,11 @@ class LibraryRepository {
             machine: machine || '',
             shot_count: shotCount ?? 0,
             notes:   notes || '',
+            machine_id: machineId,
         };
         db.prepare(
-            'INSERT INTO maintenance_log (id, ts, date, task, machine, shot_count, notes) VALUES (?,?,?,?,?,?,?)'
-        ).run(entry.id, entry.ts, entry.date, entry.task, entry.machine, entry.shot_count, entry.notes);
+            'INSERT INTO maintenance_log (id, ts, date, task, machine, shot_count, notes, machine_id) VALUES (?,?,?,?,?,?,?,?)'
+        ).run(entry.id, entry.ts, entry.date, entry.task, entry.machine, entry.shot_count, entry.notes, entry.machine_id);
         db.prepare('DELETE FROM maintenance_log WHERE id NOT IN (SELECT id FROM maintenance_log ORDER BY ts DESC LIMIT 500)').run();
         return { ...entry, shotCountAtTime: entry.shot_count };
     }

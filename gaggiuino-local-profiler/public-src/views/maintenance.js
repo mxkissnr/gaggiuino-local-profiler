@@ -8,11 +8,15 @@ export function maintStatusLabel(status) {
   return { ok: t('maint_ok'), soon: t('maint_soon'), due: t('maint_due'), never: t('maint_never') }[status] || '';
 }
 
+function machineIdParam() {
+  return `machineId=${S.activeMachineId ?? 1}`;
+}
+
 export async function loadMaintenanceView() {
   const container = document.getElementById('maint-cards');
   container.innerHTML = `<div class="loading-state">${t('loading')}</div>`;
   try {
-    const r = await apiFetch('api/maintenance');
+    const r = await apiFetch(`api/maintenance?${machineIdParam()}`);
     const data = await r.json();
     renderMaintenanceCards(data);
   } catch (e) {
@@ -135,7 +139,7 @@ export function renderMaintenanceCards(data) {
 
 export async function markMaintDone(task) {
   try {
-    const r = await apiFetch(`api/maintenance/${task}/done`, { method: 'POST' });
+    const r = await apiFetch(`api/maintenance/${task}/done?${machineIdParam()}`, { method: 'POST' });
     renderMaintenanceCards(await r.json());
     loadMaintLog();
   } catch (e) {}
@@ -143,7 +147,7 @@ export async function markMaintDone(task) {
 
 export async function saveMaintThreshold(task, field, value) {
   try {
-    await apiFetch(`api/maintenance/${task}/threshold`, {
+    await apiFetch(`api/maintenance/${task}/threshold?${machineIdParam()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [field]: parseInt(value) }),
@@ -157,7 +161,7 @@ export async function setMaintMode(task, mode) {
     ? { threshold_shots: defaults.shots, threshold_days: null }
     : { threshold_shots: null, threshold_days: defaults.days };
   try {
-    const r = await apiFetch(`api/maintenance/${task}/threshold`, {
+    const r = await apiFetch(`api/maintenance/${task}/threshold?${machineIdParam()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -247,7 +251,7 @@ export async function submitMaintLogEntry() {
   const notes = document.getElementById('maintLogNotes').value.trim();
   if (!task || !date) return;
   try {
-    await apiFetch('api/maintenance/log', {
+    await apiFetch(`api/maintenance/log?${machineIdParam()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task, date, notes }),
