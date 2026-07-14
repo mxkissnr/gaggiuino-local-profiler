@@ -110,9 +110,14 @@
         .shot-wrapper.active .shot        { border-left-color: transparent; border-image: linear-gradient(180deg, var(--accent-from), var(--accent-to)) 1; }
         .shot-wrapper.compare-active .shot{ border-left-color: #3498db; }
 
-        .shot-row  { display: flex; align-items: center; gap: 10px; }
-        .shot-text { flex: 1; min-width: 0; }
-        .shot-thumb { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--gray-800); }
+        /* .shot-thumb sits outside the flex flow (absolute, top-right) so
+           .shot-text always starts/wraps at the same position whether or
+           not a shot has a photo — previously the thumb was a flex sibling
+           before the text, shifting text left by 44px for photo-less shots
+           and breaking alignment across the list (#348). */
+        .shot-row  { position: relative; }
+        .shot-text { padding-right: 44px; }
+        .shot-thumb { position: absolute; top: 0; right: 0; width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--gray-800); }
 
         .profile-name-sidebar { font-size: .95rem; font-weight: 600; color: #fff; margin-bottom: 1px; }
         .coffee-name-sidebar  { font-size: .8rem; color: var(--gray-400); margin-bottom: 2px; }
