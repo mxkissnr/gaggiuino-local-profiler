@@ -34,6 +34,11 @@ describe('gaggimate/ws-client', () => {
                     ws.send(JSON.stringify({ tp: 'res:profiles:delete', rid: msg.rid, ok: true }));
                 } else if (msg.tp === 'req:profiles:select') {
                     ws.send(JSON.stringify({ tp: 'res:profiles:select', rid: msg.rid, ok: true }));
+                } else if (msg.tp === 'req:rid-as-string-echo') {
+                    // Real GaggiMate firmware echoes rid back as a string even
+                    // though the client sends it as a number (#342) — simulate
+                    // that quirk here so a regression is caught in CI.
+                    ws.send(JSON.stringify({ tp: 'res:rid-as-string-echo', rid: String(msg.rid), ok: true }));
                 }
             });
             // Push an unsolicited status event shortly after connect, like a real device would.
@@ -57,6 +62,11 @@ describe('gaggimate/ws-client', () => {
     it('request() correlates req:* with res:* by rid', async () => {
         const res = await wsClient.request(baseUrl(), 'req:profiles:list');
         expect(res.profiles).toEqual([{ id: '1', name: 'Default' }]);
+    });
+
+    it('request() correlates rid even when the machine echoes it back as a string (#342)', async () => {
+        const res = await wsClient.request(baseUrl(), 'req:rid-as-string-echo');
+        expect(res.ok).toBe(true);
     });
 
     it('request() times out cleanly when the machine never responds', async () => {

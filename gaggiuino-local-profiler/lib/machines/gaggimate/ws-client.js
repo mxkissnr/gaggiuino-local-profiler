@@ -60,7 +60,10 @@ function request(baseUrl, reqType, payload = {}, timeoutMs = DEFAULT_TIMEOUT_MS)
             let msg;
             try { msg = JSON.parse(data.toString()); } catch { return; }
             if (msg.tp !== resType) return;
-            if (msg.rid !== undefined && msg.rid !== rid) return;
+            // GaggiMate firmware echoes `rid` back as a string even though the
+            // client sends it as a number (verified live against a real device,
+            // #342) — the comparison must be type-tolerant, not a strict `!==`.
+            if (msg.rid !== undefined && String(msg.rid) !== String(rid)) return;
             finish(null, msg);
         });
 
