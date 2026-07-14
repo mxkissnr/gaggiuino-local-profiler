@@ -192,10 +192,18 @@ function toGlpShot(slog, nativeId) {
     }
 
     return {
-        id:           nativeId,
-        timestamp:    slog.timestamp,
-        duration:     slog.durationMs,
-        profile_name: slog.profileName || slog.profileId || 'Unknown',
+        id:          nativeId,
+        timestamp:   slog.timestamp,
+        // GLP's own convention is deciseconds (shot.duration / 10 = seconds,
+        // see CLAUDE.md "Key conventions"); durationMs is raw milliseconds
+        // read straight off the .slog header, so it needs /100 here, not /10.
+        duration:    Math.round(slog.durationMs / 100),
+        // camelCase to match the frontend's shot.profileName lookup (and
+        // the Gaggiuino adapter's own convention) — ShotRepository.upsert()
+        // accepts either profile_name or profileName for the dedicated
+        // DB column, but only profileName (or shot.profile?.name) is ever
+        // read back out on the frontend.
+        profileName: slog.profileName || slog.profileId || 'Unknown',
         datapoints,
         gaggimateExtra,
         gaggimateFinalWeight: slog.finalWeight,

@@ -124,12 +124,29 @@ describe('gaggimate/history — .slog v4 (128-byte header)', () => {
     it('toGlpShot maps samples into GLP\'s canonical ×10-scaled datapoints shape', () => {
         const shot = history.toGlpShot(parsed, 42);
         expect(shot.id).toBe(42);
-        expect(shot.profile_name).toBe('Test Profile');
-        expect(shot.duration).toBe(5000);
+        expect(shot.profileName).toBe('Test Profile');
+        expect(shot.duration).toBe(50); // durationMs 5000 -> deciseconds (GLP convention)
         expect(shot.datapoints.timeInShot).toEqual([0, 1, 2]); // tickMs/100 rounded
         expect(shot.datapoints.temperature).toEqual([900, 915, 920]); // ct * 10
         expect(shot.datapoints.pressure).toEqual([20, 80, 90]); // cp (raw/10 bar) * 10
         expect(shot.machineType).toBe('gaggimate');
+    });
+
+    // Regression (#344): a real-hardware test shot showed "Bezug zu lang
+    // (2817s)" for an actual ~28s shot, and "Unbekanntes Profil" despite the
+    // device correctly reporting "Default" — both traced to toGlpShot()
+    // storing raw milliseconds where GLP's duration/10=seconds convention
+    // expects deciseconds, and a snake_case profile_name field the frontend
+    // never reads (it only checks shot.profile?.name / shot.profileName).
+    it('scales durationMs into GLP\'s decisecond convention and exposes profileName (not profile_name)', () => {
+        const realisticBuf = buildSlogV4({ samples: SAMPLES });
+        realisticBuf.writeUInt32LE(28170, 20); // durationMs, matching a real ~28.17s test shot
+        const realisticParsed = history.parseSlog(realisticBuf);
+        const shot = history.toGlpShot(realisticParsed, 7);
+
+        expect(shot.duration).toBe(282); // 28170ms / 100 rounded, so shot.duration/10 = 28.2s
+        expect(shot.profileName).toBe('Test Profile');
+        expect(shot.profile_name).toBeUndefined();
     });
 });
 
