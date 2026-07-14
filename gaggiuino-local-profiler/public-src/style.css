@@ -247,18 +247,26 @@
         .mode-btn.active   { color: #fff; border-bottom-color: transparent; position: relative; }
         .mode-btn.active::after { content:''; position:absolute; bottom:-1px; left:0; right:0; height:2px; background:linear-gradient(90deg, var(--accent-from), var(--accent-to)); border-radius:1px; }
 
-        /* Multi-machine switcher (#325) — only shown once >1 machine is registered */
+        /* Multi-machine switcher (#325) — only shown once >1 machine is registered.
+           Resting state matches the flat topbar aesthetic (.mode-btn, #btnSettings:
+           transparent, no border/box) instead of a filled pill — #347: the previous
+           filled-box treatment still stood out against the borderless tab bar even
+           after native <select> chrome was stripped. Border/background now only
+           appear on hover/focus, as affordance, not at rest. */
         .machine-switcher {
             appearance: none; -webkit-appearance: none; -moz-appearance: none;
-            background: var(--gray-800) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2371717a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;
-            border: 1px solid var(--gray-700); color: var(--gray-200);
+            background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2371717a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+            border: 1px solid transparent; color: var(--gray-500);
             border-radius: 8px; padding: 6px 26px 6px 10px; font-family: 'Figtree', sans-serif; font-size: .8rem;
-            cursor: pointer; margin: 0 8px; flex-shrink: 0; max-width: 160px;
-            transition: border-color .2s, color .2s;
+            font-weight: 600; cursor: pointer; margin: 0 8px; flex-shrink: 0; max-width: 160px;
+            transition: border-color .2s, color .2s, background-color .2s;
         }
-        .machine-switcher:hover { border-color: var(--gray-500); color: #fff; }
+        .machine-switcher:hover {
+            border-color: var(--gray-700); background-color: var(--gray-800); color: #fff;
+        }
         .machine-switcher:focus, .machine-switcher:focus-visible {
-            outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow);
+            outline: none; border-color: var(--accent); background-color: var(--gray-800);
+            box-shadow: 0 0 0 2px var(--accent-glow);
         }
         #liveMachineUnavailableBanner {
             background: var(--gray-900); border: 1px solid var(--gray-700); border-radius: 10px;
