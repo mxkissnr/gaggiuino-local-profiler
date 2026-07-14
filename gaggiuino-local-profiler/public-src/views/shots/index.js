@@ -178,6 +178,16 @@ export function updateView() {
     document.getElementById('valProfile').innerText = nameA;
   }
 
+  // machineSubtitle (#344): make it reflect the machine that actually owns
+  // the shot being viewed, not the global default machine from status.js's
+  // periodic poll — see that file's updateStatus() for the corresponding
+  // guard (`!S.primaryShotId`) that keeps it from clobbering this back.
+  const subtitleEl = document.getElementById('machineSubtitle');
+  if (subtitleEl) {
+    const machine = S.machines?.find(m => m.id === (shotA.machineId ?? 1));
+    if (machine) subtitleEl.textContent = machine.host ? `${machine.name} · ${machine.host}` : machine.name;
+  }
+
   const totalSecs = (shotA.duration || 0) / 10;
   document.getElementById('duration').innerText =
     `${Math.floor(totalSecs / 60).toString().padStart(2, '0')}:${Math.floor(totalSecs % 60).toString().padStart(2, '0')}`;

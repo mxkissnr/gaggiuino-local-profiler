@@ -39,7 +39,12 @@ export async function updateStatus() {
     }
     dot.className = s.lastSyncError ? 'status-dot error' : (s.lastSync ? 'status-dot ok' : 'status-dot unknown');
     dot.title = s.lastSyncError || '';
-    if (s.machineHostname) {
+    // Skip while a shot is being viewed (#344): updateView() (views/shots/
+    // index.js) owns machineSubtitle in that case, showing the machine that
+    // actually owns the viewed shot — this global/default-machine value
+    // would otherwise clobber it on the next 30s poll tick regardless of
+    // which machine's shot is on screen.
+    if (s.machineHostname && !S.primaryShotId) {
       const el = document.getElementById('machineSubtitle');
       if (el) el.textContent = s.machineVersion
         ? `${s.machineHostname} · ${s.machineVersion}`
