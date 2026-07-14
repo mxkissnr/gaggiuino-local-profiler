@@ -21,8 +21,8 @@
   },
   "devDependencies": {
     "playwright": "^1.61.1",
-    "vite": "6.4.3",
-    "vitest": "3.2.7"
+    "vite": "8.1.4",
+    "vitest": "4.1.10"
   },
   "allowScripts": {
     "better-sqlite3@12.11.1": true,
