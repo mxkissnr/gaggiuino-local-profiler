@@ -3,6 +3,7 @@ import { t } from '../i18n.js';
 import { LOCALE_MAP } from '../constants.js';
 import { esc, scoreClass } from '../utils.js';
 import { loadShotImageBlobUrl } from '../bean-image.js';
+import { openLightbox } from './lightbox.js';
 
 // These are imported lazily via window to avoid circular dependencies
 // updateView is on window, calcShotScore/getShotData are set from shots.js
@@ -153,6 +154,15 @@ function _buildShotWrapper(shot) {
         }
       }
     };
+
+    // #367: clicking the shot photo opens it full-size (same lightbox as
+    // the annotation panel's own photo, openShotPhotoLightbox() in
+    // shots/annotation.js) instead of just selecting the row.
+    const thumbEl = divShot.querySelector('.shot-thumb');
+    if (thumbEl) {
+      thumbEl.style.cursor = 'pointer';
+      thumbEl.onclick = e => { e.stopPropagation(); if (thumbEl.src) openLightbox(thumbEl.src); };
+    }
 
     const btnCmp = document.createElement('button');
     btnCmp.className = 'compare-btn';
