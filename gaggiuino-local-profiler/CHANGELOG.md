@@ -1,3 +1,8 @@
+## [2.2.2] – 2026-07-14
+
+### Fixed
+- **GaggiMate shot sync still failed after v2.2.1's WS fix — now with `Request failed with status code 404` instead of a timeout.** `lib/machines/gaggimate/adapter.js`'s `getShot()` built the per-shot history URL from the plain numeric shot id (e.g. `/api/history/2.slog`), but the real GaggiMate firmware requires the id zero-padded to 6 digits (`/api/history/000002.slog`) — the unpadded form 404s. `getLatestShotId()`'s `index.bin` URL was already correct and untouched. Live-verified against Max's real GaggiMate device: unpadded ids 404, zero-padded ids return the genuine `.slog` binary (`Content-Type: application/octet-stream`, `SHOT` magic). New regression test uses a mock HTTP server that only answers on the padded path, so a silent regression back to unpadded ids would fail CI, not just live hardware. `lib/machines/gaggimate/adapter.js`, `test/gaggimate-ws-client.test.js`. Closes #343
+
 ## [2.2.1] – 2026-07-14
 
 ### Fixed
