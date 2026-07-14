@@ -1,3 +1,15 @@
+## [2.2.3] – 2026-07-14
+
+### Fixed
+- **GaggiMate shot duration displayed 100× too high (e.g. a ~28s shot showed as "2817s").** `lib/machines/gaggimate/history.js`'s `toGlpShot()` stored the `.slog` header's raw `durationMs` directly, but GLP's own convention is `shot.duration / 10 = seconds` (deciseconds). Now converts with `Math.round(durationMs / 100)`. Live-verified against a real GaggiMate test shot. Closes #344
+- **GaggiMate shot profile name always showed "Unbekanntes Profil"/"Unknown Profile" even though the device correctly reported "Default".** Two compounding bugs: `history.js`'s `toGlpShot()` returned a snake_case `profile_name` field while the frontend only ever reads camelCase `shot.profileName`/`shot.profile?.name`; and separately `lib/repositories/ShotRepository.js`'s `_hydrate()` only ever returned the DB's `profile_name` column, never a `profileName` field, regardless of which name an adapter used when saving. Both fixed — `profileName` now flows correctly end to end. Closes #345
+- **Shot detail subtitle always showed the default machine's hostname, regardless of which machine's shot was open.** `public-src/components/status.js`'s periodic status poll sets a single global `machineSubtitle` from `GET /api/status`'s `machineHostname` — correct for the default machine, but never updated for a differently-scoped shot. `public-src/views/shots/index.js`'s `updateView()` now looks up the viewed shot's own machine (via `S.machines`, same pattern as the sidebar's machine badge) and sets the subtitle accordingly, guarded against being clobbered by the next periodic poll tick (same "last call wins" pattern as #333). Closes #346
+- **Machine switcher dropdown still visually stood out after v2.2.0's #337 fix.** The previous fix correctly stripped native `<select>` chrome, but kept a filled `--gray-800` background + border box at rest — the only boxed control in an otherwise fully flat topbar (`.mode-btn` tabs, `#btnSettings` gear are all transparent/borderless except on hover). Resting state is now transparent/borderless like its neighbors; background/border only appear on hover/focus. Closes #347
+- **Sidebar shot thumbnail shifted text alignment between shots with and without a photo.** `.shot-thumb` was a flex sibling placed before `.shot-text`, so text started ~44px further right for shots with a photo than for shots without one. Thumbnail is now absolute-positioned (top-right) outside the flex flow, with `.shot-text` always reserving the same padding-right regardless of photo presence. Closes #348
+
+### Changed
+- Enabled Dependabot security updates (npm + github-actions, weekly) and added a CodeQL code scanning workflow (javascript-typescript) — both free for public repos, previously absent. Existing `test.yaml`/`build.yaml` CI is unchanged. Closes #349
+
 ## [2.2.2] – 2026-07-14
 
 ### Fixed
