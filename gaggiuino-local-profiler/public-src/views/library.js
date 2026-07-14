@@ -59,28 +59,17 @@ export function switchLibTab(tab) {
   document.getElementById('libSectionProfiles')?.classList.toggle('active', tab === 'profiles');
 }
 
-// #334: when a specific machine is selected in the topbar switcher (not
-// "All machines"), hide a bean/grinder that has shot history on *other*
-// machines but none on the active one — a bean/grinder never brewed
-// anywhere yet (e.g. freshly added) always stays visible, so it doesn't
-// vanish the moment you filter to a machine. S.shots is already the
-// machine-filtered projection of S.allShots (see state.js), so this is a
-// pure client-side filter — no new data model, no backend change.
-function _usedOnActiveMachine(matchFn) {
-  if (S.activeMachineId == null || S.activeMachineId === 'all') return true;
-  if (!(S.allShots || []).some(matchFn)) return true; // never brewed anywhere
-  return (S.shots || []).some(matchFn);
-}
-
 // ── Bean list ─────────────────────────────────────────────────────────────
 export function renderBeanList() {
   const el = document.getElementById('beanListUI');
   if (!el) return;
-  const beans = S.coffeeLibrary.beans.filter(b =>
-    _usedOnActiveMachine(s => (s.annotation?.coffee || '').toLowerCase() === b.name.toLowerCase()));
+  // Beans are a shared consumable, not scoped to the active machine — always
+  // render the full library regardless of S.activeMachineId. This reverts
+  // the display-filtering part of #334; see #339 for why that filter was
+  // wrong (it hid nearly the whole library once a second machine existed).
+  const beans = S.coffeeLibrary.beans;
   if (!beans.length) {
-    const key = S.coffeeLibrary.beans.length ? 'lib_empty_beans_machine' : 'lib_empty_beans';
-    el.innerHTML = `<div class="lib-empty">${t(key)}</div>`;
+    el.innerHTML = `<div class="lib-empty">${t('lib_empty_beans')}</div>`;
     return;
   }
   el.innerHTML = beans.map(b => {
@@ -332,11 +321,13 @@ export function toggleBeanQR(id) {
 export function renderGrinderList() {
   const el = document.getElementById('grinderListUI');
   if (!el) return;
-  const grinders = S.coffeeLibrary.grinders.filter(g =>
-    _usedOnActiveMachine(s => (s.annotation?.grinder || '').toLowerCase() === g.name.toLowerCase()));
+  // Grinders are shared equipment, not scoped to the active machine — always
+  // render the full library regardless of S.activeMachineId. This reverts
+  // the display-filtering part of #334; see #339 for why that filter was
+  // wrong (it hid nearly the whole library once a second machine existed).
+  const grinders = S.coffeeLibrary.grinders;
   if (!grinders.length) {
-    const key = S.coffeeLibrary.grinders.length ? 'lib_empty_grinders_machine' : 'lib_empty_grinders';
-    el.innerHTML = `<div class="lib-empty">${t(key)}</div>`;
+    el.innerHTML = `<div class="lib-empty">${t('lib_empty_grinders')}</div>`;
     return;
   }
   el.innerHTML = grinders.map(g => {

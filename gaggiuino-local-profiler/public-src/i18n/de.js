@@ -82,7 +82,6 @@ export default {
     lib_grinder_purchase_date:'Kaufdatum', lib_grinder_image:'Bild',
     lib_cancel:'Abbrechen', lib_save:'Speichern',
     lib_empty_beans:'Noch keine Bohnen gespeichert', lib_empty_grinders:'Noch keine Mühlen gespeichert',
-    lib_empty_beans_machine:'Noch keine Bohnen auf dieser Maschine verwendet', lib_empty_grinders_machine:'Noch keine Mühlen auf dieser Maschine verwendet',
     lib_btn_edit:'Bearbeiten', lib_btn_delete:'Löschen',
     lib_btn_disable:'Für Bestellungen deaktivieren', lib_btn_enable:'Für Bestellungen aktivieren',
     lib_bean_disabled_badge:'Deaktiviert',
