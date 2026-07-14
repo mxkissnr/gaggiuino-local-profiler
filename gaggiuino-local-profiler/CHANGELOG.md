@@ -1,3 +1,8 @@
+## [2.2.1] – 2026-07-14
+
+### Fixed
+- **GaggiMate profile fetches and profile CRUD always timed out against real hardware, even though the machine responded correctly and fast.** `lib/machines/gaggimate/ws-client.js`'s `request()` correlates responses to requests via a client-generated `rid`, sent as a JS number — but the real GaggiMate firmware echoes it back in the response frame as a string. The strict `!==` comparison between a number and a string never matches in JS, so every correct, near-instant response (`res:profiles:list` and friends) was silently discarded and the call hung for the full 8s timeout before failing with "Timed out waiting for ... from the machine". Live-verified against Max's real GaggiMate device: the raw response arrived and matched correctly within ~44ms once the comparison was made type-tolerant (`String(msg.rid) !== String(rid)`). This is also the likely cause of the v2.2.0-introduced multi-machine shot sync (#341) intermittently timing out for GaggiMate machines — repeated 8-second-long stuck WS connections to the same ESP32-class device plausibly starved concurrent HTTP shot-sync requests of a free connection slot. `lib/machines/gaggimate/ws-client.js`, `test/gaggimate-ws-client.test.js` (new regression test). Closes #342
+
 ## [2.2.0] – 2026-07-14
 
 ### Fixed
