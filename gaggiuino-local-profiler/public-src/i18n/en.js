@@ -82,7 +82,6 @@ export default {
     lib_grinder_purchase_date:'Purchase date', lib_grinder_image:'Photo',
     lib_cancel:'Cancel', lib_save:'Save',
     lib_empty_beans:'No beans saved yet', lib_empty_grinders:'No grinders saved yet',
-    lib_empty_beans_machine:'No beans used on this machine yet', lib_empty_grinders_machine:'No grinders used on this machine yet',
     lib_btn_edit:'Edit', lib_btn_delete:'Delete',
     lib_btn_disable:'Disable for ordering', lib_btn_enable:'Enable for ordering',
     lib_bean_disabled_badge:'Disabled',

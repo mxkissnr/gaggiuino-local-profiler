@@ -82,7 +82,6 @@ export default {
     lib_grinder_purchase_date:'Aankoopdatum', lib_grinder_image:'Foto',
     lib_cancel:'Annuleren', lib_save:'Opslaan',
     lib_empty_beans:'Nog geen bonen opgeslagen', lib_empty_grinders:'Nog geen molens opgeslagen',
-    lib_empty_beans_machine:'Nog geen bonen gebruikt op deze machine', lib_empty_grinders_machine:'Nog geen molens gebruikt op deze machine',
     lib_btn_edit:'Bewerken', lib_btn_delete:'Verwijderen',
     lib_btn_disable:'Uitschakelen voor bestellingen', lib_btn_enable:'Inschakelen voor bestellingen',
     lib_bean_disabled_badge:'Uitgeschakeld',

@@ -82,7 +82,6 @@ export default {
     lib_grinder_purchase_date:"Date d'achat", lib_grinder_image:'Photo',
     lib_cancel:'Annuler', lib_save:'Enregistrer',
     lib_empty_beans:'Aucun grain enregistré', lib_empty_grinders:'Aucun moulin enregistré',
-    lib_empty_beans_machine:'Aucun grain utilisé sur cette machine', lib_empty_grinders_machine:'Aucun moulin utilisé sur cette machine',
     lib_btn_edit:'Modifier', lib_btn_delete:'Supprimer',
     lib_btn_disable:'Désactiver pour les commandes', lib_btn_enable:'Activer pour les commandes',
     lib_bean_disabled_badge:'Désactivé',
