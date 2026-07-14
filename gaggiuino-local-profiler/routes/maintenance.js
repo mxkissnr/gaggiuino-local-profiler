@@ -14,28 +14,38 @@ function machineHostname() {
     try { return new URL(getMachineUrl(loadOptions())).hostname; } catch { return 'gaggiuino'; }
 }
 
+// Defaults to 1 (the existing default machine) for backward compatibility
+// with older cached frontend clients that don't send machineId yet (#338).
+function activeMachineId(req) {
+    const v = parseInt(req.query.machineId, 10);
+    return Number.isFinite(v) ? v : 1;
+}
+
 router.get('/api/maintenance', (req, res, next) => {
     try {
-        const maint = libraryService.getMaintenance();
-        res.json(libraryService.computeMaintenanceStats(maint));
+        const machineId = activeMachineId(req);
+        const maint = libraryService.getMaintenance(machineId);
+        res.json(libraryService.computeMaintenanceStats(maint, machineId));
     } catch (err) { next(err); }
 });
 
 router.post('/api/maintenance/:task/done', (req, res, next) => {
     try {
         if (!isValidTask(req.params.task)) return res.status(404).json({ error: 'Unknown task' });
-        const maint = libraryService.getMaintenance();
+        const machineId = activeMachineId(req);
+        const maint = libraryService.getMaintenance(machineId);
         maint[req.params.task].lastDate = new Date().toISOString();
-        libraryService.saveMaintenance(maint);
-        libraryService.addMaintenanceLogEntry(req.params.task, req.body?.notes || '', machineHostname());
-        res.json(libraryService.computeMaintenanceStats(maint));
+        libraryService.saveMaintenance(maint, machineId);
+        libraryService.addMaintenanceLogEntry(req.params.task, req.body?.notes || '', machineHostname(), machineId);
+        res.json(libraryService.computeMaintenanceStats(maint, machineId));
     } catch (err) { next(err); }
 });
 
 router.post('/api/maintenance/:task/threshold', (req, res, next) => {
     try {
         if (!isValidTask(req.params.task)) return res.status(404).json({ error: 'Unknown task' });
-        const maint = libraryService.getMaintenance();
+        const machineId = activeMachineId(req);
+        const maint = libraryService.getMaintenance(machineId);
         const { threshold_shots, threshold_days } = req.body;
         if (threshold_shots !== undefined) {
             const v = parseInt(threshold_shots);
@@ -45,8 +55,8 @@ router.post('/api/maintenance/:task/threshold', (req, res, next) => {
             const v = parseInt(threshold_days);
             maint[req.params.task].threshold_days = (!isNaN(v) && v >= 1 && v <= 365) ? v : null;
         }
-        libraryService.saveMaintenance(maint);
-        res.json(libraryService.computeMaintenanceStats(maint));
+        libraryService.saveMaintenance(maint, machineId);
+        res.json(libraryService.computeMaintenanceStats(maint, machineId));
     } catch (err) { next(err); }
 });
 
@@ -59,7 +69,8 @@ router.post('/api/maintenance/log', (req, res, next) => {
         const { task, date, notes } = req.body || {};
         if (!task || !isValidTask(task)) return res.status(400).json({ error: 'Invalid task' });
         if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date' });
-        const entry = libraryService.addMaintenanceLogEntry(task, (notes || '').slice(0, 500), machineHostname());
+        const machineId = activeMachineId(req);
+        const entry = libraryService.addMaintenanceLogEntry(task, (notes || '').slice(0, 500), machineHostname(), machineId);
         res.json(entry);
     } catch (err) { next(err); }
 });

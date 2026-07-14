@@ -925,6 +925,61 @@ describe('POST /api/maintenance/:task/done (shotsSince precision)', () => {
     });
 });
 
+describe('GET /api/maintenance (per-machine scoping, #338)', () => {
+    it('does not leak machine 1\'s descaling state onto a second machine with no shots', async () => {
+        shotRepo.upsertMany([
+            { id: 1, timestamp: Math.floor(Date.now() / 1000) - 86400, duration: 250, machineId: 1 },
+        ]);
+        const done = await fetch(`${baseUrl}/api/maintenance/descaling/done?machineId=1`, { method: 'POST' });
+        expect(done.status).toBe(200);
+
+        const machine1Stats = await (await fetch(`${baseUrl}/api/maintenance?machineId=1`)).json();
+        expect(machine1Stats.descaling.daysSince).toBe(0);
+
+        const machine2Stats = await (await fetch(`${baseUrl}/api/maintenance?machineId=2`)).json();
+        expect(machine2Stats.descaling.daysSince).toBeNull();
+        expect(machine2Stats.descaling.status).toBe('never');
+    });
+
+    it('scopes shotsSince for per-machine tasks to the active machine only', async () => {
+        shotRepo.upsertMany([
+            { id: 1, timestamp: Math.floor(Date.now() / 1000), duration: 250, machineId: 1 },
+            { id: 2, timestamp: Math.floor(Date.now() / 1000), duration: 250, machineId: 1 },
+            { id: 3, timestamp: Math.floor(Date.now() / 1000), duration: 250, machineId: 2 },
+        ]);
+        const machine1Stats = await (await fetch(`${baseUrl}/api/maintenance?machineId=1`)).json();
+        const machine2Stats = await (await fetch(`${baseUrl}/api/maintenance?machineId=2`)).json();
+        expect(machine1Stats.backflush.shotsSince).toBe(2);
+        expect(machine2Stats.backflush.shotsSince).toBe(1);
+    });
+
+    it('keeps waterfilter shared across machines: done on machine 2 is visible from machine 1', async () => {
+        const done = await fetch(`${baseUrl}/api/maintenance/waterfilter/done?machineId=2`, { method: 'POST' });
+        expect(done.status).toBe(200);
+
+        const machine1Stats = await (await fetch(`${baseUrl}/api/maintenance?machineId=1`)).json();
+        expect(machine1Stats.waterfilter.daysSince).toBe(0);
+    });
+
+    it('keeps waterfilter shotsSince counting shots from every machine', async () => {
+        shotRepo.upsertMany([
+            { id: 1, timestamp: Math.floor(Date.now() / 1000), duration: 250, machineId: 1 },
+            { id: 2, timestamp: Math.floor(Date.now() / 1000), duration: 250, machineId: 2 },
+        ]);
+        const machine1Stats = await (await fetch(`${baseUrl}/api/maintenance?machineId=1`)).json();
+        const machine2Stats = await (await fetch(`${baseUrl}/api/maintenance?machineId=2`)).json();
+        expect(machine1Stats.waterfilter.shotsSince).toBe(2);
+        expect(machine2Stats.waterfilter.shotsSince).toBe(2);
+    });
+
+    it('defaults to machineId 1 when the query param is omitted (back-compat)', async () => {
+        const done = await fetch(`${baseUrl}/api/maintenance/grouphead/done`, { method: 'POST' });
+        expect(done.status).toBe(200);
+        const stats = await (await fetch(`${baseUrl}/api/maintenance?machineId=1`)).json();
+        expect(stats.grouphead.daysSince).toBe(0);
+    });
+});
+
 describe('POST /api/library/grinder/:id/delete', () => {
     it('removes the grinder maintenance entry from the database', async () => {
         saveLibrary({ beans: [], grinders: [{ id: 42, name: 'DF64' }], recipes: [] });

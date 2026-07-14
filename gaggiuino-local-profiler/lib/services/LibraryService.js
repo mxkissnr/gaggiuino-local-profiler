@@ -1,18 +1,22 @@
 const repo    = require('../repositories/LibraryRepository');
 const shotRepo = require('../repositories/ShotRepository');
 const { log } = require('../helpers');
-const { LOW_STOCK_THRESHOLD_G } = require('../constants');
+const { LOW_STOCK_THRESHOLD_G, isGlobalMaintenanceTask } = require('../constants');
 
 class LibraryService {
     getLibrary()         { return repo.getLibrary(); }
     saveLibrary(lib)     { repo.saveLibrary(lib); }
-    getMaintenance()     { return repo.getMaintenance(); }
-    saveMaintenance(d)   { repo.saveMaintenance(d); }
+    getMaintenance(machineId)   { return repo.getMaintenance(machineId); }
+    saveMaintenance(d, machineId) { repo.saveMaintenance(d, machineId); }
     getMaintenanceLog()  { return repo.getMaintenanceLog(); }
 
-    addMaintenanceLogEntry(task, notes, machine) {
-        const shotCount = shotRepo.findAll().length;
-        return repo.addMaintenanceLogEntry(task, notes, machine, shotCount);
+    addMaintenanceLogEntry(task, notes, machine, machineId = 1) {
+        // waterfilter/grinder_* are shared equipment (#338) — their "shots since"
+        // accrue from every machine that used them, not just the active one.
+        const shotCount = isGlobalMaintenanceTask(task)
+            ? shotRepo.findAll().length
+            : shotRepo.findAll(machineId).length;
+        return repo.addMaintenanceLogEntry(task, notes, machine, shotCount, machineId);
     }
 
     // Remaining grams for a stock-tracked bean — mirrors the library view's math
@@ -335,11 +339,16 @@ class LibraryService {
         return bean;
     }
 
-    computeMaintenanceStats(maint) {
-        const shots = shotRepo.findAllExcludingTrash();
+    computeMaintenanceStats(maint, machineId = 1) {
+        // descaling/backflush/grouphead/gaskets are boiler/group-head specific
+        // and scope to the active machine; waterfilter/grinder_* are shared
+        // equipment and keep counting shots across every machine (#338).
+        const globalShots = shotRepo.findAllExcludingTrash();
+        const scopedShots = shotRepo.findAllExcludingTrash(machineId);
         const now   = Date.now();
         const result = {};
         for (const [key, task] of Object.entries(maint)) {
+            const shots = isGlobalMaintenanceTask(key) ? globalShots : scopedShots;
             const lastTs     = task.lastDate ? new Date(task.lastDate).getTime() : 0;
             const daysSince  = lastTs ? Math.floor((now - lastTs) / 86400000) : null;
             const shotsSince = shots.filter(s => s.timestamp * 1000 > lastTs).length;
