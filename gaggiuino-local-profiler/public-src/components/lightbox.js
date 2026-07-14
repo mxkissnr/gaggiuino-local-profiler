@@ -6,11 +6,26 @@ import { t } from '../i18n.js';
 export function openLightbox(url) {
   if (!url) return;
 
+  // Built via createElement + property assignment, not innerHTML string
+  // interpolation (#369, CodeQL) — `url` is never parsed as HTML this way,
+  // regardless of its contents, even though every current caller only ever
+  // passes a browser-normalized blob URL read off an <img>.src.
   const overlay = document.createElement('div');
   overlay.className = 'lightbox-overlay';
-  overlay.innerHTML = `
-    <button type="button" class="lightbox-close" aria-label="${t('lightbox_close')}">✕</button>
-    <img class="lightbox-img" src="${url}" alt="">`;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'lightbox-close';
+  closeBtn.setAttribute('aria-label', t('lightbox_close'));
+  closeBtn.textContent = '✕';
+
+  const img = document.createElement('img');
+  img.className = 'lightbox-img';
+  img.src = url;
+  img.alt = '';
+
+  overlay.appendChild(closeBtn);
+  overlay.appendChild(img);
   document.body.appendChild(overlay);
 
   function close() {
@@ -23,6 +38,6 @@ export function openLightbox(url) {
   }
 
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('.lightbox-close').addEventListener('click', close);
+  closeBtn.addEventListener('click', close);
   document.addEventListener('keydown', onKeydown);
 }
