@@ -22,7 +22,7 @@ const CURVES      = ['EASE_IN_OUT', 'EASE_IN', 'EASE_OUT', 'LINEAR', 'INSTANT'];
 
 // ── Profile list (Library "Profiles" tab) ───────────────────────────────
 export async function loadMachineProfileList() {
-  const r = await apiFetch('api/machine/profiles');
+  const r = await apiFetch(`api/machine/profiles?machineId=${S.activeMachineId ?? ''}`);
   if (!r.ok) return;
   const data = await r.json();
   S.machineProfiles = Array.isArray(data.optionsRaw) ? data.optionsRaw : [];
@@ -55,7 +55,7 @@ export function renderProfileList() {
 }
 
 export async function editProfile(id) {
-  const r = await apiFetch(`api/machine/profile/${id}`);
+  const r = await apiFetch(`api/machine/profile/${id}?machineId=${S.activeMachineId ?? ''}`);
   if (!r.ok) { window.showToast?.(t('profile_load_error')); return; }
   const profile = await r.json();
   openProfileForm(profile);
@@ -63,7 +63,7 @@ export async function editProfile(id) {
 
 export async function deleteMachineProfile(id) {
   if (!confirm(t('profile_confirm_delete'))) return;
-  const r = await apiFetch(`api/machine/profile/${id}`, { method: 'DELETE' });
+  const r = await apiFetch(`api/machine/profile/${id}?machineId=${S.activeMachineId ?? ''}`, { method: 'DELETE' });
   if (!r.ok) { window.showToast?.(t('profile_send_error')); return; }
   await loadMachineProfileList();
 }
@@ -259,7 +259,7 @@ export async function sendProfileToMachine() {
 
   const url    = S.profileEditId ? `api/machine/profile/${S.profileEditId}` : 'api/machine/profile';
   const method = S.profileEditId ? 'PUT' : 'POST';
-  const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) });
+  const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...profile, machineId: S.activeMachineId }) });
   if (!r.ok) {
     const body = await r.json().catch(() => ({}));
     window.showToast?.(t('profile_send_error') + (body.error ? `: ${body.error}` : ''));
