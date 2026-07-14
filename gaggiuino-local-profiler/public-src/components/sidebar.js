@@ -130,7 +130,7 @@ function _buildShotWrapper(shot) {
         <div class="shot-text">
           <div class="profile-name-sidebar">${esc(profileName)}${scorePill}${machineBadge}</div>
           ${coffeeHtml}
-          <div class="shotid-sidebar">Shot ${esc(String(shot.id))}${ann.grinder ? ` · ${esc(ann.grinder)}` : ''}${drinkHtml}</div>
+          <div class="shotid-sidebar">Shot ${esc(String(shot.nativeId ?? shot.id))}${ann.grinder ? ` · ${esc(ann.grinder)}` : ''}${drinkHtml}</div>
           <div class="date-sidebar">${esc(date.toLocaleString(LOCALE_MAP[S.currentLang] || 'de-DE'))}</div>
           ${starsHtml}
         </div>

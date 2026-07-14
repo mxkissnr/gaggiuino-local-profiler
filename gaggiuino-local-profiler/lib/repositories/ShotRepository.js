@@ -1,5 +1,6 @@
 const { getDb }         = require('../db');
 const { TRASH_TTL_MS }  = require('../constants');
+const { toNativeShotId } = require('../machines');
 
 function _hydrate(row) {
     if (!row) return null;
@@ -20,6 +21,12 @@ function _hydrate(row) {
         // machineId out of the JSON blob before storing, so `rest` never
         // carries a stale copy of this field.
         machineId:   row.machine_id,
+        // nativeId (#359): the machine's own shot number (e.g. 3), as
+        // opposed to `id`, the globally-unique synthetic id
+        // (machineId * 10,000,000 + nativeId) used everywhere internally so
+        // two machines' shots can never collide. Display-only — `id` stays
+        // the real identifier for API calls, exports, dataset attrs, etc.
+        nativeId:    toNativeShotId(row.machine_id, row.id),
         annotation:  row.ann_data ? JSON.parse(row.ann_data) : (rest.annotation ?? {}),
     };
 }

@@ -169,12 +169,17 @@ export function updateView() {
   const tempMaxScale = Math.ceil(Math.max(maxTempA, maxTempB) + 5) || 100;
 
   const nameA = shotA.profile?.name || shotA.profileName || t('profile_unknown');
+  // Shot N always shows the machine's own native shot number (#359), never
+  // the synthetic global id (machineId * 10,000,000 + nativeId) used
+  // internally so multi-machine shots never collide — that raw id would be
+  // confusing to show ("Shot 20000003") when the machine name is already
+  // in the subtitle. nativeId falls back to id for older cached shots.
   if (shotB) {
     const nameB = shotB.profile?.name || shotB.profileName || t('profile_unknown');
-    document.getElementById('topTitle').innerText   = t('compare_title', shotA.id, shotB.id);
+    document.getElementById('topTitle').innerText   = t('compare_title', shotA.nativeId ?? shotA.id, shotB.nativeId ?? shotB.id);
     document.getElementById('valProfile').innerText = `${nameA} vs. ${nameB}`;
   } else {
-    document.getElementById('topTitle').innerText   = `${nameA} – Shot ${shotA.id}`;
+    document.getElementById('topTitle').innerText   = `${nameA} – Shot ${shotA.nativeId ?? shotA.id}`;
     document.getElementById('valProfile').innerText = nameA;
   }
 
