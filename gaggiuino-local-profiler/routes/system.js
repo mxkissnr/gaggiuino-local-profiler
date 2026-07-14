@@ -214,7 +214,7 @@ router.post('/api/sync', (req, res) => {
         return res.status(429).json({ error: 'Bitte 30 Sekunden zwischen manuellen Syncs warten.' });
     state.lastManualSync = now;
     res.json({ ok: true });
-    require('../lib/live-sync').syncShots();
+    require('../lib/live-sync').syncAllMachines();
 });
 
 // ── Machine switch ────────────────────────────────────────────────────────

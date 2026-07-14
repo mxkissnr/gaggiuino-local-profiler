@@ -4,11 +4,12 @@ import { apiFetch } from '../api.js';
 import { mapToXY, formatTimeLabel } from '../utils.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
 
-// Multi-machine live gating (#325) — only the default machine has real
-// live-status polling wired up (lib/poll.js/lib/sync.js's multi-machine
-// loop for additional machines is a follow-up, not built yet). 'all' and a
-// not-yet-loaded activeMachineId both count as "assume default machine" so
-// single-machine installs (the vast majority) are entirely unaffected.
+// Multi-machine live gating (#325, #341) — shot sync now covers every
+// registered machine (lib/sync.js's syncOtherMachines()), but real-time
+// live status/brew-detection (lib/poll.js's pollViaGaggiuinoStatus()) is
+// still hardcoded to the default machine only — deferred, not built yet.
+// 'all' and a not-yet-loaded activeMachineId both count as "assume default
+// machine" so single-machine installs (the vast majority) are unaffected.
 function _isActiveMachineLiveCapable() {
   const active = S.activeMachineId;
   if (active == null || active === 'all') return true;

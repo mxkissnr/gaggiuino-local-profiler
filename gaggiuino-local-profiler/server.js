@@ -10,7 +10,7 @@ const { getDb }                                      = require('./lib/db');
 const shotService                                    = require('./lib/services/ShotService');
 const { errorHandler }                               = require('./lib/middleware/error');
 const { loadPreheatState, startPreheatWatcher }                              = require('./lib/preheat');
-const { syncShots, scheduleNextSync }                                        = require('./lib/sync');
+const { syncAllMachines, scheduleNextSync }                                  = require('./lib/sync');
 const { fetchMachineVersion, checkAndApplyMachinePower, backgroundHaCheck } = require('./lib/poll');
 
 // ── Init data dir & SQLite DB ────────────────────────────────────────────
@@ -185,7 +185,7 @@ app.listen(PORT, () => {
         try { await checkAndApplyMachinePower(); }
         catch (e) { log(`Machine power check failed on startup: ${e.message}`, true); }
         try {
-            const ok = await syncShots();
+            const ok = await syncAllMachines();
             scheduleNextSync(ok ? 0 : 1);
         } catch (e) {
             log(`Initial sync failed: ${e.message}`, true);

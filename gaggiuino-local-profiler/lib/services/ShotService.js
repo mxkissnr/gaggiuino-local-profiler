@@ -4,9 +4,15 @@ const { log }           = require('../helpers');
 const { MAX_SHOT_ID, ALLOWED_URL_SCHEMES } = require('../constants');
 
 class ShotService {
-    getAll()          { return repo.findAllExcludingTrash(); }
+    // machineId optional (#341) — omitted keeps the original all-machines
+    // behavior every pre-existing call site (shots list, backup export)
+    // relies on; pass it to scope to one machine (e.g. sync's own-machine
+    // max-id lookups, which must never be confused by another machine's
+    // shots living in the same table under disjoint synthetic ids).
+    getAll(machineId) { return repo.findAllExcludingTrash(machineId); }
     getById(id)       { return repo.findById(id); }
     getAnnotation(id) { return repo.getAnnotation(id); }
+    getLatestId(machineId) { return repo.getLatestId(machineId); }
 
     saveAnnotation(shotId, annotation) {
         repo.saveAnnotation(shotId, annotation);
