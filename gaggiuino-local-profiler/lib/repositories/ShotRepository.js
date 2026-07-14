@@ -8,7 +8,12 @@ function _hydrate(row) {
         id:          row.id,
         timestamp:   row.timestamp,
         duration:    row.duration,
+        // profile_name (snake_case) is the DB column's own name, kept for
+        // lib/card.js's fallback lookup; profileName (camelCase) is what
+        // every frontend view actually reads (shot.profile?.name ||
+        // shot.profileName) — both point at the same stored value (#344).
         profile_name: row.profile_name,
+        profileName:  row.profile_name,
         ...rest,
         // machineId (#325): surfaced to the frontend so it can filter/badge
         // shots per machine. upsert()/upsertMany() always destructure
