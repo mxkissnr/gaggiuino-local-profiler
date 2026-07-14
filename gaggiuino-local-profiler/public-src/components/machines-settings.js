@@ -8,6 +8,7 @@
 import { S, setState, filterShotsByMachine } from '../state.js';
 import { apiFetch } from '../api.js';
 import { t } from '../i18n.js';
+import { loadMachineProfileList } from '../views/library-profile-editor.js';
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -92,6 +93,10 @@ export function applyActiveMachineChange() {
     if (window.renderBeanList) window.renderBeanList();
     if (window.renderGrinderList) window.renderGrinderList();
   }
+  // #340: the Library "Profiles" tab shows the active machine's own live
+  // profile list — refetch on switch so it doesn't keep showing whichever
+  // machine was active when the tab was first opened.
+  loadMachineProfileList();
 }
 
 export function renderMachinesList() {

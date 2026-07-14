@@ -4,7 +4,6 @@ const fs      = require('fs');
 const path    = require('path');
 const yaml    = require('js-yaml');
 const router  = express.Router();
-const gaggiuinoWs = require('../lib/gaggiuino-ws-client');
 
 let _openApiSpec = null;
 function getOpenApiSpec() {
@@ -28,6 +27,7 @@ const state = require('../lib/state');
 const demoService = require('../lib/services/DemoService');
 const { profileSchema } = require('../lib/validation/schemas');
 const registry = require('../lib/machines/registry');
+const { getAdapter } = require('../lib/machines');
 
 // ── Profile cache helpers ─────────────────────────────────────────────────
 
@@ -41,6 +41,41 @@ function loadProfilesCache() {
 
 function saveProfilesCache(profiles) {
     try { fs.writeFileSync(PROFILES_CACHE_FILE, JSON.stringify(profiles)); } catch (_) {}
+}
+
+// Multi-machine (#340): the default machine (id 1) keeps using the existing
+// on-disk cache (state.machineProfiles / PROFILES_CACHE_FILE) unchanged, for
+// byte-identical behavior on single-machine installs. Additional machines
+// get a simple in-memory cache — non-default machines never had a cache
+// before, so this is purely additive.
+const nonDefaultProfilesCache = {}; // machineId -> profiles array
+
+function getProfilesCacheFor(machine) {
+    return machine.isDefault ? state.machineProfiles : (nonDefaultProfilesCache[machine.id] || []);
+}
+
+function setProfilesCacheFor(machine, profiles) {
+    if (machine.isDefault) {
+        state.machineProfiles = profiles;
+        saveProfilesCache(profiles);
+    } else {
+        nonDefaultProfilesCache[machine.id] = profiles;
+    }
+}
+
+// Resolves the target machine for a profile request: an explicit machineId
+// (query param on GET, body field on POST/PUT/DELETE) if it names a known
+// machine, otherwise the registry's default machine (id 1) — this keeps old
+// cached frontends that don't send machineId at all working exactly as
+// before (#340).
+function resolveMachine(rawId) {
+    registry.ensureDefaultMachine();
+    const machineId = rawId != null && rawId !== '' ? parseInt(rawId, 10) : NaN;
+    if (!Number.isNaN(machineId)) {
+        const machine = registry.getMachine(machineId);
+        if (machine) return machine;
+    }
+    return registry.getDefaultMachine();
 }
 
 // Pre-load cache into state on startup so the profile select is immediately available
@@ -212,10 +247,22 @@ router.post('/api/switch/toggle', async (req, res) => {
 // ── Machine profiles ──────────────────────────────────────────────────────
 
 router.get('/api/machine/profiles', async (req, res) => {
-    const opts    = loadOptions();
-    const baseUrl = getMachineBaseUrl(opts);
-    const currentId   = state.machineStatus?.profileId   ?? null;
-    const currentName = state.machineStatus?.profileName ?? null;
+    const machine = resolveMachine(req.query.machineId);
+    const adapter = getAdapter(machine);
+
+    let currentId = null, currentName = null;
+    if (machine.isDefault) {
+        // Default machine's live status is already tracked by the legacy
+        // polling loop (lib/poll.js) — reuse it rather than an extra round trip.
+        currentId   = state.machineStatus?.profileId   ?? null;
+        currentName = state.machineStatus?.profileName ?? null;
+    } else {
+        try {
+            const status = await adapter.getStatus(machine);
+            currentId   = status.profileId   ?? null;
+            currentName = status.profileName ?? null;
+        } catch (_) { /* machine unreachable — profile list can still come from cache */ }
+    }
 
     const respond = (profiles, stale = false) => {
         const options = profiles.map(p => p.name);
@@ -229,47 +276,38 @@ router.get('/api/machine/profiles', async (req, res) => {
         });
     };
 
-    if (!baseUrl) {
-        // No machine URL configured — serve from cache if available
-        return respond(state.machineProfiles, true);
-    }
     try {
-        const r    = await axios.get(`${baseUrl}/api/profiles/all`, { timeout: 5000 });
-        const raw  = Array.isArray(r.data) ? r.data : [];
-        if (raw.length) {
-            state.machineProfiles = raw;
-            saveProfilesCache(raw);
-        }
-        respond(state.machineProfiles, raw.length === 0);
+        const raw = await adapter.listProfiles(machine);
+        if (raw.length) setProfilesCacheFor(machine, raw);
+        respond(getProfilesCacheFor(machine), raw.length === 0);
     } catch (e) {
-        // Machine unreachable — fall back to last-known cache
-        log(`Profiles fetch failed, using cache (${state.machineProfiles.length} entries): ${e.message}`, true);
-        respond(state.machineProfiles, true);
+        // Machine unreachable/not configured — fall back to last-known cache
+        const cached = getProfilesCacheFor(machine);
+        log(`Profiles fetch failed for machine #${machine.id} "${machine.name}", using cache (${cached.length} entries): ${e.message}`, true);
+        respond(cached, true);
     }
 });
 
 router.post('/api/machine/profile/set', async (req, res) => {
-    const { option, id: reqId } = req.body || {};
+    const { option, id: reqId, machineId } = req.body || {};
     if (!option && reqId == null) return res.status(400).json({ error: 'option or id required' });
-    const opts    = loadOptions();
-    const baseUrl = getMachineBaseUrl(opts);
-    if (!baseUrl) return res.status(503).json({ error: 'machine URL not configured' });
+    const machine = resolveMachine(machineId);
+    const adapter = getAdapter(machine);
     try {
         let profileId = reqId != null ? parseInt(reqId) : null;
         if (profileId == null) {
             // look up by name in cached profile list (refresh if empty)
-            let profiles = state.machineProfiles;
+            let profiles = getProfilesCacheFor(machine);
             if (!profiles.length) {
-                const r = await axios.get(`${baseUrl}/api/profiles/all`, { timeout: 5000 });
-                profiles = Array.isArray(r.data) ? r.data : [];
-                state.machineProfiles = profiles;
+                profiles = await adapter.listProfiles(machine);
+                setProfilesCacheFor(machine, profiles);
             }
             const match = profiles.find(p => p.name === option);
             if (!match) return res.status(404).json({ error: `Profile not found: ${option}` });
             profileId = match.id;
         }
-        await axios.post(`${baseUrl}/api/profile-select/${profileId}`, {}, { timeout: 5000 });
-        log(`Profile switched to: ${option || profileId}`);
+        await adapter.selectProfile(machine, profileId);
+        log(`Profile switched to: ${option || profileId} (machine #${machine.id} "${machine.name}")`);
         res.json({ ok: true, profileId });
     } catch (e) {
         log(`Profile set error: ${e.message}`, true);
@@ -277,20 +315,27 @@ router.post('/api/machine/profile/set', async (req, res) => {
     }
 });
 
-// The machine has no REST endpoint for writing profiles — create/update/
-// delete only work over its WebSocket/protobuf channel (lib/gaggiuino-ws-client.js).
 // Profile shape: { name, phases:[{name,type,target:{start,end,curve,time,volume},
 // restriction,stopConditions:{...},skip,waterTemperature}], globalStopConditions,
 // waterTemperature, recipe:{coffeeIn,coffeeOut,ratio}, id (update only) } —
 // type/curve accept either the machine's enum strings ("PRESSURE","LINEAR", ...)
-// or their numeric wire values.
+// or their numeric wire values. Writes (create/update/delete) are gated by
+// the adapter's capabilities().profileEdit — e.g. GaggiMate exposes profiles
+// read-only for now (see lib/machines/gaggimate/adapter.js header comment).
+function requireProfileEditSupport(adapter, machine, res) {
+    if (adapter.capabilities().profileEdit) return true;
+    res.status(501).json({
+        error: 'not supported',
+        reason: `${machine.type} machines do not support remote profile editing yet`,
+    });
+    return false;
+}
 
 router.get('/api/machine/profile/:id', async (req, res) => {
-    const opts    = loadOptions();
-    const baseUrl = getMachineBaseUrl(opts);
-    if (!baseUrl) return res.status(503).json({ error: 'machine URL not configured' });
+    const machine = resolveMachine(req.query.machineId);
+    const adapter = getAdapter(machine);
     try {
-        const profile = await gaggiuinoWs.getProfileById(baseUrl, parseInt(req.params.id));
+        const profile = await adapter.getProfile(machine, parseInt(req.params.id));
         res.json(profile);
     } catch (e) {
         log(`Machine profile detail fetch failed: ${e.message}`, true);
@@ -303,12 +348,12 @@ router.post('/api/machine/profile', async (req, res) => {
     if (!parsed.success)
         return res.status(400).json({ error: 'invalid profile', details: parsed.error.issues });
     const profile = parsed.data;
-    const opts    = loadOptions();
-    const baseUrl = getMachineBaseUrl(opts);
-    if (!baseUrl) return res.status(503).json({ error: 'machine URL not configured' });
+    const machine = resolveMachine(req.body?.machineId);
+    const adapter = getAdapter(machine);
+    if (!requireProfileEditSupport(adapter, machine, res)) return;
     try {
-        const created = await gaggiuinoWs.createProfile(baseUrl, profile);
-        log(`Created machine profile "${created.name}" (id ${created.id})`);
+        const created = await adapter.createProfile(machine, profile);
+        log(`Created machine profile "${created.name}" (id ${created.id}) on machine #${machine.id}`);
         res.json(created);
     } catch (e) {
         log(`Machine profile create failed: ${e.message}`, true);
@@ -321,12 +366,12 @@ router.put('/api/machine/profile/:id', async (req, res) => {
     if (!parsed.success)
         return res.status(400).json({ error: 'invalid profile', details: parsed.error.issues });
     const profile = parsed.data;
-    const opts    = loadOptions();
-    const baseUrl = getMachineBaseUrl(opts);
-    if (!baseUrl) return res.status(503).json({ error: 'machine URL not configured' });
+    const machine = resolveMachine(req.body?.machineId);
+    const adapter = getAdapter(machine);
+    if (!requireProfileEditSupport(adapter, machine, res)) return;
     try {
-        const updated = await gaggiuinoWs.updateProfile(baseUrl, profile);
-        log(`Updated machine profile "${updated.name}" (id ${updated.id})`);
+        const updated = await adapter.updateProfile(machine, profile);
+        log(`Updated machine profile "${updated.name}" (id ${updated.id}) on machine #${machine.id}`);
         res.json(updated);
     } catch (e) {
         log(`Machine profile update failed: ${e.message}`, true);
@@ -335,12 +380,12 @@ router.put('/api/machine/profile/:id', async (req, res) => {
 });
 
 router.delete('/api/machine/profile/:id', async (req, res) => {
-    const opts    = loadOptions();
-    const baseUrl = getMachineBaseUrl(opts);
-    if (!baseUrl) return res.status(503).json({ error: 'machine URL not configured' });
+    const machine = resolveMachine(req.body?.machineId ?? req.query.machineId);
+    const adapter = getAdapter(machine);
+    if (!requireProfileEditSupport(adapter, machine, res)) return;
     try {
-        const remaining = await gaggiuinoWs.deleteProfile(baseUrl, parseInt(req.params.id));
-        log(`Deleted machine profile id ${req.params.id}`);
+        const remaining = await adapter.deleteProfile(machine, parseInt(req.params.id));
+        log(`Deleted machine profile id ${req.params.id} on machine #${machine.id}`);
         res.json({ ok: true, remaining });
     } catch (e) {
         log(`Machine profile delete failed: ${e.message}`, true);
