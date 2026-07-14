@@ -1,22 +1,22 @@
 # Development Stats
 
-Generated 2026-07-13 by `scripts/dev-stats.mjs`. Re-run it any time to refresh these numbers — they are computed live from git history, not hand-maintained.
+Generated 2026-07-14 by `scripts/dev-stats.mjs`. Re-run it any time to refresh these numbers — they are computed live from git history, not hand-maintained.
 
 ## Timeline
 
-The GLP ecosystem (this app + 3 companion repos) has been in development since **2026-05-20** — **55 days** as of the last commit (2026-07-13).
+The GLP ecosystem (this app + 3 companion repos) has been in development since **2026-05-20** — **56 days** as of the last commit (2026-07-14).
 
 | Repo | First commit | Last commit | Commits | Claude co-authored |
 |---|---|---|---|---|
-| gaggiuino-local-profiler | 2026-05-20 | 2026-07-13 | 470 | 375 (80%) |
-| glp-integration | 2026-05-22 | 2026-07-12 | 72 | 57 (79%) |
-| glp-lovelace-card | 2026-05-24 | 2026-07-10 | 74 | 65 (88%) |
-| glp-order-card | 2026-05-25 | 2026-07-12 | 46 | 40 (87%) |
-| **Combined** | **2026-05-20** | **2026-07-13** | **662** | **537 (81%)** |
+| gaggiuino-local-profiler | 2026-05-20 | 2026-07-14 | 493 | 398 (81%) |
+| glp-integration | 2026-05-22 | 2026-07-13 | 75 | 60 (80%) |
+| glp-lovelace-card | 2026-05-24 | 2026-07-13 | 76 | 67 (88%) |
+| glp-order-card | 2026-05-25 | 2026-07-13 | 48 | 42 (88%) |
+| **Combined** | **2026-05-20** | **2026-07-14** | **692** | **567 (82%)** |
 
 ![Commits per repo](docs/dev-stats/commits-per-repo.png)
 
-Combined line changes (insertions + deletions across all commits): **229.636**, of which **174.697** landed in Claude-co-authored commits.
+Combined line changes (insertions + deletions across all commits): **234.080**, of which **179.141** landed in Claude-co-authored commits.
 
 Commits without a Claude co-author line are presumed human-only (manual fixes, merges, config tweaks) — not independently verified.
 
@@ -25,7 +25,7 @@ Commits without a Claude co-author line are presumed human-only (manual fixes, m
 | Model | Commits |
 |---|---|
 | Claude Sonnet 4.6 | 348 |
-| Claude Sonnet 5 | 99 |
+| Claude Sonnet 5 | 129 |
 | Claude Opus 4.8 | 47 |
 | Claude Fable 5 | 32 |
 | Claude | 11 |
@@ -38,7 +38,7 @@ The exact co-author string varies by era as model names changed over the project
 
 This is **not** measured token usage or an actual invoice. It multiplies changed lines (insertions + deletions) in Claude-co-authored commits by an assumed 25 tokens/line (covers the conversation and planning overhead around a diff, not just the diff bytes), then applies the price table in `scripts/dev-stats.pricing.json` — which ships with every price set to `null` until you fill in your own plan/API rates.
 
-**Estimated cost: ~$28.21** across 171.013 priced lines (+ 3.686 lines from unpriced models, excluded from this total).
+**Estimated cost: ~$28.33** across 175.577 priced lines (+ 3.563 lines from unpriced models, excluded from this total).
 
 ---
 *This file is generated. Do not hand-edit — re-run `node scripts/dev-stats.mjs` instead.*

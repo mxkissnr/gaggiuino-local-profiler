@@ -73,7 +73,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Maint
 
 | | Feature | Description |
 |---|---|---|
-| 🔀 | **Multi-Machine** | Manage more than one espresso machine from a single add-on instance — Gaggiuino (full support) or [GaggiMate](https://github.com/jniebuhr/gaggimate) (experimental: sync + live status, read-only profiles). Existing single-machine installs upgrade automatically, no manual steps. |
+| 🔀 | **Multi-Machine** | Manage more than one espresso machine from a single add-on instance — Gaggiuino (full support) or [GaggiMate](https://github.com/jniebuhr/gaggimate) (experimental: sync + live status, read-only profiles). Shot sync now runs for every registered machine, not just the default one; live view stays default-machine-only for now. Maintenance (descaling/backflush/group head/gaskets) is tracked per machine; shared equipment (water filter, grinder) stays global. Existing single-machine installs upgrade automatically, no manual steps. |
 | 📈 | **Shot Archive** | All shots with pressure, flow, weight and temperature curves |
 | 🔴 | **Live Mode** | Real-time display directly from the controller (`/api/system/status`) |
 | 🔄 | **Auto-Sync** | New shots load automatically when `gaggiuino_latest_shot_id` rises |
