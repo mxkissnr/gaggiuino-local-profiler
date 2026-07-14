@@ -56,7 +56,12 @@ async function getLatestShotId(machine) {
 
 async function getShot(machine, nativeId) {
     const baseUrl = baseUrlFor(machine);
-    const r = await axios.get(`${baseUrl}/api/history/${nativeId}.slog`, { responseType: 'arraybuffer', timeout: 10000 });
+    // Live-verified against real GaggiMate firmware (#343): unlike index.bin
+    // (no id, no padding), per-shot .slog filenames require the id
+    // zero-padded to 6 digits — e.g. /api/history/000002.slog. The plain
+    // unpadded form (/api/history/2.slog) 404s. Do not "simplify" this back.
+    const paddedId = String(nativeId).padStart(6, '0');
+    const r = await axios.get(`${baseUrl}/api/history/${paddedId}.slog`, { responseType: 'arraybuffer', timeout: 10000 });
     const slog = history.parseSlog(Buffer.from(r.data));
     return history.toGlpShot(slog, nativeId);
 }

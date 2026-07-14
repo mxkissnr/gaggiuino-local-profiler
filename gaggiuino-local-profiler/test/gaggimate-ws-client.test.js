@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { WebSocketServer } from 'ws';
 import { createRequire } from 'module';
+import http from 'http';
 
 const req = createRequire(import.meta.url);
 
@@ -123,5 +124,61 @@ describe('gaggimate/adapter', () => {
         expect(caps.brewStart).toBe(false);
         expect(caps.profileEdit).toBe(false);
         expect(caps.history).toBe(true);
+    });
+});
+
+// getShot() history URL padding (#343) — real GaggiMate firmware 404s on
+// unpadded .slog filenames (e.g. /api/history/2.slog) and only serves
+// /api/history/000002.slog (id zero-padded to 6 digits), live-verified
+// against a real device. A mock HTTP server that only answers the padded
+// path (404s everything else, including the unpadded form) catches a
+// regression to the unpadded form here instead of only live, on hardware.
+describe('gaggimate/adapter — getShot() history URL', () => {
+    let httpServer, port, adapter;
+
+    function buildMinimalSlogV4() {
+        const history = req('../lib/machines/gaggimate/history');
+        const headerSize = history.HEADER_SIZE_V4;
+        const buf = Buffer.alloc(headerSize);
+        buf.write('SHOT', 0, 'ascii');
+        buf.writeUInt8(4, 4);            // version
+        buf.writeUInt8(0, 5);            // deviceSampleSize
+        buf.writeUInt16LE(headerSize, 6);
+        buf.writeUInt16LE(100, 8);       // sampleIntervalMs
+        buf.writeUInt32LE(0, 12);        // fieldsMask (no fields, no samples)
+        buf.writeUInt32LE(0, 16);        // sampleCount
+        buf.writeUInt32LE(1000, 20);     // durationMs
+        buf.writeUInt32LE(1700000000, 24); // timestamp
+        return buf;
+    }
+
+    beforeAll(async () => {
+        adapter = req('../lib/machines/gaggimate/adapter');
+        const slogBuf = buildMinimalSlogV4();
+        httpServer = http.createServer((request, response) => {
+            if (request.url === '/api/history/000002.slog') {
+                response.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+                response.end(slogBuf);
+            } else {
+                response.writeHead(404);
+                response.end('not found');
+            }
+        });
+        await new Promise((resolve) => httpServer.listen(0, resolve));
+        port = httpServer.address().port;
+    });
+
+    afterAll(() => new Promise((resolve) => httpServer.close(resolve)));
+
+    it('requests the 6-digit zero-padded .slog path, not the plain numeric id', async () => {
+        const machine = { host: `127.0.0.1:${port}`, type: 'gaggimate' };
+        const shot = await adapter.getShot(machine, 2);
+        expect(shot.id).toBe(2);
+        expect(shot.machineType).toBe('gaggimate');
+    });
+
+    it('rejects if the server only serves the unpadded form (regression guard)', async () => {
+        const machine = { host: `127.0.0.1:${port}`, type: 'gaggimate' };
+        await expect(adapter.getShot(machine, 999)).rejects.toThrow();
     });
 });
