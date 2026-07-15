@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  Local shot-profiling dashboard for <a href="https://gaggiuino.github.io/">Gaggiuino</a>-based espresso machines.<br/>
+  Local shot-profiling dashboard for <a href="https://gaggiuino.github.io/">Gaggiuino</a>- and <a href="https://github.com/jniebuhr/gaggimate">GaggiMate</a>-based espresso machines.<br/>
   Syncs shots automatically, visualizes extraction profiles and provides a real-time live view — all from Home Assistant.
 </p>
 
@@ -25,13 +25,13 @@
 
 ## Why GLP?
 
-You love your Gaggiuino machine, but your shot data disappears into the void? GLP brings live extraction charts, a searchable coffee library and full analytics straight into Home Assistant — completely local, no cloud, no account. From *"what was that bean from last week again?"* to a real shot archive with automatic scoring, compare view and flavor wheel: everything runs on your HA server, and your data stays yours.
+You love your Gaggiuino or GaggiMate machine, but your shot data disappears into the void? GLP brings live extraction charts, a searchable coffee library and full analytics straight into Home Assistant — completely local, no cloud, no account. From *"what was that bean from last week again?"* to a real shot archive with automatic scoring, compare view and flavor wheel: everything runs on your HA server, and your data stays yours.
 
 ## 🔗 The GLP Ecosystem
 
 | Component | Version | Requires |
 |---|---|---|
-| **GLP App** (this repo) | ![Version](https://img.shields.io/github/v/tag/mxkissnr/gaggiuino-local-profiler?label=&color=22c55e) | Gaggiuino machine + HA OS/Supervised |
+| **GLP App** (this repo) | ![Version](https://img.shields.io/github/v/tag/mxkissnr/gaggiuino-local-profiler?label=&color=22c55e) | Gaggiuino or GaggiMate machine + HA OS/Supervised |
 | [**GLP Integration**](https://github.com/mxkissnr/glp-integration) | ![Version](https://img.shields.io/github/v/release/mxkissnr/glp-integration?label=&color=22c55e) | App v1.82.7+ · [HACS](https://hacs.xyz) |
 | [**GLP Shot Card**](https://github.com/mxkissnr/glp-lovelace-card) | ![Version](https://img.shields.io/github/v/release/mxkissnr/glp-lovelace-card?label=&color=22c55e) | Integration v1.9.0+ |
 | [**GLP Order Card**](https://github.com/mxkissnr/glp-order-card) | ![Version](https://img.shields.io/github/v/release/mxkissnr/glp-order-card?label=&color=22c55e) | Integration v1.7.0+ |
@@ -195,9 +195,13 @@ Home Assistant Host
 │   ├── /data/glp.db              ← SQLite database (shots, annotations, library, …)
 │   └── Supervisor API            ← HA switch control & sensor polling
 │
-└── Gaggiuino Controller
-    ├── GET /api/shots             ← Shot list & profiles
-    └── GET /api/system/status     ← Live data (1 s polling)
+├── Gaggiuino Controller
+│   ├── GET /api/shots             ← Shot list & profiles
+│   └── GET /api/system/status     ← Live data (1 s polling)
+│
+└── GaggiMate Controller (experimental)
+    ├── ws://<host>/ws             ← JSON WebSocket (live status, profiles)
+    └── GET /api/history/*.slog    ← Binary shot history
 ```
 
 ---
@@ -233,11 +237,13 @@ Inspired by [BeanConqueror](https://github.com/graphefruit/beanconqueror) by gra
 
 Built on top of the [Gaggiuino](https://gaggiuino.github.io/) project. The machine sensor integration in glp-integration was inspired by [ALERTua/hass-gaggiuino](https://github.com/ALERTua/hass-gaggiuino) — the original Home Assistant integration for Gaggiuino. Thank you to [@ALERTua](https://github.com/ALERTua) for pioneering the HA connectivity concepts that made this possible.
 
+Thanks also to Caffinnova S.r.l. and the [jniebuhr/gaggimate](https://github.com/jniebuhr/gaggimate) project for their openly documented WebSocket API and shot-history format, which made the GaggiMate adapter possible. The adapter was written from GaggiMate's public protocol documentation — no GaggiMate code is vendored in this repo.
+
 The in-app flavor wheel's category structure follows the SCA (Specialty Coffee Association) / WCR (World Coffee Research) *Coffee Taster's Flavor Wheel* (2016). `public-src/flavor-data.js` is our own derived dataset (labels in all 6 UI languages — DE, EN, IT, FR, ES, NL — and a German alias table) — no artwork from the original wheel is used or reproduced.
 
 ## Disclaimer
 
-GLP is an independent, community-built companion project. It is not officially affiliated with, endorsed by, or supported by the [Gaggiuino](https://gaggiuino.github.io/) firmware project or its maintainers.
+GLP is an independent, community-built companion project. It is not officially affiliated with, endorsed by, or supported by the [Gaggiuino](https://gaggiuino.github.io/) firmware project or its maintainers, nor by Caffinnova S.r.l. or the [GaggiMate](https://github.com/jniebuhr/gaggimate) project or its maintainers.
 
 ---
 
