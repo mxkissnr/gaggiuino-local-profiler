@@ -2,12 +2,22 @@
 // test/gaggiuino-ws-client.test.js's approach: a mock WebSocketServer
 // speaking the same JSON tp/req:*/res:*/evt:* protocol GLP's own client
 // implements, since no real GaggiMate hardware is available to test against.
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { WebSocketServer } from 'ws';
 import { createRequire } from 'module';
 import http from 'http';
 
 const req = createRequire(import.meta.url);
+
+// The adapter now re-validates machine.host on every request via
+// assertMachineHost() (defense-in-depth against SSRF, since the default
+// machine's host is seeded from add-on options and bypasses
+// routes/machines.js's save-time check entirely). That guard rejects
+// loopback addresses by design — real Gaggiuino/GaggiMate hardware never
+// lives at 127.0.0.1 — but these tests stand up their mock device server on
+// 127.0.0.1, so the guard is stubbed out here to isolate the adapter/wire
+// behaviour under test from that unrelated host-validation concern.
+vi.spyOn(req('../lib/ssrf-guard'), 'assertMachineHost').mockResolvedValue();
 
 describe('gaggimate/ws-client', () => {
     let server, port, wsClient, profiles;
