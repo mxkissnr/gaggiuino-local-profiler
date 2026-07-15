@@ -2,7 +2,7 @@ const express = require('express');
 const axios   = require('axios');
 const fs      = require('fs');
 const path    = require('path');
-const yaml    = require('js-yaml');
+const { load: yamlLoad } = require('js-yaml');
 const router  = express.Router();
 
 let _openApiSpec = null;
@@ -10,7 +10,7 @@ function getOpenApiSpec() {
     if (!_openApiSpec) {
         try {
             const raw = fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8');
-            _openApiSpec = yaml.load(raw);
+            _openApiSpec = yamlLoad(raw);
         } catch (_) {
             return {};
         }
