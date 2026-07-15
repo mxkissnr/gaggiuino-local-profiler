@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Fixed
+- **Mobile: machine switcher collapsed to an icon-only control.** On narrow viewports the topbar machine select rendered the full machine name, eating roughly a third of the mode bar and forcing the view tabs into scroll. Since the active machine's name is already shown in the subtitle line, the select now collapses to a centered chevron (~34px tap target) below 768px — native picker behavior unchanged, CSS-only. Closes #385
+
 ## [2.2.5] – 2026-07-15
 
 Security-hardening round driven by the CodeQL code-scanning rollout: all 21 alerts from the first full scan are now resolved — 12 fixed in code, 4 scoped out (dev-wrapper directory excluded from analysis), 4 dismissed as false positives / accepted risk after per-alert call-path assessment (#377), 1 (lightbox XSS) already fixed in v2.2.4.
