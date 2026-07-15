@@ -1358,6 +1358,21 @@
             .chart-container, .live-chart-container { height: 360px; }
             .live-stats        { grid-template-columns: repeat(3, 1fr); }
             #mode-bar          { padding: 0; }
+            /* #385: icon-only machine switcher — the active machine's name is
+               already shown in the subtitle line, so on mobile the select
+               collapses to its chevron to give the tab bar room. Hover/focus
+               states are pinned too, since the desktop rules set color there. */
+            .machine-switcher,
+            .machine-switcher:hover,
+            .machine-switcher:focus,
+            .machine-switcher:focus-visible {
+                color: transparent;
+                -webkit-text-fill-color: transparent;
+                width: 34px;
+                padding: 6px 0;
+                background-position: center;
+                margin: 0 4px;
+            }
             .shot-wrapper      { padding-right: 18px; }
             #sidebar h2        { padding: 16px 18px; }
             #collapseBtn       { margin-right: 0; }
