@@ -901,6 +901,36 @@ describe('GET /api/maintenance/log', () => {
     });
 });
 
+describe('maintenance routes reject prototype-polluting task names (#374)', () => {
+    it('rejects __proto__ on /done and does not pollute Object.prototype', async () => {
+        const done = await fetch(`${baseUrl}/api/maintenance/__proto__/done`, { method: 'POST' });
+        expect(done.status).toBe(404);
+        expect({}.polluted).toBeUndefined();
+    });
+
+    it('rejects __proto__ on /threshold and does not pollute Object.prototype', async () => {
+        const res = await fetch(`${baseUrl}/api/maintenance/__proto__/threshold`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threshold_shots: 5 }),
+        });
+        expect(res.status).toBe(404);
+        expect({}.threshold_shots).toBeUndefined();
+    });
+
+    it('rejects __proto__ and constructor on POST /log', async () => {
+        for (const task of ['__proto__', 'constructor', 'prototype']) {
+            const res = await fetch(`${baseUrl}/api/maintenance/log`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ task }),
+            });
+            expect(res.status).toBe(400);
+        }
+        expect({}.polluted).toBeUndefined();
+    });
+});
+
 describe('POST /api/maintenance/:task/done (shotsSince precision)', () => {
     afterAll(() => vi.useRealTimers());
 
