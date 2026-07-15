@@ -9,7 +9,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^1.0.1",
+    "@napi-rs/canvas": "^1.0.2",
     "@protobuf-ts/runtime": "^2.11.1",
     "axios": "1.18.1",
     "better-sqlite3": "12.11.1",
