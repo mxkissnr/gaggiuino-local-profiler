@@ -75,8 +75,11 @@ function _getPath(obj, path) {
   return path.split('.').reduce((v, k) => (v == null ? v : v[k]), obj);
 }
 
+const _UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function _setPath(obj, path, value) {
   const keys = path.split('.');
+  if (keys.some(k => _UNSAFE_KEYS.has(k))) return;
   let cur = obj;
   for (let i = 0; i < keys.length - 1; i++) {
     if (cur[keys[i]] == null) cur[keys[i]] = {};
