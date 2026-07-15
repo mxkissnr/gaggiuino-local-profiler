@@ -14,12 +14,21 @@ const wsClient = require('./ws-client');
 const profiles = require('./profiles');
 const history = require('./history');
 const { ALLOWED_URL_SCHEMES } = require('../../constants');
+const { assertMachineHost } = require('../../ssrf-guard');
 
-function baseUrlFor(machine) {
+// Re-validates the host on every request, not just at machine-save time
+// (routes/machines.js): the default machine seeded by
+// lib/machines/registry.js's ensureDefaultMachine() reads machine_host
+// straight from add-on options and bypasses that route's assertMachineHost()
+// check entirely, and rows saved before v2.1.1 introduced the check were
+// never validated at all. Cheap defense-in-depth since every adapter call is
+// already async.
+async function baseUrlFor(machine) {
     const raw = (machine.host || '').trim();
     const normalised = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
     const u = new URL(normalised);
     if (!ALLOWED_URL_SCHEMES.includes(u.protocol)) throw new Error(`Invalid URL scheme: ${u.protocol}`);
+    await assertMachineHost(u.hostname);
     return `${u.protocol}//${u.host}`;
 }
 
@@ -30,7 +39,7 @@ function baseUrlFor(machine) {
 const BREWING_MODE = 1;
 
 async function getStatus(machine) {
-    const baseUrl = baseUrlFor(machine);
+    const baseUrl = await baseUrlFor(machine);
     const evt = await wsClient.waitForStatus(baseUrl, 5000);
     return {
         reachable:         true,
@@ -47,7 +56,7 @@ async function getStatus(machine) {
 }
 
 async function getLatestShotId(machine) {
-    const baseUrl = baseUrlFor(machine);
+    const baseUrl = await baseUrlFor(machine);
     const r = await axios.get(`${baseUrl}/api/history/index.bin`, { responseType: 'arraybuffer', timeout: 10000 });
     const idx = history.parseIndexBin(Buffer.from(r.data));
     if (!idx.entries.length) return null;
@@ -55,7 +64,7 @@ async function getLatestShotId(machine) {
 }
 
 async function getShot(machine, nativeId) {
-    const baseUrl = baseUrlFor(machine);
+    const baseUrl = await baseUrlFor(machine);
     // Live-verified against real GaggiMate firmware (#343): unlike index.bin
     // (no id, no padding), per-shot .slog filenames require the id
     // zero-padded to 6 digits — e.g. /api/history/000002.slog. The plain
@@ -67,27 +76,27 @@ async function getShot(machine, nativeId) {
 }
 
 async function listProfiles(machine) {
-    return profiles.listProfiles(baseUrlFor(machine));
+    return profiles.listProfiles(await baseUrlFor(machine));
 }
 
 async function getProfile(machine, id) {
-    return profiles.loadProfile(baseUrlFor(machine), id);
+    return profiles.loadProfile(await baseUrlFor(machine), id);
 }
 
 async function createProfile(machine, profile) {
-    return profiles.saveProfile(baseUrlFor(machine), profile);
+    return profiles.saveProfile(await baseUrlFor(machine), profile);
 }
 
 async function updateProfile(machine, profile) {
-    return profiles.saveProfile(baseUrlFor(machine), profile);
+    return profiles.saveProfile(await baseUrlFor(machine), profile);
 }
 
 async function deleteProfile(machine, id) {
-    return profiles.deleteProfile(baseUrlFor(machine), id);
+    return profiles.deleteProfile(await baseUrlFor(machine), id);
 }
 
 async function selectProfile(machine, id) {
-    return profiles.selectProfile(baseUrlFor(machine), id);
+    return profiles.selectProfile(await baseUrlFor(machine), id);
 }
 
 function capabilities() {
