@@ -1,3 +1,17 @@
+## [2.2.5] – 2026-07-15
+
+Security-hardening round driven by the CodeQL code-scanning rollout: all 21 alerts from the first full scan are now resolved — 12 fixed in code, 4 scoped out (dev-wrapper directory excluded from analysis), 4 dismissed as false positives / accepted risk after per-alert call-path assessment (#377), 1 (lightbox XSS) already fixed in v2.2.4.
+
+### Fixed
+- **Type confusion in image upload validation (CodeQL critical).** `ImageService.saveUploadedImage()`'s buffer/content-type checks were buried in a compound guard chain that couldn't be statically proven to dominate later use; hoisted into standalone early-return type guards at the single choke point serving all three upload call sites (shot photo, bean image, grinder image). A follow-up hardened the remaining request-derived parameter CodeQL traced past the first fix. Closes #373
+- **Polynomial ReDoS in custom Shopify-domain parsing (CodeQL high).** `routes/import.js` used a backtracking `.replace(/\/.*$/, '')` on user-provided domain strings; replaced with a linear `indexOf`/`slice` equivalent, verified byte-identical on legitimate inputs, with a pathological-input regression test. Part of #373
+- **Prototype-pollution hardening (CodeQL medium ×4).** `routes/maintenance.js`'s `isValidTask()` now explicitly rejects `__proto__`/`constructor`/`prototype` ahead of its whitelist (the whitelist already made the flagged assignments unexploitable in practice — hardened so the guarantee is explicit and statically verifiable), and `profile-dialin-convergence.js`'s path-walking assignment refuses the same dangerous keys. Closes #371
+- **SSRF defense-in-depth on machine adapters (CodeQL critical).** Both machine adapters' `baseUrlFor()` now re-validate the target host via `assertMachineHost()` at request time — closing a real gap where the default machine's host (seeded from add-on options at migration, bypassing the save-time check) and pre-v2.1.1 rows could carry never-validated values. The three remaining SSRF alerts were assessed as already-guarded or false positives (hardcoded supervisor URL; import/image allowlists) and dismissed with documented reasoning. Closes #377
+
+### Added
+- **Global API rate limiting.** New `express-rate-limit`-based app-level limiter (600 req/min per client, env-overridable, static assets exempt) as an outer backstop to the existing per-route limiter helper; 429 responses use the app's standard JSON error shape. Keyed off the raw socket address, consistent with the app's existing distrust of client-supplied forwarding headers. Closes #374
+- **CodeQL scan scoping.** New `.github/codeql/codeql-config.yml` excludes the `gaggiuino-local-profiler-dev/` bootstrap wrapper (not shipped app code) from analysis. Part of #374
+
 ## [2.2.4] – 2026-07-14
 
 ### Fixed
