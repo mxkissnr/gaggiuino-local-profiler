@@ -286,4 +286,36 @@ describe('import provider settings endpoints', () => {
         expect(saved.disabledProviders).toEqual(['kaffeebraun']);
         expect(saved.customShopifyDomains).toEqual(['shop.example.com', 'other-shop.example']);
     });
+
+    // CodeQL js/polynomial-redos: the domain-host extraction used to run a
+    // regex (/\/.*$/) over user-supplied strings. A pathological run of '/'
+    // must not blow up request latency, and legitimate URL-shaped inputs
+    // must still parse to the same host as before.
+    it('POST stays fast on a pathological run of slashes (ReDoS regression)', async () => {
+        const evil = 'a'.repeat(5) + '/'.repeat(50000);
+        const start = Date.now();
+        const r = await fetch(`${baseUrl}/api/import/settings`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customShopifyDomains: [evil] }),
+        });
+        const elapsed = Date.now() - start;
+        expect(r.status).toBe(200);
+        expect(elapsed).toBeLessThan(2000);
+    });
+
+    it('POST still strips scheme/path/www from legitimate shop URLs identically', async () => {
+        const r = await fetch(`${baseUrl}/api/import/settings`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                customShopifyDomains: [
+                    'https://www.my-shop.example/products/foo',
+                    'http://shop2.example//a//b',
+                    'shop3.example',
+                ],
+            }),
+        });
+        expect(r.status).toBe(200);
+        const saved = loadImportSettings();
+        expect(saved.customShopifyDomains).toEqual(['my-shop.example', 'shop2.example', 'shop3.example']);
+    });
 });

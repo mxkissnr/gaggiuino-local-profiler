@@ -75,8 +75,15 @@ function deleteBeanImage(beanId, ext) { deleteImage(beanId, ext); }
 // success, or null when the content-type isn't an accepted image type or the
 // buffer exceeds the size cap.
 function saveUploadedImage(prefix, id, buffer, contentType) {
-    const ext = CONTENT_TYPE_EXT[String(contentType || '').split(';')[0].trim()];
-    if (!ext || !Buffer.isBuffer(buffer) || buffer.length === 0 || buffer.length > BEAN_IMAGE_MAX_BYTES) return null;
+    // Type-check the body first: express.raw() only guarantees a Buffer when
+    // the request's Content-Type matches its allowlist. Any other shape
+    // (e.g. an object/array from an upstream JSON body parser) must be
+    // rejected before touching .length, so this stays a standalone guard
+    // rather than folded into the OR-chain below.
+    if (!Buffer.isBuffer(buffer)) return null;
+    if (typeof contentType !== 'string') return null;
+    const ext = CONTENT_TYPE_EXT[contentType.split(';')[0].trim()];
+    if (!ext || buffer.length === 0 || buffer.length > BEAN_IMAGE_MAX_BYTES) return null;
     fs.mkdirSync(BEAN_IMAGE_DIR, { recursive: true });
     fs.writeFileSync(imagePath(id, ext, prefix), buffer);
     return ext;
