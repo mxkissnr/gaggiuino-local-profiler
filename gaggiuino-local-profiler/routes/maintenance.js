@@ -4,7 +4,10 @@ const libraryService = require('../lib/services/LibraryService');
 const { loadOptions, getMachineUrl } = require('../lib/data');
 const { STATIC_MAINTENANCE_TASKS }   = require('../lib/constants');
 
+const UNSAFE_TASK_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function isValidTask(task) {
+    if (typeof task !== 'string' || UNSAFE_TASK_KEYS.has(task)) return false;
     if (STATIC_MAINTENANCE_TASKS.has(task)) return true;
     if (/^grinder_\d+$/.test(task)) return libraryService.getLibrary().grinders.some(g => `grinder_${g.id}` === task);
     return false;
