@@ -9,6 +9,7 @@ const state                                          = require('./lib/state');
 const { getDb }                                      = require('./lib/db');
 const shotService                                    = require('./lib/services/ShotService');
 const { errorHandler }                               = require('./lib/middleware/error');
+const { createApiRateLimiter }                       = require('./lib/middleware/rateLimit');
 const { loadPreheatState, startPreheatWatcher }                              = require('./lib/preheat');
 const { syncAllMachines, scheduleNextSync }                                  = require('./lib/sync');
 const { fetchMachineVersion, checkAndApplyMachinePower, backgroundHaCheck } = require('./lib/poll');
@@ -73,6 +74,12 @@ app.use((req, res, next) => {
         "connect-src 'self';");
     next();
 });
+
+// App-level rate limiter — runs ahead of auth/routes so it also caps
+// unauthenticated traffic (login/token probing) and the index.html/static
+// handlers below (see lib/middleware/rateLimit.js for the ceiling and
+// trust-proxy reasoning).
+app.use(createApiRateLimiter());
 
 // Returns true only for requests originating from the HA Supervisor internal network.
 // The Supervisor proxies ingress traffic from 172.30.0.0/16; external LAN clients
