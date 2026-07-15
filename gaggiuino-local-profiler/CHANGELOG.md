@@ -1,4 +1,4 @@
-## [Unreleased]
+## [2.2.6] – 2026-07-15
 
 ### Fixed
 - **Mobile: machine switcher collapsed to an icon-only control.** On narrow viewports the topbar machine select rendered the full machine name, eating roughly a third of the mode bar and forcing the view tabs into scroll. Since the active machine's name is already shown in the subtitle line, the select now collapses to a centered chevron (~34px tap target) below 768px — native picker behavior unchanged, CSS-only. Closes #385
