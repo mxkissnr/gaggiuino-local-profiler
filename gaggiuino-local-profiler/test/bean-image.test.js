@@ -109,6 +109,20 @@ describe('saveUploadedImage', () => {
     it('rejects empty buffers', () => {
         expect(saveUploadedImage('grinder-', 45, Buffer.alloc(0), 'image/jpeg')).toBeNull();
     });
+
+    // CodeQL js/type-confusion-through-parameter-tampering: a body parser
+    // upstream of the raw-body route could hand this a non-Buffer (e.g. an
+    // array/object from a JSON payload) or a repeated-header array as the
+    // content-type. Both must be rejected outright, not coerced.
+    it('rejects a non-Buffer body (array/object type confusion)', () => {
+        expect(saveUploadedImage('grinder-', 47, ['image/png', 'fake'], 'image/png')).toBeNull();
+        expect(saveUploadedImage('grinder-', 48, { length: 3 }, 'image/png')).toBeNull();
+    });
+
+    it('rejects a non-string content type (array/object type confusion)', () => {
+        expect(saveUploadedImage('grinder-', 49, Buffer.from('x'), ['image/png', 'text/html'])).toBeNull();
+        expect(saveUploadedImage('grinder-', 50, Buffer.from('x'), { toString: () => 'image/png' })).toBeNull();
+    });
 });
 
 describe('deleteImage (prefixed)', () => {

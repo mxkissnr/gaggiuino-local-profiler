@@ -184,7 +184,12 @@ router.post('/api/import/settings', (req, res) => {
         const domains = [];
         for (const d of body.customShopifyDomains) {
             if (typeof d !== 'string') continue;
-            const host = d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+            // Strip a leading scheme, then cut at the first '/' with a plain
+            // index lookup (not a regex) so a pathological run of '/'
+            // characters can't drive polynomial backtracking.
+            const withoutScheme = d.trim().toLowerCase().replace(/^https?:\/\//, '');
+            const slashIdx = withoutScheme.indexOf('/');
+            const host = (slashIdx === -1 ? withoutScheme : withoutScheme.slice(0, slashIdx)).replace(/^www\./, '');
             if (DOMAIN_RE.test(host)) domains.push(host);
         }
         s.customShopifyDomains = [...new Set(domains)].slice(0, 20);
