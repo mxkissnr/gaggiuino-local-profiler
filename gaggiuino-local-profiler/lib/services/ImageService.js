@@ -77,9 +77,13 @@ function deleteBeanImage(beanId, ext) { deleteImage(beanId, ext); }
 function saveUploadedImage(prefix, id, buffer, contentType) {
     // Type-check the body first: express.raw() only guarantees a Buffer when
     // the request's Content-Type matches its allowlist. Any other shape
-    // (e.g. an object/array from an upstream JSON body parser) must be
-    // rejected before touching .length, so this stays a standalone guard
-    // rather than folded into the OR-chain below.
+    // (e.g. an array or plain object from an upstream JSON body parser, or a
+    // repeated-header array standing in for contentType) must be rejected
+    // before touching .length, so these stay standalone guards rather than
+    // folded into the OR-chain below. Array.isArray is checked explicitly
+    // (not just Buffer.isBuffer) since that's the specific string/array
+    // type-confusion shape parameter tampering exploits.
+    if (Array.isArray(buffer) || Array.isArray(contentType)) return null;
     if (!Buffer.isBuffer(buffer)) return null;
     if (typeof contentType !== 'string') return null;
     const ext = CONTENT_TYPE_EXT[contentType.split(';')[0].trim()];
