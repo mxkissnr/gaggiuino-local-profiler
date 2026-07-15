@@ -75,17 +75,18 @@ function _getPath(obj, path) {
   return path.split('.').reduce((v, k) => (v == null ? v : v[k]), obj);
 }
 
-const _UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-
 function _setPath(obj, path, value) {
   const keys = path.split('.');
-  if (keys.some(k => _UNSAFE_KEYS.has(k))) return;
   let cur = obj;
   for (let i = 0; i < keys.length - 1; i++) {
-    if (cur[keys[i]] == null) cur[keys[i]] = {};
-    cur = cur[keys[i]];
+    const key = keys[i];
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
+    if (cur[key] == null) cur[key] = {};
+    cur = cur[key];
   }
-  cur[keys[keys.length - 1]] = value;
+  const lastKey = keys[keys.length - 1];
+  if (lastKey === '__proto__' || lastKey === 'constructor' || lastKey === 'prototype') return;
+  cur[lastKey] = value;
 }
 
 // ── Field candidates per symptom ────────────────────────────────────────
