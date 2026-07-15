@@ -2,6 +2,19 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { annotationSchema, beanSchema, orderSchema } = require('../lib/validation/schemas');
+const { validate } = require('../lib/middleware/validate');
+
+function runMiddleware(schema, body) {
+    let statusCode, jsonBody;
+    const req = { body };
+    const res = {
+        status(code) { statusCode = code; return this; },
+        json(payload) { jsonBody = payload; return this; },
+    };
+    let nextCalled = false;
+    validate(schema)(req, res, () => { nextCalled = true; });
+    return { statusCode, jsonBody, nextCalled, body: req.body };
+}
 
 describe('annotationSchema', () => {
     it('accepts a valid annotation', () => {
@@ -43,5 +56,44 @@ describe('orderSchema', () => {
     it('accepts a valid order', () => {
         const result = orderSchema.safeParse({ drinkId: 'espresso', personName: 'Max' });
         expect(result.success).toBe(true);
+    });
+});
+
+describe('validate middleware error shape', () => {
+    it('returns a stable 400 shape for a missing required field', () => {
+        const { statusCode, jsonBody, nextCalled } = runMiddleware(orderSchema, {});
+        expect(statusCode).toBe(400);
+        expect(nextCalled).toBe(false);
+        expect(jsonBody.error).toBe('Validation failed');
+        expect(Array.isArray(jsonBody.issues)).toBe(true);
+        expect(jsonBody.issues.length).toBeGreaterThan(0);
+        for (const issue of jsonBody.issues) {
+            expect(typeof issue.path).toBe('string');
+            expect(typeof issue.message).toBe('string');
+        }
+        expect(jsonBody.issues.map(i => i.path)).toEqual(expect.arrayContaining(['drinkId', 'personName']));
+    });
+
+    it('returns a stable 400 shape for a wrong-type field', () => {
+        const { statusCode, jsonBody } = runMiddleware(orderSchema, { drinkId: 123, personName: 'Max' });
+        expect(statusCode).toBe(400);
+        expect(jsonBody.issues).toEqual([{ path: 'drinkId', message: expect.any(String) }]);
+    });
+
+    it('passes through unknown extra fields on the schema (passthrough) rather than rejecting them', () => {
+        const { nextCalled, body } = runMiddleware(orderSchema, {
+            drinkId: 'espresso', personName: 'Max', weirdField: 'zzz',
+        });
+        expect(nextCalled).toBe(true);
+        expect(body.weirdField).toBe('zzz');
+    });
+
+    it('calls next() with the parsed data on a valid payload', () => {
+        const { nextCalled, statusCode, body } = runMiddleware(orderSchema, {
+            drinkId: 'espresso', personName: 'Max',
+        });
+        expect(nextCalled).toBe(true);
+        expect(statusCode).toBeUndefined();
+        expect(body).toEqual({ drinkId: 'espresso', personName: 'Max', notes: '' });
     });
 });
