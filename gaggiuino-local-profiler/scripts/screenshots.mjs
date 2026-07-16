@@ -99,6 +99,57 @@ function makeShotDatapoints() {
     return { timeInShot, pressure, pumpFlow, shotWeight, temperature };
 }
 
+// ── Synthetic GaggiMate .slog buffer, decoded through the real production
+// parser (lib/machines/gaggimate/history.js), not hand-built datapoints —
+// same field-layout convention verified against a real device payload for
+// #388 (test/gaggimate-history.test.js): fl (actual pump flow) ramps up
+// smoothly, tf (target flow) stays 0 throughout (pressure-profiled shot,
+// no flow target set), so the resulting shot's pumpFlow/weightFlow mapping
+// exercises the exact real-world shape screenshots should show.
+function makeGaggiMateShotDatapoints() {
+    const gaggimateHistory = require('../lib/machines/gaggimate/history.js');
+    const FIELDS_MASK = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 10); // t,tt,ct,tp,cp,fl,tf,ev
+    const SAMPLE_SIZE = 16; // 8 active fields * 2 bytes
+    const sampleIntervalMs = 250;
+    const sampleCount = 112; // ~28s at 250ms/sample
+
+    const headerSize = gaggimateHistory.HEADER_SIZE_V5;
+    const buf = Buffer.alloc(headerSize + sampleCount * SAMPLE_SIZE);
+    buf.write('SHOT', 0, 'ascii');
+    buf.writeUInt8(5, 4);
+    buf.writeUInt8(SAMPLE_SIZE, 5);
+    buf.writeUInt16LE(headerSize, 6);
+    buf.writeUInt16LE(sampleIntervalMs, 8);
+    buf.writeUInt32LE(FIELDS_MASK, 12);
+    buf.writeUInt32LE(sampleCount, 16);
+    buf.writeUInt32LE(sampleCount * sampleIntervalMs, 20); // durationMs
+    buf.writeUInt32LE(Math.floor(Date.now() / 1000), 24);
+    buf.write('default', 28); // profileId
+    buf.write('Default', 60); // profileName
+    buf.writeUInt8(0, 458); // 0 phase transitions
+    buf.writeUInt8(5, 459); // finalExitReason: duration
+
+    let off = headerSize;
+    for (let i = 0; i < sampleCount; i++) {
+        const t = (i * sampleIntervalMs) / 1000; // seconds
+        const cp = t < 3 ? (t / 3) * 90 : Math.min(95, 90 + t * 0.2);       // current pressure, x10-scaled
+        const fl = t < 4 ? (t / 4) * 25 : Math.min(25, 25 + Math.sin(t) * 1); // actual pump flow, x10-scaled
+        const ev = Math.max(0, (t - 4) * 13);                               // estimated weight, x10-scaled
+        buf.writeInt16LE(i, off); off += 2;                       // t (raw tick, x sampleIntervalMs)
+        buf.writeInt16LE(930, off); off += 2;                     // tt: 93.0C target
+        buf.writeInt16LE(Math.round(925 + Math.sin(t / 2) * 3), off); off += 2; // ct: ~92.5-93.5C
+        buf.writeInt16LE(0, off); off += 2;                       // tp: 0 (pressure-profiled, no explicit target)
+        buf.writeInt16LE(Math.round(cp), off); off += 2;          // cp
+        buf.writeInt16LE(Math.round(fl), off); off += 2;          // fl
+        buf.writeInt16LE(0, off); off += 2;                       // tf: 0 throughout, see #388
+        buf.writeInt16LE(Math.round(ev), off); off += 2;          // ev
+    }
+
+    const parsed = gaggimateHistory.parseSlog(buf);
+    const shot   = gaggimateHistory.toGlpShot(parsed, 1);
+    return { datapoints: shot.datapoints, profileName: shot.profileName, duration: shot.duration };
+}
+
 async function waitForServer(url, timeoutMs = 15000) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -157,15 +208,28 @@ async function seed(baseUrl) {
     writeFileSync(imagePath(grinder.id, 'png', 'grinder-'), makeSolidColorPng(200, 200, [0x33, 0x33, 0x38]));
     { const lib = libraryService.getLibrary(); lib.grinders.find(g => g.id === grinder.id).image = 'png'; libraryService.saveLibrary(lib); }
 
+    // Second machine (#395) so shots/maintenance/analytics screenshots show
+    // the multi-machine switcher and per-machine UI, not just a single-machine
+    // install. A bare private-LAN IP literal — not a real reachable device —
+    // so host validation (which resolves hostnames via real DNS) short-circuits
+    // on net.isIP() instead of depending on a .local/mDNS name resolving in
+    // whatever environment this script happens to run in.
+    const machine2 = await post('/api/machines', { name: 'GaggiMate Sim', type: 'gaggimate', host: '192.168.1.50' });
+
     const now = Math.floor(Date.now() / 1000);
     const datapoints = makeShotDatapoints();
+    const gaggimateShot = makeGaggiMateShotDatapoints();
     // The frontend reads shot.profile.name (nested) / shot.profileName, not
     // the flat profile_name DB column — see public-src/views/shots/index.js.
+    // Shots 3 and 4 are attributed to the second (GaggiMate) machine, using
+    // datapoints decoded through the real production .slog parser above.
     const shots = [
         { id: 1, timestamp: now - 3 * 86400, duration: 280, profile: { name: 'Blooming Shot' }, datapoints },
         { id: 2, timestamp: now - 2 * 86400, duration: 280, profile: { name: 'Standard Espresso' }, datapoints },
-        { id: 3, timestamp: now - 86400,     duration: 280, profile: { name: 'Standard Espresso' }, datapoints },
-        { id: 4, timestamp: now,             duration: 280, profile: { name: 'Standard Espresso' }, datapoints },
+        { id: 3, timestamp: now - 86400,     duration: gaggimateShot.duration, machineId: machine2.id,
+          profile: { name: gaggimateShot.profileName }, datapoints: gaggimateShot.datapoints, machineType: 'gaggimate' },
+        { id: 4, timestamp: now,             duration: gaggimateShot.duration, machineId: machine2.id,
+          profile: { name: gaggimateShot.profileName }, datapoints: gaggimateShot.datapoints, machineType: 'gaggimate' },
     ];
     shotRepo.upsertMany(shots);
     shotRepo.saveAnnotation(1, { coffee: bean1.name, dose: 15, rating: 5, grinder: grinder.name, notes: 'Blumig, sehr sauber' });
@@ -215,6 +279,12 @@ async function main() {
     await page.locator('#worldMapWrap').scrollIntoViewIfNeeded();
     await page.waitForTimeout(800); // ECharts map render
     await page.screenshot({ path: path.join(outDir, 'analytics.png') });
+
+    // Machine comparison + weekday/hour heatmap + bean ranking (#394) — only
+    // rendered/visible once >=2 machines exist, which seed() now sets up.
+    await page.locator('#machineComparisonCard').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(outDir, 'analytics-machines.png') });
 
     await page.click('#btnMaintenance');
     await page.waitForTimeout(400);
