@@ -244,6 +244,7 @@ export default {
     live_ready_status:'Prêt', live_error_status:'Erreur',
     maint_by_shots:'Shots', maint_by_days:'Jours',
     maint_grinder_section:'Moulins',
+    maint_shared_section:'Équipement partagé',
     maint_log_title:'Journal de maintenance', maint_log_empty:'Aucune entrée pour l\'instant.',
     maint_log_add:'Ajouter une entrée', maint_log_save:'Enregistrer', maint_log_cancel:'Annuler',
     maint_log_notes_ph:'ex. Cafiza 1h', maint_log_confirm_delete:'Supprimer l\'entrée ?',

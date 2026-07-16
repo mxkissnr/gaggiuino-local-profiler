@@ -1010,6 +1010,77 @@ describe('GET /api/maintenance (per-machine scoping, #338)', () => {
     });
 });
 
+// #392: machineId=all used to fall through parseInt('all') -> NaN, which
+// activeMachineId() silently defaulted to machine 1 — every "all machines"
+// maintenance view was actually showing machine 1's counters, with nothing
+// telling the user that's what happened.
+describe('GET /api/maintenance?machineId=all (#392)', () => {
+    it('returns per-machine stats for every registered machine, not just machine 1', async () => {
+        machineRegistry.ensureDefaultMachine();
+        const second = machineRegistry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: 'kitchen.local' });
+
+        await fetch(`${baseUrl}/api/maintenance/descaling/done?machineId=1`, { method: 'POST' });
+        await fetch(`${baseUrl}/api/maintenance/descaling/done?machineId=${second.id}`, { method: 'POST' });
+
+        const body = await (await fetch(`${baseUrl}/api/maintenance?machineId=all`)).json();
+        expect(body.all).toBe(true);
+        expect(body.machines).toHaveLength(2);
+        expect(body.machines[0]).toMatchObject({ machineId: 1, machineName: 'Gaggiuino' });
+        expect(body.machines[1]).toMatchObject({ machineId: second.id, machineName: 'Kitchen GaggiMate' });
+        expect(body.machines[0].tasks.descaling.daysSince).toBe(0);
+        expect(body.machines[1].tasks.descaling.daysSince).toBe(0);
+    });
+
+    it('does not leak machine 1\'s per-machine task state onto a second machine (still scoped, just grouped)', async () => {
+        machineRegistry.ensureDefaultMachine();
+        const second = machineRegistry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: 'kitchen.local' });
+        await fetch(`${baseUrl}/api/maintenance/backflush/done?machineId=1`, { method: 'POST' });
+
+        const body = await (await fetch(`${baseUrl}/api/maintenance?machineId=all`)).json();
+        const m1 = body.machines.find(m => m.machineId === 1);
+        const m2 = body.machines.find(m => m.machineId === second.id);
+        expect(m1.tasks.backflush.daysSince).toBe(0);
+        expect(m2.tasks.backflush.daysSince).toBeNull();
+        expect(m2.tasks.backflush.status).toBe('never');
+    });
+
+    it('excludes per-machine tasks from the per-machine `tasks` object (they live in `global` instead)', async () => {
+        machineRegistry.ensureDefaultMachine();
+        machineRegistry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: 'kitchen.local' });
+        const body = await (await fetch(`${baseUrl}/api/maintenance?machineId=all`)).json();
+        for (const m of body.machines) {
+            expect(m.tasks.waterfilter).toBeUndefined();
+        }
+    });
+
+    it('computes shared-equipment tasks (waterfilter) once under `global`, identical regardless of which machine', async () => {
+        machineRegistry.ensureDefaultMachine();
+        machineRegistry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: 'kitchen.local' });
+        await fetch(`${baseUrl}/api/maintenance/waterfilter/done?machineId=1`, { method: 'POST' });
+
+        const body = await (await fetch(`${baseUrl}/api/maintenance?machineId=all`)).json();
+        expect(body.global.waterfilter.daysSince).toBe(0);
+        expect(body.machines.some(m => 'waterfilter' in m.tasks)).toBe(false);
+    });
+
+    it('falls back to just the default machine on a single-machine install', async () => {
+        machineRegistry.ensureDefaultMachine();
+        const body = await (await fetch(`${baseUrl}/api/maintenance?machineId=all`)).json();
+        expect(body.machines).toHaveLength(1);
+        expect(body.machines[0].machineId).toBe(1);
+    });
+
+    it('never lets "all" leak into a write route (done/threshold still need one concrete machine)', async () => {
+        machineRegistry.ensureDefaultMachine();
+        const done = await fetch(`${baseUrl}/api/maintenance/descaling/done?machineId=all`, { method: 'POST' });
+        expect(done.status).toBe(200);
+        // Falls back to machine 1, same as the omitted-param back-compat case,
+        // rather than writing a literal 'all' machine_id into the database.
+        const machine1Stats = await (await fetch(`${baseUrl}/api/maintenance?machineId=1`)).json();
+        expect(machine1Stats.descaling.daysSince).toBe(0);
+    });
+});
+
 describe('POST /api/library/grinder/:id/delete', () => {
     it('removes the grinder maintenance entry from the database', async () => {
         saveLibrary({ beans: [], grinders: [{ id: 42, name: 'DF64' }], recipes: [] });

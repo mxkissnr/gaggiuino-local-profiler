@@ -244,6 +244,7 @@ export default {
     live_ready_status:'Pronto', live_error_status:'Errore',
     maint_by_shots:'Shots', maint_by_days:'Giorni',
     maint_grinder_section:'Macine',
+    maint_shared_section:'Attrezzatura condivisa',
     maint_log_title:'Registro manutenzione', maint_log_empty:'Nessuna voce ancora.',
     maint_log_add:'Aggiungi voce', maint_log_save:'Salva', maint_log_cancel:'Annulla',
     maint_log_notes_ph:'es. Cafiza 1h', maint_log_confirm_delete:'Eliminare voce?',

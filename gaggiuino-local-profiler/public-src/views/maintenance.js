@@ -18,14 +18,22 @@ export async function loadMaintenanceView() {
   try {
     const r = await apiFetch(`api/maintenance?${machineIdParam()}`);
     const data = await r.json();
-    renderMaintenanceCards(data);
+    if (data?.all) renderMaintenanceCardsAllMachines(data);
+    else renderMaintenanceCards(data);
   } catch (e) {
     container.innerHTML = `<div class="loading-state" style="color:#ef4444">${t('error_load')}</div>`;
   }
   loadMaintLog();
 }
 
-export function _buildMaintCard(task, d, title, icon) {
+// readOnly (#392) drops the done/threshold/guide controls — used for the
+// "all machines" per-machine cards, where the interactive actions below all
+// implicitly target S.activeMachineId ('all' in this view), not the specific
+// machine the card is showing. Grouping the actions themselves per machine
+// is deferred to the follow-up per-machine maintenance package; until then,
+// these cards are display-only rather than silently writing to the wrong
+// machine (or machine 1, activeMachineId()'s write-route fallback for 'all').
+export function _buildMaintCard(task, d, title, icon, readOnly = false) {
   const lastDoneText = d.daysSince === null
     ? t('maint_never_done')
     : d.daysSince === 0
@@ -60,9 +68,9 @@ export function _buildMaintCard(task, d, title, icon) {
     <div class="maint-bar-track">
       <div class="maint-bar-fill ${d.status}" style="width:${Math.round(d.pct * 100)}%"></div>
     </div>
-    ${threshHtml}
-    <button class="maint-done-btn" data-action="mark-maint-done" data-task="${task}">✓ ${t('maint_done_btn')}</button>
-    ${GUIDED_MAINT_STEPS[task] ? `<button class="maint-guide-btn" data-action="open-guided-maint" data-task="${task}">📋 ${t('guided_open')}</button>` : ''}
+    ${readOnly ? '' : threshHtml}
+    ${readOnly ? '' : `<button class="maint-done-btn" data-action="mark-maint-done" data-task="${task}">✓ ${t('maint_done_btn')}</button>`}
+    ${!readOnly && GUIDED_MAINT_STEPS[task] ? `<button class="maint-guide-btn" data-action="open-guided-maint" data-task="${task}">📋 ${t('guided_open')}</button>` : ''}
   `;
   return card;
 }
@@ -130,6 +138,48 @@ export function renderMaintenanceCards(data) {
       if (!d) continue;
       if (d.status === 'due' || d.status === 'never') anyDue = true;
       container.appendChild(_buildMaintCard(task, d, d.grinderName || task, '⚙'));
+    }
+  }
+
+  const badge = document.getElementById('maintBadge');
+  if (badge) badge.style.display = anyDue ? 'inline-block' : 'none';
+}
+
+// #392 — machineId=all: renders one section per registered machine for the
+// per-machine-scoped tasks (descaling/backflush/grouphead/gaskets), plus a
+// single shared-equipment section (waterfilter/grinder_*, identical across
+// machines) instead of ever silently showing just machine 1's counters.
+export function renderMaintenanceCardsAllMachines(data) {
+  const container = document.getElementById('maint-cards');
+  container.innerHTML = '';
+  let anyDue = false;
+
+  for (const m of data.machines || []) {
+    const header = document.createElement('h3');
+    header.className = 'maint-section-title';
+    header.textContent = m.machineName;
+    container.appendChild(header);
+    for (const [task, meta] of Object.entries(MAINT_META)) {
+      const d = m.tasks[task];
+      if (!d) continue;
+      if (d.status === 'due' || d.status === 'never') anyDue = true;
+      container.appendChild(_buildMaintCard(task, d, t(meta.key), meta.icon, true));
+    }
+  }
+
+  const globalEntries = Object.entries(data.global || {});
+  if (globalEntries.length > 0) {
+    const header = document.createElement('h3');
+    header.className = 'maint-section-title';
+    header.textContent = t('maint_shared_section');
+    container.appendChild(header);
+    for (const [task, d] of globalEntries) {
+      if (!d) continue;
+      if (d.status === 'due' || d.status === 'never') anyDue = true;
+      const isGrinder = task.startsWith('grinder_');
+      const title = isGrinder ? (d.grinderName || task) : t(MAINT_META[task]?.key || task);
+      const icon  = isGrinder ? '⚙' : (MAINT_META[task]?.icon || '');
+      container.appendChild(_buildMaintCard(task, d, title, icon, true));
     }
   }
 

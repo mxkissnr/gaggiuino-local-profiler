@@ -244,6 +244,7 @@ export default {
     live_ready_status:'Listo', live_error_status:'Error',
     maint_by_shots:'Shots', maint_by_days:'Días',
     maint_grinder_section:'Molinos',
+    maint_shared_section:'Equipo compartido',
     maint_log_title:'Registro de mantenimiento', maint_log_empty:'Aún no hay entradas.',
     maint_log_add:'Añadir entrada', maint_log_save:'Guardar', maint_log_cancel:'Cancelar',
     maint_log_notes_ph:'p.ej. Cafiza 1h', maint_log_confirm_delete:'¿Eliminar entrada?',

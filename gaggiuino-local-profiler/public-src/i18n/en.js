@@ -244,6 +244,7 @@ export default {
     live_ready_status:'Ready', live_error_status:'Error',
     maint_by_shots:'Shots', maint_by_days:'Days',
     maint_grinder_section:'Grinders',
+    maint_shared_section:'Shared equipment',
     maint_log_title:'Maintenance Log', maint_log_empty:'No entries yet.',
     maint_log_add:'Add entry', maint_log_save:'Save', maint_log_cancel:'Cancel',
     maint_log_notes_ph:'e.g. Cafiza 1h', maint_log_confirm_delete:'Delete entry?',

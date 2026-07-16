@@ -244,6 +244,7 @@ export default {
     live_ready_status:'Klaar', live_error_status:'Fout',
     maint_by_shots:'Shots', maint_by_days:'Dagen',
     maint_grinder_section:'Molens',
+    maint_shared_section:'Gedeelde apparatuur',
     maint_log_title:'Onderhoudslogboek', maint_log_empty:'Nog geen vermeldingen.',
     maint_log_add:'Handmatig toevoegen', maint_log_save:'Opslaan', maint_log_cancel:'Annuleren',
     maint_log_notes_ph:'bijv. Cafiza 1u', maint_log_confirm_delete:'Vermelding verwijderen?',

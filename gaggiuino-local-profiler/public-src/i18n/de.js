@@ -233,6 +233,7 @@ export default {
     live_ready_status:'Bereit', live_error_status:'Fehler',
     maint_by_shots:'Shots', maint_by_days:'Tage',
     maint_grinder_section:'Mühlen',
+    maint_shared_section:'Geteiltes Equipment',
     maint_log_title:'Wartungsprotokoll', maint_log_empty:'Noch keine Einträge.',
     maint_log_add:'Manuell eintragen', maint_log_save:'Speichern', maint_log_cancel:'Abbrechen',
     maint_log_notes_ph:'z.B. Cafiza 1h', maint_log_confirm_delete:'Eintrag löschen?',
