@@ -171,6 +171,25 @@ function parseSlog(buffer) {
 // volumetric flow (vf) and puck resistance (pr) have no slot in GLP's
 // canonical datapoints — kept in `gaggimateExtra` instead of being silently
 // dropped, per the plan's "lossy, documented" mapping.
+//
+// pumpFlow (#388): GLP's canonical `pumpFlow` is the machine's actual
+// delivered flow, which is GaggiMate's `fl` ("pump flow"), NOT `tf` ("target
+// flow"). Verified against a real device payload (dev simulator, pressure-
+// profiled "Default" shot): fl rises smoothly 0 -> 2.5ml/s over the shot
+// while tf stays 0 throughout (the profile never sets a flow target), so the
+// previous fl/tf swap made getPQData()'s `f[i] > 0` filter drop every single
+// sample, leaving the P-Q chart empty for exactly this (common) shot shape.
+//
+// weightFlow: GLP's canonical `weightFlow` is a *scale-derived* flow rate
+// (see lib/poll.js's liveAccum, which computes it from real scale-weight
+// deltas). GaggiMate has no dedicated scale-flow field — `ev`/`v` are weight
+// readings, not flow — and on the verified real payload no BLE scale was
+// connected (`systemInfo.bleScaleConnected === false`), so `ev` there is
+// itself already a firmware-side volumetric estimate derived from pump flow.
+// Differentiating that per 100-250ms sample would just re-derive a noisier,
+// quantized (0.1g-step) copy of the same `fl` signal already shown as
+// pumpFlow, not an independent measurement — so weightFlow is left unset
+// (0) for GaggiMate shots rather than fabricating a misleading second line.
 function toGlpShot(slog, nativeId) {
     const datapoints = {
         timeInShot: [], pressure: [], temperature: [],
@@ -184,8 +203,8 @@ function toGlpShot(slog, nativeId) {
         datapoints.temperature.push(Math.round((s.ct ?? 0) * 10));
         datapoints.targetTemperature.push(Math.round((s.tt ?? 0) * 10));
         datapoints.shotWeight.push(Math.round((s.ev ?? s.v ?? 0) * 10));
-        datapoints.weightFlow.push(Math.round((s.fl ?? 0) * 10));
-        datapoints.pumpFlow.push(Math.round((s.tf ?? 0) * 10));
+        datapoints.weightFlow.push(0);
+        datapoints.pumpFlow.push(Math.round((s.fl ?? 0) * 10));
         gaggimateExtra.puckFlow.push(s.pf ?? null);
         gaggimateExtra.volumetricFlow.push(s.vf ?? null);
         gaggimateExtra.puckResistance.push(s.pr ?? null);

@@ -8,7 +8,7 @@ class LibraryService {
     saveLibrary(lib)     { repo.saveLibrary(lib); }
     getMaintenance(machineId)   { return repo.getMaintenance(machineId); }
     saveMaintenance(d, machineId) { repo.saveMaintenance(d, machineId); }
-    getMaintenanceLog()  { return repo.getMaintenanceLog(); }
+    getMaintenanceLog(machineId)  { return repo.getMaintenanceLog(machineId); }
 
     addMaintenanceLogEntry(task, notes, machine, machineId = 1) {
         // waterfilter/grinder_* are shared equipment (#338) — their "shots since"

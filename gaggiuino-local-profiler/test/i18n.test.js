@@ -9,6 +9,7 @@ import itLang from '../public-src/i18n/it.js';
 import fr from '../public-src/i18n/fr.js';
 import es from '../public-src/i18n/es.js';
 import nl from '../public-src/i18n/nl.js';
+import { LOCALE_MAP } from '../public-src/constants.js';
 
 const LANGS = { de, en, it: itLang, fr, es, nl };
 const NEW_KEYS = [
@@ -21,6 +22,16 @@ describe('i18n language files', () => {
         const base = Object.keys(de).sort();
         for (const [name, obj] of Object.entries(LANGS)) {
             expect(Object.keys(obj).sort(), `key mismatch in ${name}.js`).toEqual(base);
+        }
+    });
+
+    // Regression (#391): LOCALE_MAP only had 5 entries for 6 supported
+    // languages (nl was missing), silently falling back to 'de-DE' for
+    // Dutch-locale date formatting.
+    it('LOCALE_MAP has a BCP-47 locale for every supported language', () => {
+        for (const name of Object.keys(LANGS)) {
+            expect(LOCALE_MAP, `LOCALE_MAP missing an entry for "${name}"`).toHaveProperty(name);
+            expect(LOCALE_MAP[name]).toMatch(/^[a-z]{2}-[A-Z]{2}$/);
         }
     });
 

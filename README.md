@@ -64,8 +64,12 @@ Click the button above to add this repository directly to your Home Assistant �
   <img src="gaggiuino-local-profiler/docs/screenshots/flavor-wheel.png" alt="Interactive flavor wheel for a bean" width="49%"/>
   <img src="gaggiuino-local-profiler/docs/screenshots/analytics.png" alt="Analytics view with interactive coffee world map" width="49%"/>
 </p>
+<p align="center">
+  <img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance dashboard with summary tiles, next-due banner and per-machine task tiles" width="49%"/>
+  <img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison, bean ranking and dial-in progression" width="49%"/>
+</p>
 
-More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Maintenance, Dial-in). Regenerated on demand via `node scripts/screenshots.mjs`.
+More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-in). Regenerated on demand via `node scripts/screenshots.mjs`.
 
 ---
 
@@ -79,7 +83,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Maint
 | 🔄 | **Auto-Sync** | New shots load automatically when `gaggiuino_latest_shot_id` rises |
 | ⇄ | **Compare Mode** | Overlay two shots side by side |
 | 🏆 | **Shot Score** | Automatic 0–100 score (pressure, stability, duration, ratio, channeling) |
-| 📊 | **Analytics** | Score trend, shot calendar heatmap, bean stats, profile performance, interactive coffee world map (zoom/pan, per-bean origin points) |
+| 📊 | **Analytics** | Score trend, shot calendar heatmap, bean stats, profile performance, interactive coffee world map (zoom/pan, per-bean origin points), a weekday × hour heatmap, a sortable bean ranking table (shots/score/last grind/trend), a machine comparison table (score/duration/temperature stability, once ≥2 machines are registered) and a per-bean dial-in progression chart |
 | 📊 | **P·Q Diagram** | Pressure vs. flow chart — reveals extraction signature |
 | ⚗️ | **EY Calculation** | Extraction Yield % when TDS and dose are entered |
 | ☕ | **Grind Recommendation** | Automatic advice based on shot duration and channeling |
@@ -101,6 +105,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Maint
 | ☕ | **Preheat Timer** | Progress bar + countdown after machine switches on; configurable warmup time; smart reset (ignores brief off/on cycles while still warm) |
 | 🌐 | **Multi-Language UI** | DE / EN / IT / FR / ES / NL — auto-detected from browser, persisted per session |
 | 🎨 | **Accent Color Themes** | 5 color schemes: Amber (default), Ocean, Aurora, Ember, Forest — persisted in localStorage |
+| 🧹 | **Maintenance Dashboard** | Summary tiles (due/soon/OK + log entries this year), a "next up" banner naming the most-overdue task with an inline done-button, a per-view machine filter (independent of the topbar switcher), compact task tiles with threshold/guided-flow controls behind a details expand, and a filterable maintenance log table |
 | 🔧 | **Grinder Maintenance** | Per-grinder cleaning schedule with configurable shot or day threshold; cards shown alongside machine maintenance tasks |
 | 🔩 | **Grinder Burr Wear** | Shots and grams ground since the last burr swap, tracked separately from calendar-based cleaning maintenance since burrs dull by throughput, not time; one-click reset when burrs are replaced |
 | 📷 | **Barcode / QR Scanner** | Scan coffee bag barcodes (EAN/UPC) via camera — name and roaster looked up on Open Food Facts; GLP QR schema for full bean import between installations; each bean card generates a shareable QR code |

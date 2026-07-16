@@ -2,6 +2,7 @@ import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { LOCALE_MAP, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName, flagEmoji } from '../constants.js';
 import { scoreClass } from '../utils.js';
+import { _parseGrindNum } from './shots/grind.js';
 
 // ── Analytics entry point ─────────────────────────────────────────────────
 export function initAnalytics() {
@@ -15,6 +16,10 @@ export function initAnalytics() {
   buildGrinderStats();
   buildDistribution();
   buildTimeOfDay();
+  buildWeekdayHourHeatmap();
+  buildBeanRanking();
+  buildMachineComparison();
+  buildDialinProgression();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -901,5 +906,309 @@ export function buildProfileChart() {
         y: { ticks: { color: '#a1a1aa', font: { size: 11 } }, grid: { display: false } }
       }
     }
+  });
+}
+
+// ── Weekday x Hour heatmap ─────────────────────────────────────────────────
+// True 7x24 matrix of shot counts, in the same visual language as the
+// calendar heatmap above (intensity buckets of the same red). Respects
+// S.activeMachineId scoping implicitly — S.shots is already the
+// machine-filtered projection every other builder here reads.
+export function buildWeekdayHourHeatmap() {
+  const el = document.getElementById('weekdayHourHeatmap');
+  if (!el) return;
+
+  if (!S.shots.length) {
+    el.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_no_time')}</p>`;
+    return;
+  }
+
+  const matrix = Array.from({ length: 7 }, () => Array(24).fill(0));
+  for (const s of S.shots) {
+    const d  = new Date(s.timestamp * 1000);
+    const wd = (d.getDay() + 6) % 7; // 0=Mon..6=Sun, same convention as the calendar above
+    matrix[wd][d.getHours()]++;
+  }
+  const max = Math.max(1, ...matrix.flat());
+  const level = c => c === 0 ? 0 : Math.min(4, Math.ceil((c / max) * 4));
+
+  const locale = LOCALE_MAP[S.currentLang] || 'de-DE';
+  // 2024-01-01 is a Monday — used purely as a reference date to get a
+  // locale-correct short weekday name via Intl, same approach the calendar
+  // above uses for month labels (no hardcoded weekday translation keys).
+  const refMonday = new Date(2024, 0, 1);
+  const weekdayLabels = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(refMonday); d.setDate(d.getDate() + i);
+    return d.toLocaleDateString(locale, { weekday: 'short' });
+  });
+
+  let html = '<div class="wh-heatmap"><div class="wh-row wh-header"><div class="wh-label"></div>';
+  for (let h = 0; h < 24; h++) html += `<div class="wh-hourlabel">${h % 3 === 0 ? h : ''}</div>`;
+  html += '</div>';
+  for (let wd = 0; wd < 7; wd++) {
+    html += `<div class="wh-row"><div class="wh-label">${_esc(weekdayLabels[wd])}</div>`;
+    for (let h = 0; h < 24; h++) {
+      const c = matrix[wd][h];
+      const title = `${weekdayLabels[wd]} ${String(h).padStart(2, '0')}:00 — ${c} Shot${c === 1 ? '' : 's'}`;
+      html += `<div class="wh-cell wh-l${level(c)}" title="${_esc(title)}"></div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ── Bean ranking ────────────────────────────────────────────────────────────
+// Sortable table: bean, shots, avg score, last grind setting used, and a
+// last-5-vs-previous-5 scored trend. Pure aggregation kept separate from
+// rendering so it's unit-testable without a DOM.
+export function _computeBeanRanking(shots) {
+  const byBean = {};
+  for (const s of shots) {
+    const name = s.annotation?.coffee;
+    if (!name) continue;
+    if (!byBean[name]) byBean[name] = [];
+    byBean[name].push(s);
+  }
+
+  const rows = [];
+  for (const [name, beanShots] of Object.entries(byBean)) {
+    const sorted = [...beanShots].sort((a, b) => a.timestamp - b.timestamp);
+    const scored = sorted
+      .map(s => ({ s, sc: window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null }))
+      .filter(x => x.sc !== null);
+    const avgScore = scored.length ? Math.round(scored.reduce((a, x) => a + x.sc, 0) / scored.length) : null;
+
+    const lastGrindShot = [...sorted].reverse().find(s => s.annotation?.grindSetting);
+    const lastGrind = lastGrindShot ? lastGrindShot.annotation.grindSetting : null;
+
+    let trend = null;
+    if (scored.length >= 4) {
+      const last5 = scored.slice(-5);
+      const prev5 = scored.slice(Math.max(0, scored.length - 10), scored.length - 5);
+      if (prev5.length >= 2) {
+        const avg = arr => arr.reduce((a, x) => a + x.sc, 0) / arr.length;
+        trend = Math.round((avg(last5) - avg(prev5)) * 10) / 10;
+      }
+    }
+
+    rows.push({ name, shots: sorted.length, avgScore, lastGrind, trend });
+  }
+  return rows;
+}
+
+function _cmpNullsLast(a, b, dir) {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return dir === 'asc' ? (a > b ? 1 : a < b ? -1 : 0) : (a < b ? 1 : a > b ? -1 : 0);
+}
+
+let _beanRankSort = { key: 'shots', dir: 'desc' };
+
+export function setBeanRankSort(key) {
+  if (_beanRankSort.key === key) _beanRankSort.dir = _beanRankSort.dir === 'desc' ? 'asc' : 'desc';
+  else _beanRankSort = { key, dir: key === 'name' ? 'asc' : 'desc' };
+  buildBeanRanking();
+}
+
+export function buildBeanRanking() {
+  const el = document.getElementById('beanRanking');
+  if (!el) return;
+
+  const rows = _computeBeanRanking(S.shots);
+  if (!rows.length) {
+    el.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_no_beans')}</p>`;
+    return;
+  }
+
+  const { key, dir } = _beanRankSort;
+  rows.sort((a, b) => key === 'name' ? _cmpNullsLast(a.name.toLowerCase(), b.name.toLowerCase(), dir) : _cmpNullsLast(a[key], b[key], dir));
+
+  const arrow = k => k === key ? `<span class="sort-arrow">${dir === 'asc' ? '▲' : '▼'}</span>` : '';
+  const cols = [
+    ['name', t('lib_recipe_bean')], ['shots', t('bean_stat_shots')], ['avgScore', t('bean_stat_avg')],
+    ['lastGrind', t('ann_grind_setting')], ['trend', t('analytics_bean_rank_trend')],
+  ];
+
+  const headerHtml = cols.map(([k, lbl]) =>
+    `<th data-action="set-bean-rank-sort" data-key="${k}">${_esc(lbl)}${arrow(k)}</th>`).join('');
+
+  const rowsHtml = rows.map(r => {
+    const scoreCell = r.avgScore !== null ? `<span class="${scoreClass(r.avgScore)}">${r.avgScore}</span>` : '–';
+    const trendCell = r.trend === null ? '<span class="trend-flat">–</span>'
+      : r.trend > 0.5  ? `<span class="trend-up">▲ ${r.trend > 0 ? '+' : ''}${r.trend}</span>`
+      : r.trend < -0.5 ? `<span class="trend-down">▼ ${r.trend}</span>`
+      : `<span class="trend-flat">▬ ${r.trend}</span>`;
+    return `<tr>
+      <td>${_esc(r.name)}</td>
+      <td class="num">${r.shots}</td>
+      <td class="num">${scoreCell}</td>
+      <td>${r.lastGrind ? _esc(r.lastGrind) : '–'}</td>
+      <td>${trendCell}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<div class="analytics-table-wrap"><table class="analytics-table">
+    <thead><tr>${headerHtml}</tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table></div>`;
+}
+
+// ── Machine comparison ──────────────────────────────────────────────────────
+// Deliberately reads S.allShots (unfiltered), not S.shots — comparing
+// machines against each other only makes sense across all of them,
+// regardless of whatever S.activeMachineId currently scopes the rest of
+// the app to. Only rendered once >=2 machines are registered.
+function _tempStability(shot) {
+  const temp = shot.datapoints?.temperature, target = shot.datapoints?.targetTemperature;
+  if (!temp?.length || !target?.length) return null;
+  const n = Math.min(temp.length, target.length);
+  let sum = 0, count = 0;
+  for (let i = 0; i < n; i++) {
+    if (temp[i] == null || target[i] == null || target[i] === 0) continue;
+    sum += Math.abs(temp[i] - target[i]) / 10; // both datapoints ×10-scaled per GLP convention
+    count++;
+  }
+  return count ? sum / count : null;
+}
+
+export function _computeMachineComparison(shots, machines) {
+  const byMachine = {};
+  for (const m of machines) byMachine[m.id] = { name: m.name, shots: [] };
+  for (const s of shots) {
+    const mid = s.machineId ?? 1;
+    if (byMachine[mid]) byMachine[mid].shots.push(s);
+  }
+
+  return Object.values(byMachine).map(d => {
+    const scored = d.shots
+      .map(s => window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null)
+      .filter(sc => sc !== null);
+    const avgScore = scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null;
+
+    const durations = d.shots.map(s => (s.duration || 0) / 10).filter(x => x > 5);
+    const avgDuration = durations.length ? Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10 : null;
+
+    const stabilities = d.shots.map(_tempStability).filter(x => x != null);
+    const avgStability = stabilities.length ? Math.round((stabilities.reduce((a, b) => a + b, 0) / stabilities.length) * 10) / 10 : null;
+
+    return { name: d.name, count: d.shots.length, avgScore, avgDuration, avgStability };
+  });
+}
+
+export function buildMachineComparison() {
+  const card = document.getElementById('machineComparisonCard');
+  if (!card) return;
+  const machines = S.machines || [];
+  if (machines.length < 2) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const el = document.getElementById('machineComparison');
+  if (!el) return;
+
+  const rows = _computeMachineComparison(S.allShots || [], machines);
+  if (!rows.some(r => r.count > 0)) {
+    el.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_no_machine_data')}</p>`;
+    return;
+  }
+
+  const rowsHtml = rows.map(r => `<tr>
+    <td>${_esc(r.name)}</td>
+    <td class="num">${r.count}</td>
+    <td class="num">${r.avgScore !== null ? `<span class="${scoreClass(r.avgScore)}">${r.avgScore}</span>` : '–'}</td>
+    <td class="num">${r.avgDuration !== null ? r.avgDuration + 's' : '–'}</td>
+    <td class="num">${r.avgStability !== null ? '±' + r.avgStability + '°' : '–'}</td>
+  </tr>`).join('');
+
+  el.innerHTML = `<div class="analytics-table-wrap"><table class="analytics-table">
+    <thead><tr>
+      <th>${t('maint_log_machine')}</th><th>${t('bean_stat_shots')}</th><th>${t('bean_stat_avg')}</th>
+      <th>${t('bean_stat_duration')}</th><th>${t('analytics_machine_stability')}</th>
+    </tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table></div>`;
+}
+
+// ── Dial-in progression ─────────────────────────────────────────────────────
+// Per-bean line chart of grind setting and score across that bean's own shot
+// sequence, so a dial-in arc is visible independent of calendar time. Bean
+// names are matched case-insensitively (annotation.coffee), same convention
+// as suggestGrindDoseForBean()/computeBeanRemaining() elsewhere.
+export function buildDialinProgression() {
+  const sel = document.getElementById('dialinProgressionBeanSelect');
+  if (!sel) return;
+
+  const seen = new Map();
+  for (const s of S.shots) {
+    const name = s.annotation?.coffee;
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (!seen.has(key)) seen.set(key, name);
+  }
+  const beanNames = [...seen.values()].sort((a, b) => a.localeCompare(b));
+
+  if (!beanNames.length) {
+    sel.innerHTML = '';
+    _renderDialinProgressionChart(null);
+    return;
+  }
+
+  const prevValue = sel.value;
+  sel.innerHTML = beanNames.map(n => `<option value="${_esc(n)}">${_esc(n)}</option>`).join('');
+  sel.value = beanNames.includes(prevValue) ? prevValue : beanNames[0];
+  _renderDialinProgressionChart(sel.value);
+}
+
+export function setDialinProgressionBean(name) {
+  _renderDialinProgressionChart(name);
+}
+
+function _renderDialinProgressionChart(beanName) {
+  const ctx = document.getElementById('dialinProgressionChart');
+  if (!ctx) return;
+  if (S.dialinProgressionChart) { S.dialinProgressionChart.destroy(); S.dialinProgressionChart = null; }
+
+  if (!beanName) {
+    ctx.parentElement.innerHTML = `<p style="color:#52525b;font-size:.85rem;padding-top:8px">${t('analytics_no_beans')}</p>`;
+    return;
+  }
+
+  const shots = S.shots
+    .filter(s => (s.annotation?.coffee || '').toLowerCase() === beanName.toLowerCase())
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  if (shots.length < 2) {
+    ctx.parentElement.innerHTML = `<p style="color:#52525b;font-size:.85rem;padding-top:8px">${t('analytics_no_trend')}</p>`;
+    return;
+  }
+
+  const labels    = shots.map((_, i) => `#${i + 1}`);
+  const grindData = shots.map(s => _parseGrindNum(s.annotation?.grindSetting));
+  const scoreData = shots.map(s => window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null);
+
+  S.dialinProgressionChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: t('ann_grind_setting'), data: grindData, borderColor: '#38bdf8', backgroundColor: 'transparent',
+          yAxisID: 'y', spanGaps: true, tension: .2, pointRadius: 3 },
+        { label: 'Score', data: scoreData, borderColor: '#ef4444', backgroundColor: 'transparent',
+          yAxisID: 'y1', spanGaps: true, tension: .2, pointRadius: 3 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      onClick: (_, elements) => {
+        if (elements.length > 0 && window.goToShot) window.goToShot(shots[elements[0].index].id);
+      },
+      plugins: { legend: { labels: { color: '#a1a1aa', font: { size: 11 } } } },
+      scales: {
+        x:  { ticks: { color: '#52525b', font: { size: 10 } }, grid: { color: 'rgba(63,63,70,.3)' } },
+        y:  { position: 'left',  ticks: { color: '#52525b', font: { size: 10 } }, grid: { color: 'rgba(63,63,70,.3)' } },
+        y1: { position: 'right', min: 0, max: 100, ticks: { color: '#52525b', font: { size: 10 } }, grid: { drawOnChartArea: false } },
+      },
+    },
   });
 }

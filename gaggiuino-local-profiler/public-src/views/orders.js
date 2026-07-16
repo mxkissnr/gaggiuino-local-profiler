@@ -2,6 +2,7 @@ import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { esc } from '../utils.js';
+import { LOCALE_MAP } from '../constants.js';
 
 export function toggleOrdersMenu() {
   S._ordersMenuOpen = !S._ordersMenuOpen;
@@ -456,7 +457,7 @@ export function renderOrdersStats(stats) {
     return;
   }
 
-  const fmtDate = ts => ts ? new Date(ts).toLocaleDateString() : '–';
+  const fmtDate = ts => ts ? new Date(ts).toLocaleDateString(LOCALE_MAP[S.currentLang] || 'de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '–';
   const cards = (stats.customers || []).map(c => `<div class="orders-stats-card">
       <div class="orders-stats-name" title="${esc(c.name)}">${esc(c.name)}</div>
       <div class="orders-stats-row"><span>${t('orders_stats_total')}</span><span class="orders-stats-val">${c.count} ${t('orders_stats_orders')}</span></div>

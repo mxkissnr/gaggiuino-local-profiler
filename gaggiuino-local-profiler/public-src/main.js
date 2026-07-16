@@ -3,11 +3,23 @@ import './style.css';
 // One-time cleanup for the v1.102.0 service worker (reverted in v1.102.1):
 // a client that already registered it keeps it active indefinitely — the
 // server no longer trying to re-register does nothing for those clients.
-// Unregistering unconditionally on every load self-heals them; safe to run
-// even for clients that never had one (getRegistrations() is then empty).
+//
+// IMPORTANT — the ingress-origin trap (#387): when GLP is loaded through HA
+// Ingress, this page's origin IS Home Assistant's own origin, and
+// getRegistrations() returns every service worker registered for that
+// origin — including HA frontend's own. Unregistering unconditionally used
+// to also unregister HA's SW; HA re-registers it and clients.claim() fires
+// a controllerchange event that made HA's frontend reload every open tab.
+// Only ever touch GLP's own registration (matched by its exact script URL),
+// never anything else sharing the origin.
 if ('serviceWorker' in navigator) {
+  const ownScriptURL = new URL('sw.js', location.href).href;
   navigator.serviceWorker.getRegistrations()
-    .then(regs => Promise.all(regs.map(r => r.unregister())))
+    .then(regs => Promise.all(
+      regs
+        .filter(r => [r.active, r.waiting, r.installing].some(w => w?.scriptURL === ownScriptURL))
+        .map(r => r.unregister())
+    ))
     .catch(() => {});
 }
 
@@ -48,10 +60,11 @@ import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, 
          connectLiveStream, disconnectLiveStream, setLiveBadge, handleLiveData,
          fetchPreheatData, updatePreheatWidget, fetchLiveData } from './views/live.js';
 
-import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanStats, buildProfileChart, _renderCalendar } from './views/analytics.js';
+import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanStats, buildProfileChart, _renderCalendar,
+         setBeanRankSort, setDialinProgressionBean } from './views/analytics.js';
 
-import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode,
-         renderMaintenanceCards, maintStatusLabel, _buildMaintCard,
+import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope,
+         renderMaintenanceDashboard, maintStatusLabel,
          openMaintLogForm, closeMaintLogForm, submitMaintLogEntry, deleteMaintLogEntry,
          openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState } from './views/maintenance.js';
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo } from './components/flavor-wheel.js';
@@ -249,9 +262,9 @@ Object.assign(window, {
   markMaintDone,
   saveMaintThreshold,
   setMaintMode,
-  renderMaintenanceCards,
+  setMaintScope,
+  renderMaintenanceDashboard,
   maintStatusLabel,
-  _buildMaintCard,
   openMaintLogForm,
   closeMaintLogForm,
   submitMaintLogEntry,
@@ -613,7 +626,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('machineFormCancelBtn')?.addEventListener('click', closeMachineForm);
   document.getElementById('machineFormSaveBtn')?.addEventListener('click', saveMachineForm);
   document.getElementById('machineFormTestBtn')?.addEventListener('click', testMachineForm);
-  loadMachines();
   document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
@@ -660,11 +672,14 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'select-drink':       selectDrinkType(strId()); break;
       case 'select-milk':        selectMilkType(strId()); break;
       case 'reload-data':        loadData(); break;
-      case 'set-maint-mode':     setMaintMode(el.dataset.task, el.dataset.mode); break;
-      case 'mark-maint-done':    markMaintDone(el.dataset.task); break;
-      case 'open-guided-maint':  openGuidedMaint(el.dataset.task); break;
+      case 'set-maint-mode':     setMaintMode(el.dataset.task, el.dataset.mode, el.dataset.machineId); break;
+      case 'mark-maint-done':    markMaintDone(el.dataset.task, el.dataset.machineId); break;
+      case 'open-guided-maint':  openGuidedMaint(el.dataset.task, el.dataset.machineId); break;
       case 'guided-maint-done':  submitGuidedMaint(); break;
       case 'guided-maint-cancel': closeGuidedMaint(); break;
+      case 'set-maint-scope':    setMaintScope(el.dataset.scope); break;
+      case 'toggle-maint-detail': el.closest('.maint-mini')?.classList.toggle('expanded'); break;
+      case 'set-bean-rank-sort': setBeanRankSort(el.dataset.key); break;
       case 'open-flavor-wheel':   openFlavorWheel(numId()); break;
       case 'close-flavor-wheel':  closeFlavorWheel(); break;
       case 'zoom-flavor-wheel':   zoomFlavorWheelTo(strId()); break;
@@ -694,7 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = e.target.closest('[data-action]');
     if (!el) return;
     if (el.dataset.action === 'save-maint-threshold') {
-      saveMaintThreshold(el.dataset.task, el.dataset.field, el.value);
+      saveMaintThreshold(el.dataset.task, el.dataset.field, el.value, el.dataset.machineId);
     }
     if (el.dataset.action === 'dialin-grinder-select') {
       dialinGrinderChange();
@@ -702,12 +717,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el.dataset.action === 'switch-machine') {
       switchActiveMachine(el.value);
     }
+    if (el.dataset.action === 'dialin-progression-bean-change') {
+      setDialinProgressionBean(el.value);
+    }
   });
 
   // ── Init sequence ──────────────────────────────────────────────────────
   applyTranslations();
 
   initToken().then(async () => {
+    // #390 — loadMachines() calls the token-gated /api/machines; it used to
+    // fire straight from this handler (before initToken() ever ran), so its
+    // X-GLP-Token header was always empty and the request 401ed for any
+    // non-Ingress session (Ingress bypasses the token check, which is why
+    // this went unnoticed there). S.machines never populated, so the
+    // machine switcher stayed hidden and the restored S.activeMachineId had
+    // nothing to display itself against. Now runs once the token is ready,
+    // same as loadData()/loadLibrary() below.
+    loadMachines();
     loadDrinkMenu();
     loadMilkTypes();
     await loadData();
