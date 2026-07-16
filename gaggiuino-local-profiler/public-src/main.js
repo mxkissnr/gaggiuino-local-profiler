@@ -60,7 +60,8 @@ import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, 
          connectLiveStream, disconnectLiveStream, setLiveBadge, handleLiveData,
          fetchPreheatData, updatePreheatWidget, fetchLiveData } from './views/live.js';
 
-import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanStats, buildProfileChart, _renderCalendar } from './views/analytics.js';
+import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanStats, buildProfileChart, _renderCalendar,
+         setBeanRankSort, setDialinProgressionBean } from './views/analytics.js';
 
 import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope,
          renderMaintenanceDashboard, maintStatusLabel,
@@ -678,6 +679,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'guided-maint-cancel': closeGuidedMaint(); break;
       case 'set-maint-scope':    setMaintScope(el.dataset.scope); break;
       case 'toggle-maint-detail': el.closest('.maint-mini')?.classList.toggle('expanded'); break;
+      case 'set-bean-rank-sort': setBeanRankSort(el.dataset.key); break;
       case 'open-flavor-wheel':   openFlavorWheel(numId()); break;
       case 'close-flavor-wheel':  closeFlavorWheel(); break;
       case 'zoom-flavor-wheel':   zoomFlavorWheelTo(strId()); break;
@@ -714,6 +716,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (el.dataset.action === 'switch-machine') {
       switchActiveMachine(el.value);
+    }
+    if (el.dataset.action === 'dialin-progression-bean-change') {
+      setDialinProgressionBean(el.value);
     }
   });
 

@@ -47,6 +47,7 @@ export const S = {
   doseDistChart: null,
   ratioDistChart: null,
   timeOfDayChart: null,
+  dialinProgressionChart: null,
   trendWindow: 30,
   _calendarResizeObserver: null,
   currentFilter: '',

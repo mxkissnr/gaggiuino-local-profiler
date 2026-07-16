@@ -959,6 +959,33 @@
                 <div style="height:160px;position:relative"><canvas id="timeOfDayChart"></canvas></div>
             </div>
 
+            <!-- Weekday x Hour heatmap -->
+            <div class="analytics-card">
+                <h3 class="analytics-section-title" data-i18n="analytics_heatmap">Wochentag × Uhrzeit</h3>
+                <div id="weekdayHourHeatmap"></div>
+            </div>
+
+            <!-- Bean ranking -->
+            <div class="analytics-card">
+                <h3 class="analytics-section-title" data-i18n="analytics_bean_ranking">Bohnen-Rangliste</h3>
+                <div id="beanRanking"></div>
+            </div>
+
+            <!-- Machine comparison (>=2 machines only) -->
+            <div class="analytics-card" id="machineComparisonCard" style="display:none">
+                <h3 class="analytics-section-title" data-i18n="analytics_machine_comparison">Maschinenvergleich</h3>
+                <div id="machineComparison"></div>
+            </div>
+
+            <!-- Dial-in progression -->
+            <div class="analytics-card">
+                <div class="analytics-card-head">
+                    <h3 class="analytics-section-title" data-i18n="analytics_dialin_progression">Dial-In-Verlauf</h3>
+                    <select id="dialinProgressionBeanSelect" class="analytics-bean-select" data-action="dialin-progression-bean-change"></select>
+                </div>
+                <div style="height:220px;position:relative"><canvas id="dialinProgressionChart"></canvas></div>
+            </div>
+
         </div>
     </div><!-- #analytics-view -->
 
