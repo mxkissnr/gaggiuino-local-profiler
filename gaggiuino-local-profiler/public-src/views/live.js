@@ -3,6 +3,7 @@ import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { mapToXY, formatTimeLabel } from '../utils.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
+import { LOCALE_MAP } from '../constants.js';
 
 // Multi-machine live gating (#325, #341) — shot sync now covers every
 // registered machine (lib/sync.js's syncOtherMachines()), but real-time
@@ -80,7 +81,7 @@ export function populateRefSelector() {
   S.shots.filter(s => (s.datapoints?.pressure?.length || 0) > 5)
     .slice().reverse().slice(0, 40)
     .forEach(s => {
-      const date    = new Date(s.timestamp * 1000).toLocaleDateString();
+      const date    = new Date(s.timestamp * 1000).toLocaleDateString(LOCALE_MAP[S.currentLang] || 'de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
       const profile = s.profile?.name || s.profileName || '?';
       const ann     = s.annotation || {};
       const score   = ann.score != null ? ` · ${ann.score}` : '';

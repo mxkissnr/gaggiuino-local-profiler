@@ -5,7 +5,7 @@ import fr from './i18n/fr.js';
 import es from './i18n/es.js';
 import nl from './i18n/nl.js';
 
-export const LOCALE_MAP = { de: 'de-DE', en: 'en-US', it: 'it-IT', fr: 'fr-FR', es: 'es-ES' };
+export const LOCALE_MAP = { de: 'de-DE', en: 'en-US', it: 'it-IT', fr: 'fr-FR', es: 'es-ES', nl: 'nl-NL' };
 
 export const TRANSLATIONS = { de, en, it, fr, es, nl };
 
