@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Fixed
+- **Home Assistant tabs reloaded on their own whenever GLP was open through Ingress.** `public-src/main.js`'s one-time service-worker cleanup called `getRegistrations()` and unregistered every registration for the page's origin unconditionally — but through HA Ingress that origin IS Home Assistant's own origin, so this was also unregistering HA frontend's own service worker. HA re-registers it and `clients.claim()` fires a `controllerchange` event that HA's frontend reacts to by reloading every open tab. The cleanup now only unregisters a registration whose active/waiting/installing script exactly matches GLP's own `sw.js` URL, never touching anything else sharing the origin. Closes #387
+
 ## [2.2.6] – 2026-07-15
 
 ### Fixed

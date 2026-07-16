@@ -3,11 +3,23 @@ import './style.css';
 // One-time cleanup for the v1.102.0 service worker (reverted in v1.102.1):
 // a client that already registered it keeps it active indefinitely — the
 // server no longer trying to re-register does nothing for those clients.
-// Unregistering unconditionally on every load self-heals them; safe to run
-// even for clients that never had one (getRegistrations() is then empty).
+//
+// IMPORTANT — the ingress-origin trap (#387): when GLP is loaded through HA
+// Ingress, this page's origin IS Home Assistant's own origin, and
+// getRegistrations() returns every service worker registered for that
+// origin — including HA frontend's own. Unregistering unconditionally used
+// to also unregister HA's SW; HA re-registers it and clients.claim() fires
+// a controllerchange event that made HA's frontend reload every open tab.
+// Only ever touch GLP's own registration (matched by its exact script URL),
+// never anything else sharing the origin.
 if ('serviceWorker' in navigator) {
+  const ownScriptURL = new URL('sw.js', location.href).href;
   navigator.serviceWorker.getRegistrations()
-    .then(regs => Promise.all(regs.map(r => r.unregister())))
+    .then(regs => Promise.all(
+      regs
+        .filter(r => [r.active, r.waiting, r.installing].some(w => w?.scriptURL === ownScriptURL))
+        .map(r => r.unregister())
+    ))
     .catch(() => {});
 }
 
