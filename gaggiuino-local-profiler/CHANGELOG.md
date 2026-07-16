@@ -2,6 +2,7 @@
 
 ### Fixed
 - **Home Assistant tabs reloaded on their own whenever GLP was open through Ingress.** `public-src/main.js`'s one-time service-worker cleanup called `getRegistrations()` and unregistered every registration for the page's origin unconditionally — but through HA Ingress that origin IS Home Assistant's own origin, so this was also unregistering HA frontend's own service worker. HA re-registers it and `clients.claim()` fires a `controllerchange` event that HA's frontend reacts to by reloading every open tab. The cleanup now only unregisters a registration whose active/waiting/installing script exactly matches GLP's own `sw.js` URL, never touching anything else sharing the origin. Closes #387
+- **P-Q curve was empty for GaggiMate pressure-profiled shots.** `lib/machines/gaggimate/history.js`'s `toGlpShot()` mapped `pumpFlow <- tf` (target flow) instead of `fl` (actual pump flow); on a pressure-profiled shot the device never sets a flow target, so `tf` is all zeros and the chart's `f[i] > 0` filter dropped every sample. Verified against a real payload from Max's GaggiMate dev simulator. Fixed to `pumpFlow <- fl`; `weightFlow` (GaggiMate has no scale-derived flow field) is left unset rather than deriving a noisy, redundant copy of `fl` from weight deltas. `lib/card.js`'s share-card stat computation is now null-safe for the resulting all-zero `weightFlow` array (previously would have thrown on `Math.max(...[])`/`avg([])`). Closes #388
 
 ## [2.2.6] – 2026-07-15
 

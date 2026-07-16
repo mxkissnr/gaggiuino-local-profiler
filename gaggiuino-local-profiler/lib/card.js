@@ -272,8 +272,14 @@ async function generateShareCard(shot, score, format = 'square') {
     const avgTemp     = temp.length       ? +(avg(temp.filter(v => v > 50))).toFixed(1)        : null;
     const finalWeight = weight.length     ? +(weight[weight.length - 1]).toFixed(1)            : null;
     const avgFlow     = flow.length       ? +(avg(flow.filter(v => v > 0.3))).toFixed(1)       : null;
-    const avgWF       = weightFlow.length ? +(avg(weightFlow.filter(v => v > 0.2))).toFixed(1) : null;
-    const maxWF       = weightFlow.length ? +(Math.max(...weightFlow.filter(v => v > 0))).toFixed(1) : null;
+    // weightFlow is all-zero for GaggiMate shots (#388 — no scale-derived flow
+    // available), so the >0.2/>0 filters below can legitimately empty out;
+    // guard against Math.max(...[]) (-Infinity) and avg([]) (null) instead of
+    // letting +(-Infinity/null).toFixed(1) throw.
+    const wfAboveNoise = weightFlow.filter(v => v > 0.2);
+    const wfPositive   = weightFlow.filter(v => v > 0);
+    const avgWF        = wfAboveNoise.length ? +(avg(wfAboveNoise)).toFixed(1) : null;
+    const maxWF        = wfPositive.length   ? +(Math.max(...wfPositive)).toFixed(1) : null;
     const machine     = ann.machine || shot.machine || '';
     const rating      = ann.rating != null ? Math.round(ann.rating) : null;
     const originCode  = resolveBeanOriginCode(bean, library);

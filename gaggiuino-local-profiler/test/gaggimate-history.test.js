@@ -150,6 +150,84 @@ describe('gaggimate/history — .slog v4 (128-byte header)', () => {
     });
 });
 
+// Regression (#388): field-layout fixture matching a real GaggiMate dev
+// simulator payload (pressure-profiled "Default" shot, fetched from
+// http://10.1.70.199:8180/api/history/000004.slog for verification) — fl
+// (pump flow) rises smoothly from 0 while tf (target flow) stays 0 for the
+// whole shot, because a pressure-profiled shot never sets a flow target.
+// toGlpShot() previously mapped pumpFlow <- tf, so getPQData()'s `f[i] > 0`
+// filter dropped every sample and the P-Q chart was empty for exactly this
+// (common) shot shape.
+const FIELDS_MASK_WITH_TF = (1 << 0) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6); // t, tp, cp, fl, tf
+const SAMPLE_SIZE_WITH_TF = 10; // 5 active fields * 2 bytes
+
+function buildSlogV5WithTargetFlow({ samples }) {
+    const headerSize = history.HEADER_SIZE_V5;
+    const buf = Buffer.alloc(headerSize + samples.length * SAMPLE_SIZE_WITH_TF);
+    buf.write('SHOT', 0, 'ascii');
+    buf.writeUInt8(5, 4);
+    buf.writeUInt8(SAMPLE_SIZE_WITH_TF, 5);
+    buf.writeUInt16LE(headerSize, 6);
+    buf.writeUInt16LE(250, 8); // sampleIntervalMs, matching the real payload
+    buf.writeUInt32LE(FIELDS_MASK_WITH_TF, 12);
+    buf.writeUInt32LE(samples.length, 16);
+    buf.writeUInt32LE(28170, 20);
+    buf.writeUInt32LE(1700000900, 24);
+    writeCString(buf, 28, 'p3', 32);
+    writeCString(buf, 60, 'Default', 48);
+    buf.writeUInt8(0, 458); // 0 phase transitions
+    buf.writeUInt8(5, 459); // finalExitReason: duration
+    buf.writeUInt16LE(0, 460);
+
+    let off = headerSize;
+    for (const s of samples) {
+        buf.writeInt16LE(s.t, off); off += 2;
+        buf.writeInt16LE(s.tp, off); off += 2;
+        buf.writeInt16LE(s.cp, off); off += 2;
+        buf.writeInt16LE(s.fl, off); off += 2;
+        buf.writeInt16LE(s.tf, off); off += 2;
+    }
+    return buf;
+}
+
+describe('gaggimate/history — pumpFlow/weightFlow mapping (#388)', () => {
+    // tp/tf both 0 throughout (pressure-profiled shot, no flow target set);
+    // fl rises 0 -> 2.5ml/s, matching the verified real payload's shape.
+    const samples = [
+        { t: 0, tp: 0, cp: 0,   fl: 0,    tf: 0 },
+        { t: 1, tp: 0, cp: 43,  fl: 108,  tf: 0 },
+        { t: 2, tp: 0, cp: 81,  fl: 204,  tf: 0 },
+        { t: 3, tp: 0, cp: 100, fl: 250,  tf: 0 },
+    ];
+    const buf = buildSlogV5WithTargetFlow({ samples });
+    const parsed = history.parseSlog(buf);
+
+    it('parses fl (actual pump flow) and tf (target flow) as distinct fields', () => {
+        expect(parsed.samples.map(s => s.fl)).toEqual([0, 1.08, 2.04, 2.5]);
+        expect(parsed.samples.map(s => s.tf)).toEqual([0, 0, 0, 0]);
+    });
+
+    it('maps datapoints.pumpFlow from fl, not tf', () => {
+        const shot = history.toGlpShot(parsed, 99);
+        expect(shot.datapoints.pumpFlow).toEqual([0, 11, 20, 25]); // fl * 10, rounded
+    });
+
+    it('leaves weightFlow unset (0) rather than deriving a redundant/noisy signal from fl', () => {
+        const shot = history.toGlpShot(parsed, 99);
+        expect(shot.datapoints.weightFlow).toEqual([0, 0, 0, 0]);
+    });
+
+    it('would have produced an all-empty P-Q dataset under the old fl/tf swap (the actual bug symptom)', () => {
+        // Mirrors public-src/views/shots/charts.js's getPQData() filter
+        // (p[i] >= 30 && f[i] > 0) to prove the fixed mapping is usable there.
+        const shot = history.toGlpShot(parsed, 99);
+        const pqPoints = shot.datapoints.pressure
+            .map((p, i) => ({ p, f: shot.datapoints.pumpFlow[i] }))
+            .filter(({ p, f }) => p >= 30 && f > 0);
+        expect(pqPoints.length).toBeGreaterThan(0);
+    });
+});
+
 describe('gaggimate/history — .slog v5 (512-byte header, phase transitions)', () => {
     const transitions = [
         { sampleIndex: 0, phaseNumber: 0, exitReason: 1, phaseName: 'Preinfusion' },
