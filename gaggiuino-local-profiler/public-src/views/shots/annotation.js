@@ -299,18 +299,24 @@ export function quickClone() {
   if (!S.primaryShotId) return;
   const prev = S.shots.filter(s => s.id < S.primaryShotId).sort((a, b) => b.id - a.id)[0];
   if (!prev) return;
-  const ann        = prev.annotation || {};
+  const ann         = prev.annotation || {};
   const currentShot = S.shots.find(s => s.id === S.primaryShotId);
-  _renderBeanSelect(ann.coffee || null);
+  // Prefer the currently-viewed shot's own bean when it already has one
+  // annotated — only fall back to the previous shot's bean otherwise (#389).
+  const currentAnn = currentShot?.annotation || {};
+  const beanName   = currentAnn.coffee || ann.coffee || null;
+  _renderBeanSelect(beanName);
   // Grinder/grind setting/dose come from this bean's own history, not
   // blindly from prev — prev may have used a different bean entirely.
-  const suggested = ann.coffee
-    ? suggestGrindDoseForBean(ann.coffee, S.coffeeLibrary, S.shots)
+  // "↩ Letzten" means the grind last used for this bean, so prefer the
+  // bean's most recently annotated shot over the best-scoring combo here.
+  const suggested = beanName
+    ? suggestGrindDoseForBean(beanName, S.coffeeLibrary, S.shots, { preferMostRecent: true })
     : { grinder: '', grindSetting: '', dose: '' };
   document.getElementById('annGrinder').value      = suggested.grinder      || ann.grinder      || '';
   document.getElementById('annGrindSetting').value = suggested.grindSetting || ann.grindSetting || '';
   document.getElementById('annDose').value         = suggested.dose         || ann.dose         || '';
-  updateDegassing(_roastDateFromLibrary(ann.coffee, currentShot?.timestamp) || '');
+  updateDegassing(_roastDateFromLibrary(beanName, currentShot?.timestamp) || '');
   _renderDrinkPills(ann.drinkType || '');
   _renderMilkPills('');
   _updateMilkFieldVisibility();

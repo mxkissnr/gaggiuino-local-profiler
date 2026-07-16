@@ -76,4 +76,47 @@ describe('suggestGrindDoseForBean', () => {
     const result = suggestGrindDoseForBean('Bean A', { beans: [] }, shots);
     expect(result).toEqual({ grinder: '', grindSetting: '', dose: '' });
   });
+
+  // #389 — "↩ Letzten" (quickClone) must prefill the grind actually last
+  // used for this bean, not the statistically best-scoring combo.
+  describe('with { preferMostRecent: true }', () => {
+    it('prefers the bean\'s most recently annotated shot over a qualifying best-combo', () => {
+      const shots = [
+        // Best-combo candidate: 3 well-scored shots all at grind 18.
+        shot('Bean A', 'Niche Zero', '18', '18', 95, 100),
+        shot('Bean A', 'Niche Zero', '18', '18.2', 93, 200),
+        shot('Bean A', 'Niche Zero', '18', '17.9', 97, 300),
+        // Most recent shot for this bean used a different grind — this is
+        // what "Letzten" should prefill.
+        shot('Bean A', 'Niche Zero', '19.5', '18.1', 80, 400),
+      ];
+      const result = suggestGrindDoseForBean('Bean A', { beans: [] }, shots, { preferMostRecent: true });
+      expect(result.grindSetting).toBe('19.5');
+      expect(result.grinder).toBe('Niche Zero');
+      expect(result.dose).toBe('18.1');
+    });
+
+    it('falls back to the best-combo/knownGrindSettings priority when the most recent shot has no grindSetting', () => {
+      const shots = [
+        shot('Bean A', 'Niche Zero', '18', '18', 95, 100),
+        shot('Bean A', 'Niche Zero', '18', '18.2', 93, 200),
+        shot('Bean A', 'Niche Zero', '18', '17.9', 97, 300),
+        { timestamp: 400, annotation: { coffee: 'Bean A', dose: '18' } }, // no grindSetting recorded
+      ];
+      const result = suggestGrindDoseForBean('Bean A', { beans: [] }, shots, { preferMostRecent: true });
+      expect(result.grindSetting).toBe('18');
+      expect(result.grinder).toBe('Niche Zero');
+    });
+
+    it('does not change the default (non-flagged) call\'s best-combo-first behavior', () => {
+      const shots = [
+        shot('Bean A', 'Niche Zero', '18', '18', 95, 100),
+        shot('Bean A', 'Niche Zero', '18', '18.2', 93, 200),
+        shot('Bean A', 'Niche Zero', '18', '17.9', 97, 300),
+        shot('Bean A', 'Niche Zero', '19.5', '18.1', 80, 400),
+      ];
+      const result = suggestGrindDoseForBean('Bean A', { beans: [] }, shots);
+      expect(result.grindSetting).toBe('18'); // best combo, not the most recent shot's 19.5
+    });
+  });
 });
