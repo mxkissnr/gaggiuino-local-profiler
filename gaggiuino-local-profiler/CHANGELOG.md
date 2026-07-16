@@ -1,4 +1,4 @@
-## [Unreleased]
+## [2.3.0] – 2026-07-16
 
 ### Added
 - **Screenshots pipeline seeds a second (GaggiMate) machine.** `scripts/screenshots.mjs` now registers a second machine and attributes two of the four demo shots to it, so regenerated screenshots show the multi-machine switcher and per-machine UI instead of a single-machine install. The GaggiMate shots' datapoints are decoded through the real production `.slog` parser (`lib/machines/gaggimate/history.js`) from a synthetic buffer, not hand-built — same field-layout convention verified against a real device for #388. Added a new `analytics-machines.png` screenshot (machine comparison, bean ranking, weekday×hour heatmap, dial-in progression) alongside the existing set; `maintenance.png`/`analytics.png` regenerated to reflect the #393/#394 redesigns. DOCS.md, DOCS.de.md and the README features table updated for the new maintenance dashboard and new statistics. Closes #395
