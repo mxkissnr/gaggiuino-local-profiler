@@ -62,8 +62,8 @@ import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, 
 
 import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanStats, buildProfileChart, _renderCalendar } from './views/analytics.js';
 
-import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode,
-         renderMaintenanceCards, maintStatusLabel, _buildMaintCard,
+import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope,
+         renderMaintenanceDashboard, maintStatusLabel,
          openMaintLogForm, closeMaintLogForm, submitMaintLogEntry, deleteMaintLogEntry,
          openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState } from './views/maintenance.js';
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo } from './components/flavor-wheel.js';
@@ -261,9 +261,9 @@ Object.assign(window, {
   markMaintDone,
   saveMaintThreshold,
   setMaintMode,
-  renderMaintenanceCards,
+  setMaintScope,
+  renderMaintenanceDashboard,
   maintStatusLabel,
-  _buildMaintCard,
   openMaintLogForm,
   closeMaintLogForm,
   submitMaintLogEntry,
@@ -671,11 +671,13 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'select-drink':       selectDrinkType(strId()); break;
       case 'select-milk':        selectMilkType(strId()); break;
       case 'reload-data':        loadData(); break;
-      case 'set-maint-mode':     setMaintMode(el.dataset.task, el.dataset.mode); break;
-      case 'mark-maint-done':    markMaintDone(el.dataset.task); break;
-      case 'open-guided-maint':  openGuidedMaint(el.dataset.task); break;
+      case 'set-maint-mode':     setMaintMode(el.dataset.task, el.dataset.mode, el.dataset.machineId); break;
+      case 'mark-maint-done':    markMaintDone(el.dataset.task, el.dataset.machineId); break;
+      case 'open-guided-maint':  openGuidedMaint(el.dataset.task, el.dataset.machineId); break;
       case 'guided-maint-done':  submitGuidedMaint(); break;
       case 'guided-maint-cancel': closeGuidedMaint(); break;
+      case 'set-maint-scope':    setMaintScope(el.dataset.scope); break;
+      case 'toggle-maint-detail': el.closest('.maint-mini')?.classList.toggle('expanded'); break;
       case 'open-flavor-wheel':   openFlavorWheel(numId()); break;
       case 'close-flavor-wheel':  closeFlavorWheel(); break;
       case 'zoom-flavor-wheel':   zoomFlavorWheelTo(strId()); break;
@@ -705,7 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = e.target.closest('[data-action]');
     if (!el) return;
     if (el.dataset.action === 'save-maint-threshold') {
-      saveMaintThreshold(el.dataset.task, el.dataset.field, el.value);
+      saveMaintThreshold(el.dataset.task, el.dataset.field, el.value, el.dataset.machineId);
     }
     if (el.dataset.action === 'dialin-grinder-select') {
       dialinGrinderChange();

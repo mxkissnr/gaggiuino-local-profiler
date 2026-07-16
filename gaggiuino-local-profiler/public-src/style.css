@@ -1391,7 +1391,6 @@
             .sprofiler-header h1 { font-size: 1.1rem; }
             #analytics-view, #library-view, #maintenance-view,
             #dialin-view, #settings-view, #orders-view { padding: 12px; }
-            .maint-card { padding: 14px; }
             .mode-btn { padding: 12px 10px; font-size: .75rem; }
 
             /* Smaller chart to give annotation panel more room */
@@ -1400,15 +1399,10 @@
             .export-btn        { padding: 5px 8px; font-size: .72rem; }
         }
 
-        /* ── Maintenance view ── */
+        /* ── Maintenance view: Dashboard redesign (#393) ── */
         #maintenance-view { display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto; padding:24px; }
-        #maint-cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(420px,100%),1fr)); gap:16px; align-items:start; }
-        .maint-card { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:10px; }
-        .maint-card.status-due  { border-color:var(--err); }
-        .maint-card.status-soon { border-color:var(--accent); }
-        .maint-card-header { display:flex; align-items:center; gap:10px; }
-        .maint-icon { font-size:1.3rem; }
-        .maint-title { font-size:.95rem; font-weight:600; color:var(--gray-200); flex:1; }
+        #maint-cards { display:flex; flex-direction:column; gap:8px; }
+
         .maint-status-pill {
             font-size:.7rem; font-weight:700; border-radius:999px; padding:2px 10px; flex-shrink:0;
         }
@@ -1416,15 +1410,65 @@
         .maint-status-pill.soon  { background:rgba(245,158,11,.15); color:var(--accent); }
         .maint-status-pill.due   { background:rgba(239,68,68,.12);  color:var(--err); }
         .maint-status-pill.never { background:rgba(113,113,122,.15);color:var(--gray-500); }
-        .maint-stats { font-size:.8rem; color:var(--gray-500); display:flex; gap:16px; flex-wrap:wrap; }
-        .maint-stats span { display:flex; align-items:center; gap:4px; }
         .maint-bar-track { background:var(--gray-800); border-radius:999px; height:5px; overflow:hidden; }
         .maint-bar-fill  { height:100%; border-radius:999px; transition:width .4s ease, background .4s; }
         .maint-bar-fill.ok   { background:var(--ok); }
         .maint-bar-fill.soon { background:var(--accent); }
         .maint-bar-fill.due  { background:var(--err); }
         .maint-bar-fill.never{ background:var(--gray-700); width:0% !important; }
-        .maint-thresholds { display:flex; gap:8px; align-items:center; }
+
+        /* Summary tiles */
+        .maint-summary { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:12px; margin-bottom:4px; }
+        .maint-tile { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:12px; padding:14px 16px; }
+        .maint-tile .k { font-size:1.6rem; font-weight:700; line-height:1.1; color:var(--gray-200); }
+        .maint-tile .l { font-size:.72rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:.1em; margin-top:4px; }
+        .maint-tile.due .k  { color:var(--err); }
+        .maint-tile.soon .k { color:var(--accent); }
+        .maint-tile.ok .k   { color:var(--ok); }
+
+        /* "Next up" banner */
+        .maint-next-banner {
+            display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+            background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.35); border-radius:12px;
+            padding:12px 18px; font-size:.88rem; color:var(--gray-200);
+        }
+        .maint-next-banner b { color:var(--err); }
+        .maint-next-banner .spacer { flex:1; }
+        .maint-banner-btn {
+            background:var(--accent); border:1px solid var(--accent); color:var(--accent-text);
+            border-radius:7px; font-size:.8rem; font-weight:700; padding:6px 14px; cursor:pointer;
+            font-family:'Figtree',sans-serif;
+        }
+        .maint-banner-btn:hover { filter:brightness(1.08); }
+
+        /* Machine scope segment control */
+        .maint-scope-row { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+        .maint-seg { display:inline-flex; border:1px solid var(--gray-700); border-radius:8px; overflow:hidden; }
+        .maint-seg button {
+            font:inherit; font-size:.72rem; font-family:'Figtree',sans-serif; padding:5px 12px;
+            background:var(--gray-900); color:var(--gray-500); border:none; cursor:pointer; transition:all .15s;
+        }
+        .maint-seg button.on { background:var(--accent-glow); color:var(--accent); font-weight:700; }
+        .maint-scope-hint { color:var(--gray-600); font-size:.75rem; }
+
+        /* Compact task tiles */
+        .maint-grid-compact { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(240px,100%),1fr)); gap:10px; }
+        .maint-mini { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
+        .maint-mini.status-due  { border-color:var(--err); }
+        .maint-mini.status-soon { border-color:var(--accent); }
+        .maint-mini .top { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:.85rem; font-weight:600; color:var(--gray-200); }
+        .maint-mini .icon { display:inline-flex; width:15px; height:15px; color:var(--accent); margin-right:6px; vertical-align:-3px; }
+        .maint-mini .icon svg { width:15px; height:15px; }
+        .maint-mini .n { color:var(--gray-500); font-size:.74rem; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+        .maint-detail-toggle {
+            align-self:flex-start; background:transparent; border:none; color:var(--gray-500);
+            font-size:.72rem; font-family:'Figtree',sans-serif; cursor:pointer; padding:2px 0;
+        }
+        .maint-detail-toggle:hover { color:var(--accent); }
+        .maint-mini .detail { display:none; flex-direction:column; gap:8px; border-top:1px solid var(--gray-800); padding-top:8px; }
+        .maint-mini.expanded .detail { display:flex; }
+        .maint-mini .actions { display:flex; gap:8px; flex-wrap:wrap; }
+
         .maint-mode-toggle { display:flex; border-radius:6px; overflow:hidden; border:1px solid var(--gray-700); flex-shrink:0; }
         .maint-mode-btn { background:var(--gray-800); border:none; color:var(--gray-500); font-size:.72rem; font-weight:600; padding:4px 10px; cursor:pointer; font-family:'Figtree',sans-serif; transition:all .15s; }
         .maint-mode-btn.active { background:var(--gray-700); color:var(--gray-200); }
@@ -1577,16 +1621,25 @@
         .maint-log-form-actions { display:flex; gap:8px; }
         .maint-log-cancel-btn { background:transparent; border:1px solid var(--gray-700); color:var(--gray-500); border-radius:7px; padding:6px 14px; cursor:pointer; font-size:.8rem; font-family:'Figtree',sans-serif; }
         .maint-log-cancel-btn:hover { color:var(--gray-300); }
-        .maint-log-list { display:flex; flex-direction:column; gap:6px; }
-        .maint-log-row { display:flex; align-items:flex-start; gap:12px; padding:10px 12px; background:var(--gray-900); border:1px solid var(--gray-800); border-radius:8px; }
-        .maint-log-date-col { flex:0 0 90px; font-size:.78rem; color:var(--gray-500); padding-top:1px; }
-        .maint-log-task-col { flex:1; min-width:0; }
-        .maint-log-task-name { font-size:.85rem; font-weight:600; color:var(--gray-200); }
-        .maint-log-meta { font-size:.72rem; color:var(--gray-600); margin-top:2px; }
-        .maint-log-notes { font-size:.78rem; color:var(--gray-400); margin-top:3px; font-style:italic; }
         .maint-log-manual-badge { font-size:.6rem; font-weight:700; background:rgba(132,204,22,.12); border:1px solid rgba(132,204,22,.3); color:#84cc16; border-radius:4px; padding:1px 5px; vertical-align:middle; margin-left:5px; }
-        .maint-log-del-btn { flex:0 0 auto; background:transparent; border:none; color:var(--gray-700); cursor:pointer; font-size:.9rem; padding:2px 4px; border-radius:4px; transition:color .15s; }
-        .maint-log-del-btn:hover { color:var(--err); }
+
+        /* Maintenance log table (#393) */
+        .maint-log-tablewrap { border:1px solid var(--gray-700); border-radius:12px; overflow-x:auto; background:var(--gray-900); }
+        table.maint-log-table { width:100%; border-collapse:collapse; font-size:.84rem; }
+        table.maint-log-table th {
+            text-align:left; font-size:.68rem; text-transform:uppercase; letter-spacing:.1em;
+            color:var(--gray-600); font-weight:700; padding:8px 12px; border-bottom:1px solid var(--gray-700); white-space:nowrap;
+        }
+        table.maint-log-table td { padding:9px 12px; border-bottom:1px solid var(--gray-800); color:var(--gray-500); vertical-align:top; }
+        table.maint-log-table tr:last-child td { border-bottom:none; }
+        table.maint-log-table td:first-child { color:var(--gray-200); white-space:nowrap; }
+        table.maint-log-table td:nth-child(2) { color:var(--gray-200); font-weight:600; }
+        .maint-log-del-btn {
+            float:right; background:transparent; border:1px solid var(--gray-700); color:var(--gray-500);
+            cursor:pointer; font-size:.7rem; padding:2px 8px; border-radius:5px; transition:all .15s;
+            font-family:'Figtree',sans-serif; margin-left:8px;
+        }
+        .maint-log-del-btn:hover { color:var(--err); border-color:var(--err); }
 
         .maint-badge {
             display:inline-block; width:7px; height:7px; background:var(--err);

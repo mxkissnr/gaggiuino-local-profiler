@@ -61,8 +61,15 @@ class LibraryRepository {
         })();
     }
 
-    getMaintenanceLog() {
-        const rows = getDb().prepare('SELECT * FROM maintenance_log ORDER BY ts DESC').all();
+    // machineId (#393): a finite integer scopes to that machine's log rows;
+    // undefined (omitted) keeps the pre-existing unfiltered behavior — every
+    // entry, across every machine — so older cached frontend clients that
+    // never send machineId at all still get exactly what they got before.
+    getMaintenanceLog(machineId) {
+        const db  = getDb();
+        const rows = Number.isFinite(machineId)
+            ? db.prepare('SELECT * FROM maintenance_log WHERE machine_id = ? ORDER BY ts DESC').all(machineId)
+            : db.prepare('SELECT * FROM maintenance_log ORDER BY ts DESC').all();
         const grinderNames = new Map(this.getLibrary().grinders.map(g => [`grinder_${g.id}`, g.name]));
         return rows.map(r => ({
             id:             r.id,
@@ -70,6 +77,7 @@ class LibraryRepository {
             date:           r.date,
             task:           r.task,
             machine:        r.machine,
+            machineId:      r.machine_id,
             shotCountAtTime: r.shot_count,
             notes:          r.notes,
             ...(grinderNames.has(r.task) ? { grinderName: grinderNames.get(r.task) } : {}),

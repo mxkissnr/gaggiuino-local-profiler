@@ -899,6 +899,47 @@ describe('GET /api/maintenance/log', () => {
         expect(entry.task).toBe('grinder_42');
         expect(entry.grinderName).toBeUndefined();
     });
+
+    it('exposes machineId on every entry', async () => {
+        await fetch(`${baseUrl}/api/maintenance/descaling/done?machineId=1`, { method: 'POST' });
+        const [entry] = await (await fetch(`${baseUrl}/api/maintenance/log`)).json();
+        expect(entry.machineId).toBe(1);
+    });
+});
+
+// #393: extended to accept a machineId query param for the redesigned
+// maintenance dashboard's per-scope log table.
+describe('GET /api/maintenance/log?machineId=... (#393)', () => {
+    it('omitting machineId returns every entry across every machine (back-compat)', async () => {
+        machineRegistry.ensureDefaultMachine();
+        const second = machineRegistry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: 'kitchen.local' });
+        await fetch(`${baseUrl}/api/maintenance/descaling/done?machineId=1`, { method: 'POST' });
+        await fetch(`${baseUrl}/api/maintenance/descaling/done?machineId=${second.id}`, { method: 'POST' });
+
+        const entries = await (await fetch(`${baseUrl}/api/maintenance/log`)).json();
+        expect(entries).toHaveLength(2);
+    });
+
+    it('machineId=all is equivalent to omitting it', async () => {
+        machineRegistry.ensureDefaultMachine();
+        const second = machineRegistry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: 'kitchen.local' });
+        await fetch(`${baseUrl}/api/maintenance/descaling/done?machineId=1`, { method: 'POST' });
+        await fetch(`${baseUrl}/api/maintenance/descaling/done?machineId=${second.id}`, { method: 'POST' });
+
+        const entries = await (await fetch(`${baseUrl}/api/maintenance/log?machineId=all`)).json();
+        expect(entries).toHaveLength(2);
+    });
+
+    it('a specific machineId scopes the log to just that machine', async () => {
+        machineRegistry.ensureDefaultMachine();
+        const second = machineRegistry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: 'kitchen.local' });
+        await fetch(`${baseUrl}/api/maintenance/descaling/done?machineId=1`, { method: 'POST' });
+        await fetch(`${baseUrl}/api/maintenance/descaling/done?machineId=${second.id}`, { method: 'POST' });
+
+        const entries = await (await fetch(`${baseUrl}/api/maintenance/log?machineId=${second.id}`)).json();
+        expect(entries).toHaveLength(1);
+        expect(entries[0].machineId).toBe(second.id);
+    });
 });
 
 describe('maintenance routes reject prototype-polluting task names (#374)', () => {

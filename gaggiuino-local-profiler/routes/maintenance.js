@@ -116,8 +116,15 @@ router.post('/api/maintenance/:task/threshold', (req, res, next) => {
     } catch (err) { next(err); }
 });
 
+// #393: machineId is optional and additive — omitted or 'all' both mean
+// "every machine's log" (the pre-existing, only prior behavior), a finite
+// integer scopes to that one machine's entries.
 router.get('/api/maintenance/log', (req, res, next) => {
-    try { res.json(libraryService.getMaintenanceLog()); } catch (err) { next(err); }
+    try {
+        const raw = req.query.machineId;
+        const machineId = raw === undefined || raw === 'all' ? undefined : parseInt(raw, 10);
+        res.json(libraryService.getMaintenanceLog(machineId));
+    } catch (err) { next(err); }
 });
 
 router.post('/api/maintenance/log', (req, res, next) => {
