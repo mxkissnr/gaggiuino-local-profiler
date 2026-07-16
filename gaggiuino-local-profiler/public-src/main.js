@@ -625,7 +625,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('machineFormCancelBtn')?.addEventListener('click', closeMachineForm);
   document.getElementById('machineFormSaveBtn')?.addEventListener('click', saveMachineForm);
   document.getElementById('machineFormTestBtn')?.addEventListener('click', testMachineForm);
-  loadMachines();
   document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
@@ -720,6 +719,15 @@ document.addEventListener('DOMContentLoaded', () => {
   applyTranslations();
 
   initToken().then(async () => {
+    // #390 — loadMachines() calls the token-gated /api/machines; it used to
+    // fire straight from this handler (before initToken() ever ran), so its
+    // X-GLP-Token header was always empty and the request 401ed for any
+    // non-Ingress session (Ingress bypasses the token check, which is why
+    // this went unnoticed there). S.machines never populated, so the
+    // machine switcher stayed hidden and the restored S.activeMachineId had
+    // nothing to display itself against. Now runs once the token is ready,
+    // same as loadData()/loadLibrary() below.
+    loadMachines();
     loadDrinkMenu();
     loadMilkTypes();
     await loadData();
