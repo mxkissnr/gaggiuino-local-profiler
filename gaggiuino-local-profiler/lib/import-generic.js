@@ -5,24 +5,45 @@
 // regardless, and the frontend shows which method produced the data.
 const cheerio = require('cheerio');
 const { findCountriesInText } = require('./coffee-countries');
-const { extractFlavorKeywords, normalizeImageUrl, priceFromProduct } = require('./import-parsers');
+const { matchFlavorTerms, normalizeImageUrl, priceFromProduct } = require('./import-parsers');
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+// Some Shopify shops misuse the vendor field for an internal taxonomy tag
+// (e.g. "Taste Profile_Fruity") or a bare lowercase descriptor word
+// ("adventurous") instead of the actual roaster name (#400, verified against
+// sproutcoffeeroasters.art) — neither reads as a brand, so the caller should
+// fall back to something more useful (the shop's own domain) instead of
+// showing that nonsense as the roaster. A single lowercase word is still
+// trusted when it's also part of the shop's own domain (e.g. vendor
+// "elbgold" on elbgold.com) — that reads as an actual lowercase-styled
+// brand, not a taxonomy tag that slipped into the vendor field.
+function looksLikeRoasterName(vendor, host = null) {
+    if (typeof vendor !== 'string') return false;
+    const v = vendor.trim();
+    if (!v) return false;
+    if (v.includes('_')) return false; // shop-tag style, e.g. "Taste Profile_Fruity"
+    if (/^[a-z]+$/.test(v)) return typeof host === 'string' && host.toLowerCase().includes(v.toLowerCase());
+    return true;
+}
 
 // Any Shopify storefront exposes this endpoint for a product page — no
 // shop-specific spec-table parsing, just title/vendor/description/price/image
 // plus best-effort flavor & origin extraction from the description prose.
-function parseGenericShopifyProduct(product) {
+// `host` (the shop's own domain, already known to the caller) is the roaster
+// fallback when the vendor field doesn't look like a real roaster name.
+function parseGenericShopifyProduct(product, host = null) {
     const title = String(product?.title || '').trim();
     if (!title) return null;
     const $    = cheerio.load(product.description || '');
     const text = $.text().replace(/\s+/g, ' ').trim();
     const originCodes = findCountriesInText(`${title} ${text}`);
+    const vendor = typeof product?.vendor === 'string' ? product.vendor.trim() : '';
     return {
         name:       title,
-        roaster:    product.vendor || null,
+        roaster:    looksLikeRoasterName(vendor, host) ? vendor : (host || null),
         notes:      '',
-        flavors:    extractFlavorKeywords(text),
+        flavors:    matchFlavorTerms(text),
         origin:     originCodes[0] || null,
         origins:    originCodes.map(code => ({ code })),
         imageUrl:   normalizeImageUrl(product.featured_image),
@@ -68,7 +89,7 @@ function parseJsonLd(html) {
         name,
         roaster:    typeof brand === 'string' ? brand : null,
         notes:      description.slice(0, 500),
-        flavors:    extractFlavorKeywords(text),
+        flavors:    matchFlavorTerms(text),
         origin:     originCodes[0] || null,
         origins:    originCodes.map(code => ({ code })),
         imageUrl:   normalizeImageUrl(image),
@@ -128,7 +149,7 @@ function parseOpenGraph(html) {
 
     const text = `${title} ${description}`;
     let originCodes = findCountriesInText(text);
-    let flavors     = extractFlavorKeywords(text);
+    let flavors     = matchFlavorTerms(text);
 
     // Meta description is often too short/generic to carry any tasting-note
     // or origin info — fall back to scanning the visible page body, which is
@@ -138,7 +159,7 @@ function parseOpenGraph(html) {
         if (bodyText) {
             const combined     = `${title} ${bodyText}`;
             const bodyOrigins  = findCountriesInText(combined);
-            const bodyFlavors  = extractFlavorKeywords(combined);
+            const bodyFlavors  = matchFlavorTerms(combined);
             originCodes = mergeUnique(originCodes, bodyOrigins);
             flavors     = mergeUnique(flavors, bodyFlavors, 8);
         }
@@ -177,4 +198,4 @@ function findDuplicateBean({ name, roaster, sourceUrl }, beans) {
     ) || null;
 }
 
-module.exports = { parseGenericShopifyProduct, parseJsonLd, parseOpenGraph, findDuplicateBean };
+module.exports = { parseGenericShopifyProduct, parseJsonLd, parseOpenGraph, findDuplicateBean, looksLikeRoasterName };
