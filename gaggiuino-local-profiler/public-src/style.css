@@ -94,40 +94,49 @@
 
         #shots { flex: 1; overflow-y: auto; }
 
+        /* #399: fixed data-row layout — rounded hover/active surface with
+           spacing instead of a bottom-border separator between rows. */
         .shot-wrapper {
             display: flex;
             align-items: center;
-            border-bottom: 1px solid rgba(63,63,70,.3);
-            padding-right: 12px;
+            margin: 2px 8px;
+            border-radius: var(--radius);
+            padding-right: 4px;
             transition: background .15s;
         }
-        .shot-wrapper:hover           { background: rgba(39,39,42,.4); }
+        .shot-wrapper:hover           { background: rgba(255,255,255,.045); }
         .shot-wrapper.active          { background: var(--gray-800); }
         .shot-wrapper.compare-active  { background: rgba(52,152,219,.12); }
 
         .shot {
             flex: 1;
-            padding: 11px 12px 11px 20px;
+            min-width: 0;
+            min-height: 48px;
+            display: flex;
+            align-items: center;
+            padding: 8px 10px 8px 12px;
             cursor: pointer;
-            border-left: 4px solid transparent;
+            border-left: 3px solid transparent;
+            border-radius: var(--radius);
         }
+        /* Inset accent bar: the border sits a couple px in from the sidebar
+           edge (via .shot-wrapper's margin above) rather than flush with it. */
         .shot-wrapper.active .shot        { border-left-color: transparent; border-image: linear-gradient(180deg, var(--accent-from), var(--accent-to)) 1; }
         .shot-wrapper.compare-active .shot{ border-left-color: #3498db; }
 
-        /* .shot-thumb sits outside the flex flow (absolute, top-right) so
-           .shot-text always starts/wraps at the same position whether or
-           not a shot has a photo — previously the thumb was a flex sibling
-           before the text, shifting text left by 44px for photo-less shots
-           and breaking alignment across the list (#348). */
-        .shot-row  { position: relative; }
-        .shot-text { padding-right: 44px; }
-        .shot-thumb { position: absolute; top: 0; right: 0; width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--gray-800); }
+        .shot-row  { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; }
+        .shot-text { flex: 1; min-width: 0; }
+        .shot-thumb { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: var(--gray-800); flex-shrink: 0; }
 
-        .profile-name-sidebar { font-size: .95rem; font-weight: 600; color: #fff; margin-bottom: 1px; }
-        .coffee-name-sidebar  { font-size: .8rem; color: var(--gray-400); margin-bottom: 2px; }
-        .shotid-sidebar       { color: var(--gray-400); font-size: .8rem; }
-        .date-sidebar         { color: var(--gray-500); font-size: .72rem; margin-top: 3px; }
-        .sidebar-stars        { color: var(--accent); font-size: .72rem; letter-spacing: 1px; margin-top: 3px; }
+        /* Line 1: name (+ machine badge) flex-truncated, score pinned right.
+           Line 2: fixed "dose -> yield · duration · date" data row. */
+        .shot-line1 { display: flex; align-items: baseline; gap: 8px; }
+        .shot-line1-name {
+            flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 5px;
+            overflow: hidden;
+        }
+        .profile-name-sidebar { font-size: .92rem; font-weight: 600; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .shot-line2 { font-size: .75rem; color: var(--gray-500); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         .sidebar-month-header {
             width: 100%;
@@ -144,20 +153,30 @@
         }
         .sidebar-month-header:hover { background: rgba(39,39,42,.8); color: var(--gray-300); }
 
+        /* #399: only visible on row hover/keyboard-focus (still tab-reachable
+           while invisible — opacity, not display/visibility) — except on
+           touch, where there's no hover to reveal it, so it stays shown. */
         .compare-btn {
             background: rgba(63,63,70,.5);
             color: var(--gray-400);
-            border: 1px solid var(--gray-700);
+            border: 1px solid transparent;
             border-radius:var(--radius);
             width: 34px; height: 34px;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer;
             font-size: 1.1rem;
             flex-shrink: 0;
+            opacity: 0;
             transition: all .2s;
         }
+        .shot-wrapper:hover .compare-btn,
+        .shot-wrapper:focus-within .compare-btn,
+        .shot-wrapper.compare-active .compare-btn { opacity: 1; }
+        @media (hover: none) {
+            .compare-btn { opacity: 1; }
+        }
         .compare-btn:hover { background: var(--gray-800); color: #fff; }
-        .shot-wrapper.compare-active .compare-btn { background: #3498db; color: #fff; border-color: #2980b9; }
+        .shot-wrapper.compare-active .compare-btn { background: #3498db; color: #fff; }
 
         #sidebar-footer {
             padding: 10px 20px;
@@ -591,7 +610,6 @@
         .ordered-by-badge { font-size: .75rem; color: #a16207; background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.25); border-radius:var(--radius); padding: 3px 8px; }
         .autosave-status { font-size: .75rem; color: var(--ok); opacity: 0; transition: opacity .3s; pointer-events: none; }
         .autosave-status.visible { opacity: 1; }
-        .sidebar-drink-badge { font-size: .72rem; margin-left: 6px; opacity: .75; }
 
         /* ── Drink type pills ── */
         .drink-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
