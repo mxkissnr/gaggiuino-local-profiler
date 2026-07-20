@@ -25,7 +25,6 @@
 <!-- ── Sidebar ── -->
 <div id="sidebar">
     <h2><button id="sidebarToggle">☰</button>☕ Shots <span id="shot-count"></span><div class="flap-board" id="flapDigits"></div><button id="collapseBtn" data-i18n-title="sidebar_collapse" title="Sidebar einklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z"/></svg></button></h2>
-    <div class="sidebar-hint" data-i18n-html="sidebar_hint">Klicke auf den Namen für Shot A. Nutze <b>⇄</b> für den Vergleich (Shot B).</div>
     <div id="search-container">
         <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …">
     </div>
@@ -109,13 +108,8 @@
                 <div style="flex:1;min-width:0">
                     <h1 id="topTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Profil-Name</h1>
                     <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="freshness-badge" style="display:none"></span><span id="firmwareVersionBadge" style="display:none;font-size:.7rem;color:#52525b;margin-left:6px"></span></p>
-                    <div id="phaseSubtitle" style="display:none;margin-top:4px"></div>
                 </div>
                 <div style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
-                    <div id="shotScoreBadge" class="score-badge" style="display:none">
-                        <div id="shotScoreVal" class="score-num">–</div>
-                        <div class="score-lbl">Score</div>
-                    </div>
                     <button class="export-btn" id="exportAllCsvBtn" data-i18n-title="export_csv_title" title="Alle Shots als CSV exportieren">↓ CSV</button>
                     <button class="export-btn" id="exportShotBtn" data-i18n-title="export_shot_title" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
                     <button class="export-btn" id="exportProfileBtn" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
@@ -129,70 +123,41 @@
                 </div>
             </div>
 
-            <div class="sprofiler-meta-grid">
-                <div class="meta-column divide-y">
-                    <div class="meta-item">
-                        <span class="meta-label" data-i18n="meta_profile">Profil</span>
-                        <span class="meta-value" id="valProfile">-</span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label" data-i18n="meta_pressure">Druck (Ø / Max Ziel)</span>
-                        <span class="meta-value">
-                            <span id="pressure">-</span><span class="meta-sub" id="targetPressure"></span><span id="channelingWarning" class="channeling-warn" style="display:none">⚡ Channeling</span>
-                        </span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label" data-i18n="meta_flow">Pumpenfluss (Ø / Ziel)</span>
-                        <span class="meta-value">
-                            <span id="flow">-</span><span class="meta-sub" id="targetFlow"></span>
-                        </span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label" data-i18n="meta_temp">Temperatur (Ø ±σ / Ziel)</span>
-                        <span class="meta-value">
-                            <span id="temp">-</span><span class="meta-badge" id="tempStability"></span><span class="meta-sub" id="targetTemp"></span>
-                        </span>
-                    </div>
-                    <div class="meta-item" id="phasesItem" style="display:none">
-                        <span class="meta-label" data-i18n="meta_phases">Phasen</span>
-                        <span class="meta-value" id="phases">-</span>
-                    </div>
+            <!-- Verdict header (#398): score ring + plain-language dial-in verdict, replaces the old green dial-in banner. -->
+            <div id="verdictHeader" class="verdict-header" style="display:none">
+                <div class="verdict-ring" id="verdictRing">
+                    <div class="verdict-ring-inner"><span id="verdictRingVal">–</span></div>
                 </div>
-
-                <div class="meta-column divide-y" style="text-align:right">
-                    <div class="meta-item">
-                        <span class="meta-label" data-i18n="meta_weight">Gewicht (Gesamt / Fluss Ende)</span>
-                        <span class="meta-value">
-                            <span id="weight">-</span><span class="meta-sub" id="weightFlowSub"></span>
-                        </span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label" data-i18n="meta_weight_flow">Gewichtsfluss (Ø / Max)</span>
-                        <span class="meta-value">
-                            <span id="wf">-</span><span class="meta-sub" id="maxWf"></span>
-                        </span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label" data-i18n="meta_duration">Dauer</span>
-                        <span class="meta-value" id="duration">-</span>
-                    </div>
-                    <div class="meta-item" id="ratioItem" style="display:none">
-                        <span class="meta-label" data-i18n="meta_ratio">Dosis → Yield · Ratio</span>
-                        <span class="meta-value" id="ratio">-</span>
-                    </div>
-                    <div class="meta-item" id="eyItem" style="display:none">
-                        <span class="meta-label" data-i18n="meta_ey">Extraction Yield (EY)</span>
-                        <span class="meta-value" id="ey">-</span>
-                    </div>
+                <div class="verdict-text">
+                    <div class="verdict-headline" id="verdictHeadline">-</div>
+                    <div class="verdict-subline" id="verdictSubline">-</div>
                 </div>
             </div>
 
             <div id="orderedByInfo" class="ann-ordered-by" style="display:none"></div>
 
-            <div id="grindAdvice" class="grind-advice" style="display:none">
-                <span class="grind-icon" id="grindAdviceIcon"></span>
-                <span id="grindAdviceText"></span>
+            <!-- Recipe zone (#398): the values the user sets. -->
+            <div class="recipe-zone" id="recipeZone">
+                <div class="recipe-card" id="doseYieldCard" style="display:none">
+                    <span class="recipe-card-label" data-i18n="recipe_dose_yield">Dosis → Yield</span>
+                    <span class="recipe-card-value" id="doseYieldVal">-</span>
+                </div>
+                <div class="recipe-card" id="ratioCard" style="display:none">
+                    <span class="recipe-card-label" data-i18n="recipe_ratio">Ratio</span>
+                    <span class="recipe-card-value" id="ratioVal">-</span>
+                    <span class="recipe-card-sub" id="eySub"></span>
+                </div>
+                <div class="recipe-card">
+                    <span class="recipe-card-label" data-i18n="meta_duration">Dauer</span>
+                    <span class="recipe-card-value" id="duration">-</span>
+                    <span class="recipe-card-sub" id="phasesSub"></span>
+                </div>
+                <div class="recipe-card">
+                    <span class="recipe-card-label" data-i18n="recipe_bean_grinder">Bohne & Mühle</span>
+                    <span class="recipe-card-value" id="beanGrinderVal">-</span>
+                </div>
             </div>
+
             <div id="grindAdviceComparative" class="grind-advice grind-comparative" style="display:none">
                 <span class="grind-icon" id="grindAdviceComparativeIcon"></span>
                 <span id="grindAdviceComparativeText"></span>
@@ -221,6 +186,23 @@
                 </div>
                 <div class="fs-body">
                     <canvas id="espressoShotChartFs" style="width:100%;height:100%"></canvas>
+                </div>
+            </div>
+
+            <!-- Process zone (#398): the values the machine produced. -->
+            <div class="process-zone" id="processZone">
+                <div class="process-card">
+                    <span class="process-card-label" data-i18n="process_pressure">Druck (Ø / Max)</span>
+                    <span class="process-card-value"><span id="pressure">-</span><span class="meta-sub" id="targetPressure"></span></span>
+                    <span id="channelingWarning" class="channeling-warn" style="display:none">⚡ Channeling</span>
+                </div>
+                <div class="process-card">
+                    <span class="process-card-label" data-i18n="process_flow">Pumpenfluss (Ø)</span>
+                    <span class="process-card-value"><span id="flow">-</span><span class="meta-sub" id="targetFlow"></span></span>
+                </div>
+                <div class="process-card">
+                    <span class="process-card-label" data-i18n="process_temp">Temperatur (Ø ±σ)</span>
+                    <span class="process-card-value"><span id="temp">-</span><span class="meta-badge" id="tempStability"></span><span class="meta-sub" id="targetTemp"></span></span>
                 </div>
             </div>
 

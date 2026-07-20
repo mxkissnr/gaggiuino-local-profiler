@@ -91,8 +91,7 @@ router.get('/api/import/url', async (req, res) => {
                 const jsonUrl = shopifyJsonUrl(parsed, host);
                 if (jsonUrl) {
                     const r = await safeGet(jsonUrl, FETCH_OPTS);
-                    const parseFn = provider.parser || parseGenericShopifyProduct;
-                    bean = parseFn(r.data);
+                    bean = provider.parser ? provider.parser(r.data) : parseGenericShopifyProduct(r.data, host);
                     if (bean) {
                         attachVariants(bean, r.data.variants);
                         bean.source = provider.builtin ? provider.hostSuffix : host;
@@ -116,7 +115,7 @@ router.get('/api/import/url', async (req, res) => {
             if (jsonUrl) {
                 try {
                     const r = await safeGet(jsonUrl, FETCH_OPTS);
-                    bean = parseGenericShopifyProduct(r.data);
+                    bean = parseGenericShopifyProduct(r.data, host);
                     if (bean) {
                         attachVariants(bean, r.data.variants);
                         bean.source = host;

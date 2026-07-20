@@ -82,7 +82,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-
 | 🔴 | **Live Mode** | Real-time display directly from the controller (`/api/system/status`) |
 | 🔄 | **Auto-Sync** | New shots load automatically when `gaggiuino_latest_shot_id` rises |
 | ⇄ | **Compare Mode** | Overlay two shots side by side |
-| 🏆 | **Shot Score** | Automatic 0–100 score (pressure, stability, duration, ratio, channeling) |
+| 🏆 | **Shot Score** | Automatic 0–100 score (pressure, stability, duration, ratio, channeling), shown as a verdict-header score ring with a plain-language dial-in headline atop the shot detail |
 | 📊 | **Analytics** | Score trend, shot calendar heatmap, bean stats, profile performance, interactive coffee world map (zoom/pan, per-bean origin points), a weekday × hour heatmap, a sortable bean ranking table (shots/score/last grind/trend), a machine comparison table (score/duration/temperature stability, once ≥2 machines are registered) and a per-bean dial-in progression chart |
 | 📊 | **P·Q Diagram** | Pressure vs. flow chart — reveals extraction signature |
 | ⚗️ | **EY Calculation** | Extraction Yield % when TDS and dose are entered |

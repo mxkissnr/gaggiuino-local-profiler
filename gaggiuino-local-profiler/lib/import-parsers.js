@@ -62,11 +62,25 @@ function splitFlavors(text) {
 
 function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
-// Fallback for elbgold products with no "Noten von ..." sentence — scans the
-// prose following a Sensorik/Geschmack/Aromen heading against a small curated
-// German vocabulary (lib/flavor-terms.js). Best-effort only: a curated list
-// can't cover every term future product copy might use, and the user reviews
-// the pre-filled form regardless.
+// Scans arbitrary prose for curated flavor vocabulary (lib/flavor-terms.js) —
+// no heading/structure requirement, so it works on any shop's free-text
+// description (#400: generic Shopify/JSON-LD/OpenGraph imports, which don't
+// follow elbgold's document shape). Best-effort only: a curated list can't
+// cover every term future product copy might use, and the user reviews the
+// pre-filled form regardless.
+function matchFlavorTerms(text, max = 8) {
+    if (typeof text !== 'string') return [];
+    const found = [];
+    for (const term of FLAVOR_TERMS_DE) {
+        if (new RegExp(`\\b${escapeRegex(term)}\\w*`, 'i').test(text)) found.push(term);
+    }
+    return splitFlavors(found.join(', ')).slice(0, max);
+}
+
+// Fallback for elbgold products with no "Noten von ..." sentence — narrows
+// to the prose following a Sensorik/Geschmack/Aromen heading first (elbgold's
+// free-prose tasting section always follows one of these), then runs the
+// same curated-vocabulary scan as matchFlavorTerms over just that window.
 function extractFlavorKeywords(text) {
     if (typeof text !== 'string') return [];
     const headingMatch = text.match(/(?:Sensorik|Geschmack|Aromen?)\s*[–—:-]?\s*[^.]{0,60}/i);
@@ -74,11 +88,7 @@ function extractFlavorKeywords(text) {
     const start   = headingMatch.index + headingMatch[0].length;
     const stopIdx = text.indexOf('Hier findest Du', start);
     const window  = text.slice(start, stopIdx > -1 ? stopIdx : start + 600);
-    const found = [];
-    for (const term of FLAVOR_TERMS_DE) {
-        if (new RegExp(`\\b${escapeRegex(term)}\\w*`, 'i').test(window)) found.push(term);
-    }
-    return splitFlavors(found.join(', ')).slice(0, 8);
+    return matchFlavorTerms(window);
 }
 
 // ── kaffeebraun.com (Shopware) ────────────────────────────────────────────
@@ -244,5 +254,5 @@ function parseElbgoldProduct(product) {
 module.exports = {
     parseKaffeebraun, parseHoploProduct, parseElbgoldProduct, hoploJsonUrl, shopifyJsonUrl,
     splitFlavors, roastTypeFromTags, normalizeImageUrl, extractAltitudeM, priceFromProduct,
-    extractFlavorKeywords,
+    extractFlavorKeywords, matchFlavorTerms,
 };

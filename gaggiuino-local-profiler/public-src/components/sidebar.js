@@ -1,7 +1,7 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { LOCALE_MAP } from '../constants.js';
-import { esc, scoreClass } from '../utils.js';
+import { esc, scoreClass, max, formatTimeLabel } from '../utils.js';
 import { loadShotImageBlobUrl } from '../bean-image.js';
 import { openLightbox } from './lightbox.js';
 
@@ -105,19 +105,25 @@ function _buildShotWrapper(shot) {
     const profileName = shot.profile?.name || shot.profileName || 'Unknown Profile';
     const ann = shot.annotation || {};
 
-    const coffeeHtml = ann.coffee
-      ? `<div class="coffee-name-sidebar">${esc(ann.coffee)}${ann.dose ? ` · ${esc(String(ann.dose))}g` : ''}</div>` : '';
-    const starsHtml = ann.rating
-      ? `<div class="sidebar-stars">${'★'.repeat(ann.rating)}${'☆'.repeat(5 - ann.rating)}</div>` : '';
+    // #399: fixed 2-line data row — line 1 is name + right-aligned score,
+    // line 2 is "dose g -> yield g · duration · date" (falls back to the
+    // bean name when dose/yield aren't both known yet).
+    const data = window.getShotData ? window.getShotData(shot) : null;
+    const sc   = data && window.calcShotScore ? window.calcShotScore(shot, data) : null;
+    const scoreHtml = sc !== null
+      ? `<span class="sidebar-score ${scoreClass(sc)}">${sc}</span>`
+      : '';
 
-    const sc = window.calcShotScore ? window.calcShotScore(shot, window.getShotData(shot)) : null;
-    const scorePill = sc !== null
-      ? `<span class="sidebar-score ss-${scoreClass(sc).replace('score-', '')}">${sc}</span>`
-      : '';
-    const drinkItem = ann.drinkType && S.drinkMenu?.find(m => m.id === ann.drinkType);
-    const drinkHtml = drinkItem
-      ? `<span class="sidebar-drink-badge">${drinkItem.emoji} ${esc(drinkItem.name)}</span>`
-      : '';
+    const dose    = parseFloat(ann.dose);
+    const yieldG  = data ? max(data.weight.map(p => p.y)) : null;
+    const durLabel = shot.duration ? formatTimeLabel(shot.duration / 10) : null;
+    const dateLabel = date.toLocaleDateString(LOCALE_MAP[S.currentLang] || 'de-DE', { day: '2-digit', month: '2-digit' });
+    const line2 = [
+      (dose && yieldG) ? `${dose.toFixed(1)} g → ${yieldG.toFixed(1)} g` : (ann.coffee || null),
+      durLabel,
+      dateLabel
+    ].filter(Boolean).join(' · ');
+
     const thumbHtml = shot.image ? `<img class="shot-thumb" data-shot-id="${shot.id}" alt="">` : '';
     // Multi-machine badge (#325): only shown in "all machines" mode with
     // more than one machine registered — a machine-scoped list already
@@ -129,11 +135,11 @@ function _buildShotWrapper(shot) {
       <div class="shot-row">
         ${thumbHtml}
         <div class="shot-text">
-          <div class="profile-name-sidebar">${esc(profileName)}${scorePill}${machineBadge}</div>
-          ${coffeeHtml}
-          <div class="shotid-sidebar">Shot ${esc(String(shot.nativeId ?? shot.id))}${ann.grinder ? ` · ${esc(ann.grinder)}` : ''}${drinkHtml}</div>
-          <div class="date-sidebar">${esc(date.toLocaleString(LOCALE_MAP[S.currentLang] || 'de-DE'))}</div>
-          ${starsHtml}
+          <div class="shot-line1">
+            <span class="shot-line1-name"><span class="profile-name-sidebar">${esc(profileName)}</span>${machineBadge}</span>
+            ${scoreHtml}
+          </div>
+          <div class="shot-line2">${esc(line2)}</div>
         </div>
       </div>
     `;

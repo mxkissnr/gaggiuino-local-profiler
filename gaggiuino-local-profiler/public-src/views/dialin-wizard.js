@@ -12,7 +12,7 @@
 import { S }                     from '../state.js';
 import { t }                     from '../i18n.js';
 import { apiFetch }              from '../api.js';
-import { esc, detectChanneling, calcBrewRatio } from '../utils.js';
+import { esc, detectChanneling, calcBrewRatio, scoreColor } from '../utils.js';
 import { getShotData, calcShotScore } from './shots/utils.js';
 import { calcBestGrindCombosForBean, _miniShotChart, _parseGrindNum } from './shots/grind.js';
 import { calcNextGrindSuggestion, isConverged } from '../dialin-convergence.js';
@@ -387,7 +387,7 @@ function _renderRound(s) {
     return `<div class="dw-round">
       <div class="dw-round-label">${t('dialin_wizard_round_label', roundNum)}</div>
       <div class="dw-score-row">
-        <div class="dw-score-chip" style="background:${_scoreColor(rr.score)}">${rr.score ?? '–'}</div>
+        <div class="dw-score-chip" style="background:${scoreColor(rr.score)}">${rr.score ?? '–'}</div>
         <div class="dw-score-meta">${rr.seconds.toFixed(0)} s${rr.ratio ? ` · 1:${rr.ratio.toFixed(1)}` : ''}${rr.channeling ? ` · ${t('grind_channeling_full')}` : ''}</div>
       </div>
       <div class="dw-suggestion">${esc(sugText)}</div>
@@ -431,7 +431,7 @@ function _renderSummary(s) {
     <div class="dw-summary-title">${title}</div>
     ${reasonText ? `<div class="dw-summary-reason">${esc(reasonText)}</div>` : ''}
     ${best ? `<div class="dw-summary-best">
-      <div class="dw-score-chip" style="background:${_scoreColor(best.score)}">${best.score}</div>
+      <div class="dw-score-chip" style="background:${scoreColor(best.score)}">${best.score}</div>
       <div>${t('dialin_wizard_summary_best')}: ${esc(String(best.grindSetting))} · ${best.seconds.toFixed(0)} s</div>
     </div>` : ''}
     <div class="dw-actions">
@@ -446,13 +446,7 @@ function _renderSummary(s) {
 function _renderChips(rounds) {
   if (!rounds?.length) return '';
   return `<div class="dw-chip-strip">${rounds.map(r =>
-    `<div class="dw-chip" style="border-color:${_scoreColor(r.score)}">${esc(String(r.grindSetting))} → ${r.score ?? '–'}</div>`
+    `<div class="dw-chip" style="border-color:${scoreColor(r.score)}">${esc(String(r.grindSetting))} → ${r.score ?? '–'}</div>`
   ).join('')}</div>`;
 }
 
-function _scoreColor(score) {
-  if (score == null) return '#52525b';
-  if (score >= 80) return '#22c55e';
-  if (score >= 60) return '#eab308';
-  return '#ef4444';
-}

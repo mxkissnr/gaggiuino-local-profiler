@@ -2,7 +2,37 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-const { parseOpenGraph, findDuplicateBean } = require('../lib/import-generic');
+const { parseGenericShopifyProduct, parseOpenGraph, findDuplicateBean } = require('../lib/import-generic');
+
+describe('parseGenericShopifyProduct', () => {
+    // Minimal synthetic fixture mirroring a real case (#400, verified against
+    // sproutcoffeeroasters.art): the shop misuses the Shopify vendor field for
+    // a taste-profile tag instead of the roaster name, and the description
+    // uses English specialty-coffee vocabulary that wasn't in the curated
+    // flavor list. No real shop content beyond these few words is committed.
+    const product = {
+        title: 'Lasso Lassi',
+        vendor: 'adventurous',
+        description: '<p>Lychee pop, juicy Tropical sweetness, creamy lactic Lassi finish.</p>',
+        price: 1500,
+    };
+
+    it('falls back to the shop domain when the vendor field is not a roaster name', () => {
+        const bean = parseGenericShopifyProduct(product, 'sproutcoffeeroasters.art');
+        expect(bean.roaster).toBe('sproutcoffeeroasters.art');
+        expect(bean.flavors.length).toBeGreaterThan(0);
+        expect(bean.flavors).toEqual(expect.arrayContaining(['Lychee', 'Tropical', 'Lactic']));
+    });
+
+    it('keeps a real-looking vendor name as the roaster', () => {
+        const bean = parseGenericShopifyProduct({ ...product, vendor: 'Elbgold Kaffeerösterei' }, 'elbgold.com');
+        expect(bean.roaster).toBe('Elbgold Kaffeerösterei');
+    });
+
+    it('returns null when there is no title', () => {
+        expect(parseGenericShopifyProduct({ vendor: 'adventurous' }, 'example.com')).toBeNull();
+    });
+});
 
 describe('parseOpenGraph', () => {
     it('returns null when there is no og:title', () => {
