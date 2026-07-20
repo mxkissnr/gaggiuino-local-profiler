@@ -157,7 +157,7 @@ export default {
     compare_title:(a,b)=>`Confronto: Shot ${a} vs. Shot ${b}`,
     please_wait:'Attendere …',
     profile_unknown:'Profilo sconosciuto',
-    nav_settings:'⚙', settings_theme:'Tema', settings_accent:'Schema colori', theme_dark:'Scuro', theme_light:'Chiaro', settings_language:'Lingua',
+    nav_settings:'⚙', settings_theme:'Tema', settings_accent:'Schema colori', theme_dark:'Scuro', theme_light:'Chiaro', theme_crema:'Crema', settings_language:'Lingua',
     settings_machines:'Macchine', settings_machines_desc:'Gestisci le macchine espresso monitorate da questa app.', settings_machines_add:'+ Aggiungi macchina',
     settings_machine_name:'Nome', settings_machine_type:'Tipo', settings_machine_host:'Host', settings_machine_switch:'Entità switch HA (opzionale)',
     settings_machine_test:'Testa connessione', settings_machine_save:'Salva', settings_machine_cancel:'Annulla', settings_machine_default:'Predefinita',

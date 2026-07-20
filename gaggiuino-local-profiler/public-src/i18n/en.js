@@ -157,7 +157,7 @@ export default {
     compare_title:(a,b)=>`Compare: Shot ${a} vs. Shot ${b}`,
     please_wait:'Waiting …',
     profile_unknown:'Unknown Profile',
-    nav_settings:'⚙', settings_theme:'Theme', settings_accent:'Color scheme', theme_dark:'Dark', theme_light:'Light', settings_language:'Language',
+    nav_settings:'⚙', settings_theme:'Theme', settings_accent:'Color scheme', theme_dark:'Dark', theme_light:'Light', theme_crema:'Crema', settings_language:'Language',
     settings_machines:'Machines', settings_machines_desc:'Manage the espresso machines this app monitors.', settings_machines_add:'+ Add machine',
     settings_machine_name:'Name', settings_machine_type:'Type', settings_machine_host:'Host', settings_machine_switch:'HA switch entity (optional)',
     settings_machine_test:'Test connection', settings_machine_save:'Save', settings_machine_cancel:'Cancel', settings_machine_default:'Default',

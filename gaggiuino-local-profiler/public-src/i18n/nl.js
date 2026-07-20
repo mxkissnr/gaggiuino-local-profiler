@@ -157,7 +157,7 @@ export default {
     compare_title:(a,b)=>`Vergelijking: Shot ${a} vs. Shot ${b}`,
     please_wait:'Wachten …',
     profile_unknown:'Onbekend profiel',
-    nav_settings:'⚙', settings_theme:'Thema', settings_accent:'Kleurenschema', theme_dark:'Donker', theme_light:'Licht', settings_language:'Taal',
+    nav_settings:'⚙', settings_theme:'Thema', settings_accent:'Kleurenschema', theme_dark:'Donker', theme_light:'Licht', theme_crema:'Crema', settings_language:'Taal',
     settings_machines:'Machines', settings_machines_desc:'Beheer de espressomachines die deze app volgt.', settings_machines_add:'+ Machine toevoegen',
     settings_machine_name:'Naam', settings_machine_type:'Type', settings_machine_host:'Host', settings_machine_switch:'HA switch-entiteit (optioneel)',
     settings_machine_test:'Verbinding testen', settings_machine_save:'Opslaan', settings_machine_cancel:'Annuleren', settings_machine_default:'Standaard',

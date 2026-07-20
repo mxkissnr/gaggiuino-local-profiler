@@ -46,6 +46,13 @@ try {
     for (const fp of FONT_CANDIDATES) {
         if (fs.existsSync(fp)) GlobalFonts.registerFromPath(fp);
     }
+    // #404: bundled locally (same file the frontend's @font-face uses, see
+    // public-src/style.css) — the share card's bean-name headline is the
+    // only place on the card that gets the serif treatment.
+    const serifFontPath = path.join(__dirname, '..', 'public-src', 'fonts', 'fraunces-600-latin.woff2');
+    if (fs.existsSync(serifFontPath) && GlobalFonts.registerFromPath(serifFontPath, 'Fraunces')) {
+        globalThis._glpCardSerifFont = 'Fraunces';
+    }
     let families = [];
     if (GlobalFonts.getFamilies) {
         try {
@@ -84,6 +91,15 @@ const W = 1080, H = 1080, PX = 52;
 function F(size, bold = false) {
     const fam = globalThis._glpCardFont || 'sans-serif';
     return `${bold ? 'bold ' : ''}${size}px ${fam}`;
+}
+
+// #404: serif variant for the card's bean-name headline only — every other
+// text on the card (scores, chips, chart labels, the footer) stays on F()'s
+// sans-serif family. Falls back to F() itself when the bundled font failed
+// to register (e.g. file missing), so a share card never errors over a font.
+function Fs(size, bold = false) {
+    const fam = globalThis._glpCardSerifFont;
+    return fam ? `${bold ? 'bold ' : ''}${size}px ${fam}` : F(size, bold);
 }
 
 function scoreColor(s) {
@@ -432,7 +448,7 @@ async function generateShareCard(shot, score, format = 'square') {
     const headlineMaxW  = nameMaxW - leadW;
 
     let headline = bean || profileName;
-    ctx.font = F(52, true);
+    ctx.font = Fs(52, true);
     while (ctx.measureText(headline).width > headlineMaxW && headline.length > 4)
         headline = headline.slice(0, -4) + '…';
 
@@ -455,7 +471,7 @@ async function generateShareCard(shot, score, format = 'square') {
     }
 
     ctx.fillStyle = GLP.text;
-    ctx.font = F(52, true);
+    ctx.font = Fs(52, true);
     ctx.fillText(headline, headlineX, headlineBaseline);
 
     let cursorY = headlineBaseline + 32;
