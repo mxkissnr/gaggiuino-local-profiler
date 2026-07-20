@@ -209,6 +209,25 @@ class ShotRepository {
         `).all();
     }
 
+    // #402: the most recent shot before `shotId` with the same profile name
+    // on the same machine — powers the shot-detail ghost curve/delta chips'
+    // same-profile auto-compare. Trashed shots are excluded (a deleted shot
+    // is never a useful comparison reference), mirroring
+    // findAllExcludingTrash()'s NOT IN (SELECT shot_id FROM trash) filter.
+    findPreviousByProfile(shotId, profileName, machineId) {
+        const db  = getDb();
+        const row = db.prepare(`
+            ${SELECT_BASE}
+            WHERE s.machine_id = ?
+              AND s.profile_name = ?
+              AND s.timestamp < (SELECT timestamp FROM shots WHERE id = ?)
+              AND s.id NOT IN (SELECT shot_id FROM trash)
+            ORDER BY s.timestamp DESC
+            LIMIT 1
+        `).get(machineId, profileName, shotId);
+        return _hydrate(row);
+    }
+
     // machineId optional (#326) — omitted keeps the original global-latest
     // behavior every pre-existing call site relies on; pass it to scope
     // order-fulfillment routing (routes/orders.js's /:id/complete) to the

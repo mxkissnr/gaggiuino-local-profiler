@@ -43,6 +43,7 @@ export default {
     chart_target_pressure:'Target Pressure', chart_target_flow:'Target Flow', chart_target_temp:'Target Temp',
     chart_pressure_unit:'Pressure (bar)', chart_flow_unit:'Flow (ml/s)',
     chart_time:(s)=>`Time: ${s}`,
+    delta_vs_shot:(n)=>`vs. Shot ${n}`, chart_prev_suffix:(n)=>` (Shot ${n})`,
     orders_just_now:'just now',
     live_idle_text:'Once a shot starts, real-time data will appear here.',
     live_time_unit:'min:sec', live_time_label:'Time',

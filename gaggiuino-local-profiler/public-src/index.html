@@ -130,6 +130,7 @@
                 </div>
                 <div class="verdict-text">
                     <div class="verdict-headline" id="verdictHeadline">-</div>
+                    <span class="delta-chip" id="verdictDeltaChip" style="display:none"></span>
                     <div class="verdict-subline" id="verdictSubline">-</div>
                 </div>
             </div>
@@ -194,15 +195,18 @@
                 <div class="process-card">
                     <span class="process-card-label" data-i18n="process_pressure">Druck (Ø / Max)</span>
                     <span class="process-card-value"><span id="pressure">-</span><span class="meta-sub" id="targetPressure"></span></span>
+                    <span class="delta-chip" id="pressureDeltaChip" style="display:none"></span>
                     <span id="channelingWarning" class="channeling-warn" style="display:none">⚡ Channeling</span>
                 </div>
                 <div class="process-card">
                     <span class="process-card-label" data-i18n="process_flow">Pumpenfluss (Ø)</span>
                     <span class="process-card-value"><span id="flow">-</span><span class="meta-sub" id="targetFlow"></span></span>
+                    <span class="delta-chip" id="flowDeltaChip" style="display:none"></span>
                 </div>
                 <div class="process-card">
                     <span class="process-card-label" data-i18n="process_temp">Temperatur (Ø ±σ)</span>
                     <span class="process-card-value"><span id="temp">-</span><span class="meta-badge" id="tempStability"></span><span class="meta-sub" id="targetTemp"></span></span>
+                    <span class="delta-chip" id="tempDeltaChip" style="display:none"></span>
                 </div>
             </div>
 

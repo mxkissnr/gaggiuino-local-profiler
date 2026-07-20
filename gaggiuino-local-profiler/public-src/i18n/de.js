@@ -43,6 +43,7 @@ export default {
     chart_target_pressure:'Ziel Druck', chart_target_flow:'Ziel Fluss', chart_target_temp:'Ziel Temperatur',
     chart_pressure_unit:'Druck (bar)', chart_flow_unit:'Pumpenfluss (ml/s)',
     chart_time:(s)=>`Zeit: ${s}`,
+    delta_vs_shot:(n)=>`vs. Shot ${n}`, chart_prev_suffix:(n)=>` (Shot ${n})`,
     orders_just_now:'gerade eben',
     live_idle_text:'Sobald ein Bezug startet, erscheinen hier die Echtzeit-Daten.',
     live_time_unit:'min:sec', live_time_label:'Zeit',

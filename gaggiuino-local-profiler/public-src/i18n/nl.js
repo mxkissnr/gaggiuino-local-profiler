@@ -43,6 +43,7 @@ export default {
     chart_target_pressure:'Doeldruk', chart_target_flow:'Doelstroom', chart_target_temp:'Doeltemperatuur',
     chart_pressure_unit:'Druk (bar)', chart_flow_unit:'Pompstroom (ml/s)',
     chart_time:(s)=>`Tijd: ${s}`,
+    delta_vs_shot:(n)=>`vs. Shot ${n}`, chart_prev_suffix:(n)=>` (Shot ${n})`,
     orders_just_now:'zojuist',
     live_idle_text:'Zodra een shot start, verschijnen hier de realtime gegevens.',
     live_time_unit:'min:sec', live_time_label:'Tijd',

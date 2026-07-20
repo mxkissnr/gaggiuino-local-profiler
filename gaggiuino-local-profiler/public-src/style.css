@@ -567,6 +567,26 @@
         .verdict-headline  { font-size: 1.05rem; font-weight: 700; color: #fff; }
         .verdict-subline   { font-size: .8rem; color: var(--gray-500); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+        /* ── Delta chips (#402): same-profile auto-compare vs. the previous shot.
+           Score delta reuses the unified score-scale classes (score-great/-ok/-bad,
+           #397); process-metric deltas (no quality judgment) stay neutral gray. */
+        .delta-chip {
+            display: inline-block;
+            font-size: .72rem;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            padding: 1px 7px;
+            border-radius: var(--radius);
+            margin-top: 4px;
+            background: var(--gray-800);
+            color: var(--gray-400);
+        }
+        .delta-chip.score-great { background: rgba(34,197,94,.15); color: var(--ok); }
+        .delta-chip.score-ok    { background: rgba(234,179,8,.15); color: var(--warn); }
+        .delta-chip.score-bad   { background: rgba(239,68,68,.12); color: var(--err); }
+        .verdict-text .delta-chip,
+        .process-card .delta-chip { display: block; width: fit-content; }
+
         /* ── Recipe zone (#398): large cards, the values the user sets ── */
         .recipe-zone {
             display: grid;

@@ -14,6 +14,12 @@ class ShotService {
     getAnnotation(id) { return repo.getAnnotation(id); }
     getLatestId(machineId) { return repo.getLatestId(machineId); }
 
+    // #402: same-profile auto-compare reference for the shot detail view.
+    getPreviousByProfile(shot) {
+        if (!shot || !shot.profileName) return null;
+        return repo.findPreviousByProfile(shot.id, shot.profileName, shot.machineId ?? 1);
+    }
+
     saveAnnotation(shotId, annotation) {
         repo.saveAnnotation(shotId, annotation);
         return repo.getAnnotation(shotId);
