@@ -70,3 +70,25 @@ export function calcShotScore(shot, _data) {
   if (shot && shot.score !== undefined) return shot.score;
   return _calcShotScore(shot);
 }
+
+// ── Same-profile auto-compare (#402) ────────────────────────────────────────
+
+// Client-side mirror of ShotRepository.findPreviousByProfile: most recent
+// shot before `shot` with the same profile name on the same machine. Reads
+// from the already-loaded S.shots (bulk shots.json, score included) instead
+// of a second network round-trip against GET /api/shots/:id — every shot
+// needed for the ghost curve/delta chips is already in memory once the shot
+// list has loaded.
+export function findPreviousShot(shots, shot) {
+  if (!shot || !shot.profileName) return null;
+  const machineId = shot.machineId ?? 1;
+  let prev = null;
+  for (const s of shots) {
+    if (s.id === shot.id) continue;
+    if ((s.machineId ?? 1) !== machineId) continue;
+    if (s.profileName !== shot.profileName) continue;
+    if (s.timestamp >= shot.timestamp) continue;
+    if (!prev || s.timestamp > prev.timestamp) prev = s;
+  }
+  return prev;
+}

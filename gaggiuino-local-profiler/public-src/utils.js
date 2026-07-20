@@ -213,3 +213,13 @@ export function scoreColor(sc) {
   if (sc == null) return 'var(--gray-600)';
   return sc >= 90 ? 'var(--ok)' : sc >= 70 ? 'var(--warn)' : 'var(--err)';
 }
+
+// Signed delta formatting for the same-profile auto-compare chips (#402):
+// "+2", "−0.3 bar", "±0" — a real minus sign (−, U+2212) rather than a
+// hyphen, matching how the rest of the app renders negative deltas.
+export function formatDelta(value, decimals = 0, unit = '') {
+  if (value == null) return null;
+  const rounded = Number(value.toFixed(decimals));
+  const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : '±';
+  return `${sign}${Math.abs(rounded).toFixed(decimals)}${unit}`;
+}

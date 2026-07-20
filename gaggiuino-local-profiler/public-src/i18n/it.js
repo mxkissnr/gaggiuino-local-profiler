@@ -1,5 +1,5 @@
 export default {
-    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria', nav_more:'Altro',
     sort_newest:'Recenti', sort_score:'Score', sort_rating:'Voto', sort_duration:'Durata',
     search_placeholder:'Profilo, Caffè, Macinino …', trash_label:'Cestino',
     no_sync:'nessun sync', btn_sync:'↻ Sync',
@@ -43,6 +43,7 @@ export default {
     chart_target_pressure:'Pressione obiettivo', chart_target_flow:'Flusso obiettivo', chart_target_temp:'Temp. obiettivo',
     chart_pressure_unit:'Pressione (bar)', chart_flow_unit:'Flusso (ml/s)',
     chart_time:(s)=>`Tempo: ${s}`,
+    delta_vs_shot:(n)=>`vs. Shot ${n}`, chart_prev_suffix:(n)=>` (Shot ${n})`,
     orders_just_now:'adesso',
     live_idle_text:'Quando inizia uno shot, i dati in tempo reale appariranno qui.',
     live_time_unit:'min:sec', live_time_label:'Tempo',
@@ -156,7 +157,7 @@ export default {
     compare_title:(a,b)=>`Confronto: Shot ${a} vs. Shot ${b}`,
     please_wait:'Attendere …',
     profile_unknown:'Profilo sconosciuto',
-    nav_settings:'⚙', settings_theme:'Tema', settings_accent:'Schema colori', theme_dark:'Scuro', theme_light:'Chiaro', settings_language:'Lingua',
+    nav_settings:'⚙', settings_theme:'Tema', settings_accent:'Schema colori', theme_dark:'Scuro', theme_light:'Chiaro', theme_crema:'Crema', settings_language:'Lingua',
     settings_machines:'Macchine', settings_machines_desc:'Gestisci le macchine espresso monitorate da questa app.', settings_machines_add:'+ Aggiungi macchina',
     settings_machine_name:'Nome', settings_machine_type:'Tipo', settings_machine_host:'Host', settings_machine_switch:'Entità switch HA (opzionale)',
     settings_machine_test:'Testa connessione', settings_machine_save:'Salva', settings_machine_cancel:'Annulla', settings_machine_default:'Predefinita',

@@ -64,6 +64,34 @@
 
 <div id="sidebar-backdrop"></div>
 
+<!-- ── Bottom navigation (#403): mobile-only, replaces the horizontal
+     mode-bar tab row. Shots additionally opens the shot list (sidebar)
+     since it's no longer a permanently-docked column on narrow viewports. -->
+<nav id="bottom-nav">
+    <button class="bottom-nav-btn active" id="bnShots">
+        <span class="bn-icon" aria-hidden="true">☕</span><span class="bn-label" data-i18n="nav_shots">Shots</span>
+    </button>
+    <button class="bottom-nav-btn" id="bnLive" style="display:none">
+        <span class="bn-icon" aria-hidden="true"><span class="live-dot"></span></span><span class="bn-label" data-i18n="nav_live">Live</span>
+    </button>
+    <button class="bottom-nav-btn" id="bnLibrary">
+        <span class="bn-icon" aria-hidden="true">📚</span><span class="bn-label" data-i18n="nav_library">Bibliothek</span>
+    </button>
+    <button class="bottom-nav-btn" id="bnAnalytics">
+        <span class="bn-icon" aria-hidden="true">📊</span><span class="bn-label" data-i18n="nav_analytics">Statistiken</span>
+    </button>
+    <button class="bottom-nav-btn" id="bnMore" aria-haspopup="true" aria-expanded="false">
+        <span class="bn-icon" aria-hidden="true">⋯</span><span class="bn-label" data-i18n="nav_more">Mehr</span>
+    </button>
+</nav>
+<div id="more-sheet-backdrop"></div>
+<div id="moreSheet">
+    <button class="more-sheet-item" id="bnDialin"><span data-i18n="nav_dialin">Bezugslog</span></button>
+    <button class="more-sheet-item" id="bnMaintenance"><span data-i18n="nav_maintenance">Wartung</span></button>
+    <button class="more-sheet-item" id="bnOrders" style="display:none"><span data-i18n="nav_orders">Bestellungen</span></button>
+    <button class="more-sheet-item" id="bnSettings"><span data-i18n="nav_settings">⚙</span></button>
+</div>
+
 <!-- ── Main ── -->
 <div id="main">
 
@@ -130,6 +158,7 @@
                 </div>
                 <div class="verdict-text">
                     <div class="verdict-headline" id="verdictHeadline">-</div>
+                    <span class="delta-chip" id="verdictDeltaChip" style="display:none"></span>
                     <div class="verdict-subline" id="verdictSubline">-</div>
                 </div>
             </div>
@@ -194,15 +223,18 @@
                 <div class="process-card">
                     <span class="process-card-label" data-i18n="process_pressure">Druck (Ø / Max)</span>
                     <span class="process-card-value"><span id="pressure">-</span><span class="meta-sub" id="targetPressure"></span></span>
+                    <span class="delta-chip" id="pressureDeltaChip" style="display:none"></span>
                     <span id="channelingWarning" class="channeling-warn" style="display:none">⚡ Channeling</span>
                 </div>
                 <div class="process-card">
                     <span class="process-card-label" data-i18n="process_flow">Pumpenfluss (Ø)</span>
                     <span class="process-card-value"><span id="flow">-</span><span class="meta-sub" id="targetFlow"></span></span>
+                    <span class="delta-chip" id="flowDeltaChip" style="display:none"></span>
                 </div>
                 <div class="process-card">
                     <span class="process-card-label" data-i18n="process_temp">Temperatur (Ø ±σ)</span>
                     <span class="process-card-value"><span id="temp">-</span><span class="meta-badge" id="tempStability"></span><span class="meta-sub" id="targetTemp"></span></span>
+                    <span class="delta-chip" id="tempDeltaChip" style="display:none"></span>
                 </div>
             </div>
 
@@ -1024,6 +1056,7 @@
                 <button class="accent-swatch" data-accent="aurora" title="Aurora" style="background:linear-gradient(135deg,#6366f1,#a855f7)"></button>
                 <button class="accent-swatch" data-accent="ember"  title="Ember"  style="background:linear-gradient(135deg,#ef4444,#f97316)"></button>
                 <button class="accent-swatch" data-accent="forest" title="Forest" style="background:linear-gradient(135deg,#22c55e,#10b981)"></button>
+                <button class="accent-swatch" data-accent="crema" data-i18n-title="theme_crema" title="Crema" style="background:linear-gradient(135deg,#d4a24c,#8b5e34)"></button>
             </div>
         </div>
         <!-- Multi-machine registry (#319) -->

@@ -29,6 +29,17 @@
         [data-accent="aurora"] { --accent: #a78bfa; --accent-from: #6366f1; --accent-to: #a855f7; --accent-text: #fff; --accent-glow: rgba(167,139,250,.15); }
         [data-accent="ember"]  { --accent: #fb923c; --accent-from: #ef4444; --accent-to: #f97316; --accent-text: #fff; --accent-glow: rgba(239,68,68,.15); }
         [data-accent="forest"] { --accent: #34d399; --accent-from: #22c55e; --accent-to: #10b981; --accent-text: #000; --accent-glow: rgba(34,197,94,.15); }
+        /* #404: Crema is the only theme that also warms the neutral gray
+           scale (espresso-brown instead of true gray) — every other accent
+           only swaps --accent-*. Contrast checked against the same targets
+           #397 used for the base scale (label text >=4.5:1 on card/sidebar
+           surfaces): gray-600 vs gray-800 5.11:1, vs gray-900 5.84:1;
+           gray-500 vs gray-800 6.13:1, vs gray-900 7.01:1. */
+        [data-accent="crema"] {
+            --gray-200: #f2e6d8; --gray-400: #c9b8a4; --gray-500: #b0a08d; --gray-600: #a2917d;
+            --gray-700: #4e3a2b; --gray-800: #2e2118; --gray-900: #1e1611; --gray-950: #14100c;
+            --accent: #d4a24c; --accent-from: #d4a24c; --accent-to: #b8823a; --accent-text: #1c1410; --accent-glow: rgba(212,162,76,.15);
+        }
 
         /* ── Light theme ── */
         [data-theme="light"] {
@@ -48,6 +59,36 @@
         [data-theme="light"]:not([data-accent]), [data-theme="light"][data-accent="amber"] {
             --accent: #d97706; --accent-from: #d97706; --accent-to: #ea580c;
         }
+        /* #404: Crema's light variant reads as warm paper, not an inverted
+           dark palette — every neutral gets its own value rather than
+           falling back to the plain [data-theme="light"] gray scale above.
+           Contrast checked: gray-200 (text) vs gray-950 (page) 15.11:1;
+           gray-600 (muted label) vs gray-900 5.24:1, vs gray-800 4.58:1;
+           gray-500 vs gray-900 6.52:1, vs gray-800 5.70:1; accent (used as
+           text/links) vs gray-950/900/800: 6.74:1 / 5.94:1 / 5.19:1; white
+           accent-text vs accent-from/-to: 5.60:1 / 8.92:1 — all clear the
+           4.5:1 WCAG AA floor #397 established for this scale. */
+        [data-theme="light"][data-accent="crema"] {
+            --gray-200: #2a1b0f; --gray-400: #55442f; --gray-500: #5f4c38; --gray-600: #6e5a44;
+            --gray-700: #d4b48c; --gray-800: #ead5b5; --gray-900: #f3e4ce; --gray-950: #fbf3e7;
+            --accent: #7a4a21; --accent-from: #8b5e34; --accent-to: #6b3f1d; --accent-text: #fff; --accent-glow: rgba(122,74,33,.15);
+        }
+
+        /* #404: bundled locally (public-src/fonts/) so it renders fully
+           offline / behind HA ingress — no external font CDN, unlike
+           Figtree's bunny.net link above. Applied ONLY via .serif-display:
+           bean names in the Bibliothek view and the shot-card share image
+           (lib/card.js registers the same file for server-side rendering).
+           Never on numeric/data displays — tabular-nums UI stays sans-serif
+           everywhere else, regardless of theme. */
+        @font-face {
+            font-family: 'Fraunces';
+            font-style: normal;
+            font-weight: 600;
+            font-display: swap;
+            src: url('./fonts/fraunces-600-latin.woff2') format('woff2');
+        }
+        .serif-display { font-family: 'Fraunces', Georgia, serif; }
 
         * { box-sizing: border-box; }
 
@@ -173,7 +214,10 @@
         .shot-wrapper:focus-within .compare-btn,
         .shot-wrapper.compare-active .compare-btn { opacity: 1; }
         @media (hover: none) {
-            .compare-btn { opacity: 1; }
+            /* #403: visible isn't enough — on touch this is the only way to
+               reach compare mode, so its hit area must clear the 44x44px
+               minimum touch target, not just the 34x34px desktop hover size. */
+            .compare-btn { opacity: 1; width: 44px; height: 44px; font-size: 1.25rem; }
         }
         .compare-btn:hover { background: var(--gray-800); color: #fff; }
         .shot-wrapper.compare-active .compare-btn { background: #3498db; color: #fff; }
@@ -567,6 +611,26 @@
         .verdict-headline  { font-size: 1.05rem; font-weight: 700; color: #fff; }
         .verdict-subline   { font-size: .8rem; color: var(--gray-500); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+        /* ── Delta chips (#402): same-profile auto-compare vs. the previous shot.
+           Score delta reuses the unified score-scale classes (score-great/-ok/-bad,
+           #397); process-metric deltas (no quality judgment) stay neutral gray. */
+        .delta-chip {
+            display: inline-block;
+            font-size: .72rem;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            padding: 1px 7px;
+            border-radius: var(--radius);
+            margin-top: 4px;
+            background: var(--gray-800);
+            color: var(--gray-400);
+        }
+        .delta-chip.score-great { background: rgba(34,197,94,.15); color: var(--ok); }
+        .delta-chip.score-ok    { background: rgba(234,179,8,.15); color: var(--warn); }
+        .delta-chip.score-bad   { background: rgba(239,68,68,.12); color: var(--err); }
+        .verdict-text .delta-chip,
+        .process-card .delta-chip { display: block; width: fit-content; }
+
         /* ── Recipe zone (#398): large cards, the values the user sets ── */
         .recipe-zone {
             display: grid;
@@ -606,6 +670,13 @@
         .star-rating { display: flex; gap: 3px; }
         .star { font-size: 1.4rem; cursor: pointer; color: var(--gray-700); transition: color .12s; user-select: none; line-height: 1; }
         .star.active, .star:hover { color: var(--accent); }
+        /* #403: touch-target audit — a bare glyph at any font-size falls
+           short of the 44x44px minimum hit area on touch, regardless of
+           viewport width, so this is gated on (hover: none) rather than a
+           max-width breakpoint (a touch laptop at desktop width needs it too). */
+        @media (hover: none) {
+            .star { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
+        }
 
         .annotation-photo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
         .shot-photo-thumb { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: var(--gray-800); flex-shrink: 0; }
@@ -683,6 +754,10 @@
         .lib-item { display: flex; align-items: center; gap: 8px; background: var(--gray-800); border-radius:var(--radius); padding: 10px 12px; flex-wrap: wrap; }
         .lib-item-info { flex: 1; min-width: 0; }
         .lib-item-name { font-size: .85rem; color: var(--gray-200); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .lib-item-name .serif-display { font-size: 1rem; font-weight: 600; }
+        /* #404: eyebrow above the bean name — small, muted, uppercase,
+           same visual weight class as the recipe/process-card labels. */
+        .lib-item-origin-eyebrow { font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-600); margin-bottom: 2px; }
         .lib-item-sub  { font-size: .75rem; color: var(--gray-500); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-actions { display: flex; gap: 2px; flex-shrink: 0; }
         @media (max-width: 640px) {
@@ -694,6 +769,11 @@
         .lib-inv-stats { font-size: .7rem; color: var(--gray-600); margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; }
         .lib-inv-remaining { color: var(--gray-500); }
         .lib-inv-remaining.low { color: var(--err); }
+        /* #404: supplementary proportional bar next to the gram figure —
+           the number itself (.lib-inv-remaining) stays the source of truth. */
+        .lib-stock-bar { display: inline-block; width: 42px; height: 5px; border-radius: 3px; background: var(--gray-700); overflow: hidden; vertical-align: middle; margin-left: 6px; }
+        .lib-stock-bar-fill { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+        .lib-stock-bar-fill.low { background: var(--err); }
         .lib-inv-reorder { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); color: var(--err); border-radius:var(--radius); padding: 1px 5px; font-size: .65rem; font-weight: 600; }
         .lib-inv-total { color: var(--gray-700); font-size: .68rem; }
         .lib-decaf-badge { display: inline-block; background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.3); color: #22c55e; border-radius:var(--radius); padding: 1px 5px; font-size: .6rem; font-weight: 700; vertical-align: middle; margin-left: 4px; }
@@ -714,7 +794,11 @@
         .flavor-chip { display: inline-flex; align-items: center; gap: 4px; background: rgba(168,85,247,.12); border: 1px solid rgba(168,85,247,.3); color: #c084fc; border-radius:var(--radius); padding: 2px 7px; font-size: .72rem; font-weight: 600; }
         .flavor-chip-x { background: none; border: none; color: inherit; cursor: pointer; font-size: .68rem; padding: 0; opacity: .7; }
         .flavor-chip-x:hover { opacity: 1; }
-        .flavor-chip-static { padding: 1px 6px; font-size: .66rem; }
+        /* #404: read-only display pills (bean cards) go quiet-outline
+           instead of the filled badge the editable form's chips still use —
+           .flavor-chip-static is only ever rendered without a .flavor-chip-x
+           remove button, so this never touches the editor. */
+        .flavor-chip-static { padding: 1px 6px; font-size: .66rem; background: transparent; border-color: var(--gray-700); color: var(--gray-500); }
         .origin-chip { background: rgba(56,189,248,.12); border-color: rgba(56,189,248,.3); color: #7dd3fc; }
         .flavor-chips-wrap .origin-chip-percent { width: 34px; min-width: 0; flex: none; text-align: center; background: rgba(255,255,255,.08); border-radius: 3px; padding: 1px 2px; -moz-appearance: textfield; }
         .origin-chip-percent::-webkit-outer-spin-button, .origin-chip-percent::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -1381,6 +1465,12 @@
         }
         #mobileMenuBtn:hover { color: #fff; }
 
+        /* ── Bottom navigation (#403): hidden on desktop, replaces the
+           horizontal mode-bar tab row on narrow viewports (see the
+           max-width:768px block below for the mobile layout itself). ── */
+        #bottom-nav, #moreSheet, #more-sheet-backdrop { display: none; }
+        .bottom-nav-btn .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gray-600); display: inline-block; }
+
         /* ── Sidebar backdrop ── */
         #sidebar-backdrop {
             display: none;
@@ -1412,8 +1502,90 @@
             #sidebarToggle     { display: flex; align-items: center; }
             #mobileMenuBtn     { display: flex; }
             #collapseBtn       { display: flex; }
-            #main              { height: 100vh; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+            #main              { height: 100vh; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-bottom: 60px; }
             #chart-area, #live-view { padding: 16px; }
+
+            /* ── Bottom navigation (#403): replaces the horizontal mode-bar
+               tab row. #mode-bar itself only survives to host the
+               multi-machine switcher (settings/tabs/hamburger all move to
+               the bottom nav / "Mehr" sheet) — collapsed via .mode-bar-empty
+               (renderMachineSwitcher()) when there's nothing left to show. */
+            #mode-bar-scroll, #mobileMenuBtn, #expandSidebarBtn, #btnSettings { display: none !important; }
+            #mode-bar { justify-content: flex-end; position: static; }
+            #mode-bar.mode-bar-empty { display: none; }
+
+            #bottom-nav {
+                display: flex;
+                position: fixed;
+                left: 0; right: 0; bottom: 0;
+                z-index: 150;
+                background: var(--gray-900);
+                border-top: 1px solid var(--gray-700);
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+            }
+            .bottom-nav-btn {
+                flex: 1;
+                min-height: 56px;
+                min-width: 44px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 2px;
+                background: none;
+                border: none;
+                color: var(--gray-500);
+                cursor: pointer;
+                font-family: 'Figtree', sans-serif;
+                padding: 6px 2px;
+                transition: color .15s;
+            }
+            .bottom-nav-btn .bn-icon   { font-size: 1.2rem; line-height: 1; padding: 2px 14px; border-radius: 999px; transition: background .2s; }
+            .bottom-nav-btn .bn-label  { font-size: .64rem; font-weight: 600; }
+            .bottom-nav-btn.active     { color: #fff; }
+            /* #397: same raised-surface pill language as .mode-btn.active,
+               scoped to the icon (a full-button pill would be too tall for a
+               56px-high bottom nav row). */
+            .bottom-nav-btn.active .bn-icon  { background: var(--gray-800); }
+            .bottom-nav-btn.active .live-dot { background: var(--accent); }
+
+            #more-sheet-backdrop {
+                display: none;
+                position: fixed; inset: 0;
+                z-index: 205;
+            }
+            #more-sheet-backdrop.visible { display: block; }
+            #moreSheet {
+                display: none;
+                flex-direction: column;
+                position: fixed;
+                right: 8px;
+                bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 8px);
+                background: var(--gray-900);
+                border: 1px solid var(--gray-700);
+                border-radius: var(--radius);
+                overflow: hidden;
+                min-width: 190px;
+                z-index: 220;
+                box-shadow: 0 8px 24px rgba(0,0,0,.35);
+            }
+            #moreSheet.open { display: flex; }
+            /* #397 pill visual language: raised active surface on tap/hover,
+               same border-radius token as .mode-btn — no persistent border. */
+            .more-sheet-item {
+                background: none;
+                border: none;
+                min-height: 44px;
+                color: var(--gray-300);
+                text-align: left;
+                padding: 12px 16px;
+                font-size: .85rem;
+                font-weight: 600;
+                font-family: 'Figtree', sans-serif;
+                cursor: pointer;
+                transition: background .15s, color .15s;
+            }
+            .more-sheet-item:hover, .more-sheet-item:active { background: var(--gray-800); color: #fff; }
             .sprofiler-header { margin-bottom: 10px; }
             .sprofiler-header h1 { font-size: 1.3rem; }
             /* The title block (flex:1;min-width:0) and the export-buttons block
@@ -1461,7 +1633,7 @@
             .annotation-actions { flex-direction: column; align-items: stretch; gap: 8px; }
             .save-btn          { width: 100%; padding: 11px; font-size: .9rem; text-align: center; }
             .star              { padding: 6px 7px; font-size: 1.7rem; }
-            .drink-pill        { min-height: 40px; padding: 8px 14px; font-size: .85rem; display: flex; align-items: center; }
+            .drink-pill        { min-height: 44px; padding: 8px 14px; font-size: .85rem; display: flex; align-items: center; }
         }
         @media (max-width: 480px) {
             .live-stats { grid-template-columns: repeat(2, 1fr); }

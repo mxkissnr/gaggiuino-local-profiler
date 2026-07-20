@@ -3,11 +3,11 @@ import { t }                                                  from '../../i18n.j
 import { apiFetch }                                           from '../../api.js';
 import { LOCALE_MAP, phasePlugin, corsairPlugin, clearChartOnTouchEnd } from '../../constants.js';
 import {
-  esc, avg, avgActive, max, fmt, formatTimeLabel,
+  esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting }           from '../../components/sidebar.js';
-import { getShotData, calcShotScore }                         from './utils.js';
+import { getShotData, calcShotScore, findPreviousShot }       from './utils.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel }                              from './annotation.js';
 import { updatePQChart }                                      from './charts.js';
@@ -156,6 +156,19 @@ export async function permanentDeleteShot(id) {
 
 // ── Main view ─────────────────────────────────────────────────────────────
 
+// Shared setter for the #402 delta-chip spans (verdict score + process-zone
+// metrics): hides the chip entirely when there's nothing to compare against,
+// never shows an empty pill.
+function _setDeltaChip(id, delta, decimals = 0, unit = '', colorClass = null, title = '') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (delta == null) { el.style.display = 'none'; return; }
+  el.textContent = formatDelta(delta, decimals, unit);
+  el.className   = 'delta-chip' + (colorClass ? ` ${colorClass}` : '');
+  el.title       = title;
+  el.style.display = '';
+}
+
 export function updateView() {
   const shotA = S.shots.find(s => s.id === S.primaryShotId);
   const shotB = S.compareShotId ? S.shots.find(s => s.id === S.compareShotId) : null;
@@ -163,6 +176,12 @@ export function updateView() {
 
   const dA = getShotData(shotA);
   const dB = getShotData(shotB);
+
+  // Same-profile auto-compare (#402): most recent earlier shot with the same
+  // profile on the same machine. Only meaningful outside A/B compare mode —
+  // that feature stays untouched and unrelated to this same-profile pairing.
+  const previousShot = !shotB ? findPreviousShot(S.shots, shotA) : null;
+  const dPrev         = previousShot ? getShotData(previousShot) : null;
 
   const maxTempA = max((shotA.datapoints?.temperature || []).map(v => v / 10)) || 0;
   const maxTempB = shotB ? (max((shotB.datapoints?.temperature || []).map(v => v / 10)) || 0) : 0;
@@ -207,14 +226,29 @@ export function updateView() {
   const avgPressure   = avgActive(pressureVals, 1.5);
   document.getElementById('pressure').innerText       = fmt(avgPressure, ' bar');
   document.getElementById('targetPressure').innerText = ` / ${fmt(max(dA.targetPressure.map(p => p.y)), ' bar')}`;
-  document.getElementById('flow').innerText           = fmt(avgActive(dA.flow.map(p => p.y), 0.2), ' ml/s');
+  const avgFlow = avgActive(dA.flow.map(p => p.y), 0.2);
+  document.getElementById('flow').innerText           = fmt(avgFlow, ' ml/s');
   document.getElementById('targetFlow').innerText     = ` / ${fmt(avgActive(dA.targetFlow.map(p => p.y), 0.2), ' ml/s')}`;
 
   const tempVals = dA.temp.map(p => p.y);
   const sdTemp   = stddev(tempVals);
-  document.getElementById('temp').innerText             = fmt(avg(tempVals), ' °C');
+  const avgTemp  = avg(tempVals);
+  document.getElementById('temp').innerText             = fmt(avgTemp, ' °C');
   document.getElementById('tempStability').textContent  = (sdTemp != null && sdTemp < 5) ? `±${sdTemp.toFixed(1)}` : '';
   document.getElementById('targetTemp').innerText       = ` / ${fmt(avg(dA.targetTemp.map(p => p.y)), ' °C')}`;
+
+  // Process-zone delta chips (#402): signed vs. the previous same-profile
+  // shot's own average — no quality judgment implied, so no score coloring.
+  if (dPrev) {
+    const prevTitle = t('delta_vs_shot', previousShot.nativeId ?? previousShot.id);
+    _setDeltaChip('pressureDeltaChip', avgPressure != null ? avgPressure - avgActive(dPrev.pressure.map(p => p.y), 1.5) : null, 1, ' bar', null, prevTitle);
+    _setDeltaChip('flowDeltaChip',     avgFlow     != null ? avgFlow     - avgActive(dPrev.flow.map(p => p.y), 0.2)     : null, 1, ' ml/s', null, prevTitle);
+    _setDeltaChip('tempDeltaChip',     avgTemp     != null ? avgTemp     - avg(dPrev.temp.map(p => p.y))                : null, 1, ' °C', null, prevTitle);
+  } else {
+    _setDeltaChip('pressureDeltaChip', null);
+    _setDeltaChip('flowDeltaChip', null);
+    _setDeltaChip('tempDeltaChip', null);
+  }
 
   const finalWeight = max(dA.weight.map(p => p.y));
   const ann         = shotA.annotation || {};
@@ -294,6 +328,23 @@ export function updateView() {
     ring.style.setProperty('--ring-pct', sc ?? 0);
     ring.style.setProperty('--ring-color', scoreColor(sc));
     ringVal.textContent = sc !== null ? sc : '–';
+
+    // Score delta chip (#402): same-profile auto-compare, unified score
+    // scale (#397) for the coloring — omitted entirely when there's no
+    // previous same-profile shot or either score is unknown.
+    const prevScore = previousShot ? previousShot.score : null;
+    const verdictDeltaChip = document.getElementById('verdictDeltaChip');
+    if (previousShot && sc != null && prevScore != null) {
+      const scoreDelta = sc - prevScore;
+      const cls = scoreDelta > 0 ? 'score-great' : scoreDelta < 0 ? 'score-bad' : 'score-ok';
+      const vsShot = t('delta_vs_shot', previousShot.nativeId ?? previousShot.id);
+      verdictDeltaChip.textContent = `${formatDelta(scoreDelta)} ${vsShot}`;
+      verdictDeltaChip.className   = `delta-chip ${cls}`;
+      verdictDeltaChip.style.display = '';
+    } else {
+      verdictDeltaChip.style.display = 'none';
+    }
+
     document.getElementById('verdictHeadline').textContent = advice ? `${advice.icon} ${advice.text}` : t('verdict_no_data');
     document.getElementById('verdictSubline').textContent = [
       nameA,
@@ -373,8 +424,9 @@ export function updateView() {
   renderAnnotationPanel(shotA);
 
   // Build main chart datasets
-  const maxTimeA = dA.rawTimes.length > 0 ? dA.rawTimes[dA.rawTimes.length - 1] : 0;
-  const maxTimeB = dB?.rawTimes.length > 0 ? dB.rawTimes[dB.rawTimes.length - 1] : 0;
+  const maxTimeA    = dA.rawTimes.length > 0 ? dA.rawTimes[dA.rawTimes.length - 1] : 0;
+  const maxTimeB    = dB?.rawTimes.length > 0 ? dB.rawTimes[dB.rawTimes.length - 1] : 0;
+  const maxTimePrev = dPrev?.rawTimes.length > 0 ? dPrev.rawTimes[dPrev.rawTimes.length - 1] : 0;
 
   const sfx = shotB ? ' (A)' : '';
   const datasets = [
@@ -399,6 +451,18 @@ export function updateView() {
       { label:t('chart_weightflow') + ' (B)', data: dB.weightFlow, yAxisID:'y',  borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(155,89,182,.65)',  backgroundColor:'transparent', pointStyle:false },
       { label:t('chart_weight')     + ' (B)', data: dB.weight,     yAxisID:'y1', borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.65)',  backgroundColor:'transparent', pointStyle:false },
       { label:t('chart_temp')       + ' (B)', data: dB.temp,       yAxisID:'y1', borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(231,76,60,.65)',   backgroundColor:'transparent', pointStyle:false }
+    );
+  }
+
+  // Ghost overlay (#402): previous same-profile shot's pressure/flow/weight
+  // curves, dashed + low-opacity, feeding into the chart's existing legend
+  // (dataset label carries the "(Shot N)" suffix so it's self-explanatory).
+  if (dPrev) {
+    const ghostSfx = t('chart_prev_suffix', previousShot.nativeId ?? previousShot.id);
+    datasets.push(
+      { label:t('chart_pressure') + ghostSfx, data: dPrev.pressure, yAxisID:'y',  borderDash:[2,3], borderWidth:1.5, tension:.1, borderColor:'rgba(52,152,219,.35)', backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_flow')     + ghostSfx, data: dPrev.flow,     yAxisID:'y',  borderDash:[2,3], borderWidth:1.5, tension:.1, borderColor:'rgba(243,156,18,.35)', backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_weight')   + ghostSfx, data: dPrev.weight,   yAxisID:'y1', borderDash:[2,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.35)', backgroundColor:'transparent', pointStyle:false }
     );
   }
 
@@ -430,7 +494,7 @@ export function updateView() {
           tooltip: { callbacks: { title: ctx => t('chart_time', formatTimeLabel(ctx[0].parsed.x)) } }
         },
         scales: {
-          x:  { type:'linear', min:0, max:Math.max(maxTimeA, maxTimeB), clip:false,
+          x:  { type:'linear', min:0, max:Math.max(maxTimeA, maxTimeB, maxTimePrev), clip:false,
                 ticks:{ color:'#a1a1aa', font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
                 grid:{ color:'#27272a' } },
           y:  { type:'linear', position:'left',  min:0, max:12, ticks:{color:'#a1a1aa', maxTicksLimit:6}, grid:{color:'#27272a'} },

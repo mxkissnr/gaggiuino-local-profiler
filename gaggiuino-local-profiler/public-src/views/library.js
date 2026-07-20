@@ -94,9 +94,14 @@ export function renderBeanList() {
     if (b.stock_g) {
       const isLow = remaining < 100;
       const editingStock = S._beanStockEditId === b.id;
+      // #404: small proportional bar next to the gram figure — purely
+      // supplementary, the exact gram number (lib-inv-remaining text) is
+      // unchanged and stays the source of truth.
+      const stockPct = Math.max(0, Math.min(100, Math.round((remaining / b.stock_g) * 100)));
+      const stockBar = `<span class="lib-stock-bar" title="${stockPct}%"><span class="lib-stock-bar-fill${isLow ? ' low' : ''}" style="width:${stockPct}%"></span></span>`;
       invHtml = `<div class="lib-inv-stats">
         <span>${t('lib_inv_consumed', activeBagConsumed)}</span>
-        <span class="lib-inv-remaining${isLow ? ' low' : ''}">${t('lib_inv_remaining', remaining)}</span>
+        <span class="lib-inv-remaining${isLow ? ' low' : ''}">${t('lib_inv_remaining', remaining)}</span>${stockBar}
         ${isLow ? `<span class="lib-inv-reorder">${t('lib_inv_reorder')}</span>` : ''}
         ${bags.length > 1 ? `<span class="lib-inv-total">${t('lib_inv_total_consumed', totalConsumed)} · ${t('lib_inv_bags', bags.length)}</span>` : ''}
         ${editingStock
@@ -170,12 +175,16 @@ export function renderBeanList() {
       : '';
 
     const disabled = b.enabled === false;
+    // #404: origin moves out of the generic lib-item-sub line into its own
+    // small eyebrow above the (now serif) bean name.
+    const origin = originDisplay(b);
+    const originEyebrow = origin ? `<div class="lib-item-origin-eyebrow">${esc(origin)}</div>` : '';
     return `<div class="lib-item${disabled ? ' lib-item-disabled' : ''}">
       ${b.image ? `<img class="lib-bean-thumb" data-bean-id="${b.id}" alt="">` : ''}
       <div class="lib-item-info">
-        <div class="lib-item-name">${esc(b.name)}${freshBadge}${b.roastType ? ` <span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : ''}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}${disabled ? ` <span class="lib-disabled-badge">${t('lib_bean_disabled_badge')}</span>` : ''}</div>
+        ${originEyebrow}
+        <div class="lib-item-name"><span class="serif-display">${esc(b.name)}</span>${freshBadge}${b.roastType ? ` <span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : ''}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}${disabled ? ` <span class="lib-disabled-badge">${t('lib_bean_disabled_badge')}</span>` : ''}</div>
         <div class="lib-item-sub">${[
-          originDisplay(b),
           b.region, b.species, b.variety, b.process, b.roaster, b.roastDate, b.notes,
         ].filter(Boolean).map(esc).join(' · ')}</div>
         ${extraHtml}

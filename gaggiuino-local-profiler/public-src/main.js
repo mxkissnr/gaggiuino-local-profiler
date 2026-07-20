@@ -149,6 +149,22 @@ function copyApiToken() {
     .catch(() => {});
 }
 
+// ── Bottom navigation "Mehr" sheet (#403, mobile) ──────────────────────────
+// Collapses Bezugslog/Wartung/Einstellungen (+ Bestellungen when enabled)
+// behind the bottom nav's overflow entry — same open/backdrop-click-to-close
+// pattern as the sidebar drawer (openSidebar/closeSidebar).
+function toggleMoreSheet() {
+  const open = document.getElementById('moreSheet').classList.toggle('open');
+  document.getElementById('more-sheet-backdrop').classList.toggle('visible', open);
+  document.getElementById('bnMore').setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function closeMoreSheet() {
+  document.getElementById('moreSheet').classList.remove('open');
+  document.getElementById('more-sheet-backdrop').classList.remove('visible');
+  document.getElementById('bnMore').setAttribute('aria-expanded', 'false');
+}
+
 // ── Expose everything on window (for HTML onclick handlers) ───────────────
 Object.assign(window, {
   // state & i18n
@@ -520,6 +536,20 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnMaintenance').addEventListener('click', () => switchMode('maintenance'));
   document.getElementById('btnOrders').addEventListener('click', () => switchMode('orders'));
   document.getElementById('btnSettings').addEventListener('click', () => switchMode('settings'));
+
+  // ── Bottom navigation (#403, mobile) ─────────────────────────────────────
+  // Shots also opens the shot list — on mobile the sidebar is no longer a
+  // permanently-docked column, so tapping "Shots" is how you reach it.
+  document.getElementById('bnShots').addEventListener('click', () => { switchMode('shots'); openSidebar(); });
+  document.getElementById('bnLive').addEventListener('click', () => switchMode('live'));
+  document.getElementById('bnLibrary').addEventListener('click', () => switchMode('library'));
+  document.getElementById('bnAnalytics').addEventListener('click', () => switchMode('analytics'));
+  document.getElementById('bnMore').addEventListener('click', toggleMoreSheet);
+  document.getElementById('more-sheet-backdrop').addEventListener('click', closeMoreSheet);
+  document.getElementById('bnDialin').addEventListener('click', () => { closeMoreSheet(); switchMode('dialin'); });
+  document.getElementById('bnMaintenance').addEventListener('click', () => { closeMoreSheet(); switchMode('maintenance'); });
+  document.getElementById('bnOrders').addEventListener('click', () => { closeMoreSheet(); switchMode('orders'); });
+  document.getElementById('bnSettings').addEventListener('click', () => { closeMoreSheet(); switchMode('settings'); });
   document.getElementById('exportAllCsvBtn').addEventListener('click', exportAllCSV);
   document.getElementById('exportShotBtn').addEventListener('click', exportShot);
   document.getElementById('exportProfileBtn').addEventListener('click', exportProfile);

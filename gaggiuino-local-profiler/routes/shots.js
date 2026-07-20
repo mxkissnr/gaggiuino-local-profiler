@@ -41,7 +41,15 @@ router.get('/api/shots/:id', (req, res, next) => {
         if (!id) return res.json(null);
         const shot = shotService.getById(id);
         if (!shot) return res.json(null);
-        res.json({ ...shot, score: shotService.computeScore(shot) });
+        // #402: same-profile auto-compare — additive fields only, existing
+        // consumers of this response are unaffected.
+        const previous = shotService.getPreviousByProfile(shot);
+        res.json({
+            ...shot,
+            score: shotService.computeScore(shot),
+            previousShotId: previous ? previous.id : null,
+            previousShot:   previous ? { ...previous, score: shotService.computeScore(previous) } : null,
+        });
     } catch (err) { next(err); }
 });
 

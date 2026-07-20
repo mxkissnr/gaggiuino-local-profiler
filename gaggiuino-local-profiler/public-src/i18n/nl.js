@@ -1,5 +1,5 @@
 export default {
-    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistieken', nav_library:'Bibliotheek',
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistieken', nav_library:'Bibliotheek', nav_more:'Meer',
     sort_newest:'Nieuwste', sort_score:'Score', sort_rating:'Beoordeling', sort_duration:'Duur',
     search_placeholder:'Profiel, Koffie, Molen …', trash_label:'Prullenbak',
     no_sync:'geen sync', btn_sync:'↻ Sync',
@@ -43,6 +43,7 @@ export default {
     chart_target_pressure:'Doeldruk', chart_target_flow:'Doelstroom', chart_target_temp:'Doeltemperatuur',
     chart_pressure_unit:'Druk (bar)', chart_flow_unit:'Pompstroom (ml/s)',
     chart_time:(s)=>`Tijd: ${s}`,
+    delta_vs_shot:(n)=>`vs. Shot ${n}`, chart_prev_suffix:(n)=>` (Shot ${n})`,
     orders_just_now:'zojuist',
     live_idle_text:'Zodra een shot start, verschijnen hier de realtime gegevens.',
     live_time_unit:'min:sec', live_time_label:'Tijd',
@@ -156,7 +157,7 @@ export default {
     compare_title:(a,b)=>`Vergelijking: Shot ${a} vs. Shot ${b}`,
     please_wait:'Wachten …',
     profile_unknown:'Onbekend profiel',
-    nav_settings:'⚙', settings_theme:'Thema', settings_accent:'Kleurenschema', theme_dark:'Donker', theme_light:'Licht', settings_language:'Taal',
+    nav_settings:'⚙', settings_theme:'Thema', settings_accent:'Kleurenschema', theme_dark:'Donker', theme_light:'Licht', theme_crema:'Crema', settings_language:'Taal',
     settings_machines:'Machines', settings_machines_desc:'Beheer de espressomachines die deze app volgt.', settings_machines_add:'+ Machine toevoegen',
     settings_machine_name:'Naam', settings_machine_type:'Type', settings_machine_host:'Host', settings_machine_switch:'HA switch-entiteit (optioneel)',
     settings_machine_test:'Verbinding testen', settings_machine_save:'Opslaan', settings_machine_cancel:'Annuleren', settings_machine_default:'Standaard',
