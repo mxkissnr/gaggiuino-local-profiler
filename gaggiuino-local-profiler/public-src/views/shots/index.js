@@ -3,8 +3,8 @@ import { t }                                                  from '../../i18n.j
 import { apiFetch }                                           from '../../api.js';
 import { LOCALE_MAP, phasePlugin, corsairPlugin, clearChartOnTouchEnd } from '../../constants.js';
 import {
-  esc, avg, avgActive, max, safeLast, fmt, formatTimeLabel,
-  stddev, detectPhases, detectChanneling, scoreClass, shareOrDownloadBlob
+  esc, avg, avgActive, max, fmt, formatTimeLabel,
+  stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting }           from '../../components/sidebar.js';
 import { getShotData, calcShotScore }                         from './utils.js';
@@ -176,30 +176,36 @@ export function updateView() {
   // in the subtitle. nativeId falls back to id for older cached shots.
   if (shotB) {
     const nameB = shotB.profile?.name || shotB.profileName || t('profile_unknown');
-    document.getElementById('topTitle').innerText   = t('compare_title', shotA.nativeId ?? shotA.id, shotB.nativeId ?? shotB.id);
-    document.getElementById('valProfile').innerText = `${nameA} vs. ${nameB}`;
+    document.getElementById('topTitle').innerText = t('compare_title', shotA.nativeId ?? shotA.id, shotB.nativeId ?? shotB.id);
   } else {
-    document.getElementById('topTitle').innerText   = `${nameA} – Shot ${shotA.nativeId ?? shotA.id}`;
-    document.getElementById('valProfile').innerText = nameA;
+    document.getElementById('topTitle').innerText = `${nameA} – Shot ${shotA.nativeId ?? shotA.id}`;
   }
 
   // machineSubtitle (#344): make it reflect the machine that actually owns
   // the shot being viewed, not the global default machine from status.js's
   // periodic poll — see that file's updateStatus() for the corresponding
   // guard (`!S.primaryShotId`) that keeps it from clobbering this back.
+  // In compare mode there's no single "owning" machine worth naming, so it
+  // shows the two profile names being compared instead (#398 dropped the
+  // separate "Profil" meta row that used to carry this).
   const subtitleEl = document.getElementById('machineSubtitle');
   if (subtitleEl) {
-    const machine = S.machines?.find(m => m.id === (shotA.machineId ?? 1));
-    if (machine) subtitleEl.textContent = machine.host ? `${machine.name} · ${machine.host}` : machine.name;
+    if (shotB) {
+      const nameB = shotB.profile?.name || shotB.profileName || t('profile_unknown');
+      subtitleEl.textContent = `${nameA} vs. ${nameB}`;
+    } else {
+      const machine = S.machines?.find(m => m.id === (shotA.machineId ?? 1));
+      if (machine) subtitleEl.textContent = machine.host ? `${machine.name} · ${machine.host}` : machine.name;
+    }
   }
 
   const totalSecs = (shotA.duration || 0) / 10;
-  document.getElementById('duration').innerText =
-    `${Math.floor(totalSecs / 60).toString().padStart(2, '0')}:${Math.floor(totalSecs % 60).toString().padStart(2, '0')}`;
+  document.getElementById('duration').innerText = formatTimeLabel(totalSecs);
 
   const pressureVals  = dA.pressure.map(p => p.y);
   const pressureTimes = dA.pressure.map(p => p.x);
-  document.getElementById('pressure').innerText       = fmt(avgActive(pressureVals, 1.5), ' bar');
+  const avgPressure   = avgActive(pressureVals, 1.5);
+  document.getElementById('pressure').innerText       = fmt(avgPressure, ' bar');
   document.getElementById('targetPressure').innerText = ` / ${fmt(max(dA.targetPressure.map(p => p.y)), ' bar')}`;
   document.getElementById('flow').innerText           = fmt(avgActive(dA.flow.map(p => p.y), 0.2), ' ml/s');
   document.getElementById('targetFlow').innerText     = ` / ${fmt(avgActive(dA.targetFlow.map(p => p.y), 0.2), ' ml/s')}`;
@@ -211,34 +217,38 @@ export function updateView() {
   document.getElementById('targetTemp').innerText       = ` / ${fmt(avg(dA.targetTemp.map(p => p.y)), ' °C')}`;
 
   const finalWeight = max(dA.weight.map(p => p.y));
-  document.getElementById('weight').innerText        = fmt(finalWeight, ' g');
-  document.getElementById('weightFlowSub').innerText = ` / ${fmt(safeLast(dA.weightFlow.map(p => p.y)), ' ml/s')}`;
-  document.getElementById('wf').innerText            = fmt(avgActive(dA.weightFlow.map(p => p.y), 0.1), ' ml/s');
-  document.getElementById('maxWf').innerText         = ` / ${fmt(max(dA.weightFlow.map(p => p.y)), ' max')}`;
+  const ann         = shotA.annotation || {};
 
-  // Ratio
-  const ann      = shotA.annotation || {};
-  const ratioItem = document.getElementById('ratioItem');
+  // Recipe zone (#398): dose -> yield + ratio (with EY as a sub-value) —
+  // both derived from the same dose/finalWeight pair, so they share one
+  // visibility condition (matches the old ratioItem/eyItem gating).
+  const doseYieldCard = document.getElementById('doseYieldCard');
+  const ratioCard     = document.getElementById('ratioCard');
   if (ann.dose && finalWeight && !shotB) {
+    document.getElementById('doseYieldVal').textContent = `${fmt(parseFloat(ann.dose), ' g')} → ${fmt(finalWeight, ' g')}`;
+    doseYieldCard.style.display = '';
+
     const r = (finalWeight / ann.dose).toFixed(1);
-    document.getElementById('ratio').textContent = `${ann.dose}g → ${fmt(finalWeight, 'g')} · 1:${r}`;
-    ratioItem.style.display = '';
+    document.getElementById('ratioVal').textContent = `1:${r}`;
+    const eySub = document.getElementById('eySub');
+    if (ann.tds) {
+      const ey   = (finalWeight * ann.tds) / ann.dose;
+      const eyOk = ey >= 18 && ey <= 22;
+      eySub.textContent = `EY ${ey.toFixed(1)} %`;
+      eySub.className   = 'recipe-card-sub ' + (eyOk ? 'score-great' : ey >= 16 && ey <= 24 ? 'score-ok' : 'score-bad');
+    } else {
+      eySub.textContent = '';
+      eySub.className   = 'recipe-card-sub';
+    }
+    ratioCard.style.display = '';
   } else {
-    ratioItem.style.display = 'none';
+    doseYieldCard.style.display = 'none';
+    ratioCard.style.display     = 'none';
   }
 
-  // EY
-  const eyItem = document.getElementById('eyItem');
-  if (!shotB && ann.dose && ann.tds && finalWeight) {
-    const ey   = (finalWeight * ann.tds) / ann.dose;
-    const eyEl = document.getElementById('ey');
-    eyEl.textContent = `${ey.toFixed(1)} %`;
-    const eyOk = ey >= 18 && ey <= 22;
-    eyEl.className = 'meta-value ' + (eyOk ? 'score-great' : ey >= 16 && ey <= 24 ? 'score-ok' : 'score-bad');
-    eyItem.style.display = '';
-  } else {
-    eyItem.style.display = 'none';
-  }
+  // Bean + grinder — the shot's own annotation, shown regardless of compare mode.
+  const beanGrinder = [ann.coffee, ann.grinder].filter(Boolean).join(' · ');
+  document.getElementById('beanGrinderVal').textContent = beanGrinder || '–';
 
   // Freshness badge
   const freshEl   = document.getElementById('freshnessBadge');
@@ -262,35 +272,40 @@ export function updateView() {
     fwEl.style.display = fw ? '' : 'none';
   }
 
-  // Phases
-  const phases      = !shotB ? detectPhases(pressureTimes, pressureVals) : null;
-  const phasesItem  = document.getElementById('phasesItem');
-  const phaseSubtitle = document.getElementById('phaseSubtitle');
-  if (phases) {
-    const phaseHtml =
-      `<span class="phase-tag">${t('phase_preinfusion')} <span>${formatTimeLabel(phases.preinfusion)}</span></span>` +
-      `<span class="phase-tag">${t('phase_extraction')} <span>${formatTimeLabel(phases.extraction)}</span></span>`;
-    document.getElementById('phases').innerHTML = phaseHtml;
-    phasesItem.style.display = '';
-    if (phaseSubtitle) { phaseSubtitle.innerHTML = phaseHtml; phaseSubtitle.style.display = ''; }
-  } else {
-    phasesItem.style.display = 'none';
-    if (phaseSubtitle) phaseSubtitle.style.display = 'none';
-  }
+  // Phases -> a compact sub-line on the Recipe zone's duration card (#398).
+  const phases    = !shotB ? detectPhases(pressureTimes, pressureVals) : null;
+  const phasesSub = document.getElementById('phasesSub');
+  phasesSub.textContent = phases
+    ? `${t('phase_preinfusion')} ${formatTimeLabel(phases.preinfusion)} · ${t('phase_extraction')} ${formatTimeLabel(phases.extraction)}`
+    : '';
 
   // Channeling
   const channeling = !shotB && detectChanneling(pressureTimes, pressureVals);
   document.getElementById('channelingWarning').style.display = channeling ? '' : 'none';
 
-  // Grind advice
-  const adviceEl = document.getElementById('grindAdvice');
-  const advice   = !shotB ? calcGrindAdvice(shotA, dA) : null;
-  if (advice) {
-    adviceEl.className = `grind-advice grind-${advice.type}`;
-    document.getElementById('grindAdviceIcon').textContent = advice.icon;
-    document.getElementById('grindAdviceText').textContent = advice.text;
-    adviceEl.style.display = '';
-  } else { adviceEl.style.display = 'none'; }
+  // Verdict header (#398): score ring (unified scale, #397) + the dial-in
+  // advice as a plain-language headline, replacing the old green banner.
+  const verdictHeader = document.getElementById('verdictHeader');
+  if (!shotB) {
+    const advice = calcGrindAdvice(shotA, dA);
+    const sc     = calcShotScore(shotA, dA);
+    const ring    = document.getElementById('verdictRing');
+    const ringVal = document.getElementById('verdictRingVal');
+    ring.style.setProperty('--ring-pct', sc ?? 0);
+    ring.style.setProperty('--ring-color', scoreColor(sc));
+    ringVal.textContent = sc !== null ? sc : '–';
+    document.getElementById('verdictHeadline').textContent = advice ? `${advice.icon} ${advice.text}` : t('verdict_no_data');
+    document.getElementById('verdictSubline').textContent = [
+      nameA,
+      `Shot ${shotA.nativeId ?? shotA.id}`,
+      ann.coffee || null,
+      formatTimeLabel(totalSecs),
+      avgPressure != null ? `${avgPressure.toFixed(1)} bar Ø` : null
+    ].filter(Boolean).join(' · ');
+    verdictHeader.style.display = '';
+  } else {
+    verdictHeader.style.display = 'none';
+  }
 
   const compEl  = document.getElementById('grindAdviceComparative');
   const compAdv = !shotB ? calcComparativeGrindAdvice(shotA, S.shots) : null;
@@ -353,22 +368,6 @@ export function updateView() {
     } else {
       obEl.style.display = 'none';
     }
-  }
-
-  // Shot score
-  const scoreBadge = document.getElementById('shotScoreBadge');
-  const scoreVal   = document.getElementById('shotScoreVal');
-  if (!shotB && scoreBadge && scoreVal) {
-    const sc = calcShotScore(shotA, dA);
-    if (sc !== null) {
-      scoreVal.textContent = sc;
-      scoreVal.className   = 'score-num ' + scoreClass(sc);
-      scoreBadge.style.display = '';
-    } else {
-      scoreBadge.style.display = 'none';
-    }
-  } else if (scoreBadge) {
-    scoreBadge.style.display = 'none';
   }
 
   renderAnnotationPanel(shotA);

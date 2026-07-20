@@ -537,21 +537,58 @@
         .sprofiler-header h1     { font-size: 1.75rem; font-weight: 600; color: #fff; margin: 0 0 4px; }
         .sprofiler-header p      { font-size: .875rem; color: var(--gray-400); margin: 0; }
 
-        .sprofiler-meta-grid {
-            display: flex;
-            justify-content: space-between;
-            font-size: .875rem;
-            margin-bottom: 20px;
-            gap: 40px;
-        }
-        .meta-column { max-width: 450px; flex: 1; }
-        .divide-y > * + * { border-top: 1px solid var(--gray-800); }
-        .meta-item { display: flex; flex-direction: column; padding: 9px 0; }
-        .meta-item:first-child { padding-top: 0; }
-        .meta-item:last-child  { padding-bottom: 0; }
-        .meta-label { margin-bottom: 4px; color: var(--gray-400); text-transform: uppercase; font-size: .7rem; letter-spacing: .05em; }
-        .meta-value { font-weight: 600; color: #fff; font-size: 1rem; }
         .meta-sub   { font-size: .85rem; color: var(--gray-500); font-weight: normal; margin-left: 6px; }
+
+        /* ── Verdict header (#398) ── */
+        .verdict-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 18px;
+            background: var(--gray-900);
+            border-radius: var(--radius);
+            margin-bottom: 20px;
+        }
+        .verdict-ring {
+            width: 58px; height: 58px; flex-shrink: 0;
+            border-radius: 50%;
+            /* --ring-color / --ring-pct set inline per shot (unified score scale, #397) */
+            background: conic-gradient(var(--ring-color, var(--gray-600)) calc(var(--ring-pct, 0) * 1%), var(--gray-800) 0);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .verdict-ring-inner {
+            width: 46px; height: 46px;
+            border-radius: 50%;
+            background: var(--gray-950);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.05rem; font-weight: 700; color: #fff;
+        }
+        .verdict-text      { min-width: 0; }
+        .verdict-headline  { font-size: 1.05rem; font-weight: 700; color: #fff; }
+        .verdict-subline   { font-size: .8rem; color: var(--gray-500); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* ── Recipe zone (#398): large cards, the values the user sets ── */
+        .recipe-zone {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .recipe-card       { background: var(--gray-900); border-radius: var(--radius); padding: 14px 16px; }
+        .recipe-card-label { display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin-bottom: 6px; }
+        .recipe-card-value { display: block; font-size: 1.1rem; font-weight: 700; color: #fff; }
+        .recipe-card-sub   { display: block; font-size: .75rem; color: var(--gray-500); margin-top: 3px; }
+
+        /* ── Process zone (#398): compact cards, the values the machine produced ── */
+        .process-zone {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .process-card       { background: var(--gray-900); border-radius: var(--radius); padding: 10px 12px; }
+        .process-card-label { display: block; font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin-bottom: 4px; }
+        .process-card-value { font-size: .9rem; font-weight: 600; color: var(--gray-200); }
 
         .chart-container { position: relative; height: 480px; width: 100%; }
 
@@ -1189,9 +1226,6 @@
             letter-spacing: .03em;
         }
 
-        /* ── Phase subtitle (mobile only) ── */
-        #phaseSubtitle { display: none; }
-
         /* ── Phase tags ── */
         .phase-tag {
             display: inline-block;
@@ -1207,10 +1241,6 @@
         /* ── Temp stability / meta badge ── */
         .meta-badge { font-size: .8rem; color: var(--gray-500); margin-left: 4px; font-weight: normal; }
 
-        /* ── Score badge ── */
-        .score-badge { text-align: center; flex-shrink: 0; }
-        .score-num   { font-size: 2rem; font-weight: 700; line-height: 1; margin-bottom: 2px; font-variant-numeric: tabular-nums; }
-        .score-lbl   { font-size: .6rem; text-transform: uppercase; letter-spacing: .08em; color: var(--gray-600); }
         /* #397: unified 3-tier score scale — green >=90 / yellow >=70 / red
            below, identical to .ss-* (sidebar) and the score-ring conic-gradient
            (#398 verdict header). No per-view thresholds. */
@@ -1386,37 +1416,21 @@
             #chart-area, #live-view { padding: 16px; }
             .sprofiler-header { margin-bottom: 10px; }
             .sprofiler-header h1 { font-size: 1.3rem; }
-            /* The title block (flex:1;min-width:0) and the score/export-buttons
-               block (flex-shrink:0) are both set via inline style="" in index.html
+            /* The title block (flex:1;min-width:0) and the export-buttons block
+               (flex-shrink:0) are both set via inline style="" in index.html
                (display:flex;flex-wrap:wrap on the parent). flex-wrap only kicks in once
                shrinkable items can't shrink further — but flex:1;min-width:0 lets the
                title block shrink almost to nothing instead of wrapping, so on narrow
                viewports the title/subtitle get squeezed into a sliver and visually
-               overlap the score badge/buttons instead of wrapping onto their own row.
-               Forcing both children to flex-basis:100% makes each claim the full row
-               width, so they stack as two clean rows. */
-            /* Score badge sits top-right, pinned to the header itself rather
-               than inline with the export buttons — the button row then
-               starts its own line, left-aligned flush with the title above
-               it, instead of being pushed right by flex-end/the badge. */
-            .sprofiler-header { position: relative; }
-            .sprofiler-header > div:first-child { flex: 1 1 100% !important; padding-right: 56px; }
+               overlap the buttons instead of wrapping onto their own row. Forcing
+               both children to flex-basis:100% makes each claim the full row width,
+               so they stack as two clean rows. */
+            .sprofiler-header > div:first-child { flex: 1 1 100% !important; }
             .sprofiler-header > div:last-child   { flex: 1 1 100% !important; flex-wrap: wrap; justify-content: flex-start; }
-            .score-badge { position: absolute; top: 0; right: 0; }
-            .sprofiler-meta-grid { gap: 0; flex-direction: column; }
-            .meta-column       { max-width: 100%; }
-            .meta-column[style*="text-align: right"] { text-align: left !important; }
-            .meta-item {
-                flex-direction: row;
-                align-items: baseline;
-                justify-content: space-between;
-                padding: 5px 0;
-                gap: 8px;
-            }
-            .meta-label { margin-bottom: 0; }
-            .meta-value { font-size: .875rem; text-align: right; }
-            #phasesItem { display: none !important; }
-            #phaseSubtitle { display: block; }
+            .verdict-header     { padding: 12px 14px; gap: 12px; }
+            .verdict-ring       { width: 46px; height: 46px; }
+            .verdict-ring-inner { width: 36px; height: 36px; font-size: .85rem; }
+            .verdict-headline   { font-size: .95rem; }
             .annotation-fields { grid-template-columns: 1fr; }
             .annotation-field.full-width { grid-column: 1; }
             .chart-container, .live-chart-container { height: 360px; }
@@ -1441,7 +1455,6 @@
             #sidebar h2        { padding: 16px 18px; }
             #collapseBtn       { margin-right: 0; }
             .mode-btn          { padding: 12px 14px; font-size: .8rem; }
-            .score-num         { font-size: 1.5rem; }
 
             /* Annotation panel — mobile improvements */
             .annotation-panel  { padding: 14px; margin-top: 16px; }
