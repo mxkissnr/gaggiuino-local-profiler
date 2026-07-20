@@ -17,7 +17,7 @@
 import { S }             from '../state.js';
 import { t }              from '../i18n.js';
 import { apiFetch }       from '../api.js';
-import { esc }            from '../utils.js';
+import { esc, scoreColor } from '../utils.js';
 import { getShotData, calcShotScore } from './shots/utils.js';
 import { _miniShotChart } from './shots/grind.js';
 import { suggestPhaseAdjustment, applyPhaseAdjustment, isProfileDialinConverged, profileDialinConvergenceReason }
@@ -285,7 +285,7 @@ function _renderRound(s) {
     return `<div class="dw-round">
       <div class="dw-round-label">${t('dialin_wizard_round_label', roundNum)}</div>
       <div class="dw-score-row">
-        <div class="dw-score-chip" style="background:${_scoreColor(rr.score)}">${rr.score ?? '–'}</div>
+        <div class="dw-score-chip" style="background:${scoreColor(rr.score)}">${rr.score ?? '–'}</div>
       </div>
       <div class="pdw-symptom-label">${t('profile_dialin_symptom_prompt')}</div>
       <div class="pdw-symptom-row">${symptomButtons}</div>
@@ -322,7 +322,7 @@ function _renderSummary(s) {
     <div class="dw-summary-title">${title}</div>
     ${reasonText ? `<div class="dw-summary-reason">${esc(reasonText)}</div>` : ''}
     ${best ? `<div class="dw-summary-best">
-      <div class="dw-score-chip" style="background:${_scoreColor(best.score)}">${best.score}</div>
+      <div class="dw-score-chip" style="background:${scoreColor(best.score)}">${best.score}</div>
       <div>${t('profile_dialin_summary_best')}</div>
     </div>` : ''}
     <div class="dw-actions">
@@ -336,7 +336,7 @@ function _renderSummary(s) {
 function _renderChips(rounds) {
   if (!rounds?.length) return '';
   return `<div class="dw-chip-strip">${rounds.map(r =>
-    `<div class="dw-chip" style="border-color:${_scoreColor(r.score)}">${esc(t('profile_dialin_symptom_' + r.symptom))} → ${r.score ?? '–'}</div>`
+    `<div class="dw-chip" style="border-color:${scoreColor(r.score)}">${esc(t('profile_dialin_symptom_' + r.symptom))} → ${r.score ?? '–'}</div>`
   ).join('')}</div>`;
 }
 
@@ -344,9 +344,3 @@ function _bestRound(rounds) {
   return [...(rounds || [])].filter(r => r.score != null).sort((a, b) => b.score - a.score)[0] || null;
 }
 
-function _scoreColor(score) {
-  if (score == null) return '#52525b';
-  if (score >= 80) return '#22c55e';
-  if (score >= 60) return '#eab308';
-  return '#ef4444';
-}

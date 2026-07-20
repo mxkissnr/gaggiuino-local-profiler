@@ -200,10 +200,16 @@ export function parseDMY(s) {
 }
 
 // ── Score helpers ─────────────────────────────────────────────────────────
+// Unified 3-tier scale (#397): green >= 90, yellow >= 70, red below — the
+// single source of truth for shot-score coloring across sidebar, shot
+// detail, analytics, and the dial-in wizards. No per-view thresholds.
 export function scoreClass(n) {
-  return n >= 88 ? 'score-great' : n >= 75 ? 'score-good' : n >= 60 ? 'score-ok' : n >= 45 ? 'score-poor' : 'score-bad';
+  return n >= 90 ? 'score-great' : n >= 70 ? 'score-ok' : 'score-bad';
 }
 
+// Returns a CSS custom-property reference so callers stay theme-aware
+// (accent/light-dark) instead of a hardcoded hex.
 export function scoreColor(sc) {
-  return sc >= 88 ? '#16a34a' : sc >= 75 ? '#65a30d' : sc >= 60 ? '#ca8a04' : sc >= 45 ? '#ea580c' : '#dc2626';
+  if (sc == null) return 'var(--gray-600)';
+  return sc >= 90 ? 'var(--ok)' : sc >= 70 ? 'var(--warn)' : 'var(--err)';
 }
