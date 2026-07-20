@@ -1,5 +1,5 @@
 export default {
-    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library',
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Analytics', nav_library:'Library', nav_more:'More',
     sort_newest:'Newest', sort_score:'Score', sort_rating:'Rating', sort_duration:'Duration',
     search_placeholder:'Profile, Coffee, Grinder …', trash_label:'Trash',
     no_sync:'no sync', btn_sync:'↻ Sync',

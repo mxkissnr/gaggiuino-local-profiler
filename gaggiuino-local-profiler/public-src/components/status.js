@@ -56,6 +56,9 @@ export async function updateStatus() {
     }
     const ordersBtn = document.getElementById('btnOrders');
     if (ordersBtn) ordersBtn.style.display = s.ordersFeature ? '' : 'none';
+    // Bottom nav "Mehr" sheet (#403, mobile) mirrors the same feature gate.
+    const bnOrders = document.getElementById('bnOrders');
+    if (bnOrders) bnOrders.style.display = s.ordersFeature ? '' : 'none';
     if ('isDemo' in s) updateDemoBadge(s.isDemo);
     if (switchRes?.ok) updatePowerButton(await switchRes.json());
     else updatePowerButton({ configured: false });
@@ -65,12 +68,14 @@ export async function updateStatus() {
 export function updatePowerButton(sw) {
   const btn = document.getElementById('powerBtn');
   const liveBtn = document.getElementById('btnLive');
+  const bnLive  = document.getElementById('bnLive');
   if (!sw.configured) {
     btn.style.display = 'none';
     S.machinePowerState = null;
     liveBtn.style.display = '';
     liveBtn.disabled = false;
     liveBtn.title = '';
+    if (bnLive) bnLive.style.display = '';
     return;
   }
   btn.style.display = '';
@@ -85,6 +90,8 @@ export function updatePowerButton(sw) {
   liveBtn.style.display = machineOff ? 'none' : '';
   liveBtn.disabled = false;
   liveBtn.title = '';
+  // Bottom nav (#403, mobile) mirrors the same capability gate.
+  if (bnLive) bnLive.style.display = machineOff ? 'none' : '';
   if (machineOff && S.currentMode === 'live') {
     if (window.switchMode) window.switchMode('shots');
   }

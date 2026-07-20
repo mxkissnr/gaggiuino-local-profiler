@@ -1,5 +1,5 @@
 export default {
-    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria',
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria', nav_more:'Altro',
     sort_newest:'Recenti', sort_score:'Score', sort_rating:'Voto', sort_duration:'Durata',
     search_placeholder:'Profilo, Caffè, Macinino …', trash_label:'Cestino',
     no_sync:'nessun sync', btn_sync:'↻ Sync',

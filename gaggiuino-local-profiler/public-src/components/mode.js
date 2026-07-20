@@ -20,6 +20,15 @@ export function switchMode(mode) {
   document.getElementById('btnOrders').classList.toggle('active',      mode === 'orders');
   document.getElementById('btnSettings').classList.toggle('active',    mode === 'settings');
 
+  // Bottom nav (#403, mobile) — mirrors the mode-bar active state above;
+  // dialin/maintenance/orders/settings all collapse under "Mehr" there.
+  const moreModes = mode === 'dialin' || mode === 'maintenance' || mode === 'orders' || mode === 'settings';
+  document.getElementById('bnShots').classList.toggle('active',     mode === 'shots');
+  document.getElementById('bnLive').classList.toggle('active',      mode === 'live');
+  document.getElementById('bnLibrary').classList.toggle('active',   mode === 'library');
+  document.getElementById('bnAnalytics').classList.toggle('active', mode === 'analytics');
+  document.getElementById('bnMore').classList.toggle('active',      moreModes);
+
   document.getElementById('shots-view').style.display       = mode === 'shots'       ? 'flex' : 'none';
   document.getElementById('live-view').style.display        = mode === 'live'        ? 'flex' : 'none';
   document.getElementById('analytics-view').style.display   = mode === 'analytics'   ? 'flex' : 'none';

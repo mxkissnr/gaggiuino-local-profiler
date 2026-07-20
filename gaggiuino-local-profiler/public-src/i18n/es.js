@@ -1,5 +1,5 @@
 export default {
-    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca',
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Estadísticas', nav_library:'Biblioteca', nav_more:'Más',
     sort_newest:'Recientes', sort_score:'Score', sort_rating:'Valoración', sort_duration:'Duración',
     search_placeholder:'Perfil, Café, Molino …', trash_label:'Papelera',
     no_sync:'sin sync', btn_sync:'↻ Sync',

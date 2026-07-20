@@ -1,5 +1,5 @@
 export default {
-    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistieken', nav_library:'Bibliotheek',
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistieken', nav_library:'Bibliotheek', nav_more:'Meer',
     sort_newest:'Nieuwste', sort_score:'Score', sort_rating:'Beoordeling', sort_duration:'Duur',
     search_placeholder:'Profiel, Koffie, Molen …', trash_label:'Prullenbak',
     no_sync:'geen sync', btn_sync:'↻ Sync',

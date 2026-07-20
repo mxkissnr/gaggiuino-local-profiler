@@ -1,5 +1,5 @@
 export default {
-    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque',
+    nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiques', nav_library:'Bibliothèque', nav_more:'Plus',
     sort_newest:'Récents', sort_score:'Score', sort_rating:'Note', sort_duration:'Durée',
     search_placeholder:'Profil, Café, Moulin …', trash_label:'Corbeille',
     no_sync:'pas de sync', btn_sync:'↻ Sync',

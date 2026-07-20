@@ -59,13 +59,23 @@ export async function loadMachines() {
 export function renderMachineSwitcher() {
   const el = document.getElementById('machineSwitcher');
   if (!el) return;
+  // #403 (mobile): on narrow viewports #mode-bar only still exists to host
+  // this switcher (its mode-btn tab row moved to the bottom nav) — collapse
+  // the now-empty bar entirely for single-machine installs instead of
+  // leaving a blank strip above the content.
+  const modeBar = document.getElementById('mode-bar');
   const machines = S.machines || [];
-  if (machines.length < 2) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  if (machines.length < 2) {
+    el.style.display = 'none'; el.innerHTML = '';
+    if (modeBar) modeBar.classList.add('mode-bar-empty');
+    return;
+  }
 
   el.innerHTML = `<option value="all">${escapeHtml(t('machine_switcher_all'))}</option>` +
     machines.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
   el.value = String(S.activeMachineId ?? 'all');
   el.style.display = '';
+  if (modeBar) modeBar.classList.remove('mode-bar-empty');
 }
 
 export function switchActiveMachine(rawValue) {
