@@ -4,6 +4,12 @@ import { apiFetch } from '../api.js';
 import { esc } from '../utils.js';
 import { LOCALE_MAP } from '../constants.js';
 
+// #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
+// .rail-icon treatment as the 🔥 trend toggle, #415). Used both in the
+// use-beans/use-milks toggle buttons and their inline notes below.
+const BEAN_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12c0-4 3-7.5 7-7.5S19 8 19 12s-3.5 7-7.5 7A6.5 6.5 0 0 1 6 12z"/><path d="M8.5 15c2-1 3-3 3-6"/></svg>';
+const MILK_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 4v13a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V7z"/><path d="M9 3 12 6 15 3"/><path d="M8 10h8"/></svg>';
+
 export function toggleOrdersMenu() {
   S._ordersMenuOpen = !S._ordersMenuOpen;
   document.getElementById('ordersMenuBody').style.display = S._ordersMenuOpen ? '' : 'none';
@@ -329,9 +335,9 @@ export async function renderOrdersMenuAdmin(menu) {
       `<span class="orders-menu-variant-chip">${esc(v)}<button class="orders-menu-variant-del" data-menu-id="${esc(item.id)}" data-variant="${esc(v)}" title="✕">×</button></span>`
     ).join('');
     const variantSection = useBeans
-      ? `<span class="orders-use-beans-note">🫘 ${t('orders_use_beans_note')}</span>`
+      ? `<span class="orders-use-beans-note">${BEAN_ICON_SVG} ${t('orders_use_beans_note')}</span>`
       : useMilks
-      ? `<span class="orders-use-beans-note">🥛 ${t('orders_use_milks_note')}</span>`
+      ? `<span class="orders-use-beans-note">${MILK_ICON_SVG} ${t('orders_use_milks_note')}</span>`
       : `${chipHtml}
          <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" placeholder="${t('orders_variant_ph')}">
          <button class="orders-menu-variant-btn" data-variant-add="${esc(item.id)}">${t('orders_variant_add_btn')}</button>`;
@@ -341,8 +347,8 @@ export async function renderOrdersMenuAdmin(menu) {
       <div class="orders-menu-item-top">
         <span>${esc(item.emoji)}</span>
         <span class="orders-menu-item-name">${esc(item.name)}</span>
-        <button class="orders-menu-use-beans${useBeans ? ' active' : ''}" data-menu-use-beans="${esc(item.id)}" title="${t('orders_use_beans_toggle')}">🫘</button>
-        <button class="orders-menu-use-milks${useMilks ? ' active' : ''}" data-menu-use-milks="${esc(item.id)}" title="${t('orders_use_milks_toggle')}">🥛</button>
+        <button class="orders-menu-use-beans${useBeans ? ' active' : ''}" data-menu-use-beans="${esc(item.id)}" title="${t('orders_use_beans_toggle')}">${BEAN_ICON_SVG}</button>
+        <button class="orders-menu-use-milks${useMilks ? ' active' : ''}" data-menu-use-milks="${esc(item.id)}" title="${t('orders_use_milks_toggle')}">${MILK_ICON_SVG}</button>
         <button class="orders-menu-trend${item.trending ? ' active' : ''}" data-menu-trend="${esc(item.id)}" title="${t('orders_trending_toggle')}"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></button>
         <button class="orders-menu-del" data-menu-del="${esc(item.id)}" title="${t('orders_confirm_delete_item')}">✕</button>
       </div>
