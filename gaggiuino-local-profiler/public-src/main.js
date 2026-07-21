@@ -46,6 +46,7 @@ import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sor
 import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
+import { renderBottomNav, renderBottomNavSettings, closeMoreSheet } from './components/bottom-nav.js';
 
 import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggleTrash,
          trashShot, restoreShot, permanentDeleteShot,
@@ -150,23 +151,6 @@ function copyApiToken() {
   navigator.clipboard?.writeText(S.glpToken)
     .then(() => showToast(t('settings_api_token_copied')))
     .catch(() => {});
-}
-
-// ── Bottom navigation "Mehr" sheet (#403, mobile) ──────────────────────────
-// Collapses Bezugslog/Wartung/Einstellungen (+ Bestellungen when enabled)
-// behind the bottom nav's overflow entry — a small popover with its own
-// backdrop-click-to-close, unrelated to the mobile shot-list/detail
-// sub-view toggling in sidebar.js.
-function toggleMoreSheet() {
-  const open = document.getElementById('moreSheet').classList.toggle('open');
-  document.getElementById('more-sheet-backdrop').classList.toggle('visible', open);
-  document.getElementById('bnMore').setAttribute('aria-expanded', open ? 'true' : 'false');
-}
-
-function closeMoreSheet() {
-  document.getElementById('moreSheet').classList.remove('open');
-  document.getElementById('more-sheet-backdrop').classList.remove('visible');
-  document.getElementById('bnMore').setAttribute('aria-expanded', 'false');
 }
 
 // ── Expose everything on window (for HTML onclick handlers) ───────────────
@@ -550,20 +534,17 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sidebar').addEventListener('touchstart', handleDrawerTouchStart, { passive: true });
   document.getElementById('sidebar').addEventListener('touchend', handleDrawerTouchEnd, { passive: true });
 
-  // ── Bottom navigation (#403, mobile) ─────────────────────────────────────
+  // ── Bottom navigation (#403, #443, mobile) ───────────────────────────────
   // #431: Shots opens the shot detail directly (latest/last-selected shot) —
   // the shot list is no longer reachable from here at all, only via the
-  // burger drawer (#425's openShotDrawer, wired above).
-  document.getElementById('bnShots').addEventListener('click', () => { switchMode('shots'); setMobileShotSubview('detail'); });
-  document.getElementById('bnLive').addEventListener('click', () => switchMode('live'));
-  document.getElementById('bnLibrary').addEventListener('click', () => switchMode('library'));
-  document.getElementById('bnAnalytics').addEventListener('click', () => switchMode('analytics'));
-  document.getElementById('bnMore').addEventListener('click', toggleMoreSheet);
+  // burger drawer (#425's openShotDrawer, wired above). #443: which
+  // destinations land in the bar vs. the "Mehr" sheet, and their click
+  // wiring, is now built by renderBottomNav() (components/bottom-nav.js)
+  // from the user's glp_bottom_nav_config — only the static backdrop needs
+  // wiring here.
+  renderBottomNav();
+  renderBottomNavSettings();
   document.getElementById('more-sheet-backdrop').addEventListener('click', closeMoreSheet);
-  document.getElementById('bnDialin').addEventListener('click', () => { closeMoreSheet(); switchMode('dialin'); });
-  document.getElementById('bnMaintenance').addEventListener('click', () => { closeMoreSheet(); switchMode('maintenance'); });
-  document.getElementById('bnOrders').addEventListener('click', () => { closeMoreSheet(); switchMode('orders'); });
-  document.getElementById('bnSettings').addEventListener('click', () => { closeMoreSheet(); switchMode('settings'); });
   document.getElementById('exportAllCsvBtn').addEventListener('click', exportAllCSV);
   document.getElementById('exportShotBtn').addEventListener('click', exportShot);
   document.getElementById('exportProfileBtn').addEventListener('click', exportProfile);

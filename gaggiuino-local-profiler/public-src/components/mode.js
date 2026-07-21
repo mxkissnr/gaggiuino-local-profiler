@@ -1,5 +1,6 @@
 import { S } from '../state.js';
 import { setMobileShotSubview, updateMobileShotSidebarVisibility } from './sidebar.js';
+import { applyBottomNavActiveState } from './bottom-nav.js';
 
 export function goToShot(id) {
   switchMode('shots');
@@ -30,14 +31,12 @@ export function switchMode(mode) {
   document.getElementById('btnOrders').classList.toggle('active',      mode === 'orders');
   document.getElementById('btnSettings').classList.toggle('active',    mode === 'settings');
 
-  // Bottom nav (#403, mobile) — mirrors the rail's active state above;
-  // dialin/maintenance/orders/settings all collapse under "Mehr" there.
-  const moreModes = mode === 'dialin' || mode === 'maintenance' || mode === 'orders' || mode === 'settings';
-  document.getElementById('bnShots').classList.toggle('active',     mode === 'shots');
-  document.getElementById('bnLive').classList.toggle('active',      mode === 'live');
-  document.getElementById('bnLibrary').classList.toggle('active',   mode === 'library');
-  document.getElementById('bnAnalytics').classList.toggle('active', mode === 'analytics');
-  document.getElementById('bnMore').classList.toggle('active',      moreModes);
+  // Bottom nav (#403, #443, mobile) — mirrors the rail's active state above.
+  // Which bn* id is active vs. which container it's currently rendered in
+  // (main bar or "Mehr" sheet) is user-configurable since #443, so this is
+  // delegated to bottom-nav.js's own DOM-containment-based projection
+  // instead of a hardcoded mode-name list here.
+  applyBottomNavActiveState(mode);
 
   document.getElementById('shots-view').style.display       = mode === 'shots'       ? 'flex' : 'none';
   document.getElementById('live-view').style.display        = mode === 'live'        ? 'flex' : 'none';

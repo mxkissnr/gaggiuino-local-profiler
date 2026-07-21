@@ -160,6 +160,8 @@ export default {
     please_wait:'Warten …',
     profile_unknown:'Unbekanntes Profil',
     nav_settings:'Einstellungen', settings_theme:'Theme', settings_accent:'Farbschema', theme_dark:'Dark', theme_light:'Hell', theme_crema:'Crema', settings_language:'Sprache',
+    settings_bottom_nav:'Mobile Navigationsleiste', settings_bottom_nav_desc:'Wähle bis zu 4 Ziele für die untere Navigationsleiste auf dem Handy. Alles andere landet unter "Mehr".',
+    settings_bottom_nav_checkbox_label:'In der Leiste zeigen', settings_bottom_nav_move_up:'Nach oben verschieben', settings_bottom_nav_move_down:'Nach unten verschieben',
     settings_machines:'Maschinen', settings_machines_desc:'Verwalte die Espressomaschinen, die diese App überwacht.', settings_machines_add:'+ Maschine hinzufügen',
     settings_machine_name:'Name', settings_machine_type:'Typ', settings_machine_host:'Host', settings_machine_switch:'HA Switch-Entität (optional)',
     settings_machine_test:'Verbindung testen', settings_machine_save:'Speichern', settings_machine_cancel:'Abbrechen', settings_machine_default:'Standard',
