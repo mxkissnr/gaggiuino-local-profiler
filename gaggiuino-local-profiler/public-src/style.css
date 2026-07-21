@@ -300,7 +300,6 @@
            narrow desktop widths via the -scroll wrapper. Mobile hides the
            whole row (see the max-width:768px block) and uses #bottom-nav
            instead. ── */
-        .topbar-brand { display: flex; align-items: center; flex-shrink: 0; color: var(--accent); padding: 0 2px; }
         .topbar-nav-scroll {
             flex: 1;
             min-width: 0;
@@ -1505,7 +1504,7 @@
             /* #424: the desktop topbar nav row is desktop-only — mobile
                navigates via #bottom-nav instead. The burger drawer trigger
                (#425) takes its place. */
-            .topbar-nav-scroll, .topbar-brand { display: none; }
+            .topbar-nav-scroll { display: none; }
             .mobile-drawer-btn { display: flex; }
             /* #410: #sidebar (shot list) is a full-screen alternate of the
                Shots tab now, not a drawer overlay — shown/hidden via plain
