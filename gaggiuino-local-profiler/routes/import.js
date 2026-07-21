@@ -169,6 +169,12 @@ router.get('/api/import/url', async (req, res) => {
         if (!bean) return res.status(404).json({ error: 'product not found on page' });
         bean.importMethod = method;
         bean.sourceUrl = raw;
+        // #451: extraBrewRecipes candidates are built before sourceUrl is known
+        // (enrichGenericBeanFromHtml has no access to the request URL) — stamp
+        // it on now so the import dialog can pass it straight to recipe creation.
+        if (Array.isArray(bean.extraBrewRecipes)) {
+            bean.extraBrewRecipes = bean.extraBrewRecipes.map(r => ({ ...r, sourceUrl: raw }));
+        }
 
         const dup = findDuplicateBean(bean, loadLibrary().beans);
         if (dup) bean.duplicateWarning = { id: dup.id, name: dup.name, roaster: dup.roaster || '' };

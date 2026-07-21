@@ -287,6 +287,7 @@ export default {
     lib_import_method_opengraph:host=>`Source: webpage metadata (${host})`,
     lib_import_unverified_hint:'Auto-detected data — please double-check before saving.',
     lib_import_duplicate_warning:(name)=>`⚠ May already be in your library: ${name}`,
+    lib_import_extra_recipes_title:'Also import as recipe:',
     lib_import_settings_btn:`${GEAR_ICON_SVG} Sources`, lib_import_settings_title:'Import sources',
     lib_import_settings_custom_label:'Custom Shopify shops',
     lib_import_settings_add_domain_ph:'shop.example.com', lib_import_settings_add_domain_btn:'Add',

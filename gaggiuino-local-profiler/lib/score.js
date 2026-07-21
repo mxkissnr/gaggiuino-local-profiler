@@ -19,8 +19,24 @@ function _detectChanneling(times, pressures) {
   return false;
 }
 
+// "1:2.4" -> 2.4 — the bean form's own brewRatio convention (see
+// sanitize-bean.js). Anything that doesn't match (empty, freeform notes,
+// old data predating the field) yields null so callers fall back cleanly.
+function _parseBrewRatioTarget(brewRatio) {
+  if (!brewRatio) return null;
+  const m = String(brewRatio).match(/^\s*1\s*:\s*(\d+(?:\.\d+)?)\s*$/);
+  return m ? parseFloat(m[1]) : null;
+}
+
 // Weighted: pressure 25, temp stability 20, duration 20, brew ratio 20, channeling 15.
-function calcShotScore(shot) {
+// `bean` (#450) is the coffee-library entry matching the shot's own
+// annotation.coffee, resolved by the caller — optional. When absent, or when
+// it has no brewTempC/brewRatio set, scoring is byte-identical to before
+// #450 (generic fixed bands). When present, its own recommendation becomes
+// the target instead of the generic band — but never overrides the shot's
+// own recorded target-temperature curve, which stays the highest-priority
+// source since it reflects what the profile actually asked for.
+function calcShotScore(shot, bean) {
   if (!shot) return null;
   const d = shot.datapoints || {};
   const p = (d.pressure || []).map(v => v / 10);
@@ -40,12 +56,17 @@ function calcShotScore(shot) {
     const sd = _stddev(tVals) || 0;
     const stab = sd <= 0.3 ? 100 : sd <= 0.7 ? 90 : sd <= 1.5 ? 72
       : sd <= 3 ? 50 : Math.max(15, 50 - (sd - 3) * 12);
-    // accuracy vs the shot's target temperature (fallback band 90–96 °C when no target)
+    // accuracy vs. (in priority order) the shot's own target curve, the
+    // bean's brewTempC recommendation (#450), or a fallback 90–96 °C band.
     const avgT = tVals.reduce((a, b) => a + b, 0) / tVals.length;
     const tgt  = (d.targetTemperature || []).map(v => v / 10).filter(v => v > 0);
     let acc;
     if (tgt.length) {
       const dev = Math.abs(avgT - tgt.reduce((a, b) => a + b, 0) / tgt.length);
+      acc = dev <= 0.5 ? 100 : dev <= 1 ? 90 : dev <= 2 ? 75
+          : dev <= 4 ? 50 : Math.max(15, 50 - (dev - 4) * 8);
+    } else if (bean && typeof bean.brewTempC === 'number' && bean.brewTempC > 0) {
+      const dev = Math.abs(avgT - bean.brewTempC);
       acc = dev <= 0.5 ? 100 : dev <= 1 ? 90 : dev <= 2 ? 75
           : dev <= 4 ? 50 : Math.max(15, 50 - (dev - 4) * 8);
     } else {
@@ -71,10 +92,18 @@ function calcShotScore(shot) {
   const finalW = wArr.length ? Math.max(...wArr.map(v => v / 10)) : 0;
   if (ann.dose && ann.dose > 0 && finalW) {
     const r = finalW / ann.dose;
-    s = r >= 1.8 && r <= 2.5 ? 100
-      : (r >= 1.5 && r < 1.8) || (r > 2.5 && r <= 3.2) ? 75
-      : r < 1.5 ? Math.max(15, 55 - (1.5 - r) * 40)
-                : Math.max(15, 60 - (r - 3.2) * 22);
+    // Bean's own brewRatio recommendation (#450) replaces the generic
+    // 1.8–2.5 band as the target when set.
+    const beanRatioTarget = bean ? _parseBrewRatioTarget(bean.brewRatio) : null;
+    if (beanRatioTarget != null) {
+      const dev = Math.abs(r - beanRatioTarget);
+      s = dev <= 0.35 ? 100 : dev <= 0.75 ? 75 : Math.max(15, 75 - (dev - 0.75) * 30);
+    } else {
+      s = r >= 1.8 && r <= 2.5 ? 100
+        : (r >= 1.5 && r < 1.8) || (r > 2.5 && r <= 3.2) ? 75
+        : r < 1.5 ? Math.max(15, 55 - (1.5 - r) * 40)
+                  : Math.max(15, 60 - (r - 3.2) * 22);
+    }
     scores.push(Math.round(s)); weights.push(20);
   }
 

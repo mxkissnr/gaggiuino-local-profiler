@@ -523,6 +523,9 @@ export function openBeanForm(bean) {
   if (importNotice) { importNotice.style.display = 'none'; importNotice.innerHTML = ''; }
   const dupWarning = document.getElementById('beanFormDuplicateWarning');
   if (dupWarning) { dupWarning.style.display = 'none'; dupWarning.innerHTML = ''; }
+  const extraRecipes = document.getElementById('beanFormExtraRecipes');
+  if (extraRecipes) { extraRecipes.style.display = 'none'; extraRecipes.innerHTML = ''; }
+  S._urlImportExtraRecipes = null;
   document.getElementById('beanFormName').value      = bean?.name      || '';
   document.getElementById('beanFormRoaster').value   = bean?.roaster   || '';
   document.getElementById('beanFormRoastDate').value = bean?.roastDate || '';
@@ -565,6 +568,9 @@ export function closeBeanForm() {
   S._urlImportedAt     = null;
   S._urlImportImageUrl = null;
   S._urlImportSourceUrl = null;
+  S._urlImportExtraRecipes = null;
+  const extraEl = document.getElementById('beanFormExtraRecipes');
+  if (extraEl) { extraEl.style.display = 'none'; extraEl.innerHTML = ''; }
   document.getElementById('beanAddForm').classList.remove('open');
   document.getElementById('beanAddTrigger').style.display = '';
 }
@@ -612,6 +618,10 @@ export async function saveBean() {
   }
   const body = JSON.stringify(payload);
   const url  = S.beanEditId ? `api/library/bean/${S.beanEditId}` : 'api/library/bean';
+  // #451: capture which opt-in Brew Guide recipe candidates are still
+  // checked before closeBeanForm() clears both the DOM and this state.
+  const extraRecipesToImport = (S._urlImportExtraRecipes || []).filter((_, i) =>
+    document.querySelector(`[data-extra-recipe-idx="${i}"]`)?.checked);
   const r    = await apiFetch(url, { method: S.beanEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
   if (!r.ok) return;
   const saved = await r.json();
@@ -621,9 +631,18 @@ export async function saveBean() {
   } else {
     S.coffeeLibrary.beans.push(saved);
   }
+  for (const recipe of extraRecipesToImport) {
+    const recipeBody = JSON.stringify({ ...recipe, brewMethod: 'espresso', beanName: saved.name });
+    const rr = await apiFetch('api/library/recipe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: recipeBody });
+    if (rr.ok) {
+      if (!S.coffeeLibrary.recipes) S.coffeeLibrary.recipes = [];
+      S.coffeeLibrary.recipes.push(await rr.json());
+    }
+  }
   updateLibraryDatalist();
   closeBeanForm();
   renderBeanList();
+  if (extraRecipesToImport.length) renderRecipeList();
 }
 
 export async function deleteBean(id) {
@@ -827,14 +846,41 @@ function _renderDuplicateWarning(duplicateWarning) {
   el.style.display = '';
 }
 
+// #451: opt-in Brew Guide recipe candidates (e.g. "Milky Espresso") the
+// backend surfaced alongside the bean's own brewTempC/brewRatio block —
+// rendered as checkboxes, actually created in saveBean() only for whichever
+// ones stay checked at save time.
+function _renderExtraRecipeCandidates(extraRecipes) {
+  const el = document.getElementById('beanFormExtraRecipes');
+  if (!el) return;
+  if (!Array.isArray(extraRecipes) || !extraRecipes.length) {
+    el.style.display = 'none'; el.innerHTML = '';
+    return;
+  }
+  const sub = r => [
+    r.targetDose_g != null && r.targetYield_g != null ? `${r.targetDose_g}g → ${r.targetYield_g}g` : null,
+    r.targetTime_s != null ? `${r.targetTime_s}s` : null,
+    r.waterTemp_c != null ? `${r.waterTemp_c}°C` : null,
+  ].filter(Boolean).join(' · ');
+  el.innerHTML = `<div class="lib-import-extra-recipes-title">${esc(t('lib_import_extra_recipes_title'))}</div>` +
+    extraRecipes.map((r, i) => `
+      <label class="lib-import-extra-recipe-row">
+        <input type="checkbox" data-extra-recipe-idx="${i}" checked>
+        <span>${esc(r.name)} <span class="lib-import-extra-recipe-sub">${esc(sub(r))}</span></span>
+      </label>`).join('');
+  el.style.display = '';
+}
+
 function _applyUrlImport(data, variant) {
   S._urlImportSource    = data.source    || null;
   S._urlImportedAt      = data.importedAt || null;
   S._urlImportImageUrl  = data.imageUrl  || null;
   S._urlImportSourceUrl = data.sourceUrl || null;
   openBeanForm();
+  S._urlImportExtraRecipes = Array.isArray(data.extraBrewRecipes) ? data.extraBrewRecipes : null;
   _renderImportNotice(data.importMethod, data.source);
   _renderDuplicateWarning(data.duplicateWarning);
+  _renderExtraRecipeCandidates(data.extraBrewRecipes);
   if (data.name)    document.getElementById('beanFormName').value    = data.name;
   if (data.roaster) document.getElementById('beanFormRoaster').value = data.roaster;
   if (data.notes)   document.getElementById('beanFormNotes').value   = data.notes;

@@ -276,6 +276,17 @@ class LibraryService {
     // named bean's remaining falls below the threshold, notify the barista
     // device (same channel as the preheat notification). The notified flag
     // lives on the active bag, so a new bag re-arms automatically.
+
+    // Case-insensitive bean lookup by name — shared by checkLowStockNotify
+    // below and ShotService.computeScore() (#450, brewTempC/brewRatio-aware
+    // scoring), both resolving a shot's/annotation's free-text coffee name
+    // against the library.
+    findBeanByName(coffeeName) {
+        if (!coffeeName) return null;
+        const name = String(coffeeName).toLowerCase();
+        return (this.getLibrary().beans || []).find(b => String(b.name || '').toLowerCase() === name) || null;
+    }
+
     async checkLowStockNotify(coffeeName) {
         if (!coffeeName) return;
         const lib  = this.getLibrary();

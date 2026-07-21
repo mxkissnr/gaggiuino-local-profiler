@@ -37,3 +37,48 @@ describe('calcShotScore', () => {
         expect(calcShotScore(null)).toBeNull();
     });
 });
+
+// #450: bean's own brewTempC/brewRatio recommendation becomes the scoring
+// target instead of the generic fixed bands, when set — but must never
+// change scoring for a shot whose bean has neither field.
+describe('calcShotScore — bean-aware target (#450)', () => {
+    // 30 points, steady 8.5 bar (in-band), temp fixed at 90.5°C (in the
+    // generic 90-96°C band -> acc=100 pre-#450), weight ramping to 39.6g on
+    // an 18g dose (r=2.2, in the generic 1.8-2.5 band -> also 100 pre-#450).
+    const N = 30;
+    const shot = {
+        datapoints: {
+            pressure:          new Array(N).fill(85),
+            temperature:       new Array(N).fill(905),
+            targetTemperature: new Array(N).fill(0), // none recorded -> falls through to band/bean target
+            timeInShot:        Array.from({ length: N }, (_, i) => i * 10),
+            shotWeight:        Array.from({ length: N }, (_, i) => Math.round((i / (N - 1)) * 396)),
+        },
+        duration: 300, // 30s -> in the 25-35s "100" band
+        annotation: { coffee: 'Test Bean', dose: 18 },
+    };
+
+    it('is unaffected when bean is absent or has no brewTempC/brewRatio (regression safety)', () => {
+        const baseline = calcShotScore(shot);
+        expect(calcShotScore(shot, null)).toBe(baseline);
+        expect(calcShotScore(shot, {})).toBe(baseline);
+        expect(calcShotScore(shot, { name: 'Test Bean' })).toBe(baseline);
+    });
+
+    it('scores temperature against bean.brewTempC instead of the generic band when set', () => {
+        const baseline = calcShotScore(shot); // avgT=90.5°C, in-band -> full marks pre-#450
+        const withBeanTarget = calcShotScore(shot, { brewTempC: 93 }); // 2.5°C off the bean's own target
+        expect(withBeanTarget).toBeLessThan(baseline);
+    });
+
+    it('scores dose:yield ratio against bean.brewRatio instead of the generic band when set', () => {
+        const baseline = calcShotScore(shot); // r=2.2, in-band -> full marks pre-#450
+        const withBeanTarget = calcShotScore(shot, { brewRatio: '1:1.8' }); // 0.4 off the bean's own target
+        expect(withBeanTarget).toBeLessThan(baseline);
+    });
+
+    it('ignores an unparsable brewRatio string rather than throwing', () => {
+        expect(() => calcShotScore(shot, { brewRatio: 'whatever the roaster wrote' })).not.toThrow();
+        expect(calcShotScore(shot, { brewRatio: 'whatever the roaster wrote' })).toBe(calcShotScore(shot));
+    });
+});

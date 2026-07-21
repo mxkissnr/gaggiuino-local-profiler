@@ -287,6 +287,7 @@ export default {
     lib_import_method_opengraph:host=>`Source : métadonnées de la page (${host})`,
     lib_import_unverified_hint:'Données détectées automatiquement — à vérifier avant d’enregistrer.',
     lib_import_duplicate_warning:(name)=>`⚠ Déjà présent dans la bibliothèque ? : ${name}`,
+    lib_import_extra_recipes_title:'Importer aussi comme recette :',
     lib_import_settings_btn:`${GEAR_ICON_SVG} Sources`, lib_import_settings_title:'Sources d’import',
     lib_import_settings_custom_label:'Boutiques Shopify personnalisées',
     lib_import_settings_add_domain_ph:'shop.example.com', lib_import_settings_add_domain_btn:'Ajouter',

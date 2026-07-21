@@ -314,6 +314,15 @@ function _ratioLabel(raw) {
     return nums && nums.length >= 2 ? `${nums[0]}:${nums[1]}` : null;
 }
 
+// "48g for a double, split to make 2 x ~24g single espressos." -> 48 — unlike
+// Time/Temp/Ratio, In:/Out: aren't ranges to average: the first number is the
+// actual dose/yield gram figure, everything after is descriptive prose (#451).
+function _firstNumber(raw) {
+    if (!raw) return null;
+    const m = raw.match(/\d+(?:\.\d+)?/);
+    return m ? parseFloat(m[0]) : null;
+}
+
 function _brewLineValue(lines, key) {
     const re = new RegExp(`^${key}\\s*:\\s*(.+)$`, 'i');
     for (const line of lines) {
@@ -372,12 +381,33 @@ function extractEspressoBrewGuide($) {
     const chosen = candidates.find(b => /^espresso$/i.test(b.heading)) || candidates[0];
 
     const timeMid = _rangeMidpoint(_brewLineValue(chosen.lines, 'Time'));
+
+    // #451: every other In/Out/Time/Ratio/Temp block (e.g. "Milky Espresso")
+    // used to be silently discarded once `chosen` was picked — surfaced here
+    // as opt-in recipe-import candidates instead (never auto-created; see
+    // the import route/bean form). Recipe schema has no separate ratio field
+    // (dose+yield already implies it), so Ratio isn't carried over here.
+    const extraRecipes = candidates
+        .filter(b => b !== chosen)
+        .map(b => {
+            const bTimeMid = _rangeMidpoint(_brewLineValue(b.lines, 'Time'));
+            return {
+                name:          b.heading,
+                targetDose_g:  _firstNumber(_brewLineValue(b.lines, 'In')),
+                targetYield_g: _firstNumber(_brewLineValue(b.lines, 'Out')),
+                targetTime_s:  bTimeMid == null ? null : Math.round(bTimeMid),
+                waterTemp_c:   _rangeMidpoint(_brewLineValue(b.lines, 'Temp')),
+                notes:         `${b.heading}\n${b.lines.join('\n')}`.trim(),
+            };
+        });
+
     return {
         text:      `${chosen.heading}\n${chosen.lines.join('\n')}`.trim(),
         brewTempC: _rangeMidpoint(_brewLineValue(chosen.lines, 'Temp')),
         brewTimeS: timeMid == null ? null : Math.round(timeMid),
         brewRatio: _ratioLabel(_brewLineValue(chosen.lines, 'Ratio')),
         brewNotes: prepNote,
+        extraRecipes,
     };
 }
 
@@ -449,6 +479,11 @@ function enrichGenericBeanFromHtml(bean, html, host = null) {
         if (out.brewTimeS == null && brewGuide.brewTimeS != null) out.brewTimeS = brewGuide.brewTimeS;
         if (!out.brewRatio && brewGuide.brewRatio) out.brewRatio = brewGuide.brewRatio;
         if (!out.brewNotes && brewGuide.brewNotes) out.brewNotes = brewGuide.brewNotes;
+        // #451: extra Brew Guide blocks (e.g. "Milky Espresso") beyond the one
+        // merged into the bean's own brewTempC/brewRatio above — surfaced to
+        // the import dialog as opt-in Library Recipe candidates, never
+        // auto-created.
+        if (brewGuide.extraRecipes?.length) out.extraBrewRecipes = brewGuide.extraRecipes;
     }
 
     return out;
