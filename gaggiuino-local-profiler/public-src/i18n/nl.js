@@ -160,6 +160,8 @@ export default {
     please_wait:'Wachten …',
     profile_unknown:'Onbekend profiel',
     nav_settings:'Instellingen', settings_theme:'Thema', settings_accent:'Kleurenschema', theme_dark:'Donker', theme_light:'Licht', theme_crema:'Crema', settings_language:'Taal',
+    settings_bottom_nav:'Mobiele navigatiebalk', settings_bottom_nav_desc:'Kies tot 4 bestemmingen voor de onderste navigatiebalk op mobiel. Al het andere komt onder "Meer" terecht.',
+    settings_bottom_nav_checkbox_label:'Tonen in de balk', settings_bottom_nav_move_up:'Omhoog verplaatsen', settings_bottom_nav_move_down:'Omlaag verplaatsen',
     settings_machines:'Machines', settings_machines_desc:'Beheer de espressomachines die deze app volgt.', settings_machines_add:'+ Machine toevoegen',
     settings_machine_name:'Naam', settings_machine_type:'Type', settings_machine_host:'Host', settings_machine_switch:'HA switch-entiteit (optioneel)',
     settings_machine_test:'Verbinding testen', settings_machine_save:'Opslaan', settings_machine_cancel:'Annuleren', settings_machine_default:'Standaard',

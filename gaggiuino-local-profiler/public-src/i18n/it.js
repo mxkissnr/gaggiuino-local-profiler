@@ -160,6 +160,8 @@ export default {
     please_wait:'Attendere …',
     profile_unknown:'Profilo sconosciuto',
     nav_settings:'Impostazioni', settings_theme:'Tema', settings_accent:'Schema colori', theme_dark:'Scuro', theme_light:'Chiaro', theme_crema:'Crema', settings_language:'Lingua',
+    settings_bottom_nav:'Barra di navigazione mobile', settings_bottom_nav_desc:'Scegli fino a 4 destinazioni per la barra di navigazione inferiore su mobile. Tutto il resto finisce in "Altro".',
+    settings_bottom_nav_checkbox_label:'Mostra nella barra', settings_bottom_nav_move_up:'Sposta su', settings_bottom_nav_move_down:'Sposta giù',
     settings_machines:'Macchine', settings_machines_desc:'Gestisci le macchine espresso monitorate da questa app.', settings_machines_add:'+ Aggiungi macchina',
     settings_machine_name:'Nome', settings_machine_type:'Tipo', settings_machine_host:'Host', settings_machine_switch:'Entità switch HA (opzionale)',
     settings_machine_test:'Testa connessione', settings_machine_save:'Salva', settings_machine_cancel:'Annulla', settings_machine_default:'Predefinita',
