@@ -1,3 +1,8 @@
+## [2.7.1] – 2026-07-21
+
+### Fixed
+- **Add-on failing to start on arm64/armv7 since v2.6.1.** better-sqlite3 only checks whether a prebuilt native binary exists for the target platform, not whether it's actually glibc-compatible: the bundled arm64 prebuild requires glibc ≥2.38, but `node:22-slim` (Debian Bookworm) only ships 2.36, and armv7 had no bundled prebuild at all — so the DB layer crashed on startup on both ARM architectures. The Dockerfile's prod-deps stage now builds better-sqlite3 from source for every non-amd64 target, running under QEMU on the real target architecture instead of the previous `--platform=$BUILDPLATFORM` cross-compile pin, so the compile happens against that image's actual glibc. amd64 is untouched and keeps its already-verified prebuilt binary. Verified with real QEMU builds, container runs, and HTTP round-trips (`POST /api/library/bean`, `GET /api/library`) for all three architectures — amd64 315MB (unchanged, ~33s cached build), arm64 330MB (~17min from-source build, clean start), armv7 267MB (clean start). Closes #428, closes #419
+
 ## [2.7.0] – 2026-07-21
 
 ### Changed
