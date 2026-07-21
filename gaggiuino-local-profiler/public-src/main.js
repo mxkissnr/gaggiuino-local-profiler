@@ -550,9 +550,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sidebar').addEventListener('touchend', handleDrawerTouchEnd, { passive: true });
 
   // ── Bottom navigation (#403, mobile) ─────────────────────────────────────
-  // Shots always returns to the primary shot-list screen (#410) — the list
-  // is no longer an overlay drawer over the detail view.
-  document.getElementById('bnShots').addEventListener('click', () => { switchMode('shots'); setMobileShotSubview('list'); });
+  // #431: Shots opens the shot detail directly (latest/last-selected shot) —
+  // the shot list is no longer reachable from here at all, only via the
+  // burger drawer (#425's openShotDrawer, wired above).
+  document.getElementById('bnShots').addEventListener('click', () => { switchMode('shots'); setMobileShotSubview('detail'); });
   document.getElementById('bnLive').addEventListener('click', () => switchMode('live'));
   document.getElementById('bnLibrary').addEventListener('click', () => switchMode('library'));
   document.getElementById('bnAnalytics').addEventListener('click', () => switchMode('analytics'));
