@@ -84,7 +84,9 @@ function _buildShotWrapper(shot) {
       ? `<span class="stars">${'★'.repeat(rating)}<span class="off">${'★'.repeat(5 - rating)}</span></span>`
       : '';
     const timeLabel = date.toLocaleTimeString(LOCALE_MAP[S.currentLang] || 'de-DE', { hour: '2-digit', minute: '2-digit' });
-    const grinderHtml = ann.grinder ? `<span class="shot-grinder">${esc(ann.grinder)}</span>` : '';
+    // #429: grind setting alongside the grinder in the meta line.
+    const grinderLabel = [ann.grinder, ann.grindSetting].filter(Boolean).join(' · ');
+    const grinderHtml = grinderLabel ? `<span class="shot-grinder">${esc(grinderLabel)}</span>` : '';
 
     const thumbHtml = shot.image ? `<img class="shot-thumb" data-shot-id="${shot.id}" alt="">` : '';
     // Multi-machine badge (#325): only shown in "all machines" mode with
