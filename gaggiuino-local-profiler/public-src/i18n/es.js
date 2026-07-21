@@ -28,7 +28,7 @@ export default {
     ann_drink_type:'Bebida', ann_drink_type_none:'— ninguna —',
     ann_milk_type:'Leche', ann_milk_none:'— ninguna —',
     ann_recipe:'Receta', ann_recipe_none:'— sin receta —',
-    btn_save:'Guardar', btn_saved:'✓ Guardado',
+    autosave_pending:'Guardando…', autosave_saved:'Guardado',
     grind_finer_urgent:'Moler más fino', grind_finer:'Moler ligeramente más fino',
     grind_ok:'La molturación es correcta', grind_coarser:'Moler ligeramente más grueso',
     grind_coarser_urgent:'Moler más grueso', grind_channeling:'Revisar preparación del puck',

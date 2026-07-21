@@ -15,6 +15,11 @@ export function goToShot(id) {
 }
 
 export function switchMode(mode) {
+  // #430: flush any pending debounced annotation save before leaving Shots —
+  // the annotation panel (and its auto-save) only exists there, so this is
+  // the mode-switch equivalent of the blur/visibilitychange flushes wired in
+  // main.js.
+  if (S.currentMode === 'shots' && mode !== 'shots' && window.flushAutoSave) window.flushAutoSave();
   S.currentMode = mode;
   document.getElementById('btnShots').classList.toggle('active',       mode === 'shots');
   document.getElementById('btnLive').classList.toggle('active',        mode === 'live');
