@@ -201,6 +201,55 @@ describe('GET /api/import/url — generic fallback chain', () => {
     });
 });
 
+describe('GET /api/import/url — generic-Shopify HTML detail enrichment (#423)', () => {
+    // Trimmed reconstruction of sproutcoffeeroasters.art's theme HTML (ground
+    // truth pulled 2026-07-21) — the Details accordion the enrichment reads.
+    // Real product copy, shortened structure.
+    const detailHtml = `<html><body>
+        <details class="details">
+            <summary class="details__header">Details</summary>
+            <div class="details-content">
+                <p>Process - Anaerobic Natural</p><p>Elevation - 1900-2300 MASL</p>
+            </div>
+        </details>
+    </body></html>`;
+
+    it('does one extra bounded HTML fetch and fills in detail fields the JSON left empty', async () => {
+        axiosGet
+            .mockResolvedValueOnce({ status: 200, headers: {}, data: {
+                title: 'Flower Power', vendor: 'adventurous', description: '', price: 1800,
+            }})
+            .mockResolvedValueOnce({ status: 200, headers: {}, data: detailHtml });
+
+        const url = 'https://sproutcoffeeroasters.art/products/flower-power';
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent(url)}`);
+        const data = await r.json();
+
+        expect(r.status).toBe(200);
+        expect(data.process).toBe('Anaerobic Natural');
+        expect(data.altitude_m).toBe(2100);
+        expect(axiosGet).toHaveBeenCalledTimes(2);
+        expect(axiosGet).toHaveBeenNthCalledWith(1, `${url}.js`, expect.any(Object));
+        expect(axiosGet).toHaveBeenNthCalledWith(2, url, expect.any(Object));
+    });
+
+    it('keeps the JSON-only bean when the extra HTML fetch fails, without failing the request', async () => {
+        axiosGet
+            .mockResolvedValueOnce({ status: 200, headers: {}, data: {
+                title: 'Flower Power', vendor: 'adventurous', description: '', price: 1800,
+            }})
+            .mockRejectedValueOnce(new Error('timeout'));
+
+        const url = 'https://sproutcoffeeroasters.art/products/flower-power';
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent(url)}`);
+        const data = await r.json();
+
+        expect(r.status).toBe(200);
+        expect(data.name).toBe('Flower Power');
+        expect(data.process).toBeUndefined();
+    });
+});
+
 describe('GET /api/import/url — duplicate warning', () => {
     it('warns when the imported URL was already imported into an existing bean', async () => {
         const lib = loadLibrary();

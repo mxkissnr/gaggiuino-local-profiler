@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-const { parseGenericShopifyProduct, parseOpenGraph, findDuplicateBean } = require('../lib/import-generic');
+const { parseGenericShopifyProduct, parseOpenGraph, findDuplicateBean, enrichGenericBeanFromHtml } = require('../lib/import-generic');
 
 describe('parseGenericShopifyProduct', () => {
     // Minimal synthetic fixture mirroring a real case (#400, verified against
@@ -31,6 +31,123 @@ describe('parseGenericShopifyProduct', () => {
 
     it('returns null when there is no title', () => {
         expect(parseGenericShopifyProduct({ vendor: 'adventurous' }, 'example.com')).toBeNull();
+    });
+
+    // #423, verified against sproutcoffeeroasters.art: a "Profile" option
+    // listing which roast styles are actually buyable is a more reliable
+    // roastType signal than tags, which can be an aspirational superset
+    // (tags naming Espresso/Filter/Omni even when only two variants exist).
+    it('derives roastType from a profile/roast option before falling back to tags', () => {
+        const withOption = {
+            ...product,
+            tags: ['Roast_Espresso', 'Roast_Filter', 'Roast_Omni'],
+            options: [{ name: 'Profile', values: ['Espresso', 'Filter'] }],
+        };
+        expect(parseGenericShopifyProduct(withOption, 'sproutcoffeeroasters.art').roastType).toBe('omni');
+
+        const espressoOnly = {
+            ...product,
+            tags: ['Roast_Espresso', 'Roast_Filter', 'Roast_Omni'],
+            options: [{ name: 'Roast', values: ['Espresso'] }],
+        };
+        expect(parseGenericShopifyProduct(espressoOnly, 'sproutcoffeeroasters.art').roastType).toBe('espresso');
+    });
+
+    it('falls back to tags-based roastType when no profile/roast option exists', () => {
+        const tagsOnly = { ...product, tags: ['Roast_Filter'] };
+        expect(parseGenericShopifyProduct(tagsOnly, 'sproutcoffeeroasters.art').roastType).toBe('filter');
+    });
+
+    it('leaves roastType null when neither options nor tags name a roast style', () => {
+        expect(parseGenericShopifyProduct(product, 'sproutcoffeeroasters.art').roastType).toBeNull();
+    });
+});
+
+describe('enrichGenericBeanFromHtml', () => {
+    // Trimmed reconstruction of sproutcoffeeroasters.art/products/flower-power
+    // (#423, ground truth pulled 2026-07-21) — just the title/subtitle group
+    // and the two accordions the enrichment reads, no nav/checkout/PayPal
+    // markup. Real product copy, shortened structure.
+    const sproutHtml = `
+        <div class="group-block-content">
+            <div class="text-block h2"><h1>Flower Power</h1></div>
+            <div class="text-block h4"><p>White Peach, Strawberry, Jasmine</p></div>
+            <product-price>€18,00</product-price>
+        </div>
+        <details class="details">
+            <summary class="details__header">Details</summary>
+            <div class="details-content">
+                <p>Process - Anaerobic Natural</p><p>Variety - 74112, 74110</p><p>Producer - Producers in the Yirgacheffe region</p><p>Origin - Banko Chelchele, Gedeb Zone, Southern Ethiopia</p><p>Elevation - 1900-2300 MASL</p>
+            </div>
+        </details>
+        <details class="details">
+            <summary class="details__header">Brew Guide</summary>
+            <div class="details-content">
+                <p><span class="metafield-multi_line_text_field">Espresso<br>
+                In: 19.7g<br>
+                Out: 48g for a double, split to make 2 x ~24g single espressos.<br>
+                Time: 27-29 seconds<br>
+                Ratio: 1 - 2.4<br>
+                Temp: 92-93 Celsius<br>
+                <br>
+                Milky Espresso<br>
+                In: 20g<br>
+                Out: 38g for a double, split to make 2x19g single shots.<br>
+                Time: 28-30 seconds<br>
+                Ratio: 1 - 1.9<br>
+                Temp: 92-93 Celsius</span></p>
+            </div>
+        </details>
+    `;
+
+    const jsonOnlyBean = {
+        name: 'Flower Power', roaster: 'sproutcoffeeroasters.art', notes: '',
+        flavors: ['Jasmin'], origin: 'ET', origins: [{ code: 'ET' }],
+        roastType: 'omni', imageUrl: null, price_eur: 18, importedAt: '2026-07-21',
+    };
+
+    it('fills in process/variety/producer/region/altitude_m from the Details accordion', () => {
+        const bean = enrichGenericBeanFromHtml(jsonOnlyBean, sproutHtml);
+        expect(bean.process).toBe('Anaerobic Natural');
+        expect(bean.variety).toBe('74112, 74110');
+        expect(bean.producer).toBe('Producers in the Yirgacheffe region');
+        expect(bean.region).toBe('Banko Chelchele, Gedeb Zone, Southern Ethiopia');
+        expect(bean.altitude_m).toBe(2100);
+    });
+
+    it('merges the h4 tasting-notes subtitle into flavors without dropping JSON-derived flavors', () => {
+        const bean = enrichGenericBeanFromHtml(jsonOnlyBean, sproutHtml);
+        expect(bean.flavors).toEqual(expect.arrayContaining(['Jasmin', 'White Peach', 'Strawberry', 'Jasmine']));
+    });
+
+    it('captures only the plain espresso recipe from the Brew Guide accordion, not Milky Espresso', () => {
+        const bean = enrichGenericBeanFromHtml(jsonOnlyBean, sproutHtml);
+        expect(bean.notes).toContain('Roaster brew guide (espresso):');
+        expect(bean.notes).toContain('In: 19.7g');
+        expect(bean.notes).toContain('Ratio: 1 - 2.4');
+        expect(bean.notes).not.toContain('Milky Espresso');
+    });
+
+    it('never overwrites a field the JSON already populated', () => {
+        const preFilled = { ...jsonOnlyBean, process: 'Washed', notes: 'already has notes' };
+        const bean = enrichGenericBeanFromHtml(preFilled, sproutHtml);
+        expect(bean.process).toBe('Washed');
+        expect(bean.notes).toBe('already has notes');
+    });
+
+    it('returns the bean unchanged when the HTML has none of the recognized patterns', () => {
+        const plainHtml = '<html><body><h1>Some Product</h1><p>Just a description, nothing structured.</p></body></html>';
+        const bean = enrichGenericBeanFromHtml(jsonOnlyBean, plainHtml);
+        expect(bean.process).toBeUndefined();
+        expect(bean.variety).toBeUndefined();
+        expect(bean.notes).toBe('');
+        expect(bean.flavors).toEqual(['Jasmin']);
+    });
+
+    it('returns the bean unchanged for empty/missing HTML', () => {
+        expect(enrichGenericBeanFromHtml(jsonOnlyBean, '')).toBe(jsonOnlyBean);
+        expect(enrichGenericBeanFromHtml(jsonOnlyBean, null)).toBe(jsonOnlyBean);
+        expect(enrichGenericBeanFromHtml(null, sproutHtml)).toBeNull();
     });
 });
 

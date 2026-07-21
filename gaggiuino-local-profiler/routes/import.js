@@ -5,7 +5,7 @@ const router   = express.Router();
 const { IMPORT_FETCH_MAX_BYTES } = require('../lib/constants');
 const { shopifyJsonUrl } = require('../lib/import-parsers');
 const { BUILTIN_PROVIDERS, matchProvider } = require('../lib/import-providers');
-const { parseGenericShopifyProduct, parseJsonLd, parseOpenGraph, findDuplicateBean } = require('../lib/import-generic');
+const { parseGenericShopifyProduct, parseJsonLd, parseOpenGraph, findDuplicateBean, enrichGenericBeanFromHtml } = require('../lib/import-generic');
 const { assertPublicHost, SsrfBlockedError } = require('../lib/ssrf-guard');
 const { loadImportSettings, saveImportSettings, loadLibrary } = require('../lib/data');
 
@@ -67,6 +67,14 @@ function attachVariants(bean, rawVariants) {
     if (variants.length > 1) bean.variants = variants;
 }
 
+// Fields the built-in Shopify JSON parsers can populate but that a theme
+// may instead only render into the product page's HTML (see #423). Missing
+// any of these makes one extra bounded HTML fetch worthwhile.
+const HTML_ENRICH_FIELDS = ['process', 'variety', 'producer', 'region', 'altitude_m', 'roastType'];
+function needsHtmlEnrich(bean) {
+    return HTML_ENRICH_FIELDS.some(f => !bean[f]);
+}
+
 router.get('/api/import/url', async (req, res) => {
     const raw = req.query.url;
     if (!raw) return res.status(400).json({ error: 'url required' });
@@ -120,6 +128,19 @@ router.get('/api/import/url', async (req, res) => {
                         attachVariants(bean, r.data.variants);
                         bean.source = host;
                         method = 'generic-shopify';
+
+                        // Some themes only render bean detail into the product
+                        // page HTML, not this JSON (#423) — one extra bounded
+                        // fetch, only when the JSON left detail fields empty.
+                        if (needsHtmlEnrich(bean)) {
+                            try {
+                                const htmlR = await safeGet(raw, FETCH_OPTS);
+                                bean = enrichGenericBeanFromHtml(bean, htmlR.data);
+                            } catch (htmlErr) {
+                                if (htmlErr instanceof SsrfBlockedError) throw htmlErr;
+                                // page fetch/parse failed — keep the JSON-only bean
+                            }
+                        }
                     }
                 } catch (e) {
                     if (e instanceof SsrfBlockedError) throw e;

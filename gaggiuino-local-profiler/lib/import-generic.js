@@ -5,7 +5,10 @@
 // regardless, and the frontend shows which method produced the data.
 const cheerio = require('cheerio');
 const { findCountriesInText } = require('./coffee-countries');
-const { matchFlavorTerms, normalizeImageUrl, priceFromProduct } = require('./import-parsers');
+const {
+    matchFlavorTerms, normalizeImageUrl, priceFromProduct,
+    roastTypeFromTags, extractAltitudeM, splitFlavors,
+} = require('./import-parsers');
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -27,6 +30,23 @@ function looksLikeRoasterName(vendor, host = null) {
     return true;
 }
 
+// Some shops encode roast type as a buyable variant option (e.g. a "Profile"
+// option with values Espresso/Filter) rather than — or more reliably than —
+// the shop's own tags taxonomy. Verified against sproutcoffeeroasters.art:
+// its tags include "Roast_Omni" for every product regardless of which roast
+// styles are actually purchasable, while the "Profile" option only lists the
+// variants that exist. Prefer an options entry whose name suggests roast
+// profile; fall back to tags when no such option exists.
+function roastTypeFromProduct(product) {
+    const options = Array.isArray(product?.options) ? product.options : [];
+    const profileOption = options.find(o => /profile|roast/i.test(o?.name || ''));
+    if (profileOption && Array.isArray(profileOption.values) && profileOption.values.length) {
+        const fromOptions = roastTypeFromTags(profileOption.values);
+        if (fromOptions) return fromOptions;
+    }
+    return roastTypeFromTags(product?.tags);
+}
+
 // Any Shopify storefront exposes this endpoint for a product page — no
 // shop-specific spec-table parsing, just title/vendor/description/price/image
 // plus best-effort flavor & origin extraction from the description prose.
@@ -46,6 +66,7 @@ function parseGenericShopifyProduct(product, host = null) {
         flavors:    matchFlavorTerms(text),
         origin:     originCodes[0] || null,
         origins:    originCodes.map(code => ({ code })),
+        roastType:  roastTypeFromProduct(product) || null,
         imageUrl:   normalizeImageUrl(product.featured_image),
         price_eur:  priceFromProduct(product),
         importedAt: today(),
@@ -178,6 +199,184 @@ function parseOpenGraph(html) {
     };
 }
 
+// ── HTML-only bean-detail enrichment ────────────────────────────────────────
+// Some Shopify themes render bean detail (process/variety/producer/origin/
+// elevation/tasting-notes/brew-guide) only into the product page's HTML, not
+// the /products/<handle>.js JSON that parseGenericShopifyProduct reads
+// (verified against sproutcoffeeroasters.art, #423). These helpers are
+// best-effort HTML scrapers with no shop-specific markup assumptions beyond
+// generic patterns (a <details> accordion, an h1 title with a short
+// subtitle) — the caller only uses their output to fill in fields the JSON
+// left empty.
+
+// A tasting-notes subtitle often sits as a short text block immediately
+// after the <h1> title, before any price/variant markup — e.g. Sprout's
+// "White Peach, Strawberry, Jasmine" h4. Heuristic: the first non-empty
+// sibling after the h1's wrapping block, as long as it reads like a short
+// comma-separated list (no sentence-ending punctuation) rather than prose.
+function extractTastingNotesSubtitle($) {
+    const $h1 = $('h1').first();
+    if (!$h1.length) return null;
+    let $block = $h1.closest('div');
+    if (!$block.length) return null;
+    let $sib = $block.next();
+    while ($sib.length) {
+        const text = $sib.text().replace(/\s+/g, ' ').trim();
+        if (!text) { $sib = $sib.next(); continue; }
+        return (text.length <= 100 && !/[.!?]/.test(text)) ? text : null;
+    }
+    return null;
+}
+
+// Label→bean-field map for the "Label - Value" / "Label: Value" lines found
+// in spec/detail accordions (any separator among -, –, —, :). Covers the
+// English labels seen on sproutcoffeeroasters.art plus German synonyms used
+// by other shops' equivalent accordions.
+const ACCORDION_LABEL_FIELDS = {
+    process: 'process', prozess: 'process',
+    variety: 'variety', varietal: 'variety', cultivar: 'variety', sorte: 'variety',
+    producer: 'producer', erzeuger: 'producer', produzent: 'producer',
+    origin: 'region', region: 'region', terroir: 'region', herkunft: 'region', ursprung: 'region',
+    elevation: 'altitude_m', altitude: 'altitude_m', 'höhe': 'altitude_m', hoehe: 'altitude_m', lage: 'altitude_m',
+};
+const ACCORDION_LABEL_RE = new RegExp(
+    `^(${Object.keys(ACCORDION_LABEL_FIELDS).join('|')})\\s*[-–—:]\\s*(.+)$`, 'i'
+);
+
+// Text lines within an accordion's content block, deduped: one entry per <p>
+// (covers shops that lay out each label/value pair in its own paragraph with
+// no separating whitespace, like Sprout's Details accordion) plus one entry
+// per <br>-delimited line (covers shops that use a single block of <br>-
+// joined lines instead, like Sprout's own Brew Guide accordion).
+function accordionLines($, $content) {
+    const lines = new Set();
+    $content.find('p').each((_, el) => {
+        const t = $(el).text().replace(/\s+/g, ' ').trim();
+        if (t) lines.add(t);
+    });
+    const $clone = $content.clone();
+    $clone.find('br').replaceWith('\n');
+    for (const raw of $clone.text().split('\n')) {
+        const t = raw.replace(/[ \t]+/g, ' ').trim();
+        if (t) lines.add(t);
+    }
+    return [...lines];
+}
+
+// Scans every <details> accordion's content for "Label - Value" lines and
+// maps recognized labels to bean fields. Not scoped to any one accordion
+// name ("Details") — any accordion can carry these lines.
+function scanAccordionLabelValues($) {
+    const fields = {};
+    $('details').each((_, el) => {
+        const $content = $(el).find('.details-content').first();
+        if (!$content.length) return;
+        for (const line of accordionLines($, $content)) {
+            const m = line.match(ACCORDION_LABEL_RE);
+            if (!m) continue;
+            const field = ACCORDION_LABEL_FIELDS[m[1].toLowerCase()];
+            const value = m[2].trim();
+            if (!field || !value || fields[field]) continue;
+            fields[field] = field === 'altitude_m' ? extractAltitudeM(value) : value;
+        }
+    });
+    return fields;
+}
+
+// Keys that make a block of lines read as an espresso brew recipe (In/Out/
+// Time/Ratio/Temp) rather than unrelated prose. Requiring 3-of-5 keeps this
+// generic instead of hard-coding an exact recipe shape.
+const BREW_RECIPE_KEY_RE = /^(In|Out|Time|Ratio|Temp)\s*:/i;
+
+// Finds an accordion whose heading matches /brew\s*guide/i, splits its
+// content into heading-delimited blocks (a heading is a short line with no
+// colon, not itself a recipe key/value line), and returns the text of
+// whichever block reads as the plain espresso recipe (heading exactly
+// "espresso", falling back to the first block with >=3 recipe keys) — never
+// the "Milky Espresso" or "Pour Over" variants also commonly present.
+function extractEspressoBrewGuide($) {
+    let $content = null;
+    $('details').each((_, el) => {
+        if ($content) return;
+        const $summary = $(el).find('summary').first().clone();
+        $summary.find('span').remove();
+        if (/brew\s*guide/i.test($summary.text().trim())) {
+            $content = $(el).find('.details-content').first();
+        }
+    });
+    if (!$content || !$content.length) return null;
+
+    const $clone = $content.clone();
+    $clone.find('br').replaceWith('\n');
+    const lines = $clone.text().split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim());
+
+    const blocks = [];
+    let current = null;
+    for (const line of lines) {
+        if (!line) continue;
+        const isKeyLine = BREW_RECIPE_KEY_RE.test(line);
+        if (!isKeyLine && line.length <= 40 && !/[.!?]$/.test(line)) {
+            if (current) blocks.push(current);
+            current = { heading: line, lines: [] };
+            continue;
+        }
+        if (current) current.lines.push(line);
+    }
+    if (current) blocks.push(current);
+
+    const candidates = blocks
+        .map(b => ({ ...b, keyCount: new Set(b.lines.map(l => (l.match(BREW_RECIPE_KEY_RE) || [])[1]).filter(Boolean).map(k => k.toLowerCase())).size }))
+        .filter(b => b.keyCount >= 3);
+    if (!candidates.length) return null;
+    const chosen = candidates.find(b => /^espresso$/i.test(b.heading)) || candidates[0];
+    return `${chosen.heading}\n${chosen.lines.join('\n')}`.trim();
+}
+
+// Fills in process/variety/producer/region/altitude_m/flavors/notes on a
+// JSON-derived bean from the fetched product-page HTML, but only for fields
+// the JSON left empty — an HTML-only signal never overwrites a JSON one.
+// roastType is deliberately not touched here: it's fully derivable from the
+// JSON's own options/tags (see roastTypeFromProduct above), so there is no
+// HTML-only roastType signal to add.
+function enrichGenericBeanFromHtml(bean, html) {
+    if (!bean || typeof html !== 'string' || !html.trim()) return bean;
+    const $ = cheerio.load(html);
+    const out = { ...bean };
+
+    const subtitle = extractTastingNotesSubtitle($);
+    if (subtitle) out.flavors = mergeUnique(bean.flavors || [], splitFlavors(subtitle), 8);
+
+    const fields = scanAccordionLabelValues($);
+    if (!out.process && fields.process) out.process = fields.process;
+    if (!out.variety && fields.variety) out.variety = fields.variety;
+    if (!out.producer && fields.producer) out.producer = fields.producer;
+    if (!out.region && fields.region) out.region = fields.region;
+    if (!out.altitude_m && fields.altitude_m != null) out.altitude_m = fields.altitude_m;
+
+    if (fields.region) {
+        const extraCodes = findCountriesInText(fields.region);
+        if (extraCodes.length) {
+            const existing = Array.isArray(out.origins) ? out.origins : [];
+            const have = new Set(existing.map(o => o.code));
+            const merged = [...existing];
+            for (const code of extraCodes) {
+                if (have.has(code)) continue;
+                have.add(code);
+                merged.push({ code });
+            }
+            out.origins = merged;
+            if (!out.origin) out.origin = merged[0]?.code || null;
+        }
+    }
+
+    if (!out.notes) {
+        const brewGuide = extractEspressoBrewGuide($);
+        if (brewGuide) out.notes = `Roaster brew guide (espresso): ${brewGuide}`.trim();
+    }
+
+    return out;
+}
+
 // Case-insensitive match against a candidate's sourceUrl (exact) or its
 // name+roaster combination — used to warn (non-blockingly) that an import
 // looks like a bean already in the library. Returns the matching bean, or
@@ -198,4 +397,7 @@ function findDuplicateBean({ name, roaster, sourceUrl }, beans) {
     ) || null;
 }
 
-module.exports = { parseGenericShopifyProduct, parseJsonLd, parseOpenGraph, findDuplicateBean, looksLikeRoasterName };
+module.exports = {
+    parseGenericShopifyProduct, parseJsonLd, parseOpenGraph, findDuplicateBean, looksLikeRoasterName,
+    enrichGenericBeanFromHtml,
+};
