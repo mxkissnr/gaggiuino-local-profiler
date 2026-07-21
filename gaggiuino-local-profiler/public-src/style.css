@@ -127,7 +127,11 @@
             margin: 0;
             font-size: 1.25rem;
             font-weight: 600;
-            color: #fff;
+            /* #405: was a hardcoded #fff — unreadable on the light/Crema
+               themes, where this surface is near-white. --gray-200 is the
+               same "brightest text" token the rest of the app uses (e.g.
+               .analytics-section-title), themed correctly in both modes. */
+            color: var(--gray-200);
             background: rgba(255,255,255,.02);
         }
 
@@ -169,30 +173,41 @@
         .shot-text { flex: 1; min-width: 0; }
         .shot-thumb { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: var(--gray-800); flex-shrink: 0; }
 
-        /* Line 1: name (+ machine badge) flex-truncated, score pinned right.
-           Line 2: fixed "dose -> yield · duration · date" data row. */
+        /* #412: rich 3-line card — line 1 is name (+ machine badge) flex-
+           truncated with the score pinned right, line 2 is coffee + dose,
+           line 3 is star rating + grinder + time-of-day. The full date
+           moved to the day-separator group header above (.day-sep). */
         .shot-line1 { display: flex; align-items: baseline; gap: 8px; }
         .shot-line1-name {
             flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 5px;
             overflow: hidden;
         }
-        .profile-name-sidebar { font-size: .92rem; font-weight: 600; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* #405: was a hardcoded #fff, unreadable on the light/Crema themes —
+           --gray-200 is the same themed "brightest text" token used
+           elsewhere (e.g. #sidebar h2 above, .analytics-section-title). */
+        .profile-name-sidebar { font-size: .92rem; font-weight: 600; color: var(--gray-200); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .shot-line2 { font-size: .75rem; color: var(--gray-500); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-        .sidebar-month-header {
-            width: 100%;
-            text-align: left;
-            background: rgba(39,39,42,.5);
-            color: var(--gray-400);
-            border: none;
-            border-bottom: 1px solid rgba(63,63,70,.3);
-            padding: 8px 12px 8px 20px;
-            font-size: .78rem;
-            font-weight: 600;
-            text-transform: capitalize;
-            cursor: pointer;
+        .shot-line3 {
+            display: flex; align-items: center; gap: 7px;
+            font-size: .72rem; color: var(--gray-500); margin-top: 3px;
+            overflow: hidden; white-space: nowrap;
         }
-        .sidebar-month-header:hover { background: rgba(39,39,42,.8); color: var(--gray-300); }
+        .shot-line3 .shot-grinder { overflow: hidden; text-overflow: ellipsis; }
+        .shot-line3 .shot-time    { flex-shrink: 0; margin-left: auto; }
+        .stars { color: var(--accent); letter-spacing: 1px; flex-shrink: 0; }
+        .stars .off { color: var(--gray-700); }
+
+        /* #412: day-separator group header, replaces the per-row timestamp
+           and the old collapsible month-header (#399's approach) — plain,
+           non-collapsible, matches the approved rail+panel mockup. */
+        .day-sep {
+            padding: 10px 16px 4px;
+            font-size: .72rem;
+            font-weight: 700;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
 
         /* #399: only visible on row hover/keyboard-focus (still tab-reachable
            while invisible — opacity, not display/visibility) — except on
@@ -271,63 +286,109 @@
         #powerBtn:disabled       { opacity: .4; cursor: not-allowed; }
         #powerBtn.machine-on     { color: var(--ok); border-color: rgba(34,197,94,.35); }
         #powerBtn.machine-off    { color: var(--gray-600); }
-        .mode-btn:disabled       { opacity: .38; cursor: not-allowed; }
-        .mode-btn:disabled:hover { color: var(--gray-500); }
 
         .loading-state { padding: 24px 20px; color: var(--gray-600); font-size: .85rem; text-align: center; }
 
         /* ── Main ── */
         #main { flex: 1; min-width: 0; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; }
 
-        /* ── Mode bar ── */
-        #mode-bar {
+        /* ── Desktop nav rail (#411) — replaces the old horizontal
+           #mode-bar entirely on desktop; mobile hides it (see the
+           max-width:768px block) and uses #bottom-nav instead. ── */
+        #rail {
+            width: 200px;
+            background: var(--gray-900);
+            border-right: 1px solid var(--gray-700);
+            flex-shrink: 0;
             display: flex;
-            gap: 4px;
-            padding: 6px 8px;
-            /* #397: separator border replaced by a surface fill behind the
-               whole bar, distinguishing it from #main without a hard line. */
+            flex-direction: column;
+            overflow: hidden;
+            transition: width .2s cubic-bezier(.4,0,.2,1);
+        }
+        .rail-brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 14px;
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: var(--gray-200);
+            flex-shrink: 0;
+        }
+        .rail-logo { display: flex; flex-shrink: 0; color: var(--accent); }
+        .rail-brand-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rail-toggle {
+            background: transparent; border: none; color: var(--gray-500);
+            cursor: pointer; padding: 4px; border-radius: var(--radius); flex-shrink: 0;
+            display: flex; transition: color .2s, background .2s;
+        }
+        .rail-toggle:hover { color: var(--gray-200); background: rgba(255,255,255,.04); }
+        .rail-nav-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 4px 8px; }
+        .rail-sep { height: 1px; background: var(--gray-700); margin: 6px 4px; flex-shrink: 0; }
+
+        .rail-nav {
+            display: flex; align-items: center; gap: 12px;
+            background: transparent; border: none; color: var(--gray-500);
+            border-radius: var(--radius); padding: 9px 10px;
+            cursor: pointer; font-family: 'Figtree', sans-serif; font-size: .875rem; font-weight: 600;
+            text-align: left; width: 100%; position: relative;
+            box-shadow: inset 3px 0 0 transparent;
+            transition: background .15s, color .15s, box-shadow .15s;
+        }
+        .rail-nav:hover  { color: var(--gray-200); background: rgba(255,255,255,.04); }
+        .rail-nav.active {
+            color: var(--gray-200); background: var(--gray-800);
+            box-shadow: inset 3px 0 0 var(--accent);
+        }
+        .rail-nav:disabled { opacity: .38; cursor: not-allowed; }
+        .rail-icon-slot { position: relative; display: flex; flex-shrink: 0; }
+        .rail-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+        .rail-icon.sm { width: 15px; height: 15px; }
+        .rail-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #maintBadge, #ordersBadge { flex-shrink: 0; }
+
+        /* Rail collapsed (#411): icon-only, ~56px, labels hidden, tooltips
+           via each button's title attribute (set from the same nav_* i18n
+           keys used for the visible label). */
+        #rail.rail-collapsed { width: 56px; }
+        #rail.rail-collapsed .rail-brand-label,
+        #rail.rail-collapsed .rail-label,
+        #rail.rail-collapsed .rail-machine-name { display: none; }
+        #rail.rail-collapsed .rail-brand { justify-content: center; padding: 16px 4px; }
+        #rail.rail-collapsed .rail-toggle { display: none; }
+        #rail.rail-collapsed .rail-nav { justify-content: center; padding: 9px 4px; }
+        #rail.rail-collapsed .rail-foot { justify-content: center; }
+        /* The collapse toggle itself stays reachable when collapsed — shown
+           inline with the brand mark instead of at the row's trailing edge. */
+        #rail.rail-collapsed .rail-brand { position: relative; }
+        #rail.rail-collapsed .rail-toggle { display: flex; position: absolute; inset: 0; opacity: 0; }
+        #rail.rail-collapsed .rail-brand:hover .rail-toggle { opacity: 1; background: var(--gray-800); }
+
+        .rail-toggle .rail-icon { transition: transform .2s; }
+        #rail.rail-collapsed .rail-toggle .rail-icon { transform: rotate(180deg); }
+
+        .rail-foot {
+            display: flex; align-items: center; gap: 7px;
+            padding: 12px 14px; font-size: .75rem; color: var(--gray-500);
+            border-top: 1px solid var(--gray-700); flex-shrink: 0;
+        }
+        .rail-machine-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* ── Content topbar (#411) — hosts the relocated multi-machine
+           switcher and the shot-sidebar re-expand button; both independently
+           hide themselves when not applicable (see machines-settings.js /
+           sidebar.js), so this stays a slim, mostly-empty strip rather than
+           collapsing itself away. ── */
+        #content-topbar {
+            display: flex; align-items: center; gap: 4px;
+            padding: 4px 8px; min-height: 32px;
             background: var(--gray-900);
             flex-shrink: 0;
-            position: sticky;
-            top: 0;
-            z-index: 10;
+            position: sticky; top: 0; z-index: 10;
         }
-        #mode-bar-scroll {
-            display: flex;
-            gap: 4px;
-            flex: 1;
-            overflow-x: auto;
-            scrollbar-width: none;
-            -webkit-overflow-scrolling: touch;
-        }
-        #mode-bar-scroll::-webkit-scrollbar { display: none; }
-        #btnSettings {
-            flex-shrink: 0;
-        }
-
-        /* #397: segmented-pill tab bar — active tab is a raised surface,
-           no underline. */
-        .mode-btn {
-            background: transparent;
-            color: var(--gray-500);
-            border: none;
-            border-radius: var(--radius);
-            padding: 10px 16px;
-            cursor: pointer;
-            font-family: 'Figtree', sans-serif;
-            font-size: .875rem;
-            font-weight: 600;
-            transition: all .2s;
-        }
-        .mode-btn:hover    { color: var(--gray-200); background: rgba(255,255,255,.04); }
-        .mode-btn.active   { color: #fff; background: var(--gray-800); }
-        .mode-btn.active:hover { background: var(--gray-800); }
 
         /* Multi-machine switcher (#325) — only shown once >1 machine is registered.
-           Resting state matches the flat topbar aesthetic (.mode-btn, #btnSettings:
-           transparent, no border/box) instead of a filled pill — #347: the previous
-           filled-box treatment still stood out against the borderless tab bar even
-           after native <select> chrome was stripped. Border/background now only
+           Resting state is transparent, no border/box — border/background only
            appear on hover/focus, as affordance, not at rest. */
         .machine-switcher {
             appearance: none; -webkit-appearance: none; -moz-appearance: none;
@@ -338,7 +399,7 @@
             transition: border-color .2s, color .2s, background-color .2s;
         }
         .machine-switcher:hover {
-            border-color: var(--gray-700); background-color: var(--gray-800); color: #fff;
+            border-color: var(--gray-700); background-color: var(--gray-800); color: var(--gray-200);
         }
         .machine-switcher:focus, .machine-switcher:focus-visible {
             outline: none; border-color: var(--accent); background-color: var(--gray-800);
@@ -352,7 +413,12 @@
             display: inline-block; font-size: .68rem; color: var(--gray-500); background: var(--gray-800);
             border-radius:var(--radius); padding: 1px 6px; margin-left: 6px; vertical-align: middle;
         }
-        #btnLive .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--gray-600); margin-right: 6px; transition: background .3s; }
+        .live-dot {
+            position: absolute; bottom: -1px; right: -1px;
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--gray-600); border: 1.5px solid var(--gray-900);
+            transition: background .3s;
+        }
         #btnLive.live-brewing .live-dot { background: var(--err); animation: pulse 1.2s infinite; }
         #btnLive.live-ready   .live-dot { background: var(--ok); }
 
@@ -554,7 +620,10 @@
             text-align: center;
             padding: 60px 40px;
         }
-        #empty-state .es-icon { font-size: 3.5rem; margin-bottom: 20px; }
+        /* #414: was a ☕ emoji glyph — inline stroke-SVG (same cup mark as the
+           rail brand logo) instead, themed via currentColor. */
+        #empty-state .es-icon { color: var(--gray-600); margin-bottom: 20px; }
+        #empty-state .es-icon .rail-icon { width: 56px; height: 56px; stroke-width: 1.3; }
         #empty-state h2 { color: var(--gray-500); font-size: 1.25rem; margin: 0 0 10px; }
         #empty-state p  { font-size: .875rem; color: var(--gray-600); margin: 0; max-width: 360px; line-height: 1.6; }
 
@@ -578,7 +647,11 @@
         #chart-area { display: flex; flex-direction: column; padding: 32px 40px 40px; }
 
         .sprofiler-header        { margin-bottom: 18px; }
-        .sprofiler-header h1     { font-size: 1.75rem; font-weight: 600; color: #fff; margin: 0 0 4px; }
+        /* #413: was a hardcoded #fff — invisible on the light/Crema themes,
+           where the content area is white/near-white. --gray-200 is the same
+           themed "brightest text" token used elsewhere (e.g. #sidebar h2,
+           .profile-name-sidebar, after #405). */
+        .sprofiler-header h1     { font-size: 1.75rem; font-weight: 600; color: var(--gray-200); margin: 0 0 4px; }
         .sprofiler-header p      { font-size: .875rem; color: var(--gray-400); margin: 0; }
 
         .meta-sub   { font-size: .85rem; color: var(--gray-500); font-weight: normal; margin-left: 6px; }
@@ -600,15 +673,20 @@
             background: conic-gradient(var(--ring-color, var(--gray-600)) calc(var(--ring-pct, 0) * 1%), var(--gray-800) 0);
             display: flex; align-items: center; justify-content: center;
         }
+        /* #413: .verdict-ring-inner's background is themed (var(--gray-950),
+           near-black in dark / near-white in light+Crema) but its score
+           number was still a hardcoded #fff — same bug as the headline
+           below, found while fixing it (not itself in the original issue,
+           but the same component and the same root cause). */
         .verdict-ring-inner {
             width: 46px; height: 46px;
             border-radius: 50%;
             background: var(--gray-950);
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.05rem; font-weight: 700; color: #fff;
+            font-size: 1.05rem; font-weight: 700; color: var(--gray-200);
         }
         .verdict-text      { min-width: 0; }
-        .verdict-headline  { font-size: 1.05rem; font-weight: 700; color: #fff; }
+        .verdict-headline  { font-size: 1.05rem; font-weight: 700; color: var(--gray-200); }
         .verdict-subline   { font-size: .8rem; color: var(--gray-500); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* ── Delta chips (#402): same-profile auto-compare vs. the previous shot.
@@ -1086,7 +1164,9 @@
             text-align: center;
             padding: 60px 40px;
         }
-        #live-idle .idle-icon { font-size: 3rem; margin-bottom: 16px; }
+        /* #414: was a ☕ emoji glyph — same treatment as #empty-state .es-icon. */
+        #live-idle .idle-icon { color: var(--gray-600); margin-bottom: 16px; }
+        #live-idle .idle-icon .rail-icon { width: 48px; height: 48px; stroke-width: 1.3; }
         #live-idle h2 { color: var(--gray-500); font-size: 1.1rem; margin: 0 0 8px; }
         #live-idle p  { font-size: .875rem; color: var(--gray-600); margin: 0; max-width: 320px; line-height: 1.6; }
 
@@ -1099,7 +1179,9 @@
             font-size: 1.05rem; font-weight: 600; letter-spacing: .04em;
         }
         #preheat-warming-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-        #preheat-icon { font-size: 1.8rem; margin-bottom: 4px; }
+        /* #415: was a 🔥 emoji glyph — inline stroke-SVG (.rail-icon), same treatment as #414. */
+        #preheat-icon { color: var(--accent); margin-bottom: 4px; display: flex; justify-content: center; }
+        #preheat-icon .rail-icon { width: 28px; height: 28px; stroke-width: 1.5; }
         #preheat-status-text { font-size: .9rem; color: var(--gray-400); font-weight: 600; }
         #preheat-bar-bg {
             width: 100%; height: 6px;
@@ -1418,10 +1500,9 @@
             color: var(--gray-600);
             cursor: pointer;
             font-size: 1.1rem;
-            width: 32px;
-            height: 100%;
+            width: 28px;
+            height: 24px;
             padding: 0;
-            margin-right: 4px;
             transition: color .2s;
         }
         #expandSidebarBtn.visible { display: flex; }
@@ -1433,86 +1514,54 @@
             border-right-color: transparent;
         }
 
-        /* ── Sidebar close button (inside overlay header) ── */
-        #sidebarToggle {
-            display: none;
-            background: none;
-            border: none;
-            color: var(--gray-500);
-            cursor: pointer;
-            font-size: 1.25rem;
-            line-height: 1;
-            padding: 0 10px 0 0;
-            margin: 0;
-            transition: color .2s;
-            flex-shrink: 0;
-        }
-        #sidebarToggle:hover { color: #fff; }
-
-        /* ── Mobile hamburger in mode-bar ── */
-        #mobileMenuBtn {
-            display: none;
-            background: none;
-            border: none;
-            color: var(--gray-500);
-            cursor: pointer;
-            font-size: 1.25rem;
-            line-height: 1;
-            padding: 0 12px 0 12px;
-            align-items: center;
-            flex-shrink: 0;
-            transition: color .2s;
-        }
-        #mobileMenuBtn:hover { color: #fff; }
-
-        /* ── Bottom navigation (#403): hidden on desktop, replaces the
+        /* ── Bottom navigation (#403, #410): hidden on desktop, replaces the
            horizontal mode-bar tab row on narrow viewports (see the
            max-width:768px block below for the mobile layout itself). ── */
         #bottom-nav, #moreSheet, #more-sheet-backdrop { display: none; }
-        .bottom-nav-btn .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gray-600); display: inline-block; }
-
-        /* ── Sidebar backdrop ── */
-        #sidebar-backdrop {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,.5);
-            z-index: 199;
-        }
-        #sidebar-backdrop.visible { display: block; }
 
         /* ── Responsive ── */
         @media (max-width: 768px) {
+            /* #411: the rail is desktop-only — mobile navigates via
+               #bottom-nav instead. */
+            #rail { display: none; }
+            /* #410: #sidebar (shot list) is a full-screen alternate of the
+               Shots tab now, not a drawer overlay — shown/hidden via plain
+               inline display (updateMobileShotSidebarVisibility() in
+               sidebar.js), not a transform/backdrop. Its own collapse
+               button (#collapseBtn) only makes sense next to a docked
+               desktop column, so it's hidden here rather than shrinking the
+               one full-screen view mobile has to show. */
             #sidebar {
                 position: fixed;
-                top: 0; left: 0; bottom: 0;
-                width: min(320px, 88vw);
+                inset: 0;
+                width: 100%;
                 height: 100vh;
-                z-index: 200;
-                transform: translateX(-100%);
-                transition: transform .3s ease;
+                z-index: 50;
+                border-right: none;
                 max-height: none;
-                border-right: 1px solid var(--gray-700);
-                border-bottom: none;
                 overflow-y: auto;
             }
-            #sidebar.open      { transform: translateX(0); }
-            #sidebar.collapsed { max-height: none; }
             #sidebar h2        { display: flex; align-items: center; }
-            #sidebarToggle     { display: flex; align-items: center; }
-            #mobileMenuBtn     { display: flex; }
-            #collapseBtn       { display: flex; }
-            #main              { height: 100vh; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-bottom: 60px; }
+            #collapseBtn       { display: none; }
+            /* Safety net: the desktop collapse class can only be toggled via
+               #collapseBtn, hidden above — but a browser window resized
+               down past the breakpoint while already collapsed would
+               otherwise keep width:0 here too. */
+            #sidebar.desktop-collapsed { width: 100%; min-width: 0; }
+            #main              { position: fixed; inset: 0; z-index: 40; height: 100vh; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-bottom: 60px; }
             #chart-area, #live-view { padding: 16px; }
-
-            /* ── Bottom navigation (#403): replaces the horizontal mode-bar
-               tab row. #mode-bar itself only survives to host the
-               multi-machine switcher (settings/tabs/hamburger all move to
-               the bottom nav / "Mehr" sheet) — collapsed via .mode-bar-empty
-               (renderMachineSwitcher()) when there's nothing left to show. */
-            #mode-bar-scroll, #mobileMenuBtn, #expandSidebarBtn, #btnSettings { display: none !important; }
-            #mode-bar { justify-content: flex-end; position: static; }
-            #mode-bar.mode-bar-empty { display: none; }
+            #expandSidebarBtn  { display: none !important; }
+            /* display itself is owned by inline style, set in
+               updateMobileShotSidebarVisibility() (sidebar.js) — mirrors
+               #sidebar's own show/hide, not a CSS media rule, so the two
+               stay in lockstep with the same piece of state. */
+            .mobile-back-btn {
+                align-items: center; justify-content: center;
+                background: transparent; border: none; color: var(--gray-400);
+                width: 32px; height: 32px; flex-shrink: 0; padding: 0; cursor: pointer;
+            }
+            .mobile-back-btn .rail-icon { width: 22px; height: 22px; }
+            .mobile-back-btn:hover { color: var(--gray-200); }
 
             #bottom-nav {
                 display: flex;
@@ -1540,13 +1589,15 @@
                 padding: 6px 2px;
                 transition: color .15s;
             }
-            .bottom-nav-btn .bn-icon   { font-size: 1.2rem; line-height: 1; padding: 2px 14px; border-radius: 999px; transition: background .2s; }
+            .bottom-nav-btn .bn-icon   { position: relative; display: flex; line-height: 1; padding: 6px 14px; border-radius: 999px; transition: background .2s; }
+            .bottom-nav-btn .bn-icon .rail-icon { width: 20px; height: 20px; }
             .bottom-nav-btn .bn-label  { font-size: .64rem; font-weight: 600; }
-            .bottom-nav-btn.active     { color: #fff; }
-            /* #397: same raised-surface pill language as .mode-btn.active,
-               scoped to the icon (a full-button pill would be too tall for a
-               56px-high bottom nav row). */
-            .bottom-nav-btn.active .bn-icon  { background: var(--gray-800); }
+            .bottom-nav-btn.active     { color: var(--gray-200); }
+            /* #397: same raised-surface pill language the old .mode-btn.active
+               used, scoped to the icon (a full-button pill would be too tall
+               for a 56px-high bottom nav row). Active color now comes from
+               the accent token (#410) instead of a hardcoded white. */
+            .bottom-nav-btn.active .bn-icon  { background: var(--gray-800); color: var(--accent); }
             .bottom-nav-btn.active .live-dot { background: var(--accent); }
 
             #more-sheet-backdrop {
@@ -1573,6 +1624,9 @@
             /* #397 pill visual language: raised active surface on tap/hover,
                same border-radius token as .mode-btn — no persistent border. */
             .more-sheet-item {
+                display: flex;
+                align-items: center;
+                gap: 10px;
                 background: none;
                 border: none;
                 min-height: 44px;
@@ -1585,7 +1639,7 @@
                 cursor: pointer;
                 transition: background .15s, color .15s;
             }
-            .more-sheet-item:hover, .more-sheet-item:active { background: var(--gray-800); color: #fff; }
+            .more-sheet-item:hover, .more-sheet-item:active { background: var(--gray-800); color: var(--gray-200); }
             .sprofiler-header { margin-bottom: 10px; }
             .sprofiler-header h1 { font-size: 1.3rem; }
             /* The title block (flex:1;min-width:0) and the export-buttons block
@@ -1607,7 +1661,6 @@
             .annotation-field.full-width { grid-column: 1; }
             .chart-container, .live-chart-container { height: 360px; }
             .live-stats        { grid-template-columns: repeat(3, 1fr); }
-            #mode-bar          { padding: 4px; gap: 2px; }
             /* #385: icon-only machine switcher — the active machine's name is
                already shown in the subtitle line, so on mobile the select
                collapses to its chevron to give the tab bar room. Hover/focus
@@ -1625,8 +1678,6 @@
             }
             .shot-wrapper      { padding-right: 18px; }
             #sidebar h2        { padding: 16px 18px; }
-            #collapseBtn       { margin-right: 0; }
-            .mode-btn          { padding: 12px 14px; font-size: .8rem; }
 
             /* Annotation panel — mobile improvements */
             .annotation-panel  { padding: 14px; margin-top: 16px; }
@@ -1640,7 +1691,6 @@
             .sprofiler-header h1 { font-size: 1.1rem; }
             #analytics-view, #library-view, #maintenance-view,
             #dialin-view, #settings-view, #orders-view { padding: 12px; }
-            .mode-btn { padding: 12px 10px; font-size: .75rem; }
 
             /* Smaller chart to give annotation panel more room */
             .chart-container, .live-chart-container { height: 240px; }
@@ -1968,7 +2018,8 @@
         .orders-menu-item { display:flex; flex-direction:column; gap:5px; padding:8px 0; border-bottom:1px solid var(--gray-800); }
         .orders-menu-item-top { display:flex; align-items:center; gap:10px; }
         .orders-menu-item-name { flex:1; font-size:.88rem; color:var(--gray-200); }
-        .orders-menu-trend { background:none; border:none; font-size:1rem; cursor:pointer; padding:2px 6px; opacity:.3; transition:opacity .15s; }
+        /* #415: was a 🔥 emoji glyph — inline stroke-SVG (.rail-icon), same treatment as #414. */
+        .orders-menu-trend { background:none; border:none; cursor:pointer; padding:2px 6px; opacity:.3; transition:opacity .15s; display:flex; align-items:center; }
         .orders-menu-trend:hover { opacity:.7; }
         .orders-menu-trend.active { opacity:1; }
         .orders-menu-del { background:none; border:none; color:var(--gray-600); font-size:1rem; cursor:pointer; padding:2px 6px; transition:color .15s; }
@@ -1982,12 +2033,13 @@
         .orders-menu-variant-btn { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-400); font-size:.75rem; padding:3px 8px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; }
         .orders-menu-variant-btn:hover { background:var(--gray-700); color:#fff; }
         .order-variant-badge { font-size:.8rem; color:var(--gray-400); font-weight:400; }
-        .orders-menu-use-beans { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); font-size:.8rem; padding:2px 7px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; }
+        /* #416: were 🫘/🥛 emoji glyphs — inline stroke-SVG (.rail-icon), same treatment as #415. */
+        .orders-menu-use-beans { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); padding:2px 7px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; display:inline-flex; align-items:center; }
         .orders-menu-use-beans:hover { border-color:var(--gray-500); color:var(--gray-300); }
         .orders-menu-use-beans.active { border-color:#a78bfa; color:#a78bfa; background:rgba(167,139,250,.08); }
-        .orders-use-beans-note { font-size:.72rem; color:var(--gray-500); font-style:italic; padding-left:2px; }
+        .orders-use-beans-note { font-size:.72rem; color:var(--gray-500); font-style:italic; padding-left:2px; display:inline-flex; align-items:center; gap:4px; }
 
-        .orders-menu-use-milks { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); font-size:.8rem; padding:2px 7px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; }
+        .orders-menu-use-milks { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); padding:2px 7px; cursor:pointer; transition:all .15s; font-family:'Figtree',sans-serif; display:inline-flex; align-items:center; }
         .orders-menu-use-milks:hover { border-color:var(--gray-500); color:var(--gray-300); }
         .orders-menu-use-milks.active { border-color:#7dd3fc; color:#7dd3fc; background:rgba(125,211,252,.08); }
         .ann-ordered-by { display:flex; flex-direction:column; gap:2px; margin-top:10px; padding:8px 10px; background:rgba(255,255,255,.03); border:1px solid var(--gray-800); border-radius:var(--radius); }

@@ -1,52 +1,12 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { LOCALE_MAP } from '../constants.js';
-import { esc, scoreClass, max, formatTimeLabel } from '../utils.js';
+import { esc, scoreClass, formatTimeLabel, groupShotsByDay } from '../utils.js';
 import { loadShotImageBlobUrl } from '../bean-image.js';
 import { openLightbox } from './lightbox.js';
 
 // These are imported lazily via window to avoid circular dependencies
 // updateView is on window, calcShotScore/getShotData are set from shots.js
-
-// Only chronological order groups sensibly by month — score/rating/duration
-// sort would scatter unrelated shots under confusing month headers.
-function _monthKey(shot) {
-  const d = new Date(shot.timestamp * 1000);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function _monthLabel(key) {
-  const [y, m] = key.split('-').map(Number);
-  const d = new Date(y, m - 1, 1);
-  return d.toLocaleDateString(LOCALE_MAP[S.currentLang] || 'de-DE', { month: 'long', year: 'numeric' });
-}
-
-function _buildMonthGroup(key) {
-  if (!S._expandedMonths) S._expandedMonths = new Set();
-  const expanded = S._expandedMonths.has(key);
-  const header = document.createElement('button');
-  header.type = 'button';
-  header.className = 'sidebar-month-header';
-  header.dataset.action = 'toggle-month-group';
-  header.dataset.id = key;
-  header.textContent = `${expanded ? '▾' : '▸'} ${_monthLabel(key)}`;
-  const body = document.createElement('div');
-  body.className = 'sidebar-month-body';
-  body.id = `monthGroup-${key}`;
-  body.style.display = expanded ? '' : 'none';
-  return { header, body };
-}
-
-export function toggleMonthGroup(key) {
-  if (!S._expandedMonths) S._expandedMonths = new Set();
-  const body = document.getElementById(`monthGroup-${key}`);
-  const btn  = document.querySelector(`[data-action="toggle-month-group"][data-id="${key}"]`);
-  if (!body) return;
-  const willExpand = body.style.display === 'none';
-  body.style.display = willExpand ? '' : 'none';
-  if (btn) btn.textContent = `${willExpand ? '▾' : '▸'} ${_monthLabel(key)}`;
-  if (willExpand) S._expandedMonths.add(key); else S._expandedMonths.delete(key);
-}
 
 export function renderSidebar() {
   const el = document.getElementById('shots');
@@ -56,27 +16,24 @@ export function renderSidebar() {
   updateFlapCounter(S.shots.length);
 
   const shots = sortedShots();
-  const now = new Date();
-  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const groupByMonth = S.currentSort === 'newest';
-
-  let group = null;
-  let groupKey = null;
-  shots.forEach(shot => {
-    const wrapper = _buildShotWrapper(shot);
-    if (!groupByMonth || _monthKey(shot) === currentMonthKey) {
-      el.appendChild(wrapper);
-      return;
-    }
-    const key = _monthKey(shot);
-    if (key !== groupKey) {
-      group = _buildMonthGroup(key);
-      el.appendChild(group.header);
-      el.appendChild(group.body);
-      groupKey = key;
-    }
-    group.body.appendChild(wrapper);
-  });
+  // #412: day-separator groups only make sense in chronological order —
+  // score/rating/duration sort would scatter unrelated days under
+  // confusing headers, same reasoning the old month-grouping used.
+  if (S.currentSort !== 'newest') {
+    shots.forEach(shot => el.appendChild(_buildShotWrapper(shot)));
+  } else {
+    const locale = LOCALE_MAP[S.currentLang] || 'de-DE';
+    const formatOlder = d => d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const groups = groupShotsByDay(shots, new Date(), t('day_today'), t('day_yesterday'), formatOlder);
+    groups.forEach(group => {
+      const sep = document.createElement('div');
+      sep.className = 'day-sep';
+      sep.dataset.dayKey = group.key;
+      sep.textContent = group.label;
+      el.appendChild(sep);
+      group.shots.forEach(shot => el.appendChild(_buildShotWrapper(shot)));
+    });
+  }
 
   updateSidebarHighlighting();
   if (S.currentFilter) filterShots(S.currentFilter);
@@ -105,24 +62,27 @@ function _buildShotWrapper(shot) {
     const profileName = shot.profile?.name || shot.profileName || 'Unknown Profile';
     const ann = shot.annotation || {};
 
-    // #399: fixed 2-line data row — line 1 is name + right-aligned score,
-    // line 2 is "dose g -> yield g · duration · date" (falls back to the
-    // bean name when dose/yield aren't both known yet).
+    // #412: rich 3-line card (partial revert of #399's flattened 2-line
+    // row) — line 1 is name + right-aligned score (+ machine badge), line 2
+    // is coffee + dose, line 3 is star rating + grinder + time-of-day. The
+    // date itself now lives in the day-separator header above the group
+    // (renderSidebar()), not per-row.
     const data = window.getShotData ? window.getShotData(shot) : null;
     const sc   = data && window.calcShotScore ? window.calcShotScore(shot, data) : null;
     const scoreHtml = sc !== null
       ? `<span class="sidebar-score ${scoreClass(sc)}">${sc}</span>`
       : '';
 
-    const dose    = parseFloat(ann.dose);
-    const yieldG  = data ? max(data.weight.map(p => p.y)) : null;
+    const dose = parseFloat(ann.dose);
     const durLabel = shot.duration ? formatTimeLabel(shot.duration / 10) : null;
-    const dateLabel = date.toLocaleDateString(LOCALE_MAP[S.currentLang] || 'de-DE', { day: '2-digit', month: '2-digit' });
-    const line2 = [
-      (dose && yieldG) ? `${dose.toFixed(1)} g → ${yieldG.toFixed(1)} g` : (ann.coffee || null),
-      durLabel,
-      dateLabel
-    ].filter(Boolean).join(' · ');
+    const line2 = [ann.coffee || null, dose ? `${dose.toFixed(1)} g` : null].filter(Boolean).join(' · ') || durLabel || '';
+
+    const rating = parseInt(ann.rating) || 0;
+    const starsHtml = rating > 0
+      ? `<span class="stars">${'★'.repeat(rating)}<span class="off">${'★'.repeat(5 - rating)}</span></span>`
+      : '';
+    const timeLabel = date.toLocaleTimeString(LOCALE_MAP[S.currentLang] || 'de-DE', { hour: '2-digit', minute: '2-digit' });
+    const grinderHtml = ann.grinder ? `<span class="shot-grinder">${esc(ann.grinder)}</span>` : '';
 
     const thumbHtml = shot.image ? `<img class="shot-thumb" data-shot-id="${shot.id}" alt="">` : '';
     // Multi-machine badge (#325): only shown in "all machines" mode with
@@ -140,6 +100,7 @@ function _buildShotWrapper(shot) {
             ${scoreHtml}
           </div>
           <div class="shot-line2">${esc(line2)}</div>
+          <div class="shot-line3">${starsHtml}${grinderHtml}<span class="shot-time">${esc(timeLabel)}</span></div>
         </div>
       </div>
     `;
@@ -152,8 +113,11 @@ function _buildShotWrapper(shot) {
         localStorage.removeItem('glp_compareShotId');
         updateSidebarHighlighting();
         if (S.currentMode !== 'shots' && window.switchMode) window.switchMode('shots');
-        collapseSidebarOnMobile();
+        // #410: mobile no longer shows the shot list as a drawer over the
+        // detail view — tapping a shot navigates from the primary list
+        // screen to the detail screen (back chevron returns to the list).
         if (window.innerWidth <= 768) {
+          setMobileShotSubview('detail');
           setTimeout(() => { if (window.updateView) window.updateView(); }, 50);
         } else {
           if (window.updateView) window.updateView();
@@ -209,13 +173,6 @@ export function updateSidebarHighlighting() {
 export function filterShots(query) {
   S.currentFilter = query;
   const q = query.trim().toLowerCase();
-  // While actively searching, force all month groups open so matches inside
-  // a collapsed group are actually visible; restore collapse state once
-  // the query is cleared.
-  document.querySelectorAll('.sidebar-month-body').forEach(body => {
-    const key = body.id.replace('monthGroup-', '');
-    body.style.display = q ? '' : (S._expandedMonths?.has(key) ? '' : 'none');
-  });
   document.querySelectorAll('#shots .shot-wrapper').forEach(wrapper => {
     const id = parseInt(wrapper.id.replace('wrapper-', ''));
     const shot = S.shots.find(s => s.id === id);
@@ -228,6 +185,18 @@ export function filterShots(query) {
       ann.notes || ''
     ].join(' ').toLowerCase();
     wrapper.style.display = (!q || haystack.includes(q)) ? '' : 'none';
+  });
+  // #412: a day-separator header with every shot underneath it filtered out
+  // would otherwise sit there empty — hide it too, until the next visible
+  // shot-wrapper sibling (i.e. the next day-sep or the list's end).
+  document.querySelectorAll('#shots .day-sep').forEach(sep => {
+    let sib = sep.nextElementSibling;
+    let hasVisible = false;
+    while (sib && !sib.classList.contains('day-sep')) {
+      if (sib.style.display !== 'none') { hasVisible = true; break; }
+      sib = sib.nextElementSibling;
+    }
+    sep.style.display = hasVisible ? '' : 'none';
   });
 }
 
@@ -333,26 +302,41 @@ export function toggleDesktopSidebar() {
   if (!collapsed) setTimeout(() => { if (window.updateView) window.updateView(); }, 320);
 }
 
-// ── Sidebar overlay (mobile) ──────────────────────────────────────────────
-export function openSidebar() {
-  document.getElementById('sidebar').classList.add('open');
-  document.getElementById('sidebar-backdrop').classList.add('visible');
-  const btn = document.getElementById('sidebarToggle');
-  if (btn) btn.textContent = '✕';
+// ── Mobile shot list / detail sub-view (#410) ─────────────────────────────
+// On mobile, the shot list (#sidebar) and the shot detail (#shots-view's
+// chart-area) are two full-screen alternates of the Shots tab, not a
+// permanently-docked column plus a drawer overlay — the list is the primary
+// screen, tapping a shot pushes to the detail screen, and the back chevron
+// (wired in main.js) returns to the list. Desktop is unaffected: it always
+// shows both side by side regardless of S.mobileShotSubview.
+export function setMobileShotSubview(view) {
+  S.mobileShotSubview = view;
+  updateMobileShotSidebarVisibility();
 }
 
-export function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebar-backdrop').classList.remove('visible');
-}
-
-export function toggleSidebar() {
+export function updateMobileShotSidebarVisibility() {
   const sidebar = document.getElementById('sidebar');
-  sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
-}
-
-export function collapseSidebarOnMobile() {
-  if (window.innerWidth <= 768) closeSidebar();
+  const backBtn = document.getElementById('mobileBackBtn');
+  const shotsView = document.getElementById('shots-view');
+  if (!sidebar) return;
+  if (window.innerWidth > 768) {
+    // Desktop: clear any mobile-only inline override so the normal flex
+    // column layout (set purely via CSS) applies again, e.g. after a
+    // window resize back up past the breakpoint. #shots-view's own display
+    // is switchMode()'s responsibility on desktop (mode === 'shots' or not).
+    sidebar.style.display = '';
+    if (backBtn) backBtn.style.display = 'none';
+    return;
+  }
+  const inShotsMode = S.currentMode === 'shots';
+  const showList = inShotsMode && S.mobileShotSubview !== 'detail';
+  sidebar.style.display = showList ? 'flex' : 'none';
+  if (backBtn) backBtn.style.display = (inShotsMode && !showList) ? 'flex' : 'none';
+  // #410: mode.js already set #shots-view to display:flex for mode==='shots'
+  // (side-by-side with the sidebar on desktop) — on mobile the list and the
+  // detail are two full-screen alternates instead, so override it back to
+  // 'none' while the list is the one showing.
+  if (shotsView && inShotsMode) shotsView.style.display = showList ? 'none' : 'flex';
 }
 
 // ── selectShot (used from dialin onclick) ────────────────────────────────
