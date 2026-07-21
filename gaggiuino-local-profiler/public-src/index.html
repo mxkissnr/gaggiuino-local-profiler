@@ -106,18 +106,19 @@
 <div id="main">
 
     <!-- Content topbar (#411, horizontal nav #424): hosts the burger-drawer
-         trigger (mobile-only, #425), the GLP brand mark, the button that
-         re-expands the shot-sidebar once collapsed via #collapseBtn, the
-         horizontal nav tab row (replaces the old #rail — same button ids
-         so mode.js's active-state toggling and status.js's live/orders
-         visibility gating keep working unchanged), and the multi-machine
-         switcher + machine status dot (machines-settings.js's
-         renderMachineSwitcher()/#325 filtering logic is unchanged). -->
+         trigger (mobile-only, #425), the button that re-expands the
+         shot-sidebar once collapsed via #collapseBtn, the horizontal nav tab
+         row (replaces the old #rail — same button ids so mode.js's
+         active-state toggling and status.js's live/orders visibility gating
+         keep working unchanged), and the multi-machine switcher + machine
+         status dot (machines-settings.js's renderMachineSwitcher()/#325
+         filtering logic is unchanged). The brand icon that used to sit here
+         was removed (#432) — redundant next to the nav tabs since the app is
+         already framed by the HA ingress panel. -->
     <div id="content-topbar">
         <button id="mobileDrawerBtn" class="mobile-drawer-btn" data-i18n-title="sidebar_drawer_open" title="Shot-Liste öffnen" aria-label="Shot-Liste öffnen" aria-expanded="false" aria-controls="sidebar">
             <svg class="rail-icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
-        <span class="topbar-brand" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg></span>
         <button id="expandSidebarBtn" data-i18n-title="sidebar_expand" title="Sidebar aufklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/></svg></button>
 
         <nav class="topbar-nav-scroll">
