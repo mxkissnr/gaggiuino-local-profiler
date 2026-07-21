@@ -1,3 +1,17 @@
+## [2.6.0] – 2026-07-21
+
+### Added
+- **App-shell redesign — "Rail + Panel."** Shell-only redesign (verdict header, recipe/process zones, charts and view-switching logic untouched). Desktop: a collapsible left icon+label nav rail replaces the horizontal `#mode-bar` entirely, collapse state persisted in `localStorage` (`glp_rail_collapsed`); the multi-machine switcher and the shot-sidebar's re-expand button move into a new slim `#content-topbar`. Nav button ids are unchanged from the old mode-bar so `mode.js`'s active-state toggling and `status.js`'s live/orders visibility gating keep working unmodified. Closes #411
+- **Rich sidebar shot cards restored, grouped by day.** The shot sidebar goes back to rich 3-line cards (thumbnail, profile name + score pill + machine badge, coffee + dose, star rating + grinder + time-of-day), partially reverting v2.4.0's flattened 2-line row. Per-row timestamps are replaced by day-separator group headers ("Heute"/"Gestern"/date), backed by a new pure `groupShotsByDay()` helper (`public-src/utils.js`) with its own unit tests. Closes #412
+- **Mobile: shot list becomes the primary "Shots" screen.** Bottom nav and the "Mehr" sheet get inline stroke-SVG icons instead of emoji (active state uses the accent token). The shot list is no longer a drawer/overlay — tapping "Shots" pushes to a real list screen, and tapping a shot pushes to its detail view with a back-chevron returning to the list (`setMobileShotSubview()` in `sidebar.js`). Closes #410
+
+### Fixed
+- **Sidebar text unreadable in light themes.** Hardcoded `color: #fff` on `#sidebar h2` and `.profile-name-sidebar` made shot-list text unreadable in light/Crema themes; swapped to the existing `--gray-200` "brightest text" token used elsewhere. Verified in stock light and light+Crema. Closes #405
+- **Verdict header unreadable in light themes.** `.sprofiler-header h1`, `.verdict-headline` and `.verdict-ring-inner`'s score number all hardcoded `color:#fff`, making the shot title and verdict headline invisible against the light/Crema themes' near-white content background. Swapped to the same `--gray-200` token used for the #405 sidebar fix. Verified via `getComputedStyle` in dark, light+amber and light+crema, not just a visual check. Closes #413
+- **Decorative emoji replaced with stroke-SVG across the shell chrome.** The remaining decorative ☕ outside the nav chrome (empty-state icon, live-idle icon, favicon) is now the same inline stroke-SVG cup mark used for the rail brand logo; the trailing "☕" dropped from the `preheat_ready` string in all 6 i18n files (#414). The preheat widget's 🔥 warming icon and the orders menu's trending-toggle 🔥 are now the same inline stroke-SVG flame (#415). The orders menu's bean/milk toggle buttons and their inline notes (🫘/🥛) are now stroke-SVG bean and milk-carton icons (#416). User-generated content (the order-item's own emoji picker, the user's milk-emoji fallback) is deliberately left untouched — out of scope. Closes #414, Closes #415, Closes #416
+
+Known follow-up left open deliberately: an app-wide emoji purge in view content (beyond the shell chrome touched here) is tracked as #417, not included in this release.
+
 ## [2.5.0] – 2026-07-20
 
 ### Added
