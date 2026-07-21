@@ -113,7 +113,6 @@ gaggiuino-local-profiler/     ← HA app (main deliverable)
   CHANGELOG.md
   DOCS.md                     ← English docs
   DOCS.de.md                  ← German docs (extra)
-gaggiuino-local-profiler-dev/ ← Dev app (pulls from main branch on start)
 README.md                     ← Repo root README (English)
 ```
 

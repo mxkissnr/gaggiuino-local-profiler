@@ -1,9 +1,1 @@
 name: "GLP CodeQL config"
-
-# gaggiuino-local-profiler-dev/ is a thin bootstrap wrapper that just pulls
-# the shipped app from main at add-on start (see gaggiuino-local-profiler-dev/
-# in the repo root) — it is not independently maintained app code, so alerts
-# raised against it are noise for the real codebase under
-# gaggiuino-local-profiler/. Exclude it from analysis.
-paths-ignore:
-  - gaggiuino-local-profiler-dev
