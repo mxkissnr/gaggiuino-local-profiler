@@ -836,6 +836,13 @@ function _applyUrlImport(data, variant) {
   if (data.altitude_m) document.getElementById('beanFormAltitude').value = data.altitude_m;
   if (data.importer)   document.getElementById('beanFormImporter').value = data.importer;
   if (data.harvest)    document.getElementById('beanFormHarvest').value  = data.harvest;
+  // #433: the backend has parsed producer/brew-guide fields for a while —
+  // this function just never copied them into the form.
+  if (data.producer)   document.getElementById('beanFormProducer').value   = data.producer;
+  if (data.brewTempC != null) document.getElementById('beanFormBrewTemp').value  = data.brewTempC;
+  if (data.brewRatio)         document.getElementById('beanFormBrewRatio').value = data.brewRatio;
+  if (data.brewTimeS != null) document.getElementById('beanFormBrewTime').value  = data.brewTimeS;
+  if (data.brewNotes)         document.getElementById('beanFormBrewNotes').value = data.brewNotes;
   if (variant) {
     document.getElementById('beanFormPrice').value = (variant.price / 100).toFixed(2);
     document.getElementById('beanFormStock').value = variant.weight;

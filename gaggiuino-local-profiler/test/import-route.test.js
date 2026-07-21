@@ -248,6 +248,27 @@ describe('GET /api/import/url — generic-Shopify HTML detail enrichment (#423)'
         expect(data.name).toBe('Flower Power');
         expect(data.process).toBeUndefined();
     });
+
+    // #433, ground truth end-to-end: vendor "adventurous" is a taxonomy tag,
+    // not a roaster name, so the JSON parse falls back to the bare hostname —
+    // the HTML enrichment pass should recover the real display name from
+    // og:site_name.
+    it('recovers a real roaster name from og:site_name when the JSON vendor field is unusable', async () => {
+        axiosGet
+            .mockResolvedValueOnce({ status: 200, headers: {}, data: {
+                title: 'Flower Power', vendor: 'adventurous', description: '', price: 1800,
+            }})
+            .mockResolvedValueOnce({ status: 200, headers: {}, data:
+                '<html><head><meta property="og:site_name" content="Sprout Coffee Roasters"></head><body></body></html>',
+            });
+
+        const url = 'https://sproutcoffeeroasters.art/products/flower-power';
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent(url)}`);
+        const data = await r.json();
+
+        expect(r.status).toBe(200);
+        expect(data.roaster).toBe('Sprout Coffee Roasters');
+    });
 });
 
 describe('GET /api/import/url — duplicate warning', () => {
