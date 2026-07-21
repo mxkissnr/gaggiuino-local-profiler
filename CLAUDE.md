@@ -65,6 +65,12 @@ Concretely:
 - New feature → bump second number: `1.20.1 → 1.21.0`
 - Breaking change → bump first number (rare)
 
+**Disambiguation (no size carve-out):** any net-new user-facing capability —
+however small (e.g. "click a photo to enlarge it") — is a feature and gets a
+minor bump. A round stays patch only if every change in it is a pure bugfix/
+regression-restore with zero new capability, no matter how many files or
+commits it touches.
+
 Always update **both**:
 - `gaggiuino-local-profiler/lib/constants.js` → `const GLP_VERSION  = '...'`
 - `gaggiuino-local-profiler/config.yaml` → `version: "..."`
