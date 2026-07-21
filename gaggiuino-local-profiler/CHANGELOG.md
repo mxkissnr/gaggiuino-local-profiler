@@ -1,3 +1,8 @@
+## [2.10.0] – 2026-07-21
+
+### Added
+- **Configurable mobile bottom navigation.** Choose which 4 destinations show up as the main mobile bottom-nav icons via a new "Mobile Navigationsleiste" section in Settings (checkbox to show/hide + up/down reorder arrows, no drag-and-drop). `Shots` is pinned as a mandatory, always-first slot since it's the primary mobile screen; the checkbox for a 5th main-bar slot disables itself once 4 are picked rather than silently evicting an earlier choice. Anything left unchecked falls into the "Mehr" overflow sheet automatically. Existing capability gates (Live only shown once the machine reports power-on, Bestellungen only when Orders is enabled) still apply on top of the user's picks — a gated-off destination never appears even if selected for the main bar. The selection persists client-side only (`localStorage` key `glp_bottom_nav_config`), with a parse-with-fallback that reproduces today's exact fixed set (main bar: Shots, Live, Bibliothek, Statistiken; Mehr: Bezugslog, Wartung, Bestellungen, Einstellungen) whenever the stored value is missing or corrupted. Desktop topbar is unaffected — mobile-only, by design. Also fixes a latent bug caught during the round: the bottom nav's active-state highlighting used to hardcode which ids live in the "Mehr" sheet, so it could highlight the wrong tab once destinations moved between the main bar and the sheet; it's now decided by DOM containment (`#moreSheet.contains(activeButton)`) and stays correct regardless of the user's configuration. Closes #443
+
 ## [2.9.0] – 2026-07-21
 
 ### Fixed
