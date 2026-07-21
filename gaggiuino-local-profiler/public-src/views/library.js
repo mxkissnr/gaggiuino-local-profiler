@@ -5,6 +5,7 @@ import { esc, roastAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, countryName, flagEmoji } from '../constants.js';
 import { loadBeanImageBlobUrl, loadGrinderImageBlobUrl, invalidateGrinderImage, invalidateBeanImage } from '../bean-image.js';
 import { openImageCropEditor } from '../components/image-crop.js';
+import { openLightbox } from '../components/lightbox.js';
 import { generateBeanQR, parseGlpQrParams } from '../glp-qr.js';
 import { calcBestGrindCombosForBean } from './shots/grind.js';
 import { TARGET_ICON_SVG, SLIDERS_ICON_SVG, FLAVOR_WHEEL_ICON_SVG, COFFEE_ICON_SVG, WATER_DROP_ICON_SVG, ICE_CUBE_ICON_SVG, LINK_ICON_SVG, WRENCH_ICON_SVG } from '../icons.js';
@@ -232,10 +233,17 @@ export function renderBeanList() {
 
 // Bean images need the auth token, so <img src> can't point at the API
 // directly (see bean-image.js) — set the blob-url src async after render.
+// #440: click opens the same fullscreen lightbox already used for shot
+// photos (sidebar.js) — stopPropagation mirrors that pattern in case a
+// parent click handler is ever added to .lib-item.
 function loadBeanThumbnails() {
   document.querySelectorAll('.lib-bean-thumb[data-bean-id]').forEach(img => {
     const id = Number(img.dataset.beanId);
-    loadBeanImageBlobUrl(id).then(url => { if (url) img.src = url; });
+    loadBeanImageBlobUrl(id).then(url => {
+      if (!url) return;
+      img.src = url;
+      img.onclick = e => { e.stopPropagation(); openLightbox(img.src); };
+    });
   });
 }
 
@@ -370,10 +378,15 @@ function formatWearGrams(g) {
 
 // Grinder images need the auth token, so <img src> can't point at the API
 // directly (see bean-image.js) — set the blob-url src async after render.
+// #441: click opens the fullscreen lightbox, same as bean photos (#440).
 function loadGrinderThumbnails() {
   document.querySelectorAll('.lib-grinder-thumb[data-grinder-id]').forEach(img => {
     const id = Number(img.dataset.grinderId);
-    loadGrinderImageBlobUrl(id).then(url => { if (url) img.src = url; });
+    loadGrinderImageBlobUrl(id).then(url => {
+      if (!url) return;
+      img.src = url;
+      img.onclick = e => { e.stopPropagation(); openLightbox(img.src); };
+    });
   });
 }
 

@@ -51,6 +51,11 @@ export const S = {
   trendWindow: 30,
   _calendarResizeObserver: null,
   currentFilter: '',
+  // #439: which month-tier sidebar groups are expanded — in-memory only
+  // (never mirrored to localStorage), so it survives re-renders/shot
+  // switches within a session but resets on a fresh page load, matching the
+  // pre-#399 sidebar's month-accordion behavior.
+  _expandedMonths: new Set(),
   _urlImportSource: null,
   _urlImportedAt: null,
   _urlImportSourceUrl: null,

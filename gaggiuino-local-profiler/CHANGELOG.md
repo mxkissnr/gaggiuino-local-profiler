@@ -1,3 +1,11 @@
+## [2.9.0] – 2026-07-21
+
+### Fixed
+- **Collapsible month-group accordion restored in the shot sidebar.** The #412/#426 hybrid-grouping redesign gave the sidebar day-tier and month-tier separator headers, but both rendered as plain, always-expanded divs — the pre-#399 month accordion (collapsible header, collapsed by default) never made it into the new `renderSidebar()`. `groupShotsByDay()` now tags each group with `tier: 'day' | 'month'`; month-tier groups (shots older than ~14 days) render as a `sidebar-month-header` button (▸/▾ chevron + "Month Year") with a collapsible `sidebar-month-body`, starting collapsed unless already expanded this session (in-memory `S._expandedMonths` Set, not persisted to localStorage). Recent day-tier groups (Today/Yesterday/weekday+date) are untouched and stay always-expanded. Verified against a real production `/api/backup` export (143 shots across April–July 2026) via a direct Node script calling `groupShotsByDay()`. Closes #439
+
+### Added
+- **Coffee Library: bean and grinder photos open in the fullscreen lightbox on click.** Both now reuse the same `openLightbox()` component already used for shot photos in the sidebar, for a consistent click-to-enlarge interaction across the app. Closes #440, closes #441
+
 ## [2.8.0] – 2026-07-21
 
 ### Fixed

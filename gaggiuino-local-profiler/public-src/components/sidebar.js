@@ -28,12 +28,34 @@ export function renderSidebar() {
     const formatOlder = d => d.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
     const groups = groupShotsByDay(shots, new Date(), t('day_today'), t('day_yesterday'), formatRecent, formatOlder);
     groups.forEach(group => {
-      const sep = document.createElement('div');
-      sep.className = 'day-sep';
-      sep.dataset.dayKey = group.key;
-      sep.textContent = group.label;
-      el.appendChild(sep);
-      group.shots.forEach(shot => el.appendChild(_buildShotWrapper(shot)));
+      if (group.tier === 'month') {
+        // #439: month-tier groups collapse behind a clickable header,
+        // restoring the pre-#399 accordion — collapsed by default unless
+        // this session already expanded it (S._expandedMonths survives
+        // re-renders but resets on a fresh page load).
+        const expanded = S._expandedMonths.has(group.key);
+        const header = document.createElement('button');
+        header.type = 'button';
+        header.className = 'sidebar-month-header';
+        header.dataset.action = 'toggle-month-group';
+        header.dataset.id = group.key;
+        header.textContent = `${expanded ? '▾' : '▸'} ${group.label}`;
+        el.appendChild(header);
+
+        const body = document.createElement('div');
+        body.className = 'sidebar-month-body';
+        body.id = `monthGroup-${group.key}`;
+        body.style.display = expanded ? '' : 'none';
+        group.shots.forEach(shot => body.appendChild(_buildShotWrapper(shot)));
+        el.appendChild(body);
+      } else {
+        const sep = document.createElement('div');
+        sep.className = 'day-sep';
+        sep.dataset.dayKey = group.key;
+        sep.textContent = group.label;
+        el.appendChild(sep);
+        group.shots.forEach(shot => el.appendChild(_buildShotWrapper(shot)));
+      }
     });
   }
 
@@ -159,6 +181,20 @@ function _buildShotWrapper(shot) {
     return wrapper;
 }
 
+// #439: restores the pre-#399 month-accordion toggle — flips the body's
+// display and the header's chevron, and tracks expanded state in the
+// in-memory S._expandedMonths Set so it survives renderSidebar() re-renders
+// within the session (never persisted to localStorage).
+export function toggleMonthGroup(key) {
+  const body = document.getElementById(`monthGroup-${key}`);
+  const btn = document.querySelector(`[data-action="toggle-month-group"][data-id="${key}"]`);
+  if (!body) return;
+  const willExpand = body.style.display === 'none';
+  body.style.display = willExpand ? '' : 'none';
+  if (btn) btn.textContent = `${willExpand ? '▾' : '▸'} ${btn.textContent.replace(/^[▾▸]\s*/, '')}`;
+  if (willExpand) S._expandedMonths.add(key); else S._expandedMonths.delete(key);
+}
+
 export function toggleCompare(id) {
   if (S.primaryShotId === id) return;
   S.compareShotId = (S.compareShotId === id) ? null : id;
@@ -195,15 +231,35 @@ export function filterShots(query) {
   });
   // #412: a day-separator header with every shot underneath it filtered out
   // would otherwise sit there empty — hide it too, until the next visible
-  // shot-wrapper sibling (i.e. the next day-sep or the list's end).
+  // shot-wrapper sibling (i.e. the next day-sep, month-header or the list's
+  // end). Month-tier siblings are skipped here (handled separately below)
+  // rather than counted as "visible", since their own display isn't a
+  // signal about this day-sep's shots.
   document.querySelectorAll('#shots .day-sep').forEach(sep => {
     let sib = sep.nextElementSibling;
     let hasVisible = false;
-    while (sib && !sib.classList.contains('day-sep')) {
-      if (sib.style.display !== 'none') { hasVisible = true; break; }
+    while (sib && !sib.classList.contains('day-sep') && !sib.classList.contains('sidebar-month-header')) {
+      if (sib.classList.contains('shot-wrapper') && sib.style.display !== 'none') { hasVisible = true; break; }
       sib = sib.nextElementSibling;
     }
     sep.style.display = hasVisible ? '' : 'none';
+  });
+  // #439: while actively searching, force every month group open so matches
+  // nested inside a collapsed month are actually visible; hide the
+  // header+body pair entirely if none of its shots match, and restore the
+  // session's collapse state once the query is cleared (parity with the
+  // pre-#399 behavior).
+  document.querySelectorAll('#shots .sidebar-month-body').forEach(body => {
+    const key = body.id.replace('monthGroup-', '');
+    const header = document.querySelector(`[data-action="toggle-month-group"][data-id="${key}"]`);
+    if (q) {
+      const hasVisible = [...body.children].some(c => c.style.display !== 'none');
+      body.style.display = hasVisible ? '' : 'none';
+      if (header) header.style.display = hasVisible ? '' : 'none';
+    } else {
+      body.style.display = S._expandedMonths.has(key) ? '' : 'none';
+      if (header) header.style.display = '';
+    }
   });
 }
 

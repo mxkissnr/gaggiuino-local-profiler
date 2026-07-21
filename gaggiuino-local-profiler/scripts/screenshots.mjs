@@ -230,12 +230,22 @@ async function seed(baseUrl) {
           profile: { name: gaggimateShot.profileName }, datapoints: gaggimateShot.datapoints, machineType: 'gaggimate' },
         { id: 4, timestamp: now,             duration: gaggimateShot.duration, machineId: machine2.id,
           profile: { name: gaggimateShot.profileName }, datapoints: gaggimateShot.datapoints, machineType: 'gaggimate' },
+        // Shots older than the ~14-day day/month grouping cutoff (#426), spread
+        // across three different months, so the sidebar's month-tier accordion
+        // (#439) actually has something to render/collapse in the screenshot —
+        // the four shots above alone are all within the recent day-tier window.
+        { id: 5, timestamp: now - 20 * 86400, duration: 280, profile: { name: 'Standard Espresso' }, datapoints },
+        { id: 6, timestamp: now - 50 * 86400, duration: 280, profile: { name: 'Blooming Shot' }, datapoints },
+        { id: 7, timestamp: now - 80 * 86400, duration: 280, profile: { name: 'Standard Espresso' }, datapoints },
     ];
     shotRepo.upsertMany(shots);
     shotRepo.saveAnnotation(1, { coffee: bean1.name, dose: 15, rating: 5, grinder: grinder.name, notes: 'Blumig, sehr sauber' });
     shotRepo.saveAnnotation(2, { coffee: bean2.name, dose: 18, rating: 4, grinder: grinder.name, drinkType: null });
     shotRepo.saveAnnotation(3, { coffee: bean2.name, dose: 18, rating: 5, grinder: grinder.name });
     shotRepo.saveAnnotation(4, { coffee: bean2.name, dose: 18, rating: 4, grinder: grinder.name });
+    shotRepo.saveAnnotation(5, { coffee: bean1.name, dose: 15, rating: 4, grinder: grinder.name });
+    shotRepo.saveAnnotation(6, { coffee: bean2.name, dose: 18, rating: 5, grinder: grinder.name });
+    shotRepo.saveAnnotation(7, { coffee: bean1.name, dose: 15, rating: 3, grinder: grinder.name });
 }
 
 async function main() {
