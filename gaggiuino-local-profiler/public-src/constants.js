@@ -69,12 +69,16 @@ export function flagEmoji(code) {
   return String.fromCodePoint(...[...code].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
 }
 
+// #417 sweep: the `icon` emoji fields these entries used to carry were dead
+// data — no consumer ever read MAINT_META[task].icon, since maintenance.js's
+// own taskIconSvg()/TASK_ICON_PATHS (#393) already renders the real stroke-SVG
+// task icons. Dropped rather than replaced.
 export const MAINT_META = {
-  descaling:   { icon: '🧪', key: 'maint_descaling'   },
-  backflush:   { icon: '🔄', key: 'maint_backflush'   },
-  grouphead:   { icon: '🔧', key: 'maint_grouphead'   },
-  gaskets:     { icon: '⭕', key: 'maint_gaskets'     },
-  waterfilter: { icon: '💧', key: 'maint_waterfilter' },
+  descaling:   { key: 'maint_descaling'   },
+  backflush:   { key: 'maint_backflush'   },
+  grouphead:   { key: 'maint_grouphead'   },
+  gaskets:     { key: 'maint_gaskets'     },
+  waterfilter: { key: 'maint_waterfilter' },
 };
 
 // Guided maintenance walkthroughs: i18n keys per step. Tasks without an entry

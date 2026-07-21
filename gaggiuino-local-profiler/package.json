@@ -1,6 +1,6 @@
 {
   "name": "gaggiuino-local-profiler-backend",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "main": "server.js",
   "scripts": {
     "build": "vite build",
@@ -12,7 +12,7 @@
     "@napi-rs/canvas": "^1.0.2",
     "@protobuf-ts/runtime": "^2.11.1",
     "axios": "1.18.1",
-    "better-sqlite3": "12.11.1",
+    "better-sqlite3": "13.0.1",
     "cheerio": "1.2.0",
     "express": "5.2.1",
     "express-rate-limit": "^8.6.0",
@@ -26,7 +26,7 @@
     "vitest": "4.1.10"
   },
   "allowScripts": {
-    "better-sqlite3@12.11.1": true,
+    "better-sqlite3@13.0.1": true,
     "esbuild@0.25.12": true
   }
 }

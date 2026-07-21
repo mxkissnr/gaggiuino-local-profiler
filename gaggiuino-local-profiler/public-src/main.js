@@ -108,6 +108,8 @@ import { loadDemoData, endDemo } from './components/onboarding.js';
 
 import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, renderMachinesList } from './components/machines-settings.js';
 
+import { BEAN_ICON_SVG } from './icons.js';
+
 // ── Toast helper ──────────────────────────────────────────────────────────
 function showToast(msg, duration = 3000) {
   let el = document.getElementById('glpToast');
@@ -487,7 +489,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Show bean age hint
       const ageDays = calcBeanAgeAtShot(name, shot?.timestamp);
       if (hintEl && ageDays != null) {
-        hintEl.textContent = t('bean_age_at_shot', ageDays);
+        hintEl.innerHTML = `${BEAN_ICON_SVG} ${t('bean_age_at_shot', ageDays)}`;
         hintEl.style.display = '';
       } else if (hintEl) {
         hintEl.style.display = 'none';

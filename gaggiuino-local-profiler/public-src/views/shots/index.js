@@ -12,6 +12,7 @@ import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './g
 import { renderAnnotationPanel }                              from './annotation.js';
 import { updatePQChart }                                      from './charts.js';
 import { updateMachineBanner, updateOnboardingPanel }          from '../../components/onboarding.js';
+import { GEAR_ICON_SVG, COFFEE_ICON_SVG }                     from '../../icons.js';
 
 // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -345,7 +346,7 @@ export function updateView() {
       verdictDeltaChip.style.display = 'none';
     }
 
-    document.getElementById('verdictHeadline').textContent = advice ? `${advice.icon} ${advice.text}` : t('verdict_no_data');
+    document.getElementById('verdictHeadline').innerHTML = advice ? `${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'));
     document.getElementById('verdictSubline').textContent = [
       nameA,
       `Shot ${shotA.nativeId ?? shotA.id}`,
@@ -364,7 +365,7 @@ export function updateView() {
     if (compAdv) {
       const wasOpen = compEl.classList.contains('expanded');
       compEl.className = `grind-advice grind-comparative grind-${compAdv.type}${wasOpen ? ' expanded' : ''}`;
-      document.getElementById('grindAdviceComparativeIcon').textContent = compAdv.icon;
+      document.getElementById('grindAdviceComparativeIcon').innerHTML = compAdv.icon;
       document.getElementById('grindAdviceComparativeText').textContent = compAdv.text;
 
       const locale   = LOCALE_MAP[S.currentLang] || 'de-DE';
@@ -377,7 +378,7 @@ export function updateView() {
           <div class="comp-thumb-chart">${chart}</div>
           <div class="comp-thumb-meta">
             <span class="comp-shot-date">${date}</span>
-            <span class="comp-shot-grind">⚙ ${grind}</span>
+            <span class="comp-shot-grind">${GEAR_ICON_SVG} ${grind}</span>
             <span class="comp-shot-score ${cls}">${score}</span>
             ${dur ? `<span class="comp-shot-dur">${dur}</span>` : ''}
           </div>
@@ -413,7 +414,7 @@ export function updateView() {
     if (ob?.customer) {
       const drink = ob.item ? (ob.variant ? `${ob.item} · ${ob.variant}` : ob.item) : null;
       obEl.innerHTML =
-        `<span class="ann-ordered-by-label">☕ ${t('ann_ordered_by')}</span>` +
+        `<span class="ann-ordered-by-label">${COFFEE_ICON_SVG} ${t('ann_ordered_by')}</span>` +
         `<span class="ann-ordered-by-val">${esc(ob.customer)}${drink ? ` · ${esc(drink)}` : ''}${ob.note ? ` · <em>${esc(ob.note)}</em>` : ''}</span>`;
       obEl.style.display = '';
     } else {

@@ -8,6 +8,7 @@ import { suggestGrindDoseForBean } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
+import { COFFEE_ICON_SVG } from '../../icons.js';
 
 // ── Auto-save ─────────────────────────────────────────────────────────────
 
@@ -287,7 +288,7 @@ export function renderAnnotationPanel(shot) {
     const ob = ann.orderedBy;
     if (ob?.customer) {
       const drink = ob.item ? (ob.variant ? `${ob.item} · ${ob.variant}` : ob.item) : null;
-      badge.textContent = `☕ ${ob.customer}${drink ? ` · ${drink}` : ''}${ob.note ? ` · ${ob.note}` : ''}`;
+      badge.innerHTML = `${COFFEE_ICON_SVG} ${esc(ob.customer)}${drink ? ` · ${esc(drink)}` : ''}${ob.note ? ` · ${esc(ob.note)}` : ''}`;
       badge.style.display = '';
     } else {
       badge.style.display = 'none';

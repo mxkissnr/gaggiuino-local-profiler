@@ -4,6 +4,7 @@ import { LOCALE_MAP } from '../constants.js';
 import { esc, scoreClass, formatTimeLabel, groupShotsByDay } from '../utils.js';
 import { loadShotImageBlobUrl } from '../bean-image.js';
 import { openLightbox } from './lightbox.js';
+import { STAR_ICON_SVG } from '../icons.js';
 
 // These are imported lazily via window to avoid circular dependencies
 // updateView is on window, calcShotScore/getShotData are set from shots.js
@@ -208,13 +209,13 @@ export function setSortMode(mode) {
     S.sortAsc = false;
   }
   const arrow = S.sortAsc ? ' ↑' : ' ↓';
-  const labels = { newest: t('sort_newest'), score: t('sort_score'), rating: `⭐ ${t('sort_rating')}`, duration: t('sort_duration') };
+  const labels = { newest: t('sort_newest'), score: t('sort_score'), rating: `${STAR_ICON_SVG} ${t('sort_rating')}`, duration: t('sort_duration') };
   document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
   const map = { newest: 'sortNewest', score: 'sortScore', rating: 'sortRating', duration: 'sortDur' };
   const activeBtn = document.getElementById(map[mode]);
   if (activeBtn) {
     activeBtn.classList.add('active');
-    activeBtn.textContent = (labels[mode] || mode) + arrow;
+    activeBtn.innerHTML = (labels[mode] || mode) + arrow;
   }
   renderSidebar();
 }
