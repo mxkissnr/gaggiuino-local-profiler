@@ -857,7 +857,7 @@
         .flavor-chips-wrap .origin-chip-percent { width: 34px; min-width: 0; flex: none; text-align: center; background: rgba(255,255,255,.08); border-radius: 3px; padding: 1px 2px; -moz-appearance: textfield; }
         .origin-chip-percent::-webkit-outer-spin-button, .origin-chip-percent::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .lib-flavor-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
-        .lib-bean-thumb { width: 40px; height: 40px; border-radius:var(--radius); object-fit: cover; flex-shrink: 0; margin-right: 10px; background: var(--gray-800); }
+        .lib-bean-thumb { width: 40px; height: 40px; border-radius:var(--radius); object-fit: cover; flex-shrink: 0; margin-right: 10px; background: var(--gray-800); cursor: pointer; }
         .lib-grinder-thumb { width: 40px; height: 40px; border-radius:var(--radius); object-fit: cover; flex-shrink: 0; margin-right: 10px; background: var(--gray-800); }
         .lib-rating-row { display: flex; align-items: center; gap: 1px; margin-top: 4px; }
         .lib-star { color: var(--gray-700); font-size: .8rem; }
