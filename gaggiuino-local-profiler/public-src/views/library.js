@@ -378,10 +378,15 @@ function formatWearGrams(g) {
 
 // Grinder images need the auth token, so <img src> can't point at the API
 // directly (see bean-image.js) — set the blob-url src async after render.
+// #441: click opens the fullscreen lightbox, same as bean photos (#440).
 function loadGrinderThumbnails() {
   document.querySelectorAll('.lib-grinder-thumb[data-grinder-id]').forEach(img => {
     const id = Number(img.dataset.grinderId);
-    loadGrinderImageBlobUrl(id).then(url => { if (url) img.src = url; });
+    loadGrinderImageBlobUrl(id).then(url => {
+      if (!url) return;
+      img.src = url;
+      img.onclick = e => { e.stopPropagation(); openLightbox(img.src); };
+    });
   });
 }
 
