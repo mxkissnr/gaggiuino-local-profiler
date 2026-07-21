@@ -620,7 +620,10 @@
             text-align: center;
             padding: 60px 40px;
         }
-        #empty-state .es-icon { font-size: 3.5rem; margin-bottom: 20px; }
+        /* #414: was a ☕ emoji glyph — inline stroke-SVG (same cup mark as the
+           rail brand logo) instead, themed via currentColor. */
+        #empty-state .es-icon { color: var(--gray-600); margin-bottom: 20px; }
+        #empty-state .es-icon .rail-icon { width: 56px; height: 56px; stroke-width: 1.3; }
         #empty-state h2 { color: var(--gray-500); font-size: 1.25rem; margin: 0 0 10px; }
         #empty-state p  { font-size: .875rem; color: var(--gray-600); margin: 0; max-width: 360px; line-height: 1.6; }
 
@@ -644,7 +647,11 @@
         #chart-area { display: flex; flex-direction: column; padding: 32px 40px 40px; }
 
         .sprofiler-header        { margin-bottom: 18px; }
-        .sprofiler-header h1     { font-size: 1.75rem; font-weight: 600; color: #fff; margin: 0 0 4px; }
+        /* #413: was a hardcoded #fff — invisible on the light/Crema themes,
+           where the content area is white/near-white. --gray-200 is the same
+           themed "brightest text" token used elsewhere (e.g. #sidebar h2,
+           .profile-name-sidebar, after #405). */
+        .sprofiler-header h1     { font-size: 1.75rem; font-weight: 600; color: var(--gray-200); margin: 0 0 4px; }
         .sprofiler-header p      { font-size: .875rem; color: var(--gray-400); margin: 0; }
 
         .meta-sub   { font-size: .85rem; color: var(--gray-500); font-weight: normal; margin-left: 6px; }
@@ -666,15 +673,20 @@
             background: conic-gradient(var(--ring-color, var(--gray-600)) calc(var(--ring-pct, 0) * 1%), var(--gray-800) 0);
             display: flex; align-items: center; justify-content: center;
         }
+        /* #413: .verdict-ring-inner's background is themed (var(--gray-950),
+           near-black in dark / near-white in light+Crema) but its score
+           number was still a hardcoded #fff — same bug as the headline
+           below, found while fixing it (not itself in the original issue,
+           but the same component and the same root cause). */
         .verdict-ring-inner {
             width: 46px; height: 46px;
             border-radius: 50%;
             background: var(--gray-950);
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.05rem; font-weight: 700; color: #fff;
+            font-size: 1.05rem; font-weight: 700; color: var(--gray-200);
         }
         .verdict-text      { min-width: 0; }
-        .verdict-headline  { font-size: 1.05rem; font-weight: 700; color: #fff; }
+        .verdict-headline  { font-size: 1.05rem; font-weight: 700; color: var(--gray-200); }
         .verdict-subline   { font-size: .8rem; color: var(--gray-500); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* ── Delta chips (#402): same-profile auto-compare vs. the previous shot.
@@ -1152,7 +1164,9 @@
             text-align: center;
             padding: 60px 40px;
         }
-        #live-idle .idle-icon { font-size: 3rem; margin-bottom: 16px; }
+        /* #414: was a ☕ emoji glyph — same treatment as #empty-state .es-icon. */
+        #live-idle .idle-icon { color: var(--gray-600); margin-bottom: 16px; }
+        #live-idle .idle-icon .rail-icon { width: 48px; height: 48px; stroke-width: 1.3; }
         #live-idle h2 { color: var(--gray-500); font-size: 1.1rem; margin: 0 0 8px; }
         #live-idle p  { font-size: .875rem; color: var(--gray-600); margin: 0; max-width: 320px; line-height: 1.6; }
 

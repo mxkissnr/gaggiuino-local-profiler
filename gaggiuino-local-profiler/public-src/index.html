@@ -4,7 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GLP</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%2318181b'/><text y='.85em' font-size='78' x='10'>☕</text></svg>">
+    <!-- #414: was a ☕ text glyph baked into the SVG — replaced with the same
+         inline vector cup mark used for the rail brand logo, for a
+         consistent, theme-independent icon (favicons can't follow in-app
+         dark/light/accent state, so this stays a fixed dark badge + amber
+         mark regardless of the viewer's chosen theme). -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%2318181b'/><g transform='translate(13.2,16.4) scale(3.2)' fill='none' stroke='%23f59e0b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z'/><path d='M8 2v2M12 2v2'/></g></svg>">
     <link rel="apple-touch-icon" href="icon.png">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -167,7 +172,7 @@
     <div id="shots-view">
 
         <div id="empty-state">
-            <div class="es-icon">☕</div>
+            <div class="es-icon"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg></div>
             <h2 data-i18n="empty_title">Keine Shots vorhanden</h2>
             <p data-i18n="empty_desc">Stelle sicher, dass die Gaggiuino-Maschine unter der konfigurierten URL erreichbar ist und nutze ↻ Sync.</p>
             <div id="onboarding-panel" style="display:none">
@@ -935,7 +940,7 @@
 
         <div id="live-idle" style="display:none">
             <div id="preheat-widget">
-                <div id="preheat-ready-badge" style="display:none" data-i18n="preheat_ready">Brühbereit ☕</div>
+                <div id="preheat-ready-badge" style="display:none" data-i18n="preheat_ready">Brühbereit</div>
                 <div id="preheat-warming-wrap" style="display:none">
                     <div id="preheat-icon">🔥</div>
                     <div id="preheat-status-text" data-i18n="preheat_warming">Aufheizen …</div>
@@ -943,7 +948,7 @@
                     <div id="preheat-countdown">–</div>
                 </div>
             </div>
-            <div class="idle-icon">☕</div>
+            <div class="idle-icon"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg></div>
             <h2 data-i18n="machine_ready">Maschine bereit</h2>
             <p id="liveIdleText" data-i18n="live_idle_text">Sobald ein Bezug startet, erscheinen hier die Echtzeit-Daten.</p>
         </div>

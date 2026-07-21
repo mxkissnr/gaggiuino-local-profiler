@@ -239,7 +239,7 @@ export default {
     settings_api_token:'Token API',
     settings_api_token_desc:'Le integrazioni come la Order Card in modalità URL diretto (senza HA Ingress) necessitano di questo token come glp_token nella configurazione YAML.',
     settings_api_token_copy:'Copia', settings_api_token_copied:'Token copiato',
-    preheat_warming:'Riscaldamento …', preheat_ready:'Pronto per estrarre ☕',
+    preheat_warming:'Riscaldamento …', preheat_ready:'Pronto per estrarre',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} rimanenti`,
     btn_export_profile_tooltip:'Esporta profilo Gaggiuino dallo shot',
     export_csv_title:'Esporta tutti gli shot come CSV',
