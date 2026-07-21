@@ -1,3 +1,16 @@
+## [2.7.0] – 2026-07-21
+
+### Changed
+- **Desktop nav moved from left rail back to a horizontal topbar tab row.** v2.6.0's collapsible left nav rail is removed again after real ingress testing showed it stacking a second left-hand menu on top of Home Assistant's own ingress sidebar. Desktop nav is now a horizontal tab row in `#content-topbar` (pre-#411 `#mode-bar`/`.mode-btn` visual language: raised active surface, hidden-scrollbar horizontal overflow); nav button ids (`btnShots`, `btnLive`, ...) are unchanged so `mode.js`/`status.js` keep working unmodified, and the rail footer's machine online-dot/name folds into the topbar next to the machine switcher. If you liked the nav rail, please comment on the repo. Closes #424
+- **Mobile: burger drawer reopens the shot list from any view.** A new burger button (`#mobileDrawerBtn`) slides `#sidebar` in as an overlay drawer with a backdrop, closable via swipe-left or backdrop-tap, alongside the existing bottom nav — purely additive, the #403/#410 Shots-primary-screen flow is untouched. Closes #425
+- **Shot sidebar: hybrid date grouping.** Recent shots (today/yesterday, up to ~14 days) keep per-day buckets; older shots collapse into per-month buckets ("Juli 2026") instead of one bucket per day forever. Closes #426
+
+### Added
+- **Generic Shopify bean import enriched from theme HTML detail.** Some Shopify themes only render process/variety/producer/region/origin/elevation/tasting-notes/brew-guide/roast-type into the product page's HTML, not the `/products/<handle>.js` JSON the importer reads — verified live against sproutcoffeeroasters.art (Sprout Coffee Roasters). A bounded, SSRF-checked second fetch of the product page (only when the JSON left detail fields empty) scrapes accordion label:value lines, the tasting-notes subtitle, and the brew-guide recipe block into the bean's notes, filling gaps without ever overwriting JSON-derived values. `roastType` is now also derived from the JSON's own options/tags, and elevation parsing recognizes plain-digit/MASL shapes alongside the existing German thousands-dot format. Closes #423
+
+### Fixed
+- **`ERR_ERL_KEY_GEN_IPV6` startup warning silenced.** `express-rate-limit`'s own `ipKeyGenerator` normalization helper now wraps the raw socket address so IPv6 addresses bucket correctly, removing the non-fatal validation warning without changing rate-limit bucketing for the LAN/HA-Ingress traffic this limiter actually sees. Closes #422
+
 ## [2.6.1] – 2026-07-21
 
 ### Fixed
