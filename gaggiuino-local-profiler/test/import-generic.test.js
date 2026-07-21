@@ -171,6 +171,32 @@ describe('enrichGenericBeanFromHtml', () => {
         });
     });
 
+    // #451: "Milky Espresso" used to be discarded entirely once "Espresso"
+    // was chosen for the bean's own brewTempC/brewRatio — now surfaced as an
+    // opt-in Library Recipe import candidate instead.
+    describe('extra brew guide recipe candidates (#451)', () => {
+        it('surfaces the discarded Milky Espresso block as an extraBrewRecipes candidate', () => {
+            const bean = enrichGenericBeanFromHtml(jsonOnlyBean, sproutHtml);
+            expect(bean.extraBrewRecipes).toHaveLength(1);
+            const recipe = bean.extraBrewRecipes[0];
+            expect(recipe.name).toBe('Milky Espresso');
+            expect(recipe.targetDose_g).toBe(20);
+            expect(recipe.targetYield_g).toBe(38); // first number only, ignores "for a double, split..."
+            expect(recipe.targetTime_s).toBe(29);  // round(midpoint(28,30))
+            expect(recipe.waterTemp_c).toBe(92.5);
+            expect(recipe.notes).toContain('Milky Espresso');
+            expect(recipe.notes).toContain('In: 20g');
+        });
+
+        it('does not surface extraBrewRecipes when there is only one recipe block', () => {
+            const html = '<details><summary>Brew Guide</summary><div class="details-content">'
+                + '<p><span>Espresso<br>In: 19.7g<br>Out: 48g<br>Time: 27-29 seconds<br>Ratio: 1 - 2.4<br>Temp: 92-93 Celsius</span></p>'
+                + '</div></details>';
+            const bean = enrichGenericBeanFromHtml({ ...jsonOnlyBean, notes: '' }, html);
+            expect(bean.extraBrewRecipes).toBeUndefined();
+        });
+    });
+
     // #433: reported symptom was literally "EspressoIn: 19.7gOut: 48g" — a
     // minified page's <br> tags with zero surrounding whitespace, which the
     // old code's plain .text() concatenated with no separator at all.

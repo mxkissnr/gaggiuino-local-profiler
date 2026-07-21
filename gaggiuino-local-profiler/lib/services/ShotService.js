@@ -1,5 +1,6 @@
 const repo              = require('../repositories/ShotRepository');
 const { calcShotScore } = require('../score');
+const libraryService    = require('./LibraryService');
 const { log }           = require('../helpers');
 const { MAX_SHOT_ID, ALLOWED_URL_SCHEMES } = require('../constants');
 
@@ -70,8 +71,12 @@ class ShotService {
         return repo.upsert(shot);
     }
 
+    // #450: scores against the bean's own brewTempC/brewRatio recommendation
+    // (resolved via the shot's annotation.coffee name) when the library has
+    // one set, instead of only the generic fixed bands — see lib/score.js.
     computeScore(shot) {
-        return calcShotScore(shot);
+        const bean = libraryService.findBeanByName(shot?.annotation?.coffee);
+        return calcShotScore(shot, bean);
     }
 }
 

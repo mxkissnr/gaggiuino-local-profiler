@@ -1,3 +1,9 @@
+## [2.12.0] – 2026-07-22
+
+### Added
+- **Shot score weighs temperature/ratio against the bean's own brew recommendation, when set.** `calcShotScore()` used to always score temperature accuracy and dose:yield ratio against generic fixed bands (90–96 °C, 1:1.8–1:2.5) unless the shot itself carried a recorded target-temperature curve. Now, when the shot's coffee (`annotation.coffee`) matches a library bean with its own `brewTempC`/`brewRatio` recommendation set, that becomes the target instead of the generic band — the shot's own target curve still wins when present. A bean with neither field set scores identically to before. Closes #450
+- **Brew Guide accordions with multiple recipes (e.g. "Espresso" + "Milky Espresso") can import the extra ones as Library Recipes.** The generic Shopify import's Brew Guide parser used to keep only one block (for the bean's own `brewTempC`/`brewTimeS`/`brewRatio`) and silently discard any others. The bean import dialog now shows each discarded block as an opt-in checkbox (checked by default); saving the bean also creates a Recipe entry (dose, yield, time, water temperature, linked to the bean) for whichever stay checked. Ground-truthed against a real Sprout Coffee Roasters Brew Guide (Espresso + Milky Espresso blocks). Pour-Over-style guides (different key vocabulary, numbered pour schedule) are out of scope for this round. Closes #451
+
 ## [2.11.0] – 2026-07-22
 
 ### Fixed

@@ -65,10 +65,13 @@ export function getShotData(shot) {
   };
 }
 
-// Prefer the server-computed score; only recompute locally for synthetic data.
+// Prefer the server-computed score; only recompute locally for synthetic data
+// (server-computed shots always already carry .score, bean-aware per #450).
 export function calcShotScore(shot, _data) {
   if (shot && shot.score !== undefined) return shot.score;
-  return _calcShotScore(shot);
+  const coffee = shot?.annotation?.coffee;
+  const bean = coffee ? S.coffeeLibrary?.beans?.find(b => b.name.toLowerCase() === coffee.toLowerCase()) : null;
+  return _calcShotScore(shot, bean);
 }
 
 // ── Same-profile auto-compare (#402) ────────────────────────────────────────
