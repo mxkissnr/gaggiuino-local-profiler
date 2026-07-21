@@ -321,6 +321,15 @@ export function updateMobileShotSidebarVisibility() {
   const backBtn = document.getElementById('mobileBackBtn');
   const shotsView = document.getElementById('shots-view');
   if (!sidebar) return;
+  // This function is the single authority for what mobile should show for
+  // the current mode/subview — any leftover burger-drawer overlay state
+  // (#425) is stale the moment mode/subview changes, so drop it instantly
+  // rather than waiting for its own close animation.
+  if (sidebar.classList.contains('sidebar-drawer-mode')) {
+    sidebar.classList.remove('sidebar-drawer-mode', 'sidebar-drawer-open');
+    document.getElementById('sidebar-drawer-backdrop')?.classList.remove('visible');
+    document.getElementById('mobileDrawerBtn')?.setAttribute('aria-expanded', 'false');
+  }
   if (window.innerWidth > 768) {
     // Desktop: clear any mobile-only inline override so the normal flex
     // column layout (set purely via CSS) applies again, e.g. after a
@@ -339,6 +348,55 @@ export function updateMobileShotSidebarVisibility() {
   // detail are two full-screen alternates instead, so override it back to
   // 'none' while the list is the one showing.
   if (shotsView && inShotsMode) shotsView.style.display = showList ? 'none' : 'flex';
+}
+
+// ── Mobile burger drawer (#425) ───────────────────────────────────────────
+// Additive access path to the shot list from any view/mode on mobile — the
+// bottom-nav-driven Shots-primary-screen flow above is untouched by this;
+// the drawer just layers #sidebar on top as an overlay with a backdrop,
+// then hands back to updateMobileShotSidebarVisibility() once fully closed
+// so whatever the current mode/subview would normally show resumes.
+let _drawerTouchStartX = null;
+
+export function openShotDrawer() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-drawer-backdrop');
+  const btn = document.getElementById('mobileDrawerBtn');
+  if (!sidebar || window.innerWidth > 768) return;
+  sidebar.classList.add('sidebar-drawer-mode');
+  sidebar.style.display = 'flex';
+  backdrop?.classList.add('visible');
+  btn?.setAttribute('aria-expanded', 'true');
+  // Force layout before adding the open class so the transform transition
+  // actually plays instead of starting already-open.
+  requestAnimationFrame(() => sidebar.classList.add('sidebar-drawer-open'));
+}
+
+export function closeShotDrawer() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-drawer-backdrop');
+  const btn = document.getElementById('mobileDrawerBtn');
+  if (!sidebar || !sidebar.classList.contains('sidebar-drawer-mode')) return;
+  sidebar.classList.remove('sidebar-drawer-open');
+  backdrop?.classList.remove('visible');
+  btn?.setAttribute('aria-expanded', 'false');
+  setTimeout(() => {
+    sidebar.classList.remove('sidebar-drawer-mode');
+    updateMobileShotSidebarVisibility();
+  }, 260); // matches the CSS slide transition duration
+}
+
+export function handleDrawerTouchStart(e) {
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar?.classList.contains('sidebar-drawer-open')) return;
+  _drawerTouchStartX = e.touches[0].clientX;
+}
+
+export function handleDrawerTouchEnd(e) {
+  if (_drawerTouchStartX == null) return;
+  const deltaX = e.changedTouches[0].clientX - _drawerTouchStartX;
+  _drawerTouchStartX = null;
+  if (deltaX < -60) closeShotDrawer(); // swipe left closes (drawer opens from the left edge)
 }
 
 // ── selectShot (used from dialin onclick) ────────────────────────────────

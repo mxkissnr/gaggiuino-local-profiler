@@ -292,87 +292,62 @@
         /* ── Main ── */
         #main { flex: 1; min-width: 0; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; }
 
-        /* ── Desktop nav rail (#411) — replaces the old horizontal
-           #mode-bar entirely on desktop; mobile hides it (see the
-           max-width:768px block) and uses #bottom-nav instead. ── */
-        #rail {
-            width: 200px;
-            background: var(--gray-900);
-            border-right: 1px solid var(--gray-700);
-            flex-shrink: 0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            transition: width .2s cubic-bezier(.4,0,.2,1);
+        /* ── Desktop topbar nav (#424) — replaces the #rail nav (which
+           itself replaced the old horizontal #mode-bar) with a horizontal
+           tab row inside #content-topbar, resurrecting the pre-#411
+           #mode-bar/.mode-btn visual language: raised gray-800 active
+           surface, no underline, hidden-scrollbar horizontal overflow for
+           narrow desktop widths via the -scroll wrapper. Mobile hides the
+           whole row (see the max-width:768px block) and uses #bottom-nav
+           instead. ── */
+        .topbar-brand { display: flex; align-items: center; flex-shrink: 0; color: var(--accent); padding: 0 2px; }
+        .topbar-nav-scroll {
+            flex: 1;
+            min-width: 0;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
         }
-        .rail-brand {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 16px 14px;
-            font-weight: 700;
-            font-size: 1.05rem;
-            color: var(--gray-200);
-            flex-shrink: 0;
-        }
-        .rail-logo { display: flex; flex-shrink: 0; color: var(--accent); }
-        .rail-brand-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .rail-toggle {
-            background: transparent; border: none; color: var(--gray-500);
-            cursor: pointer; padding: 4px; border-radius: var(--radius); flex-shrink: 0;
-            display: flex; transition: color .2s, background .2s;
-        }
-        .rail-toggle:hover { color: var(--gray-200); background: rgba(255,255,255,.04); }
-        .rail-nav-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 4px 8px; }
-        .rail-sep { height: 1px; background: var(--gray-700); margin: 6px 4px; flex-shrink: 0; }
+        .topbar-nav-scroll::-webkit-scrollbar { display: none; }
+        .topbar-nav-list { display: flex; align-items: center; gap: 2px; }
 
-        .rail-nav {
-            display: flex; align-items: center; gap: 12px;
+        .topbar-nav {
+            display: flex; align-items: center; gap: 8px; flex-shrink: 0;
             background: transparent; border: none; color: var(--gray-500);
-            border-radius: var(--radius); padding: 9px 10px;
-            cursor: pointer; font-family: 'Figtree', sans-serif; font-size: .875rem; font-weight: 600;
-            text-align: left; width: 100%; position: relative;
-            box-shadow: inset 3px 0 0 transparent;
-            transition: background .15s, color .15s, box-shadow .15s;
+            border-radius: var(--radius); padding: 8px 12px;
+            cursor: pointer; font-family: 'Figtree', sans-serif; font-size: .85rem; font-weight: 600;
+            white-space: nowrap; position: relative;
+            transition: background .15s, color .15s;
         }
-        .rail-nav:hover  { color: var(--gray-200); background: rgba(255,255,255,.04); }
-        .rail-nav.active {
-            color: var(--gray-200); background: var(--gray-800);
-            box-shadow: inset 3px 0 0 var(--accent);
-        }
-        .rail-nav:disabled { opacity: .38; cursor: not-allowed; }
+        .topbar-nav:hover  { color: var(--gray-200); background: rgba(255,255,255,.04); }
+        .topbar-nav.active { color: var(--gray-200); background: var(--gray-800); }
+        .topbar-nav:disabled { opacity: .38; cursor: not-allowed; }
         .rail-icon-slot { position: relative; display: flex; flex-shrink: 0; }
         .rail-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
         .rail-icon.sm { width: 15px; height: 15px; }
-        .rail-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rail-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #maintBadge, #ordersBadge { flex-shrink: 0; }
+        .topbar-sep { width: 1px; align-self: stretch; margin: 4px 4px; background: var(--gray-700); flex-shrink: 0; }
 
-        /* Rail collapsed (#411): icon-only, ~56px, labels hidden, tooltips
-           via each button's title attribute (set from the same nav_* i18n
-           keys used for the visible label). */
-        #rail.rail-collapsed { width: 56px; }
-        #rail.rail-collapsed .rail-brand-label,
-        #rail.rail-collapsed .rail-label,
-        #rail.rail-collapsed .rail-machine-name { display: none; }
-        #rail.rail-collapsed .rail-brand { justify-content: center; padding: 16px 4px; }
-        #rail.rail-collapsed .rail-toggle { display: none; }
-        #rail.rail-collapsed .rail-nav { justify-content: center; padding: 9px 4px; }
-        #rail.rail-collapsed .rail-foot { justify-content: center; }
-        /* The collapse toggle itself stays reachable when collapsed — shown
-           inline with the brand mark instead of at the row's trailing edge. */
-        #rail.rail-collapsed .rail-brand { position: relative; }
-        #rail.rail-collapsed .rail-toggle { display: flex; position: absolute; inset: 0; opacity: 0; }
-        #rail.rail-collapsed .rail-brand:hover .rail-toggle { opacity: 1; background: var(--gray-800); }
-
-        .rail-toggle .rail-icon { transition: transform .2s; }
-        #rail.rail-collapsed .rail-toggle .rail-icon { transform: rotate(180deg); }
-
-        .rail-foot {
-            display: flex; align-items: center; gap: 7px;
-            padding: 12px 14px; font-size: .75rem; color: var(--gray-500);
-            border-top: 1px solid var(--gray-700); flex-shrink: 0;
+        /* Machine status (#424): the old rail footer's online-dot/name,
+           folded next to the machine switcher rather than lost — the
+           switcher itself only conveys machine identity, not reachability. */
+        .topbar-machine {
+            display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+            padding: 0 4px; font-size: .75rem; color: var(--gray-500);
         }
-        .rail-machine-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .topbar-machine-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* Mobile burger drawer trigger (#425) — hidden on desktop; the
+           max-width:768px block below shows it. */
+        .mobile-drawer-btn {
+            display: none;
+            align-items: center; justify-content: center;
+            background: transparent; border: none; color: var(--gray-400);
+            width: 32px; height: 32px; flex-shrink: 0; padding: 0; cursor: pointer;
+            transition: color .2s;
+        }
+        .mobile-drawer-btn:hover { color: var(--gray-200); }
 
         /* ── Content topbar (#411) — hosts the relocated multi-machine
            switcher and the shot-sidebar re-expand button; both independently
@@ -1530,16 +1505,21 @@
 
         /* ── Responsive ── */
         @media (max-width: 768px) {
-            /* #411: the rail is desktop-only — mobile navigates via
-               #bottom-nav instead. */
-            #rail { display: none; }
+            /* #424: the desktop topbar nav row is desktop-only — mobile
+               navigates via #bottom-nav instead. The burger drawer trigger
+               (#425) takes its place. */
+            .topbar-nav-scroll, .topbar-brand { display: none; }
+            .mobile-drawer-btn { display: flex; }
             /* #410: #sidebar (shot list) is a full-screen alternate of the
                Shots tab now, not a drawer overlay — shown/hidden via plain
                inline display (updateMobileShotSidebarVisibility() in
                sidebar.js), not a transform/backdrop. Its own collapse
                button (#collapseBtn) only makes sense next to a docked
                desktop column, so it's hidden here rather than shrinking the
-               one full-screen view mobile has to show. */
+               one full-screen view mobile has to show. #425's burger
+               drawer is a separate, additive overlay path onto the same
+               element (see .sidebar-drawer-mode below) — it doesn't touch
+               this full-screen behavior. */
             #sidebar {
                 position: fixed;
                 inset: 0;
@@ -1557,6 +1537,34 @@
                down past the breakpoint while already collapsed would
                otherwise keep width:0 here too. */
             #sidebar.desktop-collapsed { width: 100%; min-width: 0; }
+
+            /* #425: burger drawer — additive overlay access to #sidebar
+               from any view, layered on top of (not replacing) the
+               Shots-primary-screen behavior above. Only applied while
+               sidebar-drawer-mode is present (added by openShotDrawer() in
+               sidebar.js); .sidebar-drawer-open drives the slide-in via
+               transform so the underlying full-screen rule stays untouched
+               for the normal Shots-tab flow. */
+            #sidebar.sidebar-drawer-mode {
+                width: 85vw;
+                max-width: 340px;
+                right: auto;
+                box-shadow: 4px 0 24px rgba(0,0,0,.35);
+                transform: translateX(-100%);
+                transition: transform .25s cubic-bezier(.4,0,.2,1);
+            }
+            #sidebar.sidebar-drawer-mode.sidebar-drawer-open { transform: translateX(0); }
+            /* Overrides the always-on #sidebar > * { min-width: 320px; }
+               desktop rule, which would otherwise force horizontal overflow
+               inside an 85vw-wide drawer on narrower phones. */
+            #sidebar.sidebar-drawer-mode > * { min-width: 0; }
+            #sidebar-drawer-backdrop {
+                display: none;
+                position: fixed; inset: 0;
+                z-index: 45;
+                background: rgba(0,0,0,.45);
+            }
+            #sidebar-drawer-backdrop.visible { display: block; }
             #main              { position: fixed; inset: 0; z-index: 40; height: 100vh; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-bottom: 60px; }
             #chart-area, #live-view { padding: 16px; }
             #expandSidebarBtn  { display: none !important; }
