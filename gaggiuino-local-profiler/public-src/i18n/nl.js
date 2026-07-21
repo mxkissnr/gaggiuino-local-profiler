@@ -171,7 +171,7 @@ export default {
     settings_machine_shot_count:(n)=>`${n} shot${n === 1 ? '' : 's'}`,
     settings_machine_save_error:(msg)=>`Fout: ${msg}`,
     ann_clone_btn:'↩ Klonen',
-    ann_photo_upload:'Voeg een foto toe aan dit shot', ann_photo_remove:'Foto verwijderen', lightbox_close:'Sluiten',
+    shot_photo_title:'Bonenfoto', ann_photo_upload:'Voeg een foto toe aan dit shot', ann_photo_remove:'Foto verwijderen', lightbox_close:'Sluiten',
     lib_bean_stock:'Voorraad (g)', lib_bean_stock_ph:'bijv. 500',
     lib_bean_decaf:'Cafeïnevrij',
     lib_inv_consumed:(n)=>`${n} g verbruikt`, lib_inv_remaining:(n)=>`${n} g over`, lib_inv_reorder:'Nabestellen',

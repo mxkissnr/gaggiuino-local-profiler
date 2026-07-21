@@ -171,7 +171,7 @@ export default {
     settings_machine_shot_count:(n)=>`${n} shot${n === 1 ? '' : 's'}`,
     settings_machine_save_error:(msg)=>`Error: ${msg}`,
     ann_clone_btn:'↩ Clone last',
-    ann_photo_upload:'Add a photo to this shot', ann_photo_remove:'Remove photo', lightbox_close:'Close',
+    shot_photo_title:'Bean photo', ann_photo_upload:'Add a photo to this shot', ann_photo_remove:'Remove photo', lightbox_close:'Close',
     lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'e.g. 500',
     lib_bean_decaf:'Decaffeinated',
     lib_inv_consumed:(n)=>`${n} g used`, lib_inv_remaining:(n)=>`${n} g remaining`, lib_inv_reorder:'Reorder',

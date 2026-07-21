@@ -1260,6 +1260,15 @@
         .freshness-ok     { background: rgba(245,158,11,.15); color: var(--accent); }
         .freshness-old    { background: rgba(239,68,68,.12);  color: var(--err); }
 
+        /* Shot-detail header photo thumbnail (#448) — fills the empty space
+           next to machine/freshness text on mobile; small enough to sit
+           inline with the badge text rather than growing the header. */
+        .shot-header-thumb {
+            width: 22px; height: 22px; border-radius: 50%; object-fit: cover;
+            vertical-align: middle; margin-left: 8px; cursor: pointer;
+            background: var(--gray-800);
+        }
+
         /* Grind-setting baseline chip (#429) — sits between the recipe zone
            and the grind advice so the last-used setting and the current
            advice read together as baseline + correction. */

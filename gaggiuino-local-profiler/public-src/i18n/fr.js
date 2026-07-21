@@ -171,7 +171,7 @@ export default {
     settings_machine_shot_count:(n)=>`${n} shot${n === 1 ? '' : 's'}`,
     settings_machine_save_error:(msg)=>`Erreur : ${msg}`,
     ann_clone_btn:'↩ Cloner',
-    ann_photo_upload:'Ajouter une photo à ce shot', ann_photo_remove:'Supprimer la photo', lightbox_close:'Fermer',
+    shot_photo_title:'Photo du grain', ann_photo_upload:'Ajouter une photo à ce shot', ann_photo_remove:'Supprimer la photo', lightbox_close:'Fermer',
     lib_bean_stock:'Stock (g)', lib_bean_stock_ph:'ex. 500',
     lib_bean_decaf:'Décaféiné',
     lib_inv_consumed:(n)=>`${n} g utilisés`, lib_inv_remaining:(n)=>`${n} g restants`, lib_inv_reorder:'Réapprovisionner',

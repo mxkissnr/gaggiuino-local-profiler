@@ -424,6 +424,11 @@ export function openShotDrawer() {
   const backdrop = document.getElementById('sidebar-drawer-backdrop');
   const btn = document.getElementById('mobileDrawerBtn');
   if (!sidebar || window.innerWidth > 768) return;
+  // #446: the drawer used to just toggle visibility, trusting the 30s
+  // status.js poll to keep S.shots fresh — but that poll can lag or get
+  // throttled while the tab is backgrounded, so a shot finished just before
+  // opening the drawer could be missing. Refresh on open instead of waiting.
+  if (window.loadData) window.loadData();
   sidebar.classList.add('sidebar-drawer-mode');
   sidebar.style.display = 'flex';
   backdrop?.classList.add('visible');
