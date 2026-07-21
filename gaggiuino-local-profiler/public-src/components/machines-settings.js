@@ -59,15 +59,15 @@ export async function loadMachines() {
 export function renderMachineSwitcher() {
   const el = document.getElementById('machineSwitcher');
   if (!el) return;
-  // #403 (mobile): on narrow viewports #mode-bar only still exists to host
-  // this switcher (its mode-btn tab row moved to the bottom nav) — collapse
-  // the now-empty bar entirely for single-machine installs instead of
-  // leaving a blank strip above the content.
-  const modeBar = document.getElementById('mode-bar');
+  // #411: the switcher lives in #content-topbar now (moved out of the old
+  // horizontal #mode-bar, removed in the rail redesign) — this element only
+  // hides/shows itself; #content-topbar is a small persistent bar (it also
+  // hosts #expandSidebarBtn) rather than collapsing itself away, since that
+  // visibility would depend on two independently-changing things (this and
+  // the sidebar's own collapsed state) for one thin, low-cost bar.
   const machines = S.machines || [];
   if (machines.length < 2) {
     el.style.display = 'none'; el.innerHTML = '';
-    if (modeBar) modeBar.classList.add('mode-bar-empty');
     return;
   }
 
@@ -75,7 +75,6 @@ export function renderMachineSwitcher() {
     machines.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
   el.value = String(S.activeMachineId ?? 'all');
   el.style.display = '';
-  if (modeBar) modeBar.classList.remove('mode-bar-empty');
 }
 
 export function switchActiveMachine(rawValue) {

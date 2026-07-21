@@ -40,8 +40,7 @@ import { t, setLang, applyTranslations } from './i18n.js';
 import { generateBeanQR } from './glp-qr.js';
 
 import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
-         toggleDesktopSidebar, openSidebar, closeSidebar, toggleSidebar, collapseSidebarOnMobile, selectShot,
-         toggleMonthGroup } from './components/sidebar.js';
+         toggleDesktopSidebar, setMobileShotSubview, updateMobileShotSidebarVisibility, selectShot } from './components/sidebar.js';
 import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
@@ -149,10 +148,29 @@ function copyApiToken() {
     .catch(() => {});
 }
 
+// ── Desktop nav rail collapse (#411) ────────────────────────────────────────
+// Persisted separately from the shot-sidebar's own collapse (#collapseBtn /
+// glp_rail_collapsed vs. the sidebar's desktop-collapsed class, which isn't
+// persisted) — the two are independent surfaces, see index.html/style.css.
+const RAIL_COLLAPSED_KEY = 'glp_rail_collapsed';
+
+function applyRailCollapsed(collapsed) {
+  document.getElementById('rail')?.classList.toggle('rail-collapsed', collapsed);
+  const toggleBtn = document.getElementById('railToggle');
+  if (toggleBtn) toggleBtn.title = t(collapsed ? 'rail_expand' : 'rail_collapse');
+}
+
+function toggleRailCollapsed() {
+  const collapsed = !document.getElementById('rail')?.classList.contains('rail-collapsed');
+  applyRailCollapsed(collapsed);
+  localStorage.setItem(RAIL_COLLAPSED_KEY, collapsed ? '1' : '0');
+}
+
 // ── Bottom navigation "Mehr" sheet (#403, mobile) ──────────────────────────
 // Collapses Bezugslog/Wartung/Einstellungen (+ Bestellungen when enabled)
-// behind the bottom nav's overflow entry — same open/backdrop-click-to-close
-// pattern as the sidebar drawer (openSidebar/closeSidebar).
+// behind the bottom nav's overflow entry — a small popover with its own
+// backdrop-click-to-close, unrelated to the mobile shot-list/detail
+// sub-view toggling in sidebar.js.
 function toggleMoreSheet() {
   const open = document.getElementById('moreSheet').classList.toggle('open');
   document.getElementById('more-sheet-backdrop').classList.toggle('visible', open);
@@ -199,10 +217,8 @@ Object.assign(window, {
   sortedShots,
   updateFlapCounter,
   toggleDesktopSidebar,
-  openSidebar,
-  closeSidebar,
-  toggleSidebar,
-  collapseSidebarOnMobile,
+  setMobileShotSubview,
+  updateMobileShotSidebarVisibility,
   selectShot,
 
   // status / machine
@@ -512,12 +528,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.accent-swatch').forEach(b =>
     b.classList.toggle('active', b.dataset.accent === _savedAccent));
 
+  // ── Desktop nav rail collapse state (#411) ─────────────────────────────
+  applyRailCollapsed(localStorage.getItem(RAIL_COLLAPSED_KEY) === '1');
+
   // ── Static element wiring ──────────────────────────────────────────────
-  document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
   document.getElementById('collapseBtn').addEventListener('click', toggleDesktopSidebar);
   document.getElementById('expandSidebarBtn').addEventListener('click', toggleDesktopSidebar);
-  document.getElementById('mobileMenuBtn').addEventListener('click', openSidebar);
-  document.getElementById('sidebar-backdrop').addEventListener('click', closeSidebar);
+  // #410: mobile back chevron in the shot-detail topbar returns to the
+  // primary shot-list screen (see setMobileShotSubview() in sidebar.js).
+  document.getElementById('mobileBackBtn').addEventListener('click', () => setMobileShotSubview('list'));
   document.getElementById('shotSearch').addEventListener('input', e => filterShots(e.target.value));
   document.getElementById('sortNewest').addEventListener('click', () => setSortMode('newest'));
   document.getElementById('sortScore').addEventListener('click', () => setSortMode('score'));
@@ -528,6 +547,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('syncBtn').addEventListener('click', triggerSync);
   document.getElementById('onboardingDemoBtn').addEventListener('click', loadDemoData);
   document.getElementById('glpDemoEndBtn').addEventListener('click', endDemo);
+  // ── Desktop nav rail (#411) — same ids as the old #mode-bar buttons,
+  // just relocated markup, so switchMode()'s active-state toggling and
+  // status.js's live/orders visibility gating both keep working unchanged.
   document.getElementById('btnLive').addEventListener('click', () => switchMode('live'));
   document.getElementById('btnShots').addEventListener('click', () => switchMode('shots'));
   document.getElementById('btnAnalytics').addEventListener('click', () => switchMode('analytics'));
@@ -536,11 +558,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnMaintenance').addEventListener('click', () => switchMode('maintenance'));
   document.getElementById('btnOrders').addEventListener('click', () => switchMode('orders'));
   document.getElementById('btnSettings').addEventListener('click', () => switchMode('settings'));
+  document.getElementById('railToggle').addEventListener('click', toggleRailCollapsed);
 
   // ── Bottom navigation (#403, mobile) ─────────────────────────────────────
-  // Shots also opens the shot list — on mobile the sidebar is no longer a
-  // permanently-docked column, so tapping "Shots" is how you reach it.
-  document.getElementById('bnShots').addEventListener('click', () => { switchMode('shots'); openSidebar(); });
+  // Shots always returns to the primary shot-list screen (#410) — the list
+  // is no longer an overlay drawer over the detail view.
+  document.getElementById('bnShots').addEventListener('click', () => { switchMode('shots'); setMobileShotSubview('list'); });
   document.getElementById('bnLive').addEventListener('click', () => switchMode('live'));
   document.getElementById('bnLibrary').addEventListener('click', () => switchMode('library'));
   document.getElementById('bnAnalytics').addEventListener('click', () => switchMode('analytics'));
@@ -676,7 +699,6 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'close-new-bag':      closeNewBagForm(numId()); break;
       case 'save-new-bag':       saveNewBag(numId()); break;
       case 'toggle-bag-history':   toggleBagHistory(numId()); break;
-      case 'toggle-month-group':  toggleMonthGroup(strId()); break;
       case 'delete-bag':         deleteBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'open-stock-edit':    openBeanStockEdit(numId()); break;
       case 'close-stock-edit':   closeBeanStockEdit(); break;
@@ -776,6 +798,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   setInterval(updateStatus, 30000);
-  collapseSidebarOnMobile();
+  updateMobileShotSidebarVisibility();
+  window.addEventListener('resize', updateMobileShotSidebarVisibility);
 
 });

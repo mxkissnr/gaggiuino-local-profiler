@@ -25,37 +25,19 @@ export function setLang(lang) {
 }
 
 export function applyTranslations() {
-  // Elements with IDs
+  // Elements with IDs — #411: the rail/bottom-nav/more-sheet nav labels used
+  // to live here as direct textContent (with special-casing to preserve a
+  // nested live-dot/badge span), but the rail redesign gave every nav
+  // button a dedicated data-i18n label span instead, so the generic
+  // data-i18n scan below now handles them without clobbering the icon SVG
+  // or badge siblings.
   const idMap = {
-    btnShots: 'nav_shots', btnAnalytics: 'nav_analytics', btnLibrary: 'nav_library',
-    btnDialin: 'nav_dialin', btnSettings: 'nav_settings',
     sortNewest: 'sort_newest', sortScore: 'sort_score', sortRating: 'sort_rating', sortDur: 'sort_duration',
     syncBtn: 'btn_sync',
   };
   for (const [id, key] of Object.entries(idMap)) {
     const el = document.getElementById(id);
     if (el) el.textContent = t(key);
-  }
-  // Live button: preserve inner dot span
-  const btnLive = document.getElementById('btnLive');
-  if (btnLive) {
-    const dot = btnLive.querySelector('.live-dot');
-    btnLive.textContent = t('nav_live');
-    if (dot) btnLive.prepend(dot);
-  }
-  // Maintenance button: preserve badge span
-  const btnMaint = document.getElementById('btnMaintenance');
-  if (btnMaint) {
-    const badge = btnMaint.querySelector('.maint-badge');
-    btnMaint.textContent = t('nav_maintenance');
-    if (badge) btnMaint.appendChild(badge);
-  }
-  // Orders button: preserve badge span
-  const btnOrd = document.getElementById('btnOrders');
-  if (btnOrd) {
-    const badge = btnOrd.querySelector('.maint-badge');
-    btnOrd.textContent = t('nav_orders');
-    if (badge) btnOrd.appendChild(badge);
   }
   // Search placeholder
   const searchEl = document.getElementById('shotSearch');

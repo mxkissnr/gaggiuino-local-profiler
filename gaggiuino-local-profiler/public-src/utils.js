@@ -199,6 +199,37 @@ export function parseDMY(s) {
   return isNaN(d) ? null : d;
 }
 
+// ── Day-separator grouping (#412) ────────────────────────────────────────
+// Buckets a shot list (any order — each shot just needs a `timestamp`, unix
+// seconds) into contiguous same-day groups for the sidebar's day-separator
+// headers. Pure function: the "today" reference and the today/yesterday
+// labels are all passed in rather than read from Date.now()/i18n, so day-
+// boundary behavior is testable without faking globals. Older days fall
+// back to `formatOlder(date)`, letting the caller reuse its own locale-aware
+// date formatting (e.g. LOCALE_MAP + toLocaleDateString) instead of this
+// module inventing a second one.
+export function groupShotsByDay(shots, now, todayLabel, yesterdayLabel, formatOlder) {
+  const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const today = dayKey(now);
+  const yesterdayDate = new Date(now);
+  yesterdayDate.setDate(now.getDate() - 1);
+  const yesterday = dayKey(yesterdayDate);
+
+  const groups = [];
+  let current = null;
+  (shots || []).forEach(shot => {
+    const d = new Date(shot.timestamp * 1000);
+    const key = dayKey(d);
+    if (!current || current.key !== key) {
+      const label = key === today ? todayLabel : key === yesterday ? yesterdayLabel : formatOlder(d);
+      current = { key, label, shots: [] };
+      groups.push(current);
+    }
+    current.shots.push(shot);
+  });
+  return groups;
+}
+
 // ── Score helpers ─────────────────────────────────────────────────────────
 // Unified 3-tier scale (#397): green >= 90, yellow >= 70, red below — the
 // single source of truth for shot-score coloring across sidebar, shot

@@ -1,8 +1,13 @@
 import { S } from '../state.js';
+import { setMobileShotSubview, updateMobileShotSidebarVisibility } from './sidebar.js';
 
 export function goToShot(id) {
   switchMode('shots');
   if (window.selectShot) window.selectShot(id);
+  // #410: jumping here from elsewhere (e.g. an analytics "personal best"
+  // link) means straight to that shot's detail, not the list — mirrors the
+  // shot-row tap in sidebar.js.
+  if (window.innerWidth <= 768) setMobileShotSubview('detail');
   setTimeout(() => {
     const el = document.getElementById(`wrapper-${id}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -20,7 +25,7 @@ export function switchMode(mode) {
   document.getElementById('btnOrders').classList.toggle('active',      mode === 'orders');
   document.getElementById('btnSettings').classList.toggle('active',    mode === 'settings');
 
-  // Bottom nav (#403, mobile) — mirrors the mode-bar active state above;
+  // Bottom nav (#403, mobile) — mirrors the rail's active state above;
   // dialin/maintenance/orders/settings all collapse under "Mehr" there.
   const moreModes = mode === 'dialin' || mode === 'maintenance' || mode === 'orders' || mode === 'settings';
   document.getElementById('bnShots').classList.toggle('active',     mode === 'shots');
@@ -69,4 +74,9 @@ export function switchMode(mode) {
   };
   const activeBtn = document.getElementById(modeMap[mode]);
   if (activeBtn) activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+
+  // #410: mobile shows #sidebar (shot list) only while mode === 'shots' and
+  // the mobile sub-view isn't 'detail' — re-evaluate on every mode switch,
+  // e.g. so leaving Shots for Library hides the list underneath it too.
+  updateMobileShotSidebarVisibility();
 }

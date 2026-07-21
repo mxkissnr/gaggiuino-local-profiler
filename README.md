@@ -97,7 +97,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-
 | ⭐ | **Bean Rating** | Star rating per bean, computed automatically as the average of that bean's shot ratings — no manual field |
 | 🖼️ | **Bean, Grinder & Shot Photos** | Bean photo imported once from the shop on URL import; grinder photo uploaded directly from your device — plus grinder burr type and purchase date; each shot can also have its own photo (e.g. the cup/crema), shown as a small round thumbnail in the sidebar |
 | 📝 | **Annotations & Rating** | Coffee, grinder, grind setting, dose, roast date, TDS, notes, **drink type** (from menu); 1–5 stars; auto-saves 1 s after last keystroke |
-| 🔍 | **Shot Search** | Filter sidebar by profile, coffee, grinder |
+| 🔍 | **Shot Search** | Filter sidebar by profile, coffee, grinder; each shot is a rich card (thumbnail, score, coffee + dose, star rating, grinder, time), grouped under day-separator headers ("Today" / "Yesterday" / date) |
 | ⛶ | **Fullscreen Chart** | Expand chart to fullscreen with auto landscape rotation on mobile |
 | 💾 | **.shot Export** | Export in Decent Espresso format (Visualizer.coffee compatible) |
 | 📤 | **CSV Export** | All shots with annotations as CSV |
@@ -116,7 +116,8 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-
 | 📋 | **Order Management** | Barista backend tab to manage espresso orders — queue, accept with ETA, complete or decline with reason; configurable menu (emoji + drink name); bean and milk variants offered only while actually in stock (milk is deducted automatically on order completion) and while manually enabled — a bean can be temporarily excluded from ordering without deleting it or touching its stock, with customer-facing bean descriptions (taste notes, origin, processing); companion Lovelace card for customers (`glp-order-card`) |
 | 🧭 | **First-Run Onboarding & Demo Mode** | Dismissible banner when the machine isn't reachable; first-run panel with setup steps plus a "Load demo data" button that seeds a sample dataset (shots, beans, a blend, a recipe) so the app can be evaluated before connecting hardware; "End demo" removes exactly the seeded rows |
 | 📱 | **Installable App (PWA)** | Install GLP as a standalone app when accessed directly over HTTPS (own icon, no browser chrome, offline app shell); server-side gated so it's never offered inside the HA Companion App/Ingress panel, which keeps running as a normal embedded panel |
-| 📱 | **Mobile Bottom Navigation** | Bottom nav (Shots/Live/Library/Analytics + a "More" sheet) replaces the tab row on narrow viewports; verdict header, recipe zone and full chart fit above the fold; touch targets sized 44×44px |
+| 🧭 | **Desktop Navigation Rail** | Collapsible icon+label rail on the left (Shots/Live/Library/Analytics/Dial-in/Maintenance/Orders/Settings) replaces the old horizontal tab row; collapses to icon-only via its own toggle, state persisted in localStorage |
+| 📱 | **Mobile Bottom Navigation** | Bottom nav (Shots/Live/Library/Analytics + a "More" sheet, all icon-based, no emoji) replaces the rail on narrow viewports; the shot list is the primary "Shots" screen (not a drawer) — tapping a shot pushes to its detail view with a back button; verdict header, recipe zone and full chart fit above the fold; touch targets sized 44×44px |
 
 ---
 

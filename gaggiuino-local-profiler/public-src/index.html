@@ -22,9 +22,66 @@
 
 <body>
 
-<!-- ── Sidebar ── -->
+<!-- ── Desktop nav rail (#411): replaces the old horizontal #mode-bar on
+     desktop entirely. Nav button ids (btnShots, btnLive, ...) are unchanged
+     from the old mode-bar so mode.js's active-state toggling and
+     status.js's live/orders visibility gating keep working without a
+     parallel implementation — only the markup/styling moved. Hidden on
+     mobile (see style.css); mobile navigation is #bottom-nav below. -->
+<div id="rail">
+    <div class="rail-brand">
+        <span class="rail-logo" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg></span>
+        <span class="rail-brand-label">GLP</span>
+        <button id="railToggle" class="rail-toggle" title="Rail einklappen">
+            <svg class="rail-icon" viewBox="0 0 24 24"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></svg>
+        </button>
+    </div>
+    <nav class="rail-nav-list">
+        <button class="rail-nav" id="btnShots" data-i18n-title="nav_shots" title="Shots">
+            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg></span>
+            <span class="rail-label" data-i18n="nav_shots">Shots</span>
+        </button>
+        <button class="rail-nav" id="btnLive" style="display:none" data-i18n-title="nav_live" title="Live">
+            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span class="live-dot"></span></span>
+            <span class="rail-label" data-i18n="nav_live">Live</span>
+        </button>
+        <button class="rail-nav" id="btnLibrary" data-i18n-title="nav_library" title="Bibliothek">
+            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></span>
+            <span class="rail-label" data-i18n="nav_library">Bibliothek</span>
+        </button>
+        <button class="rail-nav" id="btnAnalytics" data-i18n-title="nav_analytics" title="Statistiken">
+            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M6 20v-5M12 20V9M18 20V4"/></svg></span>
+            <span class="rail-label" data-i18n="nav_analytics">Statistiken</span>
+        </button>
+        <button class="rail-nav" id="btnDialin" data-i18n-title="nav_dialin" title="Bezugslog">
+            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></span>
+            <span class="rail-label" data-i18n="nav_dialin">Bezugslog</span>
+        </button>
+        <button class="rail-nav" id="btnMaintenance" data-i18n-title="nav_maintenance" title="Wartung">
+            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-3 3-2.7-2.7z"/></svg></span>
+            <span class="rail-label" data-i18n="nav_maintenance">Wartung</span>
+            <span id="maintBadge" class="maint-badge" style="display:none"></span>
+        </button>
+        <button class="rail-nav" id="btnOrders" style="display:none" data-i18n-title="nav_orders" title="Bestellungen">
+            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>
+            <span class="rail-label" data-i18n="nav_orders">Bestellungen</span>
+            <span id="ordersBadge" class="maint-badge" style="display:none"></span>
+        </button>
+        <div class="rail-sep"></div>
+        <button class="rail-nav" id="btnSettings" data-i18n-title="nav_settings" title="Einstellungen">
+            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg></span>
+            <span class="rail-label" data-i18n="nav_settings">Einstellungen</span>
+        </button>
+    </nav>
+    <div class="rail-foot">
+        <span class="status-dot unknown" id="railStatusDot"></span>
+        <span id="railMachineName" class="rail-machine-name">–</span>
+    </div>
+</div>
+
+<!-- ── Sidebar (shot list panel) ── -->
 <div id="sidebar">
-    <h2><button id="sidebarToggle">☰</button>☕ Shots <span id="shot-count"></span><div class="flap-board" id="flapDigits"></div><button id="collapseBtn" data-i18n-title="sidebar_collapse" title="Sidebar einklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z"/></svg></button></h2>
+    <h2>Shots <span id="shot-count"></span><div class="flap-board" id="flapDigits"></div><button id="collapseBtn" data-i18n-title="sidebar_collapse" title="Sidebar einklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z"/></svg></button></h2>
     <div id="search-container">
         <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …">
     </div>
@@ -37,7 +94,8 @@
     <div id="shots"></div>
     <div id="trash-section" style="display:none">
         <button id="trash-toggle">
-            🗑 Papierkorb
+            <svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg>
+            <span data-i18n="trash_label">Papierkorb</span>
             <span class="trash-count" id="trash-count">0</span>
         </button>
         <div id="trash-list" style="display:none"></div>
@@ -62,56 +120,47 @@
     </div>
 </div>
 
-<div id="sidebar-backdrop"></div>
-
-<!-- ── Bottom navigation (#403): mobile-only, replaces the horizontal
-     mode-bar tab row. Shots additionally opens the shot list (sidebar)
-     since it's no longer a permanently-docked column on narrow viewports. -->
+<!-- ── Bottom navigation (#403, #410): mobile-only, replaces the horizontal
+     mode-bar tab row. Shots is the primary screen (the shot list itself,
+     not an overlay drawer) — see setMobileShotSubview() in sidebar.js. -->
 <nav id="bottom-nav">
     <button class="bottom-nav-btn active" id="bnShots">
-        <span class="bn-icon" aria-hidden="true">☕</span><span class="bn-label" data-i18n="nav_shots">Shots</span>
+        <span class="bn-icon" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg></span><span class="bn-label" data-i18n="nav_shots">Shots</span>
     </button>
     <button class="bottom-nav-btn" id="bnLive" style="display:none">
-        <span class="bn-icon" aria-hidden="true"><span class="live-dot"></span></span><span class="bn-label" data-i18n="nav_live">Live</span>
+        <span class="bn-icon" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span class="live-dot"></span></span><span class="bn-label" data-i18n="nav_live">Live</span>
     </button>
     <button class="bottom-nav-btn" id="bnLibrary">
-        <span class="bn-icon" aria-hidden="true">📚</span><span class="bn-label" data-i18n="nav_library">Bibliothek</span>
+        <span class="bn-icon" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></span><span class="bn-label" data-i18n="nav_library">Bibliothek</span>
     </button>
     <button class="bottom-nav-btn" id="bnAnalytics">
-        <span class="bn-icon" aria-hidden="true">📊</span><span class="bn-label" data-i18n="nav_analytics">Statistiken</span>
+        <span class="bn-icon" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M6 20v-5M12 20V9M18 20V4"/></svg></span><span class="bn-label" data-i18n="nav_analytics">Statistiken</span>
     </button>
     <button class="bottom-nav-btn" id="bnMore" aria-haspopup="true" aria-expanded="false">
-        <span class="bn-icon" aria-hidden="true">⋯</span><span class="bn-label" data-i18n="nav_more">Mehr</span>
+        <span class="bn-icon" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span><span class="bn-label" data-i18n="nav_more">Mehr</span>
     </button>
 </nav>
 <div id="more-sheet-backdrop"></div>
 <div id="moreSheet">
-    <button class="more-sheet-item" id="bnDialin"><span data-i18n="nav_dialin">Bezugslog</span></button>
-    <button class="more-sheet-item" id="bnMaintenance"><span data-i18n="nav_maintenance">Wartung</span></button>
-    <button class="more-sheet-item" id="bnOrders" style="display:none"><span data-i18n="nav_orders">Bestellungen</span></button>
-    <button class="more-sheet-item" id="bnSettings"><span data-i18n="nav_settings">⚙</span></button>
+    <button class="more-sheet-item" id="bnDialin"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span data-i18n="nav_dialin">Bezugslog</span></button>
+    <button class="more-sheet-item" id="bnMaintenance"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-3 3-2.7-2.7z"/></svg><span data-i18n="nav_maintenance">Wartung</span></button>
+    <button class="more-sheet-item" id="bnOrders" style="display:none"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg><span data-i18n="nav_orders">Bestellungen</span></button>
+    <button class="more-sheet-item" id="bnSettings"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg><span data-i18n="nav_settings">Einstellungen</span></button>
 </div>
 
 <!-- ── Main ── -->
 <div id="main">
 
-    <!-- Mode switcher -->
-    <div id="mode-bar">
-        <button id="mobileMenuBtn">☰</button>
+    <!-- Content topbar (#411): hosts the multi-machine switcher, relocated
+         here from the old horizontal #mode-bar (now removed entirely) —
+         machines-settings.js's renderMachineSwitcher()/#325 filtering logic
+         is unchanged, only this container's id. Also hosts the button that
+         re-expands the shot-sidebar once it's been collapsed via
+         #collapseBtn (a desktop-only affordance, separate from the rail's
+         own collapse). -->
+    <div id="content-topbar">
         <button id="expandSidebarBtn" data-i18n-title="sidebar_expand" title="Sidebar aufklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/></svg></button>
-        <div id="mode-bar-scroll">
-            <button class="mode-btn" id="btnLive" style="display:none">
-                <span class="live-dot"></span>Live
-            </button>
-            <button class="mode-btn active" id="btnShots">Shots</button>
-            <button class="mode-btn" id="btnAnalytics">Analytics</button>
-            <button class="mode-btn" id="btnDialin">Einwählen</button>
-            <button class="mode-btn" id="btnLibrary">Bibliothek</button>
-            <button class="mode-btn" id="btnMaintenance">Wartung<span id="maintBadge" class="maint-badge" style="display:none"></span></button>
-            <button class="mode-btn" id="btnOrders" style="display:none">Bestellungen<span id="ordersBadge" class="maint-badge" style="display:none"></span></button>
-        </div>
         <select id="machineSwitcher" class="machine-switcher" style="display:none" data-action="switch-machine" data-i18n-title="machine_switcher_title" title="Maschine"></select>
-        <button class="mode-btn" id="btnSettings">⚙</button>
     </div>
 
     <!-- Shots view -->
@@ -133,6 +182,11 @@
 
         <div id="chart-area">
             <div class="sprofiler-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+                <!-- #410 mobile only: returns from the shot-detail screen to
+                     the primary shot-list screen (setMobileShotSubview()). -->
+                <button id="mobileBackBtn" class="mobile-back-btn" style="display:none" data-i18n-title="back_to_list" title="Zurück zur Liste" aria-label="Zurück">
+                    <svg class="rail-icon" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
                 <div style="flex:1;min-width:0">
                     <h1 id="topTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Profil-Name</h1>
                     <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="freshness-badge" style="display:none"></span><span id="firmwareVersionBadge" style="display:none;font-size:.7rem;color:#52525b;margin-left:6px"></span></p>
