@@ -686,7 +686,7 @@
             font-size: 1.05rem; font-weight: 700; color: var(--gray-200);
         }
         .verdict-text      { min-width: 0; }
-        .verdict-headline  { font-size: 1.05rem; font-weight: 700; color: var(--gray-200); }
+        .verdict-headline  { font-size: 1.05rem; font-weight: 700; color: var(--gray-200); display: flex; align-items: center; gap: 6px; }
         .verdict-subline   { font-size: .8rem; color: var(--gray-500); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* ── Delta chips (#402): same-profile auto-compare vs. the previous shot.
@@ -805,7 +805,7 @@
 
         /* ── Theme toggle (settings) ── */
         .theme-toggle-group { display: flex; gap: 8px; flex-wrap: wrap; }
-        .theme-btn { background: rgba(255,255,255,.04); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-400); font-size: .85rem; padding: 7px 16px; cursor: pointer; transition: all .15s; font-family: inherit; }
+        .theme-btn { background: rgba(255,255,255,.04); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-400); font-size: .85rem; padding: 7px 16px; cursor: pointer; transition: all .15s; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
         .theme-btn:hover { border-color: var(--gray-500); color: var(--gray-200); }
         .theme-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); font-weight: 500; }
 
@@ -1249,6 +1249,9 @@
             font-family: 'Figtree', sans-serif;
             transition: all .15s;
             white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
         }
         .sort-btn:hover     { color: var(--gray-200); background: rgba(255,255,255,.08); }
         .sort-btn.active    { background: var(--gray-800); color: #fff; }
@@ -1287,7 +1290,7 @@
         .comp-thumb-no-data { height: 65px; display: flex; align-items: center; justify-content: center; color: var(--gray-600); font-size: .75rem; }
         .comp-thumb-meta { display: flex; align-items: center; gap: 5px; padding: 5px 7px; font-size: .72rem; flex-wrap: wrap; }
         .comp-shot-date  { color: var(--gray-500); }
-        .comp-shot-grind { color: var(--gray-300); }
+        .comp-shot-grind { color: var(--gray-300); display: inline-flex; align-items: center; gap: 3px; }
         .comp-shot-score { font-weight: 700; margin-left: auto; }
         .comp-shot-dur   { color: var(--gray-500); width: 100%; }
 
@@ -1299,6 +1302,7 @@
             padding: 5px 14px; cursor: pointer;
             font-family: 'Figtree', sans-serif; font-size: .8rem; font-weight: 600;
             transition: all .2s;
+            display: inline-flex; align-items: center; gap: 5px;
         }
         .chart-tab:hover  { color: var(--gray-200); border-color: var(--gray-500); }
         .chart-tab.active { background: var(--gray-800); color: #fff; border-color: var(--gray-500); }
@@ -1382,7 +1386,9 @@
 
         /* ── Channeling warning ── */
         .channeling-warn {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
             background: rgba(239,68,68,.12);
             color: var(--err);
             border: 1px solid rgba(239,68,68,.25);
@@ -2046,7 +2052,7 @@
         .orders-menu-use-milks:hover { border-color:var(--gray-500); color:var(--gray-300); }
         .orders-menu-use-milks.active { border-color:#7dd3fc; color:#7dd3fc; background:rgba(125,211,252,.08); }
         .ann-ordered-by { display:flex; flex-direction:column; gap:2px; margin-top:10px; padding:8px 10px; background:rgba(255,255,255,.03); border:1px solid var(--gray-800); border-radius:var(--radius); }
-        .ann-ordered-by-label { font-size:.7rem; font-weight:700; color:var(--gray-500); letter-spacing:.05em; text-transform:uppercase; }
+        .ann-ordered-by-label { font-size:.7rem; font-weight:700; color:var(--gray-500); letter-spacing:.05em; text-transform:uppercase; display:inline-flex; align-items:center; gap:3px; }
         .ann-ordered-by-val { font-size:.83rem; color:var(--gray-200); }
         .orders-menu-add-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
         .orders-menu-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size:.82rem; padding:6px 10px; outline:none; font-family:'Figtree',sans-serif; }

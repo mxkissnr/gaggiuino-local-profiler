@@ -1,4 +1,4 @@
-import { BARCODE_ICON_SVG, LINK_ICON_SVG, GEAR_ICON_SVG } from '../icons.js';
+import { BARCODE_ICON_SVG, LINK_ICON_SVG, GEAR_ICON_SVG, CLOCK_ICON_SVG } from '../icons.js';
 export default {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiche', nav_library:'Libreria', nav_more:'Altro',
     sort_newest:'Recenti', sort_score:'Score', sort_rating:'Voto', sort_duration:'Durata',
@@ -14,7 +14,7 @@ export default {
     recipe_dose_yield:'Dose → Resa', recipe_ratio:'Ratio', recipe_bean_grinder:'Caffè & Mulino',
     process_pressure:'Pressione (med / max)', process_flow:'Flusso pompa (med)', process_temp:'Temperatura (med ±σ)',
     verdict_no_data:'Dati ancora insufficienti per un giudizio.',
-    tab_time:'⏱ Tempo', tab_pq:'Curva P·Q',
+    tab_time:`${CLOCK_ICON_SVG} Tempo`, tab_pq:'Curva P·Q',
     btn_fullscreen_close:'✕ Chiudi', btn_fullscreen_tooltip:'Schermo intero',
     btn_compare_tooltip:'Seleziona come shot di confronto (B). Suggerimento: clicca sul nome per Shot A.', btn_delete_tooltip:'Elimina shot',
     ann_title:'Note & Valutazione',    ann_coffee:'Caffè / Grani', ann_coffee_ph:'es. Ethiopia Yirgacheffe',

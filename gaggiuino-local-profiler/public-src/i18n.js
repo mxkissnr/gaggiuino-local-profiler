@@ -1,5 +1,6 @@
 import { S } from './state.js';
 import { TRANSLATIONS } from './constants.js';
+import { STAR_ICON_SVG } from './icons.js';
 
 export function t(key, ...args) {
   const val = TRANSLATIONS[S.currentLang]?.[key] ?? TRANSLATIONS.de?.[key] ?? key;
@@ -32,13 +33,18 @@ export function applyTranslations() {
   // data-i18n scan below now handles them without clobbering the icon SVG
   // or badge siblings.
   const idMap = {
-    sortNewest: 'sort_newest', sortScore: 'sort_score', sortRating: 'sort_rating', sortDur: 'sort_duration',
+    sortNewest: 'sort_newest', sortScore: 'sort_score', sortDur: 'sort_duration',
     syncBtn: 'btn_sync',
   };
   for (const [id, key] of Object.entries(idMap)) {
     const el = document.getElementById(id);
     if (el) el.textContent = t(key);
   }
+  // sortRating carries a decorative star icon (#417) that plain textContent
+  // can't hold — same pattern setSortMode() (sidebar.js) uses when this
+  // button is the active sort.
+  const sortRatingEl = document.getElementById('sortRating');
+  if (sortRatingEl) sortRatingEl.innerHTML = `${STAR_ICON_SVG} ${t('sort_rating')}`;
   // Search placeholder
   const searchEl = document.getElementById('shotSearch');
   if (searchEl) searchEl.placeholder = t('search_placeholder');

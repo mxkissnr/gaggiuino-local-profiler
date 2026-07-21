@@ -1,4 +1,4 @@
-import { BARCODE_ICON_SVG, LINK_ICON_SVG, GEAR_ICON_SVG } from '../icons.js';
+import { BARCODE_ICON_SVG, LINK_ICON_SVG, GEAR_ICON_SVG, CLOCK_ICON_SVG } from '../icons.js';
 export default {
     nav_shots:'Shots', nav_live:'Live', nav_analytics:'Statistiken', nav_library:'Bibliothek', nav_more:'Mehr',
     sort_newest:'Neueste', sort_score:'Score', sort_rating:'Bewertung', sort_duration:'Dauer',
@@ -14,7 +14,7 @@ export default {
     recipe_dose_yield:'Dosis → Yield', recipe_ratio:'Ratio', recipe_bean_grinder:'Bohne & Mühle',
     process_pressure:'Druck (Ø / Max)', process_flow:'Pumpenfluss (Ø)', process_temp:'Temperatur (Ø ±σ)',
     verdict_no_data:'Noch nicht genug Daten für ein Urteil.',
-    tab_time:'⏱ Zeit', tab_pq:'P·Q Kurve',
+    tab_time:`${CLOCK_ICON_SVG} Zeit`, tab_pq:'P·Q Kurve',
     btn_fullscreen_close:'✕ Schließen', btn_fullscreen_tooltip:'Vollbild',
     btn_compare_tooltip:'Als Vergleichs-Shot (B) wählen. Tipp: Klick auf den Namen wählt Shot A.', btn_delete_tooltip:'Shot löschen',
     ann_title:'Notizen & Bewertung',    ann_coffee:'Kaffee / Bohne', ann_coffee_ph:'z.B. Ethiopia Yirgacheffe',
