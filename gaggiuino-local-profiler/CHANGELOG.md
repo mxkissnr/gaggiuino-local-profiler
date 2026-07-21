@@ -1,4 +1,10 @@
-## [2.6.0] – 2026-07-21
+## [2.6.1] – 2026-07-21
+
+### Fixed
+- **Decorative emoji fully purged from shipped UI.** Two follow-up passes complete the #417 no-emoji rule started in v2.6.0: an exhaustive sweep over every js/html/css file in `public-src` (not just the previously grep-missed subset), plus the items flagged out-of-scope in the last round (bean-age hint, barcode/URL-import/settings buttons, the experimental-machine badge). Remaining hits — sort-by-rating star, chart time-domain tab, channeling warning badge, theme toggle buttons, verdict headline/grind-advice icons, comp-shot-grind and ordered-by badges — are now shared stroke-SVG icons from a new `public-src/icons.js` module, with i18n values cleaned across all 6 locales. No decorative emoji remain anywhere in the shipped UI; what's kept is user-entered content (order-item emoji picker, milk-emoji fallback), country flags, and typographic/technical symbols (✓ ✕ ★ ⚠) that carry real meaning rather than decoration. Closes #417
+- **Node.js 20 → 22, better-sqlite3 12.11.1 → 13.0.1.** better-sqlite3 13.x moved to N-API and requires Node ≥22, which was blocking Dependabot's dependency bump. CI's `setup-node` and all three Dockerfile build stages now target `node:22-slim`; the dependency is pinned to the exact 13.0.1 release matching the existing pin convention. Verified with the full test suite, a manual DB smoke test through the real `ShotRepository` API, and a full amd64 Docker build with a real HTTP round-trip. **arm64/armv7 images were not tested against real hardware in this round** — see #419; if the add-on fails to start on an ARM device after updating, roll back to v2.6.0 and please report it on that issue.
+
+
 
 ### Added
 - **App-shell redesign — "Rail + Panel."** Shell-only redesign (verdict header, recipe/process zones, charts and view-switching logic untouched). Desktop: a collapsible left icon+label nav rail replaces the horizontal `#mode-bar` entirely, collapse state persisted in `localStorage` (`glp_rail_collapsed`); the multi-machine switcher and the shot-sidebar's re-expand button move into a new slim `#content-topbar`. Nav button ids are unchanged from the old mode-bar so `mode.js`'s active-state toggling and `status.js`'s live/orders visibility gating keep working unmodified. Closes #411
