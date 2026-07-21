@@ -1,5 +1,5 @@
 # Build stage — always runs on host platform (amd64); no QEMU, pure JS tooling
-FROM --platform=$BUILDPLATFORM node:20-slim AS builder
+FROM --platform=$BUILDPLATFORM node:22-slim AS builder
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY lib/ ./lib/
 RUN npm run build
 
 # Dependency stage — cross-compiles native modules for the target arch; no QEMU
-FROM --platform=$BUILDPLATFORM node:20-slim AS prod-deps
+FROM --platform=$BUILDPLATFORM node:22-slim AS prod-deps
 ARG TARGETARCH
 
 WORKDIR /app
@@ -43,7 +43,7 @@ RUN set -eux; \
     esac
 
 # Runtime stage — only copies pre-built artifacts; no compilation at all
-FROM node:20-slim
+FROM node:22-slim
 
 ENV NODE_ENV=production
 
