@@ -33,6 +33,14 @@ describe('annotationSchema', () => {
         const result = annotationSchema.safeParse({ notes: 'x'.repeat(2001) });
         expect(result.success).toBe(false);
     });
+
+    // #434: the frontend always sends drinkType: null for "no drink assigned"
+    // (see annotation.js) — every save with no drink selected 400'd until
+    // this field got the same .nullable() treatment milkType already has.
+    it('accepts drinkType: null (no drink assigned)', () => {
+        const result = annotationSchema.safeParse({ coffee: 'Bean', drinkType: null });
+        expect(result.success).toBe(true);
+    });
 });
 
 describe('beanSchema', () => {
