@@ -1,4 +1,4 @@
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 // ── App-level rate limiter (CodeQL js/missing-rate-limiting, #3-#7) ────────
 //
@@ -37,7 +37,7 @@ function createApiRateLimiter() {
         // trusting only the raw connection address (not XFF) is correct here
         // too — mirrors server.js's own trust model instead of relying on
         // Express's `trust proxy` setting.
-        keyGenerator: (req) => req.socket?.remoteAddress || req.ip,
+        keyGenerator: (req) => ipKeyGenerator(req.socket?.remoteAddress || req.ip),
         // Never throttle the built JS/CSS bundle (public/assets/, content-hashed
         // by Vite) — only API and page routes count against the budget.
         skip: (req) => req.path.startsWith('/assets/'),

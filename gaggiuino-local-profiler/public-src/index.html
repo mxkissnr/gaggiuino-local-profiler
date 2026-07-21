@@ -27,62 +27,11 @@
 
 <body>
 
-<!-- ── Desktop nav rail (#411): replaces the old horizontal #mode-bar on
-     desktop entirely. Nav button ids (btnShots, btnLive, ...) are unchanged
-     from the old mode-bar so mode.js's active-state toggling and
-     status.js's live/orders visibility gating keep working without a
-     parallel implementation — only the markup/styling moved. Hidden on
-     mobile (see style.css); mobile navigation is #bottom-nav below. -->
-<div id="rail">
-    <div class="rail-brand">
-        <span class="rail-logo" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg></span>
-        <span class="rail-brand-label">GLP</span>
-        <button id="railToggle" class="rail-toggle" title="Rail einklappen">
-            <svg class="rail-icon" viewBox="0 0 24 24"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></svg>
-        </button>
-    </div>
-    <nav class="rail-nav-list">
-        <button class="rail-nav" id="btnShots" data-i18n-title="nav_shots" title="Shots">
-            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg></span>
-            <span class="rail-label" data-i18n="nav_shots">Shots</span>
-        </button>
-        <button class="rail-nav" id="btnLive" style="display:none" data-i18n-title="nav_live" title="Live">
-            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span class="live-dot"></span></span>
-            <span class="rail-label" data-i18n="nav_live">Live</span>
-        </button>
-        <button class="rail-nav" id="btnLibrary" data-i18n-title="nav_library" title="Bibliothek">
-            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></span>
-            <span class="rail-label" data-i18n="nav_library">Bibliothek</span>
-        </button>
-        <button class="rail-nav" id="btnAnalytics" data-i18n-title="nav_analytics" title="Statistiken">
-            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M6 20v-5M12 20V9M18 20V4"/></svg></span>
-            <span class="rail-label" data-i18n="nav_analytics">Statistiken</span>
-        </button>
-        <button class="rail-nav" id="btnDialin" data-i18n-title="nav_dialin" title="Bezugslog">
-            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></span>
-            <span class="rail-label" data-i18n="nav_dialin">Bezugslog</span>
-        </button>
-        <button class="rail-nav" id="btnMaintenance" data-i18n-title="nav_maintenance" title="Wartung">
-            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-3 3-2.7-2.7z"/></svg></span>
-            <span class="rail-label" data-i18n="nav_maintenance">Wartung</span>
-            <span id="maintBadge" class="maint-badge" style="display:none"></span>
-        </button>
-        <button class="rail-nav" id="btnOrders" style="display:none" data-i18n-title="nav_orders" title="Bestellungen">
-            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>
-            <span class="rail-label" data-i18n="nav_orders">Bestellungen</span>
-            <span id="ordersBadge" class="maint-badge" style="display:none"></span>
-        </button>
-        <div class="rail-sep"></div>
-        <button class="rail-nav" id="btnSettings" data-i18n-title="nav_settings" title="Einstellungen">
-            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg></span>
-            <span class="rail-label" data-i18n="nav_settings">Einstellungen</span>
-        </button>
-    </nav>
-    <div class="rail-foot">
-        <span class="status-dot unknown" id="railStatusDot"></span>
-        <span id="railMachineName" class="rail-machine-name">–</span>
-    </div>
-</div>
+<!-- ── Sidebar drawer backdrop (#425, mobile only): dims the rest of the app
+     while #sidebar is slid in as an overlay drawer from a non-Shots view;
+     tapping it closes the drawer. Same open/visible-class convention as
+     #more-sheet-backdrop below. ── -->
+<div id="sidebar-drawer-backdrop"></div>
 
 <!-- ── Sidebar (shot list panel) ── -->
 <div id="sidebar">
@@ -156,16 +105,66 @@
 <!-- ── Main ── -->
 <div id="main">
 
-    <!-- Content topbar (#411): hosts the multi-machine switcher, relocated
-         here from the old horizontal #mode-bar (now removed entirely) —
-         machines-settings.js's renderMachineSwitcher()/#325 filtering logic
-         is unchanged, only this container's id. Also hosts the button that
-         re-expands the shot-sidebar once it's been collapsed via
-         #collapseBtn (a desktop-only affordance, separate from the rail's
-         own collapse). -->
+    <!-- Content topbar (#411, horizontal nav #424): hosts the burger-drawer
+         trigger (mobile-only, #425), the GLP brand mark, the button that
+         re-expands the shot-sidebar once collapsed via #collapseBtn, the
+         horizontal nav tab row (replaces the old #rail — same button ids
+         so mode.js's active-state toggling and status.js's live/orders
+         visibility gating keep working unchanged), and the multi-machine
+         switcher + machine status dot (machines-settings.js's
+         renderMachineSwitcher()/#325 filtering logic is unchanged). -->
     <div id="content-topbar">
+        <button id="mobileDrawerBtn" class="mobile-drawer-btn" data-i18n-title="sidebar_drawer_open" title="Shot-Liste öffnen" aria-label="Shot-Liste öffnen" aria-expanded="false" aria-controls="sidebar">
+            <svg class="rail-icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <span class="topbar-brand" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg></span>
         <button id="expandSidebarBtn" data-i18n-title="sidebar_expand" title="Sidebar aufklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/></svg></button>
-        <select id="machineSwitcher" class="machine-switcher" style="display:none" data-action="switch-machine" data-i18n-title="machine_switcher_title" title="Maschine"></select>
+
+        <nav class="topbar-nav-scroll">
+            <div class="topbar-nav-list">
+                <button class="topbar-nav" id="btnShots" data-i18n-title="nav_shots" title="Shots">
+                    <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg></span>
+                    <span class="rail-label" data-i18n="nav_shots">Shots</span>
+                </button>
+                <button class="topbar-nav" id="btnLive" style="display:none" data-i18n-title="nav_live" title="Live">
+                    <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span class="live-dot"></span></span>
+                    <span class="rail-label" data-i18n="nav_live">Live</span>
+                </button>
+                <button class="topbar-nav" id="btnLibrary" data-i18n-title="nav_library" title="Bibliothek">
+                    <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></span>
+                    <span class="rail-label" data-i18n="nav_library">Bibliothek</span>
+                </button>
+                <button class="topbar-nav" id="btnAnalytics" data-i18n-title="nav_analytics" title="Statistiken">
+                    <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M6 20v-5M12 20V9M18 20V4"/></svg></span>
+                    <span class="rail-label" data-i18n="nav_analytics">Statistiken</span>
+                </button>
+                <button class="topbar-nav" id="btnDialin" data-i18n-title="nav_dialin" title="Bezugslog">
+                    <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></span>
+                    <span class="rail-label" data-i18n="nav_dialin">Bezugslog</span>
+                </button>
+                <button class="topbar-nav" id="btnMaintenance" data-i18n-title="nav_maintenance" title="Wartung">
+                    <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-3 3-2.7-2.7z"/></svg></span>
+                    <span class="rail-label" data-i18n="nav_maintenance">Wartung</span>
+                    <span id="maintBadge" class="maint-badge" style="display:none"></span>
+                </button>
+                <button class="topbar-nav" id="btnOrders" style="display:none" data-i18n-title="nav_orders" title="Bestellungen">
+                    <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>
+                    <span class="rail-label" data-i18n="nav_orders">Bestellungen</span>
+                    <span id="ordersBadge" class="maint-badge" style="display:none"></span>
+                </button>
+                <div class="topbar-sep"></div>
+                <button class="topbar-nav" id="btnSettings" data-i18n-title="nav_settings" title="Einstellungen">
+                    <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg></span>
+                    <span class="rail-label" data-i18n="nav_settings">Einstellungen</span>
+                </button>
+            </div>
+        </nav>
+
+        <div class="topbar-machine">
+            <span class="status-dot unknown" id="railStatusDot"></span>
+            <span id="railMachineName" class="topbar-machine-name">–</span>
+            <select id="machineSwitcher" class="machine-switcher" style="display:none" data-action="switch-machine" data-i18n-title="machine_switcher_title" title="Maschine"></select>
+        </div>
     </div>
 
     <!-- Shots view -->

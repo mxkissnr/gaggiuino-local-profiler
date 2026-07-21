@@ -208,6 +208,23 @@ describe('extractAltitudeM', () => {
             expect(extractAltitudeM(text), handle).toBe(expected);
         }
     });
+
+    // Plain-digit/MASL shape (#423, verified against sproutcoffeeroasters.art):
+    // no thousands separator, hyphen range, "MASL" unit — none of which the
+    // German dotted-thousands regex above matches.
+    it('averages a plain-digit hyphen range with a MASL unit', () => {
+        expect(extractAltitudeM('Elevation - 1900-2300 MASL')).toBe(2100);
+    });
+
+    it('extracts a plain-digit single figure with a masl/meter unit', () => {
+        expect(extractAltitudeM('Grown at 1950 masl')).toBe(1950);
+        expect(extractAltitudeM('grown at 1900 meters above sea level')).toBe(1900);
+    });
+
+    it('does not regress on plausible-looking non-altitude numbers', () => {
+        expect(extractAltitudeM('some random 42 number text')).toBeNull();
+        expect(extractAltitudeM('Ordered 1200 units in stock')).toBeNull();
+    });
 });
 
 describe('priceFromProduct', () => {

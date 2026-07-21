@@ -40,7 +40,8 @@ import { t, setLang, applyTranslations } from './i18n.js';
 import { generateBeanQR } from './glp-qr.js';
 
 import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
-         toggleDesktopSidebar, setMobileShotSubview, updateMobileShotSidebarVisibility, selectShot } from './components/sidebar.js';
+         toggleDesktopSidebar, setMobileShotSubview, updateMobileShotSidebarVisibility, selectShot,
+         openShotDrawer, closeShotDrawer, handleDrawerTouchStart, handleDrawerTouchEnd } from './components/sidebar.js';
 import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
@@ -148,24 +149,6 @@ function copyApiToken() {
   navigator.clipboard?.writeText(S.glpToken)
     .then(() => showToast(t('settings_api_token_copied')))
     .catch(() => {});
-}
-
-// ── Desktop nav rail collapse (#411) ────────────────────────────────────────
-// Persisted separately from the shot-sidebar's own collapse (#collapseBtn /
-// glp_rail_collapsed vs. the sidebar's desktop-collapsed class, which isn't
-// persisted) — the two are independent surfaces, see index.html/style.css.
-const RAIL_COLLAPSED_KEY = 'glp_rail_collapsed';
-
-function applyRailCollapsed(collapsed) {
-  document.getElementById('rail')?.classList.toggle('rail-collapsed', collapsed);
-  const toggleBtn = document.getElementById('railToggle');
-  if (toggleBtn) toggleBtn.title = t(collapsed ? 'rail_expand' : 'rail_collapse');
-}
-
-function toggleRailCollapsed() {
-  const collapsed = !document.getElementById('rail')?.classList.contains('rail-collapsed');
-  applyRailCollapsed(collapsed);
-  localStorage.setItem(RAIL_COLLAPSED_KEY, collapsed ? '1' : '0');
 }
 
 // ── Bottom navigation "Mehr" sheet (#403, mobile) ──────────────────────────
@@ -530,9 +513,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.accent-swatch').forEach(b =>
     b.classList.toggle('active', b.dataset.accent === _savedAccent));
 
-  // ── Desktop nav rail collapse state (#411) ─────────────────────────────
-  applyRailCollapsed(localStorage.getItem(RAIL_COLLAPSED_KEY) === '1');
-
   // ── Static element wiring ──────────────────────────────────────────────
   document.getElementById('collapseBtn').addEventListener('click', toggleDesktopSidebar);
   document.getElementById('expandSidebarBtn').addEventListener('click', toggleDesktopSidebar);
@@ -549,9 +529,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('syncBtn').addEventListener('click', triggerSync);
   document.getElementById('onboardingDemoBtn').addEventListener('click', loadDemoData);
   document.getElementById('glpDemoEndBtn').addEventListener('click', endDemo);
-  // ── Desktop nav rail (#411) — same ids as the old #mode-bar buttons,
-  // just relocated markup, so switchMode()'s active-state toggling and
-  // status.js's live/orders visibility gating both keep working unchanged.
+  // ── Desktop topbar nav (#424) — same ids as the old #rail/#mode-bar
+  // buttons, just relocated+restyled markup, so switchMode()'s active-state
+  // toggling and status.js's live/orders visibility gating both keep
+  // working unchanged.
   document.getElementById('btnLive').addEventListener('click', () => switchMode('live'));
   document.getElementById('btnShots').addEventListener('click', () => switchMode('shots'));
   document.getElementById('btnAnalytics').addEventListener('click', () => switchMode('analytics'));
@@ -560,7 +541,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnMaintenance').addEventListener('click', () => switchMode('maintenance'));
   document.getElementById('btnOrders').addEventListener('click', () => switchMode('orders'));
   document.getElementById('btnSettings').addEventListener('click', () => switchMode('settings'));
-  document.getElementById('railToggle').addEventListener('click', toggleRailCollapsed);
+
+  // ── Mobile burger drawer (#425) — additive shot-list access from any
+  // view; the bottom-nav Shots-primary-screen flow below is unaffected.
+  document.getElementById('mobileDrawerBtn').addEventListener('click', openShotDrawer);
+  document.getElementById('sidebar-drawer-backdrop').addEventListener('click', closeShotDrawer);
+  document.getElementById('sidebar').addEventListener('touchstart', handleDrawerTouchStart, { passive: true });
+  document.getElementById('sidebar').addEventListener('touchend', handleDrawerTouchEnd, { passive: true });
 
   // ── Bottom navigation (#403, mobile) ─────────────────────────────────────
   // Shots always returns to the primary shot-list screen (#410) — the list

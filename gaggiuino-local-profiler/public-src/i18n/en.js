@@ -247,7 +247,7 @@ export default {
     export_shot_title:'Export current shot as .shot (Decent Espresso format)',
     profile_export_no_data:'No profile data available in this shot.',
     sidebar_collapse:'Collapse sidebar', sidebar_expand:'Expand sidebar',
-    rail_collapse:'Collapse rail', rail_expand:'Expand rail', back_to_list:'Back to list',
+    sidebar_drawer_open:'Open shot list', back_to_list:'Back to list',
     day_today:'Today', day_yesterday:'Yesterday',
     error_delete:(msg)=>`Delete error: ${msg}`,
     error_generic:(msg)=>`Error: ${msg}`,

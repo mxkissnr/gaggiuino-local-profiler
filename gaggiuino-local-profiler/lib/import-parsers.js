@@ -26,15 +26,23 @@ function normalizeImageUrl(url) {
     return null;
 }
 
-// Best-effort altitude from German prose: "1.850 m" or a range like "1.950
-// bis 2.150 Meter" (range is averaged). Requires the thousands-dot shape
-// typical of altitude figures to avoid matching unrelated numbers.
+// Best-effort altitude from prose. Two shapes are recognized:
+// 1. German thousands-dot: "1.850 m" or a range like "1.950 bis 2.150 Meter"
+//    (range is averaged). Requires the thousands-dot shape typical of German
+//    altitude figures to avoid matching unrelated numbers.
+// 2. Plain digits with an English/MASL unit and no thousands separator, as
+//    used by e.g. sproutcoffeeroasters.art: "1900-2300 MASL", "1950 masl".
 function extractAltitudeM(text) {
     if (typeof text !== 'string') return null;
     const range = text.match(/(\d{1,2})[.,](\d{3})\s*(?:bis|–|-)\s*(\d{1,2})[.,](\d{3})\s*m(?:eter)?n?\b/i);
     if (range) return Math.round((parseInt(range[1] + range[2]) + parseInt(range[3] + range[4])) / 2);
     const single = text.match(/(\d{1,2})[.,](\d{3})\s*m(?:eter)?n?\b/i);
-    return single ? parseInt(single[1] + single[2]) : null;
+    if (single) return parseInt(single[1] + single[2]);
+    const plainUnit  = /m\.?a\.?s\.?l\.?|asl|m(?:eter)?s?/;
+    const plainRange = text.match(new RegExp(`\\b(\\d{3,4})\\s*(?:-|–|—)\\s*(\\d{3,4})\\s*(?:${plainUnit.source})\\b`, 'i'));
+    if (plainRange) return Math.round((parseInt(plainRange[1]) + parseInt(plainRange[2])) / 2);
+    const plainSingle = text.match(new RegExp(`\\b(\\d{3,4})\\s*(?:${plainUnit.source})\\b`, 'i'));
+    return plainSingle ? parseInt(plainSingle[1]) : null;
 }
 
 // Shopify's product JSON reports price in cents.

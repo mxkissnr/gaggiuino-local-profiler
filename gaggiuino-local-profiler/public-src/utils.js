@@ -199,29 +199,47 @@ export function parseDMY(s) {
   return isNaN(d) ? null : d;
 }
 
-// ── Day-separator grouping (#412) ────────────────────────────────────────
+// ── Day-separator grouping (#412, hybrid grouping #426) ─────────────────
 // Buckets a shot list (any order — each shot just needs a `timestamp`, unix
-// seconds) into contiguous same-day groups for the sidebar's day-separator
-// headers. Pure function: the "today" reference and the today/yesterday
-// labels are all passed in rather than read from Date.now()/i18n, so day-
-// boundary behavior is testable without faking globals. Older days fall
-// back to `formatOlder(date)`, letting the caller reuse its own locale-aware
-// date formatting (e.g. LOCALE_MAP + toLocaleDateString) instead of this
-// module inventing a second one.
-export function groupShotsByDay(shots, now, todayLabel, yesterdayLabel, formatOlder) {
+// seconds) into contiguous groups for the sidebar's separator headers. Pure
+// function: the "today" reference and all labels/formatters are passed in
+// rather than read from Date.now()/i18n, so boundary behavior is testable
+// without faking globals.
+//
+// Grouping tiers:
+//   - today / yesterday  -> todayLabel / yesterdayLabel, one bucket each
+//   - 2..13 days ago      -> per-day bucket, label = formatRecent(date)
+//   - 14+ days ago        -> per-MONTH bucket (multiple old days in the same
+//                            month merge into one group), label =
+//                            formatOlder(date)
+// Letting the caller supply formatRecent/formatOlder keeps this module free
+// of locale/i18n knowledge (e.g. LOCALE_MAP + toLocaleDateString).
+const RECENT_WINDOW_DAYS = 14; // today(0) + yesterday(1) + 12 more per-day buckets
+
+export function groupShotsByDay(shots, now, todayLabel, yesterdayLabel, formatRecent, formatOlder) {
   const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const monthKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
   const today = dayKey(now);
   const yesterdayDate = new Date(now);
   yesterdayDate.setDate(now.getDate() - 1);
   const yesterday = dayKey(yesterdayDate);
+  const todayStart = startOfDay(now);
 
   const groups = [];
   let current = null;
   (shots || []).forEach(shot => {
     const d = new Date(shot.timestamp * 1000);
-    const key = dayKey(d);
+    const dKey = dayKey(d);
+    const daysAgo = Math.round((todayStart - startOfDay(d)) / 86400000);
+    const isRecent = daysAgo < RECENT_WINDOW_DAYS;
+    const key = isRecent ? dKey : monthKey(d);
     if (!current || current.key !== key) {
-      const label = key === today ? todayLabel : key === yesterday ? yesterdayLabel : formatOlder(d);
+      const label = dKey === today ? todayLabel
+        : dKey === yesterday ? yesterdayLabel
+        : isRecent ? formatRecent(d)
+        : formatOlder(d);
       current = { key, label, shots: [] };
       groups.push(current);
     }
