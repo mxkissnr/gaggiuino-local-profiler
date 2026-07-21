@@ -33,7 +33,13 @@ const ALLOWED_IMPORT_HOSTS  = ['kaffeebraun.com', 'www.kaffeebraun.com',
 // its CDN — never an arbitrary URL a client sends.
 const ALLOWED_IMAGE_HOSTS  = [...ALLOWED_IMPORT_HOSTS, 'cdn.shopify.com'];
 const BEAN_IMAGE_DIR       = '/data/bean-images';
-const BEAN_IMAGE_MAX_BYTES  = 1.5 * 1024 * 1024;
+// #433: 1.5MB silently dropped a real roaster product photo (1.7MB,
+// verified against sproutcoffeeroasters.art's Shopify CDN image) — the
+// download's own maxContentLength threw, was swallowed by the caller's
+// fire-and-forget .catch(() => {}), and the bean was saved with no image at
+// all. 4MB comfortably covers realistic product photography (incl. 2x/retina
+// exports) while still bounding the download.
+const BEAN_IMAGE_MAX_BYTES  = 4 * 1024 * 1024;
 const IMPORT_FETCH_MAX_BYTES = 5 * 1024 * 1024; // product JSON/HTML pages, generous for Shopify's inline data
 
 const LOW_STOCK_THRESHOLD_G = 100; // remaining grams below which a bean counts as low stock

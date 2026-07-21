@@ -72,7 +72,7 @@ describe('shot image upload/retrieve/delete', () => {
 
     it('rejects an oversized upload', async () => {
         shotRepo.upsert({ id: 2, timestamp: 1000, duration: 250 });
-        const big = Buffer.alloc(2 * 1024 * 1024, 1); // exceeds BEAN_IMAGE_MAX_BYTES (1.5MB)
+        const big = Buffer.alloc(5 * 1024 * 1024, 1); // exceeds BEAN_IMAGE_MAX_BYTES (4MB, #433)
         const r = await fetch(`${baseUrl}/api/shots/2/image`, {
             method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: big,
         });

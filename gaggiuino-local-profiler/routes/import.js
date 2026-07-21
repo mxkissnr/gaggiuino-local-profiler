@@ -69,10 +69,14 @@ function attachVariants(bean, rawVariants) {
 
 // Fields the built-in Shopify JSON parsers can populate but that a theme
 // may instead only render into the product page's HTML (see #423). Missing
-// any of these makes one extra bounded HTML fetch worthwhile.
+// any of these makes one extra bounded HTML fetch worthwhile — as does a
+// roaster that fell back to the bare hostname (#433), since the HTML page
+// may carry a real shop name (og:site_name / header-logo alt) the JSON has
+// no equivalent field for.
 const HTML_ENRICH_FIELDS = ['process', 'variety', 'producer', 'region', 'altitude_m', 'roastType'];
-function needsHtmlEnrich(bean) {
-    return HTML_ENRICH_FIELDS.some(f => !bean[f]);
+function needsHtmlEnrich(bean, host) {
+    if (HTML_ENRICH_FIELDS.some(f => !bean[f])) return true;
+    return !bean.roaster || (host && bean.roaster.toLowerCase() === host.toLowerCase());
 }
 
 router.get('/api/import/url', async (req, res) => {
@@ -132,10 +136,10 @@ router.get('/api/import/url', async (req, res) => {
                         // Some themes only render bean detail into the product
                         // page HTML, not this JSON (#423) — one extra bounded
                         // fetch, only when the JSON left detail fields empty.
-                        if (needsHtmlEnrich(bean)) {
+                        if (needsHtmlEnrich(bean, host)) {
                             try {
                                 const htmlR = await safeGet(raw, FETCH_OPTS);
-                                bean = enrichGenericBeanFromHtml(bean, htmlR.data);
+                                bean = enrichGenericBeanFromHtml(bean, htmlR.data, host);
                             } catch (htmlErr) {
                                 if (htmlErr instanceof SsrfBlockedError) throw htmlErr;
                                 // page fetch/parse failed — keep the JSON-only bean
