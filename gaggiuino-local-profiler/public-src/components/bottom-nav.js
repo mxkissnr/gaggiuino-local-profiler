@@ -141,19 +141,30 @@ function onMoreSheetClick(id) {
   switchMode(id);
 }
 
-// Reapplies the same bn*-active-state projection mode.js's switchMode()
-// already does, without any of switchMode()'s other side effects (view
-// visibility, live-stream (re)connect, etc.) — needed because rebuilding
-// the nav (e.g. after a settings change) replaces the DOM nodes, which
-// would otherwise drop whichever bn* button was showing .active.
-function applyActiveState() {
-  const mode = S.currentMode;
-  const moreModes = mode === 'dialin' || mode === 'maintenance' || mode === 'orders' || mode === 'settings';
-  document.getElementById('bnShots')?.classList.toggle('active', mode === 'shots');
-  document.getElementById('bnLive')?.classList.toggle('active', mode === 'live');
-  document.getElementById('bnLibrary')?.classList.toggle('active', mode === 'library');
-  document.getElementById('bnAnalytics')?.classList.toggle('active', mode === 'analytics');
-  document.getElementById('bnMore')?.classList.toggle('active', moreModes);
+// Reflects `mode` as .active across all 8 bn* ids plus bnMore. Each bn* id
+// is a direct mode-name match (mode names equal NAV_ITEMS ids); bnMore
+// lights up instead whenever the active id's button currently lives inside
+// #moreSheet — a DOM containment check rather than a static list of mode
+// names, since #443 made main-bar-vs-Mehr placement user-configurable (a
+// mode that defaults into the sheet, e.g. "maintenance", can now render in
+// the main bar instead, and vice versa; a hardcoded mode-name list would
+// desync from wherever the item actually renders).
+//
+// Exported so mode.js's switchMode() calls this directly instead of
+// duplicating the projection inline — this used to be a private
+// applyActiveState() re-run after every renderBottomNav() rebuild (nav
+// re-renders replace the DOM nodes, which would otherwise drop whichever
+// bn* button was showing .active), and mode.js had its own separate,
+// hardcoded copy of the same logic; keeping one implementation avoids the
+// two copies drifting out of sync.
+export function applyBottomNavActiveState(mode) {
+  ALL_IDS.forEach(id => {
+    document.getElementById(bnDomId(id))?.classList.toggle('active', mode === id);
+  });
+  const activeEl = document.getElementById(bnDomId(mode));
+  const moreSheetEl = document.getElementById('moreSheet');
+  const inMoreSheet = !!(activeEl && moreSheetEl && moreSheetEl.contains(activeEl));
+  document.getElementById('bnMore')?.classList.toggle('active', inMoreSheet);
 }
 
 // Builds #bottom-nav (main-bar items + the always-present "Mehr" control)
@@ -190,7 +201,7 @@ export function renderBottomNav() {
   moreBtn.addEventListener('click', toggleMoreSheet);
   moreSheetIds.forEach(id => document.getElementById(bnDomId(id)).addEventListener('click', () => onMoreSheetClick(id)));
 
-  applyActiveState();
+  applyBottomNavActiveState(S.currentMode);
 }
 
 // Pure projection of the persisted config into what the settings list needs

@@ -19,6 +19,7 @@ const { S } = await import('../public-src/state.js');
 const {
   STORAGE_KEY, MAX_MAIN_BAR, DEFAULT_MAIN_BAR, ALL_IDS,
   getBottomNavConfig, setBottomNavConfig, computeSettingsRows, renderBottomNav,
+  applyBottomNavActiveState,
 } = await import('../public-src/components/bottom-nav.js');
 const { updatePowerButton } = await import('../public-src/components/status.js');
 
@@ -161,6 +162,7 @@ function makeFakeDocument() {
       set innerHTML(v) { this._innerHTML = v; },
       get innerHTML() { return this._innerHTML; },
       appendChild(child) { (el._children ||= []).push(child); return child; },
+      contains(child) { return (el._children || []).includes(child); },
       setAttribute(k, v) { el._attrs[k] = v; },
       getAttribute(k) { return el._attrs[k]; },
       addEventListener(evt, fn) { (el._listeners[evt] ||= []).push(fn); },
@@ -219,6 +221,48 @@ describe('renderBottomNav — renders exactly the configured set (#443)', () => 
     const sheetIds = doc.getElementById('moreSheet')._children.map(c => c.id);
     expect(barIds).toEqual(['bnShots', 'bnLive', 'bnLibrary', 'bnAnalytics', 'bnMore']);
     expect(sheetIds).toEqual(['bnDialin', 'bnMaintenance', 'bnOrders', 'bnSettings']);
+  });
+});
+
+describe('applyBottomNavActiveState — bnMore highlights by DOM containment, not a static mode list (#443)', () => {
+  let doc;
+
+  beforeEach(() => {
+    doc = makeFakeDocument();
+    doc._preRegister('bottom-nav');
+    doc._preRegister('moreSheet');
+    globalThis.document = doc;
+  });
+
+  it('a mode whose id is placed in the main bar (not the sheet) gets its own .active pill, and bnMore stays inactive', () => {
+    // Regression (peer review on PR #444): mode.js used to hardcode "if mode
+    // is dialin/maintenance/orders/settings, highlight bnMore" — which broke
+    // as soon as one of those could render in the main bar instead of the
+    // sheet, since bnMore would light up while the actual clicked button
+    // (bnMaintenance here) got no active pill at all.
+    setBottomNavConfig(['shots', 'maintenance', 'orders', 'settings']);
+    renderBottomNav();
+    S.currentMode = 'maintenance';
+
+    applyBottomNavActiveState('maintenance');
+
+    expect(doc.getElementById('bnMaintenance').classList.contains('active')).toBe(true);
+    expect(doc.getElementById('bnMore').classList.contains('active')).toBe(false);
+  });
+
+  it('the same mode still highlights bnMore when its id lives in the sheet (default config) — regression check', () => {
+    // Default config: maintenance stays in #moreSheet, exactly like before
+    // #443. bnMaintenance itself still gets the direct mode-name match (it's
+    // harmless there since the sheet is closed right after a click), but the
+    // regression this guards is bnMore correctly lighting up too — that's
+    // what a user actually sees on the closed bottom nav.
+    renderBottomNav();
+    S.currentMode = 'maintenance';
+
+    applyBottomNavActiveState('maintenance');
+
+    expect(doc.getElementById('bnMaintenance').classList.contains('active')).toBe(true);
+    expect(doc.getElementById('bnMore').classList.contains('active')).toBe(true);
   });
 });
 
