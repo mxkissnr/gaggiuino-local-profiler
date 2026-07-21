@@ -3,6 +3,7 @@ import { t } from '../i18n.js';
 import { LOCALE_MAP, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName, flagEmoji } from '../constants.js';
 import { scoreClass } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
+import { TARGET_ICON_SVG } from '../icons.js';
 
 // ── Analytics entry point ─────────────────────────────────────────────────
 export function initAnalytics() {
@@ -482,7 +483,7 @@ export function buildBeanStats() {
         ${bestSc !== null ? `<div class="bean-stat"><span class="bean-stat-val">${bestSc}</span><span class="bean-stat-lbl">${t('bean_stat_best')}</span></div>` : ''}
         ${avgDur !== null ? `<div class="bean-stat"><span class="bean-stat-val">${avgDur}s</span><span class="bean-stat-lbl">${t('bean_stat_duration')}</span></div>` : ''}
       </div>
-      ${d.dialinShot !== null ? `<div class="bean-stat-dialin">🎯 ${t('analytics_dialin', d.dialinShot)}</div>` : (d.scores.length >= 3 ? `<div class="bean-stat-dialin" style="color:#52525b">${t('analytics_dialin_none')}</div>` : '')}
+      ${d.dialinShot !== null ? `<div class="bean-stat-dialin">${TARGET_ICON_SVG} ${t('analytics_dialin', d.dialinShot)}</div>` : (d.scores.length >= 3 ? `<div class="bean-stat-dialin" style="color:#52525b">${t('analytics_dialin_none')}</div>` : '')}
     </div>`;
   }
   html += '</div>';

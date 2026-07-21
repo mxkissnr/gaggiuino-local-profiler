@@ -3,6 +3,7 @@ import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { esc } from '../utils.js';
 import { LOCALE_MAP } from '../constants.js';
+import { CLOCK_ICON_SVG, BELL_ICON_SVG } from '../icons.js';
 
 // #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
 // .rail-icon treatment as the 🔥 trend toggle, #415). Used both in the
@@ -36,7 +37,7 @@ function _notifyNewOrders(newOrders) {
   _playOrderChime();
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const n = newOrders.length;
-  new Notification(`☕ ${n} neue Bestellung${n > 1 ? 'en' : ''}`, {
+  new Notification(`${n} neue Bestellung${n > 1 ? 'en' : ''}`, {
     body: newOrders.map(o => `${o.customer}: ${o.item}`).join('\n'),
     tag: 'glp-new-order',
     silent: true,
@@ -140,7 +141,7 @@ export function renderMilkStock(milks) {
   if (!el) return;
   if (!milks?.length) { el.style.display = 'none'; return; }
   el.style.display = '';
-  el.innerHTML = `<p class="orders-milk-title">${t('orders_milk_title')}</p>` +
+  el.innerHTML = `<p class="orders-milk-title">${MILK_ICON_SVG} ${t('orders_milk_title')}</p>` +
     milks.map(m => {
       const cls = m.stockMl <= 0 ? 'empty' : m.remaining < 300 ? 'low' : 'ok';
       const label = m.stockMl <= 0 ? t('lib_milk_empty')
@@ -172,7 +173,7 @@ export function renderOrdersList(orders) {
     ? Math.ceil((S._ordersQueueEta.acceptedRemaining || 0) + (S._ordersQueueEta.pendingCount || 0) * (S._ordersQueueEta.prepTime || 4))
     : 0;
   const queueBanner = totalActive >= 2 && totalEta > 0
-    ? `<div class="orders-queue-banner">${t('orders_queue_banner', totalActive, totalEta)}</div>`
+    ? `<div class="orders-queue-banner">${CLOCK_ICON_SVG} ${t('orders_queue_banner', totalActive, totalEta)}</div>`
     : '';
 
   pendingEl.innerHTML = queueBanner + (pending.length ? pending.map(o => renderOrderCard(o, 'pending')).join('') :
@@ -354,7 +355,7 @@ export async function renderOrdersMenuAdmin(menu) {
       </div>
       <div class="orders-menu-variants">${variantSection}</div>
       <div class="orders-menu-milk-row">
-        🥛 <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${milkMl}" placeholder="0" min="0" step="10" data-milk-ml="${esc(item.id)}"> ${t('orders_milk_per_order')}
+        ${MILK_ICON_SVG} <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${milkMl}" placeholder="0" min="0" step="10" data-milk-ml="${esc(item.id)}"> ${t('orders_milk_per_order')}
       </div>
     </div>`;
   }).join('');
@@ -525,7 +526,7 @@ export async function loadNotifyMappingView() {
 
   const broadcastHtml = `
     <div class="orders-broadcast-section">
-      <p class="orders-broadcast-title">${t('orders_broadcast_title')}</p>
+      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${t('orders_broadcast_title')}</p>
       <p class="orders-notify-hint">${t('orders_broadcast_desc')}</p>
       <div class="orders-broadcast-list" id="ordersBroadcastList">${broadcastRows}</div>
       <div class="orders-notify-actions">
@@ -539,7 +540,7 @@ export async function loadNotifyMappingView() {
 
   const baristaHtml = `
     <div class="orders-broadcast-section">
-      <p class="orders-broadcast-title">${t('orders_barista_title')}</p>
+      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${t('orders_barista_title')}</p>
       <p class="orders-notify-hint">${t('orders_barista_desc')}</p>
       <select class="orders-notify-select" id="ordersBaristaSelect">${baristaOptions}</select>
       <div class="orders-notify-actions">

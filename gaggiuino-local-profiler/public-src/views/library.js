@@ -7,6 +7,7 @@ import { loadBeanImageBlobUrl, loadGrinderImageBlobUrl, invalidateGrinderImage, 
 import { openImageCropEditor } from '../components/image-crop.js';
 import { generateBeanQR, parseGlpQrParams } from '../glp-qr.js';
 import { calcBestGrindCombosForBean } from './shots/grind.js';
+import { TARGET_ICON_SVG, SLIDERS_ICON_SVG, FLAVOR_WHEEL_ICON_SVG, COFFEE_ICON_SVG, WATER_DROP_ICON_SVG, ICE_CUBE_ICON_SVG, LINK_ICON_SVG, WRENCH_ICON_SVG } from '../icons.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
@@ -171,7 +172,7 @@ export function renderBeanList() {
       b.brewTimeS ? t('bean_brew_time_display', b.brewTimeS) : '',
     ].filter(Boolean);
     const brewHtml = brewParts.length || b.brewNotes
-      ? `<div class="lib-item-sub lib-item-brew">☕ ${[...brewParts, b.brewNotes].filter(Boolean).map(esc).join(' · ')}</div>`
+      ? `<div class="lib-item-sub lib-item-brew">${COFFEE_ICON_SVG} ${[...brewParts, b.brewNotes].filter(Boolean).map(esc).join(' · ')}</div>`
       : '';
 
     const disabled = b.enabled === false;
@@ -200,9 +201,9 @@ export function renderBeanList() {
       </div>
       <div class="lib-item-actions">
         <button class="lib-btn-sm" data-action="open-new-bag" data-id="${b.id}" title="${t('lib_new_bag')}">${t('lib_new_bag')}</button>
-        ${Array.isArray(b.flavors) && b.flavors.length ? `<button class="lib-btn-sm" data-action="open-flavor-wheel" data-id="${b.id}" title="${t('flavor_wheel_btn')}">🎡</button>` : ''}
-        <button class="lib-btn-sm" data-action="create-profile-from-bean" data-id="${b.id}" title="${t('profile_create_from_bean')}">🎛</button>
-        <button class="lib-btn-sm" data-action="start-dialin-from-bean" data-id="${b.id}" title="${t('dialin_wizard_start_from_bean')}">🎯</button>
+        ${Array.isArray(b.flavors) && b.flavors.length ? `<button class="lib-btn-sm" data-action="open-flavor-wheel" data-id="${b.id}" title="${t('flavor_wheel_btn')}">${FLAVOR_WHEEL_ICON_SVG}</button>` : ''}
+        <button class="lib-btn-sm" data-action="create-profile-from-bean" data-id="${b.id}" title="${t('profile_create_from_bean')}">${SLIDERS_ICON_SVG}</button>
+        <button class="lib-btn-sm" data-action="start-dialin-from-bean" data-id="${b.id}" title="${t('dialin_wizard_start_from_bean')}">${TARGET_ICON_SVG}</button>
         <button class="lib-btn-sm" data-action="toggle-bean-qr" data-id="${b.id}" title="${t('bean_qr_label')}">QR</button>
         <button class="lib-btn-sm lib-btn-icon" data-action="toggle-bean-active" data-id="${b.id}" title="${t(disabled ? 'lib_btn_enable' : 'lib_btn_disable')}">${disabled ? ICON_EYE_OFF : ICON_EYE}</button>
         <button class="lib-btn-sm lib-btn-icon" data-action="edit-bean" data-id="${b.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
@@ -349,7 +350,7 @@ export function renderGrinderList() {
         ${extra ? `<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : ''}
         ${g.notes ? `<div class="lib-item-sub">${esc(g.notes)}</div>` : ''}
         ${g.wear ? `<div class="lib-item-sub lib-grinder-wear">
-          <span>${t('lib_grinder_wear', g.wear.shotsSinceBurrs, formatWearGrams(g.wear.gramsSinceBurrs))}</span>
+          <span>${WRENCH_ICON_SVG} ${t('lib_grinder_wear', g.wear.shotsSinceBurrs, formatWearGrams(g.wear.gramsSinceBurrs))}</span>
           <button class="lib-btn-sm lib-grinder-reset-burrs" data-action="reset-grinder-burrs" data-id="${g.id}">${t('lib_grinder_reset_burrs')}</button>
         </div>` : ''}
       </div>
@@ -1062,8 +1063,8 @@ export function renderRecipeList() {
     const params = [
       r.targetDose_g  ? `${r.targetDose_g} g`    : null,
       r.targetYield_g ? `→ ${r.targetYield_g} g` : null,
-      r.water_g       ? `💧 ${r.water_g} g`      : null,
-      r.ice_g         ? `🧊 ${r.ice_g} g`        : null,
+      r.water_g       ? `${WATER_DROP_ICON_SVG} ${r.water_g} g` : null,
+      r.ice_g         ? `${ICE_CUBE_ICON_SVG} ${r.ice_g} g`     : null,
       r.targetTime_s  ? `${r.targetTime_s} s`    : null,
       r.waterTemp_c   ? `${r.waterTemp_c} °C`    : null,
       r.grindSize     ? esc(r.grindSize)          : null,
@@ -1091,7 +1092,7 @@ export function renderRecipeList() {
         ${params.length ? `<div class="lib-recipe-params">${params.map(p => `<span>${p}</span>`).join('')}</div>` : ''}
         ${stepsHtml}
         ${r.notes ? `<div class="lib-item-sub" style="margin-top:4px">${esc(r.notes)}</div>` : ''}
-        ${r.sourceUrl ? `<div class="lib-item-source"><a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">🔗 Quelle</a></div>` : ''}
+        ${r.sourceUrl ? `<div class="lib-item-source"><a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">${LINK_ICON_SVG} Quelle</a></div>` : ''}
       </div>
       <div class="lib-item-actions">
         <button class="lib-btn-sm lib-btn-icon" data-action="edit-recipe" data-id="${r.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
