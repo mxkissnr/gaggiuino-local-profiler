@@ -48,7 +48,7 @@ import { switchMode, goToShot } from './components/mode.js';
 
 import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggleTrash,
          trashShot, restoreShot, permanentDeleteShot,
-         renderAnnotationPanel, renderStars, quickClone, saveAnnotation, scheduleAutoSave, updateDegassing, calcBeanAgeAtShot,
+         renderAnnotationPanel, renderStars, quickClone, scheduleAutoSave, flushAutoSave, updateDegassing, calcBeanAgeAtShot,
          suggestGrindDoseForBean,
          uploadShotImage, removeShotImage, openShotPhotoLightbox,
          updateView, switchChartTab, updatePQChart,
@@ -232,8 +232,8 @@ Object.assign(window, {
   renderAnnotationPanel,
   renderStars,
   quickClone,
-  saveAnnotation,
   scheduleAutoSave,
+  flushAutoSave,
   selectDrinkType,
   selectMilkType,
   loadDrinkMenu,
@@ -550,9 +550,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sidebar').addEventListener('touchend', handleDrawerTouchEnd, { passive: true });
 
   // ── Bottom navigation (#403, mobile) ─────────────────────────────────────
-  // Shots always returns to the primary shot-list screen (#410) — the list
-  // is no longer an overlay drawer over the detail view.
-  document.getElementById('bnShots').addEventListener('click', () => { switchMode('shots'); setMobileShotSubview('list'); });
+  // #431: Shots opens the shot detail directly (latest/last-selected shot) —
+  // the shot list is no longer reachable from here at all, only via the
+  // burger drawer (#425's openShotDrawer, wired above).
+  document.getElementById('bnShots').addEventListener('click', () => { switchMode('shots'); setMobileShotSubview('detail'); });
   document.getElementById('bnLive').addEventListener('click', () => switchMode('live'));
   document.getElementById('bnLibrary').addEventListener('click', () => switchMode('library'));
   document.getElementById('bnAnalytics').addEventListener('click', () => switchMode('analytics'));
@@ -587,13 +588,20 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('fsTabPQ').addEventListener('click', () => switchFsTab('pq'));
   document.getElementById('closeFullscreenBtn').addEventListener('click', closeChartFullscreen);
   document.getElementById('quickCloneBtn').addEventListener('click', quickClone);
-  document.getElementById('saveAnnotationBtn').addEventListener('click', saveAnnotation);
   document.getElementById('annPhotoPickBtn').addEventListener('click', () => document.getElementById('annPhotoInput').click());
   document.getElementById('annPhotoInput').addEventListener('change', function () { uploadShotImage(this); });
   document.getElementById('annPhotoRemoveBtn').addEventListener('click', removeShotImage);
   document.getElementById('annPhotoThumb').addEventListener('click', openShotPhotoLightbox);
+  // #430: no more explicit Save button — auto-save on input, flushed
+  // immediately on blur (leaving the field) and on page hide/mode-switch
+  // (below) so a pending debounced save is never silently dropped.
   ['annCoffee','annGrinder','annGrindSetting','annDose','annTds','annNotes'].forEach(id => {
-    document.getElementById(id).addEventListener('input', scheduleAutoSave);
+    const el = document.getElementById(id);
+    el.addEventListener('input', scheduleAutoSave);
+    el.addEventListener('blur', flushAutoSave);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushAutoSave();
   });
   document.getElementById('openMaintLogBtn').addEventListener('click', openMaintLogForm);
   document.getElementById('submitMaintLogBtn').addEventListener('click', submitMaintLogEntry);

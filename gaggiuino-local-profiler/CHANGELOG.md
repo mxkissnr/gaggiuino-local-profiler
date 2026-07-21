@@ -1,3 +1,17 @@
+## [2.8.0] – 2026-07-21
+
+### Fixed
+- **Shot annotations silently failed to save whenever no Orders drink menu was configured.** Found while verifying the #430 auto-save round end-to-end against a real running instance without Orders set up (the common case for any non-commercial install). The frontend always sends `drinkType: null` for "no drink assigned" — the same shape `milkType` already handled — but `annotationSchema` only had `.nullable()` on `milkType`/`rating`/`score`/`recipeId`/`beanBagId`, not `drinkType`. Every `POST /api/shots/:id/annotate` with no drink selected returned a 400 "Validation failed", so a save that looked successful in the UI (or simply didn't) was silently discarded server-side. Closes #434
+- **Generic Shopify bean import: brew-guide fields, roaster/producer/image drop.** Ground-truthed against a real re-import of sproutcoffeeroasters.art/products/flower-power. The brew guide's Temp/Time/Ratio lines now map into the bean's structured `brewTempC`/`brewTimeS`/`brewRatio` fields (ranges resolved via midpoint, consistent with existing altitude-range handling), plus the pre-infusion caveat into `brewNotes`. Fixed cheerio's `.text()` silently concatenating adjacent block-level content with no separator (e.g. "EspressoIn: 19.7gOut: 48g") — accordion text extraction now inserts newlines at `<br>`/`<p>`/`<div>`/`<li>`/heading/`<tr>` boundaries. Roaster name now prefers a real name (`og:site_name`/header-logo-alt) over the bare hostname. The producer field was parsed but silently dropped before reaching the import dialog — now applied. Bean images were silently dropped whenever the real photo exceeded the old 1.5MB cap (real-world case: a 1.7MB Shopify photo) — cap raised to 4MB. Closes #433
+
+### Added
+- **Grind setting surfaced in shot detail, baseline chip, and sidebar.** The shot detail's Bohne & Mühle recipe card now shows the grind setting alongside the grinder. The newest shot of a bean shows a "Letzter Mahlgrad" baseline chip with the last recorded grind setting for that bean, so baseline and correction read together next to the grind advice. Sidebar shot cards' meta line includes the grind setting too. Closes #429
+
+### Changed
+- **Mobile: Shots tab now opens the shot detail directly.** Correction of #425's interpretation — the bottom-nav Shots tab opens the shot detail (honoring the last-selected shot via `localStorage`, falling back to the newest) instead of the shot list. The list is now reachable exclusively through the left burger drawer. Closes #431
+- **Annotation panel: redundant explicit Save button removed.** Auto-save already existed; the button was redundant. `#autoSaveStatus` now carries the full lifecycle ("Speichert…" → "Gespeichert" with a check icon), with flush-on-blur, visibilitychange, mode-switch, and shot-switch so no debounced edit is silently lost — the button used to be the only thing catching a pending edit in those moments. Closes #430
+- **Desktop topbar: redundant GLP brand icon removed.** The purple icon in `#content-topbar` duplicated information already implicit from the Home Assistant ingress framing; already hidden on mobile, now removed on desktop too. Closes #432
+
 ## [2.7.1] – 2026-07-21
 
 ### Fixed

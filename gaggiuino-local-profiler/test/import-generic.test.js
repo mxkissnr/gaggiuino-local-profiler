@@ -95,7 +95,9 @@ describe('enrichGenericBeanFromHtml', () => {
                 Out: 38g for a double, split to make 2x19g single shots.<br>
                 Time: 28-30 seconds<br>
                 Ratio: 1 - 1.9<br>
-                Temp: 92-93 Celsius</span></p>
+                Temp: 92-93 Celsius<br>
+                <br>
+                We have a slow &amp; long pre-infusion with a soft pressure profile. If your machine has a short pre-infusion or jumps to 9 bar immediately, reduce these times by 1 or 2 seconds to avoid overextraction.</span></p>
             </div>
         </details>
     `;
@@ -133,6 +135,106 @@ describe('enrichGenericBeanFromHtml', () => {
         const bean = enrichGenericBeanFromHtml(preFilled, sproutHtml);
         expect(bean.process).toBe('Washed');
         expect(bean.notes).toBe('already has notes');
+    });
+
+    // #433: real-world re-import ground truth (sproutcoffeeroasters.art/products/flower-power)
+    // showed the structured brew fields staying empty even though the brew
+    // guide text (asserted above) clearly contains them.
+    describe('brew field extraction (#433)', () => {
+        it('maps the espresso block\'s Temp/Time/Ratio lines into brewTempC/brewTimeS/brewRatio, resolving ranges via midpoint', () => {
+            const bean = enrichGenericBeanFromHtml(jsonOnlyBean, sproutHtml);
+            expect(bean.brewTempC).toBe(92.5); // midpoint of 92-93
+            expect(bean.brewTimeS).toBe(28);   // round(midpoint(27,29))
+            expect(bean.brewRatio).toBe('1:2.4'); // reformatted, not averaged
+        });
+
+        it('maps the pre-infusion caveat sentence into brewNotes even though it is nested under a different heading than the chosen recipe block', () => {
+            const bean = enrichGenericBeanFromHtml(jsonOnlyBean, sproutHtml);
+            expect(bean.brewNotes).toMatch(/^We have a slow/);
+            expect(bean.brewNotes).toContain('avoid overextraction');
+        });
+
+        it('never overwrites brew fields the JSON/form already populated', () => {
+            const preFilled = { ...jsonOnlyBean, brewTempC: 94, brewRatio: '1:2', brewTimeS: 30, brewNotes: 'existing note' };
+            const bean = enrichGenericBeanFromHtml(preFilled, sproutHtml);
+            expect(bean.brewTempC).toBe(94);
+            expect(bean.brewRatio).toBe('1:2');
+            expect(bean.brewTimeS).toBe(30);
+            expect(bean.brewNotes).toBe('existing note');
+        });
+
+        it('leaves brew fields unset when there is no Brew Guide accordion', () => {
+            const plainHtml = '<html><body><h1>Some Product</h1><p>Just a description.</p></body></html>';
+            const bean = enrichGenericBeanFromHtml(jsonOnlyBean, plainHtml);
+            expect(bean.brewTempC).toBeUndefined();
+            expect(bean.brewRatio).toBeUndefined();
+        });
+    });
+
+    // #433: reported symptom was literally "EspressoIn: 19.7gOut: 48g" — a
+    // minified page's <br> tags with zero surrounding whitespace, which the
+    // old code's plain .text() concatenated with no separator at all.
+    it('keeps recipe lines separated even when the source HTML has no whitespace around <br> tags', () => {
+        const minifiedBean = { ...jsonOnlyBean, notes: '' };
+        const html = '<details><summary>Brew Guide</summary><div class="details-content">'
+            + '<p><span>Espresso<br>In: 19.7g<br>Out: 48g<br>Time: 27-29 seconds<br>Ratio: 1 - 2.4<br>Temp: 92-93 Celsius</span></p>'
+            + '</div></details>';
+        const bean = enrichGenericBeanFromHtml(minifiedBean, html);
+        expect(bean.notes).not.toContain('EspressoIn');
+        expect(bean.notes).not.toContain('19.7gOut');
+        expect(bean.notes).toContain('In: 19.7g');
+        expect(bean.notes).toContain('Out: 48g');
+        expect(bean.brewTempC).toBe(92.5);
+        expect(bean.brewTimeS).toBe(28);
+        expect(bean.brewRatio).toBe('1:2.4');
+    });
+
+    // #433: cheerio's plain .text() concatenates adjacent block-level content
+    // (e.g. sibling <div> lines with no <br> and no separating whitespace)
+    // with no separator at all — verify label/value scanning still works
+    // for that shape, not just the <p>-tag/<br> shapes already covered above.
+    it('reads label/value lines correctly when an accordion uses <div>-per-line with no separating whitespace', () => {
+        const divHtml = `
+            <details class="details">
+                <summary class="details__header">Details</summary>
+                <div class="details-content"><div>Process - Washed</div><div>Variety - Bourbon</div></div>
+            </details>
+        `;
+        const bean = enrichGenericBeanFromHtml(jsonOnlyBean, divHtml);
+        expect(bean.process).toBe('Washed');
+        expect(bean.variety).toBe('Bourbon');
+    });
+
+    // #433, verified against sproutcoffeeroasters.art: the Shopify vendor
+    // field is a taxonomy tag ("adventurous"), so parseGenericShopifyProduct
+    // (tested above) falls back to the bare hostname — the HTML enrichment
+    // pass should still recover a real display name when the page has one.
+    describe('roaster fallback via og:site_name / logo alt (#433)', () => {
+        const hostFallbackBean = { ...jsonOnlyBean, roaster: 'sproutcoffeeroasters.art' };
+
+        it('prefers og:site_name when present', () => {
+            const html = '<html><head><meta property="og:site_name" content="Sprout Coffee Roasters"></head><body></body></html>';
+            const bean = enrichGenericBeanFromHtml(hostFallbackBean, html, 'sproutcoffeeroasters.art');
+            expect(bean.roaster).toBe('Sprout Coffee Roasters');
+        });
+
+        it('falls back to the header-logo alt text when og:site_name is absent', () => {
+            const html = '<html><body><img class="header-logo__image" alt="Sprout Coffee Roasters - Home"></body></html>';
+            const bean = enrichGenericBeanFromHtml(hostFallbackBean, html, 'sproutcoffeeroasters.art');
+            expect(bean.roaster).toBe('Sprout Coffee Roasters');
+        });
+
+        it('never overwrites a roaster that already looks like a real vendor name', () => {
+            const realVendorBean = { ...jsonOnlyBean, roaster: 'Elbgold Kaffeerösterei' };
+            const html = '<html><head><meta property="og:site_name" content="Some Other Shop"></head><body></body></html>';
+            const bean = enrichGenericBeanFromHtml(realVendorBean, html, 'elbgold.com');
+            expect(bean.roaster).toBe('Elbgold Kaffeerösterei');
+        });
+
+        it('leaves the hostname fallback in place when the HTML has no usable name signal either', () => {
+            const bean = enrichGenericBeanFromHtml(hostFallbackBean, '<html><body><h1>No signals here</h1></body></html>', 'sproutcoffeeroasters.art');
+            expect(bean.roaster).toBe('sproutcoffeeroasters.art');
+        });
     });
 
     it('returns the bean unchanged when the HTML has none of the recognized patterns', () => {

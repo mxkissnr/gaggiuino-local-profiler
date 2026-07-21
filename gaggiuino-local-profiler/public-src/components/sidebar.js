@@ -84,7 +84,9 @@ function _buildShotWrapper(shot) {
       ? `<span class="stars">${'★'.repeat(rating)}<span class="off">${'★'.repeat(5 - rating)}</span></span>`
       : '';
     const timeLabel = date.toLocaleTimeString(LOCALE_MAP[S.currentLang] || 'de-DE', { hour: '2-digit', minute: '2-digit' });
-    const grinderHtml = ann.grinder ? `<span class="shot-grinder">${esc(ann.grinder)}</span>` : '';
+    // #429: grind setting alongside the grinder in the meta line.
+    const grinderLabel = [ann.grinder, ann.grindSetting].filter(Boolean).join(' · ');
+    const grinderHtml = grinderLabel ? `<span class="shot-grinder">${esc(grinderLabel)}</span>` : '';
 
     const thumbHtml = shot.image ? `<img class="shot-thumb" data-shot-id="${shot.id}" alt="">` : '';
     // Multi-machine badge (#325): only shown in "all machines" mode with
@@ -110,6 +112,9 @@ function _buildShotWrapper(shot) {
     divShot.onclick = e => {
       if (e.ctrlKey || e.metaKey) { toggleCompare(shot.id); }
       else {
+        // #430: flush a pending annotation edit on the shot being switched
+        // away from before its DOM fields get overwritten by the new shot.
+        if (S.primaryShotId !== shot.id && window.flushAutoSave) window.flushAutoSave();
         S.primaryShotId = shot.id; S.compareShotId = null;
         localStorage.setItem('glp_primaryShotId', shot.id);
         localStorage.removeItem('glp_compareShotId');
@@ -401,6 +406,7 @@ export function handleDrawerTouchEnd(e) {
 
 // ── selectShot (used from dialin onclick) ────────────────────────────────
 export function selectShot(id) {
+  if (S.primaryShotId !== id && window.flushAutoSave) window.flushAutoSave(); // #430
   S.primaryShotId = id;
   S.compareShotId = null;
   localStorage.setItem('glp_primaryShotId', id);

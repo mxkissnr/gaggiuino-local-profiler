@@ -300,7 +300,6 @@
            narrow desktop widths via the -scroll wrapper. Mobile hides the
            whole row (see the max-width:768px block) and uses #bottom-nav
            instead. ── */
-        .topbar-brand { display: flex; align-items: center; flex-shrink: 0; color: var(--accent); padding: 0 2px; }
         .topbar-nav-scroll {
             flex: 1;
             min-width: 0;
@@ -769,7 +768,7 @@
         .annotation-field.full-width { grid-column: 1 / -1; }
         .annotation-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; }
         .ordered-by-badge { font-size: .75rem; color: #a16207; background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.25); border-radius:var(--radius); padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px; }
-        .autosave-status { font-size: .75rem; color: var(--ok); opacity: 0; transition: opacity .3s; pointer-events: none; }
+        .autosave-status { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; color: var(--ok); opacity: 0; transition: opacity .3s; pointer-events: none; }
         .autosave-status.visible { opacity: 1; }
 
         /* ── Drink type pills ── */
@@ -999,19 +998,6 @@
         .bean-qr-wrap canvas { border-radius:var(--radius); }
         .bean-qr-label { font-size:.65rem; color:var(--gray-600); }
 
-        .save-btn {
-            background: var(--gray-800);
-            color: var(--gray-400);
-            border: 1px solid var(--gray-700);
-            border-radius:var(--radius);
-            padding: 6px 18px;
-            cursor: pointer;
-            font-family: 'Figtree', sans-serif;
-            font-size: .85rem;
-            transition: all .2s;
-        }
-        .save-btn:hover { background: var(--gray-700); color: #fff; }
-        .save-btn.saved { background: #14532d; color: #86efac; border-color: #166534; }
 
         /* ── Live view ── */
         #live-view {
@@ -1241,6 +1227,16 @@
         .freshness-fresh  { background: rgba(34,197,94,.15);  color: var(--ok); }
         .freshness-ok     { background: rgba(245,158,11,.15); color: var(--accent); }
         .freshness-old    { background: rgba(239,68,68,.12);  color: var(--err); }
+
+        /* Grind-setting baseline chip (#429) — sits between the recipe zone
+           and the grind advice so the last-used setting and the current
+           advice read together as baseline + correction. */
+        .grind-baseline-chip {
+            display: inline-block; margin-top: 10px;
+            font-size: .78rem; font-weight: 600; font-variant-numeric: tabular-nums;
+            padding: 3px 10px; border-radius: var(--radius);
+            background: var(--gray-800); color: var(--gray-400);
+        }
 
         /* ── Grind advice ── */
         .grind-advice {
@@ -1508,7 +1504,7 @@
             /* #424: the desktop topbar nav row is desktop-only — mobile
                navigates via #bottom-nav instead. The burger drawer trigger
                (#425) takes its place. */
-            .topbar-nav-scroll, .topbar-brand { display: none; }
+            .topbar-nav-scroll { display: none; }
             .mobile-drawer-btn { display: flex; }
             /* #410: #sidebar (shot list) is a full-screen alternate of the
                Shots tab now, not a drawer overlay — shown/hidden via plain
@@ -1699,7 +1695,6 @@
             /* Annotation panel — mobile improvements */
             .annotation-panel  { padding: 14px; margin-top: 16px; }
             .annotation-actions { flex-direction: column; align-items: stretch; gap: 8px; }
-            .save-btn          { width: 100%; padding: 11px; font-size: .9rem; text-align: center; }
             .star              { padding: 6px 7px; font-size: 1.7rem; }
             .drink-pill        { min-height: 44px; padding: 8px 14px; font-size: .85rem; display: flex; align-items: center; }
         }

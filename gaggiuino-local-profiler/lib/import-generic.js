@@ -228,6 +228,18 @@ function extractTastingNotesSubtitle($) {
     return null;
 }
 
+// Converts block-level line breaks into literal "\n" before reading .text() —
+// cheerio's plain .text() concatenates adjacent block content with NO
+// separator at all when the source HTML has no incidental whitespace between
+// tags (common with minified themes), silently running lines together (e.g.
+// "EspressoIn: 19.7gOut: 48g" instead of three separate lines, #433). Used
+// everywhere multi-line accordion/metafield content is read.
+function textWithLineBreaks($, $el) {
+    const $clone = $el.clone();
+    $clone.find('br, p, div, li, h1, h2, h3, h4, h5, h6, tr').after('\n');
+    return $clone.text();
+}
+
 // Label→bean-field map for the "Label - Value" / "Label: Value" lines found
 // in spec/detail accordions (any separator among -, –, —, :). Covers the
 // English labels seen on sproutcoffeeroasters.art plus German synonyms used
@@ -250,13 +262,7 @@ const ACCORDION_LABEL_RE = new RegExp(
 // joined lines instead, like Sprout's own Brew Guide accordion).
 function accordionLines($, $content) {
     const lines = new Set();
-    $content.find('p').each((_, el) => {
-        const t = $(el).text().replace(/\s+/g, ' ').trim();
-        if (t) lines.add(t);
-    });
-    const $clone = $content.clone();
-    $clone.find('br').replaceWith('\n');
-    for (const raw of $clone.text().split('\n')) {
+    for (const raw of textWithLineBreaks($, $content).split('\n')) {
         const t = raw.replace(/[ \t]+/g, ' ').trim();
         if (t) lines.add(t);
     }
@@ -288,12 +294,46 @@ function scanAccordionLabelValues($) {
 // generic instead of hard-coding an exact recipe shape.
 const BREW_RECIPE_KEY_RE = /^(In|Out|Time|Ratio|Temp)\s*:/i;
 
+// Numeric range midpoint, e.g. "92-93" -> 92.5, "27-29 seconds" -> 28. Mirrors
+// extractAltitudeM's own range-averaging convention (see above) so brew-guide
+// ranges resolve the same way altitude ranges already do elsewhere in this
+// file. A single number ("94 Celsius") passes through unchanged.
+function _rangeMidpoint(raw) {
+    if (!raw) return null;
+    const nums = (raw.match(/\d+(?:\.\d+)?/g) || []).map(Number);
+    if (!nums.length) return null;
+    return nums.length > 1 ? (nums[0] + nums[1]) / 2 : nums[0];
+}
+
+// "1 - 2.4" -> "1:2.4" — the ratio line's two numbers are the dose:yield pair
+// itself, not a min/max range to average, so this only reformats the
+// separator to match the bean form's own brewRatio convention ("1:2.2").
+function _ratioLabel(raw) {
+    if (!raw) return null;
+    const nums = raw.match(/\d+(?:\.\d+)?/g);
+    return nums && nums.length >= 2 ? `${nums[0]}:${nums[1]}` : null;
+}
+
+function _brewLineValue(lines, key) {
+    const re = new RegExp(`^${key}\\s*:\\s*(.+)$`, 'i');
+    for (const line of lines) {
+        const m = line.match(re);
+        if (m) return m[1].trim();
+    }
+    return null;
+}
+
 // Finds an accordion whose heading matches /brew\s*guide/i, splits its
 // content into heading-delimited blocks (a heading is a short line with no
-// colon, not itself a recipe key/value line), and returns the text of
-// whichever block reads as the plain espresso recipe (heading exactly
-// "espresso", falling back to the first block with >=3 recipe keys) — never
-// the "Milky Espresso" or "Pour Over" variants also commonly present.
+// colon, not itself a recipe key/value line), and extracts both the plain
+// espresso recipe's full text (heading exactly "espresso", falling back to
+// the first block with >=3 recipe keys — never the "Milky Espresso" or "Pour
+// Over" variants also commonly present) and its structured Temp/Time/Ratio
+// values, plus a general prep/caveat sentence: the first free-text line found
+// anywhere in the accordion, not scoped to the chosen block (verified against
+// sproutcoffeeroasters.art, #433: the pre-infusion caveat sentence sits under
+// "Milky Espresso"'s lines, not "Espresso"'s, but reads as a general machine
+// note that applies regardless of which recipe block it's nested under).
 function extractEspressoBrewGuide($) {
     let $content = null;
     $('details').each((_, el) => {
@@ -306,21 +346,22 @@ function extractEspressoBrewGuide($) {
     });
     if (!$content || !$content.length) return null;
 
-    const $clone = $content.clone();
-    $clone.find('br').replaceWith('\n');
-    const lines = $clone.text().split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim());
+    const lines = textWithLineBreaks($, $content).split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim());
 
     const blocks = [];
     let current = null;
+    let prepNote = null;
     for (const line of lines) {
         if (!line) continue;
         const isKeyLine = BREW_RECIPE_KEY_RE.test(line);
-        if (!isKeyLine && line.length <= 40 && !/[.!?]$/.test(line)) {
+        const isHeading = !isKeyLine && line.length <= 40 && !/[.!?]$/.test(line);
+        if (isHeading) {
             if (current) blocks.push(current);
             current = { heading: line, lines: [] };
             continue;
         }
         if (current) current.lines.push(line);
+        if (!prepNote && !isKeyLine && line.length > 40) prepNote = line;
     }
     if (current) blocks.push(current);
 
@@ -329,16 +370,40 @@ function extractEspressoBrewGuide($) {
         .filter(b => b.keyCount >= 3);
     if (!candidates.length) return null;
     const chosen = candidates.find(b => /^espresso$/i.test(b.heading)) || candidates[0];
-    return `${chosen.heading}\n${chosen.lines.join('\n')}`.trim();
+
+    const timeMid = _rangeMidpoint(_brewLineValue(chosen.lines, 'Time'));
+    return {
+        text:      `${chosen.heading}\n${chosen.lines.join('\n')}`.trim(),
+        brewTempC: _rangeMidpoint(_brewLineValue(chosen.lines, 'Temp')),
+        brewTimeS: timeMid == null ? null : Math.round(timeMid),
+        brewRatio: _ratioLabel(_brewLineValue(chosen.lines, 'Ratio')),
+        brewNotes: prepNote,
+    };
 }
 
-// Fills in process/variety/producer/region/altitude_m/flavors/notes on a
-// JSON-derived bean from the fetched product-page HTML, but only for fields
-// the JSON left empty — an HTML-only signal never overwrites a JSON one.
-// roastType is deliberately not touched here: it's fully derivable from the
-// JSON's own options/tags (see roastTypeFromProduct above), so there is no
-// HTML-only roastType signal to add.
-function enrichGenericBeanFromHtml(bean, html) {
+// Shopify themes commonly set the header logo's alt text to the shop's
+// display name (often suffixed " - Home" for accessibility) — a fallback
+// roaster-name signal for when og:site_name is absent (verified against
+// sproutcoffeeroasters.art, #433: this theme's static HTML sets neither
+// og:site_name nor a usable <title>, but does set the logo alt text).
+function shopNameFromLogoAlt($) {
+    const alt = $('.header-logo__image, .header-logo img, .site-header__logo img').first().attr('alt');
+    if (typeof alt !== 'string') return null;
+    const cleaned = alt.replace(/\s*[-–—]\s*Home\s*$/i, '').trim();
+    return cleaned || null;
+}
+
+// Fills in process/variety/producer/region/altitude_m/flavors/notes/brew
+// fields/roaster on a JSON-derived bean from the fetched product-page HTML,
+// but only for fields the JSON left empty (or, for roaster, only when the
+// JSON fell back to the shop hostname) — an HTML-only signal never overwrites
+// a real JSON one. roastType is deliberately not touched here: it's fully
+// derivable from the JSON's own options/tags (see roastTypeFromProduct
+// above), so there is no HTML-only roastType signal to add. `host` (the
+// shop's own domain) is optional — passed by the caller when known, so the
+// roaster fallback can tell "vendor field fell back to the hostname" apart
+// from "vendor field genuinely IS this lowercase-styled name".
+function enrichGenericBeanFromHtml(bean, html, host = null) {
     if (!bean || typeof html !== 'string' || !html.trim()) return bean;
     const $ = cheerio.load(html);
     const out = { ...bean };
@@ -369,9 +434,21 @@ function enrichGenericBeanFromHtml(bean, html) {
         }
     }
 
-    if (!out.notes) {
-        const brewGuide = extractEspressoBrewGuide($);
-        if (brewGuide) out.notes = `Roaster brew guide (espresso): ${brewGuide}`.trim();
+    // Roaster fallback (#433): only when the JSON parse had nothing usable
+    // (vendor missing, or a taxonomy-tag/domain-fallback value equal to the
+    // hostname itself) — a real vendor-derived name is never overwritten.
+    if (!out.roaster || (host && out.roaster.toLowerCase() === host.toLowerCase())) {
+        const siteName = $('meta[property="og:site_name"]').attr('content')?.trim() || shopNameFromLogoAlt($);
+        if (siteName && looksLikeRoasterName(siteName, host)) out.roaster = siteName;
+    }
+
+    const brewGuide = extractEspressoBrewGuide($);
+    if (brewGuide) {
+        if (!out.notes) out.notes = `Roaster brew guide (espresso): ${brewGuide.text}`.trim();
+        if (out.brewTempC == null && brewGuide.brewTempC != null) out.brewTempC = brewGuide.brewTempC;
+        if (out.brewTimeS == null && brewGuide.brewTimeS != null) out.brewTimeS = brewGuide.brewTimeS;
+        if (!out.brewRatio && brewGuide.brewRatio) out.brewRatio = brewGuide.brewRatio;
+        if (!out.brewNotes && brewGuide.brewNotes) out.brewNotes = brewGuide.brewNotes;
     }
 
     return out;

@@ -7,7 +7,7 @@ import {
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting }           from '../../components/sidebar.js';
-import { getShotData, calcShotScore, findPreviousShot }       from './utils.js';
+import { getShotData, calcShotScore, findPreviousShot, findPreviousShotForBean, isNewestShotForBean } from './utils.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel }                              from './annotation.js';
 import { updatePQChart }                                      from './charts.js';
@@ -52,7 +52,15 @@ export async function loadData() {
     empty.style.display     = 'none';
     chartArea.style.display = 'flex';
     const savedCompare = parseInt(localStorage.getItem('glp_compareShotId'));
-    S.primaryShotId = S.shots[S.shots.length - 1].id;
+    // #431: the mobile Shots tab now opens straight to a shot's detail (no
+    // list step in between), so the initial selection needs to actually
+    // honor the last-selected shot (persisted on every selection, see
+    // selectShot()/the sidebar row click handler) rather than always
+    // resetting to the newest one.
+    const savedPrimary = parseInt(localStorage.getItem('glp_primaryShotId'));
+    S.primaryShotId = (savedPrimary && S.shots.find(s => s.id === savedPrimary))
+      ? savedPrimary
+      : S.shots[S.shots.length - 1].id;
     if (savedCompare && S.shots.find(s => s.id === savedCompare) && savedCompare !== S.primaryShotId) {
       S.compareShotId = savedCompare;
     }
@@ -281,9 +289,26 @@ export function updateView() {
     ratioCard.style.display     = 'none';
   }
 
-  // Bean + grinder — the shot's own annotation, shown regardless of compare mode.
-  const beanGrinder = [ann.coffee, ann.grinder].filter(Boolean).join(' · ');
+  // Bean + grinder + grind setting (#429) — the shot's own annotation,
+  // shown regardless of compare mode.
+  const grinderLabel = ann.grindSetting ? t('recipe_grinder_grind', ann.grinder || '', ann.grindSetting) : ann.grinder;
+  const beanGrinder = [ann.coffee, grinderLabel].filter(Boolean).join(' · ');
   document.getElementById('beanGrinderVal').textContent = beanGrinder || '–';
+
+  // Grind-setting baseline chip (#429): only while viewing the newest shot
+  // of its bean — that's the one being dialed in, so the last recorded
+  // grind setting for the same bean is the relevant reference point.
+  const grindBaselineEl = document.getElementById('grindBaselineChip');
+  if (grindBaselineEl) {
+    const prevBeanShot = !shotB && isNewestShotForBean(S.shots, shotA) ? findPreviousShotForBean(S.shots, shotA) : null;
+    const prevGrind     = prevBeanShot?.annotation?.grindSetting;
+    if (prevGrind) {
+      grindBaselineEl.textContent = t('grind_baseline_last', prevGrind);
+      grindBaselineEl.style.display = '';
+    } else {
+      grindBaselineEl.style.display = 'none';
+    }
+  }
 
   // Freshness badge
   const freshEl   = document.getElementById('freshnessBadge');
