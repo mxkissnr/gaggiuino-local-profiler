@@ -112,6 +112,9 @@ function _buildShotWrapper(shot) {
     divShot.onclick = e => {
       if (e.ctrlKey || e.metaKey) { toggleCompare(shot.id); }
       else {
+        // #430: flush a pending annotation edit on the shot being switched
+        // away from before its DOM fields get overwritten by the new shot.
+        if (S.primaryShotId !== shot.id && window.flushAutoSave) window.flushAutoSave();
         S.primaryShotId = shot.id; S.compareShotId = null;
         localStorage.setItem('glp_primaryShotId', shot.id);
         localStorage.removeItem('glp_compareShotId');
@@ -403,6 +406,7 @@ export function handleDrawerTouchEnd(e) {
 
 // ── selectShot (used from dialin onclick) ────────────────────────────────
 export function selectShot(id) {
+  if (S.primaryShotId !== id && window.flushAutoSave) window.flushAutoSave(); // #430
   S.primaryShotId = id;
   S.compareShotId = null;
   localStorage.setItem('glp_primaryShotId', id);

@@ -28,7 +28,7 @@ export default {
     ann_drink_type:'Getränk', ann_drink_type_none:'— keines —',
     ann_milk_type:'Milch', ann_milk_none:'— keine —',
     ann_recipe:'Rezept', ann_recipe_none:'— kein Rezept —',
-    btn_save:'Speichern', btn_saved:'✓ Gespeichert',
+    autosave_pending:'Speichert…', autosave_saved:'Gespeichert',
     grind_finer_urgent:'Feiner mahlen', grind_finer:'Leicht feiner mahlen',
     grind_ok:'Mahlgrad passt', grind_coarser:'Leicht gröber mahlen',
     grind_coarser_urgent:'Gröber mahlen', grind_channeling:'Puck-Vorbereitung prüfen',

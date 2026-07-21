@@ -28,7 +28,7 @@ export default {
     ann_drink_type:'Boisson', ann_drink_type_none:'— aucune —',
     ann_milk_type:'Lait', ann_milk_none:'— aucune —',
     ann_recipe:'Recette', ann_recipe_none:'— aucune recette —',
-    btn_save:'Enregistrer', btn_saved:'✓ Enregistré',
+    autosave_pending:'Enregistrement…', autosave_saved:'Enregistré',
     grind_finer_urgent:'Moudre plus fin', grind_finer:'Moudre légèrement plus fin',
     grind_ok:'La mouture est bonne', grind_coarser:'Moudre légèrement plus grossier',
     grind_coarser_urgent:'Moudre plus grossier', grind_channeling:'Vérifier la préparation du puck',

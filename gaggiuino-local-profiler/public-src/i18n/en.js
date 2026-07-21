@@ -28,7 +28,7 @@ export default {
     ann_drink_type:'Drink', ann_drink_type_none:'— none —',
     ann_milk_type:'Milk', ann_milk_none:'— none —',
     ann_recipe:'Recipe', ann_recipe_none:'— no recipe —',
-    btn_save:'Save', btn_saved:'✓ Saved',
+    autosave_pending:'Saving…', autosave_saved:'Saved',
     grind_finer_urgent:'Grind finer', grind_finer:'Grind slightly finer',
     grind_ok:'Grind setting is good', grind_coarser:'Grind slightly coarser',
     grind_coarser_urgent:'Grind coarser', grind_channeling:'Check puck prep',

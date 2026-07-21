@@ -8,7 +8,7 @@ import { suggestGrindDoseForBean } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
-import { COFFEE_ICON_SVG } from '../../icons.js';
+import { COFFEE_ICON_SVG, CHECK_ICON_SVG } from '../../icons.js';
 
 // ── Auto-save ─────────────────────────────────────────────────────────────
 
@@ -41,46 +41,90 @@ export function _maybeDeductMilk(shot, payload) {
   }).catch(() => {});
 }
 
+// Reads every annotation field's current DOM value into the API payload
+// shape — the single source of truth for both the debounced auto-save and
+// its immediate flush, so neither path can silently build a different
+// payload than the other (#430, was previously duplicated between
+// scheduleAutoSave and the now-removed explicit saveAnnotation()).
+function _buildAnnotationPayload(shot) {
+  const coffee = document.getElementById('annCoffee').value.trim();
+  return {
+    rating:       S.currentRating || null,
+    coffee,
+    grinder:      document.getElementById('annGrinder').value.trim(),
+    grindSetting: document.getElementById('annGrindSetting').value.trim(),
+    dose:         parseFloat(document.getElementById('annDose').value) || null,
+    roastDate:    germanToIso(_roastDateFromLibrary(coffee, shot?.timestamp) || '') || null,
+    tds:          parseFloat(document.getElementById('annTds').value) || null,
+    notes:        document.getElementById('annNotes').value.trim(),
+    drinkType:    document.getElementById('annDrinkType')?.value || null,
+    milkType:     document.getElementById('annMilkType')?.value ? parseInt(document.getElementById('annMilkType').value) : null,
+    recipeId:     parseInt(document.getElementById('annRecipe')?.value) || null,
+    beanAgeDays:  calcBeanAgeAtShot(coffee, shot?.timestamp) ?? null,
+  };
+}
+
+// #430: #autoSaveStatus is now the only save feedback (the explicit Save
+// button is gone) — it carries the full lifecycle: pending while a save is
+// in flight, a confirmation on success, hidden otherwise. 'idle' explicitly
+// hides it, used when a freshly-selected shot has no in-flight save of its
+// own to report.
+function _setAutoSaveStatus(state) {
+  const status = document.getElementById('autoSaveStatus');
+  if (!status) return;
+  clearTimeout(status._hideTimer);
+  if (state === 'pending') {
+    status.textContent = t('autosave_pending');
+    status.classList.add('visible');
+  } else if (state === 'saved') {
+    status.innerHTML = `${CHECK_ICON_SVG} ${esc(t('autosave_saved'))}`;
+    status.classList.add('visible');
+    status._hideTimer = setTimeout(() => status.classList.remove('visible'), 1800);
+  } else {
+    status.classList.remove('visible');
+  }
+}
+
+async function _performAnnotationSave() {
+  if (!S.primaryShotId) return;
+  const id   = S.primaryShotId;
+  const shot = S.shots.find(s => s.id === id);
+  const payload = _buildAnnotationPayload(shot);
+  try {
+    const r = await apiFetch(`api/shots/${id}/annotate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    if (r.ok) {
+      _maybeDeductMilk(shot, payload);
+      const idx = S.shots.findIndex(s => s.id === id);
+      if (idx !== -1) S.shots[idx].annotation = payload;
+      renderSidebar();
+      updateSidebarHighlighting();
+      _setAutoSaveStatus('saved');
+    } else {
+      _setAutoSaveStatus('idle');
+    }
+  } catch { _setAutoSaveStatus('idle'); }
+}
+
 export function scheduleAutoSave() {
   clearTimeout(_autoSaveTimer);
-  _autoSaveTimer = setTimeout(async () => {
-    if (!S.primaryShotId) return;
-    const shot    = S.shots.find(s => s.id === S.primaryShotId);
-    const coffee  = document.getElementById('annCoffee').value.trim();
-    const payload = {
-      rating:       S.currentRating || null,
-      coffee,
-      grinder:      document.getElementById('annGrinder').value.trim(),
-      grindSetting: document.getElementById('annGrindSetting').value.trim(),
-      dose:         parseFloat(document.getElementById('annDose').value) || null,
-      roastDate:    germanToIso(_roastDateFromLibrary(coffee, shot?.timestamp) || '') || null,
-      tds:          parseFloat(document.getElementById('annTds').value) || null,
-      notes:        document.getElementById('annNotes').value.trim(),
-      drinkType:    document.getElementById('annDrinkType')?.value || null,
-      milkType:     document.getElementById('annMilkType')?.value ? parseInt(document.getElementById('annMilkType').value) : null,
-      recipeId:     parseInt(document.getElementById('annRecipe')?.value) || null,
-      beanAgeDays:  calcBeanAgeAtShot(coffee, shot?.timestamp) ?? null,
-    };
-    try {
-      const r = await apiFetch(`api/shots/${S.primaryShotId}/annotate`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-      });
-      if (r.ok) {
-        _maybeDeductMilk(shot, payload);
-        const idx = S.shots.findIndex(s => s.id === S.primaryShotId);
-        if (idx !== -1) S.shots[idx].annotation = payload;
-        renderSidebar();
-        updateSidebarHighlighting();
-        const status = document.getElementById('autoSaveStatus');
-        if (status) {
-          status.textContent = '✓';
-          status.classList.add('visible');
-          clearTimeout(status._hideTimer);
-          status._hideTimer = setTimeout(() => status.classList.remove('visible'), 1800);
-        }
-      }
-    } catch { /* silent */ }
-  }, 1000);
+  _setAutoSaveStatus('pending');
+  _autoSaveTimer = setTimeout(() => { _autoSaveTimer = null; _performAnnotationSave(); }, 1000);
+}
+
+// Immediately runs a pending debounced save instead of waiting out the rest
+// of its 1s delay — called on field blur, tab/page hide (visibilitychange)
+// and mode-switch away from Shots (#430). Without this, editing a field and
+// switching away inside that 1s window used to silently drop the edit; the
+// removed explicit Save button was the only thing that had covered that gap
+// before, so this flush takes over that responsibility explicitly rather
+// than leaving it implicit in a button click.
+export function flushAutoSave() {
+  if (!_autoSaveTimer) return;
+  clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = null;
+  _performAnnotationSave();
 }
 
 // ── Drink & milk pills ────────────────────────────────────────────────────
@@ -280,9 +324,7 @@ export function renderAnnotationPanel(shot) {
   _renderMilkPills(ann.milkType ? String(ann.milkType) : '');
   _updateMilkFieldVisibility();
   _renderRecipeSelect(ann.recipeId || null);
-  const btn = document.getElementById('saveAnnotationBtn');
-  btn.textContent = t('btn_save');
-  btn.classList.remove('saved');
+  _setAutoSaveStatus('idle'); // #430: clear any leftover status from the previously viewed shot
   const badge = document.getElementById('orderedByBadge');
   if (badge) {
     const ob = ann.orderedBy;
@@ -322,40 +364,8 @@ export function quickClone() {
   _renderMilkPills('');
   _updateMilkFieldVisibility();
   _renderRecipeSelect(ann.recipeId || null);
-}
-
-export async function saveAnnotation() {
-  if (!S.primaryShotId) return;
-  const btn   = document.getElementById('saveAnnotationBtn');
-  const shot  = S.shots.find(s => s.id === S.primaryShotId);
-  const coffee = document.getElementById('annCoffee').value.trim();
-  const payload = {
-    rating:       S.currentRating || null,
-    coffee,
-    grinder:      document.getElementById('annGrinder').value.trim(),
-    grindSetting: document.getElementById('annGrindSetting').value.trim(),
-    dose:         parseFloat(document.getElementById('annDose').value) || null,
-    roastDate:    germanToIso(_roastDateFromLibrary(coffee, shot?.timestamp) || '') || null,
-    tds:          parseFloat(document.getElementById('annTds').value) || null,
-    notes:        document.getElementById('annNotes').value.trim(),
-    drinkType:    document.getElementById('annDrinkType')?.value || null,
-    milkType:     document.getElementById('annMilkType')?.value ? parseInt(document.getElementById('annMilkType').value) : null,
-    recipeId:     parseInt(document.getElementById('annRecipe')?.value) || null,
-    beanAgeDays:  calcBeanAgeAtShot(coffee, shot?.timestamp) ?? null,
-  };
-  try {
-    const r = await apiFetch(`api/shots/${S.primaryShotId}/annotate`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-    });
-    if (r.ok) {
-      _maybeDeductMilk(shot, payload);
-      const idx = S.shots.findIndex(s => s.id === S.primaryShotId);
-      if (idx !== -1) S.shots[idx].annotation = payload;
-      btn.textContent = t('btn_saved');
-      btn.classList.add('saved');
-      setTimeout(() => { btn.textContent = t('btn_save'); btn.classList.remove('saved'); }, 2000);
-      renderSidebar();
-      updateSidebarHighlighting();
-    }
-  } catch (e) { console.error('Annotation-Fehler:', e); }
+  // #430: quickClone sets field values programmatically (no 'input' event
+  // fires), so it must schedule the save itself — there's no explicit Save
+  // button left to catch this otherwise.
+  scheduleAutoSave();
 }
