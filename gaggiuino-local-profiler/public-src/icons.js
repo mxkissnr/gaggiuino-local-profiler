@@ -21,3 +21,16 @@ export const WRENCH_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" ar
 export const CLOCK_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg>';
 
 export const BELL_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 3.5 1 5 2 6H4c1-1 2-2.5 2-6z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>';
+
+// #419 follow-up: same reuse-a-shared-icon pattern for the remaining
+// i18n-embedded decorative glyphs found outside the original #417 sweep
+// (bean_age_at_shot, lib_scan_barcode, lib_url_import, lib_import_settings_btn,
+// settings_machine_experimental_badge).
+
+export const BEAN_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12c0-4 3-7.5 7-7.5S19 8 19 12s-3.5 7-7.5 7A6.5 6.5 0 0 1 6 12z"/><path d="M8.5 15c2-1 3-3 3-6"/></svg>';
+
+export const BARCODE_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14M8 5v14M11 5v14M13 5v14M17 5v14M20 5v14"/></svg>';
+
+export const GEAR_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20M6.3 6.3l1.8 1.8M15.9 15.9l1.8 1.8M17.7 6.3l-1.8 1.8M8.1 15.9l-1.8 1.8"/></svg>';
+
+export const WARNING_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v4"/><path d="M12 17v.01"/></svg>';

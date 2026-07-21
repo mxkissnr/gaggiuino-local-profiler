@@ -9,6 +9,7 @@ import { S, setState, filterShotsByMachine } from '../state.js';
 import { apiFetch } from '../api.js';
 import { t } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
+import { WARNING_ICON_SVG } from '../icons.js';
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -124,7 +125,7 @@ export function renderMachinesList() {
       <span class="machine-row-name">${escapeHtml(m.name)}</span>
       <span class="machine-row-type">${m.type === 'gaggimate' ? 'GaggiMate' : 'Gaggiuino'}</span>
       <span class="machine-row-shot-count">${t('settings_machine_shot_count', shotCount)}</span>
-      ${m.type === 'gaggimate' ? `<span class="machine-row-badge-experimental" title="${escapeHtml(t('settings_machine_type_gaggimate'))}">${t('settings_machine_experimental_badge')}</span>` : ''}
+      ${m.type === 'gaggimate' ? `<span class="machine-row-badge-experimental" title="${escapeHtml(t('settings_machine_type_gaggimate'))}">${WARNING_ICON_SVG} ${t('settings_machine_experimental_badge')}</span>` : ''}
       ${m.isDefault ? `<span class="machine-row-badge">${t('settings_machine_default')}</span>` : ''}
       <span class="machine-row-actions">
         <button type="button" class="machine-edit-btn">${t('settings_machine_edit')}</button>

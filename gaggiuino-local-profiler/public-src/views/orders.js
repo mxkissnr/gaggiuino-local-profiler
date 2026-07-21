@@ -3,12 +3,12 @@ import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { esc } from '../utils.js';
 import { LOCALE_MAP } from '../constants.js';
-import { CLOCK_ICON_SVG, BELL_ICON_SVG } from '../icons.js';
-
 // #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
 // .rail-icon treatment as the 🔥 trend toggle, #415). Used both in the
 // use-beans/use-milks toggle buttons and their inline notes below.
-const BEAN_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12c0-4 3-7.5 7-7.5S19 8 19 12s-3.5 7-7.5 7A6.5 6.5 0 0 1 6 12z"/><path d="M8.5 15c2-1 3-3 3-6"/></svg>';
+// BEAN_ICON_SVG now lives in ../icons.js (also used by main.js's bean-age
+// hint, #419 follow-up) — MILK_ICON_SVG stays local, single-use here.
+import { CLOCK_ICON_SVG, BELL_ICON_SVG, BEAN_ICON_SVG } from '../icons.js';
 const MILK_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 4v13a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V7z"/><path d="M9 3 12 6 15 3"/><path d="M8 10h8"/></svg>';
 
 export function toggleOrdersMenu() {
