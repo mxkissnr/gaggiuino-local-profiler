@@ -24,8 +24,9 @@ export function renderSidebar() {
     shots.forEach(shot => el.appendChild(_buildShotWrapper(shot)));
   } else {
     const locale = LOCALE_MAP[S.currentLang] || 'de-DE';
-    const formatOlder = d => d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const groups = groupShotsByDay(shots, new Date(), t('day_today'), t('day_yesterday'), formatOlder);
+    const formatRecent = d => d.toLocaleDateString(locale, { weekday: 'long', day: '2-digit', month: '2-digit' });
+    const formatOlder = d => d.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
+    const groups = groupShotsByDay(shots, new Date(), t('day_today'), t('day_yesterday'), formatRecent, formatOlder);
     groups.forEach(group => {
       const sep = document.createElement('div');
       sep.className = 'day-sep';
