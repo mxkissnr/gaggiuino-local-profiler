@@ -92,3 +92,35 @@ export function findPreviousShot(shots, shot) {
   }
   return prev;
 }
+
+// ── Bean grind-setting baseline (#429) ──────────────────────────────────────
+// Same "most recent shot before this one" shape as findPreviousShot, but
+// scoped to the same bean (annotation.coffee) instead of the same profile —
+// used for the "Letzter Mahlgrad" reference chip so the grind advice for the
+// newest shot of a bean can be read against what was actually dialed in last.
+export function findPreviousShotForBean(shots, shot) {
+  const coffee = shot?.annotation?.coffee?.trim().toLowerCase();
+  if (!coffee) return null;
+  let prev = null;
+  for (const s of shots) {
+    if (s.id === shot.id) continue;
+    if ((s.annotation?.coffee || '').trim().toLowerCase() !== coffee) continue;
+    if (s.timestamp >= shot.timestamp) continue;
+    if (!prev || s.timestamp > prev.timestamp) prev = s;
+  }
+  return prev;
+}
+
+// True when `shot` is the most recent shot recorded for its own bean — the
+// reference chip only makes sense while dialing in the newest shot; older
+// shots already have later data to compare against via the normal
+// comparative grind advice instead.
+export function isNewestShotForBean(shots, shot) {
+  const coffee = shot?.annotation?.coffee?.trim().toLowerCase();
+  if (!coffee) return false;
+  return !shots.some(s =>
+    s.id !== shot.id &&
+    (s.annotation?.coffee || '').trim().toLowerCase() === coffee &&
+    s.timestamp > shot.timestamp
+  );
+}
