@@ -179,7 +179,7 @@
                 </button>
                 <div style="flex:1;min-width:0">
                     <h1 id="topTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Profil-Name</h1>
-                    <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="freshness-badge" style="display:none"></span><span id="firmwareVersionBadge" style="display:none;font-size:.7rem;color:#52525b;margin-left:6px"></span></p>
+                    <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="freshness-badge" style="display:none"></span><span id="firmwareVersionBadge" style="display:none;font-size:.7rem;color:#52525b;margin-left:6px"></span><img id="shotHeaderThumb" class="shot-header-thumb" alt="" style="display:none" data-i18n-title="shot_photo_title"></p>
                 </div>
                 <div style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
                     <button class="export-btn" id="exportAllCsvBtn" data-i18n-title="export_csv_title" title="Alle Shots als CSV exportieren">↓ CSV</button>
@@ -480,6 +480,7 @@
                     <div class="lib-add-form" id="beanAddForm">
                         <div class="lib-import-notice" id="beanFormImportNotice" style="display:none"></div>
                         <div class="lib-import-notice lib-import-notice-warning" id="beanFormDuplicateWarning" style="display:none"></div>
+                        <div class="lib-import-extra-recipes" id="beanFormExtraRecipes" style="display:none"></div>
                         <div class="lib-form-grid">
                             <div class="lib-form-field">
                                 <label data-i18n="lib_bean_name">Name *</label>

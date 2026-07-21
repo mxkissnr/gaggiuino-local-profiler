@@ -44,16 +44,23 @@ export async function updateStatus() {
     // #411: the rail footer mirrors the same status dot rather than tracking
     // its own state — no second source of truth for machine reachability.
     if (railDot) { railDot.className = dotClass; railDot.title = s.lastSyncError || ''; }
-    // Skip while a shot is being viewed (#344): updateView() (views/shots/
-    // index.js) owns machineSubtitle in that case, showing the machine that
+    // Skip machineSubtitle while a shot is being viewed (#344): updateView()
+    // (views/shots/index.js) owns it in that case, showing the machine that
     // actually owns the viewed shot — this global/default-machine value
     // would otherwise clobber it on the next 30s poll tick regardless of
     // which machine's shot is on screen.
-    if (s.machineHostname && !S.primaryShotId) {
-      const el = document.getElementById('machineSubtitle');
-      if (el) el.textContent = s.machineVersion
-        ? `${s.machineHostname} · ${s.machineVersion}`
-        : s.machineHostname;
+    if (s.machineHostname) {
+      if (!S.primaryShotId) {
+        const el = document.getElementById('machineSubtitle');
+        if (el) el.textContent = s.machineVersion
+          ? `${s.machineHostname} · ${s.machineVersion}`
+          : s.machineHostname;
+      }
+      // #447: railMachineName (topbar) is the active/default machine, not
+      // the viewed shot's machine — it must always reflect s.machineHostname,
+      // unlike machineSubtitle above. Since mobile opens straight into shot
+      // detail (#431), S.primaryShotId is almost always set, so bundling this
+      // into the same guard left it permanently blank on mobile.
       const railNameEl = document.getElementById('railMachineName');
       if (railNameEl) railNameEl.textContent = s.machineHostname;
     }
