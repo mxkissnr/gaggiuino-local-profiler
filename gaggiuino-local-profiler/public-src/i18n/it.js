@@ -171,7 +171,7 @@ export default {
     settings_machine_shot_count:(n)=>`${n} shot`,
     settings_machine_save_error:(msg)=>`Errore: ${msg}`,
     ann_clone_btn:'↩ Clona',
-    ann_photo_upload:'Aggiungi una foto a questo shot', ann_photo_remove:'Rimuovi foto', lightbox_close:'Chiudi',
+    shot_photo_title:'Foto del chicco', ann_photo_upload:'Aggiungi una foto a questo shot', ann_photo_remove:'Rimuovi foto', lightbox_close:'Chiudi',
     lib_bean_stock:'Scorta (g)', lib_bean_stock_ph:'es. 500',
     lib_bean_decaf:'Decaffeinato',
     lib_inv_consumed:(n)=>`${n} g usati`, lib_inv_remaining:(n)=>`${n} g rimanenti`, lib_inv_reorder:'Riordinare',

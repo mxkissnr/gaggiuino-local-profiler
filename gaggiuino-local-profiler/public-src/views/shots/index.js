@@ -13,6 +13,8 @@ import { renderAnnotationPanel }                              from './annotation
 import { updatePQChart }                                      from './charts.js';
 import { updateMachineBanner, updateOnboardingPanel }          from '../../components/onboarding.js';
 import { GEAR_ICON_SVG, COFFEE_ICON_SVG }                     from '../../icons.js';
+import { loadShotImageBlobUrl }                               from '../../bean-image.js';
+import { openLightbox }                                       from '../../components/lightbox.js';
 
 // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -330,6 +332,22 @@ export function updateView() {
     const fw = !shotB && shotA.glpFirmwareVersion;
     fwEl.textContent = fw ? `· fw ${fw}` : '';
     fwEl.style.display = fw ? '' : 'none';
+  }
+
+  // Shot photo thumbnail (#448): reuses the same image the annotation panel
+  // uploads/shows (_renderShotPhoto() in annotation.js) — shown here too so
+  // the empty space next to the machine/freshness line on mobile isn't wasted.
+  const photoThumbEl = document.getElementById('shotHeaderThumb');
+  if (photoThumbEl) {
+    if (!shotB && shotA.image) {
+      photoThumbEl.style.display = '';
+      photoThumbEl.onclick = () => { if (photoThumbEl.src) openLightbox(photoThumbEl.src); };
+      loadShotImageBlobUrl(shotA.id).then(url => { if (url) photoThumbEl.src = url; });
+    } else {
+      photoThumbEl.style.display = 'none';
+      photoThumbEl.removeAttribute('src');
+      photoThumbEl.onclick = null;
+    }
   }
 
   // Phases -> a compact sub-line on the Recipe zone's duration card (#398).
