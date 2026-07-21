@@ -4,7 +4,12 @@ const annotationSchema = z.object({
     coffee:        z.string().max(200).optional(),
     grindSetting:  z.string().max(50).optional(),
     notes:         z.string().max(2000).optional(),
-    drinkType:     z.string().max(50).optional(),
+    // #434: the frontend sends drinkType: null for "no drink assigned" (see
+    // annotation.js's `?.value || null`) — same shape as the milkType bug
+    // below, just missed the first time. Without .nullable() every annotate
+    // call with no drink selected (the common case for any install without
+    // the Orders feature's drink menu populated) failed validation with a 400.
+    drinkType:     z.string().max(50).nullable().optional(),
     // Milk ids are numeric (Date.now(), see routes/library.js POST /api/library/milk),
     // and the frontend always sends milkType as parseInt(...) — a string type here
     // rejected every annotate call that included a selected milk with a 400, which
