@@ -207,13 +207,19 @@ export function parseDMY(s) {
 // without faking globals.
 //
 // Grouping tiers:
-//   - today / yesterday  -> todayLabel / yesterdayLabel, one bucket each
-//   - 2..13 days ago      -> per-day bucket, label = formatRecent(date)
+//   - today / yesterday  -> todayLabel / yesterdayLabel, one bucket each,
+//                           tier: 'day'
+//   - 2..13 days ago      -> per-day bucket, label = formatRecent(date),
+//                            tier: 'day'
 //   - 14+ days ago        -> per-MONTH bucket (multiple old days in the same
 //                            month merge into one group), label =
-//                            formatOlder(date)
+//                            formatOlder(date), tier: 'month'
 // Letting the caller supply formatRecent/formatOlder keeps this module free
 // of locale/i18n knowledge (e.g. LOCALE_MAP + toLocaleDateString).
+// The `tier` field (#439) lets the sidebar tell recent day-headers (always
+// expanded, non-interactive) apart from month-headers (collapsible
+// accordion, restoring pre-#399 behavior) without inferring it from key
+// shape/length.
 const RECENT_WINDOW_DAYS = 14; // today(0) + yesterday(1) + 12 more per-day buckets
 
 export function groupShotsByDay(shots, now, todayLabel, yesterdayLabel, formatRecent, formatOlder) {
@@ -240,7 +246,7 @@ export function groupShotsByDay(shots, now, todayLabel, yesterdayLabel, formatRe
         : dKey === yesterday ? yesterdayLabel
         : isRecent ? formatRecent(d)
         : formatOlder(d);
-      current = { key, label, shots: [] };
+      current = { key, label, tier: isRecent ? 'day' : 'month', shots: [] };
       groups.push(current);
     }
     current.shots.push(shot);

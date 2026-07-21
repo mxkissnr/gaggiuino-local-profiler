@@ -41,7 +41,8 @@ import { generateBeanQR } from './glp-qr.js';
 
 import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
          toggleDesktopSidebar, setMobileShotSubview, updateMobileShotSidebarVisibility, selectShot,
-         openShotDrawer, closeShotDrawer, handleDrawerTouchStart, handleDrawerTouchEnd } from './components/sidebar.js';
+         openShotDrawer, closeShotDrawer, handleDrawerTouchStart, handleDrawerTouchEnd,
+         toggleMonthGroup } from './components/sidebar.js';
 import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
@@ -696,6 +697,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'close-new-bag':      closeNewBagForm(numId()); break;
       case 'save-new-bag':       saveNewBag(numId()); break;
       case 'toggle-bag-history':   toggleBagHistory(numId()); break;
+      case 'toggle-month-group':  toggleMonthGroup(strId()); break;
       case 'delete-bag':         deleteBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'open-stock-edit':    openBeanStockEdit(numId()); break;
       case 'close-stock-edit':   closeBeanStockEdit(); break;

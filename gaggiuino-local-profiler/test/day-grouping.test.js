@@ -16,11 +16,11 @@ describe('groupShotsByDay', () => {
         ];
         const groups = groupShotsByDay(shots, NOW, 'Heute', 'Gestern', formatRecent, formatOlder);
         expect(groups).toHaveLength(3);
-        expect(groups[0]).toMatchObject({ label: 'Heute', key: '2026-07-21' });
+        expect(groups[0]).toMatchObject({ label: 'Heute', key: '2026-07-21', tier: 'day' });
         expect(groups[0].shots.map(s => s.id)).toEqual([1, 2]);
-        expect(groups[1]).toMatchObject({ label: 'Gestern', key: '2026-07-20' });
+        expect(groups[1]).toMatchObject({ label: 'Gestern', key: '2026-07-20', tier: 'day' });
         expect(groups[1].shots.map(s => s.id)).toEqual([3]);
-        expect(groups[2]).toMatchObject({ label: 'recent-2026-07-19', key: '2026-07-19' });
+        expect(groups[2]).toMatchObject({ label: 'recent-2026-07-19', key: '2026-07-19', tier: 'day' });
         expect(groups[2].shots.map(s => s.id)).toEqual([4]);
     });
 
@@ -50,14 +50,14 @@ describe('groupShotsByDay', () => {
         const shots = [{ id: 1, timestamp: ts(2026, 7, 8, 10) }]; // 13 days before NOW (07-21)
         const groups = groupShotsByDay(shots, NOW, 'Heute', 'Gestern', formatRecent, formatOlder);
         expect(groups).toHaveLength(1);
-        expect(groups[0]).toMatchObject({ key: '2026-07-08', label: 'recent-2026-07-08' });
+        expect(groups[0]).toMatchObject({ key: '2026-07-08', label: 'recent-2026-07-08', tier: 'day' });
     });
 
     it('moves a shot ~15 days back into a month bucket', () => {
         const shots = [{ id: 1, timestamp: ts(2026, 7, 6, 10) }]; // 15 days before NOW
         const groups = groupShotsByDay(shots, NOW, 'Heute', 'Gestern', formatRecent, formatOlder);
         expect(groups).toHaveLength(1);
-        expect(groups[0]).toMatchObject({ key: '2026-07', label: '2026-07' });
+        expect(groups[0]).toMatchObject({ key: '2026-07', label: '2026-07', tier: 'month' });
     });
 
     it('merges two old shots from different days in the same month into one group', () => {
@@ -67,7 +67,7 @@ describe('groupShotsByDay', () => {
         ];
         const groups = groupShotsByDay(shots, NOW, 'Heute', 'Gestern', formatRecent, formatOlder);
         expect(groups).toHaveLength(1);
-        expect(groups[0]).toMatchObject({ key: '2026-06', label: '2026-06' });
+        expect(groups[0]).toMatchObject({ key: '2026-06', label: '2026-06', tier: 'month' });
         expect(groups[0].shots.map(s => s.id)).toEqual([1, 2]);
     });
 
@@ -79,7 +79,7 @@ describe('groupShotsByDay', () => {
         ];
         const groups = groupShotsByDay(shots, now, 'Heute', 'Gestern', formatRecent, formatOlder);
         expect(groups).toHaveLength(1);
-        expect(groups[0]).toMatchObject({ key: '2026-12', label: '2026-12' });
+        expect(groups[0]).toMatchObject({ key: '2026-12', label: '2026-12', tier: 'month' });
         expect(groups[0].shots.map(s => s.id)).toEqual([1, 2]);
     });
 });

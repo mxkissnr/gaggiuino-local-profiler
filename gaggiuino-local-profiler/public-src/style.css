@@ -209,6 +209,27 @@
             letter-spacing: .05em;
         }
 
+        /* #439: month-tier groups (14+ days old) restore the pre-#399
+           collapsible accordion — clickable header (▸/▾ + "Month Year"),
+           collapsed by default. Recent day-sep headers above stay plain and
+           non-interactive; only month headers get the button treatment. */
+        .sidebar-month-header {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: var(--gray-900);
+            color: var(--gray-500);
+            border: none;
+            border-top: 1px solid var(--gray-700);
+            padding: 10px 16px 10px 20px;
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            cursor: pointer;
+        }
+        .sidebar-month-header:hover { background: var(--gray-800); color: var(--gray-200); }
+
         /* #399: only visible on row hover/keyboard-focus (still tab-reachable
            while invisible — opacity, not display/visibility) — except on
            touch, where there's no hover to reveal it, so it stays shown. */
