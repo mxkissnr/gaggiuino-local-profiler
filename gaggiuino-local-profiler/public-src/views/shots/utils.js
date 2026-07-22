@@ -11,9 +11,29 @@ function _parseDMY(str) {
   return new Date(+p[2], +p[1] - 1, +p[0]).getTime();
 }
 
-export function _roastDateFromLibrary(beanName, shotTimestampSec) {
-  if (!beanName || !S.coffeeLibrary) return null;
-  const bean = S.coffeeLibrary.beans?.find(b => b.name.toLowerCase() === beanName.toLowerCase());
+// #456: resolves a shot/annotation to its library bean, preferring the
+// stable beanId link over the free-text coffee name — mirrors
+// LibraryService.resolveBeanForAnnotation on the backend. beanId survives
+// bean renames (name-matching never could); it deliberately does NOT fall
+// back to a name match when it points at a bean that's gone (a bean deleted
+// and reimported under the same name is a new identity, correctly distinct
+// from the old one). Only annotations that predate beanId fall back to
+// name matching.
+export function resolveBeanForAnnotation(annotation, beans) {
+  const list = beans || S.coffeeLibrary?.beans || [];
+  if (annotation?.beanId != null) {
+    const byId = list.find(b => b.id === annotation.beanId);
+    if (byId) return byId;
+  }
+  const name = annotation?.coffee;
+  if (!name) return null;
+  const key = String(name).toLowerCase();
+  return list.find(b => String(b.name || '').toLowerCase() === key) || null;
+}
+
+export function _roastDateFromLibrary(beanName, shotTimestampSec, beanId) {
+  if (!S.coffeeLibrary) return null;
+  const bean = resolveBeanForAnnotation({ coffee: beanName, beanId }, S.coffeeLibrary.beans);
   if (!bean) return null;
   const shotMs = (shotTimestampSec || Date.now() / 1000) * 1000;
   const bags   = Array.isArray(bean.bags) ? bean.bags : [];
@@ -27,9 +47,9 @@ export function _roastDateFromLibrary(beanName, shotTimestampSec) {
   return roastDateStr || null;
 }
 
-export function calcBeanAgeAtShot(beanName, shotTimestampSec) {
-  if (!beanName || !shotTimestampSec || !S.coffeeLibrary) return null;
-  const bean = S.coffeeLibrary.beans?.find(b => b.name.toLowerCase() === beanName.toLowerCase());
+export function calcBeanAgeAtShot(beanName, shotTimestampSec, beanId) {
+  if (!shotTimestampSec || !S.coffeeLibrary) return null;
+  const bean = resolveBeanForAnnotation({ coffee: beanName, beanId }, S.coffeeLibrary.beans);
   if (!bean) return null;
   const shotMs = shotTimestampSec * 1000;
   const bags   = Array.isArray(bean.bags) ? bean.bags : [];
@@ -69,8 +89,7 @@ export function getShotData(shot) {
 // (server-computed shots always already carry .score, bean-aware per #450).
 export function calcShotScore(shot, _data) {
   if (shot && shot.score !== undefined) return shot.score;
-  const coffee = shot?.annotation?.coffee;
-  const bean = coffee ? S.coffeeLibrary?.beans?.find(b => b.name.toLowerCase() === coffee.toLowerCase()) : null;
+  const bean = resolveBeanForAnnotation(shot?.annotation);
   return _calcShotScore(shot, bean);
 }
 
@@ -101,13 +120,26 @@ export function findPreviousShot(shots, shot) {
 // scoped to the same bean (annotation.coffee) instead of the same profile —
 // used for the "Letzter Mahlgrad" reference chip so the grind advice for the
 // newest shot of a bean can be read against what was actually dialed in last.
+// #456: two shots are "the same bean" when their resolved beans share an id;
+// when either annotation can't be resolved to a current bean (predates
+// beanId, or its bean was deleted), falls back to comparing the raw coffee
+// name strings as recorded at save time.
+function _sameBean(annA, annB) {
+  const beanA = resolveBeanForAnnotation(annA);
+  const beanB = resolveBeanForAnnotation(annB);
+  if (beanA && beanB) return beanA.id === beanB.id;
+  const nameA = (annA?.coffee || '').trim().toLowerCase();
+  const nameB = (annB?.coffee || '').trim().toLowerCase();
+  return !!nameA && nameA === nameB;
+}
+
 export function findPreviousShotForBean(shots, shot) {
-  const coffee = shot?.annotation?.coffee?.trim().toLowerCase();
-  if (!coffee) return null;
+  const ann = shot?.annotation;
+  if (!ann?.coffee && ann?.beanId == null) return null;
   let prev = null;
   for (const s of shots) {
     if (s.id === shot.id) continue;
-    if ((s.annotation?.coffee || '').trim().toLowerCase() !== coffee) continue;
+    if (!_sameBean(ann, s.annotation)) continue;
     if (s.timestamp >= shot.timestamp) continue;
     if (!prev || s.timestamp > prev.timestamp) prev = s;
   }
@@ -119,11 +151,11 @@ export function findPreviousShotForBean(shots, shot) {
 // shots already have later data to compare against via the normal
 // comparative grind advice instead.
 export function isNewestShotForBean(shots, shot) {
-  const coffee = shot?.annotation?.coffee?.trim().toLowerCase();
-  if (!coffee) return false;
+  const ann = shot?.annotation;
+  if (!ann?.coffee && ann?.beanId == null) return false;
   return !shots.some(s =>
     s.id !== shot.id &&
-    (s.annotation?.coffee || '').trim().toLowerCase() === coffee &&
+    _sameBean(ann, s.annotation) &&
     s.timestamp > shot.timestamp
   );
 }

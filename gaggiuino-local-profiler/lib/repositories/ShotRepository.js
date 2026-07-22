@@ -196,17 +196,28 @@ class ShotRepository {
         return getDb().prepare('SELECT COUNT(*) AS n FROM shots').get().n;
     }
 
-    // Lightweight (coffee, dose, timestamp) rows for bean-consumption math —
-    // avoids hydrating full shot payloads just to sum annotated doses.
+    // Lightweight (coffee, beanId, dose, timestamp) rows for bean-consumption
+    // math — avoids hydrating full shot payloads just to sum annotated doses.
+    // beanId (#456) lets computeBeanRemaining match by stable bean identity
+    // first, falling back to the coffee name for rows that predate it.
     getAnnotatedDoses() {
         return getDb().prepare(`
             SELECT json_extract(a.data, '$.coffee') AS coffee,
+                   json_extract(a.data, '$.beanId') AS beanId,
                    json_extract(a.data, '$.dose')   AS dose,
                    s.timestamp                      AS timestamp
             FROM annotations a JOIN shots s ON s.id = a.shot_id
             WHERE json_extract(a.data, '$.coffee') IS NOT NULL
               AND s.id NOT IN (SELECT shot_id FROM trash)
         `).all();
+    }
+
+    // All (shotId, annotation) pairs, for the one-time beanId backfill
+    // migration (#456) — every annotation row regardless of `coffee` presence,
+    // unlike getAnnotatedDoses() above which is scoped to consumption math.
+    getAllAnnotations() {
+        return getDb().prepare('SELECT shot_id AS shotId, data FROM annotations').all()
+            .map(r => ({ shotId: r.shotId, annotation: JSON.parse(r.data) }));
     }
 
     // #402: the most recent shot before `shotId` with the same profile name

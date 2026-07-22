@@ -47,20 +47,27 @@ export function _maybeDeductMilk(shot, payload) {
 // payload than the other (#430, was previously duplicated between
 // scheduleAutoSave and the now-removed explicit saveAnnotation()).
 function _buildAnnotationPayload(shot) {
-  const coffee = document.getElementById('annCoffee').value.trim();
+  const coffeeSelect = document.getElementById('annCoffee');
+  const coffee = coffeeSelect.value.trim();
+  // #456: the select's chosen <option> carries data-bean-id (see
+  // _renderBeanSelect) when the value matches a real library bean — null for
+  // an empty selection or a stale name no longer in the library.
+  const beanIdAttr = coffeeSelect.selectedOptions[0]?.dataset.beanId;
+  const beanId = beanIdAttr ? parseInt(beanIdAttr, 10) : null;
   return {
     rating:       S.currentRating || null,
     coffee,
+    beanId,
     grinder:      document.getElementById('annGrinder').value.trim(),
     grindSetting: document.getElementById('annGrindSetting').value.trim(),
     dose:         parseFloat(document.getElementById('annDose').value) || null,
-    roastDate:    germanToIso(_roastDateFromLibrary(coffee, shot?.timestamp) || '') || null,
+    roastDate:    germanToIso(_roastDateFromLibrary(coffee, shot?.timestamp, beanId) || '') || null,
     tds:          parseFloat(document.getElementById('annTds').value) || null,
     notes:        document.getElementById('annNotes').value.trim(),
     drinkType:    document.getElementById('annDrinkType')?.value || null,
     milkType:     document.getElementById('annMilkType')?.value ? parseInt(document.getElementById('annMilkType').value) : null,
     recipeId:     parseInt(document.getElementById('annRecipe')?.value) || null,
-    beanAgeDays:  calcBeanAgeAtShot(coffee, shot?.timestamp) ?? null,
+    beanAgeDays:  calcBeanAgeAtShot(coffee, shot?.timestamp, beanId) ?? null,
   };
 }
 
@@ -195,10 +202,13 @@ export function _renderBeanSelect(selectedName) {
   const select = document.getElementById('annCoffee');
   if (!select) return;
   const beans = S.coffeeLibrary?.beans || [];
-  const names = beans.map(b => b.name);
-  if (selectedName && !names.includes(selectedName)) names.push(selectedName);
+  // #456: data-bean-id lets _buildAnnotationPayload read off the currently
+  // selected bean's stable id — only real library beans get one; a stale
+  // name kept around because it no longer matches any current bean does not.
+  const options = beans.map(b => ({ name: b.name, id: b.id }));
+  if (selectedName && !options.some(o => o.name === selectedName)) options.push({ name: selectedName, id: null });
   select.innerHTML = `<option value=""></option>` +
-    names.map(n => `<option value="${esc(n)}"${n === selectedName ? ' selected' : ''}>${esc(n)}</option>`).join('');
+    options.map(o => `<option value="${esc(o.name)}"${o.id != null ? ` data-bean-id="${o.id}"` : ''}${o.name === selectedName ? ' selected' : ''}>${esc(o.name)}</option>`).join('');
 }
 
 export function _renderRecipeSelect(selectedId) {
@@ -317,7 +327,7 @@ export function renderAnnotationPanel(shot) {
   document.getElementById('annGrinder').value      = ann.grinder      || '';
   document.getElementById('annGrindSetting').value = ann.grindSetting || '';
   document.getElementById('annDose').value         = ann.dose         || '';
-  updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp) || '');
+  updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp, ann.beanId) || '');
   document.getElementById('annTds').value          = ann.tds          || '';
   document.getElementById('annNotes').value        = ann.notes        || '';
   _renderDrinkPills(ann.drinkType || '');
@@ -346,20 +356,27 @@ export function quickClone() {
   const currentShot = S.shots.find(s => s.id === S.primaryShotId);
   // Prefer the currently-viewed shot's own bean when it already has one
   // annotated — only fall back to the previous shot's bean otherwise (#389).
-  const currentAnn = currentShot?.annotation || {};
-  const beanName   = currentAnn.coffee || ann.coffee || null;
+  const currentAnn   = currentShot?.annotation || {};
+  const useCurrentAnn = !!currentAnn.coffee;
+  const beanName      = currentAnn.coffee || ann.coffee || null;
+  // #456: beanId mirrors the same currentAnn/ann precedence as beanName —
+  // re-derived below by _renderBeanSelect's data-bean-id from the CURRENT
+  // library (handles a bean renamed since either annotation was saved), but
+  // passed through explicitly too for the grind/degassing lookups that run
+  // before the DOM has been re-rendered with the new selection.
+  const beanId = useCurrentAnn ? (currentAnn.beanId ?? null) : (ann.beanId ?? null);
   _renderBeanSelect(beanName);
   // Grinder/grind setting/dose come from this bean's own history, not
   // blindly from prev — prev may have used a different bean entirely.
   // "↩ Letzten" means the grind last used for this bean, so prefer the
   // bean's most recently annotated shot over the best-scoring combo here.
   const suggested = beanName
-    ? suggestGrindDoseForBean(beanName, S.coffeeLibrary, S.shots, { preferMostRecent: true })
+    ? suggestGrindDoseForBean(beanName, S.coffeeLibrary, S.shots, { preferMostRecent: true, beanId })
     : { grinder: '', grindSetting: '', dose: '' };
   document.getElementById('annGrinder').value      = suggested.grinder      || ann.grinder      || '';
   document.getElementById('annGrindSetting').value = suggested.grindSetting || ann.grindSetting || '';
   document.getElementById('annDose').value         = suggested.dose         || ann.dose         || '';
-  updateDegassing(_roastDateFromLibrary(beanName, currentShot?.timestamp) || '');
+  updateDegassing(_roastDateFromLibrary(beanName, currentShot?.timestamp, beanId) || '');
   _renderDrinkPills(ann.drinkType || '');
   _renderMilkPills('');
   _updateMilkFieldVisibility();

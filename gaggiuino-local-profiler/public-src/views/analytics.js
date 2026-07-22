@@ -685,6 +685,7 @@ export async function buildWorldMap() {
   // origin countries — so one shot of a 2-country blend contributes 0.5 to
   // each by default, or e.g. 0.7/0.3 when weighted.
   const nameToBean = new Map();
+  const idToBean   = new Map();
   for (const b of (S.coffeeLibrary.beans || [])) {
     const rawOrigins = Array.isArray(b.origins) && b.origins.length
       ? b.origins : (b.origin ? [{ code: b.origin }] : []);
@@ -695,8 +696,15 @@ export async function buildWorldMap() {
       code: o.code,
       weight: totalPercent > 0 ? (o.percent || 0) / totalPercent : 1 / valid.length,
     }));
-    nameToBean.set(String(b.name || '').toLowerCase(), { bean: b, origins });
+    const entry = { bean: b, origins };
+    nameToBean.set(String(b.name || '').toLowerCase(), entry);
+    if (b.id != null) idToBean.set(b.id, entry);
   }
+  // #456: beanId-first lookup (survives bean renames), falling back to the
+  // name key for annotations that predate beanId or a name that no longer
+  // resolves to any current bean.
+  const resolveMapEntry = (ann) => (ann?.beanId != null && idToBean.get(ann.beanId))
+    || nameToBean.get(String(ann?.coffee || '').toLowerCase());
 
   // code → { shots, beans:Set, beanShots:Map } — beans with an origin count
   // even without shots; beanShots tracks each bean's own weighted
@@ -711,7 +719,7 @@ export async function buildWorldMap() {
     }
   }
   for (const s of S.shots) {
-    const entry = nameToBean.get(String(s.annotation?.coffee || '').toLowerCase());
+    const entry = resolveMapEntry(s.annotation);
     if (!entry) continue;
     for (const o of entry.origins) {
       const stats = byCode[o.code];
@@ -779,7 +787,7 @@ export async function buildWorldMap() {
       coord = [centroid[0] + (n % 2 === 0 ? jitter : -jitter), centroid[1] + (n % 3) * 0.2];
     }
     const shots = byCode[primaryCode]?.beans.has(bean.name)
-      ? S.shots.filter(s => String(s.annotation?.coffee || '').toLowerCase() === bean.name.toLowerCase()).length
+      ? S.shots.filter(s => resolveMapEntry(s.annotation)?.bean === bean).length
       : 0;
     // Always-visible label for beans that actually have shots logged (kept
     // off for zero-shot points so the map doesn't get cluttered with beans

@@ -75,7 +75,8 @@ router.post('/api/shots/:id/annotate', validate(annotationSchema), (req, res, ne
         if (!id) return res.status(400).json({ error: 'Invalid shot ID' });
         shotService.saveAnnotation(id, req.body);
         // fire-and-forget: never let a notification failure break the save
-        libraryService.checkLowStockNotify(req.body?.coffee).catch(() => {});
+        // #456: pass the full annotation so low-stock resolution prefers beanId
+        libraryService.checkLowStockNotify(req.body).catch(() => {});
         res.json({ ok: true });
     } catch (err) { next(err); }
 });

@@ -75,10 +75,17 @@ export function renderBeanList() {
     return;
   }
   el.innerHTML = beans.map(b => {
-    // Total consumption across all bags (all shots matching bean name)
+    // #456: beanId-first match (mirrors LibraryService.computeBeanRemaining
+    // on the backend) — a row with a beanId that doesn't match this bean is
+    // NOT rescued by a name match; only rows without a beanId fall back.
+    const beanMatch = s => s.annotation?.beanId != null
+      ? s.annotation.beanId === b.id
+      : (s.annotation?.coffee || '').toLowerCase() === b.name.toLowerCase();
+
+    // Total consumption across all bags (all shots matching this bean)
     const totalConsumed = Math.round(S.shots.reduce((sum, s) => {
       const d = parseFloat(s.annotation?.dose);
-      return (s.annotation?.coffee || '').toLowerCase() === b.name.toLowerCase() && d ? sum + d : sum;
+      return beanMatch(s) && d ? sum + d : sum;
     }, 0));
 
     // Current bag consumption (shots since last bag openedAt)
@@ -86,9 +93,8 @@ export function renderBeanList() {
     const activeBag = bags.length ? bags[bags.length - 1] : null;
     const activeBagConsumed = activeBag ? Math.round(S.shots.reduce((sum, s) => {
       const d = parseFloat(s.annotation?.dose);
-      const match = (s.annotation?.coffee || '').toLowerCase() === b.name.toLowerCase();
       const afterOpen = s.timestamp * 1000 >= (activeBag.openedAt || 0);
-      return (match && d && afterOpen) ? sum + d : sum;
+      return (beanMatch(s) && d && afterOpen) ? sum + d : sum;
     }, 0)) : totalConsumed;
 
     const remaining = b.stock_g ? Math.round(b.stock_g - activeBagConsumed) : null;
@@ -150,7 +156,7 @@ export function renderBeanList() {
     // Only the single best combo is shown — with several grinders/grind
     // settings tested per bean this can get noisy fast, and "the one thing
     // to try next" is more useful at a glance than a ranked list.
-    const bestCombos = calcBestGrindCombosForBean(b.name, S.shots);
+    const bestCombos = calcBestGrindCombosForBean(b.name, S.shots, b.id);
     const bestComboHtml = bestCombos ? `<div class="lib-best-combo-row" title="${esc(t('bean_best_combo_tooltip', bestCombos[0].shotCount))}">
       <span class="lib-best-combo-label">${t('bean_best_combo_label')}</span>
       <span class="lib-best-combo-value">${esc(t('bean_best_combo_value', bestCombos[0].grinder, bestCombos[0].grindSetting))}</span>

@@ -21,8 +21,16 @@ class LibraryService {
 
     // Remaining grams for a stock-tracked bean — mirrors the library view's math
     // (public-src/views/library.js): consumed = sum of annotated doses of shots
-    // matching the bean name (case-insensitive) since the active bag was opened;
-    // without bags, all matching shots count. Returns null when stock is untracked.
+    // matching this bean since the active bag was opened; without bags, all
+    // matching shots count. Returns null when stock is untracked.
+    //
+    // #456: a dose row matches by beanId when the row has one (survives the
+    // bean being renamed since), otherwise falls back to name matching (rows
+    // logged before beanId existed). A row whose beanId points at a bean that
+    // no longer exists is intentionally NOT rescued by a name match — if that
+    // bean was deleted and reimported under the same name, the reimport is a
+    // new identity with its own fresh bag, and the old shots correctly stop
+    // counting toward it.
     computeBeanRemaining(bean, doseRows) {
         if (!(bean.stock_g > 0)) return null;
         const bags      = Array.isArray(bean.bags) ? bean.bags : [];
@@ -32,7 +40,10 @@ class LibraryService {
         const consumed  = doseRows.reduce((sum, r) => {
             const d = parseFloat(r.dose);
             if (!d) return sum;
-            if (String(r.coffee || '').toLowerCase() !== name) return sum;
+            const matches = r.beanId != null
+                ? r.beanId === bean.id
+                : String(r.coffee || '').toLowerCase() === name;
+            if (!matches) return sum;
             if (activeBag && r.timestamp * 1000 < openedAt) return sum;
             return sum + d;
         }, 0);
@@ -277,21 +288,39 @@ class LibraryService {
     // device (same channel as the preheat notification). The notified flag
     // lives on the active bag, so a new bag re-arms automatically.
 
-    // Case-insensitive bean lookup by name — shared by checkLowStockNotify
-    // below and ShotService.computeScore() (#450, brewTempC/brewRatio-aware
-    // scoring), both resolving a shot's/annotation's free-text coffee name
-    // against the library.
-    findBeanByName(coffeeName) {
+    // Case-insensitive bean lookup by name — the fallback primitive used by
+    // resolveBeanForAnnotation() below for annotations without a resolvable
+    // beanId. `beans` is optional (defaults to a fresh getLibrary() read);
+    // pass it when the caller already has the array to avoid a redundant read.
+    findBeanByName(coffeeName, beans) {
         if (!coffeeName) return null;
         const name = String(coffeeName).toLowerCase();
-        return (this.getLibrary().beans || []).find(b => String(b.name || '').toLowerCase() === name) || null;
+        const list = beans || this.getLibrary().beans || [];
+        return list.find(b => String(b.name || '').toLowerCase() === name) || null;
     }
 
-    async checkLowStockNotify(coffeeName) {
-        if (!coffeeName) return;
+    // #456: resolves a shot/annotation to its library bean, preferring the
+    // stable beanId link over the free-text coffee name. beanId survives
+    // bean renames (name-matching never could) and, deliberately, does NOT
+    // fall back to a name match when it points at a bean that's gone —
+    // see computeBeanRemaining's comment for why that's the correct behavior.
+    // Only annotations that predate beanId (or a beanId we couldn't resolve
+    // for some other reason) fall back to name matching.
+    resolveBeanForAnnotation(annotation, beans) {
+        const list = beans || this.getLibrary().beans || [];
+        if (annotation?.beanId != null) {
+            const byId = list.find(b => b.id === annotation.beanId);
+            if (byId) return byId;
+        }
+        return this.findBeanByName(annotation?.coffee, list);
+    }
+
+    // annotation is the full {coffee, beanId, ...} payload, not just the name
+    // string, so low-stock lookups get the same beanId-first resolution as
+    // consumption math (#456).
+    async checkLowStockNotify(annotation) {
         const lib  = this.getLibrary();
-        const name = String(coffeeName).toLowerCase();
-        const bean = (lib.beans || []).find(b => String(b.name || '').toLowerCase() === name);
+        const bean = this.resolveBeanForAnnotation(annotation, lib.beans);
         if (!bean) return;
         const bags      = Array.isArray(bean.bags) ? bean.bags : [];
         const activeBag = bags.length ? bags[bags.length - 1] : null;

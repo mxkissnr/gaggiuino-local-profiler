@@ -42,14 +42,14 @@ beforeEach(() => {
 describe('checkLowStockNotify', () => {
     it('stays silent while remaining is above the threshold', async () => {
         seed({ stock: 120, doses: [18] }); // remaining 102
-        await libraryService.checkLowStockNotify('Lucky Punch');
+        await libraryService.checkLowStockNotify({ coffee: 'Lucky Punch' });
         expect(sendHaNotify).not.toHaveBeenCalled();
     });
 
     it('notifies exactly once per bag when remaining drops below 100 g', async () => {
         seed({ stock: 120, doses: [18, 18] }); // remaining 84
-        await libraryService.checkLowStockNotify('Lucky Punch');
-        await libraryService.checkLowStockNotify('Lucky Punch');
+        await libraryService.checkLowStockNotify({ coffee: 'Lucky Punch' });
+        await libraryService.checkLowStockNotify({ coffee: 'Lucky Punch' });
         expect(sendHaNotify).toHaveBeenCalledTimes(1);
         const [svc, title, body] = sendHaNotify.mock.calls[0];
         expect(svc).toBe('notify.mobile_app_test');
@@ -63,7 +63,7 @@ describe('checkLowStockNotify', () => {
 
     it('re-arms when a new bag is opened', async () => {
         seed({ stock: 120, doses: [18, 18] });
-        await libraryService.checkLowStockNotify('Lucky Punch');
+        await libraryService.checkLowStockNotify({ coffee: 'Lucky Punch' });
         expect(sendHaNotify).toHaveBeenCalledTimes(1);
 
         // new 60 g bag opened now; one 18 g shot after opening → remaining 42
@@ -74,15 +74,15 @@ describe('checkLowStockNotify', () => {
         shotRepo.upsert({ id: 99, timestamp: Math.floor(Date.now() / 1000), duration: 250 });
         shotRepo.saveAnnotation(99, { coffee: 'Lucky Punch', dose: '18' });
 
-        await libraryService.checkLowStockNotify('Lucky Punch');
+        await libraryService.checkLowStockNotify({ coffee: 'Lucky Punch' });
         expect(sendHaNotify).toHaveBeenCalledTimes(2);
     });
 
     it('ignores unknown beans and beans without stock tracking', async () => {
         seed({ stock: 120, doses: [] });
-        await libraryService.checkLowStockNotify('Nonexistent');
+        await libraryService.checkLowStockNotify({ coffee: 'Nonexistent' });
         libraryService.saveLibrary({ beans: [{ id: 2, name: 'Untracked' }], grinders: [], recipes: [] });
-        await libraryService.checkLowStockNotify('Untracked');
+        await libraryService.checkLowStockNotify({ coffee: 'Untracked' });
         expect(sendHaNotify).not.toHaveBeenCalled();
     });
 });

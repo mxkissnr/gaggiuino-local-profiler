@@ -72,10 +72,11 @@ class ShotService {
     }
 
     // #450: scores against the bean's own brewTempC/brewRatio recommendation
-    // (resolved via the shot's annotation.coffee name) when the library has
-    // one set, instead of only the generic fixed bands — see lib/score.js.
+    // (resolved via the shot's annotation, beanId-first per #456) when the
+    // library has one set, instead of only the generic fixed bands — see
+    // lib/score.js.
     computeScore(shot) {
-        const bean = libraryService.findBeanByName(shot?.annotation?.coffee);
+        const bean = libraryService.resolveBeanForAnnotation(shot?.annotation);
         return calcShotScore(shot, bean);
     }
 }
