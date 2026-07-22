@@ -41,6 +41,23 @@ async function safeGet(startUrl, opts) {
     throw new Error('too many redirects');
 }
 
+// Shopify's per-variant `weight` field is often unreliable merchant data —
+// e.g. a shipping-package placeholder entered once and left uncorrected
+// across every size variant (#455, verified live against
+// sproutcoffeeroasters.art: every "Espresso" variant reported weight:266
+// regardless of whether its own option label said "250g" or "1KG"). The
+// option label the merchant actually typed for the size (e.g. "250g",
+// "1kg") is the trustworthy source — fall back to the raw `weight` field
+// only when no such label is parseable.
+function parseGramsFromLabel(s) {
+    if (typeof s !== 'string') return null;
+    const m = s.match(/(\d+(?:[.,]\d+)?)\s*(kg|g)\b/i);
+    if (!m) return null;
+    const n = parseFloat(m[1].replace(',', '.'));
+    if (!Number.isFinite(n)) return null;
+    return Math.round(/^k/i.test(m[2]) ? n * 1000 : n);
+}
+
 // Shopify variants often combine two option dimensions (e.g. size × grind
 // type) — grind-type-only variants share the same price/weight, so a raw
 // variant list would show duplicate entries for the same bag size. Dedupe by
@@ -50,12 +67,15 @@ function distinctSizeVariants(variants) {
     if (!Array.isArray(variants)) return [];
     const seen = new Map();
     for (const v of variants) {
-        if (typeof v?.price !== 'number' || typeof v?.weight !== 'number') continue;
-        const key = `${v.price}|${v.weight}`;
+        if (typeof v?.price !== 'number') continue;
+        const label = [v.option1, v.option2, v.option3, v.title].find(s => parseGramsFromLabel(s) != null);
+        const weight = label ? parseGramsFromLabel(label) : (typeof v?.weight === 'number' ? v.weight : null);
+        if (weight == null) continue;
+        const key = `${v.price}|${weight}`;
         if (seen.has(key)) continue;
         seen.set(key, {
             id: v.id, title: v.option1 || v.title || null,
-            price: v.price, weight: v.weight,
+            price: v.price, weight,
             unit: v.unit_price_measurement?.quantity_unit || null,
         });
     }

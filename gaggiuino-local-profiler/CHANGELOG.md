@@ -3,6 +3,7 @@
 ### Fixed
 - **Mobile Shots tab now opens straight to the last shot's detail, not the shot list.** `S.mobileShotSubview` was never initialized, so it defaulted to `undefined` on a fresh page load — `updateMobileShotSidebarVisibility()` treats anything other than `'detail'` as "show the list", which contradicted the #431 intent ("Shots opens the shot detail directly"). Now defaults to `'detail'`, and the `btnShots` bottom-nav handler force-sets it too (mirroring `goToShot()`), so both first load and every subsequent tap land on the shot. Desktop is unaffected (always shows both panes). Closes #454
 - **Shot photo thumbnail enlarged** from 48px to 88px in the annotation panel for better visibility; still opens the fullscreen lightbox on click. Closes #454
+- **Shopify bean import: variant size no longer trusts the unreliable `weight` field.** Verified live against sproutcoffeeroasters.art/products/flower-power: the merchant's Shopify catalog reports `weight: 266` for every "Espresso" variant regardless of whether its own option label says "250g" or "1KG" — so the 250g package imported as 266g, and because `weight` was also part of the size-variant dedup key, the mispriced 1KG option silently collapsed into the 250g one and never appeared in the picker at all. `distinctSizeVariants()` (`routes/import.js`) now parses grams from the variant's own option label (e.g. "250g", "1kg") first, falling back to the raw `weight` field only when no such label is parseable. Closes #455
 
 ## [2.12.0] – 2026-07-22
 

@@ -80,6 +80,41 @@ describe('GET /api/import/url — size variants projection', () => {
         expect(data.variants).toBeUndefined();
     });
 
+    it('prefers the option label over an unreliable weight field (#455, sproutcoffeeroasters.art regression)', async () => {
+        // Real-world shape: the merchant left every "Espresso" variant's
+        // weight field at a stale 266g placeholder regardless of actual
+        // size — the true size only shows up in option2 ("250g"/"1KG").
+        axiosGet.mockResolvedValue({ status: 200, headers: {}, data: {
+            title: 'Flower Power', vendor: 'Sprout Coffee Roasters', description: '',
+            variants: [
+                { id: 1, price: 1800, weight: 266, option1: 'Espresso', option2: '250g', option3: 'Whole Beans' },
+                { id: 2, price: 1800, weight: 266, option1: 'Espresso', option2: '1KG',  option3: 'Whole Beans' },
+            ],
+        }});
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent('https://hoppenworth-ploch.de/products/flower-power')}`);
+        const data = await r.json();
+        expect(data.variants).toEqual([
+            { id: 1, title: 'Espresso', price: 1800, weight: 250, unit: null },
+            { id: 2, title: 'Espresso', price: 1800, weight: 1000, unit: null },
+        ]);
+    });
+
+    it('falls back to the raw weight field when no option carries a parseable size label', async () => {
+        axiosGet.mockResolvedValue({ status: 200, headers: {}, data: {
+            title: 'Test Bean - Ruanda', vendor: 'Hoppenworth & Ploch', description: '',
+            variants: [
+                { id: 1, price: 1490, weight: 250, option1: 'Standard' },
+                { id: 2, price: 5200, weight: 1000, option1: 'Groß' },
+            ],
+        }});
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent('https://hoppenworth-ploch.de/products/test-bean')}`);
+        const data = await r.json();
+        expect(data.variants).toEqual([
+            { id: 1, title: 'Standard', price: 1490, weight: 250, unit: null },
+            { id: 2, title: 'Groß', price: 5200, weight: 1000, unit: null },
+        ]);
+    });
+
     it('omits variants for products with no variants array at all (elbgold)', async () => {
         axiosGet.mockResolvedValue({ status: 200, headers: {}, data: {
             title: 'BOMBE', vendor: 'elbgold', description: '<p>Noten von Kirsche und Mandel.</p>', variants: null,
