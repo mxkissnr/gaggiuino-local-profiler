@@ -21,7 +21,12 @@ router.get('/shots.json', (req, res, next) => {
     try {
         const includeTrash = req.query.trash === '1';
         const shots = includeTrash ? shotService.getTrash() : shotService.getAll();
-        const result = shots.map(s => ({ ...s, score: shotService.computeScore(s) }));
+        // #457: usedBeanTarget alongside score — additive field, existing
+        // consumers that only read `score` are unaffected.
+        const result = shots.map(s => {
+            const { score, usedBeanTarget } = shotService.computeScoreDetail(s);
+            return { ...s, score, usedBeanTarget };
+        });
         res.json(result);
     } catch (err) { next(err); }
 });
@@ -31,7 +36,8 @@ router.get('/api/shots/last', (req, res, next) => {
         const shots = shotService.getAll();
         const last  = shots.length ? shots[shots.length - 1] : null;
         if (!last) return res.json(null);
-        res.json({ ...last, score: shotService.computeScore(last) });
+        const { score, usedBeanTarget } = shotService.computeScoreDetail(last);
+        res.json({ ...last, score, usedBeanTarget });
     } catch (err) { next(err); }
 });
 
@@ -44,11 +50,14 @@ router.get('/api/shots/:id', (req, res, next) => {
         // #402: same-profile auto-compare — additive fields only, existing
         // consumers of this response are unaffected.
         const previous = shotService.getPreviousByProfile(shot);
+        const detail   = shotService.computeScoreDetail(shot);
+        const prevDetail = previous ? shotService.computeScoreDetail(previous) : null;
         res.json({
             ...shot,
-            score: shotService.computeScore(shot),
+            score: detail.score,
+            usedBeanTarget: detail.usedBeanTarget,
             previousShotId: previous ? previous.id : null,
-            previousShot:   previous ? { ...previous, score: shotService.computeScore(previous) } : null,
+            previousShot:   previous ? { ...previous, score: prevDetail.score, usedBeanTarget: prevDetail.usedBeanTarget } : null,
         });
     } catch (err) { next(err); }
 });
@@ -75,7 +84,8 @@ router.post('/api/shots/:id/annotate', validate(annotationSchema), (req, res, ne
         if (!id) return res.status(400).json({ error: 'Invalid shot ID' });
         shotService.saveAnnotation(id, req.body);
         // fire-and-forget: never let a notification failure break the save
-        libraryService.checkLowStockNotify(req.body?.coffee).catch(() => {});
+        // #456: pass the full annotation so low-stock resolution prefers beanId
+        libraryService.checkLowStockNotify(req.body).catch(() => {});
         res.json({ ok: true });
     } catch (err) { next(err); }
 });

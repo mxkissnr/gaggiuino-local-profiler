@@ -8,6 +8,16 @@
 // trivially distinguishable and never collide with real data.
 const DEMO_ID_BASE = 900_000_000;
 
+// #456: maps each demo bean's name (as used in SHOT_DEFS.coffee below) to
+// its fixed id below (DEMO_ID_BASE + 10x), so seeded shots carry a real
+// beanId alongside the coffee name — same as a real annotation would once
+// saved via the bean-select dropdown.
+const DEMO_BEAN_ID_BY_NAME = {
+    'GLP Demo — Ethiopia Yirgacheffe':  DEMO_ID_BASE + 101,
+    'GLP Demo — Brasil/Ethiopia Blend': DEMO_ID_BASE + 102,
+    'GLP Demo — Colombia Decaf':        DEMO_ID_BASE + 103,
+};
+
 // Curve helper: builds a plausible espresso-shot datapoints object.
 // timeInShot in tenths of a second (0.1 s steps), pressure/temperature/
 // weight in tenths of their unit — matches the shape produced by
@@ -77,6 +87,7 @@ function buildDemoDataset(now = Date.now()) {
             datapoints,
             annotation: {
                 coffee:       def.coffee,
+                beanId:       DEMO_BEAN_ID_BY_NAME[def.coffee] ?? null,
                 grindSetting: def.grind,
                 dose:         def.dose,
                 tds:          def.tds,

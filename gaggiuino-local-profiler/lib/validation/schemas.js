@@ -19,6 +19,15 @@ const annotationSchema = z.object({
     rating:        z.number().int().min(1).max(5).nullable().optional(),
     score:         z.number().nullable().optional(),
     recipeId:      z.number().int().nullable().optional(),
+    // #456: stable link to library.beans[].id, set when the user picked a bean
+    // from the annotation panel's dropdown (or it was carried through
+    // quick-clone / the dial-in wizard). Preferred over the free-text `coffee`
+    // name for shot->bean matching, since a bean deleted+reimported gets a new
+    // id but the same name — beanId survives renames, name-matching doesn't.
+    // `coffee` is kept as-is regardless (display value / CSV export / snapshot).
+    beanId:        z.number().int().nullable().optional(),
+    // Bag-within-bean identity (if ever revived) — distinct from beanId (bean
+    // identity) above. Currently unused; do not conflate the two.
     beanBagId:     z.number().int().nullable().optional(),
 }).passthrough();
 

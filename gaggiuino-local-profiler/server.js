@@ -23,6 +23,7 @@ try {
     libraryService.migrateNotesToFlavors();
     libraryService.migrateOriginToOrigins();
     libraryService.migrateVarietyToSpecies();
+    libraryService.migrateAnnotationBeanIds();
     require('./lib/machines/registry').ensureDefaultMachine(); // #317: seed machine #1 from legacy options
     log('Database ready');
 } catch (err) {

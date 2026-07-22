@@ -1,3 +1,25 @@
+## [2.13.1] – 2026-07-22
+
+### Fixed
+- **#456 correction: a bean deleted and reimported under the same name now correctly recovers its old shots' consumption again.** The just-shipped #456 fix made `computeBeanRemaining()` trust a dose row's `beanId` exclusively whenever it was set, with no name fallback at all — which actually contradicted the original design goal ("matching over a stable id instead of name, so identity survives a delete+reimport"): a *future* delete+reimport under the same name would have reset that bean's consumption to 0 again, reproducing the exact bug #456 was meant to fix. It only looked fixed for the original incident because of a lucky backfill-timing coincidence. Corrected: a dose row's `beanId` is now trusted exclusively only when it still resolves to *some* currently-existing bean (checked against the full beans list, now threaded through `computeBeanRemaining`'s call sites) — a row whose bean was genuinely deleted falls back to name matching, recovering its consumption onto a reimported bean of the same name, while a row whose `beanId` points at a different, still-existing bean is never miscounted toward a same-named bean it doesn't belong to. `resolveBeanForAnnotation()`'s advisory matching already worked this way and is unaffected. Closes remaining scope of #456.
+
+## [2.13.0] – 2026-07-22
+
+### Added
+- **Verdict header shows a hint when the score was weighed against the bean's own brew target.** Since #450, a shot's temperature/ratio score targets the coffee bean's own `brewTempC`/`brewRatio` recommendation from the Library instead of the generic fixed band, when set — but the score percentage just silently changed with no way to tell why. A small target-icon badge (native tooltip: "Scored against this bean's own brew target") now appears next to the verdict headline whenever that happened for the shot being viewed. The shot's own recorded target-temperature curve still takes priority over the bean's recommendation and never triggers the hint. `calcShotScore()` (`lib/score.js`) gained a `calcShotScoreDetail()` sibling that also returns this flag — the plain-number `calcShotScore()` is unchanged for its many existing callers.
+
+## [2.12.2] – 2026-07-22
+
+### Fixed
+- **Shots stopped counting toward a bean's consumption after the bean was deleted and reimported.** Every place that attributed a shot to a bean matched `annotation.coffee` (a free-text name string) against the library's `bean.name`, case-insensitively — including consumption math, scoring, grinder-wear, and dial-in suggestions. A bean deleted and reimported under the same name gets a fresh `id`/bag, but historical shots still only carried the old name text, so they silently stopped being attributed to the "new" bean object (found in production: two 37g-dose shots dropped out of a bean's remaining-stock math this way). Shots now also record a stable `beanId` (set from the annotation panel's bean select, quick-clone, and the dial-in wizard) which is preferred everywhere a shot is matched to a bean, with the free-text name kept as a fallback for annotations saved before this change and as an unchanged display/export value. A one-time startup migration backfills `beanId` on existing annotations whose name currently matches exactly one bean, unambiguously; anything ambiguous is left on the name-matching fallback rather than guessed. Closes #456
+
+## [2.12.1] – 2026-07-22
+
+### Fixed
+- **Mobile Shots tab now opens straight to the last shot's detail, not the shot list.** `S.mobileShotSubview` was never initialized, so it defaulted to `undefined` on a fresh page load — `updateMobileShotSidebarVisibility()` treats anything other than `'detail'` as "show the list", which contradicted the #431 intent ("Shots opens the shot detail directly"). Now defaults to `'detail'`, and the `btnShots` bottom-nav handler force-sets it too (mirroring `goToShot()`), so both first load and every subsequent tap land on the shot. Desktop is unaffected (always shows both panes). Closes #454
+- **Shot photo thumbnail enlarged** from 48px to 88px in the annotation panel for better visibility; still opens the fullscreen lightbox on click. Closes #454
+- **Shopify bean import: variant size no longer trusts the unreliable `weight` field.** Verified live against sproutcoffeeroasters.art/products/flower-power: the merchant's Shopify catalog reports `weight: 266` for every "Espresso" variant regardless of whether its own option label says "250g" or "1KG" — so the 250g package imported as 266g, and because `weight` was also part of the size-variant dedup key, the mispriced 1KG option silently collapsed into the 250g one and never appeared in the picker at all. `distinctSizeVariants()` (`routes/import.js`) now parses grams from the variant's own option label (e.g. "250g", "1kg") first, falling back to the raw `weight` field only when no such label is parseable. Closes #455
+
 ## [2.12.0] – 2026-07-22
 
 ### Added

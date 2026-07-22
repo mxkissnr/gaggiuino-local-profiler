@@ -21,18 +21,34 @@ class LibraryService {
 
     // Remaining grams for a stock-tracked bean — mirrors the library view's math
     // (public-src/views/library.js): consumed = sum of annotated doses of shots
-    // matching the bean name (case-insensitive) since the active bag was opened;
-    // without bags, all matching shots count. Returns null when stock is untracked.
-    computeBeanRemaining(bean, doseRows) {
+    // matching this bean since the active bag was opened; without bags, all
+    // matching shots count. Returns null when stock is untracked.
+    //
+    // #456: a dose row's beanId, when it still resolves to SOME currently-
+    // existing bean (checked against `allBeans`), is trusted exclusively —
+    // that dose genuinely belongs to whichever bean the id points at, even
+    // if this bean's name happens to coincide. Only when the row's beanId is
+    // null, or points at a bean that no longer exists anywhere (deleted), does
+    // it fall back to name matching against `bean`. This is what lets a bean
+    // deleted and reimported under the same name recover its own consumption
+    // history — "Identität über Löschen/Neu-Import hinweg erhalten bleibt"
+    // was the whole point of moving to beanId in the first place — while still
+    // never misattributing a dose that legitimately belongs to a different,
+    // still-existing bean that happens to share a name.
+    computeBeanRemaining(bean, doseRows, allBeans) {
         if (!(bean.stock_g > 0)) return null;
         const bags      = Array.isArray(bean.bags) ? bean.bags : [];
         const activeBag = bags.length ? bags[bags.length - 1] : null;
         const openedAt  = activeBag?.openedAt || 0;
         const name      = String(bean.name || '').toLowerCase();
+        const idExists  = new Set((allBeans || []).map(b => b.id));
         const consumed  = doseRows.reduce((sum, r) => {
             const d = parseFloat(r.dose);
             if (!d) return sum;
-            if (String(r.coffee || '').toLowerCase() !== name) return sum;
+            const matches = r.beanId != null && idExists.has(r.beanId)
+                ? r.beanId === bean.id
+                : String(r.coffee || '').toLowerCase() === name;
+            if (!matches) return sum;
             if (activeBag && r.timestamp * 1000 < openedAt) return sum;
             return sum + d;
         }, 0);
@@ -46,8 +62,9 @@ class LibraryService {
     // pre-existing beans) keep showing up.
     getActiveBeans() {
         const doseRows = shotRepo.getAnnotatedDoses();
-        return (this.getLibrary().beans || [])
-            .map(b => ({ bean: b, remaining: this.computeBeanRemaining(b, doseRows) }))
+        const beans    = this.getLibrary().beans || [];
+        return beans
+            .map(b => ({ bean: b, remaining: this.computeBeanRemaining(b, doseRows, beans) }))
             .filter(({ remaining, bean }) => remaining !== null && remaining > 0 && bean.enabled !== false)
             .map(({ bean, remaining }) => ({
                 id: bean.id, name: bean.name, roaster: bean.roaster || null,
@@ -234,6 +251,36 @@ class LibraryService {
         return changed;
     }
 
+    // #456: one-time idempotent backfill — annotations saved before beanId
+    // existed only carry the free-text bean name. Sets beanId when (and only
+    // when) that name currently matches exactly one bean, case-insensitive;
+    // ambiguous (0 or >1 matches) rows are left alone and keep working via
+    // the name-matching fallback everywhere above — same "don't guess"
+    // idiom as migrateImportedNotes/migrateNotesToFlavors/etc. above,
+    // adapted to the annotations table instead of the library blob.
+    migrateAnnotationBeanIds() {
+        const beans  = this.getLibrary().beans || [];
+        const byName = new Map(); // lowercased name -> matching bean(s)
+        for (const bean of beans) {
+            const key = String(bean.name || '').toLowerCase();
+            if (!byName.has(key)) byName.set(key, []);
+            byName.get(key).push(bean);
+        }
+        let changed = 0;
+        for (const { shotId, annotation } of shotRepo.getAllAnnotations()) {
+            if (!annotation || annotation.beanId != null) continue;
+            const key = String(annotation.coffee || '').toLowerCase();
+            if (!key) continue;
+            const matches = byName.get(key);
+            if (!matches || matches.length !== 1) continue;
+            annotation.beanId = matches[0].id;
+            shotRepo.saveAnnotation(shotId, annotation);
+            changed++;
+        }
+        if (changed) log(`Backfilled beanId on ${changed} annotation(s)`);
+        return changed;
+    }
+
     // Fire-and-forget after bean save: download the imported image once and
     // record its extension. Never blocks the response; a failed download
     // simply leaves the bean without an image.
@@ -277,26 +324,45 @@ class LibraryService {
     // device (same channel as the preheat notification). The notified flag
     // lives on the active bag, so a new bag re-arms automatically.
 
-    // Case-insensitive bean lookup by name — shared by checkLowStockNotify
-    // below and ShotService.computeScore() (#450, brewTempC/brewRatio-aware
-    // scoring), both resolving a shot's/annotation's free-text coffee name
-    // against the library.
-    findBeanByName(coffeeName) {
+    // Case-insensitive bean lookup by name — the fallback primitive used by
+    // resolveBeanForAnnotation() below for annotations without a resolvable
+    // beanId. `beans` is optional (defaults to a fresh getLibrary() read);
+    // pass it when the caller already has the array to avoid a redundant read.
+    findBeanByName(coffeeName, beans) {
         if (!coffeeName) return null;
         const name = String(coffeeName).toLowerCase();
-        return (this.getLibrary().beans || []).find(b => String(b.name || '').toLowerCase() === name) || null;
+        const list = beans || this.getLibrary().beans || [];
+        return list.find(b => String(b.name || '').toLowerCase() === name) || null;
     }
 
-    async checkLowStockNotify(coffeeName) {
-        if (!coffeeName) return;
+    // #456: resolves a shot/annotation to its library bean, preferring the
+    // stable beanId link over the free-text coffee name — beanId survives
+    // bean renames and delete+reimport, which name-matching never could on
+    // its own. Same underlying rule as computeBeanRemaining above: when
+    // beanId resolves to a bean, it's trusted exclusively; only when it's
+    // absent, or points at nothing currently in the library, does this fall
+    // back to a name match (recovering the old delete+reimport-under-the-
+    // same-name case, and covering annotations that predate beanId).
+    resolveBeanForAnnotation(annotation, beans) {
+        const list = beans || this.getLibrary().beans || [];
+        if (annotation?.beanId != null) {
+            const byId = list.find(b => b.id === annotation.beanId);
+            if (byId) return byId;
+        }
+        return this.findBeanByName(annotation?.coffee, list);
+    }
+
+    // annotation is the full {coffee, beanId, ...} payload, not just the name
+    // string, so low-stock lookups get the same beanId-first resolution as
+    // consumption math (#456).
+    async checkLowStockNotify(annotation) {
         const lib  = this.getLibrary();
-        const name = String(coffeeName).toLowerCase();
-        const bean = (lib.beans || []).find(b => String(b.name || '').toLowerCase() === name);
+        const bean = this.resolveBeanForAnnotation(annotation, lib.beans);
         if (!bean) return;
         const bags      = Array.isArray(bean.bags) ? bean.bags : [];
         const activeBag = bags.length ? bags[bags.length - 1] : null;
         if (!activeBag || activeBag.lowStockNotifiedAt) return;
-        const remaining = this.computeBeanRemaining(bean, shotRepo.getAnnotatedDoses());
+        const remaining = this.computeBeanRemaining(bean, shotRepo.getAnnotatedDoses(), lib.beans);
         if (remaining === null || remaining >= LOW_STOCK_THRESHOLD_G) return;
         const { loadOrdersSettings }           = require('../data');
         const { sendHaNotify, getHaLanguage }  = require('../ha');

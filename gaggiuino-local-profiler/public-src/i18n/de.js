@@ -14,6 +14,7 @@ export default {
     recipe_dose_yield:'Dosis → Yield', recipe_ratio:'Ratio', recipe_bean_grinder:'Bohne & Mühle', recipe_grinder_grind:(g,s)=>g?`${g} · Mahlgrad ${s}`:`Mahlgrad ${s}`,
     process_pressure:'Druck (Ø / Max)', process_flow:'Pumpenfluss (Ø)', process_temp:'Temperatur (Ø ±σ)',
     verdict_no_data:'Noch nicht genug Daten für ein Urteil.',
+    verdict_bean_target_hint:'Bewertet anhand des eigenen Brew-Ziels dieser Bohne',
     tab_time:`${CLOCK_ICON_SVG} Zeit`, tab_pq:'P·Q Kurve',
     btn_fullscreen_close:'✕ Schließen', btn_fullscreen_tooltip:'Vollbild',
     btn_compare_tooltip:'Als Vergleichs-Shot (B) wählen. Tipp: Klick auf den Namen wählt Shot A.', btn_delete_tooltip:'Shot löschen',

@@ -41,17 +41,21 @@ function _stopPoll() {
 
 // ── Open / close ────────────────────────────────────────────────────────
 
-// prefill: { beanName, grinderName, dose, startGrind, recipeId }
+// prefill: { beanName, beanId, grinderName, dose, startGrind, recipeId }
 export function openDialinWizard(prefill = {}) {
   if (!S.dialinSession || S.dialinSession.status !== 'active') {
-    const bean = prefill.beanName
-      ? S.coffeeLibrary?.beans?.find(b => b.name === prefill.beanName)
-      : null;
-    const startGrind = prefill.startGrind ?? _suggestStartGrind(prefill.beanName, prefill.grinderName);
+    const bean = prefill.beanId != null
+      ? S.coffeeLibrary?.beans?.find(b => b.id === prefill.beanId)
+      : (prefill.beanName ? S.coffeeLibrary?.beans?.find(b => b.name === prefill.beanName) : null);
+    // #456: beanId (#310's session field) carries the stable link forward to
+    // the final annotate payload in dialinConfirmShot below.
+    const beanId = prefill.beanId ?? bean?.id ?? null;
+    const startGrind = prefill.startGrind ?? _suggestStartGrind(prefill.beanName, prefill.grinderName, beanId);
     S.dialinSession = {
       id: Date.now(),
       startedAt: Date.now(),
       bean: prefill.beanName || '',
+      beanId,
       grinder: prefill.grinderName || bean?.knownGrindSettings?.[0]?.grinder || '',
       dose: prefill.dose ?? '',
       targetRatio: bean?.brewRatio ? _parseRatio(bean.brewRatio) : 2,
@@ -73,12 +77,14 @@ export function openDialinWizard(prefill = {}) {
 }
 
 // Bean-card entry point (library.js's start-dialin-from-bean button) —
-// prefills the bean and, if known, the grinder from bean.knownGrindSettings.
+// prefills the bean (and its id, #456) and, if known, the grinder from
+// bean.knownGrindSettings.
 export function startDialinFromBean(beanId) {
   const bean = S.coffeeLibrary?.beans?.find(b => b.id === beanId);
   if (!bean) return;
   openDialinWizard({
     beanName: bean.name,
+    beanId: bean.id,
     grinderName: bean.knownGrindSettings?.[0]?.grinder || '',
   });
 }
@@ -98,16 +104,18 @@ function _parseRatio(brewRatio) {
 // Starting-grind heuristic (plan §1): best historical (grinder, grind)
 // combo for the bean, else the bean's known-good grind for this grinder,
 // else the most recent shot on this grinder, else empty.
-function _suggestStartGrind(beanName, grinderName) {
+function _suggestStartGrind(beanName, grinderName, beanId) {
   if (beanName) {
-    const combos = calcBestGrindCombosForBean(beanName, S.shots);
+    const combos = calcBestGrindCombosForBean(beanName, S.shots, beanId);
     if (combos?.length) {
       const combo = grinderName
         ? combos.find(c => c.grinder.toLowerCase() === grinderName.toLowerCase()) || combos[0]
         : combos[0];
       if (combo) return combo.grindSetting;
     }
-    const bean = S.coffeeLibrary?.beans?.find(b => b.name === beanName);
+    const bean = beanId != null
+      ? S.coffeeLibrary?.beans?.find(b => b.id === beanId)
+      : S.coffeeLibrary?.beans?.find(b => b.name === beanName);
     const known = bean?.knownGrindSettings?.find(k =>
       !grinderName || k.grinder.toLowerCase() === grinderName.toLowerCase());
     if (known) return _parseGrindNum(known.grindSetting);
@@ -146,6 +154,12 @@ export function dialinAcceptNext() {
 
   if (s.status === 'setup') {
     s.bean        = document.getElementById('dwBean')?.value.trim() || '';
+    // #456: #dwBean is a free-text input with a datalist (not a native
+    // select), so there's no data-bean-id to read off — re-derive by exact
+    // name match against the current library, same as the annotation
+    // panel's select does at selection time. A freehand-typed name that
+    // doesn't match any bean correctly gets no id.
+    s.beanId = S.coffeeLibrary?.beans?.find(b => b.name === s.bean)?.id ?? null;
     // #322: grinder is a <select> when the library has grinders (with an
     // "other…" option falling back to the free-text #dwGrinderOther input),
     // otherwise a plain text #dwGrinder input — same fallback as before.
@@ -233,7 +247,7 @@ export async function dialinConfirmShot(shotId, isMatch) {
   if (!shot) return;
 
   const payload = {
-    coffee: s.bean, grinder: s.grinder, grindSetting: String(s.pendingGrind),
+    coffee: s.bean, beanId: s.beanId ?? null, grinder: s.grinder, grindSetting: String(s.pendingGrind),
     dose: s.dose || null, recipeId: s.recipeId || null,
   };
   try {
@@ -262,7 +276,9 @@ export async function dialinConfirmShot(shotId, isMatch) {
 export async function dialinSaveKnownGrind() {
   const s = S.dialinSession;
   if (!s) return;
-  const bean = S.coffeeLibrary?.beans?.find(b => b.name === s.bean);
+  const bean = s.beanId != null
+    ? S.coffeeLibrary?.beans?.find(b => b.id === s.beanId)
+    : S.coffeeLibrary?.beans?.find(b => b.name === s.bean);
   const best = _bestRound(s.rounds);
   if (!bean || !best) return;
   const r = await apiFetch(`api/library/bean/${bean.id}/known-grind`, {

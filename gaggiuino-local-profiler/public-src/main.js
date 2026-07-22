@@ -431,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Prefill grinder/grind setting/dose from this bean's own history
       // (best scored combo, then known-good grind, then its last shot) —
       // never the literal previous shot, which may have used a different bean.
-      const suggested = suggestGrindDoseForBean(name, S.coffeeLibrary, S.shots);
+      const suggested = suggestGrindDoseForBean(name, S.coffeeLibrary, S.shots, { beanId: bean.id });
       const grinderEl = document.getElementById('annGrinder');
       const grindEl   = document.getElementById('annGrindSetting');
       const doseEl    = document.getElementById('annDose');
@@ -455,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateDegassing(roastDate || '');
 
       // Show bean age hint
-      const ageDays = calcBeanAgeAtShot(name, shot?.timestamp);
+      const ageDays = calcBeanAgeAtShot(name, shot?.timestamp, bean.id);
       if (hintEl && ageDays != null) {
         hintEl.innerHTML = `${BEAN_ICON_SVG} ${t('bean_age_at_shot', ageDays)}`;
         hintEl.style.display = '';
@@ -519,7 +519,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // toggling and status.js's live/orders visibility gating both keep
   // working unchanged.
   document.getElementById('btnLive').addEventListener('click', () => switchMode('live'));
-  document.getElementById('btnShots').addEventListener('click', () => switchMode('shots'));
+  // #454: Shots tab always lands on the shot detail (per #431's intent),
+  // not wherever mobileShotSubview happened to be left — mirrors goToShot().
+  document.getElementById('btnShots').addEventListener('click', () => {
+    switchMode('shots');
+    if (window.innerWidth <= 768) setMobileShotSubview('detail');
+  });
   document.getElementById('btnAnalytics').addEventListener('click', () => switchMode('analytics'));
   document.getElementById('btnDialin').addEventListener('click', () => switchMode('dialin'));
   document.getElementById('btnLibrary').addEventListener('click', () => switchMode('library'));

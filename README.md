@@ -83,7 +83,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-
 | 🔄 | **Auto-Sync** | New shots load automatically when `gaggiuino_latest_shot_id` rises |
 | ⇄ | **Compare Mode** | Overlay two shots side by side |
 | 👻 | **Ghost Curve & Delta Chips** | When an earlier shot exists with the same profile on the same machine, the shot detail auto-compares: a score delta chip on the verdict header, signed delta chips on pressure/flow/temp, and the previous shot's curves overlaid on the chart as a dashed ghost — independent of the explicit Compare Mode above |
-| 🏆 | **Shot Score** | Automatic 0–100 score (pressure, stability, duration, ratio, channeling), shown as a verdict-header score ring with a plain-language dial-in headline atop the shot detail |
+| 🏆 | **Shot Score** | Automatic 0–100 score (pressure, stability, duration, ratio, channeling), shown as a verdict-header score ring with a plain-language dial-in headline atop the shot detail; temperature/ratio target the bean's own brew recommendation from the Library when set, flagged with a target-icon badge on the header when it applies |
 | 📊 | **Analytics** | Score trend, shot calendar heatmap, bean stats, profile performance, interactive coffee world map (zoom/pan, per-bean origin points), a weekday × hour heatmap, a sortable bean ranking table (shots/score/last grind/trend), a machine comparison table (score/duration/temperature stability, once ≥2 machines are registered) and a per-bean dial-in progression chart |
 | 📊 | **P·Q Diagram** | Pressure vs. flow chart — reveals extraction signature |
 | ⚗️ | **EY Calculation** | Extraction Yield % when TDS and dose are entered |

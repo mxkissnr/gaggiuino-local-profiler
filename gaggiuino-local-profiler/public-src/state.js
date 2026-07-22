@@ -18,6 +18,10 @@ export const S = {
   compareShotId: null,
   currentRating: 0,
   currentMode: 'shots',
+  // #454: 'detail' by default so a fresh page load lands on the last shot's
+  // detail view (per #431's intent), not the shot list — see
+  // updateMobileShotSidebarVisibility() in components/sidebar.js.
+  mobileShotSubview: 'detail',
   trashOpen: false,
   livePollInterval: null,
   preheatPollInterval: null,

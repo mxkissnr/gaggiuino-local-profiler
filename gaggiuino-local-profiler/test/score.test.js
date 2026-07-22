@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 // score.js uses module.exports — import via createRequire
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { calcShotScore } = require('../lib/score');
+const { calcShotScore, calcShotScoreDetail } = require('../lib/score');
 
 describe('calcShotScore', () => {
     it('returns null for a shot with no datapoints', () => {
@@ -80,5 +80,57 @@ describe('calcShotScore — bean-aware target (#450)', () => {
     it('ignores an unparsable brewRatio string rather than throwing', () => {
         expect(() => calcShotScore(shot, { brewRatio: 'whatever the roaster wrote' })).not.toThrow();
         expect(calcShotScore(shot, { brewRatio: 'whatever the roaster wrote' })).toBe(calcShotScore(shot));
+    });
+});
+
+// #457: calcShotScoreDetail surfaces whether the bean's own target was
+// actually used, for the verdict header's "scored against this bean's
+// target" hint. calcShotScore stays the thin score-only wrapper.
+describe('calcShotScoreDetail — usedBeanTarget flag (#457)', () => {
+    const N = 30;
+    const baseShot = {
+        datapoints: {
+            pressure:          new Array(N).fill(85),
+            temperature:       new Array(N).fill(905),
+            targetTemperature: new Array(N).fill(0), // none recorded
+            timeInShot:        Array.from({ length: N }, (_, i) => i * 10),
+            shotWeight:        Array.from({ length: N }, (_, i) => Math.round((i / (N - 1)) * 396)),
+        },
+        duration: 300,
+        annotation: { coffee: 'Test Bean', dose: 18 },
+    };
+    // Same shot, but WITH its own recorded target-temperature curve — this
+    // must stay the highest-priority temperature source, unaffected by a
+    // bean recommendation being present too.
+    const shotWithOwnCurve = {
+        ...baseShot,
+        datapoints: { ...baseShot.datapoints, targetTemperature: new Array(N).fill(905) },
+    };
+
+    it('is false when neither the shot nor the bean has a target (generic band used)', () => {
+        expect(calcShotScoreDetail(baseShot, null).usedBeanTarget).toBe(false);
+        expect(calcShotScoreDetail(baseShot, {}).usedBeanTarget).toBe(false);
+    });
+
+    it('is true when the bean\'s brewTempC was actually used for the temperature factor', () => {
+        expect(calcShotScoreDetail(baseShot, { brewTempC: 93 }).usedBeanTarget).toBe(true);
+    });
+
+    it('is true when the bean\'s brewRatio was actually used for the ratio factor', () => {
+        expect(calcShotScoreDetail(baseShot, { brewRatio: '1:1.8' }).usedBeanTarget).toBe(true);
+    });
+
+    it('is false when the shot has its own target-temperature curve, even if the bean has brewTempC (shot curve wins)', () => {
+        expect(calcShotScoreDetail(shotWithOwnCurve, { brewTempC: 93 }).usedBeanTarget).toBe(false);
+    });
+
+    it('is false for a shot that scores null', () => {
+        expect(calcShotScoreDetail({ datapoints: [] }, { brewTempC: 93 })).toEqual({ score: null, usedBeanTarget: false });
+        expect(calcShotScoreDetail(null, { brewTempC: 93 })).toEqual({ score: null, usedBeanTarget: false });
+    });
+
+    it('calcShotScore stays a thin wrapper returning exactly calcShotScoreDetail(...).score', () => {
+        expect(calcShotScore(baseShot, { brewTempC: 93 })).toBe(calcShotScoreDetail(baseShot, { brewTempC: 93 }).score);
+        expect(calcShotScore(baseShot, null)).toBe(calcShotScoreDetail(baseShot, null).score);
     });
 });
