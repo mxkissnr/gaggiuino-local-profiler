@@ -245,6 +245,36 @@ class LibraryService {
         return changed;
     }
 
+    // #456: one-time idempotent backfill — annotations saved before beanId
+    // existed only carry the free-text bean name. Sets beanId when (and only
+    // when) that name currently matches exactly one bean, case-insensitive;
+    // ambiguous (0 or >1 matches) rows are left alone and keep working via
+    // the name-matching fallback everywhere above — same "don't guess"
+    // idiom as migrateImportedNotes/migrateNotesToFlavors/etc. above,
+    // adapted to the annotations table instead of the library blob.
+    migrateAnnotationBeanIds() {
+        const beans  = this.getLibrary().beans || [];
+        const byName = new Map(); // lowercased name -> matching bean(s)
+        for (const bean of beans) {
+            const key = String(bean.name || '').toLowerCase();
+            if (!byName.has(key)) byName.set(key, []);
+            byName.get(key).push(bean);
+        }
+        let changed = 0;
+        for (const { shotId, annotation } of shotRepo.getAllAnnotations()) {
+            if (!annotation || annotation.beanId != null) continue;
+            const key = String(annotation.coffee || '').toLowerCase();
+            if (!key) continue;
+            const matches = byName.get(key);
+            if (!matches || matches.length !== 1) continue;
+            annotation.beanId = matches[0].id;
+            shotRepo.saveAnnotation(shotId, annotation);
+            changed++;
+        }
+        if (changed) log(`Backfilled beanId on ${changed} annotation(s)`);
+        return changed;
+    }
+
     // Fire-and-forget after bean save: download the imported image once and
     // record its extension. Never blocks the response; a failed download
     // simply leaves the bean without an image.
@@ -300,12 +330,14 @@ class LibraryService {
     }
 
     // #456: resolves a shot/annotation to its library bean, preferring the
-    // stable beanId link over the free-text coffee name. beanId survives
-    // bean renames (name-matching never could) and, deliberately, does NOT
-    // fall back to a name match when it points at a bean that's gone —
-    // see computeBeanRemaining's comment for why that's the correct behavior.
-    // Only annotations that predate beanId (or a beanId we couldn't resolve
-    // for some other reason) fall back to name matching.
+    // stable beanId link over the free-text coffee name — beanId survives
+    // bean renames, which name-matching never could. Unlike
+    // computeBeanRemaining's stricter "no rescue" stock-accounting match
+    // (a deleted+reimported bean must NOT inherit the old bean's shots),
+    // this general-purpose resolver DOES fall back to a name match when
+    // beanId is absent or unresolved — it backs advisory features (scoring,
+    // grind advice, roast date) where "best guess via name" beats "nothing",
+    // not money/stock integrity.
     resolveBeanForAnnotation(annotation, beans) {
         const list = beans || this.getLibrary().beans || [];
         if (annotation?.beanId != null) {
