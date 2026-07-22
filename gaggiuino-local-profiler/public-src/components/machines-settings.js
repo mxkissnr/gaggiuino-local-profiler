@@ -10,6 +10,7 @@ import { apiFetch } from '../api.js';
 import { t } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
 import { WARNING_ICON_SVG } from '../icons.js';
+import { updateStatus } from './status.js';
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -107,6 +108,10 @@ export function applyActiveMachineChange() {
   // profile list — refetch on switch so it doesn't keep showing whichever
   // machine was active when the tab was first opened.
   loadMachineProfileList();
+  // #464: the topbar status dot/hostname (#railStatusDot/#railMachineName)
+  // used to keep showing the default machine's state until the next 30s
+  // poll — refresh immediately, scoped to the newly active machine.
+  updateStatus(S.activeMachineId);
 }
 
 export function renderMachinesList() {

@@ -1615,17 +1615,6 @@
             #main              { position: fixed; inset: 0; z-index: 40; height: 100vh; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-bottom: 60px; }
             #chart-area, #live-view { padding: 16px; }
             #expandSidebarBtn  { display: none !important; }
-            /* display itself is owned by inline style, set in
-               updateMobileShotSidebarVisibility() (sidebar.js) — mirrors
-               #sidebar's own show/hide, not a CSS media rule, so the two
-               stay in lockstep with the same piece of state. */
-            .mobile-back-btn {
-                align-items: center; justify-content: center;
-                background: transparent; border: none; color: var(--gray-400);
-                width: 32px; height: 32px; flex-shrink: 0; padding: 0; cursor: pointer;
-            }
-            .mobile-back-btn .rail-icon { width: 22px; height: 22px; }
-            .mobile-back-btn:hover { color: var(--gray-200); }
 
             #bottom-nav {
                 display: flex;

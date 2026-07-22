@@ -10,7 +10,6 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { switchMode } from './mode.js';
-import { setMobileShotSubview } from './sidebar.js';
 
 export const STORAGE_KEY = 'glp_bottom_nav_config';
 export const MAX_MAIN_BAR = 4;
@@ -132,7 +131,6 @@ export function closeMoreSheet() {
 }
 
 function onNavClick(id) {
-  if (id === 'shots') { switchMode('shots'); setMobileShotSubview('detail'); return; }
   switchMode(id);
 }
 

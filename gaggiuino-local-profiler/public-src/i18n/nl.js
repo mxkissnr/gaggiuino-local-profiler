@@ -251,7 +251,7 @@ export default {
     export_shot_title:'Huidige shot exporteren als .shot (Decent Espresso-formaat)',
     profile_export_no_data:'Geen profieldata beschikbaar in dit shot.',
     sidebar_collapse:'Zijbalk inklappen', sidebar_expand:'Zijbalk uitklappen',
-    sidebar_drawer_open:'Shotlijst openen', back_to_list:'Terug naar lijst',
+    sidebar_drawer_open:'Shotlijst openen',
     day_today:'Vandaag', day_yesterday:'Gisteren',
     error_delete:(msg)=>`Verwijderfout: ${msg}`,
     error_generic:(msg)=>`Fout: ${msg}`,

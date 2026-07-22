@@ -142,11 +142,11 @@ function _buildShotWrapper(shot) {
         localStorage.removeItem('glp_compareShotId');
         updateSidebarHighlighting();
         if (S.currentMode !== 'shots' && window.switchMode) window.switchMode('shots');
-        // #410: mobile no longer shows the shot list as a drawer over the
-        // detail view — tapping a shot navigates from the primary list
-        // screen to the detail screen (back chevron returns to the list).
+        // #410/#461: on mobile the shot list is only ever reached via the
+        // burger drawer overlay — tapping a shot here just makes sure the
+        // full-screen detail view (#shots-view) is showing underneath.
         if (window.innerWidth <= 768) {
-          setMobileShotSubview('detail');
+          updateMobileShotSidebarVisibility();
           setTimeout(() => { if (window.updateView) window.updateView(); }, 50);
         } else {
           if (window.updateView) window.updateView();
@@ -365,27 +365,20 @@ export function toggleDesktopSidebar() {
   if (!collapsed) setTimeout(() => { if (window.updateView) window.updateView(); }, 320);
 }
 
-// ── Mobile shot list / detail sub-view (#410) ─────────────────────────────
-// On mobile, the shot list (#sidebar) and the shot detail (#shots-view's
-// chart-area) are two full-screen alternates of the Shots tab, not a
-// permanently-docked column plus a drawer overlay — the list is the primary
-// screen, tapping a shot pushes to the detail screen, and the back chevron
-// (wired in main.js) returns to the list. Desktop is unaffected: it always
-// shows both side by side regardless of S.mobileShotSubview.
-export function setMobileShotSubview(view) {
-  S.mobileShotSubview = view;
-  updateMobileShotSidebarVisibility();
-}
-
+// ── Mobile shot list / detail (#410, #461) ────────────────────────────────
+// On mobile, the Shots tab always shows the shot detail (#shots-view) full
+// screen — the shot list (#sidebar) is reachable only via the burger drawer
+// overlay (#425, openShotDrawer()/closeShotDrawer() below), not as a second
+// full-screen alternate. Desktop is unaffected: it always shows both side
+// by side.
 export function updateMobileShotSidebarVisibility() {
   const sidebar = document.getElementById('sidebar');
-  const backBtn = document.getElementById('mobileBackBtn');
   const shotsView = document.getElementById('shots-view');
   if (!sidebar) return;
   // This function is the single authority for what mobile should show for
-  // the current mode/subview — any leftover burger-drawer overlay state
-  // (#425) is stale the moment mode/subview changes, so drop it instantly
-  // rather than waiting for its own close animation.
+  // the current mode — any leftover burger-drawer overlay state (#425) is
+  // stale the moment mode changes, so drop it instantly rather than
+  // waiting for its own close animation.
   if (sidebar.classList.contains('sidebar-drawer-mode')) {
     sidebar.classList.remove('sidebar-drawer-mode', 'sidebar-drawer-open');
     document.getElementById('sidebar-drawer-backdrop')?.classList.remove('visible');
@@ -397,18 +390,14 @@ export function updateMobileShotSidebarVisibility() {
     // window resize back up past the breakpoint. #shots-view's own display
     // is switchMode()'s responsibility on desktop (mode === 'shots' or not).
     sidebar.style.display = '';
-    if (backBtn) backBtn.style.display = 'none';
     return;
   }
   const inShotsMode = S.currentMode === 'shots';
-  const showList = inShotsMode && S.mobileShotSubview !== 'detail';
-  sidebar.style.display = showList ? 'flex' : 'none';
-  if (backBtn) backBtn.style.display = (inShotsMode && !showList) ? 'flex' : 'none';
+  sidebar.style.display = 'none';
   // #410: mode.js already set #shots-view to display:flex for mode==='shots'
-  // (side-by-side with the sidebar on desktop) — on mobile the list and the
-  // detail are two full-screen alternates instead, so override it back to
-  // 'none' while the list is the one showing.
-  if (shotsView && inShotsMode) shotsView.style.display = showList ? 'none' : 'flex';
+  // (side-by-side with the sidebar on desktop) — on mobile it's the only
+  // full-screen view for the Shots tab, so make sure it's shown.
+  if (shotsView && inShotsMode) shotsView.style.display = 'flex';
 }
 
 // ── Mobile burger drawer (#425) ───────────────────────────────────────────

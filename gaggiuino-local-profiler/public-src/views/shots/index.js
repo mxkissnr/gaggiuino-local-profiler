@@ -731,7 +731,13 @@ export async function shareCard(format = 'square') {
   const shotId = S.primaryShotId;
   if (!shotId) return;
   try {
-    const r = await apiFetch(`api/shots/${shotId}/card?format=${encodeURIComponent(format)}`);
+    // #462: the card should visually match whatever accent/theme the user
+    // is actually looking at, not a hardcoded snapshot — same attributes
+    // main.js applies to <html> (dataset.accent/dataset.theme), same
+    // defaults ('amber'/'dark', see _applyTheme()/_savedAccent in main.js).
+    const accent = document.documentElement.dataset.accent || 'amber';
+    const theme  = document.documentElement.dataset.theme  || 'dark';
+    const r = await apiFetch(`api/shots/${shotId}/card?format=${encodeURIComponent(format)}&accent=${encodeURIComponent(accent)}&theme=${encodeURIComponent(theme)}`);
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       throw new Error(err.error || r.statusText);

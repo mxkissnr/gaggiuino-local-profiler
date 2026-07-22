@@ -139,23 +139,65 @@ router.get('/api/token', async (req, res) => {
 
 // ── Status ────────────────────────────────────────────────────────────────
 
-router.get('/api/status', (req, res) => {
+// Resolves a machineHostname the same way the default-machine path below
+// always has (strip protocol, keep hostname only) — used for the scoped
+// branch too so both paths report hostname in the same shape.
+function hostnameOf(rawHost) {
+    try {
+        return new URL(/^https?:\/\//i.test(rawHost) ? rawHost : `http://${rawHost}`).hostname;
+    } catch (_) {
+        return rawHost;
+    }
+}
+
+router.get('/api/status', async (req, res) => {
     const opts          = loadOptions();
     const machineUrl    = getMachineUrl(opts);
     let shotCount = 0, machineHostname = '';
     try { shotCount = shotRepo.count(); } catch (e) {}
     try { machineHostname = new URL(machineUrl).hostname; } catch (e) {}
+
+    let lastSync          = state.lastSyncTime;
+    let lastSyncError     = state.lastSyncError;
+    let machineReachable  = state.machineReachable;
+
+    // #464: an explicit ?machineId for a non-default machine scopes
+    // machineHostname/lastSync/lastSyncError/machineReachable to THAT
+    // machine via a live reachability probe (same adapter.getStatus() call
+    // /api/machines/:id/test uses), instead of always describing the
+    // default machine. No machineId (or one that resolves back to the
+    // default machine) keeps the exact behavior above, byte-for-byte —
+    // this endpoint is polled unparameterized by other callers.
+    const rawMachineId = req.query.machineId;
+    if (rawMachineId != null && rawMachineId !== '') {
+        const requested = resolveMachine(rawMachineId);
+        if (!requested.isDefault) {
+            machineHostname = hostnameOf(requested.host);
+            try {
+                const adapter = getAdapter(requested);
+                await adapter.getStatus(requested);
+                machineReachable = true;
+                lastSync = new Date().toISOString();
+                lastSyncError = null;
+            } catch (e) {
+                machineReachable = false;
+                lastSyncError = e.message;
+            }
+        }
+    }
+
     // Sensitive fields only exposed to authenticated callers (H1)
     const sensitive = req.glpAuthenticated ? {
         machineUrl, machineHostname,
-        lastSyncError:    state.lastSyncError,
+        lastSyncError,
         lastMachineError: state.lastMachineError,
         switchEntity:     opts.switch_entity || null,
         isDemo:           demoService.isDemoActive(),
     } : {};
     // Multi-machine (#317): flat legacy fields above always describe the
-    // default machine, unchanged, for backward compatibility. `machines`
-    // is additive — old clients that don't read it are unaffected.
+    // default machine unless scoped by ?machineId above, for backward
+    // compatibility. `machines` is additive — old clients that don't read
+    // it are unaffected.
     let machines = [];
     try {
         registry.ensureDefaultMachine();
@@ -167,14 +209,14 @@ router.get('/api/status', (req, res) => {
     } catch (e) {}
     res.json({
         shotCount,
-        lastSync:           state.lastSyncTime,
+        lastSync,
         syncRetryCount:     state.syncRetryCount,
         machineVersion:     state.cachedMachineVersion,
         syncInterval:       opts.sync_interval || 5,
         haConnected:        !!HA_TOKEN,
         glpVersion:         GLP_VERSION,
         ordersFeature:      isOrdersEnabled(),
-        machineReachable:   state.machineReachable,
+        machineReachable,
         lastMachineSuccess: state.lastMachineSuccess,
         machines,
         ...sensitive,

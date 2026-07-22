@@ -68,16 +68,22 @@ try {
     createCanvas = null;
 }
 
-// Card color palette — matches the app's own CSS tokens (public-src/style.css
-// :root, default amber theme) so the shared card looks like part of the app
-// rather than an invented separate brand.
-const GLP = {
+// Card color palette — mirrors the app's own CSS tokens (public-src/style.css
+// :root, [data-accent=...], [data-theme="light"]) so the shared card looks
+// like the theme the user was actually looking at, not an invented separate
+// brand. #462.
+//
+// Legacy default snapshot — kept byte-for-byte as it always was (including
+// the pre-#397 --gray-500 value, since raised to #9a9aa3 in the live CSS) so
+// old cached/bookmarked card links (generated before the frontend started
+// passing accent/theme) keep looking exactly the way they always did.
+const LEGACY_GLP = {
     bg:        '#09090b',   // --gray-950
     bgCard:    '#18181b',   // --gray-900
     bgChart:   '#27272a',   // --gray-800
     text:      '#e4e4e7',   // --gray-200
     textDim:   '#a1a1aa',   // --gray-400
-    textMute:  '#71717a',   // --gray-500
+    textMute:  '#71717a',   // --gray-500 (pre-#397)
     border:    '#3f3f46',   // --gray-700
     borderDim: '#27272a',   // --gray-800
     cPressure: '#3498db', cFlow: '#f39c12', cWeightFlow: '#9b59b6', cWeight: '#2ecc71', cTemp: '#e74c3c',
@@ -85,6 +91,59 @@ const GLP = {
     accentTint: 'rgba(245,158,11,',  // e.g. GLP.accentTint + '0.12)' for chip backgrounds
     star: '#f59e0b', starDim: '#3f3f46',
 };
+
+// Gray scales, keyed by theme (and by accent for crema, the only theme that
+// also warms the neutral scale — public-src/style.css [data-accent="crema"]
+// / [data-theme="light"][data-accent="crema"]).
+const GRAY_SCALES = {
+    dark:        { 200: '#e4e4e7', 400: '#a1a1aa', 500: '#9a9aa3', 700: '#3f3f46', 800: '#27272a', 900: '#18181b', 950: '#09090b' },
+    'dark-crema':  { 200: '#f2e6d8', 400: '#c9b8a4', 500: '#b0a08d', 700: '#4e3a2b', 800: '#2e2118', 900: '#1e1611', 950: '#14100c' },
+    light:       { 200: '#18181b', 400: '#3f3f46', 500: '#52525b', 700: '#d4d4d8', 800: '#f4f4f5', 900: '#fafafa', 950: '#ffffff' },
+    'light-crema': { 200: '#2a1b0f', 400: '#55442f', 500: '#5f4c38', 700: '#d4b48c', 800: '#ead5b5', 900: '#f3e4ce', 950: '#fbf3e7' },
+};
+
+// accent-from/accent-to per accent + theme (public-src/style.css
+// [data-accent=...] and [data-theme="light"][data-accent=...] blocks) — only
+// amber and crema define a light-specific override, the other four accents
+// keep the same gradient in both themes.
+const ACCENTS = {
+    amber:  { dark: ['#f59e0b', '#f97316'], light: ['#d97706', '#ea580c'] },
+    ocean:  { dark: ['#3b82f6', '#06b6d4'], light: ['#3b82f6', '#06b6d4'] },
+    aurora: { dark: ['#6366f1', '#a855f7'], light: ['#6366f1', '#a855f7'] },
+    ember:  { dark: ['#ef4444', '#f97316'], light: ['#ef4444', '#f97316'] },
+    forest: { dark: ['#22c55e', '#10b981'], light: ['#22c55e', '#10b981'] },
+    crema:  { dark: ['#d4a24c', '#b8823a'], light: ['#8b5e34', '#6b3f1d'] },
+};
+
+function hexToRgb(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+}
+
+// Builds the card's color palette for a given accent/theme pair. No
+// arguments at all reproduces the historic hardcoded snapshot exactly (see
+// LEGACY_GLP above); any explicit accent/theme (including 'amber'/'dark',
+// what the frontend now always sends) computes fresh from the current CSS
+// tokens instead.
+function buildPalette(accent, theme) {
+    if (!accent && !theme) return { ...LEGACY_GLP };
+    const a  = ACCENTS[accent] ? accent : 'amber';
+    const th = theme === 'light' ? 'light' : 'dark';
+    const gray = GRAY_SCALES[a === 'crema' ? `${th}-crema` : th];
+    const [accentFrom, accentTo] = ACCENTS[a][th];
+    return {
+        bg: gray[950], bgCard: gray[900], bgChart: gray[800],
+        text: gray[200], textDim: gray[400], textMute: gray[500],
+        border: gray[700], borderDim: gray[800],
+        // Chart series colors are fixed across all themes/accents in the
+        // live app too (public-src/views/shots/index.js dataset borderColor
+        // values) — not derived from the accent.
+        cPressure: '#3498db', cFlow: '#f39c12', cWeightFlow: '#9b59b6', cWeight: '#2ecc71', cTemp: '#e74c3c',
+        accentFrom, accentTo,
+        accentTint: `rgba(${hexToRgb(accentFrom)},`,
+        star: accentFrom, starDim: gray[700],
+    };
+}
 
 const W = 1080, H = 1080, PX = 52;
 
@@ -102,7 +161,7 @@ function Fs(size, bold = false) {
     return fam ? `${bold ? 'bold ' : ''}${size}px ${fam}` : F(size, bold);
 }
 
-function scoreColor(s) {
+function scoreColor(s, GLP) {
     if (s == null) return GLP.textMute;
     if (s >= 80)   return GLP.accentFrom;
     if (s >= 60)   return GLP.textDim;
@@ -117,19 +176,6 @@ function scoreTierPhrase(score) {
     if (score >= 80) return 'Richtig gut getroffen';
     if (score >= 60) return 'Solider Shot';
     return 'Dial-in lohnt sich noch';
-}
-
-// Weight gets its own chart scale instead of sharing 0-100 with temperature —
-// a 20g floor keeps tiny/empty shots from zooming the axis absurdly.
-function computeWeightMax(weight) {
-    const scaled = (weight || []).filter(Boolean).map(v => v * 1.15);
-    return Math.max(20, ...scaled) || 20;
-}
-
-// Average of the extraction-phase temperature readings (values <= 50 are
-// startup/idle noise, not the actual shot temperature).
-function computeTempMid(temp) {
-    return avg((temp || []).filter(v => v > 50));
 }
 
 function clamp(v, lo, hi) {
@@ -213,6 +259,35 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
+// Shared radius for every chip/pill/tile shape on the card — the canvas
+// equivalent of the live app's 8px --radius token (public-src/style.css),
+// scaled up for this 1080px-wide canvas. Used both by drawChip() below and
+// by the stats-grid tiles, so nothing on the card invents its own radius
+// anymore (previously: full-pill chipH/2 on the origin/legend chips and the
+// footer pill, a hardcoded 3px on the phase-duration chips). #463.
+const CHIP_R = 14;
+
+// Fills (and optionally strokes) a rounded-rect chip/pill/tile in one call —
+// consolidates four near-identical roundRect+fill+stroke sites (origin chip,
+// phase-duration chips, legend chips, footer "Made with GLP" pill). Radius is
+// clamped to the shape's own half-height/half-width so short chips (e.g. the
+// 18px-tall phase chips) never self-intersect. #463.
+function drawChip(ctx, x, y, w, h, { fill, stroke, radius = CHIP_R } = {}) {
+    const r = Math.min(radius, h / 2, w / 2);
+    roundRect(ctx, x, y, w, h, r);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+}
+
+// Shrinks `text` 4 characters at a time (plus an ellipsis) until it fits
+// maxWidth — dedup of a loop previously copy-pasted at the bean headline and
+// the profile/machine subline. Uses ctx's currently-set font. #463.
+function truncateText(ctx, text, maxWidth) {
+    let t = text;
+    while (ctx.measureText(t).width > maxWidth && t.length > 4) t = t.slice(0, -4) + '…';
+    return t;
+}
+
 // Draw a polyline from a value array onto the chart canvas coordinate system
 // yScale: function(val) → canvas Y
 // xScale: function(index) → canvas X
@@ -239,8 +314,9 @@ function detectPreinfusionEnd(pressure) {
     return null;
 }
 
-async function generateShareCard(shot, score, format = 'square') {
+async function generateShareCard(shot, score, format = 'square', accent, theme) {
     if (!createCanvas) throw new Error('canvas module not available');
+    const GLP        = buildPalette(accent, theme);
     const glpIcon    = await getGlpIcon();
     const shotPhoto  = await getShotPhoto(shot);
     // Lazily required: LibraryService touches the DB at require-time in some
@@ -315,7 +391,7 @@ async function generateShareCard(shot, score, format = 'square') {
         ? new Date(shot.timestamp * 1000).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' })
         : '';
     const shotId  = shot.id ? `Shot #${shot.id}` : '';
-    const sColor       = scoreColor(score);
+    const sColor       = scoreColor(score, GLP);
     const preEnd       = detectPreinfusionEnd(pressure);
     const preinfEndSec = preEnd !== null && times.length > preEnd ? times[preEnd] : (preEnd !== null ? preEnd / Math.max(nPts - 1, 1) * totalSec : null);
     const extDurSec    = preinfEndSec !== null ? Math.max(0, totalSec - preinfEndSec) : null;
@@ -336,9 +412,6 @@ async function generateShareCard(shot, score, format = 'square') {
     const headerY  = BAR_H;
     ctx.fillStyle = GLP.bgCard;
     ctx.fillRect(0, headerY, W, HH);
-    ctx.strokeStyle = GLP.border;
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, headerY + HH); ctx.lineTo(W, headerY + HH); ctx.stroke();
     const headerBottom = headerY + HH;
 
     // GLP logo (icon.png) — or fallback to bold text
@@ -377,6 +450,10 @@ async function generateShareCard(shot, score, format = 'square') {
         // dim track for the remainder. No shadow/glow — the app never uses that.
         // (createConicGradient rendered near-invisible on @napi-rs/canvas —
         // stick to the linear-gradient technique proven in the approved mockup.)
+        // Ring width ≈10% of the ring's own diameter and a butt (non-rounded)
+        // cap — matches the live app's .verdict-ring donut (public-src/style.css:
+        // 58px disc, 46px inner cutout → 6px ring, ~10% of diameter). #463.
+        const ringLW = scoreR * 0.2;
         const frac = Math.max(0, Math.min(1, score / 100));
         ctx.beginPath();
         ctx.arc(scx, scy, scoreR, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
@@ -388,14 +465,14 @@ async function generateShareCard(shot, score, format = 'square') {
         } else {
             ctx.strokeStyle = sColor;
         }
-        ctx.lineWidth = 5;
-        ctx.lineCap = 'round';
+        ctx.lineWidth = ringLW;
+        ctx.lineCap = 'butt';
         ctx.stroke();
         // Dim track for the remainder of the ring
         ctx.beginPath();
         ctx.arc(scx, scy, scoreR, -Math.PI / 2 + frac * Math.PI * 2, 1.5 * Math.PI);
         ctx.strokeStyle = GLP.border;
-        ctx.lineWidth = 5;
+        ctx.lineWidth = ringLW;
         ctx.stroke();
         // Number
         ctx.fillStyle = GLP.text;
@@ -449,18 +526,15 @@ async function generateShareCard(shot, score, format = 'square') {
 
     let headline = bean || profileName;
     ctx.font = Fs(52, true);
-    while (ctx.measureText(headline).width > headlineMaxW && headline.length > 4)
-        headline = headline.slice(0, -4) + '…';
+    headline = truncateText(ctx, headline, headlineMaxW);
 
     if (originCode) {
         const chipH = 34;
         const chipX = PX + photoLead;
-        roundRect(ctx, chipX, chipCY - chipH / 2, chipW, chipH, chipH / 2);
-        ctx.fillStyle = GLP.accentTint + '0.14)';
-        ctx.fill();
-        ctx.strokeStyle = GLP.accentTint + '0.35)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        drawChip(ctx, chipX, chipCY - chipH / 2, chipW, chipH, {
+            fill:   GLP.accentTint + '0.14)',
+            stroke: GLP.accentTint + '0.35)',
+        });
         ctx.fillStyle = GLP.accentFrom;
         ctx.font = F(18, true);
         ctx.textAlign = 'center';
@@ -501,8 +575,7 @@ async function generateShareCard(shot, score, format = 'square') {
         ctx.fillStyle = GLP.textDim;
         ctx.font = F(24);
         let secondLine = secondParts.join('  ·  ');
-        while (ctx.measureText(secondLine).width > nameMaxW + 140 && secondLine.length > 4)
-            secondLine = secondLine.slice(0, -4) + '…';
+        secondLine = truncateText(ctx, secondLine, nameMaxW + 140);
         ctx.fillText(secondLine, PX, cursorY);
         subY = cursorY + 32;
     }
@@ -576,16 +649,16 @@ async function generateShareCard(shot, score, format = 'square') {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Y axis scales — pressure/flow keep a fixed 0-12 bar/(ml/s) scale;
-    // weight and temperature each get their own scale instead of sharing one
-    // 0-100 range (which used to waste most of the chart height on weight).
-    const LEFT_MAX   = 12;   // bar / (ml/s)
-    const WEIGHT_MAX = computeWeightMax(weight);
-    const tempMid    = computeTempMid(temp) ?? 93;
+    // Y axis scales — pressure/flow keep a fixed 0-12 bar/(ml/s) scale on the
+    // left axis. Weight and temperature share one right axis, 0..tempMaxScale
+    // — same formula the live chart uses for its y1 axis (#462;
+    // public-src/views/shots/index.js, tempMaxScale), just for this single
+    // shot's own temperature readings instead of an A/B max.
+    const LEFT_MAX     = 12;   // bar / (ml/s)
+    const tempMaxScale = Math.ceil(Math.max(0, ...temp) + 5) || 100;
 
     const yLeft   = v => plotY + plotH - Math.max(0, Math.min(v / LEFT_MAX, 1)) * plotH;
-    const yWeight = v => plotY + plotH - clamp(v / WEIGHT_MAX, 0, 1) * plotH;
-    const yTemp   = v => plotY + plotH * (1 - 0.32) - clamp((v - tempMid + 4) / 8, 0, 1) * (plotH * 0.32);
+    const yRight  = v => plotY + plotH - clamp(v / tempMaxScale, 0, 1) * plotH;
     const xTime   = i => plotX + (i / Math.max(nPts - 1, 1)) * plotW;
 
     // Grid lines (horizontal, at 0 3 6 9 12 on left axis)
@@ -606,15 +679,18 @@ async function generateShareCard(shot, score, format = 'square') {
     });
     ctx.textAlign = 'left';
 
-    // Right Y axis ticks — weight values, step size scaled to the range
-    const weightStep = WEIGHT_MAX <= 35 ? 10 : WEIGHT_MAX <= 55 ? 15 : 20;
-    for (let v = weightStep; v < WEIGHT_MAX; v += weightStep) {
-        const gy = yWeight(v);
+    // Right Y axis ticks — shared weight/temperature scale, step size scaled
+    // to the range. Unitless, mirroring the live chart's y1 axis (Chart.js
+    // auto-ticks with no unit suffix — weight and temperature share the same
+    // numbers there too).
+    const rightStep = tempMaxScale <= 40 ? 10 : tempMaxScale <= 80 ? 20 : 25;
+    for (let v = rightStep; v < tempMaxScale; v += rightStep) {
+        const gy = yRight(v);
         ctx.fillStyle = GLP.textMute;
         ctx.font = F(15);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`${v}g`, outerX + outerW - CHART_R + 5, gy);
+        ctx.fillText(String(v), outerX + outerW - CHART_R + 5, gy);
     }
 
     // X axis — time ticks every 5s
@@ -671,26 +747,14 @@ async function generateShareCard(shot, score, format = 'square') {
     // Draw target lines (dashed, behind main lines)
     drawSeries(tgtPress,  yLeft,  GLP.cPressure,   1.5, [5, 5]);
     drawSeries(tgtFlow,   yLeft,  GLP.cFlow,        1.5, [5, 5]);
-    drawSeries(tgtTemp,   yTemp,  GLP.cTemp,        1.5, [5, 5]);
+    drawSeries(tgtTemp,   yRight, GLP.cTemp,        1.5, [5, 5]);
 
     // Draw main lines (solid, GLP colors, no glow)
-    drawSeries(weightFlow, yLeft,   GLP.cWeightFlow, 2,   null);
-    drawSeries(flow,       yLeft,   GLP.cFlow,       2,   null);
-    drawSeries(weight,     yWeight, GLP.cWeight,     2,   null);
-    drawSeries(temp,       yTemp,   GLP.cTemp,       2.5, null);
-    drawSeries(pressure,   yLeft,   GLP.cPressure,   2.5, null);
-
-    // Small label pinning down what the compressed temp band represents —
-    // muted and top-right, next to the weight axis ticks, not competing with
-    // the red temperature line itself.
-    if (avgTemp != null) {
-        ctx.fillStyle = GLP.textMute;
-        ctx.font = F(13);
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText(`${Math.round(avgTemp)}°C ±4`, outerX + outerW - CHART_R + 5, plotY + 2);
-        ctx.textBaseline = 'alphabetic';
-    }
+    drawSeries(weightFlow, yLeft,  GLP.cWeightFlow, 2,   null);
+    drawSeries(flow,       yLeft,  GLP.cFlow,       2,   null);
+    drawSeries(weight,     yRight, GLP.cWeight,     2,   null);
+    drawSeries(temp,       yRight, GLP.cTemp,       2.5, null);
+    drawSeries(pressure,   yLeft,  GLP.cPressure,   2.5, null);
 
     ctx.restore();
 
@@ -707,17 +771,13 @@ async function generateShareCard(shot, score, format = 'square') {
 
         if (preWidth > 90) {
             const lw = ctx.measureText('Preinfusion').width + chipPad * 2;
-            roundRect(ctx, plotX + 4, chipY, lw, chipH, 3);
-            ctx.fillStyle = 'rgba(52,152,219,0.2)';
-            ctx.fill();
+            drawChip(ctx, plotX + 4, chipY, lw, chipH, { fill: 'rgba(52,152,219,0.2)' });
             ctx.fillStyle = 'rgba(52,152,219,0.9)';
             ctx.fillText('Preinfusion', plotX + 4 + chipPad, chipY + chipH / 2);
         }
         if (extWidth > 90) {
             const lw = ctx.measureText('Extraktion').width + chipPad * 2;
-            roundRect(ctx, pxEnd + 4, chipY, lw, chipH, 3);
-            ctx.fillStyle = 'rgba(243,156,18,0.2)';
-            ctx.fill();
+            drawChip(ctx, pxEnd + 4, chipY, lw, chipH, { fill: 'rgba(243,156,18,0.2)' });
             ctx.fillStyle = 'rgba(243,156,18,0.9)';
             ctx.fillText('Extraktion', pxEnd + 4 + chipPad, chipY + chipH / 2);
         }
@@ -732,7 +792,7 @@ async function generateShareCard(shot, score, format = 'square') {
     if (temp.length       > 2) legendItems.push({ color: GLP.cTemp,       label: 'Temperatur',   dash: false });
     if (tgtPress.length   > 2) legendItems.push({ color: GLP.cPressure,   label: 'Ziel Druck',   dash: true });
     if (tgtFlow.length    > 2) legendItems.push({ color: GLP.cFlow,       label: 'Ziel Fluss',    dash: true });
-    if (tgtTemp.length    > 2) legendItems.push({ color: GLP.cTemp,       label: 'Ziel Temp',    dash: true });
+    if (tgtTemp.length    > 2) legendItems.push({ color: GLP.cTemp,       label: 'Ziel Temperatur', dash: true });
 
     if (legendItems.length) {
         const legY    = outerY + outerH - LEGEND_H / 2;
@@ -745,12 +805,10 @@ async function generateShareCard(shot, score, format = 'square') {
 
         legendItems.forEach((it, i) => {
             const cw = chipWidths[i];
-            roundRect(ctx, lx, legY - chipH / 2, cw, chipH, chipH / 2);
-            ctx.fillStyle = GLP.bgChart;
-            ctx.fill();
-            ctx.strokeStyle = GLP.borderDim;
-            ctx.lineWidth = 1;
-            ctx.stroke();
+            drawChip(ctx, lx, legY - chipH / 2, cw, chipH, {
+                fill:   GLP.bgChart,
+                stroke: GLP.borderDim,
+            });
 
             const dotX = lx + chipPad + dotR;
             ctx.beginPath();
@@ -771,14 +829,14 @@ async function generateShareCard(shot, score, format = 'square') {
         });
     }
 
-    // ── STATS GRID — matches GLP web UI layout (Image #21) ────────────────
+    // ── STATS GRID — matches GLP web UI layout (Image #21), rebuilt as a
+    // tile grid (#463): one flat, borderless GLP.bgCard box per stat with
+    // gaps between tiles, mirroring the live app's recipe-card/process-card
+    // language, instead of one bordered panel with internal divider lines. ──
     const statsY   = outerY + outerH + 8;
     const statsH   = STATS_H;
-    const sX       = PX - 8;          // left edge of stats card
-    const sW       = W - 2 * PX + 16; // width of stats card
-    const colW     = sW / 2;
-    const lX       = sX + 16;         // left col text start
-    const rX       = sX + colW + 16;  // right col text start
+    const sX       = PX - 8;          // left edge of stats area
+    const sW       = W - 2 * PX + 16; // width of stats area
     const lastWF   = weightFlow.filter(v => v > 0).slice(-1)[0] != null
         ? +(weightFlow.filter(v => v > 0).slice(-1)[0]).toFixed(1) : null;
 
@@ -814,42 +872,29 @@ async function generateShareCard(shot, score, format = 'square') {
     ]);
     rightRows.push(['DAUER', fmtDurSec(totalSec), '']);
 
-    const nRows = Math.max(leftRows.length, rightRows.length);
-    const rowH  = statsH / nRows;
+    const nRows    = Math.max(leftRows.length, rightRows.length);
+    const TILE_GAP = 14;
+    const tileW    = (sW - TILE_GAP) / 2;
+    const tileH    = (statsH - TILE_GAP * (nRows - 1)) / nRows;
+    const lTileX   = sX;
+    const rTileX   = sX + tileW + TILE_GAP;
+    const lX       = lTileX + 16;   // left col text start
+    const rX       = rTileX + 16;   // right col text start
 
-    roundRect(ctx, sX, statsY, sW, statsH, 8);
-    ctx.fillStyle = GLP.bgCard;
-    ctx.fill();
-    ctx.strokeStyle = GLP.border;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Vertical divider
-    ctx.beginPath();
-    ctx.moveTo(sX + colW, statsY + 10);
-    ctx.lineTo(sX + colW, statsY + statsH - 10);
-    ctx.stroke();
-
-    const drawStatsCol = (rows, textX) => {
+    const drawStatsCol = (rows, tileX, textX) => {
         rows.forEach(([lbl, val, sub, special], r) => {
-            const ry = statsY + r * rowH;
-            if (r > 0) {
-                ctx.strokeStyle = GLP.border;
-                ctx.lineWidth   = 1;
-                ctx.beginPath();
-                ctx.moveTo(textX - 4, ry);
-                ctx.lineTo(textX + colW - 24, ry);
-                ctx.stroke();
-            }
+            const ry = statsY + r * (tileH + TILE_GAP);
+            drawChip(ctx, tileX, ry, tileW, tileH, { fill: GLP.bgCard });
+
             ctx.textAlign    = 'left';
             ctx.textBaseline = 'alphabetic';
             ctx.fillStyle    = GLP.textMute;
             ctx.font         = F(12);
-            ctx.fillText(lbl, textX, ry + 15);
+            ctx.fillText(lbl, textX, ry + 22);
 
             if (special === 'phasen') {
                 // Draw phase chips
-                const chipH = 18, chipPad = 6, chipY2 = ry + 20;
+                const chipH = 18, chipPad = 6, chipY2 = ry + 27;
                 ctx.font = F(12);
                 ctx.textBaseline = 'middle';
                 let cx = textX;
@@ -859,9 +904,7 @@ async function generateShareCard(shot, score, format = 'square') {
                 chips.forEach(({ t, c }) => {
                     const tw = ctx.measureText(t).width;
                     const cw = tw + chipPad * 2;
-                    roundRect(ctx, cx, chipY2, cw, chipH, 3);
-                    ctx.fillStyle = `rgba(${c},0.18)`;
-                    ctx.fill();
+                    drawChip(ctx, cx, chipY2, cw, chipH, { fill: `rgba(${c},0.18)` });
                     ctx.fillStyle = `rgba(${c},0.9)`;
                     ctx.fillText(t, cx + chipPad, chipY2 + chipH / 2);
                     cx += cw + 8;
@@ -871,18 +914,18 @@ async function generateShareCard(shot, score, format = 'square') {
                 ctx.font = F(20, true);
                 const valW = ctx.measureText(val).width;
                 ctx.fillStyle = GLP.text;
-                ctx.fillText(val, textX, ry + 38);
+                ctx.fillText(val, textX, ry + 46);
                 if (sub) {
                     ctx.fillStyle = GLP.textMute;
                     ctx.font      = F(13);
-                    ctx.fillText(sub, textX + valW + 8, ry + 38);
+                    ctx.fillText(sub, textX + valW + 8, ry + 46);
                 }
             }
         });
     };
 
-    drawStatsCol(leftRows,  lX);
-    drawStatsCol(rightRows, rX);
+    drawStatsCol(leftRows,  lTileX, lX);
+    drawStatsCol(rightRows, rTileX, rX);
     ctx.textAlign = 'left';
 
     // ── FOOTER ─────────────────────────────────────────────────────────────
@@ -906,12 +949,10 @@ async function generateShareCard(shot, score, format = 'square') {
     const pillW = ctx.measureText(pillText).width + pillPad * 2;
     const pillH = 30;
     const pillX = W - PX - pillW, pillY = footY + 6 - pillH / 2;
-    roundRect(ctx, pillX, pillY, pillW, pillH, pillH / 2);
-    ctx.fillStyle = GLP.accentTint + '0.14)';
-    ctx.fill();
-    ctx.strokeStyle = GLP.accentTint + '0.3)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    drawChip(ctx, pillX, pillY, pillW, pillH, {
+        fill:   GLP.accentTint + '0.14)',
+        stroke: GLP.accentTint + '0.3)',
+    });
     ctx.fillStyle = GLP.accentFrom;
     ctx.textAlign = 'center';
     ctx.fillText(pillText, pillX + pillW / 2, footY + 6);
@@ -925,8 +966,6 @@ module.exports = {
     isAvailable: () => createCanvas !== null,
     // Exported for unit testing of the pure logic pieces
     scoreTierPhrase,
-    computeWeightMax,
-    computeTempMid,
     resolveBeanOriginCode,
     starPoints,
 };
