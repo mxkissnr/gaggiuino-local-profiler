@@ -1,3 +1,9 @@
+## [2.13.3] – 2026-07-22
+
+### Fixed
+- **Redundant mobile back-arrow removed from the shot-detail topbar.** `#mobileBackBtn` and the burger-drawer button (`#mobileDrawerBtn`) both led to the identical `#sidebar` shot list via different mechanics — a full-screen subview swap vs. a transient overlay — left over from before #431 made the burger drawer the canonical way to reach the list. The now-dead `S.mobileShotSubview` list/detail toggle machinery (`setMobileShotSubview()`, and the branching it drove inside `updateMobileShotSidebarVisibility()`) is gone too; the burger drawer is untouched and remains the only way to reach the shot list on mobile. Closes #461
+- **Share card ignored the active accent/theme, and its chart axes didn't match the live chart.** `lib/card.js`'s color palette was a hardcoded snapshot of only the default dark theme + amber accent, so anyone on one of the other 5 accent themes or light mode got a card that visually didn't match their actual UI. The palette is now built from `accent`/`theme` query params (`routes/shots.js` → `generateShareCard()`) that the frontend now sends based on the page's own `data-accent`/`data-theme` (`shareCard()` in `public-src/views/shots/index.js`); omitting both (old cached/bookmarked card links) keeps the exact historic default look. Separately, the card's chart drew weight and temperature on two independent, incompatible scales (weight auto-scaled to its own max, temperature compressed into a narrow band around its mean) instead of sharing one right-hand axis like the live chart does — the card now uses the same `0..tempMaxScale` formula (`Math.ceil(max temp + 5) || 100`) as `index.js`'s own chart, so both lines land in the same place on the card as they do in the app. The legend's "Ziel Temp" label is now "Ziel Temperatur", matching the live chart's own i18n string. Closes #462
+
 ## [2.13.2] – 2026-07-22
 
 ### Fixed

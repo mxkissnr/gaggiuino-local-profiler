@@ -68,16 +68,22 @@ try {
     createCanvas = null;
 }
 
-// Card color palette — matches the app's own CSS tokens (public-src/style.css
-// :root, default amber theme) so the shared card looks like part of the app
-// rather than an invented separate brand.
-const GLP = {
+// Card color palette — mirrors the app's own CSS tokens (public-src/style.css
+// :root, [data-accent=...], [data-theme="light"]) so the shared card looks
+// like the theme the user was actually looking at, not an invented separate
+// brand. #462.
+//
+// Legacy default snapshot — kept byte-for-byte as it always was (including
+// the pre-#397 --gray-500 value, since raised to #9a9aa3 in the live CSS) so
+// old cached/bookmarked card links (generated before the frontend started
+// passing accent/theme) keep looking exactly the way they always did.
+const LEGACY_GLP = {
     bg:        '#09090b',   // --gray-950
     bgCard:    '#18181b',   // --gray-900
     bgChart:   '#27272a',   // --gray-800
     text:      '#e4e4e7',   // --gray-200
     textDim:   '#a1a1aa',   // --gray-400
-    textMute:  '#71717a',   // --gray-500
+    textMute:  '#71717a',   // --gray-500 (pre-#397)
     border:    '#3f3f46',   // --gray-700
     borderDim: '#27272a',   // --gray-800
     cPressure: '#3498db', cFlow: '#f39c12', cWeightFlow: '#9b59b6', cWeight: '#2ecc71', cTemp: '#e74c3c',
@@ -85,6 +91,59 @@ const GLP = {
     accentTint: 'rgba(245,158,11,',  // e.g. GLP.accentTint + '0.12)' for chip backgrounds
     star: '#f59e0b', starDim: '#3f3f46',
 };
+
+// Gray scales, keyed by theme (and by accent for crema, the only theme that
+// also warms the neutral scale — public-src/style.css [data-accent="crema"]
+// / [data-theme="light"][data-accent="crema"]).
+const GRAY_SCALES = {
+    dark:        { 200: '#e4e4e7', 400: '#a1a1aa', 500: '#9a9aa3', 700: '#3f3f46', 800: '#27272a', 900: '#18181b', 950: '#09090b' },
+    'dark-crema':  { 200: '#f2e6d8', 400: '#c9b8a4', 500: '#b0a08d', 700: '#4e3a2b', 800: '#2e2118', 900: '#1e1611', 950: '#14100c' },
+    light:       { 200: '#18181b', 400: '#3f3f46', 500: '#52525b', 700: '#d4d4d8', 800: '#f4f4f5', 900: '#fafafa', 950: '#ffffff' },
+    'light-crema': { 200: '#2a1b0f', 400: '#55442f', 500: '#5f4c38', 700: '#d4b48c', 800: '#ead5b5', 900: '#f3e4ce', 950: '#fbf3e7' },
+};
+
+// accent-from/accent-to per accent + theme (public-src/style.css
+// [data-accent=...] and [data-theme="light"][data-accent=...] blocks) — only
+// amber and crema define a light-specific override, the other four accents
+// keep the same gradient in both themes.
+const ACCENTS = {
+    amber:  { dark: ['#f59e0b', '#f97316'], light: ['#d97706', '#ea580c'] },
+    ocean:  { dark: ['#3b82f6', '#06b6d4'], light: ['#3b82f6', '#06b6d4'] },
+    aurora: { dark: ['#6366f1', '#a855f7'], light: ['#6366f1', '#a855f7'] },
+    ember:  { dark: ['#ef4444', '#f97316'], light: ['#ef4444', '#f97316'] },
+    forest: { dark: ['#22c55e', '#10b981'], light: ['#22c55e', '#10b981'] },
+    crema:  { dark: ['#d4a24c', '#b8823a'], light: ['#8b5e34', '#6b3f1d'] },
+};
+
+function hexToRgb(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+}
+
+// Builds the card's color palette for a given accent/theme pair. No
+// arguments at all reproduces the historic hardcoded snapshot exactly (see
+// LEGACY_GLP above); any explicit accent/theme (including 'amber'/'dark',
+// what the frontend now always sends) computes fresh from the current CSS
+// tokens instead.
+function buildPalette(accent, theme) {
+    if (!accent && !theme) return { ...LEGACY_GLP };
+    const a  = ACCENTS[accent] ? accent : 'amber';
+    const th = theme === 'light' ? 'light' : 'dark';
+    const gray = GRAY_SCALES[a === 'crema' ? `${th}-crema` : th];
+    const [accentFrom, accentTo] = ACCENTS[a][th];
+    return {
+        bg: gray[950], bgCard: gray[900], bgChart: gray[800],
+        text: gray[200], textDim: gray[400], textMute: gray[500],
+        border: gray[700], borderDim: gray[800],
+        // Chart series colors are fixed across all themes/accents in the
+        // live app too (public-src/views/shots/index.js dataset borderColor
+        // values) — not derived from the accent.
+        cPressure: '#3498db', cFlow: '#f39c12', cWeightFlow: '#9b59b6', cWeight: '#2ecc71', cTemp: '#e74c3c',
+        accentFrom, accentTo,
+        accentTint: `rgba(${hexToRgb(accentFrom)},`,
+        star: accentFrom, starDim: gray[700],
+    };
+}
 
 const W = 1080, H = 1080, PX = 52;
 
@@ -102,7 +161,7 @@ function Fs(size, bold = false) {
     return fam ? `${bold ? 'bold ' : ''}${size}px ${fam}` : F(size, bold);
 }
 
-function scoreColor(s) {
+function scoreColor(s, GLP) {
     if (s == null) return GLP.textMute;
     if (s >= 80)   return GLP.accentFrom;
     if (s >= 60)   return GLP.textDim;
@@ -117,19 +176,6 @@ function scoreTierPhrase(score) {
     if (score >= 80) return 'Richtig gut getroffen';
     if (score >= 60) return 'Solider Shot';
     return 'Dial-in lohnt sich noch';
-}
-
-// Weight gets its own chart scale instead of sharing 0-100 with temperature —
-// a 20g floor keeps tiny/empty shots from zooming the axis absurdly.
-function computeWeightMax(weight) {
-    const scaled = (weight || []).filter(Boolean).map(v => v * 1.15);
-    return Math.max(20, ...scaled) || 20;
-}
-
-// Average of the extraction-phase temperature readings (values <= 50 are
-// startup/idle noise, not the actual shot temperature).
-function computeTempMid(temp) {
-    return avg((temp || []).filter(v => v > 50));
 }
 
 function clamp(v, lo, hi) {
@@ -239,8 +285,9 @@ function detectPreinfusionEnd(pressure) {
     return null;
 }
 
-async function generateShareCard(shot, score, format = 'square') {
+async function generateShareCard(shot, score, format = 'square', accent, theme) {
     if (!createCanvas) throw new Error('canvas module not available');
+    const GLP        = buildPalette(accent, theme);
     const glpIcon    = await getGlpIcon();
     const shotPhoto  = await getShotPhoto(shot);
     // Lazily required: LibraryService touches the DB at require-time in some
@@ -315,7 +362,7 @@ async function generateShareCard(shot, score, format = 'square') {
         ? new Date(shot.timestamp * 1000).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' })
         : '';
     const shotId  = shot.id ? `Shot #${shot.id}` : '';
-    const sColor       = scoreColor(score);
+    const sColor       = scoreColor(score, GLP);
     const preEnd       = detectPreinfusionEnd(pressure);
     const preinfEndSec = preEnd !== null && times.length > preEnd ? times[preEnd] : (preEnd !== null ? preEnd / Math.max(nPts - 1, 1) * totalSec : null);
     const extDurSec    = preinfEndSec !== null ? Math.max(0, totalSec - preinfEndSec) : null;
@@ -576,16 +623,16 @@ async function generateShareCard(shot, score, format = 'square') {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Y axis scales — pressure/flow keep a fixed 0-12 bar/(ml/s) scale;
-    // weight and temperature each get their own scale instead of sharing one
-    // 0-100 range (which used to waste most of the chart height on weight).
-    const LEFT_MAX   = 12;   // bar / (ml/s)
-    const WEIGHT_MAX = computeWeightMax(weight);
-    const tempMid    = computeTempMid(temp) ?? 93;
+    // Y axis scales — pressure/flow keep a fixed 0-12 bar/(ml/s) scale on the
+    // left axis. Weight and temperature share one right axis, 0..tempMaxScale
+    // — same formula the live chart uses for its y1 axis (#462;
+    // public-src/views/shots/index.js, tempMaxScale), just for this single
+    // shot's own temperature readings instead of an A/B max.
+    const LEFT_MAX     = 12;   // bar / (ml/s)
+    const tempMaxScale = Math.ceil(Math.max(0, ...temp) + 5) || 100;
 
     const yLeft   = v => plotY + plotH - Math.max(0, Math.min(v / LEFT_MAX, 1)) * plotH;
-    const yWeight = v => plotY + plotH - clamp(v / WEIGHT_MAX, 0, 1) * plotH;
-    const yTemp   = v => plotY + plotH * (1 - 0.32) - clamp((v - tempMid + 4) / 8, 0, 1) * (plotH * 0.32);
+    const yRight  = v => plotY + plotH - clamp(v / tempMaxScale, 0, 1) * plotH;
     const xTime   = i => plotX + (i / Math.max(nPts - 1, 1)) * plotW;
 
     // Grid lines (horizontal, at 0 3 6 9 12 on left axis)
@@ -606,15 +653,18 @@ async function generateShareCard(shot, score, format = 'square') {
     });
     ctx.textAlign = 'left';
 
-    // Right Y axis ticks — weight values, step size scaled to the range
-    const weightStep = WEIGHT_MAX <= 35 ? 10 : WEIGHT_MAX <= 55 ? 15 : 20;
-    for (let v = weightStep; v < WEIGHT_MAX; v += weightStep) {
-        const gy = yWeight(v);
+    // Right Y axis ticks — shared weight/temperature scale, step size scaled
+    // to the range. Unitless, mirroring the live chart's y1 axis (Chart.js
+    // auto-ticks with no unit suffix — weight and temperature share the same
+    // numbers there too).
+    const rightStep = tempMaxScale <= 40 ? 10 : tempMaxScale <= 80 ? 20 : 25;
+    for (let v = rightStep; v < tempMaxScale; v += rightStep) {
+        const gy = yRight(v);
         ctx.fillStyle = GLP.textMute;
         ctx.font = F(15);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`${v}g`, outerX + outerW - CHART_R + 5, gy);
+        ctx.fillText(String(v), outerX + outerW - CHART_R + 5, gy);
     }
 
     // X axis — time ticks every 5s
@@ -671,26 +721,14 @@ async function generateShareCard(shot, score, format = 'square') {
     // Draw target lines (dashed, behind main lines)
     drawSeries(tgtPress,  yLeft,  GLP.cPressure,   1.5, [5, 5]);
     drawSeries(tgtFlow,   yLeft,  GLP.cFlow,        1.5, [5, 5]);
-    drawSeries(tgtTemp,   yTemp,  GLP.cTemp,        1.5, [5, 5]);
+    drawSeries(tgtTemp,   yRight, GLP.cTemp,        1.5, [5, 5]);
 
     // Draw main lines (solid, GLP colors, no glow)
-    drawSeries(weightFlow, yLeft,   GLP.cWeightFlow, 2,   null);
-    drawSeries(flow,       yLeft,   GLP.cFlow,       2,   null);
-    drawSeries(weight,     yWeight, GLP.cWeight,     2,   null);
-    drawSeries(temp,       yTemp,   GLP.cTemp,       2.5, null);
-    drawSeries(pressure,   yLeft,   GLP.cPressure,   2.5, null);
-
-    // Small label pinning down what the compressed temp band represents —
-    // muted and top-right, next to the weight axis ticks, not competing with
-    // the red temperature line itself.
-    if (avgTemp != null) {
-        ctx.fillStyle = GLP.textMute;
-        ctx.font = F(13);
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText(`${Math.round(avgTemp)}°C ±4`, outerX + outerW - CHART_R + 5, plotY + 2);
-        ctx.textBaseline = 'alphabetic';
-    }
+    drawSeries(weightFlow, yLeft,  GLP.cWeightFlow, 2,   null);
+    drawSeries(flow,       yLeft,  GLP.cFlow,       2,   null);
+    drawSeries(weight,     yRight, GLP.cWeight,     2,   null);
+    drawSeries(temp,       yRight, GLP.cTemp,       2.5, null);
+    drawSeries(pressure,   yLeft,  GLP.cPressure,   2.5, null);
 
     ctx.restore();
 
@@ -732,7 +770,7 @@ async function generateShareCard(shot, score, format = 'square') {
     if (temp.length       > 2) legendItems.push({ color: GLP.cTemp,       label: 'Temperatur',   dash: false });
     if (tgtPress.length   > 2) legendItems.push({ color: GLP.cPressure,   label: 'Ziel Druck',   dash: true });
     if (tgtFlow.length    > 2) legendItems.push({ color: GLP.cFlow,       label: 'Ziel Fluss',    dash: true });
-    if (tgtTemp.length    > 2) legendItems.push({ color: GLP.cTemp,       label: 'Ziel Temp',    dash: true });
+    if (tgtTemp.length    > 2) legendItems.push({ color: GLP.cTemp,       label: 'Ziel Temperatur', dash: true });
 
     if (legendItems.length) {
         const legY    = outerY + outerH - LEGEND_H / 2;
@@ -925,8 +963,6 @@ module.exports = {
     isAvailable: () => createCanvas !== null,
     // Exported for unit testing of the pure logic pieces
     scoreTierPhrase,
-    computeWeightMax,
-    computeTempMid,
     resolveBeanOriginCode,
     starPoints,
 };

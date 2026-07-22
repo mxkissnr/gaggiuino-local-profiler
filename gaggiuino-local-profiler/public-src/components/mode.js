@@ -1,14 +1,10 @@
 import { S } from '../state.js';
-import { setMobileShotSubview, updateMobileShotSidebarVisibility } from './sidebar.js';
+import { updateMobileShotSidebarVisibility } from './sidebar.js';
 import { applyBottomNavActiveState } from './bottom-nav.js';
 
 export function goToShot(id) {
   switchMode('shots');
   if (window.selectShot) window.selectShot(id);
-  // #410: jumping here from elsewhere (e.g. an analytics "personal best"
-  // link) means straight to that shot's detail, not the list — mirrors the
-  // shot-row tap in sidebar.js.
-  if (window.innerWidth <= 768) setMobileShotSubview('detail');
   setTimeout(() => {
     const el = document.getElementById(`wrapper-${id}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -79,8 +75,8 @@ export function switchMode(mode) {
   const activeBtn = document.getElementById(modeMap[mode]);
   if (activeBtn) activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
 
-  // #410: mobile shows #sidebar (shot list) only while mode === 'shots' and
-  // the mobile sub-view isn't 'detail' — re-evaluate on every mode switch,
-  // e.g. so leaving Shots for Library hides the list underneath it too.
+  // #410/#461: mobile shows #shots-view full screen only while
+  // mode === 'shots' — re-evaluate on every mode switch, e.g. so a leftover
+  // burger-drawer overlay closes when leaving Shots for Library.
   updateMobileShotSidebarVisibility();
 }

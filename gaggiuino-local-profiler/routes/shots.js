@@ -70,8 +70,14 @@ router.get('/api/shots/:id/card', async (req, res, next) => {
         const shot = shotService.getById(id);
         if (!shot) return res.status(404).json({ error: 'Shot not found' });
         const format = req.query.format === 'story' ? 'story' : 'square';
+        // #462: accent/theme let the card match the requesting user's active
+        // UI theme instead of a hardcoded snapshot — generateShareCard()
+        // falls back to the historic default palette when both are absent
+        // (old cached/bookmarked card links).
+        const accent = typeof req.query.accent === 'string' ? req.query.accent : undefined;
+        const theme  = typeof req.query.theme  === 'string' ? req.query.theme  : undefined;
         const score  = shotService.computeScore(shot);
-        const png    = await generateShareCard(shot, score, format);
+        const png    = await generateShareCard(shot, score, format, accent, theme);
         res.setHeader('Content-Type', 'image/png');
         res.setHeader('Content-Disposition', `inline; filename="glp-shot-${id}-${format}.png"`);
         res.send(png);

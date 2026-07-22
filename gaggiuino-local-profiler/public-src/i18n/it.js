@@ -251,7 +251,7 @@ export default {
     export_shot_title:'Esporta lo shot corrente come .shot (formato Decent Espresso)',
     profile_export_no_data:'Nessun dato di profilo disponibile in questo shot.',
     sidebar_collapse:'Comprimi la barra laterale', sidebar_expand:'Espandi la barra laterale',
-    sidebar_drawer_open:'Apri elenco shot', back_to_list:'Torna all’elenco',
+    sidebar_drawer_open:'Apri elenco shot',
     day_today:'Oggi', day_yesterday:'Ieri',
     error_delete:(msg)=>`Errore durante l'eliminazione: ${msg}`,
     error_generic:(msg)=>`Errore: ${msg}`,

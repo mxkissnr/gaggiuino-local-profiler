@@ -75,8 +75,9 @@
 </div>
 
 <!-- ── Bottom navigation (#403, #410): mobile-only, replaces the horizontal
-     mode-bar tab row. Shots is the primary screen (the shot list itself,
-     not an overlay drawer) — see setMobileShotSubview() in sidebar.js. -->
+     mode-bar tab row. Shots is the primary screen (the shot detail itself,
+     #461) — the shot list is reachable only via the burger drawer
+     (openShotDrawer() in sidebar.js). -->
 <!-- Contents rendered by renderBottomNav() (components/bottom-nav.js) from
      the user's glp_bottom_nav_config selection — up to 4 main-bar buttons
      (always bnShots first) plus the always-present bnMore control. Same
@@ -172,11 +173,6 @@
 
         <div id="chart-area">
             <div class="sprofiler-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
-                <!-- #410 mobile only: returns from the shot-detail screen to
-                     the primary shot-list screen (setMobileShotSubview()). -->
-                <button id="mobileBackBtn" class="mobile-back-btn" style="display:none" data-i18n-title="back_to_list" title="Zurück zur Liste" aria-label="Zurück">
-                    <svg class="rail-icon" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
-                </button>
                 <div style="flex:1;min-width:0">
                     <h1 id="topTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Profil-Name</h1>
                     <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="freshness-badge" style="display:none"></span><span id="firmwareVersionBadge" style="display:none;font-size:.7rem;color:#52525b;margin-left:6px"></span><img id="shotHeaderThumb" class="shot-header-thumb" alt="" style="display:none" data-i18n-title="shot_photo_title"></p>

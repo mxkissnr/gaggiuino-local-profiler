@@ -40,7 +40,7 @@ import { t, setLang, applyTranslations } from './i18n.js';
 import { generateBeanQR } from './glp-qr.js';
 
 import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
-         toggleDesktopSidebar, setMobileShotSubview, updateMobileShotSidebarVisibility, selectShot,
+         toggleDesktopSidebar, updateMobileShotSidebarVisibility, selectShot,
          openShotDrawer, closeShotDrawer, handleDrawerTouchStart, handleDrawerTouchEnd,
          toggleMonthGroup } from './components/sidebar.js';
 import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync } from './components/status.js';
@@ -187,7 +187,6 @@ Object.assign(window, {
   sortedShots,
   updateFlapCounter,
   toggleDesktopSidebar,
-  setMobileShotSubview,
   updateMobileShotSidebarVisibility,
   selectShot,
 
@@ -501,9 +500,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Static element wiring ──────────────────────────────────────────────
   document.getElementById('collapseBtn').addEventListener('click', toggleDesktopSidebar);
   document.getElementById('expandSidebarBtn').addEventListener('click', toggleDesktopSidebar);
-  // #410: mobile back chevron in the shot-detail topbar returns to the
-  // primary shot-list screen (see setMobileShotSubview() in sidebar.js).
-  document.getElementById('mobileBackBtn').addEventListener('click', () => setMobileShotSubview('list'));
   document.getElementById('shotSearch').addEventListener('input', e => filterShots(e.target.value));
   document.getElementById('sortNewest').addEventListener('click', () => setSortMode('newest'));
   document.getElementById('sortScore').addEventListener('click', () => setSortMode('score'));
@@ -519,12 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // toggling and status.js's live/orders visibility gating both keep
   // working unchanged.
   document.getElementById('btnLive').addEventListener('click', () => switchMode('live'));
-  // #454: Shots tab always lands on the shot detail (per #431's intent),
-  // not wherever mobileShotSubview happened to be left — mirrors goToShot().
-  document.getElementById('btnShots').addEventListener('click', () => {
-    switchMode('shots');
-    if (window.innerWidth <= 768) setMobileShotSubview('detail');
-  });
+  document.getElementById('btnShots').addEventListener('click', () => switchMode('shots'));
   document.getElementById('btnAnalytics').addEventListener('click', () => switchMode('analytics'));
   document.getElementById('btnDialin').addEventListener('click', () => switchMode('dialin'));
   document.getElementById('btnLibrary').addEventListener('click', () => switchMode('library'));
