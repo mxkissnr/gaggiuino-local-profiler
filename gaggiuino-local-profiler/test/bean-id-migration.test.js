@@ -32,10 +32,9 @@ describe('resolveBeanForAnnotation (#456)', () => {
         expect(bean?.id).toBe(1);
     });
 
-    it('falls back to a name match (advisory best-guess) when beanId points at a bean that no longer exists', () => {
-        // Unlike computeBeanRemaining's stricter stock-accounting match (see
-        // the "deleted and reimported" test below), this general-purpose
-        // resolver is advisory — it still resolves via the shared name.
+    it('falls back to a name match when beanId points at a bean that no longer exists', () => {
+        // Same underlying rule as computeBeanRemaining's beanId-first-with-
+        // fallback matching (see the "deleted and reimported" test below).
         libraryService.saveLibrary({ beans: [{ id: 2, name: 'Lucky Punch' }], grinders: [], recipes: [] });
         const bean = libraryService.resolveBeanForAnnotation({ coffee: 'Lucky Punch', beanId: 1 });
         expect(bean?.id).toBe(2);
@@ -49,7 +48,7 @@ describe('resolveBeanForAnnotation (#456)', () => {
 });
 
 describe('computeBeanRemaining beanId-first matching (#456 regression)', () => {
-    it('a bean deleted and reimported under the same name does NOT inherit the old shots\' consumption', () => {
+    it('a bean deleted and reimported under the same name DOES recover the old shots\' consumption via name fallback', () => {
         // Original bean A (id 1000), two shots totalling 37g logged against it.
         libraryService.saveLibrary({ beans: [
             { id: 1000, name: 'Kiraz', stock_g: 250, bags: [{ id: 1, openedAt: 0, stock_g: 250 }] },
@@ -62,17 +61,43 @@ describe('computeBeanRemaining beanId-first matching (#456 regression)', () => {
         shotRepo.saveAnnotation(2, { coffee: 'Kiraz', beanId: 1000, dose: '19' });
 
         // Bean A is deleted and reimported under the same name -> fresh id 2000,
-        // fresh bag. The library now only contains the new bean.
+        // fresh bag. The library now only contains the new bean; bean id 1000
+        // no longer exists anywhere.
         libraryService.saveLibrary({ beans: [
             { id: 2000, name: 'Kiraz', stock_g: 250, bags: [{ id: 2, openedAt: 0, stock_g: 250 }] },
         ], grinders: [], recipes: [] });
 
+        const lib      = libraryService.getLibrary();
         const doseRows = shotRepo.getAnnotatedDoses();
-        const newBean  = libraryService.getLibrary().beans[0];
-        // Honest behavior: the old shots' beanId (1000) no longer matches any
-        // current bean, so they are NOT rescued by the shared name — the new
-        // bean starts at its full, untouched stock.
-        expect(libraryService.computeBeanRemaining(newBean, doseRows)).toBe(250);
+        // Identity-preservation across delete+reimport ("Identität über
+        // Löschen/Neu-Import hinweg erhalten bleibt") was the whole point of
+        // moving to beanId — the old shots' beanId (1000) no longer resolves
+        // to ANY current bean, so they fall back to the shared name and
+        // recover onto the reimported bean.
+        expect(libraryService.computeBeanRemaining(lib.beans[0], doseRows, lib.beans)).toBe(250 - 18 - 19);
+    });
+
+    it('does NOT rescue by name when beanId resolves to a different, still-existing bean (precision case)', () => {
+        // Two distinct beans that happen to share a name, both still active.
+        libraryService.saveLibrary({ beans: [
+            { id: 1000, name: 'House Espresso', stock_g: 250, bags: [{ id: 1, openedAt: 0, stock_g: 250 }] },
+            { id: 2000, name: 'House Espresso', stock_g: 500, bags: [{ id: 2, openedAt: 0, stock_g: 500 }] },
+        ], grinders: [], recipes: [] });
+        shotRepo.upsertMany([{ id: 1, timestamp: 1000, duration: 250 }]);
+        // beanId explicitly points at bean 2000 — the dose genuinely belongs
+        // there, even though its stored coffee name also matches bean 1000.
+        shotRepo.saveAnnotation(1, { coffee: 'House Espresso', beanId: 2000, dose: '18' });
+
+        const lib       = libraryService.getLibrary();
+        const doseRows  = shotRepo.getAnnotatedDoses();
+        const bean1000  = lib.beans.find(b => b.id === 1000);
+        const bean2000  = lib.beans.find(b => b.id === 2000);
+
+        // A resolvable beanId is trusted exclusively — must NOT be
+        // miscounted toward bean 1000 just because the name matches.
+        expect(libraryService.computeBeanRemaining(bean1000, doseRows, lib.beans)).toBe(250);
+        // Correctly counted toward bean 2000, the bean the id actually points at.
+        expect(libraryService.computeBeanRemaining(bean2000, doseRows, lib.beans)).toBe(500 - 18);
     });
 
     it('consumption still tracks correctly across a rename when beanId matches (the actual regression fix)', () => {
@@ -82,13 +107,16 @@ describe('computeBeanRemaining beanId-first matching (#456 regression)', () => {
         shotRepo.upsertMany([{ id: 1, timestamp: 1000, duration: 250 }]);
         shotRepo.saveAnnotation(1, { coffee: 'Kiraz', beanId: 1000, dose: '18' });
 
-        // Bean renamed in place (same id) — name-matching would have broken here.
+        // Bean renamed in place (same id) — name-matching alone would have
+        // broken here; beanId still resolving to bean 1000 must win over the
+        // now-mismatched name.
         const lib = libraryService.getLibrary();
         lib.beans[0].name = 'Kiraz Reserve';
         libraryService.saveLibrary(lib);
 
-        const bean = libraryService.getLibrary().beans[0];
-        const remaining = libraryService.computeBeanRemaining(bean, shotRepo.getAnnotatedDoses());
+        const freshLib  = libraryService.getLibrary();
+        const bean      = freshLib.beans[0];
+        const remaining = libraryService.computeBeanRemaining(bean, shotRepo.getAnnotatedDoses(), freshLib.beans);
         expect(remaining).toBe(250 - 18);
     });
 
@@ -103,8 +131,9 @@ describe('computeBeanRemaining beanId-first matching (#456 regression)', () => {
         shotRepo.saveAnnotation(1, { coffee: 'Dolce', dose: 18 });
         shotRepo.saveAnnotation(2, { coffee: 'Dolce', dose: 18 });
 
-        const bean = libraryService.getLibrary().beans[0];
-        expect(libraryService.computeBeanRemaining(bean, shotRepo.getAnnotatedDoses())).toBe(232);
+        const lib  = libraryService.getLibrary();
+        const bean = lib.beans[0];
+        expect(libraryService.computeBeanRemaining(bean, shotRepo.getAnnotatedDoses(), lib.beans)).toBe(232);
     });
 });
 

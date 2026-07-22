@@ -13,13 +13,12 @@ function _parseDMY(str) {
 
 // #456: resolves a shot/annotation to its library bean, preferring the
 // stable beanId link over the free-text coffee name — mirrors
-// LibraryService.resolveBeanForAnnotation on the backend. beanId survives
-// bean renames, which name-matching never could. This general-purpose
-// resolver DOES fall back to a name match when beanId is absent or
-// unresolved — unlike library.js's renderBeanList consumption totals
-// (mirroring the backend's stricter computeBeanRemaining "no rescue" rule),
-// this one backs advisory features (scoring, grind advice, roast date)
-// where "best guess via name" beats showing nothing.
+// LibraryService.resolveBeanForAnnotation on the backend, and the same
+// underlying rule as library.js's renderBeanList consumption totals: when
+// beanId resolves to a bean, it's trusted exclusively; only when it's
+// absent, or points at nothing currently in the library, does this fall
+// back to a name match (recovering a delete+reimport under the same name,
+// and covering annotations that predate beanId).
 export function resolveBeanForAnnotation(annotation, beans) {
   const list = beans || S.coffeeLibrary?.beans || [];
   if (annotation?.beanId != null) {

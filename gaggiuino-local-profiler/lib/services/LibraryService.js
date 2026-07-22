@@ -24,23 +24,28 @@ class LibraryService {
     // matching this bean since the active bag was opened; without bags, all
     // matching shots count. Returns null when stock is untracked.
     //
-    // #456: a dose row matches by beanId when the row has one (survives the
-    // bean being renamed since), otherwise falls back to name matching (rows
-    // logged before beanId existed). A row whose beanId points at a bean that
-    // no longer exists is intentionally NOT rescued by a name match — if that
-    // bean was deleted and reimported under the same name, the reimport is a
-    // new identity with its own fresh bag, and the old shots correctly stop
-    // counting toward it.
-    computeBeanRemaining(bean, doseRows) {
+    // #456: a dose row's beanId, when it still resolves to SOME currently-
+    // existing bean (checked against `allBeans`), is trusted exclusively —
+    // that dose genuinely belongs to whichever bean the id points at, even
+    // if this bean's name happens to coincide. Only when the row's beanId is
+    // null, or points at a bean that no longer exists anywhere (deleted), does
+    // it fall back to name matching against `bean`. This is what lets a bean
+    // deleted and reimported under the same name recover its own consumption
+    // history — "Identität über Löschen/Neu-Import hinweg erhalten bleibt"
+    // was the whole point of moving to beanId in the first place — while still
+    // never misattributing a dose that legitimately belongs to a different,
+    // still-existing bean that happens to share a name.
+    computeBeanRemaining(bean, doseRows, allBeans) {
         if (!(bean.stock_g > 0)) return null;
         const bags      = Array.isArray(bean.bags) ? bean.bags : [];
         const activeBag = bags.length ? bags[bags.length - 1] : null;
         const openedAt  = activeBag?.openedAt || 0;
         const name      = String(bean.name || '').toLowerCase();
+        const idExists  = new Set((allBeans || []).map(b => b.id));
         const consumed  = doseRows.reduce((sum, r) => {
             const d = parseFloat(r.dose);
             if (!d) return sum;
-            const matches = r.beanId != null
+            const matches = r.beanId != null && idExists.has(r.beanId)
                 ? r.beanId === bean.id
                 : String(r.coffee || '').toLowerCase() === name;
             if (!matches) return sum;
@@ -57,8 +62,9 @@ class LibraryService {
     // pre-existing beans) keep showing up.
     getActiveBeans() {
         const doseRows = shotRepo.getAnnotatedDoses();
-        return (this.getLibrary().beans || [])
-            .map(b => ({ bean: b, remaining: this.computeBeanRemaining(b, doseRows) }))
+        const beans    = this.getLibrary().beans || [];
+        return beans
+            .map(b => ({ bean: b, remaining: this.computeBeanRemaining(b, doseRows, beans) }))
             .filter(({ remaining, bean }) => remaining !== null && remaining > 0 && bean.enabled !== false)
             .map(({ bean, remaining }) => ({
                 id: bean.id, name: bean.name, roaster: bean.roaster || null,
@@ -331,13 +337,12 @@ class LibraryService {
 
     // #456: resolves a shot/annotation to its library bean, preferring the
     // stable beanId link over the free-text coffee name — beanId survives
-    // bean renames, which name-matching never could. Unlike
-    // computeBeanRemaining's stricter "no rescue" stock-accounting match
-    // (a deleted+reimported bean must NOT inherit the old bean's shots),
-    // this general-purpose resolver DOES fall back to a name match when
-    // beanId is absent or unresolved — it backs advisory features (scoring,
-    // grind advice, roast date) where "best guess via name" beats "nothing",
-    // not money/stock integrity.
+    // bean renames and delete+reimport, which name-matching never could on
+    // its own. Same underlying rule as computeBeanRemaining above: when
+    // beanId resolves to a bean, it's trusted exclusively; only when it's
+    // absent, or points at nothing currently in the library, does this fall
+    // back to a name match (recovering the old delete+reimport-under-the-
+    // same-name case, and covering annotations that predate beanId).
     resolveBeanForAnnotation(annotation, beans) {
         const list = beans || this.getLibrary().beans || [];
         if (annotation?.beanId != null) {
@@ -357,7 +362,7 @@ class LibraryService {
         const bags      = Array.isArray(bean.bags) ? bean.bags : [];
         const activeBag = bags.length ? bags[bags.length - 1] : null;
         if (!activeBag || activeBag.lowStockNotifiedAt) return;
-        const remaining = this.computeBeanRemaining(bean, shotRepo.getAnnotatedDoses());
+        const remaining = this.computeBeanRemaining(bean, shotRepo.getAnnotatedDoses(), lib.beans);
         if (remaining === null || remaining >= LOW_STOCK_THRESHOLD_G) return;
         const { loadOrdersSettings }           = require('../data');
         const { sendHaNotify, getHaLanguage }  = require('../ha');

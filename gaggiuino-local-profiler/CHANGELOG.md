@@ -1,3 +1,8 @@
+## [2.13.1] – 2026-07-22
+
+### Fixed
+- **#456 correction: a bean deleted and reimported under the same name now correctly recovers its old shots' consumption again.** The just-shipped #456 fix made `computeBeanRemaining()` trust a dose row's `beanId` exclusively whenever it was set, with no name fallback at all — which actually contradicted the original design goal ("matching over a stable id instead of name, so identity survives a delete+reimport"): a *future* delete+reimport under the same name would have reset that bean's consumption to 0 again, reproducing the exact bug #456 was meant to fix. It only looked fixed for the original incident because of a lucky backfill-timing coincidence. Corrected: a dose row's `beanId` is now trusted exclusively only when it still resolves to *some* currently-existing bean (checked against the full beans list, now threaded through `computeBeanRemaining`'s call sites) — a row whose bean was genuinely deleted falls back to name matching, recovering its consumption onto a reimported bean of the same name, while a row whose `beanId` points at a different, still-existing bean is never miscounted toward a same-named bean it doesn't belong to. `resolveBeanForAnnotation()`'s advisory matching already worked this way and is unaffected. Closes remaining scope of #456.
+
 ## [2.13.0] – 2026-07-22
 
 ### Added

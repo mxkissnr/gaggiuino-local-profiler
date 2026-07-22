@@ -74,13 +74,19 @@ export function renderBeanList() {
     el.innerHTML = `<div class="lib-empty">${t('lib_empty_beans')}</div>`;
     return;
   }
+  // #456: a beanId that still resolves to SOME currently-existing bean is
+  // trusted exclusively; only a null/dangling beanId falls back to name
+  // matching — mirrors LibraryService.computeBeanRemaining on the backend
+  // (see its comment for why: this is what lets a bean deleted and
+  // reimported under the same name recover its own consumption history).
+  const idExists = new Set(beans.map(bn => bn.id));
   el.innerHTML = beans.map(b => {
-    // #456: beanId-first match (mirrors LibraryService.computeBeanRemaining
-    // on the backend) — a row with a beanId that doesn't match this bean is
-    // NOT rescued by a name match; only rows without a beanId fall back.
-    const beanMatch = s => s.annotation?.beanId != null
-      ? s.annotation.beanId === b.id
-      : (s.annotation?.coffee || '').toLowerCase() === b.name.toLowerCase();
+    const beanMatch = s => {
+      const beanId = s.annotation?.beanId;
+      return beanId != null && idExists.has(beanId)
+        ? beanId === b.id
+        : (s.annotation?.coffee || '').toLowerCase() === b.name.toLowerCase();
+    };
 
     // Total consumption across all bags (all shots matching this bean)
     const totalConsumed = Math.round(S.shots.reduce((sum, s) => {
