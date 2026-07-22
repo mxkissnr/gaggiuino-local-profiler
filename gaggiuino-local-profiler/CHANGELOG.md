@@ -1,3 +1,8 @@
+## [2.12.2] – 2026-07-22
+
+### Fixed
+- **Shots stopped counting toward a bean's consumption after the bean was deleted and reimported.** Every place that attributed a shot to a bean matched `annotation.coffee` (a free-text name string) against the library's `bean.name`, case-insensitively — including consumption math, scoring, grinder-wear, and dial-in suggestions. A bean deleted and reimported under the same name gets a fresh `id`/bag, but historical shots still only carried the old name text, so they silently stopped being attributed to the "new" bean object (found in production: two 37g-dose shots dropped out of a bean's remaining-stock math this way). Shots now also record a stable `beanId` (set from the annotation panel's bean select, quick-clone, and the dial-in wizard) which is preferred everywhere a shot is matched to a bean, with the free-text name kept as a fallback for annotations saved before this change and as an unchanged display/export value. A one-time startup migration backfills `beanId` on existing annotations whose name currently matches exactly one bean, unambiguously; anything ambiguous is left on the name-matching fallback rather than guessed. Closes #456
+
 ## [2.12.1] – 2026-07-22
 
 ### Fixed
