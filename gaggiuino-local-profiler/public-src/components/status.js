@@ -10,10 +10,17 @@ import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge } from './o
 // see #296.
 let knownShotCount = null;
 
-export async function updateStatus() {
+// #464: an explicit machineId scopes the status-dot/hostname fields below to
+// that machine (see routes/system.js's /api/status). 'all'/null/undefined
+// fall back to the unscoped call (default machine), mirroring the same
+// convention views/live.js and views/maintenance.js already use for the
+// 'all' switcher value — so single-machine installs and the unparameterized
+// 30s poll are unaffected.
+export async function updateStatus(machineId) {
   try {
+    const qs = (machineId != null && machineId !== 'all') ? `?machineId=${encodeURIComponent(machineId)}` : '';
     const [statusRes, switchRes] = await Promise.all([
-      apiFetch('api/status'),
+      apiFetch(`api/status${qs}`),
       apiFetch('api/switch').catch(() => null)
     ]);
     if (!statusRes.ok) return;

@@ -1,3 +1,8 @@
+## [2.13.5] – 2026-07-22
+
+### Fixed
+- **Topbar status dot/hostname kept showing the default machine after switching to another one.** `GET /api/status` always described `getMachineUrl(opts)` (the default machine) with no way to scope it, and `applyActiveMachineChange()` (`public-src/components/machines-settings.js`) never re-triggered a status refresh on switch — so `#railStatusDot`/`#railMachineName` stayed on whichever machine was active at page load, even past the next scheduled 30s poll, since that poll hit the same unscoped endpoint. `/api/status` now accepts an optional `?machineId=`; for a non-default machine it runs a live reachability probe through the same `adapter.getStatus()` plumbing `/api/machines/:id/test` already uses and returns that machine's own `machineHostname`/`lastSync`/`lastSyncError`/`machineReachable` instead of the default machine's — omitting the param (or passing the default machine's own id) is byte-for-byte unchanged, so the unparameterized pollers other callers rely on are unaffected. `updateStatus()` (`public-src/components/status.js`) takes an optional machine id and forwards it as that query param; `applyActiveMachineChange()` now calls it with the newly active machine right after a switch instead of waiting on the next poll. The "All machines" switcher value is treated as the default machine, mirroring the same convention `views/live.js` and `views/maintenance.js` already use for it. Closes #464
+
 ## [2.13.4] – 2026-07-22
 
 ### Fixed
