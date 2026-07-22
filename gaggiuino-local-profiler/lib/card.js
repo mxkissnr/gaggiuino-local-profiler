@@ -259,6 +259,35 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
+// Shared radius for every chip/pill/tile shape on the card — the canvas
+// equivalent of the live app's 8px --radius token (public-src/style.css),
+// scaled up for this 1080px-wide canvas. Used both by drawChip() below and
+// by the stats-grid tiles, so nothing on the card invents its own radius
+// anymore (previously: full-pill chipH/2 on the origin/legend chips and the
+// footer pill, a hardcoded 3px on the phase-duration chips). #463.
+const CHIP_R = 14;
+
+// Fills (and optionally strokes) a rounded-rect chip/pill/tile in one call —
+// consolidates four near-identical roundRect+fill+stroke sites (origin chip,
+// phase-duration chips, legend chips, footer "Made with GLP" pill). Radius is
+// clamped to the shape's own half-height/half-width so short chips (e.g. the
+// 18px-tall phase chips) never self-intersect. #463.
+function drawChip(ctx, x, y, w, h, { fill, stroke, radius = CHIP_R } = {}) {
+    const r = Math.min(radius, h / 2, w / 2);
+    roundRect(ctx, x, y, w, h, r);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+}
+
+// Shrinks `text` 4 characters at a time (plus an ellipsis) until it fits
+// maxWidth — dedup of a loop previously copy-pasted at the bean headline and
+// the profile/machine subline. Uses ctx's currently-set font. #463.
+function truncateText(ctx, text, maxWidth) {
+    let t = text;
+    while (ctx.measureText(t).width > maxWidth && t.length > 4) t = t.slice(0, -4) + '…';
+    return t;
+}
+
 // Draw a polyline from a value array onto the chart canvas coordinate system
 // yScale: function(val) → canvas Y
 // xScale: function(index) → canvas X
@@ -383,9 +412,6 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
     const headerY  = BAR_H;
     ctx.fillStyle = GLP.bgCard;
     ctx.fillRect(0, headerY, W, HH);
-    ctx.strokeStyle = GLP.border;
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, headerY + HH); ctx.lineTo(W, headerY + HH); ctx.stroke();
     const headerBottom = headerY + HH;
 
     // GLP logo (icon.png) — or fallback to bold text
@@ -424,6 +450,10 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
         // dim track for the remainder. No shadow/glow — the app never uses that.
         // (createConicGradient rendered near-invisible on @napi-rs/canvas —
         // stick to the linear-gradient technique proven in the approved mockup.)
+        // Ring width ≈10% of the ring's own diameter and a butt (non-rounded)
+        // cap — matches the live app's .verdict-ring donut (public-src/style.css:
+        // 58px disc, 46px inner cutout → 6px ring, ~10% of diameter). #463.
+        const ringLW = scoreR * 0.2;
         const frac = Math.max(0, Math.min(1, score / 100));
         ctx.beginPath();
         ctx.arc(scx, scy, scoreR, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
@@ -435,14 +465,14 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
         } else {
             ctx.strokeStyle = sColor;
         }
-        ctx.lineWidth = 5;
-        ctx.lineCap = 'round';
+        ctx.lineWidth = ringLW;
+        ctx.lineCap = 'butt';
         ctx.stroke();
         // Dim track for the remainder of the ring
         ctx.beginPath();
         ctx.arc(scx, scy, scoreR, -Math.PI / 2 + frac * Math.PI * 2, 1.5 * Math.PI);
         ctx.strokeStyle = GLP.border;
-        ctx.lineWidth = 5;
+        ctx.lineWidth = ringLW;
         ctx.stroke();
         // Number
         ctx.fillStyle = GLP.text;
@@ -496,18 +526,15 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
 
     let headline = bean || profileName;
     ctx.font = Fs(52, true);
-    while (ctx.measureText(headline).width > headlineMaxW && headline.length > 4)
-        headline = headline.slice(0, -4) + '…';
+    headline = truncateText(ctx, headline, headlineMaxW);
 
     if (originCode) {
         const chipH = 34;
         const chipX = PX + photoLead;
-        roundRect(ctx, chipX, chipCY - chipH / 2, chipW, chipH, chipH / 2);
-        ctx.fillStyle = GLP.accentTint + '0.14)';
-        ctx.fill();
-        ctx.strokeStyle = GLP.accentTint + '0.35)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        drawChip(ctx, chipX, chipCY - chipH / 2, chipW, chipH, {
+            fill:   GLP.accentTint + '0.14)',
+            stroke: GLP.accentTint + '0.35)',
+        });
         ctx.fillStyle = GLP.accentFrom;
         ctx.font = F(18, true);
         ctx.textAlign = 'center';
@@ -548,8 +575,7 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
         ctx.fillStyle = GLP.textDim;
         ctx.font = F(24);
         let secondLine = secondParts.join('  ·  ');
-        while (ctx.measureText(secondLine).width > nameMaxW + 140 && secondLine.length > 4)
-            secondLine = secondLine.slice(0, -4) + '…';
+        secondLine = truncateText(ctx, secondLine, nameMaxW + 140);
         ctx.fillText(secondLine, PX, cursorY);
         subY = cursorY + 32;
     }
@@ -745,17 +771,13 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
 
         if (preWidth > 90) {
             const lw = ctx.measureText('Preinfusion').width + chipPad * 2;
-            roundRect(ctx, plotX + 4, chipY, lw, chipH, 3);
-            ctx.fillStyle = 'rgba(52,152,219,0.2)';
-            ctx.fill();
+            drawChip(ctx, plotX + 4, chipY, lw, chipH, { fill: 'rgba(52,152,219,0.2)' });
             ctx.fillStyle = 'rgba(52,152,219,0.9)';
             ctx.fillText('Preinfusion', plotX + 4 + chipPad, chipY + chipH / 2);
         }
         if (extWidth > 90) {
             const lw = ctx.measureText('Extraktion').width + chipPad * 2;
-            roundRect(ctx, pxEnd + 4, chipY, lw, chipH, 3);
-            ctx.fillStyle = 'rgba(243,156,18,0.2)';
-            ctx.fill();
+            drawChip(ctx, pxEnd + 4, chipY, lw, chipH, { fill: 'rgba(243,156,18,0.2)' });
             ctx.fillStyle = 'rgba(243,156,18,0.9)';
             ctx.fillText('Extraktion', pxEnd + 4 + chipPad, chipY + chipH / 2);
         }
@@ -783,12 +805,10 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
 
         legendItems.forEach((it, i) => {
             const cw = chipWidths[i];
-            roundRect(ctx, lx, legY - chipH / 2, cw, chipH, chipH / 2);
-            ctx.fillStyle = GLP.bgChart;
-            ctx.fill();
-            ctx.strokeStyle = GLP.borderDim;
-            ctx.lineWidth = 1;
-            ctx.stroke();
+            drawChip(ctx, lx, legY - chipH / 2, cw, chipH, {
+                fill:   GLP.bgChart,
+                stroke: GLP.borderDim,
+            });
 
             const dotX = lx + chipPad + dotR;
             ctx.beginPath();
@@ -809,14 +829,14 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
         });
     }
 
-    // ── STATS GRID — matches GLP web UI layout (Image #21) ────────────────
+    // ── STATS GRID — matches GLP web UI layout (Image #21), rebuilt as a
+    // tile grid (#463): one flat, borderless GLP.bgCard box per stat with
+    // gaps between tiles, mirroring the live app's recipe-card/process-card
+    // language, instead of one bordered panel with internal divider lines. ──
     const statsY   = outerY + outerH + 8;
     const statsH   = STATS_H;
-    const sX       = PX - 8;          // left edge of stats card
-    const sW       = W - 2 * PX + 16; // width of stats card
-    const colW     = sW / 2;
-    const lX       = sX + 16;         // left col text start
-    const rX       = sX + colW + 16;  // right col text start
+    const sX       = PX - 8;          // left edge of stats area
+    const sW       = W - 2 * PX + 16; // width of stats area
     const lastWF   = weightFlow.filter(v => v > 0).slice(-1)[0] != null
         ? +(weightFlow.filter(v => v > 0).slice(-1)[0]).toFixed(1) : null;
 
@@ -852,42 +872,29 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
     ]);
     rightRows.push(['DAUER', fmtDurSec(totalSec), '']);
 
-    const nRows = Math.max(leftRows.length, rightRows.length);
-    const rowH  = statsH / nRows;
+    const nRows    = Math.max(leftRows.length, rightRows.length);
+    const TILE_GAP = 14;
+    const tileW    = (sW - TILE_GAP) / 2;
+    const tileH    = (statsH - TILE_GAP * (nRows - 1)) / nRows;
+    const lTileX   = sX;
+    const rTileX   = sX + tileW + TILE_GAP;
+    const lX       = lTileX + 16;   // left col text start
+    const rX       = rTileX + 16;   // right col text start
 
-    roundRect(ctx, sX, statsY, sW, statsH, 8);
-    ctx.fillStyle = GLP.bgCard;
-    ctx.fill();
-    ctx.strokeStyle = GLP.border;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Vertical divider
-    ctx.beginPath();
-    ctx.moveTo(sX + colW, statsY + 10);
-    ctx.lineTo(sX + colW, statsY + statsH - 10);
-    ctx.stroke();
-
-    const drawStatsCol = (rows, textX) => {
+    const drawStatsCol = (rows, tileX, textX) => {
         rows.forEach(([lbl, val, sub, special], r) => {
-            const ry = statsY + r * rowH;
-            if (r > 0) {
-                ctx.strokeStyle = GLP.border;
-                ctx.lineWidth   = 1;
-                ctx.beginPath();
-                ctx.moveTo(textX - 4, ry);
-                ctx.lineTo(textX + colW - 24, ry);
-                ctx.stroke();
-            }
+            const ry = statsY + r * (tileH + TILE_GAP);
+            drawChip(ctx, tileX, ry, tileW, tileH, { fill: GLP.bgCard });
+
             ctx.textAlign    = 'left';
             ctx.textBaseline = 'alphabetic';
             ctx.fillStyle    = GLP.textMute;
             ctx.font         = F(12);
-            ctx.fillText(lbl, textX, ry + 15);
+            ctx.fillText(lbl, textX, ry + 22);
 
             if (special === 'phasen') {
                 // Draw phase chips
-                const chipH = 18, chipPad = 6, chipY2 = ry + 20;
+                const chipH = 18, chipPad = 6, chipY2 = ry + 27;
                 ctx.font = F(12);
                 ctx.textBaseline = 'middle';
                 let cx = textX;
@@ -897,9 +904,7 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
                 chips.forEach(({ t, c }) => {
                     const tw = ctx.measureText(t).width;
                     const cw = tw + chipPad * 2;
-                    roundRect(ctx, cx, chipY2, cw, chipH, 3);
-                    ctx.fillStyle = `rgba(${c},0.18)`;
-                    ctx.fill();
+                    drawChip(ctx, cx, chipY2, cw, chipH, { fill: `rgba(${c},0.18)` });
                     ctx.fillStyle = `rgba(${c},0.9)`;
                     ctx.fillText(t, cx + chipPad, chipY2 + chipH / 2);
                     cx += cw + 8;
@@ -909,18 +914,18 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
                 ctx.font = F(20, true);
                 const valW = ctx.measureText(val).width;
                 ctx.fillStyle = GLP.text;
-                ctx.fillText(val, textX, ry + 38);
+                ctx.fillText(val, textX, ry + 46);
                 if (sub) {
                     ctx.fillStyle = GLP.textMute;
                     ctx.font      = F(13);
-                    ctx.fillText(sub, textX + valW + 8, ry + 38);
+                    ctx.fillText(sub, textX + valW + 8, ry + 46);
                 }
             }
         });
     };
 
-    drawStatsCol(leftRows,  lX);
-    drawStatsCol(rightRows, rX);
+    drawStatsCol(leftRows,  lTileX, lX);
+    drawStatsCol(rightRows, rTileX, rX);
     ctx.textAlign = 'left';
 
     // ── FOOTER ─────────────────────────────────────────────────────────────
@@ -944,12 +949,10 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
     const pillW = ctx.measureText(pillText).width + pillPad * 2;
     const pillH = 30;
     const pillX = W - PX - pillW, pillY = footY + 6 - pillH / 2;
-    roundRect(ctx, pillX, pillY, pillW, pillH, pillH / 2);
-    ctx.fillStyle = GLP.accentTint + '0.14)';
-    ctx.fill();
-    ctx.strokeStyle = GLP.accentTint + '0.3)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    drawChip(ctx, pillX, pillY, pillW, pillH, {
+        fill:   GLP.accentTint + '0.14)',
+        stroke: GLP.accentTint + '0.3)',
+    });
     ctx.fillStyle = GLP.accentFrom;
     ctx.textAlign = 'center';
     ctx.fillText(pillText, pillX + pillW / 2, footY + 6);

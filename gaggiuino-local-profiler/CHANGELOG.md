@@ -1,3 +1,8 @@
+## [2.13.4] – 2026-07-22
+
+### Fixed
+- **Share-card PNG generator's visual language brought in line with the current app design.** `generateShareCard()` (`lib/card.js`) predated the shell/verdict redesign (#398, #402, #411) and still looked like the old app: the score ring was a thin `lineWidth:5` rounded-cap stroke instead of the app's `.verdict-ring` filled-donut proportions (now `lineWidth` ≈10% of the ring's diameter, `lineCap:'butt'`); the bottom stat area was one bordered panel with internal divider lines instead of individual cards (now a grid of flat, borderless `roundRect` tiles with gaps, mirroring `.recipe-card`/`.process-card`); four near-duplicate chip-drawing call sites (origin chip, phase-duration chips, legend chips, footer pill) each invented their own radius, some full-pill — consolidated into one `drawChip()` helper sharing a single `CHIP_R` constant matching the app's squarish 8px `--radius` token; and the header band kept a 1px bottom hairline the live `#content-topbar` no longer has, now removed. A duplicated headline-truncation loop was also deduped into one `truncateText()` helper. Purely visual — chart series/axis scaling, theme/accent plumbing, and typography are untouched. Closes #463
+
 ## [2.13.3] – 2026-07-22
 
 ### Fixed
