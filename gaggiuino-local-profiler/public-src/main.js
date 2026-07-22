@@ -519,7 +519,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // toggling and status.js's live/orders visibility gating both keep
   // working unchanged.
   document.getElementById('btnLive').addEventListener('click', () => switchMode('live'));
-  document.getElementById('btnShots').addEventListener('click', () => switchMode('shots'));
+  // #454: Shots tab always lands on the shot detail (per #431's intent),
+  // not wherever mobileShotSubview happened to be left — mirrors goToShot().
+  document.getElementById('btnShots').addEventListener('click', () => {
+    switchMode('shots');
+    if (window.innerWidth <= 768) setMobileShotSubview('detail');
+  });
   document.getElementById('btnAnalytics').addEventListener('click', () => switchMode('analytics'));
   document.getElementById('btnDialin').addEventListener('click', () => switchMode('dialin'));
   document.getElementById('btnLibrary').addEventListener('click', () => switchMode('library'));

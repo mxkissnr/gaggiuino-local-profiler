@@ -1,3 +1,9 @@
+## [2.12.1] – 2026-07-22
+
+### Fixed
+- **Mobile Shots tab now opens straight to the last shot's detail, not the shot list.** `S.mobileShotSubview` was never initialized, so it defaulted to `undefined` on a fresh page load — `updateMobileShotSidebarVisibility()` treats anything other than `'detail'` as "show the list", which contradicted the #431 intent ("Shots opens the shot detail directly"). Now defaults to `'detail'`, and the `btnShots` bottom-nav handler force-sets it too (mirroring `goToShot()`), so both first load and every subsequent tap land on the shot. Desktop is unaffected (always shows both panes). Closes #454
+- **Shot photo thumbnail enlarged** from 48px to 88px in the annotation panel for better visibility; still opens the fullscreen lightbox on click. Closes #454
+
 ## [2.12.0] – 2026-07-22
 
 ### Added
