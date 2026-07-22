@@ -1,3 +1,9 @@
+## [2.13.2] – 2026-07-22
+
+### Fixed
+- **Shot-detail header action buttons (CSV / .shot / Profil / Teilen) no longer visibly misaligned.** `.card-fmt-wrap` — the extra wrapper `#shareCardBtn` needs so its dropdown menu (`.card-fmt-menu`) can be positioned relative to it — was `display: inline-block` with no height normalization, so in the flex action row its box didn't collapse to exactly the button's height like the three bare sibling `<button>`s did. Now `inline-flex` so it hugs the "Teilen" button's exact box; the dropdown menu (already `position: absolute`) is unaffected.
+- **Chart shrank instead of growing on small phones.** `.chart-container`/`.live-chart-container` height dropped to a flat 240px at ≤480px width — literally half the 480px desktop height, the opposite of adaptive — a tradeoff from #194 to leave room for the annotation panel below, never revisited. Heights are now `clamp()`ed to a viewport-relative range with a sane floor (480px desktop; `clamp(300px, 50vh, 400px)` ≤768px; `clamp(280px, 42vh, 360px)` ≤480px) so the chart actually gets more room on taller phones instead of a fixed shrink, while the floor keeps it usable on the smallest screens. The annotation panel sits below in normal document flow inside `#main`'s existing scroll container, so it's unaffected either way. Closes #459
+
 ## [2.13.1] – 2026-07-22
 
 ### Fixed
