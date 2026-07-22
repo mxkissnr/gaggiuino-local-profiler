@@ -741,7 +741,7 @@
         .process-card-label { display: block; font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin-bottom: 4px; }
         .process-card-value { font-size: .9rem; font-weight: 600; color: var(--gray-200); }
 
-        .chart-container { position: relative; height: 480px; width: 100%; }
+        .chart-container { position: relative; height: clamp(320px, 55vh, 480px); width: 100%; }
 
         /* ── Annotation panel ── */
         .annotation-panel {
@@ -1377,7 +1377,7 @@
         .export-btn:hover { background: var(--gray-800); color: #fff; }
 
         /* ── Share-card format picker ── */
-        .card-fmt-wrap { position: relative; display: inline-block; }
+        .card-fmt-wrap { position: relative; display: inline-flex; align-items: flex-start; }
         .card-fmt-menu {
             display: none;
             position: absolute;
@@ -1723,7 +1723,7 @@
             .verdict-headline   { font-size: .95rem; }
             .annotation-fields { grid-template-columns: 1fr; }
             .annotation-field.full-width { grid-column: 1; }
-            .chart-container, .live-chart-container { height: 360px; }
+            .chart-container, .live-chart-container { height: clamp(300px, 50vh, 400px); }
             .live-stats        { grid-template-columns: repeat(3, 1fr); }
             /* #385: icon-only machine switcher — the active machine's name is
                already shown in the subtitle line, so on mobile the select
@@ -1755,8 +1755,10 @@
             #analytics-view, #library-view, #maintenance-view,
             #dialin-view, #settings-view, #orders-view { padding: 12px; }
 
-            /* Smaller chart to give annotation panel more room */
-            .chart-container, .live-chart-container { height: 240px; }
+            /* #459: was a fixed 240px (half of desktop) — clamp() keeps the
+               chart from shrinking on small phones while still leaving room
+               for the annotation panel below. */
+            .chart-container, .live-chart-container { height: clamp(280px, 42vh, 360px); }
             .annotation-panel  { padding: 12px; }
             .export-btn        { padding: 5px 8px; font-size: .72rem; }
         }
