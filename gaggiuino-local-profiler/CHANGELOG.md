@@ -1,3 +1,8 @@
+## [2.13.0] – 2026-07-22
+
+### Added
+- **Verdict header shows a hint when the score was weighed against the bean's own brew target.** Since #450, a shot's temperature/ratio score targets the coffee bean's own `brewTempC`/`brewRatio` recommendation from the Library instead of the generic fixed band, when set — but the score percentage just silently changed with no way to tell why. A small target-icon badge (native tooltip: "Scored against this bean's own brew target") now appears next to the verdict headline whenever that happened for the shot being viewed. The shot's own recorded target-temperature curve still takes priority over the bean's recommendation and never triggers the hint. `calcShotScore()` (`lib/score.js`) gained a `calcShotScoreDetail()` sibling that also returns this flag — the plain-number `calcShotScore()` is unchanged for its many existing callers.
+
 ## [2.12.2] – 2026-07-22
 
 ### Fixed

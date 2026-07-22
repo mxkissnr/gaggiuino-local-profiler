@@ -7,12 +7,12 @@ import {
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting }           from '../../components/sidebar.js';
-import { getShotData, calcShotScore, findPreviousShot, findPreviousShotForBean, isNewestShotForBean } from './utils.js';
+import { getShotData, calcShotScore, shotUsedBeanTarget, findPreviousShot, findPreviousShotForBean, isNewestShotForBean } from './utils.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel }                              from './annotation.js';
 import { updatePQChart }                                      from './charts.js';
 import { updateMachineBanner, updateOnboardingPanel }          from '../../components/onboarding.js';
-import { GEAR_ICON_SVG, COFFEE_ICON_SVG }                     from '../../icons.js';
+import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.js';
 import { loadShotImageBlobUrl }                               from '../../bean-image.js';
 import { openLightbox }                                       from '../../components/lightbox.js';
 
@@ -389,7 +389,12 @@ export function updateView() {
       verdictDeltaChip.style.display = 'none';
     }
 
-    document.getElementById('verdictHeadline').innerHTML = advice ? `${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'));
+    // #457: compact hint icon when the score was weighed against the bean's
+    // own brewTempC/brewRatio recommendation (#450) rather than the generic
+    // fallback band — native title tooltip, no new permanent header text.
+    const beanTargetHint = shotUsedBeanTarget(shotA)
+      ? `<span class="verdict-bean-target-hint" title="${esc(t('verdict_bean_target_hint'))}">${TARGET_ICON_SVG}</span>` : '';
+    document.getElementById('verdictHeadline').innerHTML = (advice ? `${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))) + beanTargetHint;
     document.getElementById('verdictSubline').textContent = [
       nameA,
       `Shot ${shotA.nativeId ?? shotA.id}`,

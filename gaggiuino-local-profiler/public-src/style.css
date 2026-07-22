@@ -694,6 +694,9 @@
         .verdict-text      { min-width: 0; }
         .verdict-headline  { font-size: 1.05rem; font-weight: 700; color: var(--gray-200); display: flex; align-items: center; gap: 6px; }
         .verdict-subline   { font-size: .8rem; color: var(--gray-500); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* #457: bean-target score hint — muted, same tone as the subline, so
+           it reads as metadata rather than another verdict judgment. */
+        .verdict-bean-target-hint { display: inline-flex; margin-left: 2px; color: var(--gray-500); cursor: help; }
 
         /* ── Delta chips (#402): same-profile auto-compare vs. the previous shot.
            Score delta reuses the unified score-scale classes (score-great/-ok/-bad,

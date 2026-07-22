@@ -14,6 +14,7 @@ export default {
     recipe_dose_yield:'Dosis → Opbrengst', recipe_ratio:'Ratio', recipe_bean_grinder:'Bonen & Molen', recipe_grinder_grind:(g,s)=>g?`${g} · maalgraad ${s}`:`Maalgraad ${s}`,
     process_pressure:'Druk (gem / max)', process_flow:'Pompstroom (gem)', process_temp:'Temperatuur (gem ±σ)',
     verdict_no_data:'Nog niet genoeg gegevens voor een oordeel.',
+    verdict_bean_target_hint:'Beoordeeld op basis van het eigen zettarget van deze boon',
     tab_time:`${CLOCK_ICON_SVG} Tijd`, tab_pq:'P·Q Curve',
     btn_fullscreen_close:'✕ Sluiten', btn_fullscreen_tooltip:'Volledig scherm',
     btn_compare_tooltip:'Selecteer als vergelijkingsshot (B). Tip: klik op de naam voor Shot A.', btn_delete_tooltip:'Shot verwijderen',

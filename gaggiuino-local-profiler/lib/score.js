@@ -36,14 +36,23 @@ function _parseBrewRatioTarget(brewRatio) {
 // the target instead of the generic band — but never overrides the shot's
 // own recorded target-temperature curve, which stays the highest-priority
 // source since it reflects what the profile actually asked for.
-function calcShotScore(shot, bean) {
-  if (!shot) return null;
+//
+// calcShotScoreDetail (#457) is the actual implementation, returning both
+// the score and whether the bean's own brewTempC/brewRatio recommendation
+// was actually used for either factor (as opposed to the shot's own target
+// curve or the generic fallback band) — powers the verdict header's "scored
+// against this bean's target" hint. calcShotScore stays a thin wrapper
+// around it so every existing caller that only wants the number (there are
+// many, across both backend and frontend) is untouched.
+function calcShotScoreDetail(shot, bean) {
+  if (!shot) return { score: null, usedBeanTarget: false };
   const d = shot.datapoints || {};
   const p = (d.pressure || []).map(v => v / 10);
   const pVals = p.filter(v => v >= 5);
-  if (pVals.length <= 3) return null;
+  if (pVals.length <= 3) return { score: null, usedBeanTarget: false };
 
   const scores = [], weights = [];
+  let usedBeanTarget = false;
 
   const avgP = pVals.reduce((a, b) => a + b, 0) / pVals.length;
   let s = avgP >= 7 && avgP <= 9.5 ? 100
@@ -69,6 +78,7 @@ function calcShotScore(shot, bean) {
       const dev = Math.abs(avgT - bean.brewTempC);
       acc = dev <= 0.5 ? 100 : dev <= 1 ? 90 : dev <= 2 ? 75
           : dev <= 4 ? 50 : Math.max(15, 50 - (dev - 4) * 8);
+      usedBeanTarget = true;
     } else {
       const off = avgT >= 90 && avgT <= 96 ? 0 : avgT < 90 ? 90 - avgT : avgT - 96;
       acc = off === 0 ? 100 : Math.max(15, 100 - off * 10);
@@ -98,6 +108,7 @@ function calcShotScore(shot, bean) {
     if (beanRatioTarget != null) {
       const dev = Math.abs(r - beanRatioTarget);
       s = dev <= 0.35 ? 100 : dev <= 0.75 ? 75 : Math.max(15, 75 - (dev - 0.75) * 30);
+      usedBeanTarget = true;
     } else {
       s = r >= 1.8 && r <= 2.5 ? 100
         : (r >= 1.5 && r < 1.8) || (r > 2.5 && r <= 3.2) ? 75
@@ -121,7 +132,12 @@ function calcShotScore(shot, bean) {
   scores.push(_detectChanneling(times, p) ? 20 : 100); weights.push(15);
 
   const tw = weights.reduce((a, b) => a + b, 0);
-  return tw ? Math.round(scores.reduce((acc, v, i) => acc + v * weights[i], 0) / tw) : null;
+  const score = tw ? Math.round(scores.reduce((acc, v, i) => acc + v * weights[i], 0) / tw) : null;
+  return { score, usedBeanTarget: score !== null && usedBeanTarget };
 }
 
-module.exports = { calcShotScore };
+function calcShotScore(shot, bean) {
+  return calcShotScoreDetail(shot, bean).score;
+}
+
+module.exports = { calcShotScore, calcShotScoreDetail };

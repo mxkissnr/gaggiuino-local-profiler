@@ -1,6 +1,6 @@
 import { S }                    from '../../state.js';
 import { mapToXY }              from '../../utils.js';
-import { calcShotScore as _calcShotScore } from '../../../lib/score.js';
+import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../../lib/score.js';
 
 // ── Bean age ───────────────────────────────────────────────────────────────
 
@@ -92,6 +92,17 @@ export function calcShotScore(shot, _data) {
   if (shot && shot.score !== undefined) return shot.score;
   const bean = resolveBeanForAnnotation(shot?.annotation);
   return _calcShotScore(shot, bean);
+}
+
+// #457: whether the bean's own brewTempC/brewRatio recommendation was
+// actually used for this shot's score, powering the verdict header's hint.
+// Prefers the server-computed flag (server-computed shots always carry
+// .usedBeanTarget alongside .score, per #450/#457); only recomputes locally
+// for synthetic data, mirroring calcShotScore above.
+export function shotUsedBeanTarget(shot) {
+  if (shot && shot.usedBeanTarget !== undefined) return !!shot.usedBeanTarget;
+  const bean = resolveBeanForAnnotation(shot?.annotation);
+  return _calcShotScoreDetail(shot, bean).usedBeanTarget;
 }
 
 // ── Same-profile auto-compare (#402) ────────────────────────────────────────
