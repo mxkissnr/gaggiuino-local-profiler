@@ -249,6 +249,7 @@ const ACCORDION_LABEL_FIELDS = {
     variety: 'variety', varietal: 'variety', cultivar: 'variety', sorte: 'variety',
     producer: 'producer', erzeuger: 'producer', produzent: 'producer',
     origin: 'region', region: 'region', terroir: 'region', herkunft: 'region', ursprung: 'region',
+    country: 'region', land: 'region',
     elevation: 'altitude_m', altitude: 'altitude_m', 'höhe': 'altitude_m', hoehe: 'altitude_m', lage: 'altitude_m',
 };
 const ACCORDION_LABEL_RE = new RegExp(
@@ -286,6 +287,41 @@ function scanAccordionLabelValues($) {
             fields[field] = field === 'altitude_m' ? extractAltitudeM(value) : value;
         }
     });
+    return fields;
+}
+
+// Some Shopify themes (e.g. shop.squaremilecoffee.com's "Coffee information"
+// menu accordion, #471) render each spec as its own
+// <h5 class="origin-title">Label</h5> followed by a sibling <p>Value</p>,
+// instead of "Label - Value" text lines inside a single <details> block —
+// there's no <details>/.details-content anywhere on the page at all. Blends
+// list one such group per component (e.g. Country/Process/Variety/Producer
+// repeated for each origin); first-match-wins per field, same convention as
+// scanAccordionLabelValues, so a blend picks up only its first-listed
+// component's values — an acceptable default given a blend can't be
+// represented precisely as single process/variety/producer fields anyway.
+function scanOriginWrapperFields($) {
+    const fields = {};
+    $('.origin-title').each((_, el) => {
+        const label = $(el).text().replace(/\s+/g, ' ').trim().toLowerCase();
+        const field = ACCORDION_LABEL_FIELDS[label];
+        if (!field || fields[field]) return;
+        const value = $(el).next('p').text().replace(/\s+/g, ' ').trim();
+        if (!value) return;
+        fields[field] = field === 'altitude_m' ? extractAltitudeM(value) : value;
+    });
+    return fields;
+}
+
+// Combines both markup scanners into one field map — the <details> accordion
+// scan wins where both find a value (it's the longer-verified pattern, #423),
+// origin-wrapper only fills in what the accordion scan left empty.
+function scanBeanDetailFields($) {
+    const fields = scanAccordionLabelValues($);
+    const originWrapperFields = scanOriginWrapperFields($);
+    for (const [field, value] of Object.entries(originWrapperFields)) {
+        if (fields[field] == null) fields[field] = value;
+    }
     return fields;
 }
 
@@ -441,7 +477,7 @@ function enrichGenericBeanFromHtml(bean, html, host = null) {
     const subtitle = extractTastingNotesSubtitle($);
     if (subtitle) out.flavors = mergeUnique(bean.flavors || [], splitFlavors(subtitle), 8);
 
-    const fields = scanAccordionLabelValues($);
+    const fields = scanBeanDetailFields($);
     if (!out.process && fields.process) out.process = fields.process;
     if (!out.variety && fields.variety) out.variety = fields.variety;
     if (!out.producer && fields.producer) out.producer = fields.producer;
