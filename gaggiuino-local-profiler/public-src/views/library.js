@@ -1,7 +1,7 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
-import { esc, adjustedRoastAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, toIsoDateInput, todayIsoDate, isoDateInputToMs } from '../utils.js';
+import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, toIsoDateInput, todayIsoDate, isoDateInputToMs } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, LOCALE_MAP, countryName, flagEmoji } from '../constants.js';
 import { setBeanFilter } from '../components/sidebar.js';
 import { switchMode } from '../components/mode.js';
@@ -150,11 +150,11 @@ export function renderBeanList() {
       </div>
       <button class="lib-btn-sm lib-bag-history-btn" data-action="toggle-bag-history" data-id="${b.id}" id="bagHistoryBtn${b.id}">▸ ${t('lib_bag_history')}</button>` : '';
 
-    // #freeze: freshness pauses for time a portion spends vacuum-sealed in
-    // the freezer — adjustedRoastAgeDays() subtracts the active bag's total
-    // frozen-portion time (still-frozen portions count up to now) from the
-    // plain calendar age.
-    const roastAge = adjustedRoastAgeDays(activeBag?.roastDate || b.roastDate, activeBag?.frozenPortions);
+    // #477: the bag's own freshness badge is always the real calendar age —
+    // freezing part of the bag must not make the coffee still in normal use
+    // read as fresher than it is. Frozen portions get their own effective
+    // age (frozenPortionAgeDays, below) instead of discounting this one.
+    const roastAge = roastAgeDays(activeBag?.roastDate || b.roastDate);
     const freshBadge = (roastAge != null && shouldShowFreshBadge(b.stock_g, remaining))
       ? ` <span class="lib-fresh-badge fresh-${freshnessState(roastAge)}" title="${esc(t('freshness_title', roastAge))}">${roastAge}d</span>`
       : '';
@@ -180,12 +180,20 @@ export function renderBeanList() {
             <button class="lib-save-btn" data-action="save-edit-frozen-form" data-id="${b.id}" data-portion-id="${fp.id}">${t('bag_freeze_save')}</button>
           </div>
         </div>`;
+      // #477: each portion's own effective age (its clock only runs while
+      // not frozen) — separate from the bag's badge above, which is never
+      // discounted by this. Shown in the tooltip rather than as its own
+      // badge to keep the row compact.
+      const fpAge = frozenPortionAgeDays(activeBag?.roastDate || b.roastDate, fp);
+      const fpTitle = fpAge != null
+        ? `${t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g)} — ${t('bag_frozen_portion_age', fpAge)}`
+        : t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g);
       if (fp.thawedAt) {
         const thawedStr = new Date(fp.thawedAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
-        return `<span class="lib-frozen-badge thawed" title="${esc(t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g))}">${t('bag_frozen_thawed_badge', thawedStr)}
+        return `<span class="lib-frozen-badge thawed" title="${esc(fpTitle)}">${t('bag_frozen_thawed_badge', thawedStr)}
           <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${fp.id}" title="${t('bag_frozen_edit_btn')}">✎</button></span>${editForm}`;
       }
-      return `<span class="lib-frozen-badge" title="${esc(t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g))}">${remaining}/${fp.portionCount} ${t('bag_frozen_badge', frozenStr)}
+      return `<span class="lib-frozen-badge" title="${esc(fpTitle)}">${remaining}/${fp.portionCount} ${t('bag_frozen_badge', frozenStr)}
         <button class="lib-frozen-thaw-btn" data-action="thaw-portion" data-bean-id="${b.id}" data-portion-id="${fp.id}" title="${t('bag_thaw_btn')}">${t('bag_thaw_btn')}</button>
         <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${fp.id}" title="${t('bag_frozen_edit_btn')}">✎</button></span>${editForm}`;
     }).join('')}</div>` : '';
@@ -398,8 +406,9 @@ export function closeFreezeForm(id) {
 
 // Freezes a portion of the active bag: grams move into a dated frozen pool
 // (see bag.frozenPortions in the schema) but stay counted in stock_g — the
-// freeze doesn't consume anything, it just pauses the freshness clock for
-// that portion (adjustedRoastAgeDays(), utils.js) until it's thawed.
+// freeze doesn't consume anything, it just pauses that portion's own
+// freshness clock (frozenPortionAgeDays(), utils.js, #477 — the bag's own
+// badge is never affected by this) until it's thawed.
 // frozenAt (#472) comes from the form's date picker (defaults to today, but
 // editable for logging a portion frozen in the past) rather than always
 // being "now".

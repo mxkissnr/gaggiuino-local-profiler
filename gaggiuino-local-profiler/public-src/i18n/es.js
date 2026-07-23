@@ -193,6 +193,7 @@ export default {
     bag_freeze_count:'Número de porciones', bag_freeze_weight:'Gramos por porción',
     bag_frozen_badge:(d)=>`❄ desde ${d}`, bag_frozen_thawed_badge:(d)=>`descongelado el ${d}`,
     bag_frozen_portion_title:(n,g)=>`${n}× ${g} g congelados`,
+    bag_frozen_portion_age:(d)=>`edad efectiva ${d}d`,
     bag_thaw_btn:'descongelar', bag_freeze_date:'Fecha de congelación', bag_frozen_edit_btn:'Editar porción',
     lib_recipes:'Recetas', lib_milk:'Leche',
     lib_add_milk:'+ Agregar leche', lib_milk_name:'Nombre *', lib_milk_name_ph:'ej. Leche entera',
