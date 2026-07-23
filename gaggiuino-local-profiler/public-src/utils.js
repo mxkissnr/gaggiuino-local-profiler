@@ -84,26 +84,23 @@ export function freshnessState(days) {
 }
 
 // ── Frozen portions (freeze/thaw) ────────────────────────────────────────
-// Total days a bag's frozen portions have spent vacuum-sealed below freezing
-// — the freshness clock pauses for that duration (see adjustedRoastAgeDays
-// below). Still-frozen portions (no thawedAt) keep accruing up to `nowMs`;
-// thawed ones stop accruing at their own thawedAt.
-export function frozenOffsetDays(frozenPortions, nowMs = Date.now()) {
-  if (!Array.isArray(frozenPortions)) return 0;
-  return frozenPortions.reduce((sum, fp) => {
-    if (!(fp?.frozenAt > 0)) return sum;
-    const end = fp.thawedAt > fp.frozenAt ? fp.thawedAt : nowMs;
-    return sum + Math.max(0, (end - fp.frozenAt) / 86400000);
-  }, 0);
-}
-
-// roastAgeDays() adjusted for time a bag's portions spent frozen — freezing
-// a portion pauses its aging clock rather than stopping the count outright,
-// so the badge still reflects genuine roast age minus frozen time.
-export function adjustedRoastAgeDays(roastDateStr, frozenPortions, nowMs = Date.now()) {
-  const days = roastAgeDays(roastDateStr, nowMs);
-  if (days == null) return null;
-  return Math.max(0, Math.round(days - frozenOffsetDays(frozenPortions, nowMs)));
+// #477: an earlier version discounted the bag's own freshness badge by the
+// total time ANY portion spent frozen — but that badge represents the whole
+// bag, including coffee that was never frozen and keeps aging normally.
+// Freezing 20 of 500g doesn't pause the other 480g's clock, so the bag-level
+// badge must always use plain roastAgeDays(), never an offset one.
+//
+// A frozen portion's OWN effective age is tracked separately here instead:
+// it accrues normally up to frozenAt, then holds flat while (any of) it is
+// still frozen (remainingCount > 0, no thawedAt), then resumes counting
+// from thawedAt once closed out — i.e. its clock only runs while not frozen.
+export function frozenPortionAgeDays(roastDateStr, portion, nowMs = Date.now()) {
+  if (!portion || !(portion.frozenAt > 0)) return null;
+  const ageAtFreeze = roastAgeDays(roastDateStr, portion.frozenAt);
+  if (ageAtFreeze == null) return null;
+  if (!(portion.thawedAt > portion.frozenAt)) return ageAtFreeze;
+  const daysSinceThaw = Math.floor((nowMs - portion.thawedAt) / 86400000);
+  return ageAtFreeze + Math.max(0, daysSinceThaw);
 }
 
 // A stock-tracked bean with nothing left shouldn't nag about freshness — the

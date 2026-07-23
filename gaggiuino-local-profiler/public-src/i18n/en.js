@@ -193,6 +193,7 @@ export default {
     bag_freeze_count:'Portion count', bag_freeze_weight:'Grams per portion',
     bag_frozen_badge:(d)=>`❄ since ${d}`, bag_frozen_thawed_badge:(d)=>`thawed ${d}`,
     bag_frozen_portion_title:(n,g)=>`${n}× ${g} g frozen`,
+    bag_frozen_portion_age:(d)=>`effective age ${d}d`,
     bag_thaw_btn:'thaw', bag_freeze_date:'Freeze date', bag_frozen_edit_btn:'Edit portion',
     lib_recipes:'Recipes', lib_milk:'Milk',
     lib_add_milk:'+ Add milk', lib_milk_name:'Name *', lib_milk_name_ph:'e.g. Whole milk',
