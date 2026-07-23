@@ -1,3 +1,8 @@
+## [2.15.1] – 2026-07-23
+
+### Fixed
+- **Bean roast-freshness badge no longer discounted by frozen time it never applied to.** `adjustedRoastAgeDays()` (added in 2.15.0) subtracted a bag's total frozen-portion time from the single freshness figure shown on the bean card — but that badge represents the whole bag, including any coffee that was never frozen and keeps aging normally. Freezing 20g of a 500g bag doesn't pause the clock on the other 480g still in daily use; the badge was nonetheless understating that portion's real age. The bag badge now always shows plain, unadjusted `roastAgeDays()`. Each frozen portion instead tracks its own effective age (`frozenPortionAgeDays`) — accruing normally up to freeze time, holding flat while frozen, resuming from thaw time — shown in that portion's own tooltip rather than folded into the bag-wide badge. Closes #477
+
 ## [2.15.0] – 2026-07-23
 
 ### Added
