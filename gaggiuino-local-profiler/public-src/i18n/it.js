@@ -193,7 +193,7 @@ export default {
     bag_freeze_count:'Numero di porzioni', bag_freeze_weight:'Grammi per porzione',
     bag_frozen_badge:(d)=>`❄ dal ${d}`, bag_frozen_thawed_badge:(d)=>`scongelato il ${d}`,
     bag_frozen_portion_title:(n,g)=>`${n}× ${g} g congelati`,
-    bag_thaw_btn:'scongela',
+    bag_thaw_btn:'scongela', bag_freeze_date:'Data di congelamento', bag_frozen_edit_btn:'Modifica porzione',
     lib_recipes:'Ricette', lib_milk:'Latte',
     lib_add_milk:'+ Aggiungi latte', lib_milk_name:'Nome *', lib_milk_name_ph:'es. Latte intero',
     lib_milk_stock:'Scorta (ml)', lib_milk_emoji:'Emoji', lib_milk_restock:'Rifornisci',

@@ -193,7 +193,7 @@ export default {
     bag_freeze_count:'Aantal porties', bag_freeze_weight:'Gram per portie',
     bag_frozen_badge:(d)=>`❄ sinds ${d}`, bag_frozen_thawed_badge:(d)=>`ontdooid op ${d}`,
     bag_frozen_portion_title:(n,g)=>`${n}× ${g} g ingevroren`,
-    bag_thaw_btn:'ontdooien',
+    bag_thaw_btn:'ontdooien', bag_freeze_date:'Invriesdatum', bag_frozen_edit_btn:'Portie bewerken',
     lib_recipes:'Recepten', lib_milk:'Melk',
     lib_add_milk:'+ Melk toevoegen', lib_milk_name:'Naam *', lib_milk_name_ph:'bijv. Volle melk',
     lib_milk_stock:'Voorraad (ml)', lib_milk_emoji:'Emoji', lib_milk_restock:'Aanvullen',

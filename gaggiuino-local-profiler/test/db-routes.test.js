@@ -668,7 +668,54 @@ describe('frozen portions (freeze/thaw)', () => {
         expect(r.status).toBe(404);
     });
 
-    it('marks a frozen portion thawed, stamping thawedAt, and stock_g stays put', async () => {
+    it('thaws one portion at a time, only stamping thawedAt once remainingCount reaches 0 (#472)', async () => {
+        const bean = await makeStockedBean();
+        const frozen = await (await fetch(`${baseUrl}/api/library/bean/${bean.id}/freeze-portions`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionCount: 20, portionWeight_g: 18.5 }),
+        })).json();
+        const portionId = frozen.bags[0].frozenPortions[0].id;
+        expect(frozen.bags[0].frozenPortions[0].remainingCount).toBe(20);
+
+        const r1 = await fetch(`${baseUrl}/api/library/bean/${bean.id}/thaw-portion`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionId }),
+        });
+        expect(r1.status).toBe(200);
+        const afterOne = await r1.json();
+        expect(afterOne.stock_g).toBe(500);
+        expect(afterOne.bags[0].frozenPortions[0].remainingCount).toBe(19);
+        expect(afterOne.bags[0].frozenPortions[0].thawedAt).toBeUndefined();
+
+        const r2 = await fetch(`${baseUrl}/api/library/bean/${bean.id}/thaw-portion`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionId, count: 19 }),
+        });
+        const afterAll = await r2.json();
+        expect(afterAll.bags[0].frozenPortions[0].remainingCount).toBe(0);
+        expect(afterAll.bags[0].frozenPortions[0].thawedAt).toBeTypeOf('number');
+        expect(afterAll.stock_g).toBe(500);
+    });
+
+    it('lets a client freeze-log a past date via frozenAt, and clamps a bogus one to now (#472)', async () => {
+        const bean = await makeStockedBean();
+        const pastDate = Date.now() - 5 * 86400000;
+        const r = await fetch(`${baseUrl}/api/library/bean/${bean.id}/freeze-portions`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionCount: 20, portionWeight_g: 18.5, frozenAt: pastDate }),
+        });
+        const bean1 = await r.json();
+        expect(bean1.bags[0].frozenPortions[0].frozenAt).toBe(pastDate);
+
+        const r2 = await fetch(`${baseUrl}/api/library/bean/${bean.id}/freeze-portions`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionCount: 5, portionWeight_g: 18.5, frozenAt: 'not-a-timestamp' }),
+        });
+        const bean2 = await r2.json();
+        expect(bean2.bags[0].frozenPortions[1].frozenAt).toBeCloseTo(Date.now(), -3);
+    });
+
+    it('adjusts a frozen portion\'s count/weight/date after the fact, and un-thaws it when raised back above 0 (#472)', async () => {
         const bean = await makeStockedBean();
         const frozen = await (await fetch(`${baseUrl}/api/library/bean/${bean.id}/freeze-portions`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -676,14 +723,31 @@ describe('frozen portions (freeze/thaw)', () => {
         })).json();
         const portionId = frozen.bags[0].frozenPortions[0].id;
 
-        const r = await fetch(`${baseUrl}/api/library/bean/${bean.id}/thaw-portion`, {
+        const r = await fetch(`${baseUrl}/api/library/bean/${bean.id}/adjust-frozen-portion`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ portionId }),
+            body: JSON.stringify({ portionId, remainingCount: 0, portionWeight_g: 19 }),
         });
-        expect(r.status).toBe(200);
-        const updated = await r.json();
-        expect(updated.stock_g).toBe(500);
-        expect(updated.bags[0].frozenPortions[0].thawedAt).toBeTypeOf('number');
+        const closed = await r.json();
+        expect(closed.bags[0].frozenPortions[0].remainingCount).toBe(0);
+        expect(closed.bags[0].frozenPortions[0].portionWeight_g).toBe(19);
+        expect(closed.bags[0].frozenPortions[0].thawedAt).toBeTypeOf('number');
+
+        const r2 = await fetch(`${baseUrl}/api/library/bean/${bean.id}/adjust-frozen-portion`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionId, remainingCount: 3 }),
+        });
+        const reopened = await r2.json();
+        expect(reopened.bags[0].frozenPortions[0].remainingCount).toBe(3);
+        expect(reopened.bags[0].frozenPortions[0].thawedAt).toBeUndefined();
+    });
+
+    it('404s adjust-frozen-portion for a portion that does not exist', async () => {
+        const bean = await makeStockedBean();
+        const r = await fetch(`${baseUrl}/api/library/bean/${bean.id}/adjust-frozen-portion`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionId: 424242, remainingCount: 0 }),
+        });
+        expect(r.status).toBe(404);
     });
 
     it('404s thaw-portion for a portion that does not exist', async () => {

@@ -29,6 +29,50 @@ export function roastAgeDays(str, nowMs = Date.now()) {
   return days >= 0 && days <= 730 ? days : null;
 }
 
+// ── Date-input helpers (#473) ────────────────────────────────────────────
+// Native <input type="date"> always reads/writes ISO YYYY-MM-DD via .value
+// (roastAgeDays above already parses that alongside the legacy DD.MM.YYYY
+// text-field format, so no backend change was needed for existing fields).
+// This normalizes either stored format into the YYYY-MM-DD a date input
+// needs to pre-fill correctly when opening an edit form; returns '' (an
+// empty, unset date input) when the string doesn't parse.
+export function toIsoDateInput(str) {
+  if (!str || typeof str !== 'string') return '';
+  const s = str.trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2,4})$/);
+  if (m) {
+    const y = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
+    return `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
+  }
+  return '';
+}
+
+// Today's date as YYYY-MM-DD in local time (not UTC — Date#toISOString()
+// would roll over a day early/late depending on the user's timezone) — used
+// as both the default value and the `max` of freeze-date-style pickers that
+// shouldn't accept a future date.
+export function todayIsoDate(nowMs = Date.now()) {
+  const d = new Date(nowMs);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const da = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${da}`;
+}
+
+// Parses a date-input's YYYY-MM-DD value into a local-noon epoch ms
+// timestamp (noon, not midnight, sidesteps DST-transition edge cases where
+// local midnight doesn't exist or is ambiguous) — used wherever a picked
+// date needs to become the epoch-ms timestamp the backend stores (e.g.
+// frozenAt). Returns null for an empty/invalid value.
+export function isoDateInputToMs(value) {
+  const m = typeof value === 'string' && value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]), 12, 0, 0);
+  return isNaN(d) ? null : d.getTime();
+}
+
 // Same windows as the degassing tracker in the annotation panel.
 export function freshnessState(days) {
   if (days == null) return null;

@@ -193,7 +193,7 @@ export default {
     bag_freeze_count:'Nombre de portions', bag_freeze_weight:'Grammes par portion',
     bag_frozen_badge:(d)=>`❄ depuis le ${d}`, bag_frozen_thawed_badge:(d)=>`décongelé le ${d}`,
     bag_frozen_portion_title:(n,g)=>`${n}× ${g} g congelés`,
-    bag_thaw_btn:'décongeler',
+    bag_thaw_btn:'décongeler', bag_freeze_date:'Date de congélation', bag_frozen_edit_btn:'Modifier la portion',
     lib_recipes:'Recettes', lib_milk:'Lait',
     lib_add_milk:'+ Ajouter du lait', lib_milk_name:'Nom *', lib_milk_name_ph:'ex. Lait entier',
     lib_milk_stock:'Stock (ml)', lib_milk_emoji:'Emoji', lib_milk_restock:'Réapprovisionner',

@@ -155,6 +155,9 @@ router.post('/api/library/bean/:id/new-bag', (req, res) => {
 // frozen pool but stay counted in the bag's stock_g — nothing is consumed,
 // this only pauses the freshness clock for that portion (see
 // adjustedRoastAgeDays() in public-src/utils.js) until it's thawed.
+// frozenAt (#472) is client-supplied (epoch ms) so a portion can be logged
+// with a past date instead of always "now" — still defaults to now when
+// omitted.
 router.post('/api/library/bean/:id/freeze-portions', (req, res) => {
     const id  = parseInt(req.params.id, 10);
     const lib = loadLibrary();
@@ -162,8 +165,9 @@ router.post('/api/library/bean/:id/freeze-portions', (req, res) => {
     if (idx === -1) return res.status(404).json({ error: 'not found' });
     const bags = lib.beans[idx].bags;
     if (!Array.isArray(bags) || !bags.length) return res.status(400).json({ error: 'no active bag' });
+    const frozenAt = Number.isFinite(req.body?.frozenAt) ? req.body.frozenAt : Date.now();
     const [newPortion] = sanitizeFrozenPortions([{
-        frozenAt: Date.now(), portionCount: req.body?.portionCount, portionWeight_g: req.body?.portionWeight_g,
+        frozenAt, portionCount: req.body?.portionCount, portionWeight_g: req.body?.portionWeight_g,
     }]);
     if (!newPortion) return res.status(400).json({ error: 'portionCount and portionWeight_g required' });
     const activeBag = bags[bags.length - 1];
@@ -173,10 +177,40 @@ router.post('/api/library/bean/:id/freeze-portions', (req, res) => {
     res.json(lib.beans[idx]);
 });
 
-// Marks a frozen portion as thawed (stamps thawedAt) — it stops pausing the
-// freshness clock from this point on but stays in the bag's history rather
-// than being removed, for an audit trail alongside the bag itself.
+// Thaws `count` (default 1) of a frozen-portion batch's remaining portions
+// (#472) — e.g. pulling one 18.5g vacuum-sealed portion out of a 20-portion
+// batch before a shot, leaving the other 19 still frozen/paused. Only once
+// remainingCount reaches 0 does the batch stamp thawedAt and stop pausing
+// the freshness clock; it stays in the bag's history rather than being
+// removed, for an audit trail alongside the bag itself.
 router.post('/api/library/bean/:id/thaw-portion', (req, res) => {
+    const id  = parseInt(req.params.id, 10);
+    const lib = loadLibrary();
+    const idx = lib.beans.findIndex(b => b.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'not found' });
+    const portionId = parseInt(req.body?.portionId, 10);
+    const countRaw  = parseInt(req.body?.count, 10);
+    const count     = Number.isFinite(countRaw) && countRaw > 0 ? countRaw : 1;
+    const bags = Array.isArray(lib.beans[idx].bags) ? lib.beans[idx].bags : [];
+    let portion = null;
+    for (const bag of bags) {
+        portion = Array.isArray(bag.frozenPortions) ? bag.frozenPortions.find(p => p.id === portionId && !p.thawedAt) : null;
+        if (portion) break;
+    }
+    if (!portion) return res.status(404).json({ error: 'frozen portion not found' });
+    const currentRemaining = Number.isFinite(portion.remainingCount) ? portion.remainingCount : portion.portionCount;
+    portion.remainingCount = Math.max(0, currentRemaining - count);
+    if (portion.remainingCount === 0) portion.thawedAt = Date.now();
+    saveLibrary(lib);
+    res.json(lib.beans[idx]);
+});
+
+// Corrects a frozen-portion entry after the fact (#472) — wrong count,
+// weight, or freeze date entered at freeze time. remainingCount, when
+// given, is set absolutely (not decremented) and re-clamped to
+// [0, portionCount]; raising it back above 0 un-thaws the batch (clears
+// thawedAt) since it's no longer fully consumed.
+router.post('/api/library/bean/:id/adjust-frozen-portion', (req, res) => {
     const id  = parseInt(req.params.id, 10);
     const lib = loadLibrary();
     const idx = lib.beans.findIndex(b => b.id === id);
@@ -185,11 +219,27 @@ router.post('/api/library/bean/:id/thaw-portion', (req, res) => {
     const bags = Array.isArray(lib.beans[idx].bags) ? lib.beans[idx].bags : [];
     let portion = null;
     for (const bag of bags) {
-        portion = Array.isArray(bag.frozenPortions) ? bag.frozenPortions.find(p => p.id === portionId && !p.thawedAt) : null;
+        portion = Array.isArray(bag.frozenPortions) ? bag.frozenPortions.find(p => p.id === portionId) : null;
         if (portion) break;
     }
     if (!portion) return res.status(404).json({ error: 'frozen portion not found' });
-    portion.thawedAt = Date.now();
+
+    if (req.body?.portionWeight_g != null) {
+        const w = parseFloat(req.body.portionWeight_g);
+        if (!(w > 0 && w <= 2000)) return res.status(400).json({ error: 'invalid portionWeight_g' });
+        portion.portionWeight_g = Math.round(w * 10) / 10;
+    }
+    if (req.body?.frozenAt != null) {
+        if (!Number.isFinite(req.body.frozenAt)) return res.status(400).json({ error: 'invalid frozenAt' });
+        portion.frozenAt = req.body.frozenAt;
+    }
+    if (req.body?.remainingCount != null) {
+        const rc = parseInt(req.body.remainingCount, 10);
+        if (!Number.isFinite(rc) || rc < 0) return res.status(400).json({ error: 'invalid remainingCount' });
+        portion.remainingCount = Math.min(rc, portion.portionCount);
+        if (portion.remainingCount === 0) portion.thawedAt = portion.thawedAt || Date.now();
+        else delete portion.thawedAt;
+    }
     saveLibrary(lib);
     res.json(lib.beans[idx]);
 });
