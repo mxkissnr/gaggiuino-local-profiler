@@ -149,6 +149,8 @@ On narrow viewports (phones, portrait tablets) the topbar tabs are hidden and a 
 
 GLP can manage more than one espresso machine from a single add-on instance — no second add-on install needed. Each machine is either:
 
+> The `type` you pick when adding a machine (Settings → Machines) selects the **firmware adapter** GLP talks to — it is not a physical-brand setting. There is no Gaggia-specific (or any other brand-specific) logic anywhere in GLP. Any single-boiler machine running a Gaggiuino or GaggiMate controller board — Gaggia Classic, Rancilio Silvia, Lelit, and others — works identically once you pick the matching `type`.
+
 - **Gaggiuino** — the original REST + protobuf-WebSocket machine type this app was built for. Full support: shot sync, live status, profile create/read/update/delete, profile select.
 - **GaggiMate** ([jniebuhr/gaggimate](https://github.com/jniebuhr/gaggimate)) — a different ESP32 controller with a JSON WebSocket API and binary shot-history files. GLP's GaggiMate adapter is **experimental**: live status and shot history sync are supported and have been verified against real GaggiMate hardware as of v2.2.1–v2.2.3 (a WebSocket request-id correlation bug, a `.slog` URL zero-padding bug, and shot duration/profile-name mapping bugs were all found and fixed via live testing); profile editing is read-only (creating/editing GaggiMate profiles from GLP is a stretch goal for a later release); brew cannot be started from GLP (GaggiMate's own API has no start/stop command — only a Gaggiuino machine, and only via its physical brew switch, can be triggered from GLP, and even then GLP itself never sends a start command, only detects it).
 

@@ -42,7 +42,7 @@ import { generateBeanQR } from './glp-qr.js';
 import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
          toggleDesktopSidebar, updateMobileShotSidebarVisibility, selectShot,
          openShotDrawer, closeShotDrawer, handleDrawerTouchStart, handleDrawerTouchEnd,
-         toggleMonthGroup } from './components/sidebar.js';
+         toggleMonthGroup, setBeanFilter, clearBeanFilter } from './components/sidebar.js';
 import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
@@ -85,6 +85,7 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
          toggleBeanQR,
          toggleBagHistory, openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
          openBeanStockEdit, closeBeanStockEdit, saveBeanStock,
+         openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, filterShotsByBean,
          openRecipeForm, closeRecipeForm, editRecipe, saveRecipe, deleteRecipe, renderRecipeList,
          addRecipeStep, removeRecipeStep,
          toggleUrlImport, importFromUrl,
@@ -189,6 +190,8 @@ Object.assign(window, {
   toggleDesktopSidebar,
   updateMobileShotSidebarVisibility,
   selectShot,
+  setBeanFilter,
+  clearBeanFilter,
 
   // status / machine
   updateStatus,
@@ -324,6 +327,11 @@ Object.assign(window, {
   openBeanStockEdit,
   closeBeanStockEdit,
   saveBeanStock,
+  openFreezeForm,
+  closeFreezeForm,
+  saveFreezePortions,
+  thawPortion,
+  filterShotsByBean,
   openRecipeForm,
   closeRecipeForm,
   editRecipe,
@@ -679,6 +687,12 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'open-stock-edit':    openBeanStockEdit(numId()); break;
       case 'close-stock-edit':   closeBeanStockEdit(); break;
       case 'save-stock-edit':    saveBeanStock(numId()); break;
+      case 'open-freeze-form':   openFreezeForm(numId()); break;
+      case 'close-freeze-form':  closeFreezeForm(numId()); break;
+      case 'save-freeze-form':   saveFreezePortions(numId()); break;
+      case 'thaw-portion':       thawPortion(Number(el.dataset.beanId), Number(el.dataset.portionId)); break;
+      case 'filter-by-bean':     filterShotsByBean(numId()); break;
+      case 'clear-bean-filter':  clearBeanFilter(); break;
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
       case 'edit-bean':          editBean(numId()); break;
       case 'delete-bean':        deleteBean(numId()); break;

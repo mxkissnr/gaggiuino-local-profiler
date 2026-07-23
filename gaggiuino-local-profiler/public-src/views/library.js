@@ -1,8 +1,10 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
-import { esc, roastAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge } from '../utils.js';
-import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, countryName, flagEmoji } from '../constants.js';
+import { esc, adjustedRoastAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge } from '../utils.js';
+import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, LOCALE_MAP, countryName, flagEmoji } from '../constants.js';
+import { setBeanFilter } from '../components/sidebar.js';
+import { switchMode } from '../components/mode.js';
 import { loadBeanImageBlobUrl, loadGrinderImageBlobUrl, invalidateGrinderImage, invalidateBeanImage } from '../bean-image.js';
 import { openImageCropEditor } from '../components/image-crop.js';
 import { openLightbox } from '../components/lightbox.js';
@@ -148,10 +150,26 @@ export function renderBeanList() {
       </div>
       <button class="lib-btn-sm lib-bag-history-btn" data-action="toggle-bag-history" data-id="${b.id}" id="bagHistoryBtn${b.id}">▸ ${t('lib_bag_history')}</button>` : '';
 
-    const roastAge = roastAgeDays(activeBag?.roastDate || b.roastDate);
+    // #freeze: freshness pauses for time a portion spends vacuum-sealed in
+    // the freezer — adjustedRoastAgeDays() subtracts the active bag's total
+    // frozen-portion time (still-frozen portions count up to now) from the
+    // plain calendar age.
+    const roastAge = adjustedRoastAgeDays(activeBag?.roastDate || b.roastDate, activeBag?.frozenPortions);
     const freshBadge = (roastAge != null && shouldShowFreshBadge(b.stock_g, remaining))
       ? ` <span class="lib-fresh-badge fresh-${freshnessState(roastAge)}" title="${esc(t('freshness_title', roastAge))}">${roastAge}d</span>`
       : '';
+
+    const locale = LOCALE_MAP[S.currentLang] || 'de-DE';
+    const frozenPortions = Array.isArray(activeBag?.frozenPortions) ? activeBag.frozenPortions : [];
+    const frozenHtml = frozenPortions.length ? `<div class="lib-frozen-row">${frozenPortions.map(fp => {
+      const frozenStr = new Date(fp.frozenAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+      if (fp.thawedAt) {
+        const thawedStr = new Date(fp.thawedAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+        return `<span class="lib-frozen-badge thawed" title="${esc(t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g))}">${t('bag_frozen_thawed_badge', thawedStr)}</span>`;
+      }
+      return `<span class="lib-frozen-badge" title="${esc(t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g))}">${t('bag_frozen_badge', frozenStr)}
+        <button class="lib-frozen-thaw-btn" data-action="thaw-portion" data-bean-id="${b.id}" data-portion-id="${fp.id}" title="${t('bag_thaw_btn')}">${t('bag_thaw_btn')}</button></span>`;
+    }).join('')}</div>` : '';
 
     const rating = calcBeanRating(b.name, S.shots);
     const ratingHtml = rating ? `<div class="lib-rating-row" title="${esc(t('bean_rating_tooltip', rating.count))}">
@@ -197,7 +215,7 @@ export function renderBeanList() {
       ${b.image ? `<img class="lib-bean-thumb" data-bean-id="${b.id}" alt="">` : ''}
       <div class="lib-item-info">
         ${originEyebrow}
-        <div class="lib-item-name"><span class="serif-display">${esc(b.name)}</span>${freshBadge}${b.roastType ? ` <span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : ''}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}${disabled ? ` <span class="lib-disabled-badge">${t('lib_bean_disabled_badge')}</span>` : ''}</div>
+        <div class="lib-item-name"><span class="serif-display lib-bean-name-link" data-action="filter-by-bean" data-id="${b.id}" title="${t('bean_filter_hint')}">${esc(b.name)}</span>${freshBadge}${b.roastType ? ` <span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : ''}${b.decaf ? ` <span class="lib-decaf-badge">DECAF</span>` : ''}${disabled ? ` <span class="lib-disabled-badge">${t('lib_bean_disabled_badge')}</span>` : ''}</div>
         <div class="lib-item-sub">${[
           b.region, b.species, b.variety, b.process, b.roaster, b.roastDate, b.notes,
         ].filter(Boolean).map(esc).join(' · ')}</div>
@@ -207,6 +225,7 @@ export function renderBeanList() {
         ${bestComboHtml}
         ${Array.isArray(b.flavors) && b.flavors.length ? `<div class="lib-flavor-row">${b.flavors.map(f => `<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`).join('')}</div>` : ''}
         ${invHtml}
+        ${frozenHtml}
         ${bagHistoryHtml}
         ${b.source ? `<div class="lib-item-source">${t('lib_imported_from',
           b.sourceUrl ? `<a href="${esc(b.sourceUrl)}" target="_blank" rel="noopener">${esc(b.source)}</a>` : esc(b.source),
@@ -214,6 +233,7 @@ export function renderBeanList() {
       </div>
       <div class="lib-item-actions">
         <button class="lib-btn-sm" data-action="open-new-bag" data-id="${b.id}" title="${t('lib_new_bag')}">${t('lib_new_bag')}</button>
+        ${activeBag ? `<button class="lib-btn-sm" data-action="open-freeze-form" data-id="${b.id}" title="${t('bag_freeze_btn')}">${t('bag_freeze_btn')}</button>` : ''}
         ${Array.isArray(b.flavors) && b.flavors.length ? `<button class="lib-btn-sm" data-action="open-flavor-wheel" data-id="${b.id}" title="${t('flavor_wheel_btn')}">${FLAVOR_WHEEL_ICON_SVG}</button>` : ''}
         <button class="lib-btn-sm" data-action="create-profile-from-bean" data-id="${b.id}" title="${t('profile_create_from_bean')}">${SLIDERS_ICON_SVG}</button>
         <button class="lib-btn-sm" data-action="start-dialin-from-bean" data-id="${b.id}" title="${t('dialin_wizard_start_from_bean')}">${TARGET_ICON_SVG}</button>
@@ -231,6 +251,16 @@ export function renderBeanList() {
         <div class="lib-form-actions">
           <button class="lib-btn-sm" data-action="close-new-bag" data-id="${b.id}">${t('lib_cancel')}</button>
           <button class="lib-save-btn" data-action="save-new-bag" data-id="${b.id}">${t('lib_new_bag_save')}</button>
+        </div>
+      </div>
+      <div id="freezeForm${b.id}" class="lib-new-bag-form" style="display:none">
+        <div class="lib-new-bag-fields">
+          <input type="number" class="lib-new-bag-input" id="freezePortionCount${b.id}" placeholder="${t('bag_freeze_count')}" min="1" step="1">
+          <input type="number" class="lib-new-bag-input" id="freezePortionWeight${b.id}" placeholder="${t('bag_freeze_weight')}" min="0.1" step="0.1">
+        </div>
+        <div class="lib-form-actions">
+          <button class="lib-btn-sm" data-action="close-freeze-form" data-id="${b.id}">${t('lib_cancel')}</button>
+          <button class="lib-save-btn" data-action="save-freeze-form" data-id="${b.id}">${t('bag_freeze_save')}</button>
         </div>
       </div>
       <div class="bean-qr-wrap" id="beanQR${b.id}" style="display:none">
@@ -325,6 +355,60 @@ export async function saveBeanStock(id) {
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   S._beanStockEditId = null;
+  renderBeanList();
+}
+
+// Clicking a bean's name in the Library sets the sidebar's structured bean
+// filter (state.js S.beanFilter / sidebar.js setBeanFilter()) and jumps to
+// the Shots tab so the filtered history is immediately visible.
+export function filterShotsByBean(id) {
+  const bean = S.coffeeLibrary.beans.find(b => b.id === id);
+  if (!bean) return;
+  setBeanFilter(bean.id, bean.name);
+  switchMode('shots');
+}
+
+export function openFreezeForm(id) {
+  document.getElementById(`freezeForm${id}`).style.display = '';
+}
+
+export function closeFreezeForm(id) {
+  document.getElementById(`freezeForm${id}`).style.display = 'none';
+}
+
+// Freezes a portion of the active bag: grams move into a dated frozen pool
+// (see bag.frozenPortions in the schema) but stay counted in stock_g — the
+// freeze doesn't consume anything, it just pauses the freshness clock for
+// that portion (adjustedRoastAgeDays(), utils.js) until it's thawed.
+export async function saveFreezePortions(id) {
+  const portionCount    = parseInt(document.getElementById(`freezePortionCount${id}`)?.value, 10);
+  const portionWeight_g = parseFloat(document.getElementById(`freezePortionWeight${id}`)?.value);
+  if (!(portionCount > 0) || !(portionWeight_g > 0)) return;
+  const r = await apiFetch(`api/library/bean/${id}/freeze-portions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ portionCount, portionWeight_g }),
+  });
+  if (!r.ok) return;
+  const saved = await r.json();
+  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
+  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  renderBeanList();
+}
+
+// Marks a frozen portion as thawed — it stops pausing the freshness clock
+// from this point on, but stays in the bag's history (thawed badge) rather
+// than disappearing, matching the audit-trail style of bag history.
+export async function thawPortion(beanId, portionId) {
+  const r = await apiFetch(`api/library/bean/${beanId}/thaw-portion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ portionId }),
+  });
+  if (!r.ok) return;
+  const saved = await r.json();
+  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
+  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   renderBeanList();
 }
 

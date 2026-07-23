@@ -51,6 +51,10 @@ export const S = {
   trendWindow: 30,
   _calendarResizeObserver: null,
   currentFilter: '',
+  // Structured bean filter (shot history) — set by clicking a bean in the
+  // Library view; ANDed with the free-text S.currentFilter search in
+  // filterShots() (sidebar.js). { id, name } or null for "no filter".
+  beanFilter: null,
   // #439: which month-tier sidebar groups are expanded — in-memory only
   // (never mirrored to localStorage), so it survives re-renders/shot
   // switches within a session but resets on a fresh page load, matching the
