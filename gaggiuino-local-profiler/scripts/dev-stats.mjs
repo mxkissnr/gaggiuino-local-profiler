@@ -15,6 +15,7 @@
 import { execSync } from 'child_process';
 import { createRequire } from 'module';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -22,6 +23,18 @@ const __dirname   = path.dirname(fileURLToPath(import.meta.url));
 const appRepoRoot = path.join(__dirname, '..', '..');       // .../glp-project/gaggiuino-local-profiler
 const glpProjectRoot = path.join(appRepoRoot, '..');         // .../glp-project
 const projectsRoot   = path.join(glpProjectRoot, '..');      // .../Projekte
+
+// #469: this script only ever looks at siblings the same way it always has
+// (relative to its own location) unless it's being run from somewhere other
+// than the canonical checkout — e.g. a release worktree under ~/worktrees/,
+// which has no glp-integration/glp-lovelace-card/glp-order-card siblings at
+// all. In that case fall back to the fixed checkout layout documented in
+// this machine's CLAUDE.md (everything under ~/Dokumente/Projekte/glp-project).
+const canonicalProjectsRoot   = path.join(os.homedir(), 'Dokumente', 'Projekte');
+const canonicalGlpProjectRoot = path.join(canonicalProjectsRoot, 'glp-project');
+function resolveCompanionDir(relativeDir, canonicalDir) {
+    return existsSync(path.join(relativeDir, '.git')) ? relativeDir : canonicalDir;
+}
 
 // ── Optional chart rendering (@napi-rs/canvas — same optional-dependency
 // pattern as lib/card.js: skip charts silently if the native module or system
@@ -149,9 +162,9 @@ function renderCharts(results, combinedModelCounts) {
 
 const REPOS = [
     { name: 'gaggiuino-local-profiler', dir: appRepoRoot },
-    { name: 'glp-integration',          dir: path.join(projectsRoot, 'glp-integration') },
-    { name: 'glp-lovelace-card',        dir: path.join(glpProjectRoot, 'glp-lovelace-card') },
-    { name: 'glp-order-card',           dir: path.join(glpProjectRoot, 'glp-order-card') },
+    { name: 'glp-integration',          dir: resolveCompanionDir(path.join(projectsRoot, 'glp-integration'), path.join(canonicalProjectsRoot, 'glp-integration')) },
+    { name: 'glp-lovelace-card',        dir: resolveCompanionDir(path.join(glpProjectRoot, 'glp-lovelace-card'), path.join(canonicalGlpProjectRoot, 'glp-lovelace-card')) },
+    { name: 'glp-order-card',           dir: resolveCompanionDir(path.join(glpProjectRoot, 'glp-order-card'), path.join(canonicalGlpProjectRoot, 'glp-order-card')) },
 ];
 
 // Purely illustrative: tokens implied per changed line, including the

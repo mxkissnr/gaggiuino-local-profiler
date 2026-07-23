@@ -891,6 +891,11 @@
             background: none; border: none; color: inherit; cursor: pointer;
             font-size: .62rem; font-weight: 700; text-decoration: underline; padding: 0;
         }
+        .lib-frozen-edit-btn {
+            background: none; border: none; color: inherit; cursor: pointer;
+            font-size: .68rem; padding: 0; opacity: .75;
+        }
+        .lib-frozen-edit-btn:hover { opacity: 1; }
         /* Flavor chips (form input + static display) */
         .lib-form-field-wide { grid-column: 1 / -1; }
         .lib-form-hint { font-size: .68rem; color: var(--gray-500); margin-top: 2px; }

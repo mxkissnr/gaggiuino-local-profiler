@@ -106,6 +106,13 @@ function sanitizeBrewTime(v) {
 // clock while frozen. frozenAt/thawedAt are epoch-ms timestamps; thawedAt is
 // only kept when it postdates frozenAt. Capped at plausible single-bag
 // ranges the same way sanitizeAltitude/sanitizePrice bound their fields.
+//
+// remainingCount (#472) tracks how many of the batch's portions are still
+// frozen — thawing decrements it one portion at a time instead of closing
+// out the whole batch at once, so e.g. 20 vacuum-sealed 18.5g portions can
+// be pulled out one shot at a time. Defaults to portionCount (nothing
+// thawed yet) and is clamped to [0, portionCount]; thawedAt is only ever
+// meaningful once remainingCount reaches 0.
 function sanitizeFrozenPortions(v) {
     if (!Array.isArray(v)) return [];
     return v.slice(0, 50).map(fp => {
@@ -115,7 +122,15 @@ function sanitizeFrozenPortions(v) {
         if (!frozenAt || !(portionCount > 0 && portionCount <= 500) || !(portionWeight_g > 0 && portionWeight_g <= 2000))
             return null;
         const thawedAt = Number.isFinite(fp?.thawedAt) && fp.thawedAt >= frozenAt ? fp.thawedAt : null;
-        const out = { id: fp.id ?? frozenAt, frozenAt, portionCount, portionWeight_g: Math.round(portionWeight_g * 10) / 10 };
+        const remainingCountRaw = parseInt(fp?.remainingCount, 10);
+        const remainingCount = Number.isFinite(remainingCountRaw)
+            ? Math.min(Math.max(remainingCountRaw, 0), portionCount)
+            : portionCount;
+        const out = {
+            id: fp.id ?? frozenAt, frozenAt, portionCount,
+            portionWeight_g: Math.round(portionWeight_g * 10) / 10,
+            remainingCount,
+        };
         if (thawedAt) out.thawedAt = thawedAt;
         return out;
     }).filter(Boolean);

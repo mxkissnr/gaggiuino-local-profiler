@@ -1,3 +1,12 @@
+## [2.15.0] – 2026-07-23
+
+### Added
+- **Frozen portions now thaw one at a time instead of closing out the whole batch.** `POST /api/library/bean/:id/thaw-portion` decrements a frozen portion's `remainingCount` by 1 (or an explicit count) instead of always stamping the whole entry as thawed — a single 18.5g vacuum-sealed portion can now be pulled from a 20-portion batch before a shot, leaving the rest paused/frozen. `thawedAt` is only set once `remainingCount` reaches 0. `freeze-portions` also now accepts a client-supplied `frozenAt` instead of always using "now", so a portion can be logged retroactively with a past freeze date. A new `POST /api/library/bean/:id/adjust-frozen-portion` route corrects a portion's `remainingCount`/`portionWeight_g`/`frozenAt` after the fact — raising `remainingCount` back above 0 re-opens an already-thawed batch. Frozen badges now also show the year and the remaining/total count while still frozen. Closes #472, #473
+- **Bean roast date, new-bag roast date, and grinder purchase date use native date pickers.** These fields switch from free-text "TT.MM.JJJJ" inputs to `<input type="date">`, giving every platform's built-in calendar widget (including a "today" shortcut) instead of manual typing; existing DD.MM.YYYY entries keep parsing correctly alongside the new ISO format. Closes #472, #473
+
+### Fixed
+- **Generic Shopify import now also reads `.origin-title`/`.origin-wrapper` markup**, in addition to the existing `<details>`-accordion scanner, so themes like shop.squaremilecoffee.com's (which render process/variety/producer/region as `<h5 class="origin-title">` + sibling `<p>` pairs with no `<details>` on the page at all) no longer import with those fields left empty. The `<details>` scanner still wins when both find a value. Closes #471
+
 ## [2.14.0] – 2026-07-23
 
 ### Added
