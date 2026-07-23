@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { roastAgeDays, freshnessState, shouldShowFreshBadge } from '../public-src/utils.js';
+import { roastAgeDays, freshnessState, shouldShowFreshBadge, frozenOffsetDays, adjustedRoastAgeDays } from '../public-src/utils.js';
 
 const DAY = 86400000;
 const now = new Date(2026, 6, 5, 12).getTime(); // 2026-07-05 noon, local time
@@ -35,6 +35,54 @@ describe('freshnessState', () => {
         expect(freshnessState(35)).toBe('fading');
         expect(freshnessState(36)).toBe('old');
         expect(freshnessState(null)).toBeNull();
+    });
+});
+
+describe('frozenOffsetDays', () => {
+    it('returns 0 with no frozen portions', () => {
+        expect(frozenOffsetDays([], now)).toBe(0);
+        expect(frozenOffsetDays(undefined, now)).toBe(0);
+        expect(frozenOffsetDays(null, now)).toBe(0);
+    });
+
+    it('counts a still-frozen portion up to now', () => {
+        const frozenPortions = [{ id: 1, frozenAt: now - 5 * DAY, portionCount: 20, portionWeight_g: 18.5 }];
+        expect(frozenOffsetDays(frozenPortions, now)).toBe(5);
+    });
+
+    it('stops counting a thawed portion at its own thawedAt', () => {
+        const frozenPortions = [{ id: 1, frozenAt: now - 10 * DAY, thawedAt: now - 3 * DAY, portionCount: 20, portionWeight_g: 18.5 }];
+        expect(frozenOffsetDays(frozenPortions, now)).toBe(7);
+    });
+
+    it('sums multiple portion batches', () => {
+        const frozenPortions = [
+            { id: 1, frozenAt: now - 10 * DAY, thawedAt: now - 8 * DAY, portionCount: 5, portionWeight_g: 18 },
+            { id: 2, frozenAt: now - 4 * DAY, portionCount: 5, portionWeight_g: 18 },
+        ];
+        expect(frozenOffsetDays(frozenPortions, now)).toBe(6);
+    });
+});
+
+describe('adjustedRoastAgeDays', () => {
+    it('matches plain roastAgeDays when there is nothing frozen', () => {
+        expect(adjustedRoastAgeDays('2026-06-25', [], now)).toBe(10);
+        expect(adjustedRoastAgeDays('2026-06-25', undefined, now)).toBe(10);
+    });
+
+    it('subtracts frozen time from the calendar age', () => {
+        const frozenPortions = [{ id: 1, frozenAt: now - 6 * DAY, portionCount: 20, portionWeight_g: 18.5 }];
+        expect(adjustedRoastAgeDays('2026-06-25', frozenPortions, now)).toBe(4); // 10 - 6
+    });
+
+    it('never goes negative', () => {
+        const frozenPortions = [{ id: 1, frozenAt: now - 30 * DAY, portionCount: 20, portionWeight_g: 18.5 }];
+        expect(adjustedRoastAgeDays('2026-06-25', frozenPortions, now)).toBe(0);
+    });
+
+    it('stays null when the roast date itself is unparseable', () => {
+        expect(adjustedRoastAgeDays('', [], now)).toBeNull();
+        expect(adjustedRoastAgeDays(null, [], now)).toBeNull();
     });
 });
 

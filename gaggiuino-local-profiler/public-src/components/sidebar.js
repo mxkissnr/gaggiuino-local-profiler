@@ -5,6 +5,7 @@ import { esc, scoreClass, formatTimeLabel, groupShotsByDay } from '../utils.js';
 import { loadShotImageBlobUrl } from '../bean-image.js';
 import { openLightbox } from './lightbox.js';
 import { STAR_ICON_SVG } from '../icons.js';
+import { resolveBeanForAnnotation } from '../views/shots/utils.js';
 
 // These are imported lazily via window to avoid circular dependencies
 // updateView is on window, calcShotScore/getShotData are set from shots.js
@@ -60,7 +61,8 @@ export function renderSidebar() {
   }
 
   updateSidebarHighlighting();
-  if (S.currentFilter) filterShots(S.currentFilter);
+  updateBeanFilterIndicator();
+  if (S.currentFilter || S.beanFilter) filterShots(S.currentFilter);
   loadShotThumbnails();
 }
 
@@ -213,6 +215,42 @@ export function updateSidebarHighlighting() {
   });
 }
 
+// Bean filter (shot history) — set via a bean click in the Library view
+// (library.js filterShotsByBean()). Structured, ANDed with the free-text
+// search below rather than replacing it, mirroring how the machine filter
+// (filterShotsByMachine, state.js) sits alongside search instead of
+// competing with it. Indicator lives in the sidebar's search area.
+export function setBeanFilter(id, name) {
+  S.beanFilter = { id, name };
+  updateBeanFilterIndicator();
+  filterShots(S.currentFilter);
+}
+
+export function clearBeanFilter() {
+  S.beanFilter = null;
+  updateBeanFilterIndicator();
+  filterShots(S.currentFilter);
+}
+
+function updateBeanFilterIndicator() {
+  const el = document.getElementById('beanFilterIndicator');
+  if (!el) return;
+  if (!S.beanFilter) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `<span class="bean-filter-label">${t('bean_filter_active', esc(S.beanFilter.name))}</span>` +
+    `<button type="button" class="bean-filter-clear" data-action="clear-bean-filter" title="${t('bean_filter_clear')}">✕</button>`;
+}
+
+function shotMatchesBeanFilter(shot) {
+  if (!S.beanFilter) return true;
+  const resolved = resolveBeanForAnnotation(shot.annotation, S.coffeeLibrary?.beans);
+  if (resolved) return resolved.id === S.beanFilter.id;
+  // No library bean resolves for this shot (predates beanId, or its bean
+  // was since deleted/renamed) — fall back to the raw annotated name so a
+  // filter set from a still-existing bean can still match its own history.
+  return (shot.annotation?.coffee || '').toLowerCase() === S.beanFilter.name.toLowerCase();
+}
+
 export function filterShots(query) {
   S.currentFilter = query;
   const q = query.trim().toLowerCase();
@@ -227,7 +265,8 @@ export function filterShots(query) {
       ann.grinder || '',
       ann.notes || ''
     ].join(' ').toLowerCase();
-    wrapper.style.display = (!q || haystack.includes(q)) ? '' : 'none';
+    const matches = (!q || haystack.includes(q)) && shotMatchesBeanFilter(shot);
+    wrapper.style.display = matches ? '' : 'none';
   });
   // #412: a day-separator header with every shot underneath it filtered out
   // would otherwise sit there empty — hide it too, until the next visible

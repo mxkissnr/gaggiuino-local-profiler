@@ -9,6 +9,7 @@ const { rateLimit } = require('../lib/helpers');
 const {
     sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeSpecies, sanitizeFlavors,
     sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime, sanitizeEnabled, safeUrl,
+    sanitizeFrozenPortions,
 } = require('../lib/sanitize-bean');
 
 router.get('/api/library', (req, res) => {
@@ -146,6 +147,49 @@ router.post('/api/library/bean/:id/new-bag', (req, res) => {
     lib.beans[idx].bags.push(bag);
     lib.beans[idx].roastDate = roastDate;
     lib.beans[idx].stock_g   = stock_g;
+    saveLibrary(lib);
+    res.json(lib.beans[idx]);
+});
+
+// Freezes a portion of the active (last) bag: grams move into a dated
+// frozen pool but stay counted in the bag's stock_g — nothing is consumed,
+// this only pauses the freshness clock for that portion (see
+// adjustedRoastAgeDays() in public-src/utils.js) until it's thawed.
+router.post('/api/library/bean/:id/freeze-portions', (req, res) => {
+    const id  = parseInt(req.params.id, 10);
+    const lib = loadLibrary();
+    const idx = lib.beans.findIndex(b => b.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'not found' });
+    const bags = lib.beans[idx].bags;
+    if (!Array.isArray(bags) || !bags.length) return res.status(400).json({ error: 'no active bag' });
+    const [newPortion] = sanitizeFrozenPortions([{
+        frozenAt: Date.now(), portionCount: req.body?.portionCount, portionWeight_g: req.body?.portionWeight_g,
+    }]);
+    if (!newPortion) return res.status(400).json({ error: 'portionCount and portionWeight_g required' });
+    const activeBag = bags[bags.length - 1];
+    if (!Array.isArray(activeBag.frozenPortions)) activeBag.frozenPortions = [];
+    activeBag.frozenPortions.push(newPortion);
+    saveLibrary(lib);
+    res.json(lib.beans[idx]);
+});
+
+// Marks a frozen portion as thawed (stamps thawedAt) — it stops pausing the
+// freshness clock from this point on but stays in the bag's history rather
+// than being removed, for an audit trail alongside the bag itself.
+router.post('/api/library/bean/:id/thaw-portion', (req, res) => {
+    const id  = parseInt(req.params.id, 10);
+    const lib = loadLibrary();
+    const idx = lib.beans.findIndex(b => b.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'not found' });
+    const portionId = parseInt(req.body?.portionId, 10);
+    const bags = Array.isArray(lib.beans[idx].bags) ? lib.beans[idx].bags : [];
+    let portion = null;
+    for (const bag of bags) {
+        portion = Array.isArray(bag.frozenPortions) ? bag.frozenPortions.find(p => p.id === portionId && !p.thawedAt) : null;
+        if (portion) break;
+    }
+    if (!portion) return res.status(404).json({ error: 'frozen portion not found' });
+    portion.thawedAt = Date.now();
     saveLibrary(lib);
     res.json(lib.beans[idx]);
 });

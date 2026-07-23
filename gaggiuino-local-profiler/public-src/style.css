@@ -875,6 +875,22 @@
         .lib-roast-badge { display: inline-block; background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.3); color: #60a5fa; border-radius:var(--radius); padding: 1px 5px; font-size: .6rem; font-weight: 700; vertical-align: middle; margin-left: 4px; }
         .lib-disabled-badge { display: inline-block; background: rgba(161,161,170,.12); border: 1px solid rgba(161,161,170,.35); color: #a1a1aa; border-radius:var(--radius); padding: 1px 5px; font-size: .6rem; font-weight: 700; vertical-align: middle; margin-left: 4px; }
         .lib-item-disabled { opacity: .55; }
+        /* Bean name → click filters the sidebar shot list to this bean (#beanfilter) */
+        .lib-bean-name-link { cursor: pointer; }
+        .lib-bean-name-link:hover { text-decoration: underline; text-decoration-color: var(--accent); }
+        /* Frozen portion badges (#freeze) — same pill language as .lib-fresh-badge,
+           blue-ish to read distinctly as "on ice" rather than a freshness state. */
+        .lib-frozen-row { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; }
+        .lib-frozen-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            background: rgba(56,189,248,.1); border: 1px solid rgba(56,189,248,.3); color: #38bdf8;
+            border-radius: var(--radius); padding: 1px 5px; font-size: .65rem; font-weight: 600;
+        }
+        .lib-frozen-badge.thawed { background: rgba(161,161,170,.1); border-color: rgba(161,161,170,.3); color: #a1a1aa; }
+        .lib-frozen-thaw-btn {
+            background: none; border: none; color: inherit; cursor: pointer;
+            font-size: .62rem; font-weight: 700; text-decoration: underline; padding: 0;
+        }
         /* Flavor chips (form input + static display) */
         .lib-form-field-wide { grid-column: 1 / -1; }
         .lib-form-hint { font-size: .68rem; color: var(--gray-500); margin-top: 2px; }
@@ -1216,6 +1232,20 @@
         }
         #shotSearch:focus       { border-color: var(--gray-500); }
         #shotSearch::placeholder { color: var(--gray-600); }
+
+        /* ── Bean filter indicator (shot history) ── */
+        #beanFilterIndicator {
+            display: flex; align-items: center; gap: 6px;
+            margin-top: 6px; padding: 3px 4px 3px 8px;
+            background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3);
+            border-radius: var(--radius); font-size: .72rem; color: var(--accent);
+        }
+        .bean-filter-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bean-filter-clear {
+            background: none; border: none; color: var(--accent); cursor: pointer;
+            font-size: .75rem; line-height: 1; padding: 2px 5px; border-radius: var(--radius);
+        }
+        .bean-filter-clear:hover { background: rgba(245,158,11,.15); }
 
         /* ── Sidebar score pill ── */
         .sidebar-score {
