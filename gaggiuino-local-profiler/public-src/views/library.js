@@ -1,7 +1,7 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
-import { esc, adjustedRoastAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge } from '../utils.js';
+import { esc, adjustedRoastAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, toIsoDateInput, todayIsoDate, isoDateInputToMs } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, LOCALE_MAP, countryName, flagEmoji } from '../constants.js';
 import { setBeanFilter } from '../components/sidebar.js';
 import { switchMode } from '../components/mode.js';
@@ -161,14 +161,33 @@ export function renderBeanList() {
 
     const locale = LOCALE_MAP[S.currentLang] || 'de-DE';
     const frozenPortions = Array.isArray(activeBag?.frozenPortions) ? activeBag.frozenPortions : [];
+    // #472: date badges include the year (a portion can stay frozen well
+    // past 12 months) and, while still frozen, show remaining/total so a
+    // single "auftauen" click reads as "pull one portion out", not "close
+    // out the whole batch" — matches decrementing thaw-portion server-side.
     const frozenHtml = frozenPortions.length ? `<div class="lib-frozen-row">${frozenPortions.map(fp => {
-      const frozenStr = new Date(fp.frozenAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+      const frozenStr = new Date(fp.frozenAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
+      const remaining = Number.isFinite(fp.remainingCount) ? fp.remainingCount : fp.portionCount;
+      const editForm = `
+        <div id="editFrozenForm${fp.id}" class="lib-new-bag-form" style="display:none">
+          <div class="lib-new-bag-fields">
+            <input type="number" class="lib-new-bag-input" id="editFrozenRemaining${fp.id}" placeholder="${t('bag_freeze_count')}" min="0" max="${fp.portionCount}" step="1" value="${remaining}">
+            <input type="number" class="lib-new-bag-input" id="editFrozenWeight${fp.id}" placeholder="${t('bag_freeze_weight')}" min="0.1" step="0.1" value="${fp.portionWeight_g}">
+            <input type="date" class="lib-new-bag-input" id="editFrozenDate${fp.id}" value="${toIsoDateInput(new Date(fp.frozenAt).toISOString())}" max="${todayIsoDate()}">
+          </div>
+          <div class="lib-form-actions">
+            <button class="lib-btn-sm" data-action="close-edit-frozen-form" data-portion-id="${fp.id}">${t('lib_cancel')}</button>
+            <button class="lib-save-btn" data-action="save-edit-frozen-form" data-id="${b.id}" data-portion-id="${fp.id}">${t('bag_freeze_save')}</button>
+          </div>
+        </div>`;
       if (fp.thawedAt) {
-        const thawedStr = new Date(fp.thawedAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
-        return `<span class="lib-frozen-badge thawed" title="${esc(t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g))}">${t('bag_frozen_thawed_badge', thawedStr)}</span>`;
+        const thawedStr = new Date(fp.thawedAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
+        return `<span class="lib-frozen-badge thawed" title="${esc(t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g))}">${t('bag_frozen_thawed_badge', thawedStr)}
+          <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${fp.id}" title="${t('bag_frozen_edit_btn')}">✎</button></span>${editForm}`;
       }
-      return `<span class="lib-frozen-badge" title="${esc(t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g))}">${t('bag_frozen_badge', frozenStr)}
-        <button class="lib-frozen-thaw-btn" data-action="thaw-portion" data-bean-id="${b.id}" data-portion-id="${fp.id}" title="${t('bag_thaw_btn')}">${t('bag_thaw_btn')}</button></span>`;
+      return `<span class="lib-frozen-badge" title="${esc(t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g))}">${remaining}/${fp.portionCount} ${t('bag_frozen_badge', frozenStr)}
+        <button class="lib-frozen-thaw-btn" data-action="thaw-portion" data-bean-id="${b.id}" data-portion-id="${fp.id}" title="${t('bag_thaw_btn')}">${t('bag_thaw_btn')}</button>
+        <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${fp.id}" title="${t('bag_frozen_edit_btn')}">✎</button></span>${editForm}`;
     }).join('')}</div>` : '';
 
     const rating = calcBeanRating(b.name, S.shots);
@@ -244,7 +263,7 @@ export function renderBeanList() {
       </div>
       <div id="newBagForm${b.id}" class="lib-new-bag-form" style="display:none">
         <div class="lib-new-bag-fields">
-          <input type="text" class="lib-new-bag-input" id="newBagRoastDate${b.id}" placeholder="${t('lib_bag_roast_date')} (TT.MM.JJJJ)">
+          <input type="date" class="lib-new-bag-input" id="newBagRoastDate${b.id}" title="${t('lib_bag_roast_date')}" max="${todayIsoDate()}">
           <input type="number" class="lib-new-bag-input" id="newBagStock${b.id}" placeholder="${t('lib_bag_stock')}" min="0" step="1">
           <input type="text" class="lib-new-bag-input" id="newBagBatchNumber${b.id}" placeholder="${t('lib_bag_batch_number')}" maxlength="50">
         </div>
@@ -257,6 +276,7 @@ export function renderBeanList() {
         <div class="lib-new-bag-fields">
           <input type="number" class="lib-new-bag-input" id="freezePortionCount${b.id}" placeholder="${t('bag_freeze_count')}" min="1" step="1">
           <input type="number" class="lib-new-bag-input" id="freezePortionWeight${b.id}" placeholder="${t('bag_freeze_weight')}" min="0.1" step="0.1">
+          <input type="date" class="lib-new-bag-input" id="freezeDate${b.id}" title="${t('bag_freeze_date')}" value="${todayIsoDate()}" max="${todayIsoDate()}">
         </div>
         <div class="lib-form-actions">
           <button class="lib-btn-sm" data-action="close-freeze-form" data-id="${b.id}">${t('lib_cancel')}</button>
@@ -380,14 +400,18 @@ export function closeFreezeForm(id) {
 // (see bag.frozenPortions in the schema) but stay counted in stock_g — the
 // freeze doesn't consume anything, it just pauses the freshness clock for
 // that portion (adjustedRoastAgeDays(), utils.js) until it's thawed.
+// frozenAt (#472) comes from the form's date picker (defaults to today, but
+// editable for logging a portion frozen in the past) rather than always
+// being "now".
 export async function saveFreezePortions(id) {
   const portionCount    = parseInt(document.getElementById(`freezePortionCount${id}`)?.value, 10);
   const portionWeight_g = parseFloat(document.getElementById(`freezePortionWeight${id}`)?.value);
+  const frozenAt = isoDateInputToMs(document.getElementById(`freezeDate${id}`)?.value) ?? Date.now();
   if (!(portionCount > 0) || !(portionWeight_g > 0)) return;
   const r = await apiFetch(`api/library/bean/${id}/freeze-portions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ portionCount, portionWeight_g }),
+    body: JSON.stringify({ portionCount, portionWeight_g, frozenAt }),
   });
   if (!r.ok) return;
   const saved = await r.json();
@@ -396,14 +420,50 @@ export async function saveFreezePortions(id) {
   renderBeanList();
 }
 
-// Marks a frozen portion as thawed — it stops pausing the freshness clock
-// from this point on, but stays in the bag's history (thawed badge) rather
-// than disappearing, matching the audit-trail style of bag history.
+// Thaws one portion (#472) from a frozen-portion batch's remaining count —
+// e.g. pulling a single 18.5g vacuum-sealed portion out before a shot,
+// leaving the rest still frozen. The batch only stamps thawedAt (and its
+// badge switches to the closed-out "thawed" style) once remainingCount
+// reaches 0 server-side.
 export async function thawPortion(beanId, portionId) {
   const r = await apiFetch(`api/library/bean/${beanId}/thaw-portion`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ portionId }),
+    body: JSON.stringify({ portionId, count: 1 }),
+  });
+  if (!r.ok) return;
+  const saved = await r.json();
+  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
+  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  renderBeanList();
+}
+
+export function openEditFrozenForm(portionId) {
+  const el = document.getElementById(`editFrozenForm${portionId}`);
+  if (el) el.style.display = '';
+}
+
+export function closeEditFrozenForm(portionId) {
+  const el = document.getElementById(`editFrozenForm${portionId}`);
+  if (el) el.style.display = 'none';
+}
+
+// Corrects a frozen-portion entry after the fact (#472) — wrong count,
+// weight, or freeze date entered when it was first frozen. Raising
+// remainingCount back above 0 on an already-thawed batch re-opens it
+// (server clears thawedAt); this is the only place that can happen from.
+export async function saveEditFrozenForm(beanId, portionId) {
+  const remainingCount  = parseInt(document.getElementById(`editFrozenRemaining${portionId}`)?.value, 10);
+  const portionWeight_g = parseFloat(document.getElementById(`editFrozenWeight${portionId}`)?.value);
+  const frozenAt = isoDateInputToMs(document.getElementById(`editFrozenDate${portionId}`)?.value);
+  const body = {};
+  if (Number.isFinite(remainingCount)) body.remainingCount = remainingCount;
+  if (portionWeight_g > 0) body.portionWeight_g = portionWeight_g;
+  if (frozenAt != null) body.frozenAt = frozenAt;
+  const r = await apiFetch(`api/library/bean/${beanId}/adjust-frozen-portion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ portionId, ...body }),
   });
   if (!r.ok) return;
   const saved = await r.json();
@@ -624,7 +684,7 @@ export function openBeanForm(bean) {
   S._urlImportExtraRecipes = null;
   document.getElementById('beanFormName').value      = bean?.name      || '';
   document.getElementById('beanFormRoaster').value   = bean?.roaster   || '';
-  document.getElementById('beanFormRoastDate').value = bean?.roastDate || '';
+  document.getElementById('beanFormRoastDate').value = toIsoDateInput(bean?.roastDate);
   document.getElementById('beanFormNotes').value     = bean?.notes     || '';
   document.getElementById('beanFormStock').value     = bean?.stock_g   || '';
   const activeEditBag = Array.isArray(bean?.bags) && bean.bags.length ? bean.bags[bean.bags.length - 1] : null;
@@ -768,7 +828,7 @@ export function openGrinderForm(grinder) {
   document.getElementById('grinderFormName').value  = grinder?.name  || '';
   document.getElementById('grinderFormNotes').value = grinder?.notes || '';
   document.getElementById('grinderFormBurrType').value     = grinder?.burrType || '';
-  document.getElementById('grinderFormPurchaseDate').value = grinder?.purchaseDate || '';
+  document.getElementById('grinderFormPurchaseDate').value = toIsoDateInput(grinder?.purchaseDate);
   document.getElementById('grinderFormImageField').style.display = grinder ? '' : 'none';
   document.getElementById('grinderAddForm').classList.add('open');
   document.getElementById('grinderAddTrigger').style.display = 'none';
@@ -1161,7 +1221,7 @@ export async function _handleScanResult(raw, status) {
     openBeanForm();
     if (glp.name)      document.getElementById('beanFormName').value      = glp.name;
     if (glp.roaster)   document.getElementById('beanFormRoaster').value   = glp.roaster;
-    if (glp.roastDate) document.getElementById('beanFormRoastDate').value = glp.roastDate;
+    if (glp.roastDate) document.getElementById('beanFormRoastDate').value = toIsoDateInput(glp.roastDate);
     if (glp.notes)     document.getElementById('beanFormNotes').value     = glp.notes;
     status.textContent = t('scan_glp_imported');
     status.className = 'found';

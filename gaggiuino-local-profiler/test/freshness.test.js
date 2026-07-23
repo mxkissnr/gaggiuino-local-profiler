@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { roastAgeDays, freshnessState, shouldShowFreshBadge, frozenOffsetDays, adjustedRoastAgeDays } from '../public-src/utils.js';
+import { roastAgeDays, freshnessState, shouldShowFreshBadge, frozenOffsetDays, adjustedRoastAgeDays, toIsoDateInput, todayIsoDate, isoDateInputToMs } from '../public-src/utils.js';
 
 const DAY = 86400000;
 const now = new Date(2026, 6, 5, 12).getTime(); // 2026-07-05 noon, local time
@@ -83,6 +83,48 @@ describe('adjustedRoastAgeDays', () => {
     it('stays null when the roast date itself is unparseable', () => {
         expect(adjustedRoastAgeDays('', [], now)).toBeNull();
         expect(adjustedRoastAgeDays(null, [], now)).toBeNull();
+    });
+});
+
+describe('toIsoDateInput (#473)', () => {
+    it('normalizes DD.MM.YYYY to YYYY-MM-DD', () => {
+        expect(toIsoDateInput('25.06.2026')).toBe('2026-06-25');
+        expect(toIsoDateInput('5.6.26')).toBe('2026-06-05');
+    });
+
+    it('passes ISO YYYY-MM-DD through unchanged', () => {
+        expect(toIsoDateInput('2026-06-25')).toBe('2026-06-25');
+        expect(toIsoDateInput('2026-06-25T10:00:00Z')).toBe('2026-06-25');
+    });
+
+    it('returns an empty string for unparseable or missing input', () => {
+        expect(toIsoDateInput('')).toBe('');
+        expect(toIsoDateInput(null)).toBe('');
+        expect(toIsoDateInput(undefined)).toBe('');
+        expect(toIsoDateInput('not a date')).toBe('');
+    });
+});
+
+describe('todayIsoDate', () => {
+    it('formats a given timestamp as local YYYY-MM-DD', () => {
+        expect(todayIsoDate(now)).toBe('2026-07-05');
+    });
+});
+
+describe('isoDateInputToMs', () => {
+    it('parses a YYYY-MM-DD value into a local-noon epoch timestamp', () => {
+        const ms = isoDateInputToMs('2026-06-25');
+        const d = new Date(ms);
+        expect(d.getFullYear()).toBe(2026);
+        expect(d.getMonth()).toBe(5);
+        expect(d.getDate()).toBe(25);
+        expect(d.getHours()).toBe(12);
+    });
+
+    it('returns null for empty/invalid values', () => {
+        expect(isoDateInputToMs('')).toBeNull();
+        expect(isoDateInputToMs(undefined)).toBeNull();
+        expect(isoDateInputToMs('25.06.2026')).toBeNull();
     });
 });
 

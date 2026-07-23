@@ -86,6 +86,7 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
          toggleBagHistory, openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
          openBeanStockEdit, closeBeanStockEdit, saveBeanStock,
          openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, filterShotsByBean,
+         openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm,
          openRecipeForm, closeRecipeForm, editRecipe, saveRecipe, deleteRecipe, renderRecipeList,
          addRecipeStep, removeRecipeStep,
          toggleUrlImport, importFromUrl,
@@ -332,6 +333,9 @@ Object.assign(window, {
   saveFreezePortions,
   thawPortion,
   filterShotsByBean,
+  openEditFrozenForm,
+  closeEditFrozenForm,
+  saveEditFrozenForm,
   openRecipeForm,
   closeRecipeForm,
   editRecipe,
@@ -691,6 +695,9 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'close-freeze-form':  closeFreezeForm(numId()); break;
       case 'save-freeze-form':   saveFreezePortions(numId()); break;
       case 'thaw-portion':       thawPortion(Number(el.dataset.beanId), Number(el.dataset.portionId)); break;
+      case 'open-edit-frozen-form':  openEditFrozenForm(Number(el.dataset.portionId)); break;
+      case 'close-edit-frozen-form': closeEditFrozenForm(Number(el.dataset.portionId)); break;
+      case 'save-edit-frozen-form':  saveEditFrozenForm(numId(), Number(el.dataset.portionId)); break;
       case 'filter-by-bean':     filterShotsByBean(numId()); break;
       case 'clear-bean-filter':  clearBeanFilter(); break;
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
