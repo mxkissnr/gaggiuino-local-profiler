@@ -100,6 +100,27 @@ function sanitizeBrewTime(v) {
     return Number.isFinite(n) && n >= 5 && n <= 300 ? n : null;
 }
 
+// Frozen-portion batches within a bag (see routes/library.js freeze/thaw-
+// portion routes) — a dated pool of grams pulled out of the active bag and
+// vacuum-sealed, still counted in stock_g but excluded from the freshness
+// clock while frozen. frozenAt/thawedAt are epoch-ms timestamps; thawedAt is
+// only kept when it postdates frozenAt. Capped at plausible single-bag
+// ranges the same way sanitizeAltitude/sanitizePrice bound their fields.
+function sanitizeFrozenPortions(v) {
+    if (!Array.isArray(v)) return [];
+    return v.slice(0, 50).map(fp => {
+        const frozenAt = Number.isFinite(fp?.frozenAt) ? fp.frozenAt : null;
+        const portionCount    = parseInt(fp?.portionCount, 10);
+        const portionWeight_g = parseFloat(fp?.portionWeight_g);
+        if (!frozenAt || !(portionCount > 0 && portionCount <= 500) || !(portionWeight_g > 0 && portionWeight_g <= 2000))
+            return null;
+        const thawedAt = Number.isFinite(fp?.thawedAt) && fp.thawedAt >= frozenAt ? fp.thawedAt : null;
+        const out = { id: fp.id ?? frozenAt, frozenAt, portionCount, portionWeight_g: Math.round(portionWeight_g * 10) / 10 };
+        if (thawedAt) out.thawedAt = thawedAt;
+        return out;
+    }).filter(Boolean);
+}
+
 // Applies every field sanitizer to a bean-shaped object, preserving
 // structural fields (id, bags, image, location, source, importedAt, ...)
 // unchanged — used by /api/restore to sanitize a whole restored
@@ -139,6 +160,9 @@ function sanitizeBeanFields(bean) {
         brewNotes: s(bean.brewNotes, 300),
         sourceUrl: safeUrl(bean.sourceUrl),
         enabled: sanitizeEnabled(bean.enabled),
+        bags: Array.isArray(bean.bags)
+            ? bean.bags.map(bag => ({ ...bag, frozenPortions: sanitizeFrozenPortions(bag.frozenPortions) }))
+            : bean.bags,
     };
 }
 
@@ -192,5 +216,6 @@ function sanitizeRecipeFields(recipe) {
 module.exports = {
     sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeSpecies, sanitizeFlavors,
     sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime, sanitizeEnabled,
+    sanitizeFrozenPortions,
     sanitizeBeanFields, sanitizeGrinderFields, sanitizeRecipeFields, safeUrl,
 };

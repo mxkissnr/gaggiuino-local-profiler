@@ -628,6 +628,74 @@ describe('bag batch number (manual-only, per-bag)', () => {
     });
 });
 
+describe('frozen portions (freeze/thaw)', () => {
+    async function makeStockedBean(name = 'Freezer Bean') {
+        const r = await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, roastDate: '2026-06-01', stock_g: 500 }),
+        });
+        return r.json();
+    }
+
+    it('adds a frozen-portion batch to the active bag without changing stock_g', async () => {
+        const bean = await makeStockedBean();
+        const r = await fetch(`${baseUrl}/api/library/bean/${bean.id}/freeze-portions`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionCount: 20, portionWeight_g: 18.5 }),
+        });
+        expect(r.status).toBe(200);
+        const updated = await r.json();
+        expect(updated.stock_g).toBe(500);
+        expect(updated.bags[0].frozenPortions).toHaveLength(1);
+        expect(updated.bags[0].frozenPortions[0]).toMatchObject({ portionCount: 20, portionWeight_g: 18.5 });
+        expect(updated.bags[0].frozenPortions[0].frozenAt).toBeTypeOf('number');
+    });
+
+    it('rejects freeze-portions with missing/invalid counts', async () => {
+        const bean = await makeStockedBean();
+        const bad = await fetch(`${baseUrl}/api/library/bean/${bean.id}/freeze-portions`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionCount: 0, portionWeight_g: 18.5 }),
+        });
+        expect(bad.status).toBe(400);
+    });
+
+    it('404s freeze-portions for an unknown bean', async () => {
+        const r = await fetch(`${baseUrl}/api/library/bean/999999/freeze-portions`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionCount: 1, portionWeight_g: 18.5 }),
+        });
+        expect(r.status).toBe(404);
+    });
+
+    it('marks a frozen portion thawed, stamping thawedAt, and stock_g stays put', async () => {
+        const bean = await makeStockedBean();
+        const frozen = await (await fetch(`${baseUrl}/api/library/bean/${bean.id}/freeze-portions`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionCount: 20, portionWeight_g: 18.5 }),
+        })).json();
+        const portionId = frozen.bags[0].frozenPortions[0].id;
+
+        const r = await fetch(`${baseUrl}/api/library/bean/${bean.id}/thaw-portion`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionId }),
+        });
+        expect(r.status).toBe(200);
+        const updated = await r.json();
+        expect(updated.stock_g).toBe(500);
+        expect(updated.bags[0].frozenPortions[0].thawedAt).toBeTypeOf('number');
+    });
+
+    it('404s thaw-portion for a portion that does not exist', async () => {
+        const bean = await makeStockedBean();
+        const r = await fetch(`${baseUrl}/api/library/bean/${bean.id}/thaw-portion`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portionId: 424242 }),
+        });
+        expect(r.status).toBe(404);
+    });
+});
+
 describe('bean origin/variety/process fields', () => {
     it('stores origin as an uppercased ISO alpha-2 code and keeps variety/process', async () => {
         const r = await fetch(`${baseUrl}/api/library/bean`, {

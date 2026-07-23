@@ -39,6 +39,29 @@ export function freshnessState(days) {
   return 'old';
 }
 
+// ── Frozen portions (freeze/thaw) ────────────────────────────────────────
+// Total days a bag's frozen portions have spent vacuum-sealed below freezing
+// — the freshness clock pauses for that duration (see adjustedRoastAgeDays
+// below). Still-frozen portions (no thawedAt) keep accruing up to `nowMs`;
+// thawed ones stop accruing at their own thawedAt.
+export function frozenOffsetDays(frozenPortions, nowMs = Date.now()) {
+  if (!Array.isArray(frozenPortions)) return 0;
+  return frozenPortions.reduce((sum, fp) => {
+    if (!(fp?.frozenAt > 0)) return sum;
+    const end = fp.thawedAt > fp.frozenAt ? fp.thawedAt : nowMs;
+    return sum + Math.max(0, (end - fp.frozenAt) / 86400000);
+  }, 0);
+}
+
+// roastAgeDays() adjusted for time a bag's portions spent frozen — freezing
+// a portion pauses its aging clock rather than stopping the count outright,
+// so the badge still reflects genuine roast age minus frozen time.
+export function adjustedRoastAgeDays(roastDateStr, frozenPortions, nowMs = Date.now()) {
+  const days = roastAgeDays(roastDateStr, nowMs);
+  if (days == null) return null;
+  return Math.max(0, Math.round(days - frozenOffsetDays(frozenPortions, nowMs)));
+}
+
 // A stock-tracked bean with nothing left shouldn't nag about freshness — the
 // badge is only meaningful while there's still coffee to brew. Beans with no
 // stock tracking at all (stock_g unset, remaining is null) keep showing it.
