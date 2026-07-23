@@ -1,3 +1,8 @@
+## [2.15.2] – 2026-07-23
+
+### Fixed
+- **Generic-Shopify import's HTML-enrichment fetch now logs why it failed instead of silently swallowing the error.** The second request in the generic-Shopify import path (fetching the product page HTML to fill in process/variety/producer/region when the JSON left them empty) discarded any failure with no trace, so a report of "the JSON fields came through but the HTML-enrichment ones stayed empty" was undiagnosable — the same request run directly from a dev machine worked fine, pointing to something environment/network-specific on the failing side. The catch now logs a warning via the existing `log()` helper (`lib/helpers.js`) with the shop host and error message. Purely diagnostic — no change to import behavior or output. Closes #480
+
 ## [2.15.1] – 2026-07-23
 
 ### Fixed
