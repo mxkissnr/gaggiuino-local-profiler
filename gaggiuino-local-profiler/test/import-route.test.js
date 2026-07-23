@@ -268,7 +268,11 @@ describe('GET /api/import/url — generic-Shopify HTML detail enrichment (#423)'
         expect(axiosGet).toHaveBeenNthCalledWith(2, url, expect.any(Object));
     });
 
-    it('keeps the JSON-only bean when the extra HTML fetch fails, without failing the request', async () => {
+    // #480: the failure used to be silently discarded — real report from
+    // Max where the JSON-only bean came through but process/variety/
+    // producer/region stayed empty, with nothing in the logs to say why.
+    it('keeps the JSON-only bean when the extra HTML fetch fails, without failing the request, and logs why (#480)', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         axiosGet
             .mockResolvedValueOnce({ status: 200, headers: {}, data: {
                 title: 'Flower Power', vendor: 'adventurous', description: '', price: 1800,
@@ -282,6 +286,9 @@ describe('GET /api/import/url — generic-Shopify HTML detail enrichment (#423)'
         expect(r.status).toBe(200);
         expect(data.name).toBe('Flower Power');
         expect(data.process).toBeUndefined();
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('sproutcoffeeroasters.art'));
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('timeout'));
+        errorSpy.mockRestore();
     });
 
     // #433, ground truth end-to-end: vendor "adventurous" is a taxonomy tag,

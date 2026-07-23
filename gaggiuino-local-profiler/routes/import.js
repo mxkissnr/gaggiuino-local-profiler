@@ -8,6 +8,7 @@ const { BUILTIN_PROVIDERS, matchProvider } = require('../lib/import-providers');
 const { parseGenericShopifyProduct, parseJsonLd, parseOpenGraph, findDuplicateBean, enrichGenericBeanFromHtml } = require('../lib/import-generic');
 const { assertPublicHost, SsrfBlockedError } = require('../lib/ssrf-guard');
 const { loadImportSettings, saveImportSettings, loadLibrary } = require('../lib/data');
+const { log } = require('../lib/helpers');
 
 const FETCH_OPTS = {
     headers: { 'User-Agent': 'GLP/1.0 (Gaggiuino Local Profiler; private use)' },
@@ -162,7 +163,10 @@ router.get('/api/import/url', async (req, res) => {
                                 bean = enrichGenericBeanFromHtml(bean, htmlR.data, host);
                             } catch (htmlErr) {
                                 if (htmlErr instanceof SsrfBlockedError) throw htmlErr;
-                                // page fetch/parse failed — keep the JSON-only bean
+                                // #480: page fetch/parse failed — keep the JSON-only bean,
+                                // but log why so a "some fields stayed empty" report is
+                                // diagnosable from the add-on logs instead of a guess.
+                                log(`Import: HTML enrichment fetch failed for ${host}: ${htmlErr.message}`, true);
                             }
                         }
                     }
