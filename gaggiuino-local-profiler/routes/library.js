@@ -153,8 +153,9 @@ router.post('/api/library/bean/:id/new-bag', (req, res) => {
 
 // Freezes a portion of the active (last) bag: grams move into a dated
 // frozen pool but stay counted in the bag's stock_g — nothing is consumed,
-// this only pauses the freshness clock for that portion (see
-// adjustedRoastAgeDays() in public-src/utils.js) until it's thawed.
+// this only pauses that portion's own freshness clock (see
+// frozenPortionAgeDays() in public-src/utils.js, #477 — never the bag's own
+// badge) until it's thawed.
 // frozenAt (#472) is client-supplied (epoch ms) so a portion can be logged
 // with a past date instead of always "now" — still defaults to now when
 // omitted.

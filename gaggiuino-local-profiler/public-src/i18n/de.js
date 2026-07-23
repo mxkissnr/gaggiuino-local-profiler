@@ -193,6 +193,7 @@ export default {
     bag_freeze_count:'Anzahl Portionen', bag_freeze_weight:'Gramm je Portion',
     bag_frozen_badge:(d)=>`❄ seit ${d}`, bag_frozen_thawed_badge:(d)=>`aufgetaut ${d}`,
     bag_frozen_portion_title:(n,g)=>`${n}× ${g} g eingefroren`,
+    bag_frozen_portion_age:(d)=>`effektives Alter ${d}d`,
     bag_thaw_btn:'auftauen', bag_freeze_date:'Einfrierdatum', bag_frozen_edit_btn:'Portion bearbeiten',
     lib_recipes:'Rezepte', lib_milk:'Milch',
     lib_add_milk:'+ Milch hinzufügen', lib_milk_name:'Name *', lib_milk_name_ph:'z.B. Vollmilch',

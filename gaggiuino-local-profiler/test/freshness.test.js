@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { roastAgeDays, freshnessState, shouldShowFreshBadge, frozenOffsetDays, adjustedRoastAgeDays, toIsoDateInput, todayIsoDate, isoDateInputToMs } from '../public-src/utils.js';
+import { roastAgeDays, freshnessState, shouldShowFreshBadge, frozenPortionAgeDays, toIsoDateInput, todayIsoDate, isoDateInputToMs } from '../public-src/utils.js';
 
 const DAY = 86400000;
 const now = new Date(2026, 6, 5, 12).getTime(); // 2026-07-05 noon, local time
@@ -38,51 +38,33 @@ describe('freshnessState', () => {
     });
 });
 
-describe('frozenOffsetDays', () => {
-    it('returns 0 with no frozen portions', () => {
-        expect(frozenOffsetDays([], now)).toBe(0);
-        expect(frozenOffsetDays(undefined, now)).toBe(0);
-        expect(frozenOffsetDays(null, now)).toBe(0);
+// #477: a frozen portion's own effective age is tracked separately from the
+// bag's plain roastAgeDays() badge — freezing part of a bag must never
+// change how fresh the rest of the bag (still in normal use) reads.
+describe('frozenPortionAgeDays', () => {
+    it('holds flat at the age-at-freeze-time while still frozen (no thawedAt)', () => {
+        const portion = { id: 1, frozenAt: now - 6 * DAY, portionCount: 20, portionWeight_g: 18.5 };
+        // age at freeze time: roasted 2026-06-25, frozen 6 days later at now-6d
+        expect(frozenPortionAgeDays('2026-06-25', portion, now)).toBe(4);
     });
 
-    it('counts a still-frozen portion up to now', () => {
-        const frozenPortions = [{ id: 1, frozenAt: now - 5 * DAY, portionCount: 20, portionWeight_g: 18.5 }];
-        expect(frozenOffsetDays(frozenPortions, now)).toBe(5);
+    it('does not keep growing with `now` while still frozen', () => {
+        const portion = { id: 1, frozenAt: now - 6 * DAY, portionCount: 20, portionWeight_g: 18.5 };
+        const muchLater = now + 100 * DAY;
+        expect(frozenPortionAgeDays('2026-06-25', portion, muchLater)).toBe(4);
     });
 
-    it('stops counting a thawed portion at its own thawedAt', () => {
-        const frozenPortions = [{ id: 1, frozenAt: now - 10 * DAY, thawedAt: now - 3 * DAY, portionCount: 20, portionWeight_g: 18.5 }];
-        expect(frozenOffsetDays(frozenPortions, now)).toBe(7);
+    it('resumes counting from thawedAt once thawed', () => {
+        const portion = { id: 1, frozenAt: now - 10 * DAY, thawedAt: now - 3 * DAY, portionCount: 20, portionWeight_g: 18.5 };
+        // age at freeze (2026-06-25 00:00 -> now-10d, i.e. 2026-06-25 12:00 = 0 whole days)
+        // + 3 days since thawed
+        expect(frozenPortionAgeDays('2026-06-25', portion, now)).toBe(0 + 3);
     });
 
-    it('sums multiple portion batches', () => {
-        const frozenPortions = [
-            { id: 1, frozenAt: now - 10 * DAY, thawedAt: now - 8 * DAY, portionCount: 5, portionWeight_g: 18 },
-            { id: 2, frozenAt: now - 4 * DAY, portionCount: 5, portionWeight_g: 18 },
-        ];
-        expect(frozenOffsetDays(frozenPortions, now)).toBe(6);
-    });
-});
-
-describe('adjustedRoastAgeDays', () => {
-    it('matches plain roastAgeDays when there is nothing frozen', () => {
-        expect(adjustedRoastAgeDays('2026-06-25', [], now)).toBe(10);
-        expect(adjustedRoastAgeDays('2026-06-25', undefined, now)).toBe(10);
-    });
-
-    it('subtracts frozen time from the calendar age', () => {
-        const frozenPortions = [{ id: 1, frozenAt: now - 6 * DAY, portionCount: 20, portionWeight_g: 18.5 }];
-        expect(adjustedRoastAgeDays('2026-06-25', frozenPortions, now)).toBe(4); // 10 - 6
-    });
-
-    it('never goes negative', () => {
-        const frozenPortions = [{ id: 1, frozenAt: now - 30 * DAY, portionCount: 20, portionWeight_g: 18.5 }];
-        expect(adjustedRoastAgeDays('2026-06-25', frozenPortions, now)).toBe(0);
-    });
-
-    it('stays null when the roast date itself is unparseable', () => {
-        expect(adjustedRoastAgeDays('', [], now)).toBeNull();
-        expect(adjustedRoastAgeDays(null, [], now)).toBeNull();
+    it('returns null for a missing/malformed portion or unparseable roast date', () => {
+        expect(frozenPortionAgeDays('2026-06-25', null, now)).toBeNull();
+        expect(frozenPortionAgeDays('2026-06-25', {}, now)).toBeNull();
+        expect(frozenPortionAgeDays('', { frozenAt: now - DAY }, now)).toBeNull();
     });
 });
 
