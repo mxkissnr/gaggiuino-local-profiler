@@ -263,6 +263,59 @@ describe('enrichGenericBeanFromHtml', () => {
         });
     });
 
+    // #471, ground truth: shop.squaremilecoffee.com/products/red-brick pulled
+    // 2026-07-23 — the "Coffee information" origin-wrapper markup, no
+    // <details>/.details-content anywhere on the page. Trimmed to the first
+    // blend component's origin-wrapper group only (real pages repeat this
+    // once per blend component; first-match-wins picks up the first one).
+    const originWrapperHtml = `
+        <div class="submenu-origin">
+            <div class="origin-content">
+                <div class="origin-wrapper">
+                    <div><h5 class="origin-title">Coffee</h5><p>Altamira de Chirripó</p></div>
+                    <div><h5 class="origin-title">Roast Level</h5><p>Medium </p></div>
+                </div>
+                <div class="origin-wrapper">
+                    <div><h5 class="origin-title">Country</h5><p>Costa Rica </p></div>
+                    <div><h5 class="origin-title">Process</h5><p>White Honey</p></div>
+                </div>
+                <div class="origin-wrapper">
+                    <div><h5 class="origin-title">Variety</h5><p>Catuaí</p></div>
+                    <div><h5 class="origin-title">Producer</h5><p>Micepa Micromill</p></div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    describe('origin-wrapper markup (#471, no <details> accordion on the page)', () => {
+        const jsonOnlyBean2 = { name: 'Red Brick', roaster: 'Square Mile Coffee Roasters', origins: [] };
+
+        it('fills process/variety/producer/region from .origin-title + sibling <p> pairs', () => {
+            const bean = enrichGenericBeanFromHtml(jsonOnlyBean2, originWrapperHtml);
+            expect(bean.process).toBe('White Honey');
+            expect(bean.variety).toBe('Catuaí');
+            expect(bean.producer).toBe('Micepa Micromill');
+            expect(bean.region).toBe('Costa Rica');
+        });
+
+        it('resolves the Country label into an ISO origin code', () => {
+            const bean = enrichGenericBeanFromHtml(jsonOnlyBean2, originWrapperHtml);
+            expect(bean.origin).toBe('CR');
+            expect(bean.origins).toEqual([{ code: 'CR' }]);
+        });
+
+        it('never overwrites a field the <details> accordion scan already found', () => {
+            const both = `${sproutHtml}${originWrapperHtml}`;
+            const bean = enrichGenericBeanFromHtml(jsonOnlyBean, both);
+            expect(bean.process).toBe('Anaerobic Natural');
+        });
+
+        it('leaves a field empty when neither scanner finds it (no elevation label present)', () => {
+            const bean = enrichGenericBeanFromHtml({ name: 'Red Brick' }, originWrapperHtml);
+            expect(bean.altitude_m).toBeUndefined();
+        });
+    });
+
     it('returns the bean unchanged when the HTML has none of the recognized patterns', () => {
         const plainHtml = '<html><body><h1>Some Product</h1><p>Just a description, nothing structured.</p></body></html>';
         const bean = enrichGenericBeanFromHtml(jsonOnlyBean, plainHtml);
