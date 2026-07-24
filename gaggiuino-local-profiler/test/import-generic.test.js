@@ -314,6 +314,27 @@ describe('enrichGenericBeanFromHtml', () => {
             const bean = enrichGenericBeanFromHtml({ name: 'Red Brick' }, originWrapperHtml);
             expect(bean.altitude_m).toBeUndefined();
         });
+
+        // #495, ground truth: shop.squaremilecoffee.com/products/red-brick —
+        // tasting notes render as a single all-caps, slash-separated line
+        // rather than the short comma-separated h4 subtitle #423 covers.
+        it('fills flavors from an all-caps slash-separated .additional-info line, title-cased', () => {
+            const html = `${originWrapperHtml}<h5 class="additional-info">RED APPLE / TOFFEE / CHOCOLATE / HAZELNUT</h5>`;
+            const bean = enrichGenericBeanFromHtml({ name: 'Red Brick' }, html);
+            expect(bean.flavors).toEqual(['Red Apple', 'Toffee', 'Chocolate', 'Hazelnut']);
+        });
+
+        it('merges .additional-info flavors alongside a JSON-derived flavor instead of overwriting it', () => {
+            const html = `${originWrapperHtml}<h5 class="additional-info">RED APPLE / TOFFEE</h5>`;
+            const bean = enrichGenericBeanFromHtml({ name: 'Red Brick', flavors: ['Jasmin'] }, html);
+            expect(bean.flavors).toEqual(['Jasmin', 'Red Apple', 'Toffee']);
+        });
+
+        it('ignores .additional-info when it has no slash (not a flavor list)', () => {
+            const html = `${originWrapperHtml}<h5 class="additional-info">Free Shipping UK Wide</h5>`;
+            const bean = enrichGenericBeanFromHtml({ name: 'Red Brick' }, html);
+            expect(bean.flavors).toBeUndefined();
+        });
     });
 
     it('returns the bean unchanged when the HTML has none of the recognized patterns', () => {

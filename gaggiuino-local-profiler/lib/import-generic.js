@@ -228,6 +228,21 @@ function extractTastingNotesSubtitle($) {
     return null;
 }
 
+// Some themes render tasting notes as a single all-caps, slash-separated
+// line rather than the short comma-separated subtitle
+// extractTastingNotesSubtitle() already covers — e.g. Square Mile Coffee's
+// <h5 class="additional-info">RED APPLE / TOFFEE / CHOCOLATE / HAZELNUT</h5>
+// (#495, ground truth: shop.squaremilecoffee.com/products/red-brick).
+// Title-cased so it reads consistently alongside flavors from other sources.
+function extractAdditionalInfoFlavors($) {
+    const text = $('.additional-info').first().text().replace(/\s+/g, ' ').trim();
+    if (!text || !text.includes('/')) return [];
+    return text.split('/')
+        .map(s => s.trim())
+        .filter(s => s && s.length <= 30)
+        .map(s => s.replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()));
+}
+
 // Converts block-level line breaks into literal "\n" before reading .text() —
 // cheerio's plain .text() concatenates adjacent block content with NO
 // separator at all when the source HTML has no incidental whitespace between
@@ -476,6 +491,9 @@ function enrichGenericBeanFromHtml(bean, html, host = null) {
 
     const subtitle = extractTastingNotesSubtitle($);
     if (subtitle) out.flavors = mergeUnique(bean.flavors || [], splitFlavors(subtitle), 8);
+
+    const additionalInfoFlavors = extractAdditionalInfoFlavors($);
+    if (additionalInfoFlavors.length) out.flavors = mergeUnique(out.flavors || bean.flavors || [], additionalInfoFlavors, 8);
 
     const fields = scanBeanDetailFields($);
     if (!out.process && fields.process) out.process = fields.process;
