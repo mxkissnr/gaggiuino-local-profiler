@@ -9,6 +9,7 @@ import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { COFFEE_ICON_SVG, CHECK_ICON_SVG } from '../../icons.js';
+import { LOCALE_MAP } from '../../constants.js';
 
 // ── Auto-save ─────────────────────────────────────────────────────────────
 
@@ -41,6 +42,49 @@ export function _maybeDeductMilk(shot, payload) {
   }).catch(() => {});
 }
 
+// Finds a frozen-portion entry by id across every bean/bag — portion ids are
+// globally unique (generated from frozenAt), so no beanId is needed to
+// locate one. Returns { bean, portion } or null.
+function _findFrozenPortion(portionId) {
+  for (const bean of S.coffeeLibrary?.beans || []) {
+    for (const bag of bean.bags || []) {
+      const portion = (bag.frozenPortions || []).find(p => p.id === portionId);
+      if (portion) return { bean, portion };
+    }
+  }
+  return null;
+}
+
+// #502: mirrors _maybeDeductMilk's shape exactly — compares the previous vs.
+// new frozenPortionId so re-saving the same choice never double-counts, and
+// switching choices (including back to "not frozen", i.e. null) correctly
+// reverses the previous decrement. Uses the existing adjust-frozen-portion
+// endpoint (absolute remainingCount) rather than a delta endpoint, computing
+// the target value from the client's already-loaded S.coffeeLibrary state.
+function _adjustFrozenPortionRemaining(portionId, delta) {
+  const found = _findFrozenPortion(portionId);
+  if (!found) return;
+  const { bean, portion } = found;
+  const current = Number.isFinite(portion.remainingCount) ? portion.remainingCount : portion.portionCount;
+  const remainingCount = Math.min(Math.max(current + delta, 0), portion.portionCount);
+  apiFetch(`api/library/bean/${bean.id}/adjust-frozen-portion`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ portionId, remainingCount }),
+  }).then(r => r.ok ? r.json() : null).then(updated => {
+    if (!updated) return;
+    const idx = S.coffeeLibrary.beans.findIndex(b => b.id === bean.id);
+    if (idx !== -1) S.coffeeLibrary.beans[idx] = updated;
+  }).catch(() => {});
+}
+
+export function _maybeAdjustFrozenPortion(shot, payload) {
+  const prevPortionId = shot?.annotation?.frozenPortionId ?? null;
+  const newPortionId  = payload.frozenPortionId ?? null;
+  if (prevPortionId === newPortionId) return;
+  if (prevPortionId != null) _adjustFrozenPortionRemaining(prevPortionId, +1);
+  if (newPortionId != null) _adjustFrozenPortionRemaining(newPortionId, -1);
+}
+
 // Reads every annotation field's current DOM value into the API payload
 // shape — the single source of truth for both the debounced auto-save and
 // its immediate flush, so neither path can silently build a different
@@ -68,6 +112,7 @@ function _buildAnnotationPayload(shot) {
     milkType:     document.getElementById('annMilkType')?.value ? parseInt(document.getElementById('annMilkType').value) : null,
     recipeId:     parseInt(document.getElementById('annRecipe')?.value) || null,
     beanAgeDays:  calcBeanAgeAtShot(coffee, shot?.timestamp, beanId) ?? null,
+    frozenPortionId: parseInt(document.getElementById('annFrozenPortionId')?.value, 10) || null,
   };
 }
 
@@ -103,6 +148,7 @@ async function _performAnnotationSave() {
     });
     if (r.ok) {
       _maybeDeductMilk(shot, payload);
+      _maybeAdjustFrozenPortion(shot, payload);
       const idx = S.shots.findIndex(s => s.id === id);
       if (idx !== -1) S.shots[idx].annotation = payload;
       renderSidebar();
@@ -188,6 +234,57 @@ export function selectMilkType(id) {
   if (!hidden) return;
   const newVal = hidden.value === id ? '' : id;
   _renderMilkPills(newVal);
+  scheduleAutoSave();
+}
+
+// ── Frozen-portion pill (which pool of this bean's stock a shot used) ──────
+
+// Bags/portions active as of a given shot's timestamp — mirrors the
+// activeBag resolution in main.js's annCoffee change handler (openedAt <=
+// shotMs, most recent first), so the frozen-portion choices reflect what
+// was actually in the freezer at brew time, not just "now". Only portions
+// with remaining stock are offered (a fully-thawed one has nothing left to
+// pick).
+function _activeFrozenPortionsForBean(bean, shotMs) {
+  if (!bean) return [];
+  const bags = Array.isArray(bean.bags) ? bean.bags : [];
+  const activeBag = bags.filter(b => (b.openedAt || 0) <= shotMs).sort((a, b) => b.openedAt - a.openedAt)[0];
+  const portions = Array.isArray(activeBag?.frozenPortions) ? activeBag.frozenPortions : [];
+  return portions.filter(p => (Number.isFinite(p.remainingCount) ? p.remainingCount : p.portionCount) > 0);
+}
+
+// #502: an explicit "not frozen" pill is always offered alongside any active
+// frozen batches — Max wants that to be a deliberate recorded choice, not
+// just the absence of a selection. The whole field hides when the bean has
+// no active frozen stock at all, since there'd be nothing to choose between.
+export function _renderFrozenPortionPills(beanName, shotMs, selectedId) {
+  const field     = document.getElementById('frozenPortionField');
+  const container = document.getElementById('frozenPortionPillsContainer');
+  const hidden    = document.getElementById('annFrozenPortionId');
+  if (!field || !container || !hidden) return;
+  const bean = beanName ? S.coffeeLibrary?.beans?.find(b => b.name === beanName) : null;
+  const portions = _activeFrozenPortionsForBean(bean, shotMs ?? Date.now());
+  if (!portions.length) { field.style.display = 'none'; container.innerHTML = ''; hidden.value = ''; return; }
+  field.style.display = '';
+  const locale = LOCALE_MAP[S.currentLang] || 'de-DE';
+  const selected = selectedId != null ? String(selectedId) : '';
+  const options = [{ id: '', label: t('ann_frozen_portion_none') }, ...portions.map(p => {
+    const dateStr    = new Date(p.frozenAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
+    const remaining  = Number.isFinite(p.remainingCount) ? p.remainingCount : p.portionCount;
+    return { id: String(p.id), label: `❄ ${remaining}/${p.portionCount} · ${dateStr}` };
+  })];
+  container.innerHTML = options.map(o =>
+    `<button type="button" class="drink-pill${selected === o.id ? ' active' : ''}" data-action="select-frozen-portion" data-id="${esc(o.id)}">${esc(o.label)}</button>`
+  ).join('');
+  hidden.value = selected;
+}
+
+export function selectFrozenPortion(id) {
+  const hidden = document.getElementById('annFrozenPortionId');
+  if (!hidden) return;
+  const beanName = document.getElementById('annCoffee')?.value?.trim() || null;
+  const shot     = S.primaryShotId ? S.shots.find(s => s.id === S.primaryShotId) : null;
+  _renderFrozenPortionPills(beanName, shot ? shot.timestamp * 1000 : Date.now(), id || null);
   scheduleAutoSave();
 }
 
@@ -324,6 +421,7 @@ export function renderAnnotationPanel(shot) {
   S.currentRating = ann.rating || 0;
   renderStars(S.currentRating);
   _renderBeanSelect(ann.coffee || null);
+  _renderFrozenPortionPills(ann.coffee || null, shot?.timestamp ? shot.timestamp * 1000 : Date.now(), ann.frozenPortionId ?? null);
   document.getElementById('annGrinder').value      = ann.grinder      || '';
   document.getElementById('annGrindSetting').value = ann.grindSetting || '';
   document.getElementById('annDose').value         = ann.dose         || '';
@@ -381,6 +479,9 @@ export function quickClone() {
   _renderMilkPills('');
   _updateMilkFieldVisibility();
   _renderRecipeSelect(ann.recipeId || null);
+  // Frozen-portion choice is per-shot, not carried over from prev — a clone
+  // starts unset (like milk above), even if prev used a frozen portion.
+  _renderFrozenPortionPills(beanName, currentShot?.timestamp ? currentShot.timestamp * 1000 : Date.now(), null);
   // #430: quickClone sets field values programmatically (no 'input' event
   // fires), so it must schedule the save itself — there's no explicit Save
   // button left to catch this otherwise.

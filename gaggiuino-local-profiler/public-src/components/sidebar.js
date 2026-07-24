@@ -102,6 +102,9 @@ function _buildShotWrapper(shot) {
     const dose = parseFloat(ann.dose);
     const durLabel = shot.duration ? formatTimeLabel(shot.duration / 10) : null;
     const line2 = [ann.coffee || null, dose ? `${dose.toFixed(1)} g` : null].filter(Boolean).join(' · ') || durLabel || '';
+    // #502: which frozen-portion batch (if any) this shot's dose came from —
+    // an explicit annotation-panel choice, shown at a glance in the list too.
+    const frozenBadge = ann.frozenPortionId ? `<span class="shot-frozen-badge" title="${esc(t('ann_frozen_portion'))}">❄</span>` : '';
 
     const rating = parseInt(ann.rating) || 0;
     const starsHtml = rating > 0
@@ -127,7 +130,7 @@ function _buildShotWrapper(shot) {
             <span class="shot-line1-name"><span class="profile-name-sidebar">${esc(profileName)}</span>${machineBadge}</span>
             ${scoreHtml}
           </div>
-          <div class="shot-line2">${esc(line2)}</div>
+          <div class="shot-line2">${frozenBadge}${esc(line2)}</div>
           <div class="shot-line3">${starsHtml}${grinderHtml}<span class="shot-time">${esc(timeLabel)}</span></div>
         </div>
       </div>

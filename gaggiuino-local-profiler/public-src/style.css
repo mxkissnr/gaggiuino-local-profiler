@@ -187,6 +187,8 @@
            elsewhere (e.g. #sidebar h2 above, .analytics-section-title). */
         .profile-name-sidebar { font-size: .92rem; font-weight: 600; color: var(--gray-200); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .shot-line2 { font-size: .75rem; color: var(--gray-500); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* #502: same "on ice" blue as the library's .lib-frozen-badge */
+        .shot-frozen-badge { color: #38bdf8; margin-right: 3px; }
         .shot-line3 {
             display: flex; align-items: center; gap: 7px;
             font-size: .72rem; color: var(--gray-500); margin-top: 3px;

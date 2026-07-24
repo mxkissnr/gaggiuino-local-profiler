@@ -31,6 +31,7 @@ export default {
     ann_notes_ph:'Taste, observations, adjustments …',
     ann_drink_type:'Drink', ann_drink_type_none:'— none —',
     ann_milk_type:'Milk', ann_milk_none:'— none —',
+    ann_frozen_portion:'Portion', ann_frozen_portion_none:'Not frozen',
     ann_recipe:'Recipe', ann_recipe_none:'— no recipe —',
     autosave_pending:'Saving…', autosave_saved:'Saved',
     grind_finer_urgent:'Grind finer', grind_finer:'Grind slightly finer',

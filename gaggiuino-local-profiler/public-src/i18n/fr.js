@@ -31,6 +31,7 @@ export default {
     ann_notes_ph:'Goût, observations, ajustements …',
     ann_drink_type:'Boisson', ann_drink_type_none:'— aucune —',
     ann_milk_type:'Lait', ann_milk_none:'— aucune —',
+    ann_frozen_portion:'Portion', ann_frozen_portion_none:'Pas congelée',
     ann_recipe:'Recette', ann_recipe_none:'— aucune recette —',
     autosave_pending:'Enregistrement…', autosave_saved:'Enregistré',
     grind_finer_urgent:'Moudre plus fin', grind_finer:'Moudre légèrement plus fin',

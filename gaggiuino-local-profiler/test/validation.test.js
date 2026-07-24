@@ -41,6 +41,23 @@ describe('annotationSchema', () => {
         const result = annotationSchema.safeParse({ coffee: 'Bean', drinkType: null });
         expect(result.success).toBe(true);
     });
+
+    // #502: frontend always sends frozenPortionId: null for "not frozen"
+    // explicitly picked (same shape as beanId/beanBagId above it).
+    it('accepts a numeric frozenPortionId', () => {
+        const result = annotationSchema.safeParse({ coffee: 'Bean', frozenPortionId: 1721234567890 });
+        expect(result.success).toBe(true);
+    });
+
+    it('accepts frozenPortionId: null (not frozen explicitly picked)', () => {
+        const result = annotationSchema.safeParse({ coffee: 'Bean', frozenPortionId: null });
+        expect(result.success).toBe(true);
+    });
+
+    it('rejects a non-integer frozenPortionId', () => {
+        const result = annotationSchema.safeParse({ coffee: 'Bean', frozenPortionId: 1.5 });
+        expect(result.success).toBe(false);
+    });
 });
 
 describe('beanSchema', () => {

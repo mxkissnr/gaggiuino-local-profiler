@@ -56,7 +56,8 @@ import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggl
          updateView, switchChartTab, updatePQChart,
          openChartFullscreen, closeChartFullscreen, switchFsTab,
          exportCSV, exportAllCSV, exportShot, exportProfile, shareCard, restoreFromFile, downloadBackup,
-         loadDrinkMenu, loadMilkTypes, selectDrinkType, selectMilkType } from './views/shots.js';
+         loadDrinkMenu, loadMilkTypes, selectDrinkType, selectMilkType,
+         selectFrozenPortion, _renderFrozenPortionPills } from './views/shots.js';
 
 import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, clearReferenceShot,
          connectLiveStream, disconnectLiveStream, setLiveBadge, handleLiveData,
@@ -224,6 +225,7 @@ Object.assign(window, {
   flushAutoSave,
   selectDrinkType,
   selectMilkType,
+  selectFrozenPortion,
   loadDrinkMenu,
   loadMilkTypes,
   updateDegassing,
@@ -434,10 +436,10 @@ document.addEventListener('DOMContentLoaded', () => {
     annCoffee.addEventListener('change', () => {
       const name = annCoffee.value.trim();
       const hintEl = document.getElementById('beanAgeHint');
-      if (!name || !S.coffeeLibrary) { if (hintEl) hintEl.style.display = 'none'; return; }
+      if (!name || !S.coffeeLibrary) { if (hintEl) hintEl.style.display = 'none'; _renderFrozenPortionPills(null, Date.now(), null); return; }
 
       const bean = S.coffeeLibrary.beans?.find(b => b.name === name);
-      if (!bean) { if (hintEl) hintEl.style.display = 'none'; return; }
+      if (!bean) { if (hintEl) hintEl.style.display = 'none'; _renderFrozenPortionPills(null, Date.now(), null); return; }
 
       // Prefill grinder/grind setting/dose from this bean's own history
       // (best scored combo, then known-good grind, then its last shot) —
@@ -464,6 +466,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Update degassing tracker from library roast date
       updateDegassing(roastDate || '');
+
+      // Bean changed — the frozen-portion choices (if any) belong to the
+      // previously selected bean's bag, never carry over. Reset to unset.
+      _renderFrozenPortionPills(name, shotMs, null);
 
       // Show bean age hint
       const ageDays = calcBeanAgeAtShot(name, shot?.timestamp, bean.id);
@@ -720,6 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'perm-delete-shot':   permanentDeleteShot(numId()); break;
       case 'select-drink':       selectDrinkType(strId()); break;
       case 'select-milk':        selectMilkType(strId()); break;
+      case 'select-frozen-portion': selectFrozenPortion(strId()); break;
       case 'reload-data':        loadData(); break;
       case 'set-maint-mode':     setMaintMode(el.dataset.task, el.dataset.mode, el.dataset.machineId); break;
       case 'mark-maint-done':    markMaintDone(el.dataset.task, el.dataset.machineId); break;

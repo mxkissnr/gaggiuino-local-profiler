@@ -29,6 +29,14 @@ const annotationSchema = z.object({
     // Bag-within-bean identity (if ever revived) — distinct from beanId (bean
     // identity) above. Currently unused; do not conflate the two.
     beanBagId:     z.number().int().nullable().optional(),
+    // #502: which frozen-portion batch (bag.frozenPortions[].id) this shot's
+    // dose came from, an explicit choice in the annotation panel — null
+    // means "not frozen" was explicitly picked, same as no bean picked at
+    // all being distinct from "unset". The library-stock deduction itself
+    // happens client-side (public-src/views/shots/annotation.js
+    // _maybeAdjustFrozenPortion, mirroring the existing milk-deduction
+    // pattern), not here — this field is just the durable record.
+    frozenPortionId: z.number().int().nullable().optional(),
 }).passthrough();
 
 const beanSchema = z.object({
