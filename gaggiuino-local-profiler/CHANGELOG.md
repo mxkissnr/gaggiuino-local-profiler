@@ -1,3 +1,9 @@
+## [2.16.5] – 2026-07-24
+
+### Fixed
+- **Generic Shopify import now represents both components of a blend, not just the first.** `scanOriginWrapperFields()` picked each field's value first-match-wins across the whole document, so a page with multiple `.origin-content` blocks (one per blend component, e.g. `shop.squaremilecoffee.com/products/red-brick`, a 50/50 Costa Rica / Colombia blend) only ever surfaced the first-listed component (Costa Rica/Catuaí/White Honey/Micepa Micromill) and silently dropped the second (Colombia/Caturra,Colombia,Typica/Washed/58 Smallholders). The scanner now scopes each field to its own `.origin-content` block and joins distinct values with " / " before origin-code extraction, so both blend origins (CR + CO) come through correctly. Closes #498
+- **Generic Shopify import now also extracts brew temperature/time/ratio when the shop renders them as a plain bullet list.** `extractEspressoBrewGuide()` (#433) only recognized a `<details>` In/Out/Time/Ratio/Temp block; some shops instead render a "RECIPE DETAILS" section as plain bullets ("• Brew temperature: 201ºF-202ºF/94ºC-94.5ºC", "• Brew time: 28-32 sec", "• Brew Ratio: 1:2"). Added a fallback scanner for this shape, extracting the Celsius half of the dual-unit temperature line. Both found and verified live against the real page. Closes #499
+
 ## [2.16.4] – 2026-07-24
 
 ### Fixed
