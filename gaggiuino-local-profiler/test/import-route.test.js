@@ -70,6 +70,57 @@ describe('GET /api/import/url — cache headers (#486)', () => {
     });
 });
 
+// #489: opt-in inline diagnostic for the still-open "HTML enrichment finds
+// nothing on Max's server despite identical page content" investigation —
+// puts the raw fetch result in the response itself, since add-on logs
+// (including the #481/#484 debug logging) proved undiagnosable in practice.
+describe('GET /api/import/url — ?debug=1 diagnostic field (#489)', () => {
+    it('omits _debug entirely when the flag is not set', async () => {
+        axiosGet
+            .mockResolvedValueOnce({ status: 200, headers: {}, data: {
+                title: 'Flower Power', vendor: 'adventurous', description: '', price: 1800,
+            }})
+            .mockResolvedValueOnce({ status: 200, headers: {}, data: '<html><body>no markers here</body></html>' });
+        const url = 'https://sproutcoffeeroasters.art/products/flower-power';
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent(url)}`);
+        const data = await r.json();
+        expect(data._debug).toBeUndefined();
+    });
+
+    it('reports HTML fetch status/length and origin-wrapper/details-content presence when set', async () => {
+        const html = '<html><body><div class="origin-wrapper"><h5 class="origin-title">Process</h5><p>Washed</p></div></body></html>';
+        axiosGet
+            .mockResolvedValueOnce({ status: 200, headers: {}, data: {
+                title: 'Flower Power', vendor: 'adventurous', description: '', price: 1800,
+            }})
+            .mockResolvedValueOnce({ status: 200, headers: {}, data: html });
+        const url = 'https://sproutcoffeeroasters.art/products/flower-power';
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent(url)}&debug=1`);
+        const data = await r.json();
+        expect(data._debug).toMatchObject({
+            needsHtmlEnrich: true,
+            htmlFetchStatus: 200,
+            htmlLength: html.length,
+            hasOriginWrapper: true,
+            hasOriginTitle: true,
+            hasDetailsAccordion: false,
+        });
+        expect(data._debug.enrichedFieldsChanged).toContain('process');
+    });
+
+    it('reports the fetch error when the HTML fetch fails', async () => {
+        axiosGet
+            .mockResolvedValueOnce({ status: 200, headers: {}, data: {
+                title: 'Flower Power', vendor: 'adventurous', description: '', price: 1800,
+            }})
+            .mockRejectedValueOnce(new Error('timeout'));
+        const url = 'https://sproutcoffeeroasters.art/products/flower-power';
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent(url)}&debug=1`);
+        const data = await r.json();
+        expect(data._debug.htmlFetchError).toBe('timeout');
+    });
+});
+
 describe('GET /api/import/url — size variants projection', () => {
     it('attaches distinct size variants when a Shopify product has real price/weight variation', async () => {
         axiosGet.mockResolvedValue({ status: 200, headers: {}, data: {

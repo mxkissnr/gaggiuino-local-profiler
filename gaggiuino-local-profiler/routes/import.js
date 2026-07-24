@@ -148,6 +148,14 @@ router.get('/api/import/url', async (req, res) => {
             }
         }
 
+        // #489: opt-in (?debug=1) inline diagnostic — the add-on logs proved
+        // undiagnosable in practice (debugLog's own output never showed up,
+        // a separate mystery), so this puts the raw fetch result directly in
+        // the API response the browser already sees in its Network tab,
+        // sidestepping log visibility entirely. Remove once #489 is closed.
+        const wantsDebug = req.query.debug === '1';
+        const debugInfo = wantsDebug ? {} : null;
+
         // 2. Generic Shopify attempt — every Shopify storefront exposes
         // /products/<handle>.js regardless of whether it's a known shop.
         if (!bean) {
@@ -169,20 +177,32 @@ router.get('/api/import/url', async (req, res) => {
                         // fetch, only when the JSON left detail fields empty.
                         const enrich = needsHtmlEnrich(bean, host);
                         debugLog(`Import: needsHtmlEnrich=${enrich}`);
+                        if (debugInfo) debugInfo.needsHtmlEnrich = enrich;
                         if (enrich) {
                             try {
                                 const htmlR = await safeGet(raw, FETCH_OPTS);
                                 debugLog(`Import: HTML fetch ${raw} -> status ${htmlR.status}, ${typeof htmlR.data === 'string' ? htmlR.data.length : 0} chars`);
+                                const htmlStr = typeof htmlR.data === 'string' ? htmlR.data : '';
+                                if (debugInfo) {
+                                    debugInfo.htmlFetchStatus = htmlR.status;
+                                    debugInfo.htmlLength = htmlStr.length;
+                                    debugInfo.hasOriginWrapper = htmlStr.includes('origin-wrapper');
+                                    debugInfo.hasOriginTitle = htmlStr.includes('origin-title');
+                                    debugInfo.hasDetailsAccordion = htmlStr.includes('details-content');
+                                    debugInfo.htmlSnippet = htmlStr.slice(0, 500);
+                                }
                                 const before = { ...bean };
                                 bean = enrichGenericBeanFromHtml(bean, htmlR.data, host);
                                 const changedFields = Object.keys(bean).filter(k => bean[k] !== before[k]);
                                 debugLog(`Import: HTML enrichment changed fields: ${changedFields.join(', ') || '(none)'}`);
+                                if (debugInfo) debugInfo.enrichedFieldsChanged = changedFields;
                             } catch (htmlErr) {
                                 if (htmlErr instanceof SsrfBlockedError) throw htmlErr;
                                 // #480: page fetch/parse failed — keep the JSON-only bean,
                                 // but log why so a "some fields stayed empty" report is
                                 // diagnosable from the add-on logs instead of a guess.
                                 log(`Import: HTML enrichment fetch failed for ${host}: ${htmlErr.message}`, true);
+                                if (debugInfo) debugInfo.htmlFetchError = htmlErr.message;
                             }
                         }
                     } else {
@@ -192,6 +212,7 @@ router.get('/api/import/url', async (req, res) => {
                     if (e instanceof SsrfBlockedError) throw e;
                     // not a Shopify shop (or fetch failed) — fall through
                     debugLog(`Import: JSON fetch failed for ${host}: ${e.message}`);
+                    if (debugInfo) debugInfo.jsonFetchError = e.message;
                 }
             }
         }
@@ -222,6 +243,7 @@ router.get('/api/import/url', async (req, res) => {
         const dup = findDuplicateBean(bean, loadLibrary().beans);
         if (dup) bean.duplicateWarning = { id: dup.id, name: dup.name, roaster: dup.roaster || '' };
 
+        if (debugInfo) bean._debug = debugInfo;
         res.json(bean);
     } catch (e) {
         if (e instanceof SsrfBlockedError) return res.status(400).json({ error: 'blocked address' });
