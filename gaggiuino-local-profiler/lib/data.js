@@ -47,6 +47,13 @@ function getSyncIntervalMs(opts) {
 
 function isOrdersEnabled() { return !!loadOptions().enable_orders; }
 
+// #483: add-on config toggle (Home Assistant → Add-on-Konfiguration), same
+// pattern as isOrdersEnabled — off by default so debug-level detail never
+// spams production logs, switchable on when actually diagnosing something
+// (e.g. the import flow, routes/import.js) without a code change.
+function isDebugLoggingEnabled() { return !!loadOptions().debug_logging; }
+function debugLog(message) { if (isDebugLoggingEnabled()) log(`[debug] ${message}`); }
+
 // ── Order shims ───────────────────────────────────────────────────────────────
 function loadOrders()          { return orderRepo.findActive(); }
 function loadAllOrders()       { return orderRepo.findAll(); }
@@ -88,6 +95,7 @@ function saveImportSettings(s)     { importSettingsRepo.saveSettings(s); }
 
 module.exports = {
     loadOptions, getMachineUrl, getMachineBaseUrl, getSyncIntervalMs, isOrdersEnabled,
+    isDebugLoggingEnabled, debugLog,
     loadOrders, loadAllOrders, saveOrders, deleteOrder, loadMenu, saveMenu,
     loadOrdersSettings, saveOrdersSettings,
     loadNotifyMapping, saveNotifyMapping,

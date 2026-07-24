@@ -143,6 +143,7 @@ Auf schmalen Bildschirmen (Smartphones, Tablets im Hochformat) wird die Tab-Leis
 | `switch_entity` | HA-Switch-Entität zum Ein-/Ausschalten der Maschine | *(leer)* |
 | `preheat_time` | Aufwärmzeit in Minuten — wie lange nach dem Einschalten bis die Maschine brühbereit ist (1–120) | `20` |
 | `enable_orders` | Bestellsystem aktivieren — Barista-Backend-Tab + Kunden-Bestellkarte; standardmäßig deaktiviert | `false` |
+| `debug_logging` | Ausführliches Diagnose-Logging (z.B. jeder Schritt des Bohnen-Imports) im Add-on-Log — standardmäßig aus, damit der Normalbetrieb nicht zugespammt wird, bei Bedarf zum Debuggen einschalten | `false` |
 | `port` | Port, auf dem der Server lauscht (1024–65535) | `8099` |
 
 ## Multi-Maschinen-Modus (v2.0.0)

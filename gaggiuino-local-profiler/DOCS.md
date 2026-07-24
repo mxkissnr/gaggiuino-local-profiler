@@ -143,6 +143,7 @@ On narrow viewports (phones, portrait tablets) the topbar tabs are hidden and a 
 | `switch_entity` | HA switch entity to power the machine on/off | *(empty)* |
 | `preheat_time` | Warmup time in minutes — how long after switch-on until the machine is ready to brew (1–120) | `20` |
 | `enable_orders` | Enable the order management system — barista backend tab + customer order card support; disabled by default | `false` |
+| `debug_logging` | Verbose diagnostic logging (e.g. every step of the bean import flow) in the add-on log — off by default so it never spams normal operation, switch on when actually diagnosing something | `false` |
 | `port` | Port the app server listens on (1024–65535) | `8099` |
 
 ## Multi-machine (v2.0.0)

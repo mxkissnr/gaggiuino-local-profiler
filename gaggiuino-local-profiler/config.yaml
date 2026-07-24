@@ -27,9 +27,11 @@ options:
   switch_entity: ""
   preheat_time: 20
   enable_orders: false
+  debug_logging: false
 schema:
   machine_host: str
   sync_interval: int(1,60)
   switch_entity: str?
   preheat_time: int(1,120)?
   enable_orders: bool?
+  debug_logging: bool?
