@@ -1,5 +1,5 @@
 name: "GLP — Gaggiuino Local Profiler"
-version: "2.15.2"
+version: "2.16.0"
 slug: "gaggiuino_local_profiler"
 description: "Local shot profiler for the Gaggiuino espresso machine — shot archive, coffee library with flavor wheel, analytics and optional order management, all local, no cloud."
 url: "https://github.com/mxkissnr/gaggiuino-local-profiler"
@@ -27,9 +27,11 @@ options:
   switch_entity: ""
   preheat_time: 20
   enable_orders: false
+  debug_logging: false
 schema:
   machine_host: str
   sync_interval: int(1,60)
   switch_entity: str?
   preheat_time: int(1,120)?
   enable_orders: bool?
+  debug_logging: bool?

@@ -1,3 +1,8 @@
+## [2.16.0] – 2026-07-24
+
+### Added
+- **New add-on option `debug_logging` for verbose diagnostic logging.** A general-purpose debug switch on the add-on's own Home Assistant configuration page (`config.yaml`, same pattern as `enable_orders`), off by default so normal operation is never spammed. `isDebugLoggingEnabled()`/`debugLog()` (`lib/data.js`) let any code path add fine-grained tracing without a code change to turn it on later. First concrete use: the generic-Shopify import flow (`routes/import.js`) now logs each step when enabled — JSON fetch status/size, which fields the JSON alone populated, whether HTML enrichment is needed, the HTML fetch status/size, and which fields enrichment actually changed. Added after the #481 failure-only log never fired on a real silent-import failure, so the next occurrence needs this finer trace to tell whether the HTML fetch is even reached and why. Closes #483
+
 ## [2.15.2] – 2026-07-23
 
 ### Fixed

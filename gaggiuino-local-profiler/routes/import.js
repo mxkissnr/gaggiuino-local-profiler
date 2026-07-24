@@ -7,7 +7,7 @@ const { shopifyJsonUrl } = require('../lib/import-parsers');
 const { BUILTIN_PROVIDERS, matchProvider } = require('../lib/import-providers');
 const { parseGenericShopifyProduct, parseJsonLd, parseOpenGraph, findDuplicateBean, enrichGenericBeanFromHtml } = require('../lib/import-generic');
 const { assertPublicHost, SsrfBlockedError } = require('../lib/ssrf-guard');
-const { loadImportSettings, saveImportSettings, loadLibrary } = require('../lib/data');
+const { loadImportSettings, saveImportSettings, loadLibrary, debugLog } = require('../lib/data');
 const { log } = require('../lib/helpers');
 
 const FETCH_OPTS = {
@@ -145,22 +145,31 @@ router.get('/api/import/url', async (req, res) => {
         // /products/<handle>.js regardless of whether it's a known shop.
         if (!bean) {
             const jsonUrl = shopifyJsonUrl(parsed, host);
+            debugLog(`Import: generic-Shopify path for ${host}, jsonUrl=${jsonUrl}`);
             if (jsonUrl) {
                 try {
                     const r = await safeGet(jsonUrl, FETCH_OPTS);
+                    debugLog(`Import: JSON fetch ${jsonUrl} -> status ${r.status}, ${JSON.stringify(r.data).length} bytes`);
                     bean = parseGenericShopifyProduct(r.data, host);
                     if (bean) {
                         attachVariants(bean, r.data.variants);
                         bean.source = host;
                         method = 'generic-shopify';
+                        debugLog(`Import: JSON-only bean fields present: ${Object.keys(bean).filter(k => bean[k] != null && bean[k] !== '').join(', ')}`);
 
                         // Some themes only render bean detail into the product
                         // page HTML, not this JSON (#423) — one extra bounded
                         // fetch, only when the JSON left detail fields empty.
-                        if (needsHtmlEnrich(bean, host)) {
+                        const enrich = needsHtmlEnrich(bean, host);
+                        debugLog(`Import: needsHtmlEnrich=${enrich}`);
+                        if (enrich) {
                             try {
                                 const htmlR = await safeGet(raw, FETCH_OPTS);
+                                debugLog(`Import: HTML fetch ${raw} -> status ${htmlR.status}, ${typeof htmlR.data === 'string' ? htmlR.data.length : 0} chars`);
+                                const before = { ...bean };
                                 bean = enrichGenericBeanFromHtml(bean, htmlR.data, host);
+                                const changedFields = Object.keys(bean).filter(k => bean[k] !== before[k]);
+                                debugLog(`Import: HTML enrichment changed fields: ${changedFields.join(', ') || '(none)'}`);
                             } catch (htmlErr) {
                                 if (htmlErr instanceof SsrfBlockedError) throw htmlErr;
                                 // #480: page fetch/parse failed — keep the JSON-only bean,
@@ -169,10 +178,13 @@ router.get('/api/import/url', async (req, res) => {
                                 log(`Import: HTML enrichment fetch failed for ${host}: ${htmlErr.message}`, true);
                             }
                         }
+                    } else {
+                        debugLog('Import: parseGenericShopifyProduct returned null (no title in JSON)');
                     }
                 } catch (e) {
                     if (e instanceof SsrfBlockedError) throw e;
                     // not a Shopify shop (or fetch failed) — fall through
+                    debugLog(`Import: JSON fetch failed for ${host}: ${e.message}`);
                 }
             }
         }
