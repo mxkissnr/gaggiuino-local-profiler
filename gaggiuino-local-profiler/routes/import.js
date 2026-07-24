@@ -100,6 +100,47 @@ function needsHtmlEnrich(bean, host) {
     return !bean.roaster || (host && bean.roaster.toLowerCase() === host.toLowerCase());
 }
 
+// #492: shared by both the "2. Generic Shopify attempt" fallback AND the
+// custom-shopify branch of "1. Registry match" (a user-added domain under
+// Quellen with no bespoke parser) — the latter used to skip HTML enrichment
+// entirely, which was the actual root cause behind #480/#483/#486/#489: a
+// domain registered as a custom Shopify source never got process/variety/
+// producer/region filled in, no matter what the generic-fallback path's own
+// logic did, because that logic was simply never reached for it.
+async function tryHtmlEnrich(bean, host, raw, debugInfo) {
+    const enrich = needsHtmlEnrich(bean, host);
+    debugLog(`Import: needsHtmlEnrich=${enrich}`);
+    if (debugInfo) debugInfo.needsHtmlEnrich = enrich;
+    if (!enrich) return bean;
+    try {
+        const htmlR = await safeGet(raw, FETCH_OPTS);
+        debugLog(`Import: HTML fetch ${raw} -> status ${htmlR.status}, ${typeof htmlR.data === 'string' ? htmlR.data.length : 0} chars`);
+        const htmlStr = typeof htmlR.data === 'string' ? htmlR.data : '';
+        if (debugInfo) {
+            debugInfo.htmlFetchStatus = htmlR.status;
+            debugInfo.htmlLength = htmlStr.length;
+            debugInfo.hasOriginWrapper = htmlStr.includes('origin-wrapper');
+            debugInfo.hasOriginTitle = htmlStr.includes('origin-title');
+            debugInfo.hasDetailsAccordion = htmlStr.includes('details-content');
+            debugInfo.htmlSnippet = htmlStr.slice(0, 500);
+        }
+        const before = { ...bean };
+        const enriched = enrichGenericBeanFromHtml(bean, htmlR.data, host);
+        const changedFields = Object.keys(enriched).filter(k => enriched[k] !== before[k]);
+        debugLog(`Import: HTML enrichment changed fields: ${changedFields.join(', ') || '(none)'}`);
+        if (debugInfo) debugInfo.enrichedFieldsChanged = changedFields;
+        return enriched;
+    } catch (htmlErr) {
+        if (htmlErr instanceof SsrfBlockedError) throw htmlErr;
+        // #480: page fetch/parse failed — keep the bean as-is, but log why
+        // so a "some fields stayed empty" report is diagnosable from the
+        // add-on logs instead of a guess.
+        log(`Import: HTML enrichment fetch failed for ${host}: ${htmlErr.message}`, true);
+        if (debugInfo) debugInfo.htmlFetchError = htmlErr.message;
+        return bean;
+    }
+}
+
 router.get('/api/import/url', async (req, res) => {
     // #486: without this, browsers cache this GET by its query string —
     // once the shop's page changes, a bug gets fixed on this end, or the
@@ -120,6 +161,14 @@ router.get('/api/import/url', async (req, res) => {
     const host      = parsed.hostname.replace(/^www\./, '').toLowerCase();
     const provider  = matchProvider(host, disabled, settings.customShopifyDomains);
 
+    // #489: opt-in (?debug=1) inline diagnostic — the add-on logs proved
+    // undiagnosable in practice (debugLog's own output never showed up,
+    // a separate mystery), so this puts the raw fetch result directly in
+    // the API response the browser already sees in its Network tab,
+    // sidestepping log visibility entirely. Remove once #489 is closed.
+    const wantsDebug = req.query.debug === '1';
+    const debugInfo = wantsDebug ? {} : null;
+
     try {
         let bean = null;
         let method = null;
@@ -136,6 +185,11 @@ router.get('/api/import/url', async (req, res) => {
                         attachVariants(bean, r.data.variants);
                         bean.source = provider.builtin ? provider.hostSuffix : host;
                         method = provider.builtin ? `builtin:${provider.id}` : 'custom-shopify';
+                        // #492: a custom Shopify domain (no bespoke parser)
+                        // used to skip HTML enrichment entirely — give it the
+                        // same fallback the automatic generic-shopify path
+                        // gets below, instead of staying JSON-only forever.
+                        if (!provider.parser) bean = await tryHtmlEnrich(bean, host, raw, debugInfo);
                     }
                 }
             } else {
@@ -147,14 +201,6 @@ router.get('/api/import/url', async (req, res) => {
                 }
             }
         }
-
-        // #489: opt-in (?debug=1) inline diagnostic — the add-on logs proved
-        // undiagnosable in practice (debugLog's own output never showed up,
-        // a separate mystery), so this puts the raw fetch result directly in
-        // the API response the browser already sees in its Network tab,
-        // sidestepping log visibility entirely. Remove once #489 is closed.
-        const wantsDebug = req.query.debug === '1';
-        const debugInfo = wantsDebug ? {} : null;
 
         // 2. Generic Shopify attempt — every Shopify storefront exposes
         // /products/<handle>.js regardless of whether it's a known shop.
@@ -175,36 +221,7 @@ router.get('/api/import/url', async (req, res) => {
                         // Some themes only render bean detail into the product
                         // page HTML, not this JSON (#423) — one extra bounded
                         // fetch, only when the JSON left detail fields empty.
-                        const enrich = needsHtmlEnrich(bean, host);
-                        debugLog(`Import: needsHtmlEnrich=${enrich}`);
-                        if (debugInfo) debugInfo.needsHtmlEnrich = enrich;
-                        if (enrich) {
-                            try {
-                                const htmlR = await safeGet(raw, FETCH_OPTS);
-                                debugLog(`Import: HTML fetch ${raw} -> status ${htmlR.status}, ${typeof htmlR.data === 'string' ? htmlR.data.length : 0} chars`);
-                                const htmlStr = typeof htmlR.data === 'string' ? htmlR.data : '';
-                                if (debugInfo) {
-                                    debugInfo.htmlFetchStatus = htmlR.status;
-                                    debugInfo.htmlLength = htmlStr.length;
-                                    debugInfo.hasOriginWrapper = htmlStr.includes('origin-wrapper');
-                                    debugInfo.hasOriginTitle = htmlStr.includes('origin-title');
-                                    debugInfo.hasDetailsAccordion = htmlStr.includes('details-content');
-                                    debugInfo.htmlSnippet = htmlStr.slice(0, 500);
-                                }
-                                const before = { ...bean };
-                                bean = enrichGenericBeanFromHtml(bean, htmlR.data, host);
-                                const changedFields = Object.keys(bean).filter(k => bean[k] !== before[k]);
-                                debugLog(`Import: HTML enrichment changed fields: ${changedFields.join(', ') || '(none)'}`);
-                                if (debugInfo) debugInfo.enrichedFieldsChanged = changedFields;
-                            } catch (htmlErr) {
-                                if (htmlErr instanceof SsrfBlockedError) throw htmlErr;
-                                // #480: page fetch/parse failed — keep the JSON-only bean,
-                                // but log why so a "some fields stayed empty" report is
-                                // diagnosable from the add-on logs instead of a guess.
-                                log(`Import: HTML enrichment fetch failed for ${host}: ${htmlErr.message}`, true);
-                                if (debugInfo) debugInfo.htmlFetchError = htmlErr.message;
-                            }
-                        }
+                        bean = await tryHtmlEnrich(bean, host, raw, debugInfo);
                     } else {
                         debugLog('Import: parseGenericShopifyProduct returned null (no title in JSON)');
                     }

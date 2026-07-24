@@ -234,6 +234,27 @@ describe('GET /api/import/url — provider registry toggling', () => {
         expect(data.name).toBe('House Blend');
         expect(data.importMethod).toBe('custom-shopify');
     });
+
+    // #492 root cause of #480/#483/#486/#489: a domain registered under
+    // Quellen as a custom Shopify source used to skip HTML enrichment
+    // entirely — process/variety/producer/region stayed empty forever,
+    // regardless of any fix to the automatic generic-shopify fallback,
+    // because that code path was simply never reached for it.
+    it('also runs HTML enrichment for a custom Shopify domain, not just the automatic generic-shopify fallback', async () => {
+        saveImportSettings({ disabledProviders: [], customShopifyDomains: ['myroaster.example'] });
+        const html = '<html><body><div class="origin-wrapper"><h5 class="origin-title">Process</h5><p>Washed</p></div></body></html>';
+        axiosGet
+            .mockResolvedValueOnce({ status: 200, headers: {}, data: {
+                title: 'House Blend', vendor: 'My Roaster', description: '',
+            }})
+            .mockResolvedValueOnce({ status: 200, headers: {}, data: html });
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent('https://myroaster.example/products/house-blend')}`);
+        const data = await r.json();
+        expect(r.status).toBe(200);
+        expect(data.importMethod).toBe('custom-shopify');
+        expect(data.process).toBe('Washed');
+        expect(axiosGet).toHaveBeenCalledTimes(2);
+    });
 });
 
 describe('GET /api/import/url — generic fallback chain', () => {
