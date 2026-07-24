@@ -1,3 +1,8 @@
+## [2.16.2] – 2026-07-24
+
+### Added
+- **Opt-in `?debug=1` diagnostic on `GET /api/import/url`.** Continuation of #480/#483/#486 — after the browser-cache fix (#486) confirmed the request genuinely reaches the server fresh, process/variety/producer/region still stay empty for a specific real-world URL on one self-hosted instance, and the add-on's own logs (including #481/#484's `debugLog` output) proved undiagnosable in practice: they never appeared despite `debug_logging` confirmed enabled and the add-on fully restarted. Passing `?debug=1` now attaches a `_debug` object to the response itself — HTML fetch status/length, whether `origin-wrapper`/`origin-title`/`details-content` markers were present in the raw fetched HTML, which fields the enrichment scanner actually changed, or the fetch error if it failed — visible directly in the browser's Network tab response body, sidestepping add-on log visibility entirely. Opt-in only; the default response is unchanged. Closes #489
+
 ## [2.16.1] – 2026-07-24
 
 ### Fixed
