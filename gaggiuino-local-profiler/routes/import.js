@@ -101,6 +101,13 @@ function needsHtmlEnrich(bean, host) {
 }
 
 router.get('/api/import/url', async (req, res) => {
+    // #486: without this, browsers cache this GET by its query string —
+    // once the shop's page changes, a bug gets fixed on this end, or the
+    // add-on itself gets updated, a re-import of the SAME product URL keeps
+    // silently serving the stale cached response (confirmed via DevTools:
+    // 304, "from cache") instead of ever reaching this handler again. An
+    // import must always hit the network fresh.
+    res.set('Cache-Control', 'no-store');
     const raw = req.query.url;
     if (!raw) return res.status(400).json({ error: 'url required' });
     let parsed;

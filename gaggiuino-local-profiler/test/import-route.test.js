@@ -49,6 +49,27 @@ beforeEach(async () => {
 
 afterEach(() => { server?.close(); dnsLookup.mockRestore(); });
 
+// #486, root cause of the real-world "import stays stuck on stale data no
+// matter what gets fixed" bug: this GET was never marked uncacheable, so
+// browsers served an old cached response for the same ?url= forever,
+// silently bypassing the server (and therefore any server-side fix) on
+// every re-import of the same product URL.
+describe('GET /api/import/url — cache headers (#486)', () => {
+    it('always responds with Cache-Control: no-store', async () => {
+        axiosGet.mockResolvedValue({ status: 200, headers: {}, data: {
+            title: 'Test Bean', vendor: 'Some Roaster', description: '', price: 1500,
+        }});
+        const r = await fetch(`${baseUrl}/api/import/url?url=${encodeURIComponent('https://hoppenworth-ploch.de/products/test-bean')}`);
+        expect(r.headers.get('cache-control')).toBe('no-store');
+    });
+
+    it('sends no-store even for a 400 (missing url)', async () => {
+        const r = await fetch(`${baseUrl}/api/import/url`);
+        expect(r.status).toBe(400);
+        expect(r.headers.get('cache-control')).toBe('no-store');
+    });
+});
+
 describe('GET /api/import/url — size variants projection', () => {
     it('attaches distinct size variants when a Shopify product has real price/weight variation', async () => {
         axiosGet.mockResolvedValue({ status: 200, headers: {}, data: {
