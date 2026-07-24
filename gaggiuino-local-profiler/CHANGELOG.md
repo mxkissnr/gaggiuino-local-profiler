@@ -1,3 +1,8 @@
+## [2.16.3] – 2026-07-24
+
+### Fixed
+- **Found the actual root cause of the "Square Mile import stays empty" saga (#480, #483, #486, #489): a domain registered under Quellen as a custom Shopify source never ran HTML enrichment at all.** Confirmed live via the #490 `?debug=1` diagnostic — Max's import of `shop.squaremilecoffee.com` took `importMethod: "custom-shopify"`, not `"generic-shopify"`, because that domain had been registered under the app's own "Quellen" UI as a custom Shopify source. That routes through a completely different branch in `routes/import.js` ("1. Registry match") than the automatic generic-Shopify fallback ("2."), and the custom-shopify branch never called `needsHtmlEnrich`/`enrichGenericBeanFromHtml` — not even before this round's fixes existed. Every fix shipped earlier this round (#481, #484, #486, #490) was correct but irrelevant, since the code path his import actually took was never touched by any of them. The enrichment step is now extracted into a shared `tryHtmlEnrich()` helper, called from both the custom-shopify branch and the generic-shopify fallback, so a domain added under Quellen gets the same process/variety/producer/region enrichment as an unregistered one. Closes #492
+
 ## [2.16.2] – 2026-07-24
 
 ### Added
