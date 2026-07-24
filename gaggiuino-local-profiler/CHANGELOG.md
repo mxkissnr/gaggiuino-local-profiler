@@ -1,3 +1,8 @@
+## [2.16.1] – 2026-07-24
+
+### Fixed
+- **Root-caused the "Square Mile import stays empty no matter what" saga (#480, #483): `GET /api/import/url` never sent cache-control headers.** Since the route is a plain GET keyed by the target URL as a query string, browsers cached it — every re-import of the same product URL was silently served the stale cached response, straight from the browser, bypassing the server entirely regardless of server-side fixes, restarts, or add-on version. Confirmed live via DevTools Network tab: 304, "from cache", zero corresponding server-side log line even with #484's debug logging on. This is why v2.15.1/v2.15.2/v2.16.0's fixes and the new debug logging never showed any observable effect on this URL. The route now sends `Cache-Control: no-store` on every response — an import must always hit the network fresh. Closes #486
+
 ## [2.16.0] – 2026-07-24
 
 ### Added
