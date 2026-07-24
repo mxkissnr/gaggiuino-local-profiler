@@ -1,3 +1,11 @@
+## [2.17.0] – 2026-07-24
+
+### Added
+- **Shots can now record which frozen bean portion was used — or explicitly "not frozen."** When the selected bean's active bag has unthawed frozen portions available at the shot's timestamp, the annotation panel shows a pill row (mirroring the existing drink/milk-type pattern): one pill per frozen portion plus an explicit "not frozen" pill — "not frozen" is always offered alongside the frozen batches so it's a deliberate choice, not just the absence of one. Choices are resolved against the bag active at the shot's own timestamp, matching how roast-date prefill already works.
+- **Saving or changing the frozen-portion choice automatically adjusts the library's remaining count** for that portion — decremented on pick, reversed on un-pick or when switching to a different portion/bean — reusing the existing adjust-frozen-portion endpoint (mirrors the existing milk-deduction pattern). Re-saving the same choice never double-counts.
+- **A small ❄ badge now appears in the shot list** next to any shot whose annotation references a frozen portion.
+- This is additive UI/data on top of the frozen-portion tracking shipped in v2.14.0/v2.15.0 (frozen portion counts, per-portion thaw, freshness-badge exemption for frozen time). Closes #502
+
 ## [2.16.5] – 2026-07-24
 
 ### Fixed
