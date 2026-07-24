@@ -309,23 +309,42 @@ function scanAccordionLabelValues($) {
 // menu accordion, #471) render each spec as its own
 // <h5 class="origin-title">Label</h5> followed by a sibling <p>Value</p>,
 // instead of "Label - Value" text lines inside a single <details> block —
-// there's no <details>/.details-content anywhere on the page at all. Blends
-// list one such group per component (e.g. Country/Process/Variety/Producer
-// repeated for each origin); first-match-wins per field, same convention as
-// scanAccordionLabelValues, so a blend picks up only its first-listed
-// component's values — an acceptable default given a blend can't be
-// represented precisely as single process/variety/producer fields anyway.
+// there's no <details>/.details-content anywhere on the page at all.
+//
+// Blends (#498, ground truth: shop.squaremilecoffee.com/products/red-brick,
+// a 50/50 Costa Rica / Colombia blend) wrap each component's own group of
+// origin-title/<p> pairs in its own .origin-content block. Scoping the scan
+// per block (falling back to the whole document as one implicit block when
+// no .origin-content wrapper exists) and joining each field's distinct
+// per-block values with " / " means a blend's region text becomes e.g.
+// "Costa Rica / Colombia" — findCountriesInText() (called on that joined
+// text by the caller) then naturally surfaces both origin codes, which the
+// bean form already supports as a multi-country blend.
 function scanOriginWrapperFields($) {
-    const fields = {};
-    $('.origin-title').each((_, el) => {
-        const label = $(el).text().replace(/\s+/g, ' ').trim().toLowerCase();
-        const field = ACCORDION_LABEL_FIELDS[label];
-        if (!field || fields[field]) return;
-        const value = $(el).next('p').text().replace(/\s+/g, ' ').trim();
-        if (!value) return;
-        fields[field] = field === 'altitude_m' ? extractAltitudeM(value) : value;
-    });
-    return fields;
+    const $blocks = $('.origin-content');
+    const blockScopes = $blocks.length ? $blocks.toArray().map(el => $(el)) : [$.root()];
+
+    const perBlockFields = blockScopes.map($scope => {
+        const fields = {};
+        $scope.find('.origin-title').each((_, el) => {
+            const label = $(el).text().replace(/\s+/g, ' ').trim().toLowerCase();
+            const field = ACCORDION_LABEL_FIELDS[label];
+            if (!field || fields[field]) return;
+            const value = $(el).next('p').text().replace(/\s+/g, ' ').trim();
+            if (!value) return;
+            fields[field] = field === 'altitude_m' ? extractAltitudeM(value) : value;
+        });
+        return fields;
+    }).filter(f => Object.keys(f).length);
+
+    const merged = {};
+    for (const field of new Set(Object.values(ACCORDION_LABEL_FIELDS))) {
+        const values = perBlockFields.map(f => f[field]).filter(v => v != null);
+        if (!values.length) continue;
+        if (field === 'altitude_m') { merged[field] = values[0]; continue; }
+        merged[field] = [...new Set(values.map(String))].join(' / ');
+    }
+    return merged;
 }
 
 // Combines both markup scanners into one field map — the <details> accordion
@@ -381,6 +400,44 @@ function _brewLineValue(lines, key) {
         if (m) return m[1].trim();
     }
     return null;
+}
+
+// Some themes render brew recipe details as a plain bullet list rather than
+// the In/Out/Time/Ratio/Temp block extractEspressoBrewGuide() expects inside
+// a <details> accordion — e.g. Square Mile Coffee's "RECIPE DETAILS" list
+// (#499, ground truth: shop.squaremilecoffee.com/products/red-brick):
+// "• Dose: 19 grams", "• Brew temperature: 201ºF-202ºF/94ºC-94.5ºC",
+// "• Brew time: 28-32 sec", "• Brew Ratio: 1:2". Only the °C half of the
+// temperature line matters — the line always states both units, °F first;
+// the degree mark itself is the ordinal-indicator "º" (U+00BA) on this
+// theme, not the degree sign "°" (U+00B0), so both are matched.
+function extractBulletRecipeDetails($) {
+    let $content = null;
+    $('.recipe-title').each((_, el) => {
+        if ($content || !/recipe\s*details/i.test($(el).text().trim())) return;
+        const $next = $(el).next('p');
+        $content = $next.length ? $next : $(el).parent();
+    });
+    if (!$content || !$content.length) return null;
+
+    const lines = textWithLineBreaks($, $content).split('\n')
+        .map(l => l.replace(/^[•*\s]+/, '').replace(/[ \t]+/g, ' ').trim())
+        .filter(Boolean);
+
+    const tempLine  = lines.find(l => /^brew\s*temperature\s*:/i.test(l));
+    const timeLine  = lines.find(l => /^brew\s*time\s*:/i.test(l));
+    const ratioLine = lines.find(l => /^brew\s*ratio\s*:/i.test(l));
+    if (!tempLine && !timeLine && !ratioLine) return null;
+
+    const celsius = tempLine && tempLine.match(/(\d+(?:\.\d+)?)\s*[°º]C\s*[-–]\s*(\d+(?:\.\d+)?)\s*[°º]C/i);
+    const brewTempC = celsius ? (parseFloat(celsius[1]) + parseFloat(celsius[2])) / 2 : null;
+    const brewTimeS = timeLine ? _rangeMidpoint(timeLine) : null;
+
+    return {
+        brewTempC,
+        brewTimeS: brewTimeS == null ? null : Math.round(brewTimeS),
+        brewRatio: ratioLine ? _ratioLabel(ratioLine) : null,
+    };
 }
 
 // Finds an accordion whose heading matches /brew\s*guide/i, splits its
@@ -538,6 +595,17 @@ function enrichGenericBeanFromHtml(bean, html, host = null) {
         // the import dialog as opt-in Library Recipe candidates, never
         // auto-created.
         if (brewGuide.extraRecipes?.length) out.extraBrewRecipes = brewGuide.extraRecipes;
+    }
+
+    // #499: fallback for themes with no <details> Brew Guide accordion at
+    // all — a plain "RECIPE DETAILS" bullet list instead.
+    if (out.brewTempC == null || out.brewTimeS == null || !out.brewRatio) {
+        const bulletRecipe = extractBulletRecipeDetails($);
+        if (bulletRecipe) {
+            if (out.brewTempC == null && bulletRecipe.brewTempC != null) out.brewTempC = bulletRecipe.brewTempC;
+            if (out.brewTimeS == null && bulletRecipe.brewTimeS != null) out.brewTimeS = bulletRecipe.brewTimeS;
+            if (!out.brewRatio && bulletRecipe.brewRatio) out.brewRatio = bulletRecipe.brewRatio;
+        }
     }
 
     return out;

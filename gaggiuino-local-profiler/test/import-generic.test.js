@@ -337,6 +337,88 @@ describe('enrichGenericBeanFromHtml', () => {
         });
     });
 
+    // #498, ground truth: shop.squaremilecoffee.com/products/red-brick — a
+    // 50/50 blend of two origins, each its own .origin-content block.
+    describe('origin-wrapper blends (#498, multiple .origin-content blocks)', () => {
+        const blendHtml = `
+            <div class="submenu-origin">
+                <div class="origin-content">
+                    <div class="origin-wrapper">
+                        <div><h5 class="origin-title">Country</h5><p>Costa Rica </p></div>
+                        <div><h5 class="origin-title">Process</h5><p>White Honey</p></div>
+                    </div>
+                    <div class="origin-wrapper">
+                        <div><h5 class="origin-title">Variety</h5><p>Catuaí</p></div>
+                        <div><h5 class="origin-title">Producer</h5><p>Micepa Micromill</p></div>
+                    </div>
+                </div>
+                <div class="origin-content">
+                    <div class="origin-wrapper">
+                        <div><h5 class="origin-title">Country</h5><p>Colombia </p></div>
+                        <div><h5 class="origin-title">Process</h5><p>Washed </p></div>
+                    </div>
+                    <div class="origin-wrapper">
+                        <div><h5 class="origin-title">Variety</h5><p>Caturra, Colombia, Typica</p></div>
+                        <div><h5 class="origin-title">Producer</h5><p>58 Smallholders </p></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        it('joins each field across both blend components instead of keeping only the first', () => {
+            const bean = enrichGenericBeanFromHtml({ name: 'Red Brick' }, blendHtml);
+            expect(bean.process).toBe('White Honey / Washed');
+            expect(bean.variety).toBe('Catuaí / Caturra, Colombia, Typica');
+            expect(bean.producer).toBe('Micepa Micromill / 58 Smallholders');
+            expect(bean.region).toBe('Costa Rica / Colombia');
+        });
+
+        it('resolves both blend origins into distinct ISO codes', () => {
+            const bean = enrichGenericBeanFromHtml({ name: 'Red Brick', origins: [] }, blendHtml);
+            expect(bean.origins).toEqual(expect.arrayContaining([{ code: 'CR' }, { code: 'CO' }]));
+            expect(bean.origins).toHaveLength(2);
+        });
+
+        it('still resolves a single-origin (non-blend) page to one field value, unchanged from before', () => {
+            const bean = enrichGenericBeanFromHtml({ name: 'Red Brick' }, originWrapperHtml);
+            expect(bean.process).toBe('White Honey');
+            expect(bean.region).toBe('Costa Rica');
+        });
+    });
+
+    // #499, ground truth: shop.squaremilecoffee.com/products/red-brick —
+    // brew recipe rendered as a plain bullet list, no <details> at all.
+    describe('bullet-list recipe details (#499, no <details> Brew Guide accordion)', () => {
+        const bulletRecipeHtml = `
+            <div class="recipe-bullet">
+                <h5 class="recipe-title">RECIPE DETAILS</h5>
+                <p class="recipe-points">We recommend the following recipe as a starting point:
+                <br><br>
+                • Dose: 19 grams <br><br>
+                • Brew temperature: 201ºF-202ºF/94ºC-94.5ºC <br><br>
+                • Brew time: 28-32 sec <br><br>
+                • Brew Ratio: 1:2 <br><br></p>
+            </div>
+        `;
+
+        it('extracts brewTempC from the Celsius half of a dual-unit temperature line', () => {
+            const bean = enrichGenericBeanFromHtml({ name: 'Red Brick' }, bulletRecipeHtml);
+            expect(bean.brewTempC).toBe(94.25);
+        });
+
+        it('extracts brewTimeS as the range midpoint and brewRatio reformatted with a colon', () => {
+            const bean = enrichGenericBeanFromHtml({ name: 'Red Brick' }, bulletRecipeHtml);
+            expect(bean.brewTimeS).toBe(30);
+            expect(bean.brewRatio).toBe('1:2');
+        });
+
+        it('never overwrites brew fields the <details> Brew Guide scan already found', () => {
+            const both = `${sproutHtml}${bulletRecipeHtml}`;
+            const bean = enrichGenericBeanFromHtml(jsonOnlyBean, both);
+            expect(bean.brewTempC).toBe(92.5); // sprout's own midpoint, not 94.25
+        });
+    });
+
     it('returns the bean unchanged when the HTML has none of the recognized patterns', () => {
         const plainHtml = '<html><body><h1>Some Product</h1><p>Just a description, nothing structured.</p></body></html>';
         const bean = enrichGenericBeanFromHtml(jsonOnlyBean, plainHtml);
