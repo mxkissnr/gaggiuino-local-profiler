@@ -1,3 +1,8 @@
+## [2.16.4] – 2026-07-24
+
+### Fixed
+- **Generic Shopify import now also picks up flavor notes rendered as a single all-caps, slash-separated line.** Follow-up to #492/#493: after the custom-shopify enrichment root-cause fix, Herkunft/Variety/Process/Producer/Region all populate correctly for `shop.squaremilecoffee.com`, but tasting notes stayed empty even though the page clearly shows "RED APPLE / TOFFEE / CHOCOLATE / HAZELNUT" — verified with Max live. That shop's theme renders tasting notes in a `<h5 class="additional-info">` element as one all-caps line separated by `/`, a different shape than the existing comma-separated `<h4>` subtitle scanner (#423) covers. Added a dedicated scanner for it, title-cased on extraction, merged alongside (not overwriting) any JSON-derived flavors. Closes #495
+
 ## [2.16.3] – 2026-07-24
 
 ### Fixed
