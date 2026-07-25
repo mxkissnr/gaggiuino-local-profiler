@@ -1,3 +1,8 @@
+## [2.18.1] – 2026-07-25
+
+### Fixed
+- **Resolved two npm audit findings via patch-level lockfile bumps: body-parser DoS ([GHSA-v422-hmwv-36x6](https://github.com/advisories/GHSA-v422-hmwv-36x6)) and js-yaml ReDoS ([GHSA-pm4m-ph32-ghv5](https://github.com/advisories/GHSA-pm4m-ph32-ghv5)).** `js-yaml` 5.2.1 → 5.2.2, `body-parser` 2.2.2 → 2.3.0 (transitive via express, within express's existing `^2.2.1` range). No `package.json` range changes, `package-lock.json` only. `npm audit` now reports 0 vulnerabilities (was 1 low + 1 high). No functional or behavioral change; full test suite (675/675 tests, 58/58 files) verified green before and after.
+
 ## [2.18.0] – 2026-07-25
 
 ### Added
