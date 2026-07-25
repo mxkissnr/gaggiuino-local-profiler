@@ -1,4 +1,4 @@
-## [Unreleased]
+## [2.18.0] – 2026-07-25
 
 ### Added
 - **Beans can now be tagged as speciality or normal.** New optional `category` field (`speciality` | `normal`, defaults to `normal`) on the bean model, set manually via a dropdown in the bean form — mirrors the existing `species` field's pattern. No auto-classification: the user decides. Exposed on `/api/orders/active-beans` and `/api/library/beans-info` so the order card can group its bean list by category (see mxkissnr/glp-order-card#36 for the follow-up UI). Closes #505
