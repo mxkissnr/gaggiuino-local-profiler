@@ -1,3 +1,4 @@
+import * as echarts from 'echarts';
 import { FLAVOR_WHEEL } from '../flavor-data.js';
 import { matchFlavors, markLit, colorForNode, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../flavor-match.js';
 import { S } from '../state.js';
@@ -109,7 +110,6 @@ export function zoomFlavorWheelTo(id) {
 }
 
 export function renderFlavorWheel(container, flavors, lang, breadcrumbEl) {
-  if (typeof echarts === 'undefined') return false;
   const { matched } = matchFlavors(flavors);
   FLAVOR_WHEEL.forEach(cat => markLit(cat, matched));
   const bgHex = resolveModalBgHex(container);

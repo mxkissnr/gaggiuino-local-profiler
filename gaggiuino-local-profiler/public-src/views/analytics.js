@@ -1,3 +1,6 @@
+import Chart from 'chart.js/auto';
+import * as echarts from 'echarts';
+import * as topojson from 'topojson-client';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { LOCALE_MAP, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName, flagEmoji } from '../constants.js';
@@ -495,17 +498,13 @@ export function buildBeanStats() {
 // beans by name (case-insensitive, same precedent as the stock math) and
 // colored by shot count; beans with an origin but no shots yet are still
 // highlighted. Rendered with Apache ECharts (roam/zoom + scatter points),
-// registered from the same vendored topojson via topojson-client. Both
-// libraries come from the CDN; the topojson is served locally
-// (CSP connect-src 'self') and cached after the first Analytics visit.
+// registered from countries-110m.json via topojson-client — both bundled
+// as real npm deps (no CDN), the topojson data file itself is served
+// locally (CSP connect-src 'self') and cached after the first Analytics visit.
 let _worldTopo = null;
 let _worldMapRegistered = false;
 let _echartsInstance = null;
 let _resizeBound = false;
-
-function _echartsAvailable() {
-  return typeof echarts !== 'undefined' && typeof topojson !== 'undefined';
-}
 
 // Converts a #rrggbb (or #rgb) hex color to an rgba() string at the given
 // alpha; falls back to the raw input unchanged if it isn't hex (e.g. an
@@ -671,13 +670,6 @@ function _splitGeometryAtAntimeridian(geometry) {
 export async function buildWorldMap() {
   const wrap = document.getElementById('worldMapWrap');
   if (!wrap) return;
-
-  // Offline HA hosts have no CDN: show the empty-state hint instead of crashing
-  if (!_echartsAvailable()) {
-    if (_echartsInstance) { _echartsInstance.dispose(); _echartsInstance = null; }
-    wrap.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_map_empty')}</p>`;
-    return;
-  }
 
   // bean name (lowercased) → { bean, origins:[{code, weight}] }, restricted to
   // known coffee countries. A blend's weights come from its per-country

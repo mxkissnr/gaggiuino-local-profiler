@@ -1,3 +1,4 @@
+import QRCode from 'qrcode';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';

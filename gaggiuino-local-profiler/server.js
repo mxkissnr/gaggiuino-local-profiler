@@ -65,10 +65,12 @@ app.use((req, res, next) => {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    // Chart.js and QRCode are loaded from jsdelivr; Figtree font from bunny.net
+    // Chart.js, ECharts, topojson-client and QRCode are bundled into the app
+    // (no third-party script host needed); Figtree font is still loaded from
+    // bunny.net.
     res.setHeader('Content-Security-Policy',
         "default-src 'self'; " +
-        "script-src 'self' https://cdn.jsdelivr.net; " +
+        "script-src 'self'; " +
         "style-src 'self' 'unsafe-inline' https://fonts.bunny.net; " +
         "font-src 'self' data: https://fonts.bunny.net; " +
         "img-src 'self' data: blob:; " +

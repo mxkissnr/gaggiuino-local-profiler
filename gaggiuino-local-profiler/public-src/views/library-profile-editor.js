@@ -8,6 +8,7 @@
 // save time, no separate JS array is kept in sync. removeProfilePhase()
 // renumbers all remaining rows/ids/data-idx after a removal, same as
 // removeRecipeStep().
+import Chart from 'chart.js/auto';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
@@ -318,7 +319,7 @@ export function _synthesizeSeries(phases) {
 
 export function renderProfilePreviewChart() {
   const ctx = document.getElementById('profilePreviewChart');
-  if (!ctx || typeof Chart === 'undefined') return;
+  if (!ctx) return;
   const existing = Chart.getChart(ctx);
   if (existing) existing.destroy();
   S.profilePreviewChart = null;

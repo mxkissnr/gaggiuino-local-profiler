@@ -5,6 +5,13 @@ import { describe, it, expect, beforeAll } from 'vitest';
 // window.getShotData at runtime (mirroring main.js's real window-exposure
 // pattern) — stub a minimal scoring window here so shots carrying a plain
 // .score field resolve without needing real datapoints.
+//
+// navigator.userAgent must contain 'Node.js': since this file (unlike
+// world-map-antimeridian.test.js) also stubs a `window` global, zrender's
+// env detection (pulled in transitively by analytics.js's now-bundled
+// `echarts` import, see #509) takes the browser-UA-sniffing branch
+// instead of its own headless-node short-circuit, and throws matching
+// against an undefined UA otherwise.
 let _computeBeanRanking, _computeMachineComparison;
 
 beforeAll(async () => {
@@ -13,7 +20,7 @@ beforeAll(async () => {
     configurable: true, writable: true,
   });
   Object.defineProperty(globalThis, 'navigator', {
-    value: { language: 'en' },
+    value: { language: 'en', userAgent: 'Node.js' },
     configurable: true, writable: true,
   });
   Object.defineProperty(globalThis, 'window', {
