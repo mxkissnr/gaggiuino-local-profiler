@@ -51,6 +51,14 @@ function sanitizeSpecies(v) {
     return typeof v === 'string' && SPECIES.has(v) ? v : '';
 }
 
+// Manual speciality/normal tag (#505) — user-set only, no auto-classification.
+// Unlike species' '' "not set" convention, this has a real default since every
+// bean is one or the other for order-menu grouping purposes.
+const CATEGORY = new Set(['speciality', 'normal']);
+function sanitizeCategory(v) {
+    return typeof v === 'string' && CATEGORY.has(v) ? v : 'normal';
+}
+
 // Flavors are short tags (chips UI); dedupe case-insensitively, cap counts.
 function sanitizeFlavors(v) {
     if (!Array.isArray(v)) return [];
@@ -159,6 +167,7 @@ function sanitizeBeanFields(bean) {
         origins: sanitizedOrigins,
         variety: s(bean.variety, 200),
         species: sanitizeSpecies(bean.species),
+        category: sanitizeCategory(bean.category),
         process: s(bean.process, 200),
         flavors: sanitizeFlavors(bean.flavors),
         roastType: sanitizeRoastType(bean.roastType),
@@ -229,7 +238,7 @@ function sanitizeRecipeFields(recipe) {
 }
 
 module.exports = {
-    sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeSpecies, sanitizeFlavors,
+    sanitizeOrigin, sanitizeOrigins, sanitizeRoastType, sanitizeSpecies, sanitizeCategory, sanitizeFlavors,
     sanitizeAltitude, sanitizePrice, sanitizeBrewTemp, sanitizeBrewTime, sanitizeEnabled,
     sanitizeFrozenPortions,
     sanitizeBeanFields, sanitizeGrinderFields, sanitizeRecipeFields, safeUrl,

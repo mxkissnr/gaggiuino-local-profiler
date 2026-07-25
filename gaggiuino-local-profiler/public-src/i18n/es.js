@@ -62,6 +62,7 @@ export default {
     bean_flavors_label:'Notas de cata', bean_flavors_ph:'Albaricoque, caramelo …', bean_flavors_hint:'Intro o coma añade una nota', bean_origin_hint:'Varios países = una mezcla; % opcional por país',
     bean_roast_type:'Tueste', roast_type_none:'– sin definir –', roast_type_espresso:'Espresso', roast_type_filter:'Filtro', roast_type_omni:'Omni',
     bean_species_label:'Especie', species_none:'– sin definir –', species_arabica:'Arabica', species_robusta:'Robusta', species_liberica:'Liberica', species_blend:'Blend',
+    bean_category_label:'Categoría', category_normal:'Normal', category_speciality:'Speciality',
     bean_region_label:'Región', bean_region_ph:'Sidama, Bensa …',
     flavor_wheel_btn:'Abrir rueda de sabores', flavor_wheel_unmatched:'Sabores sin asignar',
     flavor_wheel_unavailable:'Rueda de sabores no disponible (¿sin conexión a internet?)',

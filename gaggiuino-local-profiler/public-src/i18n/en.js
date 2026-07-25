@@ -62,6 +62,7 @@ export default {
     bean_flavors_label:'Tasting notes', bean_flavors_ph:'Apricot, caramel …', bean_flavors_hint:'Enter or comma adds a note', bean_origin_hint:'Multiple countries = a blend; optional % weight per country',
     bean_roast_type:'Roast profile', roast_type_none:'– not set –', roast_type_espresso:'Espresso', roast_type_filter:'Filter', roast_type_omni:'Omni',
     bean_species_label:'Species', species_none:'– not set –', species_arabica:'Arabica', species_robusta:'Robusta', species_liberica:'Liberica', species_blend:'Blend',
+    bean_category_label:'Category', category_normal:'Normal', category_speciality:'Speciality',
     bean_region_label:'Region', bean_region_ph:'Sidama, Bensa …',
     flavor_wheel_btn:'Open flavor wheel', flavor_wheel_unmatched:'Unmatched flavors',
     flavor_wheel_unavailable:'Flavor wheel currently unavailable (no internet connection?)',

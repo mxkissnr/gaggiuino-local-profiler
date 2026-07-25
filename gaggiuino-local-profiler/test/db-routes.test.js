@@ -925,6 +925,26 @@ describe('bean roastType/flavors/variety (misc fields)', () => {
         expect(bad.species).toBe('');
     });
 
+    it('whitelists category, defaults to normal, drops unknown values', async () => {
+        const ok = await (await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Categorized', category: 'speciality' }),
+        })).json();
+        expect(ok.category).toBe('speciality');
+
+        const noCategory = await (await fetch(`${baseUrl}/api/library/bean`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Uncategorized' }),
+        })).json();
+        expect(noCategory.category).toBe('normal');
+
+        const bad = await (await fetch(`${baseUrl}/api/library/bean/${ok.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: 'exotic' }),
+        })).json();
+        expect(bad.category).toBe('normal');
+    });
+
     it('stores flavors deduped and capped, round-trips via PUT', async () => {
         const r = await fetch(`${baseUrl}/api/library/bean`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -947,6 +967,18 @@ describe('bean roastType/flavors/variety (misc fields)', () => {
         ], grinders: [], recipes: [] });
         const [bean] = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
         expect(bean).toMatchObject({ variety: 'Robusta', origin: 'CU' });
+    });
+
+    it('exposes category on /api/orders/active-beans, defaulting to normal', async () => {
+        saveLibrary({ beans: [
+            { id: 1, name: 'Geisha Lot', stock_g: 500, category: 'speciality',
+              bags: [{ id: 1, roastDate: '2026-06-01', stock_g: 500, openedAt: 0 }] },
+            { id: 2, name: 'House Blend', stock_g: 500,
+              bags: [{ id: 2, roastDate: '2026-06-01', stock_g: 500, openedAt: 0 }] },
+        ], grinders: [], recipes: [] });
+        const beans = await (await fetch(`${baseUrl}/api/orders/active-beans`)).json();
+        expect(beans.find(b => b.name === 'Geisha Lot')).toMatchObject({ category: 'speciality' });
+        expect(beans.find(b => b.name === 'House Blend')).toMatchObject({ category: 'normal' });
     });
 });
 
@@ -997,9 +1029,9 @@ describe('GET /api/library/beans-info', () => {
         expect(beans).toHaveLength(2); // no stock filtering
         expect(beans[0]).toMatchObject({
             name: 'Shyira', origin: 'RW', variety: 'Red Bourbon', process: 'Washed',
-            roastDate: '2026-06-20', decaf: false,
+            roastDate: '2026-06-20', decaf: false, category: 'normal',
         });
-        expect(beans[1]).toMatchObject({ name: 'Untracked', origin: null, roastDate: null });
+        expect(beans[1]).toMatchObject({ name: 'Untracked', origin: null, roastDate: null, category: 'normal' });
     });
 
     it('stays reachable with orders disabled', async () => {

@@ -705,6 +705,7 @@ export function openBeanForm(bean) {
   populateSuggestionDatalists();
   document.getElementById('beanFormVariety').value   = bean?.variety || '';
   document.getElementById('beanFormSpecies').value   = bean?.species || '';
+  document.getElementById('beanFormCategory').value  = bean?.category || 'normal';
   document.getElementById('beanFormProcess').value   = bean?.process || '';
   bindFlavorInput();
   setFormFlavors(bean?.flavors);
@@ -755,6 +756,7 @@ export async function saveBean() {
   const decaf     = document.getElementById('beanFormDecaf').checked;
   const variety   = document.getElementById('beanFormVariety').value.trim();
   const species   = document.getElementById('beanFormSpecies').value;
+  const category  = document.getElementById('beanFormCategory').value;
   const process   = document.getElementById('beanFormProcess').value.trim();
   const roastType = document.getElementById('beanFormRoastType').value;
   const region    = document.getElementById('beanFormRegion').value.trim();
@@ -771,7 +773,7 @@ export async function saveBean() {
   commitFlavorInput(); // take a still-typed flavor along
   if (!name) { document.getElementById('beanFormName').focus(); return; }
   const payload = {
-    name, roaster, roastDate, notes, stock_g, decaf, origins: _formOrigins, variety, species, process, flavors: _formFlavors, roastType, region,
+    name, roaster, roastDate, notes, stock_g, decaf, origins: _formOrigins, variety, species, category, process, flavors: _formFlavors, roastType, region,
     altitude_m, importer, harvest, price_eur, producer, certification,
     brewTempC, brewRatio, brewTimeS, brewNotes, batchNumber,
   };
