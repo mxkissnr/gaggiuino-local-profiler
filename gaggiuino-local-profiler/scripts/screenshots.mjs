@@ -265,7 +265,7 @@ async function main() {
     // normal case mid-release, before this version's own tag exists yet) —
     // it overlays the top of the page and intercepts clicks on the nav bar.
     await page.addStyleTag({ content: '#glpUpdateBanner{display:none!important}' });
-    await page.waitForTimeout(500); // let async post-load renders (thumbnails, charts) settle
+    await page.waitForTimeout(800); // let async post-load renders (thumbnails, charts, machines list) settle
 
     await page.click('#btnShots');
     await page.waitForTimeout(400);
@@ -292,9 +292,9 @@ async function main() {
 
     // Machine comparison + weekday/hour heatmap + bean ranking (#394) — only
     // rendered/visible once >=2 machines exist, which seed() now sets up.
-    const machineCardLocator = page.locator('#machineComparisonCard');
-    if (await machineCardLocator.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await machineCardLocator.scrollIntoViewIfNeeded();
+    const machineCard = page.locator('#machineComparisonCard');
+    if (await machineCard.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await machineCard.scrollIntoViewIfNeeded();
       await page.waitForTimeout(300);
       await page.screenshot({ path: path.join(outDir, 'analytics-machines.png') });
     }

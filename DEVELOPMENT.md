@@ -8,15 +8,15 @@ The GLP ecosystem (this app + 3 companion repos) has been in development since *
 
 | Repo | First commit | Last commit | Commits | Claude co-authored |
 |---|---|---|---|---|
-| gaggiuino-local-profiler | 2026-05-20 | 2026-07-26 | 655 | 506 (77%) |
-| glp-integration | 2026-05-22 | 2026-07-14 | 76 | 61 (80%) |
+| gaggiuino-local-profiler | 2026-05-20 | 2026-07-26 | 619 | 493 (80%) |
+| glp-integration | 2026-05-22 | 2026-07-26 | 82 | 61 (74%) |
 | glp-lovelace-card | 2026-05-24 | 2026-07-26 | 82 | 70 (85%) |
 | glp-order-card | 2026-05-25 | 2026-07-26 | 57 | 46 (81%) |
-| **Combined** | **2026-05-20** | **2026-07-26** | **870** | **683 (79%)** |
+| **Combined** | **2026-05-20** | **2026-07-26** | **840** | **670 (80%)** |
 
 ![Commits per repo](docs/dev-stats/commits-per-repo.png)
 
-Combined line changes (insertions + deletions across all commits): **269.521**, of which **205.431** landed in Claude-co-authored commits.
+Combined line changes (insertions + deletions across all commits): **267.211**, of which **204.315** landed in Claude-co-authored commits.
 
 Commits without a Claude co-author line are presumed human-only (manual fixes, merges, config tweaks) — not independently verified.
 
@@ -25,10 +25,11 @@ Commits without a Claude co-author line are presumed human-only (manual fixes, m
 | Model | Commits |
 |---|---|
 | Claude Sonnet 4.6 | 348 |
-| Claude Sonnet 5 | 237 |
+| Claude Sonnet 5 | 223 |
 | Claude Opus 4.8 | 47 |
 | Claude Fable 5 | 40 |
 | Claude | 11 |
+| Claude Haiku 4.5 | 1 |
 
 ![Claude model breakdown by commits](docs/dev-stats/model-breakdown.png)
 
@@ -38,7 +39,7 @@ The exact co-author string varies by era as model names changed over the project
 
 This is **not** measured token usage or an actual invoice. It multiplies changed lines (insertions + deletions) in Claude-co-authored commits by an assumed 25 tokens/line (covers the conversation and planning overhead around a diff, not just the diff bytes), then applies the price table in `scripts/dev-stats.pricing.json` — which ships with every price set to `null` until you fill in your own plan/API rates.
 
-**Estimated cost: ~$31.11** across 202.168 priced lines (+ 3.264 lines from unpriced models, excluded from this total).
+**Estimated cost: ~$31.15** across 200.610 priced lines (+ 3.707 lines from unpriced models, excluded from this total).
 
 ---
 *This file is generated. Do not hand-edit — re-run `node scripts/dev-stats.mjs` instead.*
