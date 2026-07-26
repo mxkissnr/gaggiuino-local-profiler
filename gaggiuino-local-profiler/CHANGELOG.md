@@ -1,3 +1,16 @@
+## [2.19.1] – 2026-07-26
+
+### Security
+- **The GLP API token is no longer persisted to `localStorage`, and any existing token there is removed automatically on next load.** CodeQL flagged `js/clear-text-storage-of-sensitive-data` at `api.js:17`. Tracing the token-acquisition path showed ingress requests are authorized purely by Supervisor IP + `X-Ingress-Path` (`server.js` `isIngressRequest()`), never by a client-held token, so `initToken()` fetches a fresh token from `/api/token` on every load regardless of any client-side cache — the `localStorage` copy was a pure round-trip optimization with no legitimate flow depending on it. The token now lives only in memory (`S.glpToken`) and is refetched each load; a stale token already sitting in a browser's `localStorage` from a previous version is cleared on the next page load. Closes #522
+
+### Changed
+- **`scripts/dev-stats.mjs`'s repo-history scope is now genuinely branch-independent, not just intended to be.** The first attempt at this (measuring `--remotes=origin` instead of the checked-out `HEAD`) shipped with an unquoted `--format=%(refname)` argument passed through `execSync`'s `/bin/sh`; the parentheses aborted the shell before git ran, the resulting throw landed in the same catch used for "no origin refs," and the scope silently degraded back to `HEAD` — so the fix never actually took effect, and a run from a release worktree still undercounted (caught during this release: 621 vs. the published 655). The follow-up drops the format string entirely (`for-each-ref --count=1 <pattern>` needs none — empty output already means "no such refs"), makes the catch warn on stderr instead of swallowing silently, and adds two tests against a real temporary git repo, verified to fail against the old implementation. `DEVELOPMENT.md` numbers in this release reflect the corrected, working scope. Closes #527, #529
+- **Added an ESLint 9 flat-config CI gate and a `scripts/release-check.mjs` sanity script for releases.** `npm run lint` is now wired into CI after `npm ci` and before `build`, with Node/browser/vitest globals split by path glob; baseline lint cleanup was mechanical fixes plus a few narrowly justified inline disables, no behavior change. `release-check.mjs` is a read-only, no-network script for manual release use, checking version-file consistency, the CHANGELOG heading, screenshot/dev-stats freshness, and DOCS.md/DOCS.de.md heading parity. Closes #519
+- Refreshed README screenshots and dev-stats as part of wiring up the new release gate. Closes #523
+
+### Known issue
+- Two README screenshots (`analytics-machines.png`, `flavor-wheel.png`) are stale as of this release — the underlying UI elements don't render against the current seed data, tracked as a possible real UI bug rather than a screenshot-script problem. See #526.
+
 ## [2.19.0] – 2026-07-26
 
 ### Removed
