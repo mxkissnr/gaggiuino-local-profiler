@@ -265,14 +265,14 @@ async function main() {
     // normal case mid-release, before this version's own tag exists yet) —
     // it overlays the top of the page and intercepts clicks on the nav bar.
     await page.addStyleTag({ content: '#glpUpdateBanner{display:none!important}' });
-    await page.waitForTimeout(800); // let async post-load renders (thumbnails, charts, machines list) settle
+    await page.waitForTimeout(500); // let async post-load renders (thumbnails, charts) settle
 
     await page.click('#btnShots');
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(outDir, 'shots.png') });
 
     await page.click('#btnLibrary');
-    await page.waitForTimeout(600);
+    await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(outDir, 'library.png') });
 
     const wheelBtn = page.locator('[data-action="open-flavor-wheel"]').first();
@@ -291,14 +291,10 @@ async function main() {
     await page.screenshot({ path: path.join(outDir, 'analytics.png') });
 
     // Machine comparison + weekday/hour heatmap + bean ranking (#394) — only
-    // rendered/visible once >=2 machines exist. Card visibility check used
-    // to guard against timeout; if not visible, element rendering needs investigation.
-    const machineCard = page.locator('#machineComparisonCard');
-    if (await machineCard.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await machineCard.scrollIntoViewIfNeeded();
-      await page.waitForTimeout(300);
-      await page.screenshot({ path: path.join(outDir, 'analytics-machines.png') });
-    }
+    // rendered/visible once >=2 machines exist, which seed() now sets up.
+    await page.locator('#machineComparisonCard').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(outDir, 'analytics-machines.png') });
 
     await page.click('#btnMaintenance');
     await page.waitForTimeout(400);
