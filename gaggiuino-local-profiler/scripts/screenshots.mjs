@@ -292,9 +292,12 @@ async function main() {
 
     // Machine comparison + weekday/hour heatmap + bean ranking (#394) — only
     // rendered/visible once >=2 machines exist, which seed() now sets up.
-    await page.locator('#machineComparisonCard').scrollIntoViewIfNeeded();
-    await page.waitForTimeout(300);
-    await page.screenshot({ path: path.join(outDir, 'analytics-machines.png') });
+    const machineCardLocator = page.locator('#machineComparisonCard');
+    if (await machineCardLocator.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await machineCardLocator.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(outDir, 'analytics-machines.png') });
+    }
 
     await page.click('#btnMaintenance');
     await page.waitForTimeout(400);
