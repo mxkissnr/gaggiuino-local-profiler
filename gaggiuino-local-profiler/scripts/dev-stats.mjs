@@ -180,6 +180,22 @@ function git(dir, args) {
     return execSync(`git ${args}`, { cwd: dir, encoding: 'utf8' }).trim();
 }
 
+// Which history to measure. Workers branch from origin/main, but `dev` carries
+// the unreleased work and runs dozens of commits ahead — so measuring the
+// checked-out HEAD makes the published figures depend on whose worktree ran the
+// script, and a run from main silently *lowers* them (#527, precedent: #523
+// rewrote DEVELOPMENT.md from 655 to 619 commits). Measure everything on the
+// remote instead: rev-list/log deduplicate across refs, so a commit on both main
+// and dev counts once, and --remotes=origin keeps stale local branches out.
+// Falls back to HEAD in a clone without origin refs (fresh init, CI shallow).
+export function historyScope(dir, runGit = git) {
+    try {
+        const refs = runGit(dir, 'for-each-ref --format=%(refname) refs/remotes/origin');
+        if (refs) return '--remotes=origin';
+    } catch { /* no origin refs — fall through */ }
+    return 'HEAD';
+}
+
 function loadPricing() {
     if (!existsSync(PRICING_PATH)) return {};
     try { return JSON.parse(readFileSync(PRICING_PATH, 'utf8')); } catch { return {}; }
@@ -206,16 +222,17 @@ function statsForRepo(repo) {
     // traversal (newest-first) before --reverse flips the display order, so
     // it actually returns the newest commit, not the oldest. Pull the full
     // date list once (newest first) and read both ends instead.
-    const dates = git(repo.dir, 'log --format=%ad --date=short').split('\n').filter(Boolean);
+    const scope = historyScope(repo.dir);
+    const dates = git(repo.dir, `log ${scope} --format=%ad --date=short`).split('\n').filter(Boolean);
     const lastDate  = dates[0];
     const firstDate = dates[dates.length - 1];
-    const totalCommits = parseInt(git(repo.dir, 'rev-list --count HEAD'), 10) || 0;
+    const totalCommits = parseInt(git(repo.dir, `rev-list --count ${scope}`), 10) || 0;
 
     // One bulk call: \x02 marks each commit boundary, followed by the raw
     // commit body, then (thanks to --shortstat) that same commit's diffstat
     // line — so a single split gives us, per commit, both the co-author line
     // and its changed-line count without any per-commit subprocess call.
-    const raw    = git(repo.dir, 'log --format=%x02%B --shortstat');
+    const raw    = git(repo.dir, `log ${scope} --format=%x02%B --shortstat`);
     const chunks = raw.split('\x02').filter(Boolean);
 
     const modelCounts = {};
@@ -339,4 +356,10 @@ function main() {
     console.log(`Wrote ${outPath}`);
 }
 
-main();
+// Only generate when invoked as a script. Without this guard, merely importing
+// anything from this file (e.g. a unit test for historyScope) regenerates and
+// overwrites DEVELOPMENT.md as an import side effect — which is how a test run
+// could silently republish stats from the wrong branch (#527).
+const invokedDirectly = process.argv[1] &&
+    fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (invokedDirectly) main();
