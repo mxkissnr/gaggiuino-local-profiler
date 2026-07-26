@@ -803,6 +803,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   setInterval(updateStatus, 30000);
   updateMobileShotSidebarVisibility();
-  window.addEventListener('resize', updateMobileShotSidebarVisibility);
+  let _lastViewportWidth = window.innerWidth;
+  window.addEventListener('resize', () => {
+    // Mobile virtual keyboards (Android Chrome etc.) fire a resize event on
+    // open/close because viewport *height* changes — width stays the same.
+    // updateMobileShotSidebarVisibility() force-closes the burger drawer
+    // whenever width is still <=768, so that spurious resize was slamming
+    // the drawer shut the instant a user focused #shotSearch and the
+    // keyboard opened. Real breakpoint-relevant resizes (device rotation,
+    // desktop window drag across 768px) always change width, so gate on
+    // that instead of reacting to every resize blindly.
+    const width = window.innerWidth;
+    if (width === _lastViewportWidth) return;
+    _lastViewportWidth = width;
+    updateMobileShotSidebarVisibility();
+  });
 
 });

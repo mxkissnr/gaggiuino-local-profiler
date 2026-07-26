@@ -1,3 +1,8 @@
+## [2.18.1] – 2026-07-26
+
+### Fixed
+- **Mobile shot search no longer jumps to a shot's detail view when the on-screen keyboard opens.** Focusing `#shotSearch` opens the mobile virtual keyboard, which on Android Chrome (and other mobile browsers) fires a `window` `resize` event because viewport *height* shrinks — width stays the same. `updateMobileShotSidebarVisibility()` treated that resize like any other and force-closed the open burger drawer, swapping to the full-screen shot-detail view before the user could type. The resize listener in `main.js` now only re-evaluates mobile sidebar visibility when `window.innerWidth` actually changes, so real breakpoint-relevant resizes (device rotation, desktop window drag across 768px) still work exactly as before. Closes #511
+
 ## [2.18.0] – 2026-07-25
 
 ### Added
