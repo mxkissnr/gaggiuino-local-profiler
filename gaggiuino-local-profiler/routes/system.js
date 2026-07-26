@@ -536,9 +536,10 @@ router.post('/api/update', async (req, res) => {
                 // config.yaml being missing/too low rather than a token issue —
                 // ROLE_MANAGER is required. See config.yaml for details.
                 return res.status(403).json({
-                    error: 'Supervisor denied the update request (403). The add-on is missing '
-                        + 'the required "manager" hassio_role in config.yaml — reinstall the '
-                        + 'add-on so config.yaml grants hassio_role: manager, then try again.',
+                    error: 'Supervisor denied the update request (403). This add-on version '
+                        + 'predates the "manager" hassio_role it needs for self-update — update '
+                        + 'the add-on to the latest version (reload the Add-on Store first if no '
+                        + 'update is offered yet), then try again.',
                 });
             }
             return res.status(r.status).json({ error: body });

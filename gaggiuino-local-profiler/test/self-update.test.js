@@ -60,6 +60,12 @@ describe('POST /api/update', () => {
         expect(data.error).not.toBe('403: Forbidden');
         expect(data.error).toMatch(/hassio_role/i);
         expect(data.error).toMatch(/manager/i);
+        // Must steer users toward updating the add-on, never reinstalling it —
+        // a Supervisor uninstall wipes /data (the entire shot/library/order DB),
+        // and config.yaml comes from the store repo anyway, so a plain update
+        // (which re-reads it) is always sufficient; reinstall is never needed.
+        expect(data.error.toLowerCase()).not.toMatch(/reinstall|uninstall/);
+        expect(data.error).toMatch(/update/i);
 
         // The raw Supervisor response must still be logged, even though the
         // client no longer sees it verbatim.
