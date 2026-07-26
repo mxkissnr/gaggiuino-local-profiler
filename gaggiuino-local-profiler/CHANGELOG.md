@@ -4,6 +4,11 @@
 - **Mobile shot search no longer jumps to a shot's detail view when the on-screen keyboard opens.** Focusing `#shotSearch` opens the mobile virtual keyboard, which on Android Chrome (and other mobile browsers) fires a `window` `resize` event because viewport *height* shrinks — width stays the same. `updateMobileShotSidebarVisibility()` treated that resize like any other and force-closed the open burger drawer, swapping to the full-screen shot-detail view before the user could type. The resize listener in `main.js` now only re-evaluates mobile sidebar visibility when `window.innerWidth` actually changes, so real breakpoint-relevant resizes (device rotation, desktop window drag across 768px) still work exactly as before. Closes #511
 - **Chart.js, ECharts, topojson-client and QRCode are now vendored as real npm dependencies instead of loaded from `cdn.jsdelivr.net`.** Follow-up to the 2026-07-12 security audit finding that Chart.js was pulled in fully unpinned via a CDN `<script>` tag, with CSP `script-src` allowlisting all of `cdn.jsdelivr.net`. All four libraries are now consumed through ES imports and bundled by Vite; CSP `script-src` is tightened to `'self'` only. `echarts` is deliberately pinned to `6.1.0` rather than the previously-loaded `5.6.0` after finding it fixes a moderate XSS advisory (GHSA-fgmj-fm8m-jvvx) affecting versions before 6.1.0 — not exploitable via this app's actual usage, but no reason to newly ship a flagged version in a security-hardening change. `npm audit`: 0 vulnerabilities. Closes #509
 
+## [2.18.1] – 2026-07-25
+
+### Fixed
+- **Resolved two npm audit findings via patch-level lockfile bumps: body-parser DoS ([GHSA-v422-hmwv-36x6](https://github.com/advisories/GHSA-v422-hmwv-36x6)) and js-yaml ReDoS ([GHSA-pm4m-ph32-ghv5](https://github.com/advisories/GHSA-pm4m-ph32-ghv5)).** `js-yaml` 5.2.1 → 5.2.2, `body-parser` 2.2.2 → 2.3.0 (transitive via express, within express's existing `^2.2.1` range). No `package.json` range changes, `package-lock.json` only. `npm audit` now reports 0 vulnerabilities (was 1 low + 1 high). No functional or behavioral change; full test suite (675/675 tests, 58/58 files) verified green before and after.
+
 ## [2.18.0] – 2026-07-25
 
 ### Added
