@@ -24,14 +24,7 @@ function showUpdateBanner({ current, latest, release_url }) {
 
     const msg = document.createElement('span');
     msg.style.flex = '1';
-    msg.textContent = t('update_banner', current, latest);
-
-    const installBtn = document.createElement('button');
-    installBtn.textContent = t('update_install');
-    Object.assign(installBtn.style, {
-        background: '#1c1917', color: '#fef3c7', border: 'none', borderRadius: '6px',
-        padding: '4px 14px', cursor: 'pointer', fontSize: '.85rem', fontWeight: '600',
-    });
+    msg.textContent = `${t('update_banner', current, latest)} ${t('update_via_store')}`;
 
     const changelogLink = document.createElement('a');
     changelogLink.href = release_url;
@@ -49,24 +42,6 @@ function showUpdateBanner({ current, latest, release_url }) {
     });
     closeBtn.addEventListener('click', () => banner.remove());
 
-    installBtn.addEventListener('click', async () => {
-        installBtn.disabled = true;
-        installBtn.textContent = t('update_installing');
-        try {
-            const r = await apiFetch('api/update', { method: 'POST' });
-            if (r.ok) {
-                installBtn.textContent = t('update_success');
-                banner.style.background = '#22c55e';
-            } else {
-                installBtn.textContent = t('update_error');
-                installBtn.disabled = false;
-            }
-        } catch (_) {
-            installBtn.textContent = t('update_error');
-            installBtn.disabled = false;
-        }
-    });
-
-    banner.append(msg, installBtn, changelogLink, closeBtn);
+    banner.append(msg, changelogLink, closeBtn);
     document.body.insertAdjacentElement('afterbegin', banner);
 }

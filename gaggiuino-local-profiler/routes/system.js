@@ -517,41 +517,6 @@ router.get('/api/version', async (req, res) => {
     });
 });
 
-router.post('/api/update', async (req, res) => {
-    if (!HA_TOKEN) return res.status(503).json({ error: 'Not running inside Home Assistant' });
-    try {
-        const r = await fetch('http://supervisor/addons/self/update', {
-            method:  'POST',
-            headers: { Authorization: `Bearer ${HA_TOKEN}` },
-            signal:  AbortSignal.timeout(10000),
-        });
-        const body = await r.text();
-        // Always log the Supervisor's raw response — a future 403 must be
-        // explainable from the add-on log alone, not just from the client error.
-        log(`Supervisor update response: ${r.status} ${body}`, !r.ok);
-        if (!r.ok) {
-            if (r.status === 403) {
-                // The Supervisor's api_bypass excludes /addons/self/update, so
-                // this is (almost always) the add-on's hassio_role in
-                // config.yaml being missing/too low rather than a token issue —
-                // ROLE_MANAGER is required. See config.yaml for details.
-                return res.status(403).json({
-                    error: 'Supervisor denied the update request (403). This add-on version '
-                        + 'predates the "manager" hassio_role it needs for self-update — update '
-                        + 'the add-on to the latest version (reload the Add-on Store first if no '
-                        + 'update is offered yet), then try again.',
-                });
-            }
-            return res.status(r.status).json({ error: body });
-        }
-        log('Add-on update triggered via Supervisor API');
-        res.json({ ok: true });
-    } catch (e) {
-        log(`Update trigger error: ${e.message}`, true);
-        res.status(500).json({ error: e.message });
-    }
-});
-
 // ── Debug ─────────────────────────────────────────────────────────────────
 
 // H2: only available outside production to avoid leaking internal network topology

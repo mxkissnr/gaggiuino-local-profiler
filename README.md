@@ -181,7 +181,7 @@ Click **Open Web UI** in the app page — or open it directly from your HA sideb
 | `sync_interval` | `5` | Auto-sync interval in minutes (1–60) |
 | `switch_entity` | *(empty)* | HA switch entity to power the machine on/off |
 
-The add-on requests the Supervisor `manager` role (`hassio_role: manager` in `config.yaml`) so its in-app self-update button can call `POST /addons/self/update`. This lowers the add-on's Supervisor security rating, and the Supervisor shows a corresponding notice on update — expected, it's the price of the self-update button.
+Updates run through the Home Assistant Add-on Store — the app itself only checks and shows whether a newer version is available, it never triggers an install (no elevated Supervisor role required).
 
 ---
 
