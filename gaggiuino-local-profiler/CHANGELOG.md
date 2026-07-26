@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Fixed
+- **In-app add-on self-update (HA update entity → `POST {addon}/api/update`) no longer returns a 403.** Root cause: `POST /addons/self/update` is explicitly excluded from the Supervisor's `api_bypass` allowlist, so it falls through to the Supervisor's role check — and `config.yaml` never set `hassio_role`, leaving the add-on on the implicit default role, whose regex only permits `/.+/info`. The earlier fix (#330, v1.121.2) added `hassio_api: true`, which only opens the Supervisor API at all; the role is a second, separate gate that stayed unaddressed until now. `config.yaml` now sets `hassio_role: manager` — the minimum role whose regex matches `/addons/self/update`. **Note:** this lowers the add-on's Supervisor security rating, and Supervisor shows users a corresponding notice on update — expected, the price of the self-update button. `routes/system.js` also now always logs the Supervisor's raw response body (previously only on success) and returns a speaking error message on a 403 instead of the raw Supervisor text, so a future regression is diagnosable from the add-on log and the HA UI alone. Closes #514
+
 ## [2.18.2] – 2026-07-26
 
 ### Fixed

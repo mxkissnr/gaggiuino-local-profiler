@@ -525,7 +525,24 @@ router.post('/api/update', async (req, res) => {
             headers: { Authorization: `Bearer ${HA_TOKEN}` },
             signal:  AbortSignal.timeout(10000),
         });
-        if (!r.ok) return res.status(r.status).json({ error: await r.text() });
+        const body = await r.text();
+        // Always log the Supervisor's raw response — a future 403 must be
+        // explainable from the add-on log alone, not just from the client error.
+        log(`Supervisor update response: ${r.status} ${body}`, !r.ok);
+        if (!r.ok) {
+            if (r.status === 403) {
+                // The Supervisor's api_bypass excludes /addons/self/update, so
+                // this is (almost always) the add-on's hassio_role in
+                // config.yaml being missing/too low rather than a token issue —
+                // ROLE_MANAGER is required. See config.yaml for details.
+                return res.status(403).json({
+                    error: 'Supervisor denied the update request (403). The add-on is missing '
+                        + 'the required "manager" hassio_role in config.yaml — reinstall the '
+                        + 'add-on so config.yaml grants hassio_role: manager, then try again.',
+                });
+            }
+            return res.status(r.status).json({ error: body });
+        }
         log('Add-on update triggered via Supervisor API');
         res.json({ ok: true });
     } catch (e) {
