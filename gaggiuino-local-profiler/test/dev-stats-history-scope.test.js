@@ -1,4 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { execFileSync } from 'child_process';
+import { mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import path from 'path';
 import { historyScope } from '../scripts/dev-stats.mjs';
 
 // #527: dev-stats used to measure the checked-out HEAD, so a run from a
@@ -26,5 +30,41 @@ describe('dev-stats history scope (#527)', () => {
     it('falls back to HEAD when git itself errors out', () => {
         const throwing = () => { throw new Error('not a git repository'); };
         expect(historyScope('/not/a/repo', throwing)).toBe('HEAD');
+    });
+});
+
+// #529: the tests above inject a fake runGit, so they exercise the branching
+// logic but never run a real git command — which is how a malformed command
+// string stayed invisible. The original implementation passed an unquoted
+// `--format=%(refname)`, and since git() shells out via /bin/sh, the shell
+// aborted before git ran. The throw landed in the same catch that handles the
+// legitimate "no origin refs" case, so the scope silently degraded to HEAD and
+// #528 never took effect. These tests use the real git binary.
+describe('dev-stats history scope — real git (#529)', () => {
+    let repo;
+
+    const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
+
+    beforeAll(() => {
+        repo = mkdtempSync(path.join(tmpdir(), 'glp-devstats-'));
+        git('init', '--quiet', '-b', 'main');
+        git('config', 'user.email', 'test@example.com');
+        git('config', 'user.name', 'Test');
+        git('commit', '--quiet', '--allow-empty', '-m', 'initial');
+    });
+
+    afterAll(() => {
+        if (repo) rmSync(repo, { recursive: true, force: true });
+    });
+
+    it('resolves to --remotes=origin against a repo that really has origin refs', () => {
+        git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+        // Fails with 'HEAD' if the underlying git invocation is malformed.
+        expect(historyScope(repo)).toBe('--remotes=origin');
+    });
+
+    it('resolves to HEAD against a repo that really has no origin refs', () => {
+        git('update-ref', '-d', 'refs/remotes/origin/main');
+        expect(historyScope(repo)).toBe('HEAD');
     });
 });

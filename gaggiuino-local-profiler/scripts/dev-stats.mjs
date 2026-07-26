@@ -188,11 +188,22 @@ function git(dir, args) {
 // remote instead: rev-list/log deduplicate across refs, so a commit on both main
 // and dev counts once, and --remotes=origin keeps stale local branches out.
 // Falls back to HEAD in a clone without origin refs (fresh init, CI shallow).
+// No --format here on purpose (#529): git() shells out via /bin/sh, and an
+// unquoted %(refname) makes the shell abort with `Syntax error: "(" unexpected`
+// before git even runs. The thrown error hit the catch below, which is also the
+// legitimate "no origin refs" path — so the scope silently degraded to HEAD and
+// #528 never actually took effect. Plain `for-each-ref <pattern>` needs no format
+// string: empty output already means "no such refs".
 export function historyScope(dir, runGit = git) {
     try {
-        const refs = runGit(dir, 'for-each-ref --format=%(refname) refs/remotes/origin');
+        const refs = runGit(dir, 'for-each-ref --count=1 refs/remotes/origin');
         if (refs) return '--remotes=origin';
-    } catch { /* no origin refs — fall through */ }
+    } catch (err) {
+        // A repo without origin refs returns empty output rather than failing, so
+        // an actual throw means something else broke. Say so instead of silently
+        // publishing branch-dependent numbers — that silence is what hid #529.
+        console.warn(`dev-stats: could not read origin refs in ${dir}, falling back to HEAD (numbers will depend on the checked-out branch): ${err.message.split('\n')[0]}`);
+    }
     return 'HEAD';
 }
 
