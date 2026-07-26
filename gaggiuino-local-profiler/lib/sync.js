@@ -30,8 +30,11 @@ async function syncShots() {
     const machineUrl = getMachineUrl(opts);
     try {
         const latestResponse  = await axios.get(`${machineUrl}/latest`, { timeout: 10000 });
+        // eslint-disable-next-line require-atomic-updates -- syncShots() has no mutex guarding overlapping calls (pre-existing); a real fix is a synchronization change out of scope for this lint-only pass
         state.machineReachable   = true;
+        // eslint-disable-next-line require-atomic-updates -- see above
         state.lastMachineError   = null;
+        // eslint-disable-next-line require-atomic-updates -- see above
         state.lastMachineSuccess = Date.now();
         const latestMachineId = latestResponse.data?.[0]?.lastShotId;
         if (latestMachineId == null) {
@@ -46,8 +49,11 @@ async function syncShots() {
 
         if (effectiveMax >= latestMachineId) {
             log(`Already up to date. Shots: ${maxLocalId}`);
+            // eslint-disable-next-line require-atomic-updates -- syncShots() has no mutex guarding overlapping calls (pre-existing); a real fix is a synchronization change out of scope for this lint-only pass
             state.lastSyncTime   = new Date().toISOString();
+            // eslint-disable-next-line require-atomic-updates -- see above
             state.lastSyncError  = null;
+            // eslint-disable-next-line require-atomic-updates -- see above
             state.syncRetryCount = 0;
             return true;
         }
@@ -67,8 +73,11 @@ async function syncShots() {
             shotService.upsertShot(r.data);
         }
 
+        // eslint-disable-next-line require-atomic-updates -- syncShots() has no mutex guarding overlapping calls (pre-existing); a real fix is a synchronization change out of scope for this lint-only pass
         state.lastSyncTime   = new Date().toISOString();
+        // eslint-disable-next-line require-atomic-updates -- see above
         state.lastSyncError  = null;
+        // eslint-disable-next-line require-atomic-updates -- see above
         state.syncRetryCount = 0;
         log(`Sync complete: ${maxLocalId + (latestMachineId - effectiveMax)} shots stored`);
         return true;

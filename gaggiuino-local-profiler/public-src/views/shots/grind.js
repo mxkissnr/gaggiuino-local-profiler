@@ -1,4 +1,3 @@
-import { S }                               from '../../state.js';
 import { t }                               from '../../i18n.js';
 import { detectChanneling, calcBrewRatio } from '../../utils.js';
 import { getShotData, calcShotScore }      from './utils.js';

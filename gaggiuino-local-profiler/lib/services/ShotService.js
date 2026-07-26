@@ -2,7 +2,7 @@ const repo              = require('../repositories/ShotRepository');
 const { calcShotScore, calcShotScoreDetail } = require('../score');
 const libraryService    = require('./LibraryService');
 const { log }           = require('../helpers');
-const { MAX_SHOT_ID, ALLOWED_URL_SCHEMES } = require('../constants');
+const { MAX_SHOT_ID } = require('../constants');
 
 class ShotService {
     // machineId optional (#341) — omitted keeps the original all-machines

@@ -333,7 +333,7 @@ export function updateDegassing(val) {
   const label   = document.getElementById('degassingLabel');
   const parseDMY = (s) => {
     if (!s) return null;
-    const m = s.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2,4})$/);
+    const m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
     if (!m) return null;
     const y = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
     const d = new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));
@@ -387,6 +387,7 @@ export async function uploadShotImage(input) {
   if (!file || !S.primaryShotId) return;
   const id = S.primaryShotId;
   const blob = await openImageCropEditor(file, { shape: 'circle' });
+  // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
   if (!blob) return;
   const r = await apiFetch(`api/shots/${id}/image`, {

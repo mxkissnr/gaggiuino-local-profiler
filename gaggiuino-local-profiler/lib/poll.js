@@ -1,14 +1,14 @@
 'use strict';
 const axios = require('axios');
 const {
-    TEMP_HISTORY_MAX, TEMP_STABLE_MIN, WARM_TEMP_MIN, WARM_OFF_MAX_MS,
+    TEMP_HISTORY_MAX, WARM_TEMP_MIN, WARM_OFF_MAX_MS,
 } = require('./constants');
 const { log } = require('./helpers');
 const { loadOptions, getMachineBaseUrl } = require('./data');
 const { getSwitchState, HA_TOKEN } = require('./ha');
 const state = require('./state');
 const { savePreheatState, isTempStable } = require('./preheat');
-const { syncAfterBrew, syncShots, fetchMachineVersion, scheduleNextSync } = require('./sync');
+const { syncAfterBrew, syncShots, fetchMachineVersion } = require('./sync');
 
 function startLivePolling() {
     if (state.livePollTimer) return;
@@ -39,6 +39,7 @@ async function pollLive() {
     if (state.isPollRunning) return;
     state.isPollRunning = true;
     try { await pollViaGaggiuinoStatus(); }
+    // eslint-disable-next-line require-atomic-updates -- this is the mutex-release for the guard checked at the top of this function; only this function ever writes it
     finally { state.isPollRunning = false; }
 }
 

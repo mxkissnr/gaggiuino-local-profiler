@@ -23,7 +23,7 @@ function escapeHtml(s) {
 
 export function setActiveMachine(id) {
   setState('activeMachineId', id);
-  try { localStorage.setItem('glp_active_machine', String(id)); } catch {}
+  try { localStorage.setItem('glp_active_machine', String(id)); } catch { /* ignore */ }
 }
 
 // The default machine's id, or null before /api/machines has ever loaded —
@@ -52,7 +52,7 @@ export async function loadMachines() {
     }
     renderMachinesList();
     renderMachineSwitcher();
-  } catch (e) { /* offline/first-run — settings card just stays empty */ }
+  } catch { /* offline/first-run — settings card just stays empty */ }
 }
 
 // Topbar switcher (#325) — only shown once >1 machine is registered, so a
@@ -196,7 +196,7 @@ export async function testMachineForm() {
     const r = await apiFetch(`api/machines/${id}/test`, { method: 'POST' });
     const data = await r.json().catch(() => ({}));
     resultEl.textContent = data.reachable ? t('settings_machine_test_ok') : t('settings_machine_test_fail');
-  } catch (e) {
+  } catch {
     resultEl.textContent = t('settings_machine_test_fail');
   }
 }

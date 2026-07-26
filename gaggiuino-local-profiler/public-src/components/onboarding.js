@@ -80,7 +80,7 @@ export async function loadDemoData() {
     } else if (btn) {
       btn.disabled = false; btn.textContent = t('onboarding_demo_btn');
     }
-  } catch (e) {
+  } catch {
     if (btn) { btn.disabled = false; btn.textContent = t('onboarding_demo_btn'); }
   }
 }
@@ -94,7 +94,7 @@ export async function endDemo() {
       if (window.loadData) await window.loadData();
       if (window.loadLibrary) await window.loadLibrary();
     }
-  } catch (e) {}
+  } catch { /* ignore */ }
 }
 
 // ── "Demo mode" badge ────────────────────────────────────────────────────

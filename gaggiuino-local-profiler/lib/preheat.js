@@ -13,7 +13,7 @@ const state = require('./state');
 function savePreheatState() {
     try {
         writeFileSafe(PREHEAT_STATE_FILE, { switchOnAt: state.switchOnAt, switchOffAt: state.switchOffAt });
-    } catch (e) {}
+    } catch { /* ignore */ }
 }
 
 function loadPreheatState() {
@@ -24,7 +24,7 @@ function loadPreheatState() {
         if (s.switchOnAt  && (now - s.switchOnAt)  < PREHEAT_STATE_TTL) state.switchOnAt  = s.switchOnAt;
         if (s.switchOffAt && (now - s.switchOffAt) < PREHEAT_STATE_TTL) state.switchOffAt = s.switchOffAt;
         if (state.switchOnAt) log(`Preheat state restored: started ${Math.round((now - state.switchOnAt) / 60000)} min ago`);
-    } catch (e) {}
+    } catch { /* ignore */ }
 }
 
 function isTempStable() {
@@ -45,6 +45,7 @@ async function _checkPreheatNotify() {
     if (!svc) return;
     const lang = await getHaLanguage();
     sendHaNotify(svc, notifyT(lang, 'preheat_title'), notifyT(lang, 'preheat_body'), 'glp_preheat_ready');
+    // eslint-disable-next-line require-atomic-updates -- theoretical only: this function runs on a 30s interval and its own network calls have 3-5s timeouts, so re-entrant overlap before this flag is set is not realistically reachable
     state.preheatNotifySent = true;
     log('Preheat-ready notification sent to barista');
 }

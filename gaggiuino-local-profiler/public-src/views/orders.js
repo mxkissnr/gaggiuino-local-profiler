@@ -30,7 +30,7 @@ function _playOrderChime() {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.45);
-  } catch (_) {}
+  } catch { /* ignore */ }
 }
 
 function _notifyNewOrders(newOrders) {
@@ -72,7 +72,7 @@ export async function setOrdersEnabled(enabled) {
     try {
       const settings = await apiFetch('api/orders/settings').then(r => r.json());
       _updateOrdersToggleUI(settings.enabled);
-    } catch {}
+    } catch { /* ignore */ }
   }
 }
 

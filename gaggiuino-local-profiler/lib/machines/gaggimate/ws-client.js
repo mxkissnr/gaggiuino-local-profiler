@@ -129,7 +129,7 @@ class GaggiMateLiveClient {
             if (msg.tp === 'evt:status') this.status = msg;
         });
         ws.on('close', () => { this.reachable = false; this._scheduleReconnect(); });
-        ws.on('error', () => { this.reachable = false; try { ws.terminate(); } catch {} });
+        ws.on('error', () => { this.reachable = false; try { ws.terminate(); } catch { /* ignore */ } });
     }
 
     _scheduleReconnect() {
@@ -140,7 +140,7 @@ class GaggiMateLiveClient {
 
     close() {
         this.closed = true;
-        try { this._ws?.close(); } catch {}
+        try { this._ws?.close(); } catch { /* ignore */ }
     }
 }
 

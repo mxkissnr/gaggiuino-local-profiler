@@ -11,14 +11,14 @@ function getOpenApiSpec() {
         try {
             const raw = fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8');
             _openApiSpec = yamlLoad(raw);
-        } catch (_) {
+        } catch {
             return {};
         }
     }
     return _openApiSpec;
 }
 
-const { GLP_VERSION, HA_API, HA_TOKEN, PROFILES_CACHE_FILE } = require('../lib/constants');
+const { GLP_VERSION, HA_TOKEN, PROFILES_CACHE_FILE } = require('../lib/constants');
 const shotRepo = require('../lib/repositories/ShotRepository');
 const { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled, loadMenu } = require('../lib/data');
 const { getSwitchState, callHaService } = require('../lib/ha');
@@ -35,12 +35,12 @@ function loadProfilesCache() {
     try {
         if (fs.existsSync(PROFILES_CACHE_FILE))
             return JSON.parse(fs.readFileSync(PROFILES_CACHE_FILE, 'utf8'));
-    } catch (_) {}
+    } catch { /* ignore */ }
     return [];
 }
 
 function saveProfilesCache(profiles) {
-    try { fs.writeFileSync(PROFILES_CACHE_FILE, JSON.stringify(profiles)); } catch (_) {}
+    try { fs.writeFileSync(PROFILES_CACHE_FILE, JSON.stringify(profiles)); } catch { /* ignore */ }
 }
 
 // Multi-machine (#340): the default machine (id 1) keeps using the existing
@@ -110,7 +110,7 @@ async function isValidSupervisorToken(token) {
             signal: AbortSignal.timeout(4000),
         });
         return r.ok;
-    } catch (_) {
+    } catch {
         return false;
     }
 }
@@ -145,7 +145,7 @@ router.get('/api/token', async (req, res) => {
 function hostnameOf(rawHost) {
     try {
         return new URL(/^https?:\/\//i.test(rawHost) ? rawHost : `http://${rawHost}`).hostname;
-    } catch (_) {
+    } catch {
         return rawHost;
     }
 }
@@ -154,8 +154,8 @@ router.get('/api/status', async (req, res) => {
     const opts          = loadOptions();
     const machineUrl    = getMachineUrl(opts);
     let shotCount = 0, machineHostname = '';
-    try { shotCount = shotRepo.count(); } catch (e) {}
-    try { machineHostname = new URL(machineUrl).hostname; } catch (e) {}
+    try { shotCount = shotRepo.count(); } catch { /* ignore */ }
+    try { machineHostname = new URL(machineUrl).hostname; } catch { /* ignore */ }
 
     let lastSync          = state.lastSyncTime;
     let lastSyncError     = state.lastSyncError;
@@ -206,7 +206,7 @@ router.get('/api/status', async (req, res) => {
             reachable: m.isDefault ? state.machineReachable : null,
             on:        m.isDefault ? state.machineOn        : null,
         }));
-    } catch (e) {}
+    } catch { /* ignore */ }
     res.json({
         shotCount,
         lastSync,
@@ -303,7 +303,7 @@ router.get('/api/machine/profiles', async (req, res) => {
             const status = await adapter.getStatus(machine);
             currentId   = status.profileId   ?? null;
             currentName = status.profileName ?? null;
-        } catch (_) { /* machine unreachable — profile list can still come from cache */ }
+        } catch { /* machine unreachable — profile list can still come from cache */ }
     }
 
     const respond = (profiles, stale = false) => {
@@ -502,10 +502,12 @@ router.get('/api/version', async (req, res) => {
             );
             if (r.ok) {
                 const data = await r.json();
+                // eslint-disable-next-line require-atomic-updates -- benign cache-fill race: concurrent requests before this resolves would all compute the same value from the same GitHub release
                 _versionCache = data.tag_name?.replace(/^v/, '') || null;
+                // eslint-disable-next-line require-atomic-updates -- see above
                 _versionCacheAt = now;
             }
-        } catch (_) {}
+        } catch { /* ignore */ }
     }
     const latest = _versionCache;
     const updateAvailable = !!(latest && latest !== GLP_VERSION);

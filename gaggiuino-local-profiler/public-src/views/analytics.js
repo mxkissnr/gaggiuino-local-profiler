@@ -591,7 +591,7 @@ export function splitAntimeridianRing(ring) {
   const scanEnd = closesAtStart ? ring.length - 1 : ring.length;
   const segments = [[ring[0]]];
   for (let i = 1; i < scanEnd; i++) {
-    const [lon1, lat1] = ring[i - 1];
+    const [lon1] = ring[i - 1];
     const [lon2, lat2] = ring[i];
     const dLon = lon2 - lon1;
     if (Math.abs(dLon) > 180) {
@@ -735,6 +735,7 @@ export async function buildWorldMap() {
   }
 
   if (!_worldTopo) {
+    // eslint-disable-next-line require-atomic-updates -- benign cache-fill race: concurrent calls before this resolves would all fetch/parse the same static file
     try { _worldTopo = await (await fetch('countries-110m.json')).json(); }
     catch {
       wrap.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_map_empty')}</p>`;

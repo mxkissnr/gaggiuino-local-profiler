@@ -451,7 +451,7 @@ router.post('/api/library/grinder/:id/delete', (req, res) => {
             delete maint[`grinder_${id}`];
             libraryService.saveMaintenance(maint);
         }
-    } catch (e) {}
+    } catch { /* ignore */ }
     res.json({ ok: true });
 });
 

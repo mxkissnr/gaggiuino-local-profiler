@@ -189,6 +189,7 @@ router.get('/api/import/url', async (req, res) => {
                         // used to skip HTML enrichment entirely — give it the
                         // same fallback the automatic generic-shopify path
                         // gets below, instead of staying JSON-only forever.
+                        // eslint-disable-next-line require-atomic-updates -- `bean` is a per-request local (let bean = null above), not shared state; no cross-request race is possible
                         if (!provider.parser) bean = await tryHtmlEnrich(bean, host, raw, debugInfo);
                     }
                 }
@@ -211,6 +212,7 @@ router.get('/api/import/url', async (req, res) => {
                 try {
                     const r = await safeGet(jsonUrl, FETCH_OPTS);
                     debugLog(`Import: JSON fetch ${jsonUrl} -> status ${r.status}, ${JSON.stringify(r.data).length} bytes`);
+                    // eslint-disable-next-line require-atomic-updates -- `bean` is a per-request local, not shared state; no cross-request race is possible
                     bean = parseGenericShopifyProduct(r.data, host);
                     if (bean) {
                         attachVariants(bean, r.data.variants);
@@ -221,6 +223,7 @@ router.get('/api/import/url', async (req, res) => {
                         // Some themes only render bean detail into the product
                         // page HTML, not this JSON (#423) — one extra bounded
                         // fetch, only when the JSON left detail fields empty.
+                        // eslint-disable-next-line require-atomic-updates -- `bean` is a per-request local, not shared state; no cross-request race is possible
                         bean = await tryHtmlEnrich(bean, host, raw, debugInfo);
                     } else {
                         debugLog('Import: parseGenericShopifyProduct returned null (no title in JSON)');
@@ -239,6 +242,7 @@ router.get('/api/import/url', async (req, res) => {
         if (!bean) {
             const r = await safeGet(raw, FETCH_OPTS);
             html = r.data;
+            // eslint-disable-next-line require-atomic-updates -- `bean` is a per-request local, not shared state; no cross-request race is possible
             bean = parseJsonLd(html);
             if (bean) { bean.source = host; method = 'jsonld'; }
         }

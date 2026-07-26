@@ -6,6 +6,7 @@ const { COFFEE_COUNTRY_CODES } = require('./coffee-countries');
 const { imagePath } = require('./services/ImageService');
 
 let createCanvas = null;
+// eslint-disable-next-line no-useless-assignment -- this null is the fallback used if the require() below throws before the destructuring assignment completes; the rule doesn't model that exception path
 let GlobalFonts  = null;
 let loadImage    = null;
 
@@ -145,7 +146,7 @@ function buildPalette(accent, theme) {
     };
 }
 
-const W = 1080, H = 1080, PX = 52;
+const PX = 52;
 
 function F(size, bold = false) {
     const fam = globalThis._glpCardFont || 'sans-serif';
@@ -322,7 +323,7 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
     // Lazily required: LibraryService touches the DB at require-time in some
     // environments, and card generation shouldn't depend on that succeeding.
     let library = null;
-    try { library = require('./services/LibraryService').getLibrary(); } catch { library = null; }
+    try { library = require('./services/LibraryService').getLibrary(); } catch { /* ignore */ }
 
     const W = 1080;
     const H = format === 'story' ? 1920 : 1080;

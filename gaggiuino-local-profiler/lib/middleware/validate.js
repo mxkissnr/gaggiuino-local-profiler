@@ -1,5 +1,3 @@
-const { ZodError } = require('zod');
-
 function validate(schema, source = 'body') {
     return (req, res, next) => {
         const result = schema.safeParse(req[source]);

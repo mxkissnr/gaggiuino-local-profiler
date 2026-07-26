@@ -159,7 +159,7 @@ export async function fetchPreheatData() {
     const r = await apiFetch('api/preheat');
     if (!r.ok) return;
     updatePreheatWidget(await r.json());
-  } catch (e) {}
+  } catch { /* ignore */ }
 }
 
 export function updatePreheatWidget(d) {
@@ -212,7 +212,7 @@ export async function fetchLiveData() {
     S.liveWasLive = msg.isLive;
 
     handleLiveData(msg);
-  } catch (e) {
+  } catch {
     setLiveBadge('error', 'Verbindung unterbrochen');
   }
 }

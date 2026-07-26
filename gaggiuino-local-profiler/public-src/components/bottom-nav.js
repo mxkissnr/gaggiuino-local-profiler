@@ -59,9 +59,7 @@ export function getBottomNavConfig() {
   let parsed = null;
   try {
     parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-  } catch {
-    parsed = null;
-  }
+  } catch { /* leave parsed at its null initializer */ }
   if (!Array.isArray(parsed) || parsed.length === 0) return [...DEFAULT_MAIN_BAR];
 
   const seen = new Set();
@@ -88,7 +86,7 @@ export function setBottomNavConfig(ids) {
   }
   const withoutShots = valid.filter(id => id !== 'shots');
   const finalIds = ['shots', ...withoutShots].slice(0, MAX_MAIN_BAR);
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(finalIds)); } catch {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(finalIds)); } catch { /* ignore */ }
   return finalIds;
 }
 

@@ -11,7 +11,7 @@ const { log } = require('../helpers');
 function loadOptions() {
     try {
         if (fs.existsSync(OPTIONS_FILE)) return JSON.parse(fs.readFileSync(OPTIONS_FILE, 'utf8'));
-    } catch (_) { /* fall through to {} */ }
+    } catch { /* fall through to {} */ }
     return {};
 }
 

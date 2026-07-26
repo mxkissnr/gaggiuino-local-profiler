@@ -1,6 +1,6 @@
 import { apiFetch } from './api.js';
 
-// Bean/grinder/shot images require the auth token, so <img src="api/...​">
+// Bean/grinder/shot images require the auth token, so <img src="api/...">
 // can't be used directly — fetch as a blob and hand back an object URL
 // instead. Cached per entity for the page lifetime; photos can be
 // re-uploaded/removed, so invalidate*Image() clears a stale cache entry.

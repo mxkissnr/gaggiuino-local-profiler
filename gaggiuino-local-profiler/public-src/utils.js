@@ -16,7 +16,7 @@ export function esc(str) {
 export function roastAgeDays(str, nowMs = Date.now()) {
   if (!str || typeof str !== 'string') return null;
   let d = null;
-  let m = str.trim().match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2,4})$/);
+  let m = str.trim().match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
   if (m) {
     const y = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
     d = new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));
@@ -41,7 +41,7 @@ export function toIsoDateInput(str) {
   const s = str.trim();
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = s.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2,4})$/);
+  m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
   if (m) {
     const y = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
     return `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
@@ -256,7 +256,7 @@ export function germanToIso(s) {
 
 export function parseDMY(s) {
   if (!s) return null;
-  const m = s.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2,4})$/);
+  const m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
   if (!m) return null;
   const y = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
   const d = new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));

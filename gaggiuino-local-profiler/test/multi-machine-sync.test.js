@@ -143,7 +143,7 @@ describe('lib/sync multi-machine', () => {
     it('syncOtherMachines skips the default machine and disabled machines', async () => {
         const registry = require('../lib/machines/registry');
         const enabled  = registry.createMachine({ name: 'Enabled GaggiMate', type: 'gaggimate', host: '10.1.70.199:8180' });
-        const disabled = registry.createMachine({ name: 'Disabled GaggiMate', type: 'gaggimate', host: '10.1.70.200:8180', enabled: false });
+        registry.createMachine({ name: 'Disabled GaggiMate', type: 'gaggimate', host: '10.1.70.200:8180', enabled: false });
 
         const fakeAdapter = { getLatestShotId: vi.fn().mockResolvedValue(null), getShot: vi.fn() };
         require.cache[machinesIndexPath] = {

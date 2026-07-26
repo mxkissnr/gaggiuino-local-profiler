@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 // bottom-nav.js's import chain touches state.js/i18n.js (localStorage/
 // navigator at module load time) — stub the minimum browser globals so the

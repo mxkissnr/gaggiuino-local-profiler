@@ -219,7 +219,7 @@ function parseElbgoldProduct(product) {
     });
 
     // "Noten von gerösteter Mandel, Kirsche und Nougat, mit …" → flavor tags
-    let flavors = [];
+    let flavors;
     const notesMatch = text.match(/Noten von ([^.!?]{3,140})/i);
     if (notesMatch) {
         flavors = splitFlavors(notesMatch[1].replace(/\s+und\s+/gi, ','))

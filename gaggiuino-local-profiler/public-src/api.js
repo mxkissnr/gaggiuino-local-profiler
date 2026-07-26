@@ -17,7 +17,7 @@ export async function initToken() {
         localStorage.setItem('glp_token', S.glpToken);
       }
     }
-  } catch (e) {}
+  } catch { /* ignore */ }
 }
 
 export async function apiFetch(url, opts = {}) {

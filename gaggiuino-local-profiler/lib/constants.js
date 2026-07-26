@@ -1,6 +1,6 @@
 // Polyfill File global for Node.js < 20
 if (typeof File === 'undefined') {
-    try { global.File = require('buffer').File; } catch (_) { global.File = class File {}; }
+    try { global.File = require('buffer').File; } catch { global.File = class File {}; }
 }
 
 const GLP_VERSION  = '2.19.0';

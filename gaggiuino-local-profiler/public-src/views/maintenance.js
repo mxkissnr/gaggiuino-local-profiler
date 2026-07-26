@@ -136,7 +136,7 @@ export async function loadMaintenanceView() {
     const r = await apiFetch(`api/maintenance?machineId=${scope}`);
     const data = await r.json();
     renderMaintenanceDashboard(data, scope);
-  } catch (e) {
+  } catch {
     container.innerHTML = `<div class="loading-state" style="color:var(--err)">${t('error_load')}</div>`;
   }
   loadMaintLog();
@@ -309,7 +309,7 @@ export async function markMaintDone(task, machineId) {
   try {
     await apiFetch(`api/maintenance/${task}/done?machineId=${_writeMachineId(machineId)}`, { method: 'POST' });
     await loadMaintenanceView();
-  } catch (e) {}
+  } catch { /* ignore */ }
 }
 
 export async function saveMaintThreshold(task, field, value, machineId) {
@@ -319,7 +319,7 @@ export async function saveMaintThreshold(task, field, value, machineId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [field]: parseInt(value) }),
     });
-  } catch (e) {}
+  } catch { /* ignore */ }
 }
 
 export async function setMaintMode(task, mode, machineId) {
@@ -334,7 +334,7 @@ export async function setMaintMode(task, mode, machineId) {
       body: JSON.stringify(body),
     });
     await loadMaintenanceView();
-  } catch (e) {}
+  } catch { /* ignore */ }
 }
 
 // ── Maintenance Log ───────────────────────────────────────────────────────
@@ -437,7 +437,7 @@ export async function submitMaintLogEntry() {
     });
     closeMaintLogForm();
     loadMaintLog();
-  } catch {}
+  } catch { /* ignore */ }
 }
 
 export async function deleteMaintLogEntry(id) {
@@ -445,5 +445,5 @@ export async function deleteMaintLogEntry(id) {
   try {
     await apiFetch(`api/maintenance/log/${id}`, { method: 'DELETE' });
     loadMaintLog();
-  } catch {}
+  } catch { /* ignore */ }
 }

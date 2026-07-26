@@ -7,7 +7,7 @@ import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob
 } from '../../utils.js';
-import { renderSidebar, updateSidebarHighlighting }           from '../../components/sidebar.js';
+import { renderSidebar }                                      from '../../components/sidebar.js';
 import { getShotData, calcShotScore, shotUsedBeanTarget, findPreviousShot, findPreviousShotForBean, isNewestShotForBean } from './utils.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel }                              from './annotation.js';
@@ -31,7 +31,7 @@ export async function loadData() {
       return;
     }
     fetched = await r.json();
-  } catch (e) {
+  } catch {
     shotsEl.innerHTML =
       `<div class="loading-state" style="color:#ef4444">Verbindungsfehler<br>` +
       `<button data-action="reload-data" style="margin-top:10px;padding:4px 12px;cursor:pointer;` +
@@ -86,7 +86,7 @@ export async function loadTrashData() {
     if (!r.ok) return;
     S.trashedShots = await r.json();
     renderTrash();
-  } catch (e) {}
+  } catch { /* ignore */ }
 }
 
 export function renderTrash() {
@@ -206,7 +206,6 @@ export function updateView() {
   // confusing to show ("Shot 20000003") when the machine name is already
   // in the subtitle. nativeId falls back to id for older cached shots.
   if (shotB) {
-    const nameB = shotB.profile?.name || shotB.profileName || t('profile_unknown');
     document.getElementById('topTitle').innerText = t('compare_title', shotA.nativeId ?? shotA.id, shotB.nativeId ?? shotB.id);
   } else {
     document.getElementById('topTitle').innerText = `${nameA} – Shot ${shotA.nativeId ?? shotA.id}`;
@@ -655,7 +654,7 @@ export async function exportProfile() {
     if (!out.recipe.coffeeOut && ann.dose) out.recipe.coffeeOut = parseFloat(ann.dose) * 2;
     if (out.recipe.coffeeIn && out.recipe.coffeeOut)
       out.recipe.ratio = Math.round(out.recipe.coffeeOut / out.recipe.coffeeIn * 100) / 100;
-    await _downloadJSON(out, (out.name || shot.profileName || `shot_${shot.id}`).replace(/[^a-z0-9_\-]/gi, '_') + '.json');
+    await _downloadJSON(out, (out.name || shot.profileName || `shot_${shot.id}`).replace(/[^a-z0-9_-]/gi, '_') + '.json');
     return;
   }
 
@@ -714,7 +713,7 @@ export async function exportProfile() {
       ratio:     ann.dose ? Math.round(yieldG / parseFloat(ann.dose) * 100) / 100 : 2
     }
   };
-  await _downloadJSON(out, (out.name).replace(/[^a-z0-9_\-]/gi, '_') + '.json');
+  await _downloadJSON(out, (out.name).replace(/[^a-z0-9_-]/gi, '_') + '.json');
 }
 
 async function _downloadJSON(obj, filename) {
@@ -791,5 +790,6 @@ export async function restoreFromFile(input) {
       alert(t('backup_error', res.error));
     }
   } catch (e) { alert(t('backup_error', e.message)); }
+  // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
 }

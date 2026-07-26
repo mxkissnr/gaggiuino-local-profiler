@@ -8,7 +8,7 @@ async function getSwitchState(entity) {
         const r = await axios.get(`${HA_API}/states/${entity}`,
             { headers: { Authorization: `Bearer ${HA_TOKEN}` }, timeout: 3000 });
         return r.data.state === 'on';
-    } catch (e) { return null; }
+    } catch { return null; }
 }
 
 async function sendHaNotify(service, title, message, tag) {
@@ -30,7 +30,9 @@ async function getHaLanguage() {
         const r = await axios.get(`${HA_API}/config`,
             { headers: { Authorization: `Bearer ${HA_TOKEN}` }, timeout: 5000 });
         const lang = String(r.data?.language || '').slice(0, 2).toLowerCase();
+        // eslint-disable-next-line require-atomic-updates -- benign cache-fill race: concurrent calls before this resolves would all compute the same value from the same HA config
         _haLang = ['de', 'en', 'it', 'fr', 'es', 'nl'].includes(lang) ? lang : 'de';
+    // eslint-disable-next-line require-atomic-updates -- benign cache-fill race, same reasoning as the assignment above
     } catch { _haLang = 'de'; }
     return _haLang;
 }

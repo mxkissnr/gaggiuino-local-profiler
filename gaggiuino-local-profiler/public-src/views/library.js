@@ -41,7 +41,7 @@ export async function loadLibrary() {
     updateLibraryDatalist();
     renderRecipeList();
     renderMilkList();
-  } catch (e) {}
+  } catch { /* ignore */ }
 }
 
 export function updateLibraryDatalist() {
@@ -896,6 +896,7 @@ export async function uploadBeanImage(id, input) {
   const file = input.files[0];
   if (!file) return;
   const blob = await openImageCropEditor(file, { shape: 'square' });
+  // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
   if (!blob) return;
   const r = await apiFetch(`api/library/bean/${id}/image`, {
@@ -913,6 +914,7 @@ export async function uploadGrinderImage(id, input) {
   const file = input.files[0];
   if (!file) return;
   const blob = await openImageCropEditor(file, { shape: 'square' });
+  // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
   if (!blob) return;
   const r = await apiFetch(`api/library/grinder/${id}/image`, {
@@ -1193,7 +1195,7 @@ export async function openScanModal() {
   try {
     S._scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     video.srcObject = S._scanStream;
-  } catch (e) {
+  } catch {
     status.textContent = t('scan_error');
     status.className = 'error';
     return;
@@ -1220,9 +1222,10 @@ export async function _runScanLoop() {
       const codes = await S._scanDetector.detect(video);
       if (!codes.length) continue;
       const raw = codes[0].rawValue;
+      // eslint-disable-next-line require-atomic-updates -- this loop-exit flag is idempotent; closeScanModal() setting it concurrently to the same false value is harmless
       S._scanActive = false;
       await _handleScanResult(raw, status);
-    } catch (e) { /* frame not ready yet */ }
+    } catch { /* frame not ready yet */ }
   }
 }
 
@@ -1264,7 +1267,7 @@ export async function _handleScanResult(raw, status) {
       closeScanModal();
       openBeanForm();
     }
-  } catch (e) {
+  } catch {
     status.textContent = t('scan_error');
     status.className = 'error';
     await new Promise(r => setTimeout(r, 1800));

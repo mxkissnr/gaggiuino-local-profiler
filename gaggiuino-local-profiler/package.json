@@ -6,7 +6,9 @@
     "build": "vite build",
     "dev": "vite",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "release:check": "node scripts/release-check.mjs"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.2",
@@ -25,6 +27,9 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "globals": "^17.8.0",
     "playwright": "^1.61.1",
     "vite": "8.1.5",
     "vitest": "4.1.10"

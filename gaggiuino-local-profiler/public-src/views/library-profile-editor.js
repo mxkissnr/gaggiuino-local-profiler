@@ -27,6 +27,7 @@ export async function loadMachineProfileList() {
   const r = await apiFetch(`api/machine/profiles?machineId=${S.activeMachineId ?? ''}`);
   if (!r.ok) return;
   const data = await r.json();
+  // eslint-disable-next-line require-atomic-updates -- pre-existing potential race on shared UI state if this is called concurrently; a real fix (request sequencing) is a behavior change out of scope for this lint-only pass
   S.machineProfiles = Array.isArray(data.optionsRaw) ? data.optionsRaw : [];
   renderProfileList();
   updateProfileDatalist();

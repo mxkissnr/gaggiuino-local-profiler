@@ -22,7 +22,7 @@ const DEMO_BEAN_ID_BY_NAME = {
 // timeInShot in tenths of a second (0.1 s steps), pressure/temperature/
 // weight in tenths of their unit — matches the shape produced by
 // lib/poll.js's liveAccum and stored by ShotRepository.
-function buildCurve({ seconds, peakPressure, targetTemp, doseG, yieldG }) {
+function buildCurve({ seconds, peakPressure, targetTemp, yieldG }) {
     const steps = Math.round(seconds * 10);
     const timeInShot = [], pressure = [], temperature = [], shotWeight = [],
           weightFlow = [], pumpFlow = [], targetTemperature = [];

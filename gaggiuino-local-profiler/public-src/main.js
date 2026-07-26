@@ -657,9 +657,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('trendBtnAll').addEventListener('click', () => setTrendWindow(0));
   document.getElementById('dialinCount').addEventListener('change', renderDialin);
   document.querySelectorAll('.theme-btn').forEach(btn => {
+    // eslint-disable-next-line no-undef -- setTheme is assigned onto window above (Object.assign), resolves as a global at runtime
     btn.addEventListener('click', () => setTheme(btn.dataset.themeVal));
   });
   document.querySelectorAll('.accent-swatch').forEach(btn => {
+    // eslint-disable-next-line no-undef -- setAccentTheme is assigned onto window above (Object.assign), resolves as a global at runtime
     btn.addEventListener('click', () => setAccentTheme(btn.dataset.accent));
   });
   document.querySelectorAll('.lang-option-btn').forEach(btn => {

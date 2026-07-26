@@ -192,7 +192,7 @@ const JSON_FILES = {
 function readJson(file, fallback) {
     try {
         if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
-    } catch {}
+    } catch { /* ignore */ }
     return fallback;
 }
 

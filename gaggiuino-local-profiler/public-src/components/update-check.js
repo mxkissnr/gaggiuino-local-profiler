@@ -7,7 +7,7 @@ export async function checkForUpdate() {
         if (!r.ok) return;
         const data = await r.json();
         if (data.update_available) showUpdateBanner(data);
-    } catch (_) {}
+    } catch { /* ignore */ }
 }
 
 function showUpdateBanner({ current, latest, release_url }) {

@@ -33,6 +33,7 @@ function enqueue(fn) {
     _queue = _queue.then(async () => {
         const wait = _lastRequestAt + MIN_INTERVAL_MS - Date.now();
         if (wait > 0) await new Promise(r => setTimeout(r, wait));
+        // eslint-disable-next-line require-atomic-updates -- safe: this callback only ever runs one-at-a-time via the `_queue = _queue.then(...)` serialization chain above
         _lastRequestAt = Date.now();
         return fn();
     }).catch(() => null);

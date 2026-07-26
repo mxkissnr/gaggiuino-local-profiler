@@ -83,7 +83,7 @@ export async function updateStatus(machineId) {
     if ('isDemo' in s) updateDemoBadge(s.isDemo);
     if (switchRes?.ok) updatePowerButton(await switchRes.json());
     else updatePowerButton({ configured: false });
-  } catch (e) {}
+  } catch { /* ignore */ }
 }
 
 export function updatePowerButton(sw) {
