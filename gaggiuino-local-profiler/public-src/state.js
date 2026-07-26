@@ -4,7 +4,9 @@ export const S = {
     const lang = stored || navigator.language.slice(0, 2).toLowerCase();
     return lang;
   })(),
-  glpToken: localStorage.getItem('glp_token') || '',
+  // In-memory only (#522) — never persisted to localStorage. A fresh token is
+  // fetched on every load via initToken()'s /api/token call (see api.js).
+  glpToken: '',
   // S.shots is the currently *visible* (machine-filtered) set every existing
   // view (sidebar, analytics, ...) already reads; S.allShots is the full
   // unfiltered fetch from the server, re-filtered into S.shots whenever
