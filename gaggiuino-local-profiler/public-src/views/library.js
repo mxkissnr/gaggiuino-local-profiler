@@ -41,6 +41,17 @@ export async function loadLibrary() {
     updateLibraryDatalist();
     renderRecipeList();
     renderMilkList();
+    // #526: this fetch is fired unawaited from main.js's init sequence, racing
+    // switchMode('library') (mode.js), which renders the bean/grinder lists
+    // straight off S.coffeeLibrary the moment the user opens Library — before
+    // this promise resolves, that render sees the still-empty default
+    // ({ beans: [], grinders: [] }, state.js) and, since nothing re-renders it
+    // afterwards, the flavor-wheel button (and everything else data-dependent)
+    // stays invisible for the rest of the session even once the data arrives.
+    // Re-render here too so a load that finishes after the user is already on
+    // Library corrects itself; a cheap no-op re-render if they aren't there yet.
+    renderBeanList();
+    renderGrinderList();
   } catch { /* ignore */ }
 }
 

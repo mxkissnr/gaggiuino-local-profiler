@@ -42,16 +42,20 @@ export async function loadMachines() {
     if (!S.activeMachineId) {
       const def = machines.find(m => m.isDefault) || machines[0];
       if (def) setActiveMachine(def.id);
-      // loadData() and loadMachines() both fire around startup with no
-      // fixed order — if shots already loaded before the default machine
-      // was known, S.shots was filtered against a null activeMachineId
-      // (i.e. unfiltered). Re-filter now that it's set; a no-op for
-      // single-machine installs and for the case where loadData() simply
-      // hasn't run yet (S.allShots still empty).
-      applyActiveMachineChange();
     }
     renderMachinesList();
     renderMachineSwitcher();
+    // loadData() and loadMachines() both fire around startup with no fixed
+    // order — if shots already loaded before the default machine was known,
+    // S.shots was filtered against a null activeMachineId (i.e. unfiltered).
+    // #526: also covers a returning session that already has an
+    // activeMachineId persisted (so the block above never runs) and was
+    // already showing Analytics before this fetch resolved — its
+    // machine-comparison card was built with S.machines still empty and had
+    // nothing that re-rendered it afterwards. Unconditional and idempotent:
+    // a no-op for single-machine installs and for the case where loadData()
+    // simply hasn't run yet (S.allShots still empty).
+    applyActiveMachineChange();
   } catch { /* offline/first-run — settings card just stays empty */ }
 }
 
