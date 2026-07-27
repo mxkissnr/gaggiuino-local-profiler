@@ -8,10 +8,13 @@
 //     "## [Unreleased]") doesn't equal the current version
 //  3. any docs/screenshots/*.png is older (by last commit) than the newest
 //     commit touching public-src/ that could plausibly change what's
-//     rendered — a commit whose public-src/ diff is entirely comment/blank
-//     lines doesn't count (#537). When in doubt (merge commits, binary
-//     diffs, unrecognized file types, anything not confidently a whole-line
-//     comment) it's treated as visually relevant — false positives (an
+//     rendered — a commit whose public-src/ changes are, file by file,
+//     identical once comments and blank lines are stripped out doesn't
+//     count (#537). Comments are stripped from whole file contents (not
+//     diff lines), so multi-line /* */ and <!-- --> blocks — the norm in
+//     this codebase — are handled, not just single-line comments. When in
+//     doubt (merge commits, binary diffs, unrecognized file types, git
+//     errors) it's treated as visually relevant — false positives (an
 //     unneeded screenshot re-run) are cheap, false negatives (stale
 //     screenshots shipped) are not.
 //  4. DEVELOPMENT.md is older (by last commit) than the most recent commit
@@ -49,34 +52,221 @@ export function gitLastCommitTime(gitRoot, relPathFromRoot) {
 // against it yields a normal "everything added" diff instead of a special case.
 const EMPTY_TREE_HASH = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
-// Only file types where "the whole line is a comment" can be recognized with
-// a simple, confident regex get an entry here. Anything else (json, images,
-// fonts, ...) falls through to "always counts as a real change" in
-// isCommentOrBlankLine — there's no safe comment syntax to detect, and for
-// something like an i18n JSON file every line change is visually relevant
-// anyway.
-const COMMENT_PATTERNS = {
-    '.js':  [/^\/\/.*$/, /^\/\*.*\*\/$/],
-    '.mjs': [/^\/\/.*$/, /^\/\*.*\*\/$/],
-    '.cjs': [/^\/\/.*$/, /^\/\*.*\*\/$/],
-    '.html': [/^<!--.*-->$/],
-    '.htm':  [/^<!--.*-->$/],
-    '.css':  [/^\/\*.*\*\/$/],
+// ── Comment stripping ───────────────────────────────────────────────────
+//
+// #537 follow-up: an earlier version of this check classified individual
+// diff lines ("does this added/removed line look like a whole-line
+// comment?"). That fails on the exact case the issue was filed for — HTML
+// comments in this codebase are routinely multi-line, e.g.
+//
+//   <!-- Only shown once a valid session token was obtained (ingress or
+//        already-authenticated) — the endpoint no longer hands out the
+//        token to unauthenticated LAN callers, see #276 -->
+//
+// None of those three lines opens *and* closes the comment on the same
+// line, so a per-line regex has no confident way to call any of them
+// "comment" and falls back to "code" for all three — meaning a purely
+// comment-only edit to a block like this still gets flagged, which is
+// exactly the bug #537 reports.
+//
+// Fix: compare whole-file content instead of diff lines. For each file a
+// commit touches under public-src/, strip comments from both the old and
+// new blob and compare what's left. A proper strip needs to track string/
+// template-literal state too — otherwise "//" or "/*" inside a string
+// literal (a URL, a snippet of markup) would be misread as a comment
+// start, and *removing real code* because it looked like a comment is the
+// dangerous direction (a hidden code change could then read as
+// comment-only). The tokenizers below are deliberately simple state
+// machines, not a full parser: they get strings, template literals
+// (including nested `${ \`...\` }`), and single/multi-line comments right,
+// but do not attempt to disambiguate regex literals from division — a
+// regex containing a literal, unescaped "/*" or "//" (only possible inside
+// a character class, e.g. /[/*]/) could be misread as a comment start.
+// That pattern does not occur anywhere in this repo's public-src today
+// (checked by hand); it's called out here as a known, accepted limitation
+// rather than silently ignored.
+//
+// Every stripper leans conservative the same way: when a comment or string
+// never finds its closing token before EOF, the scanner just keeps
+// consuming to the end rather than guessing — it cannot under-strip past
+// that point (nothing after an unclosed opener gets treated as anything
+// other than what it already was), so it cannot hide a real change.
+
+// JS/HTML/CSS all guard token boundaries the same way: swallowing a
+// comment can't be allowed to glue the token before it to the token after
+// it (`x/*c*/y` must not become `xy`), so every comment is replaced with a
+// single space rather than nothing, and newlines inside removed comments
+// are preserved so blank-line-only differences keep comparing equal.
+function stripJsLikeComments(src) {
+    let out = '';
+    let mode = 'NORMAL'; // NORMAL | LINE_COMMENT | BLOCK_COMMENT | STRING_SINGLE | STRING_DOUBLE | TEMPLATE
+    // Each open `${...}` inside a template literal pushes a frame here so
+    // we know, once its braces balance back to zero, to return to TEMPLATE
+    // mode for the *enclosing* literal rather than falling out to NORMAL.
+    // This is what makes nested template literals (`${a.map(x => \`...\`)}`,
+    // common in this codebase) work: entering a nested backtick from
+    // inside a `${}` just sets mode = TEMPLATE without touching the stack.
+    const templateExprStack = [];
+    let i = 0;
+    const n = src.length;
+
+    while (i < n) {
+        const c = src[i];
+        const c2 = i + 1 < n ? src[i + 1] : '';
+
+        if (mode === 'LINE_COMMENT') {
+            if (c === '\n') { out += '\n'; mode = 'NORMAL'; }
+            i++;
+            continue;
+        }
+        if (mode === 'BLOCK_COMMENT') {
+            if (c === '\n') { out += '\n'; i++; continue; }
+            if (c === '*' && c2 === '/') { out += ' '; mode = 'NORMAL'; i += 2; continue; }
+            i++;
+            continue;
+        }
+        if (mode === 'STRING_SINGLE' || mode === 'STRING_DOUBLE') {
+            const quote = mode === 'STRING_SINGLE' ? "'" : '"';
+            if (c === '\\' && i + 1 < n) { out += c + src[i + 1]; i += 2; continue; }
+            out += c;
+            if (c === quote) mode = 'NORMAL';
+            i++;
+            continue;
+        }
+        if (mode === 'TEMPLATE') {
+            if (c === '\\' && i + 1 < n) { out += c + src[i + 1]; i += 2; continue; }
+            if (c === '`') { out += c; mode = 'NORMAL'; i++; continue; }
+            if (c === '$' && c2 === '{') {
+                out += '${';
+                templateExprStack.push({ braceDepth: 0 });
+                mode = 'NORMAL';
+                i += 2;
+                continue;
+            }
+            out += c;
+            i++;
+            continue;
+        }
+
+        // NORMAL — also covers "inside a template's ${...} expression",
+        // tracked via templateExprStack rather than a distinct mode.
+        if (templateExprStack.length) {
+            const top = templateExprStack[templateExprStack.length - 1];
+            if (c === '{') { top.braceDepth++; out += c; i++; continue; }
+            if (c === '}') {
+                if (top.braceDepth === 0) {
+                    templateExprStack.pop();
+                    out += c;
+                    mode = 'TEMPLATE';
+                    i++;
+                    continue;
+                }
+                top.braceDepth--;
+                out += c;
+                i++;
+                continue;
+            }
+        }
+        if (c === '/' && c2 === '/') { mode = 'LINE_COMMENT'; i += 2; continue; }
+        if (c === '/' && c2 === '*') { mode = 'BLOCK_COMMENT'; i += 2; continue; }
+        if (c === "'") { mode = 'STRING_SINGLE'; out += c; i++; continue; }
+        if (c === '"') { mode = 'STRING_DOUBLE'; out += c; i++; continue; }
+        if (c === '`') { mode = 'TEMPLATE'; out += c; i++; continue; }
+        out += c;
+        i++;
+    }
+    return out;
+}
+
+function stripCssComments(src) {
+    let out = '';
+    let mode = 'NORMAL'; // NORMAL | BLOCK_COMMENT | STRING_SINGLE | STRING_DOUBLE
+    let i = 0;
+    const n = src.length;
+
+    while (i < n) {
+        const c = src[i];
+        const c2 = i + 1 < n ? src[i + 1] : '';
+
+        if (mode === 'BLOCK_COMMENT') {
+            if (c === '\n') { out += '\n'; i++; continue; }
+            if (c === '*' && c2 === '/') { out += ' '; mode = 'NORMAL'; i += 2; continue; }
+            i++;
+            continue;
+        }
+        if (mode === 'STRING_SINGLE' || mode === 'STRING_DOUBLE') {
+            const quote = mode === 'STRING_SINGLE' ? "'" : '"';
+            if (c === '\\' && i + 1 < n) { out += c + src[i + 1]; i += 2; continue; }
+            out += c;
+            if (c === quote) mode = 'NORMAL';
+            i++;
+            continue;
+        }
+
+        if (c === '/' && c2 === '*') { mode = 'BLOCK_COMMENT'; i += 2; continue; }
+        if (c === "'") { mode = 'STRING_SINGLE'; out += c; i++; continue; }
+        if (c === '"') { mode = 'STRING_DOUBLE'; out += c; i++; continue; }
+        out += c;
+        i++;
+    }
+    return out;
+}
+
+// No string-awareness here: HTML attribute values could in principle
+// contain a literal "<!--"/"-->" substring, which this would misread.
+// Full tag/attribute parsing to guard against that is out of proportion to
+// a risk that doesn't occur anywhere in this repo's public-src HTML today
+// — noted as an accepted limitation rather than silently ignored. An
+// unterminated "<!--" (no matching "-->" anywhere after it) is left
+// exactly as-is rather than treated as an open-ended comment, so a
+// malformed/truncated file can't cause real trailing content to vanish
+// from the comparison.
+function stripHtmlComments(src) {
+    let out = '';
+    let i = 0;
+    const n = src.length;
+
+    while (i < n) {
+        if (src.startsWith('<!--', i)) {
+            const end = src.indexOf('-->', i + 4);
+            if (end === -1) {
+                out += src.slice(i);
+                break;
+            }
+            const removed = src.slice(i, end + 3);
+            const newlines = (removed.match(/\n/g) || []).length;
+            out += '\n'.repeat(newlines) + ' ';
+            i = end + 3;
+            continue;
+        }
+        out += src[i];
+        i++;
+    }
+    return out;
+}
+
+const COMMENT_STRIPPERS = {
+    '.js':  stripJsLikeComments,
+    '.mjs': stripJsLikeComments,
+    '.cjs': stripJsLikeComments,
+    '.html': stripHtmlComments,
+    '.htm':  stripHtmlComments,
+    '.css':  stripCssComments,
 };
 
-// Deliberately conservative: only a line that is *entirely* a single-line
-// comment (or blank) is treated as non-visual. A continuation line inside a
-// multi-line /* ... */ or <!-- ... --> block won't match its file type's
-// pattern (it doesn't start with the opening token and end with the closing
-// one on the same line) and falls through to "real change" — per spec, an
-// ambiguous line must count as code, not as a comment.
-export function isCommentOrBlankLine(content, ext) {
-    const trimmed = content.trim();
-    if (trimmed === '') return true;
-    const patterns = COMMENT_PATTERNS[ext];
-    if (!patterns) return false;
-    return patterns.some((re) => re.test(trimmed));
+// Drops lines that are empty once comments are stripped, so an edit that
+// purely adds/removes blank lines around a comment (very common when a
+// comment block is reworded) doesn't register as a difference either — the
+// spec for #537 calls out blank lines the same way it does comments. Any
+// non-blank line's content, including its internal whitespace, is compared
+// as-is: an actual code line was untouched by the comment strip, so if the
+// stripped comparison as a whole differs, something other than comments/
+// blank lines changed and that's exactly what should count as relevant.
+function normalizeForCompare(stripped) {
+    return stripped.split('\n').filter((line) => line.trim() !== '').join('\n');
 }
+
+export { stripJsLikeComments, stripCssComments, stripHtmlComments };
 
 function commitsTouching(gitRoot, pathSpec) {
     let out;
@@ -95,11 +285,91 @@ function commitsTouching(gitRoot, pathSpec) {
     });
 }
 
-// True if this commit's diff on pathSpec could plausibly change what's
-// rendered. Merge commits and anything git/fs refuses to hand back a clean
-// diff for are treated as relevant without inspection — combined merge
-// diffs aren't line-addressable the same way, and "can't tell" must resolve
-// to "assume relevant" (see the module doc comment on check 3).
+// name-status and numstat for a commit's changes under pathSpec, both with
+// --no-renames: a pure rename then shows up as a plain delete-of-old +
+// add-of-new rather than an R### record with two paths, which means every
+// record here has exactly one path and there's no rename-similarity
+// parsing to get wrong. The cost is that a pure rename with no content
+// change gets read as "old path deleted (had content), new path added (has
+// content)" — i.e. relevant — which is the safe direction (over-flagging,
+// never under-flagging), not a correctness bug.
+function changedFilesNameStatus(gitRoot, parentHash, hash, pathSpec) {
+    let raw;
+    try {
+        raw = execFileSync(
+            'git', ['diff', '--no-color', '--no-renames', '--name-status', '-z', parentHash, hash, '--', pathSpec],
+            { cwd: gitRoot, encoding: 'utf8' }
+        );
+    } catch {
+        return null;
+    }
+    const tokens = raw.split('\0').filter((t) => t !== '');
+    const files = [];
+    for (let i = 0; i + 1 < tokens.length; i += 2) {
+        files.push({ status: tokens[i], filePath: tokens[i + 1] });
+    }
+    return files;
+}
+
+function binaryPathSet(gitRoot, parentHash, hash, pathSpec) {
+    let raw;
+    try {
+        raw = execFileSync(
+            'git', ['diff', '--no-color', '--no-renames', '--numstat', '-z', parentHash, hash, '--', pathSpec],
+            { cwd: gitRoot, encoding: 'utf8' }
+        );
+    } catch {
+        return null;
+    }
+    const tokens = raw.split('\0').filter((t) => t !== '');
+    const binary = new Set();
+    for (let i = 0; i + 2 < tokens.length; i += 3) {
+        if (tokens[i] === '-' && tokens[i + 1] === '-') binary.add(tokens[i + 2]);
+    }
+    return binary;
+}
+
+function blobContent(gitRoot, hash, filePath) {
+    try {
+        return execFileSync('git', ['show', `${hash}:${filePath}`], { cwd: gitRoot, encoding: 'utf8' });
+    } catch {
+        return null;
+    }
+}
+
+// True if one changed file's content, comments/blank-lines aside, actually
+// differs between the two sides. status is the --no-renames name-status
+// code (A/M/D/T); only A and D legitimately mean "one side doesn't exist"
+// — anywhere else, a missing blob is a real error, not an expected
+// deletion/addition, so it's treated as relevant rather than as ''.
+function isFileChangeVisuallyRelevant(gitRoot, parentHash, hash, filePath, status) {
+    let oldContent;
+    if (status === 'A') {
+        oldContent = '';
+    } else {
+        oldContent = blobContent(gitRoot, parentHash, filePath);
+        if (oldContent === null) return true;
+    }
+
+    let newContent;
+    if (status === 'D') {
+        newContent = '';
+    } else {
+        newContent = blobContent(gitRoot, hash, filePath);
+        if (newContent === null) return true;
+    }
+
+    const stripper = COMMENT_STRIPPERS[path.extname(filePath).toLowerCase()];
+    if (!stripper) return oldContent !== newContent;
+
+    return normalizeForCompare(stripper(oldContent)) !== normalizeForCompare(stripper(newContent));
+}
+
+// True if this commit's changes under pathSpec could plausibly change
+// what's rendered. Merge commits and anything git refuses to hand back a
+// clean diff for are treated as relevant without inspection — combined
+// merge diffs aren't per-file-addressable the same way, and "can't tell"
+// must resolve to "assume relevant" (see the module doc comment on check 3).
 export function isVisuallyRelevantCommit(gitRoot, hash, pathSpec) {
     let parents;
     try {
@@ -113,28 +383,17 @@ export function isVisuallyRelevantCommit(gitRoot, hash, pathSpec) {
     if (parents.length > 2) return true; // merge commit (2+ parents)
 
     const parentHash = parents.length === 2 ? parents[1] : EMPTY_TREE_HASH;
-    let diff;
-    try {
-        diff = execFileSync(
-            'git', ['diff', '--no-color', '--unified=0', parentHash, hash, '--', pathSpec],
-            { cwd: gitRoot, encoding: 'utf8' }
-        );
-    } catch {
-        return true;
-    }
 
-    let currentExt = null;
-    for (const line of diff.split('\n')) {
-        if (line.startsWith('diff --git')) {
-            const m = line.match(/ b\/(.+)$/);
-            currentExt = m ? path.extname(m[1]).toLowerCase() : null;
-            continue;
-        }
-        if (line.startsWith('Binary files ') && line.endsWith('differ')) return true;
-        if (line.startsWith('+++ ') || line.startsWith('--- ')) continue;
-        if (line[0] === '+' || line[0] === '-') {
-            if (!isCommentOrBlankLine(line.slice(1), currentExt)) return true;
-        }
+    const files = changedFilesNameStatus(gitRoot, parentHash, hash, pathSpec);
+    if (files === null) return true;
+    if (files.length === 0) return false;
+
+    const binaryPaths = binaryPathSet(gitRoot, parentHash, hash, pathSpec);
+    if (binaryPaths === null) return true;
+
+    for (const { status, filePath } of files) {
+        if (binaryPaths.has(filePath)) return true;
+        if (isFileChangeVisuallyRelevant(gitRoot, parentHash, hash, filePath, status)) return true;
     }
     return false;
 }
