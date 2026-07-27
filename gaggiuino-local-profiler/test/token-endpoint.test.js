@@ -90,14 +90,22 @@ describe('GET /api/token', () => {
         expect((await r.json()).apiToken).toBe('test-token-abc123');
     });
 
-    it('denies unauthenticated callers from an ordinary LAN address (#276)', async () => {
+    // #533 reverses #276's IP restriction. Direct-port access (http://<host>:8099)
+    // is how the installable PWA runs, and it has no other way to get a token:
+    // the UI has no token input, and #524 stopped caching one client-side. Under
+    // #276 the PWA only kept working on a token cached before that change — once
+    // #524 removed it, direct-port access broke outright (v2.19.1). Accepted
+    // trade-off on a home LAN: reaching the port IS the boundary.
+    it('grants the token to an unauthenticated caller from an ordinary LAN address (#533)', async () => {
         const r = await requestToken({ 'x-test-ip': nextFakeIp('192.168.1') });
-        expect(r.status).toBe(401);
+        expect(r.status).toBe(200);
+        expect((await r.json()).apiToken).toBe('test-token-abc123');
     });
 
-    it('denies unauthenticated callers from the Docker default-bridge range', async () => {
+    it('grants the token to a caller from the Docker default-bridge range (#533)', async () => {
         const r = await requestToken({ 'x-test-ip': nextFakeIp('172.17.0') });
-        expect(r.status).toBe(401);
+        expect(r.status).toBe(200);
+        expect((await r.json()).apiToken).toBe('test-token-abc123');
     });
 
     it('still grants the token to already-authenticated sessions regardless of IP', async () => {
@@ -106,25 +114,24 @@ describe('GET /api/token', () => {
         expect((await r.json()).apiToken).toBe('test-token-abc123');
     });
 
-    it('grants the token via a valid HA Supervisor bearer token from a non-internal IP', async () => {
-        vi.stubGlobal('fetch', vi.fn((url) => {
-            if (url === 'http://supervisor/info') return Promise.resolve({ ok: true });
-            return Promise.reject(new Error(`unexpected fetch to ${url}`));
-        }));
+    it('no longer calls out to the Supervisor API to authorize a token request', async () => {
+        // The Bearer-token fallback existed only to let HA-internal callers past
+        // the IP check. With no IP check left there is nothing to fall back to,
+        // and the route must not make an outbound request to serve a token.
+        const fetchSpy = vi.fn(() => Promise.reject(new Error('route must not call out')));
+        vi.stubGlobal('fetch', fetchSpy);
         const r = await requestToken({
             'x-test-ip': nextFakeIp('203.0.113'),
-            authorization: 'Bearer valid-supervisor-token',
+            authorization: 'Bearer whatever',
         });
         expect(r.status).toBe(200);
-        expect((await r.json()).apiToken).toBe('test-token-abc123');
+        expect(fetchSpy).not.toHaveBeenCalled();
     });
 
-    it('denies an invalid HA Supervisor bearer token', async () => {
-        vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false })));
-        const r = await requestToken({
-            'x-test-ip': nextFakeIp('203.0.113'),
-            authorization: 'Bearer bogus-token',
-        });
-        expect(r.status).toBe(401);
+    it('still rate-limits token requests per source IP', async () => {
+        const ip = nextFakeIp('192.168.9');
+        let last;
+        for (let i = 0; i < 12; i++) last = await requestToken({ 'x-test-ip': ip });
+        expect(last.status).toBe(429);
     });
 });
