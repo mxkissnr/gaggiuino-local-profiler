@@ -1615,6 +1615,10 @@
                 overflow-y: auto;
             }
             #sidebar h2        { display: flex; align-items: center; }
+            /* #540: #shots is the scroll container for the shot list — its
+               last row could sit underneath the fixed #bottom-nav (56px +
+               safe-area-inset). Same fix/value as #main below. */
+            #shots             { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
             #collapseBtn       { display: none; }
             /* Safety net: the desktop collapse class can only be toggled via
                #collapseBtn, hidden above — but a browser window resized
@@ -1636,6 +1640,11 @@
                 box-shadow: 4px 0 24px rgba(0,0,0,.35);
                 transform: translateX(-100%);
                 transition: transform .25s cubic-bezier(.4,0,.2,1);
+                /* #540 safety net: #sidebar itself also has overflow-y:auto
+                   on mobile (below), so whichever of #sidebar/#shots ends up
+                   the actual scroller on a given device still clears
+                   #bottom-nav at the bottom of its content. */
+                padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
             }
             #sidebar.sidebar-drawer-mode.sidebar-drawer-open { transform: translateX(0); }
             /* Overrides the always-on #sidebar > * { min-width: 320px; }
