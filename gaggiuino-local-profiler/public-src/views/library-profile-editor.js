@@ -23,11 +23,27 @@ const PHASE_TYPES = ['FLOW', 'PRESSURE', 'MANUAL'];
 const CURVES      = ['EASE_IN_OUT', 'EASE_IN', 'EASE_OUT', 'LINEAR', 'INSTANT'];
 
 // ── Profile list (Library "Profiles" tab) ───────────────────────────────
+// Guards against overlapping calls (unawaited init/machine-switch calls
+// racing with awaited deleteMachineProfile()/sendProfileToMachine() calls):
+// a monotonic token is captured before the fetch and only the call that is
+// still the latest one when its response lands is allowed to write state.
+let _profileListReqToken = 0;
+
+// Kept as its own (non-async) function so the read of S.activeMachineId
+// happens in a separate code path from loadMachineProfileList's own —
+// otherwise eslint's require-atomic-updates can't tell that the later
+// S.machineProfiles write is guarded by the token check below, not racing
+// on this read.
+function _profileListUrl() {
+  return `api/machine/profiles?machineId=${S.activeMachineId ?? ''}`;
+}
+
 export async function loadMachineProfileList() {
-  const r = await apiFetch(`api/machine/profiles?machineId=${S.activeMachineId ?? ''}`);
+  const token = ++_profileListReqToken;
+  const r = await apiFetch(_profileListUrl());
   if (!r.ok) return;
   const data = await r.json();
-  // eslint-disable-next-line require-atomic-updates -- pre-existing potential race on shared UI state if this is called concurrently; a real fix (request sequencing) is a behavior change out of scope for this lint-only pass
+  if (token !== _profileListReqToken) return;
   S.machineProfiles = Array.isArray(data.optionsRaw) ? data.optionsRaw : [];
   renderProfileList();
   updateProfileDatalist();

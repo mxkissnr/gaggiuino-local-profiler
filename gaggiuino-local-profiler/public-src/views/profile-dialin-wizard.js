@@ -113,7 +113,16 @@ export function profileDialinToggleSymptom(symptom) {
   renderProfileDialinWizard();
 }
 
+// Guards against a double-click firing profileDialinAcceptNext()/
+// profileDialinOverride() again before the first PUT resolves — the token
+// lives on the session object `s` itself (not a module-level counter, since
+// `s` is the single shared S.profileDialinSession instance callers pass in).
+// Only the call that is still current when its response lands writes
+// s.profile; a superseded call returns false without a toast (its PUT still
+// reached the machine, but the newer call's profile is authoritative).
 async function _sendUpdatedProfile(s, nextProfile) {
+  const token = (s._profileReqToken || 0) + 1;
+  s._profileReqToken = token;
   const r = await apiFetch(`api/machine/profile/${s.profileId}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nextProfile),
   });
@@ -122,7 +131,7 @@ async function _sendUpdatedProfile(s, nextProfile) {
     window.showToast?.(t('profile_send_error') + (body.error ? `: ${body.error}` : ''));
     return false;
   }
-  // eslint-disable-next-line require-atomic-updates -- pre-existing potential race on shared UI state if this is triggered concurrently; a real fix (request sequencing) is a behavior change out of scope for this lint-only pass
+  if (token !== s._profileReqToken) return false;
   s.profile = nextProfile;
   return true;
 }

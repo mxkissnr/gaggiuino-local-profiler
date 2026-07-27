@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // library-profile-editor.js imports state.js/i18n.js/api.js, which read
 // localStorage/navigator at module load time — stub the minimum browser
@@ -7,7 +7,10 @@ import { describe, it, expect } from 'vitest';
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator    ??= { language: 'en-US' };
 
-const { _synthesizeSeries, _collectPhases } = await import('../public-src/views/library-profile-editor.js');
+const { S } = await import('../public-src/state.js');
+const apiModule = await import('../public-src/api.js');
+const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
+const { _synthesizeSeries, _collectPhases, loadMachineProfileList } = await import('../public-src/views/library-profile-editor.js');
 
 // _collectPhases reads phase rows straight off `document` (DOM-as-state, no
 // separate JS array) — this vitest project runs in the 'node' environment
@@ -110,5 +113,33 @@ describe('_collectPhases', () => {
     const [phase] = _collectPhases();
     expect(phase.target.volume).toBeUndefined();
     expect(phase.waterTemperature).toBeUndefined();
+  });
+});
+
+describe('loadMachineProfileList (#521 race)', () => {
+  beforeEach(() => {
+    fetchSpy.mockReset();
+    S.machineProfiles = [];
+    globalThis.document = { getElementById: () => undefined, querySelectorAll: () => [] };
+  });
+
+  it('the later-fired call wins even when its response resolves before the earlier call\'s', async () => {
+    let resolveA, resolveB;
+    const pA = new Promise(res => { resolveA = res; });
+    const pB = new Promise(res => { resolveB = res; });
+    fetchSpy.mockImplementationOnce(() => pA); // call A — fired first
+    fetchSpy.mockImplementationOnce(() => pB); // call B — fired second, while A is still pending
+
+    const callA = loadMachineProfileList();
+    const callB = loadMachineProfileList();
+
+    // B (the later-fired call) resolves first...
+    resolveB({ ok: true, json: async () => ({ optionsRaw: [{ id: 'b', name: 'B' }] }) });
+    await callB;
+    // ...and A's stale response arrives after — it must not clobber B's data.
+    resolveA({ ok: true, json: async () => ({ optionsRaw: [{ id: 'a', name: 'A' }] }) });
+    await callA;
+
+    expect(S.machineProfiles).toEqual([{ id: 'b', name: 'B' }]);
   });
 });
