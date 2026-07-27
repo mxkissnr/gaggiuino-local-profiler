@@ -431,6 +431,11 @@ router.post('/api/preheat/ready-by', (req, res) => {
     const { targetAt } = req.body || {};
     if (targetAt !== null && (typeof targetAt !== 'number' || !Number.isFinite(targetAt)))
         return res.status(400).json({ error: 'targetAt must be an epoch-ms number or null' });
+    // Setting (not clearing) a target the watcher could never fulfill would
+    // silently no-op once plannedSwitchOnAt passes (see _checkReadyByPreheat)
+    // — reject it up front instead, same eager check /api/switch/toggle uses.
+    if (targetAt !== null && (!HA_TOKEN || !loadOptions().switch_entity))
+        return res.status(400).json({ error: 'switch_entity nicht konfiguriert' });
     setReadyByTarget(targetAt);
     res.json(buildPreheatResponse());
 });

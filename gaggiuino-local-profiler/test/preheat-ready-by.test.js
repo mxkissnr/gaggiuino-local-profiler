@@ -12,16 +12,31 @@ const memDb     = new Database(':memory:');
 realDb.initSchema(memDb);
 require.cache[dbPath].exports = { getDb: () => memDb, initSchema: realDb.initSchema };
 
+// routes/system.js destructures HA_TOKEN from lib/constants at require-time
+// (used by the new eager "switch configured?" check on POST
+// /api/preheat/ready-by, mirroring /api/switch/toggle's own check) — real
+// HA_TOKEN comes from process.env.SUPERVISOR_TOKEN, unset in tests, so patch
+// it to a fixed present value here. Per-test "is switch_entity configured"
+// variation is covered via the mutable mockOptions below instead.
+const constantsPath = require.resolve('../lib/constants');
+const realConstants = require(constantsPath);
+require.cache[constantsPath].exports = { ...realConstants, HA_TOKEN: 'test-supervisor-token' };
+
 // #541 needs a configured switch_entity + preheat_time — options.json does
 // not exist in tests, so patch lib/data.js's loadOptions the same way
 // db-routes.test.js patches isOrdersEnabled (module load order matters:
 // lib/preheat.js and routes/system.js both destructure loadOptions at
-// require-time, so this must run before either is required below).
+// require-time, so this must run before either is required below). Mutable
+// (not a fixed literal) so individual tests can flip switch_entity off —
+// the destructured `loadOptions` binding in system.js/preheat.js still
+// points at this same closure, which reads the current `mockOptions` value
+// on every call.
 const dataPath = require.resolve('../lib/data');
 const realData = require(dataPath);
+let mockOptions = { switch_entity: 'switch.espresso', preheat_time: '1' };
 require.cache[dataPath].exports = {
     ...realData,
-    loadOptions: () => ({ switch_entity: 'switch.espresso', preheat_time: '1' }),
+    loadOptions: () => mockOptions,
 };
 
 // callHaService is the HA call the ready-by watcher must reuse (same path
@@ -52,6 +67,7 @@ beforeEach(async () => {
     state.switchOnAt        = null;
     state.readyByTargetAt   = null;
     state.plannedSwitchOnAt = null;
+    mockOptions              = { switch_entity: 'switch.espresso', preheat_time: '1' };
     callHaServiceMock.mockClear();
     server = makeApp().listen(0);
     await new Promise(resolve => server.once('listening', resolve));
@@ -106,6 +122,17 @@ describe('POST /api/preheat/ready-by (#541)', () => {
             body: JSON.stringify({ targetAt: 'soon' }),
         });
         expect(r.status).toBe(400);
+    });
+
+    it('rejects a numeric targetAt when switch_entity is not configured, and does not write state', async () => {
+        mockOptions = { switch_entity: '', preheat_time: '1' };
+        const r = await fetch(`${baseUrl}/api/preheat/ready-by`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetAt: TARGET_AT }),
+        });
+        expect(r.status).toBe(400);
+        expect(state.readyByTargetAt).toBeNull();
+        expect(state.plannedSwitchOnAt).toBeNull();
     });
 
     it('the 30s watcher turns the switch on once plannedSwitchOnAt is reached, then clears the target (one-shot)', async () => {
