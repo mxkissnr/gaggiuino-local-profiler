@@ -1,3 +1,8 @@
+## [2.19.3] – 2026-07-27
+
+### Fixed
+- **Coffee Library sometimes stayed empty for the rest of the session, and the Analytics machine-comparison card sometimes never appeared for returning users with multiple machines — both were render races against late-loading data, not missing data.** `loadLibrary()` (`views/library.js`) fires unawaited during startup; if the user switched to Library before the fetch resolved, `switchMode('library')` (`mode.js`) had already rendered the bean/grinder lists off the still-empty default, and nothing re-rendered them once the data actually arrived. Fix: `loadLibrary()` now re-renders the bean/grinder lists itself when its fetch completes. Separately, `loadMachines()` (`components/machines-settings.js`) only re-triggered the Analytics refresh (`applyActiveMachineChange()`) when no active machine was set yet at load time — a returning session with a persisted `activeMachineId` (the common case) never got that refresh, so `#machineComparisonCard` stayed hidden once the machine list actually loaded. Fix: call `applyActiveMachineChange()` unconditionally; it's idempotent. Both covered by new regression tests (`test/library-load-render-race.test.js`, `test/machines-load-analytics-race.test.js`). This also resolves the sporadic `flavor-wheel.png`/`analytics-machines.png` screenshot failures noted as a known issue in v2.19.2 — same root cause, not a seed/data gap. Closes #526
+
 ## [2.19.2] – 2026-07-27
 
 ### Fixed
