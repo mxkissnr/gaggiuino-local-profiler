@@ -22,6 +22,7 @@ const { GLP_VERSION, HA_TOKEN, PROFILES_CACHE_FILE } = require('../lib/constants
 const shotRepo = require('../lib/repositories/ShotRepository');
 const { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled, loadMenu } = require('../lib/data');
 const { getSwitchState, callHaService } = require('../lib/ha');
+const { setReadyByTarget, buildPreheatResponse } = require('../lib/preheat');
 const { log, rateLimit } = require('../lib/helpers');
 const state = require('../lib/state');
 const demoService = require('../lib/services/DemoService');
@@ -418,22 +419,20 @@ router.get('/api/machine/status', (req, res) => {
 // ── Preheat ───────────────────────────────────────────────────────────────
 
 router.get('/api/preheat', (req, res) => {
-    const opts        = loadOptions();
-    const preheatMins = Math.max(1, parseInt(opts.preheat_time) || 20);
-    const preheatMs   = preheatMins * 60 * 1000;
-    const machineOff  = !state.machineOn && !!opts.switch_entity;
-    if (machineOff || !state.switchOnAt) {
-        return res.json({ ready: false, elapsed: 0, remaining: preheatMins * 60, pct: 0,
-                          preheatTime: preheatMins, temp: state.currentTemp, targetTemp: state.currentTargetTemp });
-    }
-    const elapsedMs = Date.now() - state.switchOnAt;
-    const elapsed   = Math.floor(elapsedMs / 1000);
-    const remaining = Math.max(0, Math.ceil((preheatMs - elapsedMs) / 1000));
-    const pct       = Math.min(1, elapsedMs / preheatMs);
-    const ready     = remaining === 0;
-    res.json({ ready, elapsed, remaining, pct, preheatTime: preheatMins,
-               stabilityReady: ready && !!state.stabilityReady,
-               temp: state.currentTemp, targetTemp: state.currentTargetTemp });
+    res.json(buildPreheatResponse());
+});
+
+// #541: lets a future HA-integration service set a target "ready by" wall-
+// clock time — the app computes when the switch needs to go on and does so
+// automatically via the existing 30s preheat watcher (lib/preheat.js's
+// _checkReadyByPreheat), no separate scheduling primitive. targetAt: null
+// cancels a pending target.
+router.post('/api/preheat/ready-by', (req, res) => {
+    const { targetAt } = req.body || {};
+    if (targetAt !== null && (typeof targetAt !== 'number' || !Number.isFinite(targetAt)))
+        return res.status(400).json({ error: 'targetAt must be an epoch-ms number or null' });
+    setReadyByTarget(targetAt);
+    res.json(buildPreheatResponse());
 });
 
 // ── Live data ─────────────────────────────────────────────────────────────

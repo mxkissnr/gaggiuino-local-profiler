@@ -20,6 +20,11 @@ module.exports = {
     liveSeq:              0,
     switchOnAt:           null,
     switchOffAt:          null,
+    // Ready-by preheat (#541): wall-clock target set via
+    // POST /api/preheat/ready-by, and the switch-on time computed from it
+    // (targetAt - preheat_time). Both null when no target is set.
+    readyByTargetAt:      null,
+    plannedSwitchOnAt:    null,
     stabilityReady:       false,
     currentTemp:          null,
     currentTargetTemp:    null,
