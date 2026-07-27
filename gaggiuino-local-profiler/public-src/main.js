@@ -137,9 +137,9 @@ function showToast(msg, duration = 3000) {
 }
 
 // ── API token (Settings view) ──────────────────────────────────────────────
-// Shown only once a session actually holds a token — i.e. it came through HA
-// Ingress or a Supervisor-internal caller. Unauthenticated LAN callers never
-// reach this point since S.glpToken stays empty for them (see api.js).
+// Shown once the session holds a token. Since #533 /api/token serves any caller
+// that can reach the port, so this is populated on ingress and direct-port
+// access alike (see api.js).
 function renderApiTokenCard() {
   const card = document.getElementById('apiTokenCard');
   const valueEl = document.getElementById('apiTokenValue');

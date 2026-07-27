@@ -22,7 +22,7 @@ const { GLP_VERSION, HA_TOKEN, PROFILES_CACHE_FILE } = require('../lib/constants
 const shotRepo = require('../lib/repositories/ShotRepository');
 const { loadOptions, getMachineUrl, getMachineBaseUrl, isOrdersEnabled, loadMenu } = require('../lib/data');
 const { getSwitchState, callHaService } = require('../lib/ha');
-const { log, rateLimit, isSupervisorIp } = require('../lib/helpers');
+const { log, rateLimit } = require('../lib/helpers');
 const state = require('../lib/state');
 const demoService = require('../lib/services/DemoService');
 const { profileSchema } = require('../lib/validation/schemas');
@@ -88,53 +88,25 @@ function resolveMachine(rawId) {
 })();
 
 // ── Token endpoint ────────────────────────────────────────────────────────
-// Returns the GLP API token to callers that are one of:
-//  a) already authenticated (valid X-GLP-Token — covered by middleware),
-//  b) coming from the HA Supervisor-internal network (loopback or
-//     172.30.0.0/16 — see isSupervisorIp in lib/helpers.js; this is the same
-//     boundary server.js uses for the ingress bypass, and does NOT include
-//     ordinary LAN/Docker-bridge addresses — ANY device that can reach this
-//     port used to be able to pull the token unauthenticated (issue #276)),
-//     or
-//  c) presenting a valid HA Supervisor token (Authorization: Bearer <token>)
-//     verified by calling http://supervisor/info — only processes inside HA OS
-//     have a Supervisor token, making this safe against external callers.
-// Callers outside these categories (e.g. the Order Card in direct-URL mode,
-// or any browser hitting the app's LAN IP directly) must copy the token
-// manually from Settings → API Token in the web UI.
-async function isValidSupervisorToken(token) {
-    if (!token) return false;
-    try {
-        const r = await fetch('http://supervisor/info', {
-            headers: { Authorization: `Bearer ${token}` },
-            signal: AbortSignal.timeout(4000),
-        });
-        return r.ok;
-    } catch {
-        return false;
-    }
-}
 
+// Serves the API token to any caller that can reach this port, rate-limited.
+//
+// This deliberately reverses the #276 restriction to HA-internal callers (#533).
+// Direct-port access (http://<host>:8099) is how the installable PWA runs, and
+// it has no other way to obtain a token: the UI has no token input, and a token
+// is no longer cached client-side since #524. Under #276 the PWA only kept
+// working because it still held a token cached before that change — once #524
+// removed that cached copy, direct-port access broke entirely (v2.19.1).
+//
+// The trade-off, accepted knowingly for a home LAN: anything that can reach this
+// port can obtain the token and therefore call every endpoint, so token auth is
+// no longer a boundary within the LAN. Reaching the port at all is the boundary.
+// Do NOT "fix" this back to an IP check without providing another way for
+// direct-port clients to get a token — that is precisely what broke v2.19.1.
 router.get('/api/token', async (req, res) => {
     const ip = (req.socket?.remoteAddress || req.ip || '').replace(/^::ffff:/, '');
     if (!rateLimit(`token:${ip}`, 10)) return res.status(429).json({ error: 'Rate limit exceeded' });
-    const fromSupervisor = isSupervisorIp(ip);
-    const hasValidToken  = req.glpAuthenticated;
-
-    if (fromSupervisor || hasValidToken) {
-        return res.json({ apiToken: state.apiToken || null });
-    }
-
-    // Fallback: verify via HA Supervisor API.
-    // Only HA-internal processes (core, add-ons) hold a valid Supervisor token.
-    const authHeader = req.headers['authorization'] || '';
-    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (bearerToken && await isValidSupervisorToken(bearerToken)) {
-        return res.json({ apiToken: state.apiToken || null });
-    }
-
-    log(`Token request denied — ip=${ip}`);
-    res.status(401).json({ error: 'Unauthorized' });
+    res.json({ apiToken: state.apiToken || null });
 });
 
 // ── Status ────────────────────────────────────────────────────────────────

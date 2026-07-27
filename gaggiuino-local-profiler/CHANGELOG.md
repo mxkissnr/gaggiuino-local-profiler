@@ -1,3 +1,11 @@
+## [2.19.2] – 2026-07-27
+
+### Fixed
+- **Direct-port access and the installable PWA were completely broken since v2.19.1 — `/api/token` now serves any caller that can reach the port again.** Three changes combined into a break none of them caused alone: before #276, `/api/token` served LAN clients and the PWA on `http://<host>:8099` cached the token it got in `localStorage`; #276 restricted the endpoint to HA-internal callers, which went unnoticed because the cached token kept working (the server token is stable, read from a file, never regenerated); #524 then stopped reading that cache and actively deleted it, leaving the PWA with no token and no way to obtain one — the endpoint refused LAN callers and the UI has no token input, so every API call returned 401. `/api/token` (`routes/system.js`) now hands the token to any caller that can reach the port, rate-limited to 10 requests/minute per source address; the Supervisor-IP check and the Supervisor-Bearer-token fallback are both gone with it, since they existed only to let HA-internal callers past the restriction that broke this. Deliberately does **not** revert #524: the client still fetches a fresh token on each load rather than caching it in the browser, so the CodeQL clear-text-storage fix from v2.19.1 stays in effect. Trade-off, accepted knowingly for a home LAN: reachability of port 8099 is now the actual security boundary, and token auth is no longer a second boundary behind it — `DOCS.md`/`DOCS.de.md` state this plainly. Closes #533
+
+### Known issue
+- Two README screenshots (`analytics-machines.png`, `flavor-wheel.png`) are still stale as of this release, unchanged from #526.
+
 ## [2.19.1] – 2026-07-26
 
 ### Security
