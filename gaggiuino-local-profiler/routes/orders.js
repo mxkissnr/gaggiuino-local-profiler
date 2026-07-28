@@ -362,7 +362,13 @@ router.get('/api/orders/stats', (req, res) => {
 });
 
 router.get('/api/orders/mine', (req, res) => {
-    const { haUserId } = req.query;
+    // Prefer integration-verified HA user ID over the client-supplied query
+    // param — same precedence as POST /api/orders below (#547). The query
+    // fallback stays for direct-port mode, where there is no HA proxy to set
+    // the header.
+    const haUserId = req.headers['x-glp-ha-user-id']
+        ? String(req.headers['x-glp-ha-user-id']).slice(0, 100)
+        : String(req.query.haUserId || '');
     if (!haUserId) return res.status(400).json({ error: 'haUserId required' });
     const orders = loadOrders().filter(o => o.haUserId === haUserId).reverse().slice(0, 10);
     res.json(orders);

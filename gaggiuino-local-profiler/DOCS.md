@@ -91,6 +91,8 @@ The API token grants full API access — including `/api/restore`, which wipes a
 
 This is a deliberate trade-off (#533). Direct-port access is how the installable PWA and the Order Card's direct-URL mode work, and neither has another way to obtain a token: the UI has no token input, and the token is no longer cached in the browser. Restricting the endpoint to Supervisor-internal callers (as #276 did) left those clients working only as long as they still held a token cached from before that change — when that copy was removed in v2.19.1, direct-port access broke outright.
 
+**The add-on maps port 8099 to your host by default** (`ports: 8099/tcp: 8099` in `config.yaml`), even if you only ever use HA Ingress and never touch the PWA or the Order Card's direct-URL mode. If that's you, the port being open buys you nothing and, per the trust model above, is equivalent to exposing your whole GLP database (and machine control) to your LAN. To close it: **Settings → Add-ons → GLP → Configuration → Network**, and clear/disable the host port for 8099/tcp, then restart the add-on. Only leave it mapped if you actually use the PWA or a direct-URL Order Card.
+
 For the Order Card in direct-URL mode you still copy the token once from **Settings → API Token** into the card YAML; nothing about that flow changed.
 
 All persistent data is stored in SQLite (`/data/glp.db`) with WAL journal mode enabled — writes are crash-safe by default, with no half-written state possible.
