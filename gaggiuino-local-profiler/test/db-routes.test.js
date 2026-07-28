@@ -105,6 +105,39 @@ describe('POST /api/orders', () => {
     });
 });
 
+describe('GET /api/orders/mine (#547)', () => {
+    beforeEach(() => {
+        const now = Date.now();
+        saveOrders([
+            { id: 'mine1', item: 'Espresso', customer: 'Max', haUserId: 'header-user', status: 'done', createdAt: now, completedAt: now },
+            { id: 'mine2', item: 'Espresso', customer: 'Anna', haUserId: 'query-user', status: 'done', createdAt: now, completedAt: now },
+        ]);
+    });
+
+    it('prefers the x-glp-ha-user-id header over a differing query haUserId', async () => {
+        const r = await fetch(`${baseUrl}/api/orders/mine?haUserId=query-user`, {
+            headers: { 'x-glp-ha-user-id': 'header-user' },
+        });
+        expect(r.status).toBe(200);
+        const orders = await r.json();
+        expect(orders).toHaveLength(1);
+        expect(orders[0].id).toBe('mine1');
+    });
+
+    it('falls back to the query haUserId when no header is present (direct-port mode)', async () => {
+        const r = await fetch(`${baseUrl}/api/orders/mine?haUserId=query-user`);
+        expect(r.status).toBe(200);
+        const orders = await r.json();
+        expect(orders).toHaveLength(1);
+        expect(orders[0].id).toBe('mine2');
+    });
+
+    it('400s when neither header nor query haUserId is present', async () => {
+        const r = await fetch(`${baseUrl}/api/orders/mine`);
+        expect(r.status).toBe(400);
+    });
+});
+
 describe('POST /api/orders/:id/complete', () => {
     it('links the latest non-trashed shot from the database', async () => {
         shotRepo.upsertMany([
