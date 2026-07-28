@@ -2,13 +2,13 @@ const express = require('express');
 const router  = express.Router();
 
 const {
-    loadOrders, loadAllOrders, saveOrders, deleteOrder, loadMenu, saveMenu,
+    loadOrders, loadAllOrders, deleteOrder, loadMenu, saveMenu,
     loadOrdersSettings, saveOrdersSettings,
     loadNotifyMapping, saveNotifyMapping,
     isOrdersEnabled, loadOptions, loadLibrary,
 } = require('../lib/data');
-const shotRepo       = require('../lib/repositories/ShotRepository');
 const libraryService = require('../lib/services/LibraryService');
+const orderService   = require('../lib/services/OrderService');
 const machineRegistry = require('../lib/machines/registry');
 const { sendHaNotify, getNotifyServices, getHaPersons } = require('../lib/ha');
 const { log, rateLimit } = require('../lib/helpers');
@@ -17,22 +17,6 @@ const { getMachineRuntimeState } = require('../lib/machine-runtime-state');
 // #549: orders preheat info is always about the default machine, matching
 // lib/poll.js/lib/preheat.js's own hard single-machine assumption.
 const defaultRuntime = getMachineRuntimeState();
-
-// #326: resolves an order's `machine` display name/slug (glp-order-card
-// #29) into the machine registry's actual numeric id, so orders are
-// genuinely scoped/attributed to a machine instead of only display-tagged.
-// Falls back to the default machine (never null) when the name doesn't
-// match any registered machine, or wasn't supplied at all — every existing
-// order (placed before #326, or from a single-machine setup that never
-// sets `machine`) resolves to the default machine, matching its own
-// machine_id column default of 1.
-function resolveMachineId(machineName) {
-    const fallback = machineRegistry.getDefaultMachine()?.id ?? 1;
-    if (!machineName) return fallback;
-    const needle = String(machineName).trim().toLowerCase();
-    const match  = machineRegistry.listMachines().find(m => m.name.toLowerCase() === needle);
-    return match ? match.id : fallback;
-}
 
 // Menu item emoji is user-supplied and rendered in the UI — cap length
 // (generous for multi-codepoint ZWJ emoji sequences) and reject anything
@@ -201,8 +185,6 @@ router.post('/api/orders/settings', (req, res) => {
 
 // ── Queue ETA ─────────────────────────────────────────────────────────────
 
-const DEFAULT_PREP_TIME = 4; // minutes per order, used when no historical data
-
 router.get('/api/orders/queue-eta', (req, res) => {
     // #326: a queue backed up on one machine shouldn't distort another
     // machine's ETA estimate.
@@ -211,39 +193,7 @@ router.get('/api/orders/queue-eta', (req, res) => {
         const machineId = parseInt(req.query.machine, 10);
         orders = orders.filter(o => _matchesMachine(o, machineId));
     }
-    const now     = Date.now();
-    const accepted = orders.filter(o => o.status === 'accepted');
-    const pending  = orders.filter(o => o.status === 'pending')
-        .sort((a, b) => a.createdAt - b.createdAt);
-
-    // Sum remaining time of all accepted orders
-    const acceptedRemaining = accepted.reduce((sum, o) => {
-        return sum + Math.max(0, (o.acceptedAt + o.eta * 60000 - now) / 60000);
-    }, 0);
-
-    // Use average ETA of last 10 completed orders as prep time estimate
-    const recent = orders
-        .filter(o => o.status === 'done' && o.eta)
-        .slice(-10);
-    const prepTime = recent.length
-        ? recent.reduce((s, o) => s + o.eta, 0) / recent.length
-        : DEFAULT_PREP_TIME;
-
-    // Per-order suggested ETA based on queue position
-    const positions = {};
-    pending.forEach((o, i) => {
-        positions[o.id] = {
-            position:     i + 1,
-            suggestedEta: Math.max(1, Math.min(60, Math.ceil(acceptedRemaining + i * prepTime + prepTime))),
-        };
-    });
-
-    res.json({
-        acceptedRemaining: Math.round(acceptedRemaining * 10) / 10,
-        pendingCount:      pending.length,
-        prepTime:          Math.round(prepTime * 10) / 10,
-        positions,
-    });
+    res.json(orderService.computeQueueEta(orders));
 });
 
 // ── Notify mapping ────────────────────────────────────────────────────────
@@ -388,35 +338,13 @@ router.post('/api/orders', (req, res) => {
     const menu = loadMenu();
     const menuItem = menu.find(m => m.name === item);
     if (!menuItem) return res.status(400).json({ error: 'unknown item' });
-    const validVariant = variant ? String(variant).trim().slice(0, 50) : null;
 
     // Prefer integration-verified HA user ID over client-supplied body field
     const haUserId = req.headers['x-glp-ha-user-id']
         ? String(req.headers['x-glp-ha-user-id']).slice(0, 100)
         : String(req.body?.haUserId || '').slice(0, 100);
 
-    const orders = loadOrders();
-    const order  = {
-        id: `ord_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        createdAt: Date.now(),
-        customer:  String(customer).trim().slice(0, 50),
-        haUserId,
-        item,
-        variant:        validVariant,
-        note:           note ? String(note).slice(0, 200) : '',
-        notifyService:  notifyService && String(notifyService).startsWith('notify.') ? String(notifyService).slice(0, 100) : null,
-        // Machine target (glp-order-card #29 / #326) — `machine` stays the
-        // display name/slug the card sent (or null); `machineId` is it
-        // resolved against the registry, always a real id (falls back to
-        // the default machine), used for actual fulfillment routing and
-        // stats scoping below.
-        machine:   machine ? String(machine).trim().slice(0, 100) : null,
-        machineId: resolveMachineId(machine),
-        status:    'pending',
-        eta: null, acceptedAt: null, completedAt: null, declineReason: null,
-    };
-    orders.push(order);
-    saveOrders(orders);
+    const order = orderService.placeOrder({ item, note, customer, notifyService, variant, machine, haUserId });
     const itemLabel = order.variant ? `${order.item} · ${order.variant}` : order.item;
     log(`Order ${order.id}: ${order.customer} → ${itemLabel}`);
     const baristaSvc = loadOrdersSettings().baristaNotifyService;
@@ -429,71 +357,36 @@ router.post('/api/orders', (req, res) => {
 
 // ── Order actions ─────────────────────────────────────────────────────────
 
-router.post('/api/orders/:id/accept', (req, res) => {
-    const orders = loadOrders();
-    const order  = orders.find(o => o.id === req.params.id);
-    if (!order) return res.status(404).json({ error: 'not found' });
-    if (order.status !== 'pending') return res.status(400).json({ error: 'not pending' });
-    order.status     = 'accepted';
-    order.eta        = Math.max(1, Math.min(60, parseInt(req.body?.eta) || 5));
-    order.acceptedAt = Date.now();
-    saveOrders(orders);
-    log(`Order ${order.id} accepted (ETA ${order.eta} min)`);
-    sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId],
-        `☕ ${order.item} wird zubereitet`, `Fertig in ~${order.eta} Min!`, order.id);
-    res.json(order);
+router.post('/api/orders/:id/accept', (req, res, next) => {
+    try {
+        const order = orderService.acceptOrder(req.params.id, req.body?.eta);
+        log(`Order ${order.id} accepted (ETA ${order.eta} min)`);
+        sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId],
+            `☕ ${order.item} wird zubereitet`, `Fertig in ~${order.eta} Min!`, order.id);
+        res.json(order);
+    } catch (err) { next(err); }
 });
 
-router.post('/api/orders/:id/complete', (req, res) => {
-    const orders = loadOrders();
-    const order  = orders.find(o => o.id === req.params.id);
-    if (!order) return res.status(404).json({ error: 'not found' });
-    order.status      = 'done';
-    order.completedAt = Date.now();
-    if (order.variant) {
-        try {
-            const item = loadMenu().find(m => m.name === order.item);
-            if (item?.milkMl > 0) libraryService.deductMilkByName(order.variant, item.milkMl);
-        } catch { /* non-critical */ }
-    }
-    // #326: route to the latest shot on the order's own target machine
-    // rather than the global latest shot — order.machineId always resolves
-    // to a real machine (falls back to the default one), so this is a
-    // behavior-preserving change for every order placed before #326 /
-    // every single-machine setup (machineId 1 === the only machine there).
-    try { order.shotId = shotRepo.getLatestId(order.machineId); } catch { order.shotId = null; }
-    if (order.shotId != null) {
-        try {
-            const annotation = shotRepo.getAnnotation(order.shotId);
-            annotation.orderedBy = {
-                customer: order.customer, haUserId: order.haUserId, orderId: order.id,
-                item: order.item, variant: order.variant || null, note: order.note || null,
-            };
-            shotRepo.saveAnnotation(order.shotId, annotation);
-        } catch { /* non-critical */ }
-    }
-    saveOrders(orders);
-    log(`Order ${order.id} done (shotId: ${order.shotId})`);
-    sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId],
-        `✓ ${order.item} ist fertig!`, `Hol dir deinen ${order.item} ab — guten Genuss!`, order.id);
-    res.json(order);
+router.post('/api/orders/:id/complete', (req, res, next) => {
+    try {
+        const order = orderService.completeOrder(req.params.id);
+        log(`Order ${order.id} done (shotId: ${order.shotId})`);
+        sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId],
+            `✓ ${order.item} ist fertig!`, `Hol dir deinen ${order.item} ab — guten Genuss!`, order.id);
+        res.json(order);
+    } catch (err) { next(err); }
 });
 
-router.post('/api/orders/:id/decline', (req, res) => {
-    const orders = loadOrders();
-    const order  = orders.find(o => o.id === req.params.id);
-    if (!order) return res.status(404).json({ error: 'not found' });
-    if (!['pending', 'accepted'].includes(order.status)) return res.status(400).json({ error: 'cannot decline' });
-    order.status        = 'declined';
-    order.declineReason = String(req.body?.reason || '').slice(0, 200);
-    order.completedAt   = Date.now();
-    saveOrders(orders);
-    log(`Order ${order.id} declined: ${order.declineReason}`);
-    sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId],
-        `✕ ${order.item} abgelehnt`,
-        order.declineReason ? `Grund: ${order.declineReason}` : 'Deine Bestellung wurde leider abgelehnt.',
-        order.id);
-    res.json(order);
+router.post('/api/orders/:id/decline', (req, res, next) => {
+    try {
+        const order = orderService.declineOrder(req.params.id, req.body?.reason);
+        log(`Order ${order.id} declined: ${order.declineReason}`);
+        sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId],
+            `✕ ${order.item} abgelehnt`,
+            order.declineReason ? `Grund: ${order.declineReason}` : 'Deine Bestellung wurde leider abgelehnt.',
+            order.id);
+        res.json(order);
+    } catch (err) { next(err); }
 });
 
 // ── History delete ────────────────────────────────────────────────────────
