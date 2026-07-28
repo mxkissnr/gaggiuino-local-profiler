@@ -19,7 +19,7 @@
     "cheerio": "1.2.0",
     "echarts": "6.1.0",
     "express": "5.2.1",
-    "express-rate-limit": "^8.6.0",
+    "express-rate-limit": "^8.6.1",
     "js-yaml": "^5.2.1",
     "qrcode": "1.5.4",
     "topojson-client": "3.1.0",
