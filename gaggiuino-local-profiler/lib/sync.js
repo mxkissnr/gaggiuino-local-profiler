@@ -4,8 +4,12 @@ const { log }    = require('./helpers');
 const { loadOptions, getMachineUrl, getMachineBaseUrl, getSyncIntervalMs } = require('./data');
 const shotService = require('./services/ShotService');
 const state      = require('./state');
+const { getMachineRuntimeState } = require('./machine-runtime-state');
 const registry   = require('./machines/registry');
 const { getAdapter, toGlobalShotId, toNativeShotId } = require('./machines');
+
+// #549: same single-default-machine assumption as lib/poll.js/lib/preheat.js.
+const defaultRuntime = getMachineRuntimeState();
 
 const SYNC_RETRY_DELAYS = [30_000, 60_000, 120_000];
 
@@ -24,9 +28,9 @@ async function syncAfterBrew() {
     if (newShots.length) log(`New shot saved: #${newShots.map(s => s.id).join(', ')}`);
 }
 
-async function syncShots() {
+async function syncShots(runtime = defaultRuntime) {
     const opts = loadOptions();
-    if (!state.machineOn && opts.switch_entity) return true;
+    if (!runtime.machineOn && opts.switch_entity) return true;
     const machineUrl = getMachineUrl(opts);
     try {
         const latestResponse  = await axios.get(`${machineUrl}/latest`, { timeout: 10000 });

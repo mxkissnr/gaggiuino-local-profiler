@@ -12,7 +12,11 @@ const libraryService = require('../lib/services/LibraryService');
 const machineRegistry = require('../lib/machines/registry');
 const { sendHaNotify, getNotifyServices, getHaPersons } = require('../lib/ha');
 const { log, rateLimit } = require('../lib/helpers');
-const state = require('../lib/state');
+const { getMachineRuntimeState } = require('../lib/machine-runtime-state');
+
+// #549: orders preheat info is always about the default machine, matching
+// lib/poll.js/lib/preheat.js's own hard single-machine assumption.
+const defaultRuntime = getMachineRuntimeState();
 
 // #326: resolves an order's `machine` display name/slug (glp-order-card
 // #29) into the machine registry's actual numeric id, so orders are
@@ -45,9 +49,9 @@ function _getPreheatInfo() {
     const opts        = loadOptions();
     const preheatMins = Math.max(1, parseInt(opts.preheat_time) || 20);
     const preheatMs   = preheatMins * 60 * 1000;
-    const machineOff  = !state.machineOn && !!opts.switch_entity;
-    if (machineOff || !state.switchOnAt) return { ready: false, remainingMin: preheatMins };
-    const remainingMs  = Math.max(0, preheatMs - (Date.now() - state.switchOnAt));
+    const machineOff  = !defaultRuntime.machineOn && !!opts.switch_entity;
+    if (machineOff || !defaultRuntime.switchOnAt) return { ready: false, remainingMin: preheatMins };
+    const remainingMs  = Math.max(0, preheatMs - (Date.now() - defaultRuntime.switchOnAt));
     return { ready: remainingMs === 0, remainingMin: Math.max(1, Math.ceil(remainingMs / 60000)) };
 }
 

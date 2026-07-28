@@ -51,6 +51,8 @@ const express       = require('express');
 const systemRouter  = require('../routes/system');
 const { startPreheatWatcher } = require('../lib/preheat');
 const state = require('../lib/state');
+const { getMachineRuntimeState } = require('../lib/machine-runtime-state');
+const runtime = getMachineRuntimeState();
 
 function makeApp() {
     const app = express();
@@ -63,8 +65,8 @@ function makeApp() {
 let server, baseUrl;
 
 beforeEach(async () => {
-    state.machineOn         = false;
-    state.switchOnAt        = null;
+    runtime.machineOn        = false;
+    runtime.switchOnAt       = null;
     state.readyByTargetAt   = null;
     state.plannedSwitchOnAt = null;
     mockOptions              = { switch_entity: 'switch.espresso', preheat_time: '1' };

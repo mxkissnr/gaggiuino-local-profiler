@@ -25,7 +25,12 @@ const { getSwitchState, callHaService } = require('../lib/ha');
 const { setReadyByTarget, buildPreheatResponse } = require('../lib/preheat');
 const { log, rateLimit } = require('../lib/helpers');
 const state = require('../lib/state');
+const { getMachineRuntimeState } = require('../lib/machine-runtime-state');
 const demoService = require('../lib/services/DemoService');
+
+// #549: the default machine's live/preheat status is still tracked by the
+// hard single-machine polling loop in lib/poll.js — same shared instance.
+const defaultRuntime = getMachineRuntimeState();
 const { profileSchema } = require('../lib/validation/schemas');
 const registry = require('../lib/machines/registry');
 const { getAdapter } = require('../lib/machines');
@@ -45,19 +50,19 @@ function saveProfilesCache(profiles) {
 }
 
 // Multi-machine (#340): the default machine (id 1) keeps using the existing
-// on-disk cache (state.machineProfiles / PROFILES_CACHE_FILE) unchanged, for
-// byte-identical behavior on single-machine installs. Additional machines
-// get a simple in-memory cache — non-default machines never had a cache
-// before, so this is purely additive.
+// on-disk cache (defaultRuntime.machineProfiles / PROFILES_CACHE_FILE)
+// unchanged, for byte-identical behavior on single-machine installs.
+// Additional machines get a simple in-memory cache — non-default machines
+// never had a cache before, so this is purely additive.
 const nonDefaultProfilesCache = {}; // machineId -> profiles array
 
 function getProfilesCacheFor(machine) {
-    return machine.isDefault ? state.machineProfiles : (nonDefaultProfilesCache[machine.id] || []);
+    return machine.isDefault ? defaultRuntime.machineProfiles : (nonDefaultProfilesCache[machine.id] || []);
 }
 
 function setProfilesCacheFor(machine, profiles) {
     if (machine.isDefault) {
-        state.machineProfiles = profiles;
+        defaultRuntime.machineProfiles = profiles;
         saveProfilesCache(profiles);
     } else {
         nonDefaultProfilesCache[machine.id] = profiles;
@@ -83,7 +88,7 @@ function resolveMachine(rawId) {
 (function initProfilesCache() {
     const cached = loadProfilesCache();
     if (cached.length) {
-        state.machineProfiles = cached;
+        defaultRuntime.machineProfiles = cached;
         log(`Profiles cache loaded: ${cached.length} profiles`);
     }
 })();
@@ -177,7 +182,7 @@ router.get('/api/status', async (req, res) => {
         machines = registry.listMachines().map(m => ({
             id: m.id, name: m.name, type: m.type, isDefault: m.isDefault, enabled: m.enabled,
             reachable: m.isDefault ? state.machineReachable : null,
-            on:        m.isDefault ? state.machineOn        : null,
+            on:        m.isDefault ? defaultRuntime.machineOn : null,
         }));
     } catch { /* ignore */ }
     res.json({
@@ -269,8 +274,8 @@ router.get('/api/machine/profiles', async (req, res) => {
     if (machine.isDefault) {
         // Default machine's live status is already tracked by the legacy
         // polling loop (lib/poll.js) — reuse it rather than an extra round trip.
-        currentId   = state.machineStatus?.profileId   ?? null;
-        currentName = state.machineStatus?.profileName ?? null;
+        currentId   = defaultRuntime.machineStatus?.profileId   ?? null;
+        currentName = defaultRuntime.machineStatus?.profileName ?? null;
     } else {
         try {
             const status = await adapter.getStatus(machine);
@@ -411,9 +416,9 @@ router.delete('/api/machine/profile/:id', async (req, res) => {
 // ── Machine live status (for integration / Lovelace card) ──────────────────
 
 router.get('/api/machine/status', (req, res) => {
-    if (!state.machineStatus) return res.json({ available: false });
-    const staleSec = (Date.now() - state.machineStatus.updatedAt) / 1000;
-    res.json({ available: true, stale: staleSec > 10, ...state.machineStatus });
+    if (!defaultRuntime.machineStatus) return res.json({ available: false });
+    const staleSec = (Date.now() - defaultRuntime.machineStatus.updatedAt) / 1000;
+    res.json({ available: true, stale: staleSec > 10, ...defaultRuntime.machineStatus });
 });
 
 // ── Preheat ───────────────────────────────────────────────────────────────

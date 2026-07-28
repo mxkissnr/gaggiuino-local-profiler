@@ -1,5 +1,9 @@
 // Shared mutable runtime state. All modules require() this and read/write its properties.
 // CommonJS module cache ensures every require() returns the same object.
+//
+// Machine-scoped fields (per-machine temperature/brew-switch/profile state)
+// moved to lib/machine-runtime-state.js's MachineRuntimeState (#549) — only
+// genuinely global fields remain here.
 module.exports = {
     apiToken:             '',
     lastSyncTime:         null,
@@ -12,25 +16,13 @@ module.exports = {
     lastManualSync:       0,
     lastKnownShotId:      0,
     cachedMachineVersion: null,
-    machineOn:            false,
     preheatNotifySent:    false,
-    livePollTimer:        null,
     liveAccum:            null,
     isPollRunning:        false,
     liveSeq:              0,
-    switchOnAt:           null,
-    switchOffAt:          null,
     // Ready-by preheat (#541): wall-clock target set via
     // POST /api/preheat/ready-by, and the switch-on time computed from it
     // (targetAt - preheat_time). Both null when no target is set.
     readyByTargetAt:      null,
     plannedSwitchOnAt:    null,
-    stabilityReady:       false,
-    currentTemp:          null,
-    currentTargetTemp:    null,
-    tempHistory:          [],
-    // Full machine status (cached from /api/system/status polls)
-    machineStatus:        null,
-    // Profile list (cached from /api/profiles/all)
-    machineProfiles:      [],
 };

@@ -7,43 +7,51 @@ const { log } = require('./helpers');
 const { loadOptions, getMachineBaseUrl } = require('./data');
 const { getSwitchState, HA_TOKEN } = require('./ha');
 const state = require('./state');
+const { getMachineRuntimeState } = require('./machine-runtime-state');
 const { savePreheatState, isTempStable } = require('./preheat');
 const { syncAfterBrew, syncShots, fetchMachineVersion } = require('./sync');
 
-function startLivePolling() {
-    if (state.livePollTimer) return;
-    const offMs    = state.switchOffAt ? Date.now() - state.switchOffAt : 0;
+// #549: this module is hard single-machine (always the default/legacy
+// machine, id 1) — one runtime instance obtained once at module load,
+// same lifetime as the old lib/state.js singleton it replaces for these
+// fields. Functions below still accept it as a parameter so callers (and
+// tests) can pass a different instance instead of relying on this default.
+const defaultRuntime = getMachineRuntimeState();
+
+function startLivePolling(runtime = defaultRuntime) {
+    if (runtime.livePollTimer) return;
+    const offMs    = runtime.switchOffAt ? Date.now() - runtime.switchOffAt : 0;
     const coldOff  = offMs >= WARM_OFF_MAX_MS;
-    const stillWarm = state.currentTemp !== null
-        ? (state.currentTemp > WARM_TEMP_MIN && !coldOff)
-        : (state.switchOnAt !== null && !coldOff);
-    if (!state.switchOnAt || !stillWarm) { state.switchOnAt = Date.now(); savePreheatState(); }
-    state.tempHistory = [];
+    const stillWarm = runtime.currentTemp !== null
+        ? (runtime.currentTemp > WARM_TEMP_MIN && !coldOff)
+        : (runtime.switchOnAt !== null && !coldOff);
+    if (!runtime.switchOnAt || !stillWarm) { runtime.switchOnAt = Date.now(); savePreheatState(runtime); }
+    runtime.tempHistory = [];
     log('Live polling started via /api/system/status');
-    state.livePollTimer = setInterval(pollLive, 1000);
+    runtime.livePollTimer = setInterval(() => pollLive(runtime), 1000);
 }
 
-function stopLivePolling() {
-    if (!state.livePollTimer) return;
-    clearInterval(state.livePollTimer);
-    state.livePollTimer   = null;
-    state.liveAccum       = null;
-    state.switchOffAt     = Date.now();
-    state.stabilityReady  = false;
-    state.tempHistory     = [];
-    savePreheatState();
+function stopLivePolling(runtime = defaultRuntime) {
+    if (!runtime.livePollTimer) return;
+    clearInterval(runtime.livePollTimer);
+    runtime.livePollTimer  = null;
+    state.liveAccum        = null;
+    runtime.switchOffAt    = Date.now();
+    runtime.stabilityReady = false;
+    runtime.tempHistory    = [];
+    savePreheatState(runtime);
     log('Live polling stopped');
 }
 
-async function pollLive() {
+async function pollLive(runtime = defaultRuntime) {
     if (state.isPollRunning) return;
     state.isPollRunning = true;
-    try { await pollViaGaggiuinoStatus(); }
+    try { await pollViaGaggiuinoStatus(runtime); }
     // eslint-disable-next-line require-atomic-updates -- this is the mutex-release for the guard checked at the top of this function; only this function ever writes it
     finally { state.isPollRunning = false; }
 }
 
-async function pollViaGaggiuinoStatus() {
+async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
     const opts    = loadOptions();
     const baseUrl = getMachineBaseUrl(opts);
     try {
@@ -57,13 +65,13 @@ async function pollViaGaggiuinoStatus() {
         const isBrewing = !!status.brewSwitchState;
         const presVal   = parseFloat(status.pressure)          || 0;
         const tempVal   = parseFloat(status.temperature)       || 0;
-        state.currentTemp = tempVal || state.currentTemp;
+        runtime.currentTemp = tempVal || runtime.currentTemp;
         const weightVal = parseFloat(status.weight)            || 0;
         const tTempVal  = parseFloat(status.targetTemperature) || 0;
-        state.currentTargetTemp = tTempVal || state.currentTargetTemp;
+        runtime.currentTargetTemp = tTempVal || runtime.currentTargetTemp;
         const profile   = status.profileName || 'Unknown';
 
-        state.machineStatus = {
+        runtime.machineStatus = {
             temperature:       tempVal,
             targetTemperature: tTempVal,
             pressure:          presVal,
@@ -84,19 +92,19 @@ async function pollViaGaggiuinoStatus() {
         }
 
         if (tempVal > 0 && !isBrewing) {
-            state.tempHistory.push(tempVal);
-            if (state.tempHistory.length > TEMP_HISTORY_MAX) state.tempHistory.shift();
-            if (state.switchOnAt && tTempVal > 0 && tempVal >= tTempVal - 2 && isTempStable()) {
+            runtime.tempHistory.push(tempVal);
+            if (runtime.tempHistory.length > TEMP_HISTORY_MAX) runtime.tempHistory.shift();
+            if (runtime.switchOnAt && tTempVal > 0 && tempVal >= tTempVal - 2 && isTempStable(runtime)) {
                 const preheatMs = (Math.max(1, parseInt(opts.preheat_time) || 20)) * 60 * 1000;
-                if (Date.now() - state.switchOnAt < preheatMs) {
-                    state.switchOnAt     = Date.now() - preheatMs;
-                    state.stabilityReady = true;
-                    savePreheatState();
+                if (Date.now() - runtime.switchOnAt < preheatMs) {
+                    runtime.switchOnAt     = Date.now() - preheatMs;
+                    runtime.stabilityReady = true;
+                    savePreheatState(runtime);
                     log('Temperature stable -- preheat marked complete');
                 }
             }
         } else if (isBrewing) {
-            state.tempHistory = [];
+            runtime.tempHistory = [];
         }
 
         if (isBrewing && !state.liveAccum) {
@@ -138,31 +146,31 @@ async function pollViaGaggiuinoStatus() {
     }
 }
 
-async function checkAndApplyMachinePower() {
+async function checkAndApplyMachinePower(runtime = defaultRuntime) {
     const opts   = loadOptions();
     const entity = opts.switch_entity;
     if (!entity || !HA_TOKEN) {
-        if (!state.livePollTimer) startLivePolling();
+        if (!runtime.livePollTimer) startLivePolling(runtime);
         return;
     }
     const isOn = await getSwitchState(entity);
     if (isOn === null) return;
-    if (isOn === state.machineOn) return;
-    state.machineOn = isOn;
+    if (isOn === runtime.machineOn) return;
+    runtime.machineOn = isOn;
     if (isOn) {
         log('Machine on -- live polling and sync resumed');
-        startLivePolling();
+        startLivePolling(runtime);
         setTimeout(syncShots, 2000);
     } else {
         log('Machine off -- live polling and sync paused');
-        stopLivePolling();
+        stopLivePolling(runtime);
         state.preheatNotifySent = false;
     }
 }
 
-async function backgroundHaCheck() {
+async function backgroundHaCheck(runtime = defaultRuntime) {
     if (!HA_TOKEN) return;
-    await checkAndApplyMachinePower();
+    await checkAndApplyMachinePower(runtime);
     if (!state.cachedMachineVersion) fetchMachineVersion();
 }
 
