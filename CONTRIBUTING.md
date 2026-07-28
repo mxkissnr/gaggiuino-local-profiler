@@ -22,12 +22,12 @@ Include:
 | Area | Details |
 |---|---|
 | Backend | Node.js / Express — `gaggiuino-local-profiler/server.js` |
-| Frontend | Single-file HTML + inline CSS/JS — `gaggiuino-local-profiler/public/index.html` (no build step) |
+| Frontend | Vite build from `gaggiuino-local-profiler/public-src/` (views/, components/, i18n/, main.js) — `public/` is generated build output, not edited directly |
 | Routes | `gaggiuino-local-profiler/routes/` — one file per concern |
-| Storage | `/data/*.json` inside the app container |
-| Translations | UI strings via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES) — add all 5 languages for new keys |
+| Storage | SQLite (`lib/db.js`, better-sqlite3) at `/data/glp.db` for shot data; `/data/*.json` only for token, options, preheat state and profile cache |
+| Translations | UI strings via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES/NL) — add all 6 languages for new keys |
 | URLs | Always relative (no leading `/`) for HA ingress compatibility |
 
 ## Versioning
 
-`MAJOR.MINOR.PATCH` — patch for fixes, minor for new features. Both `server.js` and `config.yaml` must be updated together.
+`MAJOR.MINOR.PATCH` — patch for fixes, minor for new features. Both `gaggiuino-local-profiler/lib/constants.js` (`GLP_VERSION`) and `gaggiuino-local-profiler/config.yaml` must be updated together.
