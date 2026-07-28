@@ -1,13 +1,12 @@
 'use strict';
 const axios = require('axios');
-const {
-    TEMP_HISTORY_MAX, WARM_TEMP_MIN, WARM_OFF_MAX_MS,
-} = require('./constants');
+const { TEMP_HISTORY_MAX } = require('./constants');
 const { log } = require('./helpers');
 const { loadOptions, getMachineBaseUrl } = require('./data');
 const { getSwitchState, HA_TOKEN } = require('./ha');
 const state = require('./state');
 const { getMachineRuntimeState } = require('./machine-runtime-state');
+const { deriveMachineState, isStillWarm } = require('./machine-state');
 const { savePreheatState, isTempStable } = require('./preheat');
 const { syncAfterBrew, syncShots, fetchMachineVersion } = require('./sync');
 
@@ -20,12 +19,7 @@ const defaultRuntime = getMachineRuntimeState();
 
 function startLivePolling(runtime = defaultRuntime) {
     if (runtime.livePollTimer) return;
-    const offMs    = runtime.switchOffAt ? Date.now() - runtime.switchOffAt : 0;
-    const coldOff  = offMs >= WARM_OFF_MAX_MS;
-    const stillWarm = runtime.currentTemp !== null
-        ? (runtime.currentTemp > WARM_TEMP_MIN && !coldOff)
-        : (runtime.switchOnAt !== null && !coldOff);
-    if (!runtime.switchOnAt || !stillWarm) { runtime.switchOnAt = Date.now(); savePreheatState(runtime); }
+    if (!runtime.switchOnAt || !isStillWarm(runtime)) { runtime.switchOnAt = Date.now(); savePreheatState(runtime); }
     runtime.tempHistory = [];
     log('Live polling started via /api/system/status');
     runtime.livePollTimer = setInterval(() => pollLive(runtime), 1000);
@@ -62,28 +56,13 @@ async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
         const raw       = statusRes.data;
         const status    = Array.isArray(raw) ? raw[0] : raw;
 
-        const isBrewing = !!status.brewSwitchState;
-        const presVal   = parseFloat(status.pressure)          || 0;
-        const tempVal   = parseFloat(status.temperature)       || 0;
-        runtime.currentTemp = tempVal || runtime.currentTemp;
-        const weightVal = parseFloat(status.weight)            || 0;
-        const tTempVal  = parseFloat(status.targetTemperature) || 0;
+        const {
+            isBrewing, pressure: presVal, temperature: tempVal, weight: weightVal,
+            targetTemperature: tTempVal, profileName: profile, machineStatus,
+        } = deriveMachineState(status);
+        runtime.currentTemp       = tempVal  || runtime.currentTemp;
         runtime.currentTargetTemp = tTempVal || runtime.currentTargetTemp;
-        const profile   = status.profileName || 'Unknown';
-
-        runtime.machineStatus = {
-            temperature:       tempVal,
-            targetTemperature: tTempVal,
-            pressure:          presVal,
-            waterLevel:        parseInt(status.waterLevel) || 0,
-            weight:            weightVal,
-            upTime:            parseInt(status.upTime)    || 0,
-            profileId:         parseInt(status.profileId) || null,
-            profileName:       status.profileName         || null,
-            brewSwitchState:   !!status.brewSwitchState,
-            steamSwitchState:  !!status.steamSwitchState,
-            updatedAt:         Date.now(),
-        };
+        runtime.machineStatus     = machineStatus;
 
         if (!state.cachedMachineVersion) {
             const ver = status.softwareVersion || status.version || status.firmware ||
