@@ -1,5 +1,6 @@
 gaggiuino-local-profiler/node_modules/
 gaggiuino-local-profiler/public/
+gaggiuino-local-profiler/coverage/
 
 .memsearch/
 graphify-out/
