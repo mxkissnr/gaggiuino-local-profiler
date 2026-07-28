@@ -91,6 +91,8 @@ Der API-Token gewährt vollen API-Zugriff — inklusive `/api/restore`, das die 
 
 Das ist eine bewusste Abwägung (#533). Der Direktzugriff über den Port ist der Weg, auf dem die installierbare PWA und der Direkt-URL-Modus der Order Card laufen, und beide haben keine andere Möglichkeit, an einen Token zu kommen: die Oberfläche hat kein Eingabefeld, und der Token wird seit v2.19.1 nicht mehr im Browser zwischengespeichert. Die Beschränkung auf Supervisor-interne Aufrufer (#276) funktionierte für diese Clients nur so lange, wie sie noch einen vor dieser Änderung zwischengespeicherten Token hielten — als dieser in v2.19.1 entfernt wurde, brach der Direktzugriff vollständig.
 
+**Das Add-on gibt Port 8099 standardmäßig auf den Host frei** (`ports: 8099/tcp: 8099` in `config.yaml`), auch wenn du ausschließlich über HA Ingress zugreifst und weder die PWA noch den Direkt-URL-Modus der Order Card nutzt. In diesem Fall bringt der offene Port keinen Vorteil und ist, wie im Vertrauensmodell oben beschrieben, gleichbedeutend damit, deine gesamte GLP-Datenbank (und die Maschinensteuerung) im LAN offenzulegen. Zum Schließen: **Einstellungen → Add-ons → GLP → Konfiguration → Netzwerk**, dort den Host-Port für 8099/tcp leeren/deaktivieren und das Add-on neu starten. Lass ihn nur gemappt, wenn du die PWA oder eine Order Card im Direkt-URL-Modus tatsächlich nutzt.
+
 Für die Order Card im Direkt-URL-Modus kopierst du den Token weiterhin einmalig aus **Einstellungen → API Token** in die Karten-YAML; an diesem Ablauf ändert sich nichts.
 
 Alle persistenten Daten werden in SQLite (`/data/glp.db`) mit aktiviertem WAL-Journal-Modus gespeichert — Schreibvorgänge sind standardmäßig absturzsicher, ohne dass ein inkonsistenter Zustand entstehen kann.

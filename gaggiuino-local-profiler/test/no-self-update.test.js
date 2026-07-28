@@ -71,7 +71,7 @@ describe('config.yaml permissions', () => {
         expect(config.hassio_role).toBeUndefined();
     });
 
-    it('keeps hassio_api: true — GET http://supervisor/info (routes/system.js, /api/token verification) still needs it, and /info is in the Supervisor\'s api_bypass allowlist (no elevated role needed)', () => {
+    it('keeps hassio_api: true — unused by any current code path, but left set rather than removed as a permissions change outside this test\'s scope (#546)', () => {
         expect(config.hassio_api).toBe(true);
     });
 });

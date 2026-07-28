@@ -11,9 +11,14 @@ arch:
 startup: application
 boot: auto
 homeassistant_api: true
-# hassio_api stays: GET http://supervisor/info (routes/system.js, token
-# verification for /api/token) needs Supervisor reachability, and /info is
-# in the Supervisor's api_bypass allowlist — no elevated role required.
+# hassio_api: kept from #330, originally for the in-app self-update button
+# (POST /addons/self/update), which #516 removed entirely. The comment that
+# replaced it claimed hassio_api also backed a Supervisor-token verification
+# check on /api/token — that's stale too: #534 dropped that check, and
+# /api/token now serves any caller that can reach the port (see the trust
+# model above GET /api/token in routes/system.js). No code path currently
+# calls the Supervisor API; left set rather than removed as part of #546
+# since dropping a permission grant is a separate change from this fix.
 hassio_api: true
 init: false
 ingress: true
