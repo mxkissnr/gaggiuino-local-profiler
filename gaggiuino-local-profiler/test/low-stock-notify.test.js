@@ -16,9 +16,9 @@ const realHa = require(haPath);
 const sendHaNotify = vi.fn(async () => {});
 require.cache[haPath].exports = { ...realHa, sendHaNotify, getHaLanguage: async () => 'de' };
 
-const dataPath = require.resolve('../lib/data');
-const realData = require(dataPath);
-require.cache[dataPath].exports = { ...realData, loadOrdersSettings: () => ({ baristaNotifyService: 'notify.mobile_app_test' }) };
+const orderRepoPath = require.resolve('../lib/repositories/OrderRepository');
+const realOrderRepo = require(orderRepoPath);
+require.cache[orderRepoPath].exports = { ...realOrderRepo, getSettings: () => ({ baristaNotifyService: 'notify.mobile_app_test' }) };
 
 const libraryService = require('../lib/services/LibraryService');
 const shotRepo       = require('../lib/repositories/ShotRepository');
