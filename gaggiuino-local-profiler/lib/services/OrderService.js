@@ -73,11 +73,24 @@ class OrderService {
         };
     }
 
+    // #563: resolves a client-supplied beanId (glp-order-card #35) against
+    // the library's actual beans. A stale/fabricated id (deleted bean, or a
+    // value invented by a buggy client) silently becomes null rather than
+    // failing order placement — mirroring the card's own name-fallback
+    // behavior when its cached bean list is stale.
+    resolveBeanId(rawBeanId) {
+        if (rawBeanId == null || rawBeanId === '') return null;
+        const id = parseInt(rawBeanId, 10);
+        if (!Number.isInteger(id)) return null;
+        const beans = libraryService.getLibrary().beans || [];
+        return beans.some(b => b.id === id) ? id : null;
+    }
+
     // Builds and persists a new pending order. Caller (route) is responsible
     // for validating item/customer presence and that `item` names a real
     // menu entry before calling this — those are request-shape checks, not
     // order domain rules.
-    placeOrder({ item, note, customer, notifyService, variant, machine, haUserId }) {
+    placeOrder({ item, note, customer, notifyService, variant, machine, haUserId, beanId }) {
         const orders = repo.findActive();
         const order = {
             id: `ord_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -85,6 +98,10 @@ class OrderService {
             customer:  String(customer).trim().slice(0, 50),
             haUserId,
             item,
+            // Stable bean identity (glp-order-card #35, follow-up to #456) —
+            // resolved against the library so orders never carry a bean id
+            // that doesn't actually exist.
+            beanId:         this.resolveBeanId(beanId),
             variant:        variant ? String(variant).trim().slice(0, 50) : null,
             note:           note ? String(note).slice(0, 200) : '',
             notifyService:  notifyService && String(notifyService).startsWith('notify.') ? String(notifyService).slice(0, 100) : null,

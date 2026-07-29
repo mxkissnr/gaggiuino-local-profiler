@@ -105,6 +105,43 @@ describe('POST /api/orders', () => {
     });
 });
 
+describe('POST /api/orders — beanId (#563)', () => {
+    // glp-order-card #35 sends beanId in the order payload for stable bean
+    // attribution; it must survive into the persisted order instead of being
+    // silently dropped.
+    it('accepts and persists a beanId that resolves to a real bean', async () => {
+        saveMenu([{ id: 'm1', name: 'Espresso', emoji: '☕' }]);
+        saveLibrary({ beans: [{ id: 42, name: 'Lucky Punch', stock_g: 250 }], grinders: [], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/orders`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item: 'Espresso', customer: 'Max', beanId: 42 }),
+        });
+        expect(r.status).toBe(200);
+        expect((await r.json()).beanId).toBe(42);
+    });
+
+    it('silently nulls out a beanId that does not resolve to any known bean', async () => {
+        saveMenu([{ id: 'm1', name: 'Espresso', emoji: '☕' }]);
+        saveLibrary({ beans: [{ id: 1, name: 'Lucky Punch', stock_g: 250 }], grinders: [], recipes: [] });
+        const r = await fetch(`${baseUrl}/api/orders`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item: 'Espresso', customer: 'Max', beanId: 9999 }),
+        });
+        expect(r.status).toBe(200);
+        expect((await r.json()).beanId).toBeNull();
+    });
+
+    it('defaults beanId to null when omitted', async () => {
+        saveMenu([{ id: 'm1', name: 'Espresso', emoji: '☕' }]);
+        const r = await fetch(`${baseUrl}/api/orders`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item: 'Espresso', customer: 'Max' }),
+        });
+        expect(r.status).toBe(200);
+        expect((await r.json()).beanId).toBeNull();
+    });
+});
+
 describe('GET /api/orders/mine (#547)', () => {
     beforeEach(() => {
         const now = Date.now();

@@ -333,7 +333,7 @@ router.get('/api/orders/mine', (req, res) => {
 router.post('/api/orders', (req, res) => {
     if (!rateLimit(`orders:${req.ip}`, 10)) return res.status(429).json({ error: 'Rate limit exceeded' });
     if (!loadOrdersSettings().enabled) return res.status(503).json({ error: 'orders_disabled' });
-    const { item, note, customer, notifyService, variant, machine } = req.body || {};
+    const { item, note, customer, notifyService, variant, machine, beanId } = req.body || {};
     if (!item || !customer?.trim()) return res.status(400).json({ error: 'item and customer required' });
     const menu = loadMenu();
     const menuItem = menu.find(m => m.name === item);
@@ -344,7 +344,7 @@ router.post('/api/orders', (req, res) => {
         ? String(req.headers['x-glp-ha-user-id']).slice(0, 100)
         : String(req.body?.haUserId || '').slice(0, 100);
 
-    const order = orderService.placeOrder({ item, note, customer, notifyService, variant, machine, haUserId });
+    const order = orderService.placeOrder({ item, note, customer, notifyService, variant, machine, haUserId, beanId });
     const itemLabel = order.variant ? `${order.item} · ${order.variant}` : order.item;
     log(`Order ${order.id}: ${order.customer} → ${itemLabel}`);
     const baristaSvc = loadOrdersSettings().baristaNotifyService;
