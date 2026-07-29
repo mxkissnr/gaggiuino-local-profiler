@@ -1,10 +1,11 @@
 const express      = require('express');
 const router       = express.Router();
 const shotService  = require('../lib/services/ShotService');
+const shotRepo     = require('../lib/repositories/ShotRepository');
 const libService   = require('../lib/services/LibraryService');
+const { getDb }                    = require('../lib/db');
 const { GLP_VERSION, MAX_SHOT_ID } = require('../lib/constants');
 const { log, rateLimit }           = require('../lib/helpers');
-const { getDb }                    = require('../lib/db');
 const { annotationSchema }         = require('../lib/validation/schemas');
 const { sanitizeBeanFields, sanitizeGrinderFields, sanitizeRecipeFields } = require('../lib/sanitize-bean');
 
@@ -31,10 +32,7 @@ router.get('/api/backup', (req, res, next) => {
             shots.map(s => [String(s.id), s.annotation]).filter(([, a]) => a && Object.keys(a).length)
         );
         const trashObj = Object.fromEntries(
-            trash.map(s => {
-                const row = getDb().prepare('SELECT deleted_at FROM trash WHERE shot_id = ?').get(s.id);
-                return [String(s.id), row?.deleted_at ?? Date.now()];
-            })
+            trash.map(s => [String(s.id), shotRepo.getTrashEntry(s.id) ?? Date.now()])
         );
         const bundle = {
             glp_backup:     true,
@@ -70,12 +68,13 @@ router.post('/api/restore', (req, res, next) => {
                 return res.status(400).json({ error: `Backup shot #${i} (id=${s.id}) has an invalid or missing timestamp` });
         }
 
-        const db = getDb();
-        db.transaction(() => {
-            db.prepare('DELETE FROM shots').run();
-            db.prepare('DELETE FROM annotations').run();
-            db.prepare('DELETE FROM trash').run();
-            db.prepare('DELETE FROM blocklist').run();
+        // Single atomic transaction over the whole restore (wipe + re-insert +
+        // library/blocklist) — shotRepo.wipeAll() runs its own db.transaction()
+        // internally, which better-sqlite3 nests as a SAVEPOINT when already
+        // inside this outer one, so the guarantee is unchanged: a failure
+        // anywhere below rolls back the wipe too.
+        getDb().transaction(() => {
+            shotRepo.wipeAll();
 
             for (const shot of b.shots) shotService.upsertShot(shot);
             if (b.annotations && typeof b.annotations === 'object') {

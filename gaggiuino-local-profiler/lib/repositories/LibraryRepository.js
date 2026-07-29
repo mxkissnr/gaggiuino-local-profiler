@@ -102,6 +102,13 @@ class LibraryRepository {
         db.prepare('DELETE FROM maintenance_log WHERE id NOT IN (SELECT id FROM maintenance_log ORDER BY ts DESC LIMIT 500)').run();
         return { ...entry, shotCountAtTime: entry.shot_count };
     }
+
+    // Deletes a single manual log entry (#553) — the "Not found" check stays
+    // in routes/maintenance.js (it already reads the log via
+    // getMaintenanceLog() to check existence before calling this).
+    deleteMaintenanceLog(id) {
+        getDb().prepare('DELETE FROM maintenance_log WHERE id = ?').run(id);
+    }
 }
 
 module.exports = new LibraryRepository();

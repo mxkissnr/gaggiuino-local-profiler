@@ -145,8 +145,7 @@ router.delete('/api/maintenance/log/:id', (req, res, next) => {
         if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' });
         const log = libraryService.getMaintenanceLog();
         if (!log.find(e => e.id === id)) return res.status(404).json({ error: 'Not found' });
-        const { getDb } = require('../lib/db');
-        getDb().prepare('DELETE FROM maintenance_log WHERE id = ?').run(id);
+        libraryService.deleteMaintenanceLog(id);
         res.json({ ok: true });
     } catch (err) { next(err); }
 });

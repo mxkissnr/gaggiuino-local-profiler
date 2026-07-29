@@ -150,6 +150,14 @@ class ShotRepository {
         return Object.fromEntries(rows.map(r => [String(r.shot_id), r.deleted_at]));
     }
 
+    // Single trash row's deleted_at, or null if the shot isn't trashed —
+    // used by the backup export (#553), which needs a per-shot timestamp
+    // rather than the getTrash() map's full contents.
+    getTrashEntry(shotId) {
+        const row = getDb().prepare('SELECT deleted_at FROM trash WHERE shot_id = ?').get(shotId);
+        return row?.deleted_at ?? null;
+    }
+
     moveToTrash(shotId) {
         getDb().prepare('INSERT OR REPLACE INTO trash (shot_id, deleted_at) VALUES (?,?)').run(shotId, Date.now());
     }
@@ -184,6 +192,19 @@ class ShotRepository {
             db.prepare('DELETE FROM blocklist').run();
             const ins = db.prepare('INSERT INTO blocklist (value) VALUES (?)');
             for (const v of list) ins.run(String(v));
+        })();
+    }
+
+    // Wipes shots/annotations/trash/blocklist for a full restore (#553) —
+    // the restore route replaces this data wholesale from a backup bundle,
+    // same DELETE set POST /api/restore used to issue directly.
+    wipeAll() {
+        const db = getDb();
+        db.transaction(() => {
+            db.prepare('DELETE FROM shots').run();
+            db.prepare('DELETE FROM annotations').run();
+            db.prepare('DELETE FROM trash').run();
+            db.prepare('DELETE FROM blocklist').run();
         })();
     }
 
