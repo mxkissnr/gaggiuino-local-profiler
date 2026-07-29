@@ -11,6 +11,7 @@ import { openImageCropEditor } from '../components/image-crop.js';
 import { openLightbox } from '../components/lightbox.js';
 import { generateBeanQR, parseGlpQrParams } from '../glp-qr.js';
 import { calcBestGrindCombosForBean } from './shots/grind.js';
+import { sumConsumedDoses, computeBeanRemaining } from '../bean-math.js';
 import { TARGET_ICON_SVG, SLIDERS_ICON_SVG, FLAVOR_WHEEL_ICON_SVG, COFFEE_ICON_SVG, WATER_DROP_ICON_SVG, ICE_CUBE_ICON_SVG, LINK_ICON_SVG, WRENCH_ICON_SVG } from '../icons.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
@@ -88,36 +89,25 @@ export function renderBeanList() {
     el.innerHTML = `<div class="lib-empty">${t('lib_empty_beans')}</div>`;
     return;
   }
-  // #456: a beanId that still resolves to SOME currently-existing bean is
-  // trusted exclusively; only a null/dangling beanId falls back to name
-  // matching — mirrors LibraryService.computeBeanRemaining on the backend
-  // (see its comment for why: this is what lets a bean deleted and
-  // reimported under the same name recover its own consumption history).
-  const idExists = new Set(beans.map(bn => bn.id));
+  // #551: shared with the backend's LibraryService.computeBeanRemaining —
+  // same beanId-first-with-name-fallback matching (#456), same double-round
+  // pattern. doseRows adapts S.shots' { annotation, timestamp } shape into
+  // the { coffee, beanId, dose, timestamp } rows the shared module expects.
+  const doseRows = S.shots
+    .filter(s => s.annotation?.coffee != null)
+    .map(s => ({ coffee: s.annotation.coffee, beanId: s.annotation.beanId, dose: s.annotation.dose, timestamp: s.timestamp }));
   el.innerHTML = beans.map(b => {
-    const beanMatch = s => {
-      const beanId = s.annotation?.beanId;
-      return beanId != null && idExists.has(beanId)
-        ? beanId === b.id
-        : (s.annotation?.coffee || '').toLowerCase() === b.name.toLowerCase();
-    };
-
     // Total consumption across all bags (all shots matching this bean)
-    const totalConsumed = Math.round(S.shots.reduce((sum, s) => {
-      const d = parseFloat(s.annotation?.dose);
-      return beanMatch(s) && d ? sum + d : sum;
-    }, 0));
+    const totalConsumed = Math.round(sumConsumedDoses(b, doseRows, beans));
 
     // Current bag consumption (shots since last bag openedAt)
     const bags = Array.isArray(b.bags) ? b.bags : [];
     const activeBag = bags.length ? bags[bags.length - 1] : null;
-    const activeBagConsumed = activeBag ? Math.round(S.shots.reduce((sum, s) => {
-      const d = parseFloat(s.annotation?.dose);
-      const afterOpen = s.timestamp * 1000 >= (activeBag.openedAt || 0);
-      return (beanMatch(s) && d && afterOpen) ? sum + d : sum;
-    }, 0)) : totalConsumed;
+    const activeBagConsumed = activeBag
+      ? Math.round(sumConsumedDoses(b, doseRows, beans, activeBag.openedAt || 0))
+      : totalConsumed;
 
-    const remaining = b.stock_g ? Math.round(b.stock_g - activeBagConsumed) : null;
+    const remaining = computeBeanRemaining(b, doseRows, beans);
     let invHtml = '';
     if (b.stock_g) {
       const isLow = remaining < 100;
