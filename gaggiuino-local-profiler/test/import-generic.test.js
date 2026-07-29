@@ -1,31 +1,50 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
+const cheerio = require('cheerio');
 
 const { parseGenericShopifyProduct, parseOpenGraph, findDuplicateBean, enrichGenericBeanFromHtml } = require('../lib/import-generic');
 
-describe('parseGenericShopifyProduct', () => {
-    // Minimal synthetic fixture mirroring a real case (#400, verified against
-    // sproutcoffeeroasters.art): the shop misuses the Shopify vendor field for
-    // a taste-profile tag instead of the roaster name, and the description
-    // uses English specialty-coffee vocabulary that wasn't in the curated
-    // flavor list. No real shop content beyond these few words is committed.
-    const product = {
-        title: 'Lasso Lassi',
-        vendor: 'adventurous',
-        description: '<p>Lychee pop, juicy Tropical sweetness, creamy lactic Lassi finish.</p>',
-        price: 1500,
-    };
+// #555: real fixtures instead of hand-reconstructed ones, following the
+// pattern test/import-parsers.test.js already uses for hoplo/elbgold.
+//
+// - sprout-flower-power.json: sproutcoffeeroasters.art's own
+//   /products/flower-power.js Shopify product JSON endpoint, fetched
+//   2026-07-29, unmodified.
+// - sprout-flower-power.html: trimmed real HTML from the same product page
+//   (title/subtitle block + the "Details" and "Brew Guide" accordions) —
+//   see the fixture file's own header comment.
+// - squaremile-red-brick.html: trimmed real HTML from
+//   shop.squaremilecoffee.com/products/red-brick via a web.archive.org
+//   capture (the live page has since dropped the bullet-recipe section,
+//   #499) — origin-wrapper blend markup, .additional-info flavor line, and
+//   .recipe-bullet "RECIPE DETAILS" block.
+const sproutProduct = JSON.parse(readFileSync(new URL('./fixtures/sprout-flower-power.json', import.meta.url), 'utf8'));
+const sproutHtml     = readFileSync(new URL('./fixtures/sprout-flower-power.html', import.meta.url), 'utf8');
+const squaremileHtml = readFileSync(new URL('./fixtures/squaremile-red-brick.html', import.meta.url), 'utf8');
 
+// squaremile-red-brick.html is inherently a two-component blend page (real
+// products don't come in a conveniently single-origin variant) — the #471
+// (pre-blend, single-origin) test scenarios need just one .origin-content
+// block, sliced from the real fixture via cheerio rather than hand-typed.
+const $squaremile          = cheerio.load(squaremileHtml);
+const originWrapperHtml    = $squaremile.html($squaremile('.origin-content').first());
+const additionalInfoHtml   = $squaremile.html($squaremile('.additional-info').first());
+const bulletRecipeHtml     = $squaremile.html($squaremile('.recipe-bullet').first());
+
+describe('parseGenericShopifyProduct', () => {
     it('falls back to the shop domain when the vendor field is not a roaster name', () => {
-        const bean = parseGenericShopifyProduct(product, 'sproutcoffeeroasters.art');
+        // #400, verified against sproutcoffeeroasters.art: the shop misuses
+        // the Shopify vendor field for a taxonomy tag ("adventurous")
+        // instead of the roaster name.
+        const bean = parseGenericShopifyProduct(sproutProduct, 'sproutcoffeeroasters.art');
         expect(bean.roaster).toBe('sproutcoffeeroasters.art');
-        expect(bean.flavors.length).toBeGreaterThan(0);
-        expect(bean.flavors).toEqual(expect.arrayContaining(['Lychee', 'Tropical', 'Lactic']));
+        expect(bean.flavors).toContain('Jasmin'); // from the "Jasmine Petals" description prose
     });
 
     it('keeps a real-looking vendor name as the roaster', () => {
-        const bean = parseGenericShopifyProduct({ ...product, vendor: 'Elbgold Kaffeerösterei' }, 'elbgold.com');
+        const bean = parseGenericShopifyProduct({ ...sproutProduct, vendor: 'Elbgold Kaffeerösterei' }, 'elbgold.com');
         expect(bean.roaster).toBe('Elbgold Kaffeerösterei');
     });
 
@@ -37,71 +56,29 @@ describe('parseGenericShopifyProduct', () => {
     // listing which roast styles are actually buyable is a more reliable
     // roastType signal than tags, which can be an aspirational superset
     // (tags naming Espresso/Filter/Omni even when only two variants exist).
+    // The real product's own options already exercise this (Profile:
+    // Espresso+Filter -> omni); espresso-only and tags-only are derived
+    // variants of the same real product, overriding just the field each
+    // scenario needs.
     it('derives roastType from a profile/roast option before falling back to tags', () => {
-        const withOption = {
-            ...product,
-            tags: ['Roast_Espresso', 'Roast_Filter', 'Roast_Omni'],
-            options: [{ name: 'Profile', values: ['Espresso', 'Filter'] }],
-        };
-        expect(parseGenericShopifyProduct(withOption, 'sproutcoffeeroasters.art').roastType).toBe('omni');
+        expect(parseGenericShopifyProduct(sproutProduct, 'sproutcoffeeroasters.art').roastType).toBe('omni');
 
-        const espressoOnly = {
-            ...product,
-            tags: ['Roast_Espresso', 'Roast_Filter', 'Roast_Omni'],
-            options: [{ name: 'Roast', values: ['Espresso'] }],
-        };
+        const espressoOnly = { ...sproutProduct, options: [{ name: 'Profile', values: ['Espresso'] }] };
         expect(parseGenericShopifyProduct(espressoOnly, 'sproutcoffeeroasters.art').roastType).toBe('espresso');
     });
 
     it('falls back to tags-based roastType when no profile/roast option exists', () => {
-        const tagsOnly = { ...product, tags: ['Roast_Filter'] };
+        const tagsOnly = { ...sproutProduct, options: [], tags: ['Roast_Filter'] };
         expect(parseGenericShopifyProduct(tagsOnly, 'sproutcoffeeroasters.art').roastType).toBe('filter');
     });
 
     it('leaves roastType null when neither options nor tags name a roast style', () => {
-        expect(parseGenericShopifyProduct(product, 'sproutcoffeeroasters.art').roastType).toBeNull();
+        const noRoastSignal = { ...sproutProduct, options: [], tags: [] };
+        expect(parseGenericShopifyProduct(noRoastSignal, 'sproutcoffeeroasters.art').roastType).toBeNull();
     });
 });
 
 describe('enrichGenericBeanFromHtml', () => {
-    // Trimmed reconstruction of sproutcoffeeroasters.art/products/flower-power
-    // (#423, ground truth pulled 2026-07-21) — just the title/subtitle group
-    // and the two accordions the enrichment reads, no nav/checkout/PayPal
-    // markup. Real product copy, shortened structure.
-    const sproutHtml = `
-        <div class="group-block-content">
-            <div class="text-block h2"><h1>Flower Power</h1></div>
-            <div class="text-block h4"><p>White Peach, Strawberry, Jasmine</p></div>
-            <product-price>€18,00</product-price>
-        </div>
-        <details class="details">
-            <summary class="details__header">Details</summary>
-            <div class="details-content">
-                <p>Process - Anaerobic Natural</p><p>Variety - 74112, 74110</p><p>Producer - Producers in the Yirgacheffe region</p><p>Origin - Banko Chelchele, Gedeb Zone, Southern Ethiopia</p><p>Elevation - 1900-2300 MASL</p>
-            </div>
-        </details>
-        <details class="details">
-            <summary class="details__header">Brew Guide</summary>
-            <div class="details-content">
-                <p><span class="metafield-multi_line_text_field">Espresso<br>
-                In: 19.7g<br>
-                Out: 48g for a double, split to make 2 x ~24g single espressos.<br>
-                Time: 27-29 seconds<br>
-                Ratio: 1 - 2.4<br>
-                Temp: 92-93 Celsius<br>
-                <br>
-                Milky Espresso<br>
-                In: 20g<br>
-                Out: 38g for a double, split to make 2x19g single shots.<br>
-                Time: 28-30 seconds<br>
-                Ratio: 1 - 1.9<br>
-                Temp: 92-93 Celsius<br>
-                <br>
-                We have a slow &amp; long pre-infusion with a soft pressure profile. If your machine has a short pre-infusion or jumps to 9 bar immediately, reduce these times by 1 or 2 seconds to avoid overextraction.</span></p>
-            </div>
-        </details>
-    `;
-
     const jsonOnlyBean = {
         name: 'Flower Power', roaster: 'sproutcoffeeroasters.art', notes: '',
         flavors: ['Jasmin'], origin: 'ET', origins: [{ code: 'ET' }],
@@ -263,38 +240,20 @@ describe('enrichGenericBeanFromHtml', () => {
         });
     });
 
-    // #471, ground truth: shop.squaremilecoffee.com/products/red-brick pulled
-    // 2026-07-23 — the "Coffee information" origin-wrapper markup, no
-    // <details>/.details-content anywhere on the page. Trimmed to the first
-    // blend component's origin-wrapper group only (real pages repeat this
-    // once per blend component; first-match-wins picks up the first one).
-    const originWrapperHtml = `
-        <div class="submenu-origin">
-            <div class="origin-content">
-                <div class="origin-wrapper">
-                    <div><h5 class="origin-title">Coffee</h5><p>Altamira de Chirripó</p></div>
-                    <div><h5 class="origin-title">Roast Level</h5><p>Medium </p></div>
-                </div>
-                <div class="origin-wrapper">
-                    <div><h5 class="origin-title">Country</h5><p>Costa Rica </p></div>
-                    <div><h5 class="origin-title">Process</h5><p>White Honey</p></div>
-                </div>
-                <div class="origin-wrapper">
-                    <div><h5 class="origin-title">Variety</h5><p>Catuaí</p></div>
-                    <div><h5 class="origin-title">Producer</h5><p>Micepa Micromill</p></div>
-                </div>
-            </div>
-        </div>
-    `;
-
+    // #471, ground truth: shop.squaremilecoffee.com/products/red-brick — the
+    // "Coffee information" origin-wrapper markup, no <details>/.details-content
+    // anywhere on the page. originWrapperHtml is the first of the real,
+    // fetched page's two .origin-content blend blocks (see the fixture-load
+    // comment at the top of this file) — real markup, sliced to one
+    // component for these pre-blend (#471) scenarios.
     describe('origin-wrapper markup (#471, no <details> accordion on the page)', () => {
         const jsonOnlyBean2 = { name: 'Red Brick', roaster: 'Square Mile Coffee Roasters', origins: [] };
 
         it('fills process/variety/producer/region from .origin-title + sibling <p> pairs', () => {
             const bean = enrichGenericBeanFromHtml(jsonOnlyBean2, originWrapperHtml);
             expect(bean.process).toBe('White Honey');
-            expect(bean.variety).toBe('Catuaí');
-            expect(bean.producer).toBe('Micepa Micromill');
+            expect(bean.variety).toBe('Catuaí, Caturra');
+            expect(bean.producer).toBe('Puente Tarrazú Micromill');
             expect(bean.region).toBe('Costa Rica');
         });
 
@@ -319,15 +278,15 @@ describe('enrichGenericBeanFromHtml', () => {
         // tasting notes render as a single all-caps, slash-separated line
         // rather than the short comma-separated h4 subtitle #423 covers.
         it('fills flavors from an all-caps slash-separated .additional-info line, title-cased', () => {
-            const html = `${originWrapperHtml}<h5 class="additional-info">RED APPLE / TOFFEE / CHOCOLATE / HAZELNUT</h5>`;
+            const html = `${originWrapperHtml}${additionalInfoHtml}`;
             const bean = enrichGenericBeanFromHtml({ name: 'Red Brick' }, html);
-            expect(bean.flavors).toEqual(['Red Apple', 'Toffee', 'Chocolate', 'Hazelnut']);
+            expect(bean.flavors).toEqual(['Plum', 'Chocolate', 'Hazelnut', 'Raisin']);
         });
 
         it('merges .additional-info flavors alongside a JSON-derived flavor instead of overwriting it', () => {
-            const html = `${originWrapperHtml}<h5 class="additional-info">RED APPLE / TOFFEE</h5>`;
+            const html = `${originWrapperHtml}${additionalInfoHtml}`;
             const bean = enrichGenericBeanFromHtml({ name: 'Red Brick', flavors: ['Jasmin'] }, html);
-            expect(bean.flavors).toEqual(['Jasmin', 'Red Apple', 'Toffee']);
+            expect(bean.flavors).toEqual(['Jasmin', 'Plum', 'Chocolate', 'Hazelnut', 'Raisin']);
         });
 
         it('ignores .additional-info when it has no slash (not a flavor list)', () => {
@@ -338,44 +297,23 @@ describe('enrichGenericBeanFromHtml', () => {
     });
 
     // #498, ground truth: shop.squaremilecoffee.com/products/red-brick — a
-    // 50/50 blend of two origins, each its own .origin-content block.
+    // blend of two origins, each its own .origin-content block. blendHtml
+    // (the squaremileHtml fixture, unsliced) is both real .origin-content
+    // blocks, unlike originWrapperHtml above (the first block only).
     describe('origin-wrapper blends (#498, multiple .origin-content blocks)', () => {
-        const blendHtml = `
-            <div class="submenu-origin">
-                <div class="origin-content">
-                    <div class="origin-wrapper">
-                        <div><h5 class="origin-title">Country</h5><p>Costa Rica </p></div>
-                        <div><h5 class="origin-title">Process</h5><p>White Honey</p></div>
-                    </div>
-                    <div class="origin-wrapper">
-                        <div><h5 class="origin-title">Variety</h5><p>Catuaí</p></div>
-                        <div><h5 class="origin-title">Producer</h5><p>Micepa Micromill</p></div>
-                    </div>
-                </div>
-                <div class="origin-content">
-                    <div class="origin-wrapper">
-                        <div><h5 class="origin-title">Country</h5><p>Colombia </p></div>
-                        <div><h5 class="origin-title">Process</h5><p>Washed </p></div>
-                    </div>
-                    <div class="origin-wrapper">
-                        <div><h5 class="origin-title">Variety</h5><p>Caturra, Colombia, Typica</p></div>
-                        <div><h5 class="origin-title">Producer</h5><p>58 Smallholders </p></div>
-                    </div>
-                </div>
-            </div>
-        `;
+        const blendHtml = squaremileHtml;
 
         it('joins each field across both blend components instead of keeping only the first', () => {
             const bean = enrichGenericBeanFromHtml({ name: 'Red Brick' }, blendHtml);
             expect(bean.process).toBe('White Honey / Washed');
-            expect(bean.variety).toBe('Catuaí / Caturra, Colombia, Typica');
-            expect(bean.producer).toBe('Micepa Micromill / 58 Smallholders');
-            expect(bean.region).toBe('Costa Rica / Colombia');
+            expect(bean.variety).toBe('Catuaí, Caturra / Catuaí, Bourbon, Caturra');
+            expect(bean.producer).toBe('Puente Tarrazú Micromill / Chacayá Producer Group');
+            expect(bean.region).toBe('Costa Rica / Guatemala');
         });
 
         it('resolves both blend origins into distinct ISO codes', () => {
             const bean = enrichGenericBeanFromHtml({ name: 'Red Brick', origins: [] }, blendHtml);
-            expect(bean.origins).toEqual(expect.arrayContaining([{ code: 'CR' }, { code: 'CO' }]));
+            expect(bean.origins).toEqual(expect.arrayContaining([{ code: 'CR' }, { code: 'GT' }]));
             expect(bean.origins).toHaveLength(2);
         });
 
@@ -389,18 +327,6 @@ describe('enrichGenericBeanFromHtml', () => {
     // #499, ground truth: shop.squaremilecoffee.com/products/red-brick —
     // brew recipe rendered as a plain bullet list, no <details> at all.
     describe('bullet-list recipe details (#499, no <details> Brew Guide accordion)', () => {
-        const bulletRecipeHtml = `
-            <div class="recipe-bullet">
-                <h5 class="recipe-title">RECIPE DETAILS</h5>
-                <p class="recipe-points">We recommend the following recipe as a starting point:
-                <br><br>
-                • Dose: 19 grams <br><br>
-                • Brew temperature: 201ºF-202ºF/94ºC-94.5ºC <br><br>
-                • Brew time: 28-32 sec <br><br>
-                • Brew Ratio: 1:2 <br><br></p>
-            </div>
-        `;
-
         it('extracts brewTempC from the Celsius half of a dual-unit temperature line', () => {
             const bean = enrichGenericBeanFromHtml({ name: 'Red Brick' }, bulletRecipeHtml);
             expect(bean.brewTempC).toBe(94.25);
