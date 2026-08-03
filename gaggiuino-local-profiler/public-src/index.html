@@ -1104,6 +1104,13 @@
                 <button class="theme-btn" data-theme-val="light"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg> <span data-i18n="theme_light">Light</span></button>
             </div>
             <h3 class="settings-card-title" style="margin-top:14px" data-i18n="settings_accent">Farbschema</h3>
+            <!-- #604: shown when the default machine has its own colour theme
+                 (see machines-settings.js's applyDefaultMachineAccentTheme()) —
+                 that theme drives the whole app's accent instead of this
+                 picker, whose swatches stay clickable/functional (so the
+                 preference is still recorded for when the machine theme is
+                 later cleared) but visually have no effect while overridden. -->
+            <p class="settings-card-desc" id="accentMachineThemeNote" style="display:none" data-i18n="settings_accent_machine_theme_note">Die Standardmaschine hat ein eigenes Farbthema — dieses bestimmt aktuell den App-Akzent statt der Auswahl unten.</p>
             <div class="accent-swatches" id="accentSwatches">
                 <button class="accent-swatch" data-accent="amber"  title="Amber"  style="background:linear-gradient(135deg,#f59e0b,#f97316)"></button>
                 <button class="accent-swatch" data-accent="ocean"  title="Ocean"  style="background:linear-gradient(135deg,#3b82f6,#06b6d4)"></button>

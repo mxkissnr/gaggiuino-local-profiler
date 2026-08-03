@@ -165,7 +165,7 @@ export default {
     compare_title:(a,b)=>`Comparación: Shot ${a} vs. Shot ${b}`,
     please_wait:'Espera …',
     profile_unknown:'Perfil desconocido',
-    nav_settings:'Ajustes', settings_theme:'Tema', settings_accent:'Esquema de colores', theme_dark:'Oscuro', theme_light:'Claro', theme_crema:'Crema', settings_language:'Idioma',
+    nav_settings:'Ajustes', settings_theme:'Tema', settings_accent:'Esquema de colores', settings_accent_machine_theme_note:'La máquina predeterminada tiene su propio tema de color — actualmente controla el acento de la app en lugar del selector de abajo.', theme_dark:'Oscuro', theme_light:'Claro', theme_crema:'Crema', settings_language:'Idioma',
     settings_bottom_nav:'Barra de navegación móvil', settings_bottom_nav_desc:'Elige hasta 4 destinos para la barra de navegación inferior en el móvil. Todo lo demás va a "Más".',
     settings_bottom_nav_checkbox_label:'Mostrar en la barra', settings_bottom_nav_move_up:'Subir', settings_bottom_nav_move_down:'Bajar',
     settings_machines:'Máquinas', settings_machines_desc:'Gestiona las máquinas de espresso que monitoriza esta app.', settings_machines_add:'+ Añadir máquina',
