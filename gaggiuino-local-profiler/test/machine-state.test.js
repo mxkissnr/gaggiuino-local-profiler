@@ -65,6 +65,54 @@ describe('deriveMachineState (#552)', () => {
         expect(r.machineStatus.pressureSensorFaulted).toBe(false);
         expect(r.machineStatus.pressureSensorFaultReason).toBe('');
     });
+
+    // #615
+    it('prefers a fresh sensorSnap temperature/pressure/weight over status when present', () => {
+        const r = deriveMachineState(
+            { brewSwitchState: false, pressure: '9.0', temperature: '92.0', weight: '10.0', targetTemperature: '93' },
+            undefined,
+            { sensorSnap: { temperature: 93.5, pressure: 8.7, weight: 12.3 } },
+        );
+        expect(r.temperature).toBe(93.5);
+        expect(r.pressure).toBe(8.7);
+        expect(r.weight).toBe(12.3);
+        expect(r.machineStatus.temperature).toBe(93.5);
+        expect(r.machineStatus.pressure).toBe(8.7);
+        expect(r.machineStatus.weight).toBe(12.3);
+        // targetTemperature is profile-configured, not a live sensor reading -- stays status-sourced
+        expect(r.targetTemperature).toBe(93);
+        expect(r.machineStatus.targetTemperature).toBe(93);
+    });
+
+    it('falls back to status temperature/pressure/weight when sensorSnap is absent (backward compatible)', () => {
+        const r = deriveMachineState({
+            brewSwitchState: false, pressure: '9.0', temperature: '92.0', weight: '10.0', targetTemperature: '93',
+        });
+        expect(r.temperature).toBe(92.0);
+        expect(r.pressure).toBe(9.0);
+        expect(r.weight).toBe(10.0);
+    });
+
+    it('falls back to status temperature/pressure/weight when sensorSnap is stale (null, per the transport clients\' own STALE_MS check)', () => {
+        const r = deriveMachineState(
+            { brewSwitchState: false, pressure: '9.0', temperature: '92.0', weight: '10.0' },
+            undefined,
+            { sensorSnap: null },
+        );
+        expect(r.temperature).toBe(92.0);
+        expect(r.pressure).toBe(9.0);
+        expect(r.weight).toBe(10.0);
+    });
+
+    it('still derives isBrewing from status.brewSwitchState, not sensorSnap.brewActive/.brewSwitchActive', () => {
+        const r = deriveMachineState(
+            { brewSwitchState: false, temperature: '92' },
+            undefined,
+            { sensorSnap: { temperature: 92, brewActive: true, brewSwitchActive: true } },
+        );
+        expect(r.isBrewing).toBe(false);
+        expect(r.machineStatus.brewSwitchState).toBe(false);
+    });
 });
 
 describe('isStillWarm (#552)', () => {

@@ -19,10 +19,32 @@ const { WARM_TEMP_MIN, WARM_OFF_MAX_MS } = require('./constants');
 // keeping this function pure. Omitting `live` entirely (every existing
 // caller/test) reproduces the exact prior machineStatus shape.
 function deriveMachineState(status, now = Date.now(), live = {}) {
-    const isBrewing         = !!status.brewSwitchState;
-    const pressure          = parseFloat(status.pressure)          || 0;
-    const temperature       = parseFloat(status.temperature)       || 0;
-    const weight            = parseFloat(status.weight)            || 0;
+    // #615: brew-start/stop detection (and the shot-recording datapoints it
+    // drives in lib/poll.js's pollViaGaggiuinoStatus) stays on the physical
+    // brewSwitchState read from REST, not sensorSnap.brewActive/
+    // .brewSwitchActive below -- the MQTT transport's toSensorSnap()
+    // (gaggiuino-mqtt-client.js) only ever maps brewActive, never
+    // brewSwitchActive, so the two live transports would disagree on which
+    // field means "the physical switch is on" if isBrewing read off
+    // sensorSnap instead. brewSwitchState is the one signal REST and both
+    // transports agree on unambiguously, and it's arguably still the more
+    // authoritative source (the physical switch) regardless. Left
+    // REST-sourced deliberately, not an oversight.
+    const isBrewing = !!status.brewSwitchState;
+    const { sensorSnap, sysState } = live;
+
+    // #615: sensorSnap (WS or MQTT, via lib/live-transport.js) is only ever
+    // passed non-null when fresh -- see the STALE_MS checks in
+    // gaggiuino-live-client.js's/gaggiuino-mqtt-client.js's
+    // getLiveSensorSnapshot() -- so preferring its temperature/pressure/
+    // weight here is strictly fresher data than the REST poll, never a
+    // stale-but-served fallback. targetTemperature stays REST/profile-
+    // sourced below -- it's a configured setpoint, not a live sensor
+    // reading, and neither SensorStateSnapshotDto nor SystemStateDto
+    // (lib/gaggiuino-proto.js) carries an equivalent field to source it from.
+    const pressure          = sensorSnap ? (parseFloat(sensorSnap.pressure)    || 0) : (parseFloat(status.pressure)    || 0);
+    const temperature       = sensorSnap ? (parseFloat(sensorSnap.temperature) || 0) : (parseFloat(status.temperature) || 0);
+    const weight             = sensorSnap ? (parseFloat(sensorSnap.weight)     || 0) : (parseFloat(status.weight)     || 0);
     const targetTemperature = parseFloat(status.targetTemperature) || 0;
     const profileName       = status.profileName || 'Unknown';
 
@@ -40,7 +62,6 @@ function deriveMachineState(status, now = Date.now(), live = {}) {
         updatedAt:         now,
     };
 
-    const { sensorSnap, sysState } = live;
     if (sensorSnap) {
         machineStatus.pumpFlow              = sensorSnap.pumpFlow    || 0;
         machineStatus.weightFlow            = sensorSnap.weightFlow  || 0;

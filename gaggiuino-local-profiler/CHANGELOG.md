@@ -1,3 +1,8 @@
+## [2.27.2] – 2026-08-04
+
+### Fixed
+- **MQTT/WS live values (temperature/pressure/weight) didn't actually update any faster than the existing 1s REST poll, defeating the point of #598's push-based transport.** `lib/machine-state.js`'s `deriveMachineState()` merged the additive fields (#597/#598: `pumpFlow`, `weightFlow`, `waterTemperature`, relay states, fault flags) from the active transport's cached snapshot, but kept reading `temperature`/`pressure`/`weight` themselves from the REST `/api/system/status` poll only — `live.sensorSnap` carried fresher values for those three the whole time, just unused. Now prefers `sensorSnap`'s values whenever the active transport (WS or MQTT) has a fresh cached snapshot, falling back to the REST-derived values exactly as before when it doesn't (transport not yet connected, or its own staleness check has expired it) — backward compatible, verified against every pre-#597 test in `test/machine-state.test.js`. `targetTemperature` stays sourced from REST/the active profile as before: it's a configured setpoint, not a live sensor reading, and neither transport's decoded message carries an equivalent field. `isBrewing` also stays sourced from `status.brewSwitchState` rather than `sensorSnap.brewActive`/`.brewSwitchActive` — the MQTT transport only maps the former, so the latter would behave inconsistently between WS and MQTT if used for brew-start/stop detection. Closes #615
+
 ## [2.27.1] – 2026-08-03
 
 ### Fixed
