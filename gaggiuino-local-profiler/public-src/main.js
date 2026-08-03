@@ -115,6 +115,8 @@ import { loadDemoData, endDemo } from './components/onboarding.js';
 import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, renderMachinesList,
          onThemeCustomColorAChange, onThemeCustomColorBChange, onThemeGradientToggleChange } from './components/machines-settings.js';
 
+import { loadMqttSettings, setMqttTransport, saveMqttSettings, applyMqttToMachine } from './components/mqtt-settings.js';
+
 import { BEAN_ICON_SVG } from './icons.js';
 
 // ── Toast helper ──────────────────────────────────────────────────────────
@@ -681,6 +683,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('machineThemeCustomA')?.addEventListener('input', onThemeCustomColorAChange);
   document.getElementById('machineThemeCustomB')?.addEventListener('input', onThemeCustomColorBChange);
   document.getElementById('machineThemeGradientToggle')?.addEventListener('change', onThemeGradientToggleChange);
+  document.querySelectorAll('#mqttTransportToggle [data-mqtt-transport]').forEach(btn => {
+    btn.addEventListener('click', () => setMqttTransport(btn.dataset.mqttTransport));
+  });
+  document.getElementById('mqttSaveBtn')?.addEventListener('click', saveMqttSettings);
+  document.getElementById('mqttApplyToMachineBtn')?.addEventListener('click', applyMqttToMachine);
   document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
@@ -800,6 +807,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // nothing to display itself against. Now runs once the token is ready,
     // same as loadData()/loadLibrary() below.
     loadMachines();
+    loadMqttSettings();
     loadDrinkMenu();
     loadMilkTypes();
     await loadData();
