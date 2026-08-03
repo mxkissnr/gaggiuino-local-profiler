@@ -11,7 +11,7 @@ import { t } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
 import { WARNING_ICON_SVG } from '../icons.js';
 import { updateStatus } from './status.js';
-import { THEME_PRESETS } from '../../lib/machines/theme-presets.js';
+import { THEME_PRESETS, resolveTheme } from '../../lib/machines/theme-presets.js';
 import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
 
 function escapeHtml(s) {
@@ -45,6 +45,80 @@ export function getDefaultMachineId() {
   return (S.machines || []).find(m => m.isDefault)?.id ?? null;
 }
 
+// #604: parses a validated "#rrggbb" hex string (see machineSchema in
+// lib/validation/schemas.js — theme.a/b are guaranteed hex by the time they
+// reach here) into {r,g,b}, or null for anything else.
+const HEX_RE = /^#([0-9a-f]{6})$/i;
+function hexToRgb(hex) {
+  const m = HEX_RE.exec(hex || '');
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+// Same relative-luminance formula as glp-card.js's _luminanceOf()
+// (GLP-SHARED:contrast v1, sibling glp-lovelace-card repo) — sRGB channels
+// linearized then weighted per WCAG. Reused here on raw {r,g,b} rather than
+// via a computed-style probe since theme.a/b are already known-hex.
+function relativeLuminance({ r, g, b }) {
+  const lin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+// #604: reconciles the default machine's per-machine colour theme (#594,
+// previously icon-only) into the global --accent-* variables that style.css's
+// [data-accent="..."] swatch presets normally drive, so it becomes the whole
+// app's accent instead of only the machine icon's. Only the DEFAULT
+// machine's theme does this — non-default machines stay icon-only (their own
+// device context), same default-machine-only scope as getDefaultMachineId()
+// above (and machine_coordinator.py's multi-machine scope note in the
+// sibling glp-integration repo).
+//
+// Sets the 5 vars as inline styles on <html>, which always outrank the
+// [data-accent] stylesheet rules regardless of which swatch is selected —
+// same "inline style wins over the cascade" pattern glp-card.js's
+// _applySemanticColorContrast() uses. Clears them (falling back to the
+// swatch picker again) when the default machine has no theme set.
+//
+// --accent-text uses the DARKER of the two stops (a flat theme has a===b and
+// reduces to a single check) at the same 0.179 WCAG flip-point crossover
+// glp-card.js's _applySemanticColorContrast() uses: pure #000/#fff at that
+// luminance split is a mathematical guarantee of >=4.58:1 against any
+// resulting accent colour, so no need to hand-check each preset/custom value.
+// --accent-glow doesn't need the same rigor (it's a low-alpha background
+// wash, not text-on-fill contrast) — a flat 15% alpha of the first stop
+// matches every existing preset's own glow convention (see style.css).
+export function applyDefaultMachineAccentTheme() {
+  const root = document.documentElement;
+  // Some test doubles for `document` (and, in principle, any non-browser
+  // caller) don't provide documentElement — a no-op here rather than a
+  // thrown error, since loadMachines() must still reach
+  // applyActiveMachineChange() right after this call regardless.
+  if (!root) return;
+  const machine = (S.machines || []).find(m => m.isDefault);
+  const resolved = resolveTheme(machine?.theme);
+  const swatchesEl = document.getElementById('accentSwatches');
+  const noteEl = document.getElementById('accentMachineThemeNote');
+  if (!resolved) {
+    ['--accent', '--accent-from', '--accent-to', '--accent-text', '--accent-glow']
+      .forEach(prop => root.style.removeProperty(prop));
+    swatchesEl?.classList.remove('accent-swatches-disabled');
+    if (noteEl) noteEl.style.display = 'none';
+    return;
+  }
+  const rgbA = hexToRgb(resolved.a);
+  const rgbB = hexToRgb(resolved.b);
+  root.style.setProperty('--accent', resolved.a);
+  root.style.setProperty('--accent-from', resolved.a);
+  root.style.setProperty('--accent-to', resolved.b);
+  const luminances = [rgbA, rgbB].filter(Boolean).map(relativeLuminance);
+  const darkest = luminances.length ? Math.min(...luminances) : null;
+  if (darkest != null) root.style.setProperty('--accent-text', darkest > 0.179 ? '#000' : '#fff');
+  if (rgbA) root.style.setProperty('--accent-glow', `rgba(${rgbA.r},${rgbA.g},${rgbA.b},.15)`);
+  swatchesEl?.classList.add('accent-swatches-disabled');
+  if (noteEl) noteEl.style.display = '';
+}
+
 export async function loadMachines() {
   try {
     const r = await apiFetch('api/machines');
@@ -57,6 +131,11 @@ export async function loadMachines() {
     }
     renderMachinesList();
     renderMachineSwitcher();
+    // #604: recomputes on every loadMachines() completion (startup, machine
+    // switch, and — since saveMachineForm() on success calls loadMachines()
+    // itself — every machine-edit save too) so switching the default machine
+    // or editing its theme updates the whole app's accent live, no reload.
+    applyDefaultMachineAccentTheme();
     // loadData() and loadMachines() both fire around startup with no fixed
     // order — if shots already loaded before the default machine was known,
     // S.shots was filtered against a null activeMachineId (i.e. unfiltered).

@@ -857,6 +857,13 @@
         .accent-swatch { width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; transition: transform .18s, border-color .18s; outline: none; }
         .accent-swatch:hover { transform: scale(1.12); }
         .accent-swatch.active { border-color: #fff; transform: scale(1.18); box-shadow: 0 0 0 2px rgba(0,0,0,.4); }
+        /* #604: default machine's own theme is overriding the picker's
+           output (see applyDefaultMachineAccentTheme() in
+           components/machines-settings.js) — swatches stay clickable
+           (picker keeps recording the preference for when the machine theme
+           is later cleared), just dimmed so it reads as "not currently in
+           effect" rather than silently doing nothing. */
+        .accent-swatches-disabled .accent-swatch { opacity: .45; }
 
         /* ── Coffee Library ── */
         .lib-open-btn { background: none; border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-400); font-size: .75rem; padding: 3px 8px; cursor: pointer; transition: border-color .15s, color .15s; }

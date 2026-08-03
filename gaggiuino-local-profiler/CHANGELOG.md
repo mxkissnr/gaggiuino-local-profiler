@@ -1,7 +1,12 @@
-## [2.25.0] – 2026-08-03
+## [2.26.0] – 2026-08-03
 
 ### Added
 - **Per-notification-type toggles in Settings.** Every automatic notification the app sends — preheat-ready, low-stock bean warning, shop opened/closed broadcast, new order to barista, and order accepted/completed/declined to customer — now has its own on/off switch in the Orders admin panel's "Push-Benachrichtigungen" section, next to the existing barista-notify-service picker. Stored alongside the rest of the orders settings (`loadOrdersSettings`/`saveOrdersSettings`) so preheat-ready and low-stock notify config lives in the same place as the order notifications that already used it, rather than splitting across `config.yaml` and the JSON-backed orders settings. All five default to on, so existing installs keep their current notification behavior unchanged until a toggle is explicitly turned off. Closes #603
+
+## [2.25.0] – 2026-08-03
+
+### Added
+- **The default machine's per-machine colour theme (#594/#595, previously icon-only) now drives the whole app's accent colour.** When the default machine has a theme configured, its resolved `{a,b}` hex stops are applied as the app-wide `--accent`/`--accent-from`/`--accent-to` (Settings' "Farbschema" swatch picker, `style.css`'s `[data-accent="..."]` presets), recomputed live whenever machines load or the default machine's theme is edited — no reload needed. `--accent-text` (readable text/icon colour on a full-strength accent fill) is derived from the darker of the two gradient stops using the same luminance/0.179-WCAG-crossover approach as the Lovelace card's `_applySemanticColorContrast()`, and `--accent-glow` from a 15%-alpha wash of the first stop. The swatch picker itself keeps working exactly as before when the default machine has no theme set (this is additive, not a replacement) — while a machine theme is active, its swatches stay clickable (still recording the preference for later) but are visually dimmed with an explanatory note so it's clear why picking a swatch has no visible effect. Only the *default* machine's theme drives this — non-default machines' themes stay icon-only, matching the existing default-machine-only scope elsewhere in this codebase. Closes #604
 
 ## [2.24.0] – 2026-08-03
 
