@@ -22,12 +22,21 @@
 // ServiceTestCommandDto below were added straight from the Gaggiuino
 // project's own published WS API reference (docs/rest-api/websocket.md in
 // gaggiuino/gaggiuino.github.io) rather than reverse-engineered from a
-// bundle — field numbers/types are transcribed verbatim from that doc, not
-// live-verified against a real machine the way the profile CRUD messages
-// above were. Settings themselves (GaggiaSettingsDto) are deliberately NOT
-// modeled here: the settings proxy uses the REST endpoints
-// (GET/POST /api/settings/*, see lib/machines/gaggiuino/adapter.js), which
-// carry plain JSON, not this binary protocol.
+// bundle — field numbers/types are transcribed verbatim from that doc.
+// ServiceTestCommandDto (and ServiceTestPeripheralDto) have since been
+// live-verified against a real machine (#600, LED peripheral): the machine
+// correctly interpreted the command and flashed the LED. Unexpectedly, no
+// `d_resp` was ever sent for it despite the docs stating every c_* command
+// gets one — the actual completion signal was a `d_resp`-shaped-but-different
+// push, `d_notif` (NotificationDto below), with message "Service test
+// complete". gaggiuino-ws-client.js's sendCommand() treats a matching
+// d_notif as an alternative success signal specifically for c_service_test
+// (not broadened to other commands, which already work via d_resp as
+// documented — opmode/tare live-verified separately, see #581's closure).
+// Settings themselves (GaggiaSettingsDto) are deliberately NOT modeled here:
+// the settings proxy uses the REST endpoints (GET/POST /api/settings/*, see
+// lib/machines/gaggiuino/adapter.js), which carry plain JSON, not this
+// binary protocol.
 const { MessageType } = require('@protobuf-ts/runtime');
 
 // ── Enums ──
@@ -40,6 +49,7 @@ const OperationModeDto = {
     5: 'FLUSH_AUTO', FLUSH_AUTO: 5, 6: 'HOT_WATER', HOT_WATER: 6, 7: 'HOME', HOME: 7,
 };
 const ServiceTestPeripheralDto = { 0: 'PUMP', PUMP: 0, 1: 'VALVE', VALVE: 1, 2: 'VALVE_B', VALVE_B: 2, 3: 'LED', LED: 3 };
+const NotificationTypeDto = { 0: 'INFO', INFO: 0, 1: 'SUCCESS', SUCCESS: 1, 2: 'WARN', WARN: 2, 3: 'ERROR', ERROR: 3 };
 
 // ── Action codes — request (g_/c_ prefixed) and their matching server-push
 // response action (d_ prefixed) are DIFFERENT strings, not the same one
@@ -71,7 +81,8 @@ const RESPONSE_ACTION = {
 let PhaseStopConditionsDto, TransitionDto, PhaseDto, GlobalStopConditionsDto,
     BrewRecipeDto, ProfileDto, WebSocketProfileIdCommandDto,
     WebSocketMessageDto, WebSocketResponseDto, SavedProfileDto, SavedProfilesDto,
-    UpdateSystemStateCommandDto, ServiceTestCommandDto, SensorStateSnapshotDto, SystemStateDto;
+    UpdateSystemStateCommandDto, ServiceTestCommandDto, SensorStateSnapshotDto, SystemStateDto,
+    NotificationDto;
 
 PhaseStopConditionsDto = new MessageType('PhaseStopConditionsDto', [
     { no: 1, name: 'time', kind: 'scalar', T: 13 },
@@ -146,6 +157,14 @@ SavedProfileDto = new MessageType('SavedProfileDto', [
 
 SavedProfilesDto = new MessageType('SavedProfilesDto', [
     { no: 1, name: 'profiles', kind: 'message', repeat: 2, T: () => SavedProfileDto },
+]);
+
+// Pushed as `d_notif` — mirrors the machine's on-screen/MQTT notifications.
+// Live-verified (#600): the completion signal for c_service_test arrives
+// this way, not via d_resp — see the header comment above.
+NotificationDto = new MessageType('NotificationDto', [
+    { no: 1, name: 'type', kind: 'enum', T: () => ['NotificationTypeDto', NotificationTypeDto] },
+    { no: 2, name: 'message', kind: 'scalar', T: 9 },
 ]);
 
 // #597 additions below — see the header comment: transcribed from the
@@ -225,9 +244,10 @@ SystemStateDto = new MessageType('SystemStateDto', [
 
 module.exports = {
     PhaseTypeDto, TransitionCurveDto, WebSocketResponseResultDto, OperationModeDto,
-    ServiceTestPeripheralDto, ND, RESPONSE_ACTION,
+    ServiceTestPeripheralDto, NotificationTypeDto, ND, RESPONSE_ACTION,
     PhaseStopConditionsDto, TransitionDto, PhaseDto, GlobalStopConditionsDto,
     BrewRecipeDto, ProfileDto, WebSocketProfileIdCommandDto,
     WebSocketMessageDto, WebSocketResponseDto, SavedProfileDto, SavedProfilesDto,
     UpdateSystemStateCommandDto, ServiceTestCommandDto, SensorStateSnapshotDto, SystemStateDto,
+    NotificationDto,
 };

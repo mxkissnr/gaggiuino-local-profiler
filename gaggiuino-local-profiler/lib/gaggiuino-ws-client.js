@@ -18,6 +18,7 @@ const {
     WebSocketResponseDto, WebSocketResponseResultDto,
     UpdateSystemStateCommandDto, ServiceTestCommandDto,
     OperationModeDto, ServiceTestPeripheralDto,
+    NotificationDto,
 } = require('./gaggiuino-proto');
 
 const DEFAULT_TIMEOUT_MS = 8000;
@@ -83,6 +84,13 @@ function sendAndWait(baseUrl, action, requestData, responseMsgType, timeoutMs = 
 // service-test/save-settings/save-active-profile) are confirmed by the
 // generic ack itself: WebSocketResponseDto.action echoes the action sent,
 // and .result/.errorMessage report success or failure.
+//
+// c_service_test is a documented exception (#600, live-verified): the
+// machine never sends a d_resp for it, only a d_notif ("Service test
+// complete"). Treated as an alternative success signal ONLY for that one
+// action — every other command here still works via d_resp exactly as
+// documented (opmode/tare live-verified separately, #581), so this isn't
+// broadened to the whole function.
 function sendCommand(baseUrl, action, requestData, timeoutMs = DEFAULT_TIMEOUT_MS) {
     return new Promise((resolve, reject) => {
         let settled = false;
@@ -111,12 +119,23 @@ function sendCommand(baseUrl, action, requestData, timeoutMs = DEFAULT_TIMEOUT_M
             if (settled) return;
             let envelope;
             try { envelope = WebSocketMessageDto.fromBinary(data); } catch { return; }
-            if (envelope.action !== 'd_resp' || !envelope.data) return;
-            let resp;
-            try { resp = WebSocketResponseDto.fromBinary(envelope.data); } catch { return; }
-            if (resp.action !== action) return; // ack for a different in-flight command on this connection
-            if (resp.result === WebSocketResponseResultDto.ERROR) finish(new Error(resp.errorMessage || `Machine rejected "${action}"`));
-            else finish(null, { ok: true });
+            if (!envelope.data) return;
+
+            if (envelope.action === 'd_resp') {
+                let resp;
+                try { resp = WebSocketResponseDto.fromBinary(envelope.data); } catch { return; }
+                if (resp.action !== action) return; // ack for a different in-flight command on this connection
+                if (resp.result === WebSocketResponseResultDto.ERROR) finish(new Error(resp.errorMessage || `Machine rejected "${action}"`));
+                else finish(null, { ok: true });
+                return;
+            }
+
+            // c_service_test-only fallback — see this function's header comment.
+            if (action === ND.ServiceTest && envelope.action === 'd_notif') {
+                let notif;
+                try { notif = NotificationDto.fromBinary(envelope.data); } catch { return; }
+                finish(null, { ok: true, message: notif.message });
+            }
         });
 
         ws.on('error', (e) => finish(new Error(`WebSocket error: ${e.message}`)));

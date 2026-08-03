@@ -85,3 +85,35 @@ describe('gaggiuino-ws-client #597 commands', () => {
         await expect(gaggiuinoWs.saveActiveProfile(baseUrl())).resolves.toEqual({ ok: true });
     });
 });
+
+// #600: real hardware never acks c_service_test via d_resp, only a d_notif
+// ("Service test complete") — live-verified against gaggia.intern. This
+// mock server reproduces that (d_notif only, no d_resp) to prove
+// sendCommand()'s fallback works, separately from the d_resp-based mock
+// server above.
+describe('gaggiuino-ws-client c_service_test d_notif fallback (#600)', () => {
+    let server, port, gaggiuinoWs, proto;
+
+    beforeAll(async () => {
+        gaggiuinoWs = req('../lib/gaggiuino-ws-client');
+        proto = req('../lib/gaggiuino-proto');
+        server = new WebSocketServer({ port: 0 });
+        port = server.address().port;
+
+        server.on('connection', (ws) => {
+            ws.on('message', (data) => {
+                const envelope = proto.WebSocketMessageDto.fromBinary(data);
+                if (envelope.action !== proto.ND.ServiceTest) return;
+                const notif = proto.NotificationDto.create({ type: proto.NotificationTypeDto.INFO, message: 'Service test complete' });
+                const msg = proto.WebSocketMessageDto.create({ action: 'd_notif', data: proto.NotificationDto.toBinary(notif) });
+                ws.send(proto.WebSocketMessageDto.toBinary(msg));
+            });
+        });
+    });
+
+    afterAll(() => server.close());
+
+    it('resolves ok from a d_notif ack when no d_resp ever arrives', async () => {
+        await expect(gaggiuinoWs.serviceTest(`http://127.0.0.1:${port}`, 'LED')).resolves.toEqual({ ok: true, message: 'Service test complete' });
+    });
+});
