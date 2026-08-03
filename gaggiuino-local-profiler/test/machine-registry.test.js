@@ -72,6 +72,42 @@ describe('lib/machines/registry', () => {
         expect(registry.getMachine(created.id)).toBeNull();
     });
 
+    // #594: theme is stored as a JSON string in machines.theme (see lib/db.js's
+    // machines table comment) and parsed back into an object by row().
+    it('createMachine/updateMachine round-trip a preset theme', () => {
+        const registry = require('../lib/machines/registry');
+        const created = registry.createMachine({ name: 'Preset Machine', type: 'gaggiuino', host: '10.0.0.1', theme: { preset: 'ember-espresso' } });
+        expect(created.theme).toEqual({ preset: 'ember-espresso' });
+        expect(registry.getMachine(created.id).theme).toEqual({ preset: 'ember-espresso' });
+
+        const updated = registry.updateMachine(created.id, { theme: { a: '#f59e0b', b: '#0891b2' } });
+        expect(updated.theme).toEqual({ a: '#f59e0b', b: '#0891b2' });
+    });
+
+    it('createMachine defaults theme to null (no theme set) when omitted', () => {
+        const registry = require('../lib/machines/registry');
+        const created = registry.createMachine({ name: 'No Theme', type: 'gaggiuino', host: '10.0.0.2' });
+        expect(created.theme).toBeNull();
+    });
+
+    it('updateMachine can clear a previously-set theme back to null', () => {
+        const registry = require('../lib/machines/registry');
+        const created = registry.createMachine({ name: 'Themed', type: 'gaggiuino', host: '10.0.0.3', theme: { preset: 'amber-americano' } });
+        const updated = registry.updateMachine(created.id, { theme: null });
+        expect(updated.theme).toBeNull();
+    });
+
+    // Defensive parsing (lib/machines/registry.js's parseTheme): a hand-edited
+    // or corrupt machines.theme value must never 500 the whole registry —
+    // it degrades to "no theme set" instead of throwing.
+    it('getMachine tolerates a corrupt (non-JSON) theme column value', () => {
+        const registry = require('../lib/machines/registry');
+        const created = registry.createMachine({ name: 'Corrupt Theme', type: 'gaggiuino', host: '10.0.0.4' });
+        memDb.prepare('UPDATE machines SET theme = ? WHERE id = ?').run('{not valid json', created.id);
+        expect(() => registry.getMachine(created.id)).not.toThrow();
+        expect(registry.getMachine(created.id).theme).toBeNull();
+    });
+
     it('deleteMachine refuses to delete the default machine', () => {
         const registry = require('../lib/machines/registry');
         registry.ensureDefaultMachine();
@@ -171,6 +207,47 @@ describe('v1 -> v2 schema migration (pre-existing single-machine DB)', () => {
         expect(machines[0].id).toBe(1);
 
         v1.close();
+    });
+});
+
+describe('migrateMachineTheme (#594 column migration)', () => {
+    const hasColumn = (db, table, col) => !!db.prepare(
+        `SELECT 1 FROM pragma_table_info(?) WHERE name = ?`
+    ).get(table, col);
+
+    it('adds the theme column to a machines table that predates it, without touching existing rows', () => {
+        // Build a post-#317, pre-#594 machines table by hand (has switch_entity
+        // but no theme column yet) — mirrors an install that upgraded past
+        // multi-machine support before this feature shipped.
+        const db = new Database(':memory:');
+        db.exec(`
+            CREATE TABLE machines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
+                type TEXT NOT NULL, host TEXT NOT NULL, switch_entity TEXT,
+                is_default INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1,
+                created_at INTEGER NOT NULL
+            );
+        `);
+        db.prepare(
+            `INSERT INTO machines (id, name, type, host, is_default, enabled, created_at) VALUES (1,'Gaggiuino','gaggiuino','gaggiuino.local',1,1,1000)`
+        ).run();
+
+        expect(hasColumn(db, 'machines', 'theme')).toBe(false);
+        realDb.migrateMachineTheme(db);
+        expect(hasColumn(db, 'machines', 'theme')).toBe(true);
+
+        const machine = db.prepare('SELECT * FROM machines WHERE id = 1').get();
+        expect(machine.theme).toBeNull(); // no theme set — no visual change for existing machines
+        expect(machine.name).toBe('Gaggiuino'); // untouched
+        db.close();
+    });
+
+    it('is idempotent — a second run against an already-migrated table is a no-op', () => {
+        const db = new Database(':memory:');
+        realDb.initSchema(db); // already has the theme column from initSchema's CREATE TABLE
+        expect(() => { realDb.migrateMachineTheme(db); realDb.migrateMachineTheme(db); }).not.toThrow();
+        expect(hasColumn(db, 'machines', 'theme')).toBe(true);
+        db.close();
     });
 });
 

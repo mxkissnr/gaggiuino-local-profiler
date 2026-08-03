@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Added
+- **Per-machine colour theme (8 presets + custom flat colour/gradient) and a new detailed Gaggia Classic machine icon rendered in the machine's own theme.** The machine form now has a swatch picker (8 curated coffee-themed presets, "none", or a custom colour with an optional two-stop gradient); the picked theme is stored on `machines.theme` as either `{"preset":"<key>"}` or `{"a":"#rrggbb","b":"#rrggbb"}` (flat colour when `a === b`) — this is the stable contract the Lovelace cards will consume in a later round (documented in `lib/db.js`'s machines table comment and `DOCS.md`). The new icon (`public-src/machine-icon.js`) renders in that theme colour in the machine list, the machine form preview, and the topbar machine switcher, and falls back to the app's existing accent gradient when no theme is set or a stored value fails strict `#rrggbb` validation. Closes #594
+
 ## [2.23.1] – 2026-08-02
 
 ### Fixed

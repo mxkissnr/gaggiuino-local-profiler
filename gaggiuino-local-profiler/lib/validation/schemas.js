@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { THEME_PRESET_KEYS } = require('../machines/theme-presets');
 
 const annotationSchema = z.object({
     coffee:        z.string().max(200).optional(),
@@ -138,11 +139,23 @@ const profileSchema = z.object({
 });
 
 // ── Machine registry (#317) ─────────────────────────────────────────────
+// Machine theme (#594): stored as-is in machines.theme (see lib/db.js's
+// machines table comment for the exact JSON contract). Hex colours are
+// validated strictly (#rrggbb only, no CSS colour names/functions) since
+// this value is interpolated straight into SVG/CSS on both the app and the
+// Lovelace cards — anything looser risks CSS/markup injection.
+const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'expected a #rrggbb hex colour');
+const themeSchema = z.union([
+    z.object({ preset: z.enum(THEME_PRESET_KEYS) }).strict(),
+    z.object({ a: hexColorSchema, b: hexColorSchema }).strict(),
+]).nullable();
+
 const machineSchema = z.object({
     name:         z.string().min(1).max(100),
     type:         z.enum(['gaggiuino', 'gaggimate']),
     host:         z.string().min(1).max(255),
     switchEntity: z.string().max(200).optional().nullable(),
+    theme:        themeSchema.optional(),
     enabled:      z.boolean().optional().default(true),
 });
 

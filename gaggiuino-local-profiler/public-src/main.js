@@ -112,7 +112,8 @@ import { startProfileDialinFromList, profileDialinClose,
 
 import { loadDemoData, endDemo } from './components/onboarding.js';
 
-import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, renderMachinesList } from './components/machines-settings.js';
+import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, renderMachinesList,
+         onThemeCustomColorAChange, onThemeCustomColorBChange, onThemeGradientToggleChange } from './components/machines-settings.js';
 
 import { BEAN_ICON_SVG } from './icons.js';
 
@@ -677,6 +678,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('machineFormCancelBtn')?.addEventListener('click', closeMachineForm);
   document.getElementById('machineFormSaveBtn')?.addEventListener('click', saveMachineForm);
   document.getElementById('machineFormTestBtn')?.addEventListener('click', testMachineForm);
+  document.getElementById('machineThemeCustomA')?.addEventListener('input', onThemeCustomColorAChange);
+  document.getElementById('machineThemeCustomB')?.addEventListener('input', onThemeCustomColorBChange);
+  document.getElementById('machineThemeGradientToggle')?.addEventListener('change', onThemeGradientToggleChange);
   document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.

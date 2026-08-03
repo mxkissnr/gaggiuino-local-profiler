@@ -11,10 +11,22 @@ import { t } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
 import { WARNING_ICON_SVG } from '../icons.js';
 import { updateStatus } from './status.js';
+import { THEME_PRESETS } from '../../lib/machines/theme-presets.js';
+import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+
+// preset key -> i18n label key, e.g. 'ember-espresso' -> 'theme_preset_ember_espresso'.
+function presetLabelKey(key) {
+  return `theme_preset_${key.replace(/-/g, '_')}`;
+}
+
+// Theme currently selected in the (single, static) machine form — kept as
+// module state rather than re-read from the DOM since it isn't a plain
+// input value (preset key vs. {a,b} custom colours). Reset in openMachineForm().
+let _selectedTheme = null;
 
 (function restoreActiveMachine() {
   const stored = localStorage.getItem('glp_active_machine');
@@ -72,8 +84,10 @@ export function renderMachineSwitcher() {
   // visibility would depend on two independently-changing things (this and
   // the sidebar's own collapsed state) for one thin, low-cost bar.
   const machines = S.machines || [];
+  const iconEl = document.getElementById('machineSwitcherIcon');
   if (machines.length < 2) {
     el.style.display = 'none'; el.innerHTML = '';
+    iconEl?.classList.remove('visible');
     return;
   }
 
@@ -81,11 +95,26 @@ export function renderMachineSwitcher() {
     machines.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
   el.value = String(S.activeMachineId ?? 'all');
   el.style.display = '';
+  updateMachineSwitcherIcon();
+}
+
+// Small coloured machine glyph next to the topbar switcher (#594) so
+// multi-machine users can tell which machine is active at a glance, not
+// just by name — a plain <select> can't reliably render swatches inside
+// its own <option>s across browsers.
+function updateMachineSwitcherIcon() {
+  const iconEl = document.getElementById('machineSwitcherIcon');
+  if (!iconEl) return;
+  const machine = (S.machines || []).find(m => m.id === S.activeMachineId);
+  if (!machine) { iconEl.classList.remove('visible'); iconEl.innerHTML = ''; return; }
+  iconEl.innerHTML = machineIconMiniSvg(machine.theme);
+  iconEl.classList.add('visible');
 }
 
 export function switchActiveMachine(rawValue) {
   const value = rawValue === 'all' ? 'all' : parseInt(rawValue, 10);
   setActiveMachine(value);
+  updateMachineSwitcherIcon();
   applyActiveMachineChange();
 }
 
@@ -131,6 +160,7 @@ export function renderMachinesList() {
     const row = document.createElement('div');
     row.className = 'machine-row';
     row.innerHTML = `
+      <span class="machine-row-icon">${machineIconMiniSvg(m.theme)}</span>
       <span class="machine-row-name">${escapeHtml(m.name)}</span>
       <span class="machine-row-type">${m.type === 'gaggimate' ? 'GaggiMate' : 'Gaggiuino'}</span>
       <span class="machine-row-shot-count">${t('settings_machine_shot_count', shotCount)}</span>
@@ -146,6 +176,76 @@ export function renderMachinesList() {
   });
 }
 
+// Renders the 8 preset swatches + "none" + "custom" as visual colour circles
+// (not a bare <select> of names, per #594) and (re-)binds their click
+// handlers — cheap enough (10 buttons) to fully re-render on every selection
+// change rather than hand-tracking which button needs its `active` class
+// toggled.
+function renderThemeSwatches() {
+  const wrap = document.getElementById('machineThemeSwatches');
+  if (!wrap) return;
+  const isCustom = !!(_selectedTheme && !_selectedTheme.preset);
+  wrap.innerHTML = `
+    <button type="button" class="machine-theme-swatch machine-theme-swatch-none${!_selectedTheme ? ' active' : ''}" data-theme-action="none" title="${escapeHtml(t('settings_machine_theme_none'))}" aria-label="${escapeHtml(t('settings_machine_theme_none'))}"></button>
+    ${THEME_PRESETS.map(p => `<button type="button" class="machine-theme-swatch${_selectedTheme?.preset === p.key ? ' active' : ''}" data-theme-action="preset" data-preset-key="${escapeHtml(p.key)}" style="background:${p.a === p.b ? p.a : `linear-gradient(135deg,${p.a},${p.b})`}" title="${escapeHtml(t(presetLabelKey(p.key)))}" aria-label="${escapeHtml(t(presetLabelKey(p.key)))}"></button>`).join('')}
+    <button type="button" class="machine-theme-swatch machine-theme-swatch-custom${isCustom ? ' active' : ''}" data-theme-action="custom" title="${escapeHtml(t('settings_machine_theme_custom'))}" aria-label="${escapeHtml(t('settings_machine_theme_custom'))}"></button>`;
+  wrap.querySelectorAll('[data-theme-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.themeAction;
+      if (action === 'none') _selectedTheme = null;
+      else if (action === 'preset') _selectedTheme = { preset: btn.dataset.presetKey };
+      else if (action === 'custom') {
+        _selectedTheme = (_selectedTheme && !_selectedTheme.preset) ? _selectedTheme : { a: '#f59e0b', b: '#f59e0b' };
+      }
+      syncThemeFormUI();
+    });
+  });
+}
+
+// Keeps the swatch active-states and the custom colour inputs in sync with
+// _selectedTheme — called after every selection change (swatch click or
+// custom colour/gradient-toggle edit).
+function syncThemeFormUI() {
+  renderThemeSwatches();
+  const preview = document.getElementById('machineThemePreview');
+  if (preview) preview.innerHTML = machineIconSvg(_selectedTheme);
+  const customWrap = document.getElementById('machineThemeCustomInputs');
+  const isCustom = !!(_selectedTheme && !_selectedTheme.preset);
+  if (customWrap) customWrap.style.display = isCustom ? '' : 'none';
+  if (!isCustom) return;
+  const aInput = document.getElementById('machineThemeCustomA');
+  const bInput = document.getElementById('machineThemeCustomB');
+  const gradToggle = document.getElementById('machineThemeGradientToggle');
+  const isGradient = _selectedTheme.a !== _selectedTheme.b;
+  if (aInput) aInput.value = _selectedTheme.a;
+  if (bInput) { bInput.value = _selectedTheme.b; bInput.style.display = isGradient ? '' : 'none'; }
+  if (gradToggle) gradToggle.checked = isGradient;
+}
+
+// Static custom-colour input wiring (#machineThemeCustomA/B, the gradient
+// toggle) — called once from main.js's DOMContentLoaded handler, same
+// pattern as the other machine form buttons wired there.
+export function onThemeCustomColorAChange() {
+  if (!_selectedTheme || _selectedTheme.preset) return;
+  const aInput = document.getElementById('machineThemeCustomA');
+  const gradToggle = document.getElementById('machineThemeGradientToggle');
+  _selectedTheme.a = aInput.value;
+  if (!gradToggle?.checked) _selectedTheme.b = aInput.value;
+  syncThemeFormUI();
+}
+
+export function onThemeCustomColorBChange() {
+  if (!_selectedTheme || _selectedTheme.preset) return;
+  _selectedTheme.b = document.getElementById('machineThemeCustomB').value;
+}
+
+export function onThemeGradientToggleChange() {
+  if (!_selectedTheme || _selectedTheme.preset) return;
+  const gradToggle = document.getElementById('machineThemeGradientToggle');
+  if (!gradToggle.checked) _selectedTheme.b = _selectedTheme.a;
+  syncThemeFormUI();
+}
+
 export function openMachineForm(machine) {
   const card = document.getElementById('machineFormCard');
   if (!card) return;
@@ -155,6 +255,8 @@ export function openMachineForm(machine) {
   document.getElementById('machineFormHost').value = machine?.host || '';
   document.getElementById('machineFormSwitch').value = machine?.switchEntity || '';
   document.getElementById('machineFormTestResult').textContent = '';
+  _selectedTheme = machine?.theme || null;
+  syncThemeFormUI();
   card.style.display = '';
 }
 
@@ -170,6 +272,7 @@ export async function saveMachineForm() {
     type: document.getElementById('machineFormType').value,
     host: document.getElementById('machineFormHost').value.trim(),
     switchEntity: document.getElementById('machineFormSwitch').value.trim() || null,
+    theme: _selectedTheme,
   };
   if (!payload.name || !payload.host) return;
   const url    = id ? `api/machines/${id}` : 'api/machines';

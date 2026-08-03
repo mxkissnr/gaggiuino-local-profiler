@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { annotationSchema, beanSchema, orderSchema } = require('../lib/validation/schemas');
+const { annotationSchema, beanSchema, orderSchema, machineSchema } = require('../lib/validation/schemas');
+const { THEME_PRESET_KEYS } = require('../lib/machines/theme-presets');
 const { validate } = require('../lib/middleware/validate');
 
 function runMiddleware(schema, body) {
@@ -69,6 +70,61 @@ describe('beanSchema', () => {
     it('accepts a full bean', () => {
         const result = beanSchema.safeParse({ name: 'Ethiopia Yirgacheffe', roaster: 'Roastery', weight: 250 });
         expect(result.success).toBe(true);
+    });
+});
+
+describe('machineSchema theme (#594)', () => {
+    const base = { name: 'Kitchen', type: 'gaggiuino', host: 'gaggiuino.local' };
+
+    it('accepts a machine with no theme (default appearance)', () => {
+        expect(machineSchema.safeParse(base).success).toBe(true);
+        expect(machineSchema.safeParse({ ...base, theme: null }).success).toBe(true);
+    });
+
+    it('accepts every known preset key', () => {
+        for (const key of THEME_PRESET_KEYS) {
+            const result = machineSchema.safeParse({ ...base, theme: { preset: key } });
+            expect(result.success).toBe(true);
+        }
+    });
+
+    it('rejects a preset key that is not one of the approved presets', () => {
+        const result = machineSchema.safeParse({ ...base, theme: { preset: 'made-up-preset' } });
+        expect(result.success).toBe(false);
+    });
+
+    it('accepts a custom flat colour (a === b)', () => {
+        const result = machineSchema.safeParse({ ...base, theme: { a: '#f59e0b', b: '#f59e0b' } });
+        expect(result.success).toBe(true);
+    });
+
+    it('accepts a custom two-stop gradient (a !== b)', () => {
+        const result = machineSchema.safeParse({ ...base, theme: { a: '#f59e0b', b: '#0891b2' } });
+        expect(result.success).toBe(true);
+    });
+
+    it('rejects a custom colour missing the b stop', () => {
+        const result = machineSchema.safeParse({ ...base, theme: { a: '#f59e0b' } });
+        expect(result.success).toBe(false);
+    });
+
+    it('rejects CSS colour keywords and functions, not just malformed hex — only strict #rrggbb is trusted downstream in SVG/CSS', () => {
+        for (const bad of ['red', 'rgb(255,0,0)', '#fff', '#gggggg', 'javascript:alert(1)']) {
+            const result = machineSchema.safeParse({ ...base, theme: { a: bad, b: bad } });
+            expect(result.success).toBe(false);
+        }
+    });
+
+    it('rejects an XSS payload smuggled into a hex field', () => {
+        const result = machineSchema.safeParse({
+            ...base, theme: { a: '"><script>alert(1)</script>', b: '#f59e0b' },
+        });
+        expect(result.success).toBe(false);
+    });
+
+    it('rejects mixing preset and custom colour keys on the same theme object (.strict())', () => {
+        const result = machineSchema.safeParse({ ...base, theme: { preset: 'amber-americano', a: '#f59e0b' } });
+        expect(result.success).toBe(false);
     });
 });
 

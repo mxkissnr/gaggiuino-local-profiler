@@ -15,6 +15,14 @@ function loadOptions() {
     return {};
 }
 
+// theme is stored as a JSON string (see lib/db.js's machines table comment
+// for the exact contract); parse defensively so a hand-edited/corrupt row
+// never 500s the whole registry — falls back to "no theme set".
+function parseTheme(raw) {
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+}
+
 function row(r) {
     if (!r) return null;
     return {
@@ -23,6 +31,7 @@ function row(r) {
         type:         r.type,
         host:         r.host,
         switchEntity: r.switch_entity || null,
+        theme:        parseTheme(r.theme),
         isDefault:    !!r.is_default,
         enabled:      !!r.enabled,
         createdAt:    r.created_at,
@@ -61,12 +70,12 @@ function getDefaultMachine() {
         || null;
 }
 
-function createMachine({ name, type, host, switchEntity, enabled = true }) {
+function createMachine({ name, type, host, switchEntity, theme, enabled = true }) {
     const db   = getDb();
     const info = db.prepare(
-        `INSERT INTO machines (name, type, host, switch_entity, is_default, enabled, created_at)
-         VALUES (?,?,?,?,0,?,?)`
-    ).run(name, type, host, switchEntity || null, enabled ? 1 : 0, Date.now());
+        `INSERT INTO machines (name, type, host, switch_entity, theme, is_default, enabled, created_at)
+         VALUES (?,?,?,?,?,0,?,?)`
+    ).run(name, type, host, switchEntity || null, theme ? JSON.stringify(theme) : null, enabled ? 1 : 0, Date.now());
     return getMachine(info.lastInsertRowid);
 }
 
@@ -78,9 +87,10 @@ function updateMachine(id, fields) {
     const type         = fields.type ?? existing.type;
     const host         = fields.host ?? existing.host;
     const switchEntity = fields.switchEntity !== undefined ? fields.switchEntity : existing.switchEntity;
+    const theme        = fields.theme !== undefined ? fields.theme : existing.theme;
     const enabled      = fields.enabled !== undefined ? (fields.enabled ? 1 : 0) : (existing.enabled ? 1 : 0);
-    db.prepare('UPDATE machines SET name=?, type=?, host=?, switch_entity=?, enabled=? WHERE id=?')
-        .run(name, type, host, switchEntity, enabled, id);
+    db.prepare('UPDATE machines SET name=?, type=?, host=?, switch_entity=?, theme=?, enabled=? WHERE id=?')
+        .run(name, type, host, switchEntity, theme ? JSON.stringify(theme) : null, enabled, id);
     return getMachine(id);
 }
 

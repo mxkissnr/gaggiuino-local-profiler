@@ -29,12 +29,21 @@ function initSchema(db) {
         -- untouched), additional machines get a synthetic id
         -- (machineId * MACHINE_ID_OFFSET + nativeId, see lib/machines/index.js)
         -- so no PRIMARY KEY rebuild is needed anywhere.
+        -- theme (#594): nullable JSON string, one of
+        --   {"preset":"<key>"}        — one of the 8 approved preset keys (see
+        --                                lib/machines/theme-presets.js)
+        --   {"a":"#rrggbb","b":"#rrggbb"} — custom colour; b === a for a flat
+        --                                colour, b !== a for a two-stop gradient
+        -- NULL = no theme set, current default appearance. This is the
+        -- cross-repo contract the Lovelace cards consume in a later round —
+        -- see DOCS.md "Machine themes".
         CREATE TABLE IF NOT EXISTS machines (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             name          TEXT NOT NULL,
             type          TEXT NOT NULL CHECK(type IN ('gaggiuino','gaggimate')),
             host          TEXT NOT NULL,
             switch_entity TEXT,
+            theme         TEXT,
             is_default    INTEGER NOT NULL DEFAULT 0,
             enabled       INTEGER NOT NULL DEFAULT 1,
             created_at    INTEGER NOT NULL
@@ -102,8 +111,22 @@ function getDb() {
     fixSchema(_db);
     migrate(_db);
     migrateMachineColumns(_db);
+    migrateMachineTheme(_db);
 
     return _db;
+}
+
+// Adds the machines.theme column (#594) for installs that created the
+// machines table before this column existed. Additive/idempotent, same
+// hasColumn()-guard pattern as migrateMachineColumns() above. NULL theme
+// means "no theme set" — nothing changes visually for existing machines.
+function migrateMachineTheme(db) {
+    const hasColumn = (table, col) =>
+        !!db.prepare(`SELECT 1 FROM pragma_table_info(?) WHERE name = ?`).get(table, col);
+    if (!hasColumn('machines', 'theme')) {
+        db.exec('ALTER TABLE machines ADD COLUMN theme TEXT');
+        log('DB: added theme column to machines');
+    }
 }
 
 // Adds machine_id scoping columns (#317) without ever rebuilding shots'/
@@ -272,4 +295,4 @@ function migrate(db) {
     log(`DB: migration complete — ${shotCount} shots, ${Object.keys(annotations).length} annotations`);
 }
 
-module.exports = { getDb, initSchema, migrateMachineColumns };
+module.exports = { getDb, initSchema, migrateMachineColumns, migrateMachineTheme };

@@ -585,6 +585,8 @@
         /* Multi-machine registry (#319) */
         .machines-list { display:flex; flex-direction:column; gap:8px; }
         .machine-row { display:flex; align-items:center; gap:10px; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); padding:10px 14px; flex-wrap:wrap; }
+        .machine-row-icon { width:18px; height:auto; flex-shrink:0; }
+        .machine-row-icon svg { width:100%; height:100%; display:block; }
         .machine-row-name { font-weight:600; color:var(--gray-200); }
         .machine-row-type { font-size:.75rem; color:var(--gray-500); background:var(--gray-900); border-radius:var(--radius); padding:2px 8px; }
         .machine-row-shot-count { font-size:.75rem; color:var(--gray-500); }
@@ -598,6 +600,26 @@
         .machine-form-actions { display:flex; gap:8px; flex-wrap:wrap; }
         .machine-form-actions .backup-btn { display:inline-block; }
         .machine-form-test-result { font-size:.78rem; color:var(--gray-400); min-height:1em; }
+
+        /* Machine colour theme (#594) */
+        .machine-theme-picker-row { display:flex; align-items:center; gap:14px; }
+        .machine-theme-swatches { display:flex; gap:8px; flex-wrap:wrap; margin:2px 0 4px; flex:1; }
+        .machine-theme-preview { width:34px; height:auto; flex-shrink:0; }
+        .machine-theme-preview svg { width:100%; height:100%; display:block; }
+        .machine-theme-swatch { width:28px; height:28px; border-radius:50%; border:2px solid transparent; padding:0; cursor:pointer; outline:none; transition:transform .15s, border-color .15s; }
+        .machine-theme-swatch:hover { transform:scale(1.1); }
+        .machine-theme-swatch.active { border-color:var(--gray-200); transform:scale(1.15); box-shadow:0 0 0 2px rgba(0,0,0,.4); }
+        .machine-theme-swatch-none { background:var(--gray-700); position:relative; }
+        .machine-theme-swatch-none::after { content:''; position:absolute; inset:7px; border-top:2px solid var(--gray-300); transform:rotate(45deg); }
+        .machine-theme-swatch-custom { background:conic-gradient(from 180deg,#f59e0b,#ec4899,#0891b2,#22c55e,#f59e0b); }
+        .machine-theme-custom-inputs { display:flex; align-items:center; gap:10px; margin:2px 0 4px; }
+        .machine-theme-color-input { width:34px; height:28px; padding:0; border:1px solid var(--gray-700); border-radius:var(--radius); background:none; cursor:pointer; }
+        .machine-theme-gradient-toggle { display:flex; align-items:center; gap:5px; font-size:.78rem; color:var(--gray-400); cursor:pointer; }
+
+        /* Topbar machine switcher icon (#594) */
+        .machine-switcher-icon { display:none; width:15px; height:auto; align-items:center; }
+        .machine-switcher-icon svg { width:100%; height:100%; display:block; }
+        .machine-switcher-icon.visible { display:inline-flex; }
 
         /* ── Degassing tracker ── */
         .degassing-bar-wrap { margin-top:6px; }

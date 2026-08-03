@@ -172,6 +172,8 @@ On upgrade from a pre-2.0.0 install, the existing `machine_host`/`switch_entity`
 
 A machine switcher in the topbar (only shown once a second machine is registered) lets you pick "All machines" or one specific machine — Shots list and Analytics scope to that choice, and in "All machines" mode each shot in the list carries a small machine-name badge. **Shot sync now runs for every registered machine** (not just the default one) — since v2.2.0 the scheduled and manual sync loops poll every enabled machine's own adapter and ingest its shots. **Live view is currently only available for the default machine** — additional machines don't have a live-status polling loop yet, so switching to one while on the Live tab shows an explanatory message instead of stale/fake data.
 
+Each machine can be given its own **colour theme**, so machines in a multi-machine setup are easy to tell apart at a glance. Pick one of 8 curated presets (Amber Americano, Ruby Ristretto, Copper Cortado, Twilight Turkish, Marbled Macchiato, Ember Espresso, Mulberry Mocha, Frosty Flat White) or a custom flat colour or two-stop gradient from the machine form's swatch picker. The theme colours a new, detailed Gaggia-style machine icon shown in the machine list, the machine form's live preview, and the topbar machine switcher; a machine with no theme set keeps rendering in the app's own accent colour.
+
 ## Features
 
 | Tab | Description |

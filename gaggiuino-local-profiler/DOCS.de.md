@@ -172,6 +172,8 @@ Beim Upgrade von einer Installation vor v2.0.0 werden die bestehenden Add-on-Opt
 
 Ein Maschinen-Umschalter in der Topbar (nur sichtbar, sobald eine zweite Maschine registriert ist) lässt „Alle Maschinen" oder eine bestimmte Maschine wählen — Shot-Liste und Analytics richten sich nach dieser Auswahl, und im Modus „Alle Maschinen" trägt jeder Shot in der Liste ein kleines Maschinen-Badge. **Der Shot-Sync läuft jetzt für jede registrierte Maschine** (nicht mehr nur für die Standardmaschine) — seit v2.2.0 fragen sowohl der geplante als auch der manuelle Sync-Lauf jede aktivierte Maschine über ihren eigenen Adapter ab und übernehmen deren Shots. **Die Live-Ansicht ist derzeit nur für die Standardmaschine verfügbar** — weitere Maschinen haben noch keine Live-Status-Abfrageschleife; beim Wechsel zu einer solchen Maschine im Live-Tab erscheint ein Hinweistext statt veralteter/vorgetäuschter Daten.
 
+Jede Maschine kann ihr eigenes **Farbthema** bekommen, damit sich Maschinen in einem Multi-Maschinen-Setup auf einen Blick unterscheiden lassen. Zur Wahl stehen 8 kuratierte Presets (Amber Americano, Ruby Ristretto, Copper Cortado, Twilight Turkish, Marbled Macchiato, Ember Espresso, Mulberry Mocha, Frosty Flat White) oder eine eigene flache Farbe bzw. ein Zweifarben-Verlauf über den Farb-Picker im Maschinenformular. Das Farbthema färbt ein neues, detailliertes Gaggia-artiges Maschinensymbol ein, das in der Maschinenliste, der Live-Vorschau des Maschinenformulars und im Maschinen-Umschalter der Topbar erscheint; eine Maschine ohne gesetztes Farbthema wird weiterhin in der Akzentfarbe der App dargestellt.
+
 ## Features
 
 | Tab | Beschreibung |
