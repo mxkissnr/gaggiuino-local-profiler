@@ -23,6 +23,25 @@ function parseTheme(raw) {
     try { return JSON.parse(raw); } catch { return null; }
 }
 
+// #600: closes the stale gaggiuino-live-client.js WS session (if any) for a
+// machine's old host after it's removed or re-hosted — otherwise that
+// session keeps retrying every RECONNECT_DELAY_MS forever, an unbounded leak
+// over a long-running add-on process. Lazy require (not a top-level one):
+// gaggiuino-live-client.js has no back-reference to this module today (no
+// actual cycle), but keeping registry.js's own top-level require graph
+// unchanged for every caller that never touches host/machine-removal
+// matches this repo's existing lazy-require precedent for optional
+// cross-module hooks (see lib/services/LibraryService.js). Best-effort: a
+// failure here must never break the machine CRUD it's hooked onto.
+function evictLiveSession(host) {
+    if (!host) return;
+    try {
+        require('../gaggiuino-live-client').disconnectForHost(host);
+    } catch (e) {
+        log(`Machines: failed to evict stale live session for ${host}: ${e.message}`, true);
+    }
+}
+
 function row(r) {
     if (!r) return null;
     return {
@@ -91,6 +110,12 @@ function updateMachine(id, fields) {
     const enabled      = fields.enabled !== undefined ? (fields.enabled ? 1 : 0) : (existing.enabled ? 1 : 0);
     db.prepare('UPDATE machines SET name=?, type=?, host=?, switch_entity=?, theme=?, enabled=? WHERE id=?')
         .run(name, type, host, switchEntity, theme ? JSON.stringify(theme) : null, enabled, id);
+    // Evict the *old* host's session, not the new one — the new host's
+    // session is opened lazily on its own next live-data read (same as any
+    // other cold cache), same pattern as the delete case below.
+    if (fields.host !== undefined && fields.host !== existing.host) {
+        evictLiveSession(existing.host);
+    }
     return getMachine(id);
 }
 
@@ -99,6 +124,7 @@ function deleteMachine(id) {
     if (!existing) return false;
     if (existing.isDefault) throw new Error('cannot delete the default machine');
     getDb().prepare('DELETE FROM machines WHERE id = ?').run(id);
+    evictLiveSession(existing.host);
     return true;
 }
 

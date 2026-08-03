@@ -77,4 +77,49 @@ describe('gaggiuino-live-client', () => {
         liveClient.getLiveSystemState(baseUrl());
         expect(connections).toBe(before); // no new connections opened by repeated cache reads
     });
+
+    // #600: lib/machines/registry.js's session-eviction hook (deleteMachine/
+    // updateMachine host change) needs a way to actually tear a stale
+    // session down instead of leaving it retrying every RECONNECT_DELAY_MS
+    // forever.
+    it('disconnect(baseUrl) terminates the socket and forgets the session, without triggering a reconnect', async () => {
+        liveClient.getLiveSensorSnapshot(baseUrl());
+        await new Promise(resolve => setTimeout(resolve, 100));
+        expect(server.clients.size).toBe(1);
+
+        liveClient.disconnect(baseUrl());
+        await new Promise(resolve => setTimeout(resolve, 100));
+        // The underlying socket is actually gone (not just forgotten by this
+        // module) and nothing reopened it on its own within this window.
+        expect(server.clients.size).toBe(0);
+
+        // A later read reopens a fresh session/connection, exactly like a
+        // cold cache — same as the very first test in this file.
+        expect(liveClient.getLiveSensorSnapshot(baseUrl())).toBeNull();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        expect(server.clients.size).toBe(1);
+    });
+
+    it('disconnect(baseUrl) does not schedule its own reconnect even past RECONNECT_DELAY_MS', async () => {
+        liveClient.getLiveSensorSnapshot(baseUrl());
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        liveClient.disconnect(baseUrl());
+        // RECONNECT_DELAY_MS is 3000 — wait past it for real. If the closed
+        // socket's own 'close' handler were still attached, this is exactly
+        // when a phantom reconnect would show up as a new server connection.
+        await new Promise(resolve => setTimeout(resolve, 3200));
+        expect(server.clients.size).toBe(0);
+    }, 10000);
+
+    it('disconnectForHost(host) normalizes a bare host (no scheme) to the same baseUrl key connect() uses', async () => {
+        liveClient.getLiveSensorSnapshot(baseUrl());
+        await new Promise(resolve => setTimeout(resolve, 100));
+        expect(server.clients.size).toBe(1);
+
+        liveClient.disconnectForHost(`127.0.0.1:${port}`); // mirrors a machine registry row's raw `host` column
+        await new Promise(resolve => setTimeout(resolve, 100));
+        expect(server.clients.size).toBe(0);
+        expect(liveClient.getLiveSensorSnapshot(baseUrl())).toBeNull(); // session was actually evicted, not left cached
+    });
 });

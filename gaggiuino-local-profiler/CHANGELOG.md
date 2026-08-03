@@ -1,3 +1,8 @@
+## [2.27.4] – 2026-08-04
+
+### Fixed
+- **Stale live-WS session leak when a machine is removed or re-hosted.** `lib/gaggiuino-live-client.js`'s persistent-WS-session cache (#597, keyed by machine `baseUrl`) never evicted an entry, so deleting a machine from the registry or editing its host left the old baseUrl's session retrying every 3s forever — an unbounded resource leak/log-noise source over a long-running add-on process (not reachable by an end user, no observable behaviour change). `lib/machines/registry.js`'s `deleteMachine`/`updateMachine` (on a host change) now evict just that one machine's session via a new targeted `disconnect()`/`disconnectForHost()`, leaving every other machine's live session untouched — unlike `disconnectAll()` (`routes/mqtt.js`'s settings-save flow), which intentionally drops every session because the MQTT broker connection is genuinely global. `lib/gaggiuino-mqtt-client.js`'s own session cache was checked for the same leak shape and doesn't have it: it's keyed by the single global broker connection descriptor, not per machine, so there's nothing for machine add/remove/edit to evict there. Addresses #600 (session-cleanup half only — the issue's second finding, live-verifying `ServiceTestCommandDto`'s protobuf field numbers against real hardware, still needs a reachable machine and remains open)
+
 ## [2.27.3] – 2026-08-04
 
 ### Fixed
