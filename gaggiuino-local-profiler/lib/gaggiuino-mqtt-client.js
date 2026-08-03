@@ -45,6 +45,11 @@ function getSession(conn) {
             sensorSnap: null, sensorSnapAt: 0,
             sysState: null, sysStateAt: 0,
             available: null,
+            // #611: one-time-per-connect log flags — set once the first
+            // sensors/system message arrives after a (re)connect, so a
+            // broker publishing continuously doesn't spam the log on every
+            // message, only confirms once that data is actually flowing.
+            loggedFirstSensorSnap: false, loggedFirstSysState: false,
         };
         sessions.set(key, session);
     }
@@ -127,6 +132,9 @@ function connect(conn) {
 
     client.on('connect', () => {
         session.connecting = false;
+        session.loggedFirstSensorSnap = false;
+        session.loggedFirstSysState = false;
+        log(`Gaggiuino MQTT connected (${conn.host}:${conn.port || 1883}, prefix "${prefix}")`);
         // Sensors/system feed the shared live-state cache (the #597/#598
         // seam); status tracks broker-reported availability. shot/profile/
         // active/maintenance/notification are subscribed per #598's scope
@@ -154,10 +162,18 @@ function connect(conn) {
         if (topic === `${prefix}/sensors`) {
             session.sensorSnap = toSensorSnap(data);
             session.sensorSnapAt = Date.now();
+            if (!session.loggedFirstSensorSnap) {
+                session.loggedFirstSensorSnap = true;
+                log(`Gaggiuino MQTT: first "${topic}" message received — live sensor data flowing`);
+            }
             events.emit('sensor-snap', connKeyFor(conn), session.sensorSnap);
         } else if (topic === `${prefix}/system`) {
             session.sysState = toSysState(data);
             session.sysStateAt = Date.now();
+            if (!session.loggedFirstSysState) {
+                session.loggedFirstSysState = true;
+                log(`Gaggiuino MQTT: first "${topic}" message received — live system data flowing`);
+            }
             events.emit('sys-state', connKeyFor(conn), session.sysState);
         }
         // shot/profile/active/maintenance/notification: received, not yet consumed — see the subscribe() comment above.

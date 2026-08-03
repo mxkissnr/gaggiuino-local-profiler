@@ -15,6 +15,7 @@ Das GLP-Ökosystem (GLP = Gaggiuino Local Profiler) besteht aus vier unabhängig
   └─ /api/system/info    (Firmware-Version)
          │
          │  Sync alle N Min. + Live-Polling während des Bezugs
+         │  (standardmäßig WebSocket, oder MQTT — siehe unten)
          ▼
   ┌──────────────────────────────────┐
   │       GLP App                 │  ← dieses App

@@ -18,9 +18,22 @@
 // unit and silently redirecting a second machine's live data at the same
 // broker/prefix would be wrong far more often than right.
 'use strict';
+const { log } = require('./helpers');
 const gaggiuinoLive = require('./gaggiuino-live-client');
 const gaggiuinoMqtt = require('./gaggiuino-mqtt-client');
 const mqttSettingsRepo = require('./repositories/MqttSettingsRepository');
+
+// #611: logs once when the effective transport for the default machine's
+// live-data read actually changes (not on every read — this is called from
+// every poll cycle) so it's possible to confirm from the logs alone which
+// transport is active after flipping the Settings toggle, without reading
+// source code or attaching a debugger.
+let lastLoggedTransport = null;
+function logTransportChange(active) {
+    if (active === lastLoggedTransport) return;
+    lastLoggedTransport = active;
+    log(`Live-data transport for the default machine is now: ${active}`);
+}
 
 function mqttEligible(isDefaultMachine) {
     if (!isDefaultMachine) return false;
@@ -29,7 +42,9 @@ function mqttEligible(isDefaultMachine) {
 }
 
 function getLiveSensorSnapshot(baseUrl, isDefaultMachine = true) {
-    if (mqttEligible(isDefaultMachine)) return gaggiuinoMqtt.getLiveSensorSnapshot(mqttSettingsRepo.getSettings());
+    const useMqtt = mqttEligible(isDefaultMachine);
+    if (isDefaultMachine) logTransportChange(useMqtt ? 'MQTT' : 'WebSocket');
+    if (useMqtt) return gaggiuinoMqtt.getLiveSensorSnapshot(mqttSettingsRepo.getSettings());
     return gaggiuinoLive.getLiveSensorSnapshot(baseUrl);
 }
 

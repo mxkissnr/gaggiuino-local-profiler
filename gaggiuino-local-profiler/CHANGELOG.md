@@ -1,3 +1,9 @@
+## [2.27.1] – 2026-08-03
+
+### Fixed
+- **No visibility into which live-data transport (WebSocket/MQTT) is active or whether data is flowing.** `lib/gaggiuino-mqtt-client.js` now logs once on a successful broker connect, and once when the first `sensors`/`system` MQTT message actually arrives after a (re)connect (not on every message, to avoid log spam). `lib/live-transport.js` now logs once whenever the effective transport for the default machine's live-data read actually changes, so switching the Settings toggle can be confirmed from the logs alone. Closes #611
+- **Top-level architecture diagram in the Documentation tab didn't mention MQTT as an alternative to the WebSocket sync path.** Annotated the Gaggiuino Machine → GLP App arrow in both DOCS.md and DOCS.de.md. Closes #612
+
 ## [2.27.0] – 2026-08-03
 
 ### Added
