@@ -119,6 +119,8 @@ import { loadMqttSettings, setMqttTransport, saveMqttSettings, applyMqttToMachin
 
 import { loadNotifySettingsCard, saveNotifySettings } from './components/notify-settings.js';
 
+import { renderWhatsNewCard } from './components/whats-new.js';
+
 import { BEAN_ICON_SVG } from './icons.js';
 
 // ── Toast helper ──────────────────────────────────────────────────────────
@@ -563,6 +565,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // wiring here.
   renderBottomNav();
   renderBottomNavSettings();
+  renderWhatsNewCard();
   document.getElementById('more-sheet-backdrop').addEventListener('click', closeMoreSheet);
   document.getElementById('exportAllCsvBtn').addEventListener('click', exportAllCSV);
   document.getElementById('exportShotBtn').addEventListener('click', exportShot);

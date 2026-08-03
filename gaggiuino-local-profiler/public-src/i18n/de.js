@@ -166,6 +166,7 @@ export default {
     please_wait:'Warten …',
     profile_unknown:'Unbekanntes Profil',
     nav_settings:'Einstellungen', settings_theme:'Theme', settings_accent:'Farbschema', settings_accent_machine_theme_note:'Die Standardmaschine hat ein eigenes Farbthema — dieses bestimmt aktuell den App-Akzent statt der Auswahl unten.', theme_dark:'Dark', theme_light:'Hell', theme_crema:'Crema', settings_language:'Sprache',
+    settings_whats_new:'Neuigkeiten', settings_whats_new_desc:'Neue Funktionen und Änderungen der letzten GLP-Versionen.',
     settings_bottom_nav:'Mobile Navigationsleiste', settings_bottom_nav_desc:'Wähle bis zu 4 Ziele für die untere Navigationsleiste auf dem Handy. Alles andere landet unter "Mehr".',
     settings_bottom_nav_checkbox_label:'In der Leiste zeigen', settings_bottom_nav_move_up:'Nach oben verschieben', settings_bottom_nav_move_down:'Nach unten verschieben',
     settings_notify_title:'Benachrichtigungen', settings_notify_desc:'Welche automatischen Benachrichtigungen der Maschine und der Kaffee-Bibliothek sollen gesendet werden?',

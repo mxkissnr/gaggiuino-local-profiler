@@ -346,6 +346,10 @@ GLP has a built-in theme toggle (⚙ Settings → Theme). The choice is saved in
 
 Independent of the Dark/Light toggle, ⚙ Settings → Color scheme offers six accent themes: **Amber** (default), **Ocean**, **Aurora**, **Ember**, **Forest** and **Crema**. Each has its own dark and light variant, contrast-checked to a ≥4.5:1 floor for text on its own background. **Crema** is the odd one out — it also warms the neutral grey scale itself (espresso-brown instead of true grey) rather than only recoloring accents — and pairs with a bundled serif display font (Fraunces, SIL Open Font License, served locally, no external font CDN) used exclusively for bean names in the Bibliothek view and on the shareable shot card; every numeric/data display stays in the regular sans-serif font regardless of accent theme.
 
+### What's New (in-app changelog, v2.28.0)
+
+⚙ Settings → **What's New** shows the last 8 GLP releases, newest first, each with a short list of highlights — so you can see what changed without leaving the app or digging through GitHub. This card is a curated, hand-maintained subset (`lib/whats-new.js`) rather than a rendered copy of the full history: **`CHANGELOG.md` stays the source of truth** for every change ever shipped; the in-app card only ever shows a short highlight per release, capped at the last 8. Highlight text is English-only regardless of your UI language — only the card's own title and description are translated, the same approach taken for shot annotations and tasting notes.
+
 ### HA theme
 
 A matching Home Assistant theme (`glp-ha-theme.yaml`) is included in the repository root. It provides **GLP Dark** and **GLP Light** variants for the full HA interface (sidebar, cards, inputs, switches, status colours).

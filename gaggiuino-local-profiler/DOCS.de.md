@@ -346,6 +346,10 @@ GLP hat einen eingebauten Theme-Wechsler (⚙ Einstellungen → Theme). Die Wahl
 
 Unabhängig vom Hell/Dunkel-Umschalter bietet ⚙ Einstellungen → Farbschema sechs Akzent-Themes: **Amber** (Standard), **Ocean**, **Aurora**, **Ember**, **Forest** und **Crema**. Jedes hat eine eigene Dunkel- und Hell-Variante, kontrastgeprüft auf mindestens 4.5:1 für Text auf eigenem Hintergrund. **Crema** ist der Sonderfall — es färbt zusätzlich die neutrale Grau-Skala selbst warm ein (Espresso-Braun statt echtem Grau) statt nur die Akzentfarben umzufärben — und kombiniert das mit einer mitgelieferten Serifenschrift (Fraunces, SIL Open Font License, lokal ausgeliefert, kein externes Schrift-CDN), die ausschließlich für Bohnennamen in der Bibliothek-Ansicht und auf der teilbaren Shot-Karte verwendet wird; alle numerischen/Daten-Anzeigen bleiben unabhängig vom Akzent-Theme in der regulären serifenlosen Schrift.
 
+### Neuigkeiten (In-App-Changelog, v2.28.0)
+
+⚙ Einstellungen → **Neuigkeiten** zeigt die letzten 8 GLP-Releases, neueste zuerst, jeweils mit einer kurzen Liste der wichtigsten Änderungen — so siehst du auf einen Blick, was sich geändert hat, ohne die App zu verlassen oder in GitHub zu suchen. Diese Karte ist eine kuratierte, von Hand gepflegte Teilmenge (`lib/whats-new.js`) und keine gerenderte Kopie der vollständigen Historie: **`CHANGELOG.md` bleibt die maßgebliche Quelle** für jede jemals ausgelieferte Änderung; die In-App-Karte zeigt pro Release nur einen kurzen Auszug, begrenzt auf die letzten 8. Der Text der Neuigkeiten bleibt unabhängig von der UI-Sprache auf Englisch — nur Titel und Beschreibung der Karte selbst sind übersetzt, derselbe Ansatz wie bei Shot-Anmerkungen und Verkostungsnotizen.
+
 ### HA-Theme
 
 Eine passende Home-Assistant-Theme-Datei (`glp-ha-theme.yaml`) liegt im Repository-Root. Sie enthält **GLP Dark** und **GLP Light** für die gesamte HA-Oberfläche (Sidebar, Karten, Inputs, Switches, Statusfarben).

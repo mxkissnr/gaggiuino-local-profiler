@@ -1,3 +1,8 @@
+## [2.28.0] – 2026-08-04
+
+### Added
+- **In-app "What's New" changelog in Settings.** New releases were previously only documented in `CHANGELOG.md`, GitHub release notes and the wiki's Home page — none of which are visible from inside the app itself, so a user could easily miss a recent capability (surfaced by the v2.25.0–v2.27.0 round: per-machine theme driving the app UI, notification toggles, MQTT transport — three genuinely new things nothing in the app pointed at). A new always-visible "What's New" card at the top of Settings lists the last 8 releases, newest first, each with 1-3 short highlight bullets. Sourced from a new hand-maintained `lib/whats-new.js` — a small structured `{version, date, highlights}` array, not generated from `CHANGELOG.md`'s Markdown, kept in sync by convention (a new entry is added by hand alongside every release, documented in `CLAUDE.md`). Same isomorphic backend/frontend sharing mechanism `lib/machines/theme-presets.js` already uses (`vite.config.js`'s `commonjsOptions`), so no new backend route was needed. Highlight text is English-only (not run through i18n) — historical release notes aren't practical to translate, same reasoning as shot annotations/tasting notes staying user-authored/English-source; only the card's title/description are translated in all 6 languages. Closes #610
+
 ## [2.27.3] – 2026-08-04
 
 ### Fixed

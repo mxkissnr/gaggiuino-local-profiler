@@ -166,6 +166,7 @@ export default {
     please_wait:'Attendere …',
     profile_unknown:'Profilo sconosciuto',
     nav_settings:'Impostazioni', settings_theme:'Tema', settings_accent:'Schema colori', settings_accent_machine_theme_note:'La macchina predefinita ha un proprio tema colore — attualmente determina l’accento dell’app al posto del selettore qui sotto.', theme_dark:'Scuro', theme_light:'Chiaro', theme_crema:'Crema', settings_language:'Lingua',
+    settings_whats_new:'Novità', settings_whats_new_desc:'Le release GLP più recenti e le loro novità principali.',
     settings_bottom_nav:'Barra di navigazione mobile', settings_bottom_nav_desc:'Scegli fino a 4 destinazioni per la barra di navigazione inferiore su mobile. Tutto il resto finisce in "Altro".',
     settings_bottom_nav_checkbox_label:'Mostra nella barra', settings_bottom_nav_move_up:'Sposta su', settings_bottom_nav_move_down:'Sposta giù',
     settings_notify_title:'Notifiche', settings_notify_desc:'Quali notifiche automatiche della macchina e della libreria caffè devono essere inviate?',

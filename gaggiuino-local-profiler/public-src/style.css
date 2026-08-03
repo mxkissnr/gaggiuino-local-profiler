@@ -571,6 +571,13 @@
         .api-token-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
         .api-token-value { flex:1; min-width:0; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); padding:10px 14px; font-size:.78rem; color:var(--gray-200); word-break:break-all; }
 
+        /* "What's New" in-app changelog card (#610) */
+        .whats-new-list { display:flex; flex-direction:column; gap:14px; max-height:360px; overflow-y:auto; }
+        .whats-new-entry { display:flex; flex-direction:column; gap:4px; }
+        .whats-new-version { margin:0; font-size:.82rem; font-weight:600; color:var(--gray-200); }
+        .whats-new-highlights { margin:0; padding-left:18px; font-size:.8rem; color:var(--gray-500); line-height:1.5; }
+        .whats-new-highlights li + li { margin-top:2px; }
+
         /* Configurable mobile bottom nav (#443) */
         .bottom-nav-config-list { display:flex; flex-direction:column; gap:8px; }
         .bottom-nav-config-row { display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); padding:10px 14px; }

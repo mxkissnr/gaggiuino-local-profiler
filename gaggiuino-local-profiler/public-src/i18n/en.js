@@ -166,6 +166,7 @@ export default {
     please_wait:'Waiting …',
     profile_unknown:'Unknown Profile',
     nav_settings:'Settings', settings_theme:'Theme', settings_accent:'Color scheme', settings_accent_machine_theme_note:'The default machine has its own colour theme — it currently drives the app accent instead of the picker below.', theme_dark:'Dark', theme_light:'Light', theme_crema:'Crema', settings_language:'Language',
+    settings_whats_new:"What's New", settings_whats_new_desc:'Recent GLP releases and their highlights.',
     settings_bottom_nav:'Mobile bottom navigation', settings_bottom_nav_desc:'Choose up to 4 destinations for the bottom navigation bar on mobile. Everything else lands under "More".',
     settings_bottom_nav_checkbox_label:'Show in the bar', settings_bottom_nav_move_up:'Move up', settings_bottom_nav_move_down:'Move down',
     settings_notify_title:'Notifications', settings_notify_desc:'Which automatic notifications from the machine and coffee library should be sent?',

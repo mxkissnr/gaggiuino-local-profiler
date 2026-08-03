@@ -1097,6 +1097,17 @@
 
     <!-- Settings view -->
     <div id="settings-view">
+        <!-- "What's New" in-app changelog (#610) — always visible, newest
+             release first. Entries come from lib/whats-new.js (hand-
+             maintained, English-only, capped at 8), rendered by
+             renderWhatsNewCard() (components/whats-new.js). Only the card
+             title/description are translated; highlight text stays
+             English, same as CHANGELOG.md itself. -->
+        <div class="settings-card">
+            <h3 class="settings-card-title" data-i18n="settings_whats_new">What's New</h3>
+            <p class="settings-card-desc" data-i18n="settings_whats_new_desc">Recent GLP releases and their highlights.</p>
+            <div id="whatsNewList" class="whats-new-list"></div>
+        </div>
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="settings_theme">Theme</h3>
             <div class="theme-toggle-group" id="themeToggleGroup">

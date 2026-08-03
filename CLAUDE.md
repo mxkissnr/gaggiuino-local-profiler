@@ -84,6 +84,7 @@ Every commit that ships a feature or fix needs:
 2. `CHANGELOG.md` entry at the top
 3. `DOCS.md` **and** `DOCS.de.md` update if the feature is user-facing — both languages always in sync
 4. `README.md` features table update if it's a new feature
+5. `gaggiuino-local-profiler/lib/whats-new.js` gets a new entry (version, date, 1-3 short highlight bullets) whenever a release ships — the in-app "What's New" Settings card reads this hand-maintained file directly, it is not generated from `CHANGELOG.md`. Keep it capped at 8 entries (drop the oldest).
 
 After the commit:
 ```
