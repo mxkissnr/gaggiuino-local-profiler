@@ -18,7 +18,8 @@ require.cache[haPath].exports = { ...realHa, sendHaNotify, getHaLanguage: async 
 
 const orderRepoPath = require.resolve('../lib/repositories/OrderRepository');
 const realOrderRepo = require(orderRepoPath);
-require.cache[orderRepoPath].exports = { ...realOrderRepo, getSettings: () => ({ baristaNotifyService: 'notify.mobile_app_test' }) };
+let mockOrderSettings = { baristaNotifyService: 'notify.mobile_app_test' };
+require.cache[orderRepoPath].exports = { ...realOrderRepo, getSettings: () => mockOrderSettings };
 
 const libraryService = require('../lib/services/LibraryService');
 const shotRepo       = require('../lib/repositories/ShotRepository');
@@ -37,6 +38,7 @@ function seed({ stock = 120, doses = [] }) {
 beforeEach(() => {
     getDb().exec('DELETE FROM shots; DELETE FROM annotations; DELETE FROM library;');
     sendHaNotify.mockClear();
+    mockOrderSettings = { baristaNotifyService: 'notify.mobile_app_test' };
 });
 
 describe('checkLowStockNotify', () => {
@@ -83,6 +85,14 @@ describe('checkLowStockNotify', () => {
         await libraryService.checkLowStockNotify({ coffee: 'Nonexistent' });
         libraryService.saveLibrary({ beans: [{ id: 2, name: 'Untracked' }], grinders: [], recipes: [] });
         await libraryService.checkLowStockNotify({ coffee: 'Untracked' });
+        expect(sendHaNotify).not.toHaveBeenCalled();
+    });
+
+    // #603: notify_low_stock mute toggle.
+    it('stays silent once notify_low_stock is turned off', async () => {
+        mockOrderSettings = { baristaNotifyService: 'notify.mobile_app_test', notify_low_stock: false };
+        seed({ stock: 120, doses: [18, 18] }); // remaining 84, below threshold
+        await libraryService.checkLowStockNotify({ coffee: 'Lucky Punch' });
         expect(sendHaNotify).not.toHaveBeenCalled();
     });
 });

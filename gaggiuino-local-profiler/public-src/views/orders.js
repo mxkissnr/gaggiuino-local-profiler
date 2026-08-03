@@ -11,6 +11,17 @@ import { LOCALE_MAP } from '../constants.js';
 import { CLOCK_ICON_SVG, BELL_ICON_SVG, BEAN_ICON_SVG } from '../icons.js';
 const MILK_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 4v13a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V7z"/><path d="M9 3 12 6 15 3"/><path d="M8 10h8"/></svg>';
 
+// #603: one mute switch per automatic notification type. Stored as
+// settings[key] === false (absent/true both mean "on") so pre-#603 installs
+// keep sending every notification they already were.
+const NOTIFY_TYPE_KEYS = [
+  { key: 'notify_preheat_ready', i18nKey: 'orders_type_preheat_ready' },
+  { key: 'notify_low_stock',     i18nKey: 'orders_type_low_stock' },
+  { key: 'notify_shop_state',    i18nKey: 'orders_type_shop_state' },
+  { key: 'notify_new_order',     i18nKey: 'orders_type_new_order' },
+  { key: 'notify_order_status',  i18nKey: 'orders_type_order_status' },
+];
+
 export function toggleOrdersMenu() {
   S._ordersMenuOpen = !S._ordersMenuOpen;
   document.getElementById('ordersMenuBody').style.display = S._ordersMenuOpen ? '' : 'none';
@@ -515,6 +526,23 @@ export async function loadNotifyMappingView() {
   const savedRecipients     = Array.isArray(settings.broadcastRecipients) ? settings.broadcastRecipients : [];
   const savedBaristaSvc     = settings.baristaNotifyService || '';
 
+  // ── Notification types section ─────────────────────────────── (#603)
+  const typesRows = NOTIFY_TYPE_KEYS.map(({ key, i18nKey }) => `
+      <div class="orders-broadcast-row">
+        <input type="checkbox" id="nt_${key}" data-notify-key="${key}"${settings[key] !== false ? ' checked' : ''}>
+        <label for="nt_${key}">${t(i18nKey)}</label>
+      </div>`).join('');
+
+  const typesHtml = `
+    <div class="orders-broadcast-section">
+      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${t('orders_types_title')}</p>
+      <p class="orders-notify-hint">${t('orders_types_desc')}</p>
+      <div class="orders-broadcast-list" id="ordersTypesList">${typesRows}</div>
+      <div class="orders-notify-actions">
+        <button class="orders-menu-save-btn" id="ordersTypesSaveBtn">${t('orders_types_save')}</button>
+      </div>
+    </div>`;
+
   // ── Broadcast section ────────────────────────────────────────
   const broadcastRows = services.length
     ? services.map(s => `
@@ -570,8 +598,9 @@ export async function loadNotifyMappingView() {
       </div>`;
   })() : `<p class="orders-notify-hint">${t('orders_notify_no_customers')}</p>`;
 
-  section.innerHTML = broadcastHtml + baristaHtml + perCustomerHtml;
+  section.innerHTML = typesHtml + broadcastHtml + baristaHtml + perCustomerHtml;
 
+  document.getElementById('ordersTypesSaveBtn')?.addEventListener('click', saveNotifyToggles);
   document.getElementById('ordersBroadcastSaveBtn')?.addEventListener('click', saveBroadcastRecipients);
   document.getElementById('ordersBaristaSaveBtn')?.addEventListener('click', saveBaristaNotify);
   document.getElementById('ordersNotifySaveBtn')?.addEventListener('click', saveNotifyMapping);
@@ -598,6 +627,26 @@ export async function saveBroadcastRecipients() {
   if (btn) {
     btn.textContent = t('orders_broadcast_saved');
     setTimeout(() => { btn.textContent = t('orders_broadcast_save'); }, 2000);
+  }
+}
+
+export async function saveNotifyToggles() {
+  const list = document.getElementById('ordersTypesList');
+  if (!list) return;
+  const settings = await apiFetch('api/orders/settings').then(r => r.json()).catch(() => ({}));
+  const body = { enabled: settings.enabled ?? true };
+  list.querySelectorAll('[data-notify-key]').forEach(cb => {
+    body[cb.dataset.notifyKey] = cb.checked;
+  });
+  await apiFetch('api/orders/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const btn = document.getElementById('ordersTypesSaveBtn');
+  if (btn) {
+    btn.textContent = t('orders_types_saved');
+    setTimeout(() => { btn.textContent = t('orders_types_save'); }, 2000);
   }
 }
 

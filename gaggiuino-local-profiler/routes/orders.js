@@ -18,6 +18,17 @@ const { getMachineRuntimeState } = require('../lib/machine-runtime-state');
 // lib/poll.js/lib/preheat.js's own hard single-machine assumption.
 const defaultRuntime = getMachineRuntimeState();
 
+// #603: one mute switch per automatic notification type, stored alongside
+// the rest of the orders settings blob (loadOrdersSettings/saveOrdersSettings)
+// rather than config.yaml — preheat-ready/low-stock already read
+// baristaNotifyService from there, so this keeps all notify config in one
+// place. Absent (undefined) means "on" — preserves existing behavior for
+// installs that saved settings before this key existed.
+const NOTIFY_TOGGLE_KEYS = [
+    'notify_preheat_ready', 'notify_low_stock', 'notify_shop_state',
+    'notify_new_order', 'notify_order_status',
+];
+
 // Menu item emoji is user-supplied and rendered in the UI — cap length
 // (generous for multi-codepoint ZWJ emoji sequences) and reject anything
 // containing HTML-special characters so a stray `<img onerror=...>` can't
@@ -43,6 +54,7 @@ async function _broadcastShopState(s, prev, recipients) {
     const opened = s.enabled && !prev.enabled;
     const closed = !s.enabled && prev.enabled;
     if (!opened && !closed) return;
+    if (s.notify_shop_state === false) return;
 
     // Filter recipients to those whose person entity is currently home.
     // Recipients with no person mapping are always included (no presence data).
@@ -173,6 +185,9 @@ router.post('/api/orders/settings', (req, res) => {
     if (req.body.baristaNotifyService !== undefined) {
         const svc = req.body.baristaNotifyService;
         s.baristaNotifyService = (typeof svc === 'string' && svc.startsWith('notify.')) ? svc.slice(0, 100) : null;
+    }
+    for (const key of NOTIFY_TOGGLE_KEYS) {
+        if (typeof req.body[key] === 'boolean') s[key] = req.body[key];
     }
     saveOrdersSettings(s);
     log(`Orders ${s.enabled ? 'enabled' : 'disabled'}`);
@@ -347,22 +362,29 @@ router.post('/api/orders', (req, res) => {
     const order = orderService.placeOrder({ item, note, customer, notifyService, variant, machine, haUserId, beanId });
     const itemLabel = order.variant ? `${order.item} · ${order.variant}` : order.item;
     log(`Order ${order.id}: ${order.customer} → ${itemLabel}`);
-    const baristaSvc = loadOrdersSettings().baristaNotifyService;
-    if (baristaSvc) {
+    const orderSettings = loadOrdersSettings();
+    if (orderSettings.baristaNotifyService && orderSettings.notify_new_order !== false) {
         const body = order.note ? `${order.customer}: ${order.note}` : order.customer;
-        sendHaNotify(baristaSvc, `☕ ${itemLabel}`, body, 'glp_new_order');
+        sendHaNotify(orderSettings.baristaNotifyService, `☕ ${itemLabel}`, body, 'glp_new_order');
     }
     res.json(order);
 });
 
 // ── Order actions ─────────────────────────────────────────────────────────
 
+// Shared by accept/complete/decline below — all three notify the customer
+// on the same per-order/HA-user mapping, gated by the single
+// notify_order_status toggle (#603).
+function _notifyOrderStatus(order, title, body) {
+    if (loadOrdersSettings().notify_order_status === false) return;
+    sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId], title, body, order.id);
+}
+
 router.post('/api/orders/:id/accept', (req, res, next) => {
     try {
         const order = orderService.acceptOrder(req.params.id, req.body?.eta);
         log(`Order ${order.id} accepted (ETA ${order.eta} min)`);
-        sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId],
-            `☕ ${order.item} wird zubereitet`, `Fertig in ~${order.eta} Min!`, order.id);
+        _notifyOrderStatus(order, `☕ ${order.item} wird zubereitet`, `Fertig in ~${order.eta} Min!`);
         res.json(order);
     } catch (err) { next(err); }
 });
@@ -371,8 +393,7 @@ router.post('/api/orders/:id/complete', (req, res, next) => {
     try {
         const order = orderService.completeOrder(req.params.id);
         log(`Order ${order.id} done (shotId: ${order.shotId})`);
-        sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId],
-            `✓ ${order.item} ist fertig!`, `Hol dir deinen ${order.item} ab — guten Genuss!`, order.id);
+        _notifyOrderStatus(order, `✓ ${order.item} ist fertig!`, `Hol dir deinen ${order.item} ab — guten Genuss!`);
         res.json(order);
     } catch (err) { next(err); }
 });
@@ -381,10 +402,8 @@ router.post('/api/orders/:id/decline', (req, res, next) => {
     try {
         const order = orderService.declineOrder(req.params.id, req.body?.reason);
         log(`Order ${order.id} declined: ${order.declineReason}`);
-        sendHaNotify(order.notifyService || loadNotifyMapping()[order.haUserId],
-            `✕ ${order.item} abgelehnt`,
-            order.declineReason ? `Grund: ${order.declineReason}` : 'Deine Bestellung wurde leider abgelehnt.',
-            order.id);
+        _notifyOrderStatus(order, `✕ ${order.item} abgelehnt`,
+            order.declineReason ? `Grund: ${order.declineReason}` : 'Deine Bestellung wurde leider abgelehnt.');
         res.json(order);
     } catch (err) { next(err); }
 });

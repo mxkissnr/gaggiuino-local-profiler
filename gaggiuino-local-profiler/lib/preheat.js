@@ -95,7 +95,9 @@ async function _checkPreheatNotify(runtime = defaultRuntime) {
     const opts      = loadOptions();
     const preheatMs = Math.max(1, parseInt(opts.preheat_time) || 20) * 60 * 1000;
     if (Date.now() - runtime.switchOnAt < preheatMs) return;
-    const svc = loadOrdersSettings().baristaNotifyService;
+    const settings = loadOrdersSettings();
+    if (settings.notify_preheat_ready === false) return;
+    const svc = settings.baristaNotifyService;
     if (!svc) return;
     const lang = await getHaLanguage();
     sendHaNotify(svc, notifyT(lang, 'preheat_title'), notifyT(lang, 'preheat_body'), 'glp_preheat_ready');

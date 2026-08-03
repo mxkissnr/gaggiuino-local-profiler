@@ -1,3 +1,8 @@
+## [2.25.0] – 2026-08-03
+
+### Added
+- **Per-notification-type toggles in Settings.** Every automatic notification the app sends — preheat-ready, low-stock bean warning, shop opened/closed broadcast, new order to barista, and order accepted/completed/declined to customer — now has its own on/off switch in the Orders admin panel's "Push-Benachrichtigungen" section, next to the existing barista-notify-service picker. Stored alongside the rest of the orders settings (`loadOrdersSettings`/`saveOrdersSettings`) so preheat-ready and low-stock notify config lives in the same place as the order notifications that already used it, rather than splitting across `config.yaml` and the JSON-backed orders settings. All five default to on, so existing installs keep their current notification behavior unchanged until a toggle is explicitly turned off. Closes #603
+
 ## [2.24.0] – 2026-08-03
 
 ### Added

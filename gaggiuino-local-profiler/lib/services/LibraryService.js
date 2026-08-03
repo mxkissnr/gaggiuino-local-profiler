@@ -383,7 +383,9 @@ class LibraryService {
         if (remaining === null || remaining >= LOW_STOCK_THRESHOLD_G) return;
         const { sendHaNotify, getHaLanguage }  = require('../ha');
         const { notifyT }                      = require('../notify-i18n');
-        const svc = orderRepo.getSettings().baristaNotifyService;
+        const settings = orderRepo.getSettings();
+        if (settings.notify_low_stock === false) return;
+        const svc = settings.baristaNotifyService;
         if (!svc) return;
         const lang = await getHaLanguage();
         await sendHaNotify(svc,
