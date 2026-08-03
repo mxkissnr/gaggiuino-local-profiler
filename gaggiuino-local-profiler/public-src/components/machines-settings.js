@@ -237,6 +237,7 @@ export function onThemeCustomColorAChange() {
 export function onThemeCustomColorBChange() {
   if (!_selectedTheme || _selectedTheme.preset) return;
   _selectedTheme.b = document.getElementById('machineThemeCustomB').value;
+  syncThemeFormUI();
 }
 
 export function onThemeGradientToggleChange() {
