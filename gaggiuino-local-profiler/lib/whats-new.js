@@ -18,6 +18,13 @@
 // caps it defensively so an out-of-order manual edit can't silently show
 // entries in the wrong order or let the list grow unbounded.
 const WHATS_NEW_ENTRIES = [
+    { version: '2.28.0', date: '2026-08-04', highlights: [
+        'Added an in-app "What\'s New" changelog to Settings — this list.',
+    ] },
+    { version: '2.27.4', date: '2026-08-04', highlights: [
+        'Fixed a stale WebSocket session leak when a machine is removed or re-hosted.',
+        'Fixed component-test commands (pump/valve/LED) always timing out despite succeeding.',
+    ] },
     { version: '2.27.3', date: '2026-08-04', highlights: [
         'Live temperature/pressure/weight readings now actually update in real time over WebSocket/MQTT, instead of lagging on the 1s REST poll.',
     ] },
@@ -35,10 +42,6 @@ const WHATS_NEW_ENTRIES = [
     ] },
     { version: '2.25.0', date: '2026-08-03', highlights: [
         "The default machine's colour theme now drives the whole app's accent colour, not just its icon.",
-    ] },
-    { version: '2.24.0', date: '2026-08-03', highlights: [
-        'Added per-machine colour themes (8 presets + custom colour/gradient) and a new detailed Gaggia Classic machine icon.',
-        'Added a backend settings/control API proxy for the machine itself (no UI yet) — phase 1 toward replacing the community hass-gaggiuino integration.',
     ] },
 ];
 

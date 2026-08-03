@@ -1,11 +1,14 @@
 // Multi-machine registry + migration tests (#317).
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
 const Database = require('better-sqlite3');
-const dbPath    = require.resolve('../lib/db');
-const realDb    = require(dbPath);
+const dbPath        = require.resolve('../lib/db');
+const realDb        = require(dbPath);
+const liveClientPath = require.resolve('../lib/gaggiuino-live-client');
+require(liveClientPath); // populate require.cache so the entry exists before tests swap .exports below
+const realLiveClientExports = require.cache[liveClientPath].exports;
 
 describe('lib/machines/registry', () => {
     let memDb;
@@ -119,6 +122,85 @@ describe('lib/machines/registry', () => {
         const def = registry.getDefaultMachine();
         expect(def.id).toBe(1);
         expect(def.isDefault).toBe(true);
+    });
+});
+
+// #600: deleteMachine/updateMachine must evict the removed/re-hosted
+// machine's stale gaggiuino-live-client.js WS session (otherwise it retries
+// forever), but must never touch any other machine's session — verified
+// here via a mocked disconnectForHost rather than a real WS session, since
+// that transport-level behaviour is already covered by
+// test/gaggiuino-live-client.test.js.
+describe('registry live-session eviction (#600)', () => {
+    let memDb, disconnectForHost;
+
+    beforeEach(() => {
+        memDb = new Database(':memory:');
+        realDb.initSchema(memDb);
+        require.cache[dbPath].exports = { getDb: () => memDb, initSchema: realDb.initSchema };
+        delete require.cache[require.resolve('../lib/machines/registry')];
+
+        disconnectForHost = vi.fn();
+        require.cache[liveClientPath].exports = { ...realLiveClientExports, disconnectForHost };
+    });
+
+    afterEach(() => {
+        memDb.close();
+        require.cache[liveClientPath].exports = realLiveClientExports;
+    });
+
+    it('deleteMachine evicts the live session for the deleted machine\'s host', () => {
+        const registry = require('../lib/machines/registry');
+        registry.ensureDefaultMachine();
+        const created = registry.createMachine({ name: 'Kitchen', type: 'gaggiuino', host: '10.0.0.9' });
+
+        registry.deleteMachine(created.id);
+
+        expect(disconnectForHost).toHaveBeenCalledWith('10.0.0.9');
+    });
+
+    it('updateMachine evicts the *old* host\'s session when the host changes', () => {
+        const registry = require('../lib/machines/registry');
+        registry.ensureDefaultMachine();
+        const created = registry.createMachine({ name: 'Kitchen', type: 'gaggiuino', host: '10.0.0.9' });
+
+        registry.updateMachine(created.id, { host: '10.0.0.10' });
+
+        expect(disconnectForHost).toHaveBeenCalledWith('10.0.0.9');
+        expect(disconnectForHost).not.toHaveBeenCalledWith('10.0.0.10');
+    });
+
+    it('updateMachine does not evict any session when the host is unchanged', () => {
+        const registry = require('../lib/machines/registry');
+        registry.ensureDefaultMachine();
+        const created = registry.createMachine({ name: 'Kitchen', type: 'gaggiuino', host: '10.0.0.9' });
+
+        registry.updateMachine(created.id, { name: 'Renamed', enabled: false });
+
+        expect(disconnectForHost).not.toHaveBeenCalled();
+    });
+
+    it('deleting/updating one machine never evicts a different machine\'s session', () => {
+        const registry = require('../lib/machines/registry');
+        registry.ensureDefaultMachine();
+        const other = registry.createMachine({ name: 'Other', type: 'gaggiuino', host: '10.0.0.20' });
+        const target = registry.createMachine({ name: 'Target', type: 'gaggiuino', host: '10.0.0.9' });
+
+        registry.deleteMachine(target.id);
+
+        expect(disconnectForHost).toHaveBeenCalledTimes(1);
+        expect(disconnectForHost).not.toHaveBeenCalledWith('10.0.0.20');
+        expect(registry.getMachine(other.id)).not.toBeNull();
+    });
+
+    it('a live-client eviction failure does not break deleteMachine', () => {
+        disconnectForHost.mockImplementation(() => { throw new Error('boom'); });
+        const registry = require('../lib/machines/registry');
+        registry.ensureDefaultMachine();
+        const created = registry.createMachine({ name: 'Kitchen', type: 'gaggiuino', host: '10.0.0.9' });
+
+        expect(() => registry.deleteMachine(created.id)).not.toThrow();
+        expect(registry.getMachine(created.id)).toBeNull();
     });
 });
 

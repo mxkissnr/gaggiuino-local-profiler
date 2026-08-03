@@ -99,6 +99,51 @@ function freshOrNull(value, at) {
     return value;
 }
 
+// #600: closes and forgets exactly one machine's session — unlike
+// disconnectAll() (used by routes/mqtt.js's settings-save flow, which really
+// does mean "every session, the broker changed"), removing or re-hosting one
+// machine must never touch any other machine's live session. Removes the ws
+// listeners before terminating so a 'close' event fired by the teardown
+// itself can't run scheduleReconnect()'s closure and silently recreate the
+// very session entry this just deleted.
+function disconnect(baseUrl) {
+    const session = sessions.get(baseUrl);
+    if (!session) return;
+    if (session.reconnectTimer) clearTimeout(session.reconnectTimer);
+    if (session.ws) {
+        session.ws.removeAllListeners();
+        try { session.ws.terminate(); } catch { /* already closed */ }
+    }
+    sessions.delete(baseUrl);
+}
+
+// Same host -> baseUrl normalisation lib/machines/gaggiuino/adapter.js's
+// baseUrlFor() applies (scheme defaulted to http://, then re-serialised via
+// URL) minus its async assertMachineHost() SSRF check — that check gates
+// whether a *new* connection is allowed to open, it doesn't change the key
+// string, and running it here would make eviction of a now-unreachable
+// machine's stale session fail exactly when eviction matters most (host
+// removed/powered off => DNS may no longer resolve at all).
+function normalizeBaseUrl(host) {
+    const raw = (host || '').trim();
+    if (!raw) return null;
+    const withScheme = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+    try {
+        const u = new URL(withScheme);
+        return `${u.protocol}//${u.host}`;
+    } catch {
+        return null;
+    }
+}
+
+// lib/machines/registry.js's targeted entrypoint: normalizes a raw machine
+// host straight to the session key and evicts it, so registry.js never has
+// to duplicate connect()'s key format itself.
+function disconnectForHost(host) {
+    const baseUrl = normalizeBaseUrl(host);
+    if (baseUrl) disconnect(baseUrl);
+}
+
 // Both getters lazily (re)open the session's connection as a side effect —
 // the very first call for a given baseUrl returns null (nothing cached yet)
 // until the machine's next push arrives, same as any other cold cache.
@@ -112,4 +157,4 @@ function getLiveSystemState(baseUrl) {
     return freshOrNull(session.sysState, session.sysStateAt);
 }
 
-module.exports = { getLiveSensorSnapshot, getLiveSystemState, events };
+module.exports = { getLiveSensorSnapshot, getLiveSystemState, events, disconnect, disconnectForHost };
