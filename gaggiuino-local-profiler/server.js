@@ -136,6 +136,7 @@ app.use(require('./routes/maintenance'));
 app.use(require('./routes/orders'));
 app.use(require('./routes/system'));
 app.use(require('./routes/machines'));
+app.use(require('./routes/machine-control'));
 app.use(require('./routes/backup'));
 app.use(require('./routes/import'));
 

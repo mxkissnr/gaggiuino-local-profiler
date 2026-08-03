@@ -159,6 +159,26 @@ const machineSchema = z.object({
     enabled:      z.boolean().optional().default(true),
 });
 
+// ── Gaggiuino settings/control proxy (#597) ─────────────────────────────
+// BREW_MANUAL is deliberately excluded from operationModeSchema — live-
+// verified (see lib/machines/gaggiuino/adapter.js's setOperationMode() doc
+// comment) to be a silent no-op while idle, so accepting it here would let a
+// caller send a command that looks like it worked but didn't.
+const operationModeSchema = z.union([
+    z.enum(['BREW_AUTO', 'FLUSH', 'DESCALE', 'STEAM', 'FLUSH_AUTO', 'HOT_WATER', 'HOME']),
+    z.number().int().refine(v => v !== 1, 'BREW_MANUAL (1) is not supported via this proxy').pipe(z.number().int().min(0).max(7)),
+]);
+
+const serviceTestPeripheralSchema = z.union([
+    z.enum(['PUMP', 'VALVE', 'VALVE_B', 'LED']),
+    z.number().int().min(0).max(3),
+]);
+
+// Settings category payloads are opaque JSON, passed straight through to the
+// machine's own REST endpoint (which validates/persists them) — GLP has no
+// settings-editor UI yet to justify modeling every field here.
+const settingsPayloadSchema = z.record(z.string(), z.any());
+
 module.exports = {
     annotationSchema,
     beanSchema,
@@ -168,4 +188,7 @@ module.exports = {
     orderSchema,
     profileSchema,
     machineSchema,
+    operationModeSchema,
+    serviceTestPeripheralSchema,
+    settingsPayloadSchema,
 };

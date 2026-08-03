@@ -15,6 +15,9 @@ const WebSocket = require('ws');
 const {
     ND, RESPONSE_ACTION, WebSocketMessageDto, WebSocketProfileIdCommandDto,
     ProfileDto, SavedProfilesDto, PhaseTypeDto, TransitionCurveDto,
+    WebSocketResponseDto, WebSocketResponseResultDto,
+    UpdateSystemStateCommandDto, ServiceTestCommandDto,
+    OperationModeDto, ServiceTestPeripheralDto,
 } = require('./gaggiuino-proto');
 
 const DEFAULT_TIMEOUT_MS = 8000;
@@ -67,6 +70,53 @@ function sendAndWait(baseUrl, action, requestData, responseMsgType, timeoutMs = 
             } catch (e) {
                 finish(new Error(`Failed to decode "${expectedAction}" response: ${e.message}`));
             }
+        });
+
+        ws.on('error', (e) => finish(new Error(`WebSocket error: ${e.message}`)));
+    });
+}
+
+// Sends a c_* command and waits for its `d_resp` acknowledgement instead of
+// a specific follow-up data push (#597) — distinct from sendAndWait() above,
+// which correlates by waiting for a *different*, action-specific push (e.g.
+// d_prof_dict after c_new_prof). The commands this wraps (opmode/tare/
+// service-test/save-settings/save-active-profile) are confirmed by the
+// generic ack itself: WebSocketResponseDto.action echoes the action sent,
+// and .result/.errorMessage report success or failure.
+function sendCommand(baseUrl, action, requestData, timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        const ws = new WebSocket(wsUrlFor(baseUrl));
+        const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            ws.terminate();
+            reject(new Error(`Timed out waiting for a "${action}" acknowledgement from the machine`));
+        }, timeoutMs);
+
+        function finish(err, value) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            try { ws.close(); } catch { /* already closing */ }
+            err ? reject(err) : resolve(value);
+        }
+
+        ws.on('open', () => {
+            const msg = WebSocketMessageDto.create(requestData !== undefined ? { action, data: requestData } : { action });
+            ws.send(WebSocketMessageDto.toBinary(msg));
+        });
+
+        ws.on('message', (data) => {
+            if (settled) return;
+            let envelope;
+            try { envelope = WebSocketMessageDto.fromBinary(data); } catch { return; }
+            if (envelope.action !== 'd_resp' || !envelope.data) return;
+            let resp;
+            try { resp = WebSocketResponseDto.fromBinary(envelope.data); } catch { return; }
+            if (resp.action !== action) return; // ack for a different in-flight command on this connection
+            if (resp.result === WebSocketResponseResultDto.ERROR) finish(new Error(resp.errorMessage || `Machine rejected "${action}"`));
+            else finish(null, { ok: true });
         });
 
         ws.on('error', (e) => finish(new Error(`WebSocket error: ${e.message}`)));
@@ -156,4 +206,54 @@ async function deleteProfile(baseUrl, id) {
     return dict.profiles;
 }
 
-module.exports = { getProfileDict, getProfileById, createProfile, updateProfile, deleteProfile, toWireProfile, wsUrlFor };
+// #597 — settings/control proxy commands. All share sendCommand()'s
+// generic d_resp ack rather than a specific data push; see that function's
+// header comment for why this differs from the profile CRUD functions above.
+
+// mode: OperationModeDto enum name or numeric value (see gaggiuino-proto.js)
+// — converted to the wire enum int here, same convention as
+// toWireProfile()'s type/curve handling above. tarePending is always false
+// here — c_tare_pend below is the dedicated path for a tare, and this field
+// is unread by the opmode handler regardless (see
+// UpdateSystemStateCommandDto's doc comment).
+async function setOperationMode(baseUrl, mode) {
+    const operationMode = typeof mode === 'string' ? OperationModeDto[mode] : mode;
+    const req = UpdateSystemStateCommandDto.toBinary(UpdateSystemStateCommandDto.create({ operationMode, tarePending: false }));
+    return sendCommand(baseUrl, ND.SetOperationMode, req);
+}
+
+// operationMode is required by the wire format but ignored by the
+// c_tare_pend handler (see UpdateSystemStateCommandDto's doc comment) —
+// BREW_AUTO (0) is sent as an inert placeholder, same convention the
+// machine's own web UI uses.
+async function tare(baseUrl) {
+    const req = UpdateSystemStateCommandDto.toBinary(UpdateSystemStateCommandDto.create({ operationMode: 0, tarePending: true }));
+    return sendCommand(baseUrl, ND.SetTarePending, req);
+}
+
+// peripheral: ServiceTestPeripheralDto enum name or numeric value. Only
+// takes effect while the machine is idle (refused otherwise) — see
+// ServiceTestCommandDto's doc comment in gaggiuino-proto.js.
+async function serviceTest(baseUrl, peripheral) {
+    const wirePeripheral = typeof peripheral === 'string' ? ServiceTestPeripheralDto[peripheral] : peripheral;
+    const req = ServiceTestCommandDto.toBinary(ServiceTestCommandDto.create({ peripheral: wirePeripheral }));
+    return sendCommand(baseUrl, ND.ServiceTest, req);
+}
+
+// Persists whatever settings are currently applied in RAM (e.g. via the
+// machine's own UI, or a prior REST POST /api/settings/* — which already
+// auto-persists on its own) to flash. See websocket.md's "Settings
+// persistence" section for the RAM-apply/flash-persist split this mirrors.
+async function saveSettings(baseUrl) {
+    return sendCommand(baseUrl, ND.SaveSettings, undefined);
+}
+
+// Persists the active profile + its ID to flash (c_save_act_prof).
+async function saveActiveProfile(baseUrl) {
+    return sendCommand(baseUrl, ND.PersistActiveProfile, undefined);
+}
+
+module.exports = {
+    getProfileDict, getProfileById, createProfile, updateProfile, deleteProfile, toWireProfile, wsUrlFor,
+    setOperationMode, tare, serviceTest, saveSettings, saveActiveProfile,
+};

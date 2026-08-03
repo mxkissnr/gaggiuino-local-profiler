@@ -1087,6 +1087,149 @@ paths:
         "502": { description: Machine unreachable, returned an error, or did not confirm the create }
         "503": { description: machine URL not configured }
 
+  /api/machine/settings:
+    get:
+      tags: [MachineControl]
+      summary: Read the machine's settings (all categories, or one via ?category=)
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer } }
+        - { name: category, in: query, schema: { type: string, enum: [boiler, system, display, scales, led, theme, versions] } }
+      responses:
+        "200": { description: Settings object (shape mirrors the machine's own GET /api/settings/* response) }
+        "400": { description: unknown category }
+        "501": { description: machine type does not support the settings proxy }
+        "502": { description: Machine unreachable or returned an error }
+
+  /api/machine/settings/save:
+    post:
+      tags: [MachineControl]
+      summary: Persist whatever settings are currently applied in RAM to flash (c_save_settings over WebSocket)
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "501": { description: machine type does not support the settings proxy }
+        "502": { description: Machine unreachable, timed out, or rejected the command }
+
+  /api/machine/settings/{category}:
+    post:
+      tags: [MachineControl]
+      summary: Update one settings category — proxies the machine's own POST /api/settings/{category}, which applies and persists in one call
+      parameters:
+        - { name: category, in: path, required: true, schema: { type: string, enum: [boiler, system, display, scales, led, theme] } }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, description: "Full category payload (all fields from the matching GET response) — passed through as-is; machineId may be included alongside it" }
+      responses:
+        "200": { description: "{ success: true }" }
+        "400": { description: unknown/read-only category, or invalid payload }
+        "501": { description: machine type does not support the settings proxy }
+        "502": { description: Machine unreachable or returned an error }
+
+  /api/machine/opmode:
+    post:
+      tags: [MachineControl]
+      summary: Switch operation mode (c_opmode over WebSocket)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: { description: "OperationModeDto enum name or numeric value — BREW_MANUAL is rejected (live-verified no-op while idle)", oneOf: [{ type: string, enum: [BREW_AUTO, FLUSH, DESCALE, STEAM, FLUSH_AUTO, HOT_WATER, HOME] }, { type: integer }] }
+                machineId: { type: integer }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "400": { description: invalid or unsupported mode }
+        "501": { description: machine type does not support the settings proxy }
+        "502": { description: Machine unreachable, timed out, or rejected the command }
+
+  /api/machine/tare:
+    post:
+      tags: [MachineControl]
+      summary: Request a scale tare (c_tare_pend over WebSocket)
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "501": { description: machine type does not support the settings proxy }
+        "502": { description: Machine unreachable, timed out, or rejected the command }
+
+  /api/machine/service-test:
+    post:
+      tags: [MachineControl]
+      summary: Briefly trigger a peripheral for the Maintenance page's component tests (c_service_test over WebSocket) — only works while the machine is idle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [peripheral]
+              properties:
+                peripheral: { description: "ServiceTestPeripheralDto enum name or numeric value", oneOf: [{ type: string, enum: [PUMP, VALVE, VALVE_B, LED] }, { type: integer }] }
+                machineId: { type: integer }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "400": { description: invalid peripheral }
+        "501": { description: machine type does not support the settings proxy }
+        "502": { description: Machine unreachable, timed out, or rejected (e.g. machine not idle) }
+
+  /api/machine/profile/save:
+    post:
+      tags: [MachineControl]
+      summary: Persist the currently active profile + its ID to flash (c_save_act_prof over WebSocket) — distinct from the saved-profile-slot CRUD under /api/machine/profile*
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "501": { description: machine type does not support the settings proxy }
+        "502": { description: Machine unreachable, timed out, or rejected the command }
+
+  /api/machine/firmware/progress:
+    get:
+      tags: [MachineControl]
+      summary: Poll an in-flight firmware OTA update's progress
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: "{ progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS }" }
+        "501": { description: machine type does not support the settings proxy }
+        "502": { description: Machine unreachable or returned an error }
+
+  /api/machine/firmware/update:
+    post:
+      tags: [MachineControl]
+      summary: Trigger a firmware OTA update from GitHub releases (ESP32 + STM32) — only starts the process, poll firmware/progress for status
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: "{ message, success }" }
+        "501": { description: machine type does not support the settings proxy }
+        "502": { description: Machine unreachable or returned an error }
+
+  /api/machine/live:
+    get:
+      tags: [MachineControl]
+      summary: Latest cached live sensor/system-state pushes from the machine's persistent WebSocket session
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: "{ sensorSnap: SensorStateSnapshotDto|null, sysState: SystemStateDto|null } — null until the machine's first push arrives" }
+        "501": { description: machine type does not support the settings proxy }
+        "502": { description: Machine unreachable or returned an error }
+
   /api/machines:
     get:
       tags: [Machines]
@@ -1308,3 +1451,5 @@ tags:
     description: Full backup and restore
   - name: Import
     description: Bean metadata import from external URLs
+  - name: MachineControl
+    description: "Gaggiuino settings/control/firmware proxy (#597) — Gaggiuino-only, 501s for machines without adapter.capabilities().settingsProxy"

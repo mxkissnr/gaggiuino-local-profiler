@@ -17,23 +17,47 @@
 // first by this module's createProfile() equivalent in the adapter. This
 // module remains required for update/delete on every firmware version, and
 // as the create/detail-read fallback for older firmware.
+//
+// #597: SensorStateSnapshotDto/SystemStateDto/UpdateSystemStateCommandDto/
+// ServiceTestCommandDto below were added straight from the Gaggiuino
+// project's own published WS API reference (docs/rest-api/websocket.md in
+// gaggiuino/gaggiuino.github.io) rather than reverse-engineered from a
+// bundle — field numbers/types are transcribed verbatim from that doc, not
+// live-verified against a real machine the way the profile CRUD messages
+// above were. Settings themselves (GaggiaSettingsDto) are deliberately NOT
+// modeled here: the settings proxy uses the REST endpoints
+// (GET/POST /api/settings/*, see lib/machines/gaggiuino/adapter.js), which
+// carry plain JSON, not this binary protocol.
 const { MessageType } = require('@protobuf-ts/runtime');
 
 // ── Enums ──
 const PhaseTypeDto = { 0: 'FLOW', FLOW: 0, 1: 'PRESSURE', PRESSURE: 1, 2: 'MANUAL', MANUAL: 2 };
 const TransitionCurveDto = { 0: 'EASE_IN_OUT', EASE_IN_OUT: 0, 1: 'EASE_IN', EASE_IN: 1, 2: 'EASE_OUT', EASE_OUT: 2, 3: 'LINEAR', LINEAR: 3, 4: 'INSTANT', INSTANT: 4 };
 const WebSocketResponseResultDto = { 0: 'SUCCESS', SUCCESS: 0, 1: 'ERROR', ERROR: 1 };
+const OperationModeDto = {
+    0: 'BREW_AUTO', BREW_AUTO: 0, 1: 'BREW_MANUAL', BREW_MANUAL: 1,
+    2: 'FLUSH', FLUSH: 2, 3: 'DESCALE', DESCALE: 3, 4: 'STEAM', STEAM: 4,
+    5: 'FLUSH_AUTO', FLUSH_AUTO: 5, 6: 'HOT_WATER', HOT_WATER: 6, 7: 'HOME', HOME: 7,
+};
+const ServiceTestPeripheralDto = { 0: 'PUMP', PUMP: 0, 1: 'VALVE', VALVE: 1, 2: 'VALVE_B', VALVE_B: 2, 3: 'LED', LED: 3 };
 
 // ── Action codes — request (g_/c_ prefixed) and their matching server-push
 // response action (d_ prefixed) are DIFFERENT strings, not the same one
 // echoed back. e.g. request GetProfileDict ('g_prof_dict') is answered by a
-// push whose action is 'd_prof_dict', not 'g_prof_dict'. ──
+// push whose action is 'd_prof_dict', not 'g_prof_dict'. The #597 commands
+// below (SetOperationMode/SetTarePending/ServiceTest/SaveSettings) are
+// acknowledged by the generic 'd_resp' (WebSocketResponseDto) instead of a
+// dedicated push action — see gaggiuino-ws-client.js's sendCommand(), not
+// sendAndWait()/RESPONSE_ACTION below, which is only for the request/push
+// pairs that answer with a specific data type. ──
 const ND = {
     GetActiveProfile: 'g_act_prof', UpdateActiveProfile: 'c_upd_act_prof',
     UpdateActiveProfileId: 'c_upd_act_prof_id', PersistActiveProfile: 'c_save_act_prof',
     GetProfileDict: 'g_prof_dict', GetProfileById: 'g_prof',
     CreateNewProfile: 'c_new_prof', UpdateProfile: 'c_upd_prof',
     DeleteProfile: 'c_del_prof', ReorderProfile: 'c_reorder_prof',
+    GetSystemState: 'g_sys_state', SetOperationMode: 'c_opmode', SetTarePending: 'c_tare_pend',
+    ServiceTest: 'c_service_test', SaveSettings: 'c_save_settings',
 };
 // Matching push-response action for each request action above.
 const RESPONSE_ACTION = {
@@ -46,7 +70,8 @@ const RESPONSE_ACTION = {
 
 let PhaseStopConditionsDto, TransitionDto, PhaseDto, GlobalStopConditionsDto,
     BrewRecipeDto, ProfileDto, WebSocketProfileIdCommandDto,
-    WebSocketMessageDto, WebSocketResponseDto, SavedProfileDto, SavedProfilesDto;
+    WebSocketMessageDto, WebSocketResponseDto, SavedProfileDto, SavedProfilesDto,
+    UpdateSystemStateCommandDto, ServiceTestCommandDto, SensorStateSnapshotDto, SystemStateDto;
 
 PhaseStopConditionsDto = new MessageType('PhaseStopConditionsDto', [
     { no: 1, name: 'time', kind: 'scalar', T: 13 },
@@ -123,9 +148,86 @@ SavedProfilesDto = new MessageType('SavedProfilesDto', [
     { no: 1, name: 'profiles', kind: 'message', repeat: 2, T: () => SavedProfileDto },
 ]);
 
+// #597 additions below — see the header comment: transcribed from the
+// published WS API doc, not reverse-engineered/live-verified like the
+// profile CRUD messages above.
+
+// Shared payload for c_opmode and c_tare_pend — each handler only reads the
+// one field it cares about, so the unused one is sent as a placeholder (see
+// gaggiuino-ws-client.js's tare()/setOperationMode()).
+UpdateSystemStateCommandDto = new MessageType('UpdateSystemStateCommandDto', [
+    { no: 1, name: 'operationMode', kind: 'enum', T: () => ['OperationModeDto', OperationModeDto] },
+    { no: 2, name: 'tarePending', kind: 'scalar', T: 8 },
+]);
+
+ServiceTestCommandDto = new MessageType('ServiceTestCommandDto', [
+    { no: 1, name: 'peripheral', kind: 'enum', T: () => ['ServiceTestPeripheralDto', ServiceTestPeripheralDto] },
+]);
+
+// Live sensor readings pushed continuously as `d_sensor_snap` — real
+// (unscaled) numbers, unlike the x10-scaled-integer shot/REST-status wire
+// formats. See lib/gaggiuino-live-client.js for the persistent-connection
+// cache that decodes these.
+SensorStateSnapshotDto = new MessageType('SensorStateSnapshotDto', [
+    { no: 1, name: 'brewActive', kind: 'scalar', T: 8 },
+    { no: 2, name: 'steamActive', kind: 'scalar', T: 8 },
+    { no: 3, name: 'hotWaterSwitchState', kind: 'scalar', T: 8 },
+    { no: 4, name: 'temperature', kind: 'scalar', T: 2 },
+    { no: 5, name: 'waterTemperature', kind: 'scalar', T: 2 },
+    { no: 6, name: 'pressure', kind: 'scalar', T: 2 },
+    { no: 7, name: 'pumpFlow', kind: 'scalar', T: 2 },
+    { no: 8, name: 'weightFlow', kind: 'scalar', T: 2 },
+    { no: 9, name: 'weight', kind: 'scalar', T: 2 },
+    { no: 10, name: 'waterLevel', kind: 'scalar', T: 13 },
+    { no: 11, name: 'boilerState', kind: 'scalar', T: 8 },
+    { no: 12, name: 'brewSwitchActive', kind: 'scalar', T: 8 },
+    { no: 13, name: 'valveState', kind: 'scalar', T: 8 },
+    { no: 14, name: 'steamValveState', kind: 'scalar', T: 8 },
+    { no: 15, name: 'valveBState', kind: 'scalar', T: 8 },
+    { no: 16, name: 'steamBoilerRelayState', kind: 'scalar', T: 8 },
+    { no: 17, name: 'pinBrewLevel', kind: 'scalar', T: 8 },
+    { no: 18, name: 'pinSteamLevel', kind: 'scalar', T: 8 },
+    { no: 19, name: 'pinWaterLevel', kind: 'scalar', T: 8 },
+    { no: 20, name: 'pinRelayLevel', kind: 'scalar', T: 8 },
+    { no: 21, name: 'pinValveLevel', kind: 'scalar', T: 8 },
+    { no: 22, name: 'pinValveBLevel', kind: 'scalar', T: 8 },
+    { no: 23, name: 'pinRelayValveBLevel', kind: 'scalar', T: 8 },
+    { no: 24, name: 'pinSteamValveRelayLevel', kind: 'scalar', T: 8 },
+    { no: 25, name: 'pinSteamBoilerRelayLevel', kind: 'scalar', T: 8 },
+    { no: 26, name: 'pinZcLevel', kind: 'scalar', T: 8 },
+    { no: 27, name: 'pinDimmerLevel', kind: 'scalar', T: 8 },
+    { no: 28, name: 'pinThermoCsLevel', kind: 'scalar', T: 8 },
+    { no: 29, name: 'pinThermoClkLevel', kind: 'scalar', T: 8 },
+    { no: 30, name: 'pinThermoDoLevel', kind: 'scalar', T: 8 },
+    { no: 31, name: 'pinThermoDiLevel', kind: 'scalar', T: 8 },
+    { no: 32, name: 'pinHx711SckLevel', kind: 'scalar', T: 8 },
+    { no: 33, name: 'pinHx711Dout1Level', kind: 'scalar', T: 8 },
+    { no: 34, name: 'pinHx711Dout2Level', kind: 'scalar', T: 8 },
+]);
+
+// System/status info pushed on change and in response to g_sys_state.
+SystemStateDto = new MessageType('SystemStateDto', [
+    { no: 1, name: 'startupInitFinished', kind: 'scalar', T: 8 },
+    { no: 2, name: 'tofReady', kind: 'scalar', T: 8 },
+    { no: 3, name: 'isSteamForgottenON', kind: 'scalar', T: 8 },
+    { no: 4, name: 'scalesPresent', kind: 'scalar', T: 8 },
+    { no: 5, name: 'operationMode', kind: 'enum', T: () => ['OperationModeDto', OperationModeDto] },
+    { no: 6, name: 'timeAlive', kind: 'scalar', T: 13 },
+    { no: 7, name: 'coreVersion', kind: 'scalar', T: 9 },
+    { no: 8, name: 'tarePending', kind: 'scalar', T: 8 },
+    { no: 9, name: 'coreType', kind: 'scalar', T: 9 },
+    { no: 10, name: 'thermocoupleFaulted', kind: 'scalar', T: 8 },
+    { no: 11, name: 'pressureSensorFaulted', kind: 'scalar', T: 8 },
+    { no: 12, name: 'thermocoupleFaultReason', kind: 'scalar', T: 9 },
+    { no: 13, name: 'pressureSensorFaultReason', kind: 'scalar', T: 9 },
+    { no: 14, name: 'pcbV2', kind: 'scalar', T: 8 },
+]);
+
 module.exports = {
-    PhaseTypeDto, TransitionCurveDto, WebSocketResponseResultDto, ND, RESPONSE_ACTION,
+    PhaseTypeDto, TransitionCurveDto, WebSocketResponseResultDto, OperationModeDto,
+    ServiceTestPeripheralDto, ND, RESPONSE_ACTION,
     PhaseStopConditionsDto, TransitionDto, PhaseDto, GlobalStopConditionsDto,
     BrewRecipeDto, ProfileDto, WebSocketProfileIdCommandDto,
     WebSocketMessageDto, WebSocketResponseDto, SavedProfileDto, SavedProfilesDto,
+    UpdateSystemStateCommandDto, ServiceTestCommandDto, SensorStateSnapshotDto, SystemStateDto,
 };

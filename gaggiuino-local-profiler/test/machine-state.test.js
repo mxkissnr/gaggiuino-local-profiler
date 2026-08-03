@@ -37,6 +37,34 @@ describe('deriveMachineState (#552)', () => {
         expect(r.temperature).toBe(0);
         expect(r.machineStatus.profileId).toBeNull();
     });
+
+    // #597
+    it('omits the live-WS-only fields when `live` is not passed (backward compatibility)', () => {
+        const r = deriveMachineState({ temperature: '92' });
+        expect(r.machineStatus.pumpFlow).toBeUndefined();
+        expect(r.machineStatus.thermocoupleFaulted).toBeUndefined();
+    });
+
+    it('merges sensorSnap fields into machineStatus when provided', () => {
+        const r = deriveMachineState({ temperature: '92' }, undefined, {
+            sensorSnap: { pumpFlow: 1.5, weightFlow: 0.4, waterTemperature: 90, boilerState: true, valveState: false },
+        });
+        expect(r.machineStatus.pumpFlow).toBe(1.5);
+        expect(r.machineStatus.weightFlow).toBe(0.4);
+        expect(r.machineStatus.waterTemperature).toBe(90);
+        expect(r.machineStatus.boilerState).toBe(true);
+        expect(r.machineStatus.valveState).toBe(false);
+    });
+
+    it('merges sysState fault fields into machineStatus when provided', () => {
+        const r = deriveMachineState({ temperature: '92' }, undefined, {
+            sysState: { thermocoupleFaulted: true, thermocoupleFaultReason: 'Open circuit', pressureSensorFaulted: false },
+        });
+        expect(r.machineStatus.thermocoupleFaulted).toBe(true);
+        expect(r.machineStatus.thermocoupleFaultReason).toBe('Open circuit');
+        expect(r.machineStatus.pressureSensorFaulted).toBe(false);
+        expect(r.machineStatus.pressureSensorFaultReason).toBe('');
+    });
 });
 
 describe('isStillWarm (#552)', () => {

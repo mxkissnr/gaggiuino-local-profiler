@@ -7,6 +7,7 @@ const { getSwitchState, HA_TOKEN } = require('./ha');
 const state = require('./state');
 const { getMachineRuntimeState } = require('./machine-runtime-state');
 const { deriveMachineState, isStillWarm } = require('./machine-state');
+const gaggiuinoLive = require('./gaggiuino-live-client');
 const { savePreheatState, isTempStable } = require('./preheat');
 const { syncAfterBrew, syncShots, fetchMachineVersion } = require('./sync');
 
@@ -56,10 +57,19 @@ async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
         const raw       = statusRes.data;
         const status    = Array.isArray(raw) ? raw[0] : raw;
 
+        // #597: best-effort merge of whatever's already cached from the
+        // persistent live WS session (lib/gaggiuino-live-client.js) — a
+        // synchronous cache read, never awaited/fetched here, so a machine
+        // with no WS session yet (or one that's still (re)connecting) just
+        // gets deriveMachineState()'s pre-#597 fields, same as before.
+        const live = {
+            sensorSnap: gaggiuinoLive.getLiveSensorSnapshot(baseUrl),
+            sysState:   gaggiuinoLive.getLiveSystemState(baseUrl),
+        };
         const {
             isBrewing, pressure: presVal, temperature: tempVal, weight: weightVal,
             targetTemperature: tTempVal, profileName: profile, machineStatus,
-        } = deriveMachineState(status);
+        } = deriveMachineState(status, undefined, live);
         runtime.currentTemp       = tempVal  || runtime.currentTemp;
         runtime.currentTargetTemp = tTempVal || runtime.currentTargetTemp;
         runtime.machineStatus     = machineStatus;

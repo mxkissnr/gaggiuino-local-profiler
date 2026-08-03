@@ -74,6 +74,12 @@ const MAINTENANCE_DEFAULTS = {
 
 const STATIC_MAINTENANCE_TASKS = new Set(['descaling', 'backflush', 'grouphead', 'gaskets', 'waterfilter']);
 
+// #597: Gaggiuino REST settings categories (GET/POST /api/settings/{category}
+// — see rest-api.md). 'versions' is intentionally excluded: it's read-only
+// (no POST), so it's only valid on the GET side (routes/machine-control.js
+// allows it separately rather than folding it into this writable list).
+const GAGGIUINO_SETTINGS_CATEGORIES = ['boiler', 'system', 'display', 'scales', 'led', 'theme'];
+
 // waterfilter and grinder_* tasks track shared equipment (one water filter /
 // one grinder used across machines, #338) — they never split per machine and
 // always live under the sentinel machine_id 1 in the `maintenance` table,
@@ -91,6 +97,7 @@ module.exports = {
     TEMP_HISTORY_MAX, TEMP_STABLE_MIN, TEMP_STABLE_VAR, PREHEAT_STATE_TTL,
     WARM_TEMP_MIN, WARM_OFF_MAX_MS,
     DEFAULT_MENU, MAINTENANCE_DEFAULTS, STATIC_MAINTENANCE_TASKS, isGlobalMaintenanceTask,
+    GAGGIUINO_SETTINGS_CATEGORIES,
     LOW_STOCK_THRESHOLD_G,
     ALLOWED_IMAGE_HOSTS, BEAN_IMAGE_DIR, BEAN_IMAGE_MAX_BYTES, IMPORT_FETCH_MAX_BYTES,
 };

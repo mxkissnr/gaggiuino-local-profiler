@@ -7,6 +7,7 @@
 'use strict';
 const axios = require('axios');
 const gaggiuinoWs = require('../../gaggiuino-ws-client');
+const gaggiuinoLive = require('../../gaggiuino-live-client');
 const { ALLOWED_URL_SCHEMES } = require('../../constants');
 const { assertMachineHost } = require('../../ssrf-guard');
 
@@ -126,12 +127,101 @@ async function getNativeMaintenanceLog(machine) {
     return r.data;
 }
 
+// ── Settings/control proxy (#597) ───────────────────────────────────────
+// GLP-side plumbing for HA-integration parity with the community
+// ALERTua/hass-gaggiuino integration — GLP itself has no settings UI yet
+// (that's a later round). category omitted -> GET /api/settings (all
+// categories); routes/machine-control.js is the caller that validates
+// `category` against GAGGIUINO_SETTINGS_CATEGORIES (+ the read-only
+// 'versions') before it ever reaches here.
+async function getSettings(machine, category) {
+    const baseUrl = await baseUrlFor(machine);
+    const path = category ? `/api/settings/${category}` : '/api/settings';
+    const r = await axios.get(`${baseUrl}${path}`, { timeout: 5000 });
+    return r.data;
+}
+
+// REST settings writes auto-persist to flash in one call (see rest-api.md's
+// "Persistence" note) — unlike the WS c_upd_settings/c_save_settings split
+// below, there is no separate "apply then save" step on this path.
+async function updateSettings(machine, category, payload) {
+    const baseUrl = await baseUrlFor(machine);
+    const r = await axios.post(`${baseUrl}/api/settings/${category}`, payload, { timeout: 5000 });
+    return r.data;
+}
+
+// c_save_settings over WS — persists whatever's currently applied in RAM
+// (e.g. via the machine's own touchscreen/web UI) to flash. Exposed for
+// integration parity per #597's scope; GLP's own settings writes go through
+// updateSettings() above, which doesn't need this extra step.
+async function saveSettings(machine) {
+    return gaggiuinoWs.saveSettings(await baseUrlFor(machine));
+}
+
+// mode: OperationModeDto enum name/value (see lib/gaggiuino-proto.js) —
+// BREW_AUTO/FLUSH/DESCALE/STEAM/FLUSH_AUTO/HOT_WATER/HOME. BREW_MANUAL is
+// intentionally not usable through this proxy: live-verified against a real
+// machine (#597 research) that entering it while idle is a silent no-op (no
+// d_resp, mode unchanged) — a shot can't be remote-started this way, so
+// routes/machine-control.js rejects that mode before it reaches here rather
+// than let a caller send a command that looks like it worked but didn't.
+async function setOperationMode(machine, mode) {
+    return gaggiuinoWs.setOperationMode(await baseUrlFor(machine), mode);
+}
+
+async function tare(machine) {
+    return gaggiuinoWs.tare(await baseUrlFor(machine));
+}
+
+// peripheral: ServiceTestPeripheralDto enum name/value — PUMP/VALVE/VALVE_B/LED.
+async function serviceTest(machine, peripheral) {
+    return gaggiuinoWs.serviceTest(await baseUrlFor(machine), peripheral);
+}
+
+// c_save_act_prof over WS — persists the currently active profile + its ID
+// to flash (distinct from updateProfile()/createProfile() above, which
+// write a *saved* profile slot, not the active-profile pointer).
+async function saveActiveProfile(machine) {
+    return gaggiuinoWs.saveActiveProfile(await baseUrlFor(machine));
+}
+
+async function getFirmwareProgress(machine) {
+    const baseUrl = await baseUrlFor(machine);
+    const r = await axios.get(`${baseUrl}/api/firmware/progress`, { timeout: 5000 });
+    return r.data;
+}
+
+async function triggerFirmwareUpdate(machine) {
+    const baseUrl = await baseUrlFor(machine);
+    const r = await axios.post(`${baseUrl}/api/firmware/update-all`, {}, { timeout: 5000 });
+    return r.data;
+}
+
+// Synchronous cache reads (no I/O here — see lib/gaggiuino-live-client.js)
+// that lazily open/reuse this machine's persistent live-value WS session.
+// Returns null until the first push arrives (or if the cached value has
+// gone stale) — callers should treat that the same as "not yet known", not
+// an error.
+async function getLiveSensorSnapshot(machine) {
+    return gaggiuinoLive.getLiveSensorSnapshot(await baseUrlFor(machine));
+}
+
+async function getLiveSystemState(machine) {
+    return gaggiuinoLive.getLiveSystemState(await baseUrlFor(machine));
+}
+
 function capabilities() {
-    return { profileEdit: true, brewStart: false, preheat: true, volumetric: true, history: true, nativeMaintenanceLog: true };
+    return {
+        profileEdit: true, brewStart: false, preheat: true, volumetric: true, history: true,
+        nativeMaintenanceLog: true, settingsProxy: true,
+    };
 }
 
 module.exports = {
     baseUrlFor, getStatus, getLatestShotId, getShot, listProfiles, getProfile,
     createProfile, updateProfile, deleteProfile, selectProfile, capabilities,
     getNativeMaintenanceLog,
+    getSettings, updateSettings, saveSettings, setOperationMode, tare, serviceTest,
+    saveActiveProfile, getFirmwareProgress, triggerFirmwareUpdate,
+    getLiveSensorSnapshot, getLiveSystemState,
 };
