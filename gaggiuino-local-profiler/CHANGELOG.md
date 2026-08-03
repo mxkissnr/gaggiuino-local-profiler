@@ -4,6 +4,10 @@
 - **No visibility into which live-data transport (WebSocket/MQTT) is active or whether data is flowing.** `lib/gaggiuino-mqtt-client.js` now logs once on a successful broker connect, and once when the first `sensors`/`system` MQTT message actually arrives after a (re)connect (not on every message, to avoid log spam). `lib/live-transport.js` now logs once whenever the effective transport for the default machine's live-data read actually changes, so switching the Settings toggle can be confirmed from the logs alone. Closes #611
 - **Top-level architecture diagram in the Documentation tab didn't mention MQTT as an alternative to the WebSocket sync path.** Annotated the Gaggiuino Machine → GLP App arrow in both DOCS.md and DOCS.de.md. Closes #612
 
+### Security
+- Bumped `ip-address` (transitive via `express-rate-limit` and `mqtt`'s `socks` dependency) to 10.4.0, resolving 3 Dependabot alerts (2 medium, 1 high) for SSRF/trust-boundary misclassification bugs fixed upstream. This repo's own SSRF guard (`lib/ssrf-guard.js`) uses Node core `net`/`dns` directly and wasn't itself affected; the exposure was in `express-rate-limit`'s IP-based rate-limit keying.
+- Bumped `brace-expansion` to 5.0.9, resolving a regular-expression denial-of-service advisory (GHSA-rgw5-rvv9-x895).
+
 ## [2.27.0] – 2026-08-03
 
 ### Added
