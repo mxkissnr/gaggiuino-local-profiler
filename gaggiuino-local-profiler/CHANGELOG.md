@@ -1,3 +1,8 @@
+## [2.27.2] – 2026-08-04
+
+### Fixed
+- **Machine-level notification toggles (preheat-ready, low-stock) are now reachable when Orders is disabled.** #603 placed all 5 per-notification-type toggles inside the Orders admin panel's "Push notifications" section, but that whole panel only renders when `enable_orders: true`. Two of the five — `notify_preheat_ready` (`lib/preheat.js`) and `notify_low_stock` (`lib/services/LibraryService.js`) — fire regardless of Orders being enabled, so users without Orders had no way to mute them. Those two now live in an always-visible "Notifications" card on the main Settings page (`public-src/components/notify-settings.js`), reading/writing the same `/api/orders/settings` blob (that route was never gated on `enable_orders`, only the Orders UI/nav tab was — no backend change needed). `notify_shop_state`, `notify_new_order` and `notify_order_status` stay in the Orders panel, since they're meaningless without Orders enabled. Closes #614
+
 ## [2.27.1] – 2026-08-03
 
 ### Fixed

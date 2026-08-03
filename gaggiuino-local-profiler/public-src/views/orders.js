@@ -14,9 +14,12 @@ const MILK_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden
 // #603: one mute switch per automatic notification type. Stored as
 // settings[key] === false (absent/true both mean "on") so pre-#603 installs
 // keep sending every notification they already were.
+// #614: notify_preheat_ready/notify_low_stock moved to the always-visible
+// Settings page card (components/notify-settings.js) — they fire regardless
+// of enable_orders (lib/preheat.js, lib/services/LibraryService.js), so this
+// panel (which only exists when Orders is enabled) is the wrong home for
+// them. Only the genuinely Orders-only types stay here.
 const NOTIFY_TYPE_KEYS = [
-  { key: 'notify_preheat_ready', i18nKey: 'orders_type_preheat_ready' },
-  { key: 'notify_low_stock',     i18nKey: 'orders_type_low_stock' },
   { key: 'notify_shop_state',    i18nKey: 'orders_type_shop_state' },
   { key: 'notify_new_order',     i18nKey: 'orders_type_new_order' },
   { key: 'notify_order_status',  i18nKey: 'orders_type_order_status' },

@@ -1130,6 +1130,30 @@
             <p class="settings-card-desc" data-i18n="settings_bottom_nav_desc">Wähle bis zu 4 Ziele für die untere Navigationsleiste auf dem Handy. Alles andere landet unter "Mehr".</p>
             <div id="bottomNavConfigList" class="bottom-nav-config-list"></div>
         </div>
+        <!-- Machine/library notification toggles (#614) — moved out of the
+             Orders admin panel (which only exists when enable_orders: true)
+             since notify_preheat_ready/notify_low_stock fire regardless of
+             Orders being enabled (lib/preheat.js, lib/services/
+             LibraryService.js). Always visible; reads/writes the same
+             /api/orders/settings blob as the Orders panel's remaining 3
+             order-specific toggles (components/notify-settings.js). -->
+        <div class="settings-card">
+            <h3 class="settings-card-title" data-i18n="settings_notify_title">Benachrichtigungen</h3>
+            <p class="settings-card-desc" data-i18n="settings_notify_desc">Welche automatischen Benachrichtigungen der Maschine und der Kaffee-Bibliothek sollen gesendet werden?</p>
+            <div class="orders-broadcast-list" id="notifySettingsList">
+                <div class="orders-broadcast-row">
+                    <input type="checkbox" id="ntSettingsPreheatReady" data-notify-key="notify_preheat_ready">
+                    <label for="ntSettingsPreheatReady" data-i18n="orders_type_preheat_ready">Maschine betriebsbereit</label>
+                </div>
+                <div class="orders-broadcast-row">
+                    <input type="checkbox" id="ntSettingsLowStock" data-notify-key="notify_low_stock">
+                    <label for="ntSettingsLowStock" data-i18n="orders_type_low_stock">Bohnen-Bestand niedrig</label>
+                </div>
+            </div>
+            <div class="orders-notify-actions">
+                <button class="orders-menu-save-btn" id="notifySettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
+            </div>
+        </div>
         <!-- Live-data transport (#598) — self-contained card, does not touch
              the machine registry card below it. Connection fields are only
              shown once "MQTT" is picked (renderMqttSettingsCard() toggles

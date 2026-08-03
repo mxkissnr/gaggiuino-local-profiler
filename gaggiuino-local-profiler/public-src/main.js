@@ -117,6 +117,8 @@ import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testM
 
 import { loadMqttSettings, setMqttTransport, saveMqttSettings, applyMqttToMachine } from './components/mqtt-settings.js';
 
+import { loadNotifySettingsCard, saveNotifySettings } from './components/notify-settings.js';
+
 import { BEAN_ICON_SVG } from './icons.js';
 
 // ── Toast helper ──────────────────────────────────────────────────────────
@@ -688,6 +690,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('mqttSaveBtn')?.addEventListener('click', saveMqttSettings);
   document.getElementById('mqttApplyToMachineBtn')?.addEventListener('click', applyMqttToMachine);
+  document.getElementById('notifySettingsSaveBtn')?.addEventListener('click', saveNotifySettings);
   document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
@@ -808,6 +811,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // same as loadData()/loadLibrary() below.
     loadMachines();
     loadMqttSettings();
+    loadNotifySettingsCard();
     loadDrinkMenu();
     loadMilkTypes();
     await loadData();
