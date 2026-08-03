@@ -168,6 +168,7 @@ export default {
     nav_settings:'Impostazioni', settings_theme:'Tema', settings_accent:'Schema colori', settings_accent_machine_theme_note:'La macchina predefinita ha un proprio tema colore — attualmente determina l’accento dell’app al posto del selettore qui sotto.', theme_dark:'Scuro', theme_light:'Chiaro', theme_crema:'Crema', settings_language:'Lingua',
     settings_bottom_nav:'Barra di navigazione mobile', settings_bottom_nav_desc:'Scegli fino a 4 destinazioni per la barra di navigazione inferiore su mobile. Tutto il resto finisce in "Altro".',
     settings_bottom_nav_checkbox_label:'Mostra nella barra', settings_bottom_nav_move_up:'Sposta su', settings_bottom_nav_move_down:'Sposta giù',
+    settings_notify_title:'Notifiche', settings_notify_desc:'Quali notifiche automatiche della macchina e della libreria caffè devono essere inviate?',
     settings_machines:'Macchine', settings_machines_desc:'Gestisci le macchine espresso monitorate da questa app.', settings_machines_add:'+ Aggiungi macchina',
     settings_machine_name:'Nome', settings_machine_type:'Tipo', settings_machine_host:'Host', settings_machine_switch:'Entità switch HA (opzionale)',
     settings_machine_theme:'Colore', settings_machine_theme_gradient:'Sfumatura', settings_machine_theme_none:'Nessuno', settings_machine_theme_custom:'Personalizzato',

@@ -1,7 +1,12 @@
-## [2.27.2] – 2026-08-04
+## [2.27.3] – 2026-08-04
 
 ### Fixed
 - **MQTT/WS live values (temperature/pressure/weight) didn't actually update any faster than the existing 1s REST poll, defeating the point of #598's push-based transport.** `lib/machine-state.js`'s `deriveMachineState()` merged the additive fields (#597/#598: `pumpFlow`, `weightFlow`, `waterTemperature`, relay states, fault flags) from the active transport's cached snapshot, but kept reading `temperature`/`pressure`/`weight` themselves from the REST `/api/system/status` poll only — `live.sensorSnap` carried fresher values for those three the whole time, just unused. Now prefers `sensorSnap`'s values whenever the active transport (WS or MQTT) has a fresh cached snapshot, falling back to the REST-derived values exactly as before when it doesn't (transport not yet connected, or its own staleness check has expired it) — backward compatible, verified against every pre-#597 test in `test/machine-state.test.js`. `targetTemperature` stays sourced from REST/the active profile as before: it's a configured setpoint, not a live sensor reading, and neither transport's decoded message carries an equivalent field. `isBrewing` also stays sourced from `status.brewSwitchState` rather than `sensorSnap.brewActive`/`.brewSwitchActive` — the MQTT transport only maps the former, so the latter would behave inconsistently between WS and MQTT if used for brew-start/stop detection. Closes #615
+
+## [2.27.2] – 2026-08-04
+
+### Fixed
+- **Machine-level notification toggles (preheat-ready, low-stock) are now reachable when Orders is disabled.** #603 placed all 5 per-notification-type toggles inside the Orders admin panel's "Push notifications" section, but that whole panel only renders when `enable_orders: true`. Two of the five — `notify_preheat_ready` (`lib/preheat.js`) and `notify_low_stock` (`lib/services/LibraryService.js`) — fire regardless of Orders being enabled, so users without Orders had no way to mute them. Those two now live in an always-visible "Notifications" card on the main Settings page (`public-src/components/notify-settings.js`), reading/writing the same `/api/orders/settings` blob (that route was never gated on `enable_orders`, only the Orders UI/nav tab was — no backend change needed). `notify_shop_state`, `notify_new_order` and `notify_order_status` stay in the Orders panel, since they're meaningless without Orders enabled. Closes #614
 
 ## [2.27.1] – 2026-08-03
 
