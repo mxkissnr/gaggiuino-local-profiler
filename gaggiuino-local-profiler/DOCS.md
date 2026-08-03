@@ -187,6 +187,16 @@ Phase 1 of making `glp-integration` a full replacement for the community [ALERTu
 
 All of the above are documented in [`openapi.yaml`](openapi.yaml)/`GET /api/openapi.json` (see [API spec](#api-spec)) and every `machineId`-scoped like the rest of the `/api/machine/*` surface.
 
+### MQTT live-data transport (v2.27.0)
+
+An alternative to the WebSocket connection above for getting live sensor/system data out of the machine: instead of GLP maintaining its own WebSocket session, it subscribes as an MQTT client to the topics the Gaggiuino's own built-in MQTT client publishes (`<prefix>/sensors`, `<prefix>/system`, plus `shot`/`profile/active`/`maintenance`/`notification`/`status`, all documented in the machine project's own [MQTT.md](https://github.com/gaggiuino/gaggiuino.github.io/blob/main/docs/rest-api/MQTT.md)). Deliberately **not** the machine's native Home Assistant MQTT Discovery — GLP stays the single data path and single HA device rather than splitting entities across two uncoordinated integrations.
+
+- **Toggle**: Settings → "Live connection" → WebSocket (default) or MQTT. Switching to MQTT needs a broker host — either auto-discovered or entered manually (see below) — before it takes effect; with no host configured GLP silently stays on WebSocket even if MQTT is selected.
+- **Broker auto-discovery**: with `services: [mqtt:want]` declared in `config.yaml`, the add-on asks the HA Supervisor's `/services/mqtt` endpoint for the broker Home Assistant's own MQTT integration is already configured against (e.g. the Mosquitto broker add-on) and pre-fills host/port/username/password in Settings. Installs with no MQTT service registered at all (or non-Supervised installs) fall back to manual entry — every field stays editable either way.
+- **One-click "Apply to machine"**: writes the same broker connection onto the Gaggiuino's own MQTT client settings (`mqttEnabled`/`mqttHost`/`mqttPort`/`mqttUsername`/`mqttPassword`/`mqttTopicPrefix`, via the settings proxy above), so the connection details don't need to be typed twice.
+- **Same live-state cache, either transport**: `GET /api/machine/live` and the fields merged into `GET /api/machine/status` are byte-identical regardless of which transport produced them — `lib/live-transport.js` dispatches each cache read to either the WebSocket session or the MQTT subscription, both feeding the exact same field shape. `glp-integration` needs zero changes, since it only ever talks to GLP's own `/api/*` contract.
+- **Scope**: MQTT only ever applies to the **default machine** (the classic single-machine case) — [multi-machine](#multi-machine-v200) installs' additional machines always stay on their own WebSocket session regardless of the toggle, since the broker/topic-prefix is scoped to one physical unit. Command writes (`opmode`/`tare`/manual-brew) and the machine's own native HA MQTT Discovery are both out of scope for this transport switch — commands stay on the existing WebSocket-based proxy above.
+
 ## Features
 
 | Tab | Description |

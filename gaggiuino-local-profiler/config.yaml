@@ -1,5 +1,5 @@
 name: "GLP — Gaggiuino Local Profiler"
-version: "2.26.0"
+version: "2.27.0"
 slug: "gaggiuino_local_profiler"
 description: "Local shot profiler for the Gaggiuino espresso machine — shot archive, coffee library with flavor wheel, analytics and optional order management, all local, no cloud."
 url: "https://github.com/mxkissnr/gaggiuino-local-profiler"
@@ -23,6 +23,16 @@ hassio_api: true
 init: false
 ingress: true
 ingress_port: 8099
+# #598: MQTT as an alternative live-data transport. "want" (not "need") —
+# per the Supervisor add-on schema, "need" declares the service required for
+# the add-on to work at all, which isn't true here: WebSocket stays the
+# default transport and MQTT is opt-in from Settings, with manual host/port/
+# user/pass entry as a fallback when no MQTT service is registered at all.
+# "want" is enough to get the Supervisor's /services/mqtt endpoint
+# (lib/mqtt-discovery.js) populated whenever an MQTT service (e.g. the
+# Mosquitto broker add-on) *is* present.
+services:
+  - mqtt:want
 ports:
   8099/tcp: 8099
 ports_description:

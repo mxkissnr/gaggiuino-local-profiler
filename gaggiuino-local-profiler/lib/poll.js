@@ -7,7 +7,7 @@ const { getSwitchState, HA_TOKEN } = require('./ha');
 const state = require('./state');
 const { getMachineRuntimeState } = require('./machine-runtime-state');
 const { deriveMachineState, isStillWarm } = require('./machine-state');
-const gaggiuinoLive = require('./gaggiuino-live-client');
+const liveTransport = require('./live-transport');
 const { savePreheatState, isTempStable } = require('./preheat');
 const { syncAfterBrew, syncShots, fetchMachineVersion } = require('./sync');
 
@@ -57,14 +57,18 @@ async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
         const raw       = statusRes.data;
         const status    = Array.isArray(raw) ? raw[0] : raw;
 
-        // #597: best-effort merge of whatever's already cached from the
-        // persistent live WS session (lib/gaggiuino-live-client.js) — a
+        // #597/#598: best-effort merge of whatever's already cached from
+        // the active live-data transport (lib/live-transport.js dispatches
+        // to either the persistent WS session or the MQTT subscription) — a
         // synchronous cache read, never awaited/fetched here, so a machine
-        // with no WS session yet (or one that's still (re)connecting) just
-        // gets deriveMachineState()'s pre-#597 fields, same as before.
+        // with no session yet (or one that's still (re)connecting) just
+        // gets deriveMachineState()'s pre-#597 fields, same as before. This
+        // module is hard single-machine (always the default machine, see
+        // the header comment above), so the MQTT toggle always applies here
+        // unconditionally.
         const live = {
-            sensorSnap: gaggiuinoLive.getLiveSensorSnapshot(baseUrl),
-            sysState:   gaggiuinoLive.getLiveSystemState(baseUrl),
+            sensorSnap: liveTransport.getLiveSensorSnapshot(baseUrl),
+            sysState:   liveTransport.getLiveSystemState(baseUrl),
         };
         const {
             isBrewing, pressure: presVal, temperature: tempVal, weight: weightVal,

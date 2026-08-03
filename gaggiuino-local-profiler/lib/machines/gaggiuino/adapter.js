@@ -7,7 +7,7 @@
 'use strict';
 const axios = require('axios');
 const gaggiuinoWs = require('../../gaggiuino-ws-client');
-const gaggiuinoLive = require('../../gaggiuino-live-client');
+const liveTransport = require('../../live-transport');
 const { ALLOWED_URL_SCHEMES } = require('../../constants');
 const { assertMachineHost } = require('../../ssrf-guard');
 
@@ -197,17 +197,19 @@ async function triggerFirmwareUpdate(machine) {
     return r.data;
 }
 
-// Synchronous cache reads (no I/O here — see lib/gaggiuino-live-client.js)
-// that lazily open/reuse this machine's persistent live-value WS session.
-// Returns null until the first push arrives (or if the cached value has
-// gone stale) — callers should treat that the same as "not yet known", not
-// an error.
+// Synchronous cache reads (no I/O here — see lib/live-transport.js) that
+// lazily open/reuse this machine's persistent live-value session, WS or
+// MQTT depending on the Settings-page transport toggle (#598 — MQTT only
+// ever applies to the default machine, see live-transport.js's header
+// comment). Returns null until the first push arrives (or if the cached
+// value has gone stale) — callers should treat that the same as "not yet
+// known", not an error.
 async function getLiveSensorSnapshot(machine) {
-    return gaggiuinoLive.getLiveSensorSnapshot(await baseUrlFor(machine));
+    return liveTransport.getLiveSensorSnapshot(await baseUrlFor(machine), machine.isDefault);
 }
 
 async function getLiveSystemState(machine) {
-    return gaggiuinoLive.getLiveSystemState(await baseUrlFor(machine));
+    return liveTransport.getLiveSystemState(await baseUrlFor(machine), machine.isDefault);
 }
 
 function capabilities() {

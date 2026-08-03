@@ -1230,6 +1230,41 @@ paths:
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
 
+  /api/mqtt/discovery:
+    get:
+      tags: [Mqtt]
+      summary: Supervisor MQTT service auto-discovery (requires services [mqtt:want] in config.yaml)
+      responses:
+        "200": { description: "{ available: false } or { available: true, host, port, username, password } from the Supervisor's /services/mqtt" }
+
+  /api/mqtt/settings:
+    get:
+      tags: [Mqtt]
+      summary: Current live-data transport settings (Settings-page WebSocket/MQTT toggle + broker connection)
+      responses:
+        "200": { description: "{ transport: 'websocket'|'mqtt', host, port, username, password, prefix }" }
+    post:
+      tags: [Mqtt]
+      summary: Save the live-data transport settings. Drops any already-open MQTT session so a changed broker/prefix/credentials takes effect on the next read.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { transport: { type: string, enum: [websocket, mqtt] }, host: { type: string }, port: { type: integer }, username: { type: string }, password: { type: string }, prefix: { type: string } } }
+      responses:
+        "200": { description: Saved settings }
+        "400": { description: Invalid settings payload }
+
+  /api/mqtt/apply-to-machine:
+    post:
+      tags: [Mqtt]
+      summary: One-click apply — points the default machine's own MQTT client (system.mqtt* settings, proxied by #597) at the already-saved broker, so the connection details don't need to be entered twice
+      responses:
+        "200": { description: Updated machine settings }
+        "400": { description: No MQTT broker configured yet }
+        "501": { description: machine type does not support the settings proxy }
+        "502": { description: Machine unreachable or returned an error }
+
   /api/machines:
     get:
       tags: [Machines]
@@ -1453,3 +1488,5 @@ tags:
     description: Bean metadata import from external URLs
   - name: MachineControl
     description: "Gaggiuino settings/control/firmware proxy (#597) — Gaggiuino-only, 501s for machines without adapter.capabilities().settingsProxy"
+  - name: Mqtt
+    description: "MQTT live-data transport (#598) — Supervisor broker auto-discovery, the WebSocket/MQTT Settings-page toggle, and a one-click apply of the broker connection onto the machine's own MQTT client settings"

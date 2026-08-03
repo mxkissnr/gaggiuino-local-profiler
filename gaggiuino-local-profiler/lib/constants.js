@@ -3,7 +3,7 @@ if (typeof File === 'undefined') {
     try { global.File = require('buffer').File; } catch { global.File = class File {}; }
 }
 
-const GLP_VERSION  = '2.26.0';
+const GLP_VERSION  = '2.27.0';
 const DEFAULT_PORT = 8099;
 
 const DATA_DIR             = '/data';
@@ -23,6 +23,10 @@ const ORDERS_HISTORY_TTL_MS = 7  * 24 * 60 * 60 * 1000;
 const MAX_SHOT_ID           = 99_999_999;
 const HA_INGRESS_PATH       = '/api/hassio_ingress/gaggiuino_local_profiler';
 const HA_API                = 'http://supervisor/core/api';
+// #598: the Supervisor's own API root, distinct from HA_API above (which is
+// the *Core* API proxied through the Supervisor) — service discovery
+// (/services/mqtt) lives directly under this root, not under /core.
+const SUPERVISOR_API        = 'http://supervisor';
 const HA_TOKEN              = process.env.SUPERVISOR_TOKEN;
 const ALLOWED_URL_SCHEMES   = ['http:', 'https:'];
 const ALLOWED_IMPORT_HOSTS  = ['kaffeebraun.com', 'www.kaffeebraun.com',
@@ -93,7 +97,7 @@ module.exports = {
     GLP_VERSION, DEFAULT_PORT,
     DATA_DIR, TOKEN_FILE, PREHEAT_STATE_FILE, OPTIONS_FILE, PROFILES_CACHE_FILE,
     TRASH_TTL_MS, ORDERS_HISTORY_TTL_MS, MAX_SHOT_ID,
-    HA_INGRESS_PATH, HA_API, HA_TOKEN, ALLOWED_URL_SCHEMES, ALLOWED_IMPORT_HOSTS,
+    HA_INGRESS_PATH, HA_API, SUPERVISOR_API, HA_TOKEN, ALLOWED_URL_SCHEMES, ALLOWED_IMPORT_HOSTS,
     TEMP_HISTORY_MAX, TEMP_STABLE_MIN, TEMP_STABLE_VAR, PREHEAT_STATE_TTL,
     WARM_TEMP_MIN, WARM_OFF_MAX_MS,
     DEFAULT_MENU, MAINTENANCE_DEFAULTS, STATIC_MAINTENANCE_TASKS, isGlobalMaintenanceTask,

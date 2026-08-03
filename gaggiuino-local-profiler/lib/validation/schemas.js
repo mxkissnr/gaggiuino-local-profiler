@@ -179,6 +179,16 @@ const serviceTestPeripheralSchema = z.union([
 // settings-editor UI yet to justify modeling every field here.
 const settingsPayloadSchema = z.record(z.string(), z.any());
 
+// ── MQTT live-data transport (#598) ─────────────────────────────────────
+const mqttSettingsSchema = z.object({
+    transport: z.enum(['websocket', 'mqtt']),
+    host:      z.string().max(255).optional().default(''),
+    port:      z.number().int().min(1).max(65535).optional().default(1883),
+    username:  z.string().max(200).optional().default(''),
+    password:  z.string().max(200).optional().default(''),
+    prefix:    z.string().min(1).max(100).optional().default('gaggiuino'),
+});
+
 module.exports = {
     annotationSchema,
     beanSchema,
@@ -191,4 +201,5 @@ module.exports = {
     operationModeSchema,
     serviceTestPeripheralSchema,
     settingsPayloadSchema,
+    mqttSettingsSchema,
 };
