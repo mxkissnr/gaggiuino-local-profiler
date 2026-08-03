@@ -251,6 +251,13 @@ async function seed(baseUrl) {
 async function main() {
     mkdirSync(outDir, { recursive: true });
 
+    // enable_orders must be set before the server boots — isOrdersEnabled()
+    // (lib/data.js) reads it from OPTIONS_FILE, and routes/UI gating on it
+    // (e.g. #btnOrders's visibility) is decided at startup/first render, not
+    // re-checked live. Gives the Orders tab screenshot something real to show
+    // instead of the tab not existing at all.
+    writeFileSync(path.join(tmpDataDir, 'options.json'), JSON.stringify({ enable_orders: true }));
+
     process.chdir(appRoot);
     require('../server.js'); // starts listening on PORT against tmpDataDir
     const baseUrl = `http://127.0.0.1:${PORT}`;
@@ -265,6 +272,11 @@ async function main() {
     // normal case mid-release, before this version's own tag exists yet) —
     // it overlays the top of the page and intercepts clicks on the nav bar.
     await page.addStyleTag({ content: '#glpUpdateBanner{display:none!important}' });
+    // #btnLive is only shown once a switch_entity is configured for machine
+    // power control (components/status.js's updatePowerButton()) — this
+    // throwaway instance has no HA connection to report one, so force it
+    // visible for the screenshot rather than leaving the Live tab undocumented.
+    await page.addStyleTag({ content: '#btnLive{display:flex!important}' });
     await page.waitForTimeout(500); // let async post-load renders (thumbnails, charts) settle
 
     await page.click('#btnShots');
@@ -303,6 +315,20 @@ async function main() {
     await page.click('#btnDialin');
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(outDir, 'dialin.png') });
+
+    // Live/Orders/Settings (previously undocumented — every top-level tab
+    // now gets a screenshot).
+    await page.click('#btnLive');
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: path.join(outDir, 'live.png') });
+
+    await page.click('#btnOrders');
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: path.join(outDir, 'orders.png') });
+
+    await page.click('#btnSettings');
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: path.join(outDir, 'settings.png') });
 
     await browser.close();
     console.log(`Screenshots written to ${outDir}`);

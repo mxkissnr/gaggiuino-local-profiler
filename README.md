@@ -69,7 +69,7 @@ Click the button above to add this repository directly to your Home Assistant â€
   <img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison, bean ranking and dial-in progression" width="49%"/>
 </p>
 
-More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-in). Regenerated on demand via `node scripts/screenshots.mjs`.
+More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-in, Live, Orders, Settings). Regenerated on demand via `node scripts/screenshots.mjs`.
 
 ---
 
