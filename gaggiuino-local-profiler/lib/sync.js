@@ -32,8 +32,17 @@ async function syncAfterBrew() {
 async function syncShots(runtime = defaultRuntime) {
     const opts = loadOptions();
     if (!runtime.machineOn && opts.switch_entity) return true;
-    const machineUrl = getMachineUrl(opts);
     try {
+        // #638: prefer the registry's live default-machine host over
+        // options.json's possibly-stale machine_host -- same pattern
+        // syncOtherMachines()/syncMachineShots() below already use for
+        // non-default machines. Falls back to options.json only when the
+        // registry has no usable host yet (defensive; ensureDefaultMachine()
+        // normally seeds one from options.json before sync ever runs).
+        const defaultMachine = registry.getDefaultMachine();
+        const machineUrl = getMachineUrl(
+            defaultMachine && defaultMachine.host ? { ...opts, machine_host: defaultMachine.host } : opts
+        );
         const latestResponse  = await axios.get(`${machineUrl}/latest`, { timeout: 10000 });
         // eslint-disable-next-line require-atomic-updates -- syncShots() has no mutex guarding overlapping calls (pre-existing); a real fix is a synchronization change out of scope for this lint-only pass
         state.machineReachable   = true;

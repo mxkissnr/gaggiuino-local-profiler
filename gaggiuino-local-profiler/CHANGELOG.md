@@ -1,3 +1,8 @@
+## Unreleased
+
+### Fixed
+- **Editing the default machine's host in Settings never actually took effect for live polling or periodic sync.** `lib/poll.js`'s `pollViaGaggiuinoStatus()` and `lib/sync.js`'s `syncShots()` both resolved the target host straight from `options.json`'s `machine_host` on every call, ignoring `registry.updateMachine()` writes to the `machines` table entirely — so after editing the default machine's host, the app kept polling/syncing the *old* host forever, with no error and no indication anything was wrong. Both now read the default machine's current host from `lib/machines/registry.js`'s `getDefaultMachine()` first (the same registry-is-source-of-truth pattern `syncOtherMachines()`/`syncMachineShots()` already use for non-default machines), falling back to `options.json`'s `machine_host` only if the registry has no usable host yet. Closes #638
+
 ## [2.28.0] – 2026-08-04
 
 ### Added

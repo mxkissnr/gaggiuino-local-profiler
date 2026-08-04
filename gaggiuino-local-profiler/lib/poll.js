@@ -4,6 +4,7 @@ const { TEMP_HISTORY_MAX } = require('./constants');
 const { log } = require('./helpers');
 const { loadOptions, getMachineBaseUrl } = require('./data');
 const { getSwitchState, HA_TOKEN } = require('./ha');
+const registry = require('./machines/registry');
 const state = require('./state');
 const { getMachineRuntimeState } = require('./machine-runtime-state');
 const { deriveMachineState, isStillWarm } = require('./machine-state');
@@ -47,9 +48,19 @@ async function pollLive(runtime = defaultRuntime) {
 }
 
 async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
-    const opts    = loadOptions();
-    const baseUrl = getMachineBaseUrl(opts);
+    const opts = loadOptions();
     try {
+        // #638: prefer the registry's live default-machine host (kept current
+        // by Settings UI edits via registry.updateMachine()) over the
+        // possibly-stale options.json value -- mirrors the pattern lib/sync.js's
+        // syncOtherMachines()/syncMachineShots() already use for non-default
+        // machines. Falls back to options.json's machine_host only when the
+        // registry has no usable host yet (defensive; ensureDefaultMachine()
+        // normally seeds one from options.json before polling ever starts).
+        const defaultMachine = registry.getDefaultMachine();
+        const baseUrl = getMachineBaseUrl(
+            defaultMachine && defaultMachine.host ? { ...opts, machine_host: defaultMachine.host } : opts
+        );
         const statusRes = await axios.get(`${baseUrl}/api/system/status`, { timeout: 3000 });
         state.machineReachable   = true;
         state.lastMachineError   = null;
