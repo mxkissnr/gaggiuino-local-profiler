@@ -19,19 +19,32 @@ import { openLightbox }                                       from '../../compon
 
 // ── Data loading ──────────────────────────────────────────────────────────
 
+// Guards against overlapping calls (loadData() is fired unawaited from at
+// least 6 independent triggers — main.js init, the reload-data button, live.js's
+// post-brew setTimeout, status.js, sidebar.js, onboarding.js — with no
+// coordination between them): a monotonic token is captured before the fetch
+// and only the call that is still the latest one when its response lands is
+// allowed to write state, same pattern as loadMachineProfileList() in
+// library-profile-editor.js (#521, #644).
+let _loadDataReqToken = 0;
+
 export async function loadData() {
+  const token = ++_loadDataReqToken;
   const shotsEl = document.getElementById('shots');
   shotsEl.innerHTML = `<div class="loading-state">${t('loading')}</div>`;
 
   let fetched;
   try {
     const r = await apiFetch('shots.json');
+    if (token !== _loadDataReqToken) return;
     if (!r.ok) {
       shotsEl.innerHTML = `<div class="loading-state" style="color:#ef4444">HTTP ${r.status}</div>`;
       return;
     }
     fetched = await r.json();
+    if (token !== _loadDataReqToken) return;
   } catch {
+    if (token !== _loadDataReqToken) return;
     shotsEl.innerHTML =
       `<div class="loading-state" style="color:#ef4444">Verbindungsfehler<br>` +
       `<button data-action="reload-data" style="margin-top:10px;padding:4px 12px;cursor:pointer;` +
