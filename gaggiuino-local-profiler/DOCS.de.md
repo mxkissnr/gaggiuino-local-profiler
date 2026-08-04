@@ -119,6 +119,41 @@ Verbindung im HA-Terminal testen:
 curl http://<gaggiuino-ip>/api/shots/latest
 ```
 
+## Betrieb ohne Home Assistant (Standalone-Docker)
+
+GLP ist ein ganz normaler Docker-Container — nichts in der App setzt zwingend HA Supervisor voraus. Wer gar kein Home Assistant OS/Supervised nutzt, kann die App auch standalone betreiben:
+
+```bash
+docker run -d \
+  --name glp \
+  -p 8099:8099 \
+  -v ./glp-data:/data \
+  -e MACHINE_URL=http://192.168.1.42 \
+  ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:<version>
+```
+
+Oder mit Compose:
+
+```yaml
+services:
+  glp:
+    image: ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:<version>
+    ports:
+      - "8099:8099"
+    volumes:
+      - ./glp-data:/data
+    environment:
+      - MACHINE_URL=http://192.168.1.42
+    restart: unless-stopped
+```
+
+Hinweise:
+- Image-Tag passend zur CPU wählen: `amd64`, `armv7` oder `aarch64`. Für reproduzierbare Updates `<version>` auf einen konkreten Release-Tag pinnen (siehe [Releases](https://github.com/mxkissnr/gaggiuino-local-profiler/releases)) statt `latest`.
+- `/data` enthält die SQLite-Datenbank, das API-Token und die Optionen — auf einen persistenten Host-Pfad mounten, sonst geht bei jedem Container-Neuanlegen alles verloren.
+- `MACHINE_URL` setzt die Adresse des Standard-Controllers, ohne dass `options.json` existieren muss (die normalerweise von HA Supervisor aus dem `options:`-Block in `config.yaml` geschrieben wird und außerhalb von HA nicht existiert). Maschinen lassen sich danach auch direkt über die Settings-UI der App hinzufügen/bearbeiten, sobald sie läuft — dieser Weg (die Multi-Maschinen-Registry) kommt ganz ohne `options.json` oder diese Env-Variable aus.
+- `http://<host>:8099` direkt im Browser öffnen — es gibt kein HA Ingress, daher authentifiziert sich die App über ihr eigenes Token (siehe [API-Token](#api-token) oben), genauso wie es der Order Card's Direct-URL-Modus bereits macht.
+- Die einzige HA-spezifische Funktion: der "Auto-Sync bei `latest_shot_id`-Änderung"-Hook, der über `SUPERVISOR_TOKEN` auf ein Home-Assistant-Sensor-Update lauscht. Ohne HA synct GLP trotzdem weiter nach seinem eigenen periodischen Zeitplan (`sync_interval`, Minuten) — nur eben nicht so nahezu sofort wie über HAs eigenes Polling.
+
 ## Als App installieren (PWA)
 
 GLP lässt sich als eigenständige App installieren (eigenes Icon, keine Browser-Adressleiste) — vorausgesetzt, man öffnet es direkt und nicht über das Home-Assistant-Dashboard/Ingress-Panel:

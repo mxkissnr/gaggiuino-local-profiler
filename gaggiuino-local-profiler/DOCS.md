@@ -119,6 +119,41 @@ Verify connectivity from the HA terminal:
 curl http://<gaggiuino-ip>/api/shots/latest
 ```
 
+## Running without Home Assistant (standalone Docker)
+
+GLP is a plain Docker container — nothing in the app actually requires HA Supervisor to run. If you don't use Home Assistant OS/Supervised at all, you can run it standalone:
+
+```bash
+docker run -d \
+  --name glp \
+  -p 8099:8099 \
+  -v ./glp-data:/data \
+  -e MACHINE_URL=http://192.168.1.42 \
+  ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:<version>
+```
+
+Or with Compose:
+
+```yaml
+services:
+  glp:
+    image: ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:<version>
+    ports:
+      - "8099:8099"
+    volumes:
+      - ./glp-data:/data
+    environment:
+      - MACHINE_URL=http://192.168.1.42
+    restart: unless-stopped
+```
+
+Notes:
+- Use the image tag matching your CPU: `amd64`, `armv7`, or `aarch64`. Pin `<version>` to a released tag (see [Releases](https://github.com/mxkissnr/gaggiuino-local-profiler/releases)) rather than `latest` for reproducible upgrades.
+- `/data` is where the SQLite database, API token and options live — mount it to a persistent host path or it resets on every container recreate.
+- `MACHINE_URL` sets the default machine's controller address without needing `options.json` (which is normally written by HA Supervisor from `config.yaml`'s `options:` block and doesn't exist outside HA). You can also add/edit machines afterward from the app's own Settings UI once it's running — that path (the multi-machine registry) doesn't involve `options.json` or this env var at all.
+- Open `http://<host>:8099` directly in a browser — there's no HA Ingress involved, so the app authenticates itself via its own token instead (see [API token](#api-token) above), same as the Order Card's direct-URL mode already does.
+- The one feature that's HA-specific: the "auto-sync on `latest_shot_id` change" hook, which listens for a Home Assistant sensor update via `SUPERVISOR_TOKEN`. Without it, GLP still syncs shots on its own periodic schedule (`sync_interval`, minutes) — you just won't get the near-instant sync that HA's own polling triggers.
+
 ## Install as an App (PWA)
 
 GLP can be installed as a standalone app (own icon, no browser address bar) when you open it directly — not through the Home Assistant dashboard/Ingress panel:
