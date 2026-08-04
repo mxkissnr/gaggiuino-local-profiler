@@ -11,7 +11,7 @@
     "release:check": "node scripts/release-check.mjs"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^1.0.2",
+    "@napi-rs/canvas": "^1.0.3",
     "@protobuf-ts/runtime": "^2.11.1",
     "axios": "1.18.1",
     "better-sqlite3": "13.0.1",
