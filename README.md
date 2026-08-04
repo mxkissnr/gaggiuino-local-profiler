@@ -21,6 +21,8 @@
 
 ---
 
+> **AI-generated project.** All code, tests, and documentation in this repo are written by Claude (Anthropic). Scope, hardware testing (Gaggia Classic + Gaggiuino), and release decisions are done by a human maintainer. Keep that in mind before installing this on your machine.
+
 > **Heads-up — this requires a machine running [Gaggiuino](https://gaggiuino.github.io/) or [GaggiMate](https://github.com/jniebuhr/gaggimate) firmware.** GLP does not work with stock espresso machines. Both are hardware mods (custom controller, pressure/temperature sensors) — Gaggiuino has full support, GaggiMate is experimental as of v2.0.0 (see the Multi-Machine row below). These mods aren't limited to one machine brand: **the "type" GLP asks for when you add a machine selects the firmware adapter it talks to, not the physical machine.** Any single-boiler machine with a Gaggiuino or GaggiMate board installed — Gaggia Classic, Rancilio Silvia, Lelit, and others — works identically from GLP's side. If your machine doesn't run either firmware yet, start there first.
 
 ## Why GLP?
