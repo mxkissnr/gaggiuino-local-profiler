@@ -96,6 +96,15 @@ function resolveSwitchEntity(opts) {
     return (defaultMachine ? defaultMachine.switchEntity : opts.switch_entity);
 }
 
+// #648: prefer the registry's live default-machine host over options.json's
+// possibly-stale machine_host -- same pattern #638/#641 established for
+// lib/poll.js/lib/sync.js. Falls back to options.json's machine_host only
+// when the registry has no usable host yet.
+function resolveMachineHost(opts) {
+    const defaultMachine = registry.getDefaultMachine();
+    return defaultMachine && defaultMachine.host ? { ...opts, machine_host: defaultMachine.host } : opts;
+}
+
 // Pre-load cache into state on startup so the profile select is immediately available
 (function initProfilesCache() {
     const cached = loadProfilesCache();
@@ -518,7 +527,7 @@ router.get('/api/version', async (req, res) => {
 if (process.env.NODE_ENV !== 'production') {
     router.get('/api/debug/machine', async (req, res) => {
         const opts    = loadOptions();
-        const baseUrl = getMachineBaseUrl(opts);
+        const baseUrl = getMachineBaseUrl(resolveMachineHost(opts));
         try {
             const r = await axios.get(`${baseUrl}/api/system/status`, { timeout: 5000 });
             res.json({ ok: true, baseUrl, data: r.data });

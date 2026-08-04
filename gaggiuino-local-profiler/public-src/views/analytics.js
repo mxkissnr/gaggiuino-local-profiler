@@ -506,6 +506,13 @@ let _worldMapRegistered = false;
 let _echartsInstance = null;
 let _resizeBound = false;
 
+// #648: buildWorldMap() is fired unawaited from initAnalytics(), which can
+// itself run again (re-navigating to Analytics) before a prior call's
+// countries-110m.json fetch has resolved. A monotonic token guard, same
+// pattern shots/index.js's loadData() uses (#644), makes sure only the
+// still-latest call writes _worldTopo / touches the DOM after the await.
+let _worldMapReqToken = 0;
+
 // Converts a #rrggbb (or #rgb) hex color to an rgba() string at the given
 // alpha; falls back to the raw input unchanged if it isn't hex (e.g. an
 // already-rgba CSS custom property value).
@@ -668,6 +675,7 @@ function _splitGeometryAtAntimeridian(geometry) {
 }
 
 export async function buildWorldMap() {
+  const token = ++_worldMapReqToken;
   const wrap = document.getElementById('worldMapWrap');
   if (!wrap) return;
 
@@ -735,12 +743,16 @@ export async function buildWorldMap() {
   }
 
   if (!_worldTopo) {
-    // eslint-disable-next-line require-atomic-updates -- benign cache-fill race: concurrent calls before this resolves would all fetch/parse the same static file
-    try { _worldTopo = await (await fetch('countries-110m.json')).json(); }
+    let topo;
+    try { topo = await (await fetch('countries-110m.json')).json(); }
     catch {
+      if (token !== _worldMapReqToken) return; // a newer call has since taken over
       wrap.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_map_empty')}</p>`;
       return;
     }
+    if (token !== _worldMapReqToken) return; // a newer call has since taken over
+    // eslint-disable-next-line require-atomic-updates -- guarded above by the token check; not a real race
+    _worldTopo = topo;
   }
 
   if (!_worldMapRegistered) {

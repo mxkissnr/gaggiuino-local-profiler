@@ -144,7 +144,7 @@ export function renderBeanList() {
         <div class="lib-bag-history-title">${t('lib_bag_history')}</div>
         ${bags.slice().reverse().map((bg, i) => `
           <div class="lib-bag-row${i === 0 ? ' active' : ''}">
-            <span>${bg.roastDate || '–'}</span>
+            <span>${bg.roastDate ? esc(bg.roastDate) : '–'}</span>
             <span>${bg.stock_g ? bg.stock_g + ' g' : '–'}</span>
             <span>${bg.batchNumber ? esc(bg.batchNumber) : '–'}</span>
             <button class="lib-bag-del" data-action="delete-bag" data-bean-id="${b.id}" data-bag-id="${bg.id}" title="${t('lib_bag_delete')}">✕</button>
