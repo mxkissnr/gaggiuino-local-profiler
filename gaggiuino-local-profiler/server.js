@@ -4,7 +4,7 @@ const path     = require('path');
 const crypto   = require('crypto');
 
 const { GLP_VERSION, DEFAULT_PORT, DATA_DIR, TOKEN_FILE, HA_INGRESS_PATH } = require('./lib/constants');
-const { log, writeFileSafe, isSupervisorIp }         = require('./lib/helpers');
+const { log, writeFileSafe, isSupervisorIp, formatUnhandledRejection } = require('./lib/helpers');
 const state                                          = require('./lib/state');
 const { getDb }                                      = require('./lib/db');
 const shotService                                    = require('./lib/services/ShotService');
@@ -13,6 +13,14 @@ const { createApiRateLimiter }                       = require('./lib/middleware
 const { loadPreheatState, startPreheatWatcher }                              = require('./lib/preheat');
 const { syncAllMachines, scheduleNextSync }                                  = require('./lib/sync');
 const { fetchMachineVersion, checkAndApplyMachinePower, backgroundHaCheck } = require('./lib/poll');
+
+// #642: Node >=15 terminates the whole process on an unhandled promise
+// rejection by default. Every setInterval/setTimeout callback in this file
+// already guards its own promise (backgroundHaCheck below, lib/preheat.js's
+// watcher, lib/sync.js's scheduleNextSync) -- this is a last-resort net so a
+// future change that drops one of those guards logs instead of killing the
+// entire backend process.
+process.on('unhandledRejection', (reason) => log(formatUnhandledRejection(reason), true));
 
 // ── Init data dir & SQLite DB ────────────────────────────────────────────
 try {
@@ -188,7 +196,7 @@ app.listen(PORT, () => {
     log(`Gaggiuino Local Profiler v${GLP_VERSION} started on port ${PORT}`);
     log(`Machine URL: ${getMachineUrl(opts)} | sync every ${opts.sync_interval || 5} min`);
     log(`HA integration: ${require('./lib/constants').HA_TOKEN ? 'active (auto-sync via latest_shot_id)' : 'unavailable (no SUPERVISOR_TOKEN)'}`);
-    setInterval(backgroundHaCheck, 30000);
+    setInterval(() => { backgroundHaCheck().catch(e => log(`Background HA check failed: ${e.message}`, true)); }, 30000);
     startPreheatWatcher();
     shotService.purgeExpiredTrash();
     setInterval(() => shotService.purgeExpiredTrash(), 24 * 60 * 60 * 1000);

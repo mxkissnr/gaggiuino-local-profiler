@@ -6,6 +6,15 @@ function log(message, isError = false) {
     else         console.log(`[${now}] ${message}`);
 }
 
+// #642: shared message formatter for the global unhandledRejection handler
+// (server.js) — kept here next to log() so the handler and its unit test
+// stay in sync on message format without requiring server.js itself, which
+// has app.listen()/DATA_DIR side effects that make it unsafe to import in
+// tests (see test/server-middleware-order.test.js).
+function formatUnhandledRejection(reason) {
+    return `Unhandled promise rejection: ${reason instanceof Error ? (reason.stack || reason.message) : String(reason)}`;
+}
+
 // ── HA Supervisor-internal network check ──────────────────────────────────
 // Trusted origins for supervisor-only fast paths: loopback (same host) and
 // the HA Supervisor's internal ingress/add-on network. The Supervisor proxies
@@ -47,4 +56,4 @@ async function withFileLock(key, fn) {
     try { return await fn(); } finally { _fileLocks.delete(key); resolve(); }
 }
 
-module.exports = { log, rateLimit, writeFileSafe, withFileLock, isSupervisorIp };
+module.exports = { log, rateLimit, writeFileSafe, withFileLock, isSupervisorIp, formatUnhandledRejection };

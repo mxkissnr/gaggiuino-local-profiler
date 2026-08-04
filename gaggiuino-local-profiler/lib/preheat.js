@@ -134,8 +134,11 @@ async function _checkReadyByPreheat(runtime = defaultRuntime) {
 function startPreheatWatcher(runtime = defaultRuntime) {
     if (_preheatWatchTimer) clearInterval(_preheatWatchTimer);
     _preheatWatchTimer = setInterval(() => {
-        _checkPreheatNotify(runtime);
-        _checkReadyByPreheat(runtime);
+        // #642: both are async and called bare -- guard each independently so
+        // a rejection from one can't propagate to an unhandled rejection (and
+        // doesn't stop the other from running on this tick).
+        _checkPreheatNotify(runtime).catch(err => log(`Preheat notify check failed: ${err.message}`, true));
+        _checkReadyByPreheat(runtime).catch(err => log(`Ready-by preheat check failed: ${err.message}`, true));
     }, 30000);
 }
 
