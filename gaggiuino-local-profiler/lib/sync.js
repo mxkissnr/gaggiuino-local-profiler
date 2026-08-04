@@ -31,7 +31,15 @@ async function syncAfterBrew() {
 
 async function syncShots(runtime = defaultRuntime) {
     const opts = loadOptions();
-    if (!runtime.machineOn && opts.switch_entity) return true;
+    // #643: prefer the registry's live default-machine switch_entity over
+    // options.json's possibly-stale one -- same pattern #638/#641 established
+    // for machine_host below. Falls back to options.json's switch_entity
+    // only when there's no default-machine row at all -- an explicitly
+    // empty/null registry switchEntity means "not configured" and must NOT
+    // fall through to a stale options.json value.
+    const defaultMachine = registry.getDefaultMachine();
+    const switchEntity = (defaultMachine ? defaultMachine.switchEntity : opts.switch_entity);
+    if (!runtime.machineOn && switchEntity) return true;
     try {
         // #638: prefer the registry's live default-machine host over
         // options.json's possibly-stale machine_host -- same pattern
@@ -39,7 +47,6 @@ async function syncShots(runtime = defaultRuntime) {
         // non-default machines. Falls back to options.json only when the
         // registry has no usable host yet (defensive; ensureDefaultMachine()
         // normally seeds one from options.json before sync ever runs).
-        const defaultMachine = registry.getDefaultMachine();
         const machineUrl = getMachineUrl(
             defaultMachine && defaultMachine.host ? { ...opts, machine_host: defaultMachine.host } : opts
         );

@@ -152,7 +152,15 @@ async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
 
 async function checkAndApplyMachinePower(runtime = defaultRuntime) {
     const opts   = loadOptions();
-    const entity = opts.switch_entity;
+    // #643: prefer the registry's live default-machine switch_entity (kept
+    // current by Settings UI edits via registry.updateMachine()) over the
+    // possibly-stale options.json value -- same pattern #638/#641 established
+    // for machine_host. Falls back to options.json's switch_entity only when
+    // there's no default-machine row at all -- an explicitly empty/null
+    // registry switchEntity means "not configured" and must NOT fall through
+    // to a stale options.json value.
+    const defaultMachine = registry.getDefaultMachine();
+    const entity = (defaultMachine ? defaultMachine.switchEntity : opts.switch_entity);
     if (!entity || !HA_TOKEN) {
         if (!runtime.livePollTimer) startLivePolling(runtime);
         return;

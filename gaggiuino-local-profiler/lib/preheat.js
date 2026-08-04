@@ -9,6 +9,7 @@ const { getHaLanguage, sendHaNotify, callHaService } = require('./ha');
 const { loadOptions, loadOrdersSettings } = require('./data');
 const { notifyT } = require('./notify-i18n');
 const state = require('./state');
+const registry = require('./machines/registry');
 const { getMachineRuntimeState } = require('./machine-runtime-state');
 
 // #549: same single-default-machine assumption as lib/poll.js — one runtime
@@ -37,6 +38,18 @@ function loadPreheatState(runtime = defaultRuntime) {
         }
         if (runtime.switchOnAt) log(`Preheat state restored: started ${Math.round((now - runtime.switchOnAt) / 60000)} min ago`);
     } catch { /* ignore */ }
+}
+
+// #643: prefer the registry's live default-machine switch_entity (kept
+// current by Settings UI edits via registry.updateMachine()) over the
+// possibly-stale options.json value -- same pattern #638/#641 established
+// for machine_host. Falls back to options.json's switch_entity only when
+// there's no default-machine row at all -- an explicitly empty/null
+// registry switchEntity means "not configured" and must NOT fall through
+// to a stale options.json value.
+function resolveSwitchEntity(opts) {
+    const defaultMachine = registry.getDefaultMachine();
+    return (defaultMachine ? defaultMachine.switchEntity : opts.switch_entity);
 }
 
 function isTempStable(runtime = defaultRuntime) {
@@ -69,7 +82,7 @@ function buildPreheatResponse(runtime = defaultRuntime) {
     const opts        = loadOptions();
     const preheatMins = Math.max(1, parseInt(opts.preheat_time) || 20);
     const preheatMs   = preheatMins * 60 * 1000;
-    const machineOff  = !runtime.machineOn && !!opts.switch_entity;
+    const machineOff  = !runtime.machineOn && !!resolveSwitchEntity(opts);
     const readyBy     = { readyByTargetAt: state.readyByTargetAt, plannedSwitchOnAt: state.plannedSwitchOnAt };
     if (machineOff || !runtime.switchOnAt) {
         return { ready: false, elapsed: 0, remaining: preheatMins * 60, pct: 0,
@@ -115,7 +128,7 @@ async function _checkReadyByPreheat(runtime = defaultRuntime) {
     if (!state.readyByTargetAt || !state.plannedSwitchOnAt) return;
     if (runtime.machineOn) return;
     if (Date.now() < state.plannedSwitchOnAt) return;
-    const entity = loadOptions().switch_entity;
+    const entity = resolveSwitchEntity(loadOptions());
     if (entity) {
         try {
             await callHaService('switch', 'turn_on', { entity_id: entity });

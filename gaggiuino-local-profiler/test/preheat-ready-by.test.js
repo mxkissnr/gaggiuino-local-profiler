@@ -54,6 +54,19 @@ const state = require('../lib/state');
 const { getMachineRuntimeState } = require('../lib/machine-runtime-state');
 const runtime = getMachineRuntimeState();
 
+// #643: switch_entity now resolves from the machines registry (real, not
+// mocked here), not from the lib/data.js loadOptions() mock above -- the
+// registry's own OPTIONS_FILE-backed auto-seed (lib/machines/registry.js)
+// is independent of this file's mockOptions and seeds switchEntity: null in
+// tests (no on-disk options.json). Keep both in sync so switch_entity
+// behaves as this test file intends regardless of which path resolves it.
+const registry = require('../lib/machines/registry');
+function setSwitchEntity(value) {
+    mockOptions = { ...mockOptions, switch_entity: value };
+    registry.getDefaultMachine(); // self-seeds machine #1 if not already present
+    registry.updateMachine(1, { switchEntity: value || null });
+}
+
 function makeApp() {
     const app = express();
     app.use(express.json());
@@ -70,6 +83,7 @@ beforeEach(async () => {
     state.readyByTargetAt   = null;
     state.plannedSwitchOnAt = null;
     mockOptions              = { switch_entity: 'switch.espresso', preheat_time: '1' };
+    setSwitchEntity('switch.espresso');
     callHaServiceMock.mockClear();
     server = makeApp().listen(0);
     await new Promise(resolve => server.once('listening', resolve));
@@ -128,6 +142,7 @@ describe('POST /api/preheat/ready-by (#541)', () => {
 
     it('rejects a numeric targetAt when switch_entity is not configured, and does not write state', async () => {
         mockOptions = { switch_entity: '', preheat_time: '1' };
+        setSwitchEntity('');
         const r = await fetch(`${baseUrl}/api/preheat/ready-by`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ targetAt: TARGET_AT }),

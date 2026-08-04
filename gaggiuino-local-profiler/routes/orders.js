@@ -40,11 +40,23 @@ function sanitizeEmoji(raw, fallback) {
     return trimmed;
 }
 
+// #643: prefer the registry's live default-machine switch_entity (kept
+// current by Settings UI edits via registry.updateMachine()) over the
+// possibly-stale options.json value -- same pattern #638/#641 established
+// for machine_host. Falls back to options.json's switch_entity only when
+// there's no default-machine row at all -- an explicitly empty/null
+// registry switchEntity means "not configured" and must NOT fall through
+// to a stale options.json value.
+function _resolveSwitchEntity(opts) {
+    const defaultMachine = machineRegistry.getDefaultMachine();
+    return (defaultMachine ? defaultMachine.switchEntity : opts.switch_entity);
+}
+
 function _getPreheatInfo() {
     const opts        = loadOptions();
     const preheatMins = Math.max(1, parseInt(opts.preheat_time) || 20);
     const preheatMs   = preheatMins * 60 * 1000;
-    const machineOff  = !defaultRuntime.machineOn && !!opts.switch_entity;
+    const machineOff  = !defaultRuntime.machineOn && !!_resolveSwitchEntity(opts);
     if (machineOff || !defaultRuntime.switchOnAt) return { ready: false, remainingMin: preheatMins };
     const remainingMs  = Math.max(0, preheatMs - (Date.now() - defaultRuntime.switchOnAt));
     return { ready: remainingMs === 0, remainingMin: Math.max(1, Math.ceil(remainingMs / 60000)) };
