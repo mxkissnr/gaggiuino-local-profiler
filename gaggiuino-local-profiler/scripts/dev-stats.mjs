@@ -5,16 +5,20 @@
 // CI, since it assumes the four sibling repos are checked out locally side by
 // side, the layout on this machine.
 //
-// The cost section is a deliberately rough, clearly-labeled estimate: nobody
-// running this script has access to actual per-session token usage, only git
-// history. It multiplies changed lines in Claude-co-authored commits by an
-// assumed tokens-per-line constant, then by a price table you fill in
-// yourself (scripts/dev-stats.pricing.json) — models with no configured
-// price are counted as "unpriced" rather than silently treated as free.
+// The cost section reports the real Claude Pro subscription cost (a flat
+// monthly rate times the number of months since the ecosystem's first
+// commit) — not a token/API-billing estimate, since the subscription is
+// paid at a flat rate regardless of usage.
+//
+// The hours-of-development section is a deliberately rough, clearly-labeled
+// lower-bound estimate: nobody running this script has access to actual
+// session-duration data, only git commit timestamps. It clusters commits
+// into sessions by gap and pads each session with a fixed lead-in — see
+// clusterIntoSessions() below.
 
 import { execSync } from 'child_process';
 import { createRequire } from 'module';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -167,14 +171,20 @@ const REPOS = [
     { name: 'glp-order-card',           dir: resolveCompanionDir(path.join(glpProjectRoot, 'glp-order-card'), path.join(canonicalGlpProjectRoot, 'glp-order-card')) },
 ];
 
-// Purely illustrative: tokens implied per changed line, including the
-// conversation/planning overhead around a diff, not just the diff bytes
-// themselves. There is no way to derive this precisely from git alone —
-// treat the resulting cost figure as an order-of-magnitude thought
-// experiment, not a bill.
-const ASSUMED_TOKENS_PER_CHANGED_LINE = 25;
+// Flat monthly Claude Pro subscription rate in USD. Change this if the plan
+// or its price changes — every cost figure in DEVELOPMENT.md derives from it.
+const CLAUDE_PRO_MONTHLY_USD = 20;
 
-const PRICING_PATH = path.join(__dirname, 'dev-stats.pricing.json');
+// Commits within this many hours of each other are treated as part of the
+// same continuous working session. Raise it to merge more commits into fewer,
+// longer sessions (higher hours total); lower it to split sessions more
+// aggressively (lower hours total).
+const SESSION_GAP_HOURS = 2;
+
+// Added to each session's (last − first commit) span, since the first commit
+// marks the *end* of some unlogged lead-in work, not the start. Raise it to
+// increase every session's duration (higher hours total).
+const SESSION_LEAD_IN_MINUTES = 30;
 
 function git(dir, args) {
     return execSync(`git ${args}`, { cwd: dir, encoding: 'utf8' }).trim();
@@ -207,22 +217,43 @@ export function historyScope(dir, runGit = git) {
     return 'HEAD';
 }
 
-function loadPricing() {
-    if (!existsSync(PRICING_PATH)) return {};
-    try { return JSON.parse(readFileSync(PRICING_PATH, 'utf8')); } catch { return {}; }
+// Whole calendar months from firstDateStr's month through today's month,
+// inclusive — a subscription started any day in a month, or still running
+// into a month it's barely touched, still counts that whole month (e.g. a
+// first commit on Jan 15 with today Feb 3 is 2 months, not 1).
+export function monthsSinceStart(firstDateStr, today = new Date()) {
+    if (!firstDateStr) return 0;
+    const first = new Date(firstDateStr);
+    return (today.getFullYear() - first.getFullYear()) * 12 + (today.getMonth() - first.getMonth()) + 1;
 }
 
-function savePricing(pricing) {
-    const ordered = { _comment: pricing._comment || PRICING_COMMENT, ...Object.fromEntries(
-        Object.entries(pricing).filter(([k]) => k !== '_comment').sort()
-    ) };
-    writeFileSync(PRICING_PATH, JSON.stringify(ordered, null, 2) + '\n');
-}
+// git-hours-style session clustering: commits within SESSION_GAP_HOURS of
+// each other belong to the same working session; each session's duration is
+// its own span (last − first commit in the cluster) plus one
+// SESSION_LEAD_IN_MINUTES credit, since the first commit marks the *end* of
+// some unlogged work, not the start. Returns total hours across all sessions.
+export function clusterIntoSessions(timestampsMs) {
+    if (!timestampsMs.length) return 0;
+    const sorted = [...timestampsMs].sort((a, b) => a - b);
+    const gapMs    = SESSION_GAP_HOURS * 60 * 60 * 1000;
+    const leadInMs = SESSION_LEAD_IN_MINUTES * 60 * 1000;
 
-const PRICING_COMMENT =
-    'USD per 1,000,000 tokens, blended input/output average — purely illustrative. ' +
-    'Fill in your actual plan/API rates for models you want priced; anything left null ' +
-    'is treated as "unpriced" and excluded from the cost total (not treated as free).';
+    let totalMs = 0;
+    let sessionStart = sorted[0];
+    let sessionEnd    = sorted[0];
+    for (let i = 1; i < sorted.length; i++) {
+        const t = sorted[i];
+        if (t - sessionEnd <= gapMs) {
+            sessionEnd = t;
+        } else {
+            totalMs += (sessionEnd - sessionStart) + leadInMs;
+            sessionStart = t;
+            sessionEnd    = t;
+        }
+    }
+    totalMs += (sessionEnd - sessionStart) + leadInMs;
+    return totalMs / 3_600_000;
+}
 
 function statsForRepo(repo) {
     if (!existsSync(path.join(repo.dir, '.git'))) {
@@ -238,6 +269,10 @@ function statsForRepo(repo) {
     const lastDate  = dates[0];
     const firstDate = dates[dates.length - 1];
     const totalCommits = parseInt(git(repo.dir, `rev-list --count ${scope}`), 10) || 0;
+
+    const timestampsMs = git(repo.dir, `log ${scope} --format=%at`)
+        .split('\n').filter(Boolean).map(s => parseInt(s, 10) * 1000);
+    const devHours = clusterIntoSessions(timestampsMs);
 
     // One bulk call: \x02 marks each commit boundary, followed by the raw
     // commit body, then (thanks to --shortstat) that same commit's diffstat
@@ -260,7 +295,7 @@ function statsForRepo(repo) {
         modelCounts[model] = (modelCounts[model] || 0) + 1;
     }
 
-    return { ...repo, firstDate, lastDate, totalCommits, aiCommits, modelCounts, totalLines, aiLines };
+    return { ...repo, firstDate, lastDate, totalCommits, aiCommits, modelCounts, totalLines, aiLines, devHours };
 }
 
 function fmtDate(d) { return d || '?'; }
@@ -272,15 +307,6 @@ function main() {
         process.exit(1);
     }
 
-    const pricing = loadPricing();
-    const allModels = new Set();
-    results.forEach(r => Object.keys(r.modelCounts).forEach(m => allModels.add(m)));
-    let pricingChanged = false;
-    for (const model of allModels) {
-        if (!(model in pricing)) { pricing[model] = null; pricingChanged = true; }
-    }
-    if (pricingChanged || !pricing._comment) savePricing(pricing);
-
     const combined = {
         firstDate: results.map(r => r.firstDate).sort()[0],
         lastDate: results.map(r => r.lastDate).sort().slice(-1)[0],
@@ -288,6 +314,7 @@ function main() {
         aiCommits: results.reduce((s, r) => s + r.aiCommits, 0),
         totalLines: results.reduce((s, r) => s + r.totalLines, 0),
         aiLines: results.reduce((s, r) => s + r.aiLines, 0),
+        devHours: results.reduce((s, r) => s + r.devHours, 0),
     };
     const combinedModelCounts = {};
     results.forEach(r => Object.entries(r.modelCounts).forEach(([m, c]) => {
@@ -300,20 +327,8 @@ function main() {
 
     const chartsRendered = renderCharts(results, combinedModelCounts);
 
-    // Cost estimate: only priced models contribute a dollar figure; unpriced
-    // models' lines are reported separately so the total is never silently
-    // understated.
-    let pricedLines = 0, unpricedLines = 0, costUsd = 0;
-    for (const r of results) {
-        for (const [model, count] of Object.entries(r.modelCounts)) {
-            const shareOfAiCommits = r.aiCommits ? count / r.aiCommits : 0;
-            const modelLines = Math.round(r.aiLines * shareOfAiCommits);
-            const price = pricing[model];
-            if (price == null) { unpricedLines += modelLines; continue; }
-            pricedLines += modelLines;
-            costUsd += (modelLines * ASSUMED_TOKENS_PER_CHANGED_LINE / 1_000_000) * price;
-        }
-    }
+    const monthsSinceStartCount = monthsSinceStart(combined.firstDate);
+    const subscriptionCostUsd = monthsSinceStartCount * CLAUDE_PRO_MONTHLY_USD;
 
     const lines = [];
     lines.push('# Development Stats');
@@ -338,6 +353,19 @@ function main() {
     lines.push('');
     lines.push('Commits without a Claude co-author line are presumed human-only (manual fixes, merges, config tweaks) — not independently verified.');
     lines.push('');
+    lines.push('## Hours of development (lower-bound estimate)');
+    lines.push('');
+    lines.push(`Clustering each repo's commit timestamps into working sessions — commits within ${SESSION_GAP_HOURS}h of each other join the same session, and each session gets a ${SESSION_LEAD_IN_MINUTES}-minute lead-in credited ahead of its first commit — gives a combined **${combined.devHours.toFixed(1)} hours** across all four repos.`);
+    lines.push('');
+    lines.push('| Repo | Hours (session-clustered) |');
+    lines.push('|---|---|');
+    for (const r of results) {
+        lines.push(`| ${r.name} | ${r.devHours.toFixed(1)} |`);
+    }
+    lines.push(`| **Combined** | **${combined.devHours.toFixed(1)}** |`);
+    lines.push('');
+    lines.push('This is a **lower-bound estimate derived from git commit timestamps only**, not measured time — it undercounts real work because a long AI-agentic session (orchestration, agent dispatch, review between infrequent commits) can run for hours between commits.');
+    lines.push('');
     lines.push('## Claude model breakdown (by commit co-author line)');
     lines.push('');
     lines.push('| Model | Commits |');
@@ -349,15 +377,11 @@ function main() {
     if (chartsRendered) { lines.push('![Claude model breakdown by commits](docs/dev-stats/model-breakdown.png)'); lines.push(''); }
     lines.push('The exact co-author string varies by era as model names changed over the project\'s lifetime — this table groups by the literal string used in each commit, so the same underlying model released under a new name shows up as a separate row.');
     lines.push('');
-    lines.push('## Rough cost estimate (illustrative only — not real billing data)');
+    lines.push('## Claude Pro subscription cost');
     lines.push('');
-    lines.push('This is **not** measured token usage or an actual invoice. It multiplies changed lines (insertions + deletions) in Claude-co-authored commits by an assumed ' + ASSUMED_TOKENS_PER_CHANGED_LINE + ' tokens/line (covers the conversation and planning overhead around a diff, not just the diff bytes), then applies the price table in `scripts/dev-stats.pricing.json` — which ships with every price set to `null` until you fill in your own plan/API rates.');
+    lines.push(`Max pays a flat **$${CLAUDE_PRO_MONTHLY_USD}/month** for Claude Pro, regardless of usage volume — this is the actual subscription cost, not a token-usage estimate. ${monthsSinceStartCount} month${monthsSinceStartCount === 1 ? '' : 's'} since the first commit (${fmtDate(combined.firstDate)}) works out to **$${subscriptionCostUsd.toFixed(2)}**.`);
     lines.push('');
-    if (pricedLines === 0) {
-        lines.push('**Estimated cost: unknown** — no per-token prices are configured in `scripts/dev-stats.pricing.json` yet. Fill in a rate for at least one model to see a figure here.');
-    } else {
-        lines.push(`**Estimated cost: ~$${costUsd.toFixed(2)}** across ${pricedLines.toLocaleString()} priced lines` + (unpricedLines ? ` (+ ${unpricedLines.toLocaleString()} lines from unpriced models, excluded from this total)` : '') + '.');
-    }
+    lines.push('This assumes a continuous subscription for the whole span — it does not account for any gaps where the subscription might have lapsed.');
     lines.push('');
     lines.push('---');
     lines.push('*This file is generated. Do not hand-edit — re-run `node scripts/dev-stats.mjs` instead.*');

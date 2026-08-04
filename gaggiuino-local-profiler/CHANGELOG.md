@@ -1,3 +1,8 @@
+## [2.29.0] – 2026-08-04
+
+### Changed
+- **`scripts/dev-stats.mjs` (generates `DEVELOPMENT.md`) now reports the real Claude Pro subscription cost instead of a token-based estimate, and adds an hours-of-development estimate.** The old "Rough cost estimate" section multiplied changed lines in Claude-co-authored commits by an assumed tokens-per-line constant, then applied a price table (`scripts/dev-stats.pricing.json`) — modeling pay-per-token API billing that has no relationship to Max's actual flat-rate Claude Pro subscription ($20/month, paid regardless of usage). The pricing file and all line/token-cost math are removed; the new "Claude Pro subscription cost" section is `monthsSinceStart × $20`, where a partial calendar month still counts as a full month. A new "Hours of development (lower-bound estimate)" section clusters each repo's commit timestamps into working sessions (commits within a 2-hour gap join the same session, each session gets a 30-minute lead-in credit ahead of its first commit — the git-hours heuristic), summed per repo and combined, and is explicitly labeled as a lower bound derived from commit timestamps only since long AI-agentic sessions can run for hours between commits. All three constants (`CLAUDE_PRO_MONTHLY_USD`, `SESSION_GAP_HOURS`, `SESSION_LEAD_IN_MINUTES`) live near the top of the file for easy tuning. Closes #623
+
 ## [2.28.0] – 2026-08-04
 
 ### Added
