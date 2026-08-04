@@ -1,0 +1,42 @@
+name: Version/Release drift check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - gaggiuino-local-profiler/config.yaml
+
+permissions:
+  contents: read
+
+jobs:
+  check-release-exists:
+    name: Verify a GitHub release exists for the bumped version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Extract version from config.yaml
+        id: version
+        run: |
+          VERSION=$(grep '^version:' gaggiuino-local-profiler/config.yaml | sed 's/version: *"\(.*\)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "config.yaml declares version $VERSION"
+
+      - name: Check release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "OK: release v$VERSION exists — the add-on image was built for this version."
+            exit 0
+          fi
+
+          echo "::error::config.yaml on main declares version $VERSION, but no GitHub release 'v$VERSION' exists."
+          echo "::error::Home Assistant Supervisor reads config.yaml directly and will offer this version as an update,"
+          echo "::error::but the Docker image build only runs on 'release: published' (see build.yaml) — so the update will 404."
+          echo "::error::Fix: either publish the 'v$VERSION' release now (gh release create v$VERSION), or this version bump"
+          echo "::error::should not have been merged outside the release process (see glp-release-checklist skill)."
+          exit 1
