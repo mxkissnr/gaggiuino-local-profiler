@@ -28,6 +28,14 @@ gh project item-add 2 --owner mxkissnr --url <issue-url>
 
 If you catch yourself writing code without an issue number in hand: stop, create the issue first, then continue.
 
+## Branch workflow
+
+**Work happens on `dev`, not `main`.** Feature/fix branches for a round are cut from
+`origin/dev` and PR'd back into `dev` — `main` only receives merges from `dev` at release
+time (see "Release & documentation rules" below). This applies to every PR unless the round
+is itself the release round. When setting up a worktree, `glp-worktree` auto-detects this
+(branches from `origin/dev` when it exists) — no manual `--base` needed for this repo.
+
 ## Regression policy
 
 > **A feature or fix must never break already-working functionality.** This
