@@ -1263,6 +1263,17 @@ paths:
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
 
+  /api/machine/firmware/version:
+    get:
+      tags: [MachineControl]
+      summary: "Is a firmware update available? (#620 Phase 1) — compares the machine's installed commit-hash version against the latest matching GitHub release for its configured releaseChannel, cached hourly"
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: "{ installed, latest, updateAvailable, releaseUrl } — latest/releaseUrl are null when no matching release could be found" }
+        "501": { description: machine type does not support the settings proxy }
+        "502": { description: Machine unreachable, or the GitHub releases lookup failed }
+
   /api/machine/live:
     get:
       tags: [MachineControl]

@@ -21,6 +21,7 @@ const { GAGGIUINO_SETTINGS_CATEGORIES } = require('../lib/constants');
 const {
     operationModeSchema, serviceTestPeripheralSchema, settingsPayloadSchema,
 } = require('../lib/validation/schemas');
+const { getLatestFirmwareRelease } = require('../lib/machines/gaggiuino/firmware-check');
 
 // Same resolution convention as routes/system.js's resolveMachine(): an
 // explicit machineId (query on GET, body on POST) if it names a known
@@ -188,6 +189,34 @@ router.post('/api/machine/firmware/update', async (req, res) => {
         res.json(result);
     } catch (e) {
         log(`Firmware update trigger failed: ${e.message}`, true);
+        res.status(502).json({ error: e.message });
+    }
+});
+
+// #620 Phase 1: "is an update even available", ahead of actually triggering
+// one via the route above. Compares the machine's own installed hash
+// (GET /api/settings/versions) against the latest matching GitHub release
+// for its configured system.releaseChannel — see firmware-check.js for the
+// channel<->tag-prefix mapping and its documented, unverified assumption.
+router.get('/api/machine/firmware/version', async (req, res) => {
+    const machine = resolveMachine(req.query.machineId);
+    const adapter = getAdapter(machine);
+    if (!requireSettingsProxySupport(adapter, machine, res)) return;
+    try {
+        const [versions, systemSettings] = await Promise.all([
+            adapter.getSettings(machine, 'versions'),
+            adapter.getSettings(machine, 'system'),
+        ]);
+        const installed = versions?.coreVersion || null;
+        const latest     = await getLatestFirmwareRelease(systemSettings?.releaseChannel);
+        res.json({
+            installed,
+            latest:          latest?.hash || null,
+            updateAvailable: !!(installed && latest && installed !== latest.hash),
+            releaseUrl:      latest?.releaseUrl || null,
+        });
+    } catch (e) {
+        log(`Firmware version check failed: ${e.message}`, true);
         res.status(502).json({ error: e.message });
     }
 });
