@@ -9,6 +9,7 @@ const orderRepo  = require('./repositories/OrderRepository');
 const shotRepo   = require('./repositories/ShotRepository');
 const libService = require('./services/LibraryService');
 const importSettingsRepo = require('./repositories/ImportSettingsRepository');
+const shotDefaultsRepo   = require('./repositories/ShotDefaultsRepository');
 
 function loadOptions() {
     try {
@@ -93,6 +94,10 @@ function loadTrash() { return shotRepo.getTrash(); }
 function loadImportSettings()      { return importSettingsRepo.getSettings(); }
 function saveImportSettings(s)     { importSettingsRepo.saveSettings(s); }
 
+// ── Shot defaults shims (#654) ─────────────────────────────────────────────────
+function loadShotDefaults()        { return shotDefaultsRepo.getDefaults(); }
+function saveShotDefaults(s)       { shotDefaultsRepo.saveDefaults(s); }
+
 module.exports = {
     loadOptions, getMachineUrl, getMachineBaseUrl, getSyncIntervalMs, isOrdersEnabled,
     isDebugLoggingEnabled, debugLog,
@@ -102,4 +107,5 @@ module.exports = {
     loadLibrary, saveLibrary,
     loadAnnotations, loadTrash,
     loadImportSettings, saveImportSettings,
+    loadShotDefaults, saveShotDefaults,
 };

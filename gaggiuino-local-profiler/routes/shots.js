@@ -4,11 +4,12 @@ const router   = express.Router();
 const shotService              = require('../lib/services/ShotService');
 const libraryService           = require('../lib/services/LibraryService');
 const { validate }             = require('../lib/middleware/validate');
-const { annotationSchema }     = require('../lib/validation/schemas');
+const { annotationSchema, shotDefaultsSchema } = require('../lib/validation/schemas');
 const { MAX_SHOT_ID, BEAN_IMAGE_MAX_BYTES } = require('../lib/constants');
 const { log }                  = require('../lib/helpers');
 const { generateShareCard, isAvailable: cardAvailable } = require('../lib/card');
 const { imagePath, CONTENT_TYPE_EXT, deleteImage, saveUploadedImage } = require('../lib/services/ImageService');
+const { loadShotDefaults, saveShotDefaults } = require('../lib/data');
 
 const VALID_IMAGE_EXTS = new Set(Object.values(CONTENT_TYPE_EXT));
 
@@ -38,6 +39,33 @@ router.get('/api/shots/last', (req, res, next) => {
         if (!last) return res.json(null);
         const { score, usedBeanTarget } = shotService.computeScoreDetail(last);
         res.json({ ...last, score, usedBeanTarget });
+    } catch (err) { next(err); }
+});
+
+// #654: optional per-install defaults auto-prefilled into a brand-new shot's
+// annotation panel. Registered before the '/api/shots/:id' GET route below —
+// Express matches routes in registration order, so 'defaults' would
+// otherwise be captured as an :id param (same reasoning as '/api/shots/last'
+// above).
+router.get('/api/shots/defaults', (req, res, next) => {
+    try {
+        res.json(loadShotDefaults());
+    } catch (err) { next(err); }
+});
+
+router.post('/api/shots/defaults', validate(shotDefaultsSchema), (req, res, next) => {
+    try {
+        const defaults = {
+            drinkType:    req.body.drinkType    ?? null,
+            coffee:       req.body.coffee       ?? null,
+            beanId:       req.body.beanId       ?? null,
+            basketId:     req.body.basketId     ?? null,
+            puckScreenId: req.body.puckScreenId ?? null,
+            grinder:      req.body.grinder      ?? '',
+            dose:         req.body.dose         ?? null,
+        };
+        saveShotDefaults(defaults);
+        res.json(defaults);
     } catch (err) { next(err); }
 });
 

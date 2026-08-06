@@ -195,6 +195,8 @@ export default {
     settings_bottom_nav:'Barra de navegación móvil', settings_bottom_nav_desc:'Elige hasta 4 destinos para la barra de navegación inferior en el móvil. Todo lo demás va a "Más".',
     settings_bottom_nav_checkbox_label:'Mostrar en la barra', settings_bottom_nav_move_up:'Subir', settings_bottom_nav_move_down:'Bajar',
     settings_notify_title:'Notificaciones', settings_notify_desc:'¿Qué notificaciones automáticas de la máquina y de la biblioteca de café deben enviarse?',
+    settings_shot_defaults_title:'Valores predeterminados para el registro de shots', settings_shot_defaults_desc:'Se autocompletan al abrir un shot nuevo aún sin anotar — siguen siendo totalmente editables.',
+    sd_none:'— sin valor predeterminado —', sd_save:'Guardar', sd_saved:'✓ Guardado',
     settings_machines:'Máquinas', settings_machines_desc:'Gestiona las máquinas de espresso que monitoriza esta app.', settings_machines_add:'+ Añadir máquina',
     settings_machine_name:'Nombre', settings_machine_type:'Tipo', settings_machine_host:'Host', settings_machine_switch:'Entidad switch de HA (opcional)',
     settings_machine_theme:'Color', settings_machine_theme_gradient:'Degradado', settings_machine_theme_none:'Ninguno', settings_machine_theme_custom:'Personalizado',

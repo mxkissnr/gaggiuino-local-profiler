@@ -1259,6 +1259,33 @@
                 <button class="orders-menu-save-btn" id="notifySettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
             </div>
         </div>
+        <!-- Shot logging auto-prefill defaults (#654) — optional, per-install
+             default values for a brand-new shot's annotation panel. Never
+             overwrites an already-annotated shot's data (see
+             _applyShotDefaults() in views/shots/annotation.js); applied
+             fields stay fully editable, this only changes what the form
+             starts out showing. Options populated from the same
+             S.coffeeLibrary/S.drinkMenu already loaded for the annotation
+             panel itself (components/shot-defaults-settings.js). -->
+        <div class="settings-card">
+            <h3 class="settings-card-title" data-i18n="settings_shot_defaults_title">Standardwerte für Shot-Notizen</h3>
+            <p class="settings-card-desc" data-i18n="settings_shot_defaults_desc">Werden beim Öffnen eines neuen, noch nicht bewerteten Shots automatisch vorausgefüllt — bleiben dabei jederzeit änderbar.</p>
+            <label class="machine-form-label" data-i18n="ann_drink_type">Getränk</label>
+            <select id="sdDrinkType" class="machine-form-input"></select>
+            <label class="machine-form-label" data-i18n="ann_coffee">Kaffee / Bohne</label>
+            <select id="sdCoffee" class="machine-form-input"></select>
+            <label class="machine-form-label" data-i18n="ann_basket">Sieb</label>
+            <select id="sdBasket" class="machine-form-input"></select>
+            <label class="machine-form-label" data-i18n="ann_puckscreen">Puck Screen</label>
+            <select id="sdPuckScreen" class="machine-form-input"></select>
+            <label class="machine-form-label" data-i18n="ann_grinder">Mühle</label>
+            <input type="text" id="sdGrinder" class="machine-form-input" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" autocomplete="off">
+            <label class="machine-form-label" data-i18n="ann_dose">Dosis (g)</label>
+            <input type="number" id="sdDose" class="machine-form-input" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0">
+            <div class="machine-form-actions">
+                <button id="shotDefaultsSaveBtn" type="button" class="backup-btn" data-i18n="sd_save">Speichern</button>
+            </div>
+        </div>
         <!-- Live-data transport (#598) — self-contained card, does not touch
              the machine registry card below it. Connection fields are only
              shown once "MQTT" is picked (renderMqttSettingsCard() toggles

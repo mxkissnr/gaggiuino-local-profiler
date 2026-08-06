@@ -195,6 +195,8 @@ export default {
     settings_bottom_nav:'Mobile bottom navigation', settings_bottom_nav_desc:'Choose up to 4 destinations for the bottom navigation bar on mobile. Everything else lands under "More".',
     settings_bottom_nav_checkbox_label:'Show in the bar', settings_bottom_nav_move_up:'Move up', settings_bottom_nav_move_down:'Move down',
     settings_notify_title:'Notifications', settings_notify_desc:'Which automatic notifications from the machine and coffee library should be sent?',
+    settings_shot_defaults_title:'Shot logging defaults', settings_shot_defaults_desc:'Auto-prefilled when opening a new, not-yet-annotated shot — stays fully editable.',
+    sd_none:'— no default —', sd_save:'Save', sd_saved:'✓ Saved',
     settings_machines:'Machines', settings_machines_desc:'Manage the espresso machines this app monitors.', settings_machines_add:'+ Add machine',
     settings_machine_name:'Name', settings_machine_type:'Type', settings_machine_host:'Host', settings_machine_switch:'HA switch entity (optional)',
     settings_machine_theme:'Color', settings_machine_theme_gradient:'Gradient', settings_machine_theme_none:'None', settings_machine_theme_custom:'Custom',

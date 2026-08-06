@@ -51,6 +51,7 @@ export const S = {
   coffeeLibrary: { beans: [], grinders: [] },
   drinkMenu: [],
   milkTypes: [],
+  shotDefaults: null,
   beanEditId: null,
   _beanStockEditId: null,
   grinderEditId: null,

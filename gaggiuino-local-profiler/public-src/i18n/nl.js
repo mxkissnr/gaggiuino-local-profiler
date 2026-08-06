@@ -195,6 +195,8 @@ export default {
     settings_bottom_nav:'Mobiele navigatiebalk', settings_bottom_nav_desc:'Kies tot 4 bestemmingen voor de onderste navigatiebalk op mobiel. Al het andere komt onder "Meer" terecht.',
     settings_bottom_nav_checkbox_label:'Tonen in de balk', settings_bottom_nav_move_up:'Omhoog verplaatsen', settings_bottom_nav_move_down:'Omlaag verplaatsen',
     settings_notify_title:'Meldingen', settings_notify_desc:'Welke automatische meldingen van de machine en de koffiebibliotheek moeten worden verstuurd?',
+    settings_shot_defaults_title:'Standaardwaarden voor shot-registratie', settings_shot_defaults_desc:'Worden automatisch ingevuld bij het openen van een nieuwe, nog niet geannoteerde shot — blijven volledig aanpasbaar.',
+    sd_none:'— geen standaardwaarde —', sd_save:'Opslaan', sd_saved:'✓ Opgeslagen',
     settings_machines:'Machines', settings_machines_desc:'Beheer de espressomachines die deze app volgt.', settings_machines_add:'+ Machine toevoegen',
     settings_machine_name:'Naam', settings_machine_type:'Type', settings_machine_host:'Host', settings_machine_switch:'HA switch-entiteit (optioneel)',
     settings_machine_theme:'Kleur', settings_machine_theme_gradient:'Verloop', settings_machine_theme_none:'Geen', settings_machine_theme_custom:'Aangepast',

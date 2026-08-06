@@ -1,3 +1,8 @@
+## Unreleased
+
+### Added
+- **Optional per-install default values for the shot-logging annotation panel** (Drink Type, Coffee/Bean, Basket, Puck Screen, Grinder, Dose), configurable in a new Settings → "Shot logging defaults" card. Auto-prefilled the moment a brand-new, never-annotated shot's panel is opened (`_applyShotDefaults()`, `public-src/views/shots/annotation.js`) — every prefilled field stays fully editable, and an existing annotation (even a single already-set field) is never overwritten. Backed by a new `GET`/`POST /api/shots/defaults` endpoint (`shot_defaults` kv row, `lib/repositories/ShotDefaultsRepository.js`), same storage pattern as the existing import-provider settings. Requested by a user for "most home baristas use a single primary setup" workflows. Closes #654
+
 ## [2.30.0] – 2026-08-06
 
 ### Added

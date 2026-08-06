@@ -123,6 +123,8 @@ import { loadMqttSettings, setMqttTransport, saveMqttSettings, applyMqttToMachin
 
 import { loadNotifySettingsCard, saveNotifySettings } from './components/notify-settings.js';
 
+import { loadShotDefaultsSettingsCard, saveShotDefaultsSettings } from './components/shot-defaults-settings.js';
+
 import { renderWhatsNewCard } from './components/whats-new.js';
 import { attachAutocomplete } from './components/autocomplete.js';
 
@@ -734,6 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('mqttSaveBtn')?.addEventListener('click', saveMqttSettings);
   document.getElementById('mqttApplyToMachineBtn')?.addEventListener('click', applyMqttToMachine);
   document.getElementById('notifySettingsSaveBtn')?.addEventListener('click', saveNotifySettings);
+  document.getElementById('shotDefaultsSaveBtn')?.addEventListener('click', saveShotDefaultsSettings);
   document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
@@ -861,6 +864,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadNotifySettingsCard();
     loadDrinkMenu();
     loadMilkTypes();
+    loadShotDefaultsSettingsCard();
     await loadData();
     loadLibrary();
     loadMachineProfileList();

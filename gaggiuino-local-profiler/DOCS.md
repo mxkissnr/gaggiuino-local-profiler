@@ -350,6 +350,10 @@ Independent of the Dark/Light toggle, ⚙ Settings → Color scheme offers six a
 
 ⚙ Settings → **What's New** shows the last 8 GLP releases, newest first, each with a short list of highlights — so you can see what changed without leaving the app or digging through GitHub. This card is a curated, hand-maintained subset (`lib/whats-new.js`) rather than a rendered copy of the full history: **`CHANGELOG.md` stays the source of truth** for every change ever shipped; the in-app card only ever shows a short highlight per release, capped at the last 8. Highlight text is English-only regardless of your UI language — only the card's own title and description are translated, the same approach taken for shot annotations and tasting notes.
 
+### Shot logging defaults
+
+⚙ Settings → **Shot logging defaults** lets you configure optional default values for Drink Type, Coffee/Bean, Basket, Puck Screen, Grinder and Dose — the fields most home baristas re-enter identically on every shot with a single primary setup. Leave any field blank to keep selecting it manually as before. A configured default is auto-prefilled the moment you open a brand-new, not-yet-annotated shot's panel; every prefilled field stays fully editable, and it never touches a shot that already has any annotation data, even a single field.
+
 ### Backup & Restore
 
 ⚙ Settings → **Backup & Restore** opens a modal for downloading or restoring your GLP database as a **ZIP file**: `backup.json` (shots including trash, annotations, the coffee library — beans, grinders, recipes, milks, baskets, puck screens — maintenance tasks and the maintenance log, orders, all configured machines, and app settings such as order menu/notification routing/import preferences/MQTT transport settings) plus every shot/bean/grinder/basket/puck-screen photo as a real image file alongside it, openable with any normal file browser or archive tool — not re-encoded into the JSON.

@@ -13,6 +13,7 @@ import { openImageCropEditor } from '../components/image-crop.js';
 import { openLightbox } from '../components/lightbox.js';
 import { generateBeanQR, parseGlpQrParams } from '../glp-qr.js';
 import { calcBestGrindCombosForBean } from './shots/grind.js';
+import { renderShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
 import { sumConsumedDoses, computeBeanRemaining } from '../bean-math.js';
 import { TARGET_ICON_SVG, SLIDERS_ICON_SVG, FLAVOR_WHEEL_ICON_SVG, COFFEE_ICON_SVG, WATER_DROP_ICON_SVG, ICE_CUBE_ICON_SVG, LINK_ICON_SVG, WRENCH_ICON_SVG } from '../icons.js';
 
@@ -63,6 +64,10 @@ export async function loadLibrary() {
     // Library corrects itself; a cheap no-op re-render if they aren't there yet.
     renderBeanList();
     renderGrinderList();
+    // #654: same race — the shot-defaults Settings card's bean/basket/puck-
+    // screen <select>s are also populated straight off S.coffeeLibrary at
+    // init, before this fetch necessarily resolves.
+    renderShotDefaultsSettingsCard();
   } catch { /* ignore */ }
 }
 

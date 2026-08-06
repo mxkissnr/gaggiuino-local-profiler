@@ -194,6 +194,19 @@ const mqttSettingsSchema = z.object({
     prefix:    z.string().min(1).max(100).optional().default('gaggiuino'),
 });
 
+// ── Shot logging auto-prefill defaults (#654) ─────────────────────────────
+// Same field shapes as the corresponding annotationSchema fields above —
+// null explicitly means "no default configured", distinct from omitted.
+const shotDefaultsSchema = z.object({
+    drinkType:    z.string().max(50).nullable().optional(),
+    coffee:       z.string().max(200).nullable().optional(),
+    beanId:       z.number().int().nullable().optional(),
+    basketId:     z.number().int().nullable().optional(),
+    puckScreenId: z.number().int().nullable().optional(),
+    grinder:      z.string().max(200).optional().default(''),
+    dose:         z.number().positive().nullable().optional(),
+});
+
 // ── Barcode scan proxy (Open Food Facts lookup) ──────────────────────────
 // EAN-8 / UPC-A / EAN-13 / GTIN-14 — the formats BarcodeDetector's scan
 // modal (public-src/views/library.js) can emit for a product package. Kept
@@ -215,6 +228,7 @@ module.exports = {
     operationModeSchema,
     serviceTestPeripheralSchema,
     settingsPayloadSchema,
+    shotDefaultsSchema,
     mqttSettingsSchema,
     scanBarcodeSchema,
 };

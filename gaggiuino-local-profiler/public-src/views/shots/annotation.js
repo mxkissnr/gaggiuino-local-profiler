@@ -199,6 +199,39 @@ export async function loadDrinkMenu() {
   } catch { /* non-critical */ }
 }
 
+// #654: optional per-install defaults auto-prefilled into a brand-new shot's
+// annotation panel — loaded once at app init (main.js), same as
+// loadDrinkMenu()/loadMilkTypes() above, and refreshed by
+// components/shot-defaults-settings.js whenever the Settings card saves.
+export async function loadShotDefaults() {
+  try {
+    const r = await apiFetch('api/shots/defaults');
+    if (r.ok) S.shotDefaults = await r.json();
+  } catch { /* non-critical */ }
+}
+
+// Merges the configured shot defaults into a shot's annotation, but only
+// when that annotation is genuinely empty — i.e. this shot has never been
+// annotated (see routes/shots.js: a synced-but-untouched shot's annotation
+// is always {}). Any existing annotation, even a single field, is returned
+// completely untouched: a configured default must never overwrite something
+// the user already recorded. Applied fields stay fully editable afterward —
+// this only changes what the form starts out showing.
+export function _applyShotDefaults(ann) {
+  if (ann && Object.keys(ann).length > 0) return ann;
+  const d = S.shotDefaults;
+  if (!d) return ann;
+  return {
+    drinkType:    d.drinkType    || null,
+    coffee:       d.coffee       || null,
+    beanId:       d.beanId       ?? null,
+    basketId:     d.basketId     ?? null,
+    puckScreenId: d.puckScreenId ?? null,
+    grinder:      d.grinder      || '',
+    dose:         d.dose         ?? null,
+  };
+}
+
 export async function loadMilkTypes() {
   try {
     const r = await apiFetch('api/library/milks');
@@ -447,7 +480,7 @@ export async function removeShotImage() {
 }
 
 export function renderAnnotationPanel(shot) {
-  const ann = shot.annotation || {};
+  const ann = _applyShotDefaults(shot.annotation || {});
   _renderShotPhoto(shot);
   S.currentRating = ann.rating || 0;
   renderStars(S.currentRating);
