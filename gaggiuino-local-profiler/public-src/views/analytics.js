@@ -18,6 +18,8 @@ export function initAnalytics() {
   buildWorldMap();
   buildProfileChart();
   buildGrinderStats();
+  buildBasketStats();
+  buildPuckScreenStats();
   buildDistribution();
   buildTimeOfDay();
   buildWeekdayHourHeatmap();
@@ -193,6 +195,75 @@ export function buildGrinderStats() {
     </div>`;
   }
   el.innerHTML = html + '</div>';
+}
+
+// ── Basket & Puck Screen Stats (#668) ───────────────────────────────────────
+// Score-by-equipment groupings, same shape/rendering as buildGrinderStats()
+// above. Baskets/puck screens are pure ID-based library links (#635) rather
+// than a name stored directly on the annotation the way grinder is, so
+// resolving id -> name needs a lookup — same logic as _equipmentName() in
+// views/shots/index.js (not imported from there to avoid coupling analytics
+// to the shots module for a 3-line helper; kept in sync by hand).
+function _equipName(list, id) {
+  if (id == null) return null;
+  return (list || []).find(e => e.id === id)?.name || null;
+}
+
+// Pure aggregation kept separate from rendering, same pattern as
+// _computeBeanRanking() below — unit-testable without a DOM. Shared by
+// buildBasketStats()/buildPuckScreenStats(); only the annotation field and
+// library list differ between baskets and puck screens.
+export function _computeEquipmentStats(shots, library, idField) {
+  const byEquip = {};
+  for (const s of shots) {
+    const name = _equipName(library, s.annotation?.[idField]);
+    if (!name) continue;
+    if (!byEquip[name]) byEquip[name] = { count: 0, scores: [], durations: [] };
+    byEquip[name].count++;
+    const sc = window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null;
+    if (sc !== null) byEquip[name].scores.push(sc);
+    const dur = (s.duration || 0) / 10;
+    if (dur > 5) byEquip[name].durations.push(dur);
+  }
+  return Object.entries(byEquip)
+    .map(([name, d]) => ({
+      name,
+      count:   d.count,
+      avgScore: d.scores.length    ? Math.round(d.scores.reduce((a, b) => a + b, 0) / d.scores.length) : null,
+      bestScore: d.scores.length   ? Math.max(...d.scores) : null,
+      avgDuration: d.durations.length ? Math.round((d.durations.reduce((a, b) => a + b, 0) / d.durations.length) * 10) / 10 : null,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function _renderEquipmentStats(containerId, entries, emptyKey) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (entries.length === 0) {
+    el.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t(emptyKey)}</p>`;
+    return;
+  }
+  let html = '<div class="bean-cards">';
+  for (const d of entries) {
+    html += `<div class="bean-card">
+      <div class="bean-card-name" title="${_esc(d.name)}">${_esc(d.name)}</div>
+      <div class="bean-card-stats">
+        <div class="bean-stat"><span class="bean-stat-val">${d.count}</span><span class="bean-stat-lbl">${t('bean_stat_shots')}</span></div>
+        ${d.avgScore    !== null ? `<div class="bean-stat"><span class="bean-stat-val ${scoreClass(d.avgScore)}">${d.avgScore}</span><span class="bean-stat-lbl">${t('bean_stat_avg')}</span></div>` : ''}
+        ${d.bestScore   !== null ? `<div class="bean-stat"><span class="bean-stat-val">${d.bestScore}</span><span class="bean-stat-lbl">${t('bean_stat_best')}</span></div>` : ''}
+        ${d.avgDuration !== null ? `<div class="bean-stat"><span class="bean-stat-val">${d.avgDuration}s</span><span class="bean-stat-lbl">${t('bean_stat_duration')}</span></div>` : ''}
+      </div>
+    </div>`;
+  }
+  el.innerHTML = html + '</div>';
+}
+
+export function buildBasketStats() {
+  _renderEquipmentStats('basketStats', _computeEquipmentStats(S.shots, S.coffeeLibrary?.baskets, 'basketId'), 'analytics_no_baskets');
+}
+
+export function buildPuckScreenStats() {
+  _renderEquipmentStats('puckScreenStats', _computeEquipmentStats(S.shots, S.coffeeLibrary?.puckScreens, 'puckScreenId'), 'analytics_no_puckscreens');
 }
 
 // ── Distributions ─────────────────────────────────────────────────────────
