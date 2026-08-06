@@ -6,6 +6,7 @@ import { t } from '../i18n.js';
 import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName, flagEmoji } from '../constants.js';
 import { scoreClass } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
+import { _equipmentName } from './shots/index.js';
 import { TARGET_ICON_SVG } from '../icons.js';
 
 // ── Analytics entry point ─────────────────────────────────────────────────
@@ -201,38 +202,46 @@ export function buildGrinderStats() {
 // Score-by-equipment groupings, same shape/rendering as buildGrinderStats()
 // above. Baskets/puck screens are pure ID-based library links (#635) rather
 // than a name stored directly on the annotation the way grinder is, so
-// resolving id -> name needs a lookup — same logic as _equipmentName() in
-// views/shots/index.js (not imported from there to avoid coupling analytics
-// to the shots module for a 3-line helper; kept in sync by hand).
-function _equipName(list, id) {
-  if (id == null) return null;
-  return (list || []).find(e => e.id === id)?.name || null;
-}
+// resolving id -> name needs a lookup — reuses _equipmentName() from
+// views/shots/index.js rather than a second local copy.
 
 // Pure aggregation kept separate from rendering, same pattern as
 // _computeBeanRanking() below — unit-testable without a DOM. Shared by
 // buildBasketStats()/buildPuckScreenStats(); only the annotation field and
 // library list differ between baskets and puck screens.
+//
+// Grouped by id, not by the resolved name: routes/library/baskets.js (and
+// the puck-screen equivalent) enforce no name uniqueness, so two baskets
+// both named e.g. "Standard" would otherwise merge into one card. The name
+// is only resolved for display, after grouping.
 export function _computeEquipmentStats(shots, library, idField) {
   const byEquip = {};
   for (const s of shots) {
-    const name = _equipName(library, s.annotation?.[idField]);
-    if (!name) continue;
-    if (!byEquip[name]) byEquip[name] = { count: 0, scores: [], durations: [] };
-    byEquip[name].count++;
+    const id = s.annotation?.[idField];
+    if (id == null) continue;
+    if (!byEquip[id]) byEquip[id] = { count: 0, scores: [], durations: [] };
+    byEquip[id].count++;
     const sc = window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null;
-    if (sc !== null) byEquip[name].scores.push(sc);
+    if (sc !== null) byEquip[id].scores.push(sc);
     const dur = (s.duration || 0) / 10;
-    if (dur > 5) byEquip[name].durations.push(dur);
+    if (dur > 5) byEquip[id].durations.push(dur);
   }
   return Object.entries(byEquip)
-    .map(([name, d]) => ({
-      name,
-      count:   d.count,
-      avgScore: d.scores.length    ? Math.round(d.scores.reduce((a, b) => a + b, 0) / d.scores.length) : null,
-      bestScore: d.scores.length   ? Math.max(...d.scores) : null,
-      avgDuration: d.durations.length ? Math.round((d.durations.reduce((a, b) => a + b, 0) / d.durations.length) * 10) / 10 : null,
-    }))
+    .map(([id, d]) => {
+      const name = _equipmentName(library, Number(id));
+      return name ? {
+        name,
+        count:   d.count,
+        avgScore: d.scores.length    ? Math.round(d.scores.reduce((a, b) => a + b, 0) / d.scores.length) : null,
+        bestScore: d.scores.length   ? Math.max(...d.scores) : null,
+        avgDuration: d.durations.length ? Math.round((d.durations.reduce((a, b) => a + b, 0) / d.durations.length) * 10) / 10 : null,
+      } : null;
+    })
+    // A basket/puck screen deleted from the library after being annotated
+    // on past shots resolves to no name here — dropped rather than shown
+    // as a blank card, same "silently omitted" precedent the rest of this
+    // file uses for missing data (e.g. no-earlier-same-profile-shot).
+    .filter(Boolean)
     .sort((a, b) => b.count - a.count);
 }
 

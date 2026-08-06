@@ -209,10 +209,22 @@ router.get('/api/machine/firmware/version', async (req, res) => {
         ]);
         const installed = versions?.coreVersion || null;
         const latest     = await getLatestFirmwareRelease(systemSettings?.releaseChannel);
+        // ASSUMPTION (flagged alongside the channel<->tag-prefix mapping in
+        // firmware-check.js, not verified any further than that): a raw
+        // string comparison, with no format/length/case normalization. The
+        // one real machine checked while researching #620 reported a
+        // coreVersion that matched its GitHub release tag's hash suffix
+        // exactly (both short, lowercase hex, e.g. "7889b7d") -- but nothing
+        // guarantees that holds for every firmware build. If installed and
+        // latest ever differ only in case or truncation length while
+        // referring to the same actual commit, this reports a phantom
+        // update forever (never the reverse -- a genuinely different commit
+        // could not accidentally compare equal this way).
+        const updateAvailable = !!(installed && latest && installed !== latest.hash);
         res.json({
             installed,
             latest:          latest?.hash || null,
-            updateAvailable: !!(installed && latest && installed !== latest.hash),
+            updateAvailable,
             releaseUrl:      latest?.releaseUrl || null,
         });
     } catch (e) {

@@ -39,7 +39,10 @@ const CACHE_TTL_MS = 60 * 60 * 1000;
 const CHANNEL_TAG_PREFIX = { 0: 'main-', 1: 'main-', 2: 'dev-' };
 const DEFAULT_CHANNEL = 0;
 
-let cache = null; // { channel, fetchedAt, result }
+// Keyed by channel (not a single slot) so a multi-machine install with
+// machines on different releaseChannels doesn't evict each other's cached
+// answer on every alternating poll.
+const cache = new Map(); // channel -> { fetchedAt, result }
 
 async function fetchLatestRelease(prefix) {
     const r = await axios.get(RELEASES_API, {
@@ -58,11 +61,12 @@ async function fetchLatestRelease(prefix) {
 // "no update available", since the two are not the same thing). Result is
 // cached for CACHE_TTL_MS per channel value.
 async function getLatestFirmwareRelease(channel) {
-    const ch     = channel != null && CHANNEL_TAG_PREFIX[channel] ? channel : DEFAULT_CHANNEL;
-    const prefix = CHANNEL_TAG_PREFIX[ch];
+    const ch      = channel != null && CHANNEL_TAG_PREFIX[channel] ? channel : DEFAULT_CHANNEL;
+    const prefix  = CHANNEL_TAG_PREFIX[ch];
+    const cached  = cache.get(ch);
 
-    if (cache && cache.channel === ch && (Date.now() - cache.fetchedAt) < CACHE_TTL_MS) {
-        return cache.result;
+    if (cached && (Date.now() - cached.fetchedAt) < CACHE_TTL_MS) {
+        return cached.result;
     }
 
     const release = await fetchLatestRelease(prefix);
@@ -71,11 +75,10 @@ async function getLatestFirmwareRelease(channel) {
         publishedAt: release.published_at,
         releaseUrl:  release.html_url,
     } : null;
-    // eslint-disable-next-line require-atomic-updates -- benign cache-fill race, same reasoning as lib/ha.js: concurrent calls before this resolves would all compute the same result from the same GitHub response
-    cache = { channel: ch, fetchedAt: Date.now(), result };
+    cache.set(ch, { fetchedAt: Date.now(), result });
     return result;
 }
 
-function _resetCacheForTests() { cache = null; }
+function _resetCacheForTests() { cache.clear(); }
 
 module.exports = { getLatestFirmwareRelease, CHANNEL_TAG_PREFIX, _resetCacheForTests };

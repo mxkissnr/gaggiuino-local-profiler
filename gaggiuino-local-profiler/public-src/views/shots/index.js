@@ -34,7 +34,7 @@ let _loadDataReqToken = 0;
 // entry's name for display/export, the same way ann.coffee already carries
 // the bean's name directly (no lookup needed there since beans store the
 // name on the annotation itself).
-function _equipmentName(list, id) {
+export function _equipmentName(list, id) {
   if (id == null) return null;
   return (list || []).find(e => e.id === id)?.name || null;
 }

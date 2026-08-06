@@ -864,7 +864,13 @@ document.addEventListener('DOMContentLoaded', () => {
     loadNotifySettingsCard();
     loadDrinkMenu();
     loadMilkTypes();
-    loadShotDefaultsSettingsCard();
+    // Awaited (unlike the two loads above): loadData() below can render the
+    // annotation panel for the initially-selected shot synchronously once
+    // it resolves (updateView() -> renderAnnotationPanel()), which reads
+    // S.shotDefaults directly — on a slow connection, firing this
+    // unawaited could let that first render see S.shotDefaults still null
+    // with nothing to re-render it once the fetch actually completes.
+    await loadShotDefaultsSettingsCard();
     await loadData();
     loadLibrary();
     loadMachineProfileList();

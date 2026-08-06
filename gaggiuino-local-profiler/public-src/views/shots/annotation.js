@@ -338,7 +338,11 @@ function _updateMilkFieldVisibility() {
   field.style.display = (S.milkTypes?.length && drinkId) ? '' : 'none';
 }
 
-export function _renderBeanSelect(selectedName) {
+// selectedBeanId, when given, takes priority over selectedName: id survives
+// a bean rename, name does not. Without it (or when it no longer resolves
+// in the current library — e.g. a deleted bean), falls back to matching by
+// name, same as before this second parameter existed.
+export function _renderBeanSelect(selectedName, selectedBeanId) {
   const select = document.getElementById('annCoffee');
   if (!select) return;
   const beans = S.coffeeLibrary?.beans || [];
@@ -347,8 +351,10 @@ export function _renderBeanSelect(selectedName) {
   // name kept around because it no longer matches any current bean does not.
   const options = beans.map(b => ({ name: b.name, id: b.id }));
   if (selectedName && !options.some(o => o.name === selectedName)) options.push({ name: selectedName, id: null });
+  const byId = selectedBeanId != null ? options.find(o => o.id === selectedBeanId) : null;
+  const selected = byId ? byId.name : selectedName;
   select.innerHTML = `<option value=""></option>` +
-    options.map(o => `<option value="${esc(o.name)}"${o.id != null ? ` data-bean-id="${o.id}"` : ''}${o.name === selectedName ? ' selected' : ''}>${esc(o.name)}</option>`).join('');
+    options.map(o => `<option value="${esc(o.name)}"${o.id != null ? ` data-bean-id="${o.id}"` : ''}${o.name === selected ? ' selected' : ''}>${esc(o.name)}</option>`).join('');
 }
 
 // #635: baskets/puck screens are pure ID-based library selections (unlike
@@ -484,7 +490,7 @@ export function renderAnnotationPanel(shot) {
   _renderShotPhoto(shot);
   S.currentRating = ann.rating || 0;
   renderStars(S.currentRating);
-  _renderBeanSelect(ann.coffee || null);
+  _renderBeanSelect(ann.coffee || null, ann.beanId ?? null);
   _renderBasketSelect(ann.basketId ?? null);
   _renderPuckScreenSelect(ann.puckScreenId ?? null);
   _renderFrozenPortionPills(ann.coffee || null, shot?.timestamp ? shot.timestamp * 1000 : Date.now(), ann.frozenPortionId ?? null);
@@ -523,13 +529,14 @@ export function quickClone() {
   const currentAnn   = currentShot?.annotation || {};
   const useCurrentAnn = !!currentAnn.coffee;
   const beanName      = currentAnn.coffee || ann.coffee || null;
-  // #456: beanId mirrors the same currentAnn/ann precedence as beanName —
-  // re-derived below by _renderBeanSelect's data-bean-id from the CURRENT
-  // library (handles a bean renamed since either annotation was saved), but
-  // passed through explicitly too for the grind/degassing lookups that run
-  // before the DOM has been re-rendered with the new selection.
+  // #456: beanId mirrors the same currentAnn/ann precedence as beanName.
+  // Passed into _renderBeanSelect() below so it matches by id against the
+  // CURRENT library (handles a bean renamed since either annotation was
+  // saved), and passed through explicitly too for the grind/degassing
+  // lookups that run before the DOM has been re-rendered with the new
+  // selection.
   const beanId = useCurrentAnn ? (currentAnn.beanId ?? null) : (ann.beanId ?? null);
-  _renderBeanSelect(beanName);
+  _renderBeanSelect(beanName, beanId);
   // Grinder/grind setting/dose come from this bean's own history, not
   // blindly from prev — prev may have used a different bean entirely.
   // "↩ Letzten" means the grind last used for this bean, so prefer the
