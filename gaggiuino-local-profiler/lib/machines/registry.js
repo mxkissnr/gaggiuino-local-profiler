@@ -214,6 +214,23 @@ function _machineFor(machineId) {
     return machineId != null ? module.exports.getMachine(machineId) : module.exports.getDefaultMachine();
 }
 
+// #679: was copy-pasted verbatim into routes/system.js and
+// routes/machine-control.js (an explicit machineId from a query/body param
+// if it names a known machine, otherwise the registry's default machine --
+// keeps old cached frontends that don't send machineId at all working
+// exactly as before, #340) -- exact precursor shape to #638/#643, now
+// shared from the one facade the rest of this file already establishes for
+// machine-config resolution.
+function resolveMachine(rawId) {
+    module.exports.ensureDefaultMachine();
+    const machineId = rawId != null && rawId !== '' ? parseInt(rawId, 10) : NaN;
+    if (!Number.isNaN(machineId)) {
+        const machine = module.exports.getMachine(machineId);
+        if (machine) return machine;
+    }
+    return module.exports.getDefaultMachine();
+}
+
 // Registry's switchEntity wins even when it's null/empty -- that's a
 // deliberate "not configured" (#643), not a hole to fall through to
 // options.json. Falling back there only when there's no default-machine row
@@ -247,5 +264,5 @@ function hostFor(machineId = null) {
 module.exports = {
     ensureDefaultMachine, listMachines, getMachine, getDefaultMachine,
     createMachine, updateMachine, deleteMachine, restoreMachines,
-    hostFor, switchEntityFor, baseUrlFor, apiUrlFor,
+    hostFor, switchEntityFor, baseUrlFor, apiUrlFor, resolveMachine,
 };

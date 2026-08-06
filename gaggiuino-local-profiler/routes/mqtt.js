@@ -15,6 +15,9 @@ const { discoverSupervisorMqtt } = require('../lib/mqtt-discovery');
 const mqttSettingsRepo = require('../lib/repositories/MqttSettingsRepository');
 const gaggiuinoMqtt = require('../lib/gaggiuino-mqtt-client');
 const { mqttSettingsSchema } = require('../lib/validation/schemas');
+// #679: was reimplemented inline here instead of sharing the canonical
+// check from routes/machine-control.js.
+const { requireSettingsProxySupport } = require('./machine-control');
 
 router.get('/api/mqtt/discovery', async (req, res) => {
     const broker = await discoverSupervisorMqtt();
@@ -43,9 +46,7 @@ router.post('/api/mqtt/apply-to-machine', async (req, res) => {
     registry.ensureDefaultMachine();
     const machine = registry.getDefaultMachine();
     const adapter = getAdapter(machine);
-    if (!adapter.capabilities().settingsProxy) {
-        return res.status(501).json({ error: 'not supported', reason: `${machine.type} machines do not support the settings/control proxy` });
-    }
+    if (!requireSettingsProxySupport(adapter, machine, res)) return;
     const mqttSettings = mqttSettingsRepo.getSettings();
     if (!mqttSettings.host) return res.status(400).json({ error: 'no MQTT broker configured yet' });
     try {

@@ -69,20 +69,10 @@ function setProfilesCacheFor(machine, profiles) {
     }
 }
 
-// Resolves the target machine for a profile request: an explicit machineId
-// (query param on GET, body field on POST/PUT/DELETE) if it names a known
-// machine, otherwise the registry's default machine (id 1) — this keeps old
-// cached frontends that don't send machineId at all working exactly as
-// before (#340).
-function resolveMachine(rawId) {
-    registry.ensureDefaultMachine();
-    const machineId = rawId != null && rawId !== '' ? parseInt(rawId, 10) : NaN;
-    if (!Number.isNaN(machineId)) {
-        const machine = registry.getMachine(machineId);
-        if (machine) return machine;
-    }
-    return registry.getDefaultMachine();
-}
+// #679: resolveMachine() now lives in lib/machines/registry.js (was
+// duplicated verbatim here and in routes/machine-control.js) -- see that
+// file for the resolution convention.
+const { resolveMachine } = registry;
 
 // Pre-load cache into state on startup so the profile select is immediately available
 (function initProfilesCache() {

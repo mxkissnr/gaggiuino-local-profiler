@@ -23,18 +23,9 @@ const {
 } = require('../lib/validation/schemas');
 const { getLatestFirmwareRelease } = require('../lib/machines/gaggiuino/firmware-check');
 
-// Same resolution convention as routes/system.js's resolveMachine(): an
-// explicit machineId (query on GET, body on POST) if it names a known
-// machine, otherwise the registry's default machine.
-function resolveMachine(rawId) {
-    registry.ensureDefaultMachine();
-    const machineId = rawId != null && rawId !== '' ? parseInt(rawId, 10) : NaN;
-    if (!Number.isNaN(machineId)) {
-        const machine = registry.getMachine(machineId);
-        if (machine) return machine;
-    }
-    return registry.getDefaultMachine();
-}
+// #679: resolveMachine() now lives in lib/machines/registry.js (was
+// duplicated verbatim here and in routes/system.js).
+const { resolveMachine } = registry;
 
 function requireSettingsProxySupport(adapter, machine, res) {
     if (adapter.capabilities().settingsProxy) return true;
@@ -255,4 +246,9 @@ router.get('/api/machine/live', async (req, res) => {
     }
 });
 
+// #679: exported off the router function itself (not a wrapper object) so
+// server.js's `app.use(require('./routes/machine-control'))` keeps working
+// unchanged, while routes/mqtt.js can still pull in the same capability
+// check instead of reimplementing it.
 module.exports = router;
+module.exports.requireSettingsProxySupport = requireSettingsProxySupport;

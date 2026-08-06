@@ -32,6 +32,26 @@ const machineConfigSourceOfTruthRule = {
   ],
 };
 
+// #679: resolveMachine() and requireSettingsProxySupport() were each
+// copy-pasted into a second file instead of shared (the same precursor
+// shape as #638/#641/#643/#648) -- now consolidated into
+// lib/machines/registry.js and routes/machine-control.js respectively.
+// Blocks either from being re-declared anywhere else so a future round
+// can't silently reintroduce a second copy.
+const noDuplicateHelpersRule = {
+  'no-restricted-syntax': [
+    'error',
+    {
+      selector: "FunctionDeclaration[id.name='resolveMachine']",
+      message: 'resolveMachine() lives in lib/machines/registry.js — import it from there instead of redeclaring (#679).',
+    },
+    {
+      selector: "FunctionDeclaration[id.name='requireSettingsProxySupport']",
+      message: 'requireSettingsProxySupport() lives in routes/machine-control.js — import it from there instead of redeclaring (#679).',
+    },
+  ],
+};
+
 module.exports = [
   {
     ignores: ['public/**', 'node_modules/**', 'docs/**', 'graphify-out/**'],
@@ -57,6 +77,14 @@ module.exports = [
       globals: globals.node,
     },
     rules: machineConfigSourceOfTruthRule,
+  },
+  {
+    files: ['lib/**/*.js', 'routes/**/*.js', 'server.js'],
+    ignores: ['lib/machines/registry.js', 'routes/machine-control.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+    rules: noDuplicateHelpersRule,
   },
   {
     files: ['public-src/**/*.js'],
