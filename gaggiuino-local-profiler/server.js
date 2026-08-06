@@ -76,7 +76,7 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'same-origin');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
     // Chart.js, ECharts, topojson-client and QRCode are bundled into the app
     // (no third-party script host needed); Figtree font is still loaded from
     // bunny.net.
