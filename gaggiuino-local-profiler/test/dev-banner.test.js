@@ -7,12 +7,13 @@ const { showDevBuildBanner, devBannerHeight } = await import('../public-src/comp
 function makeFakeDocument() {
   const registry = new Map();
   const body = {
+    style: {},
     insertAdjacentElement: (_pos, el) => { registry.set(el.id, el); },
   };
   return {
     body,
     getElementById: id => registry.get(id),
-    createElement: () => ({ style: {}, textContent: '' }),
+    createElement: () => ({ style: {}, textContent: '', offsetHeight: 34 }),
   };
 }
 
@@ -49,6 +50,14 @@ describe('dev-build banner (#683)', () => {
     showDevBuildBanner();
     doc.getElementById('glpDevBanner').offsetHeight = 32;
     expect(devBannerHeight()).toBe(32);
+  });
+
+  // Reported by Max on GLP DEV: the banner sat on top of (not above) the
+  // topbar/menus, hiding them entirely instead of just occupying its own
+  // strip at the top of the page.
+  it('pushes page content down by the banner height instead of overlaying it', () => {
+    showDevBuildBanner();
+    expect(doc.body.style.paddingTop).toBe('34px');
   });
 
   it('devBannerHeight() is 0 when no banner exists (real installs)', () => {

@@ -20,6 +20,13 @@ export function showDevBuildBanner() {
   });
   banner.textContent = '⚠ UNSTABLE DEV BUILD';
   document.body.insertAdjacentElement('afterbegin', banner);
+  // #683 follow-up: body is `height: 100vh; overflow: hidden` with global
+  // `box-sizing: border-box` (style.css), so padding-top here shrinks the
+  // flex layout's available height by the banner's own height instead of
+  // pushing it off-screen -- the fixed banner would otherwise sit on top of
+  // (not above) the topbar/sidebar, hiding the nav entirely rather than
+  // just visually overlapping a corner of it.
+  document.body.style.paddingTop = `${banner.offsetHeight}px`;
 }
 
 // Other fixed banners (update-available, machine-unreachable) stack off of

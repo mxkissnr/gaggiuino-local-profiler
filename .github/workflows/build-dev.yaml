@@ -128,9 +128,15 @@ jobs:
           token: ${{ secrets.DEV_ADDON_REPO_TOKEN }}
 
       # Bumps config.yaml's version to the tag just built, and prepends a
-      # DEV-LOG.md entry listing the commits that landed since the previous
+      # CHANGELOG.md entry listing the commits that landed since the previous
       # dev build -- so testing GLP DEV doesn't require cross-referencing
       # chat history or the main repo's own commit log to know what changed.
+      # #687: this used to write dev-app/DEV-LOG.md at the manifest repo's
+      # root. Home Assistant Supervisor's update dialog looks for
+      # CHANGELOG.md directly next to the add-on's own config.yaml (compare
+      # this repo's own CHANGELOG.md, which sits right next to its
+      # config.yaml) -- the old path/name meant Supervisor could never find
+      # it and always showed "No changelog found".
       - name: Update version and dev log
         # Passed via env rather than interpolated into the script: run_number/
         # sha are GitHub-generated and safe, but keeping every workflow input
@@ -142,7 +148,7 @@ jobs:
         run: |
           set -euo pipefail
           CONFIG="dev-app/gaggiuino_local_profiler_dev/config.yaml"
-          LOG="dev-app/DEV-LOG.md"
+          LOG="dev-app/gaggiuino_local_profiler_dev/CHANGELOG.md"
           MARKER="dev-app/.last-dev-build-sha"
 
           # Anchored to the start of the line so the `version:` key is the only
@@ -190,12 +196,12 @@ jobs:
           # actually correct. Happens whenever this job is re-run (e.g. after
           # fixing the PAT) or the manifest was bumped by hand in the meantime.
           cd dev-app
-          if git diff --quiet -- gaggiuino_local_profiler_dev/config.yaml DEV-LOG.md .last-dev-build-sha; then
+          if git diff --quiet -- gaggiuino_local_profiler_dev/config.yaml gaggiuino_local_profiler_dev/CHANGELOG.md .last-dev-build-sha; then
             echo "Already up to date with ${NEW_VERSION} -- nothing to commit"
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add gaggiuino_local_profiler_dev/config.yaml DEV-LOG.md .last-dev-build-sha
+          git add gaggiuino_local_profiler_dev/config.yaml gaggiuino_local_profiler_dev/CHANGELOG.md .last-dev-build-sha
           git commit -m "chore(dev): point dev app at ${NEW_VERSION} (${COMMIT_SHA:0:7})"
           git push
