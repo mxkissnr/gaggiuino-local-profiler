@@ -83,4 +83,47 @@ describe('getLatestFirmwareRelease (#620)', () => {
         const result = await getLatestFirmwareRelease(99);
         expect(result.hash).toBe('1234567');
     });
+
+    // #673: page 1 could be entirely the other channel's releases.
+    describe('pagination', () => {
+        it('pages past a first page with no matching-prefix release', async () => {
+            axiosGet
+                .mockResolvedValueOnce({ data: [ghRelease('dev-1111111', '2026-08-03T00:00:00Z')] }) // page 1: no main-* here
+                .mockResolvedValueOnce({ data: [ghRelease('main-2222222', '2026-08-01T00:00:00Z')] }); // page 2: match
+            const result = await getLatestFirmwareRelease(0);
+            expect(result.hash).toBe('2222222');
+            expect(axiosGet).toHaveBeenCalledTimes(2);
+        });
+
+        it('stops paging as soon as a page has a match, not fetching further pages', async () => {
+            axiosGet.mockResolvedValueOnce({ data: [ghRelease('main-1234567', '2026-08-01T00:00:00Z')] });
+            await getLatestFirmwareRelease(0);
+            expect(axiosGet).toHaveBeenCalledTimes(1);
+        });
+
+        it('requests page N via the params object on the Nth call', async () => {
+            axiosGet
+                .mockResolvedValueOnce({ data: [ghRelease('dev-1111111', '2026-08-03T00:00:00Z')] })
+                .mockResolvedValueOnce({ data: [ghRelease('main-2222222', '2026-08-01T00:00:00Z')] });
+            await getLatestFirmwareRelease(0);
+            expect(axiosGet.mock.calls[0][1].params).toEqual({ page: 1 });
+            expect(axiosGet.mock.calls[1][1].params).toEqual({ page: 2 });
+        });
+
+        it('stops paging once a page returns no more releases, bounded before MAX_PAGES', async () => {
+            axiosGet
+                .mockResolvedValueOnce({ data: [ghRelease('dev-1111111', '2026-08-03T00:00:00Z')] }) // page 1: no match
+                .mockResolvedValueOnce({ data: [] }); // page 2: no more releases at all
+            const result = await getLatestFirmwareRelease(0);
+            expect(result).toBeNull();
+            expect(axiosGet).toHaveBeenCalledTimes(2);
+        });
+
+        it('gives up after MAX_PAGES (5) when no page ever has a matching release', async () => {
+            axiosGet.mockResolvedValue({ data: [ghRelease('dev-1111111', '2026-08-01T00:00:00Z')] });
+            const result = await getLatestFirmwareRelease(0);
+            expect(result).toBeNull();
+            expect(axiosGet).toHaveBeenCalledTimes(5);
+        });
+    });
 });

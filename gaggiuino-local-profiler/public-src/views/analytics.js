@@ -158,77 +158,38 @@ export function buildPersonalBests() {
   ).join('')}</div>`;
 }
 
-// ── Grinder Stats ─────────────────────────────────────────────────────────
-export function buildGrinderStats() {
-  const el = document.getElementById('grinderStats');
-  if (!el) return;
-  const byGrinder = {};
-  for (const s of S.shots) {
-    const name = s.annotation?.grinder;
-    if (!name) continue;
-    if (!byGrinder[name]) byGrinder[name] = { count: 0, scores: [], durations: [] };
-    byGrinder[name].count++;
-    if (window.calcShotScore && window.getShotData) {
-      const sc = window.calcShotScore(s, window.getShotData(s));
-      if (sc !== null) byGrinder[name].scores.push(sc);
-    }
-    const dur = (s.duration || 0) / 10;
-    if (dur > 5) byGrinder[name].durations.push(dur);
-  }
-  const grinders = Object.entries(byGrinder).sort((a, b) => b[1].count - a[1].count);
-  if (grinders.length === 0) {
-    el.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_no_grinders')}</p>`;
-    return;
-  }
-  let html = '<div class="bean-cards">';
-  for (const [name, d] of grinders) {
-    const avgSc  = d.scores.length    ? Math.round(d.scores.reduce((a, b) => a + b, 0) / d.scores.length) : null;
-    const bestSc = d.scores.length    ? Math.max(...d.scores) : null;
-    const avgDur = d.durations.length ? (d.durations.reduce((a, b) => a + b, 0) / d.durations.length).toFixed(1) : null;
-    html += `<div class="bean-card">
-      <div class="bean-card-name" title="${_esc(name)}">${_esc(name)}</div>
-      <div class="bean-card-stats">
-        <div class="bean-stat"><span class="bean-stat-val">${d.count}</span><span class="bean-stat-lbl">${t('bean_stat_shots')}</span></div>
-        ${avgSc  !== null ? `<div class="bean-stat"><span class="bean-stat-val ${scoreClass(avgSc)}">${avgSc}</span><span class="bean-stat-lbl">${t('bean_stat_avg')}</span></div>` : ''}
-        ${bestSc !== null ? `<div class="bean-stat"><span class="bean-stat-val">${bestSc}</span><span class="bean-stat-lbl">${t('bean_stat_best')}</span></div>` : ''}
-        ${avgDur !== null ? `<div class="bean-stat"><span class="bean-stat-val">${avgDur}s</span><span class="bean-stat-lbl">${t('bean_stat_duration')}</span></div>` : ''}
-      </div>
-    </div>`;
-  }
-  el.innerHTML = html + '</div>';
-}
-
-// ── Basket & Puck Screen Stats (#668) ───────────────────────────────────────
-// Score-by-equipment groupings, same shape/rendering as buildGrinderStats()
-// above. Baskets/puck screens are pure ID-based library links (#635) rather
-// than a name stored directly on the annotation the way grinder is, so
-// resolving id -> name needs a lookup — reuses _equipmentName() from
-// views/shots/index.js rather than a second local copy.
+// ── Grinder, Basket & Puck Screen Stats (#668, #674) ────────────────────────
+// Score-by-equipment groupings sharing one aggregation/rendering pair.
+// Grinder is a free-text name stored directly on the annotation; baskets/
+// puck screens are pure ID-based library links (#635), so resolving id ->
+// name needs a lookup (_equipmentName() from views/shots/index.js). Grouped
+// by whatever getKey() returns (a grinder name, or a basket/puck-screen id
+// as a string via Object.entries) rather than by the resolved name, so two
+// same-named baskets (routes/library/baskets.js enforces no uniqueness)
+// still render as separate cards — the name is only resolved for display,
+// after grouping.
 
 // Pure aggregation kept separate from rendering, same pattern as
-// _computeBeanRanking() below — unit-testable without a DOM. Shared by
-// buildBasketStats()/buildPuckScreenStats(); only the annotation field and
-// library list differ between baskets and puck screens.
-//
-// Grouped by id, not by the resolved name: routes/library/baskets.js (and
-// the puck-screen equivalent) enforce no name uniqueness, so two baskets
-// both named e.g. "Standard" would otherwise merge into one card. The name
-// is only resolved for display, after grouping.
-export function _computeEquipmentStats(shots, library, idField) {
+// _computeBeanRanking() below — unit-testable without a DOM.
+// getKey(shot) returns the raw grouping key for a shot (grinder's name, or
+// an equipment id), or null/undefined to skip that shot. getName(key)
+// resolves the display name for a key -- identity for grinder (the key
+// already is the name), or a library id->name lookup for basket/puck screen.
+export function _computeEquipmentStats(shots, getKey, getName) {
   const byEquip = {};
   for (const s of shots) {
-    const id = s.annotation?.[idField];
-    if (id == null) continue;
-    if (!byEquip[id]) byEquip[id] = { count: 0, scores: [], durations: [] };
-    byEquip[id].count++;
+    const key = getKey(s);
+    if (key == null) continue;
+    if (!byEquip[key]) byEquip[key] = { count: 0, scores: [], durations: [] };
+    byEquip[key].count++;
     const sc = window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null;
-    if (sc !== null) byEquip[id].scores.push(sc);
+    if (sc !== null) byEquip[key].scores.push(sc);
     const dur = (s.duration || 0) / 10;
-    if (dur > 5) byEquip[id].durations.push(dur);
+    if (dur > 5) byEquip[key].durations.push(dur);
   }
   return Object.entries(byEquip)
-    .map(([id, d]) => {
-      const name = _equipmentName(library, Number(id));
+    .map(([key, d]) => {
+      const name = getName(key);
       return name ? {
         name,
         count:   d.count,
@@ -267,12 +228,31 @@ function _renderEquipmentStats(containerId, entries, emptyKey) {
   el.innerHTML = html + '</div>';
 }
 
+export function buildGrinderStats() {
+  const entries = _computeEquipmentStats(
+    S.shots,
+    s => s.annotation?.grinder || null,
+    key => key,
+  );
+  _renderEquipmentStats('grinderStats', entries, 'analytics_no_grinders');
+}
+
 export function buildBasketStats() {
-  _renderEquipmentStats('basketStats', _computeEquipmentStats(S.shots, S.coffeeLibrary?.baskets, 'basketId'), 'analytics_no_baskets');
+  const entries = _computeEquipmentStats(
+    S.shots,
+    s => s.annotation?.basketId,
+    id => _equipmentName(S.coffeeLibrary?.baskets, Number(id)),
+  );
+  _renderEquipmentStats('basketStats', entries, 'analytics_no_baskets');
 }
 
 export function buildPuckScreenStats() {
-  _renderEquipmentStats('puckScreenStats', _computeEquipmentStats(S.shots, S.coffeeLibrary?.puckScreens, 'puckScreenId'), 'analytics_no_puckscreens');
+  const entries = _computeEquipmentStats(
+    S.shots,
+    s => s.annotation?.puckScreenId,
+    id => _equipmentName(S.coffeeLibrary?.puckScreens, Number(id)),
+  );
+  _renderEquipmentStats('puckScreenStats', entries, 'analytics_no_puckscreens');
 }
 
 // ── Distributions ─────────────────────────────────────────────────────────

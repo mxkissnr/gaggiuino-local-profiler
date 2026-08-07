@@ -44,15 +44,36 @@ const DEFAULT_CHANNEL = 0;
 // answer on every alternating poll.
 const cache = new Map(); // channel -> { fetchedAt, result }
 
+// #673: fetchLatestRelease() used to only look at the response's first page
+// (GitHub's default page size, ~30 releases). If one channel is published
+// much more often than the other -- or there's simply a dry spell on one --
+// the first page could be entirely the *other* prefix, making a real
+// release look like "unknown" instead of being found. GitHub returns
+// releases newest-first, so scanning pages in order and stopping at the
+// first page that has a matching-prefix release still finds the true
+// latest one -- no need to keep paging past a match. Bounded to
+// MAX_PAGES so a channel with no matching release at all (or a GitHub API
+// change) can't spin through unbounded requests against the existing
+// 60/hr unauthenticated budget the CACHE_TTL_MS comment above already
+// accounts for.
+const MAX_PAGES = 5;
+
 async function fetchLatestRelease(prefix) {
-    const r = await axios.get(RELEASES_API, {
-        timeout: 5000,
-        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'gaggiuino-local-profiler' },
-    });
-    const releases = Array.isArray(r.data) ? r.data : [];
-    return releases
-        .filter(rel => typeof rel.tag_name === 'string' && rel.tag_name.startsWith(prefix))
-        .sort((a, b) => new Date(b.published_at) - new Date(a.published_at))[0] || null;
+    for (let page = 1; page <= MAX_PAGES; page++) {
+        const r = await axios.get(RELEASES_API, {
+            timeout: 5000,
+            params: { page },
+            headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'gaggiuino-local-profiler' },
+        });
+        const releases = Array.isArray(r.data) ? r.data : [];
+        if (releases.length === 0) break; // no more pages
+
+        const match = releases
+            .filter(rel => typeof rel.tag_name === 'string' && rel.tag_name.startsWith(prefix))
+            .sort((a, b) => new Date(b.published_at) - new Date(a.published_at))[0];
+        if (match) return match;
+    }
+    return null;
 }
 
 // Returns { hash, publishedAt, releaseUrl } for the latest release matching
