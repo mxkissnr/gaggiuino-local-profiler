@@ -10,6 +10,7 @@ import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
 import { loadShotDefaults, loadDrinkMenu } from '../views/shots/annotation.js';
+import { attachAutocomplete } from './autocomplete.js';
 
 export function renderShotDefaultsSettingsCard() {
   const d = S.shotDefaults || {};
@@ -43,7 +44,14 @@ export function renderShotDefaultsSettingsCard() {
   }
 
   const grinderInput = document.getElementById('sdGrinder');
-  if (grinderInput) grinderInput.value = d.grinder || '';
+  if (grinderInput) {
+    grinderInput.value = d.grinder || '';
+    // #691: was a plain text input with no suggestions, unlike the real
+    // annotation panel's #annGrinder (main.js). attachAutocomplete() is a
+    // no-op if this input already has one attached (guards on
+    // input._autocomplete), so calling it on every render here is safe.
+    attachAutocomplete(grinderInput, () => S.coffeeLibrary?.grinders?.map(g => g.name) || []);
+  }
 
   const doseInput = document.getElementById('sdDose');
   if (doseInput) doseInput.value = d.dose ?? '';
