@@ -36,8 +36,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # #689: the version string used to be dev-<run_number> (e.g. dev-21) -- an
+  # opaque sequential counter that doesn't say when a build actually
+  # happened. Computed once here (UTC) and shared via output so the image
+  # tag (build job) and the manifest's config.yaml/CHANGELOG.md
+  # (publish-manifest job) always agree on the exact same value.
+  prep:
+    name: Compute dev build version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        run: echo "version=dev-$(date -u +%Y%m%d_%H%M)" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.arch }}
+    needs: prep
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -80,22 +95,22 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           build-args: |
-            GLP_DEV_BUILD=dev-${{ github.run_number }}
+            GLP_DEV_BUILD=${{ needs.prep.outputs.version }}
           # Separate cache scope from the release build so a dev build can
           # never poison the cache the release build restores from.
           cache-from: type=gha,scope=dev-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=dev-${{ matrix.arch }}
           tags: |
-            ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ matrix.arch }}:dev-${{ github.run_number }}
+            ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ matrix.arch }}:${{ needs.prep.outputs.version }}
             ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ matrix.arch }}:dev
           labels: |
             org.opencontainers.image.title=GLP DEV — Gaggiuino Local Profiler (unstable)
             org.opencontainers.image.description=Unstable dev build of GLP — maintainer testing only
             org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=dev-${{ github.run_number }}
+            org.opencontainers.image.version=${{ needs.prep.outputs.version }}
             org.opencontainers.image.licenses=MIT
-            io.hass.version=dev-${{ github.run_number }}
+            io.hass.version=${{ needs.prep.outputs.version }}
             io.hass.type=addon
             io.hass.arch=${{ matrix.arch }}
             io.hass.name=GLP DEV — Gaggiuino Local Profiler (unstable)
@@ -104,7 +119,7 @@ jobs:
   # tag that exists for just one arch would break the app on the others.
   publish-manifest:
     name: Point dev manifest at the new build
-    needs: build
+    needs: [prep, build]
     runs-on: ubuntu-latest
     steps:
       # Checked out under its own path (not $GITHUB_WORKSPACE root) since the
@@ -138,12 +153,12 @@ jobs:
       # config.yaml) -- the old path/name meant Supervisor could never find
       # it and always showed "No changelog found".
       - name: Update version and dev log
-        # Passed via env rather than interpolated into the script: run_number/
-        # sha are GitHub-generated and safe, but keeping every workflow input
-        # out of the shell body means no future edit here can become an
-        # injection.
+        # Passed via env rather than interpolated into the script: the prep
+        # job's output/sha are GitHub-generated and safe, but keeping every
+        # workflow input out of the shell body means no future edit here can
+        # become an injection.
         env:
-          NEW_VERSION: dev-${{ github.run_number }}
+          NEW_VERSION: ${{ needs.prep.outputs.version }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
