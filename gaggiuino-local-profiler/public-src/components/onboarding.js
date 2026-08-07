@@ -2,6 +2,7 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
+import { devBannerHeight } from './dev-banner.js';
 
 const DISMISS_KEY = 'glp_onboarding_banner_dismissed';
 
@@ -29,7 +30,7 @@ export function updateMachineBanner(status = null) {
   banner.id = 'glpOnboardingBanner';
   Object.assign(banner.style, {
     position: 'fixed', left: '0', right: '0', zIndex: '9997',
-    top: `${document.getElementById('glpUpdateBanner')?.offsetHeight || 0}px`,
+    top: `${devBannerHeight() + (document.getElementById('glpUpdateBanner')?.offsetHeight || 0)}px`,
     background: '#3f3f46', color: '#e4e4e7',
     padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '12px',
     fontSize: '.875rem', fontWeight: '500', boxShadow: '0 2px 8px rgba(0,0,0,.35)',

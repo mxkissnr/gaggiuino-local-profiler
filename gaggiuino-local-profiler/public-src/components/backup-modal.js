@@ -324,10 +324,15 @@ export async function openBackupRestoreModal(input) {
             if (res.secretsPresent && res.secretsRestored) await initToken();
             input.value = '';
             closeBackupModal();
-            if (window.loadData) await window.loadData();
             alert(res.secretsPresent
                 ? (res.secretsRestored ? t('backup_restored_with_secrets', res.shots) : t('backup_restored_secrets_failed', res.shots))
                 : t('backup_restored', res.shots));
+            // #684: a restore can touch library/machines/settings/menu/etc,
+            // not just shots -- window.loadData() only ever refreshed shots,
+            // leaving everything else stale until a manual reload. A full
+            // reload after the result alert is dismissed is simpler and more
+            // complete than growing a bespoke per-section refresh here.
+            location.reload();
         } catch (e) { setError(t('backup_error', e.message)); }
     };
 

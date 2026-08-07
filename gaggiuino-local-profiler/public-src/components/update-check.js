@@ -1,5 +1,6 @@
 import { apiFetch } from '../api.js';
 import { t } from '../i18n.js';
+import { devBannerHeight } from './dev-banner.js';
 
 export async function checkForUpdate() {
     try {
@@ -16,7 +17,7 @@ function showUpdateBanner({ current, latest, release_url }) {
     const banner = document.createElement('div');
     banner.id = 'glpUpdateBanner';
     Object.assign(banner.style, {
-        position: 'fixed', top: '0', left: '0', right: '0', zIndex: '9998',
+        position: 'fixed', top: `${devBannerHeight()}px`, left: '0', right: '0', zIndex: '9998',
         background: 'var(--accent-color, #f59e0b)', color: '#1c1917',
         padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '12px',
         fontSize: '.875rem', fontWeight: '500', boxShadow: '0 2px 8px rgba(0,0,0,.35)',

@@ -332,6 +332,7 @@ export default {
     settings_api_token_copy:'Copier', settings_api_token_copied:'Jeton copié',
     preheat_warming:'Chauffe en cours …', preheat_ready:'Prêt à extraire',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} restantes`,
+    machine_on_duration:(m)=>`allumée depuis ${m} min`, machine_on_duration_hours:(h,m)=>`allumée depuis ${h}h ${m}m`,
     btn_export_profile_tooltip:'Exporter le profil Gaggiuino depuis le shot',
     export_csv_title:'Exporter tous les shots en CSV',
     export_shot_title:'Exporter le shot actuel en .shot (format Decent Espresso)',

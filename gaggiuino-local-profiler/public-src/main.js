@@ -43,6 +43,7 @@ import { openBackupExportModal, openBackupRestoreModal } from './components/back
 import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
          toggleDesktopSidebar, updateMobileShotSidebarVisibility, selectShot,
          openShotDrawer, closeShotDrawer, handleDrawerTouchStart, handleDrawerTouchEnd,
+         handleEdgeSwipeStart, handleEdgeSwipeEnd,
          toggleMonthGroup, setBeanFilter, clearBeanFilter } from './components/sidebar.js';
 import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
@@ -572,6 +573,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sidebar-drawer-backdrop').addEventListener('click', closeShotDrawer);
   document.getElementById('sidebar').addEventListener('touchstart', handleDrawerTouchStart, { passive: true });
   document.getElementById('sidebar').addEventListener('touchend', handleDrawerTouchEnd, { passive: true });
+  // #682: edge-swipe-to-open is bound to `document`, not #sidebar -- the
+  // sidebar is transformed off-screen while closed and therefore can't
+  // receive touch events itself.
+  document.addEventListener('touchstart', handleEdgeSwipeStart, { passive: true });
+  document.addEventListener('touchend', handleEdgeSwipeEnd, { passive: true });
 
   // ── Bottom navigation (#403, #443, mobile) ───────────────────────────────
   // #431: Shots opens the shot detail directly (latest/last-selected shot) —

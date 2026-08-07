@@ -195,6 +195,12 @@ router.get('/api/status', async (req, res) => {
         ordersFeature:      isOrdersEnabled(),
         machineReachable,
         lastMachineSuccess: state.lastMachineSuccess,
+        // #681: default machine's on/off state + the timestamp it last
+        // switched on, already tracked for preheat elapsed-time math
+        // (lib/preheat.js) -- reused here so the frontend can show "on for
+        // Xh Ym" instead of adding a second timestamp to track.
+        machineOn:          defaultRuntime.machineOn,
+        machineOnSince:     defaultRuntime.switchOnAt,
         machines,
         ...sensitive,
     });

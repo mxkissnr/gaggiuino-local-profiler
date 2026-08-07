@@ -3,6 +3,7 @@ import { t } from '../i18n.js';
 import { localeFor } from '../constants.js';
 import { apiFetch } from '../api.js';
 import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge } from './onboarding.js';
+import { showDevBuildBanner } from './dev-banner.js';
 
 // Tracks the server-side shot count as of the last status poll, so the periodic
 // poll below can detect a newly-finished shot even when the user isn't on the
@@ -41,7 +42,19 @@ export async function updateStatus(machineId) {
     const dot = document.getElementById('statusDot');
     const railDot = document.getElementById('railStatusDot');
     const timeEl = document.getElementById('syncTime');
-    if (s.lastSync) {
+    // #681: while the machine is on, show how long it's been on instead of
+    // the last shot-sync clock time -- machineOnSince is the same
+    // runtime.switchOnAt lib/preheat.js already tracks for its elapsed-time
+    // math, reused here rather than adding a second timestamp. Falls back
+    // to the previous last-sync display whenever the machine is off (or on
+    // a GLP version too old to send these fields, since they're only new
+    // additive fields on this response).
+    if (s.machineOn && s.machineOnSince) {
+      const totalMin = Math.max(0, Math.floor((Date.now() - s.machineOnSince) / 60000));
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      timeEl.textContent = h > 0 ? t('machine_on_duration_hours', h, m) : t('machine_on_duration', m);
+    } else if (s.lastSync) {
       timeEl.textContent = new Date(s.lastSync)
         .toLocaleTimeString(localeFor(S.currentLang), { hour: '2-digit', minute: '2-digit' });
     }
@@ -92,6 +105,10 @@ export async function updateStatus(machineId) {
       // build-arg) -- appending it here is a no-op for every real install.
       if (vEl) vEl.textContent = `v${s.glpVersion}` + (s.devBuild ? ` (${s.devBuild})` : '');
     }
+    // #683: same devBuild signal as the version-badge suffix above, but as a
+    // persistent top-of-page banner -- much harder to miss than the small
+    // badge text alone.
+    if (s.devBuild) showDevBuildBanner();
     const ordersBtn = document.getElementById('btnOrders');
     if (ordersBtn) ordersBtn.style.display = s.ordersFeature ? '' : 'none';
     // Bottom nav "Mehr" sheet (#403, mobile) mirrors the same feature gate.

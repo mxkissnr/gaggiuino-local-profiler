@@ -496,6 +496,33 @@ export function handleDrawerTouchEnd(e) {
   if (deltaX < -60) closeShotDrawer(); // swipe left closes (drawer opens from the left edge)
 }
 
+// #682: mirror gesture to the swipe-left-to-close pair above -- starting a
+// touch within a narrow zone at the left screen edge and dragging right
+// opens the drawer, closer to how edge-swipe navigation drawers feel on
+// mobile OSes. Bound to `document` (not #sidebar, which is off-screen and
+// therefore untouchable while closed), so this only ever activates for a
+// touch that starts genuinely at the edge -- openShotDrawer() itself already
+// no-ops above the 768px mobile breakpoint, and the `sidebar-drawer-open`
+// check here prevents double-handling once handleDrawerTouchStart/End above
+// take over for an already-open drawer.
+const EDGE_SWIPE_ZONE_PX = 24;
+let _edgeSwipeStartX = null;
+
+export function handleEdgeSwipeStart(e) {
+  if (window.innerWidth > 768) return;
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar?.classList.contains('sidebar-drawer-open')) return;
+  const x = e.touches[0].clientX;
+  _edgeSwipeStartX = x <= EDGE_SWIPE_ZONE_PX ? x : null;
+}
+
+export function handleEdgeSwipeEnd(e) {
+  if (_edgeSwipeStartX == null) return;
+  const deltaX = e.changedTouches[0].clientX - _edgeSwipeStartX;
+  _edgeSwipeStartX = null;
+  if (deltaX > 60) openShotDrawer();
+}
+
 // ── selectShot (used from dialin onclick) ────────────────────────────────
 export function selectShot(id) {
   if (S.primaryShotId !== id && window.flushAutoSave) window.flushAutoSave(); // #430
