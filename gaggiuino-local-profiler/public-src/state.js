@@ -87,6 +87,7 @@ export const S = {
   _ordersDeclineOpen: {},
   _ordersStatsOpen: false,
   machineReachable: null,
+  legacyMachineOptionsPending: false, // #662
   isDemo: false,
   // Multi-machine registry (#319) — S.machines mirrors GET /api/machines;
   // activeMachineId is restored from localStorage in machines-settings.js.

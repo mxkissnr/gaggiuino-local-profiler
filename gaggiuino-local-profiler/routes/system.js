@@ -33,6 +33,7 @@ const demoService = require('../lib/services/DemoService');
 const defaultRuntime = getMachineRuntimeState();
 const { profileSchema } = require('../lib/validation/schemas');
 const registry = require('../lib/machines/registry');
+const { hasUnconfirmedLegacyMachineOptions } = require('../lib/machines/options-adoption');
 const { getAdapter } = require('../lib/machines');
 
 // ── Profile cache helpers ─────────────────────────────────────────────────
@@ -201,6 +202,11 @@ router.get('/api/status', async (req, res) => {
         // Xh Ym" instead of adding a second timestamp to track.
         machineOn:          defaultRuntime.machineOn,
         machineOnSince:     defaultRuntime.switchOnAt,
+        // #662: true only while the default machine still has an
+        // unconfirmed legacy add-on option (machine_host/switch_entity,
+        // deprecated from config.yaml's schema) -- see
+        // options-adoption.js's hasUnconfirmedLegacyMachineOptions().
+        legacyMachineOptionsPending: hasUnconfirmedLegacyMachineOptions(),
         machines,
         ...sensitive,
     });

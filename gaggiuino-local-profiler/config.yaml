@@ -39,17 +39,20 @@ ports_description:
   8099/tcp: "GLP web interface (required for the companion HA integration)"
 panel_icon: mdi:coffee
 panel_title: "GLP"
+# #662: machine_host/switch_entity are deprecated here (soft removal --
+# removed from schema/options so the Configuration UI stops offering them;
+# NOT removed from lib/machines/options-adoption.js's TRACKED list, which
+# already treats an option absent from options.json as "never adopt" and
+# was built with exactly this deprecation in mind, see that file's own
+# comments). Machine #1 now configures like every other machine (#2+
+# already worked this way) -- only in-app, via Settings -> Machines.
 options:
-  machine_host: "gaggiuino.local"
   sync_interval: 5
-  switch_entity: ""
   preheat_time: 20
   enable_orders: false
   debug_logging: false
 schema:
-  machine_host: str
   sync_interval: int(1,60)
-  switch_entity: str?
   preheat_time: int(1,120)?
   enable_orders: bool?
   debug_logging: bool?

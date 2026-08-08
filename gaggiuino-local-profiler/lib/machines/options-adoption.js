@@ -164,4 +164,23 @@ function reconcileAfterRestore() {
     }
 }
 
-module.exports = { adoptOptionChanges, reconcileAfterRestore };
+// #662: whether the default machine still needs a heads-up about the
+// deprecated add-on options -- true only while a legacy option is present
+// in options.json AND the registry's current value for that field still
+// matches it exactly (i.e. the user hasn't yet touched this field in
+// Settings -> Machines since the deprecation). Once they edit even one
+// tracked field there, this goes false for good -- the frozen options.json
+// value can never catch back up to a value that has since diverged.
+function hasUnconfirmedLegacyMachineOptions() {
+    const opts    = loadOptions();
+    const machine = registry.getDefaultMachine();
+    if (!machine) return false;
+
+    return TRACKED.some(({ optionKey, machineField }) => {
+        const current = normalise(opts[optionKey]);
+        if (current === UNSET || current === null) return false;
+        return machine[machineField] === current;
+    });
+}
+
+module.exports = { adoptOptionChanges, reconcileAfterRestore, hasUnconfirmedLegacyMachineOptions };

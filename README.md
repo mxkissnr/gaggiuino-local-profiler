@@ -157,24 +157,18 @@ The [GLP HA Integration](https://github.com/mxkissnr/glp-integration) exposes al
 
 After installing, go to **Settings → Devices & Services → Add Integration** and search for **Gaggiuino Local Profiler**.
 
-### Step 3 — Configure the app
+### Step 3 — Open the dashboard
 
-In the app options set your controller URL:
+Click **Open Web UI** in the app page — or open it directly from your HA sidebar under **GLP**.
 
-```yaml
-machine_host: "192.168.1.42"           # IP or hostname of your Gaggiuino controller
-sync_interval: 5
-switch_entity: "switch.espresso_plug"  # optional
-```
+### Step 4 — Configure the app
+
+Set your controller's IP/hostname — and, optionally, an HA switch entity to power it on/off — under **Settings → Machines**.
 
 > **Verify connectivity** from the HA terminal:
 > ```bash
 > curl http://<gaggiuino-ip>/api/shots/latest
 > ```
-
-### Step 4 — Open the dashboard
-
-Click **Open Web UI** in the app page — or open it directly from your HA sidebar under **GLP**.
 
 ---
 
@@ -182,9 +176,9 @@ Click **Open Web UI** in the app page — or open it directly from your HA sideb
 
 | Option | Default | Description |
 |---|---|---|
-| `machine_host` | `gaggia.intern` | IP or hostname of the Gaggiuino controller |
 | `sync_interval` | `5` | Auto-sync interval in minutes (1–60) |
-| `switch_entity` | *(empty)* | HA switch entity to power the machine on/off |
+
+Machine host and switch entity are configured in-app under **Settings → Machines**, not here — see [DOCS.md](gaggiuino-local-profiler/DOCS.md#configuration-options) for details.
 
 Updates run through the Home Assistant Add-on Store — the app itself only checks and shows whether a newer version is available, it never triggers an install (no elevated Supervisor role required).
 

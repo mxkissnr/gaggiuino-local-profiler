@@ -2,7 +2,7 @@ import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { localeFor } from '../constants.js';
 import { apiFetch } from '../api.js';
-import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge } from './onboarding.js';
+import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge, updateLegacyMachineOptionsBanner } from './onboarding.js';
 import { showDevBuildBanner } from './dev-banner.js';
 
 // Tracks the server-side shot count as of the last status poll, so the periodic
@@ -31,6 +31,7 @@ export async function updateStatus(machineId) {
     // DOM lookups or JSON parsing further below) can never leave them stuck in a stale
     // state — see #288.
     updateMachineBanner(s);
+    updateLegacyMachineOptionsBanner(s);
     updateOnboardingPanel();
     if (typeof s.shotCount === 'number') {
       if (knownShotCount !== null && s.shotCount > knownShotCount && window.loadData) {

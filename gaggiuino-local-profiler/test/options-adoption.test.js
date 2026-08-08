@@ -228,6 +228,78 @@ describe('options.json adoption into the machine registry', () => {
         expect(machine().switchEntity).toBe('switch.current');
     });
 
+    // #662: machine_host/switch_entity were removed from config.yaml's
+    // schema. hasUnconfirmedLegacyMachineOptions() drives the one-time
+    // in-app banner pointing an upgrading install at Settings -> Machines --
+    // true only while a legacy option is present AND the registry still
+    // matches it exactly (the user hasn't touched it since).
+    describe('hasUnconfirmedLegacyMachineOptions (#662)', () => {
+        function pending() {
+            return require('../lib/machines/options-adoption').hasUnconfirmedLegacyMachineOptions();
+        }
+
+        it('is false when no legacy option is present in options.json at all', () => {
+            writeOptions({});
+            boot();
+            expect(pending()).toBe(false);
+        });
+
+        it('is true right after a legacy machine_host is adopted, unconfirmed', () => {
+            writeOptions({ machine_host: 'gaggia.intern' });
+            boot();
+            expect(pending()).toBe(true);
+        });
+
+        it('is true right after a legacy switch_entity is adopted, unconfirmed', () => {
+            writeOptions({ machine_host: 'gaggia.intern', switch_entity: 'switch.espresso' });
+            boot();
+            expect(pending()).toBe(true);
+        });
+
+        it('goes false once the user edits the host in Settings -> Machines', () => {
+            writeOptions({ machine_host: 'gaggia.intern' });
+            boot();
+            expect(pending()).toBe(true);
+
+            require('../lib/machines/registry').updateMachine(1, { host: 'edited-in-app.local' });
+            expect(pending()).toBe(false);
+        });
+
+        it('goes false once the user edits the switch entity in Settings -> Machines', () => {
+            // Isolated to switch_entity alone (no machine_host in options.json,
+            // so it reads UNSET and never keeps pending() true on its own) --
+            // otherwise an unconfirmed host would still correctly keep the
+            // banner showing per the "any unconfirmed tracked field" semantics
+            // .some() implements, which is exercised by the next test.
+            writeOptions({ switch_entity: 'switch.espresso' });
+            boot();
+            expect(pending()).toBe(true);
+
+            require('../lib/machines/registry').updateMachine(1, { switchEntity: 'switch.edited' });
+            expect(pending()).toBe(false);
+        });
+
+        it('keeps pending while any one of two legacy fields is still unconfirmed', () => {
+            writeOptions({ machine_host: 'gaggia.intern', switch_entity: 'switch.espresso' });
+            boot();
+
+            // Only the switch entity gets confirmed/edited -- the host is
+            // still exactly the frozen legacy value, so the banner should
+            // keep showing rather than disappearing after a partial edit.
+            require('../lib/machines/registry').updateMachine(1, { switchEntity: 'switch.edited' });
+            expect(pending()).toBe(true);
+
+            require('../lib/machines/registry').updateMachine(1, { host: 'edited-in-app.local' });
+            expect(pending()).toBe(false);
+        });
+
+        it('stays false for a genuinely fresh install that never had legacy options', () => {
+            writeOptions({}); // no machine_host/switch_entity ever set
+            boot(); // ensureDefaultMachine() seeds a placeholder host
+            expect(pending()).toBe(false);
+        });
+    });
+
     it('restore reconciliation leaves a restored host alone when the add-on option is empty', () => {
         writeOptions({ machine_host: 'gaggia.intern' });
         boot();

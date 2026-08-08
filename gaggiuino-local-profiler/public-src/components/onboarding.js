@@ -36,7 +36,7 @@ export function updateMachineBanner(status = null) {
     fontSize: '.875rem', fontWeight: '500', boxShadow: '0 2px 8px rgba(0,0,0,.35)',
   });
 
-  const host = status?.machineHostname || 'machine_host';
+  const host = status?.machineHostname || 'configured host';
   const msg = document.createElement('span');
   msg.style.flex = '1';
   msg.textContent = t('onboarding_banner_msg', host);
@@ -57,6 +57,57 @@ export function updateMachineBanner(status = null) {
   });
 
   banner.append(msg, wikiLink, closeBtn);
+  document.body.insertAdjacentElement('afterbegin', banner);
+}
+
+// ── "Legacy add-on machine options" banner (#662) ───────────────────────
+// machine_host/switch_entity were removed from config.yaml's schema --
+// shown once per session on an upgrading install that still has one of
+// them sitting unconfirmed in its (now frozen) options.json, pointing at
+// Settings -> Machines. Server-side hasUnconfirmedLegacyMachineOptions()
+// (options-adoption.js) already stops reporting this the moment the user
+// edits the field there, so this banner naturally stops reappearing across
+// sessions too, without any dismiss-state of its own needed for that case
+// -- sessionStorage here only covers "seen it, don't need it again today."
+const LEGACY_DISMISS_KEY = 'glp_legacy_machine_options_banner_dismissed';
+
+export function updateLegacyMachineOptionsBanner(status = null) {
+  if (status) S.legacyMachineOptionsPending = !!status.legacyMachineOptionsPending;
+
+  const existing = document.getElementById('glpLegacyMachineOptionsBanner');
+  const shouldShow = S.legacyMachineOptionsPending && !sessionStorage.getItem(LEGACY_DISMISS_KEY);
+
+  if (!shouldShow) {
+    existing?.remove();
+    return;
+  }
+  if (existing) return; // already shown this session
+
+  const banner = document.createElement('div');
+  banner.id = 'glpLegacyMachineOptionsBanner';
+  Object.assign(banner.style, {
+    position: 'fixed', left: '0', right: '0', zIndex: '9996',
+    top: `${devBannerHeight()
+      + (document.getElementById('glpUpdateBanner')?.offsetHeight || 0)
+      + (document.getElementById('glpOnboardingBanner')?.offsetHeight || 0)}px`,
+    background: '#3f3f46', color: '#e4e4e7',
+    padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '12px',
+    fontSize: '.875rem', fontWeight: '500', boxShadow: '0 2px 8px rgba(0,0,0,.35)',
+  });
+
+  const msg = document.createElement('span');
+  msg.style.flex = '1';
+  msg.textContent = t('legacy_machine_options_banner_msg');
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  Object.assign(closeBtn.style, { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: '#e4e4e7', padding: '0 2px' });
+  closeBtn.addEventListener('click', () => {
+    sessionStorage.setItem(LEGACY_DISMISS_KEY, '1');
+    banner.remove();
+  });
+
+  banner.append(msg, closeBtn);
   document.body.insertAdjacentElement('afterbegin', banner);
 }
 
