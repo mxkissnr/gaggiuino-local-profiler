@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Added
+- **Startup log now includes the key set of `options.json`** (keys only, never values — `machine_host` can be a private hostname/IP). Diagnostic addition for #662: a dev-channel tester still saw the deprecated `machine_host`/`switch_entity` Configuration fields on a build that should no longer expose them, suspected to be Home Assistant Supervisor caching the add-on's `config.yaml` schema independently of the image version. This log line lets that be confirmed or ruled out from the Supervisor log tab alone, without shell access to the affected instance. Closes #706
+
 ### Fixed
 - **GLP DEV showed the stable-release update banner ("GLP 2.31.0 verfügbar... Update über den Home-Assistant-Add-on-Store") on every dev build**, since `GLP_VERSION` only moves at an actual release and is therefore always "behind" the last stable GitHub tag on `dev` — the normal, permanent state of the dev channel, not something to prompt about via the stable store link (there's no store listing for GLP DEV, and it would just take you back to stable). `GET /api/version` now skips `update_available` when `process.env.GLP_DEV_BUILD` is set, the same dev-build-aware guard the "UNSTABLE DEV BUILD" banner (#683) already uses. Also: that banner now shows the running dev build string (e.g. "dev-20260809_0800") in its own text, not just the small version-badge suffix, so which build is live is visible at a glance. Closes #704
 

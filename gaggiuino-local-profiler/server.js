@@ -5,6 +5,7 @@ const crypto   = require('crypto');
 
 const { GLP_VERSION, DEFAULT_PORT, DATA_DIR, TOKEN_FILE, HA_INGRESS_PATH } = require('./lib/constants');
 const { log, writeFileSafe, isSupervisorIp, formatUnhandledRejection } = require('./lib/helpers');
+const { loadOptions }                                = require('./lib/data');
 const state                                          = require('./lib/state');
 const { getDb }                                      = require('./lib/db');
 const shotService                                    = require('./lib/services/ShotService');
@@ -38,6 +39,12 @@ try {
     // can no longer pick up. See lib/machines/options-adoption.js.
     require('./lib/machines/options-adoption').adoptOptionChanges();
     log('Database ready');
+    // #706: keys only, never values (machine_host can be a private
+    // hostname/IP) -- lets a stale Supervisor-side config.yaml schema
+    // (add-on version bumped, but the repository's schema cache wasn't
+    // refreshed in lockstep) be confirmed or ruled out from the log tab
+    // alone, without shell access to the affected instance.
+    log(`options.json keys: ${Object.keys(loadOptions()).sort().join(', ') || '(none)'}`);
 } catch (err) {
     log(`Init error: ${err.message}`, true);
 }
