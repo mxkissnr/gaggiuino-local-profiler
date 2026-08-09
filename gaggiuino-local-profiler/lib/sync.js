@@ -6,7 +6,7 @@ const shotService = require('./services/ShotService');
 const state      = require('./state');
 const { getMachineRuntimeState } = require('./machine-runtime-state');
 const registry   = require('./machines/registry');
-const { getAdapter, toGlobalShotId, toNativeShotId } = require('./machines');
+const { getAdapter, toGlobalShotId, toNativeShotId, MACHINE_ID_OFFSET } = require('./machines');
 const { syncNativeMaintenance } = require('./maintenance-sync');
 
 // #549: same single-default-machine assumption as lib/poll.js/lib/preheat.js.
@@ -22,8 +22,20 @@ const SYNC_RETRY_DELAYS = [30_000, 60_000, 120_000];
 // Gaggiuino native id, so an unscoped max-id reduce would make the default
 // machine's sync think it's already "caught up" and silently stop pulling
 // its own new shots. Must stay scoped to avoid that regression.
+//
+// #719: on top of the machineId scoping above, also ignore any id that's
+// still >= MACHINE_ID_OFFSET even though it's (wrongly) filed under machine
+// 1 -- a belt-and-suspenders guard against a corrupted/pre-existing row
+// surviving in an older DB. The default machine's own native ids are by
+// definition always below the offset (lib/machines/index.js's
+// toGlobalShotId), so anything at or above it can never be a legitimate
+// machine-1 shot and must not be allowed to poison this max.
+function maxDefaultMachineShotId() {
+    return shotService.getAll(1).reduce((m, s) => (s.id < MACHINE_ID_OFFSET && s.id > m) ? s.id : m, 0);
+}
+
 async function syncAfterBrew() {
-    const prevMaxId = shotService.getAll(1).reduce((m, s) => s.id > m ? s.id : m, 0);
+    const prevMaxId = maxDefaultMachineShotId();
     await syncShots();
     const newShots = shotService.getAll(1).filter(s => s.id > prevMaxId);
     if (newShots.length) log(`New shot saved: #${newShots.map(s => s.id).join(', ')}`);
@@ -67,7 +79,7 @@ async function syncShots(runtime = defaultRuntime) {
         }
 
         const blocklist    = shotService.getBlocklist();
-        const maxLocalId   = shotService.getAll(1).reduce((m, s) => s.id > m ? s.id : m, 0);
+        const maxLocalId   = maxDefaultMachineShotId();
         const maxBlockedId = blocklist.length ? Math.max(...blocklist.map(Number)) : 0;
         const effectiveMax = Math.max(maxLocalId, maxBlockedId);
 

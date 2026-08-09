@@ -1,6 +1,6 @@
 const { getDb }         = require('../db');
 const { TRASH_TTL_MS }  = require('../constants');
-const { toNativeShotId } = require('../machines');
+const { toNativeShotId, ownerOfShotId } = require('../machines');
 
 function _hydrate(row) {
     if (!row) return null;
@@ -67,17 +67,25 @@ class ShotRepository {
         return rows.map(_hydrate);
     }
 
-    // shot.machineId (optional, defaults to 1 = the default/legacy machine)
-    // selects which machine owns this row; shot.id must already be a
-    // globally-unique id (the default machine keeps its native shot ids,
-    // additional machines use lib/machines.toGlobalShotId to avoid
-    // collisions) — see the shots table comment in lib/db.js.
+    // shot.machineId (optional) selects which machine owns this row;
+    // shot.id must already be a globally-unique id (the default machine
+    // keeps its native shot ids, additional machines use
+    // lib/machines.toGlobalShotId to avoid collisions) — see the shots
+    // table comment in lib/db.js.
+    //
+    // #719: when machineId is omitted, infer ownership from the id itself
+    // (ownerOfShotId) instead of blindly defaulting to 1. An id in another
+    // machine's synthetic range (>= MACHINE_ID_OFFSET) landing under machine
+    // 1 anyway would silently poison that machine's own sync forever — see
+    // lib/sync.js's syncShots(), whose "already caught up" check is a plain
+    // max(local ids) >= latest-from-machine comparison.
     upsert(shot) {
         const db = getDb();
         const { id, timestamp, duration, profile_name, profileName, annotation, machineId, ...rest } = shot;
+        const ownerMachineId = machineId ?? ownerOfShotId(id);
         db.prepare(
             'INSERT OR REPLACE INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (?,?,?,?,?,?)'
-        ).run(id, timestamp ?? null, duration ?? null, profile_name ?? profileName ?? null, JSON.stringify(rest), machineId ?? 1);
+        ).run(id, timestamp ?? null, duration ?? null, profile_name ?? profileName ?? null, JSON.stringify(rest), ownerMachineId);
         if (annotation !== undefined) {
             db.prepare('INSERT OR REPLACE INTO annotations (shot_id, data) VALUES (?,?)').run(id, JSON.stringify(annotation));
         }

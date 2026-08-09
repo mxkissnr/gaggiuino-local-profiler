@@ -50,6 +50,66 @@ describe('lib/sync multi-machine', () => {
         expect(maxUnscoped).toBe(20_000_010); // confirms the bug would exist without scoping
     });
 
+    // #719: a shot carrying another machine's synthetic id must never be
+    // filed under machine 1 just because the caller forgot to set
+    // machineId -- that would silently make syncShots() think it's already
+    // caught up (see maxDefaultMachineShotId() in lib/sync.js) and stop
+    // pulling the default machine's own new shots forever.
+    it('#719 regression guard: upsertShot infers real ownership from a synthetic id when machineId is omitted', () => {
+        const shotService = require('../lib/services/ShotService');
+        const { toGlobalShotId } = require('../lib/machines');
+        const syntheticId = toGlobalShotId(2, 12); // machine 2's native shot #12
+
+        shotService.upsertShot({ id: syntheticId, timestamp: 1000, duration: 25000, datapoints: {} }); // no machineId
+
+        const stored = shotService.getAll().find(s => s.id === syntheticId);
+        expect(stored.machineId).toBe(2); // not defaulted to 1
+        expect(shotService.getAll(1)).toHaveLength(0); // default machine's own scope stays clean
+    });
+
+    // #719: even a row that's *already* wrongly filed under machine 1 (e.g.
+    // surviving in a DB from before the upsert-side fix above shipped) must
+    // not be able to wedge the default machine's sync -- its id alone marks
+    // it as out of the default machine's native range.
+    it('#719 regression guard: syncShots() keeps backfilling past a pre-existing out-of-range row mis-filed under machine 1', async () => {
+        const registry = require('../lib/machines/registry');
+        registry.updateMachine(1, { host: 'test-machine.local' });
+
+        // Simulate legacy corruption directly via SQL, bypassing the (now
+        // fixed) repository layer entirely -- this is data that could only
+        // have been written before #719's upsert-side fix existed.
+        memDb.prepare(
+            'INSERT INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (?,?,?,?,?,?)'
+        ).run(900_000_012, 500, 25000, null, JSON.stringify({}), 1);
+
+        const axiosPath = require.resolve('axios');
+        const realAxios = require(axiosPath);
+        const axiosGetMock = vi.fn()
+            .mockResolvedValueOnce({ data: [{ lastShotId: 3 }] })
+            .mockResolvedValueOnce({ data: { id: 1, timestamp: 100, duration: 25000, datapoints: { timeInShot: [0] } } })
+            .mockResolvedValueOnce({ data: { id: 2, timestamp: 200, duration: 25000, datapoints: { timeInShot: [0] } } })
+            .mockResolvedValueOnce({ data: { id: 3, timestamp: 300, duration: 25000, datapoints: { timeInShot: [0] } } });
+        require.cache[axiosPath].exports = { get: axiosGetMock };
+        delete require.cache[syncPath];
+
+        try {
+            const { syncShots } = require('../lib/sync');
+            const ok = await syncShots({ machineOn: true });
+
+            expect(ok).toBe(true);
+            // /latest + 3 per-shot fetches -- proves it did NOT short-circuit
+            // on "already up to date" because of the id-900000012 row.
+            expect(axiosGetMock).toHaveBeenCalledTimes(4);
+
+            const shotService = require('../lib/services/ShotService');
+            expect(shotService.getById(1)).toBeTruthy();
+            expect(shotService.getById(2)).toBeTruthy();
+            expect(shotService.getById(3)).toBeTruthy();
+        } finally {
+            require.cache[axiosPath].exports = realAxios;
+        }
+    });
+
     it('syncMachineShots ingests new shots for a non-default machine via its adapter, using synthetic ids', async () => {
         const registry = require('../lib/machines/registry');
         const machine = registry.createMachine({ name: 'Kitchen GaggiMate', type: 'gaggimate', host: '10.1.70.199:8180' });
