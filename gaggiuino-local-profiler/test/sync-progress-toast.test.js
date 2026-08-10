@@ -124,4 +124,28 @@ describe('updateStatus() import-complete toast (#731)', () => {
     await updateStatus();
     expect(toastCalls).toEqual(['Import complete: 50 shots', 'Import complete: 100 shots']);
   });
+
+  // #734 review: updateStatus() can now be triggered from three independent
+  // places (the 30s interval, a machine switch, and #733's visibilitychange
+  // refocus handler) with no ordering guarantee between them -- two
+  // overlapping in-flight calls both reading+mutating the shared
+  // _lastSyncProgress map could otherwise both observe the same
+  // just-finished import and double-fire its completion toast.
+  it('#734 regression guard: a second updateStatus() call while one is already in flight is a no-op, not a duplicate poll', async () => {
+    let resolveFetch;
+    const pending = new Promise(res => { resolveFetch = res; });
+    globalThis.fetch = vi.fn(url => {
+      if (String(url).startsWith('api/status')) return pending;
+      return Promise.resolve({ ok: false });
+    });
+
+    const first = updateStatus();
+    const second = updateStatus(); // fires while `first` is still awaiting the fetch above
+
+    resolveFetch({ ok: true, json: async () => ({ lastSync: '2026-01-01T00:00:00.000Z', syncProgress: [] }) });
+    await Promise.all([first, second]);
+
+    // Only the first call's fetch actually ran -- the second returned immediately.
+    expect(globalThis.fetch.mock.calls.filter(c => String(c[0]).startsWith('api/status')).length).toBe(1);
+  });
 });

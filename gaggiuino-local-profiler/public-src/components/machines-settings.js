@@ -389,6 +389,15 @@ async function _saveMachine({ triggerSync = true } = {}) {
 
 // #727: shared by testMachineForm() — runs the connection test against a
 // known machine id and renders the result into #machineFormTestResult.
+//
+// #734 review: #733 removed testMachineForm()'s auto-close, so the form
+// (and the still-clickable machines list behind it) can now stay open long
+// enough for the user to switch to editing a *different* machine while this
+// test is still in flight — openMachineForm() overwrites #machineFormId
+// synchronously, so by the time this resolves the form may no longer be
+// showing the machine that was actually tested. Re-check #machineFormId
+// still matches before writing the result, so a stale in-flight test can't
+// land its result under the wrong machine's name/host.
 async function _testMachine(id) {
   const resultEl = document.getElementById('machineFormTestResult');
   if (!resultEl) return;
@@ -396,8 +405,10 @@ async function _testMachine(id) {
   try {
     const r = await apiFetch(`api/machines/${id}/test`, { method: 'POST' });
     const data = await r.json().catch(() => ({}));
+    if (String(document.getElementById('machineFormId').value) !== String(id)) return;
     resultEl.textContent = data.reachable ? t('settings_machine_test_ok') : t('settings_machine_test_fail');
   } catch {
+    if (String(document.getElementById('machineFormId').value) !== String(id)) return;
     resultEl.textContent = t('settings_machine_test_fail');
   }
 }

@@ -28,6 +28,18 @@ let knownShotCount = null;
 // session opened).
 let _lastSyncProgress = new Map();
 
+// #734 review: updateStatus() can now be triggered from three independent
+// places (the 30s setInterval, applyActiveMachineChange() on a machine
+// switch, and #733's visibilitychange refocus handler) with no ordering
+// guarantee between them. Two overlapping calls both read+mutate
+// _lastSyncProgress without synchronization -- if a machine's import
+// finishes in the gap between two in-flight calls' fetches, both can pass
+// the "entry just disappeared" check and double-fire its completion toast.
+// A plain in-flight guard turns a same-tick collision into "skip, the other
+// call's result already covers this tick" rather than a race -- the
+// skipped call's data is never more than one poll interval stale.
+let _statusUpdateInFlight = false;
+
 // #464: an explicit machineId scopes the status-dot/hostname fields below to
 // that machine (see routes/system.js's /api/status). 'all'/null/undefined
 // fall back to the unscoped call (default machine), mirroring the same
@@ -35,6 +47,8 @@ let _lastSyncProgress = new Map();
 // 'all' switcher value — so single-machine installs and the unparameterized
 // 30s poll are unaffected.
 export async function updateStatus(machineId) {
+  if (_statusUpdateInFlight) return;
+  _statusUpdateInFlight = true;
   try {
     const qs = (machineId != null && machineId !== 'all') ? `?machineId=${encodeURIComponent(machineId)}` : '';
     const [statusRes, switchRes] = await Promise.all([
@@ -182,6 +196,8 @@ export async function updateStatus(machineId) {
     if (switchRes?.ok) updatePowerButton(await switchRes.json());
     else updatePowerButton({ configured: false });
   } catch { /* ignore */ }
+  // eslint-disable-next-line require-atomic-updates -- intentional single-flight guard; last-writer-wins reset is fine, the guard only needs to be false again once no call is in flight
+  finally { _statusUpdateInFlight = false; }
 }
 
 // #722: the devToolsCard button's click handler -- deliberately goes through

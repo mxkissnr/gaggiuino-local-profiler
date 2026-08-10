@@ -200,6 +200,43 @@ describe('testMachineForm (#729/#733)', () => {
     await pending;
     expect(btn.disabled).toBe(false);
   });
+
+  // #734 review: #733 removed the auto-close, so the form (and the
+  // still-clickable machines list behind it) can now stay open long enough
+  // for the user to switch to editing a *different* machine while a test is
+  // still in flight -- without a staleness guard, machine A's test result
+  // would land in #machineFormTestResult after the user has already moved
+  // on to viewing/editing machine B's data.
+  it('#734 regression guard: discards a test result if #machineFormId no longer matches the machine being tested', async () => {
+    setFormFields({ id: '9' });
+    let resolveTest;
+    const pendingTest = new Promise(res => { resolveTest = res; });
+    globalThis.fetch = async (url, opts) => {
+      if (String(url) === 'api/machines/9?sync=0' && opts?.method === 'PUT') {
+        return { ok: true, json: async () => ({ id: 9, name: 'Test Machine' }) };
+      }
+      if (String(url) === 'api/machines/9/test' && opts?.method === 'POST') return pendingTest;
+      if (String(url) === 'api/machines') return { ok: true, json: async () => [] };
+      throw new Error(`unexpected fetch: ${opts?.method || 'GET'} ${url}`);
+    };
+
+    const pending = testMachineForm();
+    // Let the save round-trip (and testMachineForm()'s own id write-back)
+    // fully settle before simulating the machine switch below -- a
+    // macrotask tick guarantees every already-queued microtask (the mocked
+    // PUT's await chain) has drained, landing us inside _testMachine()'s
+    // still-pending `await apiFetch(.../test)` call.
+    await new Promise(res => setTimeout(res, 0));
+    // Simulate openMachineForm(otherMachine) landing while the test above is
+    // still in flight -- it overwrites the id and clears the result field.
+    fakeElement('machineFormId').value = 17;
+    fakeElement('machineFormTestResult').textContent = '';
+
+    resolveTest({ ok: true, json: async () => ({ ok: true, reachable: true }) });
+    await pending;
+
+    expect(fakeElement('machineFormTestResult').textContent).toBe('');
+  });
 });
 
 describe('saveMachineForm (unchanged behavior)', () => {

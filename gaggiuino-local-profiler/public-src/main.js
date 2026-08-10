@@ -640,7 +640,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // catches an import that's still running by then; one that already
     // finished fully in the background is a case no client-side poll can
     // retroactively catch (nothing else was watching either).
-    if (document.visibilityState === 'visible') updateStatus();
+    //
+    // #734 review: must pass S.activeMachineId through, same as
+    // applyActiveMachineChange() does (#464) -- an unscoped call hits the
+    // default machine's /api/status and overwrites #railMachineName/
+    // #railStatusDot even when a non-default machine is the active
+    // selection, undoing #464's fix via this new trigger.
+    if (document.visibilityState === 'visible') updateStatus(S.activeMachineId);
   });
   document.getElementById('openMaintLogBtn').addEventListener('click', openMaintLogForm);
   document.getElementById('submitMaintLogBtn').addEventListener('click', submitMaintLogEntry);
