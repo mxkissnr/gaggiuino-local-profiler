@@ -17,6 +17,15 @@ router.get('/api/events', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    // #738: HA Supervisor's Ingress panel is served through an nginx reverse
+    // proxy, which buffers proxied responses by default -- without this
+    // header, nginx held the whole stream until it had accumulated enough
+    // bytes (or the connection closed) before flushing to the browser, so
+    // events arrived in the same "block jump" pattern as the old 30s poll
+    // despite the backend emitting one per shot. Live-tested over Ingress;
+    // not reproducible in a local/direct-port dev session, which has no
+    // such proxy in front of it.
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
 
     function send(type, data) {

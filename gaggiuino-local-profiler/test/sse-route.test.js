@@ -81,6 +81,16 @@ describe('GET /api/events', () => {
         controller.abort();
     });
 
+    it('#738: sends X-Accel-Buffering: no so HA Ingress\'s nginx proxy does not buffer the stream', async () => {
+        const controller = new AbortController();
+        const r = await fetch(`${baseUrl}/api/events`, {
+            headers: { 'X-GLP-Token': 'test-token-abc123' },
+            signal: controller.signal,
+        });
+        expect(r.headers.get('x-accel-buffering')).toBe('no');
+        controller.abort();
+    });
+
     it('200s with only ?token= (EventSource can\'t send custom headers)', async () => {
         const controller = new AbortController();
         const r = await fetch(`${baseUrl}/api/events?token=test-token-abc123`, { signal: controller.signal });
