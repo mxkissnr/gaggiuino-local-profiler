@@ -345,7 +345,14 @@ export function closeMachineForm() {
   if (card) card.style.display = 'none';
 }
 
-export async function saveMachineForm() {
+// #727: shared by saveMachineForm() and saveAndTestMachineForm() so the
+// payload-building/fetch logic (and the SSRF-guard error surfacing from
+// #336) lives in exactly one place. Returns the saved machine's id on
+// success (the form field's existing value when editing, the server's
+// newly-assigned id when creating), or null on failure/validation no-op —
+// callers that need to distinguish "failed" from "nothing to save" can
+// inspect the DOM themselves, neither existing caller needs to.
+async function _saveMachine() {
   const id = document.getElementById('machineFormId').value;
   const payload = {
     name: document.getElementById('machineFormName').value.trim(),
@@ -354,17 +361,42 @@ export async function saveMachineForm() {
     switchEntity: document.getElementById('machineFormSwitch').value.trim() || null,
     theme: _selectedTheme,
   };
-  if (!payload.name || !payload.host) return;
+  if (!payload.name || !payload.host) return null;
   const url    = id ? `api/machines/${id}` : 'api/machines';
   const method = id ? 'PUT' : 'POST';
   const resultEl = document.getElementById('machineFormTestResult');
   const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-  if (r.ok) { closeMachineForm(); loadMachines(); return; }
+  if (r.ok) {
+    const data = await r.json().catch(() => ({}));
+    return id || data?.id || null;
+  }
   // #336: used to fail silently here (no visible error at all), which made
   // the SSRF-guard-blocks-LAN-hosts bug far harder to diagnose than it
   // needed to be — always surface the server's actual error now.
   const data = await r.json().catch(() => ({}));
   if (resultEl) resultEl.textContent = t('settings_machine_save_error', data.error || r.status);
+  return null;
+}
+
+// #727: shared by testMachineForm() and saveAndTestMachineForm() — runs the
+// connection test against a known machine id and renders the result into
+// #machineFormTestResult exactly like the standalone Test button does today.
+async function _testMachine(id) {
+  const resultEl = document.getElementById('machineFormTestResult');
+  if (!resultEl) return;
+  resultEl.textContent = t('settings_machine_testing');
+  try {
+    const r = await apiFetch(`api/machines/${id}/test`, { method: 'POST' });
+    const data = await r.json().catch(() => ({}));
+    resultEl.textContent = data.reachable ? t('settings_machine_test_ok') : t('settings_machine_test_fail');
+  } catch {
+    resultEl.textContent = t('settings_machine_test_fail');
+  }
+}
+
+export async function saveMachineForm() {
+  const id = await _saveMachine();
+  if (id !== null) { closeMachineForm(); loadMachines(); }
 }
 
 export async function deleteMachine(id) {
@@ -378,12 +410,19 @@ export async function testMachineForm() {
   const resultEl = document.getElementById('machineFormTestResult');
   if (!resultEl) return;
   if (!id) { resultEl.textContent = t('settings_machine_test_save_first'); return; }
-  resultEl.textContent = t('settings_machine_testing');
-  try {
-    const r = await apiFetch(`api/machines/${id}/test`, { method: 'POST' });
-    const data = await r.json().catch(() => ({}));
-    resultEl.textContent = data.reachable ? t('settings_machine_test_ok') : t('settings_machine_test_fail');
-  } catch {
-    resultEl.textContent = t('settings_machine_test_fail');
-  }
+  await _testMachine(id);
+}
+
+// #727: combined "Speichern und testen" action — saves first (create or
+// update, same as saveMachineForm()), and only on success immediately runs
+// the connection test against the now-known id. Unlike saveMachineForm(),
+// deliberately does NOT close the form / reload the machines list on
+// success — the point of this button is to let the user see the test
+// result inline before deciding to leave the form open (e.g. to fix a bad
+// host) or close it manually. On save failure, _saveMachine() already
+// surfaced the save error; the test is skipped entirely.
+export async function saveAndTestMachineForm() {
+  const id = await _saveMachine();
+  if (id === null) return;
+  await _testMachine(id);
 }

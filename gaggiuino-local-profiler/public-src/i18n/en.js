@@ -202,7 +202,7 @@ export default {
     settings_machines:'Machines', settings_machines_desc:'Manage the espresso machines this app monitors.', settings_machines_add:'+ Add machine',
     settings_machine_name:'Name', settings_machine_type:'Type', settings_machine_host:'Host', settings_machine_switch:'HA switch entity (optional)',
     settings_machine_theme:'Color', settings_machine_theme_gradient:'Gradient', settings_machine_theme_none:'None', settings_machine_theme_custom:'Custom',
-    settings_machine_test:'Test connection', settings_machine_save:'Save', settings_machine_cancel:'Cancel', settings_machine_default:'Default',
+    settings_machine_test:'Test connection', settings_machine_save_test:'Save & test', settings_machine_save:'Save', settings_machine_cancel:'Cancel', settings_machine_default:'Default',
     settings_machine_edit:'Edit', settings_machine_delete:'Delete', settings_machine_delete_confirm:'Really remove this machine?',
     settings_machine_testing:'Testing connection…', settings_machine_test_ok:'✓ Reachable', settings_machine_test_fail:'✗ Not reachable', settings_machine_test_save_first:'Save first',
     settings_machine_type_gaggimate:'GaggiMate (experimental)', settings_machine_experimental_badge:'Experimental',
