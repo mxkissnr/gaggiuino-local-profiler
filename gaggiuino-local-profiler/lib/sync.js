@@ -8,6 +8,7 @@ const { getMachineRuntimeState } = require('./machine-runtime-state');
 const registry   = require('./machines/registry');
 const { getAdapter, toGlobalShotId, toNativeShotId, MACHINE_ID_OFFSET } = require('./machines');
 const { syncNativeMaintenance } = require('./maintenance-sync');
+const { bus, EVENTS } = require('./events');
 
 // #549: same single-default-machine assumption as lib/poll.js/lib/preheat.js.
 const defaultRuntime = getMachineRuntimeState();
@@ -32,6 +33,20 @@ const SYNC_RETRY_DELAYS = [30_000, 60_000, 120_000];
 // machine-1 shot and must not be allowed to poison this max.
 function maxDefaultMachineShotId() {
     return shotService.getAll(1).reduce((m, s) => (s.id < MACHINE_ID_OFFSET && s.id > m) ? s.id : m, 0);
+}
+
+// #735: single choke point for bumping+broadcasting a machine's backfill
+// progress -- replaces the four scattered
+// `state.syncProgress.get(id).current++` call sites in syncShots()/
+// syncMachineShots() below, which used to update state without ever telling
+// the frontend (previously only visible via the next 30s /api/status poll).
+// A no-op if this machineId has no active entry (backfill too small to
+// track, see the `total > 5` gates below), same as the sites it replaces.
+function bumpSyncProgress(machineId) {
+    const entry = state.syncProgress.get(machineId);
+    if (!entry) return;
+    entry.current++;
+    bus.emit(EVENTS.SYNC_PROGRESS, { machineId, current: entry.current, total: entry.total });
 }
 
 async function syncAfterBrew() {
@@ -105,7 +120,19 @@ async function syncShots(runtime = defaultRuntime) {
         // syncMachineShots() backfill for a different machine.
         const total = latestMachineId - effectiveMax;
         const defaultMachineId = registry.getDefaultMachine()?.id;
-        if (total > 5 && defaultMachineId != null) state.syncProgress.set(defaultMachineId, { current: 0, total });
+        // #735: only a tracked backfill (progress bar actually shown, see
+        // the `total > 5` gate) gets a SYNC_COMPLETE broadcast in the
+        // finally block below -- otherwise every routine few-shot sync tick
+        // would fire a spurious "Import complete" toast the UI never showed
+        // a progress bar for in the first place.
+        const tracked = total > 5 && defaultMachineId != null;
+        if (tracked) state.syncProgress.set(defaultMachineId, { current: 0, total });
+        // Tracks whether the loop below completed without throwing -- the
+        // single source of truth SYNC_COMPLETE reports to the frontend in
+        // the finally block, replacing the old "the entry vanished between
+        // two polls" heuristic (#731/#734) that could never distinguish a
+        // clean finish from an aborted one.
+        let loopOk = false;
         try {
             for (let i = effectiveMax + 1; i <= latestMachineId; i++) {
                 // #716: elapsed time per shot, not just the URL (#714) -- lets a
@@ -134,7 +161,7 @@ async function syncShots(runtime = defaultRuntime) {
                         log(`Shot ${i} not found on machine (404) -- marking as permanently missing, continuing backfill`, true);
                         const bl = shotService.getBlocklist();
                         if (!bl.includes(i)) shotService.saveBlocklist([...bl, i]);
-                        if (state.syncProgress.has(defaultMachineId)) state.syncProgress.get(defaultMachineId).current++;
+                        bumpSyncProgress(defaultMachineId);
                         continue;
                     }
                     // #721: the outer catch's logging redacts the whole URL
@@ -145,7 +172,7 @@ async function syncShots(runtime = defaultRuntime) {
                 }
                 if (!r.data || typeof r.data.id === 'undefined' || !r.data.datapoints) {
                     log(`Shot ${i} has invalid data -- skipped`, true);
-                    if (state.syncProgress.has(defaultMachineId)) state.syncProgress.get(defaultMachineId).current++;
+                    bumpSyncProgress(defaultMachineId);
                     continue;
                 }
                 if (!state.cachedMachineVersion) {
@@ -155,10 +182,12 @@ async function syncShots(runtime = defaultRuntime) {
                 }
                 if (state.cachedMachineVersion) r.data.glpFirmwareVersion = state.cachedMachineVersion;
                 shotService.upsertShot(r.data);
-                if (state.syncProgress.has(defaultMachineId)) state.syncProgress.get(defaultMachineId).current++;
+                bumpSyncProgress(defaultMachineId);
             }
+            loopOk = true;
         } finally {
             state.syncProgress.delete(defaultMachineId);
+            if (tracked) bus.emit(EVENTS.SYNC_COMPLETE, { machineId: defaultMachineId, total, success: loopOk });
         }
 
         // eslint-disable-next-line require-atomic-updates -- syncShots() has no mutex guarding overlapping calls (pre-existing); a real fix is a synchronization change out of scope for this lint-only pass
@@ -226,14 +255,20 @@ async function syncMachineShots(machine) {
         // clobber -- or be clobbered by -- a concurrent syncShots()
         // (default machine) or another machine's syncMachineShots() run.
         const total = latestNativeId - lastNativeId;
-        if (total > 5) state.syncProgress.set(machine.id, { current: 0, total });
+        // #735: same "only a tracked/shown backfill gets a completion
+        // broadcast" reasoning as syncShots() above.
+        const tracked = total > 5;
+        if (tracked) state.syncProgress.set(machine.id, { current: 0, total });
+        let loopOk = false;
         try {
             for (let i = lastNativeId + 1; i <= latestNativeId; i++) {
                 await syncMachineShot(machine, i, adapter);
-                if (state.syncProgress.has(machine.id)) state.syncProgress.get(machine.id).current++;
+                bumpSyncProgress(machine.id);
             }
+            loopOk = true;
         } finally {
             state.syncProgress.delete(machine.id);
+            if (tracked) bus.emit(EVENTS.SYNC_COMPLETE, { machineId: machine.id, total, success: loopOk });
         }
         log(`Sync (${machine.name}): up to shot ${latestNativeId}`);
         return true;

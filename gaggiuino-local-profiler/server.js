@@ -127,6 +127,16 @@ function isIngressRequest(req) {
 // API token auth
 app.use((req, res, next) => {
     req.glpAuthenticated = isTokenValid(req.headers['x-glp-token']);
+    // #735: EventSource can't send custom headers, so /api/events -- and only
+    // that route -- also accepts the token as a query param. Same "reaching
+    // the port is the boundary, not the token" reasoning as GET /api/token
+    // above (routes/system.js): a token passed in a URL is visible in
+    // access logs, which is why this isn't done for every route, only the
+    // one that has no other way to authenticate a browser-native EventSource
+    // connection.
+    if (!req.glpAuthenticated && req.path === '/api/events') {
+        req.glpAuthenticated = isTokenValid(req.query.token);
+    }
     // Fail closed, not open: if the token couldn't be loaded/created (disk
     // error at startup), deny everything instead of letting every request
     // through unauthenticated.
@@ -168,6 +178,7 @@ app.use(require('./routes/mqtt'));
 app.use(require('./routes/backup'));
 app.use(require('./routes/import'));
 app.use(require('./routes/debug'));
+app.use(require('./routes/sse'));
 
 // ── Centralized error handling ────────────────────────────────────────────
 app.use(errorHandler);

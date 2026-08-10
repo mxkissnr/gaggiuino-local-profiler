@@ -12,8 +12,9 @@ import { showDevBuildBanner } from './dev-banner.js';
 // see #296.
 let knownShotCount = null;
 
-// #731: active shot-import progress entries (see the syncProgress block in
-// updateStatus() below), keyed by machineId -- kept only so the poll that
+// #731/#735: active shot-import progress entries as last seen by the
+// *polling fallback* (pollSyncProgressFallback() below, only exercised when
+// S.sseActive is falsy) -- keyed by machineId, kept only so the poll that
 // finds a given machine's entry gone can show that machine's own "done"
 // toast. Must be per-machine, not a single scalar: lib/state.js's own
 // state.syncProgress is deliberately keyed by machineId too (see its and
@@ -25,8 +26,90 @@ let knownShotCount = null;
 // deleted the moment its toast fires, so it doesn't repeat on later polls,
 // and a machineId only ever toasts once it's first been seen active (so
 // app startup never fires it for an import already in progress before this
-// session opened).
+// session opened). Entirely separate from _pushSyncProgress below -- the two
+// paths never share state, so a mid-session S.sseActive flip can't leave
+// either one with stale/duplicate data.
 let _lastSyncProgress = new Map();
+
+// #735: same per-machine tracking as _lastSyncProgress above, but driven
+// purely by SSE push (handleSyncProgressEvent/handleSyncCompleteEvent) --
+// used only to pick which machine's bar to render when more than one is
+// backfilling, since a "complete" push has no list to fall back to the way
+// the polling fallback's /api/status response does.
+const _pushSyncProgress = new Map();
+
+// #735: shared bar-rendering helper -- both the polling fallback and the
+// SSE push handlers need to render "this machine's import is at
+// current/total" (or hide the bar entirely) the exact same way.
+function renderSyncProgressBar(entry) {
+  const syncProgressBar = document.getElementById('syncProgressBar');
+  if (!syncProgressBar) return;
+  if (!entry) {
+    syncProgressBar.style.display = 'none';
+    return;
+  }
+  const { current, total } = entry;
+  const label = document.getElementById('syncProgressLabel');
+  const fill  = syncProgressBar.querySelector('.sync-progress-fill');
+  if (label) label.textContent = t('sync_progress_label', current, total);
+  if (fill) fill.style.width = `${Math.min(100, (current / total) * 100)}%`;
+  syncProgressBar.style.display = '';
+}
+
+// #731: the pre-SSE polling implementation, kept as the fallback path for
+// whenever SSE hasn't (yet, or ever) connected this session -- see
+// public-src/sse.js's fallback detection. Derives "a backfill just
+// finished" purely from an entry disappearing between two /api/status
+// polls, which is why it needs the toast/list bookkeeping below; the SSE
+// push path (handleSyncCompleteEvent) doesn't need any of this, since the
+// backend tells it directly.
+function pollSyncProgressFallback(list, machineId) {
+  // #731: toast every previously-tracked machine whose entry is gone from
+  // this poll's list -- independent of whichever single entry the bar
+  // itself ends up showing below, so machine B finishing while A is still
+  // backfilling still gets its own toast right away, not only once A also
+  // finishes (or never, if A finished first and B's entry never got picked
+  // as "the" entry to track).
+  for (const [id, prev] of _lastSyncProgress) {
+    if (!list.some(p => p.machineId === id)) {
+      if (window.showToast) window.showToast(t('sync_complete_toast', prev.total));
+      _lastSyncProgress.delete(id);
+    }
+  }
+  for (const p of list) _lastSyncProgress.set(p.machineId, p);
+
+  // There's only one bar to show even with multiple machines active --
+  // prefer whichever machine this poll was scoped to, falling back to
+  // the first active entry otherwise.
+  const entry = list.length
+    ? (list.find(p => p.machineId === Number(machineId)) || list[0])
+    : null;
+  renderSyncProgressBar(entry);
+}
+
+// #735: SSE push handlers -- registered once in main.js's bootstrap
+// (connectEvents()/onEvent()), independent of whichever view is currently
+// open. Structurally simpler than the polling fallback above: the backend
+// tells us directly when a backfill finishes and whether it succeeded, so
+// there's no "entry vanished between two polls" inference and no #731/#734
+// class of race to guard against.
+export function handleSyncProgressEvent({ machineId, current, total }) {
+  _pushSyncProgress.set(machineId, { current, total });
+  renderSyncProgressBar(_pickPushEntry());
+}
+
+export function handleSyncCompleteEvent({ machineId, total, success }) {
+  _pushSyncProgress.delete(machineId);
+  renderSyncProgressBar(_pickPushEntry());
+  if (success && window.showToast) window.showToast(t('sync_complete_toast', total));
+}
+
+// Same "prefer the active machine, fall back to the first active entry"
+// convention pollSyncProgressFallback() above uses for the REST list.
+function _pickPushEntry() {
+  if (!_pushSyncProgress.size) return null;
+  return _pushSyncProgress.get(S.activeMachineId) ?? _pushSyncProgress.values().next().value;
+}
 
 // #734 review: updateStatus() can now be triggered from three independent
 // places (the 30s setInterval, applyActiveMachineChange() on a machine
@@ -70,45 +153,16 @@ export async function updateStatus(machineId) {
       }
       knownShotCount = s.shotCount;
     }
-    // #729/#730: shot-import progress bar next to the flap-board shot
-    // counter -- only present in the response while at least one backfill
-    // is actively tracking progress (see lib/state.js's syncProgress),
-    // hidden the rest of the time. Rides the existing 30s updateStatus()
-    // poll, no separate interval. s.syncProgress is a list -- more than one
-    // machine can be backfilling at once, see _lastSyncProgress's comment.
-    const syncProgressBar = document.getElementById('syncProgressBar');
-    if (syncProgressBar) {
+    // #729/#730/#735: shot-import progress bar next to the flap-board shot
+    // counter. Preferred path is SSE push (handleSyncProgressEvent/
+    // handleSyncCompleteEvent, wired once in main.js's bootstrap,
+    // independent of this poll). This polling fallback only runs when SSE
+    // hasn't (yet, or ever) taken over for this session -- see
+    // public-src/sse.js's fallback detection -- so it doesn't fight the
+    // push path over which entry is currently shown.
+    if (!S.sseActive) {
       const list = Array.isArray(s.syncProgress) ? s.syncProgress : [];
-      // #731: toast every previously-tracked machine whose entry is gone
-      // from this poll's list -- independent of whichever single entry the
-      // bar itself ends up showing below, so machine B finishing while A is
-      // still backfilling still gets its own toast right away, not only
-      // once A also finishes (or never, if A finished first and B's entry
-      // never got picked as "the" entry to track).
-      for (const [id, prev] of _lastSyncProgress) {
-        if (!list.some(p => p.machineId === id)) {
-          if (window.showToast) window.showToast(t('sync_complete_toast', prev.total));
-          _lastSyncProgress.delete(id);
-        }
-      }
-      for (const p of list) _lastSyncProgress.set(p.machineId, p);
-
-      // There's only one bar to show even with multiple machines active --
-      // prefer whichever machine this poll was scoped to, falling back to
-      // the first active entry otherwise.
-      const entry = list.length
-        ? (list.find(p => p.machineId === Number(machineId)) || list[0])
-        : null;
-      if (entry) {
-        const { current, total } = entry;
-        const label = document.getElementById('syncProgressLabel');
-        const fill  = syncProgressBar.querySelector('.sync-progress-fill');
-        if (label) label.textContent = t('sync_progress_label', current, total);
-        if (fill) fill.style.width = `${Math.min(100, (current / total) * 100)}%`;
-        syncProgressBar.style.display = '';
-      } else {
-        syncProgressBar.style.display = 'none';
-      }
+      pollSyncProgressFallback(list, machineId);
     }
     // Token is no longer returned by /api/status — it comes from /api/token (initToken)
     const dot = document.getElementById('statusDot');

@@ -22,6 +22,7 @@ const WHATS_NEW_ENTRIES = [
         'Machine setup\'s "Test connection" button now saves first automatically, instead of requiring the machine to already be saved.',
         'New machines show an import progress indicator for their initial shot sync.',
         'Saving any machine now triggers a catch-up shot sync for it, not just default-machine host changes.',
+        'Shot-import progress now updates live instead of in 30s polling jumps, and the completion toast is now reliable — falls back to the previous polling behavior automatically if a live connection can\'t be established.',
     ] },
     { version: '2.31.0', date: '2026-08-07', highlights: [
         'Added optional per-install shot-logging defaults (Settings → "Shot logging defaults") that auto-prefill a new shot\'s annotation panel.',

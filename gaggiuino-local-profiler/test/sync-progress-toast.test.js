@@ -1,13 +1,15 @@
-// status.js's updateStatus() — #731: a short toast when an active shot-
-// import (state.syncProgress, surfaced via /api/status's syncProgress list)
-// finishes, i.e. the poll where a previously-active entry is gone. Must not
-// fire on the very first poll (no prior state to compare against), must not
-// repeat on every subsequent poll once it has already fired once, and must
-// be tracked per machineId (not a single scalar) since lib/state.js's
-// syncProgress deliberately allows more than one machine to backfill at
-// once -- a code-review regression guard below covers a bug where a scalar
-// tracker let one machine's completion toast go missing entirely whenever
-// another machine was still active.
+// status.js's shot-import progress bar/toast. Two independent paths feed it
+// (#735): SSE push (handleSyncProgressEvent/handleSyncCompleteEvent, no
+// fetch-mocking needed -- the backend tells the frontend directly) and the
+// pre-SSE polling fallback (pollSyncProgressFallback(), only exercised when
+// S.sseActive is falsy), which preserves the original #731/#734 regression
+// coverage: a short toast when an active shot-import (state.syncProgress,
+// surfaced via /api/status's syncProgress list) finishes, i.e. the poll
+// where a previously-active entry is gone. Must not fire on the very first
+// poll (no prior state to compare against), must not repeat on every
+// subsequent poll once it has already fired once, and must be tracked per
+// machineId (not a single scalar) since lib/state.js's syncProgress
+// deliberately allows more than one machine to backfill at once.
 //
 // Same fake-document convention as test/status-update-machine-id.test.js.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -22,7 +24,7 @@ globalThis.navigator ??= { language: 'en-US' };
 globalThis.window ??= globalThis;
 
 const { S } = await import('../public-src/state.js');
-const { updateStatus } = await import('../public-src/components/status.js');
+const { updateStatus, handleSyncProgressEvent, handleSyncCompleteEvent } = await import('../public-src/components/status.js');
 
 function makeFakeDocument() {
   const registry = new Map();
@@ -41,7 +43,58 @@ function makeFakeDocument() {
   };
 }
 
-describe('updateStatus() import-complete toast (#731)', () => {
+describe('SSE push: handleSyncProgressEvent()/handleSyncCompleteEvent() (#735)', () => {
+  let doc, toastCalls;
+
+  beforeEach(() => {
+    doc = makeFakeDocument();
+    ['syncProgressBar', 'syncProgressLabel'].forEach(id => doc._preRegister(id));
+    globalThis.document = doc;
+    S.activeMachineId = null;
+    S.currentLang = 'en';
+
+    toastCalls = [];
+    globalThis.window.showToast = msg => toastCalls.push(msg);
+  });
+
+  it('renders the bar directly from a progress push, no fetch involved', () => {
+    handleSyncProgressEvent({ machineId: 1, current: 3, total: 10 });
+    const bar = doc.getElementById('syncProgressBar');
+    expect(bar.style.display).toBe('');
+    expect(doc.getElementById('syncProgressLabel').textContent).toBe('Import 3/10');
+  });
+
+  it('does not toast when success is false', () => {
+    handleSyncProgressEvent({ machineId: 1, current: 10, total: 10 });
+    handleSyncCompleteEvent({ machineId: 1, total: 10, success: false });
+    expect(toastCalls).toEqual([]);
+    expect(doc.getElementById('syncProgressBar').style.display).toBe('none');
+  });
+
+  it('toasts with the final count when success is true', () => {
+    handleSyncProgressEvent({ machineId: 1, current: 10, total: 10 });
+    handleSyncCompleteEvent({ machineId: 1, total: 10, success: true });
+    expect(toastCalls).toEqual(['Import complete: 10 shots']);
+    expect(doc.getElementById('syncProgressBar').style.display).toBe('none');
+  });
+
+  // #731 regression guard, structural now instead of poll-diff-based: two
+  // machines pushing concurrently each get their own completion toast, and
+  // finishing one doesn't hide the other's still-active bar state.
+  it('two machines backfilling concurrently each get their own completion toast', () => {
+    handleSyncProgressEvent({ machineId: 1, current: 10, total: 100 });
+    handleSyncProgressEvent({ machineId: 2, current: 40, total: 50 });
+    expect(toastCalls).toEqual([]);
+
+    handleSyncCompleteEvent({ machineId: 2, total: 50, success: true });
+    expect(toastCalls).toEqual(['Import complete: 50 shots']);
+
+    handleSyncCompleteEvent({ machineId: 1, total: 100, success: true });
+    expect(toastCalls).toEqual(['Import complete: 50 shots', 'Import complete: 100 shots']);
+  });
+});
+
+describe('Polling fallback: updateStatus() import-complete toast (#731, S.sseActive=false)', () => {
   let doc, toastCalls;
 
   beforeEach(() => {
@@ -52,6 +105,10 @@ describe('updateStatus() import-complete toast (#731)', () => {
     globalThis.document = doc;
     S.primaryShotId = null;
     S.currentLang = 'en';
+    // #735: this describe block exists specifically to exercise the
+    // polling fallback -- forcing sseActive=false is what makes
+    // updateStatus() call pollSyncProgressFallback() at all (see status.js).
+    S.sseActive = false;
 
     toastCalls = [];
     globalThis.window.showToast = msg => toastCalls.push(msg);

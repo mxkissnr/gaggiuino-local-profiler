@@ -37,6 +37,7 @@ if ('serviceWorker' in navigator && document.querySelector('link[rel="manifest"]
 import { S } from './state.js';
 import { initToken, apiFetch } from './api.js';
 import { t, setLang, applyTranslations } from './i18n.js';
+import { connectEvents, onEvent } from './sse.js';
 import { generateBeanQR } from './glp-qr.js';
 import { openBackupExportModal, openBackupRestoreModal } from './components/backup-modal.js';
 
@@ -45,7 +46,8 @@ import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sor
          openShotDrawer, closeShotDrawer, handleDrawerTouchStart, handleDrawerTouchEnd,
          handleEdgeSwipeStart, handleEdgeSwipeEnd,
          toggleMonthGroup, setBeanFilter, clearBeanFilter } from './components/sidebar.js';
-import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync, exportDevDb } from './components/status.js';
+import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync, exportDevDb,
+         handleSyncProgressEvent, handleSyncCompleteEvent } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
 import { renderBottomNav, renderBottomNavSettings, closeMoreSheet } from './components/bottom-nav.js';
@@ -874,6 +876,17 @@ document.addEventListener('DOMContentLoaded', () => {
   applyTranslations();
 
   initToken().then(async () => {
+    // #735: opened once at app bootstrap, not per view-switch -- sync
+    // progress must keep updating regardless of which view/tab is
+    // currently open, same reasoning as the 30s updateStatus() interval
+    // below. Needs S.glpToken to already be populated (for the ?token=
+    // fallback EventSource itself can't send as a header), hence after
+    // initToken() resolves. `onFallback` is a no-op here -- the PR 2
+    // follow-up (Live view over the same stream) extends it.
+    onEvent('sync-progress', handleSyncProgressEvent);
+    onEvent('sync-complete', handleSyncCompleteEvent);
+    connectEvents(() => {});
+
     // #390 — loadMachines() calls the token-gated /api/machines; it used to
     // fire straight from this handler (before initToken() ever ran), so its
     // X-GLP-Token header was always empty and the request 401ed for any

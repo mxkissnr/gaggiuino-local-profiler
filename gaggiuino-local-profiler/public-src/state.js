@@ -88,6 +88,11 @@ export const S = {
   _ordersStatsOpen: false,
   machineReachable: null,
   legacyMachineOptionsPending: false, // #662
+  // #735: SSE push connection state -- null = "not yet known" (treated the
+  // same as false by consumers until proven true), true once EventSource
+  // has successfully opened at least once, false once fallback detection
+  // (see sse.js) has given up on it for this session.
+  sseActive: null,
   isDemo: false,
   // Multi-machine registry (#319) — S.machines mirrors GET /api/machines;
   // activeMachineId is restored from localStorage in machines-settings.js.
