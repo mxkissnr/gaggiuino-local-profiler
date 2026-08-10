@@ -117,6 +117,47 @@ describe('LIVE_SNAPSHOT/PREHEAT_UPDATE SSE emissions (#736)', () => {
         expect(events).toHaveLength(2);
     });
 
+    // #736 review: an SSE-connected Live tab client had nothing telling it
+    // the machine went offline once fetchLiveData()'s own 1s fallback poll
+    // was gated behind S.sseActive -- pollViaGaggiuinoStatus()'s 1s loop
+    // (the only other LIVE_SNAPSHOT emitter) is exactly what stopLivePolling()
+    // stops, reintroducing #655's bug class for the SSE path specifically.
+    it('stopLivePolling() also emits a LIVE_SNAPSHOT reflecting machineReachable:false (#655 for the SSE path)', () => {
+        const { startLivePolling, stopLivePolling } = require('../lib/poll');
+        const { MachineRuntimeState } = require('../lib/machine-runtime-state');
+        const { bus, EVENTS } = require('../lib/events');
+        const runtime = new MachineRuntimeState();
+
+        state.machineReachable = true; // was fine before the switch flipped off
+        startLivePolling(runtime); // startLivePolling() itself only emits PREHEAT_UPDATE, no LIVE_SNAPSHOT
+
+        const events = [];
+        bus.on(EVENTS.LIVE_SNAPSHOT, p => events.push(p));
+
+        stopLivePolling(runtime);
+
+        expect(events).toHaveLength(1);
+        expect(events[0].machineReachable).toBe(false);
+    });
+
+    it('stopLivePolling() flips machineReachable and emits LIVE_SNAPSHOT even when no live-poll timer was ever running', () => {
+        const { stopLivePolling } = require('../lib/poll');
+        const { MachineRuntimeState } = require('../lib/machine-runtime-state');
+        const { bus, EVENTS } = require('../lib/events');
+        const runtime = new MachineRuntimeState(); // never went through startLivePolling()
+
+        state.machineReachable = true;
+
+        const events = [];
+        bus.on(EVENTS.LIVE_SNAPSHOT, p => events.push(p));
+
+        stopLivePolling(runtime);
+
+        expect(state.machineReachable).toBe(false);
+        expect(events).toHaveLength(1);
+        expect(events[0].machineReachable).toBe(false);
+    });
+
     it('setReadyByTarget() emits PREHEAT_UPDATE with the new target reflected', () => {
         const { setReadyByTarget } = require('../lib/preheat');
         const { MachineRuntimeState } = require('../lib/machine-runtime-state');

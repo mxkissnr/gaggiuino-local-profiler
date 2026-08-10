@@ -38,14 +38,34 @@ let _lastSyncProgress = new Map();
 // the polling fallback's /api/status response does.
 const _pushSyncProgress = new Map();
 
-// #742: per-machineId baseline (S.shots.length as of the start of that
-// machine's current backfill sequence) + the last `current` value seen for
-// it -- lets handleSyncProgressEvent tell "still the same backfill,
-// current just advanced" apart from "a brand-new sequence started" (current
-// resetting lower than what was last seen), without needing the backend to
-// send an explicit sequence id. Reserved for the SSE push path only, same
-// per-machine Map keying as _pushSyncProgress immediately above.
-const _syncBaseline = new Map();
+// #742 review: two machines can genuinely backfill concurrently (syncShots()/
+// syncMachineShots() are not mutually exclusive, see lib/sync.js) -- an
+// earlier version of this tracked a baseline PER machine and displayed
+// "that machine's own baseline + current" on every event, which made the
+// shared header flicker/regress between each machine's independent total
+// (e.g. 42 -> 39 -> 42...) instead of showing one consistent combined
+// count. The same global/scalar-instead-of-per-machine-keyed bug class
+// already fixed in #730/#732, except inverted here: S.shots.length is a
+// single global count (not per-machine), so there can only be ONE shared
+// base, with each machine contributing its own `current` on top of it.
+//
+// _midSyncCurrent: machineId -> that machine's own last-seen `current`, for
+// every machine presently mid-sync. The displayed count is always
+// _globalBaseline + the SUM of every entry here.
+// _globalBaseline: S.shots.length (or a running fold of already-finished
+// machines' final `current`, see below), captured fresh the moment the
+// FIRST machine of a new "nobody currently mid-sync" round starts
+// backfilling -- stays fixed while anything is still mid-sync, so a second
+// machine joining in never re-samples S.shots.length out from under an
+// already-in-progress display. Reserved for the SSE push path only.
+let _midSyncCurrent = new Map();
+let _globalBaseline = null;
+
+function displaySyncCount() {
+  let sum = 0;
+  for (const c of _midSyncCurrent.values()) sum += c;
+  setShotCountDisplay((_globalBaseline ?? S.shots.length) + sum);
+}
 
 // #742: updates just the two DOM bits that show the shot count -- the
 // sidebar header's "(N)" text and the flap-board odometer -- without going
@@ -116,24 +136,38 @@ export function handleSyncProgressEvent({ machineId, current, total }) {
   _pushSyncProgress.set(machineId, { current, total });
   renderSyncProgressBar(_pickPushEntry());
 
-  // #742: on the first SYNC_PROGRESS of a new backfill sequence for this
-  // machine -- no baseline recorded yet, or `current` resetting lower than
-  // previously seen (a fresh sequence starting while an older baseline is
-  // still cached) -- capture S.shots.length as the starting point so every
-  // later tick can show a live running total (baseline + current) without a
-  // full loadData() reload per tick.
-  const prev = _syncBaseline.get(machineId);
-  if (!prev || current < prev.lastCurrent) {
-    _syncBaseline.set(machineId, { baseline: S.shots.length, lastCurrent: current });
-  } else {
-    prev.lastCurrent = current;
+  // #742 review: per-machine sequence detection (a fresh backfill for THIS
+  // machine, either never tracked before or `current` resetting lower than
+  // previously seen -- e.g. it restarted without a SYNC_COMPLETE ever
+  // arriving for the prior attempt) is still needed, but must never disturb
+  // another machine's already-in-flight contribution.
+  const prevCurrent = _midSyncCurrent.get(machineId);
+  if (prevCurrent === undefined) {
+    // Only resample the shared base when NOTHING is currently mid-sync --
+    // otherwise this machine is simply joining an already-active round.
+    if (_midSyncCurrent.size === 0) _globalBaseline = S.shots.length;
+  } else if (current < prevCurrent) {
+    // This machine restarted its own sequence without ever completing the
+    // previous one -- fold what it had already contributed into the shared
+    // base (so the total never visibly regresses), then start it fresh.
+    _globalBaseline = (_globalBaseline ?? S.shots.length) + prevCurrent;
   }
-  setShotCountDisplay(_syncBaseline.get(machineId).baseline + current);
+  _midSyncCurrent.set(machineId, current);
+  displaySyncCount();
 }
 
 export function handleSyncCompleteEvent({ machineId, total, success }) {
   _pushSyncProgress.delete(machineId);
-  _syncBaseline.delete(machineId);
+  // #742 review: fold this machine's final `current` into the shared base
+  // instead of just dropping its entry -- those shots are already saved to
+  // the DB (bumpSyncProgress() only fires per successfully-saved shot, see
+  // lib/sync.js), so removing its contribution outright would make the
+  // displayed count visibly drop by exactly that amount the moment it
+  // finishes, even though nothing was actually lost.
+  const finalCurrent = _midSyncCurrent.get(machineId) ?? 0;
+  _midSyncCurrent.delete(machineId);
+  _globalBaseline = (_globalBaseline ?? S.shots.length) + finalCurrent;
+  displaySyncCount();
   renderSyncProgressBar(_pickPushEntry());
   // #737 review: the polling fallback above always toasts on completion
   // (it has no success/failure signal to work with) -- mirror that here so

@@ -81,17 +81,37 @@ function startLivePolling(runtime = defaultRuntime) {
 }
 
 function stopLivePolling(runtime = defaultRuntime) {
-    if (!runtime.livePollTimer) return;
-    clearInterval(runtime.livePollTimer);
-    runtime.livePollTimer  = null;
-    state.liveAccum        = null;
-    runtime.switchOffAt    = Date.now();
-    runtime.stabilityReady = false;
-    runtime.tempHistory    = [];
-    savePreheatState(runtime);
-    log('Live polling stopped');
-    // #736: same immediate-push reasoning as startLivePolling() above.
+    // #655: the switch entity's own "off" report is itself an authoritative
+    // reachability signal -- applied unconditionally, even when there was no
+    // active live-poll timer to actually stop below (e.g. this being called
+    // on a runtime that never reached startLivePolling() in the first
+    // place), so nothing is ever left able to flip this back to false on its
+    // own. Previously set by the one and only caller
+    // (checkAndApplyMachinePower's machine-off branch) right after calling
+    // this function; moved in here so the LIVE_SNAPSHOT push below always
+    // reflects it, never the stale pre-flip value.
+    state.machineReachable = false;
+    if (runtime.livePollTimer) {
+        clearInterval(runtime.livePollTimer);
+        runtime.livePollTimer  = null;
+        state.liveAccum        = null;
+        runtime.switchOffAt    = Date.now();
+        runtime.stabilityReady = false;
+        runtime.tempHistory    = [];
+        savePreheatState(runtime);
+        log('Live polling stopped');
+    }
+    // #736: emit both push types on stop, not just PREHEAT_UPDATE -- without
+    // a LIVE_SNAPSHOT here too, an SSE-connected Live tab client never
+    // learns the machine went offline: pollViaGaggiuinoStatus()'s 1s loop
+    // (the only other LIVE_SNAPSHOT emitter) is exactly what this function
+    // just stopped, and the frontend's own fetchLiveData() fallback poll is
+    // skipped while SSE is active -- reintroducing #655's bug class for the
+    // SSE path specifically. Unconditional (not nested in the `if` above) so
+    // the machineReachable:false flip is always broadcast, even on the
+    // no-active-timer path.
     bus.emit(EVENTS.PREHEAT_UPDATE, buildPreheatResponse(runtime));
+    bus.emit(EVENTS.LIVE_SNAPSHOT, buildLiveDataResponse());
 }
 
 async function pollLive(runtime = defaultRuntime) {
@@ -275,22 +295,12 @@ async function checkAndApplyMachinePower(runtime = defaultRuntime) {
         syncSoonAfterPowerOn();
     } else {
         log('Machine off -- live polling and sync paused');
+        // #655/#736: stopLivePolling() itself now sets state.machineReachable
+        // = false (moved there so its LIVE_SNAPSHOT push reflects the flip
+        // instead of the stale pre-flip value) -- see its own comment for
+        // the full "why this must happen at all" reasoning.
         stopLivePolling(runtime);
         state.preheatNotifySent = false;
-        // #655: without this, state.machineReachable stayed frozen at
-        // whatever it was just before the switch flipped off (usually
-        // true) -- stopLivePolling() above is what actually stops the only
-        // frequent prober of the machine's own reachability
-        // (pollViaGaggiuinoStatus() below), and syncShots() (lib/sync.js)
-        // short-circuits before its own network probe whenever this same
-        // switchEntity reports the machine off, so nothing else would ever
-        // flip it back to false. That's exactly why the status dot stayed
-        // green for days after the machine was switched off. The switch
-        // entity's own "off" report is itself an authoritative reachability
-        // signal -- syncShots() already trusts it to skip its network call
-        // -- so it's applied directly here instead of adding a separate
-        // stale-timeout mechanism.
-        state.machineReachable = false;
     }
 }
 

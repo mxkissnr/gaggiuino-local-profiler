@@ -199,6 +199,16 @@ describe('checkAndApplyMachinePower() flips machineReachable false on the on->of
   const realDb = require(dbPath);
   const registryPath = require.resolve('../lib/machines/registry');
   const pollPath = require.resolve('../lib/poll');
+  // #736: lib/poll.js's stopLivePolling()/startLivePolling() now call
+  // lib/preheat.js's buildPreheatResponse(), which resolves the default
+  // machine via lib/machines/registry.js -- if lib/preheat.js was already
+  // require()d earlier in this file (describe block 2 above pulls it in
+  // transitively via routes/system.js, before any DB mock exists), its own
+  // module-scoped `registry` binding stays pinned to that stale,
+  // real-DB-backed registry module forever, even after registryPath's cache
+  // entry is later replaced here -- must be dropped and re-required fresh
+  // in lockstep with registryPath/pollPath below.
+  const preheatPath = require.resolve('../lib/preheat');
   const haPath = require.resolve('../lib/ha');
   const state = require('../lib/state');
   let memDb, realHa;
@@ -208,6 +218,7 @@ describe('checkAndApplyMachinePower() flips machineReachable false on the on->of
     realDb.initSchema(memDb);
     require.cache[dbPath].exports = { getDb: () => memDb, initSchema: realDb.initSchema };
     delete require.cache[registryPath];
+    delete require.cache[preheatPath];
     delete require.cache[pollPath];
 
     const registry = require('../lib/machines/registry');
@@ -266,6 +277,9 @@ describe('checkAndApplyMachinePower() retries the post-power-on sync a few times
   const realDb = require(dbPath);
   const registryPath = require.resolve('../lib/machines/registry');
   const pollPath = require.resolve('../lib/poll');
+  // #736: same stale-registry-reference reasoning as describe block 3 above
+  // -- startLivePolling() now also calls buildPreheatResponse().
+  const preheatPath = require.resolve('../lib/preheat');
   const haPath = require.resolve('../lib/ha');
   const syncPath = require.resolve('../lib/sync');
   const realSync = require(syncPath);
@@ -278,6 +292,7 @@ describe('checkAndApplyMachinePower() retries the post-power-on sync a few times
     realDb.initSchema(memDb);
     require.cache[dbPath].exports = { getDb: () => memDb, initSchema: realDb.initSchema };
     delete require.cache[registryPath];
+    delete require.cache[preheatPath];
     delete require.cache[pollPath];
 
     const registry = require('../lib/machines/registry');
