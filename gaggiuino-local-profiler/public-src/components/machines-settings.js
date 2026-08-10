@@ -409,9 +409,28 @@ export async function deleteMachine(id) {
 // against the now-known id, briefly shows the result inline, and closes the
 // form like saveMachineForm() does. On save failure, _saveMachine() already
 // surfaced the save error; the test is skipped entirely.
+//
+// #730 review: the form stays open (and clickable) for the 1200ms dwell
+// before it auto-closes -- a double-click used to re-enter _saveMachine()
+// with #machineFormId still empty (never written back after the first
+// save), turning a single "new machine" save into two POSTs. Fixed two
+// ways: the id is written back into the DOM the moment the first save
+// succeeds (so even a concurrent second call would PUT, not POST again),
+// and the button itself is disabled for the whole in-flight+dwell window so
+// a second click can't start a second call in the first place.
 export async function testMachineForm() {
+  const btn = document.getElementById('machineFormTestBtn');
+  if (btn) btn.disabled = true;
   const id = await _saveMachine();
-  if (id === null) return;
+  if (id === null) {
+    if (btn) btn.disabled = false;
+    return;
+  }
+  document.getElementById('machineFormId').value = id;
   await _testMachine(id);
-  setTimeout(() => { closeMachineForm(); loadMachines(); }, 1200);
+  setTimeout(() => {
+    closeMachineForm();
+    loadMachines();
+    if (btn) btn.disabled = false;
+  }, 1200);
 }

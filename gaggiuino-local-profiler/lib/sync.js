@@ -94,15 +94,18 @@ async function syncShots(runtime = defaultRuntime) {
             return true;
         }
 
-        // #729: only surface progress for a backfill big enough to actually
-        // take a noticeable amount of time (see syncMachineShots() for the
-        // same threshold). The try/finally sits inside this function's
-        // existing outer try/catch (not a second outer level) so a loop
-        // error is still caught below and syncProgress is always cleared
-        // before that catch runs.
+        // #729/#730: only surface progress for a backfill big enough to
+        // actually take a noticeable amount of time (see syncMachineShots()
+        // for the same threshold). The try/finally sits inside this
+        // function's existing outer try/catch (not a second outer level) so
+        // a loop error is still caught below and this machine's
+        // syncProgress entry is always cleared before that catch runs.
+        // Keyed by machineId in a Map (not a single shared slot) so this
+        // backfill can't clobber -- or be clobbered by -- a concurrent
+        // syncMachineShots() backfill for a different machine.
         const total = latestMachineId - effectiveMax;
         const defaultMachineId = registry.getDefaultMachine()?.id;
-        if (total > 5 && defaultMachineId != null) state.syncProgress = { machineId: defaultMachineId, current: 0, total };
+        if (total > 5 && defaultMachineId != null) state.syncProgress.set(defaultMachineId, { current: 0, total });
         try {
             for (let i = effectiveMax + 1; i <= latestMachineId; i++) {
                 // #716: elapsed time per shot, not just the URL (#714) -- lets a
@@ -131,7 +134,7 @@ async function syncShots(runtime = defaultRuntime) {
                         log(`Shot ${i} not found on machine (404) -- marking as permanently missing, continuing backfill`, true);
                         const bl = shotService.getBlocklist();
                         if (!bl.includes(i)) shotService.saveBlocklist([...bl, i]);
-                        if (state.syncProgress?.machineId === defaultMachineId) state.syncProgress.current++;
+                        if (state.syncProgress.has(defaultMachineId)) state.syncProgress.get(defaultMachineId).current++;
                         continue;
                     }
                     // #721: the outer catch's logging redacts the whole URL
@@ -142,7 +145,7 @@ async function syncShots(runtime = defaultRuntime) {
                 }
                 if (!r.data || typeof r.data.id === 'undefined' || !r.data.datapoints) {
                     log(`Shot ${i} has invalid data -- skipped`, true);
-                    if (state.syncProgress?.machineId === defaultMachineId) state.syncProgress.current++;
+                    if (state.syncProgress.has(defaultMachineId)) state.syncProgress.get(defaultMachineId).current++;
                     continue;
                 }
                 if (!state.cachedMachineVersion) {
@@ -152,10 +155,10 @@ async function syncShots(runtime = defaultRuntime) {
                 }
                 if (state.cachedMachineVersion) r.data.glpFirmwareVersion = state.cachedMachineVersion;
                 shotService.upsertShot(r.data);
-                if (state.syncProgress?.machineId === defaultMachineId) state.syncProgress.current++;
+                if (state.syncProgress.has(defaultMachineId)) state.syncProgress.get(defaultMachineId).current++;
             }
         } finally {
-            if (state.syncProgress?.machineId === defaultMachineId) state.syncProgress = null;
+            state.syncProgress.delete(defaultMachineId);
         }
 
         // eslint-disable-next-line require-atomic-updates -- syncShots() has no mutex guarding overlapping calls (pre-existing); a real fix is a synchronization change out of scope for this lint-only pass
@@ -216,18 +219,21 @@ async function syncMachineShots(machine) {
 
         if (lastNativeId >= latestNativeId) return true;
 
-        // #729: only surface progress for a backfill big enough to actually
-        // take a noticeable amount of time -- a handful of shots finishes
-        // before the UI's next poll would ever see it.
+        // #729/#730: only surface progress for a backfill big enough to
+        // actually take a noticeable amount of time -- a handful of shots
+        // finishes before the UI's next poll would ever see it. Keyed by
+        // machine.id in the shared Map so this machine's entry can't
+        // clobber -- or be clobbered by -- a concurrent syncShots()
+        // (default machine) or another machine's syncMachineShots() run.
         const total = latestNativeId - lastNativeId;
-        if (total > 5) state.syncProgress = { machineId: machine.id, current: 0, total };
+        if (total > 5) state.syncProgress.set(machine.id, { current: 0, total });
         try {
             for (let i = lastNativeId + 1; i <= latestNativeId; i++) {
                 await syncMachineShot(machine, i, adapter);
-                if (state.syncProgress?.machineId === machine.id) state.syncProgress.current++;
+                if (state.syncProgress.has(machine.id)) state.syncProgress.get(machine.id).current++;
             }
         } finally {
-            if (state.syncProgress?.machineId === machine.id) state.syncProgress = null;
+            state.syncProgress.delete(machine.id);
         }
         log(`Sync (${machine.name}): up to shot ${latestNativeId}`);
         return true;

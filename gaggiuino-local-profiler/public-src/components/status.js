@@ -40,14 +40,21 @@ export async function updateStatus(machineId) {
       }
       knownShotCount = s.shotCount;
     }
-    // #729: shot-import progress bar next to the flap-board shot counter --
-    // only present in the response while a backfill is actively tracking
-    // progress (see lib/state.js's syncProgress), hidden the rest of the
-    // time. Rides the existing 30s updateStatus() poll, no separate interval.
+    // #729/#730: shot-import progress bar next to the flap-board shot
+    // counter -- only present in the response while at least one backfill
+    // is actively tracking progress (see lib/state.js's syncProgress),
+    // hidden the rest of the time. Rides the existing 30s updateStatus()
+    // poll, no separate interval. s.syncProgress is a list (more than one
+    // machine can be backfilling at once) -- there's only one bar to show,
+    // so prefer whichever machine this poll was scoped to, falling back to
+    // the first active entry otherwise.
     const syncProgressBar = document.getElementById('syncProgressBar');
     if (syncProgressBar) {
-      if (s.syncProgress) {
-        const { current, total } = s.syncProgress;
+      const entry = Array.isArray(s.syncProgress) && s.syncProgress.length
+        ? (s.syncProgress.find(p => p.machineId === Number(machineId)) || s.syncProgress[0])
+        : null;
+      if (entry) {
+        const { current, total } = entry;
         const label = document.getElementById('syncProgressLabel');
         const fill  = syncProgressBar.querySelector('.sync-progress-fill');
         if (label) label.textContent = t('sync_progress_label', current, total);

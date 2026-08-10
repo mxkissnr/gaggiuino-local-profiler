@@ -200,6 +200,59 @@ describe('lib/sync multi-machine', () => {
         expect(ok).toBe(false);
     });
 
+    // #730 review: state.syncProgress used to be a single shared object that
+    // syncShots()/syncMachineShots() both overwrote unconditionally -- two
+    // concurrent backfills (e.g. two newly-saved machines syncing at
+    // roughly the same time) meant whichever one's finally-block ran first
+    // wiped out the other's still-in-progress entry. It's now a Map keyed
+    // by machineId so each backfill only ever touches its own entry.
+    it('#730 regression guard: two machines backfilling concurrently do not clobber each other\'s syncProgress entry', async () => {
+        const registry = require('../lib/machines/registry');
+        const machineA = registry.createMachine({ name: 'A', type: 'gaggimate', host: 'a.local' });
+        const machineB = registry.createMachine({ name: 'B', type: 'gaggimate', host: 'b.local' });
+
+        let releaseA;
+        const gate = new Promise(resolve => { releaseA = resolve; });
+        const fakeAdapter = {
+            getLatestShotId: vi.fn().mockImplementation(async m => (m.id === machineA.id ? 10 : 8)),
+            getShot: vi.fn().mockImplementation(async (m, nativeId) => {
+                // Pause machine A's backfill mid-way (after 4 shots, before its
+                // 5th) so machine B's backfill can run to completion while
+                // A's syncProgress entry is still live -- the only way to
+                // actually exercise "two active entries in the Map at once"
+                // deterministically in a single-threaded test.
+                if (m.id === machineA.id && nativeId === 5) await gate;
+                return { id: nativeId, timestamp: 1000 * nativeId, duration: 25000, datapoints: { timeInShot: [0] } };
+            }),
+        };
+        require.cache[machinesIndexPath] = {
+            exports: { ...require('../lib/machines'), getAdapter: () => fakeAdapter },
+        };
+        delete require.cache[syncPath];
+        const sync  = require('../lib/sync');
+        const state = require('../lib/state');
+        state.syncProgress.clear();
+
+        const syncAPromise = sync.syncMachineShots(machineA);
+        // Flush pending microtasks so A runs up to its 5th shot and blocks on `gate`.
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        const progressA = state.syncProgress.get(machineA.id);
+        expect(progressA).toEqual({ current: 4, total: 10 });
+
+        const okB = await sync.syncMachineShots(machineB);
+        expect(okB).toBe(true);
+        // B finishing (and clearing its own entry in its finally block) must
+        // not have touched A's still-in-flight entry.
+        expect(state.syncProgress.has(machineB.id)).toBe(false);
+        expect(state.syncProgress.get(machineA.id)).toEqual({ current: 4, total: 10 });
+
+        releaseA();
+        const okA = await syncAPromise;
+        expect(okA).toBe(true);
+        expect(state.syncProgress.size).toBe(0); // both entries cleared, none left dangling
+    });
+
     it('syncOtherMachines skips the default machine and disabled machines', async () => {
         const registry = require('../lib/machines/registry');
         const enabled  = registry.createMachine({ name: 'Enabled GaggiMate', type: 'gaggimate', host: '10.1.70.199:8180' });

@@ -212,10 +212,14 @@ router.get('/api/status', async (req, res) => {
         // options-adoption.js's hasUnconfirmedLegacyMachineOptions().
         legacyMachineOptionsPending: hasUnconfirmedLegacyMachineOptions(),
         machines,
-        // #729: only present while a shot-import backfill is actively
-        // tracking progress -- clients that don't know the field just see
-        // it absent, same pattern as devBuild above.
-        ...(state.syncProgress ? { syncProgress: state.syncProgress } : {}),
+        // #729/#730: only present while at least one shot-import backfill is
+        // actively tracking progress -- clients that don't know the field
+        // just see it absent, same pattern as devBuild above. state.syncProgress
+        // is a Map keyed by machineId (more than one entry can be active at
+        // once -- e.g. the default machine and a newly-saved other machine
+        // backfilling concurrently), serialized here as a plain array since
+        // a Map doesn't survive res.json() on its own.
+        ...(state.syncProgress.size ? { syncProgress: Array.from(state.syncProgress, ([machineId, p]) => ({ machineId, ...p })) } : {}),
         ...sensitive,
     });
 });

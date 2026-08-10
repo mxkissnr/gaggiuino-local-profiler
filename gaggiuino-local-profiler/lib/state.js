@@ -9,10 +9,15 @@ module.exports = {
     lastSyncTime:         null,
     lastSyncError:        null,
     syncRetryCount:       0,
-    // Shot-import progress (#729): null = no import active, otherwise
-    // { machineId, current, total } for the backfill currently running in
-    // lib/sync.js's syncShots()/syncMachineShots().
-    syncProgress:         null,
+    // Shot-import progress (#729): keyed by machineId (Map<machineId,
+    // {current,total}>), one entry per backfill currently running in
+    // lib/sync.js's syncShots()/syncMachineShots() -- a Map (not a single
+    // object) so the default machine's sync and another machine's sync can
+    // run concurrently (e.g. two newly-added machines saved back-to-back,
+    // or a manual save landing mid-way through the periodic
+    // syncAllMachines() tick) without one clobbering the other's progress
+    // or prematurely clearing it out from under it (#730 review).
+    syncProgress:         new Map(),
     // Machine connection state (first-run onboarding, see #274). null = never checked.
     machineReachable:     null,
     lastMachineError:     null,

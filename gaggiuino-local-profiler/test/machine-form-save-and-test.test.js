@@ -141,6 +141,68 @@ describe('testMachineForm (#729)', () => {
     expect(fakeElement('machineFormTestResult').textContent).toBe('');
     expect(fakeElement('machineFormCard').style.display).toBe(''); // still open
   });
+
+  // #730 review: #machineFormId used to stay empty after a successful save,
+  // even though the machine now has a real id -- a second call before the
+  // dwell timer closed the form (e.g. a double-click) re-entered
+  // _saveMachine() with that still-empty id and POSTed a duplicate machine
+  // instead of PUTing the one just created.
+  it('#730 regression guard: writes the new id back into the form on success, so a second call would PUT instead of POST again', async () => {
+    setFormFields({ id: '' });
+    let calls = [];
+    globalThis.fetch = async (url, opts) => {
+      calls.push({ url: String(url), method: opts?.method });
+      if (String(url) === 'api/machines' && opts?.method === 'POST') {
+        return { ok: true, json: async () => ({ id: 42, name: 'Test Machine' }) };
+      }
+      if (String(url) === 'api/machines/42' && opts?.method === 'PUT') {
+        return { ok: true, json: async () => ({ id: 42, name: 'Test Machine' }) };
+      }
+      if (String(url) === 'api/machines/42/test' && opts?.method === 'POST') {
+        return { ok: true, json: async () => ({ ok: true, reachable: true }) };
+      }
+      if (String(url) === 'api/machines') return { ok: true, json: async () => [] };
+      throw new Error(`unexpected fetch: ${opts?.method || 'GET'} ${url}`);
+    };
+
+    await testMachineForm();
+    expect(fakeElement('machineFormId').value).toBe(42);
+
+    // Simulate a second invocation landing before the dwell timer closes the
+    // form (what a double-click used to trigger).
+    calls = [];
+    await testMachineForm();
+    expect(calls[0]).toEqual({ url: 'api/machines/42', method: 'PUT' });
+  });
+
+  // #730 review: the button itself is also disabled for the whole
+  // save+test+dwell window, so a real double-click can't even start a
+  // second call in the browser (a disabled <button> doesn't fire click
+  // events) -- belt-and-suspenders alongside the id-rewrite above.
+  it('#730 regression guard: disables the test button for the whole in-flight+dwell window, re-enabling once the form closes', async () => {
+    setFormFields({ id: '' });
+    globalThis.fetch = async (url, opts) => {
+      if (String(url) === 'api/machines' && opts?.method === 'POST') {
+        return { ok: true, json: async () => ({ id: 42, name: 'Test Machine' }) };
+      }
+      if (String(url) === 'api/machines/42/test' && opts?.method === 'POST') {
+        return { ok: true, json: async () => ({ ok: true, reachable: true }) };
+      }
+      if (String(url) === 'api/machines') return { ok: true, json: async () => [] };
+      throw new Error(`unexpected fetch: ${opts?.method || 'GET'} ${url}`);
+    };
+    const btn = fakeElement('machineFormTestBtn');
+    expect(btn.disabled).toBeFalsy();
+
+    const pending = testMachineForm(); // runs synchronously up to its first `await`
+    expect(btn.disabled).toBe(true);
+
+    await pending;
+    expect(btn.disabled).toBe(true); // still disabled -- close is still pending in the dwell timer
+
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(btn.disabled).toBe(false);
+  });
 });
 
 describe('saveMachineForm (unchanged behavior)', () => {
