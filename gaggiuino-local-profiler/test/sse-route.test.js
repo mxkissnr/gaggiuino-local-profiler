@@ -104,6 +104,22 @@ describe('GET /api/events', () => {
         r.body?.cancel();
     });
 
+    it('#740: sends an initial ~2KB padding comment to flush past any intermediate buffering layer', async () => {
+        const controller = new AbortController();
+        const r = await fetch(`${baseUrl}/api/events?token=test-token-abc123`, { signal: controller.signal });
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        while (!buf.includes('\n\n')) {
+            const { value } = await reader.read();
+            buf += decoder.decode(value, { stream: true });
+        }
+        controller.abort();
+
+        expect(buf.startsWith(':')).toBe(true);
+        expect(buf.length).toBeGreaterThanOrEqual(2048);
+    });
+
     it('primes a newly-connected client with the current syncProgress state', async () => {
         state.syncProgress.set(1, { current: 3, total: 10 });
         const controller = new AbortController();
@@ -112,7 +128,9 @@ describe('GET /api/events', () => {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
         let buf = '';
-        while (!buf.includes('\n\n')) {
+        // #740: the first block is now the padding comment, not the priming
+        // event -- read past it before looking for the real event.
+        while ((buf.match(/\n\n/g) || []).length < 2) {
             const { value } = await reader.read();
             buf += decoder.decode(value, { stream: true });
         }
@@ -133,7 +151,8 @@ describe('GET /api/events', () => {
         bus.emit(EVENTS.SYNC_PROGRESS, { machineId: 2, current: 1, total: 8 });
 
         let buf = '';
-        while (!buf.includes('\n\n')) {
+        // #740: skip past the initial padding comment, wait for the real event.
+        while (!buf.includes('event: sync-progress')) {
             const { value } = await reader.read();
             buf += decoder.decode(value, { stream: true });
         }
@@ -157,7 +176,8 @@ describe('GET /api/events', () => {
 
         async function readOne(reader) {
             let buf = '';
-            while (!buf.includes('\n\n')) {
+            // #740: skip past the initial padding comment, wait for the real event.
+            while (!buf.includes('event: sync-complete')) {
                 const { value } = await reader.read();
                 buf += decoder.decode(value, { stream: true });
             }

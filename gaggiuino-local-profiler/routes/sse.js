@@ -17,16 +17,28 @@ router.get('/api/events', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
-    // #738: HA Supervisor's Ingress panel is served through an nginx reverse
-    // proxy, which buffers proxied responses by default -- without this
-    // header, nginx held the whole stream until it had accumulated enough
-    // bytes (or the connection closed) before flushing to the browser, so
-    // events arrived in the same "block jump" pattern as the old 30s poll
-    // despite the backend emitting one per shot. Live-tested over Ingress;
-    // not reproducible in a local/direct-port dev session, which has no
-    // such proxy in front of it.
+    // #738: harmless to keep even though #740 ruled out nginx-style proxy
+    // buffering (any reverse proxy in front of HA Ingress) as the cause --
+    // Supervisor's own ingress.py already sets this on its side too, so
+    // this is redundant defense-in-depth, not the actual fix.
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
+    // #740: disable Nagle's algorithm on the response socket. Our events are
+    // tiny (a few dozen bytes each, one res.write() per shot) -- without
+    // this, small writes can sit coalescing before actually leaving the
+    // socket, worsened by the extra Core->Supervisor->add-on hop count HA
+    // Ingress adds. A well-known, easy-to-miss gotcha for Node SSE endpoints.
+    res.socket?.setNoDelay?.(true);
+    // #740: over HA Ingress (both external and local direct-to-Core access,
+    // identical -- so not an external reverse proxy issue), the connection
+    // never actually opened client-side within our own watchdog window even
+    // though the direct add-on port streams correctly and our response
+    // carries no Content-Length (ruling out both documented Ingress-side
+    // buffering triggers we could find in Supervisor's/Core's own source).
+    // This initial padding comment (ignored by EventSource -- any line
+    // starting with ':' is a no-op per spec) forces a flush past whichever
+    // intermediate layer is buffering, regardless of which exact hop it is.
+    res.write(`:${' '.repeat(2048)}\n\n`);
 
     function send(type, data) {
         res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
