@@ -28,6 +28,16 @@ const defaultRuntime = getMachineRuntimeState();
 let _connWindow      = [];
 let _connWindowStart = Date.now();
 
+// #725: previous poll's reachability, module-scoped for the same
+// hard-single-machine reason as _connWindow above -- lets a successful poll
+// tell a genuine false->true recovery apart from "was already reachable,
+// still is" (which must NOT re-trigger a sync every second). null (the
+// initial/never-polled state) deliberately does NOT count as "was
+// unreachable": the very first successful poll after a host is configured
+// is covered by routes/machines.js's direct save-triggered sync instead, not
+// by this recovery path.
+let _wasReachable = null;
+
 function recordConnectivity(ok, latencyMs, err) {
     _connWindow.push({ ok, latencyMs, err });
     const now = Date.now();
@@ -84,6 +94,19 @@ async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
         state.machineReachable   = true;
         state.lastMachineError   = null;
         state.lastMachineSuccess = Date.now();
+
+        // #725: false->true reachability recovery, with either a known
+        // outstanding sync failure or no successful sync ever recorded --
+        // catch up now instead of waiting for the regular sync_interval
+        // (default 5 min) to eventually notice. Fire-and-forget: this must
+        // never block or fail the live poll itself. scheduleNextSync()'s own
+        // timer chain (lib/sync.js) is untouched -- if it fires shortly
+        // after this already succeeded, syncShots() just sees "already up
+        // to date" and costs nothing.
+        if (_wasReachable === false && (state.lastSyncError || !state.lastSyncTime)) {
+            syncShots().catch(err => log(`Catch-up sync after reachability recovery failed: ${err.message}`, true));
+        }
+        _wasReachable = true;
         const raw       = statusRes.data;
         const status    = Array.isArray(raw) ? raw[0] : raw;
 
@@ -173,6 +196,7 @@ async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
     } catch (err) {
         recordConnectivity(false, null, err.code || null);
         state.machineReachable = false;
+        _wasReachable = false;
         state.lastMachineError = err.message.replace(/https?:\/\/\S+/g, '[url]');
         log(`Live poll error: ${err.message}`, true);
     }

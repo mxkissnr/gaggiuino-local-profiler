@@ -10,6 +10,17 @@ const { getAdapter } = require('../lib/machines');
 const { machineSchema } = require('../lib/validation/schemas');
 const { assertMachineHost, SsrfBlockedError } = require('../lib/ssrf-guard');
 const { log } = require('../lib/helpers');
+const { syncShots } = require('../lib/sync');
+
+// #725: lib/sync.js's syncShots() is hard-coded to the default machine (see
+// its own #341 header comment) -- a host saved for any other machine has
+// nothing for it to act on. Only fire the catch-up sync when this save
+// actually touched the default machine's host, not on unrelated field-only
+// updates (name/theme/etc.) or on a non-default machine's save.
+function syncSoonIfDefaultHostChanged(machine, parsedData) {
+    if (!machine.isDefault || parsedData.host === undefined) return;
+    syncShots().catch(err => log(`Sync after machine save failed: ${err.message}`, true));
+}
 
 // Machine hosts are the app owner's own trusted LAN configuration (a real
 // Gaggiuino/GaggiMate controller), not untrusted external content — so this
@@ -45,6 +56,7 @@ router.post('/api/machines', async (req, res) => {
     const machine = registry.createMachine(parsed.data);
     log(`Machine added: #${machine.id} "${machine.name}" (${machine.type}) host=${machine.host}`);
     registry.logRegistrySnapshot();
+    syncSoonIfDefaultHostChanged(machine, parsed.data);
     res.json(machine);
 });
 
@@ -71,6 +83,7 @@ router.put('/api/machines/:id', async (req, res) => {
     const hostSuffix = parsed.data.host ? ` host=${parsed.data.host}` : '';
     log(`Machine updated: #${id}${hostSuffix}`);
     registry.logRegistrySnapshot();
+    syncSoonIfDefaultHostChanged(machine, parsed.data);
     res.json(machine);
 });
 

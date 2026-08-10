@@ -23,6 +23,15 @@ vi.spyOn(dns.promises, 'lookup').mockImplementation(async (hostname) => {
     return [{ address: '203.0.113.10', family: 4 }];
 });
 
+// #725: routes/machines.js destructures `syncShots` from lib/sync at its own
+// require time, so the stub must be in place in require.cache *before*
+// routes/machines is first required below -- swapping it in afterward
+// wouldn't reach the reference machines.js already captured.
+const syncPath = require.resolve('../lib/sync');
+const realSync = require(syncPath);
+const syncShotsMock = vi.fn().mockResolvedValue(true);
+require.cache[syncPath].exports = { ...realSync, syncShots: syncShotsMock };
+
 const express = require('express');
 const machinesRouter = require('../routes/machines');
 const registry = require('../lib/machines/registry');
@@ -39,6 +48,7 @@ let server, baseUrl;
 
 beforeEach(async () => {
     memDb.exec('DELETE FROM machines;');
+    syncShotsMock.mockClear();
     server = makeApp().listen(0);
     await new Promise(resolve => server.once('listening', resolve));
     baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -125,5 +135,46 @@ describe('PUT/DELETE /api/machines/:id', () => {
     it('404s for an unknown machine id', async () => {
         const r = await fetch(`${baseUrl}/api/machines/999`, { method: 'DELETE' });
         expect(r.status).toBe(404);
+    });
+});
+
+describe('sync-on-save (#725)', () => {
+    it('PUT on the default machine\'s host triggers a catch-up sync', async () => {
+        registry.ensureDefaultMachine();
+        const r = await fetch(`${baseUrl}/api/machines/1`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ host: 'newly-configured.local' }),
+        });
+        expect(r.status).toBe(200);
+        expect(syncShotsMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('PUT on the default machine changing an unrelated field (not host) does not trigger a sync', async () => {
+        registry.ensureDefaultMachine();
+        const r = await fetch(`${baseUrl}/api/machines/1`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Renamed only' }),
+        });
+        expect(r.status).toBe(200);
+        expect(syncShotsMock).not.toHaveBeenCalled();
+    });
+
+    it('PUT on a non-default machine\'s host does not trigger a sync (syncShots() only ever acts on the default machine)', async () => {
+        const created = registry.createMachine({ name: 'Office GaggiMate', type: 'gaggimate', host: 'a.local' });
+        const r = await fetch(`${baseUrl}/api/machines/${created.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ host: 'b.local' }),
+        });
+        expect(r.status).toBe(200);
+        expect(syncShotsMock).not.toHaveBeenCalled();
+    });
+
+    it('POST /api/machines never triggers a sync -- a newly created machine is never the default', async () => {
+        const r = await fetch(`${baseUrl}/api/machines`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Office GaggiMate', type: 'gaggimate', host: 'gaggimate.local' }),
+        });
+        expect(r.status).toBe(200);
+        expect(syncShotsMock).not.toHaveBeenCalled();
     });
 });
