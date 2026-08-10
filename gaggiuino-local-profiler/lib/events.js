@@ -10,9 +10,8 @@ const EventEmitter = require('events');
 const bus = new EventEmitter();
 bus.setMaxListeners(50);
 
-// PREHEAT_UPDATE/LIVE_SNAPSHOT are defined now, even though this PR's
-// backend (lib/sync.js) never emits them yet, so PR 2 (live-mode over the
-// same bus/route) doesn't need to rename anything here.
+// SYNC_PROGRESS/SYNC_COMPLETE: emitted by lib/sync.js's backfill loop (#735).
+// LIVE_SNAPSHOT/PREHEAT_UPDATE: emitted by lib/poll.js/lib/preheat.js (#736).
 const EVENTS = {
     SYNC_PROGRESS: 'sync-progress',
     SYNC_COMPLETE: 'sync-complete',

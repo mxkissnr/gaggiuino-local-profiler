@@ -11,6 +11,7 @@ const { notifyT } = require('./notify-i18n');
 const state = require('./state');
 const registry = require('./machines/registry');
 const { getMachineRuntimeState } = require('./machine-runtime-state');
+const { bus, EVENTS } = require('./events');
 
 // #549: same single-default-machine assumption as lib/poll.js — one runtime
 // instance shared by default, overridable per call for testability.
@@ -62,6 +63,7 @@ function setReadyByTarget(targetAt, runtime = defaultRuntime) {
         state.plannedSwitchOnAt = targetAt - preheatMs;
     }
     savePreheatState(runtime);
+    bus.emit(EVENTS.PREHEAT_UPDATE, buildPreheatResponse(runtime));
 }
 
 // Shared by GET /api/preheat and POST /api/preheat/ready-by so both return
@@ -130,6 +132,7 @@ async function _checkReadyByPreheat(runtime = defaultRuntime) {
     // eslint-disable-next-line require-atomic-updates -- same as above
     state.plannedSwitchOnAt = null;
     savePreheatState(runtime);
+    bus.emit(EVENTS.PREHEAT_UPDATE, buildPreheatResponse(runtime));
 }
 
 function startPreheatWatcher(runtime = defaultRuntime) {
@@ -140,6 +143,19 @@ function startPreheatWatcher(runtime = defaultRuntime) {
         // doesn't stop the other from running on this tick).
         _checkPreheatNotify(runtime).catch(err => log(`Preheat notify check failed: ${err.message}`, true));
         _checkReadyByPreheat(runtime).catch(err => log(`Ready-by preheat check failed: ${err.message}`, true));
+        // #736: periodic push, independent of the immediate-emit points
+        // elsewhere (setReadyByTarget/_checkReadyByPreheat/startLivePolling/
+        // stopLivePolling/the stability-ready flip) -- covers the plain
+        // elapsed/remaining/pct countdown ticking down with no other event
+        // firing in between. buildPreheatResponse() is synchronous (unlike
+        // the two calls above) -- wrapped the same independent-guard way so
+        // a synchronous throw here can't kill the interval or stop the other
+        // two checks on this tick.
+        try {
+            bus.emit(EVENTS.PREHEAT_UPDATE, buildPreheatResponse(runtime));
+        } catch (err) {
+            log(`Preheat update push failed: ${err.message}`, true);
+        }
     }, 30000);
 }
 

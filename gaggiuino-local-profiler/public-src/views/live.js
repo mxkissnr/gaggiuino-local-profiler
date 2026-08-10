@@ -150,8 +150,15 @@ export function connectLiveStream() {
   S.liveWasLive = false;
   fetchLiveData();
   fetchPreheatData();
-  S.livePollInterval    = setInterval(fetchLiveData, 1000);
-  S.preheatPollInterval = setInterval(fetchPreheatData, 10000);
+  // #736: SSE push (handleLiveSnapshotEvent/handlePreheatUpdateEvent, wired
+  // once in main.js's bootstrap) covers both once connected -- these
+  // polling intervals are only needed as the fallback for whenever SSE
+  // hasn't (yet, or ever) taken over for this session, same S.sseActive
+  // gating convention as status.js's pollSyncProgressFallback().
+  if (!S.sseActive) {
+    S.livePollInterval    = setInterval(fetchLiveData, 1000);
+    S.preheatPollInterval = setInterval(fetchPreheatData, 10000);
+  }
 }
 
 export async function fetchPreheatData() {
@@ -245,6 +252,20 @@ export function setLiveBadge(state, detail = '') {
 
   if (state === 'brewing') liveBtn.classList.add('live-brewing');
   if (state === 'ready' || state === 'idle') liveBtn.classList.add('live-ready');
+}
+
+// #736: SSE push handlers -- registered once in main.js's bootstrap
+// (connectEvents()/onEvent()), independent of whichever view is currently
+// open. Both payloads are already the identical shape their REST
+// counterparts (GET /api/live/data, GET /api/preheat) return -- see
+// lib/poll.js's buildLiveDataResponse()/lib/preheat.js's
+// buildPreheatResponse() -- so these are thin passthroughs, not adapters.
+export function handleLiveSnapshotEvent(payload) {
+  handleLiveData(payload);
+}
+
+export function handlePreheatUpdateEvent(payload) {
+  updatePreheatWidget(payload);
 }
 
 export function handleLiveData(msg) {

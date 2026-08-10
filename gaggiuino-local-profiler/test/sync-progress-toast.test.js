@@ -94,6 +94,87 @@ describe('SSE push: handleSyncProgressEvent()/handleSyncCompleteEvent() (#735)',
   });
 });
 
+describe('SSE push: shot-counter live update via handleSyncProgressEvent()/handleSyncCompleteEvent() (#742)', () => {
+  let doc, loadDataCalls;
+
+  beforeEach(() => {
+    doc = makeFakeDocument();
+    ['syncProgressBar', 'syncProgressLabel', 'shot-count'].forEach(id => doc._preRegister(id));
+    globalThis.document = doc;
+    S.activeMachineId = null;
+    S.currentLang = 'en';
+    S.shots = new Array(37); // baseline shot count before any backfill starts
+
+    globalThis.window.showToast = () => {};
+    globalThis.window.updateFlapCounter = vi.fn();
+    loadDataCalls = 0;
+    globalThis.window.loadData = () => { loadDataCalls++; };
+  });
+
+  it('shows baseline + current on the first progress event of a new backfill', () => {
+    handleSyncProgressEvent({ machineId: 1, current: 3, total: 10 });
+    expect(doc.getElementById('shot-count').textContent).toBe('(40)'); // 37 + 3
+    expect(globalThis.window.updateFlapCounter).toHaveBeenLastCalledWith(40);
+  });
+
+  it('keeps advancing the same baseline on later ticks of the same sequence', () => {
+    handleSyncProgressEvent({ machineId: 1, current: 1, total: 10 });
+    handleSyncProgressEvent({ machineId: 1, current: 5, total: 10 });
+    handleSyncProgressEvent({ machineId: 1, current: 10, total: 10 });
+    expect(doc.getElementById('shot-count').textContent).toBe('(47)'); // 37 + 10
+  });
+
+  it('does not call window.loadData() per tick -- too expensive at this cadence', () => {
+    handleSyncProgressEvent({ machineId: 1, current: 1, total: 10 });
+    handleSyncProgressEvent({ machineId: 1, current: 2, total: 10 });
+    expect(loadDataCalls).toBe(0);
+  });
+
+  it('starts a fresh baseline when current resets lower than previously seen for that machine', () => {
+    handleSyncProgressEvent({ machineId: 1, current: 10, total: 10 });
+    expect(doc.getElementById('shot-count').textContent).toBe('(47)'); // 37 + 10
+
+    // A brand-new backfill sequence starts for the same machine -- S.shots
+    // hasn't changed yet (no loadData() has run), but `current` resetting to
+    // 1 below the last-seen 10 must re-baseline from S.shots.length again,
+    // not keep stacking on top of the previous sequence's endpoint.
+    handleSyncProgressEvent({ machineId: 1, current: 1, total: 5 });
+    expect(doc.getElementById('shot-count').textContent).toBe('(38)'); // 37 + 1
+  });
+
+  it('tracks separate baselines per machine, mirroring _pushSyncProgress\'s per-machine keying', () => {
+    handleSyncProgressEvent({ machineId: 1, current: 5, total: 10 });
+    expect(doc.getElementById('shot-count').textContent).toBe('(42)'); // 37 + 5
+
+    handleSyncProgressEvent({ machineId: 2, current: 2, total: 8 });
+    expect(doc.getElementById('shot-count').textContent).toBe('(39)'); // 37 + 2 (machine 2's own baseline)
+  });
+
+  it('reconciles via window.loadData() on a successful completion', () => {
+    handleSyncProgressEvent({ machineId: 1, current: 10, total: 10 });
+    handleSyncCompleteEvent({ machineId: 1, total: 10, success: true });
+    expect(loadDataCalls).toBe(1);
+  });
+
+  it('does not call window.loadData() on a failed completion -- nothing new was actually synced', () => {
+    handleSyncProgressEvent({ machineId: 1, current: 10, total: 10 });
+    handleSyncCompleteEvent({ machineId: 1, total: 10, success: false });
+    expect(loadDataCalls).toBe(0);
+  });
+
+  it('a machine that starts backfilling again after completing gets a fresh baseline off the reconciled S.shots.length', () => {
+    handleSyncProgressEvent({ machineId: 1, current: 10, total: 10 });
+    handleSyncCompleteEvent({ machineId: 1, total: 10, success: true });
+
+    // Simulate window.loadData() (mocked above, doesn't really touch
+    // S.shots) having reconciled the real count.
+    S.shots = new Array(47);
+
+    handleSyncProgressEvent({ machineId: 1, current: 1, total: 5 });
+    expect(doc.getElementById('shot-count').textContent).toBe('(48)'); // 47 + 1, not 37 + 10 + 1
+  });
+});
+
 describe('Polling fallback: updateStatus() import-complete toast (#731, S.sseActive=false)', () => {
   let doc, toastCalls;
 

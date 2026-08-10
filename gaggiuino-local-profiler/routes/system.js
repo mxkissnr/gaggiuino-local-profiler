@@ -23,6 +23,7 @@ const shotRepo = require('../lib/repositories/ShotRepository');
 const { loadOptions, isOrdersEnabled, loadMenu } = require('../lib/data');
 const { getSwitchState, callHaService } = require('../lib/ha');
 const { setReadyByTarget, buildPreheatResponse } = require('../lib/preheat');
+const { buildLiveDataResponse } = require('../lib/poll');
 const { log, rateLimit } = require('../lib/helpers');
 const state = require('../lib/state');
 const { getMachineRuntimeState } = require('../lib/machine-runtime-state');
@@ -469,16 +470,7 @@ router.post('/api/preheat/ready-by', (req, res) => {
 // ── Live data ─────────────────────────────────────────────────────────────
 
 router.get('/api/live/data', (req, res) => {
-    res.json({
-        isLive:           !!state.liveAccum,
-        profileName:      state.liveAccum?.profileName || '',
-        datapoints:       state.liveAccum ? state.liveAccum.datapoints : null,
-        seq:              state.liveSeq,
-        // #655: without this, a powered-off machine looked identical to an
-        // idle-but-reachable one (state.liveAccum is null either way) — the
-        // live tab kept showing "Ready to brew" indefinitely.
-        machineReachable: state.machineReachable,
-    });
+    res.json(buildLiveDataResponse());
 });
 
 // ── Public menu (drink types for annotations; always available) ───────────

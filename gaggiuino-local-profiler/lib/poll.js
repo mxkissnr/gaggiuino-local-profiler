@@ -9,9 +9,10 @@ const state = require('./state');
 const { getMachineRuntimeState } = require('./machine-runtime-state');
 const { deriveMachineState, isStillWarm } = require('./machine-state');
 const liveTransport = require('./live-transport');
-const { savePreheatState, isTempStable } = require('./preheat');
+const { savePreheatState, isTempStable, buildPreheatResponse } = require('./preheat');
 const { syncAfterBrew, syncShots, fetchMachineVersion } = require('./sync');
 const { summarizeConnectivity, WINDOW_MS: CONN_WINDOW_MS } = require('./connectivity-stats');
+const { bus, EVENTS } = require('./events');
 
 // #549: this module is hard single-machine (always the default/legacy
 // machine, id 1) — one runtime instance obtained once at module load,
@@ -49,12 +50,34 @@ function recordConnectivity(ok, latencyMs, err) {
     }
 }
 
+// #736: single source of truth for GET /api/live/data's response shape,
+// also used to build the LIVE_SNAPSHOT SSE payload from pollViaGaggiuinoStatus()
+// below -- avoids duplicating the same field-mapping in two places. Reads
+// straight off the module-scoped `state` (not the passed-in runtime), same
+// as the route it replaces: state.liveAccum/liveSeq/machineReachable are
+// hard single-machine already, per this file's header comment.
+function buildLiveDataResponse() {
+    return {
+        isLive:           !!state.liveAccum,
+        profileName:      state.liveAccum?.profileName || '',
+        datapoints:       state.liveAccum ? state.liveAccum.datapoints : null,
+        seq:              state.liveSeq,
+        // #655: without this, a powered-off machine looked identical to an
+        // idle-but-reachable one (state.liveAccum is null either way) — the
+        // live tab kept showing "Ready to brew" indefinitely.
+        machineReachable: state.machineReachable,
+    };
+}
+
 function startLivePolling(runtime = defaultRuntime) {
     if (runtime.livePollTimer) return;
     if (!runtime.switchOnAt || !isStillWarm(runtime)) { runtime.switchOnAt = Date.now(); savePreheatState(runtime); }
     runtime.tempHistory = [];
     log('Live polling started via /api/system/status');
     runtime.livePollTimer = setInterval(() => pollLive(runtime), 1000);
+    // #736: immediate push so the Ready badge/preheat widget update the
+    // instant polling (re)starts, instead of waiting for the 30s watcher tick.
+    bus.emit(EVENTS.PREHEAT_UPDATE, buildPreheatResponse(runtime));
 }
 
 function stopLivePolling(runtime = defaultRuntime) {
@@ -67,6 +90,8 @@ function stopLivePolling(runtime = defaultRuntime) {
     runtime.tempHistory    = [];
     savePreheatState(runtime);
     log('Live polling stopped');
+    // #736: same immediate-push reasoning as startLivePolling() above.
+    bus.emit(EVENTS.PREHEAT_UPDATE, buildPreheatResponse(runtime));
 }
 
 async function pollLive(runtime = defaultRuntime) {
@@ -147,6 +172,9 @@ async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
                     runtime.stabilityReady = true;
                     savePreheatState(runtime);
                     log('Temperature stable -- preheat marked complete');
+                    // #736: immediate push on the stability-ready flip, instead
+                    // of waiting for the 30s preheat watcher tick.
+                    bus.emit(EVENTS.PREHEAT_UPDATE, buildPreheatResponse(runtime));
                 }
             }
         } else if (isBrewing) {
@@ -193,12 +221,20 @@ async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
             state.liveAccum.datapoints.pumpFlow.push(Math.round(pumpFlowVal * 10));
             state.liveAccum.datapoints.targetTemperature.push(Math.round(tTempVal * 10));
         }
+
+        // #736: broadcast this tick's live snapshot -- same shape GET
+        // /api/live/data returns, single source of truth via
+        // buildLiveDataResponse() above.
+        bus.emit(EVENTS.LIVE_SNAPSHOT, buildLiveDataResponse());
     } catch (err) {
         recordConnectivity(false, null, err.code || null);
         state.machineReachable = false;
         _wasReachable = false;
         state.lastMachineError = err.message.replace(/https?:\/\/\S+/g, '[url]');
         log(`Live poll error: ${err.message}`, true);
+        // #736: also broadcast on the error path -- machineReachable just
+        // flipped false, and the live view needs that transition in real time.
+        bus.emit(EVENTS.LIVE_SNAPSHOT, buildLiveDataResponse());
     }
 }
 
@@ -266,5 +302,5 @@ async function backgroundHaCheck(runtime = defaultRuntime) {
 
 module.exports = {
     startLivePolling, stopLivePolling, pollLive, pollViaGaggiuinoStatus,
-    checkAndApplyMachinePower, backgroundHaCheck, fetchMachineVersion,
+    checkAndApplyMachinePower, backgroundHaCheck, fetchMachineVersion, buildLiveDataResponse,
 };

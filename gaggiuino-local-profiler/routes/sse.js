@@ -1,6 +1,6 @@
-// #735: GET /api/events -- single SSE endpoint multiplexing every push event
-// type over one connection (sync-progress/sync-complete now, live-snapshot/
-// preheat-update added by the PR 2 follow-up). Existing REST endpoints
+// #735/#736: GET /api/events -- single SSE endpoint multiplexing every push
+// event type over one connection (sync-progress/sync-complete from #735,
+// live-snapshot/preheat-update added by #736). Existing REST endpoints
 // (/api/status, /api/live/data, /api/preheat) are untouched -- other GLP
 // repos may consume them directly, and the frontend falls back to polling
 // them whenever this stream doesn't work (see public-src/sse.js).
@@ -10,6 +10,7 @@ const router  = express.Router();
 
 const state = require('../lib/state');
 const { bus, EVENTS } = require('../lib/events');
+const { buildPreheatResponse } = require('../lib/preheat');
 
 const PING_INTERVAL_MS = 20_000;
 
@@ -51,10 +52,20 @@ router.get('/api/events', (req, res) => {
         send(EVENTS.SYNC_PROGRESS, { machineId, current: p.current, total: p.total });
     }
 
+    // #736: also prime with the current preheat snapshot -- without this the
+    // Ready badge would wait up to 30s for the watcher's first tick. No
+    // equivalent priming for LIVE_SNAPSHOT: its 1s cadence is fast enough
+    // that a new client just waits for the next regular tick.
+    send(EVENTS.PREHEAT_UPDATE, buildPreheatResponse());
+
     const onProgress = payload => send(EVENTS.SYNC_PROGRESS, payload);
     const onComplete  = payload => send(EVENTS.SYNC_COMPLETE, payload);
+    const onLiveSnapshot  = payload => send(EVENTS.LIVE_SNAPSHOT, payload);
+    const onPreheatUpdate = payload => send(EVENTS.PREHEAT_UPDATE, payload);
     bus.on(EVENTS.SYNC_PROGRESS, onProgress);
     bus.on(EVENTS.SYNC_COMPLETE, onComplete);
+    bus.on(EVENTS.LIVE_SNAPSHOT, onLiveSnapshot);
+    bus.on(EVENTS.PREHEAT_UPDATE, onPreheatUpdate);
 
     // Keepalive comment line (not a real event) against silent proxy/idle
     // timeouts -- HA Ingress and any LAN reverse proxy in between.
@@ -64,6 +75,8 @@ router.get('/api/events', (req, res) => {
         clearInterval(pingTimer);
         bus.off(EVENTS.SYNC_PROGRESS, onProgress);
         bus.off(EVENTS.SYNC_COMPLETE, onComplete);
+        bus.off(EVENTS.LIVE_SNAPSHOT, onLiveSnapshot);
+        bus.off(EVENTS.PREHEAT_UPDATE, onPreheatUpdate);
     });
 });
 

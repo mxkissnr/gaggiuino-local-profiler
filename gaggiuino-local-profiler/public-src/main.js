@@ -65,7 +65,8 @@ import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggl
 
 import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, clearReferenceShot,
          connectLiveStream, disconnectLiveStream, setLiveBadge, handleLiveData,
-         fetchPreheatData, updatePreheatWidget, fetchLiveData } from './views/live.js';
+         fetchPreheatData, updatePreheatWidget, fetchLiveData,
+         handleLiveSnapshotEvent, handlePreheatUpdateEvent } from './views/live.js';
 
 import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanStats, buildProfileChart, _renderCalendar,
          setBeanRankSort, setDialinProgressionBean } from './views/analytics.js';
@@ -885,6 +886,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // follow-up (Live view over the same stream) extends it.
     onEvent(EVENTS.SYNC_PROGRESS, handleSyncProgressEvent);
     onEvent(EVENTS.SYNC_COMPLETE, handleSyncCompleteEvent);
+    // #736: Live view telemetry/preheat push -- same bootstrap-time wiring
+    // as the sync-progress events above.
+    onEvent(EVENTS.LIVE_SNAPSHOT, handleLiveSnapshotEvent);
+    onEvent(EVENTS.PREHEAT_UPDATE, handlePreheatUpdateEvent);
     connectEvents(() => {});
 
     // #390 — loadMachines() calls the token-gated /api/machines; it used to
