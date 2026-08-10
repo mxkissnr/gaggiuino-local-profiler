@@ -415,22 +415,26 @@ export async function deleteMachine(id) {
 
 // #729: saves first (create or update, same as saveMachineForm()) so a
 // not-yet-saved machine can be tested too, then runs the connection test
-// against the now-known id, briefly shows the result inline, and closes the
-// form like saveMachineForm() does. On save failure, _saveMachine() already
-// surfaced the save error; the test is skipped entirely.
+// against the now-known id and shows the result inline.
+//
+// #733: unlike saveMachineForm(), this deliberately does NOT close the
+// form -- testing is meant to be an in-place check the user can react to
+// (e.g. fix a bad host and test again) without losing their place. #729
+// originally auto-closed it to mirror Save, but that turned out to be
+// confusing for a *test* action; only the explicit Save button closes now.
 //
 // #731: this save is only a means to get a testable id -- it must not start
 // a shot import the way an explicit "Speichern" does, so triggerSync:false
 // is passed through to _saveMachine() (server-side gate in routes/machines.js).
 //
-// #730 review: the form stays open (and clickable) for the 1200ms dwell
-// before it auto-closes -- a double-click used to re-enter _saveMachine()
-// with #machineFormId still empty (never written back after the first
-// save), turning a single "new machine" save into two POSTs. Fixed two
-// ways: the id is written back into the DOM the moment the first save
-// succeeds (so even a concurrent second call would PUT, not POST again),
-// and the button itself is disabled for the whole in-flight+dwell window so
-// a second click can't start a second call in the first place.
+// #730 review: the form stays open (and clickable) while the request is in
+// flight -- a double-click used to re-enter _saveMachine() with
+// #machineFormId still empty (never written back after the first save),
+// turning a single "new machine" save into two POSTs. Fixed two ways: the
+// id is written back into the DOM the moment the first save succeeds (so
+// even a concurrent second call would PUT, not POST again), and the button
+// itself is disabled for the whole in-flight window so a second click can't
+// start a second call in the first place.
 export async function testMachineForm() {
   const btn = document.getElementById('machineFormTestBtn');
   if (btn) btn.disabled = true;
@@ -441,9 +445,6 @@ export async function testMachineForm() {
   }
   document.getElementById('machineFormId').value = id;
   await _testMachine(id);
-  setTimeout(() => {
-    closeMachineForm();
-    loadMachines();
-    if (btn) btn.disabled = false;
-  }, 1200);
+  loadMachines();
+  if (btn) btn.disabled = false;
 }

@@ -631,6 +631,16 @@ document.addEventListener('DOMContentLoaded', () => {
   attachAutocomplete(document.getElementById('annGrinder'), () => S.coffeeLibrary.grinders.map(g => g.name));
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushAutoSave();
+    // #733: the 30s setInterval(updateStatus, ...) below gets throttled by
+    // the browser while the tab is backgrounded -- a shot import that both
+    // starts and finishes while the tab is hidden can end up with zero
+    // polls landing while it was still active, so status.js's per-machine
+    // _lastSyncProgress map never records it as "seen active" and the
+    // completion toast never fires. Forcing one immediate poll on refocus
+    // catches an import that's still running by then; one that already
+    // finished fully in the background is a case no client-side poll can
+    // retroactively catch (nothing else was watching either).
+    if (document.visibilityState === 'visible') updateStatus();
   });
   document.getElementById('openMaintLogBtn').addEventListener('click', openMaintLogForm);
   document.getElementById('submitMaintLogBtn').addEventListener('click', submitMaintLogEntry);
@@ -866,7 +876,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // machine switcher stayed hidden and the restored S.activeMachineId had
     // nothing to display itself against. Now runs once the token is ready,
     // same as loadData()/loadLibrary() below.
-    loadMachines();
+    const machinesPromise = loadMachines();
     loadMqttSettings();
     loadNotifySettingsCard();
     loadDrinkMenu();
@@ -887,6 +897,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // after loadLibrary() had since resolved).
     await loadLibrary();
     await loadData();
+    // #733: same class of bug as #700 above, one level removed — renderMachinesList()
+    // (inside loadMachines()) computes each machine's shot count from S.allShots, but
+    // loadMachines() was fired unawaited before loadData() populated S.allShots, so the
+    // very first render always saw an empty shot list and nothing ever re-rendered it
+    // once the real shots arrived. Re-render once both are guaranteed to be ready.
+    await machinesPromise;
+    renderMachinesList();
     loadMachineProfileList();
     updateStatus();
     checkForUpdate();

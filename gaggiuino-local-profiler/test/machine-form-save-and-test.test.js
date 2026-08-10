@@ -1,16 +1,23 @@
-// #729: "Test connection" now saves the machine form first (create via POST
-// if no id yet, update via PUT if editing, same as the existing plain
+// #729: "Test connection" saves the machine form first (create via POST if
+// no id yet, update via PUT if editing, same as the existing plain
 // "Speichern" button) and, only on success, immediately tests the connection
-// against the now-known id -- then briefly shows the result inline before
-// closing the form and reloading the machines list, same as saveMachineForm()
-// does. The previous standalone "Speichern und testen" button/action is gone
-// (merged into this one), see machines-settings.js.
+// against the now-known id, showing the result inline. The previous
+// standalone "Speichern und testen" button/action is gone (merged into this
+// one), see machines-settings.js.
 //
 // #731: that implicit save must not itself start a shot import (only an
 // explicit "Speichern" click should) -- so testMachineForm()'s POST/PUT
 // carry a `?sync=0` query param the plain saveMachineForm() path doesn't,
 // see test/machines-api.test.js's sync-on-save suite for the server side.
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+//
+// #733: #729 originally auto-closed the form after a 1200ms dwell, matching
+// Save's behavior -- live testing found that confusing for a *test* action
+// (the user wants to see the result and stay in place, e.g. to fix a bad
+// host and test again), so the auto-close was removed. Only the explicit
+// Save button closes the form now; the id-rewrite/button-disable guards from
+// the #730 review still apply since the form (and its Test button) stays
+// open and clickable.
+import { describe, it, expect, beforeEach } from 'vitest';
 
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator ??= { language: 'en-US' };
@@ -49,17 +56,12 @@ function setFormFields({ id = '', name = 'Test Machine', host = '192.168.1.50' }
   fakeElement('machineFormTestResult').textContent = '';
 }
 
-describe('testMachineForm (#729)', () => {
+describe('testMachineForm (#729/#733)', () => {
   beforeEach(() => {
     for (const key of Object.keys(elements)) delete elements[key];
-    vi.useFakeTimers();
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('on save success, tests the newly-created machine id, shows the result inline, then closes and reloads', async () => {
+  it('on save success, tests the newly-created machine id, shows the result inline, and leaves the form open', async () => {
     setFormFields({ id: '' }); // brand-new machine — no id yet, POST path
     const calls = [];
     globalThis.fetch = async (url, opts) => {
@@ -72,7 +74,7 @@ describe('testMachineForm (#729)', () => {
       if (String(url) === 'api/machines/42/test' && opts?.method === 'POST') {
         return { ok: true, json: async () => ({ ok: true, reachable: true }) };
       }
-      // loadMachines() GET after the setTimeout below
+      // loadMachines() GET after the test call
       if (String(url) === 'api/machines') return { ok: true, json: async () => [] };
       throw new Error(`unexpected fetch: ${opts?.method || 'GET'} ${url}`);
     };
@@ -82,17 +84,13 @@ describe('testMachineForm (#729)', () => {
     expect(calls).toEqual([
       { url: 'api/machines?sync=0', method: 'POST' },
       { url: 'api/machines/42/test', method: 'POST' },
+      { url: 'api/machines', method: undefined }, // loadMachines() refresh
     ]);
-    // Result shown inline immediately, form still open (closes after the delay below).
     expect(fakeElement('machineFormTestResult').textContent).toBe('✓ Reachable');
     expect(fakeElement('machineFormCard').style.display).toBe('');
-
-    await vi.advanceTimersByTimeAsync(1200);
-
-    expect(fakeElement('machineFormCard').style.display).toBe('none');
   });
 
-  it('on save success while editing an existing machine, tests against the existing id, then closes', async () => {
+  it('on save success while editing an existing machine, tests against the existing id and leaves the form open', async () => {
     setFormFields({ id: '9' }); // editing — PUT path
     const calls = [];
     globalThis.fetch = async (url, opts) => {
@@ -112,15 +110,13 @@ describe('testMachineForm (#729)', () => {
     expect(calls).toEqual([
       { url: 'api/machines/9?sync=0', method: 'PUT' },
       { url: 'api/machines/9/test', method: 'POST' },
+      { url: 'api/machines', method: undefined },
     ]);
     expect(fakeElement('machineFormTestResult').textContent).toBe('✗ Not reachable');
-
-    await vi.advanceTimersByTimeAsync(1200);
-
-    expect(fakeElement('machineFormCard').style.display).toBe('none');
+    expect(fakeElement('machineFormCard').style.display).toBe('');
   });
 
-  it('on save failure (server-rejected), shows the save error, never calls the test endpoint, and does not close', async () => {
+  it('on save failure (server-rejected), shows the save error and never calls the test endpoint', async () => {
     setFormFields({ id: '' });
     const calls = [];
     globalThis.fetch = async (url, opts) => {
@@ -133,10 +129,6 @@ describe('testMachineForm (#729)', () => {
     expect(calls).toEqual([{ url: 'api/machines?sync=0', method: 'POST' }]);
     expect(fakeElement('machineFormTestResult').textContent).toBe('Error: host not allowed');
     expect(fakeElement('machineFormCard').style.display).toBe(''); // still open
-
-    await vi.advanceTimersByTimeAsync(1200);
-
-    expect(fakeElement('machineFormCard').style.display).toBe(''); // still open, no close scheduled
   });
 
   it('refuses when save fails validation (empty name/host), never calls fetch', async () => {
@@ -151,9 +143,10 @@ describe('testMachineForm (#729)', () => {
 
   // #730 review: #machineFormId used to stay empty after a successful save,
   // even though the machine now has a real id -- a second call before the
-  // dwell timer closed the form (e.g. a double-click) re-entered
-  // _saveMachine() with that still-empty id and POSTed a duplicate machine
-  // instead of PUTing the one just created.
+  // form closed re-entered _saveMachine() with that still-empty id and
+  // POSTed a duplicate machine instead of PUTing the one just created. The
+  // form staying open by default (#733) makes a second click even easier to
+  // trigger, so this guard matters more now, not less.
   it('#730 regression guard: writes the new id back into the form on success, so a second call would PUT instead of POST again', async () => {
     setFormFields({ id: '' });
     let calls = [];
@@ -175,18 +168,18 @@ describe('testMachineForm (#729)', () => {
     await testMachineForm();
     expect(fakeElement('machineFormId').value).toBe(42);
 
-    // Simulate a second invocation landing before the dwell timer closes the
-    // form (what a double-click used to trigger).
+    // Simulate a second invocation while the form is still open (what a
+    // double-click, or simply testing again, triggers).
     calls = [];
     await testMachineForm();
     expect(calls[0]).toEqual({ url: 'api/machines/42?sync=0', method: 'PUT' });
   });
 
   // #730 review: the button itself is also disabled for the whole
-  // save+test+dwell window, so a real double-click can't even start a
-  // second call in the browser (a disabled <button> doesn't fire click
-  // events) -- belt-and-suspenders alongside the id-rewrite above.
-  it('#730 regression guard: disables the test button for the whole in-flight+dwell window, re-enabling once the form closes', async () => {
+  // save+test window, so a real double-click can't even start a second call
+  // in the browser (a disabled <button> doesn't fire click events) --
+  // belt-and-suspenders alongside the id-rewrite above.
+  it('#730 regression guard: disables the test button for the whole in-flight window, re-enabling once it settles', async () => {
     setFormFields({ id: '' });
     globalThis.fetch = async (url, opts) => {
       if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
@@ -205,9 +198,6 @@ describe('testMachineForm (#729)', () => {
     expect(btn.disabled).toBe(true);
 
     await pending;
-    expect(btn.disabled).toBe(true); // still disabled -- close is still pending in the dwell timer
-
-    await vi.advanceTimersByTimeAsync(1200);
     expect(btn.disabled).toBe(false);
   });
 });
