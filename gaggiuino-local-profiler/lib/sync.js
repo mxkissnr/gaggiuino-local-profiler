@@ -88,8 +88,35 @@ async function syncShots(runtime = defaultRuntime) {
             // id afterward, to confirm or rule out the machine's own
             // embedded HTTP server slowing down as shot history grows.
             const shotStartedAt = Date.now();
-            const r = await axios.get(`${machineUrl}/${i}`, { timeout: 10000 });
-            debugLog(`GET ${machineUrl}/${i} -> ${Date.now() - shotStartedAt}ms`);
+            let r;
+            try {
+                r = await axios.get(`${machineUrl}/${i}`, { timeout: 10000 });
+                debugLog(`GET ${machineUrl}/${i} -> ${Date.now() - shotStartedAt}ms`);
+            } catch (err) {
+                // #721: the machine's on-device shot storage rotates/caps
+                // independently of the monotonically increasing lastShotId
+                // it reports via /latest -- a genuine 404 here means shot i
+                // is permanently gone, not a transient failure. Blocklisting
+                // it (the same mechanism already used for user-deleted
+                // shots, and already factored into effectiveMax above) lets
+                // the backfill skip past it instead of restarting at this
+                // exact id forever. Any other error (network/timeout/5xx)
+                // is NOT skipped -- it's rethrown so the outer catch aborts
+                // the whole call and the existing retry/backoff schedule
+                // handles it, since a flaky connection is not the same
+                // situation as a confirmed-missing shot.
+                if (err.response?.status === 404) {
+                    log(`Shot ${i} not found on machine (404) -- marking as permanently missing, continuing backfill`, true);
+                    const bl = shotService.getBlocklist();
+                    if (!bl.includes(i)) shotService.saveBlocklist([...bl, i]);
+                    continue;
+                }
+                // #721: the outer catch's logging redacts the whole URL
+                // (including the shot id path segment), making a failing
+                // shot id invisible in logs -- log it explicitly here first.
+                debugLog(`GET ${machineUrl}/${i} failed after ${Date.now() - shotStartedAt}ms: ${err.message}`);
+                throw err;
+            }
             if (!r.data || typeof r.data.id === 'undefined' || !r.data.datapoints) {
                 log(`Shot ${i} has invalid data -- skipped`, true);
                 continue;
