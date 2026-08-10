@@ -37,7 +37,7 @@ if ('serviceWorker' in navigator && document.querySelector('link[rel="manifest"]
 import { S } from './state.js';
 import { initToken, apiFetch } from './api.js';
 import { t, setLang, applyTranslations } from './i18n.js';
-import { connectEvents, onEvent } from './sse.js';
+import { connectEvents, onEvent, EVENTS } from './sse.js';
 import { generateBeanQR } from './glp-qr.js';
 import { openBackupExportModal, openBackupRestoreModal } from './components/backup-modal.js';
 
@@ -883,8 +883,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // fallback EventSource itself can't send as a header), hence after
     // initToken() resolves. `onFallback` is a no-op here -- the PR 2
     // follow-up (Live view over the same stream) extends it.
-    onEvent('sync-progress', handleSyncProgressEvent);
-    onEvent('sync-complete', handleSyncCompleteEvent);
+    onEvent(EVENTS.SYNC_PROGRESS, handleSyncProgressEvent);
+    onEvent(EVENTS.SYNC_COMPLETE, handleSyncCompleteEvent);
     connectEvents(() => {});
 
     // #390 — loadMachines() calls the token-gated /api/machines; it used to

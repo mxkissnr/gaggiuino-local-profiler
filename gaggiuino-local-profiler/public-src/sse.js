@@ -7,6 +7,18 @@ import { S } from './state.js';
 // see the fallback detection below -- callers keep their existing polling
 // code path as a fallback for whenever it doesn't connect cleanly.
 
+// Mirrors lib/events.js's EVENTS on the backend -- kept here (not just as
+// string literals at each onEvent() call site) so a future rename only
+// needs updating in one frontend spot. The two files can't share a single
+// JS module (CommonJS backend vs. bundled ESM frontend), so this is a
+// values-must-match-lib/events.js contract, not true DRY.
+export const EVENTS = {
+  SYNC_PROGRESS: 'sync-progress',
+  SYNC_COMPLETE: 'sync-complete',
+  LIVE_SNAPSHOT: 'live-snapshot',
+  PREHEAT_UPDATE: 'preheat-update',
+};
+
 const WATCHDOG_MS = 8000;
 const MAX_STRIKES = 3;
 

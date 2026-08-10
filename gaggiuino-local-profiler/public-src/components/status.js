@@ -101,7 +101,13 @@ export function handleSyncProgressEvent({ machineId, current, total }) {
 export function handleSyncCompleteEvent({ machineId, total, success }) {
   _pushSyncProgress.delete(machineId);
   renderSyncProgressBar(_pickPushEntry());
-  if (success && window.showToast) window.showToast(t('sync_complete_toast', total));
+  // #737 review: the polling fallback above always toasts on completion
+  // (it has no success/failure signal to work with) -- mirror that here so
+  // an aborted backfill (success:false, e.g. a non-404 network error mid-
+  // loop, see lib/sync.js) isn't silently swallowed just because SSE
+  // happened to be the active transport this session.
+  if (!window.showToast) return;
+  window.showToast(success ? t('sync_complete_toast', total) : t('sync_failed_toast'));
 }
 
 // Same "prefer the active machine, fall back to the first active entry"

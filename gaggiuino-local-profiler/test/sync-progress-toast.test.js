@@ -64,10 +64,10 @@ describe('SSE push: handleSyncProgressEvent()/handleSyncCompleteEvent() (#735)',
     expect(doc.getElementById('syncProgressLabel').textContent).toBe('Import 3/10');
   });
 
-  it('does not toast when success is false', () => {
+  it('#737 review: toasts a failure message (not the completion one) when success is false', () => {
     handleSyncProgressEvent({ machineId: 1, current: 10, total: 10 });
     handleSyncCompleteEvent({ machineId: 1, total: 10, success: false });
-    expect(toastCalls).toEqual([]);
+    expect(toastCalls).toEqual(['Import failed -- some shots may be missing']);
     expect(doc.getElementById('syncProgressBar').style.display).toBe('none');
   });
 

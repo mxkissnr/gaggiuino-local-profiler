@@ -336,6 +336,7 @@ export default {
     machine_on_duration:(m)=>`accesa da ${m} min`, machine_on_duration_hours:(h,m)=>`accesa da ${h}h ${m}m`,
     sync_progress_label:(current,total)=>`Importazione ${current}/${total}`,
     sync_complete_toast:(total)=>`Importazione completata: ${total} shot`,
+    sync_failed_toast:()=>`Importazione fallita -- alcuni shot potrebbero mancare`,
     btn_export_profile_tooltip:'Esporta profilo Gaggiuino dallo shot',
     export_csv_title:'Esporta tutti gli shot come CSV',
     export_shot_title:'Esporta lo shot corrente come .shot (formato Decent Espresso)',
