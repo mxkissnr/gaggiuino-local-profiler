@@ -12,6 +12,14 @@ import { showDevBuildBanner } from './dev-banner.js';
 // see #296.
 let knownShotCount = null;
 
+// #731: the last active shot-import progress entry (see the syncProgress
+// block in updateStatus() below), kept only so the poll that finds it gone
+// can show a "done" toast with a shot count -- reset to null the moment
+// that toast fires, so it doesn't repeat on every poll afterwards, and left
+// null on the very first poll (no prior state) so app startup never fires
+// it for an import that was already in progress before this session opened.
+let _lastSyncProgress = null;
+
 // #464: an explicit machineId scopes the status-dot/hostname fields below to
 // that machine (see routes/system.js's /api/status). 'all'/null/undefined
 // fall back to the unscoped call (default machine), mirroring the same
@@ -60,7 +68,15 @@ export async function updateStatus(machineId) {
         if (label) label.textContent = t('sync_progress_label', current, total);
         if (fill) fill.style.width = `${Math.min(100, (current / total) * 100)}%`;
         syncProgressBar.style.display = '';
+        _lastSyncProgress = entry;
       } else {
+        // #731: only toast on the active->gone transition (a prior entry we
+        // hadn't already toasted for), never on a poll that simply finds no
+        // import running -- see _lastSyncProgress's own comment above.
+        if (_lastSyncProgress) {
+          if (window.showToast) window.showToast(t('sync_complete_toast', _lastSyncProgress.total));
+          _lastSyncProgress = null;
+        }
         syncProgressBar.style.display = 'none';
       }
     }

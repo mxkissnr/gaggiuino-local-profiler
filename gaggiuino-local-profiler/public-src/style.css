@@ -1886,6 +1886,7 @@
             }
             .shot-wrapper      { padding-right: 18px; }
             #sidebar h2        { padding: 16px 18px; }
+            #syncProgressBar   { padding: 0 18px 10px; }
 
             /* Annotation panel — mobile improvements */
             .annotation-panel  { padding: 14px; margin-top: 16px; }
@@ -2352,17 +2353,18 @@
             to   { transform: rotateX(-90deg); }
         }
 
-        /* ── Shot-import progress bar (#729, inline in sidebar header, next
-           to the flap-board shot counter) ── */
+        /* ── Shot-import progress bar (#729, own row under the sidebar
+           header — #730 review: was squeezed inline next to the flap-board
+           shot counter, moved out to its own line below) ── */
         #syncProgressBar {
             display: flex;
             align-items: center;
-            gap: 6px;
-            margin-right: 8px;
+            gap: 8px;
+            padding: 0 20px 12px;
         }
         #syncProgressLabel { font-size: .72rem; color: var(--gray-500); white-space: nowrap; }
         .sync-progress-track {
-            width: 48px;
+            width: 100px;
             height: 4px;
             border-radius: 2px;
             background: var(--gray-700);

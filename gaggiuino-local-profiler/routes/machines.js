@@ -22,6 +22,19 @@ function syncSoonAfterSave(machine) {
     sync.catch(err => log(`Sync after machine save failed: ${err.message}`, true));
 }
 
+// #731: "Verbindung testen" (public-src/components/machines-settings.js's
+// testMachineForm()) saves the form first to get a testable machine id, the
+// same POST/PUT this route already handles for an explicit "Speichern" --
+// but that implicit save must not itself start an import, only a real save
+// click should. The client marks that case with a `?sync=0` query param
+// (not a body field -- machineSchema/machineSchema.partial() in
+// lib/validation/schemas.js validate the body strictly). Absent or anything
+// other than '0'/'false' keeps the previous default (sync fires), so every
+// other/future caller of this route is unaffected.
+function wantsSync(req) {
+    return req.query.sync !== '0' && req.query.sync !== 'false';
+}
+
 // Machine hosts are the app owner's own trusted LAN configuration (a real
 // Gaggiuino/GaggiMate controller), not untrusted external content — so this
 // uses the narrower assertMachineHost() (blocks only loopback/link-local/
@@ -56,7 +69,7 @@ router.post('/api/machines', async (req, res) => {
     const machine = registry.createMachine(parsed.data);
     log(`Machine added: #${machine.id} "${machine.name}" (${machine.type}) host=${machine.host}`);
     registry.logRegistrySnapshot();
-    syncSoonAfterSave(machine);
+    if (wantsSync(req)) syncSoonAfterSave(machine);
     res.json(machine);
 });
 
@@ -83,7 +96,7 @@ router.put('/api/machines/:id', async (req, res) => {
     const hostSuffix = parsed.data.host ? ` host=${parsed.data.host}` : '';
     log(`Machine updated: #${id}${hostSuffix}`);
     registry.logRegistrySnapshot();
-    syncSoonAfterSave(machine);
+    if (wantsSync(req)) syncSoonAfterSave(machine);
     res.json(machine);
 });
 

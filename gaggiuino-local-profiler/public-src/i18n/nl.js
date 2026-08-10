@@ -335,6 +335,7 @@ export default {
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} resterend`,
     machine_on_duration:(m)=>`${m} min aan`, machine_on_duration_hours:(h,m)=>`${h}u ${m}m aan`,
     sync_progress_label:(current,total)=>`Import ${current}/${total}`,
+    sync_complete_toast:(total)=>`Import voltooid: ${total} shots`,
     btn_export_profile_tooltip:'Gaggiuino profiel exporteren uit shot',
     export_csv_title:'Alle shots exporteren als CSV',
     export_shot_title:'Huidige shot exporteren als .shot (Decent Espresso-formaat)',

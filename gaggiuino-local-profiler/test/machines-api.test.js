@@ -141,7 +141,7 @@ describe('PUT/DELETE /api/machines/:id', () => {
     });
 });
 
-describe('sync-on-save (#725/#729)', () => {
+describe('sync-on-save (#725/#729/#731)', () => {
     it('PUT on the default machine\'s host triggers a catch-up sync', async () => {
         registry.ensureDefaultMachine();
         const r = await fetch(`${baseUrl}/api/machines/1`, {
@@ -188,5 +188,35 @@ describe('sync-on-save (#725/#729)', () => {
         expect(r.status).toBe(200);
         expect(syncShotsMock).not.toHaveBeenCalled();
         expect(syncMachineShotsMock).toHaveBeenCalledTimes(1);
+    });
+
+    // #731: the "Test connection" button saves the form first to get a
+    // testable machine id (see machines-settings.js's testMachineForm()) --
+    // that implicit save must not itself start an import, only an explicit
+    // "Speichern" click should. The client marks it with a `?sync=0` query
+    // param, checked here on both POST and PUT.
+    it('POST /api/machines?sync=0 creates the machine but skips the catch-up sync', async () => {
+        const r = await fetch(`${baseUrl}/api/machines?sync=0`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Office GaggiMate', type: 'gaggimate', host: 'gaggimate.local' }),
+        });
+        expect(r.status).toBe(200);
+        const machine = await r.json();
+        expect(machine.name).toBe('Office GaggiMate');
+        expect(syncShotsMock).not.toHaveBeenCalled();
+        expect(syncMachineShotsMock).not.toHaveBeenCalled();
+    });
+
+    it('PUT /api/machines/:id?sync=0 on the default machine updates it but skips the catch-up sync', async () => {
+        registry.ensureDefaultMachine();
+        const r = await fetch(`${baseUrl}/api/machines/1?sync=0`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ host: 'newly-configured.local' }),
+        });
+        expect(r.status).toBe(200);
+        const updated = await r.json();
+        expect(updated.host).toBe('newly-configured.local');
+        expect(syncShotsMock).not.toHaveBeenCalled();
+        expect(syncMachineShotsMock).not.toHaveBeenCalled();
     });
 });

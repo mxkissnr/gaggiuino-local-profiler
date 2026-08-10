@@ -352,7 +352,15 @@ export function closeMachineForm() {
 // newly-assigned id when creating), or null on failure/validation no-op —
 // callers that need to distinguish "failed" from "nothing to save" can
 // inspect the DOM themselves, neither existing caller needs to.
-async function _saveMachine() {
+//
+// #731: triggerSync defaults to true (saveMachineForm()'s explicit "Speichern"
+// still fires the post-save shot sync) but testMachineForm() passes false —
+// "Verbindung testen" needs a saved machine id to test against, but that
+// implicit save must not itself start an import. Carried to the server as
+// a `?sync=0` query param rather than a body field: machineSchema/
+// machineSchema.partial() (lib/validation/schemas.js) validate the body
+// strictly, so an extra JSON field would be unclean at best.
+async function _saveMachine({ triggerSync = true } = {}) {
   const id = document.getElementById('machineFormId').value;
   const payload = {
     name: document.getElementById('machineFormName').value.trim(),
@@ -362,7 +370,8 @@ async function _saveMachine() {
     theme: _selectedTheme,
   };
   if (!payload.name || !payload.host) return null;
-  const url    = id ? `api/machines/${id}` : 'api/machines';
+  const base   = id ? `api/machines/${id}` : 'api/machines';
+  const url    = triggerSync ? base : `${base}?sync=0`;
   const method = id ? 'PUT' : 'POST';
   const resultEl = document.getElementById('machineFormTestResult');
   const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -410,6 +419,10 @@ export async function deleteMachine(id) {
 // form like saveMachineForm() does. On save failure, _saveMachine() already
 // surfaced the save error; the test is skipped entirely.
 //
+// #731: this save is only a means to get a testable id -- it must not start
+// a shot import the way an explicit "Speichern" does, so triggerSync:false
+// is passed through to _saveMachine() (server-side gate in routes/machines.js).
+//
 // #730 review: the form stays open (and clickable) for the 1200ms dwell
 // before it auto-closes -- a double-click used to re-enter _saveMachine()
 // with #machineFormId still empty (never written back after the first
@@ -421,7 +434,7 @@ export async function deleteMachine(id) {
 export async function testMachineForm() {
   const btn = document.getElementById('machineFormTestBtn');
   if (btn) btn.disabled = true;
-  const id = await _saveMachine();
+  const id = await _saveMachine({ triggerSync: false });
   if (id === null) {
     if (btn) btn.disabled = false;
     return;
