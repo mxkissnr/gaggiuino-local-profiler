@@ -330,6 +330,7 @@ export default {
     settings_api_token:'Jeton API',
     settings_api_token_desc:'Les intégrations comme la Order Card en mode URL directe (sans HA Ingress) ont besoin de ce jeton comme glp_token dans leur configuration YAML.',
     settings_api_token_copy:'Copier', settings_api_token_copied:'Jeton copié',
+    settings_devtools_title:'Outils développeur', settings_devtools_desc:'Canal GLP DEV uniquement — jamais disponible sur une installation réelle.', settings_devtools_export_db:'Télécharger la base de données brute',
     preheat_warming:'Chauffe en cours …', preheat_ready:'Prêt à extraire',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} restantes`,
     machine_on_duration:(m)=>`allumée depuis ${m} min`, machine_on_duration_hours:(h,m)=>`allumée depuis ${h}h ${m}m`,

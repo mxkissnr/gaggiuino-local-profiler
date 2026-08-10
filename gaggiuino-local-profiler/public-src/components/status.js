@@ -2,6 +2,7 @@ import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { localeFor } from '../constants.js';
 import { apiFetch } from '../api.js';
+import { shareOrDownloadBlob } from '../utils.js';
 import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge, updateLegacyMachineOptionsBanner } from './onboarding.js';
 import { showDevBuildBanner } from './dev-banner.js';
 
@@ -110,6 +111,12 @@ export async function updateStatus(machineId) {
     // persistent top-of-page banner -- much harder to miss than the small
     // badge text alone.
     if (s.devBuild) showDevBuildBanner(s.devBuild);
+    // #722: raw-DB export button (Settings) is gated on the exact same
+    // devBuild signal as the banner above -- never shown on a real install.
+    // The backend route (routes/debug.js) independently 404s regardless of
+    // this, so this toggle is UI hygiene, not the safety mechanism.
+    const devToolsCard = document.getElementById('devToolsCard');
+    if (devToolsCard) devToolsCard.style.display = s.devBuild ? '' : 'none';
     const ordersBtn = document.getElementById('btnOrders');
     if (ordersBtn) ordersBtn.style.display = s.ordersFeature ? '' : 'none';
     // Bottom nav "Mehr" sheet (#403, mobile) mirrors the same feature gate.
@@ -119,6 +126,25 @@ export async function updateStatus(machineId) {
     if (switchRes?.ok) updatePowerButton(await switchRes.json());
     else updatePowerButton({ configured: false });
   } catch { /* ignore */ }
+}
+
+// #722: the devToolsCard button's click handler -- deliberately goes through
+// apiFetch (adds X-GLP-Token) rather than a plain <a href>, since a plain
+// anchor navigation wouldn't carry that header for non-Ingress direct-port
+// access, only for HA Ingress traffic (which bypasses auth by Supervisor IP,
+// see server.js isIngressRequest()). The route itself (routes/debug.js)
+// still 404s outright on any real install regardless of how it's called.
+export async function exportDevDb() {
+  try {
+    const r = await apiFetch('api/debug/export-db');
+    if (!r.ok) return;
+    const blob = await r.blob();
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const filename = `glp-db-export-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
+      `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}.db`;
+    await shareOrDownloadBlob(blob, filename, { title: filename });
+  } catch { /* ignore -- dev-only diagnostic tool, no user-facing error UI needed */ }
 }
 
 export function updatePowerButton(sw) {

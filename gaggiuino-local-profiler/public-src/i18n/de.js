@@ -319,6 +319,7 @@ export default {
     settings_api_token:'API Token',
     settings_api_token_desc:'Für Integrationen wie die Order Card im Direkt-URL-Modus (ohne HA Ingress) benötigst du diesen Token als glp_token in der YAML-Konfiguration.',
     settings_api_token_copy:'Kopieren', settings_api_token_copied:'Token kopiert',
+    settings_devtools_title:'Entwickler-Tools', settings_devtools_desc:'Nur im GLP-DEV-Kanal — bei einer echten Installation nie verfügbar.', settings_devtools_export_db:'Rohe Datenbank herunterladen',
     preheat_warming:'Aufheizen …', preheat_ready:'Brühbereit',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} verbleibend`,
     machine_on_duration:(m)=>`${m} Min an`, machine_on_duration_hours:(h,m)=>`${h} Std ${m} Min an`,

@@ -167,6 +167,7 @@ app.use(require('./routes/machine-control'));
 app.use(require('./routes/mqtt'));
 app.use(require('./routes/backup'));
 app.use(require('./routes/import'));
+app.use(require('./routes/debug'));
 
 // ── Centralized error handling ────────────────────────────────────────────
 app.use(errorHandler);

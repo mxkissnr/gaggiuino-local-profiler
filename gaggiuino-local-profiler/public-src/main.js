@@ -45,7 +45,7 @@ import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sor
          openShotDrawer, closeShotDrawer, handleDrawerTouchStart, handleDrawerTouchEnd,
          handleEdgeSwipeStart, handleEdgeSwipeEnd,
          toggleMonthGroup, setBeanFilter, clearBeanFilter } from './components/sidebar.js';
-import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync } from './components/status.js';
+import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync, exportDevDb } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
 import { renderBottomNav, renderBottomNavSettings, closeMoreSheet } from './components/bottom-nav.js';
@@ -728,6 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // main.js, but this modal's actions depend on which flow opened it).
   document.getElementById('backupRestoreInput').addEventListener('change', e => openBackupRestoreModal(e.target));
   document.getElementById('backupDownloadBtn').addEventListener('click', openBackupExportModal);
+  document.getElementById('devExportDbBtn')?.addEventListener('click', exportDevDb);
   document.getElementById('apiTokenCopyBtn').addEventListener('click', copyApiToken);
   document.getElementById('addMachineBtn')?.addEventListener('click', () => openMachineForm(null));
   document.getElementById('machineFormCancelBtn')?.addEventListener('click', closeMachineForm);

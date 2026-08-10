@@ -295,4 +295,4 @@ function migrate(db) {
     log(`DB: migration complete — ${shotCount} shots, ${Object.keys(annotations).length} annotations`);
 }
 
-module.exports = { getDb, initSchema, migrateMachineColumns, migrateMachineTheme };
+module.exports = { getDb, initSchema, migrateMachineColumns, migrateMachineTheme, DB_PATH };

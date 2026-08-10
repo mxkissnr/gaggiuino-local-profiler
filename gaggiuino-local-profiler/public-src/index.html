@@ -1402,6 +1402,18 @@
                 <button id="apiTokenCopyBtn" type="button" class="backup-btn" data-i18n="settings_api_token_copy">Kopieren</button>
             </div>
         </div>
+        <!-- #722: dev-channel-only diagnostic, hidden by default. Shown only
+             when /api/status reports devBuild (see components/status.js) --
+             same signal the version-badge suffix and "UNSTABLE DEV BUILD"
+             banner already use, never present on a real install. The route
+             itself (routes/debug.js) independently 404s for anyone who hits
+             it without GLP_DEV_BUILD set -- this hidden-by-default markup is
+             just UI hygiene, not the actual safety mechanism. -->
+        <div class="settings-card" id="devToolsCard" style="display:none">
+            <h3 class="settings-card-title" data-i18n="settings_devtools_title">Dev Tools</h3>
+            <p class="settings-card-desc" data-i18n="settings_devtools_desc">GLP DEV channel only — never available on a real install.</p>
+            <button id="devExportDbBtn" type="button" class="backup-btn" data-i18n="settings_devtools_export_db">Download raw database</button>
+        </div>
     </div>
 
 </div><!-- /main -->
