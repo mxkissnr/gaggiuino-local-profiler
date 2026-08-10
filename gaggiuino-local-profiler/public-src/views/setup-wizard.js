@@ -54,10 +54,23 @@ export function shouldOpenSetupWizard(machines) {
 // last saw", so the stale completed flag gets cleared before
 // shouldOpenSetupWizard() runs. A normal user whose DB file is untouched
 // keeps a stable installId, so this is a no-op for them on every call.
+//
+// #757: comparison must be unconditional (`stored !== installId`, not
+// `stored && stored !== installId`) -- glp_install_id never existed in any
+// browser before this feature shipped, so `stored` is always null on the
+// very first status poll after deploying it. The old guard treated that as
+// "nothing to compare, skip" and just recorded the current installId as the
+// new baseline -- a no-op for exactly the case this was built for (a browser
+// with an already-stale completed flag from before this fix existed, hitting
+// a genuine data wipe). A missing stored value is never equal to a real
+// installId string, so the unconditional comparison clears it here too; this
+// stays safe for an already-configured install because
+// shouldOpenSetupWizard()'s own host check keeps the wizard closed
+// regardless of the completed flag once a real host exists.
 export function syncInstallId(installId) {
   if (!installId) return;
   const stored = localStorage.getItem(INSTALL_ID_KEY);
-  if (stored && stored !== installId) {
+  if (stored !== installId) {
     try { localStorage.removeItem(COMPLETED_KEY); } catch { /* ignore */ }
   }
   try { localStorage.setItem(INSTALL_ID_KEY, installId); } catch { /* ignore */ }

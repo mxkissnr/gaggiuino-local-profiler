@@ -18,6 +18,9 @@
 // caps it defensively so an out-of-order manual edit can't silently show
 // entries in the wrong order or let the list grow unbounded.
 const WHATS_NEW_ENTRIES = [
+    { version: '2.35.1', date: '2026-08-10', highlights: [
+        'Fixed the previous data-wipe wizard fix (v2.33.3) never actually firing on its first run for any existing browser — it now genuinely reopens the setup wizard after a real data wipe.',
+    ] },
     { version: '2.35.0', date: '2026-08-10', highlights: [
         'The dev-only raw database export (Settings → Dev Tools) now has an import counterpart, for GLP DEV builds only — separate from, and no change to, the regular Backup & Restore feature.',
     ] },
@@ -43,11 +46,6 @@ const WHATS_NEW_ENTRIES = [
         'New machines show an import progress indicator for their initial shot sync.',
         'Saving any machine now triggers a catch-up shot sync for it, not just default-machine host changes.',
         'Shot-import progress now updates live instead of in 30s polling jumps, and the completion toast is now reliable — falls back to the previous polling behavior automatically if a live connection can\'t be established.',
-    ] },
-    { version: '2.31.0', date: '2026-08-07', highlights: [
-        'Added optional per-install shot-logging defaults (Settings → "Shot logging defaults") that auto-prefill a new shot\'s annotation panel.',
-        'Added Basket Stats and Puck Screen Stats groupings to Analytics, alongside the existing Grinder Stats.',
-        'Added on-duration to the status footer, edge-swipe to open the mobile drawer, and a persistent dev-build warning banner.',
     ] },
 ];
 

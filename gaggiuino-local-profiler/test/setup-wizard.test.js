@@ -96,10 +96,15 @@ describe('syncInstallId (#750)', () => {
     delete store[INSTALL_ID_KEY];
   });
 
-  it('does nothing on the very first call (no locally-remembered id yet)', () => {
+  // #757: this used to be a no-op ("nothing stored yet, nothing to compare")
+  // -- but glp_install_id never existed before this feature shipped, so
+  // *every* browser's very first call has nothing stored, including the
+  // exact case this feature exists for (an already-stale completed flag
+  // from before the fix, now hitting a genuine data wipe). Must clear here.
+  it('clears the completed flag on the very first call too (no locally-remembered id yet)', () => {
     localStorage.setItem(COMPLETED_KEY, '1');
     syncInstallId('install-a');
-    expect(localStorage.getItem(COMPLETED_KEY)).toBe('1');
+    expect(localStorage.getItem(COMPLETED_KEY)).toBe(null);
     expect(localStorage.getItem(INSTALL_ID_KEY)).toBe('install-a');
   });
 
