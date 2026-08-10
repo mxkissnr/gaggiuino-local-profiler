@@ -345,7 +345,7 @@ export function closeMachineForm() {
   if (card) card.style.display = 'none';
 }
 
-// #727: shared by saveMachineForm() and saveAndTestMachineForm() so the
+// #727: shared by saveMachineForm() and testMachineForm() so the
 // payload-building/fetch logic (and the SSRF-guard error surfacing from
 // #336) lives in exactly one place. Returns the saved machine's id on
 // success (the form field's existing value when editing, the server's
@@ -378,9 +378,8 @@ async function _saveMachine() {
   return null;
 }
 
-// #727: shared by testMachineForm() and saveAndTestMachineForm() — runs the
-// connection test against a known machine id and renders the result into
-// #machineFormTestResult exactly like the standalone Test button does today.
+// #727: shared by testMachineForm() — runs the connection test against a
+// known machine id and renders the result into #machineFormTestResult.
 async function _testMachine(id) {
   const resultEl = document.getElementById('machineFormTestResult');
   if (!resultEl) return;
@@ -405,24 +404,14 @@ export async function deleteMachine(id) {
   if (r.ok) loadMachines();
 }
 
-export async function testMachineForm() {
-  const id = document.getElementById('machineFormId').value;
-  const resultEl = document.getElementById('machineFormTestResult');
-  if (!resultEl) return;
-  if (!id) { resultEl.textContent = t('settings_machine_test_save_first'); return; }
-  await _testMachine(id);
-}
-
-// #727: combined "Speichern und testen" action — saves first (create or
-// update, same as saveMachineForm()), and only on success immediately runs
-// the connection test against the now-known id. Unlike saveMachineForm(),
-// deliberately does NOT close the form / reload the machines list on
-// success — the point of this button is to let the user see the test
-// result inline before deciding to leave the form open (e.g. to fix a bad
-// host) or close it manually. On save failure, _saveMachine() already
+// #729: saves first (create or update, same as saveMachineForm()) so a
+// not-yet-saved machine can be tested too, then runs the connection test
+// against the now-known id, briefly shows the result inline, and closes the
+// form like saveMachineForm() does. On save failure, _saveMachine() already
 // surfaced the save error; the test is skipped entirely.
-export async function saveAndTestMachineForm() {
+export async function testMachineForm() {
   const id = await _saveMachine();
   if (id === null) return;
   await _testMachine(id);
+  setTimeout(() => { closeMachineForm(); loadMachines(); }, 1200);
 }

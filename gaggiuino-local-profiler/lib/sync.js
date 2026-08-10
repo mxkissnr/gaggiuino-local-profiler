@@ -94,52 +94,68 @@ async function syncShots(runtime = defaultRuntime) {
             return true;
         }
 
-        for (let i = effectiveMax + 1; i <= latestMachineId; i++) {
-            // #716: elapsed time per shot, not just the URL (#714) -- lets a
-            // large backfill's per-request latency be checked against shot
-            // id afterward, to confirm or rule out the machine's own
-            // embedded HTTP server slowing down as shot history grows.
-            const shotStartedAt = Date.now();
-            let r;
-            try {
-                r = await axios.get(`${machineUrl}/${i}`, { timeout: 10000 });
-                debugLog(`GET ${machineUrl}/${i} -> ${Date.now() - shotStartedAt}ms`);
-            } catch (err) {
-                // #721: the machine's on-device shot storage rotates/caps
-                // independently of the monotonically increasing lastShotId
-                // it reports via /latest -- a genuine 404 here means shot i
-                // is permanently gone, not a transient failure. Blocklisting
-                // it (the same mechanism already used for user-deleted
-                // shots, and already factored into effectiveMax above) lets
-                // the backfill skip past it instead of restarting at this
-                // exact id forever. Any other error (network/timeout/5xx)
-                // is NOT skipped -- it's rethrown so the outer catch aborts
-                // the whole call and the existing retry/backoff schedule
-                // handles it, since a flaky connection is not the same
-                // situation as a confirmed-missing shot.
-                if (err.response?.status === 404) {
-                    log(`Shot ${i} not found on machine (404) -- marking as permanently missing, continuing backfill`, true);
-                    const bl = shotService.getBlocklist();
-                    if (!bl.includes(i)) shotService.saveBlocklist([...bl, i]);
+        // #729: only surface progress for a backfill big enough to actually
+        // take a noticeable amount of time (see syncMachineShots() for the
+        // same threshold). The try/finally sits inside this function's
+        // existing outer try/catch (not a second outer level) so a loop
+        // error is still caught below and syncProgress is always cleared
+        // before that catch runs.
+        const total = latestMachineId - effectiveMax;
+        const defaultMachineId = registry.getDefaultMachine()?.id;
+        if (total > 5 && defaultMachineId != null) state.syncProgress = { machineId: defaultMachineId, current: 0, total };
+        try {
+            for (let i = effectiveMax + 1; i <= latestMachineId; i++) {
+                // #716: elapsed time per shot, not just the URL (#714) -- lets a
+                // large backfill's per-request latency be checked against shot
+                // id afterward, to confirm or rule out the machine's own
+                // embedded HTTP server slowing down as shot history grows.
+                const shotStartedAt = Date.now();
+                let r;
+                try {
+                    r = await axios.get(`${machineUrl}/${i}`, { timeout: 10000 });
+                    debugLog(`GET ${machineUrl}/${i} -> ${Date.now() - shotStartedAt}ms`);
+                } catch (err) {
+                    // #721: the machine's on-device shot storage rotates/caps
+                    // independently of the monotonically increasing lastShotId
+                    // it reports via /latest -- a genuine 404 here means shot i
+                    // is permanently gone, not a transient failure. Blocklisting
+                    // it (the same mechanism already used for user-deleted
+                    // shots, and already factored into effectiveMax above) lets
+                    // the backfill skip past it instead of restarting at this
+                    // exact id forever. Any other error (network/timeout/5xx)
+                    // is NOT skipped -- it's rethrown so the outer catch aborts
+                    // the whole call and the existing retry/backoff schedule
+                    // handles it, since a flaky connection is not the same
+                    // situation as a confirmed-missing shot.
+                    if (err.response?.status === 404) {
+                        log(`Shot ${i} not found on machine (404) -- marking as permanently missing, continuing backfill`, true);
+                        const bl = shotService.getBlocklist();
+                        if (!bl.includes(i)) shotService.saveBlocklist([...bl, i]);
+                        if (state.syncProgress?.machineId === defaultMachineId) state.syncProgress.current++;
+                        continue;
+                    }
+                    // #721: the outer catch's logging redacts the whole URL
+                    // (including the shot id path segment), making a failing
+                    // shot id invisible in logs -- log it explicitly here first.
+                    debugLog(`GET ${machineUrl}/${i} failed after ${Date.now() - shotStartedAt}ms: ${err.message}`);
+                    throw err;
+                }
+                if (!r.data || typeof r.data.id === 'undefined' || !r.data.datapoints) {
+                    log(`Shot ${i} has invalid data -- skipped`, true);
+                    if (state.syncProgress?.machineId === defaultMachineId) state.syncProgress.current++;
                     continue;
                 }
-                // #721: the outer catch's logging redacts the whole URL
-                // (including the shot id path segment), making a failing
-                // shot id invisible in logs -- log it explicitly here first.
-                debugLog(`GET ${machineUrl}/${i} failed after ${Date.now() - shotStartedAt}ms: ${err.message}`);
-                throw err;
+                if (!state.cachedMachineVersion) {
+                    const d   = r.data;
+                    const ver = d.softwareVersion || d.firmware || d.buildNumber || d.buildDate || d.version || null;
+                    if (ver) { state.cachedMachineVersion = String(ver); log(`Gaggiuino firmware (from shot): ${state.cachedMachineVersion}`); }
+                }
+                if (state.cachedMachineVersion) r.data.glpFirmwareVersion = state.cachedMachineVersion;
+                shotService.upsertShot(r.data);
+                if (state.syncProgress?.machineId === defaultMachineId) state.syncProgress.current++;
             }
-            if (!r.data || typeof r.data.id === 'undefined' || !r.data.datapoints) {
-                log(`Shot ${i} has invalid data -- skipped`, true);
-                continue;
-            }
-            if (!state.cachedMachineVersion) {
-                const d   = r.data;
-                const ver = d.softwareVersion || d.firmware || d.buildNumber || d.buildDate || d.version || null;
-                if (ver) { state.cachedMachineVersion = String(ver); log(`Gaggiuino firmware (from shot): ${state.cachedMachineVersion}`); }
-            }
-            if (state.cachedMachineVersion) r.data.glpFirmwareVersion = state.cachedMachineVersion;
-            shotService.upsertShot(r.data);
+        } finally {
+            if (state.syncProgress?.machineId === defaultMachineId) state.syncProgress = null;
         }
 
         // eslint-disable-next-line require-atomic-updates -- syncShots() has no mutex guarding overlapping calls (pre-existing); a real fix is a synchronization change out of scope for this lint-only pass
@@ -200,8 +216,18 @@ async function syncMachineShots(machine) {
 
         if (lastNativeId >= latestNativeId) return true;
 
-        for (let i = lastNativeId + 1; i <= latestNativeId; i++) {
-            await syncMachineShot(machine, i, adapter);
+        // #729: only surface progress for a backfill big enough to actually
+        // take a noticeable amount of time -- a handful of shots finishes
+        // before the UI's next poll would ever see it.
+        const total = latestNativeId - lastNativeId;
+        if (total > 5) state.syncProgress = { machineId: machine.id, current: 0, total };
+        try {
+            for (let i = lastNativeId + 1; i <= latestNativeId; i++) {
+                await syncMachineShot(machine, i, adapter);
+                if (state.syncProgress?.machineId === machine.id) state.syncProgress.current++;
+            }
+        } finally {
+            if (state.syncProgress?.machineId === machine.id) state.syncProgress = null;
         }
         log(`Sync (${machine.name}): up to shot ${latestNativeId}`);
         return true;

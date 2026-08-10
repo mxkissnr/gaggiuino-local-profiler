@@ -18,6 +18,11 @@
 // caps it defensively so an out-of-order manual edit can't silently show
 // entries in the wrong order or let the list grow unbounded.
 const WHATS_NEW_ENTRIES = [
+    { version: '2.32.0', date: '2026-08-10', highlights: [
+        'Machine setup\'s "Test connection" button now saves first automatically, instead of requiring the machine to already be saved.',
+        'New machines show an import progress indicator for their initial shot sync.',
+        'Saving any machine now triggers a catch-up shot sync for it, not just default-machine host changes.',
+    ] },
     { version: '2.31.0', date: '2026-08-07', highlights: [
         'Added optional per-install shot-logging defaults (Settings → "Shot logging defaults") that auto-prefill a new shot\'s annotation panel.',
         'Added Basket Stats and Puck Screen Stats groupings to Analytics, alongside the existing Grinder Stats.',
@@ -43,9 +48,6 @@ const WHATS_NEW_ENTRIES = [
     ] },
     { version: '2.27.2', date: '2026-08-04', highlights: [
         'Preheat-ready and low-stock notification toggles are now reachable in Settings even when Orders is disabled.',
-    ] },
-    { version: '2.27.1', date: '2026-08-03', highlights: [
-        'Added logging so the active live-data transport (WebSocket/MQTT) and its connection state are visible from the logs.',
     ] },
 ];
 

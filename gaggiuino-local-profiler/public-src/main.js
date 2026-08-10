@@ -117,7 +117,7 @@ import { startProfileDialinFromList, profileDialinClose,
 
 import { loadDemoData, endDemo } from './components/onboarding.js';
 
-import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, saveAndTestMachineForm, switchActiveMachine, renderMachinesList,
+import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, renderMachinesList,
          onThemeCustomColorAChange, onThemeCustomColorBChange, onThemeGradientToggleChange } from './components/machines-settings.js';
 
 import { loadMqttSettings, setMqttTransport, saveMqttSettings, applyMqttToMachine } from './components/mqtt-settings.js';
@@ -734,7 +734,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('machineFormCancelBtn')?.addEventListener('click', closeMachineForm);
   document.getElementById('machineFormSaveBtn')?.addEventListener('click', saveMachineForm);
   document.getElementById('machineFormTestBtn')?.addEventListener('click', testMachineForm);
-  document.getElementById('machineFormSaveTestBtn')?.addEventListener('click', saveAndTestMachineForm);
   document.getElementById('machineThemeCustomA')?.addEventListener('input', onThemeCustomColorAChange);
   document.getElementById('machineThemeCustomB')?.addEventListener('input', onThemeCustomColorBChange);
   document.getElementById('machineThemeGradientToggle')?.addEventListener('change', onThemeGradientToggleChange);

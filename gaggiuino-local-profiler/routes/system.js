@@ -212,6 +212,10 @@ router.get('/api/status', async (req, res) => {
         // options-adoption.js's hasUnconfirmedLegacyMachineOptions().
         legacyMachineOptionsPending: hasUnconfirmedLegacyMachineOptions(),
         machines,
+        // #729: only present while a shot-import backfill is actively
+        // tracking progress -- clients that don't know the field just see
+        // it absent, same pattern as devBuild above.
+        ...(state.syncProgress ? { syncProgress: state.syncProgress } : {}),
         ...sensitive,
     });
 });

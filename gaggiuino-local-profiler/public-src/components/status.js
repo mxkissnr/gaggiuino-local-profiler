@@ -40,6 +40,23 @@ export async function updateStatus(machineId) {
       }
       knownShotCount = s.shotCount;
     }
+    // #729: shot-import progress bar next to the flap-board shot counter --
+    // only present in the response while a backfill is actively tracking
+    // progress (see lib/state.js's syncProgress), hidden the rest of the
+    // time. Rides the existing 30s updateStatus() poll, no separate interval.
+    const syncProgressBar = document.getElementById('syncProgressBar');
+    if (syncProgressBar) {
+      if (s.syncProgress) {
+        const { current, total } = s.syncProgress;
+        const label = document.getElementById('syncProgressLabel');
+        const fill  = syncProgressBar.querySelector('.sync-progress-fill');
+        if (label) label.textContent = t('sync_progress_label', current, total);
+        if (fill) fill.style.width = `${Math.min(100, (current / total) * 100)}%`;
+        syncProgressBar.style.display = '';
+      } else {
+        syncProgressBar.style.display = 'none';
+      }
+    }
     // Token is no longer returned by /api/status — it comes from /api/token (initToken)
     const dot = document.getElementById('statusDot');
     const railDot = document.getElementById('railStatusDot');

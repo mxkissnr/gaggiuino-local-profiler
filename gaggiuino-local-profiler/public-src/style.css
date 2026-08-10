@@ -2351,3 +2351,27 @@
             from { transform: rotateX(0deg); }
             to   { transform: rotateX(-90deg); }
         }
+
+        /* ── Shot-import progress bar (#729, inline in sidebar header, next
+           to the flap-board shot counter) ── */
+        #syncProgressBar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-right: 8px;
+        }
+        #syncProgressLabel { font-size: .72rem; color: var(--gray-500); white-space: nowrap; }
+        .sync-progress-track {
+            width: 48px;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--gray-700);
+            overflow: hidden;
+        }
+        .sync-progress-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 2px;
+            background: linear-gradient(90deg, var(--accent-from), var(--accent-to));
+            transition: width .2s ease;
+        }

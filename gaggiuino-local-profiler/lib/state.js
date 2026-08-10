@@ -9,6 +9,10 @@ module.exports = {
     lastSyncTime:         null,
     lastSyncError:        null,
     syncRetryCount:       0,
+    // Shot-import progress (#729): null = no import active, otherwise
+    // { machineId, current, total } for the backfill currently running in
+    // lib/sync.js's syncShots()/syncMachineShots().
+    syncProgress:         null,
     // Machine connection state (first-run onboarding, see #274). null = never checked.
     machineReachable:     null,
     lastMachineError:     null,
