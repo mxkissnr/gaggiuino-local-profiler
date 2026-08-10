@@ -1,8 +1,13 @@
 // status.js's updateStatus() — #731: a short toast when an active shot-
 // import (state.syncProgress, surfaced via /api/status's syncProgress list)
 // finishes, i.e. the poll where a previously-active entry is gone. Must not
-// fire on the very first poll (no prior state to compare against) and must
-// not repeat on every subsequent poll once it has already fired once.
+// fire on the very first poll (no prior state to compare against), must not
+// repeat on every subsequent poll once it has already fired once, and must
+// be tracked per machineId (not a single scalar) since lib/state.js's
+// syncProgress deliberately allows more than one machine to backfill at
+// once -- a code-review regression guard below covers a bug where a scalar
+// tracker let one machine's completion toast go missing entirely whenever
+// another machine was still active.
 //
 // Same fake-document convention as test/status-update-machine-id.test.js.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -91,5 +96,32 @@ describe('updateStatus() import-complete toast (#731)', () => {
     await updateStatus();
     await updateStatus();
     expect(toastCalls).toEqual(['Import complete: 10 shots']);
+  });
+
+  // #731 code-review regression guard: a single scalar tracker (the original
+  // version of this fix) let one machine's entry silently overwrite another's
+  // in _lastSyncProgress, so whichever machine finished first never got its
+  // own toast as long as the other was still active -- and misattributed its
+  // total to the wrong machine once both were done. Each machineId must get
+  // its own toast, at its own completion, independent of the others.
+  it('#731 regression guard: two machines backfilling concurrently each get their own completion toast', async () => {
+    // Machine 1 (100 shots) and machine 2 (50 shots) both actively backfilling.
+    mockStatus([
+      { machineId: 1, current: 10, total: 100 },
+      { machineId: 2, current: 40, total: 50 },
+    ]);
+    await updateStatus();
+    expect(toastCalls).toEqual([]);
+
+    // Machine 2 finishes first -- its entry drops out of the list while
+    // machine 1's is still there.
+    mockStatus([{ machineId: 1, current: 20, total: 100 }]);
+    await updateStatus();
+    expect(toastCalls).toEqual(['Import complete: 50 shots']);
+
+    // Machine 1 finishes later, on its own poll.
+    mockStatus([]);
+    await updateStatus();
+    expect(toastCalls).toEqual(['Import complete: 50 shots', 'Import complete: 100 shots']);
   });
 });
