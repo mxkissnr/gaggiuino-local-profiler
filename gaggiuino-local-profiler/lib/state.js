@@ -18,6 +18,18 @@ module.exports = {
     // syncAllMachines() tick) without one clobbering the other's progress
     // or prematurely clearing it out from under it (#730 review).
     syncProgress:         new Map(),
+    // #773: mutex guarding syncShots() (default machine) against overlapping
+    // calls -- lib/poll.js's reachability-recovery catch-up sync is
+    // fire-and-forget and could otherwise start a second backfill while the
+    // scheduled one is still running, with each call's independently
+    // computed `total` clobbering the same syncProgress entry above and
+    // making the displayed progress denominator jump around mid-backfill.
+    // Same pattern as isPollRunning below. A Set (not a boolean) for
+    // syncMachineShots()'s other-machine backfills, keyed by machine.id, so
+    // two different machines can still sync concurrently -- only a second
+    // call for the SAME machine is skipped.
+    defaultSyncInFlight:  false,
+    otherMachineSyncInFlight: new Set(),
     // Machine connection state (first-run onboarding, see #274). null = never checked.
     machineReachable:     null,
     lastMachineError:     null,

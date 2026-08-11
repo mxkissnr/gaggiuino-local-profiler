@@ -613,12 +613,12 @@
         .machine-theme-swatches { display:flex; gap:8px; flex-wrap:wrap; margin:2px 0 4px; flex:1; }
         .machine-theme-preview { width:34px; height:auto; flex-shrink:0; }
         .machine-theme-preview svg { width:100%; height:100%; display:block; }
-        .machine-theme-swatch { width:28px; height:28px; border-radius:50%; border:2px solid transparent; padding:0; cursor:pointer; outline:none; transition:transform .15s, border-color .15s; }
+        .machine-theme-swatch { appearance:none; -webkit-appearance:none; -moz-appearance:none; width:28px; height:28px; border-radius:50%; overflow:hidden; clip-path:circle(50%); -webkit-clip-path:circle(50%); border:2px solid transparent; padding:0; cursor:pointer; outline:none; transition:transform .15s, border-color .15s; background-repeat:no-repeat; background-position:center; background-size:140% 140%; }
         .machine-theme-swatch:hover { transform:scale(1.1); }
         .machine-theme-swatch.active { border-color:var(--gray-200); transform:scale(1.15); box-shadow:0 0 0 2px rgba(0,0,0,.4); }
         .machine-theme-swatch-none { background:var(--gray-700); position:relative; }
         .machine-theme-swatch-none::after { content:''; position:absolute; inset:7px; border-top:2px solid var(--gray-300); transform:rotate(45deg); }
-        .machine-theme-swatch-custom { background:conic-gradient(from 180deg,#f59e0b,#ec4899,#0891b2,#22c55e,#f59e0b); }
+        .machine-theme-swatch-custom { background-image:conic-gradient(from 180deg,#f59e0b,#ec4899,#0891b2,#22c55e,#f59e0b); }
         .machine-theme-custom-inputs { display:flex; align-items:center; gap:10px; margin:2px 0 4px; }
         .machine-theme-color-input { width:34px; height:28px; padding:0; border:1px solid var(--gray-700); border-radius:var(--radius); background:none; cursor:pointer; }
         .machine-theme-gradient-toggle { display:flex; align-items:center; gap:5px; font-size:.78rem; color:var(--gray-400); cursor:pointer; }
@@ -861,7 +861,7 @@
 
         /* ── Accent swatches ── */
         .accent-swatches { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
-        .accent-swatch { width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; transition: transform .18s, border-color .18s; outline: none; }
+        .accent-swatch { appearance: none; -webkit-appearance: none; -moz-appearance: none; width: 34px; height: 34px; border-radius: 50%; overflow: hidden; clip-path: circle(50%); -webkit-clip-path: circle(50%); border: 3px solid transparent; cursor: pointer; transition: transform .18s, border-color .18s; outline: none; background-repeat: no-repeat; background-position: center; background-size: 140% 140%; }
         .accent-swatch:hover { transform: scale(1.12); }
         .accent-swatch.active { border-color: #fff; transform: scale(1.18); box-shadow: 0 0 0 2px rgba(0,0,0,.4); }
         /* #604: default machine's own theme is overriding the picker's

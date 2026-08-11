@@ -1,3 +1,9 @@
+## [2.33.1] – 2026-08-11
+
+### Fixed
+- **Theme/accent colour swatches (Settings → Machines → Farbe, and the app-wide colour scheme picker) now render as fully filled circles.** They previously showed a visible square edge peeking out from behind the circle on some browsers/GPU drivers. Closes #772
+- **Shot-import progress no longer shows the total shrinking mid-backfill** during a large sync. A missing safeguard let two sync attempts overlap and interfere with each other's progress count — shots were never lost, just the on-screen number. Closes #773
+
 ## [2.33.0] – 2026-08-11
 
 ### Added

@@ -68,6 +68,11 @@ async function syncShots(runtime = defaultRuntime) {
     // was the last successful sync -- so bumping it to "now" here would
     // make it lie about actually having synced when nothing was fetched.
     if (!runtime.machineOn && switchEntity) return true;
+    // #773: skip a second overlapping call instead of letting it clobber
+    // this run's state.syncProgress entry -- see state.js's
+    // defaultSyncInFlight comment for the full story.
+    if (state.defaultSyncInFlight) return true;
+    state.defaultSyncInFlight = true;
     try {
         const machineUrl = registry.apiUrlFor();
         // #718: null means no host configured anywhere -- nothing to sync,
@@ -190,11 +195,11 @@ async function syncShots(runtime = defaultRuntime) {
             if (tracked) bus.emit(EVENTS.SYNC_COMPLETE, { machineId: defaultMachineId, total, success: loopOk });
         }
 
-        // eslint-disable-next-line require-atomic-updates -- syncShots() has no mutex guarding overlapping calls (pre-existing); a real fix is a synchronization change out of scope for this lint-only pass
+        // #773: the require-atomic-updates disables previously here are gone
+        // -- defaultSyncInFlight above now rules out the overlapping-call
+        // race they were suppressing, so these three writes are safe again.
         state.lastSyncTime   = new Date().toISOString();
-        // eslint-disable-next-line require-atomic-updates -- see above
         state.lastSyncError  = null;
-        // eslint-disable-next-line require-atomic-updates -- see above
         state.syncRetryCount = 0;
         log(`Sync complete: ${maxLocalId + (latestMachineId - effectiveMax)} shots stored`);
         return true;
@@ -214,6 +219,9 @@ async function syncShots(runtime = defaultRuntime) {
             debugLog(`Sync error detail: ${err.response.status} on ${url} -- body: ${body}`);
         }
         return false;
+    } finally {
+        // eslint-disable-next-line require-atomic-updates -- this is the mutex-release for the guard checked at this function's top, mirroring lib/poll.js's pollLive() isPollRunning pattern; only this function ever writes it
+        state.defaultSyncInFlight = false;
     }
 }
 
@@ -238,6 +246,13 @@ async function syncMachineShot(machine, nativeId, adapter) {
 }
 
 async function syncMachineShots(machine) {
+    // #773: skip a second overlapping call for the SAME machine (e.g. a
+    // manual routes/machines.js save/test-connection landing mid-way through
+    // this machine's own syncOtherMachines() tick) instead of letting it
+    // clobber this run's state.syncProgress entry. A different machine's id
+    // is unaffected, matching state.js's otherMachineSyncInFlight comment.
+    if (state.otherMachineSyncInFlight.has(machine.id)) return true;
+    state.otherMachineSyncInFlight.add(machine.id);
     const adapter = getAdapter(machine);
     try {
         const latestNativeId = await adapter.getLatestShotId(machine);
@@ -275,6 +290,8 @@ async function syncMachineShots(machine) {
     } catch (err) {
         log(`Sync error (${machine.name}): ${err.message}`, true);
         return false;
+    } finally {
+        state.otherMachineSyncInFlight.delete(machine.id);
     }
 }
 

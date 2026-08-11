@@ -95,6 +95,50 @@ describe('lib/sync.js SSE event emissions (#735)', () => {
         expect(completeEvents).toEqual([{ machineId: defaultId, total: 10, success: true }]);
     });
 
+    it('#773 regression guard: a second overlapping syncShots() call is skipped instead of clobbering syncProgress', async () => {
+        // 10 shots (tracked); shot 5's request is gated so a second
+        // syncShots() call can be started while the first is still mid-loop
+        // -- the only way to deterministically exercise "overlapping calls"
+        // in a single-threaded test, same technique as multi-machine-sync
+        // .test.js's #730 guard.
+        let releaseFirst;
+        const gate = new Promise(resolve => { releaseFirst = resolve; });
+        const axiosGetMock = vi.fn((url) => {
+            if (url.endsWith('/latest')) return Promise.resolve({ data: [{ lastShotId: 10 }] });
+            const id = Number(url.split('/').pop());
+            if (id === 5) return gate.then(() => ({ data: makeShot(id) }));
+            return Promise.resolve({ data: makeShot(id) });
+        });
+        require.cache[axiosPath].exports = { get: axiosGetMock };
+
+        const { syncShots } = require('../lib/sync');
+        const state    = require('../lib/state');
+        const registry = require('../lib/machines/registry');
+        const defaultId = registry.getDefaultMachine().id;
+        state.syncProgress.clear();
+        state.defaultSyncInFlight = false;
+
+        const firstPromise = syncShots({ machineOn: true });
+        await new Promise(resolve => setTimeout(resolve, 0)); // let it run up to shot 5 and block
+
+        expect(state.syncProgress.get(defaultId)).toEqual({ current: 4, total: 10 });
+
+        // Before #773's fix, this second call would independently recompute
+        // its own `total` (still 10 here since no shots are stored yet) and
+        // overwrite the Map entry with {current: 0, total: 10} -- resetting
+        // the progress the first call had already made. Now it must be
+        // skipped outright, leaving the first call's entry untouched.
+        const secondResult = await syncShots({ machineOn: true });
+        expect(secondResult).toBe(true);
+        expect(state.syncProgress.get(defaultId)).toEqual({ current: 4, total: 10 });
+
+        releaseFirst();
+        const firstResult = await firstPromise;
+        expect(firstResult).toBe(true);
+        expect(state.syncProgress.has(defaultId)).toBe(false);
+        expect(state.defaultSyncInFlight).toBe(false);
+    });
+
     it('syncShots() emits SYNC_COMPLETE with success:false when a non-404 error aborts mid-backfill', async () => {
         // 10 shots so the backfill is tracked; shot 5 fails with a non-404
         // error, which (per #721) aborts the whole loop instead of skipping.

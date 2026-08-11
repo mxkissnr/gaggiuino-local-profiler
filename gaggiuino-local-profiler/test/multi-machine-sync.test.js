@@ -253,6 +253,49 @@ describe('lib/sync multi-machine', () => {
         expect(state.syncProgress.size).toBe(0); // both entries cleared, none left dangling
     });
 
+    it('#773 regression guard: a second overlapping syncMachineShots() call for the SAME machine is skipped, not clobbering its syncProgress entry', async () => {
+        const registry = require('../lib/machines/registry');
+        const machine = registry.createMachine({ name: 'A', type: 'gaggimate', host: 'a.local' });
+
+        let releaseFirst;
+        const gate = new Promise(resolve => { releaseFirst = resolve; });
+        const fakeAdapter = {
+            getLatestShotId: vi.fn().mockResolvedValue(10),
+            getShot: vi.fn().mockImplementation(async (m, nativeId) => {
+                if (nativeId === 5) await gate;
+                return { id: nativeId, timestamp: 1000 * nativeId, duration: 25000, datapoints: { timeInShot: [0] } };
+            }),
+        };
+        require.cache[machinesIndexPath] = {
+            exports: { ...require('../lib/machines'), getAdapter: () => fakeAdapter },
+        };
+        delete require.cache[syncPath];
+        const sync  = require('../lib/sync');
+        const state = require('../lib/state');
+        state.syncProgress.clear();
+        state.otherMachineSyncInFlight.clear();
+
+        const firstPromise = sync.syncMachineShots(machine);
+        await new Promise(resolve => setTimeout(resolve, 0)); // let it run up to shot 5 and block
+
+        expect(state.syncProgress.get(machine.id)).toEqual({ current: 4, total: 10 });
+
+        // Before #773's fix, this second call for the SAME machine.id would
+        // recompute its own `total` and overwrite the Map entry with
+        // {current: 0, total: 10} -- resetting the first call's progress.
+        // Now it must be skipped outright.
+        const secondResult = await sync.syncMachineShots(machine);
+        expect(secondResult).toBe(true);
+        expect(fakeAdapter.getLatestShotId).toHaveBeenCalledTimes(1); // second call never touched the adapter
+        expect(state.syncProgress.get(machine.id)).toEqual({ current: 4, total: 10 });
+
+        releaseFirst();
+        const firstResult = await firstPromise;
+        expect(firstResult).toBe(true);
+        expect(state.syncProgress.has(machine.id)).toBe(false);
+        expect(state.otherMachineSyncInFlight.has(machine.id)).toBe(false);
+    });
+
     it('syncOtherMachines skips the default machine and disabled machines', async () => {
         const registry = require('../lib/machines/registry');
         const enabled  = registry.createMachine({ name: 'Enabled GaggiMate', type: 'gaggimate', host: '10.1.70.199:8180' });
