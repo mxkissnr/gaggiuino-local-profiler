@@ -1,0 +1,89 @@
+#include <tunables/global>
+
+# GLP — Gaggiuino Local Profiler AppArmor profile.
+#
+# MUST BE VALIDATED IN complain MODE BEFORE THIS SHIPS AT enforce. See the
+# PR description for the exact steps. A too-tight profile fails in the
+# field with opaque errors (files silently unreadable, sockets silently
+# refused) and this repo has no way to run real AppArmor mediation in CI —
+# only a Home Assistant OS install can confirm it.
+#
+# Runtime shape this profile is derived from (not a template):
+#   - Base image: node:22-slim (Debian Bookworm), no s6-overlay, init: false
+#     (config.yaml). docker-entrypoint.sh starts as root, `chown -R node:node
+#     /data` (the bind mount's owning UID varies per install, see #271),
+#     then `exec gosu node "$@"` to run `node server.js` unprivileged for
+#     the rest of the process lifetime.
+#   - All persistent state lives under /data: the SQLite DB (glp.db, plus
+#     its -wal/-shm files — lib/db.js runs `PRAGMA journal_mode = WAL`),
+#     legacy per-entity JSON files kept only as one-time migration sources
+#     (lib/db.js's JSON_FILES), api_token.txt, preheat_state.json,
+#     options.json, profiles_cache.json, and bean-images/ (bean photos,
+#     downloaded from an allow-listed set of import hosts or uploaded by
+#     the user — lib/constants.js's BEAN_IMAGE_DIR/ALLOWED_IMPORT_HOSTS).
+#     Backups (routes/backup.js) are built as an in-memory zip and streamed
+#     out over HTTP — nothing is written to a temp/backup directory.
+#   - better-sqlite3 and @napi-rs/canvas are native (N-API) addons; the
+#     Dockerfile rebuilds better-sqlite3 from source on non-amd64 targets
+#     (#419) — both need to open/exec their own .node files under
+#     node_modules. @napi-rs/canvas additionally reads TTF fonts at
+#     /usr/share/fonts/truetype/liberation/*.ttf (lib/card.js — the
+#     `fonts-liberation` apt package installed in the Dockerfile).
+#   - Outbound network: the Gaggiuino/GaggiMate WebSocket and MQTT clients
+#     (lib/gaggiuino-*.js, lib/machines/gaggimate/ws-client.js) connect to
+#     whatever LAN host the user configures per machine; axios/cheerio
+#     import fetches bean data from a small allow-listed set of HTTPS
+#     hosts (lib/constants.js's ALLOWED_IMPORT_HOSTS); lib/mqtt-discovery.js
+#     calls the Supervisor's own API (config.yaml's hassio_api); the
+#     homeassistant_api option proxies Core API calls. All of this is plain
+#     outbound TCP with normal DNS resolution — AppArmor network mediation
+#     can't scope by destination host, only by address family/socket type.
+#
+# Strategy: a broad `file,` rule (default-deny still applies to every
+# capability, mount, module load, ptrace and raw socket NOT explicitly
+# granted below) rather than enumerating exact paths. A Node app pulls in
+# hundreds of node_modules files plus dynamic native-addon lookups that
+# differ per architecture (see the better-sqlite3 rebuild above) — hand-
+# enumerating every path here would be exactly the kind of guess this audit
+# was told not to ship. The capability/network/exec lists ARE scoped
+# tightly to what's documented above.
+profile gaggiuino_local_profiler flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+
+  # App's own file I/O: /app (code + node_modules), /data (DB + WAL/SHM,
+  # config/options files, bean-images), /tmp, /proc, fonts, and whatever
+  # the Node/native-addon runtime itself needs.
+  file,
+
+  # Boot-time privilege drop performed by docker-entrypoint.sh: chown -R on
+  # the /data bind mount, then gosu (setuid/setgid) from root to the node
+  # user for the rest of the process's life.
+  capability chown,
+  capability dac_override,
+  capability fowner,
+  capability fsetid,
+  capability setgid,
+  capability setuid,
+
+  # Graceful shutdown (SIGTERM/SIGINT forwarding) between the entrypoint
+  # shell, gosu, and the node process it execs.
+  signal,
+
+  # Execute the entrypoint, gosu, and node itself within this same profile
+  # (ix = inherit) so nothing here needs its own child profile.
+  /usr/local/bin/docker-entrypoint.sh rix,
+  /usr/bin/** ix,
+  /usr/sbin/** ix,
+  /usr/local/bin/** ix,
+  /app/** ix,
+
+  # WebSocket/MQTT clients to user-configured LAN machines, HTTPS bean-
+  # import fetches, Supervisor/Core API calls, and normal DNS resolution.
+  # No raw/packet sockets — nothing in this codebase needs them.
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+}
