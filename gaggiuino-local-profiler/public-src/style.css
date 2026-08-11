@@ -75,12 +75,12 @@
         }
 
         /* #404: bundled locally (public-src/fonts/) so it renders fully
-           offline / behind HA ingress — no external font CDN, unlike
-           Figtree's bunny.net link above. Applied ONLY via .serif-display:
-           bean names in the Bibliothek view and the shot-card share image
-           (lib/card.js registers the same file for server-side rendering).
-           Never on numeric/data displays — tabular-nums UI stays sans-serif
-           everywhere else, regardless of theme. */
+           offline / behind HA ingress — no external font CDN. Applied ONLY
+           via .serif-display: bean names in the Bibliothek view and the
+           shot-card share image (lib/card.js registers the same file for
+           server-side rendering). Never on numeric/data displays —
+           tabular-nums UI stays sans-serif everywhere else, regardless of
+           theme. */
         @font-face {
             font-family: 'Fraunces';
             font-style: normal;
@@ -89,6 +89,24 @@
             src: url('./fonts/fraunces-600-latin.woff2') format('woff2');
         }
         .serif-display { font-family: 'Fraunces', Georgia, serif; }
+
+        /* Bundled locally same as Fraunces above (fonts.bunny.net removed —
+           was the app's last external CDN dependency). 400/600 latin only,
+           matching the two weights the app actually uses. */
+        @font-face {
+            font-family: 'Figtree';
+            font-style: normal;
+            font-weight: 400;
+            font-display: swap;
+            src: url('./fonts/figtree-400-latin.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Figtree';
+            font-style: normal;
+            font-weight: 600;
+            font-display: swap;
+            src: url('./fonts/figtree-600-latin.woff2') format('woff2');
+        }
 
         * { box-sizing: border-box; }
 

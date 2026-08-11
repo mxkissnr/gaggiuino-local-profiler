@@ -16,10 +16,9 @@
 // app shell (this document + built /assets/ bundles) — never for anything
 // under /api/. Network-first (not cache-first) means app updates always
 // win when the network is reachable; the cache only kicks in offline or on
-// a flaky connection. Chart.js/ECharts/topojson-client/QRCode are bundled
-// into the /assets/ output and covered by this same-origin caching; only
-// the Figtree font (bunny.net) is intentionally left uncached, since it's
-// still cross-origin.
+// a flaky connection. Chart.js/ECharts/topojson-client/QRCode and both
+// bundled fonts (Figtree, Fraunces) are all same-origin /assets/ output and
+// covered by this caching — no cross-origin request is left uncached.
 
 const SHELL_CACHE = 'glp-shell-v1';
 

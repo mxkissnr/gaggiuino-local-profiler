@@ -84,14 +84,13 @@ app.use((req, res, next) => {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
-    // Chart.js, ECharts, topojson-client and QRCode are bundled into the app
-    // (no third-party script host needed); Figtree font is still loaded from
-    // bunny.net.
+    // Chart.js, ECharts, topojson-client, QRCode and both fonts (Figtree,
+    // Fraunces) are bundled into the app — no third-party host needed.
     res.setHeader('Content-Security-Policy',
         "default-src 'self'; " +
         "script-src 'self'; " +
-        "style-src 'self' 'unsafe-inline' https://fonts.bunny.net; " +
-        "font-src 'self' data: https://fonts.bunny.net; " +
+        "style-src 'self' 'unsafe-inline'; " +
+        "font-src 'self' data:; " +
         "img-src 'self' data: blob:; " +
         "connect-src 'self';");
     next();
