@@ -7,14 +7,14 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             reporter: ['text', 'json-summary', 'lcov'],
-            // Real measured baseline (2026-07-28): statements 41.21%, branches 38.37%,
-            // functions 33.68%, lines 43.87%. Thresholds set slightly below to avoid
+            // Real measured baseline (2026-08-11): statements 49.31%, branches 44.71%,
+            // functions 40.43%, lines 52.38%. Thresholds set slightly below to avoid
             // false-failing on minor variance while still catching real regressions.
             thresholds: {
-                statements: 40,
-                branches: 37,
-                functions: 32,
-                lines: 42,
+                statements: 47,
+                branches: 42,
+                functions: 38,
+                lines: 50,
             },
         },
     },

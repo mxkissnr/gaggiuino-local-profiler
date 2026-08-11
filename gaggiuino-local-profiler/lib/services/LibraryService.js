@@ -43,7 +43,12 @@ class LibraryService {
         const activeBag = bags.length ? bags[bags.length - 1] : null;
         const name      = String(bean.name || '').toLowerCase();
         const idExists  = new Set((allBeans || []).map(b => b.id));
-        const consumed  = doseRows.reduce((sum, r) => {
+        // Guard mirrors public-src/bean-math.js's computeBeanRemaining — no
+        // live caller passes a nullish doseRows (shotRepo.getAnnotatedDoses()
+        // always returns an array), but the frontend port defends against it
+        // and this side silently didn't, a real (if unreachable) divergence
+        // caught by test/bean-math-parity.test.js.
+        const consumed  = (doseRows || []).reduce((sum, r) => {
             const d = parseFloat(r.dose);
             if (!d) return sum;
             const matches = r.beanId != null && idExists.has(r.beanId)
