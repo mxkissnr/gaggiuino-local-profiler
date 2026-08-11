@@ -39,3 +39,36 @@ jobs:
 
       - name: Run tests with coverage
         run: npx vitest run --coverage
+
+  e2e:
+    name: E2E smoke test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: gaggiuino-local-profiler
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: gaggiuino-local-profiler/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Own job (not a step in `test` above) so a Chromium download never
+      # slows the unit test job — see #798.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      - name: Run E2E smoke test
+        run: npm run test:e2e

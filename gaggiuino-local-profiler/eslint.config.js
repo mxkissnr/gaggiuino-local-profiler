@@ -100,4 +100,14 @@ module.exports = [
     },
     rules: commonRules,
   },
+  {
+    // test/e2e/*.mjs runs on node:test (Playwright), not vitest — see
+    // test:e2e in package.json (#798) — so it gets node globals only, not
+    // globals.vitest.
+    files: ['test/**/*.mjs'],
+    languageOptions: {
+      globals: globals.node,
+    },
+    rules: commonRules,
+  },
 ];
