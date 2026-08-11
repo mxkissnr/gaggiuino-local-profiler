@@ -30,12 +30,19 @@ import { computeBeanRemaining as computeBeanRemainingFrontend } from '../public-
 
 beforeEach(() => memDb.exec('DELETE FROM shots; DELETE FROM annotations; DELETE FROM library;'));
 
-// Runs the same fixture through both implementations. Neither call mutates
-// its inputs, so the exact same objects can be reused for both sides.
+// Runs the same fixture through both implementations. Each side gets its own
+// deep copy rather than the same object instances: neither implementation
+// mutates its inputs today, but that is precisely one of the properties this
+// test exists to protect, so it must not be assumed. Sharing instances would
+// let a future mutation in the first-called side (backend) silently feed the
+// second, keeping the two in agreement here while real callers -- which never
+// share state this way -- diverge.
 function runBoth(bean, doseRows, allBeans) {
     return {
-        backend:  libraryService.computeBeanRemaining(bean, doseRows, allBeans),
-        frontend: computeBeanRemainingFrontend(bean, doseRows, allBeans),
+        backend:  libraryService.computeBeanRemaining(
+            structuredClone(bean), structuredClone(doseRows), structuredClone(allBeans)),
+        frontend: computeBeanRemainingFrontend(
+            structuredClone(bean), structuredClone(doseRows), structuredClone(allBeans)),
     };
 }
 
