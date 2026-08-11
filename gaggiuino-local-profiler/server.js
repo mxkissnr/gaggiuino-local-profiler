@@ -109,6 +109,17 @@ function isFromSupervisor(req) {
     return isSupervisorIp(req.socket?.remoteAddress || req.ip || '');
 }
 
+// #801: isSupervisorIp() trusts the whole 172.30.0.0/16 Supervisor add-on
+// network, not just the Ingress proxy specifically -- any other add-on
+// running on that network, not only the Supervisor's own ingress path, could
+// in principle send a crafted X-Ingress-Path and be treated as Ingress here.
+// Not a regression (equally true before this fix) and not exploitable beyond
+// what the already-public GET /api/token grants today, but it means
+// isIngressRequest()'s actual trust boundary is "anything on the Supervisor
+// network", not "the Ingress proxy alone" -- load-bearing for anything later
+// built on the assumption that Ingress implies trusted (e.g. the planned
+// expose_api_port hardening).
+
 // True only for requests that genuinely arrive through HA Ingress (Supervisor
 // IP + X-Ingress-Path header — same trust check the auth bypass below uses).
 // Also used to decide whether index.html gets the PWA manifest link / service

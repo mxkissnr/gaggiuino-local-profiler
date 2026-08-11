@@ -138,4 +138,13 @@ describe('index.html PWA gating — real server, real HTTP', () => {
         const noHeaderReq = { headers: {}, socket: { remoteAddress: '172.30.32.1' } };
         expect(serverExports.isIngressRequest(noHeaderReq)).toBe(false);
     });
+
+    // Without this, an implementation that dropped the prefix check entirely
+    // (`typeof p === 'string' && isFromSupervisor(req)`) would still pass every
+    // other case above -- none of them exercise a trusted IP paired with a
+    // header that isn't shaped like an Ingress path at all.
+    it('rejects a header that is not an Ingress path at all, even from a trusted IP', () => {
+        const req = { headers: { 'x-ingress-path': '/api/some_other_thing' }, socket: { remoteAddress: '172.30.32.1' } };
+        expect(serverExports.isIngressRequest(req)).toBe(false);
+    });
 });
