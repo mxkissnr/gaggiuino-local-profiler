@@ -31,10 +31,10 @@
     "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^4.1.10",
     "aedes": "^1.1.1",
-    "eslint": "^10.8.0",
-    "globals": "^17.8.0",
+    "eslint": "^10.8.1",
+    "globals": "^17.9.0",
     "playwright": "^1.62.1",
-    "vite": "8.2.0",
+    "vite": "8.2.1",
     "vitest": "4.1.10"
   },
   "allowScripts": {
