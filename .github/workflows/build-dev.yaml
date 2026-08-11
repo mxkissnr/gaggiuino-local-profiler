@@ -222,6 +222,24 @@ jobs:
           CONFIG="dev-app/gaggiuino_local_profiler_dev/config.yaml"
           LOG="dev-app/gaggiuino_local_profiler_dev/CHANGELOG.md"
           MARKER="dev-app/.last-dev-build-sha"
+          PROFILE_SRC="main-repo/gaggiuino-local-profiler/apparmor.txt"
+          PROFILE_DST="dev-app/gaggiuino_local_profiler_dev/apparmor.txt"
+
+          # #789: Supervisor reads an add-on's AppArmor profile from the
+          # add-on's own directory, NOT from the image -- so the profile has
+          # to be copied into the manifest repo alongside config.yaml or the
+          # dev add-on runs completely unconfined. That failure is silent and
+          # actively misleading: a complain-mode validation would report an
+          # empty audit log, which is indistinguishable from a clean pass, and
+          # the step after a clean pass is enabling enforce for everyone.
+          # Absent source file: drop any stale copy rather than leaving an
+          # outdated profile in place, and say so loudly in the run.
+          if [ -f "$PROFILE_SRC" ]; then
+            cp "$PROFILE_SRC" "$PROFILE_DST"
+          else
+            echo "::warning::no apparmor.txt in the source repo -- the dev add-on will run unconfined"
+            rm -f "$PROFILE_DST"
+          fi
 
           # Anchored to the start of the line so the `version:` key is the only
           # possible match -- description text may contain the word too.
@@ -268,12 +286,17 @@ jobs:
           # actually correct. Happens whenever this job is re-run (e.g. after
           # fixing the PAT) or the manifest was bumped by hand in the meantime.
           cd dev-app
-          if git diff --quiet -- gaggiuino_local_profiler_dev/config.yaml gaggiuino_local_profiler_dev/CHANGELOG.md .last-dev-build-sha; then
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Stage first, then test the index: apparmor.txt may be brand new
+          # (#789's first run), and `git diff` on a worktree can't see an
+          # untracked file -- it would report "nothing to commit" for exactly
+          # the change this step exists to deliver. `git add -A` over the
+          # add-on directory also picks up the profile's deletion.
+          git add -A gaggiuino_local_profiler_dev .last-dev-build-sha
+          if git diff --cached --quiet; then
             echo "Already up to date with ${NEW_VERSION} -- nothing to commit"
             exit 0
           fi
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add gaggiuino_local_profiler_dev/config.yaml gaggiuino_local_profiler_dev/CHANGELOG.md .last-dev-build-sha
           git commit -m "chore(dev): point dev app at ${NEW_VERSION} (${COMMIT_SHA:0:7})"
           git push
