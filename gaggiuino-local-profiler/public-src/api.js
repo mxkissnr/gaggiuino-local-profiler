@@ -5,11 +5,13 @@ export async function initToken() {
   // localStorage under this key. Idempotent no-op once the key is gone.
   localStorage.removeItem('glp_token');
   try {
-    // /api/token is only served to requests arriving via the HA Supervisor ingress
-    // (source 172.30.x.x) or to already-authenticated callers — not to unauthenticated
-    // external LAN clients. Ingress traffic is authorized purely by Supervisor IP +
-    // X-Ingress-Path (see server.js isIngressRequest()), never by a client-held token,
-    // so a fresh token is available on every load — no need to persist it (#522).
+    // /api/token answers any caller that can reach the port by default (#533),
+    // so a fresh token is normally available on every load — no need to
+    // persist it (#522). #803: if the add-on's expose_api_port option is
+    // turned off, this fetch 403s for a session that didn't arrive via HA
+    // Ingress, and S.glpToken simply stays empty for the rest of this
+    // session — see server.js's isIngressRequest() and routes/system.js's
+    // GET /api/token.
     const headers = S.glpToken ? { 'X-GLP-Token': S.glpToken } : {};
     const r = await fetch('api/token', { headers });
     if (r.ok) {

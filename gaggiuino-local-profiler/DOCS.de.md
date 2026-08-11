@@ -79,7 +79,7 @@ Installation via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/m
 Alle Komponenten authentifizieren sich automatisch über einen gemeinsamen Token:
 
 1. Das App generiert beim ersten Start einen zufälligen 64-stelligen Token und speichert ihn in `/data/api_token.txt`.
-2. `GET /api/token` gibt den Token an jeden Aufrufer zurück, der den Port erreichen kann — begrenzt auf 10 Anfragen pro Minute je Quelladresse. Die Begründung steht unten im Vertrauensmodell (#533).
+2. `GET /api/token` gibt den Token an jeden Aufrufer zurück, der den Port erreichen kann — begrenzt auf 10 Anfragen pro Minute je Quelladresse. Die Begründung steht unten im Vertrauensmodell (#533) — das ist der Standard; die Option `expose_api_port` kann das für Aufrufer außerhalb von Ingress abschalten.
 3. Browser-UI und Integration lesen den Token beim Start über `/api/token` (die Anfrage läuft durch den Supervisor) und schicken ihn danach als `X-GLP-Token`-Header bei allen Anfragen mit.
 4. Anfragen über HA Ingress umgehen die Token-Prüfung vollständig — HA hat den Benutzer bereits authentifiziert.
 5. **GLP Order Card im Direkt-URL-Modus** (`glp_url` konfiguriert): `glp_token: <token>` in der Karten-YAML-Konfiguration setzen. Den Token findest du unter **Einstellungen → API Token** in der App-Oberfläche (App einmal über HA Ingress öffnen, oder eine Sitzung nutzen, die bereits einen gültigen Token besitzt).
@@ -97,6 +97,16 @@ Das ist eine bewusste Abwägung (#533). Der Direktzugriff über den Port ist der
 **Das Add-on gibt Port 8099 standardmäßig auf den Host frei** (`ports: 8099/tcp: 8099` in `config.yaml`), auch wenn du ausschließlich über HA Ingress zugreifst und weder die PWA noch den Direkt-URL-Modus der Order Card nutzt. In diesem Fall bringt der offene Port keinen Vorteil und ist, wie im Vertrauensmodell oben beschrieben, gleichbedeutend damit, deine gesamte GLP-Datenbank (und die Maschinensteuerung) im LAN offenzulegen. Zum Schließen: **Einstellungen → Add-ons → GLP → Konfiguration → Netzwerk**, dort den Host-Port für 8099/tcp leeren/deaktivieren und das Add-on neu starten. Lass ihn nur gemappt, wenn du die PWA oder eine Order Card im Direkt-URL-Modus tatsächlich nutzt.
 
 Für die Order Card im Direkt-URL-Modus kopierst du den Token weiterhin einmalig aus **Einstellungen → API Token** in die Karten-YAML; an diesem Ablauf ändert sich nichts.
+
+**Eine leichtere Alternative: `expose_api_port: false` (#803).** Den Port komplett aus der Freigabe zu nehmen (oben) schließt alles darauf. Wenn du den Port lieber gemappt lassen möchtest — etwa für eine bereits eingerichtete Order Card im Direkt-URL-Modus —, aber neue/unbekannte Aufrufer in deinem LAN daran hindern willst, überhaupt erst einen Token abzuholen, setze stattdessen diese Add-on-Option auf `false`. `GET /api/token` gibt dann für jede Anfrage, die nicht über HA Ingress kam, `403` zurück; das Ingress-Panel ist davon nicht betroffen und funktioniert unverändert weiter.
+
+Sei präzise darüber, was das schließt und was nicht:
+
+- Es betrifft ausschließlich `GET /api/token` selbst. Es gibt Port 8099 nicht frei vom Host-Mapping und wirkt sich auf keinen anderen Endpunkt aus — eine Anfrage, die bereits einen gültigen `X-GLP-Token`-Header mitbringt (z. B. einen zuvor in die YAML einer Order Card kopierten), funktioniert weiterhin, von überall, das den Port erreichen kann. Beschreibe diese Option nicht als "authentifiziert" oder allgemein "geschützt" für den Token-Endpunkt — sie schließt eine bestimmte Art, an einen Token zu kommen, nicht den generellen API-Zugriff.
+- Sie schließt den Endpunkt gegen dein **LAN**, nicht gegen das Supervisor-Add-on-Netzwerk. `isSupervisorIp()` vertraut dem gesamten `172.30.0.0/16` (dem kompletten Supervisor-Netzwerk), nicht nur dem Ingress-Proxy — siehe den Kommentar in `server.js`. Ein anderes Add-on in diesem Netzwerk ist von dieser Option nicht betroffen.
+- Zwei Komponenten verlieren dadurch komplett die Möglichkeit, einen Token zu bekommen, weil beide keine andere Möglichkeit zur Authentifizierung haben: die **installierbare PWA** (kein Eingabefeld, kein clientseitiger Cache seit #524) und die **erstmalige Einrichtung des Direkt-URL-Modus der Order Card** — eine Order Card, die bereits `glp_token` in ihrer YAML gesetzt hat, funktioniert weiter, da das nur ein `X-GLP-Token`-Header an einem anderen Endpunkt ist.
+
+Standard ist `true` (unverändertes, offenes Verhalten) — jede bestehende Installation funktioniert exakt wie bisher weiter; du musst dies aktiv abschalten.
 
 Alle persistenten Daten werden in SQLite (`/data/glp.db`) mit aktiviertem WAL-Journal-Modus gespeichert — Schreibvorgänge sind standardmäßig absturzsicher, ohne dass ein inkonsistenter Zustand entstehen kann.
 
@@ -144,6 +154,7 @@ Auf schmalen Bildschirmen (Smartphones, Tablets im Hochformat) wird die Tab-Leis
 | `preheat_time` | Aufwärmzeit in Minuten — wie lange nach dem Einschalten bis die Maschine brühbereit ist (1–120) | `20` |
 | `enable_orders` | Bestellsystem aktivieren — Barista-Backend-Tab + Kunden-Bestellkarte; standardmäßig deaktiviert | `false` |
 | `debug_logging` | Ausführliches Diagnose-Logging (z.B. jeder Schritt des Bohnen-Imports) im Add-on-Log — standardmäßig aus, damit der Normalbetrieb nicht zugespammt wird, bei Bedarf zum Debuggen einschalten | `false` |
+| `expose_api_port` | Ob `GET /api/token` auf Anfragen antwortet, die nicht über HA Ingress kommen (#803). Deaktivierung bricht die **installierbare PWA** und die **erstmalige Einrichtung des Direkt-URL-Modus der Order Card**, da beide keine andere Möglichkeit haben, an einen Token zu kommen — eine bereits eingerichtete Order Card im Direkt-URL-Modus funktioniert weiter. Gibt Port 8099 selbst nicht frei und verengt die Vertrauensgrenze nicht unter das gesamte Supervisor-Add-on-Netzwerk. Siehe [Vertrauensmodell](#vertrauensmodell) oben. | `true` |
 | `port` | Port, auf dem der Server lauscht (1024–65535) | `8099` |
 
 **Maschinen-Host und Switch-Entität werden in der App konfiguriert, nicht hier.** Sie waren früher Add-on-Optionen (`machine_host`/`switch_entity`); seit dieser Version sind sie komplett aus der Configuration-Seite des Add-ons entfernt — stattdessen unter **Einstellungen → Maschinen** setzen, für die Standardmaschine (#1) genau wie für jede weitere Maschine. Bereits konfigurierte Werte einer bestehenden Installation werden automatisch übernommen; nichts muss neu eingegeben werden.
@@ -188,6 +199,7 @@ Umgebungsvariablen zurück, alle optional:
 | `GLP_PREHEAT_TIME` | Add-on-Option `preheat_time` | Minuten, 1–120, Standard `20` |
 | `GLP_ENABLE_ORDERS` | Add-on-Option `enable_orders` | `true`/`false`, Standard `false` |
 | `GLP_DEBUG_LOGGING` | Add-on-Option `debug_logging` | `true`/`false`, Standard `false` |
+| `GLP_EXPOSE_API_PORT` | Add-on-Option `expose_api_port` | `true`/`false`, Standard `true` |
 | `GLP_HA_URL` + `GLP_HA_TOKEN` | `SUPERVISOR_TOKEN` (HA-API-Zugriff) | Stellt Auto-Sync, Switch-Entity-Power-Control und Push-Benachrichtigungen wieder her — siehe unten. Beide müssen gemeinsam gesetzt sein. |
 
 `GLP_HA_TOKEN` ist ein normaler Home-Assistant-**Langzeit-Zugriffstoken**: in

@@ -26,6 +26,10 @@ function loadOptions() {
         preheat_time:  process.env.GLP_PREHEAT_TIME  ? Number(process.env.GLP_PREHEAT_TIME)  : undefined,
         enable_orders: process.env.GLP_ENABLE_ORDERS === 'true',
         debug_logging: process.env.GLP_DEBUG_LOGGING === 'true',
+        // #803: unlike the booleans above, this one defaults to true (open),
+        // so unset/anything-but-'false' must resolve to true here too -- see
+        // isApiPortExposed() below for why the default can't be "off".
+        expose_api_port: process.env.GLP_EXPOSE_API_PORT !== 'false',
     };
 }
 
@@ -80,6 +84,16 @@ function isOrdersEnabled() { return !!loadOptions().enable_orders; }
 function isDebugLoggingEnabled() { return !!loadOptions().debug_logging; }
 function debugLog(message) { if (isDebugLoggingEnabled()) log(`[debug] ${message}`); }
 
+// #803: opposite default from isOrdersEnabled/isDebugLoggingEnabled above --
+// this one must stay true when the key is missing, both when options.json
+// exists but predates this option (upgrading install) and when it's absent
+// entirely (standalone Docker, env-var fallback above already defaults to
+// true too). Only an explicit `false` in options.json turns it off; that is
+// the whole point (see routes/system.js GET /api/token) -- a heuristic
+// default-off here would repeat the v2.19.1 regression this option exists
+// to avoid.
+function isApiPortExposed() { return loadOptions().expose_api_port !== false; }
+
 // ── Order shims ───────────────────────────────────────────────────────────────
 function loadOrders()          { return orderRepo.findActive(); }
 function loadAllOrders()       { return orderRepo.findAll(); }
@@ -125,7 +139,7 @@ function saveShotDefaults(s)       { shotDefaultsRepo.saveDefaults(s); }
 
 module.exports = {
     loadOptions, getMachineUrl, getMachineBaseUrl, getSyncIntervalMs, isOrdersEnabled,
-    isDebugLoggingEnabled, debugLog,
+    isDebugLoggingEnabled, debugLog, isApiPortExposed,
     loadOrders, loadAllOrders, saveOrders, deleteOrder, loadMenu, saveMenu,
     loadOrdersSettings, saveOrdersSettings,
     loadNotifyMapping, saveNotifyMapping,

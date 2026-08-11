@@ -250,6 +250,11 @@ export async function updateStatus(machineId) {
       pollSyncProgressFallback(list, machineId);
     }
     // Token is no longer returned by /api/status — it comes from /api/token (initToken)
+    // #803: exposeApiPort mirrors the add-on option of the same name (default
+    // true if the field is somehow missing, e.g. an older server -- matches
+    // the option's own default). main.js's renderApiTokenCard() reads this to
+    // tell "no token because expose_api_port is off" apart from "no token yet".
+    S.apiPortExposed = s.exposeApiPort !== false;
     const dot = document.getElementById('statusDot');
     const railDot = document.getElementById('railStatusDot');
     const timeEl = document.getElementById('syncTime');

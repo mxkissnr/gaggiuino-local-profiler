@@ -17,6 +17,10 @@ export const S = {
   // In-memory only (#522) — never persisted to localStorage. A fresh token is
   // fetched on every load via initToken()'s /api/token call (see api.js).
   glpToken: '',
+  // #803: mirrors /api/status's exposeApiPort field. Starts true (the add-on
+  // default) so a session that hasn't polled /api/status yet never shows the
+  // "port closed" explanation it hasn't actually confirmed.
+  apiPortExposed: true,
   // S.shots is the currently *visible* (machine-filtered) set every existing
   // view (sidebar, analytics, ...) already reads; S.allShots is the full
   // unfiltered fetch from the server, re-filtered into S.shots whenever

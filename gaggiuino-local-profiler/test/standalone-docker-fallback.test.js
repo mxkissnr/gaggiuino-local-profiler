@@ -20,6 +20,7 @@ const dataPath       = require.resolve('../lib/data');
 const ENV_KEYS = [
     'SUPERVISOR_TOKEN', 'GLP_HA_URL', 'GLP_HA_TOKEN',
     'GLP_SYNC_INTERVAL', 'GLP_PREHEAT_TIME', 'GLP_ENABLE_ORDERS', 'GLP_DEBUG_LOGGING',
+    'GLP_EXPOSE_API_PORT',
 ];
 
 describe('standalone Docker env-var fallbacks', () => {
@@ -58,6 +59,7 @@ describe('standalone Docker env-var fallbacks', () => {
             process.env.GLP_PREHEAT_TIME  = '30';
             process.env.GLP_ENABLE_ORDERS = 'true';
             process.env.GLP_DEBUG_LOGGING = 'true';
+            process.env.GLP_EXPOSE_API_PORT = 'false';
             delete require.cache[dataPath];
             const { loadOptions } = require(dataPath);
 
@@ -66,10 +68,14 @@ describe('standalone Docker env-var fallbacks', () => {
                 preheat_time:  30,
                 enable_orders: true,
                 debug_logging: true,
+                expose_api_port: false,
             });
         });
 
-        it('defaults to undefined/false when neither options.json nor env vars are set', () => {
+        // #803: unlike the three booleans above, expose_api_port must default
+        // to true (open) when unset -- an existing standalone-Docker install
+        // upgrading to this option must not suddenly start 403ing its own PWA.
+        it('defaults to undefined/false/true when neither options.json nor env vars are set', () => {
             delete require.cache[dataPath];
             const { loadOptions } = require(dataPath);
 
@@ -78,6 +84,7 @@ describe('standalone Docker env-var fallbacks', () => {
                 preheat_time:  undefined,
                 enable_orders: false,
                 debug_logging: false,
+                expose_api_port: true,
             });
         });
 

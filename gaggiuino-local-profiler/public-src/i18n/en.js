@@ -334,6 +334,7 @@ export default {
     settings_api_token:'API Token',
     settings_api_token_desc:'Integrations like the Order Card in direct-URL mode (without HA Ingress) need this token as glp_token in their YAML configuration.',
     settings_api_token_copy:'Copy', settings_api_token_copied:'Token copied',
+    settings_api_token_port_closed:'This session has no token because expose_api_port is turned off and the request did not arrive via HA Ingress. Open the app through the Home Assistant Ingress panel to get a token, or turn expose_api_port back on in the add-on Configuration for direct-port access (the installable PWA, first-time Order Card direct-URL setup).',
     settings_devtools_title:'Dev Tools', settings_devtools_desc:'GLP DEV channel only — never available on a real install.', settings_devtools_export_db:'Download raw database',
     settings_devtools_import_db:'Upload raw database …', settings_devtools_import_db_confirm:'This replaces the entire database with the uploaded file. A backup of the current database is kept, but a restart is required for the import to take effect. Continue?', settings_devtools_import_db_done:'Import successful — restart the add-on to load it.', settings_devtools_import_db_failed:'Import failed.',
     preheat_warming:'Warming up …', preheat_ready:'Ready to brew',

@@ -20,7 +20,7 @@ function getOpenApiSpec() {
 
 const { GLP_VERSION, HA_TOKEN, PROFILES_CACHE_FILE } = require('../lib/constants');
 const shotRepo = require('../lib/repositories/ShotRepository');
-const { loadOptions, isOrdersEnabled, loadMenu } = require('../lib/data');
+const { loadOptions, isOrdersEnabled, loadMenu, isApiPortExposed } = require('../lib/data');
 const { getSwitchState, callHaService } = require('../lib/ha');
 const { setReadyByTarget, buildPreheatResponse } = require('../lib/preheat');
 const { buildLiveDataResponse } = require('../lib/poll');
@@ -88,7 +88,8 @@ const { resolveMachine } = registry;
 
 // ── Token endpoint ────────────────────────────────────────────────────────
 
-// Serves the API token to any caller that can reach this port, rate-limited.
+// Serves the API token to any caller that can reach this port, rate-limited —
+// unless the expose_api_port add-on option has been explicitly turned off.
 //
 // This deliberately reverses the #276 restriction to HA-internal callers (#533).
 // Direct-port access (http://<host>:8099) is how the installable PWA runs, and
@@ -99,12 +100,20 @@ const { resolveMachine } = registry;
 //
 // The trade-off, accepted knowingly for a home LAN: anything that can reach this
 // port can obtain the token and therefore call every endpoint, so token auth is
-// no longer a boundary within the LAN. Reaching the port at all is the boundary.
-// Do NOT "fix" this back to an IP check without providing another way for
-// direct-port clients to get a token — that is precisely what broke v2.19.1.
+// no longer a boundary within the LAN by default. Reaching the port at all is
+// the boundary. Do NOT restore the old #276 IP check unconditionally -- that is
+// precisely what broke v2.19.1. #803's expose_api_port is the opt-in escape
+// hatch instead: default true (identical to the behaviour above, so no
+// existing install regresses), and only when a user explicitly sets it to
+// false does this endpoint start rejecting non-Ingress callers. See
+// config.yaml's option comment and DOCS.md's "Trust model" section for what
+// that closes and what it does not.
 router.get('/api/token', async (req, res) => {
     const ip = (req.socket?.remoteAddress || req.ip || '').replace(/^::ffff:/, '');
     if (!rateLimit(`token:${ip}`, 10)) return res.status(429).json({ error: 'Rate limit exceeded' });
+    if (!req.glpIsIngress && !isApiPortExposed()) {
+        return res.status(403).json({ error: 'API token endpoint disabled for direct-port access (expose_api_port=false); use HA Ingress' });
+    }
     res.json({ apiToken: state.apiToken || null });
 });
 
@@ -200,6 +209,13 @@ router.get('/api/status', async (req, res) => {
         // GLP DEV. See the Dockerfile's ARG GLP_DEV_BUILD comment.
         ...(process.env.GLP_DEV_BUILD ? { devBuild: process.env.GLP_DEV_BUILD } : {}),
         ordersFeature:      isOrdersEnabled(),
+        // #803: intentionally NOT gated behind req.glpAuthenticated like the
+        // `sensitive` block below -- a session that has no token precisely
+        // because expose_api_port is off is, by definition, unauthenticated,
+        // and it's exactly that session the Settings API-token card (see
+        // main.js's renderApiTokenCard()) needs this value to explain itself
+        // to. A boolean config flag isn't sensitive on its own.
+        exposeApiPort:      isApiPortExposed(),
         machineReachable,
         lastMachineSuccess: state.lastMachineSuccess,
         // #681: default machine's on/off state + the timestamp it last

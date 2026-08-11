@@ -158,16 +158,33 @@ function showToast(msg, duration = 3000) {
 }
 
 // ── API token (Settings view) ──────────────────────────────────────────────
-// Shown once the session holds a token. Since #533 /api/token serves any caller
-// that can reach the port, so this is populated on ingress and direct-port
-// access alike (see api.js).
+// Shows the token once the session holds one. #803: when expose_api_port is
+// off, a direct-port session (no Ingress) never gets a token at all — this
+// card then shows an explanation instead of just disappearing, since a
+// silently-hidden card here is exactly what would leave someone setting up
+// the installable PWA or a direct-URL Order Card with no idea why. A session
+// that reached Settings via Ingress is unaffected either way (Ingress always
+// gets a token, expose_api_port or not) and still shows the token normally.
 function renderApiTokenCard() {
   const card = document.getElementById('apiTokenCard');
   const valueEl = document.getElementById('apiTokenValue');
+  const rowEl = document.getElementById('apiTokenRow');
+  const noticeEl = document.getElementById('apiTokenPortClosedNotice');
   if (!card || !valueEl) return;
-  if (!S.glpToken) { card.style.display = 'none'; return; }
-  valueEl.textContent = S.glpToken;
-  card.style.display = '';
+  if (S.glpToken) {
+    valueEl.textContent = S.glpToken;
+    card.style.display = '';
+    if (rowEl) rowEl.style.display = '';
+    if (noticeEl) noticeEl.style.display = 'none';
+    return;
+  }
+  if (S.apiPortExposed === false) {
+    card.style.display = '';
+    if (rowEl) rowEl.style.display = 'none';
+    if (noticeEl) noticeEl.style.display = '';
+    return;
+  }
+  card.style.display = 'none';
 }
 
 function copyApiToken() {

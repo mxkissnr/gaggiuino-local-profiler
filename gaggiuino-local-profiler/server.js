@@ -156,12 +156,16 @@ app.use((req, res, next) => {
     // error at startup), deny everything instead of letting every request
     // through unauthenticated.
     if (!state.apiToken) return res.status(503).json({ error: 'API token unavailable' });
+    // #803: computed once and exposed on req so routes/system.js's GET
+    // /api/token (the only other caller that needs this distinction) reuses
+    // this exact check instead of a second implementation of it.
+    req.glpIsIngress = isIngressRequest(req);
     // Ingress bypass: only trust X-Ingress-Path when the request genuinely
     // originates from the HA Supervisor (172.30.x.x), preventing header spoofing
     // from external LAN clients who can also reach port 8099.
-    if (isIngressRequest(req)) return next();
+    if (req.glpIsIngress) return next();
     if (req.path === '/api/status') return next();
-    if (req.path === '/api/token') return next(); // endpoint handles its own IP-based check
+    if (req.path === '/api/token') return next(); // endpoint enforces expose_api_port itself, using req.glpIsIngress above
     if (!req.path.startsWith('/api/') && req.path !== '/shots.json') return next();
     if (req.glpAuthenticated) return next();
     res.status(401).json({ error: 'Unauthorized' });
