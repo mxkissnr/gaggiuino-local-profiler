@@ -19,7 +19,7 @@
     "cheerio": "1.2.0",
     "echarts": "6.1.0",
     "express": "5.2.1",
-    "express-rate-limit": "^8.6.1",
+    "express-rate-limit": "^8.6.2",
     "js-yaml": "^5.2.3",
     "mqtt": "^5.15.2",
     "qrcode": "1.5.4",
