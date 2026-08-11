@@ -11,14 +11,16 @@ arch:
 startup: application
 boot: auto
 homeassistant_api: true
-# hassio_api: kept from #330, originally for the in-app self-update button
-# (POST /addons/self/update), which #516 removed entirely. The comment that
-# replaced it claimed hassio_api also backed a Supervisor-token verification
-# check on /api/token — that's stale too: #534 dropped that check, and
-# /api/token now serves any caller that can reach the port (see the trust
-# model above GET /api/token in routes/system.js). No code path currently
-# calls the Supervisor API; left set rather than removed as part of #546
-# since dropping a permission grant is a separate change from this fix.
+# hassio_api: was kept from #330 (self-update button, removed by #516) and a
+# Supervisor-token check (removed by #534) with no live use in between --
+# but #598 gave it a real one: lib/mqtt-discovery.js calls the Supervisor's
+# own /services/mqtt endpoint (SUPERVISOR_API, distinct from HA_API/
+# homeassistant_api below, which only proxies the *Core* API) to
+# auto-discover a registered MQTT broker. That endpoint is populated by the
+# `services: - mqtt:want` declaration further down, and reading it requires
+# this permission. #779 caught the previous version of this comment
+# claiming no code path used it -- no longer true, don't remove this again
+# without re-checking lib/mqtt-discovery.js first.
 hassio_api: true
 init: false
 ingress: true

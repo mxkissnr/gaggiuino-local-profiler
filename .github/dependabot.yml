@@ -12,3 +12,14 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # github/codeql-action ships init/analyze/upload-sarif as one
+      # versioned unit; a single-action bump leaves the other two on a
+      # mismatched version and breaks the Analyze job (#778, verified via
+      # glp-order-card PR #81, run 31450429543). Actions here are batched
+      # and reviewed together anyway, so one group covering all
+      # github-actions updates -- not just codeql-action -- is the simpler
+      # fix and cuts PR noise across the board.
+      github-actions:
+        patterns:
+          - "*"
