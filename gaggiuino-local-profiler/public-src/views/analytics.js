@@ -1,6 +1,4 @@
 import Chart from 'chart.js/auto';
-import * as echarts from 'echarts';
-import * as topojson from 'topojson-client';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName, flagEmoji } from '../constants.js';
@@ -565,6 +563,12 @@ let _worldTopo = null;
 let _worldMapRegistered = false;
 let _echartsInstance = null;
 let _resizeBound = false;
+// #797: echarts + topojson-client (~380 kB gzip combined) are dynamic
+// imports now, only fetched once the map actually has data to draw — cached
+// as a promise (not the resolved modules) so a second buildWorldMap() call
+// racing the first one's still-in-flight import reuses the same request
+// instead of firing a duplicate one.
+let _mapLibsPromise = null;
 
 // #648: buildWorldMap() is fired unawaited from initAnalytics(), which can
 // itself run again (re-navigating to Analytics) before a prior call's
@@ -801,6 +805,7 @@ export async function buildWorldMap() {
     wrap.innerHTML = `<div class="world-map-canvas" style="width:100%;height:100%"></div>
       <div class="world-map-hint">${t('analytics_map_zoom_hint')}</div>`;
   }
+  const container = wrap.querySelector('.world-map-canvas');
 
   if (!_worldTopo) {
     let topo;
@@ -814,6 +819,27 @@ export async function buildWorldMap() {
     // eslint-disable-next-line require-atomic-updates -- guarded above by the token check; not a real race
     _worldTopo = topo;
   }
+
+  // #797: echarts + topojson-client only ship once there's actually
+  // something to draw (not on every Analytics visit). _mapLibsPromise
+  // caches the in-flight import so a second buildWorldMap() call racing
+  // this one's chunk download reuses the same request instead of firing a
+  // duplicate one.
+  let echarts, topojson;
+  try {
+    if (!_mapLibsPromise) {
+      _mapLibsPromise = Promise.all([import('echarts'), import('topojson-client')]);
+      container.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_map_loading')}</p>`;
+    }
+    [echarts, topojson] = await _mapLibsPromise;
+  } catch {
+    // eslint-disable-next-line require-atomic-updates -- a concurrent call resetting the same promise to null is idempotent, not a real race
+    _mapLibsPromise = null; // don't cache a rejected promise — allow a retry on the next navigation
+    if (token !== _worldMapReqToken) return; // a newer call has since taken over
+    wrap.innerHTML = `<p style="color:#52525b;font-size:.85rem">${t('analytics_map_unavailable')}</p>`;
+    return;
+  }
+  if (token !== _worldMapReqToken) return; // a newer call has since taken over
 
   if (!_worldMapRegistered) {
     const geo = topojson.feature(_worldTopo, _worldTopo.objects.countries);
@@ -869,8 +895,10 @@ export async function buildWorldMap() {
   const accentTo = (cs.getPropertyValue('--accent-to') || '#f97316').trim() || '#f97316';
   const mutedText = (cs.getPropertyValue('--gray-500') || '#71717a').trim() || '#71717a';
 
-  const container = wrap.querySelector('.world-map-canvas');
-  if (!_echartsInstance) _echartsInstance = echarts.init(container);
+  if (!_echartsInstance) {
+    container.innerHTML = ''; // clear the loading message before echarts takes over this node
+    _echartsInstance = echarts.init(container);
+  }
 
   const boundingCoords = [
     ...Object.keys(byCode).map(code => COUNTRY_CENTROIDS[code]).filter(Boolean),

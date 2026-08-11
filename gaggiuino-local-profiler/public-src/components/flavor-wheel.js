@@ -1,4 +1,3 @@
-import * as echarts from 'echarts';
 import { FLAVOR_WHEEL } from '../flavor-data.js';
 import { matchFlavors, markLit, colorForNode, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../flavor-match.js';
 import { S } from '../state.js';
@@ -83,6 +82,15 @@ let _rootId = null; // currently zoomed-to node id, or null for the full overvie
 let _lang = 'en';
 let _breadcrumbEl = null;
 
+// #797: echarts (~370 kB gzip) only ships once a wheel is actually opened.
+// _echartsPromise caches the in-flight import so re-opening while it's
+// still loading reuses the same request; _renderReqToken mirrors the
+// analytics.js world-map guard (#648) — it invalidates a still-pending
+// renderFlavorWheel() call once a newer open (or a close) has taken over,
+// so a late-arriving chunk never calls echarts.init() on a stale container.
+let _echartsPromise = null;
+let _renderReqToken = 0;
+
 function renderBreadcrumb() {
   if (!_breadcrumbEl) return;
   const ids = _rootId ? pathToNode(_rootId) : [];
@@ -109,7 +117,7 @@ export function zoomFlavorWheelTo(id) {
   zoomTo(id || null);
 }
 
-export function renderFlavorWheel(container, flavors, lang, breadcrumbEl) {
+export async function renderFlavorWheel(container, flavors, lang, breadcrumbEl) {
   const { matched } = matchFlavors(flavors);
   FLAVOR_WHEEL.forEach(cat => markLit(cat, matched));
   const bgHex = resolveModalBgHex(container);
@@ -118,6 +126,25 @@ export function renderFlavorWheel(container, flavors, lang, breadcrumbEl) {
   _lang = lang;
   _breadcrumbEl = breadcrumbEl || null;
   if (_chart) { _chart.dispose(); _chart = null; }
+
+  const token = ++_renderReqToken;
+  let echarts;
+  try {
+    if (!_echartsPromise) _echartsPromise = import('echarts');
+    echarts = await _echartsPromise;
+  } catch {
+    // eslint-disable-next-line require-atomic-updates -- a concurrent call resetting the same promise to null is idempotent, not a real race
+    _echartsPromise = null; // don't cache a rejected promise — allow a retry on the next open
+    return false;
+  }
+  // A newer render (reopen with a different bean) or a close raced ahead of
+  // this chunk load — do nothing rather than init a chart into a container
+  // that no longer belongs to this call.
+  if (token !== _renderReqToken) return true;
+
+  // eslint-disable-next-line require-atomic-updates -- guarded above by the token check; not a real race
+  container.innerHTML = ''; // clear the loading message before echarts takes over this node
+  // eslint-disable-next-line require-atomic-updates -- guarded above by the token check; not a real race
   _chart = echarts.init(container);
   _chart.setOption({
     backgroundColor: 'transparent',
@@ -193,6 +220,7 @@ export function renderFlavorWheel(container, flavors, lang, breadcrumbEl) {
 }
 
 export function disposeFlavorWheel() {
+  ++_renderReqToken; // invalidate a still-pending renderFlavorWheel() chunk load, if any
   if (_chart) { _chart.dispose(); _chart = null; }
   _rootId = null;
   _breadcrumbEl = null;
@@ -200,7 +228,7 @@ export function disposeFlavorWheel() {
 
 // ── Modal wiring ─────────────────────────────────────────────────────────
 
-export function openFlavorWheel(beanId) {
+export async function openFlavorWheel(beanId) {
   const bean = S.coffeeLibrary?.beans?.find(b => b.id === beanId);
   if (!bean) return;
   const modal = document.getElementById('flavorWheelModal');
@@ -226,7 +254,11 @@ export function openFlavorWheel(beanId) {
   const container = document.getElementById('flavorWheelCanvas');
   const breadcrumbEl = document.getElementById('flavorWheelBreadcrumb');
   const lang = ['de', 'en', 'it', 'fr', 'es', 'nl'].includes(S.currentLang) ? S.currentLang : 'en';
-  if (!renderFlavorWheel(container, bean.flavors, lang, breadcrumbEl)) {
+  // echarts is a dynamic import now (#797) — show a loading state while its
+  // chunk downloads instead of leaving the canvas blank.
+  container.innerHTML = `<p style="color:#52525b;font-size:.85rem;text-align:center">${t('flavor_wheel_loading')}</p>`;
+  if (breadcrumbEl) breadcrumbEl.innerHTML = '';
+  if (!await renderFlavorWheel(container, bean.flavors, lang, breadcrumbEl)) {
     container.innerHTML = `<p style="color:#52525b;font-size:.85rem;text-align:center">${t('flavor_wheel_unavailable')}</p>`;
     if (breadcrumbEl) breadcrumbEl.innerHTML = '';
   }

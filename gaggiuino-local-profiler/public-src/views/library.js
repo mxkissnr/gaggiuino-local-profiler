@@ -1,4 +1,3 @@
-import QRCode from 'qrcode';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
@@ -514,15 +513,24 @@ export function toggleBeanQR(id) {
   if (!bean) return;
   wrap.style.display = 'flex';
   const canvas = document.getElementById(`beanQRCanvas${id}`);
+  const label = wrap.querySelector('.bean-qr-label');
+  // qrcode is a dynamic import now (#797) — the label doubles as a loading
+  // indicator while its chunk downloads, restored once the canvas is drawn
+  // (or the attempt fails).
+  if (label) label.textContent = t('bean_qr_loading');
   // toCanvas() with no callback returns a Promise — without this .catch(),
   // a rejection (e.g. QR data-capacity exceeded by a long notes field) was
   // an unhandled rejection: the canvas stayed silently blank, no error ever
   // reached the user.
-  QRCode.toCanvas(canvas, generateBeanQR(bean), { width: 140, margin: 1, errorCorrectionLevel: 'L', color: { dark: '#e4e4e7', light: '#18181b' } })
-    .catch(() => {
-      wrap.style.display = 'none';
-      alert(t('bean_qr_error'));
-    });
+  import('qrcode').then(({ default: QRCode }) =>
+    QRCode.toCanvas(canvas, generateBeanQR(bean), { width: 140, margin: 1, errorCorrectionLevel: 'L', color: { dark: '#e4e4e7', light: '#18181b' } })
+  ).then(() => {
+    if (label) label.textContent = t('bean_qr_label');
+  }).catch(() => {
+    wrap.style.display = 'none';
+    if (label) label.textContent = t('bean_qr_label');
+    alert(t('bean_qr_error'));
+  });
 }
 
 // ── Grinder list ──────────────────────────────────────────────────────────

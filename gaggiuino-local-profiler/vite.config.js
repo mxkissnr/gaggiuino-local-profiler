@@ -15,18 +15,23 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        // Splits the biggest statically-imported vendor libraries into their
-        // own chunks instead of one ~2MB bundle. Deliberately NOT route-level
-        // lazy-loading (no dynamic import()) — the app runs behind HA
-        // Ingress under a dynamic path prefix, and `base: './'` above only
-        // makes the *entry* script's own relative URL ingress-safe. These
-        // vendor chunks stay statically imported by the entry module, so the
-        // browser resolves them as ordinary ES module specifiers relative to
-        // the importing script's URL — the exact same resolution the entry
-        // script itself already relies on — rather than at runtime relative
-        // to the current document location the way a dynamic import() chunk
-        // would. zrender is echarts' own rendering dependency and must ship
-        // in the same chunk as echarts, not split further.
+        // Splits the biggest vendor libraries into their own chunks instead
+        // of one ~2MB bundle. #797 verified empirically (Vite 8.2.1, built
+        // output inspected directly) that this does not conflict with
+        // running behind HA Ingress under a dynamic path prefix: the
+        // __vitePreload helper Vite emits for a chunk resolves its URL via
+        // `import.meta.resolve(specifier)` (falling back to
+        // `new URL(specifier, import.meta.url).href`), both anchored to the
+        // *importing module's own URL* — never `document.baseURI` or
+        // `location`. Static and dynamic `import()` specifiers resolve the
+        // same way, so echarts/topojson-client/qrcode (see their use sites)
+        // are dynamic imports, and the first load no longer ships or
+        // preloads them. chart.js stays a static import — it's on the
+        // startup path (live.js, shots/). zrender is echarts' own rendering
+        // dependency and must ship in the same chunk as echarts, not split
+        // further. Still needs a live Ingress smoke test before release —
+        // this reasoning wasn't wrong before, but it also wasn't checked
+        // against actual build output, which is the whole point of #797.
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
           if (id.includes('echarts') || id.includes('zrender')) return 'vendor-echarts';
