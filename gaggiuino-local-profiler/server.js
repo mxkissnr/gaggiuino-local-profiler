@@ -3,7 +3,7 @@ const fs       = require('fs');
 const path     = require('path');
 const crypto   = require('crypto');
 
-const { GLP_VERSION, DEFAULT_PORT, DATA_DIR, TOKEN_FILE, HA_INGRESS_PATH } = require('./lib/constants');
+const { GLP_VERSION, DEFAULT_PORT, DATA_DIR, TOKEN_FILE, HA_INGRESS_PREFIX } = require('./lib/constants');
 const { log, writeFileSafe, isSupervisorIp, formatUnhandledRejection } = require('./lib/helpers');
 const { loadOptions }                                = require('./lib/data');
 const state                                          = require('./lib/state');
@@ -118,9 +118,14 @@ function isFromSupervisor(req) {
 // service worker"). Gating server-side — not just client-side — means the
 // Companion App's WebView can never see the manifest link or SW registration
 // call at all, so it structurally cannot regress the same way again.
+//
+// #801: only the prefix is checked against the header, never a full slug --
+// see the HA_INGRESS_PREFIX comment in lib/constants.js for why. The
+// Supervisor-IP check is what stops a LAN client on port 8099 from just
+// sending its own X-Ingress-Path to pass this.
 function isIngressRequest(req) {
     const ingressPath = req.headers['x-ingress-path'];
-    return ingressPath !== undefined && ingressPath.startsWith(HA_INGRESS_PATH) && isFromSupervisor(req);
+    return typeof ingressPath === 'string' && ingressPath.startsWith(HA_INGRESS_PREFIX) && isFromSupervisor(req);
 }
 
 // API token auth
@@ -278,3 +283,11 @@ function gracefulShutdown(signal) {
 }
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// #801: exported for test/pwa-gating.test.js, which needs to call
+// isIngressRequest() with a fabricated non-Supervisor-IP req directly --
+// the real HTTP server this file starts always sees loopback as the source
+// address (isSupervisorIp() trusts it), so a genuine end-to-end request can
+// never exercise the "spoofed header, untrusted IP" rejection path. `node
+// server.js` (production entrypoint, see Dockerfile) never reads this value.
+module.exports = { isIngressRequest, isFromSupervisor };

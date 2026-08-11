@@ -15,6 +15,17 @@
 // IP" combination server.js's isIngressRequest() checks is exercised for
 // real, not simulated.
 //
+// #801: GENUINE_INGRESS_PATH below is a hardcoded literal, deliberately NOT
+// derived from lib/constants.js's HA_INGRESS_PREFIX. The bug this file now
+// guards against was exactly a test that fed a constant back in as the
+// header value it was itself checked against, so it passed no matter how
+// wrong the constant was relative to what HA Core actually sends
+// (homeassistant/components/hassio/ingress.py sets X-Ingress-Path to
+// `/api/hassio_ingress/<per-session random token>`, confirmed against a
+// live install, never the add-on slug the constant used to hold). A
+// hardcoded, realistic token here fails independently if HA_INGRESS_PREFIX
+// ever drifts from that shape.
+//
 // What this test CANNOT prove: it never touches a real HA Supervisor/Ingress
 // proxy or the HA Companion App itself, so it cannot confirm the Companion
 // App's live shot graph keeps working. That final check is manual only —
@@ -27,11 +38,11 @@ import path from 'path';
 
 const require = createRequire(import.meta.url);
 const PORT = 8198; // distinct from the app's real 8099 and screenshots.mjs's 8199
+const GENUINE_INGRESS_PATH = '/api/hassio_ingress/m5QxZH_2iLVDiQr862wpJ5d6NlZJG5I9nlC-sMh4yQU';
 
 const tmpDataDir = mkdtempSync(path.join(tmpdir(), 'glp-pwa-gating-'));
 const constantsPath = require.resolve('../lib/constants.js');
 const realConstants = require(constantsPath);
-const HA_INGRESS_PATH = realConstants.HA_INGRESS_PATH;
 
 // Every *_FILE/*_DIR constant is a hardcoded '/data/...' literal (not derived
 // from DATA_DIR at runtime) — same override list scripts/screenshots.mjs uses,
@@ -62,8 +73,12 @@ async function waitForServer(url, timeoutMs = 10000) {
 }
 
 describe('index.html PWA gating — real server, real HTTP', () => {
+    let serverExports;
+
     beforeAll(async () => {
-        require('../server.js'); // starts listening on PORT against tmpDataDir
+        // starts listening on PORT against tmpDataDir; module.exports is the
+        // #801 test hook (see server.js), not read by the production entrypoint
+        serverExports = require('../server.js');
         await waitForServer(`${baseUrl}/api/status`);
     }, 15000);
 
@@ -73,7 +88,7 @@ describe('index.html PWA gating — real server, real HTTP', () => {
 
     it('serves index.html WITHOUT the manifest link for a genuine Ingress request', async () => {
         const r = await fetch(baseUrl + '/', {
-            headers: { 'X-Ingress-Path': HA_INGRESS_PATH },
+            headers: { 'X-Ingress-Path': GENUINE_INGRESS_PATH },
         });
         expect(r.status).toBe(200);
         const html = await r.text();
@@ -88,24 +103,39 @@ describe('index.html PWA gating — real server, real HTTP', () => {
         expect(html).toContain('<link rel="manifest" href="manifest.json">');
     });
 
-    it('does not grant Ingress treatment for an X-Ingress-Path that does not match HA_INGRESS_PATH', async () => {
-        // Trusted loopback IP, but the header value itself is wrong — the real
-        // isIngressRequest() check requires both the trusted IP AND a header
-        // that startsWith(HA_INGRESS_PATH).
-        const r = await fetch(baseUrl + '/', {
-            headers: { 'X-Ingress-Path': '/api/hassio_ingress/some_other_addon' },
-        });
-        expect(r.status).toBe(200);
-        const html = await r.text();
-        expect(html).toContain('rel="manifest"');
-    });
-
     it('same gating applies to the explicit /index.html path', async () => {
         const ingress = await fetch(baseUrl + '/index.html', {
-            headers: { 'X-Ingress-Path': HA_INGRESS_PATH },
+            headers: { 'X-Ingress-Path': GENUINE_INGRESS_PATH },
         });
         const direct = await fetch(baseUrl + '/index.html');
         expect(await ingress.text()).not.toContain('rel="manifest"');
         expect(await direct.text()).toContain('rel="manifest"');
+    });
+
+    // #801: a real fetch() from this Node process always arrives over loopback,
+    // which isSupervisorIp() trusts -- so no genuine HTTP request made against
+    // the server above can ever reach the "untrusted source IP" branch of
+    // isIngressRequest(). Calling the exported function directly with a
+    // fabricated req is the only way to exercise that branch against the real
+    // implementation instead of a reimplementation of it.
+    it('rejects a spoofed X-Ingress-Path from a non-Supervisor source IP', () => {
+        const spoofedReq = {
+            headers: { 'x-ingress-path': GENUINE_INGRESS_PATH },
+            socket: { remoteAddress: '192.168.1.50' },
+        };
+        expect(serverExports.isIngressRequest(spoofedReq)).toBe(false);
+    });
+
+    it('accepts the same header value from a trusted Supervisor source IP', () => {
+        const trustedReq = {
+            headers: { 'x-ingress-path': GENUINE_INGRESS_PATH },
+            socket: { remoteAddress: '172.30.32.1' },
+        };
+        expect(serverExports.isIngressRequest(trustedReq)).toBe(true);
+    });
+
+    it('rejects a request with no X-Ingress-Path header even from a trusted IP', () => {
+        const noHeaderReq = { headers: {}, socket: { remoteAddress: '172.30.32.1' } };
+        expect(serverExports.isIngressRequest(noHeaderReq)).toBe(false);
     });
 });
