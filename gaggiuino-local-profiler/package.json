@@ -8,7 +8,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "release:check": "node scripts/release-check.mjs"
+    "release:check": "node scripts/release-check.mjs",
+    "test:docker": "node scripts/docker-standalone-test.mjs"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.3",

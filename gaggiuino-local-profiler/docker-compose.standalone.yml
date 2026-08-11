@@ -8,32 +8,38 @@
 
 services:
   glp:
-    image: ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:latest
+    # GLP_STANDALONE_IMAGE/PORT/DATA_DIR let scripts/docker-standalone-test.mjs
+    # run this exact file against a locally-built image on an isolated port
+    # and temp data dir -- unset, the defaults below are unchanged.
+    image: ${GLP_STANDALONE_IMAGE:-ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:latest}
     container_name: glp
     restart: unless-stopped
     ports:
-      - "8099:8099"
+      - "${GLP_STANDALONE_PORT:-8099}:8099"
     volumes:
       # Persists the shot database, coffee library, bean images and API
       # token across container restarts/updates -- do not skip this.
-      - ./data:/data
+      - ${GLP_STANDALONE_DATA_DIR:-./data}:/data
     environment:
-      # Optional -- point GLP at your machine directly instead of using the
-      # in-app Settings -> Machines dialog after first start.
-      # - MACHINE_URL=http://gaggiuino.local
+      # All optional -- leave unset (or pass via a sibling .env file /
+      # `VAR=value docker compose ... up`) to keep the add-on's own
+      # defaults. Left blank, each behaves exactly as if it were unset.
 
-      # Optional -- app config that the HA Supervisor add-on would normally
-      # set via its own Configuration tab (config.yaml's `options`). Unset
-      # values keep the same defaults as the add-on.
-      # - GLP_SYNC_INTERVAL=5      # minutes, 1-60
-      # - GLP_PREHEAT_TIME=20      # minutes, 1-120
-      # - GLP_ENABLE_ORDERS=false
-      # - GLP_DEBUG_LOGGING=false
+      # Point GLP at your machine directly instead of using the in-app
+      # Settings -> Machines dialog after first start.
+      - MACHINE_URL=${MACHINE_URL:-}
 
-      # Optional -- restores HA auto-sync, switch-entity power control and
-      # push notifications without a Supervisor. GLP_HA_TOKEN is a normal
-      # Home Assistant long-lived access token (HA -> your profile ->
-      # Security -> "Long-lived access tokens" -> Create Token). Both must
-      # be set together.
-      # - GLP_HA_URL=http://homeassistant.local:8123
-      # - GLP_HA_TOKEN=your-long-lived-access-token
+      # App config that the HA Supervisor add-on would normally set via its
+      # own Configuration tab (config.yaml's `options`).
+      - GLP_SYNC_INTERVAL=${GLP_SYNC_INTERVAL:-}      # minutes, 1-60, default 5
+      - GLP_PREHEAT_TIME=${GLP_PREHEAT_TIME:-}        # minutes, 1-120, default 20
+      - GLP_ENABLE_ORDERS=${GLP_ENABLE_ORDERS:-false}
+      - GLP_DEBUG_LOGGING=${GLP_DEBUG_LOGGING:-false}
+
+      # Restores HA auto-sync, switch-entity power control and push
+      # notifications without a Supervisor. GLP_HA_TOKEN is a normal Home
+      # Assistant long-lived access token (HA -> your profile -> Security ->
+      # "Long-lived access tokens" -> Create Token). Both must be set
+      # together.
+      - GLP_HA_URL=${GLP_HA_URL:-}
+      - GLP_HA_TOKEN=${GLP_HA_TOKEN:-}
