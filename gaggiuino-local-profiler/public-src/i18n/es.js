@@ -334,7 +334,7 @@ export default {
     settings_api_token:'Token de API',
     settings_api_token_desc:'Integraciones como la Order Card en modo URL directa (sin HA Ingress) necesitan este token como glp_token en su configuración YAML.',
     settings_api_token_copy:'Copiar', settings_api_token_copied:'Token copiado',
-    settings_api_token_port_closed:'Esta sesión no tiene token porque expose_api_port está desactivado y la solicitud no llegó a través de HA Ingress. Abre la app a través del panel de HA Ingress para obtener un token, o vuelve a activar expose_api_port en la configuración del add-on para el acceso directo por puerto (la PWA instalable, la configuración inicial de la Order Card en modo URL directa).',
+    settings_api_token_port_closed:'Esta sesión no tiene token porque expose_api_port está desactivado y la solicitud no llegó a través de HA Ingress. Abre la app a través del panel de HA Ingress para obtener un token, o vuelve a activar expose_api_port en la configuración del add-on.',
     settings_devtools_title:'Herramientas de desarrollo', settings_devtools_desc:'Solo canal GLP DEV — nunca disponible en una instalación real.', settings_devtools_export_db:'Descargar base de datos sin procesar',
     settings_devtools_import_db:'Subir base de datos sin procesar …', settings_devtools_import_db_confirm:'Esto reemplaza toda la base de datos por el archivo subido. Se conserva una copia de seguridad de la base de datos actual, pero se requiere reiniciar para que la importación surta efecto. ¿Continuar?', settings_devtools_import_db_done:'Importación correcta — reinicia el add-on para cargarla.', settings_devtools_import_db_failed:'Error al importar.',
     preheat_warming:'Calentando …', preheat_ready:'Listo para extraer',

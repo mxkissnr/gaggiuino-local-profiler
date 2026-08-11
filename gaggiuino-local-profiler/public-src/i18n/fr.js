@@ -334,7 +334,7 @@ export default {
     settings_api_token:'Jeton API',
     settings_api_token_desc:'Les intégrations comme la Order Card en mode URL directe (sans HA Ingress) ont besoin de ce jeton comme glp_token dans leur configuration YAML.',
     settings_api_token_copy:'Copier', settings_api_token_copied:'Jeton copié',
-    settings_api_token_port_closed:'Cette session n\'a pas de jeton car expose_api_port est désactivé et la requête n\'est pas arrivée via HA Ingress. Ouvrez l\'application via le panneau HA Ingress pour obtenir un jeton, ou réactivez expose_api_port dans la configuration de l\'add-on pour l\'accès direct par port (la PWA installable, la configuration initiale de la Order Card en mode URL directe).',
+    settings_api_token_port_closed:'Cette session n\'a pas de jeton car expose_api_port est désactivé et la requête n\'est pas arrivée via HA Ingress. Ouvrez l\'application via le panneau HA Ingress pour obtenir un jeton, ou réactivez expose_api_port dans la configuration de l\'add-on.',
     settings_devtools_title:'Outils développeur', settings_devtools_desc:'Canal GLP DEV uniquement — jamais disponible sur une installation réelle.', settings_devtools_export_db:'Télécharger la base de données brute',
     settings_devtools_import_db:'Importer une base de données brute …', settings_devtools_import_db_confirm:'Cela remplace toute la base de données par le fichier importé. Une sauvegarde de la base actuelle est conservée, mais un redémarrage est nécessaire pour que l\'import prenne effet. Continuer ?', settings_devtools_import_db_done:'Import réussi — redémarrez l\'add-on pour le charger.', settings_devtools_import_db_failed:'Échec de l\'import.',
     preheat_warming:'Chauffe en cours …', preheat_ready:'Prêt à extraire',

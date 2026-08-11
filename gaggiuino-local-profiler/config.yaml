@@ -59,11 +59,12 @@ options:
   # any request that didn't arrive via HA Ingress; it does not unmap port
   # 8099 itself, and it does not narrow the trust boundary below the whole
   # Supervisor add-on network (isFromSupervisor() in server.js trusts all of
-  # 172.30.0.0/16, not just the Ingress proxy). Breaks two direct-port
-  # consumers that have no other way to obtain a token: the installable PWA,
-  # and first-time setup of the GLP Order Card's direct-URL mode (an
-  # already-configured card that already has glp_token in its YAML is
-  # unaffected). See DOCS.md's "Trust model" section.
+  # 172.30.0.0/16, not just the Ingress proxy). Breaks direct-port browser
+  # access to the app entirely (this includes the installable PWA -- it's
+  # just the installed form of the same UI), plus first-time setup of the
+  # GLP Order Card's direct-URL mode, since none of those have any other way
+  # to obtain a token (an already-configured Order Card that already has
+  # glp_token in its YAML is unaffected). See DOCS.md's "Trust model" section.
   expose_api_port: true
 schema:
   sync_interval: int(1,60)

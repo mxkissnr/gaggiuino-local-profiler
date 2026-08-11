@@ -323,7 +323,7 @@ export default {
     settings_api_token:'API Token',
     settings_api_token_desc:'Für Integrationen wie die Order Card im Direkt-URL-Modus (ohne HA Ingress) benötigst du diesen Token als glp_token in der YAML-Konfiguration.',
     settings_api_token_copy:'Kopieren', settings_api_token_copied:'Token kopiert',
-    settings_api_token_port_closed:'Diese Sitzung hat keinen Token, weil expose_api_port deaktiviert ist und die Anfrage nicht über HA Ingress kam. Öffne die App über das Home-Assistant-Ingress-Panel, um einen Token zu erhalten, oder aktiviere expose_api_port wieder in der Add-on-Konfiguration für Direktzugriff (die installierbare PWA, erstmalige Einrichtung der Order Card im Direkt-URL-Modus).',
+    settings_api_token_port_closed:'Diese Sitzung hat keinen Token, weil expose_api_port deaktiviert ist und die Anfrage nicht über HA Ingress kam. Öffne die App über das Home-Assistant-Ingress-Panel, um einen Token zu erhalten, oder aktiviere expose_api_port wieder in der Add-on-Konfiguration.',
     settings_devtools_title:'Entwickler-Tools', settings_devtools_desc:'Nur im GLP-DEV-Kanal — bei einer echten Installation nie verfügbar.', settings_devtools_export_db:'Rohe Datenbank herunterladen',
     settings_devtools_import_db:'Rohe Datenbank hochladen …', settings_devtools_import_db_confirm:'Dies ersetzt die komplette Datenbank durch die hochgeladene Datei. Ein Backup der aktuellen Datenbank bleibt erhalten, aber ein Neustart ist nötig, damit der Import wirksam wird. Fortfahren?', settings_devtools_import_db_done:'Import erfolgreich — Add-on neu starten, damit es geladen wird.', settings_devtools_import_db_failed:'Import fehlgeschlagen.',
     preheat_warming:'Aufheizen …', preheat_ready:'Brühbereit',
