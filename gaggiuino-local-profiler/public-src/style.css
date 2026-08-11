@@ -2281,8 +2281,7 @@
             display: inline-flex;
             gap: 2px;
             perspective: 400px;
-            margin-left: auto;
-            margin-right: 8px;
+            margin-right: 10px;
             align-items: center;
         }
         .flap-cell {

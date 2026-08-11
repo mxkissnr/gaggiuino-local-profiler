@@ -1,3 +1,8 @@
+## [2.33.2] – 2026-08-11
+
+### Changed
+- **Sidebar shot counter cleaned up**: removed the redundant "(N)" text next to the flap-board counter, and moved the counter in front of the "Shots" label. Closes #776
+
 ## [2.33.1] – 2026-08-11
 
 ### Fixed

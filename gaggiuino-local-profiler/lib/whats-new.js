@@ -18,6 +18,9 @@
 // caps it defensively so an out-of-order manual edit can't silently show
 // entries in the wrong order or let the list grow unbounded.
 const WHATS_NEW_ENTRIES = [
+    { version: '2.33.2', date: '2026-08-11', highlights: [
+        'Sidebar shot counter cleaned up: removed the redundant "(N)" text next to the flap-board counter and moved the counter in front of the "Shots" label.',
+    ] },
     { version: '2.33.1', date: '2026-08-11', highlights: [
         'Fixed theme/accent colour swatches (Settings → Machines → Farbe, and the app-wide colour scheme picker) showing a square edge instead of a fully filled circle on some browsers.',
         'Fixed shot-import progress showing the total shrinking mid-backfill during a large sync.',
@@ -47,10 +50,6 @@ const WHATS_NEW_ENTRIES = [
     ] },
     { version: '2.28.0', date: '2026-08-04', highlights: [
         'Added an in-app "What\'s New" changelog to Settings — this list.',
-    ] },
-    { version: '2.27.4', date: '2026-08-04', highlights: [
-        'Fixed a stale WebSocket session leak when a machine is removed or re-hosted.',
-        'Fixed component-test commands (pump/valve/LED) always timing out despite succeeding.',
     ] },
 ];
 
