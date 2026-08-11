@@ -26,7 +26,10 @@ require.cache[dbPath].exports = { getDb: () => memDb, initSchema: realDb.initSch
 
 const libraryService = require('../lib/services/LibraryService');
 
-import { computeBeanRemaining as computeBeanRemainingFrontend } from '../public-src/bean-math.js';
+import {
+    computeBeanRemaining as computeBeanRemainingFrontend,
+    sumConsumedDoses as sumConsumedDosesFrontend,
+} from '../public-src/bean-math.js';
 
 beforeEach(() => memDb.exec('DELETE FROM shots; DELETE FROM annotations; DELETE FROM library;'));
 
@@ -217,5 +220,64 @@ describe('bean-math parity: backend LibraryService.computeBeanRemaining vs. fron
 
         expect(backend).toBe(frontend);
         expect(backend).toBe(250 - 21);
+    });
+});
+
+// #788: computeBeanRemaining and sumConsumedDoses's bag-scoped total both
+// live in bean-math.js and both resolve "which bag is this dose in" — but
+// used to do it with two different rules (computeBeanRemaining: full
+// resolveBagAtShotTime with the `|| bags[0]` fallback; sumConsumedDoses: a
+// flat openedAt cutoff). They agreed everywhere the parity fixtures above
+// happened to check, and disagreed on a dose predating the only recorded
+// bag — the library view then showed "consumed this bag: 0 g" next to a
+// remaining figure that had already subtracted that exact dose. These
+// fixtures pin agreement between the two functions directly, since there is
+// no backend equivalent of sumConsumedDoses to compare against.
+describe('bean-math parity: sumConsumedDoses (bag-scoped) vs computeBeanRemaining\'s bag resolution (#788)', () => {
+    it('a dose predating the only recorded bag is counted by both, not just computeBeanRemaining', () => {
+        const bean = { id: 1, name: 'Lasso Lassi', stock_g: 250, bags: [{ id: 1, openedAt: 5000 * 1000 }] };
+        const doseRows = [{ coffee: 'Lasso Lassi', beanId: 1, dose: '18', timestamp: 1000 }];
+
+        const remaining   = computeBeanRemainingFrontend(bean, doseRows, [bean]);
+        const bagConsumed = sumConsumedDosesFrontend(bean, doseRows, [bean], bean.bags);
+
+        expect(remaining).toBe(250 - 18);
+        expect(bagConsumed).toBe(18);
+        // The exact contradiction #788 found on screen: the remaining figure
+        // and the bag-scoped consumed total must account for the same doses.
+        expect(bean.stock_g - bagConsumed).toBe(remaining);
+    });
+
+    it('multi-bag: doses before the active bag was opened are excluded by both', () => {
+        const bean = {
+            id: 1, name: 'Dolce', stock_g: 250,
+            bags: [{ id: 1, openedAt: 0 }, { id: 2, openedAt: 5000 * 1000 }],
+        };
+        const doseRows = [
+            { coffee: 'Dolce', dose: 18, timestamp: 1000 }, // old bag
+            { coffee: 'Dolce', dose: 18, timestamp: 6000 }, // active bag
+        ];
+
+        const remaining   = computeBeanRemainingFrontend(bean, doseRows, [bean]);
+        const bagConsumed = sumConsumedDosesFrontend(bean, doseRows, [bean], bean.bags);
+
+        expect(remaining).toBe(250 - 18);
+        expect(bagConsumed).toBe(18);
+        expect(bean.stock_g - bagConsumed).toBe(remaining);
+    });
+
+    it('no bags: sumConsumedDoses without a bags argument matches computeBeanRemaining\'s unscoped total', () => {
+        const bean = { id: 1, name: 'No Bags', stock_g: 250 };
+        const doseRows = [
+            { coffee: 'No Bags', dose: 18, timestamp: 1 },
+            { coffee: 'No Bags', dose: 19, timestamp: 999999999 },
+        ];
+
+        const remaining = computeBeanRemainingFrontend(bean, doseRows, [bean]);
+        const total      = sumConsumedDosesFrontend(bean, doseRows, [bean]);
+
+        expect(remaining).toBe(250 - 18 - 19);
+        expect(total).toBe(18 + 19);
+        expect(bean.stock_g - total).toBe(remaining);
     });
 });

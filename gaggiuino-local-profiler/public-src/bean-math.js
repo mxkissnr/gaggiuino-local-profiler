@@ -22,16 +22,37 @@ export function matchesBean(doseRow, bean, idExists) {
     : String(doseRow.coffee || '').toLowerCase() === String(bean.name || '').toLowerCase();
 }
 
-// Sums matching dose rows for `bean`, optionally only those at/after
-// `sinceMs` (epoch ms) — used both for a bag-scoped total (activeBag's
-// openedAt) and an unscoped lifetime total (sinceMs left at its default 0).
-export function sumConsumedDoses(bean, doseRows, allBeans, sinceMs = 0) {
-  const idExists = new Set((allBeans || []).map(b => b.id));
+// Which bag was active when a dose (shot) was pulled — same "bag active at
+// shot time" resolution used for roast-date/frozen-portion lookups
+// (shots/utils.js, annotation.js). A dose that predates every recorded bag
+// (bean/bag added to the library only after the shot was already pulled,
+// then assigned to it retroactively) still belongs to the oldest bag on
+// record — there was nothing else it could have come from, so it must not
+// be silently dropped from the sum. Shared by computeBeanRemaining and
+// sumConsumedDoses's bag-scoped total so the two can never resolve a dose's
+// bag differently again (#788).
+function resolveBagAtShotTime(bags, shotMs) {
+  return bags
+    .filter(b => (b.openedAt || 0) <= shotMs)
+    .sort((a, b) => b.openedAt - a.openedAt)[0] || bags[0];
+}
+
+// Sums matching dose rows for `bean`. With `bags` omitted (or empty), every
+// matching dose counts — an unscoped lifetime total. With `bags` given, only
+// doses that resolveBagAtShotTime() attributes to the last bag in the array
+// (the active bag, same convention as computeBeanRemaining) count — a
+// bag-scoped total that resolves each dose's bag exactly like
+// computeBeanRemaining does, instead of a flat openedAt timestamp cutoff
+// that disagreed with it on doses predating the only recorded bag (#788).
+export function sumConsumedDoses(bean, doseRows, allBeans, bags = null) {
+  const idExists  = new Set((allBeans || []).map(b => b.id));
+  const bagList   = Array.isArray(bags) && bags.length ? bags : null;
+  const activeBag = bagList ? bagList[bagList.length - 1] : null;
   return (doseRows || []).reduce((sum, r) => {
     const d = parseFloat(r.dose);
     if (!d) return sum;
     if (!matchesBean(r, bean, idExists)) return sum;
-    if (sinceMs && r.timestamp * 1000 < sinceMs) return sum;
+    if (activeBag && resolveBagAtShotTime(bagList, r.timestamp * 1000) !== activeBag) return sum;
     return sum + d;
   }, 0);
 }
@@ -49,20 +70,7 @@ export function computeBeanRemaining(bean, doseRows, allBeans) {
     const d = parseFloat(r.dose);
     if (!d) return sum;
     if (!matchesBean(r, bean, idExists)) return sum;
-    if (activeBag) {
-      // Which bag was active when this shot was pulled — same "bag active
-      // at shot time" resolution used for roast-date/frozen-portion lookups
-      // (shots/utils.js, annotation.js). A dose that predates every
-      // recorded bag (bean/bag added to the library only after the shot was
-      // already pulled, then assigned to it retroactively) still belongs to
-      // the oldest bag on record — there was nothing else it could have
-      // come from, so it must not be silently dropped from the sum.
-      const shotMs = r.timestamp * 1000;
-      const bagAtShotTime = bags
-        .filter(b => (b.openedAt || 0) <= shotMs)
-        .sort((a, b) => b.openedAt - a.openedAt)[0] || bags[0];
-      if (bagAtShotTime !== activeBag) return sum;
-    }
+    if (activeBag && resolveBagAtShotTime(bags, r.timestamp * 1000) !== activeBag) return sum;
     return sum + d;
   }, 0);
   return Math.round(bean.stock_g - Math.round(consumed));

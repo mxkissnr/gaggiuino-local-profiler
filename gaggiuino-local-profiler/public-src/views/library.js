@@ -127,7 +127,7 @@ export function renderBeanList() {
     const bags = Array.isArray(b.bags) ? b.bags : [];
     const activeBag = bags.length ? bags[bags.length - 1] : null;
     const activeBagConsumed = activeBag
-      ? Math.round(sumConsumedDoses(b, doseRows, beans, activeBag.openedAt || 0))
+      ? Math.round(sumConsumedDoses(b, doseRows, beans, bags))
       : totalConsumed;
 
     const remaining = computeBeanRemaining(b, doseRows, beans);
