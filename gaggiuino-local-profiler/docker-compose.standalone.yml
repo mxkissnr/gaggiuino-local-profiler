@@ -1,0 +1,39 @@
+# GLP -- standalone Docker install (no Home Assistant Supervisor required).
+# For HA installs that don't have an Add-on Store (HA Container, HA Core,
+# Unraid, TrueNAS SCALE, ...). See DOCS.md "Standalone Docker Installation"
+# for the full walkthrough and a feature-parity comparison with the
+# Supervisor add-on.
+#
+# Usage: docker compose -f docker-compose.standalone.yml up -d
+
+services:
+  glp:
+    image: ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:latest
+    container_name: glp
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
+    volumes:
+      # Persists the shot database, coffee library, bean images and API
+      # token across container restarts/updates -- do not skip this.
+      - ./data:/data
+    environment:
+      # Optional -- point GLP at your machine directly instead of using the
+      # in-app Settings -> Machines dialog after first start.
+      # - MACHINE_URL=http://gaggiuino.local
+
+      # Optional -- app config that the HA Supervisor add-on would normally
+      # set via its own Configuration tab (config.yaml's `options`). Unset
+      # values keep the same defaults as the add-on.
+      # - GLP_SYNC_INTERVAL=5      # minutes, 1-60
+      # - GLP_PREHEAT_TIME=20      # minutes, 1-120
+      # - GLP_ENABLE_ORDERS=false
+      # - GLP_DEBUG_LOGGING=false
+
+      # Optional -- restores HA auto-sync, switch-entity power control and
+      # push notifications without a Supervisor. GLP_HA_TOKEN is a normal
+      # Home Assistant long-lived access token (HA -> your profile ->
+      # Security -> "Long-lived access tokens" -> Create Token). Both must
+      # be set together.
+      # - GLP_HA_URL=http://homeassistant.local:8123
+      # - GLP_HA_TOKEN=your-long-lived-access-token

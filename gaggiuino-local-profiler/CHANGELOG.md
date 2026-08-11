@@ -1,3 +1,8 @@
+## [2.33.0] – 2026-08-11
+
+### Added
+- **Standalone Docker install support**, for Home Assistant setups without a Supervisor (HA Container, HA Core, Unraid, TrueNAS SCALE, …): a ready-made `docker-compose.standalone.yml`, plus env-var fallbacks (`GLP_SYNC_INTERVAL`/`GLP_PREHEAT_TIME`/`GLP_ENABLE_ORDERS`/`GLP_DEBUG_LOGGING`) and an optional HA long-lived-token integration (`GLP_HA_URL`/`GLP_HA_TOKEN`) for auto-sync, switch-entity power control and push notifications. Closes #764
+
 ## [2.32.0] – 2026-08-11
 
 > ⚠ **Configuration change:** `machine_host`/`switch_entity` are removed from the add-on's Configuration page. Existing values carry over automatically — no action needed. If you manage those fields via automation/scripts through the Configuration tab, switch to Settings → Machines instead, since edits there no longer take effect.

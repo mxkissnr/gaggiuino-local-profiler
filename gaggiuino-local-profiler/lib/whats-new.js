@@ -18,6 +18,9 @@
 // caps it defensively so an out-of-order manual edit can't silently show
 // entries in the wrong order or let the list grow unbounded.
 const WHATS_NEW_ENTRIES = [
+    { version: '2.33.0', date: '2026-08-11', highlights: [
+        'Added standalone Docker install support for Home Assistant setups without a Supervisor (HA Container, HA Core, Unraid, TrueNAS SCALE, …): a ready-made docker-compose.standalone.yml, plus env-var config and an optional HA long-lived-token integration.',
+    ] },
     { version: '2.32.0', date: '2026-08-11', highlights: [
         'Heads up if you manage the machine host/switch entity via the add-on\'s Configuration tab: those fields are removed there. Your existing value carries over automatically, but from now on the default machine is configured entirely under Settings → Machines instead.',
         'Added a guided first-run setup wizard: a fresh install with no machines configured now gets a welcome -> connect machine -> done walkthrough, with a one-click demo-data option and a "Restart setup tour" control in Settings → Machines.',
@@ -47,9 +50,6 @@ const WHATS_NEW_ENTRIES = [
     ] },
     { version: '2.27.3', date: '2026-08-04', highlights: [
         'Live temperature/pressure/weight readings now actually update in real time over WebSocket/MQTT, instead of lagging on the 1s REST poll.',
-    ] },
-    { version: '2.27.2', date: '2026-08-04', highlights: [
-        'Preheat-ready and low-stock notification toggles are now reachable in Settings even when Orders is disabled.',
     ] },
 ];
 

@@ -148,6 +148,71 @@ On narrow viewports (phones, portrait tablets) the topbar tabs are hidden and a 
 
 **Machine host and switch entity are configured in-app, not here.** They used to be add-on options (`machine_host`/`switch_entity`); as of this release they've been removed from the add-on's Configuration page entirely — set them under **Settings → Machines** instead, for the default machine (#1) exactly the same way as any additional machine. An upgrading install's previously-configured values are carried over automatically; nothing to redo.
 
+## Standalone Docker Installation
+
+GLP is published as a plain multi-arch Docker image
+(`ghcr.io/mxkissnr/gaggiuino-local-profiler/{arch}`, `amd64`/`armv7`/`aarch64`), so
+it runs on any Docker host, not just Home Assistant OS. This is the path for
+Home Assistant installs that have no Supervisor and therefore no Add-on Store —
+**HA Container**, **HA Core**, and any Docker-based NAS setup (Unraid, TrueNAS
+SCALE, Synology, …) running its own separate HA Container instance.
+
+```bash
+docker run -d --name glp --restart unless-stopped \
+  -p 8099:8099 -v ./data:/data \
+  ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:latest
+```
+
+Or use the ready-made
+[`docker-compose.standalone.yml`](docker-compose.standalone.yml):
+
+```bash
+docker compose -f docker-compose.standalone.yml up -d
+```
+
+The `/data` volume is required — it holds the shot database, coffee library,
+bean images and API token, and must survive container restarts/updates.
+
+### Env vars that replace Supervisor-only config
+
+Two things the HA Supervisor normally provides for free — the add-on's own
+Configuration page and a Supervisor token for talking back to HA — don't exist
+outside HA OS. GLP falls back to environment variables for both, all optional:
+
+| Env var | Replaces | Notes |
+|---|---|---|
+| `MACHINE_URL` | Settings → Machines (default machine host) | Same effect as setting the host in-app; still editable in Settings afterward |
+| `GLP_SYNC_INTERVAL` | `sync_interval` add-on option | Minutes, 1–60, default `5` |
+| `GLP_PREHEAT_TIME` | `preheat_time` add-on option | Minutes, 1–120, default `20` |
+| `GLP_ENABLE_ORDERS` | `enable_orders` add-on option | `true`/`false`, default `false` |
+| `GLP_DEBUG_LOGGING` | `debug_logging` add-on option | `true`/`false`, default `false` |
+| `GLP_HA_URL` + `GLP_HA_TOKEN` | `SUPERVISOR_TOKEN` (HA API access) | Restores auto-sync, switch-entity power control and push notifications — see below. Both must be set together. |
+
+`GLP_HA_TOKEN` is a normal Home Assistant **long-lived access token**: in HA,
+open your profile → **Security** tab → **Long-lived access tokens** → **Create
+Token**. `GLP_HA_URL` is your HA instance's base URL, e.g.
+`http://homeassistant.local:8123`. This grants GLP the same HA API access the
+Supervisor token would — treat it like any other credential (Docker secret,
+`.env` file kept out of version control, etc.), not a hardcoded value in a
+committed compose file.
+
+If `options.json` exists (e.g. a bind-mount left over from an earlier
+Supervisor install), it always wins over these env vars — see [Configuration
+options](#configuration-options) above.
+
+### What's different without a Supervisor
+
+| Feature | HA OS / Supervisor add-on | Docker standalone |
+|---|---|---|
+| Ingress sidebar panel | ✅ native | ❌ — use a Lovelace iframe/Webpage card pointed at `http://<docker-host>:8099` instead (see [Embed in HA Dashboard](../README.md#-embed-in-ha-dashboard)) |
+| Update notification | ✅ (Add-on Store) | ✅ — the app checks GitHub releases itself either way |
+| HA auto-sync / switch-entity power control / push notifications | ✅ automatic | ✅ with `GLP_HA_URL` + `GLP_HA_TOKEN` |
+| MQTT auto-discovery | ✅ | ❌ — enter the broker host/port/user/password manually under Settings → MQTT (already the fallback path on HA OS too when no MQTT service is registered) |
+| App configuration (`sync_interval`, etc.) | ✅ Add-on Configuration page | ✅ via env vars, see table above |
+| Machine configuration (Settings → Machines) | ✅ | ✅ identical, unchanged |
+| GLP Integration (HACS) — sensors, Order/Shot Card zero-config mode | ✅ auto-discovers the add-on | ✅ — enter the GLP URL manually on the integration's config step (auto-discovery needs a Supervisor) |
+| Backup/restore (in-app export) | ✅ | ✅ identical, unchanged |
+
 ## Multi-machine (v2.0.0)
 
 GLP can manage more than one espresso machine from a single add-on instance — no second add-on install needed. Each machine is either:

@@ -16,7 +16,17 @@ function loadOptions() {
         if (fs.existsSync(OPTIONS_FILE))
             return JSON.parse(fs.readFileSync(OPTIONS_FILE, 'utf8'));
     } catch (e) { log(`Could not read options.json: ${e.message}`, true); }
-    return {};
+    // #764: standalone Docker (no Supervisor) never gets an options.json
+    // written -- Supervisor is the only writer, see the module comment above.
+    // Fall back to env vars, same pattern as MACHINE_URL in getMachineUrl()
+    // below. Values are left undefined/false when unset, matching what an
+    // absent key in options.json already means to every caller here.
+    return {
+        sync_interval: process.env.GLP_SYNC_INTERVAL ? Number(process.env.GLP_SYNC_INTERVAL) : undefined,
+        preheat_time:  process.env.GLP_PREHEAT_TIME  ? Number(process.env.GLP_PREHEAT_TIME)  : undefined,
+        enable_orders: process.env.GLP_ENABLE_ORDERS === 'true',
+        debug_logging: process.env.GLP_DEBUG_LOGGING === 'true',
+    };
 }
 
 // #718: null means "genuinely nothing configured anywhere" -- callers must

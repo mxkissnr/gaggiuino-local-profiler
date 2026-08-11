@@ -148,6 +148,74 @@ Auf schmalen Bildschirmen (Smartphones, Tablets im Hochformat) wird die Tab-Leis
 
 **Maschinen-Host und Switch-Entität werden in der App konfiguriert, nicht hier.** Sie waren früher Add-on-Optionen (`machine_host`/`switch_entity`); seit dieser Version sind sie komplett aus der Configuration-Seite des Add-ons entfernt — stattdessen unter **Einstellungen → Maschinen** setzen, für die Standardmaschine (#1) genau wie für jede weitere Maschine. Bereits konfigurierte Werte einer bestehenden Installation werden automatisch übernommen; nichts muss neu eingegeben werden.
 
+## Standalone Docker Installation
+
+GLP wird als reines Multi-Arch-Docker-Image veröffentlicht
+(`ghcr.io/mxkissnr/gaggiuino-local-profiler/{arch}`, `amd64`/`armv7`/`aarch64`)
+und läuft damit auf jedem Docker-Host, nicht nur unter Home Assistant OS. Das
+ist der Weg für Home-Assistant-Installationen ohne Supervisor und damit ohne
+App Store — **HA Container**, **HA Core** sowie jedes Docker-basierte
+NAS-Setup (Unraid, TrueNAS SCALE, Synology, …) mit einer eigenen, separaten
+HA-Container-Instanz.
+
+```bash
+docker run -d --name glp --restart unless-stopped \
+  -p 8099:8099 -v ./data:/data \
+  ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:latest
+```
+
+Oder die fertige Vorlage
+[`docker-compose.standalone.yml`](docker-compose.standalone.yml) nutzen:
+
+```bash
+docker compose -f docker-compose.standalone.yml up -d
+```
+
+Das `/data`-Volume ist Pflicht — es enthält Shot-Datenbank, Kaffee-Bibliothek,
+Bohnenbilder und API-Token und muss Container-Neustarts/-Updates überstehen.
+
+### Env-Vars als Ersatz für Supervisor-only-Konfiguration
+
+Zwei Dinge, die der HA-Supervisor normalerweise kostenlos mitliefert — die
+eigene Configuration-Seite des Add-ons und einen Supervisor-Token, um mit HA
+zu sprechen — gibt es außerhalb von HA OS nicht. GLP fällt dafür auf
+Umgebungsvariablen zurück, alle optional:
+
+| Env-Var | Ersetzt | Hinweise |
+|---|---|---|
+| `MACHINE_URL` | Einstellungen → Maschinen (Standardmaschinen-Host) | Gleicher Effekt wie das Setzen des Hosts in der App; danach weiterhin in den Einstellungen änderbar |
+| `GLP_SYNC_INTERVAL` | Add-on-Option `sync_interval` | Minuten, 1–60, Standard `5` |
+| `GLP_PREHEAT_TIME` | Add-on-Option `preheat_time` | Minuten, 1–120, Standard `20` |
+| `GLP_ENABLE_ORDERS` | Add-on-Option `enable_orders` | `true`/`false`, Standard `false` |
+| `GLP_DEBUG_LOGGING` | Add-on-Option `debug_logging` | `true`/`false`, Standard `false` |
+| `GLP_HA_URL` + `GLP_HA_TOKEN` | `SUPERVISOR_TOKEN` (HA-API-Zugriff) | Stellt Auto-Sync, Switch-Entity-Power-Control und Push-Benachrichtigungen wieder her — siehe unten. Beide müssen gemeinsam gesetzt sein. |
+
+`GLP_HA_TOKEN` ist ein normaler Home-Assistant-**Langzeit-Zugriffstoken**: in
+HA das eigene Profil öffnen → Tab **Sicherheit** → **Langlebige
+Zugangstoken** → **Token erstellen**. `GLP_HA_URL` ist die Basis-URL der
+eigenen HA-Instanz, z. B. `http://homeassistant.local:8123`. Das gibt GLP
+denselben HA-API-Zugriff wie der Supervisor-Token — entsprechend wie jedes
+andere Credential behandeln (Docker-Secret, `.env`-Datei außerhalb der
+Versionskontrolle, …), nicht als Klartext in einer committeten
+Compose-Datei.
+
+Existiert eine `options.json` (z. B. ein übrig gebliebenes Bind-Mount einer
+früheren Supervisor-Installation), hat sie immer Vorrang vor diesen Env-Vars
+— siehe [Konfigurationsoptionen](#konfigurationsoptionen) oben.
+
+### Was ohne Supervisor anders läuft
+
+| Feature | HA OS / Supervisor-Add-on | Docker Standalone |
+|---|---|---|
+| Ingress-Sidebar-Panel | ✅ nativ | ❌ — stattdessen eine Lovelace-iframe/Webpage-Karte auf `http://<docker-host>:8099` (siehe [In HA-Dashboard einbetten](../README.md#-embed-in-ha-dashboard)) |
+| Update-Hinweis | ✅ (App Store) | ✅ — die App prüft GitHub-Releases in beiden Fällen selbst |
+| HA-Auto-Sync / Switch-Entity-Power-Control / Push-Benachrichtigungen | ✅ automatisch | ✅ mit `GLP_HA_URL` + `GLP_HA_TOKEN` |
+| MQTT-Auto-Discovery | ✅ | ❌ — Broker-Host/Port/User/Passwort manuell unter Einstellungen → MQTT eintragen (schon auf HA OS der Fallback, wenn kein MQTT-Service registriert ist) |
+| App-Konfiguration (`sync_interval` etc.) | ✅ Add-on-Configuration-Seite | ✅ per Env-Vars, siehe Tabelle oben |
+| Maschinen-Konfiguration (Einstellungen → Maschinen) | ✅ | ✅ identisch, unverändert |
+| GLP-Integration (HACS) — Sensoren, Order/Shot-Card Zero-Config-Modus | ✅ entdeckt das Add-on automatisch | ✅ — GLP-URL im Config-Schritt der Integration manuell eintragen (Auto-Discovery braucht einen Supervisor) |
+| Backup/Restore (App-eigener Export) | ✅ | ✅ identisch, unverändert |
+
 ## Multi-Maschinen-Modus (v2.0.0)
 
 GLP kann mehr als eine Espressomaschine aus einer einzigen Add-on-Instanz heraus verwalten — kein zweites Add-on nötig. Jede Maschine ist entweder:
