@@ -45,9 +45,12 @@ function makeFakeDocument() {
   };
 }
 
+let doc;
+
 beforeEach(() => {
   _session.clear();
-  globalThis.document = makeFakeDocument();
+  doc = makeFakeDocument();
+  globalThis.document = doc;
   S.glpToken = '';
   S.apiPortExposed = true;
 });
@@ -97,7 +100,7 @@ describe('app-wide banner (#807)', () => {
   it('appears once the status poll reports the port closed for a token-less session', () => {
     S.apiPortExposed = false;
     updateApiPortClosedBanner();
-    const banner = document.getElementById('glpApiPortClosedBanner');
+    const banner = doc.getElementById('glpApiPortClosedBanner');
     expect(banner).toBeDefined();
     expect(banner.children.some(c => c.dataset.action === 'goto-settings')).toBe(true);
     expect(banner.children[0].textContent).toContain('expose_api_port');
@@ -105,37 +108,37 @@ describe('app-wide banner (#807)', () => {
 
   it('is not shown in the default (port exposed) state', () => {
     updateApiPortClosedBanner();
-    expect(document.getElementById('glpApiPortClosedBanner')).toBeUndefined();
+    expect(doc.getElementById('glpApiPortClosedBanner')).toBeUndefined();
   });
 
   it('removes itself again once the option is turned back on and a token arrives', () => {
     S.apiPortExposed = false;
     updateApiPortClosedBanner();
-    expect(document.getElementById('glpApiPortClosedBanner')).toBeDefined();
+    expect(doc.getElementById('glpApiPortClosedBanner')).toBeDefined();
 
     S.apiPortExposed = true;
     S.glpToken = 'token-after-reenable';
     updateApiPortClosedBanner();
-    expect(document.getElementById('glpApiPortClosedBanner')).toBeUndefined();
+    expect(doc.getElementById('glpApiPortClosedBanner')).toBeUndefined();
   });
 
   it('stays dismissed for the rest of the session, across further status polls', () => {
     S.apiPortExposed = false;
     updateApiPortClosedBanner();
-    const banner = document.getElementById('glpApiPortClosedBanner');
+    const banner = doc.getElementById('glpApiPortClosedBanner');
     const closeBtn = banner.children[banner.children.length - 1];
     closeBtn._listeners.click();
 
-    expect(document.getElementById('glpApiPortClosedBanner')).toBeUndefined();
+    expect(doc.getElementById('glpApiPortClosedBanner')).toBeUndefined();
     updateApiPortClosedBanner();
-    expect(document.getElementById('glpApiPortClosedBanner')).toBeUndefined();
+    expect(doc.getElementById('glpApiPortClosedBanner')).toBeUndefined();
   });
 
   it('does not stack duplicates across repeated polls', () => {
     S.apiPortExposed = false;
     updateApiPortClosedBanner();
-    const first = document.getElementById('glpApiPortClosedBanner');
+    const first = doc.getElementById('glpApiPortClosedBanner');
     updateApiPortClosedBanner();
-    expect(document.getElementById('glpApiPortClosedBanner')).toBe(first);
+    expect(doc.getElementById('glpApiPortClosedBanner')).toBe(first);
   });
 });
