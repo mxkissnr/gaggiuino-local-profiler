@@ -224,6 +224,7 @@ jobs:
           MARKER="dev-app/.last-dev-build-sha"
           PROFILE_SRC="main-repo/gaggiuino-local-profiler/apparmor.txt"
           PROFILE_DST="dev-app/gaggiuino_local_profiler_dev/apparmor.txt"
+          SYNC_SCRIPT="main-repo/gaggiuino-local-profiler/scripts/sync-dev-config.mjs"
 
           # #789: Supervisor reads an add-on's AppArmor profile from the
           # add-on's own directory, NOT from the image -- so the profile has
@@ -240,6 +241,19 @@ jobs:
             echo "::warning::no apparmor.txt in the source repo -- the dev add-on will run unconfined"
             rm -f "$PROFILE_DST"
           fi
+
+          # #805: same class of bug as #789/#803 above, one layer up -- this
+          # workflow bumped `version` and copied apparmor.txt but never
+          # touched `options`/`schema`, so an option added to the app's own
+          # config.yaml (e.g. #804's expose_api_port) had no way to ever
+          # reach the dev add-on's Configuration tab. sync-dev-config.mjs
+          # does the merge (source schema wholesale, source-default options
+          # added, dev's existing option values preserved -- e.g.
+          # debug_logging: true) while leaving every other field (name,
+          # slug, ports, panel_*, boot, url, description) untouched; see
+          # that script's own header for why this isn't a plain YAML
+          # parse+dump.
+          node "$SYNC_SCRIPT" "main-repo/gaggiuino-local-profiler/config.yaml" "$CONFIG"
 
           # Anchored to the start of the line so the `version:` key is the only
           # possible match -- description text may contain the word too.
