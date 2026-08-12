@@ -55,6 +55,19 @@ function parseOptionEntries(bodyLines) {
     const entries = [];
     let pendingComments = [];
     for (const line of bodyLines) {
+        if (line.trim() === '') {
+            // A blank line is formatting, not a key -- there's nothing to
+            // interleave it into the merged output next to, so it's simply
+            // dropped rather than preserved. It also breaks a comment's
+            // attachment to whatever follows: this codebase's own
+            // convention (e.g. the block comments above `options:` in both
+            // config.yaml files) treats a comment separated from the next
+            // line by a blank line as a standalone note, not documentation
+            // for that line, so pendingComments is discarded here rather
+            // than carried across the gap.
+            pendingComments = [];
+            continue;
+        }
         if (OPTION_COMMENT.test(line)) {
             pendingComments.push(line);
             continue;

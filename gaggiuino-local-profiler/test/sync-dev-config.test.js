@@ -80,6 +80,34 @@ describe('syncDevConfig (#805)', () => {
         expect(text).toContain('  # explains the default\n  expose_api_port: true');
     });
 
+    it('tolerates a blank line between options in the source without carrying it into the merge', () => {
+        const sourceText = source(
+            '  debug_logging: false\n\n  expose_api_port: true',
+            '  debug_logging: bool?\n  expose_api_port: bool?',
+        );
+        const targetText = target('  debug_logging: true', '  debug_logging: bool?');
+
+        const { text, added } = syncDevConfig(sourceText, targetText);
+
+        expect(added).toEqual(['expose_api_port']);
+        const optionsBlock = text.slice(text.indexOf('options:'), text.indexOf('schema:'));
+        expect(optionsBlock).not.toContain('\n\n');
+        expect(text).toContain('  debug_logging: true\n  expose_api_port: true');
+    });
+
+    it('drops a comment from the merge when a blank line separates it from the key below', () => {
+        const sourceText = source(
+            '  debug_logging: false\n  # a standalone note, not attached below\n\n  expose_api_port: true',
+            '  debug_logging: bool?\n  expose_api_port: bool?',
+        );
+        const targetText = target('  debug_logging: true', '  debug_logging: bool?');
+
+        const { text } = syncDevConfig(sourceText, targetText);
+
+        expect(text).not.toContain('a standalone note');
+        expect(text).toContain('  expose_api_port: true');
+    });
+
     it('is a no-op when options/schema already match', () => {
         const sourceText = source('  debug_logging: false', '  debug_logging: bool?');
         const targetText = target('  debug_logging: false', '  debug_logging: bool?');
