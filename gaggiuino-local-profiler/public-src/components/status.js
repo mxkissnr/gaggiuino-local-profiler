@@ -4,6 +4,7 @@ import { localeFor } from '../constants.js';
 import { apiFetch } from '../api.js';
 import { shareOrDownloadBlob } from '../utils.js';
 import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge, updateLegacyMachineOptionsBanner } from './onboarding.js';
+import { updateApiPortClosedBanner } from './api-port-notice.js';
 import { showDevBuildBanner } from './dev-banner.js';
 import { syncInstallId } from '../views/setup-wizard.js';
 
@@ -255,6 +256,10 @@ export async function updateStatus(machineId) {
     // the option's own default). main.js's renderApiTokenCard() reads this to
     // tell "no token because expose_api_port is off" apart from "no token yet".
     S.apiPortExposed = s.exposeApiPort !== false;
+    // #807: the app-wide banner for that state -- re-evaluated on every poll
+    // (it removes itself again if the option is turned back on and a token
+    // arrives), same always-run/self-correct convention as the banners above.
+    updateApiPortClosedBanner();
     const dot = document.getElementById('statusDot');
     const railDot = document.getElementById('railStatusDot');
     const timeEl = document.getElementById('syncTime');

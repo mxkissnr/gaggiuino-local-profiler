@@ -851,6 +851,9 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'select-milk':        selectMilkType(strId()); break;
       case 'select-frozen-portion': selectFrozenPortion(strId()); break;
       case 'reload-data':        loadData(); break;
+      // #807: the "why is this empty" notices (in-view block and app-wide
+      // banner, components/api-port-notice.js) both link here.
+      case 'goto-settings':      switchMode('settings'); break;
       case 'set-maint-mode':     setMaintMode(el.dataset.task, el.dataset.mode, el.dataset.machineId); break;
       case 'mark-maint-done':    markMaintDone(el.dataset.task, el.dataset.machineId); break;
       case 'open-guided-maint':  openGuidedMaint(el.dataset.task, el.dataset.machineId); break;

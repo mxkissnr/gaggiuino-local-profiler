@@ -1,13 +1,14 @@
 import Chart from 'chart.js/auto';
 import { S, filterShotsByMachine }                            from '../../state.js';
 import { t }                                                  from '../../i18n.js';
-import { apiFetch }                                           from '../../api.js';
+import { apiFetch, isApiPortBlocked }                         from '../../api.js';
 import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd } from '../../constants.js';
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob
 } from '../../utils.js';
 import { renderSidebar }                                      from '../../components/sidebar.js';
+import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
 import { getShotData, calcShotScore, shotUsedBeanTarget, findPreviousShot, findPreviousShotForBean, isNewestShotForBean } from './utils.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel }                              from './annotation.js';
@@ -49,7 +50,14 @@ export async function loadData() {
     const r = await apiFetch('shots.json');
     if (token !== _loadDataReqToken) return;
     if (!r.ok) {
-      shotsEl.innerHTML = `<div class="loading-state" style="color:#ef4444">HTTP ${r.status}</div>`;
+      // #807: Shots is the landing view, so a session that arrived on the
+      // direct port with expose_api_port off sees this 401 before it ever
+      // sees the Settings card that explains it. Everything needed to
+      // explain it is already client-side (see isApiPortBlocked), so say it
+      // here instead of showing a bare status code.
+      shotsEl.innerHTML = isApiPortBlocked(r.status)
+        ? apiPortClosedHtml()
+        : `<div class="loading-state" style="color:#ef4444">HTTP ${r.status}</div>`;
       return;
     }
     fetched = await r.json();

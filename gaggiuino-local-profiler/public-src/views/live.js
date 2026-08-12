@@ -1,7 +1,7 @@
 import Chart from 'chart.js/auto';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
-import { apiFetch } from '../api.js';
+import { apiFetch, isApiPortBlocked } from '../api.js';
 import { mapToXY, formatTimeLabel } from '../utils.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
 import { localeFor } from '../constants.js';
@@ -202,7 +202,12 @@ export function updatePreheatWidget(d) {
 export async function fetchLiveData() {
   try {
     const r = await apiFetch('api/live/data');
-    if (!r.ok) { setLiveBadge('error', `HTTP ${r.status}`); return; }
+    if (!r.ok) {
+      // #807: same reasoning as the Shots view -- a bare "HTTP 401" in the
+      // Live badge says nothing about the deliberately-closed direct port.
+      setLiveBadge('error', isApiPortBlocked(r.status) ? t('api_port_closed_badge') : `HTTP ${r.status}`);
+      return;
+    }
     const msg = await r.json();
 
     // First successful response — mark as ready

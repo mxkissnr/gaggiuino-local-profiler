@@ -98,7 +98,7 @@ This is a deliberate trade-off (#533). Direct-port access is how the installable
 
 For the Order Card in direct-URL mode you still copy the token once from **Settings → API Token** into the card YAML; nothing about that flow changed.
 
-**A lighter alternative: `expose_api_port: false` (#803).** Unmapping the port entirely (above) closes everything on it. If you'd rather keep the port mapped — say, for a direct-URL Order Card that's already set up — but stop new/unknown callers on your LAN from fetching a token in the first place, set this add-on option to `false` instead. `GET /api/token` then returns `403` for any request that didn't arrive via HA Ingress; the Ingress panel is unaffected and keeps working exactly as before.
+**A lighter alternative: `expose_api_port: false` (#803).** Unmapping the port entirely (above) closes everything on it. If you'd rather keep the port mapped — say, for a direct-URL Order Card that's already set up — but stop new/unknown callers on your LAN from fetching a token in the first place, set this add-on option to `false` instead. `GET /api/token` then returns `403` for any request that didn't arrive via HA Ingress; the Ingress panel is unaffected and keeps working exactly as before. Direct-port sessions still reach the app itself, but every data request fails with `401` — since #807 the app says so instead of showing a bare status code: an in-view notice on the Shots view and a dismissible banner on every other view explain that direct-port access is turned off and link to Settings.
 
 Be precise about what this does and doesn't close:
 
