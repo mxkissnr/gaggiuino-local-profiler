@@ -76,7 +76,47 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # #809: the push (not the build) has hit ghcr.io's secondary rate limit
+      # -- all three arch jobs push the same image set concurrently, so a
+      # 403 "exceeded a secondary rate limit" fails the whole run and, since
+      # publish-manifest is gated on this job, silently leaves the dev
+      # manifest pointing at the previous build. First attempt is allowed to
+      # fail and is retried once below after a pause. A first-attempt
+      # failure still shows in the run's step list, so a systematic problem
+      # stays visible instead of being masked.
       - name: Build and push
+        id: push
+        continue-on-error: true
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: ./gaggiuino-local-profiler
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            GLP_DEV_BUILD=${{ needs.prep.outputs.version }}
+          cache-from: type=gha,scope=dev-amd64
+          cache-to: type=gha,mode=max,scope=dev-amd64
+          tags: |
+            ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:${{ needs.prep.outputs.version }}
+            ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:dev
+          labels: |
+            org.opencontainers.image.title=GLP DEV — Gaggiuino Local Profiler (unstable)
+            org.opencontainers.image.description=Unstable dev build of GLP — maintainer testing only
+            org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.prep.outputs.version }}
+            org.opencontainers.image.licenses=MIT
+            io.hass.version=${{ needs.prep.outputs.version }}
+            io.hass.type=addon
+            io.hass.arch=amd64
+            io.hass.name=GLP DEV — Gaggiuino Local Profiler (unstable)
+
+      - name: Wait out the registry rate limit
+        if: steps.push.outcome == 'failure'
+        run: sleep 120
+
+      - name: Build and push (retry)
+        if: steps.push.outcome == 'failure'
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: ./gaggiuino-local-profiler
@@ -142,7 +182,42 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # #809: same retry as build-amd64 above -- see its comment.
       - name: Build and push
+        id: push
+        continue-on-error: true
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: ./gaggiuino-local-profiler
+          platforms: ${{ matrix.platform }}
+          push: true
+          build-args: |
+            GLP_DEV_BUILD=${{ needs.prep.outputs.version }}
+          # Separate cache scope from the release build so a dev build can
+          # never poison the cache the release build restores from.
+          cache-from: type=gha,scope=dev-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=dev-${{ matrix.arch }}
+          tags: |
+            ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ matrix.arch }}:${{ needs.prep.outputs.version }}
+            ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ matrix.arch }}:dev
+          labels: |
+            org.opencontainers.image.title=GLP DEV — Gaggiuino Local Profiler (unstable)
+            org.opencontainers.image.description=Unstable dev build of GLP — maintainer testing only
+            org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.prep.outputs.version }}
+            org.opencontainers.image.licenses=MIT
+            io.hass.version=${{ needs.prep.outputs.version }}
+            io.hass.type=addon
+            io.hass.arch=${{ matrix.arch }}
+            io.hass.name=GLP DEV — Gaggiuino Local Profiler (unstable)
+
+      - name: Wait out the registry rate limit
+        if: steps.push.outcome == 'failure'
+        run: sleep 120
+
+      - name: Build and push (retry)
+        if: steps.push.outcome == 'failure'
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: ./gaggiuino-local-profiler
