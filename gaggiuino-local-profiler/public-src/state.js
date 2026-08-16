@@ -51,7 +51,6 @@ export const S = {
   sortAsc: false,
   fsChart: null,
   currentFsTab: 'zeit',
-  _flapInitDone: false,
   coffeeLibrary: { beans: [], grinders: [] },
   drinkMenu: [],
   milkTypes: [],

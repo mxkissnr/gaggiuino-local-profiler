@@ -18,6 +18,9 @@
 // caps it defensively so an out-of-order manual edit can't silently show
 // entries in the wrong order or let the list grow unbounded.
 const WHATS_NEW_ENTRIES = [
+    { version: '2.33.4', date: '2026-08-16', highlights: [
+        'Sidebar shot counter flattened from a mechanical split-flap odometer to plain text, matching the app\'s current design.',
+    ] },
     { version: '2.33.3', date: '2026-08-11', highlights: [
         'Live view updates faster on a fresh sensor reading: a WebSocket or MQTT sample now pushes to the Live tab instantly instead of waiting for the next 1-second poll.',
     ] },
@@ -47,9 +50,6 @@ const WHATS_NEW_ENTRIES = [
         'Backup export now downloads as a real .zip with selectable sections, an optional encrypted API-token/MQTT-login section, and a dry-run preview before restoring.',
         'Fixed the status dot/Live tab staying green for hours after the machine was switched off — and, on the same fix, staying red for minutes after it was switched back on.',
         'Fixed barcode scanning during bean import being completely broken for every user, blocked by the app\'s own content-security policy.',
-    ] },
-    { version: '2.29.0', date: '2026-08-04', highlights: [
-        'Added Baskets and Puck Screens as new Coffee Library entity types, with photo upload and shot linkage like beans.',
     ] },
 ];
 

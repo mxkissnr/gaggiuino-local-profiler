@@ -2,6 +2,7 @@
 
 ### Fixed
 - **Settings → Machines showed the same icon for a Gaggiuino and a GaggiMate machine.** The list, topbar switcher and add/edit preview still drew the old pre-redesign single-body icon; they now render the same rectangular-panel vs. round-puck bodies the Live view already used. Closes #822
+- **The sidebar's shot-count header is no longer a mechanical split-flap odometer** — boxed digits, monospace font, drop-shadow and flip animation replaced with plain text (bold count, small muted label), matching the redesign prototype's own literal markup. #823
 
 ### Changed
 - **The last text-glyph buttons (✕/✎) and glyph-prefixed status text (✓/✗) become drawn icons**, matching the rest of the redesign's single visual language for close/delete/edit/success/failure affordances instead of mixing in Unicode symbols. #811

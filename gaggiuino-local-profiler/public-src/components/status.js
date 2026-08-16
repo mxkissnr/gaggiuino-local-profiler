@@ -70,9 +70,10 @@ function displaySyncCount() {
 }
 
 // #742: updates just the two DOM bits that show the shot count -- the
-// sidebar header's "(N)" text and the flap-board odometer -- without going
-// through the full renderSidebar()/loadData() cycle, which would be far too
-// expensive to run on every SYNC_PROGRESS tick (as fast as per-shot).
+// sidebar header's "(N)" text and the shot-count header text -- without
+// going through the full renderSidebar()/loadData() cycle, which would be
+// far too expensive to run on every SYNC_PROGRESS tick (as fast as
+// per-shot).
 function setShotCountDisplay(n) {
   const countEl = document.getElementById('shot-count');
   if (countEl) countEl.textContent = `(${n})`;
@@ -239,8 +240,8 @@ export async function updateStatus(machineId) {
       }
       knownShotCount = s.shotCount;
     }
-    // #729/#730/#735: shot-import progress bar next to the flap-board shot
-    // counter. Preferred path is SSE push (handleSyncProgressEvent/
+    // #729/#730/#735: shot-import progress bar next to the shot count
+    // header. Preferred path is SSE push (handleSyncProgressEvent/
     // handleSyncCompleteEvent, wired once in main.js's bootstrap,
     // independent of this poll). This polling fallback only runs when SSE
     // hasn't (yet, or ever) taken over for this session -- see

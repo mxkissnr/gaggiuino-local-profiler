@@ -322,59 +322,20 @@ export function sortedShots() {
   return list.reverse();
 }
 
-// ── Split-flap counter ────────────────────────────────────────────────────
-function _flapFlip(container, str) {
-  [...str].forEach((ch, i) => {
-    const cell = container.children[i];
-    if (!cell || cell.dataset.val === ch) return;
-    const oldCh = cell.dataset.val;
-    cell.dataset.val = ch;
-    const fold = document.createElement('div');
-    fold.className = 'flap-fold';
-    fold.innerHTML = `<span>${oldCh}</span>`;
-    cell.appendChild(fold);
-    setTimeout(() => {
-      fold.classList.add('flipping');
-      setTimeout(() => {
-        cell.querySelector('.flap-half.top span').textContent = ch;
-        cell.querySelector('.flap-half.bottom span').textContent = ch;
-        fold.remove();
-      }, 140);
-    }, i * 55);
-  });
-}
-
-// #333: loadData() and loadMachines() both race to call renderSidebar() on
-// startup with no fixed order — if loadMachines() resolves first (its
-// default-machine bootstrap re-filters S.shots from a still-empty
-// S.allShots), the resulting 0-count call used to be treated as "the" first
-// call, scheduling a deferred flip that then clobbered the real count back
-// to zero once it arrived. Tracking the pending timeout lets a later call
-// cancel it and win instead, the same way the header text (set synchronously
-// on every renderSidebar() call, never deferred) already always shows the
-// latest count.
-let _flapInitTimeout = null;
-
+// ── Shot count (#823: flattened from the old split-flap odometer to plain
+// text) ─────────────────────────────────────────────────────────────────
+// #333 originally guarded against a startup race between loadData() and
+// loadMachines() clobbering the count back to zero: the flap animation
+// deferred its flip by a timeout, so a stale "0" call whose deferred flip
+// fired *after* the real count arrived could overwrite it, and a tracked
+// timeout let the later call cancel and win instead. That guard is dropped
+// here on purpose, not silently: a plain textContent write is synchronous
+// and unconditional, so whichever call runs last always wins — the same
+// property the guard existed to simulate for the flap animation.
 export function updateFlapCounter(count) {
-  const container = document.getElementById('flapDigits');
-  if (!container) return;
-  const str = String(count).padStart(Math.max(String(count).length, 4), '0');
-  while (container.children.length < str.length) {
-    const cell = document.createElement('div');
-    cell.className = 'flap-cell';
-    cell.dataset.val = '0';
-    cell.innerHTML =
-      '<div class="flap-half top"><span>0</span></div>' +
-      '<div class="flap-half bottom"><span>0</span></div>';
-    container.appendChild(cell);
-  }
-  if (!S._flapInitDone) {
-    S._flapInitDone = true;
-    _flapInitTimeout = setTimeout(() => { _flapInitTimeout = null; _flapFlip(container, str); }, 350);
-  } else {
-    if (_flapInitTimeout) { clearTimeout(_flapInitTimeout); _flapInitTimeout = null; }
-    _flapFlip(container, str);
-  }
+  const el = document.getElementById('flapDigits');
+  if (!el) return;
+  el.textContent = String(count).padStart(Math.max(String(count).length, 4), '0');
 }
 
 // ── Desktop sidebar collapse ──────────────────────────────────────────────

@@ -2507,85 +2507,16 @@
         .orders-broadcast-row label { font-size: var(--fs-2); color:var(--gray-200); cursor:pointer; }
         .orders-broadcast-empty { font-size: var(--fs-1); color:var(--gray-600); margin: 0 0 var(--sp-3); }
 
-        /* ── Split-flap counter (inline in sidebar header) ── */
-        .flap-board {
-            display: inline-flex;
-            gap: 2px;
-            perspective: 400px;
-            margin-right: var(--sp-3);
-            align-items: center;
-        }
-        .flap-cell {
-            position: relative;
-            width: 20px;
-            height: 30px;
-            border-radius: 3px;
-            overflow: hidden;
-            background: #111;
-            box-shadow: 0 1px 4px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.04);
-            flex-shrink: 0;
-        }
-        .flap-half {
-            position: absolute;
-            left: 0; right: 0;
-            height: 50%;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-        }
-        .flap-half.top    { top: 0;    align-items: flex-end;   background: #161616; }
-        .flap-half.bottom { bottom: 0; align-items: flex-start; background: #111; }
-        .flap-half span {
-            font-size: var(--fs-3);
-            font-weight: 700;
-            font-family: 'Courier New', 'SF Mono', monospace;
-            color: #e8dfc0;
-            line-height: 30px;
-            position: absolute;
-            top: 0; width: 100%; text-align: center; height: 30px;
-            letter-spacing: -.02em;
-        }
-        .flap-half.bottom span { top: -15px; }
-        .flap-cell::after {
-            content: '';
-            position: absolute; top: 50%; left: 0; right: 0;
-            height: 1px;
-            background: #2a2a2a;
-            z-index: 10;
-        }
-        .flap-fold {
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 50%;
-            background: #161616;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: flex-end;
-            transform-origin: center bottom;
-            z-index: 5;
-            border-radius: 3px 3px 0 0;
-            backface-visibility: hidden;
-        }
-        .flap-fold span {
-            font-size: var(--fs-3);
-            font-weight: 700;
-            font-family: 'Courier New', 'SF Mono', monospace;
-            color: #e8dfc0;
-            line-height: 30px;
-            position: absolute;
-            top: 0; width: 100%; text-align: center; height: 30px;
-            letter-spacing: -.02em;
-        }
-        .flap-fold.flipping { animation: flapDown .14s ease-in forwards; }
-        @keyframes flapDown {
-            from { transform: rotateX(0deg); }
-            to   { transform: rotateX(-90deg); }
-        }
+        /* ── Shot-count header (#823: flattened from a mechanical split-flap
+           odometer to plain text, matching the redesign prototype's literal
+           .rail-hd markup — bold count + small muted label, inline, no
+           boxes/monospace/flip animation) ── */
+        .shot-count-num { font-weight: 600; margin-right: var(--sp-2); }
+        .shot-count-label { font-size: var(--fs-1); font-weight: normal; color: var(--gray-500); }
 
         /* ── Shot-import progress bar (#729, own row under the sidebar
-           header — #730 review: was squeezed inline next to the flap-board
-           shot counter, moved out to its own line below) ── */
+           header — #730 review: was squeezed inline next to the shot
+           counter, moved out to its own line below) ── */
         #syncProgressBar {
             display: flex;
             align-items: center;
