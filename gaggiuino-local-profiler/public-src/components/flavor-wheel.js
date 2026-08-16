@@ -256,10 +256,10 @@ export async function openFlavorWheel(beanId) {
   const lang = ['de', 'en', 'it', 'fr', 'es', 'nl'].includes(S.currentLang) ? S.currentLang : 'en';
   // echarts is a dynamic import now (#797) — show a loading state while its
   // chunk downloads instead of leaving the canvas blank.
-  container.innerHTML = `<p style="color:#52525b;font-size:.85rem;text-align:center">${t('flavor_wheel_loading')}</p>`;
+  container.innerHTML = `<p class="empty-note" style="text-align:center">${t('flavor_wheel_loading')}</p>`;
   if (breadcrumbEl) breadcrumbEl.innerHTML = '';
   if (!await renderFlavorWheel(container, bean.flavors, lang, breadcrumbEl)) {
-    container.innerHTML = `<p style="color:#52525b;font-size:.85rem;text-align:center">${t('flavor_wheel_unavailable')}</p>`;
+    container.innerHTML = `<p class="empty-note" style="text-align:center">${t('flavor_wheel_unavailable')}</p>`;
     if (breadcrumbEl) breadcrumbEl.innerHTML = '';
   }
 }

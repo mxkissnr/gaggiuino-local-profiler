@@ -119,7 +119,7 @@ export function buildPersonalBests() {
   const el = document.getElementById('personalBests');
   if (!el) return;
   if (S.shots.length < 3) {
-    el.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem">${t('analytics_no_bests')}</p>`;
+    el.innerHTML = `<p class="empty-note">${t('analytics_no_bests')}</p>`;
     return;
   }
 
@@ -218,7 +218,7 @@ function _renderEquipmentStats(containerId, entries, emptyKey) {
   const el = document.getElementById(containerId);
   if (!el) return;
   if (entries.length === 0) {
-    el.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem">${t(emptyKey)}</p>`;
+    el.innerHTML = `<p class="empty-note">${t(emptyKey)}</p>`;
     return;
   }
   let html = '<div class="bean-cards">';
@@ -275,7 +275,7 @@ function _buildDoseDist() {
   if (S.doseDistChart) { S.doseDistChart.destroy(); S.doseDistChart = null; }
   const doses = S.shots.map(s => s.annotation?.dose).filter(d => d != null && d > 5 && d < 50);
   if (doses.length < 5) {
-    ctx.parentElement.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem;padding-top:8px">${t('analytics_no_distribution')}</p>`;
+    ctx.parentElement.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_distribution')}</p>`;
     return;
   }
   const lo = Math.floor(Math.min(...doses) * 2) / 2;
@@ -305,7 +305,7 @@ function _buildRatioDist() {
     .map(s => s.annotation?.dose && s.weight ? (s.weight / 10) / s.annotation.dose : null)
     .filter(r => r != null && r > 1 && r < 4);
   if (ratios.length < 5) {
-    ctx.parentElement.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem;padding-top:8px">${t('analytics_no_distribution')}</p>`;
+    ctx.parentElement.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_distribution')}</p>`;
     return;
   }
   const lo = Math.floor(Math.min(...ratios) * 10) / 10;
@@ -342,7 +342,7 @@ export function buildTimeOfDay() {
     }
   }
   if (!hours.some(h => h.count > 0)) {
-    ctx.parentElement.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem;padding-top:8px">${t('analytics_no_time')}</p>`;
+    ctx.parentElement.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_time')}</p>`;
     return;
   }
   const avgSc = h => h.scores.length ? Math.round(h.scores.reduce((a, b) => a + b, 0) / h.scores.length) : null;
@@ -390,7 +390,7 @@ export function buildTrendChart() {
   if (S.trendChart) { S.trendChart.destroy(); S.trendChart = null; }
 
   if (src.length < 2) {
-    ctx.parentElement.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem;padding-top:8px">${t('analytics_no_trend')}</p>`;
+    ctx.parentElement.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_trend')}</p>`;
     return;
   }
 
@@ -538,7 +538,7 @@ export function buildBeanStats() {
   const beans = Object.entries(byBean).sort((a, b) => b[1].count - a[1].count);
 
   if (beans.length === 0) {
-    el.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem">${t('analytics_no_beans')}</p>`;
+    el.innerHTML = `<p class="empty-note">${t('analytics_no_beans')}</p>`;
     return;
   }
 
@@ -811,7 +811,7 @@ export async function buildWorldMap() {
 
   if (Object.keys(byCode).length === 0) {
     if (_echartsInstance) { _echartsInstance.dispose(); _echartsInstance = null; }
-    wrap.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem">${t('analytics_map_empty')}</p>`;
+    wrap.innerHTML = `<p class="empty-note">${t('analytics_map_empty')}</p>`;
     return;
   }
   if (!wrap.querySelector('.world-map-canvas')) {
@@ -825,7 +825,7 @@ export async function buildWorldMap() {
     try { topo = await (await fetch('countries-110m.json')).json(); }
     catch {
       if (token !== _worldMapReqToken) return; // a newer call has since taken over
-      wrap.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem">${t('analytics_map_empty')}</p>`;
+      wrap.innerHTML = `<p class="empty-note">${t('analytics_map_empty')}</p>`;
       return;
     }
     if (token !== _worldMapReqToken) return; // a newer call has since taken over
@@ -842,14 +842,14 @@ export async function buildWorldMap() {
   try {
     if (!_mapLibsPromise) {
       _mapLibsPromise = Promise.all([import('echarts'), import('topojson-client')]);
-      container.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem">${t('analytics_map_loading')}</p>`;
+      container.innerHTML = `<p class="empty-note">${t('analytics_map_loading')}</p>`;
     }
     [echarts, topojson] = await _mapLibsPromise;
   } catch {
     // eslint-disable-next-line require-atomic-updates -- a concurrent call resetting the same promise to null is idempotent, not a real race
     _mapLibsPromise = null; // don't cache a rejected promise — allow a retry on the next navigation
     if (token !== _worldMapReqToken) return; // a newer call has since taken over
-    wrap.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem">${t('analytics_map_unavailable')}</p>`;
+    wrap.innerHTML = `<p class="empty-note">${t('analytics_map_unavailable')}</p>`;
     return;
   }
   if (token !== _worldMapReqToken) return; // a newer call has since taken over
@@ -997,7 +997,7 @@ export function buildProfileChart() {
   if (S.profileBarChart) { S.profileBarChart.destroy(); S.profileBarChart = null; }
 
   if (entries.length === 0) {
-    wrap.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem">${t('analytics_no_profiles')}</p>`;
+    wrap.innerHTML = `<p class="empty-note">${t('analytics_no_profiles')}</p>`;
     return;
   }
 
@@ -1037,7 +1037,7 @@ export function buildWeekdayHourHeatmap() {
   if (!el) return;
 
   if (!S.shots.length) {
-    el.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem">${t('analytics_no_time')}</p>`;
+    el.innerHTML = `<p class="empty-note">${t('analytics_no_time')}</p>`;
     return;
   }
 
@@ -1136,7 +1136,7 @@ export function buildBeanRanking() {
 
   const rows = _computeBeanRanking(S.shots);
   if (!rows.length) {
-    el.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem">${t('analytics_no_beans')}</p>`;
+    el.innerHTML = `<p class="empty-note">${t('analytics_no_beans')}</p>`;
     return;
   }
 
@@ -1227,7 +1227,7 @@ export function buildMachineComparison() {
 
   const rows = _computeMachineComparison(S.allShots || [], machines);
   if (!rows.some(r => r.count > 0)) {
-    el.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem">${t('analytics_no_machine_data')}</p>`;
+    el.innerHTML = `<p class="empty-note">${t('analytics_no_machine_data')}</p>`;
     return;
   }
 
@@ -1291,7 +1291,7 @@ function _renderDialinProgressionChart(beanName) {
   if (S.dialinProgressionChart) { S.dialinProgressionChart.destroy(); S.dialinProgressionChart = null; }
 
   if (!beanName) {
-    ctx.parentElement.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem;padding-top:8px">${t('analytics_no_beans')}</p>`;
+    ctx.parentElement.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_beans')}</p>`;
     return;
   }
 
@@ -1300,7 +1300,7 @@ function _renderDialinProgressionChart(beanName) {
     .sort((a, b) => a.timestamp - b.timestamp);
 
   if (shots.length < 2) {
-    ctx.parentElement.innerHTML = `<p style="color:var(--gray-600);font-size:.85rem;padding-top:8px">${t('analytics_no_trend')}</p>`;
+    ctx.parentElement.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_trend')}</p>`;
     return;
   }
 

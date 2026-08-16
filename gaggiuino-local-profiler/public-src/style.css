@@ -1690,6 +1690,11 @@
         .comp-thumb:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.2); }
         .comp-thumb-chart { background: rgba(0,0,0,.2); }
         .comp-thumb-no-data { height: 65px; display: flex; align-items: center; justify-content: center; color: var(--gray-600); font-size: var(--fs-1); }
+        /* #811 follow-up: repeated raw font-size:.85rem literals (analytics empty
+           states, flavor-wheel loading/unavailable, maintenance log empty state)
+           never migrated onto the six-step scale — closest step is --fs-2. */
+        .empty-note { color: var(--gray-600); font-size: var(--fs-2); }
+        .empty-note.pad-top { padding: var(--sp-2) 0; }
         .comp-thumb-meta { display: flex; align-items: center; gap: var(--sp-1); padding: var(--sp-1) var(--sp-2); font-size: var(--fs-1); flex-wrap: wrap; }
         .comp-shot-date  { color: var(--gray-500); }
         .comp-shot-grind { color: var(--gray-300); display: inline-flex; align-items: center; gap: var(--sp-1); }

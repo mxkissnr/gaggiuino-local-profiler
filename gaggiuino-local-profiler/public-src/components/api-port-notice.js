@@ -19,7 +19,7 @@ const DISMISS_KEY = 'glp_api_port_closed_banner_dismissed';
 export function apiPortClosedHtml() {
   return `<div class="loading-state" style="max-width:520px;margin:0 auto;text-align:center">
     <div style="font-weight:600;margin-bottom:6px">${t('api_port_closed_title')}</div>
-    <div style="font-size:.85rem;line-height:1.45">${t('api_port_closed_desc')}</div>
+    <div style="font-size:var(--fs-2);line-height:1.45">${t('api_port_closed_desc')}</div>
     <button data-action="goto-settings" class="export-btn" style="margin-top:var(--sp-3)">${t('api_port_closed_settings_btn')}</button>
   </div>`;
 }

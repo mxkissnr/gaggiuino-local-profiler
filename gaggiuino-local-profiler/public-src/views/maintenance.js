@@ -373,7 +373,7 @@ export function renderMaintLog(entries) {
   }
 
   if (!entries.length) {
-    el.innerHTML = `<p style="color:var(--gray-600);font-size:.82rem;padding:8px 0">${t('maint_log_empty')}</p>`;
+    el.innerHTML = `<p class="empty-note pad-top">${t('maint_log_empty')}</p>`;
     return;
   }
 
