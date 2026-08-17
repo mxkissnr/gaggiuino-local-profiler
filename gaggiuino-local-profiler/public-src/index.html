@@ -183,6 +183,12 @@
         </div>
 
         <div id="chart-area">
+            <!-- Shot hero photo (#850): large desktop-only panel showing the
+                 same image as #shotHeaderThumb, floated top-right so the
+                 existing single-column content wraps around it — claims the
+                 empty space next to the title/verdict/recipe block instead of
+                 restructuring the layout into a two-column grid. -->
+            <img id="shotHeroPhoto" class="shot-hero-photo" alt="" data-i18n-title="shot_photo_title">
             <div class="sprofiler-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
                 <div style="flex:1;min-width:0">
                     <h1 id="topTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Profil-Name</h1>
@@ -236,6 +242,7 @@
                 <div class="recipe-card">
                     <span class="recipe-card-label" data-i18n="recipe_bean_grinder">Bohne & Mühle</span>
                     <span class="recipe-card-value" id="beanGrinderVal">-</span>
+                    <span class="recipe-card-sub" id="beanGrinderPuckVal"></span>
                 </div>
             </div>
 

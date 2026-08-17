@@ -340,9 +340,13 @@ export function updateView() {
   // #635: appended only when actually set (most shots won't have either yet),
   // so this stays a no-op on mobile space until the equipment library is used.
   const basketName     = _equipmentName(S.coffeeLibrary?.baskets, ann.basketId);
+  // #851: puck screen gets its own line below (beanGrinderPuckVal) instead
+  // of being appended here — the combined line was getting too long
+  // (bean + grinder + grind setting + basket + puck screen all on one row).
   const puckScreenName = _equipmentName(S.coffeeLibrary?.puckScreens, ann.puckScreenId);
-  const beanGrinder = [ann.coffee, grinderLabel, basketName, puckScreenName].filter(Boolean).join(' · ');
+  const beanGrinder = [ann.coffee, grinderLabel, basketName].filter(Boolean).join(' · ');
   document.getElementById('beanGrinderVal').textContent = beanGrinder || '–';
+  document.getElementById('beanGrinderPuckVal').textContent = puckScreenName || '';
 
   // Freshness badge
   const freshEl   = document.getElementById('freshnessBadge');
@@ -366,19 +370,41 @@ export function updateView() {
     fwEl.style.display = fw ? '' : 'none';
   }
 
-  // Shot photo thumbnail (#448): reuses the same image the annotation panel
-  // uploads/shows (_renderShotPhoto() in annotation.js) — shown here too so
-  // the empty space next to the machine/freshness line on mobile isn't wasted.
+  // Shot photo (#448, #850): reuses the same image the annotation panel
+  // uploads/shows (_renderShotPhoto() in annotation.js) — the small circular
+  // thumb fills the empty space next to the machine/freshness line on
+  // mobile, and the large hero panel (floated top-right of #chart-area)
+  // fills the unused desktop space above the chart. Both show the same
+  // photo, fetched once and shared; CSS (see .shot-hero-photo /
+  // .shot-header-thumb) decides which one is visible per breakpoint.
   const photoThumbEl = document.getElementById('shotHeaderThumb');
-  if (photoThumbEl) {
+  const heroPhotoEl  = document.getElementById('shotHeroPhoto');
+  if (photoThumbEl || heroPhotoEl) {
     if (!shotB && shotA.image) {
-      photoThumbEl.style.display = '';
-      photoThumbEl.onclick = () => { if (photoThumbEl.src) openLightbox(photoThumbEl.src); };
-      loadShotImageBlobUrl(shotA.id).then(url => { if (url) photoThumbEl.src = url; });
+      if (photoThumbEl) {
+        photoThumbEl.style.display = '';
+        photoThumbEl.onclick = () => { if (photoThumbEl.src) openLightbox(photoThumbEl.src); };
+      }
+      if (heroPhotoEl) {
+        heroPhotoEl.classList.add('has-photo');
+        heroPhotoEl.onclick = () => { if (heroPhotoEl.src) openLightbox(heroPhotoEl.src); };
+      }
+      loadShotImageBlobUrl(shotA.id).then(url => {
+        if (!url) return;
+        if (photoThumbEl) photoThumbEl.src = url;
+        if (heroPhotoEl)  heroPhotoEl.src  = url;
+      });
     } else {
-      photoThumbEl.style.display = 'none';
-      photoThumbEl.removeAttribute('src');
-      photoThumbEl.onclick = null;
+      if (photoThumbEl) {
+        photoThumbEl.style.display = 'none';
+        photoThumbEl.removeAttribute('src');
+        photoThumbEl.onclick = null;
+      }
+      if (heroPhotoEl) {
+        heroPhotoEl.classList.remove('has-photo');
+        heroPhotoEl.removeAttribute('src');
+        heroPhotoEl.onclick = null;
+      }
     }
   }
 

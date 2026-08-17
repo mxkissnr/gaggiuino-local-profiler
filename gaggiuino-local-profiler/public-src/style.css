@@ -1672,12 +1672,36 @@
 
         /* Shot-detail header photo thumbnail (#448) — fills the empty space
            next to machine/freshness text on mobile; small enough to sit
-           inline with the badge text rather than growing the header. */
+           inline with the badge text rather than growing the header.
+           #850: hidden by default (desktop) now that .shot-hero-photo below
+           shows the same image at a useful size there — the mobile media
+           query re-enables it, since the hero panel is desktop-only. */
         .shot-header-thumb {
+            display: none;
             width: 22px; height: 22px; border-radius: 50%; object-fit: cover;
             vertical-align: middle; margin-left: var(--sp-2); cursor: pointer;
             background: var(--gray-800);
         }
+
+        /* Shot-detail hero photo (#850): large desktop-only panel claiming the
+           unused space to the right of the title/verdict/recipe block, above
+           the chart. Floated so the existing single-column stack wraps
+           around it with no DOM/layout restructuring. Sized to roughly match
+           the fixed 480x480 export resolution (image-crop.js EXPORT_SIZE) —
+           bigger would just look soft. Hidden until JS adds .has-photo (no
+           photo on this shot, or A/B compare mode); the mobile media query
+           below forces it hidden even then, since #shotHeaderThumb covers
+           mobile instead. */
+        .shot-hero-photo {
+            display: none;
+            float: right;
+            width: 280px; height: 280px;
+            object-fit: cover; border-radius: var(--radius);
+            margin: 0 0 var(--sp-4) var(--sp-4);
+            background: var(--gray-800);
+            cursor: pointer;
+        }
+        .shot-hero-photo.has-photo { display: block; }
 
         /* ── Grind advice ── #816: de-boxed — was a filled+bordered panel,
            exactly the "everything is a box" pattern PLAN.md calls out. Not
@@ -2115,6 +2139,10 @@
                so they stack as two clean rows. */
             .sprofiler-header > div:first-child { flex: 1 1 100% !important; }
             .sprofiler-header > div:last-child   { flex: 1 1 100% !important; flex-wrap: wrap; justify-content: flex-start; }
+            /* #850: the hero panel is desktop-only — on mobile the small
+               circular thumb (re-enabled here) covers the same photo. */
+            .shot-hero-photo.has-photo { display: none; }
+            .shot-header-thumb         { display: inline; }
             .annotation-fields { grid-template-columns: 1fr; }
             .annotation-field.full-width { grid-column: 1; }
             .chart-container, .live-chart-container { height: clamp(300px, 50vh, 400px); }
