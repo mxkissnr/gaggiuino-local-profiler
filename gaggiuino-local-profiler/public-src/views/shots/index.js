@@ -432,11 +432,10 @@ export function updateView() {
     // #838: duration and avg pressure dropped — they're already shown once
     // each, in the Dauer recipe card (incl. phase breakdown) and the
     // Process-zone pressure card, so repeating them here was pure duplication.
-    document.getElementById('verdictSubline').textContent = [
-      nameA,
-      `Shot ${shotA.nativeId ?? shotA.id}`,
-      ann.coffee || null
-    ].filter(Boolean).join(' · ');
+    // #841: profile name + shot number (topTitle, one element above) and the
+    // bean name (beanGrinderVal, in the recipe zone below) were the only
+    // things left in this subline — both already shown elsewhere, so the
+    // subline itself is retired (stays hidden, see index.html/style.css).
     verdictHeader.style.display = '';
   } else {
     verdictHeader.style.display = 'none';

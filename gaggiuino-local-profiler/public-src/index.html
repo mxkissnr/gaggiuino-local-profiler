@@ -197,7 +197,11 @@
                     <span class="verdict-score-num" id="verdictRingVal">–</span><span class="verdict-sep">·</span><span class="verdict-headline" id="verdictHeadline">-</span>
                     <span class="delta-chip" id="verdictDeltaChip" style="display:none"></span>
                 </div>
-                <div class="verdict-subline" id="verdictSubline">-</div>
+                <!-- #841: retired — used to repeat the profile name/shot number
+                     (already in #topTitle above) and the bean name (already
+                     in #beanGrinderVal below). Kept hidden rather than removed
+                     in case a genuinely independent subline is needed later. -->
+                <div class="verdict-subline" id="verdictSubline" style="display:none"></div>
             </div>
 
             <div id="orderedByInfo" class="ann-ordered-by" style="display:none"></div>
