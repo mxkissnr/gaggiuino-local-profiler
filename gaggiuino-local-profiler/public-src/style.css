@@ -558,12 +558,17 @@
            silhouette never distorts. */
         .topbar-machine-icon {
             display: flex; align-items: center; justify-content: center;
-            width: 44px; height: 44px; flex-shrink: 0;
+            flex-shrink: 0;
             background: transparent; border: none; padding: 0; margin: 0; cursor: pointer;
         }
-        /* #topbarMachineIcon (ID) outranks .machine-icon-live .m-svg's own
+        /* #topbarMachineIcon (ID) outranks .machine-icon-live's own
            100%/100% sizing rule further below regardless of stylesheet
-           order — same reasoning #live-idle #liveMachineIcon svg uses. */
+           order — .machine-icon-live is defined later in this file, so at
+           equal class-selector specificity it was winning and stretching
+           the button to fill its flex parent (#839). Same ID-specificity
+           reasoning #live-idle #liveMachineIcon already uses for its own
+           container. */
+        #topbarMachineIcon { width: 44px; height: 44px; }
         #topbarMachineIcon .m-svg { width: auto; height: 100%; display: block; }
 
         /* Mobile burger drawer trigger (#425) — hidden on desktop; the
