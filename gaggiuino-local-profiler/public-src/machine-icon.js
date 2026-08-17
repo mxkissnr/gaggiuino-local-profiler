@@ -168,12 +168,12 @@ function animBody(gradId, steelId, mini = false) {
       <path d="M0 134 L80 134 L80.8 138 L0 138 Z" fill="#fff" opacity=".07"/>
       <rect x="4.5" y="155" width="7.5" height="4.4" rx="1.5" fill="#26262c"/>
       <rect x="66" y="155" width="7.5" height="4.4" rx="1.5" fill="#26262c"/>
-      <ellipse cx="82.6" cy="26.4" rx="2.6" ry="5.4" fill="#1f1f24"/>
-      <path d="M82.6 21 H95.4 A3.4 5.4 0 0 1 95.4 31.8 H82.6 Z" fill="#b4b9c0"/>
-      <ellipse cx="95.4" cy="26.4" rx="3.2" ry="5.4" fill="#d6dade"/>
-      <ellipse cx="95.4" cy="26.4" rx="1.5" ry="2.6" fill="#9aa0a8"/>
-      <path d="M84 22.6 H93.4" stroke="#fff" opacity=".55" stroke-width="1.4" stroke-linecap="round"/>
-      <path d="M84 30 H93.4" stroke="#000" opacity=".22" stroke-width="1.2" stroke-linecap="round"/>`;
+      <ellipse cx="82.6" cy="26.4" rx="2.6" ry="5.4" fill="#0c0c0e"/>
+      <path d="M82.6 21 H95.4 A3.4 5.4 0 0 1 95.4 31.8 H82.6 Z" fill="#1a1a1e"/>
+      <ellipse cx="95.4" cy="26.4" rx="3.2" ry="5.4" fill="#161619"/>
+      <ellipse cx="95.4" cy="26.4" rx="1.5" ry="2.6" fill="#0c0c0e"/>
+      <path d="M84 22.6 H93.4" stroke="#fff" opacity=".35" stroke-width="1.4" stroke-linecap="round"/>
+      <path d="M84 30 H93.4" stroke="#000" opacity=".4" stroke-width="1.2" stroke-linecap="round"/>`;
 }
 
 // Gaggiuino: rectangular display module bolted to the front, overhanging,
