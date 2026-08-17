@@ -183,6 +183,22 @@
         </div>
 
         <div id="chart-area">
+            <!-- Shot header zone (#850/#852 float fix): plain block wrapper
+                 around the title/verdict/recipe block + the hero photo. It
+                 exists ONLY because #chart-area is display:flex, and per the
+                 CSS spec float has no effect on a flex item — a floated flex
+                 item behaves as float:none, so #shotHeroPhoto rendered as a
+                 full-width block stacked above everything instead of
+                 wrapping. Wrapping these elements in one plain (non-flex,
+                 non-grid) block gives them back normal in-flow block
+                 layout, where floats work as designed: each sibling here is
+                 still just a block-level box to THIS wrapper, even though
+                 .sprofiler-header/#verdictHeader/.recipe-zone are
+                 themselves flex containers internally. .chart-tabs and the
+                 chart canvas stay OUTSIDE this wrapper as direct flex
+                 children of #chart-area, unaffected, so the chart keeps
+                 spanning full width below the header/photo zone. -->
+            <div id="shotHeaderZone">
             <!-- Shot hero photo (#850): large desktop-only panel showing the
                  same image as #shotHeaderThumb, floated top-right so the
                  existing single-column content wraps around it — claims the
@@ -249,6 +265,7 @@
             <div id="grindAdviceComparative" class="grind-advice grind-comparative" style="display:none">
                 <span class="grind-icon" id="grindAdviceComparativeIcon"></span>
                 <span id="grindAdviceComparativeText"></span>
+            </div>
             </div>
 
             <div class="chart-tabs tabs-scroll">

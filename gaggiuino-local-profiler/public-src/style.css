@@ -901,6 +901,15 @@
 
         #chart-area { display: flex; flex-direction: column; padding: var(--sp-6) var(--sp-6) var(--sp-6); }
 
+        /* #852 fix: plain block wrapper for the title/verdict/recipe block +
+           the hero photo — see the comment in index.html above #shotHeaderZone
+           for why this exists (float has no effect on flex items, so
+           #shotHeroPhoto needs a non-flex, non-grid parent to float inside).
+           BFC (overflow:hidden) so the wrapper's own box clears the floated
+           photo — otherwise its height would collapse to the (shorter) text
+           column and .chart-tabs right below it would overlap the photo. */
+        #shotHeaderZone { display: block; overflow: hidden; }
+
         .sprofiler-header        { margin-bottom: var(--sp-4); }
         /* #413: was a hardcoded #fff — invisible on the light/Crema themes,
            where the content area is white/near-white. --gray-200 is the same
