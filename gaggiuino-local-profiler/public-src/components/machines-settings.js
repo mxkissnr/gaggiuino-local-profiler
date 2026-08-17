@@ -208,8 +208,10 @@ export function applyActiveMachineChange() {
   }
   // #340: the Library "Profiles" tab shows the active machine's own live
   // profile list — refetch on switch so it doesn't keep showing whichever
-  // machine was active when the tab was first opened.
-  loadMachineProfileList();
+  // machine was active when the tab was first opened. Fire-and-forget, but
+  // caught (#846) — a network failure here shouldn't surface as an
+  // unhandled rejection just because nothing else in this function awaits it.
+  loadMachineProfileList().catch(() => {});
   // #464: the topbar status dot/hostname (#railStatusDot/#railMachineName)
   // used to keep showing the default machine's state until the next 30s
   // poll — refresh immediately, scoped to the newly active machine.
