@@ -168,10 +168,8 @@ export function renderMachineSwitcher() {
   // visibility would depend on two independently-changing things (this and
   // the sidebar's own collapsed state) for one thin, low-cost bar.
   const machines = S.machines || [];
-  const iconEl = document.getElementById('machineSwitcherIcon');
   if (machines.length < 2) {
     el.style.display = 'none'; el.innerHTML = '';
-    iconEl?.classList.remove('visible');
     return;
   }
 
@@ -180,26 +178,11 @@ export function renderMachineSwitcher() {
     machines.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
   el.value = String(S.activeMachineId ?? 'all');
   el.style.display = '';
-  updateMachineSwitcherIcon();
-}
-
-// Small coloured machine glyph next to the topbar switcher (#594) so
-// multi-machine users can tell which machine is active at a glance, not
-// just by name — a plain <select> can't reliably render swatches inside
-// its own <option>s across browsers.
-function updateMachineSwitcherIcon() {
-  const iconEl = document.getElementById('machineSwitcherIcon');
-  if (!iconEl) return;
-  const machine = (S.machines || []).find(m => m.id === S.activeMachineId);
-  if (!machine) { iconEl.classList.remove('visible'); iconEl.innerHTML = ''; return; }
-  iconEl.innerHTML = machineIconMiniSvg(machine.theme, machine.type);
-  iconEl.classList.add('visible');
 }
 
 export function switchActiveMachine(rawValue) {
   const value = rawValue === 'all' ? 'all' : parseInt(rawValue, 10);
   setActiveMachine(value);
-  updateMachineSwitcherIcon();
   renderTopbarMachineIcon();
   applyActiveMachineChange();
 }

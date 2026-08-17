@@ -13,6 +13,8 @@
 // machine-icon.js — see that module for why steaming can't be told apart
 // from heating yet.
 import { S } from '../state.js';
+import { t } from '../i18n.js';
+import { esc } from '../utils.js';
 import { machineIconAnimatedSvg, setMachineIconMode, resolveMachineIconState,
          MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
 
@@ -102,4 +104,80 @@ export function handleTopbarMachineIconClick() {
   void el.offsetWidth; // restart the animation if a previous burst is still playing
   el.classList.add(EASTER_EGG_CLASS);
   setTimeout(() => el.classList.remove(EASTER_EGG_CLASS), EASTER_EGG_DURATION_MS);
+  openEasterEggPanel();
+}
+
+// The panel's own icon copy is a second, independent instance (its own
+// cached SVG, no SSE wiring) — it only ever needs to show one thing: the
+// active machine, permanently colour-cycling via the same blend-mode
+// overlay as the topbar burst above, just without the burst's fade-out/
+// auto-stop, since the panel itself is the "off switch" (closing it removes
+// the class). No new persistent state, no analytics, nothing recorded —
+// see this module's top-of-file note and #845: intentionally never
+// mentioned in CHANGELOG.md/whats-new.js, it's meant to stay a secret.
+let _panelIconFor = null;
+
+function panelHost() {
+  return document.getElementById('easterEggPanelIcon');
+}
+
+function renderPanelIcon() {
+  const el = panelHost();
+  if (!el) return;
+  const machine = (S.machines || []).find(m => m.id === S.activeMachineId)
+               || (S.machines || []).find(m => m.isDefault)
+               || (S.machines || [])[0];
+  const id = machine?.id ?? null;
+  if (_panelIconFor !== id || !el.firstChild) {
+    el.className = `easter-egg-panel-icon-live ${MACHINE_ICON_LIVE_CLASS} topbar-machine-icon-easter-egg`;
+    el.innerHTML = machineIconAnimatedSvg(machine?.theme, machine?.type);
+    _panelIconFor = id;
+  }
+  const { mode, heatFraction } = resolveMachineIconState(null, _lastPreheat);
+  setMachineIconMode(el, mode === 'off' ? 'hot' : mode, heatFraction || 1);
+}
+
+function machineLabel() {
+  if (S.activeMachineId == null || S.activeMachineId === 'all') return t('machine_switcher_all');
+  const machine = (S.machines || []).find(m => m.id === S.activeMachineId);
+  return machine?.name || t('machine_switcher_all');
+}
+
+function renderPanelStats() {
+  const el = document.getElementById('easterEggPanelStats');
+  if (!el) return;
+  const version = document.getElementById('glpVersionBadge')?.textContent?.trim() || '–';
+  const rows = [
+    [t('easter_egg_stat_version'), version],
+    [t('easter_egg_stat_connection'), S.sseActive ? t('easter_egg_stat_sse_live') : t('easter_egg_stat_sse_poll')],
+    [t('machine_switcher_title'), machineLabel()],
+  ];
+  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
+  el.innerHTML = rows.map(([label, value]) => `<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`).join('');
+}
+
+export function openEasterEggPanel() {
+  const panel = document.getElementById('easterEggPanel');
+  if (!panel) return;
+  renderPanelIcon();
+  renderPanelStats();
+  panel.style.display = 'flex';
+  document.getElementById('easterEggPanelCloseBtn')?.focus();
+}
+
+export function closeEasterEggPanel() {
+  const panel = document.getElementById('easterEggPanel');
+  if (!panel) return;
+  panel.style.display = 'none';
+}
+
+// Called once from main.js's bootstrap, not at module-import time — this
+// module is imported by test files (via machines-settings.js/status.js)
+// under Node/vitest, where `document` doesn't exist.
+export function bindEasterEggPanelEscape() {
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const panel = document.getElementById('easterEggPanel');
+    if (panel && panel.style.display !== 'none') closeEasterEggPanel();
+  });
 }

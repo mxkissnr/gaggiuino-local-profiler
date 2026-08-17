@@ -129,7 +129,8 @@ import { openSetupWizard, closeSetupWizard, setupWizardGetStarted, setupWizardSk
          shouldOpenSetupWizard } from './views/setup-wizard.js';
 
 import { handleTopbarLiveSnapshotEvent, handleTopbarPreheatUpdateEvent,
-         handleTopbarMachineIconClick } from './components/topbar-machine-icon.js';
+         handleTopbarMachineIconClick, closeEasterEggPanel,
+         bindEasterEggPanelEscape } from './components/topbar-machine-icon.js';
 
 import { loadMqttSettings, setMqttTransport, saveMqttSettings, applyMqttToMachine } from './components/mqtt-settings.js';
 
@@ -542,6 +543,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  bindEasterEggPanelEscape();
+
   // ── Keyboard navigation: left/right arrows between shots ──────────────
   document.addEventListener('keydown', e => {
     if (S.currentMode !== 'shots') return;
@@ -918,6 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'setup-wizard-close':          closeSetupWizard(); break;
       case 'setup-wizard-get-started':    setupWizardGetStarted(); break;
       case 'setup-wizard-skip-demo':      setupWizardSkipToDemo(); break;
+      case 'close-easter-egg':            closeEasterEggPanel(); break;
     }
   });
 

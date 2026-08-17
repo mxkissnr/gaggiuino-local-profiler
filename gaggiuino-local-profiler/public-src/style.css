@@ -558,7 +558,7 @@
            silhouette never distorts. */
         .topbar-machine-icon {
             display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0;
+            flex-shrink: 0; position: relative;
             background: transparent; border: none; padding: 0; margin: 0; cursor: pointer;
         }
         /* #topbarMachineIcon (ID) outranks .machine-icon-live's own
@@ -831,11 +831,6 @@
         .machine-theme-custom-inputs { display:flex; align-items:center; gap: var(--sp-3); margin: 2px 0 var(--sp-1); }
         .machine-theme-color-input { width:34px; height:28px; padding: 0; border:1px solid var(--gray-700); border-radius:var(--radius); background:none; cursor:pointer; }
         .machine-theme-gradient-toggle { display:flex; align-items:center; gap: var(--sp-1); font-size: var(--fs-1); color:var(--gray-400); cursor:pointer; }
-
-        /* Topbar machine switcher icon (#594) */
-        .machine-switcher-icon { display:none; width:15px; height:auto; align-items:center; }
-        .machine-switcher-icon svg { width:100%; height:100%; display:block; }
-        .machine-switcher-icon.visible { display:inline-flex; }
 
         /* ── Degassing tracker ── */
         .degassing-bar-wrap { margin-top: var(--sp-2); }
@@ -2699,18 +2694,85 @@
             .machine-icon-live.is-brewing .m-pour path { animation: none !important; stroke-dashoffset: 0; }
             .machine-icon-live.is-steaming .milk-top,
             .machine-icon-live.is-steaming .swirl { animation: none !important; }
-            .topbar-machine-icon-easter-egg .m-svg { animation: none !important; }
+            .topbar-machine-icon-easter-egg::after { animation: none !important; opacity: 0 !important; }
         }
 
-        /* Topbar icon easter egg (#837): 7 clicks within 3s
-           (components/topbar-machine-icon.js) — a short, reversible hue
-           sweep, purely decorative (no state change), removed again once
-           the animation ends. */
-        .topbar-machine-icon-easter-egg .m-svg { animation: mi-easter-egg 2.4s ease; }
+        /* Topbar icon easter egg (#837, colour fixed in #845): 7 clicks
+           within 3s (components/topbar-machine-icon.js) triggers a short,
+           reversible rainbow sweep, purely decorative (no state change),
+           removed again once the animation ends.
+           A `filter: hue-rotate()` on the SVG itself (the original #837
+           approach) only visibly shifts already-saturated pixels — most of
+           the body is neutral grey/black (chassis, base, wand, tray), so
+           only the small accent-gradient patch actually changed colour
+           (#845). `mix-blend-mode: color` instead projects a rotating
+           conic-gradient's hue onto every pixel underneath regardless of
+           its own saturation, so the whole icon visibly cycles colour. */
+        .topbar-machine-icon-easter-egg::after {
+            content: "";
+            position: absolute; inset: 0;
+            background: conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+            mix-blend-mode: color;
+            opacity: 0;
+            pointer-events: none;
+            animation: mi-easter-egg 2.4s ease;
+        }
         @keyframes mi-easter-egg {
-            0%   { filter: hue-rotate(0deg) saturate(1); }
-            50%  { filter: hue-rotate(180deg) saturate(1.6); }
-            100% { filter: hue-rotate(360deg) saturate(1); }
+            0%   { opacity: 0; transform: rotate(0deg); }
+            12%  { opacity: .85; }
+            88%  { opacity: .85; }
+            100% { opacity: 0; transform: rotate(360deg); }
+        }
+
+        /* ── Easter egg panel (#845) ──────────────────────────────────────
+           Opens on the topbar icon's 7th click, alongside its brief burst
+           above. Not documented anywhere user-facing by design — see
+           components/topbar-machine-icon.js's module comment. */
+        .easter-egg-panel {
+            position: fixed; inset: 0; z-index: 9500;
+            align-items: center; justify-content: center; padding: var(--sp-4);
+        }
+        .easter-egg-panel-backdrop {
+            position: absolute; inset: 0; background: rgba(0,0,0,.6);
+        }
+        .easter-egg-panel-card {
+            position: relative; z-index: 1;
+            background: var(--gray-950); border: 1px solid var(--gray-700); border-radius: var(--radius-lg, var(--radius));
+            padding: var(--sp-6) var(--sp-5) var(--sp-5);
+            max-width: 320px; width: 100%;
+            display: flex; flex-direction: column; align-items: center; gap: var(--sp-3);
+            text-align: center;
+        }
+        .easter-egg-panel-close {
+            position: absolute; top: var(--sp-2); right: var(--sp-2);
+            background: transparent; border: none; color: var(--gray-500);
+            font-size: 22px; line-height: 1; cursor: pointer; padding: var(--sp-1);
+        }
+        .easter-egg-panel-close:hover { color: var(--gray-200); }
+        .easter-egg-panel-icon { position: relative; height: 140px; }
+        .easter-egg-panel-icon .m-svg { height: 100%; width: auto; display: block; }
+        .easter-egg-panel-card h3 { margin: 0; font-size: var(--fs-4); color: var(--gray-100); }
+        .easter-egg-panel-stats {
+            display: grid; grid-template-columns: auto auto; gap: var(--sp-1) var(--sp-3);
+            margin: 0; font-size: var(--fs-1);
+        }
+        .easter-egg-panel-stats dt { color: var(--gray-500); text-align: right; }
+        .easter-egg-panel-stats dd { margin: 0; color: var(--gray-300); text-align: left; font-variant-numeric: tabular-nums; }
+        .easter-egg-panel-thanks { margin: 0; font-size: var(--fs-1); color: var(--gray-400); }
+
+        /* Continuous colour-cycle for the panel's own icon — same blend-mode
+           overlay as the topbar burst (.topbar-machine-icon-easter-egg::after
+           above), but looping for as long as the panel stays open rather
+           than fading out once. */
+        .easter-egg-panel-icon-live.topbar-machine-icon-easter-egg::after {
+            animation: mi-easter-egg-loop 3s linear infinite;
+        }
+        @keyframes mi-easter-egg-loop {
+            from { opacity: .85; transform: rotate(0deg); }
+            to   { opacity: .85; transform: rotate(360deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .easter-egg-panel-icon-live.topbar-machine-icon-easter-egg::after { animation: none !important; opacity: .6 !important; }
         }
 
         /* ══ Achievements view: the stamp card (#812) ═══════════════════════

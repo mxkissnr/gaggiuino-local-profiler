@@ -150,8 +150,19 @@
             <button type="button" id="topbarMachineIcon" class="topbar-machine-icon" data-i18n-title="topbar_machine_icon_title" title="Maschinen-Status" aria-label="Maschinen-Status"></button>
             <span class="status-dot unknown" id="railStatusDot"></span>
             <span id="railMachineName" class="topbar-machine-name">–</span>
-            <span id="machineSwitcherIcon" class="machine-switcher-icon"></span>
             <select id="machineSwitcher" class="machine-switcher" style="display:none" data-action="switch-machine" data-i18n-title="machine_switcher_title" title="Maschine"></select>
+        </div>
+    </div>
+
+    <!-- Topbar icon easter egg panel (#845) — not mentioned in CHANGELOG/whats-new by design, stays a secret for whoever finds it. -->
+    <div id="easterEggPanel" class="easter-egg-panel" style="display:none" role="dialog" aria-modal="true" aria-labelledby="easterEggPanelTitle">
+        <div class="easter-egg-panel-backdrop" data-action="close-easter-egg"></div>
+        <div class="easter-egg-panel-card">
+            <button type="button" class="easter-egg-panel-close" id="easterEggPanelCloseBtn" data-action="close-easter-egg" aria-label="Schließen">&times;</button>
+            <div class="easter-egg-panel-icon" id="easterEggPanelIcon"></div>
+            <h3 id="easterEggPanelTitle" data-i18n="easter_egg_title">Gefunden.</h3>
+            <dl class="easter-egg-panel-stats" id="easterEggPanelStats"></dl>
+            <p class="easter-egg-panel-thanks" data-i18n="easter_egg_thanks">Danke an alle, die dieses kleine Projekt nutzen.</p>
         </div>
     </div>
 

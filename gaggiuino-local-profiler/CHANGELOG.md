@@ -1,6 +1,13 @@
 ## [Unreleased]
 
+### Added
+- **The animated machine icon now has a permanent home in the app topbar**, visible on every tab instead of only in the Live view's idle panel — its heating/hot/brewing/steaming states are no longer hidden the moment a shot starts or you switch tabs. Closes #837
+
 ### Fixed
+- **Topbar machine icon rendered full-size instead of its intended 44px**, overlapping the shot list. Closes #839
+- **Topbar showed the active machine's icon twice** once the multi-machine switcher was visible — the old static 15px glyph next to the switcher dropdown duplicated the new animated topbar icon. Removed the redundant one. Closes #845
+- **Machine icon's steam knob recolored from light chrome to black**, matching the real machine. Closes #842
+- **Shot detail screen repeated the profile name, shot number and bean name twice** — once right under the score, again in the title and recipe line above/below it. The duplicate line is gone. Closes #841
 - **Doc screenshots captured the full page instead of just the relevant view.** `scripts/screenshots.mjs` now crops each capture to its view container, cutting the repeated top nav bar out of the generated images. Closes #835
 - **GitHub-only CI workflows (build, CodeQL, dependency review, scorecard, dev-image publish, release-drift check) no longer auto-run against the local Gitea mirror.** Gitea Actions picks up `.github/workflows` automatically, so registering the local runner re-ran all of them there too — one accidental run already fired a real CodeQL job. Each now skips outside `github.com`; the `test.yaml` lint/test gate is unaffected and runs on both. Closes #834
 
