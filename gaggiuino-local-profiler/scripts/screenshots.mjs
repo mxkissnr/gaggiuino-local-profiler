@@ -34,19 +34,24 @@ async function main() {
     await page.addStyleTag({ content: '#btnLive{display:flex!important}' });
     await page.waitForTimeout(500); // let async post-load renders (thumbnails, charts) settle
 
+    // Each capture is scoped to its view container (#<tab>-view) instead of
+    // the full 1400x900 viewport — cuts the repeated top nav bar out of 8 of
+    // 9 images and shrinks file size accordingly, with no loss of
+    // documentation content (the view container already holds everything
+    // that tab renders).
     await page.click('#btnShots');
     await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(outDir, 'shots.png') });
+    await page.locator('#shots-view').screenshot({ path: path.join(outDir, 'shots.png') });
 
     await page.click('#btnLibrary');
     await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(outDir, 'library.png') });
+    await page.locator('#library-view').screenshot({ path: path.join(outDir, 'library.png') });
 
     const wheelBtn = page.locator('[data-action="open-flavor-wheel"]').first();
     if (await wheelBtn.count()) {
         await wheelBtn.click();
         await page.waitForTimeout(600); // sunburst render
-        await page.screenshot({ path: path.join(outDir, 'flavor-wheel.png') });
+        await page.locator('#flavorWheelModal').screenshot({ path: path.join(outDir, 'flavor-wheel.png') });
         const closeBtn = page.locator('#flavorWheelModal .fw-close, #flavorWheelModal [data-action="close-flavor-wheel"]').first();
         if (await closeBtn.count()) await closeBtn.click();
     }
@@ -55,35 +60,35 @@ async function main() {
     await page.waitForTimeout(400);
     await page.locator('#worldMapWrap').scrollIntoViewIfNeeded();
     await page.waitForTimeout(800); // ECharts map render
-    await page.screenshot({ path: path.join(outDir, 'analytics.png') });
+    await page.locator('#analytics-view').screenshot({ path: path.join(outDir, 'analytics.png') });
 
     // Machine comparison + weekday/hour heatmap + bean ranking (#394) — only
     // rendered/visible once >=2 machines exist, which seed() now sets up.
     await page.locator('#machineComparisonCard').scrollIntoViewIfNeeded();
     await page.waitForTimeout(300);
-    await page.screenshot({ path: path.join(outDir, 'analytics-machines.png') });
+    await page.locator('#analytics-view').screenshot({ path: path.join(outDir, 'analytics-machines.png') });
 
     await page.click('#btnMaintenance');
     await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(outDir, 'maintenance.png') });
+    await page.locator('#maintenance-view').screenshot({ path: path.join(outDir, 'maintenance.png') });
 
     await page.click('#btnDialin');
     await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(outDir, 'dialin.png') });
+    await page.locator('#dialin-view').screenshot({ path: path.join(outDir, 'dialin.png') });
 
     // Live/Orders/Settings (previously undocumented — every top-level tab
     // now gets a screenshot).
     await page.click('#btnLive');
     await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(outDir, 'live.png') });
+    await page.locator('#live-view').screenshot({ path: path.join(outDir, 'live.png') });
 
     await page.click('#btnOrders');
     await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(outDir, 'orders.png') });
+    await page.locator('#orders-view').screenshot({ path: path.join(outDir, 'orders.png') });
 
     await page.click('#btnSettings');
     await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(outDir, 'settings.png') });
+    await page.locator('#settings-view').screenshot({ path: path.join(outDir, 'settings.png') });
 
     await browser.close();
     console.log(`Screenshots written to ${outDir}`);

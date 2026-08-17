@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **Doc screenshots captured the full page instead of just the relevant view.** `scripts/screenshots.mjs` now crops each capture to its view container, cutting the repeated top nav bar out of the generated images. Closes #835
 - **GitHub-only CI workflows (build, CodeQL, dependency review, scorecard, dev-image publish, release-drift check) no longer auto-run against the local Gitea mirror.** Gitea Actions picks up `.github/workflows` automatically, so registering the local runner re-ran all of them there too — one accidental run already fired a real CodeQL job. Each now skips outside `github.com`; the `test.yaml` lint/test gate is unaffected and runs on both. Closes #834
 
 ### Added
