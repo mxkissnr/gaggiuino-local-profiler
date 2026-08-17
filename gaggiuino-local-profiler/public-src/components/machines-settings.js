@@ -13,6 +13,7 @@ import { WARNING_ICON_SVG, CHECK_ICON_SVG, CLOSE_ICON_SVG } from '../icons.js';
 import { updateStatus } from './status.js';
 import { THEME_PRESETS, resolveTheme } from '../../lib/machines/theme-presets.js';
 import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
+import { renderTopbarMachineIcon } from './topbar-machine-icon.js';
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -131,6 +132,10 @@ export async function loadMachines() {
     }
     renderMachinesList();
     renderMachineSwitcher();
+    // #837: unlike renderMachineSwitcher() above, the topbar's ambient icon
+    // is shown for every install (including single-machine ones), so this
+    // runs unconditionally rather than being folded into that function.
+    renderTopbarMachineIcon();
     // #604: recomputes on every loadMachines() completion (startup, machine
     // switch, and — since saveMachineForm() on success calls loadMachines()
     // itself — every machine-edit save too) so switching the default machine
@@ -195,6 +200,7 @@ export function switchActiveMachine(rawValue) {
   const value = rawValue === 'all' ? 'all' : parseInt(rawValue, 10);
   setActiveMachine(value);
   updateMachineSwitcherIcon();
+  renderTopbarMachineIcon();
   applyActiveMachineChange();
 }
 

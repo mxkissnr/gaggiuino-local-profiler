@@ -7,6 +7,7 @@ import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge, updateLega
 import { updateApiPortClosedBanner } from './api-port-notice.js';
 import { showDevBuildBanner } from './dev-banner.js';
 import { syncInstallId } from '../views/setup-wizard.js';
+import { syncTopbarMachineIconFallback } from './topbar-machine-icon.js';
 
 // Tracks the server-side shot count as of the last status poll, so the periodic
 // poll below can detect a newly-finished shot even when the user isn't on the
@@ -297,6 +298,10 @@ export async function updateStatus(machineId) {
     // #655: must mirror dotTitle too, not just dotClass — otherwise the rail
     // dot shows the correct error color but a blank tooltip on hover.
     if (railDot) { railDot.className = dotClass; railDot.title = dotTitle; }
+    // #837: the topbar's ambient machine icon mirrors the same reachability
+    // signal as its SSE-less fallback — a no-op whenever SSE is already
+    // driving it with richer detail (see syncTopbarMachineIconFallback()).
+    syncTopbarMachineIconFallback(s.machineReachable);
     // Skip machineSubtitle while a shot is being viewed (#344): updateView()
     // (views/shots/index.js) owns it in that case, showing the machine that
     // actually owns the viewed shot — this global/default-machine value

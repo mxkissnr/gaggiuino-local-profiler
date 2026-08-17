@@ -109,6 +109,7 @@ export default {
     machine_unreachable_title:'Machine niet bereikbaar',
     live_unreachable_text:'De machine reageert niet. Controleer of ze is ingeschakeld en bereikbaar is op het netwerk.',
     machine_switcher_title:'Machine', machine_switcher_all:'Alle machines',
+    topbar_machine_icon_title:'Machinestatus',
     live_waiting:'Wachten op shot …', live_disabled:'Live uitgeschakeld (machine uit)',
     machine_ready:'Machine klaar',
     ref_label:'Referentie:', ref_none:'— geen referentieshot —', ref_clear:`${CLOSE_ICON_SVG} Verwijderen`,

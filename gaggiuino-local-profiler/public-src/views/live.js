@@ -4,7 +4,7 @@ import { t } from '../i18n.js';
 import { apiFetch, isApiPortBlocked } from '../api.js';
 import { mapToXY, formatTimeLabel, chartColors } from '../utils.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
-         MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
+         resolveMachineIconState, MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
 import { localeFor } from '../constants.js';
 
@@ -200,30 +200,18 @@ function machineIconEl() {
   return host;
 }
 
-// Maps what the backend actually reports onto the icon's states.
-// NOTE ON STEAM: there is deliberately no 'steaming' case. Nothing in the
-// poll payload distinguishes steaming from heating — lib/machine-state.js
-// derives isBrewing from brewSwitchState and carries no steam-switch
-// equivalent — and showing a steam state on a guess would be worse than not
-// showing it, since it would be wrong exactly when the user is watching.
-// The icon supports the state; wiring it needs a signal that does not exist
-// yet.
-function machineIconState(msg, preheat) {
-  if (msg?.machineReachable === false) return { mode: 'off', heat: 0 };
-  if (msg?.isLive)                     return { mode: 'brewing', heat: 1 };
-  if (preheat && !preheat.ready && preheat.remaining > 0) {
-    return { mode: 'heating', heat: Math.max(0, Math.min(1, preheat.pct || 0)) };
-  }
-  return { mode: 'hot', heat: 1 };
-}
-
 let _lastPreheat = null;
 
+// #837: raw-data-to-icon-state translation itself now lives in
+// resolveMachineIconState() (machine-icon.js) — shared with the topbar's
+// own ambient icon instance (components/topbar-machine-icon.js) — this stays
+// the Live view's own wiring: which element to drive and which preheat
+// snapshot to translate against.
 export function syncMachineIcon(msg) {
   const el = machineIconEl();
   if (!el) return;
-  const { mode, heat } = machineIconState(msg, _lastPreheat);
-  setMachineIconMode(el, mode, heat);
+  const { mode, heatFraction } = resolveMachineIconState(msg, _lastPreheat);
+  setMachineIconMode(el, mode, heatFraction);
 }
 
 export function updatePreheatWidget(d) {

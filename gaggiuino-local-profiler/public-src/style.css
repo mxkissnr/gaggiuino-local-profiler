@@ -550,6 +550,22 @@
         }
         .topbar-machine-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+        /* Topbar ambient machine icon (#837) — the full animated
+           "Instrument" SVG (machine-icon.js), sized into a ~44px square
+           touch target (matching .mobile-drawer-btn below as the reference
+           tap size) even though the icon's own aspect ratio is much taller
+           than wide — height-constrained, not width-stretched, so the body
+           silhouette never distorts. */
+        .topbar-machine-icon {
+            display: flex; align-items: center; justify-content: center;
+            width: 44px; height: 44px; flex-shrink: 0;
+            background: transparent; border: none; padding: 0; margin: 0; cursor: pointer;
+        }
+        /* #topbarMachineIcon (ID) outranks .machine-icon-live .m-svg's own
+           100%/100% sizing rule further below regardless of stylesheet
+           order — same reasoning #live-idle #liveMachineIcon svg uses. */
+        #topbarMachineIcon .m-svg { width: auto; height: 100%; display: block; }
+
         /* Mobile burger drawer trigger (#425) — hidden on desktop; the
            max-width:768px block below shows it. */
         .mobile-drawer-btn {
@@ -568,7 +584,7 @@
            collapsing itself away. ── */
         #content-topbar {
             display: flex; align-items: center; gap: var(--sp-1);
-            padding: var(--sp-1) var(--sp-2); min-height: 32px;
+            padding: var(--sp-1) var(--sp-2); min-height: 44px; /* #837: fits the ~44px topbar machine icon */
             background: var(--gray-900);
             flex-shrink: 0;
             position: sticky; top: 0; z-index: 10;
@@ -1597,7 +1613,7 @@
             margin-left: var(--sp-2);
             vertical-align: middle;
         }
-        /* #838: compact grind-setting badge, line 1 — bare number, no border
+        /* #837: compact grind-setting badge, line 1 — bare number, no border
            (Border-Diät: no border on non-clickable elements), grinder name
            lives in its title tooltip instead of taking up row space. */
         .sidebar-grind-badge {
@@ -2678,6 +2694,18 @@
             .machine-icon-live.is-brewing .m-pour path { animation: none !important; stroke-dashoffset: 0; }
             .machine-icon-live.is-steaming .milk-top,
             .machine-icon-live.is-steaming .swirl { animation: none !important; }
+            .topbar-machine-icon-easter-egg .m-svg { animation: none !important; }
+        }
+
+        /* Topbar icon easter egg (#837): 7 clicks within 3s
+           (components/topbar-machine-icon.js) — a short, reversible hue
+           sweep, purely decorative (no state change), removed again once
+           the animation ends. */
+        .topbar-machine-icon-easter-egg .m-svg { animation: mi-easter-egg 2.4s ease; }
+        @keyframes mi-easter-egg {
+            0%   { filter: hue-rotate(0deg) saturate(1); }
+            50%  { filter: hue-rotate(180deg) saturate(1.6); }
+            100% { filter: hue-rotate(360deg) saturate(1); }
         }
 
         /* ══ Achievements view: the stamp card (#812) ═══════════════════════

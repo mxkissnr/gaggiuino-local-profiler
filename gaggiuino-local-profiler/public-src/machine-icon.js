@@ -469,6 +469,30 @@ export function setMachineIconMode(rootEl, mode, heatFraction = 0) {
     svg.style.setProperty('--heat', String(heat));
 }
 
+// Maps what the backend actually reports onto one of MACHINE_ICON_MODES.
+// Pure -- same {mode, heatFraction} for the same (msg, preheat) pair, no
+// DOM/state access -- so every caller that drives an animated icon instance
+// shares one translation instead of copy-pasting it: views/live.js's own
+// #liveMachineIcon and the topbar's always-visible ambient widget
+// (components/topbar-machine-icon.js, #837) both call this, then hand the
+// result straight to setMachineIconMode().
+//
+// NOTE ON STEAM: there is deliberately no 'steaming' case. Nothing in the
+// poll payload distinguishes steaming from heating — lib/machine-state.js
+// derives isBrewing from brewSwitchState and carries no steam-switch
+// equivalent — and showing a steam state on a guess would be worse than not
+// showing it, since it would be wrong exactly when the user is watching.
+// The icon supports the state; wiring it needs a signal that does not exist
+// yet.
+export function resolveMachineIconState(msg, preheat) {
+    if (msg?.machineReachable === false) return { mode: 'off', heatFraction: 0 };
+    if (msg?.isLive)                     return { mode: 'brewing', heatFraction: 1 };
+    if (preheat && !preheat.ready && preheat.remaining > 0) {
+        return { mode: 'heating', heatFraction: Math.max(0, Math.min(1, preheat.pct || 0)) };
+    }
+    return { mode: 'hot', heatFraction: 1 };
+}
+
 function formatBrewTime(sec) {
     const whole = Math.max(0, Math.floor(sec));
     return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;

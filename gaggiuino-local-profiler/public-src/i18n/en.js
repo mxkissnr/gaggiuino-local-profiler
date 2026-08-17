@@ -109,6 +109,7 @@ export default {
     machine_unreachable_title:'Machine unreachable',
     live_unreachable_text:'The machine is not responding. Check that it is powered on and reachable on the network.',
     machine_switcher_title:'Machine', machine_switcher_all:'All machines',
+    topbar_machine_icon_title:'Machine status',
     live_waiting:'Waiting for shot …', live_disabled:'Live disabled (machine off)',
     machine_ready:'Machine ready',
     ref_label:'Reference:', ref_none:'— no reference shot —', ref_clear:`${CLOSE_ICON_SVG} Clear`,

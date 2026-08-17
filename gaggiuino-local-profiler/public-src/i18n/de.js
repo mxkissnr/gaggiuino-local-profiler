@@ -109,6 +109,7 @@ export default {
     machine_unreachable_title:'Maschine nicht erreichbar',
     live_unreachable_text:'Die Maschine antwortet nicht. Prüfe, ob sie eingeschaltet und im Netzwerk erreichbar ist.',
     machine_switcher_title:'Maschine', machine_switcher_all:'Alle Maschinen',
+    topbar_machine_icon_title:'Maschinen-Status',
     live_waiting:'Warte auf Bezug …', live_disabled:'Live deaktiviert (Maschine aus)',
     machine_ready:'Maschine bereit',
     ref_label:'Referenz:', ref_none:'— kein Referenz-Shot —', ref_clear:`${CLOSE_ICON_SVG} Löschen`,

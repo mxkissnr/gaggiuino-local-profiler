@@ -128,6 +128,9 @@ import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testM
 import { openSetupWizard, closeSetupWizard, setupWizardGetStarted, setupWizardSkipToDemo,
          shouldOpenSetupWizard } from './views/setup-wizard.js';
 
+import { handleTopbarLiveSnapshotEvent, handleTopbarPreheatUpdateEvent,
+         handleTopbarMachineIconClick } from './components/topbar-machine-icon.js';
+
 import { loadMqttSettings, setMqttTransport, saveMqttSettings, applyMqttToMachine } from './components/mqtt-settings.js';
 
 import { loadNotifySettingsCard, saveNotifySettings } from './components/notify-settings.js';
@@ -699,6 +702,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // selection, undoing #464's fix via this new trigger.
     if (document.visibilityState === 'visible') updateStatus(S.activeMachineId);
   });
+  document.getElementById('topbarMachineIcon').addEventListener('click', handleTopbarMachineIconClick);
   document.getElementById('openMaintLogBtn').addEventListener('click', openMaintLogForm);
   document.getElementById('submitMaintLogBtn').addEventListener('click', submitMaintLogEntry);
   document.getElementById('cancelMaintLogBtn').addEventListener('click', closeMaintLogForm);
@@ -952,6 +956,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // as the sync-progress events above.
     onEvent(EVENTS.LIVE_SNAPSHOT, handleLiveSnapshotEvent);
     onEvent(EVENTS.PREHEAT_UPDATE, handlePreheatUpdateEvent);
+    // #837: the topbar's ambient machine icon -- a second, independent
+    // listener for the same two event types (see components/
+    // topbar-machine-icon.js's module doc comment for why it doesn't just
+    // reuse live.js's own handlers).
+    onEvent(EVENTS.LIVE_SNAPSHOT, handleTopbarLiveSnapshotEvent);
+    onEvent(EVENTS.PREHEAT_UPDATE, handleTopbarPreheatUpdateEvent);
     connectEvents(() => {});
 
     // #390 — loadMachines() calls the token-gated /api/machines; it used to
