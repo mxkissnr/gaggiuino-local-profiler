@@ -2697,31 +2697,40 @@
             .topbar-machine-icon-easter-egg::after { animation: none !important; opacity: 0 !important; }
         }
 
-        /* Topbar icon easter egg (#837, colour fixed in #845): 7 clicks
-           within 3s (components/topbar-machine-icon.js) triggers a short,
-           reversible rainbow sweep, purely decorative (no state change),
-           removed again once the animation ends.
+        /* Topbar icon easter egg (#837, colour fixed in #845 and #848): 7
+           clicks within 3s (components/topbar-machine-icon.js) triggers a
+           short, reversible rainbow sweep, purely decorative (no state
+           change), removed again once the animation ends.
            A `filter: hue-rotate()` on the SVG itself (the original #837
            approach) only visibly shifts already-saturated pixels — most of
            the body is neutral grey/black (chassis, base, wand, tray), so
-           only the small accent-gradient patch actually changed colour
-           (#845). `mix-blend-mode: color` instead projects a rotating
-           conic-gradient's hue onto every pixel underneath regardless of
-           its own saturation, so the whole icon visibly cycles colour. */
+           only the small accent-gradient patch actually changed colour.
+           A `conic-gradient` overlay blended with `mix-blend-mode: color`
+           (#845's fix) tinted every pixel regardless of saturation, but a
+           conic gradient is spatial — different parts of the tall, narrow
+           icon sit at different angles from its centre and so show
+           different hues of the wheel *simultaneously*, reading as
+           "only part of the machine changes colour" rather than the whole
+           body shifting through the rainbow together (#848). The overlay
+           is now a flat, fully-saturated colour whose *own* hue is rotated
+           over time — `filter: hue-rotate()` on a solid colour has no
+           saturation cliff to hit, so it sweeps smoothly, and because the
+           overlay has no spatial variation, blend-mode projects the exact
+           same hue onto every pixel of the icon at every instant. */
         .topbar-machine-icon-easter-egg::after {
             content: "";
             position: absolute; inset: 0;
-            background: conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+            background: #f00;
             mix-blend-mode: color;
             opacity: 0;
             pointer-events: none;
             animation: mi-easter-egg 2.4s ease;
         }
         @keyframes mi-easter-egg {
-            0%   { opacity: 0; transform: rotate(0deg); }
+            0%   { opacity: 0; filter: hue-rotate(0deg); }
             12%  { opacity: .85; }
             88%  { opacity: .85; }
-            100% { opacity: 0; transform: rotate(360deg); }
+            100% { opacity: 0; filter: hue-rotate(360deg); }
         }
 
         /* ── Easter egg panel (#845) ──────────────────────────────────────
@@ -2749,7 +2758,7 @@
             font-size: 22px; line-height: 1; cursor: pointer; padding: var(--sp-1);
         }
         .easter-egg-panel-close:hover { color: var(--gray-200); }
-        .easter-egg-panel-icon { position: relative; height: 140px; }
+        .easter-egg-panel-icon { position: relative; height: 140px; width: max-content; overflow: hidden; }
         .easter-egg-panel-icon .m-svg { height: 100%; width: auto; display: block; }
         .easter-egg-panel-card h3 { margin: 0; font-size: var(--fs-4); color: var(--gray-100); }
         .easter-egg-panel-stats {
@@ -2768,8 +2777,8 @@
             animation: mi-easter-egg-loop 3s linear infinite;
         }
         @keyframes mi-easter-egg-loop {
-            from { opacity: .85; transform: rotate(0deg); }
-            to   { opacity: .85; transform: rotate(360deg); }
+            from { opacity: .85; filter: hue-rotate(0deg); }
+            to   { opacity: .85; filter: hue-rotate(360deg); }
         }
         @media (prefers-reduced-motion: reduce) {
             .easter-egg-panel-icon-live.topbar-machine-icon-easter-egg::after { animation: none !important; opacity: .6 !important; }

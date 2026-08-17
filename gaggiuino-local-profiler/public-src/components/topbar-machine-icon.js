@@ -129,7 +129,12 @@ function renderPanelIcon() {
                || (S.machines || [])[0];
   const id = machine?.id ?? null;
   if (_panelIconFor !== id || !el.firstChild) {
-    el.className = `easter-egg-panel-icon-live ${MACHINE_ICON_LIVE_CLASS} topbar-machine-icon-easter-egg`;
+    // #848: must keep the base easter-egg-panel-icon class — it's what
+    // gives this element position:relative, so the rainbow ::after's
+    // inset:0 stays clipped to the ~140px icon box instead of resolving
+    // against the next positioned ancestor up (.easter-egg-panel itself,
+    // position:fixed; inset:0 — the whole viewport).
+    el.className = `easter-egg-panel-icon easter-egg-panel-icon-live ${MACHINE_ICON_LIVE_CLASS} topbar-machine-icon-easter-egg`;
     el.innerHTML = machineIconAnimatedSvg(machine?.theme, machine?.type);
     _panelIconFor = id;
   }
