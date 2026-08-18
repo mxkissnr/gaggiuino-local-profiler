@@ -15,7 +15,7 @@ export default {
     meta_temp:'Temperatur (Ø ±σ / Ziel)', meta_phases:'Phasen',
     meta_weight:'Gewicht (Gesamt / Fluss Ende)', meta_weight_flow:'Gewichtsfluss (Ø / Max)',
     meta_duration:'Dauer', meta_ratio:'Dosis → Yield · Ratio', meta_ey:'Extraction Yield (EY)',
-    recipe_dose_yield:'Dosis → Yield', recipe_ratio:'Ratio', recipe_bean_grinder:'Bohne & Mühle', recipe_grinder_grind:(g,s)=>g?`${g} · Mahlgrad ${s}`:`Mahlgrad ${s}`, recipe_grind_with_baseline:(g,s,p)=>g?`${g} · Mahlgrad ${s} (zuletzt ${p})`:`Mahlgrad ${s} (zuletzt ${p})`,
+    recipe_dose_yield:'Dosis → Yield', recipe_ratio:'Ratio', recipe_bean:'Bohne', recipe_grinder:'Mühle', recipe_grinder_grind:(g,s)=>g?`${g} · Mahlgrad ${s}`:`Mahlgrad ${s}`, recipe_grind_with_baseline:(g,s,p)=>g?`${g} · Mahlgrad ${s} (zuletzt ${p})`:`Mahlgrad ${s} (zuletzt ${p})`,
     process_pressure:'Druck (Ø / Max)', process_flow:'Pumpenfluss (Ø)', process_temp:'Temperatur (Ø ±σ)',
     conn_error:'Verbindungsfehler',
     // #812 achievements: 48 open badges. The 6 secret ones are NOT here on

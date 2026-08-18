@@ -15,7 +15,7 @@ export default {
     meta_temp:'Température (moy ±σ / cible)', meta_phases:'Phases',
     meta_weight:'Poids (total / fin débit)', meta_weight_flow:'Débit poids (moy / max)',
     meta_duration:'Durée', meta_ratio:'Dose → Rendement · Ratio', meta_ey:"Taux d'extraction (EY)",
-    recipe_dose_yield:'Dose → Rendement', recipe_ratio:'Ratio', recipe_bean_grinder:'Café & Moulin', recipe_grinder_grind:(g,s)=>g?`${g} · mouture ${s}`:`Mouture ${s}`, recipe_grind_with_baseline:(g,s,p)=>g?`${g} · mouture ${s} (dernière ${p})`:`Mouture ${s} (dernière ${p})`,
+    recipe_dose_yield:'Dose → Rendement', recipe_ratio:'Ratio', recipe_bean:'Café', recipe_grinder:'Moulin', recipe_grinder_grind:(g,s)=>g?`${g} · mouture ${s}`:`Mouture ${s}`, recipe_grind_with_baseline:(g,s,p)=>g?`${g} · mouture ${s} (dernière ${p})`:`Mouture ${s} (dernière ${p})`,
     process_pressure:'Pression (moy / max)', process_flow:'Débit pompe (moy)', process_temp:'Température (moy ±σ)',
     conn_error:'Erreur de connexion',
     // #812 achievements: 48 open badges. The 6 secret ones are NOT here on

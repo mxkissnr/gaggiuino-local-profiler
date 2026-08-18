@@ -337,8 +337,8 @@ export function updateView() {
   // folded straight into this label ("Mahlgrad X (zuletzt Y)") instead of
   // a separate chip — one place to look instead of two.
   const grinderLabel = buildGrinderGrindLabel(S.shots, shotA, !shotB, t);
-  const beanGrinder = [ann.coffee, grinderLabel].filter(Boolean).join(' · ');
-  document.getElementById('beanGrinderVal').textContent = beanGrinder || '–';
+  document.getElementById('beanVal').textContent    = ann.coffee || '–';
+  document.getElementById('grinderVal').textContent = grinderLabel || '–';
 
   // Freshness badge
   const freshEl   = document.getElementById('freshnessBadge');
@@ -451,7 +451,7 @@ export function updateView() {
     // each, in the Dauer recipe card (incl. phase breakdown) and the
     // Process-zone pressure card, so repeating them here was pure duplication.
     // #841: profile name + shot number (topTitle, one element above) and the
-    // bean name (beanGrinderVal, in the recipe zone below) were the only
+    // bean name (beanVal, in the recipe zone below) were the only
     // things left in this subline — both already shown elsewhere, so the
     // subline itself is retired (stays hidden, see index.html/style.css).
     verdictHeader.style.display = '';

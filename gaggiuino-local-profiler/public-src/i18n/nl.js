@@ -15,7 +15,7 @@ export default {
     meta_temp:'Temperatuur (gem ±σ / doel)', meta_phases:'Fasen',
     meta_weight:'Gewicht (totaal / einde stroom)', meta_weight_flow:'Gewichtsstroom (gem / max)',
     meta_duration:'Duur', meta_ratio:'Dosis → Opbrengst · Ratio', meta_ey:'Extractie-opbrengst (EY)',
-    recipe_dose_yield:'Dosis → Opbrengst', recipe_ratio:'Ratio', recipe_bean_grinder:'Bonen & Molen', recipe_grinder_grind:(g,s)=>g?`${g} · maalgraad ${s}`:`Maalgraad ${s}`, recipe_grind_with_baseline:(g,s,p)=>g?`${g} · maalgraad ${s} (laatst ${p})`:`Maalgraad ${s} (laatst ${p})`,
+    recipe_dose_yield:'Dosis → Opbrengst', recipe_ratio:'Ratio', recipe_bean:'Bonen', recipe_grinder:'Molen', recipe_grinder_grind:(g,s)=>g?`${g} · maalgraad ${s}`:`Maalgraad ${s}`, recipe_grind_with_baseline:(g,s,p)=>g?`${g} · maalgraad ${s} (laatst ${p})`:`Maalgraad ${s} (laatst ${p})`,
     process_pressure:'Druk (gem / max)', process_flow:'Pompstroom (gem)', process_temp:'Temperatuur (gem ±σ)',
     conn_error:'Verbindingsfout',
     // #812 achievements: 48 open badges. The 6 secret ones are NOT here on

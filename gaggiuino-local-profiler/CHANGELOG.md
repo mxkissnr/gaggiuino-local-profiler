@@ -10,6 +10,7 @@
 - **The shot score now sits right under the title on mobile** instead of below the export buttons, filling the empty space next to the (now 100px) hero photo instead of leaving it unused. Closes #865
 - **The shot detail screen no longer shows the basket or puck screen on its bean/grinder line** — both are already visible/editable in the annotation panel below, and added noise to this glance-level view without adding value. Closes #867
 - **The frozen-portion/frozen-batch icon is now a snowflake** instead of a 4-quadrant grid square that read as a generic tile at small sizes. Same icon everywhere it appears: shot-list badge, Coffee Library badge, freeze button, recipe ice amount. Closes #869
+- **The shot detail screen now shows Bohne and Mühle as two separate recipe cards** instead of one long combined string ("bean · grinder · grind setting · baseline") under a single "Bohne & Mühle" label. Closes #871
 
 ### Fixed
 - **The dev-build banner covered the topbar and shot-list header on mobile** instead of pushing them down like it does on desktop. Closes #861
