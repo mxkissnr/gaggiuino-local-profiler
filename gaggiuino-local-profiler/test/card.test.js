@@ -209,6 +209,95 @@ describe('generateShareCard() chart container removal (#811 "Instrument" Fix 2)'
   });
 });
 
+// #873 follow-up: the header/footer lost their accent bar and boxed fills on
+// the current palette (only a 1px GLP.border hairline remains under the
+// header and above the footer), and Story format additionally drops the
+// shot#/date meta text from the header's top-right corner entirely.
+describe('generateShareCard() header/footer boxless treatment (#873 follow-up)', () => {
+  it('current palette, story format: the header top-right corner has nothing drawn in it -- no stray meta/footer text bleeding in', async () => {
+    const buf = await generateShareCard(makeTestShot(6), 87, 'story', 'amber', 'dark');
+    const { ctx, width } = await decodePixels(buf);
+    const GLP = buildPalette('amber', 'dark');
+    const bg = hexToRgbArr(GLP.bg);
+    // Header is 76px tall (HH) starting at y=0 (no accent bar) on the current
+    // palette, with a 1px GLP.border hairline right at its bottom edge
+    // (y~75-76) -- that hairline is intentional and, being a 1px stroke at a
+    // half-pixel-centred path, antialiases into a blend of GLP.border/GLP.bg
+    // rather than either exact color, so it's excluded from this scan by
+    // stopping at y=70. Everything above that, in the top-right quadrant
+    // where the old shot#/date meta text used to sit, must be pure
+    // background -- anything else means something is drawing where that
+    // meta text used to go.
+    const data = ctx.getImageData(700, 0, width - 700, 70).data;
+    let stray = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] !== bg[0] || data[i + 1] !== bg[1] || data[i + 2] !== bg[2]) stray++;
+    }
+    expect(stray).toBe(0);
+  });
+
+  it('current palette, square format: the header top-right corner still shows the shot#/date meta text (unlike story format above)', async () => {
+    const buf = await generateShareCard(makeTestShot(7), 87, 'square', 'amber', 'dark');
+    const { ctx } = await decodePixels(buf);
+    const GLP = buildPalette('amber', 'dark');
+    const count = countColor(ctx.getImageData(700, 0, 380, 76), hexToRgbArr(GLP.textDim));
+    expect(count).toBeGreaterThan(50);
+  });
+
+  it('legacy snapshot: header keeps its accent bar and filled box, unchanged', async () => {
+    const buf = await generateShareCard(makeTestShot(8), 87, 'square');
+    const { ctx, width } = await decodePixels(buf);
+    const legacy = buildPalette();
+    // Accent bar (y=0..4) is a gradient between accentFrom/accentTo -- just
+    // confirm it's neither the page bg nor fully transparent, i.e. something
+    // was actually painted there.
+    const barPx = Array.from(ctx.getImageData(Math.round(width / 2), 2, 1, 1).data);
+    expect(barPx.slice(0, 3)).not.toEqual(hexToRgbArr(legacy.bg));
+    // Header box (bgCard fill) still present just under the bar.
+    const headerCount = countColor(ctx.getImageData(0, 10, width, 60), hexToRgbArr(legacy.bgCard));
+    expect(headerCount).toBeGreaterThan(10000);
+  });
+
+  // Story format's canvas is 1920px tall vs square's 1080px -- #873 follow-up
+  // removed the old capping that kept the chart near-square in story format
+  // and split the freed height into blank padding above/below it. The chart
+  // should now grow into that freed height instead. Measured indirectly via
+  // the pressure line's own vertical pixel span (GLP.cPressure, #3498db):
+  // since the same data always occupies the same 0-12 bar fraction of the
+  // plot, a taller plot stretches that line's absolute pixel span
+  // proportionally. Empirically (this fixture): capped-old span ~950px,
+  // fixed-new span ~1296px, new square format span ~456px -- the >2.3x
+  // threshold below sits well clear of both the old-capped ratio (~2.1x)
+  // and the new, fixed ratio (~2.8x).
+  it('current palette: story format chart is taller than a simple 1.78x scale-up of square would explain -- it fills the freed height rather than staying capped near-square', async () => {
+    const storyBuf  = await generateShareCard(makeTestShot(9), 87, 'story', 'amber', 'dark');
+    const squareBuf = await generateShareCard(makeTestShot(10), 87, 'square', 'amber', 'dark');
+    const cPressure = hexToRgbArr(buildPalette('amber', 'dark').cPressure);
+
+    async function pressureLineSpan(buf) {
+      const { ctx, width, height } = await decodePixels(buf);
+      const data = ctx.getImageData(0, 0, width, height).data;
+      let minY = null, maxY = null;
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          if (Math.abs(data[i] - cPressure[0]) <= 20 &&
+              Math.abs(data[i + 1] - cPressure[1]) <= 20 &&
+              Math.abs(data[i + 2] - cPressure[2]) <= 20) {
+            if (minY === null) minY = y;
+            maxY = y;
+          }
+        }
+      }
+      return maxY - minY;
+    }
+
+    const storySpan  = await pressureLineSpan(storyBuf);
+    const squareSpan = await pressureLineSpan(squareBuf);
+    expect(storySpan).toBeGreaterThan(squareSpan * 2.3);
+  });
+});
+
 // #462's legacy snapshot must stay byte-for-byte so old cached/bookmarked
 // card links keep looking exactly the way they always did -- this includes
 // the borderDim === bgChart quirk being fixed above for the live path.

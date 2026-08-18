@@ -863,24 +863,22 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
     const LEGEND_H = 50;
 
     const outerX    = PX - 8;
-    let outerY       = sepY + 10;
+    const outerY     = sepY + 10;
     const outerW    = W - 2 * PX + 16;
     const STATS_H   = 200;
     const FOOT_H    = 52;
-    // Chart fills remaining space so the card has no empty area — except in
-    // story format, where filling all the way down stretches the chart into
-    // a tall, distorted shape. There it's capped near-square (like the shot
-    // graph reads everywhere else in the app) and the freed vertical space is
-    // split evenly above/below the chart+stats block instead of left as one
-    // gap.
+    // Chart fills remaining space so the card has no empty area. Story format
+    // used to cap this near-square and split the freed height evenly above/
+    // below as blank gaps (matching the old boxed chart + 5-tile grid, where
+    // a near-square chart read best) -- #873 follow-up: the prototype's own
+    // note for the Story pane ("dasselbe System, hochkant: das Messband
+    // bricht auf zwei Reihen, der Chart bekommt die gewonnene Höhe") calls
+    // for the opposite now that the band-row stats grid is much shorter than
+    // the old tile grid -- the chart should grow into that freed height
+    // instead of leaving it blank. Same availH formula square already uses,
+    // just no longer capped to outerW for story.
     const availH = H - outerY - STATS_H - 16 - FOOT_H;
-    let outerH = Math.max(Math.round(240 * SCALE), availH);
-    if (format === 'story') {
-        const capped = Math.min(outerH, outerW);
-        const freed  = Math.max(0, outerH - capped);
-        outerH = capped;
-        outerY += freed / 2;
-    }
+    const outerH = Math.max(Math.round(240 * SCALE), availH);
 
     const plotX  = outerX + CHART_L;
     const plotY  = outerY + CHART_T;
