@@ -1155,7 +1155,7 @@
         .lib-item-origin-eyebrow { font-size: var(--fs-1); color: var(--gray-600); margin-bottom: 2px; }
         .lib-item-sub  { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-brew .rail-icon, .lib-item-source .rail-icon { vertical-align: -3px; margin-right: 1px; }
-        .lib-item-actions { display: flex; gap: 2px; flex-shrink: 0; }
+        .lib-item-actions { display: flex; flex-wrap: wrap; gap: 2px; flex-shrink: 0; }
         @media (max-width: 640px) {
           .lib-item-info { width: 100%; }
           .lib-item-actions { width: 100%; justify-content: flex-end; border-top: 1px solid rgba(63,63,70,.5); padding-top: var(--sp-2); margin-top: var(--sp-1); }

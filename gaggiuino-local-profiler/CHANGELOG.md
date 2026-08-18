@@ -9,6 +9,7 @@
 - **The puck screen now gets its own line on the shot detail screen** instead of being tacked onto the end of the bean/grinder/basket line, which was growing too long to read at a glance. Closes #851
 
 ### Fixed
+- **Coffee Library action buttons could spill off the left edge of the screen on mobile** instead of wrapping to a second line when a bean card had many buttons in its row. Closes #859
 - **The new desktop hero photo panel rendered as a square instead of a circle**, unlike every other place the shot photo shows up (the small header thumb, the upload crop editor). Closes #855
 - **Topbar machine icon rendered full-size instead of its intended 44px**, overlapping the shot list. Closes #839
 - **Topbar showed the active machine's icon twice** once the multi-machine switcher was visible — the old static 15px glyph next to the switcher dropdown duplicated the new animated topbar icon. Removed the redundant one. Closes #845
