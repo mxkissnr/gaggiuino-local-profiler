@@ -8,7 +8,7 @@
 
 ### Changed
 - **The shot score now sits right under the title on mobile** instead of below the export buttons, filling the empty space next to the (now 100px) hero photo instead of leaving it unused. Closes #865
-- **The puck screen now gets its own line on the shot detail screen** instead of being tacked onto the end of the bean/grinder/basket line, which was growing too long to read at a glance. Closes #851
+- **The shot detail screen no longer shows the basket or puck screen on its bean/grinder line** — both are already visible/editable in the annotation panel below, and added noise to this glance-level view without adding value. Closes #867
 
 ### Fixed
 - **The dev-build banner covered the topbar and shot-list header on mobile** instead of pushing them down like it does on desktop. Closes #861
