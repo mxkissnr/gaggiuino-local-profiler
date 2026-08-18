@@ -38,6 +38,19 @@ export function showDevBuildBanner(devBuild) {
   // (not above) the topbar/sidebar, hiding the nav entirely rather than
   // just visually overlapping a corner of it.
   document.body.style.paddingTop = `${banner.offsetHeight}px`;
+  // #861: on mobile, #main and #sidebar switch to `position: fixed; inset:
+  // 0` (style.css, full-screen views below the 640px breakpoint), which
+  // positions them against the viewport rather than body's content box --
+  // body's padding-top above has zero effect on them there, so the banner
+  // sits on top of (and hides) the topbar/sidebar header instead of pushing
+  // it down. An inline `top` always wins over the mobile media query's
+  // `inset: 0` shorthand, so set it directly; on desktop neither element has
+  // an explicit `position` (default `static`), so this is a harmless no-op
+  // there.
+  const mainEl = document.getElementById('main');
+  if (mainEl) mainEl.style.top = `${banner.offsetHeight}px`;
+  const sidebarEl = document.getElementById('sidebar');
+  if (sidebarEl) sidebarEl.style.top = `${banner.offsetHeight}px`;
 }
 
 // Other fixed banners (update-available, machine-unreachable) stack off of
