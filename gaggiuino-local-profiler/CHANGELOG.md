@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Added
+- **Frozen coffee portions in the Coffee Library now show their own paused-age badge**, so a portion on ice no longer looks like it's aging at the same rate as the rest of the bag. Closes #856
 - **The shot detail screen now shows a large photo panel above the chart on desktop**, floated top-right of the title/verdict/recipe block, instead of leaving that space empty — the existing 22px circular thumb (still used on mobile) was the only photo shown there before. Closes #850
 - **The animated machine icon now has a permanent home in the app topbar**, visible on every tab instead of only in the Live view's idle panel — its heating/hot/brewing/steaming states are no longer hidden the moment a shot starts or you switch tabs. Closes #837
 

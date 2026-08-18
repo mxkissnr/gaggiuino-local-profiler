@@ -233,18 +233,23 @@ export function renderBeanList() {
         </div>`;
       // #477: each portion's own effective age (its clock only runs while
       // not frozen) — separate from the bag's badge above, which is never
-      // discounted by this. Shown in the tooltip rather than as its own
-      // badge to keep the row compact.
+      // discounted by this.
       const fpAge = frozenPortionAgeDays(activeBag?.roastDate || b.roastDate, fp);
       const fpTitle = fpAge != null
         ? `${t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g)} — ${t('bag_frozen_portion_age', fpAge)}`
         : t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g);
+      // #856: the portion's paused age is now also a visible badge (reusing
+      // the bag-level fresh-badge color tiers), not just a tooltip — without
+      // it, a frozen portion looked like it kept aging same as the bag.
+      const fpAgeBadge = fpAge != null
+        ? ` <span class="lib-fresh-badge fresh-${freshnessState(fpAge)}" title="${esc(t('bag_frozen_portion_age', fpAge))}">${fpAge}d</span>`
+        : '';
       if (fp.thawedAt) {
         const thawedStr = new Date(fp.thawedAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
-        return `<span class="lib-frozen-badge thawed" title="${esc(fpTitle)}">${t('bag_frozen_thawed_badge', thawedStr)}
+        return `<span class="lib-frozen-badge thawed" title="${esc(fpTitle)}">${t('bag_frozen_thawed_badge', thawedStr)}${fpAgeBadge}
           <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${fp.id}" title="${t('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
       }
-      return `<span class="lib-frozen-badge" title="${esc(fpTitle)}">${ICE_CUBE_ICON_SVG} ${remaining}/${fp.portionCount} ${t('bag_frozen_badge', frozenStr)}
+      return `<span class="lib-frozen-badge" title="${esc(fpTitle)}">${ICE_CUBE_ICON_SVG} ${remaining}/${fp.portionCount} ${t('bag_frozen_badge', frozenStr)}${fpAgeBadge}
         <button class="lib-frozen-thaw-btn" data-action="thaw-portion" data-bean-id="${b.id}" data-portion-id="${fp.id}" title="${t('bag_thaw_btn')}">${t('bag_thaw_btn')}</button>
         <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${fp.id}" title="${t('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
     }).join('')}</div>` : '';
