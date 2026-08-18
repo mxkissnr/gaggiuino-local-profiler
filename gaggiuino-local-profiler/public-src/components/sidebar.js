@@ -2,7 +2,7 @@ import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { localeFor } from '../constants.js';
 import { esc, scoreClass, formatTimeLabel, groupShotsByDay } from '../utils.js';
-import { STAR_ICON_SVG , ICE_CUBE_ICON_SVG, CLOSE_ICON_SVG} from '../icons.js';
+import { STAR_ICON_SVG , SNOWFLAKE_ICON_SVG, CLOSE_ICON_SVG} from '../icons.js';
 import { resolveBeanForAnnotation } from '../views/shots/utils.js';
 
 // These are imported lazily via window to avoid circular dependencies
@@ -89,7 +89,7 @@ function _buildShotWrapper(shot) {
     const line2 = [ann.coffee || null, dose ? `${dose.toFixed(1)} g` : null].filter(Boolean).join(' · ') || durLabel || '';
     // #502: which frozen-portion batch (if any) this shot's dose came from —
     // an explicit annotation-panel choice, shown at a glance in the list too.
-    const frozenBadge = ann.frozenPortionId ? `<span class="shot-frozen-badge" title="${esc(t('ann_frozen_portion'))}">${ICE_CUBE_ICON_SVG}</span>` : '';
+    const frozenBadge = ann.frozenPortionId ? `<span class="shot-frozen-badge" title="${esc(t('ann_frozen_portion'))}">${SNOWFLAKE_ICON_SVG}</span>` : '';
 
     const rating = parseInt(ann.rating) || 0;
     const starsHtml = rating > 0

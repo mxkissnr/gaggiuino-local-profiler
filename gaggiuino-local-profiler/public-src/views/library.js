@@ -14,7 +14,7 @@ import { generateBeanQR, parseGlpQrParams } from '../glp-qr.js';
 import { calcBestGrindCombosForBean } from './shots/grind.js';
 import { renderShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
 import { sumConsumedDoses, computeBeanRemaining } from '../bean-math.js';
-import { TARGET_ICON_SVG, SLIDERS_ICON_SVG, FLAVOR_WHEEL_ICON_SVG, COFFEE_ICON_SVG, WATER_DROP_ICON_SVG, ICE_CUBE_ICON_SVG, LINK_ICON_SVG, WRENCH_ICON_SVG, STAR_ICON_SVG, WARNING_ICON_SVG, CLOSE_ICON_SVG, EDIT_ICON_SVG } from '../icons.js';
+import { TARGET_ICON_SVG, SLIDERS_ICON_SVG, FLAVOR_WHEEL_ICON_SVG, COFFEE_ICON_SVG, WATER_DROP_ICON_SVG, SNOWFLAKE_ICON_SVG, LINK_ICON_SVG, WRENCH_ICON_SVG, STAR_ICON_SVG, WARNING_ICON_SVG, CLOSE_ICON_SVG, EDIT_ICON_SVG } from '../icons.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
@@ -249,7 +249,7 @@ export function renderBeanList() {
         return `<span class="lib-frozen-badge thawed" title="${esc(fpTitle)}">${t('bag_frozen_thawed_badge', thawedStr)}${fpAgeBadge}
           <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${fp.id}" title="${t('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
       }
-      return `<span class="lib-frozen-badge" title="${esc(fpTitle)}">${ICE_CUBE_ICON_SVG} ${remaining}/${fp.portionCount} ${t('bag_frozen_badge', frozenStr)}${fpAgeBadge}
+      return `<span class="lib-frozen-badge" title="${esc(fpTitle)}">${SNOWFLAKE_ICON_SVG} ${remaining}/${fp.portionCount} ${t('bag_frozen_badge', frozenStr)}${fpAgeBadge}
         <button class="lib-frozen-thaw-btn" data-action="thaw-portion" data-bean-id="${b.id}" data-portion-id="${fp.id}" title="${t('bag_thaw_btn')}">${t('bag_thaw_btn')}</button>
         <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${fp.id}" title="${t('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
     }).join('')}</div>` : '';
@@ -333,7 +333,7 @@ export function renderBeanList() {
       </div>
       <div class="lib-item-actions">
         <button class="lib-btn-sm" data-action="open-new-bag" data-id="${b.id}" title="${t('lib_new_bag')}">${t('lib_new_bag')}</button>
-        ${activeBag ? `<button class="lib-btn-sm" data-action="open-freeze-form" data-id="${b.id}" title="${t('bag_freeze_btn')}">${ICE_CUBE_ICON_SVG} ${t('bag_freeze_btn')}</button>` : ''}
+        ${activeBag ? `<button class="lib-btn-sm" data-action="open-freeze-form" data-id="${b.id}" title="${t('bag_freeze_btn')}">${SNOWFLAKE_ICON_SVG} ${t('bag_freeze_btn')}</button>` : ''}
         ${Array.isArray(b.flavors) && b.flavors.length ? `<button class="lib-btn-sm" data-action="open-flavor-wheel" data-id="${b.id}" title="${t('flavor_wheel_btn')}">${FLAVOR_WHEEL_ICON_SVG}</button>` : ''}
         <button class="lib-btn-sm" data-action="create-profile-from-bean" data-id="${b.id}" title="${t('profile_create_from_bean')}">${SLIDERS_ICON_SVG}</button>
         <button class="lib-btn-sm" data-action="start-dialin-from-bean" data-id="${b.id}" title="${t('dialin_wizard_start_from_bean')}">${TARGET_ICON_SVG}</button>
@@ -1395,7 +1395,7 @@ export function renderRecipeList() {
       r.targetDose_g  ? `${r.targetDose_g} g`    : null,
       r.targetYield_g ? `→ ${r.targetYield_g} g` : null,
       r.water_g       ? `${WATER_DROP_ICON_SVG} ${r.water_g} g` : null,
-      r.ice_g         ? `${ICE_CUBE_ICON_SVG} ${r.ice_g} g`     : null,
+      r.ice_g         ? `${SNOWFLAKE_ICON_SVG} ${r.ice_g} g`     : null,
       r.targetTime_s  ? `${r.targetTime_s} s`    : null,
       r.waterTemp_c   ? `${r.waterTemp_c} °C`    : null,
       r.grindSize     ? esc(r.grindSize)          : null,

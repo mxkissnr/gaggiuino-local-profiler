@@ -12,7 +12,10 @@ export const COFFEE_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" ar
 
 export const WATER_DROP_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>';
 
-export const ICE_CUBE_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M4 15h16M9 4v16M15 4v16"/></svg>';
+// #869: replaced the 4-quadrant grid square (read as a generic tile/window at
+// 15px, not "ice") with a snowflake built on a precise 6-point radial grid —
+// 3 main axes plus short branch ticks, not freehand.
+export const SNOWFLAKE_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5V19.5M18.5 8.3 5.5 15.8M18.5 15.8 5.5 8.3"/><path d="M10.9 6.3H13.1M10.9 17.7H13.1M17.45 10.1 16.35 8.2M6.55 13.9 7.65 15.8M16.35 15.8 17.45 13.9M7.65 8.2 6.55 10.1"/></svg>';
 
 export const LINK_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5 14.5 9.5"/><path d="M11 6.5 12.5 5a3.5 3.5 0 0 1 5 5L16 11.5"/><path d="M13 17.5 11.5 19a3.5 3.5 0 0 1-5-5L8 12.5"/></svg>';
 
