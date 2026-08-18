@@ -337,16 +337,8 @@ export function updateView() {
   // folded straight into this label ("Mahlgrad X (zuletzt Y)") instead of
   // a separate chip — one place to look instead of two.
   const grinderLabel = buildGrinderGrindLabel(S.shots, shotA, !shotB, t);
-  // #635: appended only when actually set (most shots won't have either yet),
-  // so this stays a no-op on mobile space until the equipment library is used.
-  const basketName     = _equipmentName(S.coffeeLibrary?.baskets, ann.basketId);
-  // #851: puck screen gets its own line below (beanGrinderPuckVal) instead
-  // of being appended here — the combined line was getting too long
-  // (bean + grinder + grind setting + basket + puck screen all on one row).
-  const puckScreenName = _equipmentName(S.coffeeLibrary?.puckScreens, ann.puckScreenId);
-  const beanGrinder = [ann.coffee, grinderLabel, basketName].filter(Boolean).join(' · ');
+  const beanGrinder = [ann.coffee, grinderLabel].filter(Boolean).join(' · ');
   document.getElementById('beanGrinderVal').textContent = beanGrinder || '–';
-  document.getElementById('beanGrinderPuckVal').textContent = puckScreenName || '';
 
   // Freshness badge
   const freshEl   = document.getElementById('freshnessBadge');
