@@ -1679,12 +1679,12 @@
         .freshness-ok     { background: rgba(245,158,11,.15); color: var(--accent-ink); }
         .freshness-old    { background: rgba(239,68,68,.12);  color: var(--err); }
 
-        /* Shot-detail header photo thumbnail (#448) — fills the empty space
-           next to machine/freshness text on mobile; small enough to sit
-           inline with the badge text rather than growing the header.
-           #850: hidden by default (desktop) now that .shot-hero-photo below
-           shows the same image at a useful size there — the mobile media
-           query re-enables it, since the hero panel is desktop-only. */
+        /* Shot-detail header photo thumbnail (#448) — originally the mobile
+           fallback for the space next to machine/freshness text. #850 made
+           it desktop-hidden in favor of .shot-hero-photo below; #863 hides it
+           on mobile too, since the (now-shrunk) hero panel covers that
+           space there as well. Kept around only in case a future layout
+           needs an inline-sized photo again. */
         .shot-header-thumb {
             display: none;
             width: 22px; height: 22px; border-radius: 50%; object-fit: cover;
@@ -1692,15 +1692,15 @@
             background: var(--gray-800);
         }
 
-        /* Shot-detail hero photo (#850): large desktop-only panel claiming the
-           unused space to the right of the title/verdict/recipe block, above
-           the chart. Floated so the existing single-column stack wraps
-           around it with no DOM/layout restructuring. Sized to roughly match
-           the fixed 480x480 export resolution (image-crop.js EXPORT_SIZE) —
-           bigger would just look soft. Hidden until JS adds .has-photo (no
-           photo on this shot, or A/B compare mode); the mobile media query
-           below forces it hidden even then, since #shotHeaderThumb covers
-           mobile instead. */
+        /* Shot-detail hero photo (#850, shrunk for mobile in #863): panel
+           claiming the unused space to the right of the title/verdict/recipe
+           block, above the chart. Floated so the existing single-column
+           stack wraps around it with no DOM/layout restructuring. Desktop
+           size roughly matches the fixed 480x480 export resolution
+           (image-crop.js EXPORT_SIZE) — bigger would just look soft. Hidden
+           until JS adds .has-photo (no photo on this shot, or A/B compare
+           mode); the mobile media query below shrinks it instead of hiding
+           it. */
         .shot-hero-photo {
             display: none;
             float: right;
@@ -2148,10 +2148,15 @@
                so they stack as two clean rows. */
             .sprofiler-header > div:first-child { flex: 1 1 100% !important; }
             .sprofiler-header > div:last-child   { flex: 1 1 100% !important; flex-wrap: wrap; justify-content: flex-start; }
-            /* #850: the hero panel is desktop-only — on mobile the small
-               circular thumb (re-enabled here) covers the same photo. */
-            .shot-hero-photo.has-photo { display: none; }
-            .shot-header-thumb         { display: inline; }
+            /* #863: the hero panel now shows on mobile too, shrunk to fit the
+               header's unused top-right space instead of falling back to the
+               22px thumb — the thumb is no longer needed once the hero
+               covers the same spot here. */
+            .shot-hero-photo.has-photo {
+                width: 100px; height: 100px;
+                margin: 0 0 var(--sp-2) var(--sp-2);
+            }
+            .shot-header-thumb { display: none; }
             .annotation-fields { grid-template-columns: 1fr; }
             .annotation-field.full-width { grid-column: 1; }
             .chart-container, .live-chart-container { height: clamp(300px, 50vh, 400px); }
