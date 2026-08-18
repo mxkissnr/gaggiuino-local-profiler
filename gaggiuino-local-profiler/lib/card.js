@@ -472,6 +472,15 @@ function detectPreinfusionEnd(pressure) {
 async function generateShareCard(shot, score, format = 'square', accent, theme) {
     if (!createCanvas) throw new Error('canvas module not available');
     const GLP        = buildPalette(accent, theme);
+    // #811 "Instrument": true only for the frozen LEGACY_GLP snapshot
+    // (buildPalette() with no args, #462) -- an already-shared/cached card
+    // link keeps rendering exactly as it always did (accent bar, boxed
+    // header/footer/tiles/chips, score ring); the current palette gets the
+    // typographic/boxless redesign throughout this function instead. Same
+    // GLP.ok presence check scoreColor() uses. Declared this early (rather
+    // than right before the score badge section, where it originally lived)
+    // because the header now needs it too (#873 follow-up).
+    const isLegacy = !GLP.ok;
     const glpIcon    = await getGlpIcon();
     const shotPhoto  = await getShotPhoto(shot);
     // Lazily required: LibraryService touches the DB at require-time in some
@@ -566,18 +575,35 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
     ctx.fillRect(0, 0, W, H);
 
     // ── ACCENT BAR + HEADER ────────────────────────────────────────────────
+    // #873 follow-up: the current palette drops the accent bar and the
+    // boxed header entirely (prototype `.sq-top{border-bottom:1px solid
+    // var(--line);padding-bottom:10px}` — no bar, no fill, just a hairline
+    // under the row). Legacy keeps the bar + GLP.bgCard-filled header box
+    // exactly as before.
     const BAR_H = 4;
-    const barGrad = ctx.createLinearGradient(0, 0, W, 0);
-    barGrad.addColorStop(0, GLP.accentFrom);
-    barGrad.addColorStop(1, GLP.accentTo);
-    ctx.fillStyle = barGrad;
-    ctx.fillRect(0, 0, W, BAR_H);
+    if (isLegacy) {
+        const barGrad = ctx.createLinearGradient(0, 0, W, 0);
+        barGrad.addColorStop(0, GLP.accentFrom);
+        barGrad.addColorStop(1, GLP.accentTo);
+        ctx.fillStyle = barGrad;
+        ctx.fillRect(0, 0, W, BAR_H);
+    }
 
     const HH       = 76;
-    const headerY  = BAR_H;
-    ctx.fillStyle = GLP.bgCard;
-    ctx.fillRect(0, headerY, W, HH);
+    const headerY  = isLegacy ? BAR_H : 0;
+    if (isLegacy) {
+        ctx.fillStyle = GLP.bgCard;
+        ctx.fillRect(0, headerY, W, HH);
+    }
     const headerBottom = headerY + HH;
+    if (!isLegacy) {
+        ctx.strokeStyle = GLP.border;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, headerBottom);
+        ctx.lineTo(W, headerBottom);
+        ctx.stroke();
+    }
 
     // GLP logo (icon.png) — or fallback to bold text
     const iconSize = Math.round(HH * 0.72);
@@ -592,8 +618,13 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
         ctx.fillText('GLP', PX, headerY + HH / 2);
     }
 
-    // Shot number + date top-right
-    const headerRight = [shotId, dateStr].filter(Boolean).join('  ·  ');
+    // Shot number + date top-right -- #873 follow-up: Story format shows
+    // only the brand/logo on the current palette, no "Shot #x · date" (the
+    // prototype's Story header pane has no meta text at all). Square format,
+    // and the legacy palette regardless of format, keep showing it.
+    const headerRight = (isLegacy || format !== 'story')
+        ? [shotId, dateStr].filter(Boolean).join('  ·  ')
+        : '';
     ctx.fillStyle = GLP.textDim;
     ctx.font = F(20);
     ctx.textAlign = 'right';
@@ -611,9 +642,8 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
     // snapshot (buildPalette() with no args, #462) so an already-shared/
     // cached card link keeps rendering exactly as it always did; the current
     // path draws the score inline with the verdict phrase further down
-    // instead (see "HERO" below). isLegacy mirrors the same GLP.ok presence
-    // check scoreColor() already uses to distinguish the two palettes.
-    const isLegacy = !GLP.ok;
+    // instead (see "HERO" below). isLegacy is declared up near GLP above now
+    // (the header needs it too, #873 follow-up).
     const scoreR = 74;
     const scx = W - PX - 88, scy = headerBottom + 90;
     if (isLegacy && score != null) {
@@ -1303,9 +1333,15 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
     }
 
     // ── FOOTER ─────────────────────────────────────────────────────────────
+    // #873 follow-up: current palette drops the GLP.bgCard-filled footer
+    // strip -- footer sits directly on GLP.bg with just a 1px GLP.border top
+    // line (prototype `.sq-foot{border-top:1px solid var(--line)}`). Legacy
+    // keeps the filled strip exactly as before.
     const footY = H - 38;
-    ctx.fillStyle = GLP.bgCard;
-    ctx.fillRect(0, footY - 12, W, H - footY + 12);
+    if (isLegacy) {
+        ctx.fillStyle = GLP.bgCard;
+        ctx.fillRect(0, footY - 12, W, H - footY + 12);
+    }
     ctx.strokeStyle = GLP.border;
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, footY - 12); ctx.lineTo(W, footY - 12); ctx.stroke();
@@ -1319,17 +1355,27 @@ async function generateShareCard(shot, score, format = 'square', accent, theme) 
     const footerLeft = ['Gaggiuino Local Profiler', installCode].filter(Boolean).join('  ·  ');
     ctx.fillText(footerLeft, PX, footY + 6);
 
-    // "Made with GLP" pill — same soft-tint chip convention as the rest of the app
+    // "Made with GLP" pill. #873 follow-up: outline-only on the current
+    // palette -- border + text in GLP.accentFrom, no fill at all (prototype
+    // `.sq-foot span{border:1px solid var(--aline);color:var(--aline);
+    // border-radius:3px}`). Legacy keeps the soft-tint filled chip.
     const pillText = 'Made with GLP';
     ctx.font = F(16, true);
     const pillPad = 12;
     const pillW = ctx.measureText(pillText).width + pillPad * 2;
     const pillH = 30;
     const pillX = W - PX - pillW, pillY = footY + 6 - pillH / 2;
-    drawChip(ctx, pillX, pillY, pillW, pillH, {
-        fill:   GLP.accentTint + '0.14)',
-        stroke: GLP.accentTint + '0.3)',
-    });
+    if (isLegacy) {
+        drawChip(ctx, pillX, pillY, pillW, pillH, {
+            fill:   GLP.accentTint + '0.14)',
+            stroke: GLP.accentTint + '0.3)',
+        });
+    } else {
+        drawChip(ctx, pillX, pillY, pillW, pillH, {
+            stroke: GLP.accentFrom,
+            radius: Math.round(3 * CANVAS_SCALE),
+        });
+    }
     ctx.fillStyle = GLP.accentFrom;
     ctx.textAlign = 'center';
     ctx.fillText(pillText, pillX + pillW / 2, footY + 6);
