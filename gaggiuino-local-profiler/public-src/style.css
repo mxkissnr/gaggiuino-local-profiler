@@ -917,6 +917,16 @@
            .profile-name-sidebar, after #405). */
         .sprofiler-header h1     { font-size: var(--fs-5); font-weight: 600; color: var(--gray-200); margin: 0 0 var(--sp-1); }
         .sprofiler-header p      { font-size: var(--fs-2); color: var(--gray-400); margin: 0; }
+        /* #865: explicit order for all three flex items of .sprofiler-header
+           (title, action buttons, #verdictHeader) so #verdictHeader's
+           position relative to the other two can be flipped per breakpoint
+           without depending on DOM order or the now-inapplicable
+           :first-child/:last-child pairing (there are three children, not
+           two). Desktop keeps the verdict line last, matching its previous
+           standalone position below the row; the mobile media query below
+           moves it to order:2, between title and buttons. */
+        .sph-title   { order: 1; }
+        .sph-actions { order: 2; }
 
         .meta-sub   { font-size: var(--fs-2); color: var(--gray-500); font-weight: normal; margin-left: var(--sp-2); }
 
@@ -931,6 +941,14 @@
             flex-direction: column;
             gap: var(--sp-1);
             margin-bottom: var(--sp-5);
+            /* #865: now a flex item of .sprofiler-header — basis:100% makes
+               it always wrap onto its own row regardless of the row's
+               remaining width; order:3 keeps it last on desktop (after
+               .sph-title/.sph-actions), matching where it sat as a
+               standalone block before. The mobile media query overrides
+               this to order:2. */
+            flex: 1 1 100%;
+            order: 3;
         }
         .verdict-line {
             display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-2);
@@ -2146,8 +2164,16 @@
                overlap the buttons instead of wrapping onto their own row. Forcing
                both children to flex-basis:100% makes each claim the full row width,
                so they stack as two clean rows. */
-            .sprofiler-header > div:first-child { flex: 1 1 100% !important; }
-            .sprofiler-header > div:last-child   { flex: 1 1 100% !important; flex-wrap: wrap; justify-content: flex-start; }
+            .sph-title   { flex: 1 1 100% !important; }
+            .sph-actions { flex: 1 1 100% !important; flex-wrap: wrap; justify-content: flex-start; order: 3; }
+            /* #865: on mobile, #verdictHeader moves from last (order:3, its
+               desktop position) to between the title and the button row —
+               it fills the band next to the shrunk hero photo instead of
+               that space going unused while the score sits below everything.
+               .sph-actions is bumped to order:3 here so verdict's order:2
+               actually lands between title(1) and actions, instead of tying
+               with actions' base order:2 and losing on DOM order. */
+            .verdict-header { order: 2; margin-bottom: var(--sp-3); }
             /* #863: the hero panel now shows on mobile too, shrunk to fit the
                header's unused top-right space instead of falling back to the
                22px thumb — the thumb is no longer needed once the hero

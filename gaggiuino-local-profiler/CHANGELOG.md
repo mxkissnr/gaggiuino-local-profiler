@@ -7,6 +7,7 @@
 - **The animated machine icon now has a permanent home in the app topbar**, visible on every tab instead of only in the Live view's idle panel — its heating/hot/brewing/steaming states are no longer hidden the moment a shot starts or you switch tabs. Closes #837
 
 ### Changed
+- **The shot score now sits right under the title on mobile** instead of below the export buttons, filling the empty space next to the (now 100px) hero photo instead of leaving it unused. Closes #865
 - **The puck screen now gets its own line on the shot detail screen** instead of being tacked onto the end of the bean/grinder/basket line, which was growing too long to read at a glance. Closes #851
 
 ### Fixed

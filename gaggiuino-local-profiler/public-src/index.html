@@ -207,11 +207,11 @@
                  grid. -->
             <img id="shotHeroPhoto" class="shot-hero-photo" alt="" data-i18n-title="shot_photo_title">
             <div class="sprofiler-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
-                <div style="flex:1;min-width:0">
+                <div class="sph-title" style="flex:1;min-width:0">
                     <h1 id="topTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Profil-Name</h1>
                     <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="freshness-badge" style="display:none"></span><span id="firmwareVersionBadge" style="display:none;font-size:.7rem;color:var(--gray-600);margin-left:6px"></span><img id="shotHeaderThumb" class="shot-header-thumb" alt="" style="display:none" data-i18n-title="shot_photo_title"></p>
                 </div>
-                <div style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
+                <div class="sph-actions" style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
                     <button class="export-btn" id="exportAllCsvBtn" data-i18n-title="export_csv_title" title="Alle Shots als CSV exportieren">↓ CSV</button>
                     <button class="export-btn" id="exportShotBtn" data-i18n-title="export_shot_title" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
                     <button class="export-btn" id="exportProfileBtn" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
@@ -223,19 +223,27 @@
                       </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Verdict header (#398, de-boxed #816): score + plain-language dial-in advice fold into one line, replacing the old boxed banner (score badge + a second boxed advice line beneath it). -->
-            <div id="verdictHeader" class="verdict-header" style="display:none">
-                <div class="verdict-line">
-                    <span class="verdict-score-num" id="verdictRingVal">–</span><span class="verdict-sep">·</span><span class="verdict-headline" id="verdictHeadline">-</span>
-                    <span class="delta-chip" id="verdictDeltaChip" style="display:none"></span>
+                <!-- Verdict header (#398, de-boxed #816, reordered #865): score +
+                     plain-language dial-in advice, folded into one line. Now a
+                     third flex item of .sprofiler-header (flex-basis:100%, so it
+                     always wraps onto its own row) rather than a sibling block
+                     below the whole row — desktop keeps it last (order set in
+                     CSS), but on mobile it renders BETWEEN the title and the
+                     button row, using the band next to the (now 100px) hero
+                     photo instead of sitting below everything with that space
+                     going unused. -->
+                <div id="verdictHeader" class="verdict-header" style="display:none">
+                    <div class="verdict-line">
+                        <span class="verdict-score-num" id="verdictRingVal">–</span><span class="verdict-sep">·</span><span class="verdict-headline" id="verdictHeadline">-</span>
+                        <span class="delta-chip" id="verdictDeltaChip" style="display:none"></span>
+                    </div>
+                    <!-- #841: retired — used to repeat the profile name/shot number
+                         (already in #topTitle above) and the bean name (already
+                         in #beanGrinderVal below). Kept hidden rather than removed
+                         in case a genuinely independent subline is needed later. -->
+                    <div class="verdict-subline" id="verdictSubline" style="display:none"></div>
                 </div>
-                <!-- #841: retired — used to repeat the profile name/shot number
-                     (already in #topTitle above) and the bean name (already
-                     in #beanGrinderVal below). Kept hidden rather than removed
-                     in case a genuinely independent subline is needed later. -->
-                <div class="verdict-subline" id="verdictSubline" style="display:none"></div>
             </div>
 
             <div id="orderedByInfo" class="ann-ordered-by" style="display:none"></div>
