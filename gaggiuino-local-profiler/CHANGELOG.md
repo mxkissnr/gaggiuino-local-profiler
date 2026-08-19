@@ -1,7 +1,7 @@
 ## [Unreleased]
 
 ### Changed
-- Internal: switched dependency updates from Dependabot to Renovate (`renovate.json`), matching the same npm dev-dependency and github-actions grouping as before (CI/tooling only, no user-facing change). Closes #875
+- Internal: switched dependency updates from Dependabot to Renovate (`renovate.json`), matching the same npm dev-dependency and github-actions grouping as before, plus automerge for green minor/patch dev-tooling/CI updates, immediate (unscheduled) security PRs, and weekly lockfile maintenance (CI/tooling only, no user-facing change). Closes #875
 
 ### Added
 - **Frozen coffee portions in the Coffee Library now show their own paused-age badge**, so a portion on ice no longer looks like it's aging at the same rate as the rest of the bag. Closes #856
