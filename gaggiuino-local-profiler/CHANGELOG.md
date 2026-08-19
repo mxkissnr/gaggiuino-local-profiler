@@ -18,6 +18,9 @@
 - **The shot detail screen now shows Bohne and Mühle as two separate recipe cards** instead of one long combined string ("bean · grinder · grind setting · baseline") under a single "Bohne & Mühle" label. Closes #871
 
 ### Fixed
+- **The easter-egg rainbow effect on the topbar machine icon now rotates the machine's own colour** instead of overlaying a translucent colour filter on top of the finished icon. Closes #886
+- **The topbar machine icon no longer shows a sliver of the machine's accent colour poking out below its 44px box.** Closes #887
+- **A bean's remaining stock in the Coffee Library no longer displays as a negative number.** Closes #888
 - **The dev-build banner covered the topbar and shot-list header on mobile** instead of pushing them down like it does on desktop. Closes #861
 - **Coffee Library action buttons could spill off the left edge of the screen on mobile** instead of wrapping to a second line when a bean card had many buttons in its row. Closes #859
 - **The new desktop hero photo panel rendered as a square instead of a circle**, unlike every other place the shot photo shows up (the small header thumb, the upload crop editor). Closes #855

@@ -367,9 +367,14 @@ export function machineIconAnimatedSvg(theme, kind = 'gaggiuino') {
     return `
     <svg viewBox="${vb}" class="m-svg" aria-hidden="true">
       <defs>
+        <!-- .mi-grad-a/.mi-grad-b (#886): stable hooks the topbar easter
+             egg's animateGradientRainbow() (components/topbar-machine-icon.js)
+             uses to rotate these two stop colours through the hue wheel and
+             restore them afterwards — the gradient ids themselves are
+             per-instance and not usable for that. -->
         <linearGradient id="${hotGradId}" x1="6" y1="0" x2="92" y2="145" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stop-color="${a}"/>
-          <stop offset="1" stop-color="${b}"/>
+          <stop class="mi-grad-a" offset="0" stop-color="${a}"/>
+          <stop class="mi-grad-b" offset="1" stop-color="${b}"/>
         </linearGradient>
         <linearGradient id="${coldGradId}" x1="6" y1="0" x2="92" y2="145" gradientUnits="userSpaceOnUse">
           <stop offset="0" stop-color="#6a6f74"/>

@@ -83,14 +83,76 @@ export function syncTopbarMachineIconFallback(reachable) {
 }
 
 // Easter egg (#837): 7 clicks within 3s triggers a short, reversible
-// playful animation burst (style.css's .topbar-machine-icon-easter-egg) —
-// no new persistent state, purely a CSS class toggle.
+// rainbow burst — no new persistent state.
+//
+// #886: this used to be a `::after` overlay blended on top of the finished
+// icon (style.css's now-removed .topbar-machine-icon-easter-egg), which
+// read as a filter slapped over the machine rather than the machine's own
+// colour changing. animateGradientRainbow() below instead rotates the
+// icon's own hot-gradient `<stop>` colours (`.mi-grad-a`/`.mi-grad-b`,
+// machine-icon.js) directly, so RGB mode is genuinely the machine's theme
+// cycling through the hue wheel.
 const EASTER_EGG_CLICKS = 7;
 const EASTER_EGG_WINDOW_MS = 3000;
 const EASTER_EGG_DURATION_MS = 2500;
-const EASTER_EGG_CLASS = 'topbar-machine-icon-easter-egg';
+const RAINBOW_PERIOD_MS = 3000; // one full hue rotation
+const RAINBOW_HUE_SPAN = 40;    // degrees between the two stops, keeps the two-tone gradient look while it rotates
+const RAINBOW_SAT = 85;
+const RAINBOW_LIGHT = 50;
+
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const toHex = x => Math.round(255 * x).toString(16).padStart(2, '0');
+  return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+}
+
+// Rotates one icon's `.mi-grad-a`/`.mi-grad-b` stop colours through the hue
+// wheel starting now. `durationMs` null means loop forever (the panel icon)
+// until .stop() is called; a number auto-restores the original colours and
+// calls `onDone` once elapsed (the topbar burst). Respects
+// prefers-reduced-motion by applying one static rainbow hue instead of
+// animating — matches this app's rule that decorative motion, not just
+// state-carrying motion, still needs a reduced-motion fallback.
+function animateGradientRainbow(el, { durationMs = null, onDone = null } = {}) {
+  const stopA = el.querySelector('.mi-grad-a');
+  const stopB = el.querySelector('.mi-grad-b');
+  if (!stopA || !stopB) return null;
+  const origA = stopA.getAttribute('stop-color');
+  const origB = stopB.getAttribute('stop-color');
+  const restore = () => {
+    stopA.setAttribute('stop-color', origA);
+    stopB.setAttribute('stop-color', origB);
+  };
+  const setHue = hue => {
+    stopA.setAttribute('stop-color', hslToHex((hue - RAINBOW_HUE_SPAN + 360) % 360, RAINBOW_SAT, RAINBOW_LIGHT));
+    stopB.setAttribute('stop-color', hslToHex((hue + RAINBOW_HUE_SPAN) % 360, RAINBOW_SAT, RAINBOW_LIGHT));
+  };
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    setHue(0);
+    if (durationMs != null) setTimeout(() => { restore(); onDone?.(); }, durationMs);
+    return { stop: restore };
+  }
+  const start = performance.now();
+  let rafId = null;
+  function tick(now) {
+    const elapsed = now - start;
+    if (durationMs != null && elapsed >= durationMs) {
+      restore();
+      onDone?.();
+      return;
+    }
+    setHue((elapsed / RAINBOW_PERIOD_MS) * 360 % 360);
+    rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+  return { stop() { if (rafId != null) cancelAnimationFrame(rafId); restore(); } };
+}
 
 let _clickTimes = [];
+let _topbarRainbow = null;
 
 export function handleTopbarMachineIconClick() {
   const el = host();
@@ -100,22 +162,25 @@ export function handleTopbarMachineIconClick() {
   _clickTimes.push(now);
   if (_clickTimes.length < EASTER_EGG_CLICKS) return;
   _clickTimes = [];
-  el.classList.remove(EASTER_EGG_CLASS);
-  void el.offsetWidth; // restart the animation if a previous burst is still playing
-  el.classList.add(EASTER_EGG_CLASS);
-  setTimeout(() => el.classList.remove(EASTER_EGG_CLASS), EASTER_EGG_DURATION_MS);
+  _topbarRainbow?.stop(); // restart if a previous burst is still playing
+  _topbarRainbow = animateGradientRainbow(el, {
+    durationMs: EASTER_EGG_DURATION_MS,
+    onDone: () => { _topbarRainbow = null; },
+  });
   openEasterEggPanel();
 }
 
 // The panel's own icon copy is a second, independent instance (its own
 // cached SVG, no SSE wiring) — it only ever needs to show one thing: the
-// active machine, permanently colour-cycling via the same blend-mode
-// overlay as the topbar burst above, just without the burst's fade-out/
-// auto-stop, since the panel itself is the "off switch" (closing it removes
-// the class). No new persistent state, no analytics, nothing recorded —
-// see this module's top-of-file note and #845: intentionally never
-// mentioned in CHANGELOG.md/whats-new.js, it's meant to stay a secret.
+// active machine, permanently colour-cycling via the same gradient-rotation
+// as the topbar burst above (animateGradientRainbow()), just looping for as
+// long as the panel stays open instead of the burst's fade-out/auto-stop —
+// the panel itself is the "off switch" (closeEasterEggPanel() stops it). No
+// new persistent state, no analytics, nothing recorded — see this module's
+// top-of-file note and #845: intentionally never mentioned in
+// CHANGELOG.md/whats-new.js, it's meant to stay a secret.
 let _panelIconFor = null;
+let _panelRainbow = null;
 
 function panelHost() {
   return document.getElementById('easterEggPanelIcon');
@@ -129,14 +194,16 @@ function renderPanelIcon() {
                || (S.machines || [])[0];
   const id = machine?.id ?? null;
   if (_panelIconFor !== id || !el.firstChild) {
-    // #848: must keep the base easter-egg-panel-icon class — it's what
-    // gives this element position:relative, so the rainbow ::after's
-    // inset:0 stays clipped to the ~140px icon box instead of resolving
-    // against the next positioned ancestor up (.easter-egg-panel itself,
-    // position:fixed; inset:0 — the whole viewport).
-    el.className = `easter-egg-panel-icon easter-egg-panel-icon-live ${MACHINE_ICON_LIVE_CLASS} topbar-machine-icon-easter-egg`;
+    // #848: must keep the position:relative easter-egg-panel-icon class —
+    // machineIconAnimatedSvg()'s own clip-paths rely on it, and it keeps the
+    // 140px icon box from resolving against the next positioned ancestor up
+    // (.easter-egg-panel itself, position:fixed; inset:0 — the whole
+    // viewport).
+    el.className = `easter-egg-panel-icon ${MACHINE_ICON_LIVE_CLASS}`;
     el.innerHTML = machineIconAnimatedSvg(machine?.theme, machine?.type);
     _panelIconFor = id;
+    _panelRainbow?.stop();
+    _panelRainbow = animateGradientRainbow(el);
   }
   const { mode, heatFraction } = resolveMachineIconState(null, _lastPreheat);
   setMachineIconMode(el, mode === 'off' ? 'hot' : mode, heatFraction || 1);
@@ -165,6 +232,11 @@ export function openEasterEggPanel() {
   const panel = document.getElementById('easterEggPanel');
   if (!panel) return;
   renderPanelIcon();
+  // renderPanelIcon() only (re)starts the rainbow when it rebuilds the SVG
+  // (machine changed) — a reopen of the same machine's panel needs its own
+  // restart since closeEasterEggPanel() below stops the previous loop.
+  const el = panelHost();
+  if (el && !_panelRainbow) _panelRainbow = animateGradientRainbow(el);
   renderPanelStats();
   panel.style.display = 'flex';
   document.getElementById('easterEggPanelCloseBtn')?.focus();
@@ -174,6 +246,8 @@ export function closeEasterEggPanel() {
   const panel = document.getElementById('easterEggPanel');
   if (!panel) return;
   panel.style.display = 'none';
+  _panelRainbow?.stop();
+  _panelRainbow = null;
 }
 
 // Called once from main.js's bootstrap, not at module-import time — this

@@ -168,7 +168,7 @@ export function renderBeanList() {
       const stockBar = `<span class="lib-stock-bar" title="${stockPct}%"><span class="lib-stock-bar-fill${isLow ? ' low' : ''}" style="width:${stockPct}%"></span></span>`;
       invHtml = `<div class="lib-inv-stats">
         <span>${t('lib_inv_consumed', activeBagConsumed)}</span>
-        <span class="lib-inv-remaining${isLow ? ' low' : ''}">${t('lib_inv_remaining', remaining)}</span>${stockBar}
+        <span class="lib-inv-remaining${isLow ? ' low' : ''}">${t('lib_inv_remaining', Math.max(0, remaining))}</span>${stockBar}
         ${isLow ? `<span class="lib-inv-reorder">${t('lib_inv_reorder')}</span>` : ''}
         ${bags.length > 1 ? `<span class="lib-inv-total">${t('lib_inv_total_consumed', totalConsumed)} · ${t('lib_inv_bags', bags.length)}</span>` : ''}
         ${editingStock
