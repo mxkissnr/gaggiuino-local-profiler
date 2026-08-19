@@ -43,6 +43,7 @@ jobs:
   e2e:
     name: E2E smoke test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     defaults:
       run:
@@ -65,7 +66,20 @@ jobs:
       # Own job (not a step in `test` above) so a Chromium download never
       # slows the unit test job — see #798.
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        # apt-get (triggered by --with-deps) can hang indefinitely when the
+        # runner's regional Ubuntu mirror is unreachable (#882) -- a short
+        # per-attempt timeout + retry lets a single mirror hiccup self-heal
+        # within this run instead of needing a manual rerun.
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 300 npx playwright install --with-deps chromium; then
+              exit 0
+            fi
+            echo "Playwright install attempt $attempt/3 failed or timed out, retrying..."
+            sleep 10
+          done
+          echo "::error::Playwright Chromium install failed after 3 attempts"
+          exit 1
 
       - name: Build
         run: npm run build
