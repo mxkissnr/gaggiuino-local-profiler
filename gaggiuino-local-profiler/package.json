@@ -37,7 +37,7 @@
     "globals": "^17.9.0",
     "playwright": "^1.62.1",
     "vite": "8.2.1",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   },
   "allowScripts": {
     "better-sqlite3@13.0.1": true,
