@@ -91,19 +91,32 @@ Concretely:
 
 ## Versioning
 
+**The version number only ever changes at release time, on `main`.** Dev/
+feature commits never touch it — see #890: bumping per dev commit made
+`main`'s version jump by however many increments had piled up on `dev`
+since the last release (e.g. 2.34.0 → 2.37.1 in one step), which is
+confusing in the CHANGELOG/GitHub releases list and doesn't reflect actual
+release cadence (no one ever installed the intermediate versions).
+
 - Patch fix → bump third number: `1.20.0 → 1.20.1`
 - New feature → bump second number: `1.20.1 → 1.21.0`
 - Breaking change → bump first number (rare)
 
 **Disambiguation (no size carve-out):** any net-new user-facing capability —
 however small (e.g. "click a photo to enlarge it") — is a feature and gets a
-minor bump. A round stays patch only if every change in it is a pure bugfix/
-regression-restore with zero new capability, no matter how many files or
-commits it touches.
+minor bump. A release stays patch only if every `## [Unreleased]` entry
+since the last release is a pure bugfix/regression-restore with zero new
+capability, no matter how many commits it took.
 
-Always update **both**:
+At release time (see `glp-release-checklist` skill), bump exactly **one**
+step from `main`'s currently-released version — never further, and never
+skip ahead to whatever a dev commit's own CHANGELOG-drafting incorrectly
+speculated the version might become. Update all **three**:
 - `gaggiuino-local-profiler/lib/constants.js` → `const GLP_VERSION  = '...'`
 - `gaggiuino-local-profiler/config.yaml` → `version: "..."`
+- `gaggiuino-local-profiler/package.json` → `"version": "..."` — easy to
+  forget; `test/version-sync.test.js` fails if it's out of sync with the
+  other two.
 
 ## Commits
 
@@ -111,12 +124,15 @@ Docs and code always in the same commit — never deliver CHANGELOG/DOCS/README 
 
 Every commit that ships a feature or fix needs:
 1. Code change
-2. `CHANGELOG.md` entry at the top — **keep it short: one bold lead-in sentence per bullet, optionally one short trailing clause, plus `Closes #N`.** No multi-sentence technical paragraphs, no file/function names, no "Review follow-up"/"Live-testing follow-up" sub-narratives. Home Assistant Supervisor renders this file verbatim in the add-on's own Update dialog (screenshot-verified 2026-08-11) — a long entry there is a real UX problem, not just a cosmetic one. The deep technical writeup (root cause, file paths, edge cases) belongs in the commit message and PR description, which stay the actual detailed record; don't duplicate it into `CHANGELOG.md`.
+2. `CHANGELOG.md` entry added under `## [Unreleased]` at the top — **keep it short: one bold lead-in sentence per bullet, optionally one short trailing clause, plus `Closes #N`.** No multi-sentence technical paragraphs, no file/function names, no "Review follow-up"/"Live-testing follow-up" sub-narratives, and no version number of its own — the entry stays under `## [Unreleased]` until the release step retitles that whole section. Home Assistant Supervisor renders this file verbatim in the add-on's own Update dialog (screenshot-verified 2026-08-11) — a long entry there is a real UX problem, not just a cosmetic one. The deep technical writeup (root cause, file paths, edge cases) belongs in the commit message and PR description, which stay the actual detailed record; don't duplicate it into `CHANGELOG.md`.
 3. `DOCS.md` **and** `DOCS.de.md` update if the feature is user-facing — both languages always in sync
 4. `README.md` features table update if it's a new feature
-5. `gaggiuino-local-profiler/lib/whats-new.js` gets a new entry (version, date, 1-3 short highlight bullets) whenever a release ships — the in-app "What's New" Settings card reads this hand-maintained file directly, it is not generated from `CHANGELOG.md`. Keep it capped at 8 entries (drop the oldest).
 
-After the commit:
+Do **not** bump `GLP_VERSION`/`config.yaml`/`package.json` or touch
+`lib/whats-new.js` in a feature/fix commit — both happen once, together, at
+release time (see Versioning above and the `glp-release-checklist` skill).
+
+At release time:
 ```
 git tag v<version>
 git push origin main
