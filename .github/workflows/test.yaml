@@ -72,3 +72,71 @@ jobs:
 
       - name: Run E2E smoke test
         run: npm run test:e2e
+
+  version-release-check:
+    name: Verify a GitHub release exists for the bumped version
+    # Only meaningful on a real push to main (not dev, not PRs) — the workflow-level
+    # `on:` above is shared by all three jobs, so the narrower push-to-main scope that
+    # version-release-check.yaml used to have via its own trigger is reproduced here as
+    # a job-level condition instead. Gitea Actions also auto-detects .github/workflows —
+    # skip there too, GitHub-only (this repo's release process only exists on GitHub).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 2
+
+      - name: Check if config.yaml changed
+        id: changed
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.event.after }}
+        run: |
+          # config.yaml used to be the workflow-level `paths:` filter on this job's own
+          # trigger; merged into one file, that has to become an explicit check instead
+          # (GitHub Actions has no per-job path filter).
+          if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -qx 'gaggiuino-local-profiler/config.yaml'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract version from config.yaml
+        if: steps.changed.outputs.changed == 'true'
+        id: version
+        run: |
+          VERSION=$(grep '^version:' gaggiuino-local-profiler/config.yaml | sed 's/version: *"\(.*\)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "config.yaml declares version $VERSION"
+
+      - name: Check release exists
+        if: steps.changed.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # The release process merges the version-bump PR to main (which triggers this
+          # check) and only creates the GitHub release a bit later as a separate step, so
+          # a short gap between merge and release-publish is expected, not drift. Poll for
+          # up to 90s before treating a missing release as real.
+          for attempt in 1 2 3 4 5 6; do
+            if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "OK: release v$VERSION exists — the add-on image was built for this version."
+              exit 0
+            fi
+            if [ "$attempt" -lt 6 ]; then
+              echo "Release v$VERSION not found yet (attempt $attempt/6), retrying in 15s..."
+              sleep 15
+            fi
+          done
+
+          echo "::error::config.yaml on main declares version $VERSION, but no GitHub release 'v$VERSION' exists."
+          echo "::error::Home Assistant Supervisor reads config.yaml directly and will offer this version as an update,"
+          echo "::error::but the Docker image build only runs on 'release: published' (see build.yaml) — so the update will 404."
+          echo "::error::Fix: either publish the 'v$VERSION' release now (gh release create v$VERSION), or this version bump"
+          echo "::error::should not have been merged outside the release process (see glp-release-checklist skill)."
+          exit 1
