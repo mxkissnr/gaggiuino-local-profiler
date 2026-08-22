@@ -343,6 +343,8 @@ Once the machine turns on, a preheat progress bar and countdown are shown in the
 
 **"Ready by" scheduling (backend, v2.20.0+):** `POST /api/preheat/ready-by` lets a caller set a target wall-clock time by which the machine should be thermally ready; the existing 30s preheat watcher works backward from `preheat_time` and turns `switch_entity` on automatically once the planned switch-on time is reached, then clears the target (one-shot). ⚠ This is a backend capability only — there is currently no UI in this app, the HA integration, or the Lovelace card to set a target. It becomes usable once the companion HA-integration service and Lovelace-card control ship in a later release.
 
+While idle (no shot, steam or flush running), the Live tab shows the machine's current stats — temperature and target, pressure, water level — instead of just "Ready to brew" with no numbers. Steam and flush mode are shown as their own live states (badge, timer, running temperature/pressure), the same treatment brewing already gets, with the animated machine icon reflecting whichever mode is active.
+
 ### Import from kaffeebraun.com
 
 In the Library tab, click **🔗 URL** next to "Add Bean", paste any product URL from [kaffeebraun.com](https://kaffeebraun.com) and press Import. The app fetches the product page server-side and pre-fills the bean form with:

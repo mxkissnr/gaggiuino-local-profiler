@@ -6,6 +6,7 @@
 // and return plain values — no axios, no lib/state, no lib/machine-runtime-state
 // — so they're unit-testable without mocking I/O or global state.
 const { WARM_TEMP_MIN, WARM_OFF_MAX_MS } = require('./constants');
+const { normalizeOperationMode } = require('./gaggiuino-proto');
 
 // Normalizes one /api/system/status payload (already unwrapped from the
 // array some firmware versions wrap it in) into the values
@@ -19,19 +20,43 @@ const { WARM_TEMP_MIN, WARM_OFF_MAX_MS } = require('./constants');
 // keeping this function pure. Omitting `live` entirely (every existing
 // caller/test) reproduces the exact prior machineStatus shape.
 function deriveMachineState(status, now = Date.now(), live = {}) {
-    // #615: brew-start/stop detection (and the shot-recording datapoints it
-    // drives in lib/poll.js's pollViaGaggiuinoStatus) stays on the physical
-    // brewSwitchState read from REST, not sensorSnap.brewActive/
-    // .brewSwitchActive below -- the MQTT transport's toSensorSnap()
+    // #615/#902: brew-start detection (and the physical-switch-on half of
+    // stop detection) stays anchored on brewSwitchState read from REST, not
+    // sensorSnap.brewSwitchActive -- the MQTT transport's toSensorSnap()
     // (gaggiuino-mqtt-client.js) only ever maps brewActive, never
     // brewSwitchActive, so the two live transports would disagree on which
-    // field means "the physical switch is on" if isBrewing read off
-    // sensorSnap instead. brewSwitchState is the one signal REST and both
+    // field means "the physical switch is on" if this read off sensorSnap
+    // instead. brewSwitchState is the one switch-state signal REST and both
     // transports agree on unambiguously, and it's arguably still the more
-    // authoritative source (the physical switch) regardless. Left
-    // REST-sourced deliberately, not an oversight.
-    const isBrewing = !!status.brewSwitchState;
+    // authoritative source (the physical switch) regardless.
+    //
+    // #902: under BREW_AUTO, the firmware auto-stops the brew once its
+    // target weight/time is hit, but the physical switch itself stays up
+    // until the user manually flips it back down -- so brewSwitchState alone
+    // kept the live timer running well after the shot was actually over.
+    // sensorSnap.brewActive (unlike .brewSwitchActive above) IS mapped
+    // identically by both live transports (gaggiuino-proto.js's WS decode
+    // and gaggiuino-mqtt-client.js's toSensorSnap(), both under the same
+    // `brewActive` name) and means "firmware is actively brewing right now"
+    // -- so once a live transport is connected and it flips to false, that's
+    // trusted immediately even while the switch is still up. `!== false`
+    // (not a plain truthiness check) so a live transport that hasn't
+    // reported brewActive at all yet (undefined) doesn't spuriously end a
+    // brew the switch says is still running. No live transport connected at
+    // all (sensorSnap null) reproduces the pre-#902 REST-only behaviour
+    // exactly, unchanged.
     const { sensorSnap, sysState } = live;
+    const isBrewing = !!status.brewSwitchState && (sensorSnap ? sensorSnap.brewActive !== false : true);
+    // #902: steam mirrors isBrewing's own sensorSnap-preferred/REST-fallback
+    // pattern -- sensorSnap.steamActive when a live transport is connected,
+    // status.steamSwitchState (the physical switch, already read via REST)
+    // otherwise. opMode/isFlushing have no REST equivalent at all (the
+    // operation-mode enum is only ever pushed via WS/MQTT's sysState) and
+    // stay null/false whenever no live transport is connected, same
+    // no-live-transport convention as the #597 sensorSnap-only fields below.
+    const isSteaming = sensorSnap ? !!sensorSnap.steamActive : !!status.steamSwitchState;
+    const opMode     = sysState ? normalizeOperationMode(sysState.operationMode) : null;
+    const isFlushing = opMode === 'FLUSH' || opMode === 'FLUSH_AUTO';
 
     // #615: sensorSnap (WS or MQTT, via lib/live-transport.js) is only ever
     // passed non-null when fresh -- see the STALE_MS checks in
@@ -63,6 +88,9 @@ function deriveMachineState(status, now = Date.now(), live = {}) {
         profileName:       status.profileName         || null,
         brewSwitchState:   isBrewing,
         steamSwitchState:  !!status.steamSwitchState,
+        isSteaming,
+        isFlushing,
+        opMode,
         updatedAt:         now,
     };
 
@@ -83,7 +111,7 @@ function deriveMachineState(status, now = Date.now(), live = {}) {
         machineStatus.pressureSensorFaultReason   = sysState.pressureSensorFaultReason || '';
     }
 
-    return { isBrewing, pressure, temperature, weight, pumpFlow, targetTemperature, profileName, machineStatus };
+    return { isBrewing, isSteaming, isFlushing, opMode, pressure, temperature, weight, pumpFlow, targetTemperature, profileName, machineStatus };
 }
 
 // Warm/cold heuristic: whether a machine that was polling before should be

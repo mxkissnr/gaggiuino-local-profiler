@@ -105,6 +105,25 @@ function buildLiveDataResponse() {
         // idle-but-reachable one (state.liveAccum is null either way) — the
         // live tab kept showing "Ready to brew" indefinitely.
         machineReachable: state.machineReachable,
+        // #902: steam/flush live sessions -- same shape as the brew fields
+        // above, kept separate rather than folded into isLive/datapoints
+        // since isLive's meaning (brew-only) is relied on elsewhere
+        // (views/live.js's post-brew shot-list reload) and must not start
+        // firing on steam/flush end too.
+        isSteaming:       !!state.steamAccum,
+        steamSeq:         state.steamSeq,
+        steamDatapoints:  state.steamAccum ? state.steamAccum.datapoints : null,
+        isFlushing:       !!state.flushAccum,
+        flushSeq:         state.flushSeq,
+        flushDatapoints:  state.flushAccum ? state.flushAccum.datapoints : null,
+        // #902: idle stats -- always present (not gated behind isLive), so
+        // the Live tab can show current readings while nothing is running.
+        // Sourced from defaultRuntime.machineStatus, already populated every
+        // poll tick -- no extra sensor calls needed.
+        temperature:       defaultRuntime.machineStatus?.temperature ?? null,
+        targetTemperature: defaultRuntime.machineStatus?.targetTemperature ?? null,
+        pressure:          defaultRuntime.machineStatus?.pressure ?? null,
+        waterLevel:        defaultRuntime.machineStatus?.waterLevel ?? null,
     };
 }
 
@@ -141,6 +160,10 @@ function stopLivePolling(runtime = defaultRuntime) {
         clearInterval(runtime.livePollTimer);
         runtime.livePollTimer  = null;
         state.liveAccum        = null;
+        // #902: a powered-off machine can't be mid-steam/flush either --
+        // same reasoning as state.liveAccum above.
+        state.steamAccum       = null;
+        state.flushAccum       = null;
         runtime.switchOffAt    = Date.now();
         runtime.stabilityReady = false;
         runtime.tempHistory    = [];
@@ -223,7 +246,7 @@ async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
             sysState:   liveTransport.getLiveSystemState(baseUrl),
         };
         const {
-            isBrewing, pressure: presVal, temperature: tempVal, weight: weightVal, pumpFlow: pumpFlowVal,
+            isBrewing, isSteaming, isFlushing, pressure: presVal, temperature: tempVal, weight: weightVal, pumpFlow: pumpFlowVal,
             targetTemperature: tTempVal, profileName: profile, machineStatus,
         } = deriveMachineState(status, undefined, live);
         runtime.currentTemp       = tempVal  || runtime.currentTemp;
@@ -294,6 +317,51 @@ async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
             state.liveAccum.datapoints.weightFlow.push(Math.round(weightFlow * 10));
             state.liveAccum.datapoints.pumpFlow.push(Math.round(pumpFlowVal * 10));
             state.liveAccum.datapoints.targetTemperature.push(Math.round(tTempVal * 10));
+        }
+
+        // #902: steam/flush live sessions -- same start/stop/accumulate
+        // shape as the brew blocks above, with a simpler datapoint set
+        // (timeInMode/pressure/temperature only; no weight/flow, neither
+        // mode moves the scale). The three modes are mutually exclusive
+        // (BREW_AUTO/BREW_MANUAL/FLUSH/FLUSH_AUTO/STEAM/... are one
+        // physical operation mode at a time), so no locking is needed
+        // between these blocks and the brew ones above.
+        if (isSteaming && !state.steamAccum) {
+            state.steamAccum = {
+                startTime: Date.now(),
+                datapoints: { timeInMode: [], pressure: [], temperature: [] },
+            };
+            log('Steam started');
+        }
+        if (!isSteaming && state.steamAccum) {
+            log('Steam finished');
+            state.steamAccum = null;
+            state.steamSeq++;
+        }
+        if (isSteaming && state.steamAccum) {
+            const elapsed = Math.round((Date.now() - state.steamAccum.startTime) / 100);
+            state.steamAccum.datapoints.timeInMode.push(elapsed);
+            state.steamAccum.datapoints.pressure.push(Math.round(presVal * 10));
+            state.steamAccum.datapoints.temperature.push(Math.round(tempVal * 10));
+        }
+
+        if (isFlushing && !state.flushAccum) {
+            state.flushAccum = {
+                startTime: Date.now(),
+                datapoints: { timeInMode: [], pressure: [], temperature: [] },
+            };
+            log('Flush started');
+        }
+        if (!isFlushing && state.flushAccum) {
+            log('Flush finished');
+            state.flushAccum = null;
+            state.flushSeq++;
+        }
+        if (isFlushing && state.flushAccum) {
+            const elapsed = Math.round((Date.now() - state.flushAccum.startTime) / 100);
+            state.flushAccum.datapoints.timeInMode.push(elapsed);
+            state.flushAccum.datapoints.pressure.push(Math.round(presVal * 10));
+            state.flushAccum.datapoints.temperature.push(Math.round(tempVal * 10));
         }
 
         // #736: broadcast this tick's live snapshot -- same shape GET

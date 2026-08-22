@@ -51,6 +51,23 @@ const OperationModeDto = {
 const ServiceTestPeripheralDto = { 0: 'PUMP', PUMP: 0, 1: 'VALVE', VALVE: 1, 2: 'VALVE_B', VALVE_B: 2, 3: 'LED', LED: 3 };
 const NotificationTypeDto = { 0: 'INFO', INFO: 0, 1: 'SUCCESS', SUCCESS: 1, 2: 'WARN', WARN: 2, 3: 'ERROR', ERROR: 3 };
 
+// #902: SystemStateDto.operationMode arrives as a numeric wire value when
+// decoded from a WS d_sys_state push, but as the enum's string name (e.g.
+// "BREW_AUTO") when mapped from an MQTT <prefix>/system payload (see
+// gaggiuino-mqtt-client.js's toSysState() comment) -- callers that need to
+// compare operationMode regardless of which transport supplied it (e.g.
+// lib/machine-state.js's deriveMachineState(), detecting steam/flush) go
+// through this instead of comparing against OperationModeDto directly.
+// Returns the canonical string key, or null for anything unrecognized
+// (including operationMode being absent/undefined, the case when no live
+// transport is connected at all).
+function normalizeOperationMode(raw) {
+    if (raw == null) return null;
+    if (typeof raw === 'number') return OperationModeDto[raw] ?? null;
+    if (typeof raw === 'string') return Object.prototype.hasOwnProperty.call(OperationModeDto, raw) ? raw : null;
+    return null;
+}
+
 // ── Action codes — request (g_/c_ prefixed) and their matching server-push
 // response action (d_ prefixed) are DIFFERENT strings, not the same one
 // echoed back. e.g. request GetProfileDict ('g_prof_dict') is answered by a
@@ -244,7 +261,7 @@ SystemStateDto = new MessageType('SystemStateDto', [
 
 module.exports = {
     PhaseTypeDto, TransitionCurveDto, WebSocketResponseResultDto, OperationModeDto,
-    ServiceTestPeripheralDto, NotificationTypeDto, ND, RESPONSE_ACTION,
+    ServiceTestPeripheralDto, NotificationTypeDto, normalizeOperationMode, ND, RESPONSE_ACTION,
     PhaseStopConditionsDto, TransitionDto, PhaseDto, GlobalStopConditionsDto,
     BrewRecipeDto, ProfileDto, WebSocketProfileIdCommandDto,
     WebSocketMessageDto, WebSocketResponseDto, SavedProfileDto, SavedProfilesDto,

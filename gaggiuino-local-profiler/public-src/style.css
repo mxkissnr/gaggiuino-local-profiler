@@ -1469,13 +1469,19 @@
         #live-status-badge.ready       { color: var(--ok); }
         #live-status-badge.error       { color: var(--err); }
         #live-status-badge.unreachable { color: var(--err); }
+        /* #902: steaming/flushing get their own accent color, distinct from
+           brewing's --err red -- an active-but-not-a-shot process. */
+        #live-status-badge.steaming,
+        #live-status-badge.flushing    { color: var(--accent-ink); }
 
         #live-status-badge .badge-dot {
             width: 8px; height: 8px;
             border-radius: 50%;
             background: currentColor;
         }
-        #live-status-badge.brewing .badge-dot { animation: pulse 1.2s infinite; }
+        #live-status-badge.brewing .badge-dot,
+        #live-status-badge.steaming .badge-dot,
+        #live-status-badge.flushing .badge-dot { animation: pulse 1.2s infinite; }
 
         #live-meta {
             display: flex;
@@ -1579,6 +1585,19 @@
            error color, instead of a separate screen. */
         #live-idle.unreachable .idle-icon { color: var(--err); }
         #live-idle.unreachable h2         { color: var(--err); }
+
+        /* #902: idle-state stats row (current temp/target, pressure, water
+           level) -- deliberately smaller/muted than .live-stats above, this
+           is a passive readout, not the shot-focused hero stats. */
+        #live-idle-stats {
+            display: flex;
+            gap: var(--sp-5);
+            margin-top: var(--sp-6);
+        }
+        .idle-stat { text-align: center; }
+        .idle-stat-val { font-size: var(--fs-3); font-weight: 600; color: var(--gray-300); }
+        #liveIdleTargetTemp { color: var(--gray-600); }
+        .idle-stat-label { font-size: var(--fs-1); color: var(--gray-600); margin-top: var(--sp-1); }
 
         /* ── Preheat widget ── */
         #preheat-widget { width: 100%; max-width: 320px; margin-bottom: var(--sp-6); text-align: center; }
@@ -2702,6 +2721,12 @@
         .machine-icon-live.is-brewing .d-brew { opacity: 1; }
         .machine-icon-live.is-steaming .d-ready { opacity: 0; }
         .machine-icon-live.is-steaming .d-steam { opacity: 1; }
+        /* #902: flush gets the display-badge treatment only (no milk-jug-
+           style illustration -- there's no equivalent physical action to
+           depict for a group-head flush the way there is for steaming
+           milk). */
+        .machine-icon-live.is-flushing .d-ready { opacity: 0; }
+        .machine-icon-live.is-flushing .d-flush { opacity: 1; }
 
         /* Bezug/brewing: the brew scale's cup fills to one third, crema
            settles on top last. Two steady streams from the basket,

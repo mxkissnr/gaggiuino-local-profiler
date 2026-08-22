@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+- **The Live tab now shows current machine stats (temperature/target, pressure, water level) even when idle**, instead of just "Ready to brew" with no numbers. Closes #905
+- **Steam and flush mode are now shown as active states in the Live tab and the animated machine icon** (timer, live temp/pressure readout, dedicated badge), matching the existing brewing treatment. Closes #906
+
 ## [2.35.0] – 2026-08-19
 
 ### Fixed

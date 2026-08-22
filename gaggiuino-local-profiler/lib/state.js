@@ -41,6 +41,15 @@ module.exports = {
     liveAccum:            null,
     isPollRunning:        false,
     liveSeq:              0,
+    // #902: steam/flush live sessions, same hard-single-machine slot
+    // pattern as liveAccum/liveSeq above (lib/poll.js is explicitly
+    // single-machine, see its own header comment) -- a genuine
+    // multi-machine migration of this whole tracking scheme is out of
+    // scope here, not attempted.
+    steamAccum:           null,
+    steamSeq:             0,
+    flushAccum:           null,
+    flushSeq:             0,
     // Ready-by preheat (#541): wall-clock target set via
     // POST /api/preheat/ready-by, and the switch-on time computed from it
     // (targetAt - preheat_time). Both null when no target is set.

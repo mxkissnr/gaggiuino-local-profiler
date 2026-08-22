@@ -1094,6 +1094,23 @@
             <div class="idle-icon" id="liveMachineIcon"></div>
             <h2 id="liveIdleTitle" data-i18n="machine_ready">Maschine bereit</h2>
             <p id="liveIdleText" data-i18n="live_idle_text">Sobald ein Bezug startet, erscheinen hier die Echtzeit-Daten.</p>
+            <!-- #902: idle-state machine stats (temp/target, pressure, water
+                 level) -- views/live.js's handleLiveData() keeps these current
+                 on every tick, not only while this panel is visible. -->
+            <div id="live-idle-stats">
+                <div class="idle-stat">
+                    <div class="idle-stat-val"><span id="liveIdleTemp">–</span><span id="liveIdleTargetTemp"></span></div>
+                    <div class="idle-stat-label" data-i18n="live_temp_label">Temperatur</div>
+                </div>
+                <div class="idle-stat">
+                    <div class="idle-stat-val" id="liveIdlePressure">–</div>
+                    <div class="idle-stat-label" data-i18n="live_pressure_label">Druck</div>
+                </div>
+                <div class="idle-stat">
+                    <div class="idle-stat-val" id="liveIdleWaterLevel">–</div>
+                    <div class="idle-stat-label" data-i18n="live_idle_water_label">Wasserstand</div>
+                </div>
+            </div>
         </div>
     </div><!-- #live-view -->
 
