@@ -345,6 +345,8 @@ Once the machine turns on, a preheat progress bar and countdown are shown in the
 
 On a machine running BREW_AUTO, the shot timer ends the instant the firmware itself reports the brew as finished, rather than waiting for the physical brew switch to be flipped back down (which BREW_AUTO leaves up after an auto-stop).
 
+While idle (no shot, steam or flush running), the Live tab shows the machine's current stats — temperature and target, pressure, water level — instead of just "Ready to brew" with no numbers. Steam and flush mode are shown as their own live states (badge, timer, running temperature/pressure), the same treatment brewing already gets, with the animated machine icon reflecting whichever mode is active.
+
 ### Import from kaffeebraun.com
 
 In the Library tab, click **🔗 URL** next to "Add Bean", paste any product URL from [kaffeebraun.com](https://kaffeebraun.com) and press Import. The app fetches the product page server-side and pre-fills the bean form with:

@@ -298,6 +298,11 @@ export function setLiveBadge(state, detail = '') {
     connecting:  t('live_connecting'),
     ready:       t('live_ready_status'),
     brewing:     t('live_brewing'),
+    // #902: steam/flush get their own badge labels/status-dot color (see
+    // style.css's #live-status-badge.steaming/.flushing) -- distinct from
+    // brewing (a shot) even though both are "something is actively running".
+    steaming:    t('live_steaming'),
+    flushing:    t('live_flushing'),
     error:       detail || t('live_error_status'),
     idle:        t('live_ready_status'),
     unreachable: detail || t('live_unreachable_status')
@@ -306,6 +311,32 @@ export function setLiveBadge(state, detail = '') {
 
   if (state === 'brewing') liveBtn.classList.add('live-brewing');
   if (state === 'ready' || state === 'idle') liveBtn.classList.add('live-ready');
+}
+
+// #902: shared elapsed-timer pair, used by all three "something is
+// currently running" branches in handleLiveData() below (brewing/steaming/
+// flushing) instead of each inlining its own setInterval -- the three modes
+// are mutually exclusive (one physical operation mode at a time), so one
+// shared S.liveBrewStartWall/S.liveTimerTick pair is enough; no per-mode
+// state needed.
+function startElapsedTimer(startWall, elId) {
+  S.liveBrewStartWall = startWall;
+  if (!S.liveTimerTick) {
+    S.liveTimerTick = setInterval(() => {
+      if (S.liveBrewStartWall) {
+        const s = (Date.now() - S.liveBrewStartWall) / 1000;
+        document.getElementById(elId).textContent = formatTimeLabel(s);
+      }
+    }, 100);
+  }
+}
+
+function stopElapsedTimer(elId, finalElapsedSec) {
+  if (S.liveTimerTick) { clearInterval(S.liveTimerTick); S.liveTimerTick = null; }
+  S.liveBrewStartWall = null;
+  if (elId != null && finalElapsedSec != null) {
+    document.getElementById(elId).textContent = formatTimeLabel(finalElapsedSec);
+  }
 }
 
 // #736: SSE push handlers -- registered once in main.js's bootstrap
@@ -362,6 +393,50 @@ export function handleLiveData(msg) {
   if (idleTitleEl) idleTitleEl.textContent = stillWarming ? t('preheat_warming') : t('machine_ready');
   if (idleTextEl)  idleTextEl.textContent  = t('live_idle_text');
 
+  // #902: idle stats row -- always kept current (not gated behind the true-
+  // idle branch below), same reasoning as syncMachineIcon(msg) above, so the
+  // numbers are already fresh the moment the idle panel becomes visible.
+  const idleTempEl       = document.getElementById('liveIdleTemp');
+  const idleTargetTempEl = document.getElementById('liveIdleTargetTemp');
+  const idlePressureEl   = document.getElementById('liveIdlePressure');
+  const idleWaterEl      = document.getElementById('liveIdleWaterLevel');
+  if (idleTempEl)       idleTempEl.textContent       = msg.temperature       != null ? `${msg.temperature.toFixed(1)}°`         : '–';
+  if (idleTargetTempEl) idleTargetTempEl.textContent = msg.targetTemperature != null ? ` / ${msg.targetTemperature.toFixed(0)}°` : '';
+  if (idlePressureEl)   idlePressureEl.textContent   = msg.pressure          != null ? `${msg.pressure.toFixed(1)} bar`          : '–';
+  if (idleWaterEl)       idleWaterEl.textContent      = msg.waterLevel        != null ? `${msg.waterLevel}%`                     : '–';
+
+  // #902: steam/flush live sessions -- same live-content readout the brew
+  // branch below uses (duration/pressure/temperature), sourced from
+  // steamDatapoints/flushDatapoints instead of the brew shot's datapoints.
+  // No flow/weight equivalent for either mode (neither moves the scale), so
+  // those two tiles stay blank. Checked ahead of the pure-idle fallback
+  // below since steaming/flushing is itself a non-idle state.
+  if (msg.isSteaming || msg.isFlushing) {
+    const steaming     = msg.isSteaming;
+    const modeDp       = steaming ? (msg.steamDatapoints || {}) : (msg.flushDatapoints || {});
+    const modeTimes    = modeDp.timeInMode || [];
+    const modeLastIdx  = modeTimes.length - 1;
+
+    setLiveBadge(steaming ? 'steaming' : 'flushing');
+    metaEl.textContent       = steaming ? t('live_steaming') : t('live_flushing');
+    contentEl.style.display  = 'block';
+    idleEl.style.display     = 'none';
+
+    if (modeLastIdx >= 0) {
+      const elapsed  = modeTimes[modeLastIdx] / 10;
+      const pressure = modeDp.pressure?.[modeLastIdx]    != null ? modeDp.pressure[modeLastIdx] / 10    : null;
+      const temp     = modeDp.temperature?.[modeLastIdx] != null ? modeDp.temperature[modeLastIdx] / 10 : null;
+
+      startElapsedTimer(Date.now() - elapsed * 1000, 'liveTime');
+
+      document.getElementById('livePressure').textContent = pressure != null ? pressure.toFixed(1) : '–';
+      document.getElementById('liveFlow').textContent     = '–';
+      document.getElementById('liveWeight').textContent   = '–';
+      document.getElementById('liveTemp').textContent     = temp != null ? temp.toFixed(1) : '–';
+    }
+    return;
+  }
+
   if (!msg.isLive && times.length === 0) {
     setLiveBadge('ready');
     metaEl.textContent = '–';
@@ -396,19 +471,9 @@ export function handleLiveData(msg) {
         weightG: weight ?? 0, elapsedSec: elapsed ?? 0, pressureBar: pressure,
       });
       // Re-sync wall clock so timer stays accurate
-      S.liveBrewStartWall = Date.now() - elapsed * 1000;
-      if (!S.liveTimerTick) {
-        S.liveTimerTick = setInterval(() => {
-          if (S.liveBrewStartWall) {
-            const s = (Date.now() - S.liveBrewStartWall) / 1000;
-            document.getElementById('liveTime').textContent = formatTimeLabel(s);
-          }
-        }, 100);
-      }
+      startElapsedTimer(Date.now() - elapsed * 1000, 'liveTime');
     } else {
-      if (S.liveTimerTick) { clearInterval(S.liveTimerTick); S.liveTimerTick = null; }
-      S.liveBrewStartWall = null;
-      document.getElementById('liveTime').textContent = formatTimeLabel(elapsed);
+      stopElapsedTimer('liveTime', elapsed);
     }
 
     document.getElementById('livePressure').textContent = pressure != null ? pressure.toFixed(1) : '–';

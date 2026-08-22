@@ -348,6 +348,8 @@ Nach dem Einschalten zeigt der Live-Tab einen Fortschrittsbalken und einen Count
 
 Läuft die Maschine im BREW_AUTO-Modus, endet der Bezugs-Timer in dem Moment, in dem die Firmware selbst den Bezug als beendet meldet, statt darauf zu warten, dass der physische Brühschalter zurückgeklappt wird (den BREW_AUTO nach einem automatischen Stopp oben lässt).
 
+Im Leerlauf (kein Bezug, kein Dampf, kein Spülen aktiv) zeigt der Live-Tab die aktuellen Maschinenwerte — Temperatur samt Ziel, Druck, Wasserstand — statt nur "Maschine bereit" ohne Zahlen. Dampf- und Spülmodus erscheinen als eigene Live-Zustände (Badge, Timer, laufende Temperatur/Druck-Anzeige) — dieselbe Behandlung, die ein Bezug bereits bekommt —, und das animierte Maschinen-Icon spiegelt den jeweils aktiven Modus.
+
 ### Import von kaffeebraun.com
 
 Im Bibliothek-Tab auf **🔗 URL** neben „Bohne hinzufügen" klicken, eine Produkt-URL von [kaffeebraun.com](https://kaffeebraun.com) einfügen und auf „Importieren" drücken. Das App lädt die Produktseite serverseitig und befüllt das Bohnen-Formular mit:

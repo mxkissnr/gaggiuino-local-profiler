@@ -6,6 +6,7 @@
 // and return plain values — no axios, no lib/state, no lib/machine-runtime-state
 // — so they're unit-testable without mocking I/O or global state.
 const { WARM_TEMP_MIN, WARM_OFF_MAX_MS } = require('./constants');
+const { normalizeOperationMode } = require('./gaggiuino-proto');
 
 // Normalizes one /api/system/status payload (already unwrapped from the
 // array some firmware versions wrap it in) into the values
@@ -50,6 +51,16 @@ function deriveMachineState(status, now = Date.now(), live = {}) {
     // behaviour exactly, unchanged.
     const { sensorSnap, sysState } = live;
     const isBrewing = !!status.brewSwitchState && sensorSnap?.brewActive !== false;
+    // #902: steam mirrors isBrewing's own sensorSnap-preferred/REST-fallback
+    // pattern -- sensorSnap.steamActive when a live transport is connected,
+    // status.steamSwitchState (the physical switch, already read via REST)
+    // otherwise. opMode/isFlushing have no REST equivalent at all (the
+    // operation-mode enum is only ever pushed via WS/MQTT's sysState) and
+    // stay null/false whenever no live transport is connected, same
+    // no-live-transport convention as the #597 sensorSnap-only fields below.
+    const isSteaming = sensorSnap ? !!sensorSnap.steamActive : !!status.steamSwitchState;
+    const opMode     = sysState ? normalizeOperationMode(sysState.operationMode) : null;
+    const isFlushing = opMode === 'FLUSH' || opMode === 'FLUSH_AUTO';
 
     // #615: sensorSnap (WS or MQTT, via lib/live-transport.js) is only ever
     // passed non-null when fresh -- see the STALE_MS checks in
@@ -81,6 +92,9 @@ function deriveMachineState(status, now = Date.now(), live = {}) {
         profileName:       status.profileName         || null,
         brewSwitchState:   isBrewing,
         steamSwitchState:  !!status.steamSwitchState,
+        isSteaming,
+        isFlushing,
+        opMode,
         updatedAt:         now,
     };
 
@@ -101,7 +115,7 @@ function deriveMachineState(status, now = Date.now(), live = {}) {
         machineStatus.pressureSensorFaultReason   = sysState.pressureSensorFaultReason || '';
     }
 
-    return { isBrewing, pressure, temperature, weight, pumpFlow, targetTemperature, profileName, machineStatus };
+    return { isBrewing, isSteaming, isFlushing, opMode, pressure, temperature, weight, pumpFlow, targetTemperature, profileName, machineStatus };
 }
 
 // Warm/cold heuristic: whether a machine that was polling before should be
