@@ -210,6 +210,11 @@ function gaggiuinoPanelAndDisplay() {
           <rect x="31" y="56.2" width="18" height="3.6" rx="1.3" fill="${MINI_FLOW}"/>
           <text x="40" y="59" text-anchor="middle" font-size="2.8" font-weight="600" fill="#0b0d12">STEAM</text>
         </g>
+        <g class="d-flush">
+          <text x="40" y="53.4" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">FLUSH</text>
+          <rect x="31" y="56.2" width="18" height="3.6" rx="1.3" fill="${MINI_PRES}"/>
+          <text x="40" y="59" text-anchor="middle" font-size="2.8" font-weight="600" fill="#0b0d12">FLUSH</text>
+        </g>
       </g>`;
     return { panel, disp };
 }
@@ -249,6 +254,10 @@ function gaggimatePanelAndDisplay() {
         <g class="d-steam">
           <text x="${cx}" y="${r(cy + 2.6)}" text-anchor="middle" font-size="7.4" font-weight="600" fill="#fff">145°</text>
           <text x="${cx}" y="${r(cy + 8.4)}" text-anchor="middle" font-size="3.4" font-weight="600" fill="${MINI_FLOW}">STEAM</text>
+        </g>
+        <g class="d-flush">
+          <text x="${cx}" y="${r(cy + 2.6)}" text-anchor="middle" font-size="6.6" font-weight="600" fill="#fff">FLUSH</text>
+          <text x="${cx}" y="${r(cy + 8.4)}" text-anchor="middle" font-size="3.4" font-weight="600" fill="${MINI_PRES}">FLUSH</text>
         </g>
       </g>`;
     return { panel, disp };
@@ -335,6 +344,7 @@ export const MACHINE_ICON_MODES = Object.freeze({
     hot:      Object.freeze(['is-on', 'is-hot']),
     brewing:  Object.freeze(['is-on', 'is-hot', 'is-brewing']),
     steaming: Object.freeze(['is-on', 'is-hot', 'is-steaming']),
+    flushing: Object.freeze(['is-on', 'is-hot', 'is-flushing']),
 });
 
 /**
@@ -482,16 +492,20 @@ export function setMachineIconMode(rootEl, mode, heatFraction = 0) {
 // (components/topbar-machine-icon.js, #837) both call this, then hand the
 // result straight to setMachineIconMode().
 //
-// NOTE ON STEAM: there is deliberately no 'steaming' case. Nothing in the
-// poll payload distinguishes steaming from heating — lib/machine-state.js
-// derives isBrewing from brewSwitchState and carries no steam-switch
-// equivalent — and showing a steam state on a guess would be worse than not
-// showing it, since it would be wrong exactly when the user is watching.
-// The icon supports the state; wiring it needs a signal that does not exist
-// yet.
+// #902: steam/flush signal source -- msg.isSteaming/msg.isFlushing come
+// from lib/machine-state.js's deriveMachineState() (sensorSnap.steamActive/
+// status.steamSwitchState for steam; sysState.operationMode, normalized via
+// gaggiuino-proto.js's normalizeOperationMode(), for flush), surfaced on
+// every GET /api/live/data / LIVE_SNAPSHOT payload by lib/poll.js's
+// buildLiveDataResponse(). Checked ahead of the isLive/heating/hot fallbacks
+// below since brewing/steaming/flushing are mutually exclusive machine
+// states, brewing taking priority if it were somehow reported alongside one
+// of the others.
 export function resolveMachineIconState(msg, preheat) {
     if (msg?.machineReachable === false) return { mode: 'off', heatFraction: 0 };
     if (msg?.isLive)                     return { mode: 'brewing', heatFraction: 1 };
+    if (msg?.isSteaming)                 return { mode: 'steaming', heatFraction: 1 };
+    if (msg?.isFlushing)                 return { mode: 'flushing', heatFraction: 1 };
     if (preheat && !preheat.ready && preheat.remaining > 0) {
         return { mode: 'heating', heatFraction: Math.max(0, Math.min(1, preheat.pct || 0)) };
     }

@@ -142,6 +142,59 @@ describe('deriveMachineState (#552)', () => {
         expect(r.isBrewing).toBe(true);
     });
 
+    // #902: steam/flush signals
+    it('#902: derives isSteaming from sensorSnap.steamActive when a live transport is connected', () => {
+        const r = deriveMachineState(
+            { steamSwitchState: false, temperature: '92' },
+            undefined,
+            { sensorSnap: { temperature: 92, steamActive: true } },
+        );
+        expect(r.isSteaming).toBe(true);
+        expect(r.machineStatus.isSteaming).toBe(true);
+    });
+
+    it('#902: falls back to status.steamSwitchState for isSteaming when no live transport is connected', () => {
+        const r = deriveMachineState({ steamSwitchState: true, temperature: '92' });
+        expect(r.isSteaming).toBe(true);
+    });
+
+    it('#902: derives isFlushing/opMode from sysState.operationMode (numeric WS value)', () => {
+        const r = deriveMachineState(
+            { temperature: '92' },
+            undefined,
+            { sysState: { operationMode: 2 } }, // FLUSH
+        );
+        expect(r.opMode).toBe('FLUSH');
+        expect(r.isFlushing).toBe(true);
+        expect(r.machineStatus.opMode).toBe('FLUSH');
+        expect(r.machineStatus.isFlushing).toBe(true);
+    });
+
+    it('#902: derives isFlushing/opMode from sysState.operationMode (MQTT string name), including FLUSH_AUTO', () => {
+        const r = deriveMachineState(
+            { temperature: '92' },
+            undefined,
+            { sysState: { operationMode: 'FLUSH_AUTO' } },
+        );
+        expect(r.opMode).toBe('FLUSH_AUTO');
+        expect(r.isFlushing).toBe(true);
+    });
+
+    it('#902: isFlushing is false for other operation modes (e.g. STEAM)', () => {
+        const r = deriveMachineState(
+            { temperature: '92' },
+            undefined,
+            { sysState: { operationMode: 'STEAM' } },
+        );
+        expect(r.opMode).toBe('STEAM');
+        expect(r.isFlushing).toBe(false);
+    });
+
+    it('#902: opMode/isFlushing are null/false with no sysState (no live transport connected)', () => {
+        const r = deriveMachineState({ temperature: '92' });
+        expect(r.opMode).toBeNull();
+        expect(r.isFlushing).toBe(false);
+    });
 });
 
 describe('isStillWarm (#552)', () => {

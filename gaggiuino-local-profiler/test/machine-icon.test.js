@@ -2,7 +2,8 @@
 // builder, no DOM dependency, so it's tested directly the same way
 // public-src/bean-math.js is (see test/bean-math.test.js).
 import { describe, it, expect } from 'vitest';
-import { machineIconSvg, machineIconMiniSvg } from '../public-src/machine-icon.js';
+import { machineIconSvg, machineIconMiniSvg, machineIconAnimatedSvg,
+         MACHINE_ICON_MODES, resolveMachineIconState } from '../public-src/machine-icon.js';
 import { THEME_PRESETS, resolveTheme } from '../lib/machines/theme-presets.js';
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -126,5 +127,41 @@ describe('resolveTheme (lib/machines/theme-presets.js)', () => {
 
     it('resolves a custom {a,b} theme as-is', () => {
         expect(resolveTheme({ a: '#111111', b: '#222222' })).toEqual({ a: '#111111', b: '#222222' });
+    });
+});
+
+// #902: steam/flush wiring into the animated icon's state resolver.
+describe('resolveMachineIconState() steam/flush (#902)', () => {
+    it('resolves isSteaming to the steaming mode', () => {
+        expect(resolveMachineIconState({ isSteaming: true }, null)).toEqual({ mode: 'steaming', heatFraction: 1 });
+    });
+
+    it('resolves isFlushing to the flushing mode', () => {
+        expect(resolveMachineIconState({ isFlushing: true }, null)).toEqual({ mode: 'flushing', heatFraction: 1 });
+    });
+
+    it('isLive (brewing) takes priority over isSteaming/isFlushing', () => {
+        expect(resolveMachineIconState({ isLive: true, isSteaming: true }, null)).toEqual({ mode: 'brewing', heatFraction: 1 });
+    });
+
+    it('machineReachable:false takes priority over isSteaming/isFlushing', () => {
+        expect(resolveMachineIconState({ machineReachable: false, isSteaming: true }, null)).toEqual({ mode: 'off', heatFraction: 0 });
+    });
+
+    it('falls through to hot/heating when neither isSteaming nor isFlushing is set', () => {
+        expect(resolveMachineIconState({}, null)).toEqual({ mode: 'hot', heatFraction: 1 });
+    });
+});
+
+describe('MACHINE_ICON_MODES flushing (#902)', () => {
+    it('flushing mode carries is-on/is-hot/is-flushing classes, same shape as steaming', () => {
+        expect(MACHINE_ICON_MODES.flushing).toEqual(['is-on', 'is-hot', 'is-flushing']);
+    });
+});
+
+describe('machineIconAnimatedSvg() flush display group (#902)', () => {
+    it('renders a .d-flush group alongside .d-steam for both machine kinds', () => {
+        expect(machineIconAnimatedSvg(null, 'gaggiuino')).toContain('class="d-flush"');
+        expect(machineIconAnimatedSvg(null, 'gaggimate')).toContain('class="d-flush"');
     });
 });

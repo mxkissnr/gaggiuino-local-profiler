@@ -82,7 +82,12 @@ describe('LIVE_SNAPSHOT/PREHEAT_UPDATE SSE emissions (#736)', () => {
 
         expect(events).toHaveLength(1);
         expect(events[0]).toEqual(buildLiveDataResponse());
-        expect(events[0]).toEqual({ isLive: false, profileName: '', datapoints: null, seq: 0, machineReachable: true });
+        expect(events[0]).toEqual({
+            isLive: false, profileName: '', datapoints: null, seq: 0, machineReachable: true,
+            isSteaming: false, steamSeq: 0, steamDatapoints: null,
+            isFlushing: false, flushSeq: 0, flushDatapoints: null,
+            temperature: null, targetTemperature: null, pressure: null, waterLevel: null,
+        });
     });
 
     it('pollViaGaggiuinoStatus() emits LIVE_SNAPSHOT with machineReachable:false on a failed poll', async () => {

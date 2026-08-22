@@ -346,6 +346,8 @@ Nach dem Einschalten zeigt der Live-Tab einen Fortschrittsbalken und einen Count
 
 **"Ready by"-Zeitplanung (Backend, ab v2.20.0):** Über `POST /api/preheat/ready-by` lässt sich eine wall-clock Zielzeit setzen, zu der die Maschine thermisch bereit sein soll; der bestehende 30-Sekunden-Preheat-Watcher rechnet ausgehend von `preheat_time` zurück und schaltet `switch_entity` automatisch ein, sobald der berechnete Einschaltzeitpunkt erreicht ist — danach wird das Ziel gelöscht (einmalig). ⚠ Dies ist aktuell nur eine Backend-Fähigkeit — weder in dieser App noch in der HA-Integration oder der Lovelace-Card gibt es bisher eine Oberfläche zum Setzen eines Ziels. Nutzbar wird es erst, sobald der zugehörige HA-Integrationsdienst und die Lovelace-Card-Steuerung in einer späteren Version erscheinen.
 
+Im Leerlauf (kein Bezug, kein Dampf, kein Spülen aktiv) zeigt der Live-Tab die aktuellen Maschinenwerte — Temperatur samt Ziel, Druck, Wasserstand — statt nur "Maschine bereit" ohne Zahlen. Dampf- und Spülmodus erscheinen als eigene Live-Zustände (Badge, Timer, laufende Temperatur/Druck-Anzeige) — dieselbe Behandlung, die ein Bezug bereits bekommt —, und das animierte Maschinen-Icon spiegelt den jeweils aktiven Modus.
+
 ### Import von kaffeebraun.com
 
 Im Bibliothek-Tab auf **🔗 URL** neben „Bohne hinzufügen" klicken, eine Produkt-URL von [kaffeebraun.com](https://kaffeebraun.com) einfügen und auf „Importieren" drücken. Das App lädt die Produktseite serverseitig und befüllt das Bohnen-Formular mit:
