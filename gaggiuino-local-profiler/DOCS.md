@@ -343,6 +343,8 @@ Once the machine turns on, a preheat progress bar and countdown are shown in the
 
 **"Ready by" scheduling (backend, v2.20.0+):** `POST /api/preheat/ready-by` lets a caller set a target wall-clock time by which the machine should be thermally ready; the existing 30s preheat watcher works backward from `preheat_time` and turns `switch_entity` on automatically once the planned switch-on time is reached, then clears the target (one-shot). ⚠ This is a backend capability only — there is currently no UI in this app, the HA integration, or the Lovelace card to set a target. It becomes usable once the companion HA-integration service and Lovelace-card control ship in a later release.
 
+On a machine running BREW_AUTO, the shot timer ends the instant the firmware itself reports the brew as finished, rather than waiting for the physical brew switch to be flipped back down (which BREW_AUTO leaves up after an auto-stop).
+
 ### Import from kaffeebraun.com
 
 In the Library tab, click **🔗 URL** next to "Add Bean", paste any product URL from [kaffeebraun.com](https://kaffeebraun.com) and press Import. The app fetches the product page server-side and pre-fills the bean form with:

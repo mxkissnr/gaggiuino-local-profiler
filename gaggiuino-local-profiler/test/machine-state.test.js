@@ -104,15 +104,44 @@ describe('deriveMachineState (#552)', () => {
         expect(r.weight).toBe(10.0);
     });
 
-    it('still derives isBrewing from status.brewSwitchState, not sensorSnap.brewActive/.brewSwitchActive', () => {
+    it('still derives isBrewing from status.brewSwitchState, not sensorSnap.brewSwitchActive', () => {
         const r = deriveMachineState(
             { brewSwitchState: false, temperature: '92' },
             undefined,
-            { sensorSnap: { temperature: 92, brewActive: true, brewSwitchActive: true } },
+            { sensorSnap: { temperature: 92, brewSwitchActive: true } },
         );
         expect(r.isBrewing).toBe(false);
         expect(r.machineStatus.brewSwitchState).toBe(false);
     });
+
+    // #902: BREW_AUTO regression -- the physical switch stays up after the
+    // firmware auto-stops the brew, but sensorSnap.brewActive (unlike
+    // brewSwitchActive) is mapped identically by both live transports and
+    // flips false the instant the firmware itself ends the brew.
+    it('#902: ends the live brew immediately when sensorSnap.brewActive flips false, even though brewSwitchState is still true (BREW_AUTO auto-stop)', () => {
+        const r = deriveMachineState(
+            { brewSwitchState: true, temperature: '92' },
+            undefined,
+            { sensorSnap: { temperature: 92, brewActive: false } },
+        );
+        expect(r.isBrewing).toBe(false);
+        expect(r.machineStatus.brewSwitchState).toBe(false);
+    });
+
+    it('#902: keeps brewing true while brewSwitchState is up and sensorSnap.brewActive has not flipped false yet', () => {
+        const r = deriveMachineState(
+            { brewSwitchState: true, temperature: '92' },
+            undefined,
+            { sensorSnap: { temperature: 92, brewActive: true } },
+        );
+        expect(r.isBrewing).toBe(true);
+    });
+
+    it('#902: no live transport connected reproduces the pre-#902 REST-only behaviour (switch alone decides)', () => {
+        const r = deriveMachineState({ brewSwitchState: true, temperature: '92' });
+        expect(r.isBrewing).toBe(true);
+    });
+
 });
 
 describe('isStillWarm (#552)', () => {
