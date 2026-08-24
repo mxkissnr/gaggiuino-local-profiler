@@ -380,6 +380,18 @@ export function handleLiveData(msg) {
     idleEl.classList.add('unreachable');
     if (idleTitleEl) idleTitleEl.textContent = t('machine_unreachable_title');
     if (idleTextEl)  idleTextEl.textContent  = t('live_unreachable_text');
+    // #902: the idle-stats row (temp/target/pressure/water-level) must be
+    // cleared here too -- otherwise the last-known numbers stay visible
+    // under the red "machine unreachable" message as if still live, same
+    // stale-data trap #655 originally fixed for the rest of this panel.
+    const idleTempEl       = document.getElementById('liveIdleTemp');
+    const idleTargetTempEl = document.getElementById('liveIdleTargetTemp');
+    const idlePressureEl   = document.getElementById('liveIdlePressure');
+    const idleWaterEl      = document.getElementById('liveIdleWaterLevel');
+    if (idleTempEl)       idleTempEl.textContent       = '–';
+    if (idleTargetTempEl) idleTargetTempEl.textContent = '';
+    if (idlePressureEl)   idlePressureEl.textContent   = '–';
+    if (idleWaterEl)       idleWaterEl.textContent      = '–';
     return;
   }
   idleEl.classList.remove('unreachable');

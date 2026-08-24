@@ -326,42 +326,48 @@ async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
         // #902: steam/flush live sessions -- same start/stop/accumulate
         // shape as the brew blocks above, with a simpler datapoint set
         // (timeInMode/pressure/temperature only; no weight/flow, neither
-        // mode moves the scale). The three modes are mutually exclusive
-        // (BREW_AUTO/BREW_MANUAL/FLUSH/FLUSH_AUTO/STEAM/... are one
-        // physical operation mode at a time), so no locking is needed
-        // between these blocks and the brew ones above.
-        if (isSteaming && !state.steamAccum) {
+        // mode moves the scale). isBrewing/isSteaming/isFlushing are NOT
+        // strictly mutually exclusive at the signal level: sensorSnap.steamActive
+        // and sysState.operationMode (lib/gaggiuino-live-client.js) are cached
+        // independently with their own staleness windows, so a steam<->flush
+        // (or similar) transition can transiently read both true within the
+        // same poll tick. Guard with an explicit priority instead of trusting
+        // exclusivity: brewing > steaming > flushing.
+        const effectiveSteaming = isSteaming && !isBrewing;
+        const effectiveFlushing = isFlushing && !isBrewing && !isSteaming;
+
+        if (effectiveSteaming && !state.steamAccum) {
             state.steamAccum = {
                 startTime: Date.now(),
                 datapoints: { timeInMode: [], pressure: [], temperature: [] },
             };
             log('Steam started');
         }
-        if (!isSteaming && state.steamAccum) {
+        if (!effectiveSteaming && state.steamAccum) {
             log('Steam finished');
             state.steamAccum = null;
             state.steamSeq++;
         }
-        if (isSteaming && state.steamAccum) {
+        if (effectiveSteaming && state.steamAccum) {
             const elapsed = Math.round((Date.now() - state.steamAccum.startTime) / 100);
             state.steamAccum.datapoints.timeInMode.push(elapsed);
             state.steamAccum.datapoints.pressure.push(Math.round(presVal * 10));
             state.steamAccum.datapoints.temperature.push(Math.round(tempVal * 10));
         }
 
-        if (isFlushing && !state.flushAccum) {
+        if (effectiveFlushing && !state.flushAccum) {
             state.flushAccum = {
                 startTime: Date.now(),
                 datapoints: { timeInMode: [], pressure: [], temperature: [] },
             };
             log('Flush started');
         }
-        if (!isFlushing && state.flushAccum) {
+        if (!effectiveFlushing && state.flushAccum) {
             log('Flush finished');
             state.flushAccum = null;
             state.flushSeq++;
         }
-        if (isFlushing && state.flushAccum) {
+        if (effectiveFlushing && state.flushAccum) {
             const elapsed = Math.round((Date.now() - state.flushAccum.startTime) / 100);
             state.flushAccum.datapoints.timeInMode.push(elapsed);
             state.flushAccum.datapoints.pressure.push(Math.round(presVal * 10));
