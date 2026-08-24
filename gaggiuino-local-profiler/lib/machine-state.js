@@ -38,14 +38,18 @@ function deriveMachineState(status, now = Date.now(), live = {}) {
     // and gaggiuino-mqtt-client.js's toSensorSnap(), both under the same
     // `brewActive` name) and means "firmware is actively brewing right now"
     // -- so once a live transport is connected and it flips to false, that's
-    // trusted immediately even while the switch is still up. `!== false`
-    // (not a plain truthiness check) so a live transport that hasn't
-    // reported brewActive at all yet (undefined) doesn't spuriously end a
-    // brew the switch says is still running. No live transport connected at
-    // all (sensorSnap null) reproduces the pre-#902 REST-only behaviour
-    // exactly, unchanged.
+    // trusted immediately even while the switch is still up. `brewActive` is
+    // a plain scalar bool in the protobuf schema (gaggiuino-proto.js), not a
+    // field with presence tracking, so protobuf-ts always fills it with a
+    // real boolean (defaulting false) and the MQTT mapper does `!!p.brewActive`
+    // -- it's never actually undefined except via sensorSnap itself being
+    // null, which the `?.` below already covers. `!== false` (rather than a
+    // plain truthiness check) is therefore defensive/clarity only, not a
+    // guard against a real undefined-from-transport case. No live transport
+    // connected at all (sensorSnap null) reproduces the pre-#902 REST-only
+    // behaviour exactly, unchanged.
     const { sensorSnap, sysState } = live;
-    const isBrewing = !!status.brewSwitchState && (sensorSnap ? sensorSnap.brewActive !== false : true);
+    const isBrewing = !!status.brewSwitchState && sensorSnap?.brewActive !== false;
 
     // #615: sensorSnap (WS or MQTT, via lib/live-transport.js) is only ever
     // passed non-null when fresh -- see the STALE_MS checks in

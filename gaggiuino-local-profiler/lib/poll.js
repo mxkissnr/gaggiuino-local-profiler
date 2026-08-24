@@ -266,18 +266,22 @@ async function pollViaGaggiuinoStatus(runtime = defaultRuntime) {
                 }
             };
             log(`Brew started: profile ${profile}`);
-            // #709: isBrewing is derived purely from the REST poll's raw
-            // status.brewSwitchState (see machine-state.js) -- logging it
-            // plus upTime lets a rapid start/finish flap be told apart from
-            // a genuine repeated brew after the fact: the same upTime
+            // #709/#902: isBrewing is derived from the REST poll's raw
+            // status.brewSwitchState AND, once a live transport is connected,
+            // live.sensorSnap.brewActive (see machine-state.js) -- logging
+            // both plus upTime lets a rapid start/finish flap be told apart
+            // from a genuine repeated brew after the fact: the same upTime
             // repeating across flaps would mean the machine is echoing a
-            // stale/cached status rather than a fresh read each poll.
-            debugLog(`Brew started detail: brewSwitchState=${status.brewSwitchState} upTime=${status.upTime}`);
+            // stale/cached status rather than a fresh read each poll, and
+            // brewSwitchState=true with brewActive=false distinguishes a
+            // BREW_AUTO auto-stop (switch still up, brew genuinely over)
+            // from an actual switch flap.
+            debugLog(`Brew started detail: brewSwitchState=${status.brewSwitchState} sensorBrewActive=${live.sensorSnap?.brewActive} upTime=${status.upTime}`);
         }
 
         if (!isBrewing && state.liveAccum) {
             log('Brew finished');
-            debugLog(`Brew finished detail: brewSwitchState=${status.brewSwitchState} upTime=${status.upTime}`);
+            debugLog(`Brew finished detail: brewSwitchState=${status.brewSwitchState} sensorBrewActive=${live.sensorSnap?.brewActive} upTime=${status.upTime}`);
             state.liveAccum = null;
             state.liveSeq++;
             setTimeout(syncAfterBrew, 3000);
