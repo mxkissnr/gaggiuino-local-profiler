@@ -1,4 +1,7 @@
 ## [Unreleased]
+### Fixed
+- **Input fields no longer flash white in dark theme when a value is entered or autofilled.** Closes #921
+
 ### Changed
 - **Bumped the `@napi-rs/canvas` dependency to v1.0.8** (Renovate, #910). Upstream bug-fix release, no code change here.
 - **Bumped the `github/codeql-action` digest pin to `db488dd`** (Renovate, #909). CI/tooling only, no runtime effect on the app.

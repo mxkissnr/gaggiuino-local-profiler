@@ -270,6 +270,25 @@
            repeat on almost every button/input/select. */
         button, input, select, textarea { font-family: inherit; }
 
+        /* #921: browser/OS autofill (and Chrome's own remembered-value
+           suggestions) paints inputs with a hardcoded light background via
+           an internal UA style that a plain `background` declaration can't
+           override -- it has to be beaten with the -webkit-box-shadow inset
+           trick, or every dark-themed input field flashes white the moment
+           a value is entered/autofilled. One shared rule instead of
+           patching it per input class, since new form fields would
+           otherwise reintroduce the same bug one at a time. */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus,
+        input:-webkit-autofill:active {
+            -webkit-text-fill-color: var(--gray-200);
+            -webkit-box-shadow: 0 0 0 1000px var(--gray-900) inset;
+            box-shadow: 0 0 0 1000px var(--gray-900) inset;
+            caret-color: var(--gray-200);
+            transition: background-color 9999s ease-in-out 0s;
+        }
+
         /* ── Sidebar ── */
         #sidebar {
             width: 320px;
