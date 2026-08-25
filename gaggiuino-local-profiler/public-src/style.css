@@ -1214,7 +1214,16 @@
         /* #404: eyebrow above the bean name — small, muted, uppercase,
            same visual weight class as the recipe/process-card labels. */
         .lib-item-origin-eyebrow { font-size: var(--fs-1); color: var(--gray-600); margin-bottom: 2px; }
-        .lib-item-sub  { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* #858: min-width:0 lives on the ancestor .lib-item-info, but some
+           WebView-based engines (HA Companion App, installed PWA) still
+           let this element's own flex-item sizing win over its
+           white-space:nowrap/text-overflow:ellipsis truncation, so the
+           line overflows the card with no visible '…'. Not reproducible in
+           real headless-Chromium (Playwright) at any tested viewport —
+           setting min-width:0 and max-width:100% directly on the
+           truncating element itself is a no-op for that already-working
+           case and closes the gap for engines that don't. */
+        .lib-item-sub  { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 100%; }
         .lib-item-brew .rail-icon, .lib-item-source .rail-icon { vertical-align: -3px; margin-right: 1px; }
         .lib-item-actions { display: flex; flex-wrap: wrap; gap: 2px; flex-shrink: 0; }
         @media (max-width: 640px) {

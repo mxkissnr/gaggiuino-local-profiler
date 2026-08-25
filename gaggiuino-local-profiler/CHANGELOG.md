@@ -1,6 +1,7 @@
 ## [Unreleased]
 ### Fixed
 - **Input fields no longer flash white in dark theme when a value is entered or autofilled.** Closes #921
+- **Bean card metadata line no longer runs off-screen without truncating in the HA Companion App / installed PWA.** Closes #858
 
 ### Changed
 - **Bumped the `@napi-rs/canvas` dependency to v1.0.8** (Renovate, #910). Upstream bug-fix release, no code change here.
