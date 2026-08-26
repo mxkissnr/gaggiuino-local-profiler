@@ -1,5 +1,5 @@
 # Build stage — always runs on host platform (amd64); no QEMU, pure JS tooling
-FROM --platform=$BUILDPLATFORM node:22-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436 AS builder
+FROM --platform=$BUILDPLATFORM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ RUN npm run build
 # QEMU when cross-building), so npm's own os/cpu-scoped optionalDependency
 # resolution and any native compilation naturally target the right arch
 # without a hand-rolled cross-compiler/arch mapping.
-FROM node:22-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436 AS prod-deps
+FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS prod-deps
 ARG TARGETARCH
 
 WORKDIR /app
@@ -39,7 +39,7 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
     fi
 
 # Runtime stage — only copies pre-built artifacts; no compilation at all
-FROM node:22-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
+FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
 
 # Empty by default -- only .github/workflows/build-dev.yaml passes this
 # build-arg (as dev-<run_number>); the release build (build.yaml) never sets
