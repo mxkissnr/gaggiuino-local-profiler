@@ -351,34 +351,41 @@ export function _renderBeanSelect(selectedName, selectedBeanId) {
   const select = document.getElementById('annCoffee');
   if (!select) return;
   const allBeans = S.coffeeLibrary?.beans || [];
-  // #915: exhausted (zero-stock) beans are dropped from the general
-  // candidate list -- same computeBeanRemaining() convention already used
-  // by library.js and _activeFrozenPortionsForBean() above. null means
-  // untracked/unlimited stock and stays offered. doseRows mirrors
-  // library.js's own adapter from S.shots' { annotation, timestamp } shape.
+  // #933 (was #915): exhausted (zero-stock) beans used to be dropped from
+  // the candidate list entirely -- but that also blocked logging the very
+  // last shot against a bean that's genuinely down to 0 g. They now stay
+  // selectable, just sorted after every in-stock bean and labelled "Empty"
+  // so the common case (picking an in-stock bean) still reads cleanly.
+  // null means untracked/unlimited stock and always sorts as in-stock.
+  // doseRows mirrors library.js's own adapter from S.shots' { annotation,
+  // timestamp } shape.
   const doseRows = S.shots
     .filter(s => s.annotation?.coffee != null)
     .map(s => ({ coffee: s.annotation.coffee, beanId: s.annotation.beanId, dose: s.annotation.dose, timestamp: s.timestamp }));
-  const beans = allBeans.filter(b => {
+  const inStock  = [];
+  const exhausted = [];
+  for (const b of allBeans) {
     const remaining = computeBeanRemaining(b, doseRows, allBeans);
-    return remaining === null || remaining > 0;
-  });
+    (remaining === null || remaining > 0 ? inStock : exhausted).push(b);
+  }
   // #456: data-bean-id lets _buildAnnotationPayload read off the currently
   // selected bean's stable id — only real library beans get one; a stale
   // name kept around because it no longer matches any current bean does not.
-  const options = beans.map(b => ({ name: b.name, id: b.id }));
-  // #915: an already-selected bean must stay visible even if it's now
-  // exhausted -- reuses the same stale/renamed-selection preservation this
-  // function already had, just widened to cover the empty-stock case too.
+  const options = [
+    ...inStock.map(b => ({ name: b.name, id: b.id, empty: false })),
+    ...exhausted.map(b => ({ name: b.name, id: b.id, empty: true })),
+  ];
+  // A stale/renamed selection (no longer matching any current bean by name)
+  // still needs its own carve-out entry, same as before #933.
   if (selectedName && !options.some(o => o.name === selectedName)) {
     const stale = allBeans.find(b => b.name === selectedName);
-    options.push({ name: selectedName, id: stale ? stale.id : null });
+    options.push({ name: selectedName, id: stale ? stale.id : null, empty: false });
   }
   const byId = selectedBeanId != null ? options.find(o => o.id === selectedBeanId) : null;
   const selected = byId ? byId.name : selectedName;
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   select.innerHTML = `<option value=""></option>` +
-    options.map(o => `<option value="${esc(o.name)}"${o.id != null ? ` data-bean-id="${o.id}"` : ''}${o.name === selected ? ' selected' : ''}>${esc(o.name)}</option>`).join('');
+    options.map(o => `<option value="${esc(o.name)}"${o.id != null ? ` data-bean-id="${o.id}"` : ''}${o.name === selected ? ' selected' : ''}>${esc(o.name)}${o.empty ? ` (${t('lib_milk_empty')})` : ''}</option>`).join('');
 }
 
 // #635: baskets/puck screens are pure ID-based library selections (unlike
