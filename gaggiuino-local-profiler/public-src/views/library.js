@@ -13,7 +13,7 @@ import { openLightbox } from '../components/lightbox.js';
 import { generateBeanQR, parseGlpQrParams } from '../glp-qr.js';
 import { calcBestGrindCombosForBean } from './shots/grind.js';
 import { renderShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
-import { sumConsumedDoses, computeBeanRemaining } from '../bean-math.js';
+import { sumConsumedDoses, computeBeanRemaining, remainingToStockG } from '../bean-math.js';
 import { TARGET_ICON_SVG, SLIDERS_ICON_SVG, FLAVOR_WHEEL_ICON_SVG, COFFEE_ICON_SVG, WATER_DROP_ICON_SVG, SNOWFLAKE_ICON_SVG, LINK_ICON_SVG, WRENCH_ICON_SVG, STAR_ICON_SVG, WARNING_ICON_SVG, CLOSE_ICON_SVG, EDIT_ICON_SVG } from '../icons.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
@@ -124,6 +124,16 @@ export function switchLibTab(tab) {
   document.getElementById('libSectionProfiles')?.classList.toggle('active', tab === 'profiles');
 }
 
+// #551/#930: adapts S.shots' { annotation, timestamp } shape into the
+// { coffee, beanId, dose, timestamp } rows bean-math.js's shared functions
+// expect — used everywhere in this file that needs consumption totals
+// (rendering, "Adjust stock", the bean edit form's stock field).
+function annotationDoseRows() {
+  return S.shots
+    .filter(s => s.annotation?.coffee != null)
+    .map(s => ({ coffee: s.annotation.coffee, beanId: s.annotation.beanId, dose: s.annotation.dose, timestamp: s.timestamp }));
+}
+
 // ── Bean list ─────────────────────────────────────────────────────────────
 export function renderBeanList() {
   const el = document.getElementById('beanListUI');
@@ -139,11 +149,8 @@ export function renderBeanList() {
   }
   // #551: shared with the backend's LibraryService.computeBeanRemaining —
   // same beanId-first-with-name-fallback matching (#456), same double-round
-  // pattern. doseRows adapts S.shots' { annotation, timestamp } shape into
-  // the { coffee, beanId, dose, timestamp } rows the shared module expects.
-  const doseRows = S.shots
-    .filter(s => s.annotation?.coffee != null)
-    .map(s => ({ coffee: s.annotation.coffee, beanId: s.annotation.beanId, dose: s.annotation.dose, timestamp: s.timestamp }));
+  // pattern.
+  const doseRows = annotationDoseRows();
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   el.innerHTML = beans.map(b => {
     // Total consumption across all bags (all shots matching this bean)
@@ -173,7 +180,7 @@ export function renderBeanList() {
         ${bags.length > 1 ? `<span class="lib-inv-total">${t('lib_inv_total_consumed', totalConsumed)} · ${t('lib_inv_bags', bags.length)}</span>` : ''}
         ${editingStock
           ? `<div class="lib-stock-edit-row">
-               <input type="number" class="lib-new-bag-input" id="stockEditInput${b.id}" value="${b.stock_g}" min="0" step="1" placeholder="${t('lib_bag_stock')}">
+               <input type="number" class="lib-new-bag-input" id="stockEditInput${b.id}" value="${Math.max(0, remaining)}" min="0" step="1" placeholder="${t('lib_stock_adjust_ph')}">
                <button class="lib-save-btn" data-action="save-stock-edit" data-id="${b.id}">${t('lib_save')}</button>
                <button class="lib-btn-sm" data-action="close-stock-edit" data-id="${b.id}">${t('lib_cancel')}</button>
              </div>`
@@ -446,10 +453,13 @@ export function closeBeanStockEdit() {
 export async function saveBeanStock(id) {
   const val = parseFloat(document.getElementById(`stockEditInput${id}`)?.value);
   if (isNaN(val) || val < 0) return;
+  const bean = S.coffeeLibrary.beans.find(b => b.id === id);
+  if (!bean) return;
+  const stock_g = remainingToStockG(bean, annotationDoseRows(), S.coffeeLibrary.beans, val);
   const r = await apiFetch(`api/library/bean/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ stock_g: val }),
+    body: JSON.stringify({ stock_g }),
   });
   if (!r.ok) return;
   const saved = await r.json();
@@ -783,7 +793,11 @@ export function openBeanForm(bean) {
   document.getElementById('beanFormRoaster').value   = bean?.roaster   || '';
   document.getElementById('beanFormRoastDate').value = toIsoDateInput(bean?.roastDate);
   document.getElementById('beanFormNotes').value     = bean?.notes     || '';
-  document.getElementById('beanFormStock').value     = bean?.stock_g   || '';
+  // #930: show what's actually left, not the bag's original weight — a bean
+  // with consumption history had computeBeanRemaining() != stock_g already.
+  document.getElementById('beanFormStock').value = bean
+    ? (computeBeanRemaining(bean, annotationDoseRows(), S.coffeeLibrary.beans) ?? '')
+    : '';
   const activeEditBag = Array.isArray(bean?.bags) && bean.bags.length ? bean.bags[bean.bags.length - 1] : null;
   document.getElementById('beanFormBatchNumber').value = activeEditBag?.batchNumber || '';
   document.getElementById('beanFormDecaf').checked   = !!bean?.decaf;
@@ -839,7 +853,15 @@ export async function saveBean() {
   const roaster   = document.getElementById('beanFormRoaster').value.trim();
   const roastDate = document.getElementById('beanFormRoastDate').value.trim();
   const notes     = document.getElementById('beanFormNotes').value.trim();
-  const stock_g   = parseFloat(document.getElementById('beanFormStock').value) || null;
+  // #930: the field shows/accepts "how much is left", not the bag's original
+  // weight — translate back through the existing bean's consumption before
+  // storing stock_g. A brand-new bean (no S.beanEditId yet) has nothing
+  // consumed, so it's stored as-is.
+  const rawStock  = parseFloat(document.getElementById('beanFormStock').value) || null;
+  const editingBean = S.beanEditId != null ? S.coffeeLibrary.beans.find(b => b.id === S.beanEditId) : null;
+  const stock_g   = editingBean && rawStock != null
+    ? remainingToStockG(editingBean, annotationDoseRows(), S.coffeeLibrary.beans, rawStock)
+    : rawStock;
   const batchNumber = document.getElementById('beanFormBatchNumber').value.trim();
   const decaf     = document.getElementById('beanFormDecaf').checked;
   const variety   = document.getElementById('beanFormVariety').value.trim();
@@ -1617,9 +1639,9 @@ export async function saveMilk() {
 export async function restockMilk(id) {
   const val = parseFloat(document.getElementById(`milkRestock_${id}`)?.value);
   if (!val || val <= 0) return;
-  const r = await apiFetch(`api/library/milk/${id}`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ stockMl: val }),
+  const r = await apiFetch(`api/library/milk/${id}/restock`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ml: val }),
   });
   if (!r.ok) return;
   const saved = await r.json();

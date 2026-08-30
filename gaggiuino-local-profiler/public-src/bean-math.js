@@ -75,3 +75,17 @@ export function computeBeanRemaining(bean, doseRows, allBeans) {
   }, 0);
   return Math.round(bean.stock_g - Math.round(consumed));
 }
+
+// Inverse of computeBeanRemaining (#930): stock-editing UI (the bean edit form's "Stock
+// (g)" field and the "Adjust stock" button) lets a user type in how much coffee is
+// actually left, not the bag's original weight. Since stock_g is the source of truth and
+// remaining is always derived from it, that entered value has to be translated into the
+// stock_g that makes computeBeanRemaining() report it back — i.e. the desired remaining
+// plus whatever the active bag has already consumed. For a bag with nothing consumed yet
+// this is a no-op (desiredRemaining in, same value out), so it's also safe to use
+// unconditionally for the bean-creation form.
+export function remainingToStockG(bean, doseRows, allBeans, desiredRemaining) {
+  const bags     = Array.isArray(bean.bags) ? bean.bags : [];
+  const consumed = sumConsumedDoses(bean, doseRows, allBeans, bags);
+  return Math.round(desiredRemaining + consumed);
+}

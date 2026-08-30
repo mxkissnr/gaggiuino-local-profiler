@@ -307,7 +307,7 @@ export default {
     lib_new_bag_save:'Packung hinzufügen',
     lib_bag_history:'Packungsverlauf', lib_bag_delete:'Packung löschen',
     lib_bag_roast_date:'Röstdatum',
-    lib_bag_stock:'Anfangsgewicht (g)',
+    lib_bag_stock:'Anfangsgewicht (g)', lib_stock_adjust_ph:'Verbleibend (g)',
     lib_bag_batch_number:'Chargennummer',
     lib_stock_edit_btn:'Bestand anpassen',
     bag_freeze_btn:'Einfrieren', bag_freeze_save:'Portionen einfrieren',

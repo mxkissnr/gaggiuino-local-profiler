@@ -1,5 +1,7 @@
 ## [Unreleased]
 ### Fixed
+- **Correcting a coffee bean's stock now actually sets the remaining weight**, instead of overwriting the bag's original size. Closes #930
+- **Milk "Restock" now adds to the existing stock instead of replacing it.** Closes #931
 - **Input fields no longer flash white in dark theme when a value is entered or autofilled.** Closes #921
 - **Bean card metadata line no longer runs off-screen without truncating in the HA Companion App / installed PWA.** Closes #858
 

@@ -307,7 +307,7 @@ export default {
     lib_new_bag_save:'Aggiungi confezione',
     lib_bag_history:'Storico confezioni', lib_bag_delete:'Elimina confezione',
     lib_bag_roast_date:'Data torrefazione',
-    lib_bag_stock:'Peso iniziale (g)',
+    lib_bag_stock:'Peso iniziale (g)', lib_stock_adjust_ph:'Rimanente (g)',
     lib_bag_batch_number:'Numero di lotto',
     lib_stock_edit_btn:'Modifica scorta',
     bag_freeze_btn:'Congela', bag_freeze_save:'Congela porzioni',

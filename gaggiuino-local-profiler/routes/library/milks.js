@@ -23,6 +23,23 @@ router.post('/api/library/milk/:id/deduct', (req, res) => {
     res.json(milk);
 });
 
+// #931: additive top-up, atomic server-side like /deduct above — the
+// "Restock" UI button/label imply adding a fresh carton to what's left, not
+// replacing the total, and a client-computed current+val PUT would let two
+// concurrent restocks race and drop one of them.
+router.post('/api/library/milk/:id/restock', (req, res) => {
+    const id  = parseInt(req.params.id, 10);
+    const ml  = parseFloat(req.body?.ml) || 0;
+    if (ml <= 0) return res.status(400).json({ error: 'ml must be positive' });
+    const lib  = loadLibrary();
+    const milk = lib.milks?.find(m => m.id === id);
+    if (!milk) return res.status(404).json({ error: 'not found' });
+    milk.stockMl   = (milk.stockMl || 0) + ml;
+    milk.updatedAt = Date.now();
+    saveLibrary(lib);
+    res.json(milk);
+});
+
 router.post('/api/library/milk', (req, res) => {
     if (!rateLimit(`lib:${req.ip}`, 30)) return res.status(429).json({ error: 'Rate limit exceeded' });
     const { name, emoji, stockMl } = req.body || {};

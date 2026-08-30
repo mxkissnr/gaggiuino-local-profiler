@@ -4,7 +4,7 @@
 // rows instead of a DB round trip, since public-src/bean-math.js is a pure
 // ESM module with no DB dependency.
 import { describe, it, expect } from 'vitest';
-import { matchesBean, sumConsumedDoses, computeBeanRemaining } from '../public-src/bean-math.js';
+import { matchesBean, sumConsumedDoses, computeBeanRemaining, remainingToStockG } from '../public-src/bean-math.js';
 
 describe('computeBeanRemaining (#551, ported from #456 regression)', () => {
     it('a bean deleted and reimported under the same name recovers the old shots\' consumption via name fallback', () => {
@@ -68,5 +68,29 @@ describe('computeBeanRemaining (#551, ported from #456 regression)', () => {
             { coffee: 'Kiraz', dose: '18', timestamp: 1 },
         ];
         expect(sumConsumedDoses(bean, doseRows, [bean])).toBe(18);
+    });
+});
+
+describe('remainingToStockG (#930 regression)', () => {
+    it('translates a desired remaining value into the stock_g that reproduces it, using the reported bug\'s own numbers', () => {
+        const bean = { id: 1, name: 'House Espresso', stock_g: 250, bags: [{ id: 1, openedAt: 0 }] };
+        const doseRows = [{ coffee: 'House Espresso', beanId: 1, dose: '108', timestamp: 1000 }];
+        const allBeans = [bean];
+
+        // Before the fix, saving stock_g=250 directly made remaining read 250-108=142.
+        expect(computeBeanRemaining(bean, doseRows, allBeans)).toBe(142);
+
+        // Entering "250" into "Adjust stock" must now produce a stock_g of 358...
+        const newStockG = remainingToStockG(bean, doseRows, allBeans, 250);
+        expect(newStockG).toBe(358);
+
+        // ...which, fed back through computeBeanRemaining, reports 250 remaining again.
+        const updatedBean = { ...bean, stock_g: newStockG };
+        expect(computeBeanRemaining(updatedBean, doseRows, allBeans)).toBe(250);
+    });
+
+    it('is a no-op for a fresh bean with nothing consumed yet', () => {
+        const bean = { id: 2, name: 'Fresh Bag', stock_g: null, bags: [] };
+        expect(remainingToStockG(bean, [], [bean], 500)).toBe(500);
     });
 });

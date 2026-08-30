@@ -307,7 +307,7 @@ export default {
     lib_new_bag_save:'Zak toevoegen',
     lib_bag_history:'Zakgeschiedenis', lib_bag_delete:'Zak verwijderen',
     lib_bag_roast_date:'Roosdatum',
-    lib_bag_stock:'Startgewicht (g)',
+    lib_bag_stock:'Startgewicht (g)', lib_stock_adjust_ph:'Resterend (g)',
     lib_bag_batch_number:'Chargenummer',
     lib_stock_edit_btn:'Voorraad aanpassen',
     bag_freeze_btn:'Invriezen', bag_freeze_save:'Porties invriezen',

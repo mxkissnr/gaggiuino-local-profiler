@@ -307,7 +307,7 @@ export default {
     lib_new_bag_save:'Añadir bolsa',
     lib_bag_history:'Historial de bolsas', lib_bag_delete:'Eliminar bolsa',
     lib_bag_roast_date:'Fecha de tostado',
-    lib_bag_stock:'Peso inicial (g)',
+    lib_bag_stock:'Peso inicial (g)', lib_stock_adjust_ph:'Restante (g)',
     lib_bag_batch_number:'Número de lote',
     lib_stock_edit_btn:'Ajustar stock',
     bag_freeze_btn:'Congelar', bag_freeze_save:'Congelar porciones',

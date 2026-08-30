@@ -307,7 +307,7 @@ export default {
     lib_new_bag_save:'Ajouter sachet',
     lib_bag_history:'Historique sachets', lib_bag_delete:'Supprimer le sachet',
     lib_bag_roast_date:'Date de torréfaction',
-    lib_bag_stock:'Poids initial (g)',
+    lib_bag_stock:'Poids initial (g)', lib_stock_adjust_ph:'Restant (g)',
     lib_bag_batch_number:'Numéro de lot',
     lib_stock_edit_btn:'Ajuster le stock',
     bag_freeze_btn:'Congeler', bag_freeze_save:'Congeler des portions',

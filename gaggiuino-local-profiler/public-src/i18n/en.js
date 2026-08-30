@@ -307,7 +307,7 @@ export default {
     lib_new_bag_save:'Add bag',
     lib_bag_history:'Bag history', lib_bag_delete:'Delete bag',
     lib_bag_roast_date:'Roast date',
-    lib_bag_stock:'Initial weight (g)',
+    lib_bag_stock:'Initial weight (g)', lib_stock_adjust_ph:'Remaining (g)',
     lib_bag_batch_number:'Batch number',
     lib_stock_edit_btn:'Adjust stock',
     bag_freeze_btn:'Freeze', bag_freeze_save:'Freeze portions',
