@@ -2,6 +2,22 @@ gaggiuino-local-profiler/node_modules/
 gaggiuino-local-profiler/public/
 gaggiuino-local-profiler/coverage/
 
+# local runtime/verification artifacts — never committed, may contain live tokens
+**/data_verify_tmp/
+*.db
+*.db-wal
+*.db-shm
+api_token.txt
+preheat_state.json
+
+# defence-in-depth: secrets that must never land in git regardless of location
+.env
+.env.*
+*.pem
+*.key
+id_rsa
+id_rsa.*
+
 .memsearch/
 graphify-out/
 .claude/settings.local.json
