@@ -53,6 +53,9 @@ module.exports = {
     // Ready-by preheat (#541): wall-clock target set via
     // POST /api/preheat/ready-by, and the switch-on time computed from it
     // (targetAt - preheat_time). Both null when no target is set.
+    // Same single-machine scope as steamAccum/flushAccum above (lib/preheat.js
+    // is explicitly single-machine, see its own header comment) -- extending
+    // ready-by to a non-default machine needs a real Map<machineId,...> here.
     readyByTargetAt:      null,
     plannedSwitchOnAt:    null,
 };

@@ -480,6 +480,8 @@ router.get('/api/preheat', (req, res) => {
 // automatically via the existing 30s preheat watcher (lib/preheat.js's
 // _checkReadyByPreheat), no separate scheduling primitive. targetAt: null
 // cancels a pending target.
+// #549: hard single-machine, same as the rest of lib/preheat.js — no
+// machineId param, always targets the default machine's switch entity.
 router.post('/api/preheat/ready-by', (req, res) => {
     const { targetAt } = req.body || {};
     if (targetAt !== null && (typeof targetAt !== 'number' || !Number.isFinite(targetAt)))
