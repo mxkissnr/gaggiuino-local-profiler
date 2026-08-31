@@ -168,6 +168,11 @@ Home Assistant installs that have no Supervisor and therefore no Add-on Store �
 **HA Container**, **HA Core**, and any Docker-based NAS setup (Unraid, TrueNAS
 SCALE, Synology, …) running its own separate HA Container instance.
 
+> ⚠ **armv7 is deprecated and planned for removal in a future release** (no date set
+> yet, see [#944](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/944)) —
+> Node.js no longer publishes official Docker images for 32-bit ARM past v22. If you're
+> on a 32-bit ARM device, plan a move to a 64-bit OS image.
+
 ```bash
 docker run -d --name glp --restart unless-stopped \
   -p 8099:8099 -v ./data:/data \

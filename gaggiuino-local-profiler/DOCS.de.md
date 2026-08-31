@@ -169,6 +169,12 @@ App Store — **HA Container**, **HA Core** sowie jedes Docker-basierte
 NAS-Setup (Unraid, TrueNAS SCALE, Synology, …) mit einer eigenen, separaten
 HA-Container-Instanz.
 
+> ⚠ **armv7 gilt als veraltet und wird in einer künftigen Version entfernt**
+> (noch kein Datum festgelegt, siehe
+> [#944](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/944)) — Node.js
+> veröffentlicht ab v22 keine offiziellen Docker-Images mehr für 32-Bit-ARM. Wer auf
+> einem 32-Bit-ARM-Gerät läuft, sollte auf ein 64-Bit-OS-Image umziehen.
+
 ```bash
 docker run -d --name glp --restart unless-stopped \
   -p 8099:8099 -v ./data:/data \
