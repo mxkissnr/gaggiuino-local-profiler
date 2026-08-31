@@ -47,6 +47,13 @@
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["major"],
       "groupName": "github-actions"
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchDepNames": ["node"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false,
+      "description": "Held until armv7 support is resolved — node:24-slim dropped linux/arm/v7, this add-on still publishes an armv7 build. See #944."
     }
   ]
 }
