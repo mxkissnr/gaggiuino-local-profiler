@@ -12,6 +12,7 @@ const liveTransport = require('./live-transport');
 const { events: liveEvents } = require('./gaggiuino-live-client');
 const { savePreheatState, isTempStable, buildPreheatResponse } = require('./preheat');
 const { syncAfterBrew, syncShots, fetchMachineVersion } = require('./sync');
+const { GaggiMateLiveClient, mapEvtStatus } = require('./machines/gaggimate/ws-client');
 const { summarizeConnectivity, WINDOW_MS: CONN_WINDOW_MS } = require('./connectivity-stats');
 const { bus, EVENTS } = require('./events');
 
@@ -127,12 +128,29 @@ function buildLiveDataResponse() {
     };
 }
 
+// #954: the persistent GaggiMate WS client for a GaggiMate default
+// machine, module-scoped for the same hard-single-machine reason as
+// _wasReachable above. Non-null only while a GaggiMate live-poll interval
+// is running; startGaggiMateLivePolling creates it, stopLivePolling closes
+// it.
+let _gaggiMateLive = null;
+
 function startLivePolling(runtime = defaultRuntime) {
     if (runtime.livePollTimer) return;
     if (!runtime.switchOnAt || !isStillWarm(runtime)) { runtime.switchOnAt = Date.now(); savePreheatState(runtime); }
     runtime.tempHistory = [];
-    log('Live polling started via /api/system/status');
-    runtime.livePollTimer = setInterval(() => pollLive(runtime), 1000);
+    // #954: decide the live transport once, by the default machine's adapter
+    // type. GaggiMate has no /api/system/status — polling it every second
+    // made a v1.8.1 controller unresponsive (needed a power cycle) — so a
+    // GaggiMate default machine gets its own WS-cache tick and the Gaggiuino
+    // HTTP loop never starts for it (no per-tick registry read + early
+    // return, PR #947 regression #3).
+    if (registry.getDefaultMachine()?.type === 'gaggimate') {
+        startGaggiMateLivePolling(runtime);
+    } else {
+        log('Live polling started via /api/system/status');
+        runtime.livePollTimer = setInterval(() => pollLive(runtime), 1000);
+    }
     // #708: bridge the transport's own push-on-arrival events into an
     // immediate LIVE_SNAPSHOT -- see the bridge functions' own comments above.
     if (!_liveEventBridgeActive) {
@@ -156,6 +174,10 @@ function stopLivePolling(runtime = defaultRuntime) {
     // this function; moved in here so the LIVE_SNAPSHOT push below always
     // reflects it, never the stale pre-flip value.
     state.machineReachable = false;
+    if (_gaggiMateLive) {
+        _gaggiMateLive.close();
+        _gaggiMateLive = null;
+    }
     if (runtime.livePollTimer) {
         clearInterval(runtime.livePollTimer);
         runtime.livePollTimer  = null;
@@ -189,6 +211,109 @@ function stopLivePolling(runtime = defaultRuntime) {
     // no-active-timer path.
     bus.emit(EVENTS.PREHEAT_UPDATE, buildPreheatResponse(runtime));
     emitLiveSnapshot();
+}
+
+// #954: GaggiMate live-poll path. startLivePolling() routes here when the
+// default machine is a GaggiMate. Instead of an HTTP poll per tick it opens
+// ONE persistent WS session (GaggiMateLiveClient — the class ws-client.js
+// already defined but nothing instantiated, PR #948) and each tick reads
+// its cached evt:status frame. Sets state.machineReachable / runtime
+// .machineStatus / preheat tracking and emits a LIVE_SNAPSHOT, so the
+// status dot and Live tab behave the same as for a Gaggiuino machine.
+function startGaggiMateLivePolling(runtime = defaultRuntime) {
+    const baseUrl = registry.baseUrlFor();
+    if (!baseUrl) return; // #718: no host configured — nothing to connect to
+    log('GaggiMate live transport: WebSocket (evt:status)');
+    _gaggiMateLive = new GaggiMateLiveClient(baseUrl);
+    runtime.livePollTimer = setInterval(() => pollGaggiMate(runtime), 1000);
+}
+
+function pollGaggiMate(runtime = defaultRuntime) {
+    if (state.isPollRunning) return;
+    state.isPollRunning = true;
+    try {
+        const client = _gaggiMateLive;
+        if (!client) return;
+
+        if (!client.status) {
+            // No evt:status frame yet — session still (re)connecting.
+            if (client.reachable === false) {
+                state.machineReachable = false;
+                _wasReachable = false;
+            }
+            emitLiveSnapshot();
+            return;
+        }
+
+        state.machineReachable   = true;
+        state.lastMachineError   = null;
+        state.lastMachineSuccess = Date.now();
+        // #725: false->true reachability recovery — same catch-up as
+        // pollViaGaggiuinoStatus. Fire-and-forget; syncShots() delegates to
+        // the GaggiMate history path (sync.js).
+        if (_wasReachable === false && (state.lastSyncError || !state.lastSyncTime)) {
+            syncShots().catch(err => log(`Catch-up sync after reachability recovery failed: ${err.message}`, true));
+        }
+        _wasReachable = true;
+
+        const status = mapEvtStatus(client.status);
+        const {
+            isBrewing, pressure: presVal, temperature: tempVal,
+            targetTemperature: tTempVal, profileName: profile, machineStatus,
+        } = deriveMachineState(status);
+        runtime.currentTemp       = tempVal  || runtime.currentTemp;
+        runtime.currentTargetTemp = tTempVal || runtime.currentTargetTemp;
+        runtime.machineStatus     = machineStatus;
+
+        if (tempVal > 0 && !isBrewing) {
+            runtime.tempHistory.push(tempVal);
+            if (runtime.tempHistory.length > TEMP_HISTORY_MAX) runtime.tempHistory.shift();
+            if (runtime.switchOnAt && tTempVal > 0 && tempVal >= tTempVal - 2 && isTempStable(runtime)) {
+                const preheatMs = (Math.max(1, parseInt(loadOptions().preheat_time) || 20)) * 60 * 1000;
+                if (Date.now() - runtime.switchOnAt < preheatMs) {
+                    runtime.switchOnAt     = Date.now() - preheatMs;
+                    runtime.stabilityReady = true;
+                    savePreheatState(runtime);
+                    log('Temperature stable -- preheat marked complete');
+                    bus.emit(EVENTS.PREHEAT_UPDATE, buildPreheatResponse(runtime));
+                }
+            }
+        } else if (isBrewing) {
+            runtime.tempHistory = [];
+        }
+
+        // Brew curve accumulation. evt:status carries no weight/flow field,
+        // so shotWeight/weightFlow/pumpFlow stay empty — the pressure/temp
+        // trace is still captured, and the `brewing` signal is advisory for
+        // GaggiMate (see the adapter's own caveat).
+        if (isBrewing && !state.liveAccum) {
+            state.liveAccum = {
+                startTime: Date.now(), profileName: profile, prevWeight: 0,
+                datapoints: {
+                    timeInShot: [], pressure: [], temperature: [],
+                    shotWeight: [], weightFlow: [], pumpFlow: [], targetTemperature: [],
+                },
+            };
+            log(`Brew started: profile ${profile}`);
+        }
+        if (!isBrewing && state.liveAccum) {
+            log('Brew finished');
+            state.liveAccum = null;
+            state.liveSeq++;
+            setTimeout(syncAfterBrew, 3000);
+        }
+        if (isBrewing && state.liveAccum) {
+            const elapsed = Math.round((Date.now() - state.liveAccum.startTime) / 100);
+            state.liveAccum.datapoints.timeInShot.push(elapsed);
+            state.liveAccum.datapoints.pressure.push(Math.round(presVal * 10));
+            state.liveAccum.datapoints.temperature.push(Math.round(tempVal * 10));
+            state.liveAccum.datapoints.targetTemperature.push(Math.round(tTempVal * 10));
+        }
+
+        emitLiveSnapshot();
+    } finally {
+        state.isPollRunning = false;
+    }
 }
 
 async function pollLive(runtime = defaultRuntime) {
@@ -443,6 +568,6 @@ async function backgroundHaCheck(runtime = defaultRuntime) {
 }
 
 module.exports = {
-    startLivePolling, stopLivePolling, pollLive, pollViaGaggiuinoStatus,
+    startLivePolling, stopLivePolling, pollLive, pollViaGaggiuinoStatus, pollGaggiMate,
     checkAndApplyMachinePower, backgroundHaCheck, fetchMachineVersion, buildLiveDataResponse,
 };

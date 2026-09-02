@@ -74,6 +74,19 @@ async function syncShots(runtime = defaultRuntime) {
     if (state.defaultSyncInFlight) return true;
     state.defaultSyncInFlight = true;
     try {
+        // #954: a GaggiMate default machine has no /api/shots/latest — its
+        // history is the binary index.bin/.slog files. Delegate to the
+        // adapter-driven syncMachineShots() path (which sets machineReachable
+        // on a successful history probe). This sits AFTER the machine-off
+        // and defaultSyncInFlight guards above, unlike PR #947's version, so
+        // a powered-off GaggiMate never gets a 10s-timeout index.bin probe
+        // every tick + retry-backoff escalation (regression #1).
+        const defaultMachine = registry.getDefaultMachine();
+        if (defaultMachine?.type === 'gaggimate') {
+            debugLog('GaggiMate default machine: syncing via history adapter, not /api/shots/latest');
+            return await syncMachineShots(defaultMachine);
+        }
+
         const machineUrl = registry.apiUrlFor();
         // #718: null means no host configured anywhere -- nothing to sync,
         // don't request against a placeholder/fallback hostname.
@@ -256,6 +269,18 @@ async function syncMachineShots(machine) {
     const adapter = getAdapter(machine);
     try {
         const latestNativeId = await adapter.getLatestShotId(machine);
+        // #954: a successful history probe is an authoritative reachability
+        // signal for the default machine — the same role syncShots()'s
+        // /latest success plays for a Gaggiuino default. Without this a
+        // GaggiMate default machine's status dot stayed permanently red and
+        // the #725 reachability-recovery catch-up sync never armed.
+        if (machine.isDefault) {
+            /* eslint-disable require-atomic-updates -- same pre-existing "syncShots() has no mutex" caveat the identical writes in syncShots() carry */
+            state.machineReachable   = true;
+            state.lastMachineError   = null;
+            state.lastMachineSuccess = Date.now();
+            /* eslint-enable require-atomic-updates */
+        }
         if (latestNativeId == null) return true;
 
         const lastGlobalId = shotService.getLatestId(machine.id);
