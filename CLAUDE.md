@@ -197,6 +197,9 @@ README.md                     ← Repo root README (English)
 - Chart.js is loaded from CDN; reuse existing chart instances (destroy before re-creating)
 - `/data/` is the persistent storage directory inside the app container
 - i18n: translations live in `public-src/i18n/{de,en,it,fr,es,nl}.js` — each exports a default object; `constants.js` re-exports them as `TRANSLATIONS`; add new keys to **all 6 files**
+- **PR AI disclosure** — every PR fills the PR template's "AI assistance disclosure" section
+  (`none`/`assisted`/`substantial`/`generated` + tool/model); every AI-assisted commit carries
+  a `Co-Authored-By:` trailer. CI enforces it. See CONTRIBUTING.md.
 
 ## GitHub project
 
