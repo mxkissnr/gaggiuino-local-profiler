@@ -65,6 +65,7 @@ describe('#954 GaggiMate default machine dispatch', () => {
         delete require.cache[require.resolve('../lib/machines')];
 
         state.machineReachable = null;
+        state.cachedMachineVersion = null;
         state.lastSyncTime = null;
         state.lastSyncError = null;
         state.defaultSyncInFlight = false;
@@ -120,6 +121,50 @@ describe('#954 GaggiMate default machine dispatch', () => {
         expect(runtime.machineStatus.temperature).toBe(92.5);
         expect(snapshots.length).toBeGreaterThan(0);
         expect(axiosGetMock).not.toHaveBeenCalled();
+    });
+
+    it('pollGaggiMate keeps all seven datapoint series parallel during a brew', () => {
+        seedMachine(memDb, 'gaggimate', 'gaggimate.local');
+        const { startLivePolling, pollGaggiMate } = require('../lib/poll');
+        const { MachineRuntimeState } = require('../lib/machine-runtime-state');
+        const runtime = new MachineRuntimeState();
+
+        startLivePolling(runtime);
+        const client = FakeLiveClient.instances[0];
+        client.reachable = true;
+        client.status = { tp: 'evt:status', ct: 93, tt: 93, pr: 9, m: 1, p: 'Espresso' }; // m:1 = brewing
+
+        pollGaggiMate(runtime);
+        pollGaggiMate(runtime);
+
+        const dp = state.liveAccum.datapoints;
+        const keys = ['timeInShot', 'pressure', 'temperature', 'targetTemperature', 'shotWeight', 'weightFlow', 'pumpFlow'];
+        const lens = keys.map(k => dp[k].length);
+        expect(lens).toEqual([2, 2, 2, 2, 2, 2, 2]);
+        // The real trace is captured; the absent ones are zero-filled.
+        expect(dp.pressure).toEqual([90, 90]);
+        expect(dp.shotWeight).toEqual([0, 0]);
+    });
+
+    it('fetchMachineVersion is a no-op for a GaggiMate default (no /api/system/info, machineReachable untouched)', async () => {
+        seedMachine(memDb, 'gaggimate', 'gaggimate.local');
+        const { fetchMachineVersion } = require('../lib/sync');
+        state.machineReachable = true;
+
+        await fetchMachineVersion();
+
+        expect(axiosGetMock).not.toHaveBeenCalled();
+        expect(state.cachedMachineVersion).toBeFalsy();
+        expect(state.machineReachable).toBe(true); // not flipped to false
+    });
+
+    it('fetchMachineVersion still probes /api/system/info for a Gaggiuino default (no regression)', async () => {
+        seedMachine(memDb, 'gaggiuino', 'gaggiuino.local');
+        const { fetchMachineVersion } = require('../lib/sync');
+
+        await fetchMachineVersion();
+
+        expect(axiosGetMock.mock.calls.some(([u]) => String(u).includes('/api/system/info'))).toBe(true);
     });
 
     it('syncShots for a GaggiMate default delegates to the history adapter, not /latest', async () => {

@@ -283,8 +283,10 @@ function pollGaggiMate(runtime = defaultRuntime) {
         }
 
         // Brew curve accumulation. evt:status carries no weight/flow field,
-        // so shotWeight/weightFlow/pumpFlow stay empty — the pressure/temp
-        // trace is still captured, and the `brewing` signal is advisory for
+        // so shotWeight/weightFlow/pumpFlow are pushed as 0 each tick to
+        // keep all seven series the same length — buildLiveDataResponse()
+        // and public-src's live.js chart assume parallel arrays. The
+        // pressure/temp trace is still real, and `brewing` is advisory for
         // GaggiMate (see the adapter's own caveat).
         if (isBrewing && !state.liveAccum) {
             state.liveAccum = {
@@ -304,10 +306,15 @@ function pollGaggiMate(runtime = defaultRuntime) {
         }
         if (isBrewing && state.liveAccum) {
             const elapsed = Math.round((Date.now() - state.liveAccum.startTime) / 100);
-            state.liveAccum.datapoints.timeInShot.push(elapsed);
-            state.liveAccum.datapoints.pressure.push(Math.round(presVal * 10));
-            state.liveAccum.datapoints.temperature.push(Math.round(tempVal * 10));
-            state.liveAccum.datapoints.targetTemperature.push(Math.round(tTempVal * 10));
+            const dp = state.liveAccum.datapoints;
+            dp.timeInShot.push(elapsed);
+            dp.pressure.push(Math.round(presVal * 10));
+            dp.temperature.push(Math.round(tempVal * 10));
+            dp.targetTemperature.push(Math.round(tTempVal * 10));
+            // evt:status has no weight/flow — keep the arrays parallel.
+            dp.shotWeight.push(0);
+            dp.weightFlow.push(0);
+            dp.pumpFlow.push(0);
         }
 
         emitLiveSnapshot();

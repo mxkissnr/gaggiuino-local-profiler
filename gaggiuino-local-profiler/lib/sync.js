@@ -371,6 +371,17 @@ function scheduleNextSync(retryCount = 0) {
 
 async function fetchMachineVersion() {
     if (state.cachedMachineVersion) return;
+    // #954: a GaggiMate default machine has no /api/system/info|firmware|about
+    // endpoints. backgroundHaCheck() calls this every 30s while
+    // cachedMachineVersion is unset -- and for GaggiMate it's never set
+    // (pollGaggiMate() doesn't capture it, evt:status carries no version
+    // field) -- so this loop would 404/refuse against the controller every
+    // 30s and, on total failure, flip state.machineReachable to false
+    // against pollGaggiMate()'s 1s = true. That's exactly the
+    // Gaggiuino-HTTP-against-GaggiMate class #954 removes, just at 30s
+    // cadence. GaggiMate firmware version isn't surfaced anywhere critical;
+    // skip.
+    if (registry.getDefaultMachine()?.type === 'gaggimate') return;
     // #641/#648 fixed this pattern everywhere except here -- this call still
     // read options.json's possibly-stale machine_host directly, so a host
     // edited via Settings UI could make backgroundHaCheck() (30s interval)
