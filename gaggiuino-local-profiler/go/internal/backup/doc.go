@@ -23,11 +23,16 @@
 //	              without an import cycle
 //	ratelimit.go  lib/helpers.js's rateLimit(key, maxPerMinute) — same
 //	              duplication precedent as internal/orders' own copy
-//	bundle.go     gatherBackupData / buildBackupZip — the export half
+//	bundle.go     gatherSmallSections — every backup section except shots/
+//	              annotations/images (all small regardless of dataset size)
+//	stream.go     writeBundleJSON — the incremental bundle-JSON writer that
+//	              streams the shots array one hydrated shot at a time
 //	restore.go    the POST /api/restore handler and everything it composes
 //	              — the largest file in this package, deliberately split
 //	              from handlers.go given its size
-//	handlers.go   GET/POST /api/backup, route registration, zip build/read
+//	restore_stream.go  the streaming restore plumbing: body -> temp file,
+//	              parseBundleStream, lazy zip image source, zip-bomb caps
+//	handlers.go   GET/POST /api/backup, route registration, zip streaming
 //
 // # Cross-domain dependencies this phase closed
 //
@@ -50,18 +55,33 @@
 //     internal/library/restore_sanitize.go, and called from this
 //     package's mapToLibrary.
 //
+// # Memory profile (#959)
+//
+// Every export/import path streams: peak Go heap growth is bounded by
+// O(one shot + one image + the small non-shot sections) and does NOT rise
+// with the shot/image count (proven by memory_test.go, which quadruples
+// the dataset and asserts the same ceiling). The bundle JSON is written
+// incrementally (stream.go) and parsed twice with a streaming decoder
+// (restore_stream.go); restore images are read one body at a time from
+// the zip on disk; the POST /api/restore body and the POST
+// /api/debug/import-db body both go to a temp file, never a slice. The
+// one remaining non-O(1) allocation is the `annotations` map (bounded by
+// annotated-shot count, ~2 orders of magnitude below the datapoints
+// payload) — noted, not a regression.
+//
 // # Deliberately deferred in this phase
 //
-//   - Atomicity: routes/backup.js wraps every restore write in one
-//     getDb().transaction(...). This Go port does NOT reproduce that —
-//     see restore.go's header comment for the full rationale (every
-//     Repository across five packages would need a shared-Tx-accepting
-//     variant of every write method, a real architecture change out of
-//     this task's scope). applyRestore instead writes each of the six
-//     sections sequentially, each internally atomic on its own; a failure
-//     partway through leaves earlier sections applied and later ones not,
-//     unlike Node's all-or-nothing guarantee. This is the one genuine
-//     behavior gap in this domain's contract and is flagged again in
+//   - Cross-section atomicity: routes/backup.js wraps every restore write
+//     in one getDb().transaction(...). #959 closed most of that gap — the
+//     structured shots restore (wipe + every shot upsert + annotations +
+//     trash + blocklist + library-save) now commits as ONE transaction
+//     via shots.Repository.RestoreShots, and orders restore is one tx
+//     (orders.ReplaceAll). What is still NOT Node-identical: atomicity
+//     *across* sections — a failure after the shots tx commits but during
+//     a later section (maintenance, machines, kv) leaves shots restored
+//     and that section not. Threading a shared *sql.Tx through every
+//     repository across five packages (the only in-process way to close
+//     it) remains out of scope. Flagged again in restore.go's header and
 //     go/README.md's status section.
 //   - A restored API token (POST /api/restore's decrypted secrets.apiToken)
 //     is persisted to TOKEN_FILE on disk, but does NOT take effect in the
@@ -81,7 +101,9 @@
 //   - lib/zip.js's hand-rolled DEFLATE/CRC32 ZIP reader-writer is not
 //     ported at all: Go's stdlib archive/zip already implements the same
 //     ZIP format (APPNOTE.TXT, DEFLATE) that hand-rolled version targets,
-//     so buildZip/readZip in handlers.go use it directly instead.
+//     so the export streams entries through an archive/zip.Writer and
+//     restore reads them back through archive/zip.OpenReader on the
+//     spooled temp file.
 //
 // See openapi.yaml's Backup tag for the frozen contract this package
 // satisfies.

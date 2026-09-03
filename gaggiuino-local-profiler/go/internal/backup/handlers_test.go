@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
@@ -362,15 +362,17 @@ func withSmallUnzipLimits(t *testing.T, entryLimit, totalLimit int64) {
 	t.Cleanup(func() { restoreUnzipEntryLimit, restoreUnzipTotalLimit = prevEntry, prevTotal })
 }
 
-// TestReadZip_RejectsZipBombEntry (#901 code review): a zip entry that's
-// tiny compressed but decompresses past restoreUnzipEntryLimit must be
-// rejected by readZip itself, not read fully into memory first. The payload
-// below is all-zero bytes — maximally compressible, so the compressed zip
-// stays a few dozen bytes while the decompressed size crosses the entry
-// limit — the exact shape of a zip-bomb DoS attempt, not a realistic large
-// backup.json.
-func TestReadZip_RejectsZipBombEntry(t *testing.T) {
+// TestRestore_RejectsZipBombBackupJSON (#901 code review, #959 streaming):
+// a backup.json entry that's tiny compressed but decompresses past
+// restoreUnzipEntryLimit must be rejected as it streams through the JSON
+// decoder — never buffered whole first. The payload is a valid JSON prefix
+// followed by a long run of insignificant whitespace (maximally
+// compressible), so the compressed zip stays tiny while the decompressed
+// stream crosses the cap mid-parse.
+func TestRestore_RejectsZipBombBackupJSON(t *testing.T) {
 	withSmallUnzipLimits(t, 64*1024, 256*1024)
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
 
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
@@ -378,54 +380,46 @@ func TestReadZip_RejectsZipBombEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateHeader: %v", err)
 	}
-	if _, err := io.CopyN(fw, zeroReader{}, restoreUnzipEntryLimit+1024); err != nil {
+	fw.Write([]byte(`{"glp_backup":true,`))
+	if _, err := io.CopyN(fw, spaceReader{}, restoreUnzipEntryLimit+4096); err != nil {
 		t.Fatalf("writing oversized zip entry: %v", err)
 	}
+	fw.Write([]byte(`"shots":[]}`))
 	if err := zw.Close(); err != nil {
 		t.Fatalf("closing zip: %v", err)
 	}
 
-	if _, _, err := readZip(buf.Bytes()); err == nil {
-		t.Fatal("readZip accepted a zip entry that decompresses past restoreUnzipEntryLimit; want a clean error")
+	r := httptest.NewRequest(http.MethodPost, "/api/restore", bytes.NewReader(buf.Bytes()))
+	r.Header.Set("Content-Type", "application/zip")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, r)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d; want 400 for a zip-bomb backup.json; body=%s", rec.Code, rec.Body.String())
 	}
 }
 
-// TestReadZip_RejectsCumulativeOversize (#901 code review): several entries
-// each under restoreUnzipEntryLimit individually, but summing past
-// restoreUnzipTotalLimit, must also be rejected.
-func TestReadZip_RejectsCumulativeOversize(t *testing.T) {
-	withSmallUnzipLimits(t, 64*1024, 256*1024)
-
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	perEntry := restoreUnzipEntryLimit / 2
-	entryCount := restoreUnzipTotalLimit/perEntry + 2
-	for i := int64(0); i < entryCount; i++ {
-		fw, err := zw.CreateHeader(&zip.FileHeader{Name: fmt.Sprintf("images/%d.bin", i), Method: zip.Deflate})
-		if err != nil {
-			t.Fatalf("CreateHeader: %v", err)
-		}
-		if _, err := io.CopyN(fw, zeroReader{}, perEntry); err != nil {
-			t.Fatalf("writing zip entry %d: %v", i, err)
-		}
+// TestCappedReader_ErrorsPastLimit is the unit-level guard behind both the
+// per-entry and cumulative zip-bomb caps: newCappedReader reports an error
+// (not EOF) once more than `limit` bytes have passed through it.
+func TestCappedReader_ErrorsPastLimit(t *testing.T) {
+	cr := newCappedReader(spaceReader{}, 1024)
+	n, err := io.Copy(io.Discard, cr)
+	if err == nil {
+		t.Fatalf("cappedReader read %d bytes without erroring past its 1024-byte limit", n)
 	}
-	if err := zw.Close(); err != nil {
-		t.Fatalf("closing zip: %v", err)
-	}
-
-	if _, _, err := readZip(buf.Bytes()); err == nil {
-		t.Fatal("readZip accepted entries summing past restoreUnzipTotalLimit; want a clean error")
+	if n > 1024+64*1024 {
+		t.Errorf("cappedReader over-read: %d bytes", n)
 	}
 }
 
-// zeroReader yields an endless stream of zero bytes without allocating a
+// spaceReader yields an endless stream of ASCII spaces without allocating a
 // full in-memory buffer — used to build a highly-compressible (small
 // compressed, large decompressed) zip entry cheaply in tests.
-type zeroReader struct{}
+type spaceReader struct{}
 
-func (zeroReader) Read(p []byte) (int, error) {
+func (spaceReader) Read(p []byte) (int, error) {
 	for i := range p {
-		p[i] = 0
+		p[i] = ' '
 	}
 	return len(p), nil
 }

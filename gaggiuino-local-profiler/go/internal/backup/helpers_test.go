@@ -66,6 +66,20 @@ func doJSON(t *testing.T, mux *http.ServeMux, method, path string, body []byte) 
 	return rec
 }
 
+// doZip POSTs raw zip bytes to path as application/zip (the frontend's
+// real restore upload shape).
+func doZip(t *testing.T, mux *http.ServeMux, path string, zipBytes []byte, headers map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(zipBytes))
+	r.Header.Set("Content-Type", "application/zip")
+	for k, v := range headers {
+		r.Header.Set(k, v)
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, r)
+	return rec
+}
+
 func decodeBody(t *testing.T, body []byte) map[string]any {
 	t.Helper()
 	var m map[string]any

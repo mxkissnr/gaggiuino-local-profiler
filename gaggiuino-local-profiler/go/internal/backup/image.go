@@ -17,8 +17,10 @@ import (
 // before its bytes are ever written to a real filesystem path.
 
 // imageDir mirrors lib/constants.js's BEAN_IMAGE_DIR — reused from
-// internal/library rather than a second copy of the literal path.
-const imageDir = library.DefaultImageDir
+// internal/library rather than a second copy of the literal path. A var,
+// not a const, purely so memory_test.go can point export/import at a
+// throwaway directory of synthetic images.
+var imageDir = library.DefaultImageDir
 
 // imageMaxBytes mirrors lib/constants.js's BEAN_IMAGE_MAX_BYTES.
 const imageMaxBytes = 4 * 1024 * 1024
@@ -59,12 +61,15 @@ func matchesImageMagicBytes(buf []byte, ext string) bool {
 	}
 }
 
-// pendingImageWrite is one validated {path, data} pair queued to be
-// written to disk after the DB transaction commits — mirrors
-// routes/backup.js's pendingImageWrites array.
+// pendingImageWrite is one validated image queued to be written to disk
+// after the DB transaction commits — mirrors routes/backup.js's
+// pendingImageWrites array. It holds only the target path and the source
+// entry name (never the bytes): writePendingImages streams the bytes from
+// the restore image source zip-entry -> disk, so many restored images
+// never sum up in memory (#959).
 type pendingImageWrite struct {
-	path string
-	data []byte
+	path    string
+	srcName string
 }
 
 // validateEntityImages ports validateEntityImages(list, prefix, imagesMap,
@@ -73,8 +78,10 @@ type pendingImageWrite struct {
 // image that survives every check. Any entity whose image fails validation
 // for any reason has its `.image` field cleared (set to nil) rather than
 // left pointing at a file that will never exist — list entries are mutated
-// in place, matching the Node original.
-func validateEntityImages(list []map[string]any, prefix string, imagesMap map[string][]byte, pending *[]pendingImageWrite) {
+// in place, matching the Node original. The image bytes are read once here
+// (capped at imageMaxBytes) for the magic-byte + size checks and dropped;
+// writePendingImages re-reads them lazily to write.
+func validateEntityImages(list []map[string]any, prefix string, imgs restoreImages, pending *[]pendingImageWrite) {
 	for _, entity := range list {
 		if entity == nil {
 			continue
@@ -93,12 +100,12 @@ func validateEntityImages(list []map[string]any, prefix string, imagesMap map[st
 			continue
 		}
 		filename := imageFilename(id, ext, prefix)
-		buf, present := imagesMap[filename]
+		buf, present := imgs.get(filename)
 		if !present || len(buf) == 0 || len(buf) > imageMaxBytes || !matchesImageMagicBytes(buf, ext) {
 			entity["image"] = nil
 			continue
 		}
-		*pending = append(*pending, pendingImageWrite{path: imagePath(id, ext, prefix), data: buf})
+		*pending = append(*pending, pendingImageWrite{path: imagePath(id, ext, prefix), srcName: filename})
 	}
 }
 
@@ -120,7 +127,7 @@ var libraryImageEntityTypes = []struct {
 // library entity type. lib is the map-of-lists JSON shape produced by
 // decoding the backup's raw `coffee_library` field (not library.Library —
 // this runs before/independent of SanitizeLibraryForRestore's typed pass).
-func validateRestoredLibraryImages(lib map[string]any, imagesMap map[string][]byte, pending *[]pendingImageWrite) {
+func validateRestoredLibraryImages(lib map[string]any, imgs restoreImages, pending *[]pendingImageWrite) {
 	if lib == nil {
 		return
 	}
@@ -135,6 +142,6 @@ func validateRestoredLibraryImages(lib map[string]any, imagesMap map[string][]by
 				list = append(list, m)
 			}
 		}
-		validateEntityImages(list, t.prefix, imagesMap, pending)
+		validateEntityImages(list, t.prefix, imgs, pending)
 	}
 }

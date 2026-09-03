@@ -1,14 +1,17 @@
 package backup
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 )
 
-// This file ports routes/backup.js's gatherBackupData/buildBackupBundleJson/
-// buildBackupZip: the export side of the backup domain.
+// This file ports the "gather the small stuff" half of routes/backup.js's
+// gatherBackupData: every backup section EXCEPT shots, annotations and
+// images. Shots stream one page at a time (shots.Repository.
+// ForEachShotForBackup), annotations accumulate during that stream, and
+// images travel as real zip entries / a streamed base64 map — all in
+// stream.go's writeBundleJSON, which composes the bundle JSON object
+// incrementally so peak memory is O(one shot + one image), independent of
+// dataset size (#959).
 
 // glpVersion mirrors lib/constants.js's GLP_VERSION. Not read from the
 // same source Node's package.json-derived constant is (no Go equivalent
@@ -16,130 +19,69 @@ import (
 // parity with. Update alongside lib/constants.js's own GLP_VERSION bumps.
 const glpVersion = "2.35.0"
 
-// imageFile is one file read from BEAN_IMAGE_DIR — filename plus raw bytes.
-type imageFile struct {
-	filename string
-	data     []byte
-}
-
-// gatheredBundle is gatherBackupData's return shape: bundle (the JSON
-// object, minus embedded image bytes), imageFiles, and whether images were
-// actually requested by the caller's section scope.
-type gatheredBundle struct {
-	bundle          map[string]any
-	imageFiles      []imageFile
-	imagesRequested bool
-}
-
-func (d Dependencies) gatherBackupData(passphrase string, sec sections) (gatheredBundle, error) {
-	allShots, err := d.ShotsRepo.FindAll()
-	if err != nil {
-		return gatheredBundle{}, err
-	}
-	trashedShots, err := d.ShotsRepo.FindTrashed()
-	if err != nil {
-		return gatheredBundle{}, err
-	}
-
-	strippedShots := make([]map[string]any, len(allShots))
-	annotations := map[string]any{}
-	for i, s := range allShots {
-		rest := map[string]any{}
-		for k, v := range s {
-			if k == "annotation" || k == "score" {
-				continue
-			}
-			rest[k] = v
-		}
-		strippedShots[i] = rest
-		if ann, ok := s["annotation"].(map[string]any); ok && len(ann) > 0 {
-			id := fmt.Sprintf("%v", s["id"])
-			annotations[id] = ann
-		}
-	}
-
-	trashObj := map[string]any{}
-	for _, s := range trashedShots {
-		id, _ := s["id"].(int64)
-		deletedAt, ok, err := d.ShotsRepo.GetTrashEntry(id)
-		if err != nil {
-			return gatheredBundle{}, err
-		}
-		if !ok {
-			deletedAt = time.Now().UnixMilli()
-		}
-		trashObj[fmt.Sprintf("%d", id)] = deletedAt
-	}
-
+// gatherSmallSections collects every bundle section that is small
+// regardless of shot/image count: coffee_library, blocklist, trash (via
+// the lightweight TrashMap, not FindTrashed), maintenance, maintenance_log,
+// orders, machines, kv, and — when a passphrase is supplied and there is
+// something to protect — the encrypted secrets block. shots/annotations/
+// images are added by writeBundleJSON. The returned map's values are
+// marshalled straight into the bundle JSON, so this stays the single
+// source of truth for those sections' shapes.
+func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, error) {
 	lib, err := d.LibRepo.GetLibrary()
 	if err != nil {
-		return gatheredBundle{}, err
+		return nil, err
 	}
-
-	var imageFiles []imageFile
-	if entries, err := os.ReadDir(imageDir); err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			data, err := os.ReadFile(filepath.Join(imageDir, entry.Name()))
-			if err != nil {
-				continue // best-effort — one unreadable file must not fail the whole export
-			}
-			imageFiles = append(imageFiles, imageFile{filename: entry.Name(), data: data})
-		}
+	blocklist, err := d.ShotsRepo.GetBlocklist()
+	if err != nil {
+		return nil, err
+	}
+	trashObj, err := d.ShotsRepo.TrashMap()
+	if err != nil {
+		return nil, err
 	}
 
 	safeMqtt, err := getMqttSettings(d.DB)
 	if err != nil {
-		return gatheredBundle{}, err
+		return nil, err
 	}
 	delete(safeMqtt, "username")
 	delete(safeMqtt, "password")
 
-	blocklist, err := d.ShotsRepo.GetBlocklist()
-	if err != nil {
-		return gatheredBundle{}, err
-	}
 	maintRaw, err := d.MaintenanceRepo.GetAllMaintenanceRaw()
 	if err != nil {
-		return gatheredBundle{}, err
+		return nil, err
 	}
 	maintLogRaw, err := d.MaintenanceRepo.GetAllMaintenanceLogRaw()
 	if err != nil {
-		return gatheredBundle{}, err
+		return nil, err
 	}
 	allOrders, err := d.OrdersRepo.FindAll()
 	if err != nil {
-		return gatheredBundle{}, err
+		return nil, err
 	}
 	allMachines, err := d.Registry.ListMachines()
 	if err != nil {
-		return gatheredBundle{}, err
+		return nil, err
 	}
 	menu, err := d.OrdersRepo.GetMenu()
 	if err != nil {
-		return gatheredBundle{}, err
+		return nil, err
 	}
 	ordersSettings, err := d.OrdersRepo.GetSettings()
 	if err != nil {
-		return gatheredBundle{}, err
+		return nil, err
 	}
 	notifyMapping, err := d.OrdersRepo.GetNotifyMapping()
 	if err != nil {
-		return gatheredBundle{}, err
+		return nil, err
 	}
 	importSettings, err := getImportSettings(d.DB)
 	if err != nil {
-		return gatheredBundle{}, err
+		return nil, err
 	}
 
-	fullBundle := map[string]any{
-		"glp_backup":      true,
-		"version":         glpVersion,
-		"created":         time.Now().UTC().Format(time.RFC3339Nano),
-		"shots":           strippedShots,
-		"annotations":     annotations,
+	out := map[string]any{
 		"coffee_library":  lib,
 		"blocklist":       blocklist,
 		"trash":           trashObj,
@@ -156,7 +98,7 @@ func (d Dependencies) gatherBackupData(passphrase string, sec sections) (gathere
 	if passphrase != "" {
 		rawMqtt, err := getMqttSettings(d.DB)
 		if err != nil {
-			return gatheredBundle{}, err
+			return nil, err
 		}
 		secretPayload := map[string]any{}
 		if d.Token != "" {
@@ -170,32 +112,18 @@ func (d Dependencies) gatherBackupData(passphrase string, sec sections) (gathere
 		if len(secretPayload) > 0 {
 			enc, err := EncryptSecrets(secretPayload, passphrase)
 			if err != nil {
-				return gatheredBundle{}, err
+				return nil, err
 			}
-			fullBundle["secrets"] = enc
+			out["secrets"] = enc
 		}
 	}
 
-	imagesRequested := sec == nil || sec.has("shots")
+	return out, nil
+}
 
-	if sec == nil {
-		return gatheredBundle{bundle: fullBundle, imageFiles: imageFiles, imagesRequested: imagesRequested}, nil
-	}
+// bundleCreatedNow is time.Now, overridable in tests.
+var bundleCreatedNow = time.Now
 
-	scoped := map[string]any{
-		"glp_backup": true, "version": fullBundle["version"], "created": fullBundle["created"],
-		"sections": sec.orderedNames(),
-	}
-	for section := range sec {
-		for _, key := range sectionBundleKeys[section] {
-			if v, ok := fullBundle[key]; ok {
-				scoped[key] = v
-			}
-		}
-	}
-	files := imageFiles
-	if !imagesRequested {
-		files = nil
-	}
-	return gatheredBundle{bundle: scoped, imageFiles: files, imagesRequested: imagesRequested}, nil
+func bundleCreated() string {
+	return bundleCreatedNow().UTC().Format(time.RFC3339Nano)
 }

@@ -2,15 +2,15 @@ package backup
 
 import (
 	"archive/zip"
-	"bytes"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
-	"strings"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
@@ -28,7 +28,10 @@ import (
 
 // restoreJSONBodyLimit/restoreZipBodyLimit mirror server.js's
 // `app.use('/api/restore', express.json({ limit: '50mb' }))` /
-// `express.raw({ type: 'application/zip', limit: '50mb' })`.
+// `express.raw({ type: 'application/zip', limit: '50mb' })`. With #959's
+// true streaming (the body goes to a temp file, never a slice) these are a
+// zip-bomb / abuse guard on the compressed upload, no longer a memory
+// guard — kept at their current values.
 const (
 	restoreJSONBodyLimit = 50 * 1024 * 1024
 	restoreZipBodyLimit  = 50 * 1024 * 1024
@@ -36,20 +39,13 @@ const (
 )
 
 // restoreUnzipEntryLimit/restoreUnzipTotalLimit bound how much
-// *decompressed* data readZip will accept out of a restore zip — a
-// dimension restoreZipBodyLimit above does NOT cover, since it only caps
-// the compressed request body. Without this, a small, highly-compressible
-// zip entry (a "zip bomb") can inflate to many GB via io.ReadAll and
-// OOM-kill the process before any JSON validation on backup.json's
-// contents ever runs (#901 code review). Sized generously above
-// restoreJSONBodyLimit — a legitimate backup.json is never bigger
-// uncompressed than that same content would be as the legacy non-zip JSON
-// restore body — to leave headroom for the largest single image entry; the
-// total cap bounds the sum across every entry in the archive, so many
-// merely-large-but-not-bomb-sized entries can't add up past a sane ceiling
-// either. Package-level vars (not consts), same testing seam pattern as
-// machines/registry.go's machineHostGuard, so tests can shrink them to
-// avoid actually allocating/deflating hundreds of MB per test run.
+// *decompressed* data the restore path will read out of a single zip
+// entry, and cumulatively across every entry it reads. restoreZipBodyLimit
+// only caps the compressed request body; without this a small,
+// highly-compressible entry (a "zip bomb") could still inflate past memory
+// as it is streamed through the JSON decoder / image validator (#901 code
+// review). Package-level vars (not consts) so tests can shrink them to a
+// few KB instead of deflating hundreds of MB per run.
 var (
 	restoreUnzipEntryLimit int64 = 100 * 1024 * 1024
 	restoreUnzipTotalLimit int64 = 300 * 1024 * 1024
@@ -122,22 +118,11 @@ func backupTimestamp() string {
 // ── GET /api/backup ──────────────────────────────────────────────────────
 
 // getBackup ports GET /api/backup: always the unscoped, all-sections,
-// secrets-free legacy JSON export.
+// secrets-free legacy JSON export — streamed straight to the response
+// (backup.json's contents plus an inline base64 `images` map), never
+// assembled in RAM (#959).
 func (h *Handlers) getBackup(w http.ResponseWriter, r *http.Request) {
-	g, err := h.deps.gatherBackupData("", nil)
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	bundle := g.bundle
-	if g.imagesRequested {
-		images := map[string]string{}
-		for _, f := range g.imageFiles {
-			images[f.filename] = base64.StdEncoding.EncodeToString(f.data)
-		}
-		bundle["images"] = images
-	}
-	b, err := json.Marshal(bundle)
+	small, err := h.deps.gatherSmallSections("")
 	if err != nil {
 		internalError(w, err)
 		return
@@ -145,7 +130,9 @@ func (h *Handlers) getBackup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="glp-backup-%s.json"`, backupTimestamp()))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(b)
+	if err := h.deps.writeBundleJSON(w, small, nil, true); err != nil {
+		log.Printf("backup: streaming legacy JSON export failed mid-response: %v", err)
+	}
 }
 
 // ── POST /api/backup ─────────────────────────────────────────────────────
@@ -172,110 +159,67 @@ func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sec := normaliseSections(body.Sections)
-	g, err := h.deps.gatherBackupData(body.Passphrase, sec)
+
+	// Everything that can still fail cleanly (DB reads for the small
+	// sections, secrets encryption) runs before the first byte of the
+	// response — a failure here is a proper 500. Once the 200 + partial
+	// zip is on the wire an error can only be logged (see writeBundleJSON).
+	small, err := h.deps.gatherSmallSections(body.Passphrase)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	zipBytes, err := buildZip(g)
-	if err != nil {
-		internalError(w, err)
-		return
-	}
+
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="glp-backup-%s.zip"`, backupTimestamp()))
 	w.WriteHeader(http.StatusOK)
-	w.Write(zipBytes)
-}
 
-// buildZip ports buildBackupZip's zip-assembly half: backup.json (no
-// embedded image bytes) plus one images/<filename> entry per photo. Uses
-// Go's stdlib archive/zip rather than porting lib/zip.js's hand-rolled
-// DEFLATE/CRC32 reader-writer — archive/zip already implements the exact
-// same ZIP format (APPNOTE.TXT, DEFLATE method) that hand-rolled version
-// targets, so there is nothing lib/zip.js's own approach adds here.
-func buildZip(g gatheredBundle) ([]byte, error) {
-	backupJSON, err := json.Marshal(g.bundle)
+	zw := zip.NewWriter(w)
+	jw, err := zw.CreateHeader(&zip.FileHeader{Name: "backup.json", Method: zip.Deflate})
 	if err != nil {
-		return nil, err
+		log.Printf("backup: creating backup.json zip entry: %v", err)
+		return
 	}
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	fw, err := zw.Create("backup.json")
-	if err != nil {
-		return nil, err
+	if err := h.deps.writeBundleJSON(jw, small, sec, false); err != nil {
+		log.Printf("backup: streaming backup.json failed mid-response: %v", err)
+		return
 	}
-	if _, err := fw.Write(backupJSON); err != nil {
-		return nil, err
+
+	if sec == nil || sec.has("shots") {
+		streamImagesIntoZip(zw)
 	}
-	if g.imagesRequested {
-		for _, f := range g.imageFiles {
-			iw, err := zw.Create("images/" + f.filename)
-			if err != nil {
-				return nil, err
-			}
-			if _, err := iw.Write(f.data); err != nil {
-				return nil, err
-			}
-		}
-	}
+
 	if err := zw.Close(); err != nil {
-		return nil, err
+		log.Printf("backup: closing backup zip: %v", err)
 	}
-	return buf.Bytes(), nil
 }
 
-// readZip unpacks a zip archive's entries into backup.json's raw bytes
-// (error if absent) plus an images/<filename> -> bytes map. Each entry's
-// decompressed size is bounded (both individually and cumulatively across
-// the whole archive — see restoreUnzipEntryLimit/restoreUnzipTotalLimit's
-// doc comment) so a zip-bomb entry fails cleanly here instead of exhausting
-// memory.
-func readZip(data []byte) (backupJSON []byte, images map[string][]byte, err error) {
-	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+// streamImagesIntoZip copies every file in imageDir into zw as an
+// images/<name> entry, one io.Copy at a time — a file is never read into a
+// slice. Best-effort per file: one unreadable file must not abort the
+// archive (matches routes/backup.js).
+func streamImagesIntoZip(zw *zip.Writer) {
+	entries, err := os.ReadDir(imageDir)
 	if err != nil {
-		return nil, nil, fmt.Errorf("invalid zip file: %w", err)
+		return
 	}
-	images = map[string][]byte{}
-	var totalUnzipped int64
-	for _, f := range zr.File {
-		rc, err := f.Open()
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		f, err := os.Open(filepath.Join(imageDir, entry.Name()))
 		if err != nil {
-			return nil, nil, fmt.Errorf("invalid zip file: %w", err)
+			continue
 		}
-		content, err := readZipEntry(rc, &totalUnzipped)
-		rc.Close()
+		iw, err := zw.CreateHeader(&zip.FileHeader{Name: "images/" + entry.Name(), Method: zip.Deflate})
 		if err != nil {
-			return nil, nil, err
+			f.Close()
+			log.Printf("backup: creating image zip entry %s: %v", entry.Name(), err)
+			return
 		}
-		if f.Name == "backup.json" {
-			backupJSON = content
-		} else if name, ok := strings.CutPrefix(f.Name, "images/"); ok {
-			images[name] = content
+		if _, err := io.Copy(iw, f); err != nil {
+			log.Printf("backup: streaming image %s into zip: %v", entry.Name(), err)
 		}
+		f.Close()
 	}
-	if backupJSON == nil {
-		return nil, nil, errors.New("invalid backup file (no backup.json in zip)")
-	}
-	return backupJSON, images, nil
-}
-
-// readZipEntry reads one zip entry's decompressed bytes, rejecting it once
-// either restoreUnzipEntryLimit (this entry alone) or restoreUnzipTotalLimit
-// (summed via *total across every entry read so far) is exceeded. The
-// io.LimitReader cap is set one byte above the limit so an entry that lands
-// exactly on the limit is still distinguishable from one that overflows it.
-func readZipEntry(rc io.Reader, total *int64) ([]byte, error) {
-	content, err := io.ReadAll(io.LimitReader(rc, restoreUnzipEntryLimit+1))
-	if err != nil {
-		return nil, fmt.Errorf("invalid zip file: %w", err)
-	}
-	if int64(len(content)) > restoreUnzipEntryLimit {
-		return nil, fmt.Errorf("zip entry too large uncompressed (max %d bytes)", restoreUnzipEntryLimit)
-	}
-	*total += int64(len(content))
-	if *total > restoreUnzipTotalLimit {
-		return nil, fmt.Errorf("zip archive too large uncompressed (max %d bytes total)", restoreUnzipTotalLimit)
-	}
-	return content, nil
 }

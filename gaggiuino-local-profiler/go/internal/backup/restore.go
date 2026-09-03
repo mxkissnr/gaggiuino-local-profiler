@@ -1,7 +1,6 @@
 package backup
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,51 +25,131 @@ import (
 // top-to-bottom structure (parse request -> validate -> sanitize/preview
 // -> [dry-run: return] -> apply -> side effects -> respond).
 //
-// # Atomicity: a real, documented gap from Node
+// # Streaming (#959)
 //
-// routes/backup.js wraps every DB write below in one
-// getDb().transaction(() => {...}) — shotRepo.wipeAll() through the kv
-// writes all roll back together on any failure. This Go port does NOT
-// reproduce that: internal/shots/library/maintenance/orders/machines'
-// Repository types each own *sql.DB directly and manage their own
-// transactions internally (see e.g. shots.Repository.WipeAll), with no
-// shared external *sql.Tx parameter threaded through every write method
-// across five packages — building that is a real architecture change
-// (every Repository constructor and write method across five packages
-// would need a Querier/Tx-accepting variant), out of scope for a single
-// Phase 1f task. applyRestore below instead writes each section
-// sequentially, each internally atomic on its own, but a failure partway
-// through (e.g. shots restore succeeds, then a maintenance-table write
-// fails) leaves earlier sections applied and later ones not — unlike
-// Node, where that same failure would roll back the shots write too. This
-// is flagged here, in the doc.go summary, and in the go/README.md status
-// update as the one known, deliberate behavior gap in this domain.
+// The request body is spooled to a temp file, never a slice. The bundle
+// JSON is parsed twice with a streaming decoder (parseBundleStream): pass 1
+// validates every shot and gathers the small sections for the dry-run
+// preview; pass 2 (real restore only) re-streams the shots array straight
+// into the batched upsert transaction. Restore images are read one body at
+// a time from the zip on disk. Peak memory is O(one shot + one image + the
+// small sections), independent of dataset size.
+//
+// # Atomicity: narrowed, not eliminated
+//
+// routes/backup.js wraps every DB write in one getDb().transaction(...).
+// This Go port's structured shots restore (wipe + every shot upsert +
+// annotations + trash + blocklist + library-save) now commits as ONE
+// transaction via shots.Repository.RestoreShots — a mid-restore failure in
+// that section rolls the whole section back, leaving the pre-restore shots
+// intact. Orders restore is one tx (orders.ReplaceAll); the two
+// maintenance restores, machines and kv are each their own tx. What is
+// still NOT Node-identical: atomicity *across* those sections — a failure
+// after the shots tx commits but during, say, the maintenance write leaves
+// shots restored and maintenance not. Threading a shared *sql.Tx through
+// every repository across five packages (the only way to close that last
+// gap in-process) remains out of scope. Flagged again in doc.go and
+// go/README.md.
 const maxShotID = shots.MaxShotID
 
-// restoreRequest mirrors normaliseRestoreRequest's `{ b, imagesMap }`
-// return shape: b is the bundle (as a generic decoded map, so every loose/
-// presence check below reads it exactly like Node's plain-object `req.body`
-// does), imagesMap is always filename -> raw bytes (no base64 anywhere past
-// this point).
-type restoreRequest struct {
-	b         map[string]any
-	imagesMap map[string][]byte
+// shotMeta is the per-shot validation state pass 1 collects while
+// streaming the `shots` array — a few bytes each, never the shot body, so
+// this stays O(shot count) small, not O(datapoints).
+type shotMeta struct {
+	jsonErr bool
+	id      int64
+	idOK    bool
+	tsOK    bool
 }
 
-// parseRestoreRequest ports normaliseRestoreRequest + legacyImagesMap: zip
-// body (backup.json + images/*, sections/dryRun/passphrase via headers) or
-// legacy self-contained JSON body (images embedded as base64 under `images`).
-// postRestore ports POST /api/restore end to end.
+// postRestore ports POST /api/restore end to end, streamed (#959): body ->
+// temp file, two-pass streaming bundle parse, batched transactional shots
+// restore.
 func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 	isZip := strings.HasPrefix(contentType, "application/zip")
 
-	req, err := parseRestoreRequest(r, isZip)
+	tmpPath, cleanup, err := streamRestoreBodyToTemp(r.Body, isZip)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	b := req.b
+	defer cleanup()
+
+	// openBundle yields a fresh reader over backup.json's bytes (bounded by
+	// the per-entry zip-bomb cap for a zip, a plain file stream for legacy
+	// JSON). images is the lazy zip image source (or the legacy inline map,
+	// set below once the bundle is parsed).
+	var (
+		openBundle    func() (io.ReadCloser, error)
+		images        restoreImages
+		totalUnzipped int64
+	)
+	if isZip {
+		zr, jsonEntry, imgIdx, err := openRestoreZip(tmpPath)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		defer zr.Close()
+		images = restoreImages{zip: imgIdx, total: &totalUnzipped}
+		openBundle = func() (io.ReadCloser, error) {
+			rc, err := jsonEntry.Open()
+			if err != nil {
+				return nil, err
+			}
+			return cappedReadCloser{Reader: newCappedReader(rc, restoreUnzipEntryLimit), c: rc}, nil
+		}
+	} else {
+		openBundle = func() (io.ReadCloser, error) { return os.Open(tmpPath) }
+	}
+
+	// ── Pass 1: validate every shot, gather the small sections ───────────
+	var (
+		metas       []shotMeta
+		shotPending []pendingImageWrite
+	)
+	rc, err := openBundle()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	b, shotCount, sawShotsArray, err := parseBundleStream(rc, func(raw json.RawMessage) error {
+		var m map[string]any
+		if uErr := json.Unmarshal(raw, &m); uErr != nil {
+			metas = append(metas, shotMeta{jsonErr: true})
+			return nil
+		}
+		id, idOK := jsIntStrict(m["id"])
+		_, tsOK := m["timestamp"].(float64)
+		metas = append(metas, shotMeta{id: id, idOK: idOK && id > 0, tsOK: tsOK})
+		// Shot image validation happens here (one image body in memory at
+		// most). Discarded below if the shots section isn't in scope.
+		validateEntityImages([]map[string]any{m}, "shot-", images, &shotPending)
+		return nil
+	})
+	rc.Close()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if isZip {
+		b["dryRun"] = r.Header.Get("X-GLP-Dry-Run") == "true"
+		if sectionsHeader := r.Header.Get("X-GLP-Sections"); sectionsHeader != "" {
+			var sec any
+			if err := json.Unmarshal([]byte(sectionsHeader), &sec); err != nil {
+				writeError(w, http.StatusBadRequest, "Invalid X-GLP-Sections header")
+				return
+			}
+			b["sections"] = sec
+		}
+		if pass := r.Header.Get("X-GLP-Passphrase"); pass != "" {
+			b["passphrase"] = pass
+		}
+	} else {
+		images = restoreImages{inline: decodeInlineImages(b["images"])}
+	}
 
 	isDryRun, _ := b["dryRun"].(bool)
 	ip := auth.RemoteIP(r)
@@ -86,12 +165,11 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	glpBackup, _ := b["glp_backup"].(bool)
-	shotsArr, shotsIsArray := b["shots"].([]any)
-	if !glpBackup || !shotsIsArray {
+	if !glpBackup || !sawShotsArray {
 		writeError(w, http.StatusBadRequest, "Invalid backup file")
 		return
 	}
-	if len(shotsArr) > maxShotID {
+	if shotCount > maxShotID {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("Backup contains too many shots (max %d)", maxShotID))
 		return
 	}
@@ -99,41 +177,58 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 	sec := normaliseSections(b["sections"])
 	wantsShots := sec.has("shots")
 	if wantsShots {
-		for i, v := range shotsArr {
-			s, ok := v.(map[string]any)
-			if !ok {
+		for i, mt := range metas {
+			switch {
+			case mt.jsonErr:
 				writeError(w, http.StatusBadRequest, fmt.Sprintf("Backup shot #%d is not a valid object", i))
 				return
-			}
-			id, idOK := jsIntStrict(s["id"])
-			if !idOK || id <= 0 {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("Backup shot #%d has an invalid id (%v)", i, s["id"]))
+			case !mt.idOK:
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("Backup shot #%d has an invalid id", i))
 				return
-			}
-			if _, ok := s["timestamp"].(float64); !ok {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("Backup shot #%d (id=%d) has an invalid or missing timestamp", i, id))
+			case !mt.tsOK:
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("Backup shot #%d (id=%d) has an invalid or missing timestamp", i, mt.id))
 				return
 			}
 		}
 	}
 
-	plan := buildRestorePlan(b, req.imagesMap)
+	plan := buildRestorePlan(b, images, shotCount)
+	if wantsShots {
+		plan.pending = append(plan.pending, shotPending...)
+	}
 
 	if isDryRun {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "dryRun": true, "preview": plan.preview()})
 		return
 	}
 
-	if err := h.applyRestore(plan); err != nil {
+	// ── Pass 2: re-stream the shots array into the batched restore tx ────
+	shotIter := func(yield func(shots.Shot) error) error {
+		src, err := openBundle()
+		if err != nil {
+			return err
+		}
+		defer src.Close()
+		_, _, _, err = parseBundleStream(src, func(raw json.RawMessage) error {
+			var m map[string]any
+			if err := json.Unmarshal(raw, &m); err != nil {
+				return err
+			}
+			return yield(shots.Shot(m))
+		})
+		return err
+	}
+
+	if err := h.applyRestore(plan, shotIter); err != nil {
 		internalError(w, err)
 		return
 	}
 
 	h.applyRestoredToken(plan.restoredToken)
-	h.writePendingImages(plan.pending)
+	h.writePendingImages(plan.images, plan.pending)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok": true, "shots": len(shotsArr) * boolToInt(wantsShots),
+		"ok": true, "shots": shotCount * boolToInt(wantsShots),
 		"secretsPresent": plan.secretsPresent, "secretsRestored": plan.secretsRestored,
 	})
 }
@@ -145,65 +240,16 @@ func boolToInt(b bool) int {
 	return 0
 }
 
-func parseRestoreRequest(r *http.Request, isZip bool) (restoreRequest, error) {
-	if isZip {
-		data, err := io.ReadAll(io.LimitReader(r.Body, restoreZipBodyLimit+1))
-		if err != nil {
-			return restoreRequest{}, err
-		}
-		if len(data) > restoreZipBodyLimit {
-			return restoreRequest{}, errBodyTooLarge
-		}
-		backupJSON, images, err := readZip(data)
-		if err != nil {
-			return restoreRequest{}, err
-		}
-		var parsed map[string]any
-		if err := json.Unmarshal(backupJSON, &parsed); err != nil {
-			return restoreRequest{}, fmt.Errorf("invalid backup file (backup.json is not valid JSON)")
-		}
-		b := map[string]any{}
-		for k, v := range parsed {
-			b[k] = v
-		}
-		b["dryRun"] = r.Header.Get("X-GLP-Dry-Run") == "true"
-		if sectionsHeader := r.Header.Get("X-GLP-Sections"); sectionsHeader != "" {
-			var sec any
-			if err := json.Unmarshal([]byte(sectionsHeader), &sec); err != nil {
-				return restoreRequest{}, fmt.Errorf("Invalid X-GLP-Sections header")
-			}
-			b["sections"] = sec
-		}
-		if pass := r.Header.Get("X-GLP-Passphrase"); pass != "" {
-			b["passphrase"] = pass
-		}
-		return restoreRequest{b: b, imagesMap: images}, nil
-	}
+var errBodyTooLarge = fmt.Errorf("request entity too large")
 
-	data, err := io.ReadAll(io.LimitReader(r.Body, restoreJSONBodyLimit+1))
-	if err != nil {
-		return restoreRequest{}, err
-	}
-	if len(data) > restoreJSONBodyLimit {
-		return restoreRequest{}, errBodyTooLarge
-	}
-	var b map[string]any
-	if err := json.Unmarshal(data, &b); err != nil {
-		return restoreRequest{}, fmt.Errorf("Invalid JSON body")
-	}
-	images := map[string][]byte{}
-	if raw, ok := b["images"].(map[string]any); ok {
-		for name, v := range raw {
-			s, _ := v.(string)
-			if decoded, err := base64.StdEncoding.DecodeString(s); err == nil {
-				images[name] = decoded
-			}
-		}
-	}
-	return restoreRequest{b: b, imagesMap: images}, nil
+// cappedReadCloser adds Close (delegating to the underlying zip entry
+// reader) to a newCappedReader-wrapped stream.
+type cappedReadCloser struct {
+	io.Reader
+	c io.Closer
 }
 
-var errBodyTooLarge = fmt.Errorf("request entity too large")
+func (r cappedReadCloser) Close() error { return r.c.Close() }
 
 // restorePlan is every "what would actually be written" computation —
 // identical whether this is a dry run or a real restore, so preview counts
@@ -212,9 +258,18 @@ type restorePlan struct {
 	b          map[string]any
 	sec        sections
 	wantsShots bool
+	shotCount  int
+
+	images restoreImages
 
 	sanitizedLib map[string]any // nil if not restoring a library
+	libraryJSON  []byte         // marshalled library.Library for RestoreShots; nil = don't touch
 	pending      []pendingImageWrite
+
+	// pre-validated shots-section side data, applied inside RestoreShots' tx
+	validAnnotations map[string]map[string]any
+	validTrash       map[string]int64
+	blocklist        []string // non-nil (possibly empty) = wipe+rewrite the blocklist
 
 	validMaintenance    []maintenance.RawRow
 	maintenanceTotal    int
@@ -238,11 +293,11 @@ type restorePlan struct {
 // buildRestorePlan ports the "Every 'what would actually be written'
 // computation" block of routes/backup.js's POST /api/restore, from
 // `sections := normaliseSections(...)` through `restoredToken`.
-func buildRestorePlan(b map[string]any, imagesMap map[string][]byte) restorePlan {
+func buildRestorePlan(b map[string]any, images restoreImages, shotCount int) restorePlan {
 	sec := normaliseSections(b["sections"])
 	wantsShots := sec.has("shots")
 
-	plan := restorePlan{b: b, sec: sec, wantsShots: wantsShots}
+	plan := restorePlan{b: b, sec: sec, wantsShots: wantsShots, shotCount: shotCount, images: images}
 
 	wantsSecrets := sec.has("secrets")
 	passphrase, _ := b["passphrase"].(string)
@@ -261,17 +316,51 @@ func buildRestorePlan(b map[string]any, imagesMap map[string][]byte) restorePlan
 			for k, v := range rawLib {
 				sanitized[k] = v
 			}
-			validateRestoredLibraryImages(sanitized, imagesMap, &plan.pending)
+			validateRestoredLibraryImages(sanitized, images, &plan.pending)
 			plan.sanitizedLib = sanitized
+			if jb, err := json.Marshal(mapToLibrary(sanitized)); err == nil {
+				plan.libraryJSON = jb
+			}
 		}
-		if shotsArr, ok := b["shots"].([]any); ok {
-			list := make([]map[string]any, 0, len(shotsArr))
-			for _, v := range shotsArr {
-				if m, ok := v.(map[string]any); ok {
-					list = append(list, m)
+		if ann, ok := b["annotations"].(map[string]any); ok {
+			plan.validAnnotations = map[string]map[string]any{}
+			for idStr, raw := range ann {
+				m, ok := raw.(map[string]any)
+				if !ok {
+					continue
+				}
+				if issues := shots.ValidateAnnotation(m); len(issues) > 0 {
+					continue
+				}
+				if _, err := strconv.ParseInt(idStr, 10, 64); err != nil {
+					continue
+				}
+				plan.validAnnotations[idStr] = m
+			}
+		}
+		if trash, ok := b["trash"].(map[string]any); ok {
+			plan.validTrash = map[string]int64{}
+			for idStr, raw := range trash {
+				if _, err := strconv.ParseInt(idStr, 10, 64); err != nil {
+					continue
+				}
+				deletedAt, ok := jsFiniteNumber(raw)
+				if !ok {
+					deletedAt = float64(nowMillis())
+				}
+				plan.validTrash[idStr] = int64(deletedAt)
+			}
+		}
+		if arr, ok := b["blocklist"].([]any); ok {
+			list := make([]string, 0, len(arr))
+			for _, v := range arr {
+				if n, ok := jsFiniteNumber(v); ok {
+					list = append(list, formatBlocklistValue(n))
+				} else if s, ok := v.(string); ok {
+					list = append(list, s)
 				}
 			}
-			validateEntityImages(list, "shot-", imagesMap, &plan.pending)
+			plan.blocklist = list
 		}
 	}
 
@@ -383,9 +472,7 @@ func reDecode(v any, out any) error {
 func (p restorePlan) preview() map[string]any {
 	shotsCount := 0
 	if p.wantsShots {
-		if arr, ok := p.b["shots"].([]any); ok {
-			shotsCount = len(arr)
-		}
+		shotsCount = p.shotCount
 	}
 	return map[string]any{
 		"shots":               shotsCount,
@@ -430,79 +517,22 @@ func sectionsPresent(b map[string]any) []string {
 	return out
 }
 
-// applyRestore ports the real (non-dry-run) restore transaction — see this
-// file's header comment for the atomicity caveat.
-func (h *Handlers) applyRestore(p restorePlan) error {
+// applyRestore ports the real (non-dry-run) restore. The shots section
+// (wipe + every shot upsert + annotations + trash + blocklist + library)
+// now commits as ONE transaction via shots.Repository.RestoreShots
+// (#959); the remaining sections stay their own internal txs — see this
+// file's header comment for the narrowed atomicity gap.
+func (h *Handlers) applyRestore(p restorePlan, shotIter func(yield func(shots.Shot) error) error) error {
 	d := h.deps
 	if p.wantsShots {
-		if err := d.ShotsRepo.WipeAll(); err != nil {
+		if err := d.ShotsRepo.RestoreShots(shots.RestoreInput{
+			Shots:       shotIter,
+			Annotations: p.validAnnotations,
+			Trash:       p.validTrash,
+			Blocklist:   p.blocklist,
+			LibraryJSON: p.libraryJSON,
+		}); err != nil {
 			return err
-		}
-		shotsArr, _ := p.b["shots"].([]any)
-		var restoredIDs = map[int64]bool{}
-		for _, v := range shotsArr {
-			m, ok := v.(map[string]any)
-			if !ok {
-				continue
-			}
-			if err := d.ShotsRepo.Upsert(shots.Shot(m)); err != nil {
-				return err
-			}
-			if id, ok := jsIntStrict(m["id"]); ok {
-				restoredIDs[id] = true
-			}
-		}
-		if ann, ok := p.b["annotations"].(map[string]any); ok {
-			for idStr, raw := range ann {
-				m, ok := raw.(map[string]any)
-				if !ok {
-					continue
-				}
-				if issues := shots.ValidateAnnotation(m); len(issues) > 0 {
-					continue
-				}
-				id, err := strconv.ParseInt(idStr, 10, 64)
-				if err != nil {
-					continue
-				}
-				if err := d.ShotsRepo.SaveAnnotation(id, m); err != nil {
-					return err
-				}
-			}
-		}
-		if trash, ok := p.b["trash"].(map[string]any); ok {
-			for idStr, deletedAtRaw := range trash {
-				id, err := strconv.ParseInt(idStr, 10, 64)
-				if err != nil || !restoredIDs[id] {
-					continue
-				}
-				deletedAt, ok := jsFiniteNumber(deletedAtRaw)
-				if !ok {
-					deletedAt = float64(nowMillis())
-				}
-				if err := d.ShotsRepo.SetTrashEntry(id, int64(deletedAt)); err != nil {
-					return err
-				}
-			}
-		}
-		if p.sanitizedLib != nil {
-			lib := mapToLibrary(p.sanitizedLib)
-			if err := d.LibRepo.SaveLibrary(lib); err != nil {
-				return err
-			}
-		}
-		if arr, ok := p.b["blocklist"].([]any); ok {
-			list := make([]string, 0, len(arr))
-			for _, v := range arr {
-				if n, ok := jsFiniteNumber(v); ok {
-					list = append(list, formatBlocklistValue(n))
-				} else if s, ok := v.(string); ok {
-					list = append(list, s)
-				}
-			}
-			if err := d.ShotsRepo.SaveBlocklist(list); err != nil {
-				return err
-			}
 		}
 	}
 
@@ -664,11 +694,20 @@ func (h *Handlers) applyRestoredToken(token string) {
 	_ = os.Rename(tmp, h.deps.TokenFile)
 }
 
-func (h *Handlers) writePendingImages(pending []pendingImageWrite) {
+// writePendingImages streams each validated image from the restore image
+// source to its final path after the DB tx has committed (unchanged
+// ordering). The bytes are re-read from the zip entry here, one at a time,
+// rather than held in the plan since a heavily-illustrated library would
+// otherwise sum every image body in memory (#959).
+func (h *Handlers) writePendingImages(imgs restoreImages, pending []pendingImageWrite) {
 	for _, w := range pending {
+		buf, ok := imgs.getForWrite(w.srcName)
+		if !ok || len(buf) == 0 || len(buf) > imageMaxBytes {
+			continue
+		}
 		if err := os.MkdirAll(filepath.Dir(w.path), 0o755); err != nil {
 			continue
 		}
-		_ = os.WriteFile(w.path, w.data, 0o644)
+		_ = os.WriteFile(w.path, buf, 0o644)
 	}
 }
