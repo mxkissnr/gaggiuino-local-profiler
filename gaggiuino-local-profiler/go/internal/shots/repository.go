@@ -330,14 +330,46 @@ func (r *Repository) WipeAll() error {
 // wrote machineId, so this fallback is not expected to be reached in
 // practice.
 func (r *Repository) Upsert(shot Shot) error {
-	// jsonInt tolerates BOTH shapes this method's callers can hand it: an
-	// int64 (a Shot built in-process, e.g. by hydrateRow) or a float64 (a
-	// Shot decoded straight from JSON by encoding/json, which never
-	// produces int64 for a bare `any` destination — the shape every
-	// restore/import caller of Upsert actually has). Using shot.id()/
-	// shot.machineID() here (int64-only) silently upserted every restored
-	// shot under id=0 in practice, discovered via
-	// internal/backup's restore round-trip test.
+	row, err := shotInsertArgs(shot)
+	if err != nil {
+		return err
+	}
+	if _, err := r.db.Exec(
+		`INSERT OR REPLACE INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (?,?,?,?,?,?)`,
+		row.id, row.timestamp, row.duration, row.profileName, row.data, row.machineID,
+	); err != nil {
+		return fmt.Errorf("shots: upserting shot %d: %w", row.id, err)
+	}
+	if ann, ok := shot["annotation"]; ok {
+		annMap, _ := ann.(map[string]any)
+		if annMap == nil {
+			annMap = map[string]any{}
+		}
+		if err := r.SaveAnnotation(row.id, annMap); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// shotInsertRow is the fixed-column shape shotInsertArgs extracts from a
+// restored/imported Shot object for the shots-table INSERT.
+type shotInsertRow struct {
+	id          int64
+	timestamp   int64
+	duration    any
+	profileName any
+	data        string
+	machineID   int64
+}
+
+// shotInsertArgs is Upsert's field-extraction logic, factored out so both
+// Upsert and RestoreShots build the shots-row column values the same way.
+// jsonInt tolerates BOTH shapes a caller can hand it: an int64 (a Shot
+// built in-process, e.g. by hydrateRow) or a float64 (a Shot decoded
+// straight from JSON by encoding/json, which never produces int64 for a
+// bare `any` destination — the shape every restore/import caller has).
+func shotInsertArgs(shot Shot) (shotInsertRow, error) {
 	jsonInt := func(v any) (int64, bool) {
 		switch t := v.(type) {
 		case int64:
@@ -347,21 +379,20 @@ func (r *Repository) Upsert(shot Shot) error {
 		}
 		return 0, false
 	}
-	id, _ := jsonInt(shot["id"])
-	timestamp, _ := jsonInt(shot["timestamp"])
-	var duration any
+	var row shotInsertRow
+	row.id, _ = jsonInt(shot["id"])
+	row.timestamp, _ = jsonInt(shot["timestamp"])
 	if d, ok := jsonInt(shot["duration"]); ok {
-		duration = d
+		row.duration = d
 	}
-	var profileName any
 	if pn, ok := shot["profileName"].(string); ok && pn != "" {
-		profileName = pn
+		row.profileName = pn
 	} else if pn, ok := shot["profile_name"].(string); ok && pn != "" {
-		profileName = pn
+		row.profileName = pn
 	}
-	machineID := int64(1)
+	row.machineID = int64(1)
 	if v, ok := jsonInt(shot["machineId"]); ok {
-		machineID = v
+		row.machineID = v
 	}
 
 	rest := make(map[string]any, len(shot))
@@ -375,24 +406,10 @@ func (r *Repository) Upsert(shot Shot) error {
 	}
 	data, err := json.Marshal(rest)
 	if err != nil {
-		return fmt.Errorf("shots: encoding restored shot %d: %w", id, err)
+		return shotInsertRow{}, fmt.Errorf("shots: encoding restored shot %d: %w", row.id, err)
 	}
-	if _, err := r.db.Exec(
-		`INSERT OR REPLACE INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (?,?,?,?,?,?)`,
-		id, timestamp, duration, profileName, string(data), machineID,
-	); err != nil {
-		return fmt.Errorf("shots: upserting shot %d: %w", id, err)
-	}
-	if ann, ok := shot["annotation"]; ok {
-		annMap, _ := ann.(map[string]any)
-		if annMap == nil {
-			annMap = map[string]any{}
-		}
-		if err := r.SaveAnnotation(id, annMap); err != nil {
-			return err
-		}
-	}
-	return nil
+	row.data = string(data)
+	return row, nil
 }
 
 // FindTrashed ports ShotRepository.js's getTrash() paired with
