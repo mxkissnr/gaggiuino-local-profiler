@@ -156,15 +156,25 @@ library domain on top of that same pattern:
   `internal/machines/registry.go`'s `RestoreMachines` (flagged in
   Phase 1e) and `internal/library`'s whole-entity restore sanitizers
   (`SanitizeBeanFields` et al., flagged in Phase 1d — now in
-  `internal/library/restore_sanitize.go`). **One known, deliberate gap**:
-  a real restore is NOT wrapped in one all-or-nothing transaction the way
-  Node's is — each of the six backup sections (shots, maintenance, orders,
-  machines, settings, secrets) writes atomically on its own, but a failure
-  partway through a multi-section restore leaves earlier sections applied
-  and later ones not, unlike Node. `routes/debug.js`'s
+  `internal/library/restore_sanitize.go`). **Memory (#959):** every
+  export/import path streams — peak heap growth is bounded by O(one shot +
+  one image + the small sections) and does not rise with the shot/image
+  count (`internal/backup/memory_test.go` quadruples the dataset and
+  asserts the same ceiling). The bundle JSON is written incrementally and
+  parsed twice with a streaming decoder; the `POST /api/restore` and `POST
+  /api/debug/import-db` request bodies go to a temp file, never a slice.
+  **Remaining atomicity gap:** #959 made the structured shots restore
+  (wipe + upserts + annotations + trash + blocklist + library) commit as
+  one transaction, and orders restore is one tx — but atomicity *across*
+  sections (a failure after the shots tx commits but during maintenance /
+  machines / kv) is still not Node-identical. `routes/debug.js`'s
   `export-db`/`import-db` (raw SQLite file dump/restore) are explicitly
-  NOT part of this domain — see `internal/backup/doc.go` for the full
-  reasoning on both.
+  NOT part of this domain (they live in `internal/debug`); `import-db` now
+  streams the upload to a temp file and validates it (SQLite magic +
+  `PRAGMA integrity_check` + core-table schema probe) before touching the
+  live DB — a corrupt upload is a clean 400 with the live DB untouched.
+  See `internal/backup/doc.go` and `internal/debug/debug.go` for the full
+  reasoning.
 - `internal/ha` (Phase 1f, extended in Phase 1g) — ports `lib/ha.js`:
   `SendNotify`, `GetNotifyServices`, `GetPersons` (Phase 1f, orders domain),
   plus `GetSwitchState`, `CallHaService`, `GetHaLanguage` (Phase 1g, the

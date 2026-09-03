@@ -20,15 +20,22 @@
 // handler-chain comment, which anticipated exactly this).
 //
 // The DB-replace path mirrors routes/debug.js's #755 safety mechanism
-// step for step: checkpoint the live WAL, copy the current glp.db to a
-// timestamped pre-import-backup, write the upload to a temp file in the
-// same directory, atomically rename it into place, then delete the OLD
+// step for step, plus #959's streaming + validation hardening: the upload
+// is streamed straight to a temp file in the DB directory (never
+// io.ReadAll'd into a ~500 MB slice), then validated BEFORE anything
+// touches the live DB — a 16-byte SQLite-magic check, a throwaway
+// read-only handle running PRAGMA integrity_check, and a schema probe for
+// the core tables. Only once all three pass does it checkpoint the live
+// WAL, copy the current glp.db to a timestamped pre-import-backup,
+// atomically rename the temp file into place, and delete the OLD
 // database's -wal/-shm sidecars (a WAL from the old file would be replayed
-// against the mismatched new main file on the next startup otherwise). The
-// running process keeps its already-open file descriptor pinned to the old
-// inode through POSIX rename semantics — modernc.org/sqlite is no
-// different from better-sqlite3 here — so only a restart picks up the new
-// file, which is why the 200 response says restartRequired.
+// against the mismatched new main file on the next startup otherwise). A
+// corrupt or wrong-schema upload is rejected with 400 and the live DB is
+// left completely untouched. The running process keeps its already-open
+// file descriptor pinned to the old inode through POSIX rename semantics
+// — modernc.org/sqlite is no different from better-sqlite3 here — so only
+// a restart picks up the new file, which is why the 200 response says
+// restartRequired (no in-process pool drain / reopen).
 package debug
 
 import (
@@ -47,6 +54,7 @@ import (
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
+	_ "modernc.org/sqlite"
 )
 
 // importDBMaxBytes mirrors server.js:192's express.raw({ limit: '500mb' })
@@ -169,10 +177,26 @@ func (h *Handlers) importDB(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, importDBMaxBytes)
-	buf, err := io.ReadAll(r.Body)
+
+	nowMS := h.clock().UnixMilli()
+	dir := filepath.Dir(h.dbPath)
+	tmpPath := fmt.Sprintf("%s.importing-%d", h.dbPath, nowMS)
+
+	// Stream the upload straight to a temp file on the same filesystem as
+	// glp.db (so the eventual os.Rename stays a single-device atomic swap),
+	// never a ~500 MB slice in RAM (#959).
+	tmp, err := os.Create(tmpPath)
 	if err != nil {
+		log.Printf("debug: DB import failed: %v", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	written, copyErr := io.Copy(tmp, r.Body)
+	closeErr := tmp.Close()
+	if copyErr != nil {
+		_ = os.Remove(tmpPath)
 		var mbe *http.MaxBytesError
-		if errors.As(err, &mbe) {
+		if errors.As(copyErr, &mbe) {
 			// server.js:192's express.raw({ limit: '500mb' }) rejects an
 			// oversized body with a 413 before the handler runs;
 			// lib/middleware/error.js turns that into { error: <message> }.
@@ -182,37 +206,45 @@ func (h *Handlers) importDB(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
+	if closeErr != nil {
+		_ = os.Remove(tmpPath)
+		log.Printf("debug: DB import failed: %v", closeErr)
+		httputil.WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
 
-	if len(buf) == 0 {
+	if written == 0 {
+		_ = os.Remove(tmpPath)
 		httputil.WriteError(w, http.StatusBadRequest, "No database file uploaded")
 		return
 	}
-	if len(buf) < len(sqliteMagic) || string(buf[:len(sqliteMagic)]) != string(sqliteMagic) {
+	if !fileHasSQLiteMagic(tmpPath) {
+		_ = os.Remove(tmpPath)
 		httputil.WriteError(w, http.StatusBadRequest, "Not a SQLite database file")
+		return
+	}
+	if err := validateUploadedDB(tmpPath); err != nil {
+		_ = os.Remove(tmpPath)
+		log.Printf("debug: DB import rejected — uploaded file failed validation: %v", err)
+		httputil.WriteError(w, http.StatusBadRequest, "Uploaded database failed validation")
 		return
 	}
 
 	if _, err := h.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		_ = os.Remove(tmpPath)
 		log.Printf("debug: DB import failed: %v", err)
 		httputil.WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	nowMS := h.clock().UnixMilli()
-	dir := filepath.Dir(h.dbPath)
 	backupPath := filepath.Join(dir, fmt.Sprintf("pre-import-backup-%d.db", nowMS))
 	if err := copyFile(h.dbPath, backupPath); err != nil {
+		_ = os.Remove(tmpPath)
 		log.Printf("debug: DB import failed: %v", err)
 		httputil.WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	tmpPath := fmt.Sprintf("%s.importing-%d", h.dbPath, nowMS)
-	if err := os.WriteFile(tmpPath, buf, 0o644); err != nil {
-		log.Printf("debug: DB import failed: %v", err)
-		httputil.WriteError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
 	if err := os.Rename(tmpPath, h.dbPath); err != nil {
 		_ = os.Remove(tmpPath)
 		log.Printf("debug: DB import failed: %v", err)
@@ -226,7 +258,7 @@ func (h *Handlers) importDB(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Printf("debug: DB import: replaced glp.db (%d bytes, previous version backed up to %s) -- restart required to load it", len(buf), backupPath)
+	log.Printf("debug: DB import: replaced glp.db (%d bytes, previous version backed up to %s) -- restart required to load it", written, backupPath)
 	httputil.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok":              true,
 		"restartRequired": true,
@@ -297,6 +329,67 @@ func (h *Handlers) defaultMachineBaseURL(ctx context.Context) (string, error) {
 		return m.Host, err
 	}
 	return baseURL, nil
+}
+
+// fileHasSQLiteMagic checks the first 16 bytes of path against
+// sqliteMagic without reading the whole file — routes/debug.js's
+// SQLITE_MAGIC guard, moved off the (now streamed) in-memory buffer.
+func fileHasSQLiteMagic(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	head := make([]byte, len(sqliteMagic))
+	if _, err := io.ReadFull(f, head); err != nil {
+		return false
+	}
+	return string(head) == string(sqliteMagic)
+}
+
+// validateUploadedDB opens the uploaded temp file with a throwaway
+// read-only handle and runs PRAGMA integrity_check plus a probe for the
+// core tables (#959). Any failure means the file is corrupt or is a
+// SQLite file from something other than this app — reject it before the
+// live DB is touched at all. The handle is fully closed here, before the
+// caller's os.Rename.
+func validateUploadedDB(path string) error {
+	dsn := "file:" + path + "?_pragma=busy_timeout(2000)&_pragma=query_only(true)"
+	probe, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return fmt.Errorf("opening uploaded db: %w", err)
+	}
+	defer func() {
+		probe.Close()
+		// query_only still lets SQLite create a -wal/-shm beside the file on
+		// open; tidy them so the subsequent os.Rename doesn't strand them.
+		for _, sfx := range []string{"-wal", "-shm"} {
+			_ = os.Remove(path + sfx)
+		}
+	}()
+	probe.SetMaxOpenConns(1)
+
+	var result string
+	if err := probe.QueryRow(`PRAGMA integrity_check`).Scan(&result); err != nil {
+		return fmt.Errorf("integrity_check: %w", err)
+	}
+	if result != "ok" {
+		return fmt.Errorf("integrity_check reported %q", result)
+	}
+
+	for _, table := range []string{"shots", "kv"} {
+		var one int
+		err := probe.QueryRow(
+			`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`, table,
+		).Scan(&one)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("uploaded db is missing the %q table", table)
+		}
+		if err != nil {
+			return fmt.Errorf("probing for %q table: %w", table, err)
+		}
+	}
+	return nil
 }
 
 // copyFile mirrors routes/debug.js's fs.copyFileSync(DB_PATH, backupPath):

@@ -2701,17 +2701,22 @@ paths:
       tags: [System]
       summary: Replace the entire glp.db file 1:1 from an uploaded SQLite file (dev-channel only)
       description: >
-        Gated identically to GET /api/debug/export-db. Backs up the current
-        database before replacing it; a restart is required to load the
-        imported file (the running process keeps its old file descriptor).
+        Gated identically to GET /api/debug/export-db. The upload is
+        streamed to a temp file and validated (SQLite magic-byte check,
+        PRAGMA integrity_check, core-table schema probe) before anything
+        touches the live database. Only on success is the current database
+        backed up and the file swapped in; a rejected upload leaves the
+        live database untouched. A restart is required to load the imported
+        file (the running process keeps its old file descriptor).
       requestBody:
         required: true
         content:
           application/octet-stream: { schema: { type: string, format: binary } }
       responses:
         "200": { description: "{ ok: true, restartRequired: true, backupPath }" }
-        "400": { description: "No file uploaded, or not a SQLite database (magic-byte check)" }
+        "400": { description: "No file uploaded, not a SQLite database (magic-byte check), or the uploaded database failed validation (integrity_check / schema probe)" }
         "404": { description: "Not a dev-channel build — route does not exist" }
+        "413": { description: "Uploaded file exceeds the 500 MB limit" }
         "500": { description: Import failed }
 
   /api/openapi.json:

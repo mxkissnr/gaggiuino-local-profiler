@@ -154,6 +154,94 @@ func TestImportDB_RejectsNonSQLiteBody(t *testing.T) {
 	}
 }
 
+// TestImportDB_RejectsCorruptSQLite (#959): a truncated SQLite file keeps
+// the 16-byte magic but fails PRAGMA integrity_check — it must be rejected
+// with 400 and the live DB left completely untouched.
+func TestImportDB_RejectsCorruptSQLite(t *testing.T) {
+	t.Setenv("GLP_DEV_BUILD", "dev")
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "glp.db")
+	sqlDB := openTestDB(t, dbPath)
+	insertShot(t, sqlDB, 1, "V60")
+	insertShot(t, sqlDB, 2, "Espresso")
+
+	h := NewHandlers(sqlDB, dbPath, nil)
+	mux := newMux(h)
+
+	// A valid export, then truncated to half its length (magic intact,
+	// pages missing).
+	exp := httptest.NewRecorder()
+	mux.ServeHTTP(exp, httptest.NewRequest(http.MethodGet, "/api/debug/export-db", nil))
+	full := exp.Body.Bytes()
+	corrupt := append([]byte(nil), full[:len(full)/2]...)
+	if !bytes.HasPrefix(corrupt, sqliteMagic) {
+		t.Fatalf("truncated body lost the SQLite magic; adjust the test")
+	}
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/debug/import-db", bytes.NewReader(corrupt)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp["error"] != "Uploaded database failed validation" {
+		t.Errorf("error = %q", resp["error"])
+	}
+
+	// Live DB untouched: same 2 shots, still passes its own integrity check,
+	// no pre-import backup was written.
+	if got := countShots(t, dbPath); got != 2 {
+		t.Errorf("live shot count = %d, want 2 (unchanged)", got)
+	}
+	var ic string
+	if err := sqlDB.QueryRow(`PRAGMA integrity_check`).Scan(&ic); err != nil || ic != "ok" {
+		t.Errorf("live DB integrity_check = %q, err=%v", ic, err)
+	}
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if bytes.Contains([]byte(e.Name()), []byte("pre-import-backup")) {
+			t.Errorf("a pre-import backup (%s) was written for a rejected upload", e.Name())
+		}
+		if bytes.Contains([]byte(e.Name()), []byte(".importing-")) {
+			t.Errorf("temp import file %s left behind after rejection", e.Name())
+		}
+	}
+}
+
+// TestImportDB_RejectsSQLiteMissingCoreTables (#959): a structurally valid
+// SQLite file that isn't a GLP database (no `shots` table) is rejected.
+func TestImportDB_RejectsSQLiteMissingCoreTables(t *testing.T) {
+	t.Setenv("GLP_DEV_BUILD", "dev")
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "glp.db")
+	sqlDB := openTestDB(t, dbPath)
+	mux := newMux(NewHandlers(sqlDB, dbPath, nil))
+
+	otherPath := filepath.Join(dir, "other.db")
+	other, err := sql.Open("sqlite", otherPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.Exec(`CREATE TABLE foo (x INTEGER); INSERT INTO foo VALUES (1);`); err != nil {
+		t.Fatal(err)
+	}
+	other.Close()
+	body, err := os.ReadFile(otherPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/debug/import-db", bytes.NewReader(body)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if got := countShots(t, dbPath); got != 0 {
+		t.Errorf("live DB touched by a rejected non-GLP upload")
+	}
+}
+
 func TestImportDB_RejectsOversizedBody(t *testing.T) {
 	t.Setenv("GLP_DEV_BUILD", "dev")
 	dir := t.TempDir()
