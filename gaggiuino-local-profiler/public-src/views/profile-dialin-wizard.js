@@ -18,7 +18,7 @@ import { S }             from '../state.js';
 import { t }              from '../i18n.js';
 import { apiFetch }       from '../api.js';
 import { esc, scoreColor } from '../utils.js';
-import { getShotData, calcShotScore } from './shots/utils.js';
+import { calcShotScore } from './shots/utils.js';
 import { _miniShotChart } from './shots/grind.js';
 import { suggestPhaseAdjustment, applyPhaseAdjustment, isProfileDialinConverged, profileDialinConvergenceReason }
   from '../profile-dialin-convergence.js';
@@ -231,7 +231,7 @@ export function profileDialinConfirmShot(shotId, isMatch) {
 
   const shot = S.shots.find(sh => sh.id === shotId);
   if (!shot) return;
-  const score = calcShotScore(shot, getShotData(shot));
+  const score = calcShotScore(shot); // #957: server score on the metadata row, no curve fetch
   s.reviewRound = { shotId, score, suggestion: null };
   s.pendingSymptoms = [];
   s.candidateShotId = null;
@@ -263,6 +263,13 @@ export function renderProfileDialinWizard() {
   if (s.status === 'converged' || s.status === 'ended') { body.innerHTML = _renderSummary(s); return; }
 
   if (!s.candidateShotId && !s.reviewRound) _checkForCandidate(s);
+  // #957: the candidate mini-chart needs its curve — fetch then re-render.
+  if (s.candidateShotId && window.getRawCurve && !window.getRawCurve(s.candidateShotId)) {
+    const pendingId = s.candidateShotId;
+    window.getShotCurve?.(pendingId).then(() => {
+      if (S.profileDialinSession?.candidateShotId === pendingId) renderProfileDialinWizard();
+    });
+  }
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   body.innerHTML = _renderRound(s);
 }

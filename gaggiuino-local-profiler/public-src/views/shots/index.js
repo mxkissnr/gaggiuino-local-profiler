@@ -10,7 +10,9 @@ import {
 } from '../../utils.js';
 import { renderSidebar }                                      from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
-import { getShotData, calcShotScore, shotUsedBeanTarget, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
+import { calcShotScore, shotUsedBeanTarget, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
+import { mapShotDatapoints } from '../../utils.js';
+import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel }                              from './annotation.js';
 import { updatePQChart }                                      from './charts.js';
@@ -41,6 +43,14 @@ export function _equipmentName(list, id) {
   return (list || []).find(e => e.id === id)?.name || null;
 }
 
+// #957: GET /api/shots is keyset-paginated and metadata-only (no curve
+// blobs). loadData() paints from page 1; loadAllShotMeta() then walks every
+// following page in the background so S.allShots ends up holding the full
+// shot-metadata history the non-visual consumers (analytics, dial-in
+// wizards, per-machine counts, findPreviousShot) still expect. Curve data is
+// fetched per shot on demand via shot-curves.js.
+const SHOTS_PAGE_LIMIT = 60;
+
 export async function loadData() {
   const token = ++_loadDataReqToken;
   const shotsEl = document.getElementById('shots');
@@ -48,7 +58,7 @@ export async function loadData() {
 
   let fetched;
   try {
-    const r = await apiFetch('shots.json');
+    const r = await apiFetch(`api/shots?limit=${SHOTS_PAGE_LIMIT}`);
     if (token !== _loadDataReqToken) return;
     if (!r.ok) {
       // #807: Shots is the landing view, so a session that arrived on the
@@ -61,8 +71,12 @@ export async function loadData() {
         : `<div class="loading-state" style="color:#ef4444">HTTP ${r.status}</div>`;
       return;
     }
-    fetched = await r.json();
+    const page = await r.json();
     if (token !== _loadDataReqToken) return;
+    fetched = [...(page.shots || [])].reverse(); // page is newest-first; keep S.allShots oldest-first
+    S.shotsPageCursor = page.hasMore ? page.nextCursor : null;
+    S.shotsHasMore    = !!page.hasMore;
+    S.allShotsLoaded  = !page.hasMore;
   } catch {
     if (token !== _loadDataReqToken) return;
     shotsEl.innerHTML =
@@ -112,15 +126,79 @@ export async function loadData() {
   // Re-evaluate the machine-unreachable banner as soon as shots finish loading,
   // instead of waiting for the next 30s updateStatus() poll (#288).
   updateMachineBanner();
+
+  // Background: pull every remaining page of shot metadata so S.allShots
+  // holds the full history for analytics / dial-in wizards / per-machine
+  // counts / findPreviousShot, without blocking first paint.
+  loadAllShotMeta(token, S.shotsPageCursor);
+}
+
+// loadAllShotMeta walks api/shots page by page (oldest direction) from
+// startCursor until the server reports no more, concatenating each page into
+// S.allShots and re-deriving S.shots. Guarded by the same _loadDataReqToken
+// as loadData, so a newer loadData() abandons a superseded walk. The loop is
+// driven entirely by the local `cursor` (never re-read from S across an
+// await), and every S write takes its value from the just-fetched page, so
+// there is no read-then-write race on S.
+let _metaWalkActive = false;
+
+export async function loadAllShotMeta(token, startCursor) {
+  if (_metaWalkActive) return;
+  _metaWalkActive = true;
+  let cursor = startCursor;
+  let done = false;
+  try {
+    while (cursor && token === _loadDataReqToken) {
+      let page;
+      try {
+        const r = await apiFetch(`api/shots?limit=${SHOTS_PAGE_LIMIT}&cursor=${encodeURIComponent(cursor)}`);
+        if (token !== _loadDataReqToken) return;
+        if (!r.ok) break;
+        page = await r.json();
+      } catch { return; }
+      if (token !== _loadDataReqToken) return;
+
+      // Each page is newest-first and older than everything already loaded —
+      // reverse it to oldest-first and prepend.
+      const merged = [...[...(page.shots || [])].reverse(), ...S.allShots];
+      cursor = page.hasMore ? page.nextCursor : null;
+      done = !page.hasMore;
+      S.allShots        = merged;
+      S.shots           = filterShotsByMachine(merged, S.activeMachineId);
+      S.shotsPageCursor = cursor;
+      S.shotsHasMore    = !!page.hasMore;
+      renderSidebar();
+    }
+    if (token === _loadDataReqToken && done) {
+      S.shotsHasMore   = false;
+      S.allShotsLoaded = true;
+      // Analytics gates its builders on S.allShotsLoaded — let it re-run now
+      // that the full history is in memory.
+      window.onAllShotMetaLoaded?.();
+    }
+  } finally {
+    // eslint-disable-next-line require-atomic-updates -- single-flight guard; last-writer-wins reset is correct once no walk is in flight (same pattern as status.js triggerSync)
+    _metaWalkActive = false;
+  }
+}
+
+// loadMoreShots pulls the next page on demand (sidebar infinite scroll). No-op
+// once the background walk has already loaded everything.
+export async function loadMoreShots() {
+  if (!S.shotsHasMore || !S.shotsPageCursor) return;
+  await loadAllShotMeta(_loadDataReqToken, S.shotsPageCursor);
 }
 
 // ── Trash ─────────────────────────────────────────────────────────────────
 
 export async function loadTrashData() {
   try {
-    const r = await apiFetch('shots.json?trash=1');
+    // The trash TTL is 30 days, so a single page is plenty in practice; the
+    // envelope's `shots` array is the list. (#957)
+    const r = await apiFetch(`api/shots?trash=1&limit=${SHOTS_PAGE_LIMIT}`);
     if (!r.ok) return;
-    S.trashedShots = await r.json();
+    const page = await r.json();
+    S.trashedShots = page.shots || [];
     renderTrash();
   } catch { /* ignore */ }
 }
@@ -163,7 +241,9 @@ export async function trashShot(id) {
   try {
     const r = await apiFetch(`api/shots/${id}/trash`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
     if (!r.ok) throw new Error(await r.text());
+    evictCurve(id);
     S.shots = S.shots.filter(s => s.id !== id);
+    S.allShots = (S.allShots || []).filter(s => s.id !== id);
     if (S.primaryShotId === id) {
       S.primaryShotId = S.shots[0]?.id || null;
       if (S.primaryShotId) localStorage.setItem('glp_primaryShotId', S.primaryShotId);
@@ -196,6 +276,7 @@ export async function permanentDeleteShot(id) {
   try {
     const r = await apiFetch(`api/shots/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
     if (!r.ok) throw new Error(await r.text());
+    evictCurve(id);
     S.trashedShots = S.trashedShots.filter(s => s.id !== id);
     renderTrash();
   } catch (e) {
@@ -218,7 +299,9 @@ function _setDeltaChip(id, delta, decimals = 0, unit = '', colorClass = null, ti
   el.style.display = '';
 }
 
-export function updateView() {
+let _updateViewToken = 0;
+
+export async function updateView() {
   // #814: resolved per render, never at module load — the value has to be
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
@@ -226,17 +309,27 @@ export function updateView() {
   const shotB = S.compareShotId ? S.shots.find(s => s.id === S.compareShotId) : null;
   if (!shotA) return;
 
-  const dA = getShotData(shotA);
-  const dB = getShotData(shotB);
-
   // Same-profile auto-compare (#402): most recent earlier shot with the same
   // profile on the same machine. Only meaningful outside A/B compare mode —
   // that feature stays untouched and unrelated to this same-profile pairing.
   const previousShot = !shotB ? findPreviousShot(S.shots, shotA) : null;
-  const dPrev         = previousShot ? getShotData(previousShot) : null;
 
-  const maxTempA = max((shotA.datapoints?.temperature || []).map(v => v / 10)) || 0;
-  const maxTempB = shotB ? (max((shotB.datapoints?.temperature || []).map(v => v / 10)) || 0) : 0;
+  // #957: curve data is lazy per shot now. Fetch the ones this render needs
+  // (A, the B comparand, the previous same-profile shot for the ghost curve)
+  // before building anything that reads a sample series. A newer updateView()
+  // call supersedes this one via the token guard.
+  const token = ++_updateViewToken;
+  await ensureCurves([shotA.id, shotB && shotB.id, previousShot && previousShot.id].filter(Boolean));
+  if (token !== _updateViewToken) return;
+
+  const dA    = getCachedShotData(shotA.id) || mapShotDatapoints({});
+  const dB    = shotB ? (getCachedShotData(shotB.id) || mapShotDatapoints({})) : null;
+  const dPrev = previousShot ? (getCachedShotData(previousShot.id) || mapShotDatapoints({})) : null;
+  const rawA  = getRawCurve(shotA.id) || {};
+  const rawB  = shotB ? (getRawCurve(shotB.id) || {}) : {};
+
+  const maxTempA = max((rawA.temperature || []).map(v => v / 10)) || 0;
+  const maxTempB = shotB ? (max((rawB.temperature || []).map(v => v / 10)) || 0) : 0;
   const tempMaxScale = Math.ceil(Math.max(maxTempA, maxTempB) + 5) || 100;
 
   const nameA = shotA.profile?.name || shotA.profileName || t('profile_unknown');
@@ -468,6 +561,12 @@ export function updateView() {
       document.getElementById('grindAdviceComparativeIcon').innerHTML = compAdv.icon;
       document.getElementById('grindAdviceComparativeText').textContent = compAdv.text;
 
+      // #957: the comparative thumbnails each need their shot's curve — fetch
+      // the handful (typically 1-8) before rendering; _miniShotChart falls
+      // back to a no-data placeholder for any that are still missing.
+      await ensureCurves(compAdv.shots.map(x => x.shot.id));
+      if (token !== _updateViewToken) return;
+
       const locale   = localeFor(S.currentLang);
       const listHtml = compAdv.shots.map(({ shot: s, grind, score }) => {
         const date  = new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
@@ -611,8 +710,10 @@ export function updateView() {
 
 // ── CSV Export ────────────────────────────────────────────────────────────
 
-function shotToCSVRow(shot) {
-  const d      = getShotData(shot);
+// d is the mapped XY curve bundle for this shot (from the curve cache) — the
+// caller fetches it via getShotCurve() first, since list rows no longer carry
+// datapoints (#957).
+function shotToCSVRow(shot, d) {
   const ann    = shot.annotation || {};
   const avgP   = avgActive(d.pressure.map(p => p.y), 1.5);
   const finalW = max(d.weight.map(p => p.y));
@@ -648,13 +749,18 @@ async function downloadCSV(rows, filename) {
 export async function exportCSV() {
   const shot = S.shots.find(s => s.id === S.primaryShotId);
   if (!shot) return;
+  await getShotCurve(shot.id);
   const date    = new Date(shot.timestamp * 1000).toISOString().slice(0, 10);
   const profile = (shot.profile?.name || shot.profileName || 'shot').replace(/[^a-z0-9]/gi, '_');
-  await downloadCSV([shotToCSVRow(shot)], `glp_shot_${date}_${profile}.csv`);
+  await downloadCSV([shotToCSVRow(shot, getCachedShotData(shot.id) || mapShotDatapoints({}))], `glp_shot_${date}_${profile}.csv`);
 }
 
 export async function exportAllCSV() {
-  await downloadCSV(S.shots.map(shotToCSVRow), 'glp_all_shots.csv');
+  // Rare, explicit user action — pull every shot's curve (bounded concurrency
+  // inside ensureCurves) before building the rows.
+  const list = S.shots;
+  await ensureCurves(list.map(s => s.id));
+  await downloadCSV(list.map(s => shotToCSVRow(s, getCachedShotData(s.id) || mapShotDatapoints({}))), 'glp_all_shots.csv');
 }
 
 // ── .shot export ──────────────────────────────────────────────────────────
@@ -662,7 +768,7 @@ export async function exportAllCSV() {
 export async function exportShot() {
   const shot = S.shots.find(s => s.id === S.primaryShotId);
   if (!shot) return;
-  const d   = shot.datapoints || {};
+  const d   = await getShotCurve(shot.id);
   const ann = shot.annotation || {};
   const timeArr = d.timeInShot || [];
 
@@ -717,7 +823,7 @@ export async function exportProfile() {
     return;
   }
 
-  const d    = shot.datapoints || {};
+  const d    = await getShotCurve(shot.id);
   const rawT = d.timeInShot     || [];
   const rawTP = d.targetPressure || [];
 

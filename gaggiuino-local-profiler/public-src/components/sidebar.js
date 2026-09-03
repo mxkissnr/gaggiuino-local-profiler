@@ -78,9 +78,10 @@ function _buildShotWrapper(shot) {
     // is coffee + dose, line 3 is star rating + grinder + time-of-day. The
     // date itself now lives in the day-separator header above the group
     // (renderSidebar()), not per-row.
-    const data = window.getShotData ? window.getShotData(shot) : null;
-    const sc   = data && window.calcShotScore ? window.calcShotScore(shot, data) : null;
-    const scoreHtml = sc !== null
+    // #957: the row badge uses the server-computed score straight off the
+    // metadata row — no curve fetch, list rows never carry datapoints.
+    const sc   = window.calcShotScore ? window.calcShotScore(shot) : null;
+    const scoreHtml = sc !== null && sc !== undefined
       ? `<span class="sidebar-score ${scoreClass(sc)}">${sc}</span>`
       : '';
 
@@ -314,8 +315,8 @@ export function sortedShots() {
     return S.sortAsc ? list : list.reverse();
   if (S.currentSort === 'score')
     return list.sort((a, b) => dir * (
-      ((window.calcShotScore ? window.calcShotScore(b, window.getShotData(b)) : null) ?? -1) -
-      ((window.calcShotScore ? window.calcShotScore(a, window.getShotData(a)) : null) ?? -1)
+      ((window.calcShotScore ? window.calcShotScore(b) : null) ?? -1) -
+      ((window.calcShotScore ? window.calcShotScore(a) : null) ?? -1)
     ));
   if (S.currentSort === 'rating')
     return list.sort((a, b) => dir * ((b.annotation?.rating || 0) - (a.annotation?.rating || 0)));

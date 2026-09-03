@@ -26,8 +26,19 @@ export const S = {
   // unfiltered fetch from the server, re-filtered into S.shots whenever
   // S.activeMachineId changes (#325) — see filterShotsByMachine() below and
   // applyActiveMachineChange() in components/machines-settings.js.
+  //
+  // #957: both hold METADATA-ONLY rows now — every hydrated-shot field EXCEPT
+  // the `datapoints` curve blob, plus `.score` / `.usedBeanTarget` /
+  // `.hasChartData`. Curve data is fetched per shot on demand and cached in
+  // shot-curves.js. loadData() paints S.shots/S.allShots from page 1 of
+  // GET /api/shots, then loadAllShotMeta() walks the rest into S.allShots in
+  // the background (cursor + hasMore below track that walk; allShotsLoaded
+  // flips true when it finishes).
   shots: [],
   allShots: [],
+  shotsPageCursor: null,
+  shotsHasMore: false,
+  allShotsLoaded: false,
   trashedShots: [],
   chart: null,
   primaryShotId: null,

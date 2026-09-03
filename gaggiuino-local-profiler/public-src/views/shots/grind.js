@@ -1,12 +1,17 @@
 import { t }                               from '../../i18n.js';
 import { detectChanneling, calcBrewRatio } from '../../utils.js';
-import { getShotData, calcShotScore }      from './utils.js';
+import { calcShotScore }                   from './utils.js';
+import { getRawCurve }                     from '../../shot-curves.js';
 import { LIGHTNING_ICON_SVG, SCALE_ICON_SVG, BAR_CHART_ICON_SVG } from '../../icons.js';
 
 // ── Mini chart thumbnail ───────────────────────────────────────────────────
 
+// #957: curves are lazy — callers (index.js updateView) ensureCurves() for
+// every comparable shot before rendering the panel, so the cache read is
+// synchronous here; a still-missing curve falls back to the shot's own
+// datapoints (synthetic/demo) and finally to the no-data placeholder.
 export function _miniShotChart(shot) {
-  const d  = shot.datapoints || {};
+  const d  = getRawCurve(shot.id) || shot.datapoints || {};
   const tm = d.timeInShot || [];
   const series = [
     { vals: (d.pressure  || []).map((v, i) => ({ x: tm[i] / 10, y: v / 10 })).filter(p => p.y > 0), color: '#60a5fa' },
@@ -92,14 +97,14 @@ export function calcComparativeGrindAdvice(shot, allShots) {
       if (!sd || Math.abs(sd - dose) > 1) return false;
     }
     if (_parseGrindNum(a.grindSetting) === null) return false;
-    return calcShotScore(s, getShotData(s)) !== null;
+    return calcShotScore(s) !== null;
   });
   if (comparable.length < 1) return null;
 
   const byGrind = {};
   comparable.forEach(s => {
     const g   = _parseGrindNum(s.annotation.grindSetting);
-    const sc  = calcShotScore(s, getShotData(s));
+    const sc  = calcShotScore(s);
     const key = Math.round(g * 2) / 2;
     if (!byGrind[key]) byGrind[key] = [];
     byGrind[key].push(sc);
@@ -115,7 +120,7 @@ export function calcComparativeGrindAdvice(shot, allShots) {
   const n         = comparable.length;
   const bestScore = Math.round(bestAvg);
   const shots     = comparable
-    .map(s => ({ shot: s, grind: _parseGrindNum(s.annotation.grindSetting), score: calcShotScore(s, getShotData(s)) }))
+    .map(s => ({ shot: s, grind: _parseGrindNum(s.annotation.grindSetting), score: calcShotScore(s) }))
     .sort((a, b) => b.score - a.score);
 
   if (currentGrind === null)
@@ -152,7 +157,7 @@ export function calcBestGrindCombosForBean(beanName, allShots, beanId) {
     if (!sameBean) return false;
     if (!a.grinder?.trim()) return false;
     if (_parseGrindNum(a.grindSetting) === null) return false;
-    return calcShotScore(s, getShotData(s)) !== null;
+    return calcShotScore(s) !== null;
   });
   if (!scored.length) return null;
 
@@ -162,7 +167,7 @@ export function calcBestGrindCombosForBean(beanName, allShots, beanId) {
     const grind    = Math.round(_parseGrindNum(s.annotation.grindSetting) * 2) / 2;
     const key      = `${grinder.toLowerCase()} ${grind}`;
     if (!byCombo[key]) byCombo[key] = { grinder, grindSetting: grind, scores: [] };
-    byCombo[key].scores.push(calcShotScore(s, getShotData(s)));
+    byCombo[key].scores.push(calcShotScore(s));
   });
 
   const combos = Object.values(byCombo)

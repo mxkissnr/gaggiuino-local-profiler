@@ -2,7 +2,8 @@ import Chart from 'chart.js/auto';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch, isApiPortBlocked } from '../api.js';
-import { mapToXY, formatTimeLabel, chartColors } from '../utils.js';
+import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints } from '../utils.js';
+import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
          resolveMachineIconState, MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
@@ -64,10 +65,15 @@ export function initLiveChart() {
   });
 
   // Re-apply reference shot after chart re-init
-  if (S.refShotId) {
-    const refShot = S.shots.find(s => s.id === S.refShotId);
-    if (refShot && window.getShotData) _applyRefDatasets(window.getShotData(refShot));
-  }
+  if (S.refShotId) _applyRefShotById(S.refShotId);
+}
+
+// #957: reference-overlay curves are lazy per shot now — fetch through the
+// curve cache, then feed _applyRefDatasets the mapped XY form.
+async function _applyRefShotById(shotId) {
+  const dp = await getShotCurve(shotId);
+  if (S.refShotId !== shotId) return; // ref changed while we were fetching
+  _applyRefDatasets(mapShotDatapoints(dp));
 }
 
 function _applyRefDatasets(d) {
@@ -84,7 +90,7 @@ export function populateRefSelector() {
   if (!sel) return;
   const prev = sel.value;
   sel.innerHTML = `<option value="">${t('ref_none')}</option>`;
-  S.shots.filter(s => (s.datapoints?.pressure?.length || 0) > 5)
+  S.shots.filter(s => s.hasChartData)
     .slice().reverse().slice(0, 40)
     .forEach(s => {
       const date    = new Date(s.timestamp * 1000).toLocaleDateString(localeFor(S.currentLang), { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -102,12 +108,11 @@ export function populateRefSelector() {
 
 export function autoApplyRefShot(profileName) {
   const match = S.shots
-    .filter(s => (s.profile?.name || s.profileName || '') === profileName
-              && (s.datapoints?.pressure?.length || 0) > 5)
+    .filter(s => (s.profile?.name || s.profileName || '') === profileName && s.hasChartData)
     .sort((a, b) => b.timestamp - a.timestamp)[0];
   if (!match) return;
   S.refShotId = match.id;
-  if (window.getShotData) _applyRefDatasets(window.getShotData(match));
+  _applyRefShotById(match.id);
   const sel = document.getElementById('refShotSelect');
   if (sel) sel.value = String(match.id);
   const btn = document.getElementById('refClearBtn');
@@ -119,7 +124,7 @@ export function onRefShotChange(val) {
   S.refShotId = parseInt(val);
   const shot = S.shots.find(s => s.id === S.refShotId);
   if (!shot) return;
-  if (window.getShotData) _applyRefDatasets(window.getShotData(shot));
+  _applyRefShotById(shot.id);
   const btn = document.getElementById('refClearBtn');
   if (btn) btn.style.display = '';
 }

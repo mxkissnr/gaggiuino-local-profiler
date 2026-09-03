@@ -3,7 +3,7 @@ import { t } from '../i18n.js';
 import { localeFor } from '../constants.js';
 import { esc, scoreColor } from '../utils.js';
 
-export function renderDialin() {
+export async function renderDialin() {
   const select = document.getElementById('dialinCount');
   const saved  = localStorage.getItem('glp_dialin_count');
   if (select && saved && select.value !== saved) select.value = saved;
@@ -24,11 +24,14 @@ export function renderDialin() {
 
   const locale = localeFor(S.currentLang);
 
+  // #957: curves are lazy per shot — fetch the handful this grid shows first.
+  if (window.ensureCurves) await window.ensureCurves(recent.map(s => s.id));
+
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   grid.innerHTML = recent.map(s => {
-    const data  = window.getShotData ? window.getShotData(s) : null;
+    const data  = window.getShotDataById ? window.getShotDataById(s.id) : null;
     const ann   = s.annotation || {};
-    const score = (data && window.calcShotScore) ? window.calcShotScore(s, data) : null;
+    const score = window.calcShotScore ? window.calcShotScore(s) : null;
     const dur   = s.duration ? (s.duration / 10).toFixed(0) + ' s' : '–';
 
     let pAvg = '–';
@@ -43,7 +46,7 @@ export function renderDialin() {
     const ratio  = (ann.dose && s.weight) ? '1:' + (s.weight / 10 / ann.dose).toFixed(1) : null;
     const date   = new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
     const profile = s.profile?.name || s.profileName || '–';
-    const scorePill = score !== null
+    const scorePill = score != null
       // #811: colour/size/radius moved to .score-pill in style.css so this
       // resolves through --on-fill and the type scale. The hardcoded #fff
       // measured 2.37-3.16:1 on the dark theme's semantic fills; only the

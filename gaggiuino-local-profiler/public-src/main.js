@@ -64,6 +64,12 @@ import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggl
          loadDrinkMenu, loadMilkTypes, selectDrinkType, selectMilkType,
          selectFrozenPortion, _renderFrozenPortionPills } from './views/shots.js';
 
+// #957: shot curve data is fetched lazily per shot (list rows are
+// metadata-only). Views reach the cache through these window globals, same
+// as they already do for getShotData / calcShotScore.
+import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData,
+         primeCurve, evictCurve } from './shot-curves.js';
+
 import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, clearReferenceShot,
          connectLiveStream, disconnectLiveStream, setLiveBadge, handleLiveData,
          fetchPreheatData, updatePreheatWidget, fetchLiveData,
@@ -258,6 +264,13 @@ Object.assign(window, {
   // shots view
   getShotData,
   calcShotScore,
+  // #957 curve cache
+  getShotCurve,
+  ensureCurves,
+  getRawCurve,
+  getShotDataById: getCachedShotData,
+  primeCurve,
+  evictCurve,
   loadData,
   loadTrashData,
   renderTrash,

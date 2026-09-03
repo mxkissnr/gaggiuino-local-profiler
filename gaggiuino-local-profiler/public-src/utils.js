@@ -214,6 +214,28 @@ export function mapToXY(timeArr, dataArr) {
     .filter(pt => pt.y !== null);
 }
 
+// mapShotDatapoints(datapoints) -> the XY-series bundle the shot charts and
+// metrics read. Split out of views/shots/utils.js's getShotData (#957) so the
+// per-shot curve cache (shot-curves.js) maps a lazily-fetched datapoints
+// object through the exact same shape. Pure; a missing/empty datapoints
+// yields all-empty series, never null. Kept in this leaf module (no imports)
+// so shot-curves.js can depend on it without an import cycle.
+export function mapShotDatapoints(datapoints) {
+  const d = datapoints || {};
+  const t = d.timeInShot || [];
+  return {
+    rawTimes:       t.map(v => v / 10),
+    pressure:       mapToXY(t, d.pressure),
+    targetPressure: mapToXY(t, d.targetPressure),
+    flow:           mapToXY(t, d.pumpFlow),
+    targetFlow:     mapToXY(t, d.targetPumpFlow),
+    weight:         mapToXY(t, d.shotWeight || d.weight),
+    weightFlow:     mapToXY(t, d.weightFlow),
+    temp:           mapToXY(t, d.temperature),
+    targetTemp:     mapToXY(t, d.targetTemperature),
+  };
+}
+
 // ── Phase detection ───────────────────────────────────────────────────────
 export function detectPhases(times, pressures) {
   if (!times?.length || pressures?.length < 5) return null;
