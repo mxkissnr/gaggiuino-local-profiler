@@ -12,7 +12,7 @@ import { renderSidebar }                                      from '../../compon
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
 import { calcShotScore, shotUsedBeanTarget, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
 import { mapShotDatapoints } from '../../utils.js';
-import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
+import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve, primeCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel }                              from './annotation.js';
 import { updatePQChart }                                      from './charts.js';
@@ -51,6 +51,41 @@ export function _equipmentName(list, id) {
 // fetched per shot on demand via shot-curves.js.
 const SHOTS_PAGE_LIMIT = 60;
 
+// #957: GET /api/shots is Go-only. The shared frontend also runs against the
+// (frozen, bugfix-only) Node backend during the migration, which serves the
+// old full /shots.json dump and no paginated route — so on a 404 we fall
+// back to that dump, seeding the curve cache from the datapoints it carries
+// so the lazy per-shot loader is a pure cache hit there. `trash` toggles the
+// trashed list on either backend. Returns a normalised page:
+// { shots: <newest-first, metadata-only>, nextCursor, hasMore }.
+async function fetchShotsPage({ cursor = null, trash = false } = {}) {
+  const params = new URLSearchParams({ limit: String(SHOTS_PAGE_LIMIT) });
+  if (cursor) params.set('cursor', cursor);
+  if (trash) params.set('trash', '1');
+
+  const r = await apiFetch(`api/shots?${params}`);
+  if (r.status === 404) {
+    const fb = await apiFetch(trash ? 'shots.json?trash=1' : 'shots.json');
+    if (!fb.ok) return { error: fb.status };
+    const dump = await fb.json();               // full ASC array, datapoints inline
+    const shots = Array.isArray(dump) ? dump : [];
+    for (const s of shots) {
+      if (s && s.datapoints) {
+        // Seed the curve cache so the lazy per-shot loader is a pure cache
+        // hit on Node. The row keeps its datapoints (Node's existing shape),
+        // so the metadata-only readers just ignore the extra key.
+        primeCurve(s.id, s.datapoints);
+        s.hasChartData = (s.datapoints.timeInShot?.length || s.datapoints.pressure?.length || 0) > 0;
+      }
+    }
+    shots.reverse();                            // normalise to newest-first
+    return { shots, nextCursor: null, hasMore: false };
+  }
+  if (!r.ok) return { error: r.status };
+  const page = await r.json();
+  return { shots: page.shots || [], nextCursor: page.nextCursor ?? null, hasMore: !!page.hasMore };
+}
+
 export async function loadData() {
   const token = ++_loadDataReqToken;
   const shotsEl = document.getElementById('shots');
@@ -58,22 +93,20 @@ export async function loadData() {
 
   let fetched;
   try {
-    const r = await apiFetch(`api/shots?limit=${SHOTS_PAGE_LIMIT}`);
+    const page = await fetchShotsPage();
     if (token !== _loadDataReqToken) return;
-    if (!r.ok) {
+    if (page.error != null) {
       // #807: Shots is the landing view, so a session that arrived on the
       // direct port with expose_api_port off sees this 401 before it ever
       // sees the Settings card that explains it. Everything needed to
       // explain it is already client-side (see isApiPortBlocked), so say it
       // here instead of showing a bare status code.
-      shotsEl.innerHTML = isApiPortBlocked(r.status)
+      shotsEl.innerHTML = isApiPortBlocked(page.error)
         ? apiPortClosedHtml()
-        : `<div class="loading-state" style="color:#ef4444">HTTP ${r.status}</div>`;
+        : `<div class="loading-state" style="color:#ef4444">HTTP ${page.error}</div>`;
       return;
     }
-    const page = await r.json();
-    if (token !== _loadDataReqToken) return;
-    fetched = [...(page.shots || [])].reverse(); // page is newest-first; keep S.allShots oldest-first
+    fetched = [...page.shots].reverse(); // page is newest-first; keep S.allShots oldest-first
     S.shotsPageCursor = page.hasMore ? page.nextCursor : null;
     S.shotsHasMore    = !!page.hasMore;
     S.allShotsLoaded  = !page.hasMore;
@@ -151,12 +184,10 @@ export async function loadAllShotMeta(token, startCursor) {
     while (cursor && token === _loadDataReqToken) {
       let page;
       try {
-        const r = await apiFetch(`api/shots?limit=${SHOTS_PAGE_LIMIT}&cursor=${encodeURIComponent(cursor)}`);
-        if (token !== _loadDataReqToken) return;
-        if (!r.ok) break;
-        page = await r.json();
+        page = await fetchShotsPage({ cursor });
       } catch { return; }
       if (token !== _loadDataReqToken) return;
+      if (page.error != null) break;
 
       // Each page is newest-first and older than everything already loaded —
       // reverse it to oldest-first and prepend.
@@ -193,11 +224,10 @@ export async function loadMoreShots() {
 
 export async function loadTrashData() {
   try {
-    // The trash TTL is 30 days, so a single page is plenty in practice; the
-    // envelope's `shots` array is the list. (#957)
-    const r = await apiFetch(`api/shots?trash=1&limit=${SHOTS_PAGE_LIMIT}`);
-    if (!r.ok) return;
-    const page = await r.json();
+    // The trash TTL is 30 days, so a single page is plenty in practice. On
+    // the Node backend this falls back to shots.json?trash=1 (#957).
+    const page = await fetchShotsPage({ trash: true });
+    if (page.error != null) return;
     S.trashedShots = page.shots || [];
     renderTrash();
   } catch { /* ignore */ }

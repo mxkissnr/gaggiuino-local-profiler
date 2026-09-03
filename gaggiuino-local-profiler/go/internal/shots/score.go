@@ -246,6 +246,59 @@ func rawHasNonEmptyArray(raw []byte) bool {
 	return false
 }
 
+// tempStabilityDev ports analytics.js's _tempStability: the mean absolute
+// deviation of the temperature series from its target, in °C (both series
+// are the ×10-scaled GLP convention, hence the /10). Returned per GET
+// /api/shots row as `tempStabilityDev` so the Analytics machine-comparison's
+// "Ø stability" column doesn't need every shot's curve client-side (#957
+// decision 3 / step 13). nil when the shot has no usable temp+target pair.
+func tempStabilityDev(v any) *float64 {
+	var temp, target []float64
+	switch t := v.(type) {
+	case map[string]any:
+		temp, target = floatSlice(t["temperature"]), floatSlice(t["targetTemperature"])
+	case stdjson.RawMessage:
+		temp, target = tempTargetFromRaw(t)
+	case []byte:
+		temp, target = tempTargetFromRaw(t)
+	default:
+		return nil
+	}
+	n := len(temp)
+	if len(target) < n {
+		n = len(target)
+	}
+	var sum float64
+	var count int
+	for i := 0; i < n; i++ {
+		if target[i] == 0 {
+			continue
+		}
+		d := temp[i] - target[i]
+		if d < 0 {
+			d = -d
+		}
+		sum += d / 10
+		count++
+	}
+	if count == 0 {
+		return nil
+	}
+	dev := sum / float64(count)
+	return &dev
+}
+
+func tempTargetFromRaw(raw []byte) (temp, target []float64) {
+	if isJSONNull(raw) {
+		return nil, nil
+	}
+	var m map[string]stdjson.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, nil
+	}
+	return decodeFloatArray(m["temperature"]), decodeFloatArray(m["targetTemperature"])
+}
+
 func isJSONNull(r stdjson.RawMessage) bool {
 	t := bytes.TrimSpace(r)
 	return len(t) == 0 || string(t) == "null"

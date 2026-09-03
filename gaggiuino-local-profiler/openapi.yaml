@@ -695,9 +695,10 @@ paths:
                         - $ref: '#/components/schemas/Shot'
                         - type: object
                           properties:
-                            score:          { type: integer, nullable: true }
-                            usedBeanTarget: { type: boolean }
-                            hasChartData:   { type: boolean, description: Whether the shot has a non-empty pressure/time curve series }
+                            score:            { type: integer, nullable: true }
+                            usedBeanTarget:   { type: boolean }
+                            hasChartData:     { type: boolean, description: Whether the shot has a non-empty pressure/time curve series }
+                            tempStabilityDev: { type: number, nullable: true, description: Mean absolute deviation of the temperature series from target, in °C (for the Analytics machine-comparison stability column) }
                   nextCursor:
                     type: string
                     nullable: true

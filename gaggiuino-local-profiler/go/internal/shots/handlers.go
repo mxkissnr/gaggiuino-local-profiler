@@ -237,6 +237,7 @@ func (h *Handlers) listShotsPage(w http.ResponseWriter, r *http.Request) {
 		out["score"] = row.Score
 		out["usedBeanTarget"] = row.UsedBeanTarget
 		out["hasChartData"] = row.HasChartData
+		out["tempStabilityDev"] = row.TempStabilityDev
 		shotsOut[i] = out
 	}
 

@@ -77,10 +77,11 @@ func DecodeCursor(token string) (Cursor, error) {
 // resolved score fields and hasChartData. Score is nil for a shot with too
 // little data to score at all (matching CalcShotScoreDetail).
 type PageRow struct {
-	Shot           Shot
-	Score          *int
-	UsedBeanTarget bool
-	HasChartData   bool
+	Shot             Shot
+	Score            *int
+	UsedBeanTarget   bool
+	HasChartData     bool
+	TempStabilityDev *float64
 }
 
 // Page is a slice of PageRows plus the keyset state to fetch the next one.
@@ -236,20 +237,24 @@ func (r *Repository) scanPageRow(sc rowScanner) (PageRow, *scoreCacheRow, error)
 	}
 
 	row := PageRow{Shot: shot}
+	// hasChartData / tempStabilityDev are derived from the raw datapoints
+	// bytes on every row (cache hit or miss) — one shallow tokenize each,
+	// bounded by page size, never the full score-series decode.
+	row.HasChartData = hasChartSeries(shot["datapoints"])
+	row.TempStabilityDev = tempStabilityDev(shot["datapoints"])
+
 	if cachedFingerprint.Valid && cachedFingerprint.String == fingerprint {
 		if cachedScore.Valid {
 			v := int(cachedScore.Int64)
 			row.Score = &v
 		}
 		row.UsedBeanTarget = cachedUBT.Bool
-		row.HasChartData = hasChartSeries(shot["datapoints"])
 		return row, nil, nil
 	}
 
 	detail := CalcShotScoreDetail(shot, nil)
 	row.Score = detail.Score
 	row.UsedBeanTarget = detail.UsedBeanTarget
-	row.HasChartData = hasChartSeries(shot["datapoints"])
 	return row, &scoreCacheRow{
 		shotID:         id,
 		score:          detail.Score,

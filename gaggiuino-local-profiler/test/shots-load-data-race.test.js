@@ -56,7 +56,7 @@ describe('loadData (#644 race)', () => {
     const pB = new Promise(res => { resolveB = res; });
     let shotsCallCount = 0;
     fetchSpy.mockImplementation(url => {
-      if (url.startsWith('api/shots?trash=1')) return Promise.resolve({ ok: false });
+      if (url.includes('trash=1')) return Promise.resolve({ ok: false });
       shotsCallCount++;
       return shotsCallCount === 1 ? pA : pB; // call A fired first, call B fired second
     });

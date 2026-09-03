@@ -1185,10 +1185,12 @@ export function buildBeanRanking() {
 // regardless of whatever S.activeMachineId currently scopes the rest of
 // the app to. Only rendered once >=2 machines are registered.
 function _tempStability(shot) {
-  // #957: curves are lazy — buildMachineComparison() ensureCurves() for every
-  // compared shot first, so this cache read is populated; a synthetic shot
-  // still carries its own datapoints.
-  const d = (window.getRawCurve && window.getRawCurve(shot.id)) || shot.datapoints || {};
+  // #957: the server computes this scalar per GET /api/shots row
+  // (tempStabilityDev) from the same temp+target series it parses to score —
+  // no per-shot curve fetch needed here. Fall back to a local compute only
+  // for synthetic/demo shots that carry their own datapoints inline.
+  if (shot.tempStabilityDev !== undefined) return shot.tempStabilityDev;
+  const d = shot.datapoints || {};
   const temp = d.temperature, target = d.targetTemperature;
   if (!temp?.length || !target?.length) return null;
   const n = Math.min(temp.length, target.length);
@@ -1225,7 +1227,7 @@ export function _computeMachineComparison(shots, machines) {
   });
 }
 
-export async function buildMachineComparison() {
+export function buildMachineComparison() {
   const card = document.getElementById('machineComparisonCard');
   if (!card) return;
   const machines = S.machines || [];
@@ -1234,11 +1236,6 @@ export async function buildMachineComparison() {
 
   const el = document.getElementById('machineComparison');
   if (!el) return;
-
-  // #957: the Ø-stability column is the one analytics figure that needs every
-  // shot's temperature curve. Only fetch them here, in the >=2-machine case,
-  // behind this card's own guard — bounded concurrency inside ensureCurves.
-  if (window.ensureCurves) await window.ensureCurves((S.allShots || []).map(s => s.id));
 
   const rows = _computeMachineComparison(S.allShots || [], machines);
   if (!rows.some(r => r.count > 0)) {

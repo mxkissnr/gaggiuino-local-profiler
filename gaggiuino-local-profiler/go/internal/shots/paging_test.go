@@ -226,6 +226,30 @@ func TestScoreCache_InvalidatedByAnnotation(t *testing.T) {
 	}
 }
 
+func TestTempStabilityDev_MeanAbsDeviationOverTen(t *testing.T) {
+	// temp - target: |950-940|,|960-940|,|930-940| = 10,20,10 -> mean 13.33
+	// /10 -> 1.333 (analytics.js _tempStability convention).
+	dp := map[string]any{
+		"temperature":       []any{950.0, 960.0, 930.0},
+		"targetTemperature": []any{940.0, 940.0, 940.0},
+		"pressure":          []any{90.0, 90.0, 90.0},
+		"timeInShot":        []any{0.0, 10.0, 20.0},
+	}
+	got := tempStabilityDev(map[string]any(dp))
+	if got == nil || *got < 1.33 || *got > 1.34 {
+		t.Fatalf("tempStabilityDev = %v, want ~1.333", got)
+	}
+	// A zero target sample is skipped, not counted as a huge deviation.
+	if d := tempStabilityDev(map[string]any{"temperature": []any{950.0}, "targetTemperature": []any{0.0}}); d != nil {
+		t.Fatalf("all-zero-target series should yield nil, got %v", *d)
+	}
+	// raw-bytes path matches the map path.
+	raw := stdjson.RawMessage(`{"temperature":[950,960,930],"targetTemperature":[940,940,940]}`)
+	if d := tempStabilityDev(raw); d == nil || *d < 1.33 || *d > 1.34 {
+		t.Fatalf("raw path tempStabilityDev = %v, want ~1.333", d)
+	}
+}
+
 // ── GET /api/shots handler ────────────────────────────────────────────
 
 func TestListShotsPage_EnvelopeAndSlimRows(t *testing.T) {
@@ -252,7 +276,7 @@ func TestListShotsPage_EnvelopeAndSlimRows(t *testing.T) {
 		if _, ok := row["datapoints"]; ok {
 			t.Errorf("row %v still carries datapoints", row["id"])
 		}
-		for _, k := range []string{"score", "usedBeanTarget", "hasChartData"} {
+		for _, k := range []string{"score", "usedBeanTarget", "hasChartData", "tempStabilityDev"} {
 			if _, ok := row[k]; !ok {
 				t.Errorf("row %v missing %q", row["id"], k)
 			}
