@@ -2715,6 +2715,30 @@
             transition: width .2s ease;
         }
 
+        /* ── Backup/restore modal progress (#960) — reuses the shot-import
+           track/fill above; adds an indeterminate mode for transfers whose
+           size is genuinely unknown (Node backend sends no estimate header,
+           or the server-side restore phase after the upload completes). ── */
+        .backup-modal-progress {
+            display: flex;
+            align-items: center;
+            gap: var(--sp-2);
+            margin: var(--sp-2) 0;
+        }
+        #backupModalProgressLabel {
+            font-size: var(--fs-1);
+            color: var(--gray-500);
+            white-space: nowrap;
+        }
+        .sync-progress-track.indeterminate .sync-progress-fill {
+            width: 40% !important;
+            animation: glp-indeterminate 1.1s ease-in-out infinite;
+        }
+        @keyframes glp-indeterminate {
+            0% { margin-left: -40%; }
+            100% { margin-left: 100%; }
+        }
+
         /* ── Machine icon — live states (#811) ──────────────────────────
            Animated "Instrument" icon (public-src/machine-icon.js's
            machineIconAnimatedSvg()/setMachineIconMode()), ported from

@@ -6,7 +6,7 @@
 // restore, the same reasoning `lib/machines/options-adoption.js` documents
 // for tracked options.
 import { t } from '../i18n.js';
-import { apiFetch, initToken } from '../api.js';
+import { apiFetch, apiFetchToBlob, apiUpload, initToken } from '../api.js';
 import { shareOrDownloadBlob } from '../utils.js';
 
 const SECTION_KEYS = ['shots', 'maintenance', 'orders', 'machines', 'settings', 'secrets'];
@@ -70,9 +70,50 @@ function els() {
         passConfirmRow: document.getElementById('backupPassphraseConfirmRow'),
         preview:      document.getElementById('backupPreview'),
         error:        document.getElementById('backupModalError'),
+        progress:     document.getElementById('backupModalProgress'),
+        progressFill: document.getElementById('backupModalProgressFill'),
+        progressLabel: document.getElementById('backupModalProgressLabel'),
         confirmBtn:   document.getElementById('backupModalConfirmBtn'),
         cancelBtn:    document.getElementById('backupModalCancelBtn'),
     };
+}
+
+// Progress row (#960). A null `pct` means "size unknown" — an indeterminate
+// bar (Node backend sends no X-GLP-Backup-Estimate; or the server-side
+// restore phase after the upload bytes are all sent). Both the confirm and
+// the cancel button are disabled for the whole transfer (setBusy) so an
+// in-flight stream/XHR is never orphaned — there is no abort path.
+function showProgress(labelText, pct) {
+    const { progress, progressFill, progressLabel } = els();
+    const track = progress.querySelector('.sync-progress-track');
+    progress.style.display = '';
+    if (pct == null) {
+        track.classList.add('indeterminate');
+    } else {
+        track.classList.remove('indeterminate');
+        progressFill.style.width = pct + '%';
+    }
+    progressLabel.textContent = labelText;
+}
+
+function hideProgress() {
+    const { progress, progressFill } = els();
+    progress.style.display = 'none';
+    progressFill.style.width = '0%';
+    progress.querySelector('.sync-progress-track').classList.remove('indeterminate');
+}
+
+function setBusy(on) {
+    const { confirmBtn, cancelBtn } = els();
+    confirmBtn.disabled = on;
+    cancelBtn.disabled = on;
+}
+
+// Clamped whole-percent for a determinate bar — never shows 100% before the
+// transfer has actually finished (the export estimate header is only
+// approximate; see routes' X-GLP-Backup-Estimate spec).
+function clampPct(done, total) {
+    return Math.min(99, Math.floor((done / total) * 100));
 }
 
 function checkedSections() {
@@ -90,6 +131,8 @@ function setError(msg) {
 function closeBackupModal() {
     const { modal, passInput, passConfirm } = els();
     modal.classList.remove('open');
+    hideProgress();
+    setBusy(false);
     mode = null;
     restoreBundle = null;
     restoreZipBytes = null;
@@ -130,12 +173,19 @@ function renderSectionCheckboxes(presentSections) {
 // which the backend reads as "fall back to the bundle's own recorded
 // `sections` field" -- used once, by openBackupRestoreModal()'s initial
 // "what's in this file" probe, before the user has touched any checkbox.
-function postRestore({ sections, passphrase, dryRun }) {
+function postRestore({ sections, passphrase, dryRun, onProgress }) {
     if (restoreZipBytes) {
         const headers = { 'Content-Type': 'application/zip' };
         if (sections !== undefined) headers['X-GLP-Sections'] = JSON.stringify(sections);
         if (passphrase !== undefined) headers['X-GLP-Passphrase'] = passphrase;
         if (dryRun) headers['X-GLP-Dry-Run'] = 'true';
+        // The real (non-dry-run) upload gets an XHR so upload progress is
+        // observable; the shim gives back the same { ok, status, json() }
+        // shape the rest of this module already expects from a Response.
+        if (onProgress) {
+            return apiUpload('api/restore', { method: 'POST', headers, body: restoreZipBytes, onProgress })
+                .then(res => ({ ok: res.ok, status: res.status, json: async () => JSON.parse(res.text || '{}') }));
+        }
         return apiFetch('api/restore', { method: 'POST', headers, body: restoreZipBytes });
     }
     return apiFetch('api/restore', {
@@ -205,20 +255,41 @@ export function openBackupExportModal() {
         if (wantsSecrets && !passphrase) { setError(t('backup_error_passphrase_required')); return; }
         if (wantsSecrets && passphrase !== els().passConfirm.value) { setError(t('backup_error_passphrase_mismatch')); return; }
         setError('');
+        setBusy(true);
+        showProgress(t('backup_progress_preparing'), null);
         try {
-            const r = await apiFetch('api/backup', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sections, passphrase: wantsSecrets ? passphrase : undefined }),
-            });
-            if (!r.ok) { const err = await r.json().catch(() => ({})); setError(t('backup_error', err.error || r.status)); return; }
             // The response is already the zip binary (backup.json + real
             // image files, see routes/backup.js's buildBackupZip()) -- no
-            // re-serialization needed, unlike the old JSON.stringify(bundle) here.
-            const blob     = await r.blob();
+            // re-serialization needed, unlike the old JSON.stringify(bundle).
+            // X-GLP-Backup-Estimate is an approximate size for the bar; the
+            // Go backend sends it, the Node backend doesn't (then the bar
+            // stays indeterminate). apiFetchToBlob buffers the whole zip in
+            // memory before the download — fine for these file sizes.
+            const res = await apiFetchToBlob('api/backup', {
+                opts: {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sections, passphrase: wantsSecrets ? passphrase : undefined }),
+                },
+                estimateHeader: 'X-GLP-Backup-Estimate',
+                onProgress: (received, total) => {
+                    if (total) showProgress(t('backup_progress_download', clampPct(received, total)), clampPct(received, total));
+                    else showProgress(t('backup_progress_preparing'), null);
+                },
+            });
+            if (!res.ok) {
+                setBusy(false);
+                hideProgress();
+                let detail = res.status;
+                try { detail = JSON.parse(res.errorText).error || res.status; } catch { /* non-JSON error body */ }
+                setError(t('backup_error', detail));
+                return;
+            }
+            showProgress(t('backup_progress_download', 100), 100);
             const filename = `glp-backup-${backupTimestamp()}.zip`;
-            await shareOrDownloadBlob(blob, filename, { title: filename });
+            await shareOrDownloadBlob(res.blob, filename, { title: filename });
+            if (window.showToast) window.showToast(t('backup_progress_done'));
             closeBackupModal();
-        } catch (e) { setError(t('backup_error', e.message)); }
+        } catch (e) { setBusy(false); hideProgress(); setError(t('backup_error', e.message)); }
     };
 }
 
@@ -313,15 +384,30 @@ export async function openBackupRestoreModal(input) {
         if (!sections.length) { setError(t('backup_error_no_sections')); return; }
         const passphrase = els().secretsCb.checked ? els().passInput.value : undefined;
         setError('');
+        setBusy(true);
+        showProgress(t('backup_progress_upload', 0), 0);
         try {
-            const r = await postRestore({ sections, passphrase, dryRun: undefined });
+            // Legacy JSON-bundle restore is already fully in memory — no
+            // upload phase to report, just the indeterminate server phase.
+            const onProgress = restoreZipBytes
+                ? (sent, total) => {
+                    if (sent >= total) showProgress(t('backup_progress_restoring'), null);
+                    else showProgress(t('backup_progress_upload', clampPct(sent, total)), clampPct(sent, total));
+                }
+                : undefined;
+            if (!restoreZipBytes) showProgress(t('backup_progress_restoring'), null);
+            const r = await postRestore({ sections, passphrase, dryRun: undefined, onProgress });
+            // Upload bytes are all sent by the time the promise resolves;
+            // the server-side apply is genuinely unbounded from here.
+            showProgress(t('backup_progress_restoring'), null);
             const res = await r.json();
-            if (!res.ok) { setError(t('backup_error', res.error)); return; }
+            if (!res.ok) { setBusy(false); hideProgress(); setError(t('backup_error', res.error)); return; }
             // The restore may have just replaced the API token this session is
             // using -- /api/token serves any caller that can reach the port
             // (see routes/system.js), so re-fetching it is always safe and,
             // if it changed, required before any further apiFetch() call.
             if (res.secretsPresent && res.secretsRestored) await initToken();
+            if (window.showToast) window.showToast(t('backup_progress_done'));
             input.value = '';
             closeBackupModal();
             alert(res.secretsPresent
@@ -333,7 +419,7 @@ export async function openBackupRestoreModal(input) {
             // reload after the result alert is dismissed is simpler and more
             // complete than growing a bespoke per-section refresh here.
             location.reload();
-        } catch (e) { setError(t('backup_error', e.message)); }
+        } catch (e) { setBusy(false); hideProgress(); setError(t('backup_error', e.message)); }
     };
 
     refreshRestorePreview();

@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Added
+- **Backup export/import and the dev-channel raw-database download/upload now show a progress bar (and disable their button) for the whole transfer**, instead of an unresponsive UI on a large database. Closes #960
 - **Uploaded entity photos (beans, grinders, baskets, puck screens, shots) are now optimized on save.** Each image is downscaled to at most 1600 px on its long edge, re-encoded without embedded metadata (camera EXIF and GPS location tags are stripped), and stored next to a small thumbnail. Grid views can request the thumbnail, so libraries with many photos load noticeably less data. Existing photos are optimized once in the background on the first start after upgrading; originals are kept if an image can't be processed. Closes #961
 
 ### Deprecated

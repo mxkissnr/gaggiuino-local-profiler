@@ -48,3 +48,17 @@ describe('backup modal: secrets checkbox markup', () => {
         expect(tag).toMatch(/value="secrets"/);
     });
 });
+
+describe('backup modal: progress row markup (#960)', () => {
+    it('has a #backupModalProgress element inside the #backupModal block', () => {
+        const modalBlock = html.slice(html.indexOf('id="backupModal"'), html.indexOf('<script type="module"'));
+        expect(modalBlock).toContain('id="backupModalProgress"');
+    });
+
+    it('the progress row contains a .sync-progress-fill child (reuses the shot-import bar styles)', () => {
+        const m = html.match(/<div id="backupModalProgress"[\s\S]*?<\/div>\s*<\/div>/);
+        expect(m).not.toBeNull();
+        expect(m[0]).toContain('sync-progress-fill');
+        expect(m[0]).toContain('id="backupModalProgressLabel"');
+    });
+});

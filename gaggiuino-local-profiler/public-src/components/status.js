@@ -1,7 +1,7 @@
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { localeFor } from '../constants.js';
-import { apiFetch } from '../api.js';
+import { apiFetch, apiFetchToBlob, apiUpload } from '../api.js';
 import { shareOrDownloadBlob } from '../utils.js';
 import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge, updateLegacyMachineOptionsBanner } from './onboarding.js';
 import { updateApiPortClosedBanner } from './api-port-notice.js';
@@ -358,17 +358,45 @@ export async function updateStatus(machineId) {
 // access, only for HA Ingress traffic (which bypasses auth by Supervisor IP,
 // see server.js isIngressRequest()). The route itself (routes/debug.js)
 // still 404s outright on any real install regardless of how it's called.
+// #960: the Dev Tools card has no room for a progress bar, so the transfer
+// state shows as the button's own label ("Downloading… 42%") while the
+// button is disabled — the minimal idiomatic choice for a dev-only card.
+// Restores the button's text/disabled state on every exit.
+function withButtonProgress(btn, work) {
+  const prevText = btn.textContent;
+  const prevDisabled = btn.disabled;
+  btn.disabled = true;
+  const restore = () => { btn.textContent = prevText; btn.disabled = prevDisabled; };
+  // Promise chain rather than async/await + finally so the snapshot restore
+  // isn't flagged by require-atomic-updates (nothing else writes this
+  // button while it's disabled anyway).
+  return Promise.resolve(work((text) => { btn.textContent = text; }))
+    .then((v) => { restore(); return v; }, (err) => { restore(); throw err; });
+}
+
 export async function exportDevDb() {
+  const btn = document.getElementById('devExportDbBtn') || { textContent: '', disabled: false };
   try {
-    const r = await apiFetch('api/debug/export-db');
-    if (!r.ok) return;
-    const blob = await r.blob();
-    const d = new Date();
-    const pad = n => String(n).padStart(2, '0');
-    const filename = `glp-db-export-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
-      `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}.db`;
-    await shareOrDownloadBlob(blob, filename, { title: filename });
-  } catch { /* ignore -- dev-only diagnostic tool, no user-facing error UI needed */ }
+    await withButtonProgress(btn, async (setLabel) => {
+      const res = await apiFetchToBlob('api/debug/export-db', {
+        onProgress: (received, total) => setLabel(total
+          ? t('backup_progress_download', Math.floor((received / total) * 100))
+          : t('backup_progress_preparing')),
+      });
+      if (!res.ok) {
+        if (window.showToast) window.showToast(t('settings_devtools_export_db_failed'));
+        return;
+      }
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const filename = `glp-db-export-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
+        `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}.db`;
+      await shareOrDownloadBlob(res.blob, filename, { title: filename });
+      if (window.showToast) window.showToast(t('backup_progress_done'));
+    });
+  } catch {
+    if (window.showToast) window.showToast(t('settings_devtools_export_db_failed'));
+  }
 }
 
 // #755: counterpart to exportDevDb() above -- uploads a raw .db file to
@@ -384,16 +412,30 @@ export async function exportDevDb() {
 export async function importDevDb(file) {
   if (!file) return;
   if (!confirm(t('settings_devtools_import_db_confirm'))) return;
+  const input = document.getElementById('devImportDbInput');
+  const label = document.querySelector('#devToolsCard label span[data-i18n="settings_devtools_import_db"]')
+    || { textContent: '', disabled: false };
+  if (input) input.disabled = true;
   try {
-    const r = await apiFetch('api/debug/import-db', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream' },
-      body: await file.arrayBuffer(),
+    await withButtonProgress(label, async (setLabel) => {
+      const res = await apiUpload('api/debug/import-db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: await file.arrayBuffer(),
+        onProgress: (sent, total) => setLabel(sent >= total
+          ? t('backup_progress_restoring')
+          : t('backup_progress_upload', Math.floor((sent / total) * 100))),
+      });
+      let body = {};
+      try { body = JSON.parse(res.text || '{}'); } catch { /* non-JSON body */ }
+      if (!res.ok) { alert(body.error || t('settings_devtools_import_db_failed')); return; }
+      alert(t('settings_devtools_import_db_done'));
     });
-    const body = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(body.error || t('settings_devtools_import_db_failed')); return; }
-    alert(t('settings_devtools_import_db_done'));
-  } catch { alert(t('settings_devtools_import_db_failed')); }
+  } catch {
+    alert(t('settings_devtools_import_db_failed'));
+  } finally {
+    if (input) input.disabled = false;
+  }
 }
 
 export function updatePowerButton(sw) {

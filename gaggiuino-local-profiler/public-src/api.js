@@ -33,6 +33,69 @@ export async function apiFetch(url, opts = {}) {
   return fetch(url, opts);
 }
 
+// apiFetchToBlob runs a request through apiFetch and reads the response body
+// as a Blob, reporting download progress along the way. `total` passed to
+// onProgress is the Content-Length if present, else the value of the
+// `estimateHeader` response header (POST /api/backup's approximate
+// X-GLP-Backup-Estimate — the Node backend never sends it), else null for
+// "indeterminate". A non-numeric/zero header is treated as null too.
+//
+// The whole body is buffered in browser memory before the caller builds an
+// object-URL download from the returned Blob. That is acceptable for the
+// tens-of-MB database/backup files this is used for, not for a
+// general-purpose streaming download.
+export async function apiFetchToBlob(url, { opts = {}, onProgress, estimateHeader } = {}) {
+  const r = await apiFetch(url, opts);
+  if (!r.ok) {
+    return { ok: false, status: r.status, errorText: await r.text().catch(() => '') };
+  }
+  // Safari <14.1 / JSDOM: no streaming body reader — fall back to r.blob(),
+  // which still works, just without progress events.
+  if (!r.body || typeof r.body.getReader !== 'function') {
+    return { ok: true, status: r.status, blob: await r.blob() };
+  }
+
+  const finitePositive = (v) => (Number.isFinite(v) && v > 0 ? v : null);
+  const total = finitePositive(Number(r.headers.get('Content-Length')))
+    ?? (estimateHeader ? finitePositive(Number(r.headers.get(estimateHeader))) : null);
+
+  const reader = r.body.getReader();
+  const chunks = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    onProgress?.(received, total);
+  }
+  const type = r.headers.get('Content-Type') || 'application/octet-stream';
+  return { ok: true, status: r.status, blob: new Blob(chunks, { type }) };
+}
+
+// apiUpload sends a body via XMLHttpRequest so upload progress
+// (xhr.upload.onprogress) is observable — fetch() has no equivalent. It
+// mirrors apiFetch's X-GLP-Token injection and forwards any custom headers.
+// All mutable state stays inside the executor (require-atomic-updates).
+export function apiUpload(url, { method = 'POST', headers = {}, body, onProgress } = {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    if (S.glpToken) xhr.setRequestHeader('X-GLP-Token', S.glpToken);
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded, e.total);
+    };
+    xhr.onload = () => resolve({
+      ok: xhr.status >= 200 && xhr.status < 300,
+      status: xhr.status,
+      text: xhr.responseText,
+    });
+    xhr.onerror = () => reject(new Error('network error'));
+    xhr.send(body);
+  });
+}
+
 // #807: "this session can't talk to the API because expose_api_port is off".
 // Both inputs are already client-side: S.apiPortExposed mirrors the add-on
 // option via the deliberately-public /api/status (components/status.js), and
