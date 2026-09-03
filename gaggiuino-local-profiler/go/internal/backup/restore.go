@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
@@ -699,6 +700,12 @@ func (h *Handlers) applyRestoredToken(token string) {
 // ordering). The bytes are re-read from the zip entry here, one at a time,
 // rather than held in the plan since a heavily-illustrated library would
 // otherwise sum every image body in memory (#959).
+//
+// Each image is run through img.WriteOptimized (ModePreserve): a JPEG/PNG
+// is downscaled + metadata-stripped, a WebP/GIF is written byte-identical,
+// and a ".thumb" sibling is generated. The stored extension is never
+// changed, so the DB row written in the restore transaction stays
+// consistent (#961 decision 6).
 func (h *Handlers) writePendingImages(imgs restoreImages, pending []pendingImageWrite) {
 	for _, w := range pending {
 		buf, ok := imgs.getForWrite(w.srcName)
@@ -708,6 +715,7 @@ func (h *Handlers) writePendingImages(imgs restoreImages, pending []pendingImage
 		if err := os.MkdirAll(filepath.Dir(w.path), 0o755); err != nil {
 			continue
 		}
-		_ = os.WriteFile(w.path, buf, 0o644)
+		srcExt := strings.TrimPrefix(filepath.Ext(w.path), ".")
+		_, _ = img.WriteOptimized(w.path, buf, srcExt)
 	}
 }

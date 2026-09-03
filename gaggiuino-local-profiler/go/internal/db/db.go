@@ -490,6 +490,37 @@ func installIDString(raw interface{}) string {
 	return fmt.Sprintf("%v", raw)
 }
 
+// GetKVBool reads a boolean flag from the kv table, JSON-decoded like every
+// other kv row. A missing key or a value that is not a JSON `true` reads as
+// false — callers use this for "has one-time task X already run" gates
+// where only an explicit true should skip the work.
+func GetKVBool(sqlDB *sql.DB, key string) (bool, error) {
+	var value string
+	err := sqlDB.QueryRow(`SELECT value FROM kv WHERE key = ?`, key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var b bool
+	if json.Unmarshal([]byte(value), &b) != nil {
+		return false, nil
+	}
+	return b, nil
+}
+
+// SetKVBool stores a boolean flag in the kv table, JSON-encoded to match
+// the convention every other kv row follows (see EnsureInstallID).
+func SetKVBool(sqlDB *sql.DB, key string, v bool) error {
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	_, err = sqlDB.Exec(`INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)`, key, string(encoded))
+	return err
+}
+
 // copyFile is a plain byte-for-byte copy (no fsync/atomic-rename dance —
 // this is a best-effort pre-migration safety snapshot, same as
 // fs.copyFileSync in the Node original, not a crash-safe write path).
