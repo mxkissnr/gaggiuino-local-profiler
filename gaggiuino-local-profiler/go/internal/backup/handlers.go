@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,20 @@ const (
 	restoreJSONBodyLimit = 50 * 1024 * 1024
 	restoreZipBodyLimit  = 50 * 1024 * 1024
 	postBackupBodyLimit  = 16 * 1024 // POST /api/backup's own body is tiny (sections+passphrase) — server.js's global express.json({limit:'16kb'}) default applies.
+)
+
+// backupEnvelopeEstimateBytes and perShotEstimateBytes feed the
+// X-GLP-Backup-Estimate response header on POST /api/backup — a purely
+// client-side progress hint (#960). Both are deliberately approximate: the
+// real body is DEFLATE-compressed and a hydrated shot's JSON (profile +
+// datapoints) varies widely, so perShotEstimateBytes is a rough guess, not
+// a measurement. The client MUST clamp the displayed bar at 99% until the
+// stream actually ends (see the header spec above postBackup), which makes
+// an under-estimate harmless and a mild over-estimate only cap the bar
+// below 99% before it jumps to 100.
+const (
+	backupEnvelopeEstimateBytes = 4 * 1024 // non-shot JSON sections + envelope
+	perShotEstimateBytes        = 4 * 1024 // rough deflated size of one hydrated shot's JSON
 )
 
 // restoreUnzipEntryLimit/restoreUnzipTotalLimit bound how much
@@ -138,6 +153,12 @@ func (h *Handlers) getBackup(w http.ResponseWriter, r *http.Request) {
 
 // ── POST /api/backup ─────────────────────────────────────────────────────
 
+// postBackup streams the selective/encrypted zip export. Before the first
+// body byte it emits X-GLP-Backup-Estimate: an approximate upper-ish bound
+// on the response size (stat-only — it never opens an image or a shot row),
+// for a client-side determinate progress bar. Clients clamp at 99% until
+// the stream ends and treat a missing/zero/non-numeric header as
+// indeterminate (the Node backend never sends it).
 func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, postBackupBodyLimit)
 	var body struct {
@@ -171,6 +192,13 @@ func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	est, err := h.backupSizeEstimate(sec)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.Header().Set("X-GLP-Backup-Estimate", strconv.FormatInt(est, 10))
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="glp-backup-%s.zip"`, backupTimestamp()))
 	w.WriteHeader(http.StatusOK)
@@ -193,6 +221,44 @@ func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 	if err := zw.Close(); err != nil {
 		log.Printf("backup: closing backup zip: %v", err)
 	}
+}
+
+// backupSizeEstimate computes the X-GLP-Backup-Estimate value for a given
+// section scope. It is stat-only: it counts shot rows and sums the on-disk
+// size of the image files streamImagesIntoZip would bundle, without opening
+// a single image or hydrating a single shot. The image filter mirrors
+// streamImagesIntoZip exactly (skip directories and *.thumb.* files). A
+// missing/unreadable image directory is treated as "no images" rather than
+// an error; only a DB failure counting shots propagates (still pre-header,
+// so a clean 500).
+func (h *Handlers) backupSizeEstimate(sec sections) (int64, error) {
+	inScope := sec == nil || sec.has("shots")
+	est := int64(backupEnvelopeEstimateBytes)
+	if !inScope {
+		return est, nil
+	}
+
+	n, err := h.deps.ShotsRepo.Count()
+	if err != nil {
+		return 0, err
+	}
+	est += int64(n) * perShotEstimateBytes
+
+	entries, err := os.ReadDir(imageDir)
+	if err != nil {
+		return est, nil
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || strings.Contains(entry.Name(), ".thumb.") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		est += info.Size()
+	}
+	return est, nil
 }
 
 // streamImagesIntoZip copies every file in imageDir into zw as an

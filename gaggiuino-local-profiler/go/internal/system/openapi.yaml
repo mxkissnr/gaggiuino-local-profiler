@@ -2692,7 +2692,13 @@ paths:
         install, before touching the database. Checkpoints WAL first so the
         download reflects all committed writes.
       responses:
-        "200": { description: "SQLite database file (Content-Disposition attachment)", content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+        "200":
+          description: "SQLite database file (Content-Disposition attachment)"
+          headers:
+            Content-Length:
+              description: Exact size of the database file in bytes (set after the WAL checkpoint) — the frontend uses it for a determinate download progress bar.
+              schema: { type: integer }
+          content: { application/octet-stream: { schema: { type: string, format: binary } } }
         "404": { description: "Not a dev-channel build — route does not exist" }
         "500": { description: Export failed }
 
@@ -2776,6 +2782,18 @@ paths:
       responses:
         "200":
           description: "Zip archive (Content-Disposition attachment): backup.json (BackupBundle, no embedded images) + images/<filename> entries"
+          headers:
+            X-GLP-Backup-Estimate:
+              description: >
+                Approximate upper-ish bound on the response body size in
+                bytes (decimal ASCII, like Content-Length), for a
+                client-side determinate progress bar. NOT exact — the body
+                is DEFLATE-compressed and the per-shot term is a constant
+                guess; clients clamp displayed progress at 99 % until the
+                stream ends and treat a missing/zero/non-numeric value as
+                indeterminate. Stat-only on the server (no image or shot
+                row is opened to compute it).
+              schema: { type: integer }
           content:
             application/zip:
               schema: { type: string, format: binary }

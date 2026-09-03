@@ -8,7 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
@@ -107,6 +109,66 @@ func TestPostBackup_ScopedSections(t *testing.T) {
 	sections, _ := bundle["sections"].([]any)
 	if len(sections) != 1 || sections[0] != "orders" {
 		t.Errorf("sections = %+v", bundle["sections"])
+	}
+}
+
+// TestPostBackup_SetsEstimateHeader pins both estimate constants and the
+// *.thumb.* exclusion: two shots + two real images (48 + 100 bytes) + one
+// thumbnail that must NOT be counted → 4096 envelope + 2*4096 per-shot +
+// (48 + 100) image bytes.
+func TestPostBackup_SetsEstimateHeader(t *testing.T) {
+	imgDir := useImageDir(t)
+	if err := os.WriteFile(filepath.Join(imgDir, "1.png"), fakePNG(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(imgDir, "2.png"), bytes.Repeat([]byte{0x00}, 100), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(imgDir, "3.thumb.png"), bytes.Repeat([]byte{0x00}, 999), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h, deps, _ := newTestHandlers(t)
+	mux := newMux(h)
+	seedShot(t, deps, 1)
+	seedShot(t, deps, 2)
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	raw := rec.Header().Get("X-GLP-Backup-Estimate")
+	got, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		t.Fatalf("X-GLP-Backup-Estimate = %q; not a decimal integer: %v", raw, err)
+	}
+	want := int64(backupEnvelopeEstimateBytes) + 2*perShotEstimateBytes + int64(len(fakePNG())) + 100
+	if got != want {
+		t.Errorf("X-GLP-Backup-Estimate = %d; want %d (envelope + 2 shots + 48+100 image bytes, thumb excluded)", got, want)
+	}
+}
+
+// TestPostBackup_EstimateExcludesImagesWhenShotsOutOfScope: a scope that
+// doesn't include "shots" drops both the per-shot term and the image term
+// entirely — only the flat envelope estimate remains.
+func TestPostBackup_EstimateExcludesImagesWhenShotsOutOfScope(t *testing.T) {
+	imgDir := useImageDir(t)
+	if err := os.WriteFile(filepath.Join(imgDir, "1.png"), fakePNG(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h, deps, _ := newTestHandlers(t)
+	mux := newMux(h)
+	seedShot(t, deps, 1)
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/backup", mustMarshal(t, map[string]any{
+		"sections": []string{"maintenance"},
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("X-GLP-Backup-Estimate"); got != strconv.Itoa(backupEnvelopeEstimateBytes) {
+		t.Errorf("X-GLP-Backup-Estimate = %q; want %d (envelope only)", got, backupEnvelopeEstimateBytes)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
@@ -121,6 +122,35 @@ func TestExportImportRoundTrip(t *testing.T) {
 		if _, err := os.Stat(dbPath + sfx); err == nil {
 			t.Errorf("stale %s sidecar left behind after import", sfx)
 		}
+	}
+}
+
+// TestExportDB_SetsContentLength: the raw-DB download must carry an
+// accurate Content-Length so the frontend can render a determinate
+// progress bar (#960) — it is expected to equal the streamed body length.
+func TestExportDB_SetsContentLength(t *testing.T) {
+	t.Setenv("GLP_DEV_BUILD", "dev")
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "glp.db")
+	sqlDB := openTestDB(t, dbPath)
+	insertShot(t, sqlDB, 1, "V60")
+	insertShot(t, sqlDB, 2, "Espresso")
+
+	mux := newMux(NewHandlers(sqlDB, dbPath, nil))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/debug/export-db", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	cl, err := strconv.Atoi(rec.Header().Get("Content-Length"))
+	if err != nil {
+		t.Fatalf("Content-Length = %q; not an integer: %v", rec.Header().Get("Content-Length"), err)
+	}
+	if cl <= 0 {
+		t.Errorf("Content-Length = %d; want > 0", cl)
+	}
+	if cl != rec.Body.Len() {
+		t.Errorf("Content-Length = %d; want %d (streamed body length)", cl, rec.Body.Len())
 	}
 }
 

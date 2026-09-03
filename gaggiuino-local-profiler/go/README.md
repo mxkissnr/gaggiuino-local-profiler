@@ -174,7 +174,15 @@ library domain on top of that same pattern:
   `PRAGMA integrity_check` + core-table schema probe) before touching the
   live DB — a corrupt upload is a clean 400 with the live DB untouched.
   See `internal/backup/doc.go` and `internal/debug/debug.go` for the full
-  reasoning.
+  reasoning. **Progress (#960):** `POST /api/backup` emits an approximate
+  `X-GLP-Backup-Estimate` response header (decimal byte count) purely for a
+  client-side determinate progress bar — envelope constant + per-shot
+  constant × `shots.Count()` + the stat-summed on-disk size of the images
+  it would bundle (`*.thumb.*` excluded, mirroring `streamImagesIntoZip`).
+  It is stat-only (never opens an image or a shot row) and *not* exact (the
+  body is DEFLATE-compressed), so clients clamp the bar at 99 % until the
+  stream ends and treat a missing/zero/non-numeric header as indeterminate
+  (the Node backend never sends it).
 - `internal/img` (#961, new) — the single home for the entity-image
   helpers that were triplicated across `internal/shots`, `internal/library`
   and `internal/backup` (filename/path construction, the content-type
@@ -259,6 +267,11 @@ library domain on top of that same pattern:
   answered against a real install. Serves JSON to `Accept: application/json`
   / `?format=json`, the self-contained HTML page (inline style + a
   SHA-256-pinned inline script, no external assets) otherwise.
+  **Progress (#960):** `GET /api/debug/export-db` sets `Content-Length`
+  from `f.Stat()` after the WAL checkpoint (already true) — the frontend
+  now streams the download through a reader so that length drives a
+  determinate progress bar, and streams the `import-db` upload via
+  `XMLHttpRequest` for upload progress.
 
 Every REST domain package named in the original migration plan now exists
 and routes the endpoints its phase brief scoped it to, including the two
