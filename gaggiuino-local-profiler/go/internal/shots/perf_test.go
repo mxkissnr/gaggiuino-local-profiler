@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	stdjson "encoding/json"
 	"net/http"
+	"strconv"
 	"testing"
 )
 
@@ -177,6 +178,67 @@ func seedRealisticShots(b *testing.B, sqlDB *sql.DB) {
 	for i := 1; i <= 213; i++ {
 		data := map[string]any{"datapoints": bigDatapoints(150), "version": "1.5.0"}
 		insertShot(b, sqlDB, int64(i), int64(1000+i), &dur, "V60", data, map[string]any{"dose": 18.0, "tds": 9.0})
+	}
+}
+
+// seedManyShots bulk-inserts n shots with a realistic (~150-sample) curve
+// blob each — the bulk seed for BenchmarkListShotsPage's 200-vs-5000
+// comparison.
+func seedManyShots(b *testing.B, sqlDB *sql.DB, n int) {
+	b.Helper()
+	dur := int64(280)
+	blob, err := stdjson.Marshal(map[string]any{"datapoints": bigDatapoints(150), "version": "1.5.0"})
+	if err != nil {
+		b.Fatal(err)
+	}
+	ann, _ := stdjson.Marshal(map[string]any{"dose": 18.0, "tds": 9.0})
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		b.Fatal(err)
+	}
+	for i := 1; i <= n; i++ {
+		if _, err := tx.Exec(
+			`INSERT INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (?,?,?,?,?,1)`,
+			i, 1000+i, dur, "V60", string(blob),
+		); err != nil {
+			b.Fatal(err)
+		}
+		if _, err := tx.Exec(`INSERT INTO annotations (shot_id, data) VALUES (?, ?)`, i, string(ann)); err != nil {
+			b.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		b.Fatal(err)
+	}
+}
+
+// BenchmarkListShotsPage is #957's headline done-criterion: GET
+// /api/shots?limit=60 wall time AND alloc bytes must stay flat (within
+// ~10%) between a 200-shot and a 5000-shot DB — i.e. listing the history is
+// O(page), not O(history). Run:
+//
+//	go test ./internal/shots -run '^$' -bench BenchmarkListShotsPage -benchmem
+//
+// The first request per size warms shot_score_cache; the measured loop is
+// all cache hits, so the only per-request work is the keyset query (61
+// rows) + hydrating/serialising one page of metadata.
+func BenchmarkListShotsPage(b *testing.B) {
+	for _, n := range []int{200, 5000} {
+		b.Run("shots="+strconv.Itoa(n), func(b *testing.B) {
+			h, _, sqlDB := newTestHandlers(b)
+			mux := newMux(h)
+			seedManyShots(b, sqlDB, n)
+			doJSON(b, mux, http.MethodGet, "/api/shots?limit=60", nil) // warm cache
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				rec := doJSON(b, mux, http.MethodGet, "/api/shots?limit=60", nil)
+				if rec.Code != http.StatusOK {
+					b.Fatalf("status = %d", rec.Code)
+				}
+			}
+		})
 	}
 }
 

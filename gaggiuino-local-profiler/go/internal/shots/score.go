@@ -208,6 +208,44 @@ func scoreSeriesFromRaw(raw stdjson.RawMessage) scoreSeries {
 	return s
 }
 
+// hasChartSeries reports whether a shot's "datapoints" value carries a
+// non-empty timeInShot or pressure series — GET /api/shots's hasChartData
+// slim-row bool (the frontend's live ref-overlay picker and any
+// "curves available?" check read it instead of probing datapoints, which
+// the slim row no longer carries). Cheap on both shapes: a hand-built
+// map[string]any is a length check; a hydrateRow RawMessage is one shallow
+// object tokenize (no per-sample number parsing), materially cheaper than
+// the full extractScoreSeries decode the scorer does.
+func hasChartSeries(v any) bool {
+	switch t := v.(type) {
+	case map[string]any:
+		return len(floatSlice(t["timeInShot"])) > 0 || len(floatSlice(t["pressure"])) > 0
+	case stdjson.RawMessage:
+		return rawHasNonEmptyArray(t)
+	case []byte:
+		return rawHasNonEmptyArray(t)
+	default:
+		return false
+	}
+}
+
+func rawHasNonEmptyArray(raw []byte) bool {
+	if isJSONNull(raw) {
+		return false
+	}
+	var m map[string]stdjson.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return false
+	}
+	for _, k := range [...]string{"timeInShot", "pressure"} {
+		v := bytes.TrimSpace(m[k])
+		if len(v) >= 2 && v[0] == '[' && string(v) != "[]" {
+			return true
+		}
+	}
+	return false
+}
+
 func isJSONNull(r stdjson.RawMessage) bool {
 	t := bytes.TrimSpace(r)
 	return len(t) == 0 || string(t) == "null"

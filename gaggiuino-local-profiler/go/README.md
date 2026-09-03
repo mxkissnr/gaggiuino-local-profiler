@@ -34,7 +34,8 @@ library domain on top of that same pattern:
   event multiplexing, plus a Go-channel pub/sub (`Hub`) domain packages
   publish onto (see `internal/sse/doc.go`).
 - `internal/shots` (Phase 1c, new) — the full shot-history REST domain:
-  `/shots.json`, `/api/shots/last`, `/api/shots/defaults` (GET+POST),
+  `/shots.json`, `GET /api/shots` (keyset-paginated metadata list, no curve
+  data — #957), `/api/shots/last`, `/api/shots/defaults` (GET+POST),
   `/api/shots/:id`, `/api/shots/:id/annotate`, `/api/shots/:id/{trash,
   restore,delete}`, and `/api/shots/:id/image` (GET+POST+DELETE) —
   `lib/score.js`'s scoring, `ShotService`'s annotation/trash/blocklist

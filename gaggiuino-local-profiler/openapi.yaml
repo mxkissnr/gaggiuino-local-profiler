@@ -646,6 +646,65 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/Shot' }
 
+  /api/shots:
+    get:
+      tags: [Shots]
+      summary: Keyset-paginated shot list (metadata only, no curve data) (#957)
+      description: >
+        Newest-first, keyset-paginated list of shot METADATA — every field a
+        hydrated shot has EXCEPT the `datapoints` curve blob, plus `score`,
+        `usedBeanTarget` and `hasChartData`. Fetch a shot's curve data
+        separately via GET /api/shots/{id}. No response here carries the
+        full-history curve payload, so listing the history is O(page) not
+        O(total shots). `/shots.json` is retained unchanged for existing
+        consumers (full dump, timestamp-ASC, `datapoints` included).
+      parameters:
+        - name: limit
+          in: query
+          description: Page size (default 60, clamped to 1..200)
+          schema: { type: integer, minimum: 1, maximum: 200, default: 60 }
+        - name: cursor
+          in: query
+          description: Opaque pagination cursor from a previous response's `nextCursor`. Omit for the first page.
+          schema: { type: string }
+        - name: machine
+          in: query
+          description: Filter to one machine id. Omit or "all" for every machine.
+          schema: { type: string }
+        - name: trash
+          in: query
+          description: Set to "1" to page the trashed-shots list instead.
+          schema: { type: string, enum: ["0", "1"] }
+      responses:
+        "200":
+          description: One page of shot metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [shots, nextCursor, hasMore]
+                properties:
+                  shots:
+                    type: array
+                    description: >
+                      Each row is a Shot with the `datapoints` curve blob removed
+                      (fetch it via GET /api/shots/{id}) plus `score`,
+                      `usedBeanTarget` and `hasChartData`.
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Shot'
+                        - type: object
+                          properties:
+                            score:          { type: integer, nullable: true }
+                            usedBeanTarget: { type: boolean }
+                            hasChartData:   { type: boolean, description: Whether the shot has a non-empty pressure/time curve series }
+                  nextCursor:
+                    type: string
+                    nullable: true
+                    description: Cursor for the next page, or null when hasMore is false.
+                  hasMore: { type: boolean }
+        "400": { description: Malformed cursor or machine parameter }
+
   /api/shots/last:
     get:
       tags: [Shots]

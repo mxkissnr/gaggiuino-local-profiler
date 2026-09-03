@@ -341,6 +341,39 @@ func MigrateMachineColumns(sqlDB *sql.DB, dbPath string) error {
 		return fmt.Errorf("db: creating idx_shots_machine: %w", err)
 	}
 
+	// shot_score_cache (#957): a Go-only read-through cache for the shot
+	// score, so GET /api/shots's keyset-paginated list — and the frontend's
+	// background walk of every page to build S.allShots — don't re-parse each
+	// shot's datapoints blob to re-score it on every request. Deliberately
+	// NOT in schemaSQL: that constant is pinned byte-for-byte to Node's
+	// lib/db.js by db_schema_test.go, and Node has no equivalent table. An
+	// additive CREATE TABLE IF NOT EXISTS Exec here (same pattern as
+	// idx_shots_machine just above) keeps the Node-parity schema intact while
+	// still giving every Go install the table. fingerprint is a cheap
+	// SQL-recomputable digest of the inputs to CalcShotScoreDetail
+	// (length(data) || timestamp || length(annotation)); a mismatch on read
+	// means the row is stale and gets recomputed + rewritten. See
+	// internal/shots/repository.go's FindPageExcludingTrash.
+	if _, err := sqlDB.Exec(`CREATE TABLE IF NOT EXISTS shot_score_cache (
+		shot_id          INTEGER PRIMARY KEY,
+		score            INTEGER,
+		used_bean_target INTEGER NOT NULL DEFAULT 0,
+		fingerprint      TEXT NOT NULL,
+		computed_at      INTEGER NOT NULL
+	)`); err != nil {
+		return fmt.Errorf("db: creating shot_score_cache: %w", err)
+	}
+
+	// idx_shots_ts_id (#957): the keyset order GET /api/shots pages by
+	// (timestamp DESC, id DESC). idx_shots_timestamp covers only the
+	// timestamp column, so the id-tiebreak sort and the "one page from the
+	// tail" scan aren't fully index-served; this composite makes each page a
+	// bounded covered range scan regardless of history size. Go-only,
+	// additive, same rationale as shot_score_cache above.
+	if _, err := sqlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_shots_ts_id ON shots(timestamp DESC, id DESC)`); err != nil {
+		return fmt.Errorf("db: creating idx_shots_ts_id: %w", err)
+	}
+
 	ok, err := hasColumn(sqlDB, "maintenance", "machine_id")
 	if err != nil {
 		return err

@@ -74,6 +74,32 @@ func TestSchemaMatchesNodeFixture(t *testing.T) {
 
 	got := dumpSchema(t, sqlDB)
 
+	// goOnlyTables / goOnlyIndexes: additive objects the Go server creates
+	// that Node's lib/db.js has no equivalent for (see the CREATE ... IF NOT
+	// EXISTS Execs in db.go, kept out of the Node-pinned schemaSQL constant
+	// on purpose). They are dropped from the Go dump before the Node-parity
+	// comparison; extend these when adding another Go-only table/index.
+	goOnlyTables := map[string]bool{
+		"shot_score_cache": true, // #957 read-through score cache
+	}
+	goOnlyIndexes := map[string]bool{
+		"idx_shots_ts_id": true, // #957 keyset-page order
+	}
+	for name := range goOnlyTables {
+		if _, ok := got.Tables[name]; !ok {
+			t.Errorf("expected Go-only table %q to exist", name)
+		}
+		delete(got.Tables, name)
+	}
+	filteredIdx := got.Indexes[:0]
+	for _, idx := range got.Indexes {
+		if goOnlyIndexes[idx.Name] {
+			continue
+		}
+		filteredIdx = append(filteredIdx, idx)
+	}
+	got.Indexes = filteredIdx
+
 	wantTables := sortedKeys(want.Tables)
 	gotTables := sortedKeys(got.Tables)
 	if !reflect.DeepEqual(wantTables, gotTables) {

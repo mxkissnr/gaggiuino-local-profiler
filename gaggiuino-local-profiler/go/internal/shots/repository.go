@@ -306,7 +306,7 @@ func (r *Repository) WipeAll() error {
 	if err != nil {
 		return fmt.Errorf("shots: starting wipe tx: %w", err)
 	}
-	for _, stmt := range []string{`DELETE FROM annotations`, `DELETE FROM trash`, `DELETE FROM shots`} {
+	for _, stmt := range []string{`DELETE FROM annotations`, `DELETE FROM trash`, `DELETE FROM shot_score_cache`, `DELETE FROM shots`} {
 		if _, err := tx.Exec(stmt); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("shots: wiping (%s): %w", stmt, err)
@@ -533,6 +533,10 @@ func (r *Repository) SaveAnnotation(shotID int64, annotation map[string]any) err
 	if _, err := r.db.Exec(`INSERT OR REPLACE INTO annotations (shot_id, data) VALUES (?, ?)`, shotID, string(b)); err != nil {
 		return fmt.Errorf("shots: saving annotation for shot %d: %w", shotID, err)
 	}
+	// #957: dose/tds feed CalcShotScoreDetail, and a same-length edit
+	// (18.0 -> 19.0) leaves shot_score_cache's fingerprint unchanged, so
+	// drop the row outright rather than trusting the fingerprint here.
+	r.InvalidateScoreCache(shotID)
 	return nil
 }
 
@@ -571,6 +575,10 @@ func (r *Repository) DeleteByID(shotID int64) error {
 	if _, err := tx.Exec(`DELETE FROM shots WHERE id = ?`, shotID); err != nil {
 		tx.Rollback()
 		return fmt.Errorf("shots: deleting shot %d: %w", shotID, err)
+	}
+	if _, err := tx.Exec(`DELETE FROM shot_score_cache WHERE shot_id = ?`, shotID); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("shots: deleting score cache for shot %d: %w", shotID, err)
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("shots: committing delete of shot %d: %w", shotID, err)

@@ -31,6 +31,67 @@ func (s *Service) GetAll() ([]Shot, error) {
 	return s.repo.FindAllExcludingTrash()
 }
 
+// DefaultPageLimit / MaxPageLimit bound GET /api/shots's ?limit= (#957).
+const (
+	DefaultPageLimit = 60
+	MaxPageLimit     = 200
+)
+
+// ClampPageLimit applies the DefaultPageLimit / MaxPageLimit policy: a
+// non-positive or absent limit becomes the default, anything above the max
+// is capped.
+func ClampPageLimit(limit int) int {
+	if limit <= 0 {
+		return DefaultPageLimit
+	}
+	if limit > MaxPageLimit {
+		return MaxPageLimit
+	}
+	return limit
+}
+
+// GetPage ports the new GET /api/shots list (#957): one keyset page of
+// non-trashed shot metadata, newest first, each row carrying a
+// cache-resolved score. machineID == 0 lists every machine. limit is
+// clamped by ClampPageLimit.
+func (s *Service) GetPage(cur Cursor, limit int, machineID int64) (Page, error) {
+	return s.repo.FindPageExcludingTrash(cur, ClampPageLimit(limit), machineID)
+}
+
+// GetTrashPage is GetPage against the trash list.
+func (s *Service) GetTrashPage(cur Cursor, limit int, machineID int64) (Page, error) {
+	return s.repo.FindTrashedPage(cur, ClampPageLimit(limit), machineID)
+}
+
+// GetRecent returns the newest n non-trashed shots (metadata + curves,
+// hydrated) — the templ no-JS views' bounded replacement for GetAll(),
+// which scans the whole history (#957 decision 7). Order is newest first,
+// so callers no longer reverse the slice.
+func (s *Service) GetRecent(n int) ([]Shot, error) {
+	page, err := s.repo.FindPageExcludingTrash(Cursor{}, n, 0)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Shot, len(page.Rows))
+	for i, row := range page.Rows {
+		out[i] = row.Shot
+	}
+	return out, nil
+}
+
+// GetRecentTrash is GetRecent against the trash list.
+func (s *Service) GetRecentTrash(n int) ([]Shot, error) {
+	page, err := s.repo.FindTrashedPage(Cursor{}, n, 0)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Shot, len(page.Rows))
+	for i, row := range page.Rows {
+		out[i] = row.Shot
+	}
+	return out, nil
+}
+
 // GetByID ports ShotService.js's getById.
 func (s *Service) GetByID(id int64) (Shot, error) {
 	return s.repo.FindByID(id)

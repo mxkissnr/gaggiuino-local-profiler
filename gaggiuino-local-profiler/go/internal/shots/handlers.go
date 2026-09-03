@@ -68,6 +68,7 @@ func NewHandlers(repo *Repository) *Handlers {
 // headers -> rate limit -> token auth) these routes run behind.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /shots.json", h.listShots)
+	mux.HandleFunc("GET /api/shots", h.listShotsPage)
 	mux.HandleFunc("GET /api/shots/last", h.lastShot)
 	mux.HandleFunc("GET /api/shots/defaults", h.getDefaults)
 	mux.HandleFunc("POST /api/shots/defaults", h.postDefaults)
@@ -179,6 +180,76 @@ func (h *Handlers) listShots(w http.ResponseWriter, r *http.Request) {
 		out[i] = withScore(shot, h.service.ComputeScoreDetail(shot))
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// listShotsPage serves GET /api/shots (#957): a keyset-paginated,
+// newest-first list of shot METADATA — every hydrated-shot field except the
+// `datapoints` curve blob, plus score/usedBeanTarget/hasChartData. Unlike
+// /shots.json (full dump, kept byte-for-byte for the HA integration) no
+// response here carries the full-history curve payload, and no request
+// decodes more than one page of datapoints.
+//
+// Query params: limit (default 60, clamped 1..200), cursor (opaque, empty =
+// first page), machine (int; absent or "all" = every machine), trash ("1" =
+// the trash list). A malformed cursor is a 400 — a client paging with a
+// stale cursor should find out, not silently restart at page 1.
+func (h *Handlers) listShotsPage(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	limit := 0
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			limit = n
+		}
+	}
+
+	cursor, err := DecodeCursor(q.Get("cursor"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid cursor")
+		return
+	}
+
+	var machineID int64
+	if m := q.Get("machine"); m != "" && m != "all" {
+		n, err := strconv.ParseInt(m, 10, 64)
+		if err != nil || n < 0 {
+			writeError(w, http.StatusBadRequest, "Invalid machine")
+			return
+		}
+		machineID = n
+	}
+
+	var page Page
+	if q.Get("trash") == "1" {
+		page, err = h.service.GetTrashPage(cursor, limit, machineID)
+	} else {
+		page, err = h.service.GetPage(cursor, limit, machineID)
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	shotsOut := make([]Shot, len(page.Rows))
+	for i, row := range page.Rows {
+		out := row.Shot.clone()
+		stripDatapoints(out)
+		out["score"] = row.Score
+		out["usedBeanTarget"] = row.UsedBeanTarget
+		out["hasChartData"] = row.HasChartData
+		shotsOut[i] = out
+	}
+
+	var nextCursor *string
+	if page.HasMore {
+		s := EncodeCursor(page.NextCursor)
+		nextCursor = &s
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"shots":      shotsOut,
+		"nextCursor": nextCursor,
+		"hasMore":    page.HasMore,
+	})
 }
 
 // lastShot ports GET /api/shots/last. Node reads shotService.getAll() and

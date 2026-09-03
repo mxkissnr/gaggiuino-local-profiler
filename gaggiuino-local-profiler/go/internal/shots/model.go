@@ -111,7 +111,14 @@ func hydrateRow(sc rowScanner) (Shot, error) {
 	if err := sc.Scan(&id, &timestamp, &duration, &profileName, &data, &machineID, &annData); err != nil {
 		return nil, err
 	}
+	return hydrateFields(id, timestamp, machineID, duration, profileName, data, annData)
+}
 
+// hydrateFields is hydrateRow's body after the Scan — split out so the
+// keyset-page query (paging.go), which scans the same seven shot columns
+// plus a few score-cache columns in one row, can reuse the exact hydration
+// logic without a second Scan signature drifting from this one.
+func hydrateFields(id, timestamp, machineID int64, duration sql.NullInt64, profileName sql.NullString, data string, annData sql.NullString) (Shot, error) {
 	var rest map[string]any
 	if data != "" {
 		var raw map[string]stdjson.RawMessage

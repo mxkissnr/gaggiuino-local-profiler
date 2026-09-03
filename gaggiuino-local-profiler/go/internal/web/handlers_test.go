@@ -792,3 +792,50 @@ func TestShotChartJS_ServesGhostAndCompareBranches(t *testing.T) {
 		}
 	}
 }
+
+// TestListPage_CapsAtWebListCap pins #957 decision 7: the no-JS templ list
+// never renders more than webListCap (200) shot rows regardless of history
+// size, and shows the "showing latest N" note when it caps. The SPA is the
+// paginated experience; this page is a bounded fallback.
+func TestListPage_CapsAtWebListCap(t *testing.T) {
+	mux, repo := newTestServer(t)
+	for i := int64(1); i <= 230; i++ {
+		upsertTestShot(t, repo, i, i*1000, "V60", nil)
+	}
+
+	rec := doRequest(t, mux, "GET", "/shots")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /shots: status = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if n := strings.Count(body, `id="shot-row-`); n != webListCap {
+		t.Errorf("rendered %d live shot rows, want the cap of %d", n, webListCap)
+	}
+	if !strings.Contains(body, "Showing the latest 200 shots") {
+		t.Errorf("capped list is missing the 'showing latest' note\nbody:\n%s", body[:min(len(body), 2000)])
+	}
+	// Newest first: shot 230 present, shot 1 (beyond the cap) absent.
+	if !strings.Contains(body, "shot-row-230") || strings.Contains(body, `id="shot-row-1"`) {
+		t.Errorf("cap should keep the newest 200, dropping the oldest")
+	}
+}
+
+// TestDetailFragment_CompareDropdownStillRenders pins that GET /shots/{id}
+// still renders a full single-shot detail plus the "Compare with…"
+// dropdown after #957 switched its list load to the bounded GetRecent call.
+func TestDetailFragment_CompareDropdownStillRenders(t *testing.T) {
+	mux, repo := newTestServer(t)
+	for i := int64(1); i <= 5; i++ {
+		upsertTestShot(t, repo, i, i*1000, "V60", nil)
+	}
+	rec := doRequest(t, mux, "GET", "/shots/3")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /shots/3: status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"Compare with", `hx-get="shots/3`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("detail fragment missing %q\nbody:\n%s", want, body)
+		}
+	}
+}

@@ -23,6 +23,14 @@ func NewHandlers(svc *shots.Service) *Handlers {
 	return &Handlers{shots: svc}
 }
 
+// webListCap bounds how many shots the no-JS templ views load (#957
+// decision 7). listPage / detailFragment used to call Service.GetAll() +
+// GetTrash(), each an O(history) scan that also scored every row; at 5000
+// shots that made the fallback page multi-second. The SPA (public-src/) is
+// the paginated experience — these server-rendered pages just show the
+// latest webListCap with a "showing latest N" note.
+const webListCap = 200
+
 // RegisterRoutes registers this package's page and static-asset routes
 // onto mux. Unlike every REST domain package's RegisterRoutes (see e.g.
 // shots.Handlers.RegisterRoutes), these routes are NOT prefixed with
@@ -59,18 +67,16 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 // newest-first for display, matching that same default and every list
 // UI's normal reading order.
 func (h *Handlers) listPage(w http.ResponseWriter, r *http.Request) {
-	live, err := h.shots.GetAll()
+	live, err := h.shots.GetRecent(webListCap)
 	if err != nil {
 		httputil.InternalError(w, "web", err)
 		return
 	}
-	trashed, err := h.shots.GetTrash()
+	trashed, err := h.shots.GetRecentTrash(webListCap)
 	if err != nil {
 		httputil.InternalError(w, "web", err)
 		return
 	}
-	reverseShots(live)
-	reverseShots(trashed)
 
 	rows := make([]templates.ShotRow, len(live))
 	for i, shot := range live {
@@ -92,7 +98,7 @@ func (h *Handlers) listPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := templates.ShotsPage(rows, trashRows, detail).Render(r.Context(), w); err != nil {
+	if err := templates.ShotsPage(rows, trashRows, detail, len(live) >= webListCap).Render(r.Context(), w); err != nil {
 		// Render can only fail after writing has already started (a
 		// broken client connection, mid-stream), so there's no valid
 		// status code left to send — log and stop, matching net/http's
@@ -102,17 +108,6 @@ func (h *Handlers) listPage(w http.ResponseWriter, r *http.Request) {
 		// partial HTML write only produces a "superfluous WriteHeader"
 		// warning plus a JSON blob appended straight after truncated HTML.
 		log.Printf("web: rendering /shots: %v", err)
-	}
-}
-
-// reverseShots reverses shots in place — Repository's own queries are
-// fixed at `ORDER BY timestamp ASC` (shared with the JSON API's own
-// listing, which this package doesn't want to reorder for every caller),
-// so the newest-first display order this page wants is applied here
-// instead of in the query.
-func reverseShots(list []shots.Shot) {
-	for i, j := 0, len(list)-1; i < j; i, j = i+1, j-1 {
-		list[i], list[j] = list[j], list[i]
 	}
 }
 
@@ -169,12 +164,11 @@ func (h *Handlers) detailFragment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	live, err := h.shots.GetAll()
+	live, err := h.shots.GetRecent(webListCap)
 	if err != nil {
 		httputil.InternalError(w, "web", err)
 		return
 	}
-	reverseShots(live)
 	rows := make([]templates.ShotRow, len(live))
 	for i, s := range live {
 		rows[i] = toShotRow(s, h.shots.ComputeScore(s))

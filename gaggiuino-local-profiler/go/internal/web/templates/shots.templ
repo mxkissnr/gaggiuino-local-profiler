@@ -45,7 +45,7 @@ type ShotRow struct {
 // (internal/web/handlers.go's listPage) or for whichever row's hx-get the
 // visitor last clicked (handlers.go's detailFragment, swapped into
 // #shot-detail below without a full page reload).
-templ ShotsPage(rows []ShotRow, trash []ShotRow, detail *ShotDetail) {
+templ ShotsPage(rows []ShotRow, trash []ShotRow, detail *ShotDetail, listCapped bool) {
 	@Layout("Shots") {
 		<h1 class="page-title">Shots</h1>
 		if len(rows) == 0 && len(trash) == 0 {
@@ -53,6 +53,9 @@ templ ShotsPage(rows []ShotRow, trash []ShotRow, detail *ShotDetail) {
 		} else {
 			<div class="shots-layout" x-data="{ filterText: '' }">
 				<div class="shots-list-col">
+					if listCapped {
+						<p class="list-cap-note">Showing the latest { fmt.Sprintf("%d", len(rows)) } shots. Open the full app for the complete, paginated history.</p>
+					}
 					<input
 						class="filter-input"
 						type="text"
