@@ -9,7 +9,7 @@ import (
 )
 
 func TestOptimize_DownscalesLargePhoto(t *testing.T) {
-	data := encodeJPEG(t, gradientRGBA(4000, 3000))
+	data := encodeJPEG(t, gradientRGBA(1700, 1300))
 
 	res, err := Optimize(data, "jpg", ModeUpload)
 	if err != nil {

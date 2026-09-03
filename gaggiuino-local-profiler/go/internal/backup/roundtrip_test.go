@@ -3,6 +3,9 @@ package backup
 import (
 	"bytes"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -106,6 +109,85 @@ func TestStreamRoundTrip_FullFidelity(t *testing.T) {
 	// Maintenance log.
 	if lg, _ := deps2.MaintenanceRepo.GetMaintenanceLog(0); len(lg) != 1 || lg[0].Notes != "rt note" {
 		t.Errorf("maintenance log = %+v", lg)
+	}
+}
+
+// oversizedJPEGWithEXIF returns a w×h gradient JPEG with a bare APP1 "Exif"
+// segment spliced in after the SOI — enough for the restore pipeline to
+// both downscale and drop metadata.
+func oversizedJPEGWithEXIF(t *testing.T, w, h int) []byte {
+	t.Helper()
+	im := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			im.Set(x, y, color.RGBA{uint8(x % 256), uint8(y % 256), uint8((x + y) % 256), 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, im, &jpeg.Options{Quality: 92}); err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.Bytes()
+	payload := append([]byte("Exif\x00\x00"), bytes.Repeat([]byte{0}, 32)...)
+	app1 := []byte{0xFF, 0xE1, byte((len(payload) + 2) >> 8), byte(len(payload) + 2)}
+	app1 = append(app1, payload...)
+	out := append([]byte{}, raw[:2]...)
+	out = append(out, app1...)
+	return append(out, raw[2:]...)
+}
+
+// TestRestore_OptimizesImagesThroughPipeline (#961): an oversized,
+// EXIF-carrying bean image in a restored bundle is downscaled + stripped +
+// thumbnailed by writePendingImages, while the stored extension (and the
+// bean row referencing it) stays put.
+func TestRestore_OptimizesImagesThroughPipeline(t *testing.T) {
+	imgDir := useImageDir(t)
+	big := oversizedJPEGWithEXIF(t, 1700, 1700)
+	if err := os.WriteFile(filepath.Join(imgDir, "1.jpg"), big, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h1, deps1, _ := newTestHandlers(t)
+	if err := deps1.LibRepo.SaveLibrary(library.Library{
+		Beans: []library.Entity{{"id": int64(1), "name": "Pipe Bean", "stock_g": float64(200), "image": "jpg"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	recExp := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", nil)
+	if recExp.Code != http.StatusOK {
+		t.Fatalf("export status = %d", recExp.Code)
+	}
+	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
+
+	h2, deps2, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+
+	restored, err := os.ReadFile(filepath.Join(imgDir, "1.jpg"))
+	if err != nil {
+		t.Fatalf("restored image missing: %v", err)
+	}
+	if len(restored) >= len(big) {
+		t.Errorf("restored image not shrunk: %d >= %d", len(restored), len(big))
+	}
+	if bytes.Contains(restored, []byte("Exif")) {
+		t.Error("restored image still carries an Exif marker")
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(restored))
+	if err != nil {
+		t.Fatalf("decode restored: %v", err)
+	}
+	if cfg.Width > 1600 || cfg.Height > 1600 {
+		t.Errorf("restored image not downscaled: %dx%d", cfg.Width, cfg.Height)
+	}
+	if _, err := os.Stat(filepath.Join(imgDir, "1.thumb.jpg")); err != nil {
+		t.Errorf("thumbnail not generated on restore: %v", err)
+	}
+	lib, _ := deps2.LibRepo.GetLibrary()
+	if len(lib.Beans) != 1 || lib.Beans[0]["image"] != "jpg" {
+		t.Errorf("restored bean image ext changed: %+v", lib.Beans)
 	}
 }
 

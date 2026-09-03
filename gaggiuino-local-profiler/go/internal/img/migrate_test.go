@@ -16,7 +16,7 @@ func TestMigrateExisting(t *testing.T) {
 		}
 	}
 
-	bigJPEG := encodeJPEG(t, gradientRGBA(2600, 2000))
+	bigJPEG := encodeJPEG(t, gradientRGBA(1700, 1300))
 	smallJPEG := encodeJPEG(t, gradientRGBA(200, 200))
 	gifBytes := animatedGIF(t)
 	corruptJPEG := append([]byte{0xFF, 0xD8, 0xFF}, bytes.Repeat([]byte{0x22}, 64)...)
@@ -83,7 +83,9 @@ func TestMigrateExisting(t *testing.T) {
 
 func TestMigrateExisting_Idempotent(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "123.jpg"), encodeJPEG(t, gradientRGBA(2400, 1800)), 0o644); err != nil {
+	// Already within bounds: exercises the "generate the missing thumbnail
+	// without touching the main file" branch plus its byte-stable re-run.
+	if err := os.WriteFile(filepath.Join(dir, "123.jpg"), encodeJPEG(t, gradientRGBA(800, 600)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

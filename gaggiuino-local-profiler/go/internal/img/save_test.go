@@ -9,7 +9,7 @@ import (
 
 func TestSave_WritesMainAndThumb(t *testing.T) {
 	dir := t.TempDir()
-	in := encodeJPEG(t, gradientRGBA(3000, 2000))
+	in := encodeJPEG(t, gradientRGBA(1700, 1300))
 
 	ext, ok := Save(dir, "grinder-", 7, in, "image/jpeg", ModeUpload)
 	if !ok || ext != "jpg" {
@@ -83,7 +83,7 @@ func TestSave_RejectsBadMagic(t *testing.T) {
 func TestWriteOptimized_PreservesExtAddsThumb(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "5.jpg")
-	in := jpegWithOrientation(t, gradientRGBA(2400, 1800), 1)
+	in := jpegWithOrientation(t, gradientRGBA(1700, 1300), 1)
 
 	ext, err := WriteOptimized(path, in, "jpg")
 	if err != nil || ext != "jpg" {

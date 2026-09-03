@@ -1,8 +1,12 @@
 package library
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"net/http"
 	"path/filepath"
 	"testing"
@@ -10,6 +14,24 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
+
+// makeJPEG builds a w×h smooth-gradient JPEG in memory — a real, decodable
+// image the #961 pipeline can downscale and thumbnail (a hand-rolled magic-
+// byte stub no longer survives img.Save's decode step).
+func makeJPEG(t testing.TB, w, h int) []byte {
+	t.Helper()
+	im := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			im.Set(x, y, color.RGBA{uint8(x * 255 / w), uint8(y * 255 / h), uint8((x + y) * 255 / (w + h)), 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, im, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatalf("encode test jpeg: %v", err)
+	}
+	return buf.Bytes()
+}
 
 // newTestHandlers opens a throwaway on-disk SQLite DB via internal/db.Open
 // (same fixture pattern as shots/helpers_test.go) and wires it into a fresh

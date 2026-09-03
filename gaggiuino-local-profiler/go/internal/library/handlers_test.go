@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 )
@@ -372,7 +374,7 @@ func TestBean_Image_RoundTrip(t *testing.T) {
 		t.Fatalf("expected 404 before upload, got %d", rec.Code)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/library/bean/"+itoa(id)+"/image", bytes.NewReader([]byte{0xFF, 0xD8, 0xFF, 0xE0, 0, 0, 0, 0}))
+	req := httptest.NewRequest(http.MethodPost, "/api/library/bean/"+itoa(id)+"/image", bytes.NewReader(makeJPEG(t, 64, 48)))
 	req.Header.Set("Content-Type", "image/jpeg")
 	rec2 := httptest.NewRecorder()
 	mux.ServeHTTP(rec2, req)
@@ -403,6 +405,64 @@ func TestBean_PostImage_UnsupportedType(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGrinder_Image_ThumbnailServed(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/grinder", mustMarshal(t, map[string]any{"name": "Niche"}))
+	id := int64(decodeBody(t, rec.Body.Bytes())["id"].(float64))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/library/grinder/"+itoa(id)+"/image", bytes.NewReader(makeJPEG(t, 1700, 1300)))
+	req.Header.Set("Content-Type", "image/jpeg")
+	up := httptest.NewRecorder()
+	mux.ServeHTTP(up, req)
+	if up.Code != http.StatusOK {
+		t.Fatalf("upload status = %d; body=%s", up.Code, up.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(h.imageDir, "grinder-"+itoa(id)+".thumb.jpg")); err != nil {
+		t.Fatalf("thumbnail not generated: %v", err)
+	}
+
+	full := doJSON(t, mux, http.MethodGet, "/api/library/grinder/"+itoa(id)+"/image", nil)
+	thumb := doJSON(t, mux, http.MethodGet, "/api/library/grinder/"+itoa(id)+"/image?thumb=1", nil)
+	if full.Code != http.StatusOK || thumb.Code != http.StatusOK {
+		t.Fatalf("GET codes: full=%d thumb=%d", full.Code, thumb.Code)
+	}
+	if thumb.Body.Len() >= full.Body.Len() {
+		t.Errorf("thumb (%d B) not smaller than full (%d B)", thumb.Body.Len(), full.Body.Len())
+	}
+}
+
+func TestBean_Image_WebPUploadStoredAsJPEG(t *testing.T) {
+	webp, err := os.ReadFile("testdata/sample.webp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, repo, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/library/bean/"+itoa(id)+"/image", bytes.NewReader(webp))
+	req.Header.Set("Content-Type", "image/webp")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("upload status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if got := decodeBody(t, rec.Body.Bytes())["image"]; got != "jpg" {
+		t.Errorf("response image ext = %v, want jpg", got)
+	}
+	lib, _ := repo.GetLibrary()
+	if lib.Beans[0]["image"] != "jpg" {
+		t.Errorf("persisted bean image ext = %v, want jpg", lib.Beans[0]["image"])
+	}
+	if _, err := os.Stat(filepath.Join(h.imageDir, itoa(id)+".jpg")); err != nil {
+		t.Errorf("converted file missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(h.imageDir, itoa(id)+".webp")); !os.IsNotExist(err) {
+		t.Errorf("source webp not cleaned up: %v", err)
 	}
 }
 

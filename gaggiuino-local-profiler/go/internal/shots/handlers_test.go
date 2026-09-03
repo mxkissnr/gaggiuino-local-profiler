@@ -3,8 +3,13 @@ package shots
 import (
 	"bytes"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -439,6 +444,74 @@ func TestImage_UploadServeDeleteRoundTrip(t *testing.T) {
 
 	if rec := doJSON(t, mux, http.MethodGet, "/api/shots/1/image", nil); rec.Code != http.StatusNotFound {
 		t.Fatalf("GET after delete: status = %d, want 404", rec.Code)
+	}
+}
+
+// testJPEG builds a w×h gradient JPEG — a real, decodable image so the
+// #961 optimize pipeline in img.Save actually runs.
+func testJPEG(t testing.TB, w, h int) []byte {
+	t.Helper()
+	im := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			im.Set(x, y, color.RGBA{uint8(x * 255 / w), uint8(y * 255 / h), uint8((x + y) * 255 / (w + h)), 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, im, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatalf("encode test jpeg: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func TestImage_OptimizedAndThumbnailed(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "V60", nil, nil)
+
+	in := testJPEG(t, 1700, 1300)
+	req := httptest.NewRequest(http.MethodPost, "/api/shots/1/image", bytes.NewReader(in))
+	req.Header.Set("Content-Type", "image/jpeg")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("upload status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+
+	main := filepath.Join(h.imageDir, "shot-1.jpg")
+	mi, err := os.Stat(main)
+	if err != nil {
+		t.Fatalf("stored main missing: %v", err)
+	}
+	if mi.Size() >= 300*1024 {
+		t.Errorf("stored main = %d bytes, want < 300 KiB", mi.Size())
+	}
+	thumb := filepath.Join(h.imageDir, "shot-1.thumb.jpg")
+	ti, err := os.Stat(thumb)
+	if err != nil {
+		t.Fatalf("thumbnail missing: %v", err)
+	}
+
+	full := doJSON(t, mux, http.MethodGet, "/api/shots/1/image", nil)
+	if full.Code != http.StatusOK || int64(full.Body.Len()) != mi.Size() {
+		t.Errorf("GET image: code=%d len=%d, want 200 / %d", full.Code, full.Body.Len(), mi.Size())
+	}
+	small := doJSON(t, mux, http.MethodGet, "/api/shots/1/image?thumb=1", nil)
+	if small.Code != http.StatusOK || int64(small.Body.Len()) != ti.Size() {
+		t.Errorf("GET image?thumb=1: code=%d len=%d, want 200 / %d", small.Code, small.Body.Len(), ti.Size())
+	}
+	if small.Body.Len() >= full.Body.Len() {
+		t.Errorf("thumb body (%d) not smaller than full body (%d)", small.Body.Len(), full.Body.Len())
+	}
+
+	// Thumb missing -> transparent fallback to the full image, never 404.
+	if err := os.Remove(thumb); err != nil {
+		t.Fatal(err)
+	}
+	fb := doJSON(t, mux, http.MethodGet, "/api/shots/1/image?thumb=1", nil)
+	if fb.Code != http.StatusOK || int64(fb.Body.Len()) != mi.Size() {
+		t.Errorf("thumb fallback: code=%d len=%d, want 200 / %d", fb.Code, fb.Body.Len(), mi.Size())
 	}
 }
 
