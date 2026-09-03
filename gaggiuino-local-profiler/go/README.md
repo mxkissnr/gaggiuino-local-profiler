@@ -175,6 +175,22 @@ library domain on top of that same pattern:
   live DB — a corrupt upload is a clean 400 with the live DB untouched.
   See `internal/backup/doc.go` and `internal/debug/debug.go` for the full
   reasoning.
+- `internal/img` (#961, new) — the single home for the entity-image
+  helpers that were triplicated across `internal/shots`, `internal/library`
+  and `internal/backup` (filename/path construction, the content-type
+  whitelist, the magic-byte sniff, best-effort delete), plus the #961
+  optimize pipeline: every stored bean/grinder/basket/puck-screen/shot
+  photo is decoded, EXIF-oriented (hand-parsed APP1, no dependency),
+  downscaled to at most 1600 px on its long edge, re-encoded without
+  metadata (opaque → JPEG q85, real alpha → PNG; GIF and — on the
+  migration/restore path — WebP pass through untouched), and written next
+  to a 320 px `<name>.thumb.<ext>` variant that `GET .../image?thumb=1`
+  serves (falling back to the full image when absent, never 404). A
+  best-effort background sweep (`MigrateExisting`, launched from
+  `buildApp`, gated by the `images_optimized_v1` kv flag) brings an
+  existing library up to the same shape once, on the first boot after
+  upgrade; a decode failure anywhere keeps the original bytes. See
+  `internal/img/doc.go`.
 - `internal/ha` (Phase 1f, extended in Phase 1g) — ports `lib/ha.js`:
   `SendNotify`, `GetNotifyServices`, `GetPersons` (Phase 1f, orders domain),
   plus `GetSwitchState`, `CallHaService`, `GetHaLanguage` (Phase 1g, the
