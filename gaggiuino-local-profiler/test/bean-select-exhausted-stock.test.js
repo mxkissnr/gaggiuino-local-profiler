@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { installFakeOptionDom } from './helpers/fake-option-dom.js';
 
 // Same module-load stubbing as bean-select-by-id.test.js.
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
@@ -11,17 +12,16 @@ const { _renderBeanSelect } = await import('../public-src/views/shots/annotation
 let selectEl;
 
 beforeEach(() => {
-  selectEl = { innerHTML: '' };
-  globalThis.document = { getElementById: id => (id === 'annCoffee' ? selectEl : null) };
+  selectEl = installFakeOptionDom(['annCoffee']).annCoffee;
   S.shots = [];
 });
 
 function optionValues() {
-  return [...selectEl.innerHTML.matchAll(/<option value="([^"]*)"/g)].map(m => m[1]);
+  return selectEl.options.map(o => o.value);
 }
 
-function selectedOptionHtml() {
-  return selectEl.innerHTML.split('<option').find(o => o.includes(' selected'));
+function selectedOption() {
+  return selectEl.options.find(o => o.selected);
 }
 
 describe('_renderBeanSelect — exhausted (zero-stock) beans (#915, superseded by #933)', () => {
@@ -39,7 +39,7 @@ describe('_renderBeanSelect — exhausted (zero-stock) beans (#915, superseded b
     expect(values).toContain('Fresh Bean');
     expect(values).toContain('Empty Bean');
     expect(values.indexOf('Fresh Bean')).toBeLessThan(values.indexOf('Empty Bean'));
-    expect(selectEl.innerHTML).toContain(`Empty Bean (${t('lib_milk_empty')})`);
+    expect(selectEl.options.find(o => o.value === 'Empty Bean').text).toBe(`Empty Bean (${t('lib_milk_empty')})`);
   });
 
   it('keeps a bean with untracked (no stock_g) stock, treating it as unlimited', () => {
@@ -52,8 +52,8 @@ describe('_renderBeanSelect — exhausted (zero-stock) beans (#915, superseded b
     S.coffeeLibrary = { beans: [{ id: 2, name: 'Empty Bean', stock_g: 100 }] };
     S.shots = [{ id: 1, timestamp: 1000, annotation: { coffee: 'Empty Bean', beanId: 2, dose: 100 } }];
     _renderBeanSelect('Empty Bean', 2);
-    const opt = selectedOptionHtml();
-    expect(opt).toContain('value="Empty Bean"');
-    expect(opt).toContain('data-bean-id="2"');
+    const opt = selectedOption();
+    expect(opt.value).toBe('Empty Bean');
+    expect(opt.dataset.beanId).toBe(2);
   });
 });
