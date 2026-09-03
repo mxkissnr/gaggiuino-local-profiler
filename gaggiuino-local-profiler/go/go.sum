@@ -24,8 +24,14 @@ github.com/kanrichan/resvg-go v0.0.1 h1:qXt/ffAcybitiGxELLm40SQ58IW137Fv8WbN/kao
 github.com/kanrichan/resvg-go v0.0.1/go.mod h1:8duvQiA+s19COisrVUOxxjqNBUvB5y1OUs6P1ujarO0=
 github.com/mattn/go-isatty v0.0.24 h1:tGZZoVgT/KiqK1c8ocVLeDS8BSWMRd47J3Lbz7vsReI=
 github.com/mattn/go-isatty v0.0.24/go.mod h1:nMCL3Zebbrt45jsMDgnfIwz6ydEQApk5oEI3HqDio6A=
+github.com/ncruces/go-sqlite3 v0.34.0 h1:q2I6wHTLWIoz6ehYkKdG5dGQc66eJv7ZGnekhvuMfK8=
+github.com/ncruces/go-sqlite3 v0.34.0/go.mod h1:qpBxsSdGPnO9K5OExuv5GEsrGQ7Rk6JsJFH6wn2DwwU=
+github.com/ncruces/go-sqlite3-wasm/v2 v2.1.35300 h1:cRdxCt3BDfMu0vfSdoqaAPD+dzIXPkGREjqyZMLN2Ak=
+github.com/ncruces/go-sqlite3-wasm/v2 v2.1.35300/go.mod h1:R2kJLPoSA/GBX/b8x7zwOq/KLAw6rLMY1l3Hi76SQIo=
 github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOFAw7w=
 github.com/ncruces/go-strftime v1.0.0/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
+github.com/ncruces/julianday v1.0.0 h1:fH0OKwa7NWvniGQtxdJRxAgkBMolni2BjDHaWTxqt7M=
+github.com/ncruces/julianday v1.0.0/go.mod h1:Dusn2KvZrrovOMJuOt0TNXL6tB7U2E8kvza5fFc9G7g=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/tetratelabs/wazero v1.4.0 h1:9/MirYvmkJ/zSUOygKY/ia3t+e+RqIZXKbylIby1WYk=
