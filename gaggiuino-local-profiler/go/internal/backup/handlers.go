@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
@@ -204,8 +205,8 @@ func streamImagesIntoZip(zw *zip.Writer) {
 		return
 	}
 	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+		if entry.IsDir() || strings.Contains(entry.Name(), ".thumb.") {
+			continue // thumbnails are regenerated on restore, not bundled
 		}
 		f, err := os.Open(filepath.Join(imageDir, entry.Name()))
 		if err != nil {

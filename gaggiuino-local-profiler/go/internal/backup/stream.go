@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
@@ -151,8 +152,8 @@ func (d Dependencies) writeBundleJSON(w io.Writer, small map[string]any, sec sec
 		firstImg := true
 		if entries, err := os.ReadDir(imageDir); err == nil {
 			for _, entry := range entries {
-				if entry.IsDir() {
-					continue
+				if entry.IsDir() || strings.Contains(entry.Name(), ".thumb.") {
+					continue // thumbnails are regenerated on restore, not bundled
 				}
 				f, err := os.Open(filepath.Join(imageDir, entry.Name()))
 				if err != nil {

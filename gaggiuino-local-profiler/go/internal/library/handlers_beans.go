@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
 // This file ports routes/library/beans.js.
@@ -365,7 +367,7 @@ func (h *Handlers) deleteBean(w http.ResponseWriter, r *http.Request) {
 	if !noMatch {
 		if idx := findBeanIndex(lib, id); idx != -1 {
 			if ext, _ := lib.Beans[idx]["image"].(string); ext != "" {
-				deleteImage(h.imageDir, id, ext, "")
+				img.Delete(h.imageDir, id, ext, "")
 			}
 		}
 	}
@@ -511,14 +513,14 @@ func (h *Handlers) postBeanImage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ext, ok := saveUploadedImage(h.imageDir, "", id, data, contentType)
+	ext, ok := img.Save(h.imageDir, "", id, data, contentType, img.ModeUpload)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported image")
 		return
 	}
 	bean := lib.Beans[idx]
 	if oldExt, _ := bean["image"].(string); oldExt != "" && oldExt != ext {
-		deleteImage(h.imageDir, id, oldExt, "")
+		img.Delete(h.imageDir, id, oldExt, "")
 	}
 	bean["image"] = ext
 	lib.Beans[idx] = bean

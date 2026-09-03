@@ -1,64 +1,36 @@
 package backup
 
 import (
-	"bytes"
-	"fmt"
-	"path/filepath"
-
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 )
 
-// This file ports lib/services/ImageService.js's imageFilename/imagePath
-// (duplicated here rather than exported from internal/library, the same
-// "small enough to duplicate" precedent internal/shots' own image.go
-// already set relative to internal/library's) plus routes/backup.js's
-// validateEntityImages/validateRestoredLibraryImages — the actual path-
-// traversal/integrity guard a restored entity's `.image` field must pass
-// before its bytes are ever written to a real filesystem path.
+// This file ports routes/backup.js's validateEntityImages/
+// validateRestoredLibraryImages — the path-traversal / integrity guard a
+// restored entity's `.image` field must pass before its bytes are ever
+// written to a real filesystem path. The filename / path / magic-byte
+// helpers it used to carry now live in internal/img, shared with
+// internal/shots and internal/library (see that package's doc.go).
 
-// imageDir mirrors lib/constants.js's BEAN_IMAGE_DIR — reused from
-// internal/library rather than a second copy of the literal path. A var,
-// not a const, purely so memory_test.go can point export/import at a
-// throwaway directory of synthetic images.
+// imageDir mirrors lib/constants.js's BEAN_IMAGE_DIR. A var, not a const,
+// purely so the tests can point export/import at a throwaway directory of
+// synthetic images.
 var imageDir = library.DefaultImageDir
 
 // imageMaxBytes mirrors lib/constants.js's BEAN_IMAGE_MAX_BYTES.
-const imageMaxBytes = 4 * 1024 * 1024
+const imageMaxBytes = img.MaxBytes
 
-// contentTypeExtensions mirrors ImageService.js's CONTENT_TYPE_EXT values
-// — the whitelist of extensions an `.image` field may ever legitimately
-// hold.
-var contentTypeExtensions = map[string]bool{"jpg": true, "png": true, "webp": true, "gif": true}
-
-func imageFilename(id int64, ext, prefix string) string {
-	return fmt.Sprintf("%s%d.%s", prefix, id, ext)
-}
-
+// imagePath is the package-local shorthand for img.Path bound to imageDir
+// (the restore path never crosses image directories).
 func imagePath(id int64, ext, prefix string) string {
-	return filepath.Join(imageDir, imageFilename(id, ext, prefix))
+	return img.Path(imageDir, id, ext, prefix)
 }
 
-// matchesImageMagicBytes ports ImageService.js's matchesImageMagicBytes:
-// a first-bytes sniff for the four whitelisted image types — Content-Type
-// headers/extensions are caller-supplied and trivially spoofable, so a
-// blob claiming to be `png` must actually start with a PNG signature
-// before it's ever written to disk.
-func matchesImageMagicBytes(buf []byte, ext string) bool {
-	if len(buf) < 12 {
-		return false
-	}
-	switch ext {
-	case "jpg":
-		return buf[0] == 0xFF && buf[1] == 0xD8 && buf[2] == 0xFF
-	case "png":
-		return bytes.Equal(buf[:8], []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A})
-	case "gif":
-		return bytes.Equal(buf[:4], []byte("GIF8"))
-	case "webp":
-		return string(buf[:4]) == "RIFF" && string(buf[8:12]) == "WEBP"
-	default:
-		return false
-	}
+// extAllowed reports whether an `.image` field's value is one of the
+// whitelisted on-disk extensions.
+func extAllowed(ext string) bool {
+	_, ok := img.ExtContentType[ext]
+	return ok
 }
 
 // pendingImageWrite is one validated image queued to be written to disk
@@ -90,7 +62,7 @@ func validateEntityImages(list []map[string]any, prefix string, imgs restoreImag
 		if ext == "" {
 			continue
 		}
-		if !contentTypeExtensions[ext] {
+		if !extAllowed(ext) {
 			entity["image"] = nil
 			continue
 		}
@@ -99,9 +71,9 @@ func validateEntityImages(list []map[string]any, prefix string, imgs restoreImag
 			entity["image"] = nil
 			continue
 		}
-		filename := imageFilename(id, ext, prefix)
+		filename := img.Filename(id, ext, prefix)
 		buf, present := imgs.get(filename)
-		if !present || len(buf) == 0 || len(buf) > imageMaxBytes || !matchesImageMagicBytes(buf, ext) {
+		if !present || len(buf) == 0 || len(buf) > imageMaxBytes || !img.MatchesMagicBytes(buf, ext) {
 			entity["image"] = nil
 			continue
 		}

@@ -2,34 +2,24 @@ package library
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
-// This file ports lib/services/ImageService.js in full — internal/shots'
-// image.go only ported the upload/serve half (the shots domain never fetches
-// an image by URL); this package additionally needs fetchBeanImage's
-// URL-download path (bean.imageUrl on create), which is why
-// ALLOWED_IMAGE_HOSTS is in scope here and wasn't for shots. Both packages
-// currently duplicate this file's non-URL half rather than sharing a
-// package — see shots/image.go's doc comment, which already flags this as
-// the thing to fix once both exist.
+// The upload / serve / delete / filename helpers this file used to carry
+// now live in internal/img, shared with internal/shots and internal/backup
+// (see that package's doc.go). What stays here is the URL-download half —
+// fetchBeanImage and its exact-hostname allowlist — which the shots domain
+// never needed.
 
-// DefaultImageDir mirrors lib/constants.js's BEAN_IMAGE_DIR — the one
-// directory every entity photo (bean/grinder/basket/puckScreen/shot) lives
-// in, distinguished by filename prefix (see imageFilename). Injectable on
-// Handlers so tests can point it at a t.TempDir() instead of the real /data
-// mount.
-const DefaultImageDir = "/data/bean-images"
-
-// maxImageBytes mirrors lib/constants.js's BEAN_IMAGE_MAX_BYTES.
-const maxImageBytes = 4 * 1024 * 1024
+// DefaultImageDir is re-exported from internal/img because many call sites
+// (and internal/backup + internal/web) reference library.DefaultImageDir.
+const DefaultImageDir = img.DefaultImageDir
 
 // allowedImageHosts mirrors lib/constants.js's ALLOWED_IMAGE_HOSTS
 // (ALLOWED_IMPORT_HOSTS plus cdn.shopify.com): bean images are only ever
@@ -45,62 +35,6 @@ var allowedImageHosts = map[string]bool{
 	"elbgold.com":              true,
 	"www.elbgold.com":          true,
 	"cdn.shopify.com":          true,
-}
-
-var contentTypeExt = map[string]string{
-	"image/jpeg": "jpg",
-	"image/png":  "png",
-	"image/webp": "webp",
-	"image/gif":  "gif",
-}
-
-var extContentType = map[string]string{
-	"jpg":  "image/jpeg",
-	"png":  "image/png",
-	"webp": "image/webp",
-	"gif":  "image/gif",
-}
-
-// imageFilename ports ImageService.js's imageFilename.
-func imageFilename(id int64, ext, prefix string) string {
-	return fmt.Sprintf("%s%d.%s", prefix, id, ext)
-}
-
-// imagePath ports ImageService.js's imagePath.
-func imagePath(dir string, id int64, ext, prefix string) string {
-	return filepath.Join(dir, imageFilename(id, ext, prefix))
-}
-
-// deleteImage ports ImageService.js's deleteImage: best-effort, silently
-// ignores an already-missing file.
-func deleteImage(dir string, id int64, ext, prefix string) {
-	if ext == "" {
-		return
-	}
-	_ = os.Remove(imagePath(dir, id, ext, prefix))
-}
-
-// contentTypeKnown reports whether contentType (optionally with a
-// "; charset=..." suffix) names one of the four whitelisted image types.
-func contentTypeKnown(contentType string) (ext string, ok bool) {
-	base := strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0])
-	ext, ok = contentTypeExt[base]
-	return ext, ok
-}
-
-// saveUploadedImage ports ImageService.js's saveUploadedImage.
-func saveUploadedImage(dir, prefix string, id int64, data []byte, contentType string) (ext string, ok bool) {
-	ext, known := contentTypeKnown(contentType)
-	if !known || len(data) == 0 || len(data) > maxImageBytes {
-		return "", false
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", false
-	}
-	if err := os.WriteFile(imagePath(dir, id, ext, prefix), data, 0o644); err != nil {
-		return "", false
-	}
-	return ext, true
 }
 
 // normalizeImageURL ports ImageService.js's normalizeImageUrl: a
@@ -139,9 +73,12 @@ var fetchImageClient = &http.Client{
 // assertPublicHost's DNS-resolution guard — see allowedImageHosts' doc
 // comment), no redirect following, a size cap, and a content-type
 // whitelist. The filename is derived from the (already-numeric) bean id,
-// never from the URL. Returns the extension on success, "" on any failure
-// (never an error — every caller treats this as best-effort, matching the
-// Node original's `.catch(() => {})` fire-and-forget callers).
+// never from the URL. The downloaded bytes run through img.Save
+// (ModeUpload), so the stored image is downscaled + metadata-stripped and
+// gets a thumbnail, and a non-JPEG/PNG source may be converted. Returns the
+// FINAL extension on success, "" on any failure (never an error — every
+// caller treats this as best-effort, matching the Node original's
+// `.catch(() => {})` fire-and-forget callers).
 func fetchBeanImage(dir string, beanID int64, imageURL string) string {
 	u := normalizeImageURL(imageURL)
 	if u == "" || !isAllowedImageURL(u) {
@@ -160,19 +97,16 @@ func fetchBeanImage(dir string, beanID int64, imageURL string) string {
 	if resp.StatusCode != http.StatusOK {
 		return ""
 	}
-	contentType := strings.TrimSpace(strings.SplitN(resp.Header.Get("Content-Type"), ";", 2)[0])
-	ext, known := contentTypeExt[contentType]
-	if !known {
+	contentType := resp.Header.Get("Content-Type")
+	if _, known := img.ContentTypeKnown(contentType); !known {
 		return ""
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxImageBytes+1))
-	if err != nil || len(data) == 0 || len(data) > maxImageBytes {
+	data, err := io.ReadAll(io.LimitReader(resp.Body, img.MaxBytes+1))
+	if err != nil || len(data) == 0 || len(data) > img.MaxBytes {
 		return ""
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return ""
-	}
-	if err := os.WriteFile(imagePath(dir, beanID, ext, ""), data, 0o644); err != nil {
+	ext, ok := img.Save(dir, "", beanID, data, contentType, img.ModeUpload)
+	if !ok {
 		return ""
 	}
 	return ext

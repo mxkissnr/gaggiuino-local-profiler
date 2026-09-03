@@ -3,6 +3,8 @@ package library
 import (
 	"errors"
 	"net/http"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
 // This file ports routes/library/baskets.js (#635).
@@ -90,7 +92,7 @@ func (h *Handlers) deleteBasket(w http.ResponseWriter, r *http.Request) {
 	if !noMatch {
 		if idx := findBasketIndex(lib, id); idx != -1 {
 			if ext, _ := lib.Baskets[idx]["image"].(string); ext != "" {
-				deleteImage(h.imageDir, id, ext, "basket-")
+				img.Delete(h.imageDir, id, ext, "basket-")
 			}
 		}
 	}
@@ -147,14 +149,14 @@ func (h *Handlers) postBasketImage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ext, ok := saveUploadedImage(h.imageDir, "basket-", id, data, contentType)
+	ext, ok := img.Save(h.imageDir, "basket-", id, data, contentType, img.ModeUpload)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported image")
 		return
 	}
 	basket := lib.Baskets[idx]
 	if oldExt, _ := basket["image"].(string); oldExt != "" && oldExt != ext {
-		deleteImage(h.imageDir, id, oldExt, "basket-")
+		img.Delete(h.imageDir, id, oldExt, "basket-")
 	}
 	basket["image"] = ext
 	lib.Baskets[idx] = basket

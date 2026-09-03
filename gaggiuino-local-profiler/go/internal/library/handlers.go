@@ -7,6 +7,7 @@ import (
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
@@ -217,12 +218,15 @@ func (h *Handlers) getBeansInfo(w http.ResponseWriter, r *http.Request) {
 // {error:"no image"} when the entity/image is missing, otherwise serves the
 // file with a 24h cache header.
 func (h *Handlers) serveImage(w http.ResponseWriter, r *http.Request, ext, prefix string, id int64) {
-	contentType, known := extContentType[ext]
+	contentType, known := img.ExtContentType[ext]
 	if ext == "" || !known {
 		writeError(w, http.StatusNotFound, "no image")
 		return
 	}
-	path := imagePath(h.imageDir, id, ext, prefix)
+	// `?thumb=1` serves the downscaled variant when present and otherwise
+	// falls back to the full image — a missing thumbnail never 404s.
+	thumb := r.URL.Query().Get("thumb") == "1"
+	path := img.ServePath(h.imageDir, id, ext, prefix, thumb)
 	if _, err := os.Stat(path); err != nil {
 		writeError(w, http.StatusNotFound, "no image")
 		return
@@ -236,12 +240,12 @@ func (h *Handlers) serveImage(w http.ResponseWriter, r *http.Request, ext, prefi
 // Object.keys(CONTENT_TYPE_EXT), limit: BEAN_IMAGE_MAX_BYTES})` body
 // handling every entity's `POST .../image` route uses: an unrecognized
 // Content-Type or an empty body is "no image data" (400); an oversized body
-// is rejected by MaxBytesReader before ever reaching saveUploadedImage's
-// own size check.
+// is rejected by MaxBytesReader before ever reaching img.Save's own size
+// check.
 func readUploadedImage(w http.ResponseWriter, r *http.Request) (data []byte, contentType string, ok bool) {
 	contentType = r.Header.Get("Content-Type")
-	_, typeKnown := contentTypeKnown(contentType)
-	r.Body = http.MaxBytesReader(w, r.Body, maxImageBytes)
+	_, typeKnown := img.ContentTypeKnown(contentType)
+	r.Body = http.MaxBytesReader(w, r.Body, img.MaxBytes)
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeError(w, http.StatusRequestEntityTooLarge, "request entity too large")

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
 // This file ports routes/library/grinders.js.
@@ -108,7 +110,7 @@ func (h *Handlers) deleteGrinder(w http.ResponseWriter, r *http.Request) {
 	if !noMatch {
 		if idx := findGrinderIndex(lib, id); idx != -1 {
 			if ext, _ := lib.Grinders[idx]["image"].(string); ext != "" {
-				deleteImage(h.imageDir, id, ext, "grinder-")
+				img.Delete(h.imageDir, id, ext, "grinder-")
 			}
 		}
 	}
@@ -171,14 +173,14 @@ func (h *Handlers) postGrinderImage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ext, ok := saveUploadedImage(h.imageDir, "grinder-", id, data, contentType)
+	ext, ok := img.Save(h.imageDir, "grinder-", id, data, contentType, img.ModeUpload)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported image")
 		return
 	}
 	grinder := lib.Grinders[idx]
 	if oldExt, _ := grinder["image"].(string); oldExt != "" && oldExt != ext {
-		deleteImage(h.imageDir, id, oldExt, "grinder-")
+		img.Delete(h.imageDir, id, oldExt, "grinder-")
 	}
 	grinder["image"] = ext
 	lib.Grinders[idx] = grinder

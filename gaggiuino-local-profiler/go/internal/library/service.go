@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
@@ -248,7 +249,7 @@ func SetBeanImage(repo *Repository, imageDir string, beanID int64, imageURL stri
 			continue
 		}
 		if oldExt, _ := bean["image"].(string); oldExt != "" && oldExt != ext {
-			deleteImage(imageDir, beanID, oldExt, "")
+			img.Delete(imageDir, beanID, oldExt, "")
 		}
 		bean["image"] = ext
 		lib.Beans[i] = bean
@@ -258,5 +259,5 @@ func SetBeanImage(repo *Repository, imageDir string, beanID int64, imageURL stri
 		return
 	}
 	// Bean was deleted before the download finished — clean up the orphaned file.
-	deleteImage(imageDir, beanID, ext, "")
+	img.Delete(imageDir, beanID, ext, "")
 }

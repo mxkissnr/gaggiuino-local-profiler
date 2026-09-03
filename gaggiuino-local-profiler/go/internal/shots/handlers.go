@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
 // This file ports routes/shots.js's Express router onto Go 1.22+'s
@@ -524,12 +525,15 @@ func (h *Handlers) getImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	ext := shot.imageExt()
-	contentType, known := extContentType[ext]
+	contentType, known := img.ExtContentType[ext]
 	if ext == "" || !known {
 		writeError(w, http.StatusNotFound, "no image")
 		return
 	}
-	path := imagePath(h.imageDir, id, ext, "shot-")
+	// `?thumb=1` serves the downscaled variant when present and otherwise
+	// falls back to the full image — a missing thumbnail never 404s.
+	thumb := r.URL.Query().Get("thumb") == "1"
+	path := img.ServePath(h.imageDir, id, ext, "shot-", thumb)
 	if _, err := os.Stat(path); err != nil {
 		writeError(w, http.StatusNotFound, "no image")
 		return
@@ -558,9 +562,9 @@ func (h *Handlers) postImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contentType := r.Header.Get("Content-Type")
-	_, typeKnown := contentTypeKnown(contentType)
+	_, typeKnown := img.ContentTypeKnown(contentType)
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxImageBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, img.MaxBytes)
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeError(w, http.StatusRequestEntityTooLarge, "request entity too large")
@@ -570,20 +574,19 @@ func (h *Handlers) postImage(w http.ResponseWriter, r *http.Request) {
 	// req.body.length === 0`: express.raw() only populates req.body as a
 	// Buffer when Content-Type matches its whitelist, so an unrecognized
 	// content type reaches the same "no image data" branch an empty body
-	// does, distinctly from saveUploadedImage's own "unsupported image"
-	// check below (see image.go's doc comment on that redundancy).
+	// does, distinctly from img.Save's own "unsupported image" check below.
 	if !typeKnown || len(data) == 0 {
 		writeError(w, http.StatusBadRequest, "no image data")
 		return
 	}
 
-	ext, ok := saveUploadedImage(h.imageDir, "shot-", id, data, contentType)
+	ext, ok := img.Save(h.imageDir, "shot-", id, data, contentType, img.ModeUpload)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported image")
 		return
 	}
 	if oldExt := shot.imageExt(); oldExt != "" && oldExt != ext {
-		deleteImage(h.imageDir, id, oldExt, "shot-")
+		img.Delete(h.imageDir, id, oldExt, "shot-")
 	}
 	updated, err := h.service.SetImage(id, ext)
 	if err != nil {
@@ -598,12 +601,9 @@ func (h *Handlers) postImage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// deleteImage (method) ports DELETE /api/shots/:id/image. A method and a
-// package-level function (image.go's deleteImage(id, ext, prefix)) can
-// share a name without conflict — the method is only ever reached via the
-// h.deleteImage(...) selector, the free function via a bare call — so this
-// stays deleteImage on the Handlers receiver, mirroring the route it
-// serves the same way every other handler here mirrors its route name.
+// deleteImage (method) ports DELETE /api/shots/:id/image. It stays named
+// deleteImage on the Handlers receiver, mirroring the route it serves the
+// same way every other handler here mirrors its route name.
 func (h *Handlers) deleteImage(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
@@ -620,7 +620,7 @@ func (h *Handlers) deleteImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ext := shot.imageExt(); ext != "" {
-		deleteImage(h.imageDir, id, ext, "shot-")
+		img.Delete(h.imageDir, id, ext, "shot-")
 	}
 	updated, err := h.service.ClearImage(id)
 	if err != nil {

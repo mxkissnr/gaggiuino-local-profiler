@@ -3,6 +3,8 @@ package library
 import (
 	"errors"
 	"net/http"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
 // This file ports routes/library/puckscreens.js (#635).
@@ -89,7 +91,7 @@ func (h *Handlers) deletePuckScreen(w http.ResponseWriter, r *http.Request) {
 	if !noMatch {
 		if idx := findPuckScreenIndex(lib, id); idx != -1 {
 			if ext, _ := lib.PuckScreens[idx]["image"].(string); ext != "" {
-				deleteImage(h.imageDir, id, ext, "puckscreen-")
+				img.Delete(h.imageDir, id, ext, "puckscreen-")
 			}
 		}
 	}
@@ -146,14 +148,14 @@ func (h *Handlers) postPuckScreenImage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ext, ok := saveUploadedImage(h.imageDir, "puckscreen-", id, data, contentType)
+	ext, ok := img.Save(h.imageDir, "puckscreen-", id, data, contentType, img.ModeUpload)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported image")
 		return
 	}
 	puckScreen := lib.PuckScreens[idx]
 	if oldExt, _ := puckScreen["image"].(string); oldExt != "" && oldExt != ext {
-		deleteImage(h.imageDir, id, oldExt, "puckscreen-")
+		img.Delete(h.imageDir, id, oldExt, "puckscreen-")
 	}
 	puckScreen["image"] = ext
 	lib.PuckScreens[idx] = puckScreen
