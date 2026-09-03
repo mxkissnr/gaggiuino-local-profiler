@@ -81,7 +81,9 @@ func Optimize(data []byte, srcExt string, mode Mode) (Result, error) {
 		return Result{}, err
 	}
 
-	thumbImg := scaleDown(src, ThumbEdge)
+	// The thumbnail is scaled from the already-downscaled main image, not
+	// the source: less work, and the main image is already anti-aliased.
+	thumbImg := scaleDown(mainImg, ThumbEdge)
 	thumbBytes, err := encodeImage(thumbImg, mainExt)
 	if err != nil {
 		return Result{}, err
@@ -125,9 +127,11 @@ func hasAlpha(im image.Image) bool {
 }
 
 // scaleDown returns im resized so its long edge is at most maxEdge,
-// preserving aspect ratio. x/image's windowed bilinear kernel is a
-// deliberate quality/CPU balance — it averages properly when minifying
-// (unlike ApproxBiLinear) but costs a fraction of Catmull-Rom, which
+// preserving aspect ratio. It halves repeatedly with a cheap bilinear
+// kernel until within 2x of the target, then does one final resample —
+// the "browser-style" downscale: it averages enough source pixels to
+// avoid the aliasing a single ApproxBiLinear pass leaves on a large
+// minification, while costing a fraction of a Catmull-Rom pass, which
 // matters for a synchronous upload handler on the ARM boards this runs on.
 // An image already within bounds is returned unchanged (never upscaled).
 func scaleDown(im image.Image, maxEdge int) image.Image {
@@ -139,19 +143,22 @@ func scaleDown(im image.Image, maxEdge int) image.Image {
 	nw, nh := w, h
 	if w >= h {
 		nw = maxEdge
-		nh = int(float64(h) * float64(maxEdge) / float64(w))
+		nh = max(int(float64(h)*float64(maxEdge)/float64(w)), 1)
 	} else {
 		nh = maxEdge
-		nw = int(float64(w) * float64(maxEdge) / float64(h))
+		nw = max(int(float64(w)*float64(maxEdge)/float64(h)), 1)
 	}
-	if nw < 1 {
-		nw = 1
-	}
-	if nh < 1 {
-		nh = 1
+
+	cur := im
+	cw, ch := w, h
+	for cw/2 >= nw && ch/2 >= nh {
+		cw, ch = cw/2, ch/2
+		half := image.NewRGBA(image.Rect(0, 0, cw, ch))
+		xdraw.ApproxBiLinear.Scale(half, half.Bounds(), cur, cur.Bounds(), xdraw.Src, nil)
+		cur = half
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, nw, nh))
-	xdraw.BiLinear.Scale(dst, dst.Bounds(), im, b, xdraw.Over, nil)
+	xdraw.ApproxBiLinear.Scale(dst, dst.Bounds(), cur, cur.Bounds(), xdraw.Src, nil)
 	return dst
 }
 
