@@ -68,6 +68,26 @@ func TestSave_CorruptFallsBackToRaw(t *testing.T) {
 	}
 }
 
+func TestSave_DecompressionBombStoredRaw(t *testing.T) {
+	dir := t.TempDir()
+	bomb := hugePNG(30000, 30000)
+
+	ext, ok := Save(dir, "", 4, bomb, "image/png", ModeUpload)
+	if !ok || ext != "png" {
+		t.Fatalf("Save = %q, %v; want png, true (raw fallback)", ext, ok)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "4.png"))
+	if err != nil {
+		t.Fatalf("main not written: %v", err)
+	}
+	if !bytes.Equal(got, bomb) {
+		t.Error("raw fallback did not store the original bytes")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "4.thumb.png")); !os.IsNotExist(err) {
+		t.Errorf("no thumbnail expected for an over-cap image, stat err = %v", err)
+	}
+}
+
 func TestSave_RejectsBadMagic(t *testing.T) {
 	dir := t.TempDir()
 	jpegBytes := encodeJPEG(t, gradientRGBA(20, 20))

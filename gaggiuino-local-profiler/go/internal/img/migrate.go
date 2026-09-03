@@ -91,6 +91,14 @@ func MigrateExisting(dir string, isDone func() (bool, error), markDone func() er
 			failed++
 			continue
 		}
+		// A pre-existing decompression bomb (the old Node upload path stored
+		// raw after only a magic-byte check) must never be decoded — that
+		// would OOM the process on every boot, and markDone() is only
+		// reached at the end. Leave it exactly as-is.
+		if !withinPixelCap(cfg.Width, cfg.Height) {
+			failed++
+			continue
+		}
 		needDownscale := cfg.Width > MaxEdge || cfg.Height > MaxEdge
 		if !needDownscale && haveThumb {
 			skipped++

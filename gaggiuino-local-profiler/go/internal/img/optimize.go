@@ -3,6 +3,7 @@ package img
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -53,6 +54,18 @@ func Optimize(data []byte, srcExt string, mode Mode) (Result, error) {
 	}
 	if mode == ModePreserve && srcExt == "webp" {
 		return Result{Main: data, MainExt: "webp"}, nil
+	}
+
+	// Read the header first: an attacker-controlled blob whose declared
+	// dimensions blow past MaxPixels would allocate gigabytes of RGBA in
+	// image.Decode. Bail before the decoder ever runs; the caller stores
+	// the raw bytes instead (Save) or leaves the file untouched (migrate).
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return Result{}, err
+	}
+	if !withinPixelCap(cfg.Width, cfg.Height) {
+		return Result{}, fmt.Errorf("img: %dx%d exceeds the %d-pixel decode cap", cfg.Width, cfg.Height, MaxPixels)
 	}
 
 	src, _, err := image.Decode(bytes.NewReader(data))

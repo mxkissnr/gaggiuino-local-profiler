@@ -3,6 +3,7 @@ package img
 import (
 	"bytes"
 	"encoding/binary"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/gif"
@@ -10,6 +11,27 @@ import (
 	"image/png"
 	"testing"
 )
+
+// hugePNG returns a tiny byte slice that is a structurally valid PNG whose
+// IHDR declares w×h pixels — image.DecodeConfig reads those dimensions, but
+// a full image.Decode would try to allocate w*h*4 bytes of RGBA. Used to
+// prove the pipeline rejects a decompression bomb on the header alone: if
+// the pixel cap were missing, the test process itself would OOM.
+func hugePNG(w, h uint32) []byte {
+	var buf bytes.Buffer
+	buf.WriteString("\x89PNG\r\n\x1a\n")
+	ihdr := make([]byte, 13)
+	binary.BigEndian.PutUint32(ihdr[0:], w)
+	binary.BigEndian.PutUint32(ihdr[4:], h)
+	ihdr[8] = 8 // bit depth
+	ihdr[9] = 2 // colour type: truecolor
+	// ihdr[10..12]: compression / filter / interlace = 0
+	binary.Write(&buf, binary.BigEndian, uint32(13))
+	chunk := append([]byte("IHDR"), ihdr...)
+	buf.Write(chunk)
+	binary.Write(&buf, binary.BigEndian, crc32.ChecksumIEEE(chunk))
+	return buf.Bytes()
+}
 
 // gradientRGBA builds a w×h smooth-gradient opaque image — it compresses
 // well, so the encoded fixtures stay small even at photo dimensions.

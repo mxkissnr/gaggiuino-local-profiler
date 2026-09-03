@@ -180,3 +180,18 @@ func TestOptimize_CorruptImage(t *testing.T) {
 		t.Fatal("expected an error decoding a corrupt JPEG")
 	}
 }
+
+func TestOptimize_RejectsDecompressionBomb(t *testing.T) {
+	// 30000x30000 = 900M pixels; a full decode would allocate ~3.6 GB.
+	// Reaching the assertion at all proves DecodeConfig gated it.
+	bomb := hugePNG(30000, 30000)
+	if w, h := decodeSize(t, bomb); int64(w)*int64(h) <= MaxPixels {
+		t.Fatalf("fixture %dx%d does not exceed the cap", w, h)
+	}
+	if _, err := Optimize(bomb, "png", ModeUpload); err == nil {
+		t.Fatal("Optimize accepted an over-cap image")
+	}
+	if _, err := Optimize(bomb, "png", ModePreserve); err == nil {
+		t.Fatal("Optimize (preserve) accepted an over-cap image")
+	}
+}

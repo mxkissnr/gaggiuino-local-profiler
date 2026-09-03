@@ -25,11 +25,14 @@ func TestMigrateExisting(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	bombPNG := hugePNG(30000, 30000)
+
 	write("123.jpg", bigJPEG)
 	write("grinder-5.jpg", smallJPEG)
 	write("basket-1.gif", gifBytes)
 	write("shot-9.jpg", corruptJPEG)
 	write("77.webp", webpBytes)
+	write("500.png", bombPNG)
 
 	var markCalls int
 	MigrateExisting(dir,
@@ -78,6 +81,14 @@ func TestMigrateExisting(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "77.thumb.webp")); !os.IsNotExist(err) {
 		t.Errorf("unexpected webp thumbnail: %v", err)
+	}
+
+	// Decompression bomb left completely untouched, never decoded.
+	if got, _ := os.ReadFile(filepath.Join(dir, "500.png")); !bytes.Equal(got, bombPNG) {
+		t.Error("500.png bytes changed")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "500.thumb.png")); !os.IsNotExist(err) {
+		t.Errorf("unexpected thumbnail for over-cap image: %v", err)
 	}
 }
 

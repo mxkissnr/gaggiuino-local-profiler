@@ -31,6 +31,21 @@ const (
 // opaque image.
 const JPEGQuality = 85
 
+// MaxPixels caps the decoded dimensions (width * height) of any image the
+// pipeline will hand to a decoder. The bytes are attacker-controlled and a
+// highly-compressible format (a ~4 MB PNG at zlib's ~1000:1 ceiling)
+// decodes to gigabytes of RGBA — so DecodeConfig is checked first and an
+// over-cap image is left untouched (stored raw on upload, skipped on
+// migration), matching the pre-#961 "magic-byte check only" behaviour. ~50
+// MP clears every real camera (a 200 MP phone sensor bins to well under
+// this) with a wide margin.
+const MaxPixels = 50_000_000
+
+// withinPixelCap reports whether a w*h image is safe to decode.
+func withinPixelCap(w, h int) bool {
+	return w > 0 && h > 0 && int64(w)*int64(h) <= MaxPixels
+}
+
 // ContentTypeExt mirrors ImageService.js's CONTENT_TYPE_EXT: the whitelist
 // of image content types the app accepts, mapped to the on-disk extension.
 var ContentTypeExt = map[string]string{
