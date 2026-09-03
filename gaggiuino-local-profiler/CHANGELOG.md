@@ -1,4 +1,7 @@
 ## [Unreleased]
+### Changed
+- **The shot annotator's coffee/basket/puck-screen/recipe dropdowns are now built via the DOM API** instead of an HTML string, silencing a recurring false-positive security scan finding with no change in behaviour. Closes #946
+
 ### Deprecated
 - **armv7 support is planned for removal in a future release.** Node.js no longer publishes official Docker images for 32-bit ARM past v22 — staying on armv7 means staying on an increasingly outdated Node major indefinitely, the same tradeoff that led Home Assistant OS itself to drop several 32-bit ARM boards. No removal date is set yet; this is an early heads-up for anyone still running the add-on on a 32-bit ARM device (e.g. an older Raspberry Pi on a 32-bit OS image) to plan a move to a 64-bit image before support ends. Track #944 for updates.
 
