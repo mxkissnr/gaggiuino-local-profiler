@@ -259,6 +259,17 @@ func parseBundleStream(r io.Reader, onShot func(raw json.RawMessage) error) (b m
 	if _, err := dec.Token(); err != nil { // closing '}'
 		return nil, 0, false, fmt.Errorf("invalid backup file (backup.json is not valid JSON)")
 	}
+
+	// The shots array is consumed by onShot and never stored in b, but
+	// sectionsPresent (and every other `b["shots"]` presence check) still
+	// needs to know it was there — without this the dry-run preview reports
+	// shots/library as absent for every zip bundle and the UI skips them
+	// (#967). A bare marker: nothing reads b["shots"] as data.
+	if sawShotsArray {
+		if _, ok := b["shots"]; !ok {
+			b["shots"] = []any{}
+		}
+	}
 	return b, shotCount, sawShotsArray, nil
 }
 

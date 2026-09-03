@@ -262,6 +262,56 @@ func TestRestore_DryRunPreview_NoWrites(t *testing.T) {
 	}
 }
 
+// TestRestore_DryRunPreview_ZipReportsShotsPresent (#967): the streamed zip
+// parser consumes the shots array via its callback and never stores it in
+// b, so sectionsPresent used to omit "shots" for every zip bundle — the UI
+// then showed "not in this file" and skipped shots + library on restore.
+func TestRestore_DryRunPreview_ZipReportsShotsPresent(t *testing.T) {
+	useImageDir(t)
+	h, deps, _ := newTestHandlers(t)
+	mux := newMux(h)
+	seedShot(t, deps, 1)
+	seedShot(t, deps, 2)
+	if err := deps.LibRepo.SaveLibrary(library.Library{
+		Beans: []library.Entity{{"id": int64(1), "name": "Zip Bean", "stock_g": float64(250)}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d", rec.Code)
+	}
+	zipBytes := append([]byte(nil), rec.Body.Bytes()...)
+
+	rr := doZip(t, mux, "/api/restore", zipBytes, map[string]string{"X-GLP-Dry-Run": "true"})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("dry-run restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	resp := decodeBody(t, rr.Body.Bytes())
+	preview, ok := resp["preview"].(map[string]any)
+	if !ok {
+		t.Fatalf("no preview: %+v", resp)
+	}
+
+	present := preview["sectionsPresent"].([]any)
+	found := false
+	for _, s := range present {
+		if s == "shots" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("sectionsPresent %v does not contain \"shots\"", present)
+	}
+	if n, _ := preview["shots"].(float64); n != 2 {
+		t.Errorf("preview.shots = %v; want 2", preview["shots"])
+	}
+	if preview["library"] != true {
+		t.Errorf("preview.library = %v; want true", preview["library"])
+	}
+}
+
 func TestRestore_RoundTrip_ToFreshInstall(t *testing.T) {
 	h1, deps1, _ := newTestHandlers(t)
 	mux1 := newMux(h1)
