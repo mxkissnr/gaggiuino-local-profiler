@@ -1,6 +1,6 @@
 ## [Unreleased]
 ### Fixed
-- **The shot sidebar stays responsive on installs with a very large shot history** — collapsed month groups now build their rows only when first opened, and searching no longer re-scans the entire shot list once per row. Closes #969
+- **The shot sidebar stays responsive on installs with a very large shot history** — collapsed month groups now build their rows only when first opened, searching no longer re-scans the entire shot list once per row, and typing in the search box no longer re-filters on every keystroke. Closes #969
 
 ### Changed
 - **The shot annotator's coffee/basket/puck-screen/recipe dropdowns are now built via the DOM API** instead of an HTML string, silencing a recurring false-positive security scan finding with no change in behaviour. Closes #946
