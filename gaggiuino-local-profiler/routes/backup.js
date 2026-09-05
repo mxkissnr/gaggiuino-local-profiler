@@ -630,7 +630,20 @@ router.post('/api/restore', (req, res, next) => {
             if (wantsShots) {
                 shotRepo.wipeAll();
 
-                for (const shot of b.shots) shotService.upsertShot(shot);
+                // #978: shotRepo.upsert() (not shotService.upsertShot()) --
+                // the latter emits SHOT_SAVED per call, which would trigger a
+                // full achievement-registry re-evaluation (a full context
+                // rebuild + every badge's check()) once per restored shot. On
+                // a large backup restored into a non-empty install that's
+                // thousands of synchronous, increasingly expensive passes
+                // back to back, blocking the event loop long enough for the
+                // Supervisor watchdog to consider the process unresponsive
+                // and kill it mid-transaction -- losing the entire restore
+                // (see the single evaluateAll() trigger after the
+                // transaction below for the fix, mirroring how
+                // BACKUP_EXPORTED already evaluates once per export rather
+                // than once per exported row).
+                for (const shot of b.shots) shotRepo.upsert(shot);
                 if (b.annotations && typeof b.annotations === 'object') {
                     for (const [id, ann] of Object.entries(b.annotations)) {
                         const parsed = annotationSchema.safeParse(ann);
@@ -694,6 +707,15 @@ router.post('/api/restore', (req, res, next) => {
                 });
             }
         })();
+
+        // #978: one achievement re-evaluation pass for the whole restore,
+        // once every restored domain (shots, library, maintenance, orders --
+        // all of it, since this fires after the transaction above commits)
+        // is actually in place, instead of one storm-triggering SHOT_SAVED
+        // per shot inside the loop above. No badge's check() keys off
+        // SHOT_SAVED's payload (see lib/achievements/registry.js), so a
+        // single bare emit here reaches the exact same end state.
+        if (wantsShots && b.shots.length) bus.emit(EVENTS.SHOT_SAVED, {});
 
         // Deferred until after the DB transaction commits, same reasoning as
         // the image writes below: TOKEN_FILE is a filesystem write and can't
