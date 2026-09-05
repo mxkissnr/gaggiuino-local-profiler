@@ -40,10 +40,13 @@ type MachineStatus struct {
 	// via WS/MQTT sysState) and stay false/nil whenever no live transport
 	// is connected. opMode is the canonical wire-enum name or nil, matching
 	// Node's `opMode` (string name or null), always present in the JSON.
-	IsSteaming bool    `json:"isSteaming"`
-	IsFlushing bool    `json:"isFlushing"`
-	OpMode     *string `json:"opMode"`
-	UpdatedAt  int64   `json:"updatedAt"`
+	IsSteaming bool `json:"isSteaming"`
+	IsFlushing bool `json:"isFlushing"`
+	// #983: descale mirrors isFlushing's opMode-only derivation (no REST
+	// equivalent, stays false/nil whenever no live transport is connected).
+	IsDescaling bool    `json:"isDescaling"`
+	OpMode      *string `json:"opMode"`
+	UpdatedAt   int64   `json:"updatedAt"`
 
 	PumpFlow              *float64 `json:"pumpFlow,omitempty"`
 	WeightFlow            *float64 `json:"weightFlow,omitempty"`
@@ -107,6 +110,7 @@ type DeriveResult struct {
 	IsBrewing     bool
 	IsSteaming    bool
 	IsFlushing    bool
+	IsDescaling   bool
 	ProfileName   string
 	MachineStatus MachineStatus
 }
@@ -142,6 +146,8 @@ func deriveMachineState(in DeriveInput) DeriveResult {
 		}
 	}
 	isFlushing := opMode != nil && (*opMode == "FLUSH" || *opMode == "FLUSH_AUTO")
+	// #983: descale operation mode, same opMode-only derivation as isFlushing.
+	isDescaling := opMode != nil && *opMode == "DESCALE"
 
 	pressure := in.Status.Pressure
 	temperature := in.Status.Temperature
@@ -172,6 +178,7 @@ func deriveMachineState(in DeriveInput) DeriveResult {
 		SteamSwitchState:  in.Status.SteamSwitchState,
 		IsSteaming:        isSteaming,
 		IsFlushing:        isFlushing,
+		IsDescaling:       isDescaling,
 		OpMode:            opMode,
 		UpdatedAt:         in.Now,
 	}
@@ -203,6 +210,7 @@ func deriveMachineState(in DeriveInput) DeriveResult {
 		IsBrewing:     isBrewing,
 		IsSteaming:    isSteaming,
 		IsFlushing:    isFlushing,
+		IsDescaling:   isDescaling,
 		ProfileName:   profileName,
 		MachineStatus: ms,
 	}

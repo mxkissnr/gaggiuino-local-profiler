@@ -3,6 +3,7 @@
 - **The shot sidebar stays responsive on installs with a very large shot history** — collapsed month groups now build their rows only when first opened, searching no longer re-scans the entire shot list once per row, the sidebar no longer rebuilds itself once per page while loading a large shot history in the background, and typing in the search box no longer re-filters on every keystroke. Closes #969
 
 ### Added
+- **The descale operation mode is now surfaced as `isDescaling` in the machine status and live SSE payloads**, mirroring the existing steam/flush live-state fields. Closes #983
 - **Backup export/import and the dev-channel raw-database download/upload now show a progress bar (and disable their button) for the whole transfer**, instead of an unresponsive UI on a large database. Closes #960
 - **Uploaded entity photos (beans, grinders, baskets, puck screens, shots) are now optimized on save.** Each image is downscaled to at most 1600 px on its long edge, re-encoded without embedded metadata (camera EXIF and GPS location tags are stripped), and stored next to a small thumbnail. Grid views can request the thumbnail, so libraries with many photos load noticeably less data. Existing photos are optimized once in the background on the first start after upgrading; originals are kept if an image can't be processed. Closes #961
 

@@ -101,6 +101,10 @@ type LiveData struct {
 	IsFlushing      bool            `json:"isFlushing"`
 	FlushSeq        int             `json:"flushSeq"`
 	FlushDatapoints *modeDatapoints `json:"flushDatapoints"`
+	// #983: descale live sessions, same shape as steam/flush above.
+	IsDescaling       bool            `json:"isDescaling"`
+	DescaleSeq        int             `json:"descaleSeq"`
+	DescaleDatapoints *modeDatapoints `json:"descaleDatapoints"`
 
 	// #902: idle stats — always present (not gated behind isLive), so the
 	// Live tab can show current readings while nothing is running. Sourced
@@ -139,6 +143,9 @@ type pollGlobalState struct {
 	steamSeq   int
 	flushAccum *modeAccumState
 	flushSeq   int
+	// #983: descale live sessions, same hard-single-machine slot pattern.
+	descaleAccum *modeAccumState
+	descaleSeq   int
 	// wasReachable is #725's tri-state: nil = never polled (the very first
 	// successful poll after a host is configured is NOT a "recovery" —
 	// that path belongs to routes/machines.js's own save-triggered sync,
@@ -421,9 +428,11 @@ func (p *Poller) stopLivePolling() {
 		p.liveTicker = nil
 		p.state.mu.Lock()
 		p.state.liveAccum = nil
-		// #902: a powered-off machine can't be mid-steam/flush either.
+		// #902/#983: a powered-off machine can't be mid-steam/flush/descale
+		// either.
 		p.state.steamAccum = nil
 		p.state.flushAccum = nil
+		p.state.descaleAccum = nil
 		p.state.mu.Unlock()
 		now := time.Now().UnixMilli()
 		p.runtime.SetSwitchOffAt(&now)
@@ -610,9 +619,12 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	// .steamActive and sysState.operationMode are cached independently with
 	// their own staleness windows, so a mode transition can transiently read
 	// two of them true within the same tick. Guard with an explicit
-	// priority instead of trusting exclusivity: brewing > steaming > flushing.
+	// priority instead of trusting exclusivity: brewing > steaming > flushing
+	// > descaling (#983: descale added last, same lowest-priority reasoning
+	// as flushing).
 	effectiveSteaming := result.IsSteaming && !result.IsBrewing
 	effectiveFlushing := result.IsFlushing && !result.IsBrewing && !result.IsSteaming
+	effectiveDescaling := result.IsDescaling && !result.IsBrewing && !result.IsSteaming && !result.IsFlushing
 
 	if effectiveSteaming && p.state.steamAccum == nil {
 		p.state.steamAccum = &modeAccumState{startTime: now}
@@ -641,6 +653,22 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	}
 	if effectiveFlushing && p.state.flushAccum != nil {
 		acc := p.state.flushAccum
+		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
+		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(ms.Pressure))
+		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(ms.Temperature))
+	}
+
+	if effectiveDescaling && p.state.descaleAccum == nil {
+		p.state.descaleAccum = &modeAccumState{startTime: now}
+		log.Printf("system: descale started")
+	}
+	if !effectiveDescaling && p.state.descaleAccum != nil {
+		log.Printf("system: descale finished")
+		p.state.descaleAccum = nil
+		p.state.descaleSeq++
+	}
+	if effectiveDescaling && p.state.descaleAccum != nil {
+		acc := p.state.descaleAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
 		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(ms.Pressure))
 		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(ms.Temperature))
@@ -807,12 +835,15 @@ func (p *Poller) buildLiveDataResponse() LiveData {
 		dp = copyDatapoints(&p.state.liveAccum.datapoints)
 		profileName = p.state.liveAccum.profileName
 	}
-	var steamDP, flushDP *modeDatapoints
+	var steamDP, flushDP, descaleDP *modeDatapoints
 	if p.state.steamAccum != nil {
 		steamDP = copyModeDatapoints(&p.state.steamAccum.datapoints)
 	}
 	if p.state.flushAccum != nil {
 		flushDP = copyModeDatapoints(&p.state.flushAccum.datapoints)
+	}
+	if p.state.descaleAccum != nil {
+		descaleDP = copyModeDatapoints(&p.state.descaleAccum.datapoints)
 	}
 	return LiveData{
 		IsLive:           isLive,
@@ -827,6 +858,10 @@ func (p *Poller) buildLiveDataResponse() LiveData {
 		IsFlushing:      p.state.flushAccum != nil,
 		FlushSeq:        p.state.flushSeq,
 		FlushDatapoints: flushDP,
+
+		IsDescaling:       p.state.descaleAccum != nil,
+		DescaleSeq:        p.state.descaleSeq,
+		DescaleDatapoints: descaleDP,
 
 		Temperature:       temp,
 		TargetTemperature: targetTemp,

@@ -435,7 +435,7 @@ export default {
     error_generic:(msg)=>`Erreur : ${msg}`,
     error_load:'Erreur de chargement',
     live_ready_status:'Prêt', live_error_status:'Erreur', live_unreachable_status:'Injoignable',
-    live_steaming:'Vapeur …', live_flushing:'Rinçage …',
+    live_steaming:'Vapeur …', live_flushing:'Rinçage …', live_descaling:'Détartrage …',
     maint_by_shots:'Shots', maint_by_days:'Jours',
     maint_grinder_section:'Moulins',
     maint_shared_section:'Équipement partagé',

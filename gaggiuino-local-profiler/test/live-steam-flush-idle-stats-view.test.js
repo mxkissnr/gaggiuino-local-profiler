@@ -59,6 +59,13 @@ describe('setLiveBadge() steaming/flushing labels (#902)', () => {
     expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge flushing');
     expect(doc.getElementById('live-status-text').textContent).toBe('Flushing …');
   });
+
+  // #983: descale mirrors steaming/flushing's own badge treatment.
+  it('sets the descaling badge class/label', () => {
+    setLiveBadge('descaling');
+    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge descaling');
+    expect(doc.getElementById('live-status-text').textContent).toBe('Descaling …');
+  });
 });
 
 describe('handleLiveData() steam/flush live-content branches (#902)', () => {
@@ -101,6 +108,21 @@ describe('handleLiveData() steam/flush live-content branches (#902)', () => {
     expect(doc.getElementById('live-content').style.display).toBe('block');
     expect(doc.getElementById('livePressure').textContent).toBe('0.5');
     expect(doc.getElementById('liveTemp').textContent).toBe('93.0');
+  });
+
+  // #983: descale mirrors flush's own DOM-wiring test above.
+  it('shows the descaling badge/content from descaleDatapoints', () => {
+    handleLiveData({
+      machineReachable: true, isLive: false, isSteaming: false, isFlushing: false, isDescaling: true,
+      descaleDatapoints: { timeInMode: [0], pressure: [2], temperature: [800] },
+      temperature: 80, targetTemperature: 93, pressure: 0.2, waterLevel: 70,
+    });
+
+    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge descaling');
+    expect(doc.getElementById('live-meta').textContent).toBe('Descaling …');
+    expect(doc.getElementById('live-content').style.display).toBe('block');
+    expect(doc.getElementById('livePressure').textContent).toBe('0.2');
+    expect(doc.getElementById('liveTemp').textContent).toBe('80.0');
   });
 
   it('updates the idle stats row (temp/target/pressure/water) even while true idle (no mode running)', () => {

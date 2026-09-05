@@ -167,6 +167,30 @@ func TestDeriveMachineState_FlushState(t *testing.T) {
 	}
 }
 
+// #983: descale live-state derivation, same opMode-only shape as flush.
+func TestDeriveMachineState_DescaleState(t *testing.T) {
+	res := deriveMachineState(DeriveInput{
+		Status:   RawStatus{},
+		Now:      1,
+		SysState: &proto.SystemStateDto{OperationMode: proto.ModeDescale},
+	})
+	if !res.IsDescaling || !res.MachineStatus.IsDescaling {
+		t.Error("expected IsDescaling=true for ModeDescale")
+	}
+	if res.MachineStatus.OpMode == nil || *res.MachineStatus.OpMode != "DESCALE" {
+		t.Errorf("OpMode = %v, want DESCALE", res.MachineStatus.OpMode)
+	}
+
+	notDescale := deriveMachineState(DeriveInput{
+		Status:   RawStatus{},
+		Now:      1,
+		SysState: &proto.SystemStateDto{OperationMode: proto.ModeFlush},
+	})
+	if notDescale.IsDescaling {
+		t.Error("FLUSH must not derive IsDescaling=true")
+	}
+}
+
 func TestDeriveMachineState_SysStateAddsFaultFields(t *testing.T) {
 	res := deriveMachineState(DeriveInput{
 		Status: RawStatus{},

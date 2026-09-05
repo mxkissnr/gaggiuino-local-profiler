@@ -435,7 +435,7 @@ export default {
     error_generic:(msg)=>`Error: ${msg}`,
     error_load:'Error loading data',
     live_ready_status:'Ready', live_error_status:'Error', live_unreachable_status:'Unreachable',
-    live_steaming:'Steaming …', live_flushing:'Flushing …',
+    live_steaming:'Steaming …', live_flushing:'Flushing …', live_descaling:'Descaling …',
     maint_by_shots:'Shots', maint_by_days:'Days',
     maint_grinder_section:'Grinders',
     maint_shared_section:'Shared equipment',

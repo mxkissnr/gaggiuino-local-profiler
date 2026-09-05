@@ -315,6 +315,8 @@ export function setLiveBadge(state, detail = '') {
     // brewing (a shot) even though both are "something is actively running".
     steaming:    t('live_steaming'),
     flushing:    t('live_flushing'),
+    // #983: descale mirrors steam/flush's own badge treatment.
+    descaling:   t('live_descaling'),
     error:       detail || t('live_error_status'),
     idle:        t('live_ready_status'),
     unreachable: detail || t('live_unreachable_status')
@@ -429,20 +431,23 @@ export function handleLiveData(msg) {
   if (idlePressureEl)   idlePressureEl.textContent   = msg.pressure          != null ? `${msg.pressure.toFixed(1)} bar`          : '–';
   if (idleWaterEl)       idleWaterEl.textContent      = msg.waterLevel        != null ? `${msg.waterLevel}%`                     : '–';
 
-  // #902: steam/flush live sessions -- same live-content readout the brew
-  // branch below uses (duration/pressure/temperature), sourced from
-  // steamDatapoints/flushDatapoints instead of the brew shot's datapoints.
-  // No flow/weight equivalent for either mode (neither moves the scale), so
-  // those two tiles stay blank. Checked ahead of the pure-idle fallback
-  // below since steaming/flushing is itself a non-idle state.
-  if (msg.isSteaming || msg.isFlushing) {
-    const steaming     = msg.isSteaming;
-    const modeDp       = steaming ? (msg.steamDatapoints || {}) : (msg.flushDatapoints || {});
+  // #902/#983: steam/flush/descale live sessions -- same live-content
+  // readout the brew branch below uses (duration/pressure/temperature),
+  // sourced from steamDatapoints/flushDatapoints/descaleDatapoints instead
+  // of the brew shot's datapoints. No flow/weight equivalent for any mode
+  // (none moves the scale), so those two tiles stay blank. Checked ahead of
+  // the pure-idle fallback below since each of these is itself a non-idle
+  // state.
+  if (msg.isSteaming || msg.isFlushing || msg.isDescaling) {
+    const badgeState  = msg.isSteaming ? 'steaming' : msg.isFlushing ? 'flushing' : 'descaling';
+    const modeDp       = msg.isSteaming ? (msg.steamDatapoints || {})
+      : msg.isFlushing  ? (msg.flushDatapoints || {})
+      : (msg.descaleDatapoints || {});
     const modeTimes    = modeDp.timeInMode || [];
     const modeLastIdx  = modeTimes.length - 1;
 
-    setLiveBadge(steaming ? 'steaming' : 'flushing');
-    metaEl.textContent       = steaming ? t('live_steaming') : t('live_flushing');
+    setLiveBadge(badgeState);
+    metaEl.textContent       = t(`live_${badgeState}`);
     contentEl.style.display  = 'block';
     idleEl.style.display     = 'none';
 

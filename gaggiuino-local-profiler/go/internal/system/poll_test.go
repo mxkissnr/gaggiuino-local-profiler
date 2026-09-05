@@ -307,6 +307,77 @@ func TestSteamFlushLiveSessions(t *testing.T) {
 	}
 }
 
+// TestDescaleLiveSession is the #983 regression test for
+// state.descaleAccum: a descale session starts/accumulates/stops mirroring
+// the steam/flush accumulators, guarded by the
+// brewing>steaming>flushing>descaling priority.
+func TestDescaleLiveSession(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, _ := newTestPoller(t, fake)
+
+	// Descale via SysState.OperationMode == DESCALE.
+	fake.setStatus(okStatus(t, `{}`, 93, 94, 1.5, 0, false, "Espresso", 1), nil)
+	fake.setLive(nil, &proto.SystemStateDto{OperationMode: proto.ModeDescale})
+	p.pollViaGaggiuinoStatus(context.Background())
+	ld := p.LiveData()
+	if !ld.IsDescaling {
+		t.Fatal("expected IsDescaling=true once SysState.OperationMode flips to DESCALE")
+	}
+	if ld.DescaleDatapoints == nil || len(ld.DescaleDatapoints.TimeInMode) != 1 {
+		t.Fatalf("expected one descale datapoint, got %+v", ld.DescaleDatapoints)
+	}
+	if ld.IsLive || ld.IsSteaming || ld.IsFlushing {
+		t.Error("descale session must not set IsLive/IsSteaming/IsFlushing")
+	}
+	descaleSeqBefore := ld.DescaleSeq
+
+	p.pollViaGaggiuinoStatus(context.Background())
+	if ld = p.LiveData(); len(ld.DescaleDatapoints.TimeInMode) != 2 {
+		t.Fatalf("expected two descale datapoints after second poll, got %d", len(ld.DescaleDatapoints.TimeInMode))
+	}
+
+	// Descale off.
+	fake.setLive(nil, &proto.SystemStateDto{OperationMode: proto.ModeBrewAuto})
+	p.pollViaGaggiuinoStatus(context.Background())
+	ld = p.LiveData()
+	if ld.IsDescaling {
+		t.Fatal("expected IsDescaling=false once OperationMode leaves DESCALE")
+	}
+	if ld.DescaleSeq != descaleSeqBefore+1 {
+		t.Errorf("DescaleSeq = %d, want %d (incremented on descale finish)", ld.DescaleSeq, descaleSeqBefore+1)
+	}
+
+	// Flushing wins over a concurrently-true descale signal (priority guard).
+	fake.setLive(nil, &proto.SystemStateDto{OperationMode: proto.ModeFlush})
+	p.pollViaGaggiuinoStatus(context.Background())
+	ld = p.LiveData()
+	if !ld.IsFlushing {
+		t.Fatal("expected IsFlushing=true (flush)")
+	}
+	if ld.IsDescaling {
+		t.Error("descale session must not start while flushing/steaming/brewing take priority")
+	}
+}
+
+// TestStopLivePolling_ClearsDescaleAccum ports stopLivePolling's #983
+// descale accumulator reset.
+func TestStopLivePolling_ClearsDescaleAccum(t *testing.T) {
+	fake := &fakeAdapter{}
+	fake.setStatus(okStatus(t, `{}`, 93, 94, 1.5, 0, false, "Espresso", 1), nil)
+	fake.setLive(nil, &proto.SystemStateDto{OperationMode: proto.ModeDescale})
+	p, _ := newTestPoller(t, fake)
+
+	p.startLivePolling() // stopLivePolling only resets accumulators when a ticker is active (Node parity)
+	p.pollViaGaggiuinoStatus(context.Background())
+	if !p.LiveData().IsDescaling {
+		t.Fatal("precondition: expected a live descale session")
+	}
+	p.stopLivePolling()
+	if p.LiveData().IsDescaling {
+		t.Fatal("expected descale session cleared after stopLivePolling")
+	}
+}
+
 // TestStopLivePolling_ClearsSteamFlushAccum ports stopLivePolling's #908
 // steam/flush accumulator reset.
 func TestStopLivePolling_ClearsSteamFlushAccum(t *testing.T) {

@@ -560,6 +560,12 @@ components:
           type: object
           nullable: true
           description: "#902: timeInMode/pressure/temperature arrays while flushing, null otherwise"
+        isDescaling: { type: boolean, description: "#983: a descale live-session is active" }
+        descaleSeq: { type: integer, description: "#983: increments when a descale session ends" }
+        descaleDatapoints:
+          type: object
+          nullable: true
+          description: "#983: timeInMode/pressure/temperature arrays while descaling, null otherwise"
         temperature: { type: number, nullable: true, description: "#902 idle stats: current temperature from the per-tick machineStatus, null before the first successful poll" }
         targetTemperature: { type: number, nullable: true, description: "#902 idle stats: current target temperature" }
         pressure: { type: number, nullable: true, description: "#902 idle stats: current pressure" }

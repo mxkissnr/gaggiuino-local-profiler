@@ -424,7 +424,7 @@ export default {
     error_generic:(msg)=>`Fehler: ${msg}`,
     error_load:'Fehler beim Laden',
     live_ready_status:'Bereit', live_error_status:'Fehler', live_unreachable_status:'Nicht erreichbar',
-    live_steaming:'Dampf …', live_flushing:'Spülen …',
+    live_steaming:'Dampf …', live_flushing:'Spülen …', live_descaling:'Entkalken …',
     maint_by_shots:'Shots', maint_by_days:'Tage',
     maint_grinder_section:'Mühlen',
     maint_shared_section:'Geteiltes Equipment',

@@ -1518,10 +1518,12 @@
         #live-status-badge.ready       { color: var(--ok); }
         #live-status-badge.error       { color: var(--err); }
         #live-status-badge.unreachable { color: var(--err); }
-        /* #902: steaming/flushing get their own accent color, distinct from
-           brewing's --err red -- an active-but-not-a-shot process. */
+        /* #902/#983: steaming/flushing/descaling get their own accent color,
+           distinct from brewing's --err red -- an active-but-not-a-shot
+           process. */
         #live-status-badge.steaming,
-        #live-status-badge.flushing    { color: var(--accent-ink); }
+        #live-status-badge.flushing,
+        #live-status-badge.descaling   { color: var(--accent-ink); }
 
         #live-status-badge .badge-dot {
             width: 8px; height: 8px;
@@ -1530,7 +1532,8 @@
         }
         #live-status-badge.brewing .badge-dot,
         #live-status-badge.steaming .badge-dot,
-        #live-status-badge.flushing .badge-dot { animation: pulse 1.2s infinite; }
+        #live-status-badge.flushing .badge-dot,
+        #live-status-badge.descaling .badge-dot { animation: pulse 1.2s infinite; }
 
         #live-meta {
             display: flex;
@@ -2802,12 +2805,14 @@
         .machine-icon-live.is-brewing .d-brew { opacity: 1; }
         .machine-icon-live.is-steaming .d-ready { opacity: 0; }
         .machine-icon-live.is-steaming .d-steam { opacity: 1; }
-        /* #902: flush gets the display-badge treatment only (no milk-jug-
-           style illustration -- there's no equivalent physical action to
-           depict for a group-head flush the way there is for steaming
-           milk). */
+        /* #902/#983: flush/descale get the display-badge treatment only (no
+           milk-jug-style illustration -- there's no equivalent physical
+           action to depict for a group-head flush or a descale cycle the
+           way there is for steaming milk). */
         .machine-icon-live.is-flushing .d-ready { opacity: 0; }
         .machine-icon-live.is-flushing .d-flush { opacity: 1; }
+        .machine-icon-live.is-descaling .d-ready { opacity: 0; }
+        .machine-icon-live.is-descaling .d-descale { opacity: 1; }
 
         /* Bezug/brewing: the brew scale's cup fills to one third, crema
            settles on top last. Two steady streams from the basket,

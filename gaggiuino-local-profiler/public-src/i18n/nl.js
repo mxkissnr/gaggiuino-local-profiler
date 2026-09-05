@@ -435,7 +435,7 @@ export default {
     error_generic:(msg)=>`Fout: ${msg}`,
     error_load:'Laadfout',
     live_ready_status:'Klaar', live_error_status:'Fout', live_unreachable_status:'Niet bereikbaar',
-    live_steaming:'Stomen …', live_flushing:'Spoelen …',
+    live_steaming:'Stomen …', live_flushing:'Spoelen …', live_descaling:'Ontkalken …',
     maint_by_shots:'Shots', maint_by_days:'Dagen',
     maint_grinder_section:'Molens',
     maint_shared_section:'Gedeelde apparatuur',
