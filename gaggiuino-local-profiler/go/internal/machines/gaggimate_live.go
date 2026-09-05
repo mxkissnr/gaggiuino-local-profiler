@@ -91,7 +91,15 @@ func (c *gaggiMateLiveClient) run(ctx context.Context, baseURL string, s *gaggiM
 	}
 }
 
+// connectOnce re-validates baseURL's host on every reconnect attempt via
+// assertLiveHost (live.go) before dialing — see that function's doc comment
+// for why: only the adapter call that lazily opened this session ever went
+// through BaseURLFor; run()'s reconnect loop dials again on its own every
+// liveReconnectDelay, independent of any adapter call (#986 code review).
 func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s *gaggiMateLiveSession) {
+	if err := assertLiveHost(ctx, baseURL); err != nil {
+		return
+	}
 	wsURL, err := gaggimateWSURL(baseURL)
 	if err != nil {
 		return

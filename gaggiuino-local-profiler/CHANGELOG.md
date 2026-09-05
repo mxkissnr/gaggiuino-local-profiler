@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Fixed
+- **(go-migration) A machine's persistent live WebSocket session now re-validates its host on every automatic reconnect**, not just when the session was first opened. Previously, once a session was established, its background reconnect loop kept dialing the same host every ~3s forever without re-running the SSRF guard — a host that started failing validation after the fact (e.g. re-pointed via DNS) would still get dialed indefinitely. Closes #986
 - **The shot sidebar stays responsive on installs with a very large shot history** — collapsed month groups now build their rows only when first opened, searching no longer re-scans the entire shot list once per row, the sidebar no longer rebuilds itself once per page while loading a large shot history in the background, and typing in the search box no longer re-filters on every keystroke. Closes #969
 
 ### Added

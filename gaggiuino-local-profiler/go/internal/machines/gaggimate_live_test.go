@@ -3,6 +3,7 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -135,6 +136,37 @@ func TestGaggiMateLiveClient_ReconnectsAfterDrop(t *testing.T) {
 		st, ok := c.Status(base)
 		return ok && st["ct"] == 77.0
 	})
+}
+
+// TestGaggiMateLiveClient_ReconnectRevalidatesHost is the #986 regression
+// test's GaggiMate counterpart — see live_test.go's
+// TestGaggiuinoLiveClient_ReconnectRevalidatesHost for the full rationale.
+func TestGaggiMateLiveClient_ReconnectRevalidatesHost(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	fake := newStreamingGaggiMate()
+	defer fake.Close()
+
+	c := newGaggiMateLiveClient()
+	c.idleTimeout = time.Hour
+	t.Cleanup(c.DisconnectAll)
+	base := fake.URL
+
+	waitUntil(t, time.Second, func() bool { _, ok := c.Status(base); return ok })
+	if n := fake.conns.Load(); n != 1 {
+		t.Fatalf("expected 1 connection after warm-up, got %d", n)
+	}
+
+	orig := machineHostGuard
+	machineHostGuard = func(ctx context.Context, hostname string) error {
+		return errors.New("host no longer valid")
+	}
+	t.Cleanup(func() { machineHostGuard = orig })
+
+	fake.dropConns()
+	time.Sleep(liveReconnectDelay + 2*time.Second)
+	if n := fake.conns.Load(); n != 1 {
+		t.Fatalf("connectOnce dialed after the host started failing validation: conns=%d, want 1", n)
+	}
 }
 
 func TestGaggiMateAdapter_GetStatusUsesPersistentCache(t *testing.T) {

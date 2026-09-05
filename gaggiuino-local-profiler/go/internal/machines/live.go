@@ -161,11 +161,32 @@ func (c *gaggiuinoLiveClient) run(ctx context.Context, baseURL string, s *gaggiu
 	}
 }
 
+// assertLiveHost re-runs the SSRF guard on baseURL's hostname (#986 code
+// review): BaseURLFor validates the host once, at the adapter call that
+// lazily opened this session, but run()'s reconnect loop calls connectOnce
+// again every liveReconnectDelay entirely on its own, with no adapter call
+// (and no BaseURLFor) anywhere near it. Without this, a host that starts
+// failing validation after the session opens — re-pointed via DNS, or a
+// registry Host/Type change racing DisconnectForHost — would still get
+// dialed by the background reconnect loop forever. Reuses machineHostGuard,
+// the exact same seam BaseURLFor calls, so tests that already stub it (e.g.
+// allowLoopbackMachineHost) cover this path too.
+func assertLiveHost(ctx context.Context, baseURL string) error {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return err
+	}
+	return machineHostGuard(ctx, u.Hostname())
+}
+
 // connectOnce dials once and reads frames until the connection closes or
 // errors, updating s's cache for every d_sensor_snap/d_sys_state push —
 // ports connect()'s ws.on('message', ...). No longer publishes onto the
 // SSE hub directly — see this file's header comment.
 func (c *gaggiuinoLiveClient) connectOnce(ctx context.Context, baseURL string, s *gaggiuinoLiveSession) {
+	if err := assertLiveHost(ctx, baseURL); err != nil {
+		return
+	}
 	wsURL, err := gaggiuinoWSURL(baseURL)
 	if err != nil {
 		return
