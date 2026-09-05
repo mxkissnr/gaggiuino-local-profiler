@@ -15,13 +15,29 @@ class AchievementRepository {
         return out;
     }
 
-    // Unlocks a badge at `unlockedAt` (Unix seconds). Idempotent: INSERT OR
-    // IGNORE means a badge that's already unlocked keeps its original
-    // unlocked_at forever, even if evaluateAll() runs again later (retroactive
-    // re-run, or another event firing) -- re-evaluation must never re-stamp.
+    // Unlocks a badge at `unlockedAt` (Unix seconds). Idempotent: the
+    // `WHERE unlocked_at IS NULL` guard means a badge that's already unlocked
+    // keeps its original unlocked_at forever, even if evaluateAll() runs
+    // again later (retroactive re-run, or another event firing) --
+    // re-evaluation must never re-stamp.
+    //
+    // #978: this used to be a plain `INSERT OR IGNORE`, which only ever wrote
+    // the row the *first* time an id was touched. Every progress-tracked
+    // badge (progressTarget set) calls setProgress() below on every locked
+    // evaluation pass, which itself INSERTs a row (unlocked_at NULL) well
+    // before the badge actually crosses its target. By the time check()
+    // finally returns true, that row already exists, so the old INSERT OR
+    // IGNORE silently did nothing -- unlocked_at stayed NULL forever, and
+    // evaluateAll() kept re-reporting the same badge as "newly unlocked" on
+    // every single subsequent pass (harmless log spam in normal live usage,
+    // but a synchronous storm during a bulk restore -- see routes/backup.js).
+    // ON CONFLICT...DO UPDATE, gated the same way setProgress() already gates
+    // its own write, actually stamps the row instead of no-op'ing on it.
     unlock(id, unlockedAt, progress = null) {
         getDb().prepare(
-            'INSERT OR IGNORE INTO achievements (id, unlocked_at, progress) VALUES (?, ?, ?)'
+            `INSERT INTO achievements (id, unlocked_at, progress) VALUES (?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET unlocked_at = excluded.unlocked_at, progress = excluded.progress
+             WHERE achievements.unlocked_at IS NULL`
         ).run(id, unlockedAt, progress);
     }
 
