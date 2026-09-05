@@ -93,7 +93,10 @@ func wsConnect(ctx context.Context, baseURL string, urlFor func(string) (string,
 		cancel()
 		return nil, nil, nil, err
 	}
-	conn, _, err = websocket.Dial(dialCtx, wsURL, nil)
+	// HTTPClient: httpClient pins the dial to the SSRF-guard-resolved IP
+	// (guardedDialContext, http.go) instead of letting the WS handshake's
+	// underlying HTTP request re-resolve the hostname independently (#987).
+	conn, _, err = websocket.Dial(dialCtx, wsURL, &websocket.DialOptions{HTTPClient: httpClient})
 	if err != nil {
 		cancel()
 		return nil, nil, nil, fmt.Errorf("connecting to machine: %w", err)

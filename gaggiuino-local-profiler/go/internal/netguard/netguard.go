@@ -46,24 +46,38 @@ func IsBlocked(err error) bool {
 // ErrBlocked) error, matching both callers' existing distinction between
 // "blocked by policy" and "just couldn't resolve."
 func AssertHost(ctx context.Context, hostname string, blocked func(net.IP) bool, lookupIPAddr func(context.Context, string) ([]net.IPAddr, error)) error {
+	_, err := AssertHostResolved(ctx, hostname, blocked, lookupIPAddr)
+	return err
+}
+
+// AssertHostResolved is AssertHost's pin-friendly counterpart (#987): same
+// resolve-then-check plumbing, but it also returns the resolved (or
+// literal) address that passed the check. A caller that goes on to open a
+// real connection should dial that exact IP instead of handing the
+// hostname to net/http's (or any other) dialer to resolve a second time —
+// resolving once here and reusing the answer closes the DNS-rebinding
+// window where an attacker's resolver could pass this check with a safe
+// address and then answer a second, independent lookup at connect time
+// with a blocked one instead.
+func AssertHostResolved(ctx context.Context, hostname string, blocked func(net.IP) bool, lookupIPAddr func(context.Context, string) ([]net.IPAddr, error)) (net.IP, error) {
 	bare := strings.TrimPrefix(strings.TrimSuffix(hostname, "]"), "[")
 	if ip := net.ParseIP(bare); ip != nil {
 		if blocked(ip) {
-			return &ErrBlocked{fmt.Sprintf("blocked address: %s", bare)}
+			return nil, &ErrBlocked{fmt.Sprintf("blocked address: %s", bare)}
 		}
-		return nil
+		return ip, nil
 	}
 	addrs, err := lookupIPAddr(ctx, bare)
 	if err != nil {
-		return fmt.Errorf("could not resolve host: %s: %w", bare, err)
+		return nil, fmt.Errorf("could not resolve host: %s: %w", bare, err)
 	}
 	if len(addrs) == 0 {
-		return fmt.Errorf("could not resolve host: %s", bare)
+		return nil, fmt.Errorf("could not resolve host: %s", bare)
 	}
 	for _, a := range addrs {
 		if blocked(a.IP) {
-			return &ErrBlocked{fmt.Sprintf("blocked address: %s (%s)", a.IP, bare)}
+			return nil, &ErrBlocked{fmt.Sprintf("blocked address: %s (%s)", a.IP, bare)}
 		}
 	}
-	return nil
+	return addrs[0].IP, nil
 }

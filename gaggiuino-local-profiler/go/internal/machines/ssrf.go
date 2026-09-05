@@ -70,6 +70,16 @@ func assertMachineHost(ctx context.Context, hostname string) error {
 	return netguard.AssertHost(ctx, hostname, isLoopbackOrMetadataAddress, lookupIPAddr)
 }
 
+// assertMachineHostResolved is assertMachineHost's pin-friendly counterpart
+// (#987): returns the resolved (or literal) IP that passed the guard, so
+// guardedDialContext (http.go) can dial that literal address instead of
+// letting net/http's own dialer re-resolve the hostname independently at
+// connect time — closing the DNS-rebinding window between this check and
+// the actual TCP connection.
+func assertMachineHostResolved(ctx context.Context, hostname string) (net.IP, error) {
+	return netguard.AssertHostResolved(ctx, hostname, isLoopbackOrMetadataAddress, lookupIPAddr)
+}
+
 // isSSRFBlocked reports whether err is (or wraps) an ErrBlocked from a
 // failed assertMachineHost call.
 func isSSRFBlocked(err error) bool {

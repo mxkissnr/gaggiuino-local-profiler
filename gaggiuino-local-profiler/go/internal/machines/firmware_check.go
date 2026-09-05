@@ -21,6 +21,16 @@ import (
 // firmware_check_test.go.
 var releasesAPI = "https://api.github.com/repos/Zer0-bit/gaggiuino/releases"
 
+// firmwareHTTPClient is deliberately its own *http.Client, distinct from
+// http.go's httpClient: that one's Transport pins outbound connections to
+// an SSRF-guard-resolved LAN address (#987, guardedDialContext) — the
+// right behavior for a machine's own user-configured host, wrong for this
+// file's fixed, hardcoded api.github.com endpoint (no attacker-controlled
+// host ever reaches it, and firmware_check_test.go's fake GitHub server
+// intentionally binds to 127.0.0.1, which machineHostGuardResolved would
+// reject).
+var firmwareHTTPClient = &http.Client{}
+
 // firmwareCacheTTL ports CACHE_TTL_MS — unauthenticated GitHub API calls
 // are rate-limited to 60 req/hr, so this must never be queried per-poll.
 const firmwareCacheTTL = time.Hour
@@ -81,7 +91,7 @@ func fetchLatestRelease(ctx context.Context, prefix string) (*githubRelease, err
 		}
 		req.Header.Set("Accept", "application/vnd.github+json")
 		req.Header.Set("User-Agent", "gaggiuino-local-profiler")
-		resp, err := httpClient.Do(req)
+		resp, err := firmwareHTTPClient.Do(req)
 		cancel()
 		if err != nil {
 			return nil, err

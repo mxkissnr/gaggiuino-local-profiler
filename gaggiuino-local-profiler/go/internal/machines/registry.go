@@ -488,6 +488,13 @@ func (r *Registry) ResolveMachine(rawID *int64) (*Machine, error) {
 // weakening the real SSRF guard itself.
 var machineHostGuard = assertMachineHost
 
+// machineHostGuardResolved is assertMachineHostResolved by default — the
+// same testing seam as machineHostGuard, but for guardedDialContext's
+// (http.go) dial-time pinning check (#987): allowLoopbackMachineHost
+// overrides both together so an httptest.Server-backed fake machine still
+// gets dialed in tests.
+var machineHostGuardResolved = assertMachineHostResolved
+
 // BaseURLFor ports the adapters' shared baseUrlFor(machine) helper
 // (lib/machines/gaggiuino/adapter.js and gaggimate/adapter.js define the
 // identical function twice — consolidated here to one place, since both Go

@@ -191,7 +191,9 @@ func (c *gaggiuinoLiveClient) connectOnce(ctx context.Context, baseURL string, s
 	if err != nil {
 		return
 	}
-	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	// HTTPClient: httpClient pins the dial to the guard-resolved IP (#987) —
+	// see ws.go's wsConnect for the identical rationale.
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPClient: httpClient})
 	if err != nil {
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -67,7 +68,42 @@ func newFetcher() *fetcher {
 	return &fetcher{client: &http.Client{
 		Timeout:       fetchTimeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Transport:     &http.Transport{DialContext: guardedDialContext},
 	}}
+}
+
+// rawDialContext is (&net.Dialer{}).DialContext by default — a package-
+// level var so tests can substitute a stub that records the address it was
+// asked to dial instead of opening a real socket (#987's regression test,
+// fetch_test.go). Mirrors machines/http.go's identical seam.
+var rawDialContext = (&net.Dialer{}).DialContext
+
+// publicHostGuardResolved is assertPublicHostResolved by default — a
+// package-level var (same seam pattern as lookupIPAddr) so tests can
+// substitute a stub without weakening the real guard.
+var publicHostGuardResolved = assertPublicHostResolved
+
+// guardedDialContext pins safeGet's actual TCP connection to the IP
+// publicHostGuardResolved just approved for the current hop, instead of
+// letting net/http's transport re-resolve the hostname independently at
+// connect time (#987) — the same DNS-rebinding TOCTOU window
+// machines/http.go's guardedDialContext closes for the machine-adapter
+// client, applied here to safeGet's per-hop HTTPS fetch. safeGet's
+// assertPublicHost call (per hop, before doOnce) is the fast-fail check;
+// this is the one that's actually atomic with the connection. The
+// request's URL/Host header keep the original hostname, so TLS SNI and
+// certificate validation happen against the real hostname, not the pinned
+// IP — only the wire-level connection target changes.
+func guardedDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	ip, err := publicHostGuardResolved(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	return rawDialContext(ctx, network, net.JoinHostPort(ip.String(), port))
 }
 
 func (f *fetcher) safeGet(ctx context.Context, startURL string) (fetchResult, error) {

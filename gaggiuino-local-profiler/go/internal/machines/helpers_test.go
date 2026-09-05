@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -67,10 +69,23 @@ func doRequest(mux *http.ServeMux, req *http.Request) *httptest.ResponseRecorder
 // address assertMachineHost correctly rejects for a REAL machine host (see
 // ssrf_test.go's own coverage of that behavior). This substitutes
 // registry.go's machineHostGuard seam rather than weakening
-// assertMachineHost itself.
+// assertMachineHost itself. Also overrides machineHostGuardResolved
+// (#987) — guardedDialContext (http.go) uses that seam to pin the actual
+// dial, so a real connection to a fake httptest.Server would otherwise
+// still get rejected there even with machineHostGuard itself stubbed out.
 func allowLoopbackMachineHost(t *testing.T) {
 	t.Helper()
-	orig := machineHostGuard
+	origGuard := machineHostGuard
+	origResolved := machineHostGuardResolved
 	machineHostGuard = func(ctx context.Context, hostname string) error { return nil }
-	t.Cleanup(func() { machineHostGuard = orig })
+	machineHostGuardResolved = func(ctx context.Context, hostname string) (net.IP, error) {
+		if ip := net.ParseIP(hostname); ip != nil {
+			return ip, nil
+		}
+		return nil, fmt.Errorf("allowLoopbackMachineHost: unexpected non-IP hostname %q", hostname)
+	}
+	t.Cleanup(func() {
+		machineHostGuard = origGuard
+		machineHostGuardResolved = origResolved
+	})
 }
