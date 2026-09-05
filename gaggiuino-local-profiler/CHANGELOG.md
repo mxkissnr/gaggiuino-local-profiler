@@ -1,6 +1,6 @@
 ## [Unreleased]
 ### Fixed
-- **The shot sidebar stays responsive on installs with a very large shot history** — collapsed month groups now build their rows only when first opened, searching no longer re-scans the entire shot list once per row, and the sidebar no longer rebuilds itself once per page while loading a large shot history in the background. Closes #969
+- **The shot sidebar stays responsive on installs with a very large shot history** — collapsed month groups now build their rows only when first opened, searching no longer re-scans the entire shot list once per row, the sidebar no longer rebuilds itself once per page while loading a large shot history in the background, and typing in the search box no longer re-filters on every keystroke. Closes #969
 
 ### Added
 - **Backup export/import and the dev-channel raw-database download/upload now show a progress bar (and disable their button) for the whole transfer**, instead of an unresponsive UI on a large database. Closes #960

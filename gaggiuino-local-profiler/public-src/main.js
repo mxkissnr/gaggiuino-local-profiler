@@ -613,7 +613,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Static element wiring ──────────────────────────────────────────────
   document.getElementById('collapseBtn').addEventListener('click', toggleDesktopSidebar);
   document.getElementById('expandSidebarBtn').addEventListener('click', toggleDesktopSidebar);
-  document.getElementById('shotSearch').addEventListener('input', e => filterShots(e.target.value));
+  // #969: filterShots() does 3 full DOM passes over the shot list; on a
+  // large history that's too much work to redo synchronously on every
+  // keystroke. Debounce so a fast typist only pays for it once per pause.
+  let _searchDebounce = null;
+  document.getElementById('shotSearch').addEventListener('input', e => {
+    const value = e.target.value;
+    clearTimeout(_searchDebounce);
+    _searchDebounce = setTimeout(() => filterShots(value), 150);
+  });
   document.getElementById('sortNewest').addEventListener('click', () => setSortMode('newest'));
   document.getElementById('sortScore').addEventListener('click', () => setSortMode('score'));
   document.getElementById('sortRating').addEventListener('click', () => setSortMode('rating'));
