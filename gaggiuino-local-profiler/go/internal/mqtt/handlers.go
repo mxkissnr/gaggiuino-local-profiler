@@ -74,6 +74,18 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteError(w, http.StatusBadRequest, "invalid MQTT settings")
 		return
 	}
+	// #988: reject a broker host the SSRF guard would refuse to dial, same
+	// threat model as a machine's own host (client.go's connect() re-checks
+	// this again before every AddBroker, since a backup restore can also
+	// set a broker host without going through this handler at all — this
+	// check just gives immediate feedback instead of a silent background
+	// connect failure).
+	if parsed.Host != "" {
+		if err := machines.AssertMachineHost(r.Context(), parsed.Host); err != nil {
+			httputil.WriteError(w, http.StatusBadRequest, "MQTT broker host is not allowed")
+			return
+		}
+	}
 	saved, err := h.repo.SaveSettings(parsed)
 	if err != nil {
 		httputil.InternalError(w, "mqtt", err)

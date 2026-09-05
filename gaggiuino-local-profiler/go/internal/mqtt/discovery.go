@@ -21,6 +21,15 @@ type Broker struct {
 // DiscoverSupervisorMQTT ports discoverSupervisorMqtt(): returns nil on any
 // failure (no token, unreachable Supervisor, no MQTT service), matching the
 // Node original's `catch -> null` and `if (!d || !d.host) return null`.
+//
+// #988 code review: the returned Broker.Host is NOT run through the SSRF
+// guard client.go's connect() applies to a manually-entered/restored
+// broker host. Deliberately so: this host comes verbatim from the trusted
+// HA Supervisor's own /services/mqtt response — no user input anywhere on
+// this path (unlike parseSettings' host field or a restored backup's kv
+// row) — the same trust boundary machines/registry.go and this package's
+// own manual-entry path draw between "the app owner's own infrastructure"
+// and "attacker-influenced input."
 func DiscoverSupervisorMQTT(ctx context.Context, ha SupervisorAPI) *Broker {
 	if ha == nil {
 		return nil

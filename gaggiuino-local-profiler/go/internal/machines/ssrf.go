@@ -85,3 +85,14 @@ func assertMachineHostResolved(ctx context.Context, hostname string) (net.IP, er
 func isSSRFBlocked(err error) bool {
 	return netguard.IsBlocked(err)
 }
+
+// AssertMachineHost exports assertMachineHost's exact loopback/link-local/
+// cloud-metadata guard for other packages that validate a user-supplied LAN
+// host under the same threat model as a machine's own host (#988: an MQTT
+// broker host is exactly this — a real LAN broker legitimately lives in
+// RFC1918 space, same as a real machine). Reuses the guard directly (not
+// the machineHostGuard test seam) so an external caller always gets the
+// real check.
+func AssertMachineHost(ctx context.Context, hostname string) error {
+	return assertMachineHost(ctx, hostname)
+}

@@ -1,6 +1,7 @@
 package mqtt
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
 
@@ -113,6 +115,21 @@ func (c *Client) connect(conn Conn) *session {
 	}
 	s.connecting = true
 	s.mu.Unlock()
+
+	// #988: the broker host is user-supplied (manual settings entry, or a
+	// restored backup's raw kv row — neither goes through parseSettings'
+	// own check, see handlers.go's postSettings), so it needs the same
+	// SSRF guard a machine's own host gets before anything dials it.
+	// machines.AssertMachineHost's loopback/link-local/metadata-only
+	// predicate is the right threat model here too: a real MQTT broker
+	// legitimately lives in RFC1918 space, same as a real machine.
+	if err := machines.AssertMachineHost(context.Background(), conn.Host); err != nil {
+		log.Printf("Gaggiuino MQTT: broker host %q rejected by SSRF guard: %v", conn.Host, err)
+		s.mu.Lock()
+		s.connecting = false
+		s.mu.Unlock()
+		return s
+	}
 
 	prefix := conn.prefix()
 	opts := paho.NewClientOptions().

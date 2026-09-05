@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	paho "github.com/eclipse/paho.mqtt.golang"
+
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
@@ -45,6 +47,29 @@ func TestSettings_SaveRoundTrip(t *testing.T) {
 	}
 	if got := repo.GetSettings(); got.Host != "192.168.1.50" {
 		t.Fatalf("reloaded = %+v", got)
+	}
+}
+
+// TestConnect_RejectsSSRFBlockedBrokerHost is the #988 regression test:
+// connect() must reject a broker host the shared machine-host SSRF guard
+// blocks (loopback/link-local/cloud-metadata) before ever calling AddBroker
+// or constructing a paho client for it — matching how machine-host
+// validation is tested in machines/ssrf_test.go. 169.254.169.254 is a
+// literal IP, so this needs no fake DNS resolver (AssertHost's literal-IP
+// fast path).
+func TestConnect_RejectsSSRFBlockedBrokerHost(t *testing.T) {
+	c := NewClient()
+	called := false
+	c.newPahoClient = func(*paho.ClientOptions) paho.Client {
+		called = true
+		return nil
+	}
+	s := c.connect(Conn{Host: "169.254.169.254", Port: 1883, Prefix: "gaggiuino"})
+	if called {
+		t.Fatal("connect() constructed a paho client for a blocked broker host")
+	}
+	if s.client != nil {
+		t.Fatal("session got a client despite the guard rejecting the host")
 	}
 }
 
@@ -241,6 +266,20 @@ func TestRoute_SettingsGetPost(t *testing.T) {
 	}
 	if do(t, m, http.MethodPost, "/api/mqtt/settings", `{"transport":"carrier-pigeon"}`).Code != 400 {
 		t.Error("invalid transport should 400")
+	}
+}
+
+// TestRoute_SettingsPost_RejectsSSRFBlockedHost is the #988 regression
+// test's HTTP-handler-level counterpart: POSTing a broker host the shared
+// machine-host SSRF guard blocks must 400 and must not persist.
+func TestRoute_SettingsPost_RejectsSSRFBlockedHost(t *testing.T) {
+	_, repo, m := newRoutes(t, &fakeAdapter{}, fakeSupervisor{err: errors.New("x")})
+	rec := do(t, m, http.MethodPost, "/api/mqtt/settings", `{"transport":"mqtt","host":"169.254.169.254","port":1883,"prefix":"gaggiuino"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for a cloud-metadata broker host, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if repo.GetSettings().Host == "169.254.169.254" {
+		t.Fatal("blocked host must not be persisted")
 	}
 }
 
