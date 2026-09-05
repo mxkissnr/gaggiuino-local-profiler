@@ -62,14 +62,16 @@ Click the button above to add this repository directly to your Home Assistant â€
 
 <p align="center">
   <img src="gaggiuino-local-profiler/docs/screenshots/shots.png" alt="Shots view with pressure/flow/weight/temperature chart" width="49%"/>
+</p>
+<p align="center">
   <img src="gaggiuino-local-profiler/docs/screenshots/library.png" alt="Coffee library with bean cards" width="49%"/>
-</p>
-<p align="center">
   <img src="gaggiuino-local-profiler/docs/screenshots/flavor-wheel.png" alt="Interactive flavor wheel for a bean" width="49%"/>
-  <img src="gaggiuino-local-profiler/docs/screenshots/analytics.png" alt="Analytics view with interactive coffee world map" width="49%"/>
 </p>
 <p align="center">
+  <img src="gaggiuino-local-profiler/docs/screenshots/analytics.png" alt="Analytics view with interactive coffee world map" width="49%"/>
   <img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance dashboard with summary tiles, next-due banner and per-machine task tiles" width="49%"/>
+</p>
+<p align="center">
   <img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison, bean ranking and dial-in progression" width="49%"/>
 </p>
 
