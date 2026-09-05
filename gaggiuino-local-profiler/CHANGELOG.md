@@ -1,10 +1,13 @@
 ## [Unreleased]
 ### Fixed
-- **The shot list stays responsive while it loads a large shot history in the background** — the sidebar no longer rebuilds itself once per page of the background sync. Closes #969
+- **The shot sidebar stays responsive on installs with a very large shot history** — collapsed month groups now build their rows only when first opened, searching no longer re-scans the entire shot list once per row, and the sidebar no longer rebuilds itself once per page while loading a large shot history in the background. Closes #969
 
 ### Added
 - **Backup export/import and the dev-channel raw-database download/upload now show a progress bar (and disable their button) for the whole transfer**, instead of an unresponsive UI on a large database. Closes #960
 - **Uploaded entity photos (beans, grinders, baskets, puck screens, shots) are now optimized on save.** Each image is downscaled to at most 1600 px on its long edge, re-encoded without embedded metadata (camera EXIF and GPS location tags are stripped), and stored next to a small thumbnail. Grid views can request the thumbnail, so libraries with many photos load noticeably less data. Existing photos are optimized once in the background on the first start after upgrading; originals are kept if an image can't be processed. Closes #961
+
+### Changed
+- **The shot annotator's coffee/basket/puck-screen/recipe dropdowns are now built via the DOM API** instead of an HTML string, silencing a recurring false-positive security scan finding with no change in behaviour. Closes #946
 
 ### Deprecated
 - **armv7 support is planned for removal in a future release.** Node.js no longer publishes official Docker images for 32-bit ARM past v22 — staying on armv7 means staying on an increasingly outdated Node major indefinitely, the same tradeoff that led Home Assistant OS itself to drop several 32-bit ARM boards. No removal date is set yet; this is an early heads-up for anyone still running the add-on on a 32-bit ARM device (e.g. an older Raspberry Pi on a 32-bit OS image) to plan a move to a 64-bit image before support ends. Track #944 for updates.

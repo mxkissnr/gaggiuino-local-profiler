@@ -8,9 +8,18 @@ import { resolveBeanForAnnotation } from '../views/shots/utils.js';
 // These are imported lazily via window to avoid circular dependencies
 // updateView is on window, calcShotScore/getShotData are set from shots.js
 
+// #969: collapsed month groups render lazily — instead of building (and
+// running window.calcShotScore for) every wrapper in a multi-year history up
+// front, a collapsed group appends an empty body and stashes its shot list
+// here. toggleMonthGroup() drains its entry on first expand; an active search
+// in filterShots() drains the whole map. Module-level rather than on the DOM
+// node because a dataset can't hold objects.
+const _pendingMonthShots = new Map();
+
 export function renderSidebar() {
   const el = document.getElementById('shots');
   el.innerHTML = '';
+  _pendingMonthShots.clear(); // #969: repopulated below for whatever stays collapsed this render
   updateFlapCounter(S.shots.length);
 
   const shots = sortedShots();
@@ -43,7 +52,15 @@ export function renderSidebar() {
         body.className = 'sidebar-month-body';
         body.id = `monthGroup-${group.key}`;
         body.style.display = expanded ? '' : 'none';
-        group.shots.forEach(shot => body.appendChild(_buildShotWrapper(shot)));
+        // #969: only an expanded month builds its rows now — a collapsed one
+        // (display:none) appends an empty body and stashes its shots, then
+        // builds on first expand, so a long history never builds wrappers it
+        // isn't showing.
+        if (expanded) {
+          group.shots.forEach(shot => body.appendChild(_buildShotWrapper(shot)));
+        } else {
+          _pendingMonthShots.set(group.key, group.shots);
+        }
         el.appendChild(body);
       } else {
         const sep = document.createElement('div');
@@ -179,6 +196,13 @@ export function toggleMonthGroup(key) {
   const btn = document.querySelector(`[data-action="toggle-month-group"][data-id="${key}"]`);
   if (!body) return;
   const willExpand = body.style.display === 'none';
+  // #969: a collapsed month's rows are built lazily — materialise the stashed
+  // shots the first time it opens, then drop the stash. Subsequent toggles
+  // just flip display, as before.
+  if (willExpand && _pendingMonthShots.has(key)) {
+    _pendingMonthShots.get(key).forEach(shot => body.appendChild(_buildShotWrapper(shot)));
+    _pendingMonthShots.delete(key);
+  }
   body.style.display = willExpand ? '' : 'none';
   if (btn) btn.textContent = `${willExpand ? '▾' : '▸'} ${btn.textContent.replace(/^[▾▸]\s*/, '')}`;
   if (willExpand) S._expandedMonths.add(key); else S._expandedMonths.delete(key);
@@ -238,12 +262,30 @@ function shotMatchesBeanFilter(shot) {
   return (shot.annotation?.coffee || '').toLowerCase() === S.beanFilter.name.toLowerCase();
 }
 
+// #969: build any month bodies still rendered lazily (collapsed = empty
+// until first expand). A search reads each body's children and force-opens
+// every group, so the deferred wrappers have to exist first — otherwise a
+// match nested in a never-expanded month is silently missed.
+function _buildPendingMonthBodies() {
+  if (!_pendingMonthShots.size) return;
+  for (const [key, shots] of _pendingMonthShots) {
+    const body = document.getElementById(`monthGroup-${key}`);
+    if (body) shots.forEach(shot => body.appendChild(_buildShotWrapper(shot)));
+  }
+  _pendingMonthShots.clear();
+}
+
 export function filterShots(query) {
   S.currentFilter = query;
   const q = query.trim().toLowerCase();
+  if (q) _buildPendingMonthBodies();
+  // #969: one id->shot lookup instead of a linear S.shots.find() per wrapper
+  // — the per-row find made filtering O(n^2) over the whole list on every
+  // keystroke.
+  const shotsById = new Map(S.shots.map(s => [s.id, s]));
   document.querySelectorAll('#shots .shot-wrapper').forEach(wrapper => {
     const id = parseInt(wrapper.id.replace('wrapper-', ''));
-    const shot = S.shots.find(s => s.id === id);
+    const shot = shotsById.get(id);
     if (!shot) { wrapper.style.display = 'none'; return; }
     const ann = shot.annotation || {};
     const haystack = [
