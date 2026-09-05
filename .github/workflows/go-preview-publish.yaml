@@ -25,9 +25,13 @@ name: Publish Go preview channel image
 on:
   push:
     branches: [go-migration]
-    paths:
-      - 'gaggiuino-local-profiler/go/**'
-      - '.github/workflows/go-preview-publish.yaml'
+    # #973: this image bakes in the built frontend (public-src/ -> public/)
+    # as well as go/, so a `paths:` include list kept missing frontend-only
+    # changes (e.g. #970/#972) -- paths-ignore, matching build-dev.yaml's own
+    # pattern, means only genuinely inert pushes (docs) skip a rebuild.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   workflow_dispatch:
 
 env:
