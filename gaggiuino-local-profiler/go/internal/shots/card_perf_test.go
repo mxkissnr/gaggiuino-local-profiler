@@ -2,11 +2,38 @@ package shots
 
 import (
 	"net/http"
+	"runtime"
 	"sort"
 	"sync"
 	"testing"
 	"time"
 )
+
+// TestDefaultResvgPoolSize pins the #980 floor/cap: the pool tracks
+// GOMAXPROCS so a host doesn't pay RSS for slots it can't run in parallel,
+// but never drops below 2 (the pre-#980 default, and #956's RSS budget)
+// or above 4 (typical add-on hardware, beyond which the RSS cost stops
+// buying real throughput — see the defaultResvgPoolSize doc comment).
+func TestDefaultResvgPoolSize(t *testing.T) {
+	cases := []struct{ gomaxprocs, want int }{
+		{1, 2},
+		{2, 2},
+		{3, 3},
+		{4, 4},
+		{5, 4}, {8, 4}, {64, 4},
+	}
+	prev := runtime.GOMAXPROCS(0)
+	defer runtime.GOMAXPROCS(prev)
+	for _, c := range cases {
+		// GOMAXPROCS(n) requires n >= 1 to actually change the setting
+		// (n <= 0 is a read-only no-op per the stdlib doc), which is why
+		// defaultResvgPoolSize's own floor only needs to handle >= 1 here.
+		runtime.GOMAXPROCS(c.gomaxprocs)
+		if got := defaultResvgPoolSize(); got != c.want {
+			t.Errorf("GOMAXPROCS(%d): defaultResvgPoolSize() = %d, want %d", c.gomaxprocs, got, c.want)
+		}
+	}
+}
 
 // card_perf_test.go covers the GET /api/shots/{id}/card pooling work from
 // #951: concurrent card renders must actually run in parallel (independent

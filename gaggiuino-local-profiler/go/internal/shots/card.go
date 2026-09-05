@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -109,14 +110,65 @@ func InstallCodeFor(uuid string) string {
 // warm. A render that returns a wasm-level error drops its slot so the
 // next user rebuilds it rather than inheriting a wedged module.
 //
-// Sized 2, not 3 (#956 W3): each warm slot holds an independent wazero
-// runtime + linear memory (~30-50 MB resident), and three of them was the
-// single biggest contributor to the Go build's ~190 MB warm RSS vs Node's
-// ~90 MB. Two still lets a second card render while the first is in flight
-// (card p95 had headroom under the c=10 bench at pool 3); a third slot only
-// helped a burst of 3+ simultaneous card requests, which the live traffic
-// never showed.
-const resvgPoolSize = 2
+// #956 fixed the pool at 2 (down from 3) purely for warm RSS: each slot
+// holds an independent wazero runtime + linear memory, and that
+// re-verification only checked DB-endpoint latency and RSS, never
+// concurrent card-render latency. #980 found the gap: against a real
+// 2000-shot install, GET /api/shots/{id}/card at --concurrency 10 was 4.1x
+// slower than Node's (p50 1271 ms vs 308 ms).
+//
+// Two things were verified, not assumed:
+//
+//  1. It's pool-queue wait, not a per-render slowdown. BenchmarkCardRenderWarm
+//     (one render, no contention) is flat at ~130 ms regardless of pool
+//     size; only BenchmarkCardRenderConcurrent's per-op time moves with it,
+//     because c=10 requests funnel through however many slots exist.
+//  2. That ~130 ms/render isn't Go doing unnecessary work. A CPU profile of
+//     a warm render (enough iterations to amortise the one-time wazero JIT
+//     cost) puts ~88% of the time in the compiled wasm itself — actual
+//     resvg parse+layout+rasterise work — not in this package's SVG string
+//     building or in repeat JIT compilation. There's no cheap win here
+//     short of replacing the cgo-free wasm renderer with a native one,
+//     which would give up the single-static-binary goal #901 chose it for.
+//
+// So the only lever available without redesigning the renderer is pool
+// size — trading RSS for less queueing. Rather than pick a new fixed
+// number, resvgPoolSize scales with GOMAXPROCS: each render is CPU-bound,
+// so a slot beyond the host's core count adds RSS without adding
+// throughput, and a host's core count is exactly the resource #956 was
+// budgeting against. Floored at 2 — today's default, so a 1-2 core host
+// (what #956 was optimising RSS for) sees no change at all — and capped at
+// 4, since typical add-on hardware (RPi4-class SBCs, small NUCs) tops out
+// there and a busier host's RSS budget usually scales with its core count
+// too.
+//
+// Measured locally with a real HTTP server against a 2000-shot DB
+// (--concurrency 10, --requests 200, 2-physical-core/4-thread dev box —
+// itself a worse case than the non-SMT SBCs this mostly targets, so real
+// gains on target hardware should be at least this good):
+//
+//	pool  p50      warm RSS  RSS after burst
+//	2     1579 ms   116 MB    121 MB   (today's default, matches the live
+//	                                    #980 finding of p50 1271-1579 ms)
+//	3     1493 ms   145 MB    166 MB
+//	4     1416 ms   180 MB    206 MB   (this change's default on this box)
+//
+// This narrows, not closes, the gap to Node — the ~130 ms/render wasm cost
+// is the real floor per the profile above, and no pool size removes it.
+// It's still a straight improvement with no regression on the RSS-tightest
+// hosts, and it lets a host with real spare cores actually use them.
+func defaultResvgPoolSize() int {
+	n := runtime.GOMAXPROCS(0)
+	if n < 2 {
+		return 2
+	}
+	if n > 4 {
+		return 4
+	}
+	return n
+}
+
+var resvgPoolSize = defaultResvgPoolSize()
 
 type resvgSlot struct {
 	ctx *resvg.Context
