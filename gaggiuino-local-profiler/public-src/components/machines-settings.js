@@ -326,6 +326,16 @@ export function onThemeGradientToggleChange() {
   syncThemeFormUI();
 }
 
+function syncWaterSensorRowVisibility() {
+  const type = document.getElementById('machineFormType')?.value;
+  const row = document.getElementById('machineWaterSensorRow');
+  if (row) row.style.display = type === 'gaggimate' ? '' : 'none';
+}
+
+export function onMachineTypeChange() {
+  syncWaterSensorRowVisibility();
+}
+
 export function openMachineForm(machine) {
   const card = document.getElementById('machineFormCard');
   if (!card) return;
@@ -334,9 +344,11 @@ export function openMachineForm(machine) {
   document.getElementById('machineFormType').value = machine?.type || 'gaggiuino';
   document.getElementById('machineFormHost').value = machine?.host || '';
   document.getElementById('machineFormSwitch').value = machine?.switchEntity || '';
+  document.getElementById('machineFormWaterSensor').checked = machine?.hasWaterSensor || false;
   document.getElementById('machineFormTestResult').textContent = '';
   _selectedTheme = machine?.theme || null;
   syncThemeFormUI();
+  syncWaterSensorRowVisibility();
   card.style.display = '';
 }
 
@@ -362,12 +374,14 @@ export function closeMachineForm() {
 // strictly, so an extra JSON field would be unclean at best.
 async function _saveMachine({ triggerSync = true } = {}) {
   const id = document.getElementById('machineFormId').value;
+  const type = document.getElementById('machineFormType').value;
   const payload = {
     name: document.getElementById('machineFormName').value.trim(),
-    type: document.getElementById('machineFormType').value,
+    type,
     host: document.getElementById('machineFormHost').value.trim(),
     switchEntity: document.getElementById('machineFormSwitch').value.trim() || null,
     theme: _selectedTheme,
+    hasWaterSensor: type === 'gaggimate' ? (document.getElementById('machineFormWaterSensor')?.checked || false) : false,
   };
   if (!payload.name || !payload.host) return null;
   const base   = id ? `api/machines/${id}` : 'api/machines';

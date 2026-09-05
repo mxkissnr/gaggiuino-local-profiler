@@ -9,15 +9,16 @@ import (
 // returned by every /api/machines* endpoint (see openapi.yaml's Machine
 // schema).
 type Machine struct {
-	ID           int64   `json:"id"`
-	Name         string  `json:"name"`
-	Type         string  `json:"type"` // "gaggiuino" | "gaggimate"
-	Host         string  `json:"host"`
-	SwitchEntity *string `json:"switchEntity"`
-	Theme        *Theme  `json:"theme"`
-	IsDefault    bool    `json:"isDefault"`
-	Enabled      bool    `json:"enabled"`
-	CreatedAt    int64   `json:"createdAt"`
+	ID             int64   `json:"id"`
+	Name           string  `json:"name"`
+	Type           string  `json:"type"` // "gaggiuino" | "gaggimate"
+	Host           string  `json:"host"`
+	SwitchEntity   *string `json:"switchEntity"`
+	Theme          *Theme  `json:"theme"`
+	HasWaterSensor bool    `json:"hasWaterSensor"`
+	IsDefault      bool    `json:"isDefault"`
+	Enabled        bool    `json:"enabled"`
+	CreatedAt      int64   `json:"createdAt"`
 }
 
 // Theme ports the machines.theme JSON contract documented in
@@ -39,12 +40,13 @@ type Theme struct {
 // Name/Type/Host to be non-nil (validated in handlers.go, matching
 // machineSchema's non-partial required fields).
 type MachineInput struct {
-	Name         *string `json:"name"`
-	Type         *string `json:"type"`
-	Host         *string `json:"host"`
-	SwitchEntity *string `json:"switchEntity"`
-	Theme        *Theme  `json:"theme"`
-	Enabled      *bool   `json:"enabled"`
+	Name           *string `json:"name"`
+	Type           *string `json:"type"`
+	Host           *string `json:"host"`
+	SwitchEntity   *string `json:"switchEntity"`
+	Theme          *Theme  `json:"theme"`
+	HasWaterSensor *bool   `json:"hasWaterSensor"`
+	Enabled        *bool   `json:"enabled"`
 }
 
 const maxNameLen = 100

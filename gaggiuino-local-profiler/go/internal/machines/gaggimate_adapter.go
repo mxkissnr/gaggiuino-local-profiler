@@ -35,11 +35,6 @@ func NewGaggiMateAdapter(live *gaggiMateLiveClient) *GaggiMateAdapter {
 
 var _ Adapter = (*GaggiMateAdapter)(nil)
 
-// gaggimateBrewingMode ports ws-client.js's BREWING_MODE — evt:status's
-// `m` (mode) field's exact enum isn't documented anywhere public; mode 1
-// is treated as "brewing", best-effort/advisory, same caveat as Node.
-const gaggimateBrewingMode = 1
-
 func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, error) {
 	baseURL, err := BaseURLFor(ctx, m)
 	if err != nil {
@@ -60,25 +55,46 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 		}
 	}
 	raw, _ := json.Marshal(evt)
+
+	// m==1 (BREW mode) means "brew screen selected", not "pump running".
+	// Actual brewing requires process.a==1 AND process.s in ("brew","infusion").
+	// Steaming: process.a==1 AND m==2. Source: ha-integration sensor.py _get_status.
+	var isBrewing, isSteaming bool
+	if process, ok := evt["process"].(map[string]any); ok {
+		if looseFloat(process["a"]) == 1 {
+			stage, _ := process["s"].(string)
+			isBrewing = stage == "brew" || stage == "infusion"
+			isSteaming = looseFloat(evt["m"]) == 2
+		}
+	}
+	steamOn := isSteaming
+
+	// Weight: cw (filtered scale weight) only when bc (BLE scale connected) is true.
+	var weight *float64
+	if looseTruthy(evt["bc"]) {
+		weight = looseFloatOrNil(evt["cw"])
+	}
+
 	profileName := looseStringPtr(evt["p"])
 	return Status{
 		Reachable:         true,
 		Temperature:       looseFloat(evt["ct"]),
 		TargetTemperature: looseFloat(evt["tt"]),
 		Pressure:          looseFloat(evt["pr"]),
-		Weight:            nil, // evt:status carries no weight field
-		Brewing:           looseFloat(evt["m"]) == gaggimateBrewingMode,
-		SteamOn:           nil,
+		Weight:            weight,
+		Brewing:           isBrewing,
+		SteamOn:           &steamOn,
 		ProfileID:         nil,
 		ProfileName:       profileName,
+		PumpFlow:          looseFloatOrNil(evt["fl"]),
 		Raw:               raw,
 	}, nil
 }
 
-// GetLatestShotId/GetShot (lib/machines/gaggimate/history.js's
-// index.bin/.slog binary parsing) are deliberately NOT ported — see
-// doc.go: they back lib/sync.js's shot-history sync, a background/cron
-// concern outside every REST endpoint this phase's task brief lists.
+// Shot-history sync (index.bin/.slog binary parsing) lives in
+// gaggimate_history.go and is called from system/sync.go's
+// syncGaggiMateShots — not through the Adapter interface, which has no
+// GetShot/GetLatestShotId methods.
 
 func (a *GaggiMateAdapter) ListProfiles(ctx context.Context, m *Machine) ([]ProfileSummary, error) {
 	baseURL, err := BaseURLFor(ctx, m)
@@ -125,7 +141,7 @@ func (a *GaggiMateAdapter) SelectProfile(ctx context.Context, m *Machine, id int
 
 func (a *GaggiMateAdapter) Capabilities() Capabilities {
 	return Capabilities{
-		ProfileEdit:   false, // protocol supports it (req:profiles:save/delete); UI-gated off in v1
+		ProfileEdit:   false, // protocol supports it (req:profiles:save/delete); UI-gated off, same as Node
 		BrewStart:     false, // GaggiMate has no start/stop API at all
 		Preheat:       nil,   // not modeled yet — unknown until verified against hardware
 		Volumetric:    nil,   // determined per-shot from slog systemInfo.volumetricCapable, not a static capability

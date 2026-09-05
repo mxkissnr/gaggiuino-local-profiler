@@ -138,16 +138,10 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 		return nil
 	}
 
-	// #952: a GaggiMate default machine has no /api/shots REST surface — its
-	// shot history is the binary index.bin/.slog files
-	// (lib/machines/gaggimate/history.js), whose parser is not ported yet
-	// (Part B). Dispatch by adapter type here AFTER the machine-off and
-	// in-flight guards above: probe reachability via the adapter's own
-	// status call (which reads the persistent evt:status cache, not a fresh
-	// connection) instead of blindly hammering the Gaggiuino-only
-	// /api/shots/latest, and leave the backfill for the history-parser port.
+	// #952 Part B: GaggiMate uses binary index.bin/.slog history files, not
+	// the Gaggiuino /api/shots REST surface. Dispatch to dedicated sync path.
 	if machine.Type == "gaggimate" {
-		return p.probeGaggiMateReachable(ctx, machine)
+		return p.syncGaggiMateShots(ctx, machine)
 	}
 
 	base, err := machines.BaseURLFor(ctx, machine)
@@ -224,22 +218,90 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 	return nil
 }
 
-// probeGaggiMateReachable handles a GaggiMate default machine on the sync
-// path: one adapter status probe (persistent-cache-backed) to keep
-// machineReachable accurate, then a logged skip of the actual backfill
-// until lib/machines/gaggimate/history.js's binary parser is ported (#952
-// Part B). Never touches lastSyncTime — nothing was actually synced.
-func (p *Poller) probeGaggiMateReachable(ctx context.Context, machine *machines.Machine) error {
+// syncGaggiMateShots ports syncMachineShots() for GaggiMate (#952 Part B):
+// probes reachability via the WS adapter (live cache), then fetches
+// /api/history/index.bin to find the latest shot ID and pulls missing .slog
+// files — same blocklist/404 logic as the Gaggiuino path above.
+// HTTP unreachable is not an error: the adapter probe already recorded
+// reachability, so we return nil and skip the sync (the next scheduled tick
+// will retry).
+func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machine) error {
+	// Probe via adapter (WS cache) — this sets MachineReachable independent of
+	// whether the HTTP history endpoint is up.
 	adapter, err := p.adapters.GetAdapter(machine)
+	if err == nil {
+		if _, serr := adapter.GetStatus(ctx, machine); serr == nil {
+			p.recordMachineReachable()
+		}
+	}
+
+	base, berr := machines.BaseURLFor(ctx, machine)
+	if berr != nil {
+		log.Printf("system: gaggimate sync: machine URL unresolvable: %v", berr)
+		return nil
+	}
+
+	latestMachineID, err := machines.FetchGaggiMateIndex(ctx, base)
+	if err != nil {
+		// HTTP unreachable — machine may still be live via WS (e.g. only HTTP
+		// is blocked). Not a hard error: return nil so the caller doesn't stamp
+		// a sync failure and the next tick retries.
+		log.Printf("system: gaggimate sync: history unreachable: %v", err)
+		return nil
+	}
+	if latestMachineID == 0 {
+		log.Printf("system: gaggimate sync: no shots on machine")
+		p.recordSyncSuccess()
+		return nil
+	}
+
+	blocklist, err := p.shots.GetBlocklist()
 	if err != nil {
 		return err
 	}
-	if _, err := adapter.GetStatus(ctx, machine); err != nil {
-		p.recordSyncError(err)
+	maxLocalID, err := p.shots.MaxNativeShotID(1)
+	if err != nil {
 		return err
 	}
-	p.recordMachineReachable()
-	log.Printf("system: sync: GaggiMate default machine reachable — shot-history backfill not ported yet (#952 Part B)")
+	effectiveMax := maxLocalID
+	for _, b := range blocklist {
+		if n, perr := strconv.ParseInt(b, 10, 64); perr == nil && n > effectiveMax {
+			effectiveMax = n
+		}
+	}
+
+	if effectiveMax >= latestMachineID {
+		log.Printf("system: gaggimate sync: already up to date (shots: %d)", maxLocalID)
+		p.recordSyncSuccess()
+		return nil
+	}
+
+	for i := effectiveMax + 1; i <= latestMachineID; i++ {
+		shot, status, err := machines.FetchGaggiMateShot(ctx, base, i)
+		if err != nil {
+			if status == http.StatusNotFound {
+				log.Printf("system: gaggimate sync: shot %d not found (404) — marking permanently missing", i)
+				if aerr := p.shots.AppendToBlocklist(strconv.FormatInt(i, 10)); aerr != nil {
+					return aerr
+				}
+				continue
+			}
+			p.recordSyncError(err)
+			return err
+		}
+		if shot["id"] == nil || shot["datapoints"] == nil {
+			log.Printf("system: gaggimate sync: shot %d has no id/datapoints — skipped", i)
+			continue
+		}
+
+		if uerr := p.shots.Upsert(shots.Shot(shot)); uerr != nil {
+			p.recordSyncError(uerr)
+			return uerr
+		}
+	}
+
+	log.Printf("system: gaggimate sync complete: caught up to shot %d", latestMachineID)
+	p.recordSyncSuccess()
 	return nil
 }
 

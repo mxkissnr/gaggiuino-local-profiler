@@ -28,21 +28,23 @@ func NewRegistry(db *sql.DB) *Registry {
 }
 
 type machineRow struct {
-	ID           int64
-	Name         string
-	Type         string
-	Host         string
-	SwitchEntity sql.NullString
-	Theme        sql.NullString
-	IsDefault    bool
-	Enabled      bool
-	CreatedAt    int64
+	ID             int64
+	Name           string
+	Type           string
+	Host           string
+	SwitchEntity   sql.NullString
+	Theme          sql.NullString
+	HasWaterSensor bool
+	IsDefault      bool
+	Enabled        bool
+	CreatedAt      int64
 }
 
 func (r machineRow) toMachine() Machine {
 	m := Machine{
 		ID: r.ID, Name: r.Name, Type: r.Type, Host: r.Host,
-		IsDefault: r.IsDefault, Enabled: r.Enabled, CreatedAt: r.CreatedAt,
+		HasWaterSensor: r.HasWaterSensor,
+		IsDefault:      r.IsDefault, Enabled: r.Enabled, CreatedAt: r.CreatedAt,
 	}
 	if r.SwitchEntity.Valid {
 		s := r.SwitchEntity.String
@@ -54,11 +56,11 @@ func (r machineRow) toMachine() Machine {
 	return m
 }
 
-const selectMachineColumns = `id, name, type, host, switch_entity, theme, is_default, enabled, created_at`
+const selectMachineColumns = `id, name, type, host, switch_entity, theme, has_water_sensor, is_default, enabled, created_at`
 
 func scanMachineRow(scanner interface{ Scan(...any) error }) (machineRow, error) {
 	var r machineRow
-	err := scanner.Scan(&r.ID, &r.Name, &r.Type, &r.Host, &r.SwitchEntity, &r.Theme, &r.IsDefault, &r.Enabled, &r.CreatedAt)
+	err := scanner.Scan(&r.ID, &r.Name, &r.Type, &r.Host, &r.SwitchEntity, &r.Theme, &r.HasWaterSensor, &r.IsDefault, &r.Enabled, &r.CreatedAt)
 	return r, err
 }
 
@@ -162,11 +164,15 @@ func (r *Registry) CreateMachine(in MachineInput) (*Machine, error) {
 	if in.Enabled != nil {
 		enabled = *in.Enabled
 	}
+	hasWaterSensor := false
+	if in.HasWaterSensor != nil {
+		hasWaterSensor = *in.HasWaterSensor
+	}
 	res, err := r.db.Exec(
-		`INSERT INTO machines (name, type, host, switch_entity, theme, is_default, enabled, created_at)
-		 VALUES (?,?,?,?,?,0,?,?)`,
+		`INSERT INTO machines (name, type, host, switch_entity, theme, has_water_sensor, is_default, enabled, created_at)
+		 VALUES (?,?,?,?,?,?,0,?,?)`,
 		*in.Name, *in.Type, *in.Host, nullableString(in.SwitchEntity), nullableString(themeStr),
-		boolToInt(enabled), time.Now().UnixMilli(),
+		boolToInt(hasWaterSensor), boolToInt(enabled), time.Now().UnixMilli(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("machines: creating: %w", err)
@@ -221,6 +227,10 @@ func (r *Registry) UpdateMachine(id int64, fields MachineInput, onHostChanged fu
 	if fields.Theme != nil {
 		theme = fields.Theme
 	}
+	hasWaterSensor := existing.HasWaterSensor
+	if fields.HasWaterSensor != nil {
+		hasWaterSensor = *fields.HasWaterSensor
+	}
 	enabled := existing.Enabled
 	if fields.Enabled != nil {
 		enabled = *fields.Enabled
@@ -231,8 +241,8 @@ func (r *Registry) UpdateMachine(id int64, fields MachineInput, onHostChanged fu
 		return nil, fmt.Errorf("machines: encoding theme: %w", err)
 	}
 	_, err = r.db.Exec(
-		`UPDATE machines SET name=?, type=?, host=?, switch_entity=?, theme=?, enabled=? WHERE id=?`,
-		name, typ, host, nullableString(switchEntity), nullableString(themeStr), boolToInt(enabled), id,
+		`UPDATE machines SET name=?, type=?, host=?, switch_entity=?, theme=?, has_water_sensor=?, enabled=? WHERE id=?`,
+		name, typ, host, nullableString(switchEntity), nullableString(themeStr), boolToInt(hasWaterSensor), boolToInt(enabled), id,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("machines: updating #%d: %w", id, err)

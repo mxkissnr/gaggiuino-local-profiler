@@ -150,6 +150,13 @@
         "notnull": 1,
         "dflt_value": null,
         "pk": 0
+      },
+      {
+        "name": "has_water_sensor",
+        "type": "INTEGER",
+        "notnull": 1,
+        "dflt_value": "0",
+        "pk": 0
       }
     ],
     "maintenance": [

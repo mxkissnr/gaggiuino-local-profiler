@@ -230,6 +230,11 @@ export function mapShotDatapoints(datapoints) {
     flow:           mapToXY(t, d.pumpFlow),
     targetFlow:     mapToXY(t, d.targetPumpFlow),
     weight:         mapToXY(t, d.shotWeight || d.weight),
+    // bleScaleConnected is set by GaggiMate shots: true = real BLE scale weight,
+    // false = volumetric estimate. For Gaggiuino shots (no flag), fall back to
+    // checking whether shotWeight is present (Gaggiuino only stores shotWeight
+    // when a real BLE scale was connected during that shot).
+    weightIsReal:   d.bleScaleConnected != null ? d.bleScaleConnected === true : !!(d.shotWeight?.length),
     weightFlow:     mapToXY(t, d.weightFlow),
     temp:           mapToXY(t, d.temperature),
     targetTemp:     mapToXY(t, d.targetTemperature),

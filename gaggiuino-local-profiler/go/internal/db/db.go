@@ -92,6 +92,10 @@ func Open(path string) (*sql.DB, error) {
 		sqlDB.Close()
 		return nil, err
 	}
+	if err := MigrateMachineWaterSensor(sqlDB); err != nil {
+		sqlDB.Close()
+		return nil, err
+	}
 	if _, err := EnsureInstallID(sqlDB); err != nil {
 		sqlDB.Close()
 		return nil, err
@@ -421,6 +425,24 @@ func MigrateMachineTheme(sqlDB *sql.DB) error {
 	}
 	if _, err := sqlDB.Exec(`ALTER TABLE machines ADD COLUMN theme TEXT`); err != nil {
 		return fmt.Errorf("db: adding theme column to machines: %w", err)
+	}
+	return nil
+}
+
+// MigrateMachineWaterSensor adds the machines.has_water_sensor column for
+// installs that created the machines table before this column existed.
+// Default 0 (false) means "no sensor" — existing GaggiMate machines will show
+// no water level until the user enables the flag in Settings.
+func MigrateMachineWaterSensor(sqlDB *sql.DB) error {
+	ok, err := hasColumn(sqlDB, "machines", "has_water_sensor")
+	if err != nil {
+		return err
+	}
+	if ok {
+		return nil
+	}
+	if _, err := sqlDB.Exec(`ALTER TABLE machines ADD COLUMN has_water_sensor INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("db: adding has_water_sensor column to machines: %w", err)
 	}
 	return nil
 }

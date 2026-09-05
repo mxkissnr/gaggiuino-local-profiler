@@ -41,7 +41,7 @@ func (f *fakeGaggiMateMachine) handleWS(w http.ResponseWriter, r *http.Request) 
 
 	// Push one evt:status frame immediately on connect — waitForStatus()
 	// (used by GetStatus) waits for exactly this, unsolicited.
-	statusFrame, _ := json.Marshal(map[string]any{"tp": "evt:status", "ct": 92.5, "tt": 93.0, "pr": 8.5, "m": gaggimateBrewingMode, "p": "Espresso"})
+	statusFrame, _ := json.Marshal(map[string]any{"tp": "evt:status", "ct": 92.5, "tt": 93.0, "pr": 8.5, "m": 1, "p": "Espresso", "process": map[string]any{"a": 1, "s": "brew"}})
 	_ = conn.Write(ctx, websocket.MessageText, statusFrame)
 
 	for {

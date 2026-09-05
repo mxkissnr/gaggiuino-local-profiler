@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
 
@@ -218,7 +219,14 @@ func TestBuildLiveDataResponse_NoDataRaceWithConcurrentPollTick(t *testing.T) {
 // machineStatus (no extra sensor calls).
 func TestLiveData_IdleStatsAlwaysPresent(t *testing.T) {
 	fake := &fakeAdapter{}
-	p, _ := newTestPoller(t, fake)
+	p, sqlDB := newTestPoller(t, fake)
+
+	// Enable water sensor on the default machine so wl is parsed.
+	reg := machines.NewRegistry(sqlDB)
+	hasWater := true
+	if _, err := reg.UpdateMachine(1, machines.MachineInput{HasWaterSensor: &hasWater}, nil); err != nil {
+		t.Fatalf("UpdateMachine: %v", err)
+	}
 
 	// Before any poll: idle stats are null (no machineStatus yet).
 	ld := p.LiveData()
@@ -226,7 +234,9 @@ func TestLiveData_IdleStatsAlwaysPresent(t *testing.T) {
 		t.Fatalf("expected nil idle stats before first poll, got temp=%v water=%v", ld.Temperature, ld.WaterLevel)
 	}
 
-	fake.setStatus(okStatus(t, `{"waterLevel":72}`, 93.5, 94, 6.2, 0, false, "Espresso", 1), nil)
+	// GaggiMate sends "wl" only when sensor is present. hasWaterSensor=true
+	// above gates parsing so wl=72 is read and nil is returned when absent.
+	fake.setStatus(okStatus(t, `{"wl":72}`, 93.5, 94, 6.2, 0, false, "Espresso", 1), nil)
 	p.pollViaGaggiuinoStatus(context.Background())
 	ld = p.LiveData()
 	if ld.IsLive {

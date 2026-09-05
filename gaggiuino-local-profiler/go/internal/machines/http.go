@@ -129,6 +129,21 @@ func looseIntPtr(v any) *int {
 	}
 }
 
+func looseFloatOrNil(v any) *float64 {
+	switch t := v.(type) {
+	case float64:
+		return &t
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(t), 64)
+		if err != nil {
+			return nil
+		}
+		return &f
+	default:
+		return nil
+	}
+}
+
 func looseStringPtr(v any) *string {
 	s, ok := v.(string)
 	if !ok || s == "" {

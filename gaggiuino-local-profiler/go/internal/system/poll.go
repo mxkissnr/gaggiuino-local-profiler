@@ -555,7 +555,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	}
 
 	result := deriveMachineState(DeriveInput{
-		Status:     rawStatusFrom(status),
+		Status:     rawStatusFrom(status, machine.HasWaterSensor),
 		Now:        now,
 		SensorSnap: sensorSnap,
 		SysState:   sysState,
@@ -704,28 +704,53 @@ func zeroToNil(v float64) *float64 {
 
 // rawStatusFrom decodes the two fields machines.Status doesn't already
 // carry (waterLevel/upTime) straight off its Raw JSON — the rest come from
-// Status's own already-parsed fields.
-func rawStatusFrom(s machines.Status) RawStatus {
+// Status's own already-parsed fields. hasWaterSensor gates the GaggiMate-
+// specific `wl` field: GaggiMate always sends wl=100 when no ALBA sensor is
+// present, so we only read it when the user has explicitly flagged the machine
+// as having one. Gaggiuino sends `waterLevel` (not `wl`) and has no such
+// ambiguity, so that field is read unconditionally as a fallback.
+func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
 	var extra struct {
-		WaterLevel json.Number `json:"waterLevel"`
-		UpTime     json.Number `json:"upTime"`
+		WL         json.RawMessage `json:"wl"`
+		WaterLevel json.RawMessage `json:"waterLevel"`
+		UpTime     json.Number     `json:"upTime"`
 	}
 	_ = json.Unmarshal(s.Raw, &extra)
-	waterLevel, _ := extra.WaterLevel.Int64()
 	upTime, _ := extra.UpTime.Int64()
+
+	parseRawInt := func(raw json.RawMessage) *int {
+		if len(raw) == 0 || string(raw) == "null" {
+			return nil
+		}
+		var n int64
+		if json.Unmarshal(raw, &n) != nil {
+			return nil
+		}
+		v := int(n)
+		return &v
+	}
+
+	var waterLevel *int
+	if hasWaterSensor {
+		waterLevel = parseRawInt(extra.WL)
+	}
+	if waterLevel == nil {
+		waterLevel = parseRawInt(extra.WaterLevel)
+	}
 
 	var steamOn bool
 	if s.SteamOn != nil {
 		steamOn = *s.SteamOn
 	}
 	return RawStatus{
-		WaterLevel:        int(waterLevel),
+		WaterLevel:        waterLevel,
 		UpTime:            int(upTime),
 		Brewing:           s.Brewing,
 		Temperature:       s.Temperature,
 		TargetTemperature: s.TargetTemperature,
 		Pressure:          s.Pressure,
 		Weight:            derefFloat(s.Weight),
+		PumpFlow:          s.PumpFlow,
 		ProfileID:         s.ProfileID,
 		ProfileName:       s.ProfileName,
 		SteamSwitchState:  steamOn,
@@ -822,8 +847,8 @@ func (p *Poller) buildLiveDataResponse() LiveData {
 		t := rt.MachineStatus.Temperature
 		tt := rt.MachineStatus.TargetTemperature
 		pr := rt.MachineStatus.Pressure
-		wl := rt.MachineStatus.WaterLevel
-		temp, targetTemp, pressure, waterLevel = &t, &tt, &pr, &wl
+		temp, targetTemp, pressure = &t, &tt, &pr
+		waterLevel = rt.MachineStatus.WaterLevel // already *int, nil when HasWaterSensor=false (wl field not parsed)
 	}
 
 	p.state.mu.Lock()

@@ -27,7 +27,7 @@ type MachineStatus struct {
 	Temperature       float64 `json:"temperature"`
 	TargetTemperature float64 `json:"targetTemperature"`
 	Pressure          float64 `json:"pressure"`
-	WaterLevel        int     `json:"waterLevel"`
+	WaterLevel        *int    `json:"waterLevel"`
 	Weight            float64 `json:"weight"`
 	UpTime            int     `json:"upTime"`
 	ProfileID         *int    `json:"profileId"`
@@ -68,13 +68,14 @@ type MachineStatus struct {
 // settings/control proxy's reachability probe and doesn't need
 // waterLevel/upTime), decoded straight off machines.Status.Raw by poll.go.
 type RawStatus struct {
-	WaterLevel        int
+	WaterLevel        *int
 	UpTime            int
 	Brewing           bool
 	Temperature       float64
 	TargetTemperature float64
 	Pressure          float64
 	Weight            float64
+	PumpFlow          *float64
 	ProfileID         *int
 	ProfileName       *string
 	SteamSwitchState  bool
@@ -158,6 +159,8 @@ func deriveMachineState(in DeriveInput) DeriveResult {
 		temperature = in.SensorSnap.Temperature
 		weight = in.SensorSnap.Weight
 		pumpFlow = in.SensorSnap.PumpFlow
+	} else if in.Status.PumpFlow != nil {
+		pumpFlow = *in.Status.PumpFlow
 	}
 	targetTemperature := in.Status.TargetTemperature
 	profileName := "Unknown"
@@ -183,6 +186,9 @@ func deriveMachineState(in DeriveInput) DeriveResult {
 		UpdatedAt:         in.Now,
 	}
 
+	if in.Status.PumpFlow != nil && in.SensorSnap == nil {
+		ms.PumpFlow = &pumpFlow
+	}
 	if in.SensorSnap != nil {
 		s := in.SensorSnap
 		ms.PumpFlow = &pumpFlow

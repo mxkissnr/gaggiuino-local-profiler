@@ -26,6 +26,7 @@ type Status struct {
 	SteamOn           *bool           `json:"steamOn"`
 	ProfileID         *int            `json:"profileId"`
 	ProfileName       *string         `json:"profileName"`
+	PumpFlow          *float64        `json:"pumpFlow,omitempty"`
 	Raw               json.RawMessage `json:"raw"`
 }
 

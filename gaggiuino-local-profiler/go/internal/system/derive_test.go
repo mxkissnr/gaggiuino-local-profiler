@@ -15,7 +15,7 @@ func ptrBool(v bool) *bool      { return &v }
 func TestDeriveMachineState_RESTOnly_NoLiveSession(t *testing.T) {
 	res := deriveMachineState(DeriveInput{
 		Status: RawStatus{
-			WaterLevel: 80, UpTime: 1234, Brewing: false,
+			WaterLevel: ptrInt(80), UpTime: 1234, Brewing: false,
 			Temperature: 93.5, TargetTemperature: 94, Pressure: 9.0, Weight: 0,
 			ProfileID: ptrInt(1), ProfileName: ptrStr("Espresso"), SteamSwitchState: false,
 		},
@@ -29,7 +29,7 @@ func TestDeriveMachineState_RESTOnly_NoLiveSession(t *testing.T) {
 		t.Errorf("ProfileName = %q, want Espresso", res.ProfileName)
 	}
 	ms := res.MachineStatus
-	if ms.Temperature != 93.5 || ms.Pressure != 9.0 || ms.WaterLevel != 80 || ms.UpTime != 1234 {
+	if ms.Temperature != 93.5 || ms.Pressure != 9.0 || ms.WaterLevel == nil || *ms.WaterLevel != 80 || ms.UpTime != 1234 {
 		t.Errorf("unexpected base fields: %+v", ms)
 	}
 	if ms.UpdatedAt != 1000 {

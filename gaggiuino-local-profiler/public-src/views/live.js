@@ -415,8 +415,11 @@ export function handleLiveData(msg) {
   // by showing the heating state right between the two. Reuses the existing
   // preheat_warming key rather than adding a seventh translation of the same
   // idea.
+  // machineReachable == null means "never polled yet" (startup) — show
+  // connecting rather than "Maschine bereit" which implies confirmed reachability.
   const stillWarming = _lastPreheat && !_lastPreheat.ready && _lastPreheat.remaining > 0;
-  if (idleTitleEl) idleTitleEl.textContent = stillWarming ? t('preheat_warming') : t('machine_ready');
+  const neverPolled  = msg.machineReachable == null;
+  if (idleTitleEl) idleTitleEl.textContent = neverPolled ? t('live_connecting') : stillWarming ? t('preheat_warming') : t('machine_ready');
   if (idleTextEl)  idleTextEl.textContent  = t('live_idle_text');
 
   // #902: idle stats row -- always kept current (not gated behind the true-
@@ -430,6 +433,11 @@ export function handleLiveData(msg) {
   if (idleTargetTempEl) idleTargetTempEl.textContent = msg.targetTemperature != null ? ` / ${msg.targetTemperature.toFixed(0)}°` : '';
   if (idlePressureEl)   idlePressureEl.textContent   = msg.pressure          != null ? `${msg.pressure.toFixed(1)} bar`          : '–';
   if (idleWaterEl)       idleWaterEl.textContent      = msg.waterLevel        != null ? `${msg.waterLevel}%`                     : '–';
+
+  {
+    const waterStat = document.getElementById('liveIdleWaterStat');
+    if (waterStat) waterStat.style.display = msg.waterLevel != null ? '' : 'none';
+  }
 
   // #902/#983: steam/flush/descale live sessions -- same live-content
   // readout the brew branch below uses (duration/pressure/temperature),

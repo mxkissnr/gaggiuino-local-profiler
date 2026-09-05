@@ -129,7 +129,7 @@ import { startProfileDialinFromList, profileDialinClose,
 import { loadDemoData, endDemo } from './components/onboarding.js';
 
 import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, renderMachinesList,
-         onThemeCustomColorAChange, onThemeCustomColorBChange, onThemeGradientToggleChange } from './components/machines-settings.js';
+         onThemeCustomColorAChange, onThemeCustomColorBChange, onThemeGradientToggleChange, onMachineTypeChange } from './components/machines-settings.js';
 
 import { openSetupWizard, closeSetupWizard, setupWizardGetStarted, setupWizardSkipToDemo,
          shouldOpenSetupWizard } from './views/setup-wizard.js';
@@ -138,7 +138,7 @@ import { handleTopbarLiveSnapshotEvent, handleTopbarPreheatUpdateEvent,
          handleTopbarMachineIconClick, closeEasterEggPanel,
          bindEasterEggPanelEscape } from './components/topbar-machine-icon.js';
 
-import { loadMqttSettings, setMqttTransport, saveMqttSettings, applyMqttToMachine } from './components/mqtt-settings.js';
+import { loadMqttSettings, renderMqttSettingsCard, setMqttTransport, saveMqttSettings, applyMqttToMachine } from './components/mqtt-settings.js';
 
 import { loadNotifySettingsCard, saveNotifySettings } from './components/notify-settings.js';
 
@@ -839,6 +839,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('setupWizardModal')?.addEventListener('click', e => {
     if (e.target.id === 'setupWizardModal') closeSetupWizard();
   });
+  document.getElementById('machineFormType')?.addEventListener('change', onMachineTypeChange);
   document.getElementById('machineThemeCustomA')?.addEventListener('input', onThemeCustomColorAChange);
   document.getElementById('machineThemeCustomB')?.addEventListener('input', onThemeCustomColorBChange);
   document.getElementById('machineThemeGradientToggle')?.addEventListener('change', onThemeGradientToggleChange);
@@ -1026,6 +1027,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // very first render always saw an empty shot list and nothing ever re-rendered it
     // once the real shots arrived. Re-render once both are guaranteed to be ready.
     await machinesPromise;
+    renderMqttSettingsCard();
     renderMachinesList();
     loadMachineProfileList();
     // #750: awaited (was fire-and-forget) so the installId comparison inside

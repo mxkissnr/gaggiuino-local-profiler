@@ -25,6 +25,17 @@ function _store(id, promise) {
   return promise;
 }
 
+// Merges the top-level gaggimateBleScale flag into the datapoints object so
+// mapShotDatapoints can use it for the chart weight label. Needed for shots
+// synced before bleScaleConnected was added to the datapoints themselves.
+function _mergeScaleFlag(shot) {
+  const dp = shot.datapoints || {};
+  if (shot.gaggimateBleScale != null && dp.bleScaleConnected == null) {
+    dp.bleScaleConnected = shot.gaggimateBleScale;
+  }
+  return dp;
+}
+
 function _fetchCurve(id) {
   return apiFetch('api/shots/' + id)
     .then(r => {
@@ -36,9 +47,9 @@ function _fetchCurve(id) {
       // The detail endpoint already ships the previous same-profile shot in
       // full — seed it so the auto-compare ghost curve is instant too.
       if (shot.previousShot && shot.previousShot.id != null && shot.previousShot.datapoints) {
-        primeCurve(shot.previousShot.id, shot.previousShot.datapoints);
+        primeCurve(shot.previousShot.id, _mergeScaleFlag(shot.previousShot));
       }
-      return shot.datapoints || {};
+      return _mergeScaleFlag(shot);
     })
     .catch(() => {
       _pending.delete(id); // don't cache a transient failure
