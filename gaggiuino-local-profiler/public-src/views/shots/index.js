@@ -51,6 +51,12 @@ export function _equipmentName(list, id) {
 // fetched per shot on demand via shot-curves.js.
 const SHOTS_PAGE_LIMIT = 60;
 
+// #969: renderSidebar() rebuilds a DOM wrapper for every visible shot, so
+// calling it after every page of loadAllShotMeta()'s background walk made a
+// large history (e.g. 15k shots / 250 pages) effectively O(n^2) in render
+// work. Rebuild at most once per this interval during the walk instead.
+const RENDER_THROTTLE_MS = 400;
+
 // #957: GET /api/shots is Go-only. The shared frontend also runs against the
 // (frozen, bugfix-only) Node backend during the migration, which serves the
 // old full /shots.json dump and no paginated route — so on a 404 we fall
@@ -180,6 +186,13 @@ export async function loadAllShotMeta(token, startCursor) {
   _metaWalkActive = true;
   let cursor = startCursor;
   let done = false;
+  // #969: per-page state (S.allShots/S.shots/S.shotsPageCursor/S.shotsHasMore)
+  // still updates every page — cheap. Only the DOM rebuild is throttled;
+  // renderedSinceStart tracks whether the trailing render below has anything
+  // new to paint at all (a superseded/errored walk that never got a page
+  // shouldn't render).
+  let lastRenderAt = 0;
+  let renderedSinceStart = false;
   try {
     while (cursor && token === _loadDataReqToken) {
       let page;
@@ -198,7 +211,12 @@ export async function loadAllShotMeta(token, startCursor) {
       S.shots           = filterShotsByMachine(merged, S.activeMachineId);
       S.shotsPageCursor = cursor;
       S.shotsHasMore    = !!page.hasMore;
-      renderSidebar();
+      renderedSinceStart = true;
+      const now = Date.now();
+      if (now - lastRenderAt >= RENDER_THROTTLE_MS) {
+        renderSidebar();
+        lastRenderAt = now;
+      }
     }
     if (token === _loadDataReqToken && done) {
       S.shotsHasMore   = false;
@@ -210,6 +228,12 @@ export async function loadAllShotMeta(token, startCursor) {
   } finally {
     // eslint-disable-next-line require-atomic-updates -- single-flight guard; last-writer-wins reset is correct once no walk is in flight (same pattern as status.js triggerSync)
     _metaWalkActive = false;
+    // #969: a trailing render covers both the throttle window swallowing the
+    // final page's paint, and the loop exiting early (superseded token or a
+    // fetch error) after it already mutated S.allShots/S.shots — but only
+    // when there's something new to show and this token is still current
+    // (a loadData() that superseded this walk owns the next render instead).
+    if (renderedSinceStart && token === _loadDataReqToken) renderSidebar();
   }
 }
 
