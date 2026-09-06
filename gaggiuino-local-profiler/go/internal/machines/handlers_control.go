@@ -2,6 +2,7 @@ package machines
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -291,15 +292,19 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		httputil.SafeCall("machines: firmware version fetch", func() {
+		if httputil.SafeCall("machines: firmware version fetch", func() {
 			versionsRaw, versionsErr = adapter.GetSettings(r.Context(), machine, "versions")
-		})
+		}) {
+			versionsErr = fmt.Errorf("internal error fetching versions settings")
+		}
 	}()
 	go func() {
 		defer wg.Done()
-		httputil.SafeCall("machines: firmware version fetch", func() {
+		if httputil.SafeCall("machines: firmware version fetch", func() {
 			systemRaw, systemErr = adapter.GetSettings(r.Context(), machine, "system")
-		})
+		}) {
+			systemErr = fmt.Errorf("internal error fetching system settings")
+		}
 	}()
 	wg.Wait()
 	if versionsErr != nil {

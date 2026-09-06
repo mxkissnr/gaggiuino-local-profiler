@@ -130,23 +130,31 @@ type ValidationError struct {
 func (e *ValidationError) Error() string { return e.Message }
 
 // SafeCall runs fn synchronously, recovering any panic instead of letting
-// it propagate (#993). This add-on has no supervised-restart design, so an
-// unrecovered panic anywhere reachable from a background goroutine or a
-// request-spawned helper goroutine (machine-adapter parsing, a scheduled
-// sync tick, a WaitGroup-bound fan-out fetch, ...) takes the whole process
-// down -- a panic inside the request-handling goroutine itself doesn't need
-// this (net/http's own per-connection recover already contains it), but
-// recover() never crosses a goroutine boundary, so anything spawned with a
-// bare `go` -- fire-and-forget or awaited via sync.WaitGroup -- is on its
-// own. logCtx prefixes the recovered panic's log line, matching this
-// codebase's "<package>: <what>: %v" convention.
-func SafeCall(logCtx string, fn func()) {
+// it propagate (#993), and reports whether one occurred so the caller can
+// treat a recovered panic as an error condition instead of silently
+// proceeding on fn's zero-value output (#994 review: the first cut of this
+// only logged, so a WaitGroup-bound caller like firmwareVersion's/
+// settingsPage's concurrent fetches had no way to tell a recovered panic
+// apart from a clean, empty result). This add-on has no supervised-restart
+// design, so an unrecovered panic anywhere reachable from a background
+// goroutine or a request-spawned helper goroutine (machine-adapter
+// parsing, a scheduled sync tick, a WaitGroup-bound fan-out fetch, ...)
+// takes the whole process down -- a panic inside the request-handling
+// goroutine itself doesn't need this (net/http's own per-connection
+// recover already contains it), but recover() never crosses a goroutine
+// boundary, so anything spawned with a bare `go` -- fire-and-forget or
+// awaited via sync.WaitGroup -- is on its own. logCtx prefixes the
+// recovered panic's log line, matching this codebase's
+// "<package>: <what>: %v" convention.
+func SafeCall(logCtx string, fn func()) (recovered bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("%s: panic recovered: %v", logCtx, r)
+			recovered = true
 		}
 	}()
 	fn()
+	return false
 }
 
 // SafeGo runs fn in a new goroutine via SafeCall, so a panic inside it logs

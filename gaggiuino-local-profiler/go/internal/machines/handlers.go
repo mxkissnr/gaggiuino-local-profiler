@@ -56,11 +56,16 @@ func (c *profilesCache) set(machineID int64, profiles []ProfileSummary) {
 }
 
 // Handlers wires Registry + the two concrete adapters + FirmwareChecker
-// into net/http handlers.
+// into net/http handlers. gaggiuino/gaggimate are typed as the Adapter
+// interface (not the concrete *GaggiuinoAdapter/*GaggiMateAdapter
+// NewHandlers actually constructs) purely so a same-package test can swap
+// in a fake implementation -- GetAdapter's own return type is already
+// Adapter, and nothing else in this package reaches past that interface to
+// a concrete-type-only method, so this costs no behavior.
 type Handlers struct {
 	registry      *Registry
-	gaggiuino     *GaggiuinoAdapter
-	gaggimate     *GaggiMateAdapter
+	gaggiuino     Adapter
+	gaggimate     Adapter
 	firmware      *FirmwareChecker
 	profilesCache *profilesCache
 	liveClient    *gaggiuinoLiveClient

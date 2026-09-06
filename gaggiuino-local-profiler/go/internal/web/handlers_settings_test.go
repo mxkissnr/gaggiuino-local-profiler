@@ -36,6 +36,13 @@ type fakeSettingsAdapter struct {
 	// used by TestSettingsPage_FetchesCategoriesConcurrently to prove the 5
 	// category fetches run in parallel instead of back to back.
 	getDelay time.Duration
+	// panicCategories, when set for a category, makes GetSettings panic
+	// instead of returning — #994 code-review regression fixture for the
+	// per-category fetch goroutine's httputil.SafeCall wrapping (a first
+	// cut of SafeCall only logged a recovered panic, leaving that
+	// category's slice entry a blank zero-value instead of a visible
+	// failed-category state).
+	panicCategories map[string]bool
 }
 
 var _ machines.Adapter = (*fakeSettingsAdapter)(nil)
@@ -45,6 +52,9 @@ func (f *fakeSettingsAdapter) Capabilities() machines.Capabilities { return f.ca
 func (f *fakeSettingsAdapter) GetSettings(ctx context.Context, m *machines.Machine, category string) (json.RawMessage, error) {
 	if f.getDelay > 0 {
 		time.Sleep(f.getDelay)
+	}
+	if f.panicCategories[category] {
+		panic("fakeSettingsAdapter: simulated panic fetching " + category)
 	}
 	if err, ok := f.getErr[category]; ok {
 		return nil, err
@@ -248,6 +258,35 @@ func TestSettingsPage_CategoryFetchErrorIsPerBlock(t *testing.T) {
 	}
 	if !strings.Contains(body, `hx-post="settings/display"`) {
 		t.Errorf("GET /settings: editable display form missing even though only boiler failed\nbody:\n%s", body)
+	}
+}
+
+// TestSettingsPage_CategoryFetchPanicIsPerBlock is #994's regression test:
+// a panic inside one category's fetch goroutine (wrapped in
+// httputil.SafeCall) must render that category as a visible failed state,
+// not a silent blank category built from SettingsCategory's zero value as
+// if the fetch had quietly returned nothing.
+func TestSettingsPage_CategoryFetchPanicIsPerBlock(t *testing.T) {
+	adapter := &fakeSettingsAdapter{
+		caps:            machines.Capabilities{SettingsProxy: true},
+		settings:        defaultTestSettings(),
+		panicCategories: map[string]bool{"boiler": true},
+	}
+	mux := newTestSettingsServer(t, adapter)
+
+	rec := doRequest(t, mux, "GET", "/settings")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /settings: status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "badge-err") {
+		t.Errorf("GET /settings body missing a failed-category badge for the panicking boiler fetch\nbody:\n%s", body)
+	}
+	if strings.Contains(body, `hx-post="settings/boiler"`) {
+		t.Errorf("GET /settings: boiler rendered as editable even though its fetch panicked\nbody:\n%s", body)
+	}
+	if !strings.Contains(body, `hx-post="settings/display"`) {
+		t.Errorf("GET /settings: editable display form missing even though only boiler panicked\nbody:\n%s", body)
 	}
 }
 

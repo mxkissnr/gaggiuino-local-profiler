@@ -237,9 +237,14 @@ func (h *SettingsHandlers) settingsPage(w http.ResponseWriter, r *http.Request) 
 	for i, cat := range settingsCategoryNames {
 		go func(i int, cat string) {
 			defer wg.Done()
-			httputil.SafeCall("web: settings category fetch", func() {
+			if httputil.SafeCall("web: settings category fetch", func() {
 				categories[i] = h.fetchCategory(r.Context(), adapter, machine, cat)
-			})
+			}) {
+				// Matches fetchCategory's own "reachability failure" shape
+				// (FetchError) so a recovered panic renders the same
+				// per-block error state instead of a silent blank category.
+				categories[i] = templates.SettingsCategory{Name: cat, FetchError: "Internal error fetching this category"}
+			}
 		}(i, cat)
 	}
 	wg.Wait()
