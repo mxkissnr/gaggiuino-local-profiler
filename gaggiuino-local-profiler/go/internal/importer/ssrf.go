@@ -26,10 +26,10 @@ func assertPublicHost(ctx context.Context, hostname string) error {
 
 // assertPublicHostResolved is assertPublicHost's pin-friendly counterpart
 // (#987) — see machines/ssrf.go's assertMachineHostResolved for the
-// identical rationale. fetch.go's guardedDialContext uses it to pin
-// safeGet's actual TCP connection to the address this check approved,
-// instead of letting net/http's transport re-resolve the hostname
-// independently at connect time.
+// identical rationale. fetch.go's importDialer (a netguard.GuardedDialer)
+// uses it to pin safeGet's actual TCP connection to the address this check
+// approved, instead of letting net/http's transport re-resolve the
+// hostname independently at connect time.
 func assertPublicHostResolved(ctx context.Context, hostname string) (net.IP, error) {
 	return netguard.AssertHostResolved(ctx, hostname, netguard.IsPrivateAddress, lookupIPAddr)
 }

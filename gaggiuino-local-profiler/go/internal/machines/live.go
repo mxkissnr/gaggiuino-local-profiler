@@ -176,7 +176,7 @@ func assertLiveHost(ctx context.Context, baseURL string) error {
 	if err != nil {
 		return err
 	}
-	return machineHostGuard(ctx, u.Hostname())
+	return machineHostGuard.get()(ctx, u.Hostname())
 }
 
 // connectOnce dials once and reads frames until the connection closes or

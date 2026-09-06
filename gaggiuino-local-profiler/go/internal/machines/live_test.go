@@ -129,16 +129,16 @@ func TestGaggiuinoLiveClient_ReconnectRevalidatesHost(t *testing.T) {
 
 	c := newGaggiuinoLiveClient(sse.NewHub())
 	c.idleTimeout = time.Hour
+	t.Cleanup(func() { c.Disconnect(fake.URL) })
 	base := fake.URL
 
 	c.GetLiveSensorSnapshot(base) // opens the session, first dial happens
 	waitUntil(t, time.Second, func() bool { return fake.conns.Load() >= 1 })
 
-	orig := machineHostGuard
-	machineHostGuard = func(ctx context.Context, hostname string) error {
+	orig := machineHostGuard.set(func(ctx context.Context, hostname string) error {
 		return errors.New("host no longer valid")
-	}
-	t.Cleanup(func() { machineHostGuard = orig })
+	})
+	t.Cleanup(func() { machineHostGuard.set(orig) })
 
 	fake.dropConns()
 	// liveReconnectDelay (3s) plus margin — long enough for run() to have

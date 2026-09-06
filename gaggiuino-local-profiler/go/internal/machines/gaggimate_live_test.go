@@ -156,11 +156,10 @@ func TestGaggiMateLiveClient_ReconnectRevalidatesHost(t *testing.T) {
 		t.Fatalf("expected 1 connection after warm-up, got %d", n)
 	}
 
-	orig := machineHostGuard
-	machineHostGuard = func(ctx context.Context, hostname string) error {
+	orig := machineHostGuard.set(func(ctx context.Context, hostname string) error {
 		return errors.New("host no longer valid")
-	}
-	t.Cleanup(func() { machineHostGuard = orig })
+	})
+	t.Cleanup(func() { machineHostGuard.set(orig) })
 
 	fake.dropConns()
 	time.Sleep(liveReconnectDelay + 2*time.Second)

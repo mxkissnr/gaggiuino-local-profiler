@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -480,20 +482,51 @@ func (r *Registry) ResolveMachine(rawID *int64) (*Machine, error) {
 	return r.GetDefaultMachine()
 }
 
+// guardVar is a small atomic-swap wrapper around a function value — used
+// for the machineHostGuard/machineHostGuardResolved test seams below.
+// Plain package-level func vars read directly (no synchronization) by a
+// background goroutine (live.go's reconnect loop, http.go's dial path)
+// while a test reassigns them from its own goroutine is a genuine data
+// race under -race, even though production code never reassigns them
+// after init (#986/#987 code review, caught by CI's -race run on PR #990).
+// get/set go through atomic.Pointer instead of a bare variable so a
+// concurrent reassignment is safe.
+type guardVar[F any] struct {
+	p atomic.Pointer[F]
+}
+
+func newGuardVar[F any](initial F) *guardVar[F] {
+	g := &guardVar[F]{}
+	g.p.Store(&initial)
+	return g
+}
+
+func (g *guardVar[F]) get() F {
+	return *g.p.Load()
+}
+
+// set stores f and returns the previous value, so a test can restore it
+// via t.Cleanup(func() { v.set(prev) }).
+func (g *guardVar[F]) set(f F) F {
+	prev := g.get()
+	g.p.Store(&f)
+	return prev
+}
+
 // machineHostGuard is assertMachineHost by default — a package-level var
 // (same testing seam pattern as ssrf.go's lookupIPAddr) so tests exercising
 // an adapter end-to-end against an httptest.Server (which only ever binds
 // to 127.0.0.1, a loopback address assertMachineHost correctly blocks for
 // any real machine host) can substitute a permissive stub instead of
 // weakening the real SSRF guard itself.
-var machineHostGuard = assertMachineHost
+var machineHostGuard = newGuardVar[func(context.Context, string) error](assertMachineHost)
 
 // machineHostGuardResolved is assertMachineHostResolved by default — the
 // same testing seam as machineHostGuard, but for guardedDialContext's
 // (http.go) dial-time pinning check (#987): allowLoopbackMachineHost
 // overrides both together so an httptest.Server-backed fake machine still
 // gets dialed in tests.
-var machineHostGuardResolved = assertMachineHostResolved
+var machineHostGuardResolved = newGuardVar[func(context.Context, string) (net.IP, error)](assertMachineHostResolved)
 
 // BaseURLFor ports the adapters' shared baseUrlFor(machine) helper
 // (lib/machines/gaggiuino/adapter.js and gaggimate/adapter.js define the
@@ -526,7 +559,7 @@ func BaseURLFor(ctx context.Context, m *Machine) (string, error) {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return "", fmt.Errorf("invalid URL scheme: %s:", u.Scheme)
 	}
-	if err := machineHostGuard(ctx, u.Hostname()); err != nil {
+	if err := machineHostGuard.get()(ctx, u.Hostname()); err != nil {
 		return "", err
 	}
 	return u.Scheme + "://" + u.Host, nil

@@ -9,47 +9,29 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/netguard"
 )
 
-// rawDialContext is (&net.Dialer{}).DialContext by default — a package-
-// level var so tests can substitute a stub that records the address it
-// was asked to dial instead of opening a real socket (#987's regression
-// test, http_test.go).
-var rawDialContext = (&net.Dialer{}).DialContext
-
-// guardedDialContext pins every real connection httpClient (and, via
+// machinesDialer pins every real connection httpClient (and, via
 // websocket.DialOptions, every WS dial in this package — ws.go/live.go/
 // gaggimate_live.go/gaggimate_ws.go all pass HTTPClient: httpClient) opens
-// to the exact IP machineHostGuardResolved just approved, instead of
-// handing net/http's own dialer the raw hostname to resolve independently
-// (#987): BaseURLFor/assertMachineHost already validate the hostname before
-// a request is built, but net/http's default dialer would otherwise
-// re-resolve that same hostname a second time at connect time — a DNS-
-// rebinding attacker who controls the answer gets a second, independent
-// lookup to pass a blocked address through. Resolving once here (via the
-// same guard) and dialing that literal address closes the window; the
-// request's URL/Host header keep the original hostname unchanged, so TLS
-// SNI and certificate validation (for an https:// machine host) are
-// unaffected — only the wire-level connection target is pinned.
-func guardedDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, err
-	}
-	ip, err := machineHostGuardResolved(ctx, host)
-	if err != nil {
-		return nil, err
-	}
-	return rawDialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-}
+// to the exact IP machineHostGuardResolved just approved (#987), via the
+// shared netguard.GuardedDialer (also used by internal/importer/fetch.go
+// and internal/mqtt/client.go — one implementation, not three copies).
+// The resolve closure reads machineHostGuardResolved.get() on every call
+// so allowLoopbackMachineHost's test-time override is honored.
+var machinesDialer = netguard.NewGuardedDialer(func(ctx context.Context, hostname string) (net.IP, error) {
+	return machineHostGuardResolved.get()(ctx, hostname)
+})
 
 // httpClient is package-level (not http.DefaultClient directly) so tests
 // can point it at an httptest.Server's transport if ever needed. Its
 // Transport is deliberately a minimal custom one (not http.DefaultTransport)
-// so guardedDialContext is the only dialer in play — no environment-driven
+// so machinesDialer is the only dialer in play — no environment-driven
 // proxy that could route guarded traffic somewhere the guard never saw.
 var httpClient = &http.Client{
-	Transport: &http.Transport{DialContext: guardedDialContext},
+	Transport: &http.Transport{DialContext: machinesDialer.DialContext},
 }
 
 // httpGetBytes issues a GET request and returns the raw response body

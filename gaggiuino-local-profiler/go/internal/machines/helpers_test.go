@@ -75,17 +75,15 @@ func doRequest(mux *http.ServeMux, req *http.Request) *httptest.ResponseRecorder
 // still get rejected there even with machineHostGuard itself stubbed out.
 func allowLoopbackMachineHost(t *testing.T) {
 	t.Helper()
-	origGuard := machineHostGuard
-	origResolved := machineHostGuardResolved
-	machineHostGuard = func(ctx context.Context, hostname string) error { return nil }
-	machineHostGuardResolved = func(ctx context.Context, hostname string) (net.IP, error) {
+	origGuard := machineHostGuard.set(func(ctx context.Context, hostname string) error { return nil })
+	origResolved := machineHostGuardResolved.set(func(ctx context.Context, hostname string) (net.IP, error) {
 		if ip := net.ParseIP(hostname); ip != nil {
 			return ip, nil
 		}
 		return nil, fmt.Errorf("allowLoopbackMachineHost: unexpected non-IP hostname %q", hostname)
-	}
+	})
 	t.Cleanup(func() {
-		machineHostGuard = origGuard
-		machineHostGuardResolved = origResolved
+		machineHostGuard.set(origGuard)
+		machineHostGuardResolved.set(origResolved)
 	})
 }
