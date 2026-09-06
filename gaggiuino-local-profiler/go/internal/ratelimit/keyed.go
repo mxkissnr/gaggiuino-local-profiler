@@ -49,16 +49,6 @@ func NewKeyed() *KeyedLimiter {
 	return &KeyedLimiter{windows: make(map[string]*keyedWindow)}
 }
 
-// Reset drops every tracked window. Test-only helper for benchmarks that
-// fire far more than maxPerMinute requests at a feature-limited endpoint
-// (e.g. internal/shots' card-render benchmarks) and need to sidestep the
-// limit without a real 60s wait.
-func (l *KeyedLimiter) Reset() {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.windows = make(map[string]*keyedWindow)
-}
-
 // Allow ports rateLimit(key, maxPerMinute): increments key's counter,
 // resetting it if more than 60s have elapsed since the window started, and
 // reports whether the incremented count is still within maxPerMinute.

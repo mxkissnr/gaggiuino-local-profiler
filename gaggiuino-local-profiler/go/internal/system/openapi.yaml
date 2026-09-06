@@ -802,6 +802,7 @@ paths:
         "400": { description: Invalid shot ID }
         "404": { description: Shot not found }
         "503": { description: Card rendering module not available }
+        "429": { description: "Rate limit exceeded — dedicated per-IP card limit, 30/min (#999)" }
 
   /api/shots/{id}/image:
     get:
@@ -2706,6 +2707,7 @@ paths:
               schema: { type: integer }
           content: { application/octet-stream: { schema: { type: string, format: binary } } }
         "404": { description: "Not a dev-channel build — route does not exist" }
+        "429": { description: "Rate limit exceeded — dedicated per-IP export-db limit, 5/min (#999)" }
         "500": { description: Export failed }
 
   /api/debug/import-db:
