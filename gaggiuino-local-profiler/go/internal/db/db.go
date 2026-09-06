@@ -270,12 +270,35 @@ func FixSchema(sqlDB *sql.DB) error {
 	return nil
 }
 
+// migrationTables is the closed set of table names this file's migration
+// helpers are ever allowed to interpolate into a query string. SQLite's
+// pragma_table_info() table-valued function and ALTER TABLE both refuse a
+// bound parameter for the table name, so those two spots build SQL with
+// fmt.Sprintf — every call site passes a compile-time literal, and
+// assertKnownTable() turns "someone later passes a request-derived name
+// here" from a silent injection into an immediate panic at startup.
+var migrationTables = map[string]struct{}{
+	"shots":           {},
+	"orders":          {},
+	"maintenance":     {},
+	"maintenance_log": {},
+	"machines":        {},
+}
+
+func assertKnownTable(table string) {
+	if _, ok := migrationTables[table]; !ok {
+		panic(fmt.Sprintf("db: migration helper called with unknown table name %q", table))
+	}
+}
+
 // hasColumn ports the hasColumn(table, col) closure repeated in lib/db.js's
-// migrateMachineColumns/migrateMachineTheme. table/col are always internal
-// literals (never user input), so building the pragma_table_info() query
-// directly (that table-valued function can't take a bound parameter for its
-// own name) is safe.
+// migrateMachineColumns/migrateMachineTheme. table is always an internal
+// literal from migrationTables (asserted below, never user input), so
+// building the pragma_table_info() query directly (that table-valued
+// function can't take a bound parameter for its own name) is safe; col is
+// still bound.
 func hasColumn(sqlDB *sql.DB, table, col string) (bool, error) {
+	assertKnownTable(table)
 	var one int
 	err := sqlDB.QueryRow(
 		fmt.Sprintf(`SELECT 1 FROM pragma_table_info('%s') WHERE name = ?`, table),
@@ -335,6 +358,7 @@ func MigrateMachineColumns(sqlDB *sql.DB, dbPath string) error {
 			return err
 		}
 		if !ok {
+			assertKnownTable(table)
 			stmt := fmt.Sprintf(`ALTER TABLE %s ADD COLUMN machine_id INTEGER NOT NULL DEFAULT 1`, table)
 			if _, err := sqlDB.Exec(stmt); err != nil {
 				return fmt.Errorf("db: adding machine_id to %s: %w", table, err)

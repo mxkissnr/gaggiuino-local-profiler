@@ -47,7 +47,11 @@ COPY lib/ ./lib/
 RUN npm run build
 
 # ── Go builder ────────────────────────────────────────────────────────────
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+# Digest-pinned like the node:22-slim stages above so a moved upstream tag
+# can't silently change the build toolchain; Renovate's dockerfile manager
+# bumps the digest (and the go.mod `toolchain` directive it should track)
+# on its weekly run.
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -85,7 +89,8 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
 # bundle for the outbound HTTPS calls to Open Food Facts (barcode scan) and
 # GitHub (update check) — the concrete case the task brief called out
 # scratch failing on.
-FROM alpine:3.22
+# Digest-pinned (see the builder stage note above); Renovate keeps it current.
+FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
 
 # Empty by default, same as the repo-root Node Dockerfile's own
 # GLP_DEV_BUILD ARG/ENV pair -- only .github/workflows/go-preview-publish.yaml
