@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Fixed
+- **(go-migration) Fetching a GaggiMate machine's shot-history index no longer reads an unbounded amount of data into memory.** Closes #991
 - **(go-migration) An MQTT broker host is now checked against the same address-safety guard a machine's own host gets**, including on every automatic reconnect. Closes #988
 - **(go-migration) Outbound machine and URL-import connections now pin the exact address the safety guard just validated**, closing a narrow window where a second, independent lookup could have been tricked into answering differently. Closes #987
 - **(go-migration) A machine's persistent live connection now re-validates its host on every automatic reconnect**, not just when first opened. Closes #986

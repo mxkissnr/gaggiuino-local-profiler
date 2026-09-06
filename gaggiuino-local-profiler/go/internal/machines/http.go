@@ -62,6 +62,36 @@ func httpGetBytes(ctx context.Context, url string, timeout time.Duration) ([]byt
 	return body, nil
 }
 
+// httpGetBytesCapped is httpGetBytes but limits the response body to at
+// most maxBytes via io.LimitReader, so an oversized reply from an
+// untrusted machine can never be read fully into memory (#991) -- use it
+// for any endpoint whose legitimate response size has a known, defensible
+// upper bound (e.g. GaggiMate's index.bin, capped by gaggimate_history.go's
+// entry-size math). An over-cap response is read only up to maxBytes,
+// same truncate-not-reject behavior FetchGaggiMateShot's own
+// io.LimitReader already relies on for .slog fetches.
+func httpGetBytesCapped(ctx context.Context, url string, timeout time.Duration, maxBytes int64) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("machine responded %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return body, nil
+}
+
 // httpPostBytes issues a POST request with an already-JSON-encoded body
 // and returns the raw response body bytes, for the same byte-preservation
 // reason httpGetBytes documents. An empty body posts `{}` (net/http.Post's
