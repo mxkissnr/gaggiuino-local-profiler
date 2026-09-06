@@ -194,8 +194,18 @@ func gaggiMateParseSlog(data []byte) (*gaggiMateSlogResult, error) {
 		}
 	}
 	computedSampleSize := len(active) * 2
+	// deviceSampleSize is a single attacker-controlled byte (data[5]).
+	// Trusting a value smaller than what the active fieldsMask actually
+	// needs turns available/maxSamples below into a huge, disproportionate
+	// preallocation (#992: data[5]=1 on an 8MB body preallocates ~1GB).
+	// There's no legitimate reason for the device to report less than
+	// computedSampleSize -- that many bytes are the minimum needed to hold
+	// one sample of every active field -- so floor at computedSampleSize
+	// rather than trusting anything under it; 0 (unset) and any larger,
+	// legitimately-padded value both pass through unchanged, exactly as
+	// before.
 	sampleSize := deviceSampleSize
-	if sampleSize == 0 {
+	if sampleSize < computedSampleSize {
 		sampleSize = computedSampleSize
 	}
 
