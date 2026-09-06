@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Fixed
+- **(go-migration) A panic in a background task (live-machine polling, scheduled sync, or a settings fetch) is now recovered and logged instead of crashing the whole add-on.** Closes #993
 - **(go-migration) A crafted shot-history file can no longer make the .slog parser preallocate a wildly oversized amount of memory.** Closes #992
 - **(go-migration) Fetching a GaggiMate machine's shot-history index no longer reads an unbounded amount of data into memory.** Closes #991
 - **(go-migration) An MQTT broker host is now checked against the same address-safety guard a machine's own host gets**, including on every automatic reconnect. Closes #988

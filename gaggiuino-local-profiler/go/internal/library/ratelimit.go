@@ -3,6 +3,8 @@ package library
 import (
 	"sync"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
 
 // rateLimiter ports lib/helpers.js's rateLimit(key, maxPerMinute): a fixed
@@ -36,7 +38,7 @@ func newRateLimiter() *rateLimiter {
 // waiting on the real 120s production interval.
 func newRateLimiterWithInterval(interval time.Duration) *rateLimiter {
 	rl := &rateLimiter{windows: make(map[string]*rlWindow), interval: interval, stop: make(chan struct{})}
-	go rl.gcLoop()
+	httputil.SafeGo("library: ratelimit gc", rl.gcLoop)
 	return rl
 }
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
 
@@ -290,11 +291,15 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		versionsRaw, versionsErr = adapter.GetSettings(r.Context(), machine, "versions")
+		httputil.SafeCall("machines: firmware version fetch", func() {
+			versionsRaw, versionsErr = adapter.GetSettings(r.Context(), machine, "versions")
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		systemRaw, systemErr = adapter.GetSettings(r.Context(), machine, "system")
+		httputil.SafeCall("machines: firmware version fetch", func() {
+			systemRaw, systemErr = adapter.GetSettings(r.Context(), machine, "system")
+		})
 	}()
 	wg.Wait()
 	if versionsErr != nil {

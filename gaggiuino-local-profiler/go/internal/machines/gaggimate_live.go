@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"nhooyr.io/websocket"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
 
 // gaggimate_live.go ports ws-client.js's GaggiMateLiveClient: a persistent,
@@ -55,7 +57,7 @@ func (c *gaggiMateLiveClient) session(baseURL string) *gaggiMateLiveSession {
 	s := &gaggiMateLiveSession{cancel: cancel, done: make(chan struct{})}
 	c.sessions[baseURL] = s
 	s.idleTimer = time.AfterFunc(c.idleTimeout, func() { c.evictIdle(baseURL, s) })
-	go c.run(ctx, baseURL, s)
+	httputil.SafeGo("machines: gaggimate live session", func() { c.run(ctx, baseURL, s) })
 	return s
 }
 

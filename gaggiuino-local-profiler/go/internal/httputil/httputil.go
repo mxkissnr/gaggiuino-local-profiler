@@ -128,3 +128,33 @@ type ValidationError struct {
 }
 
 func (e *ValidationError) Error() string { return e.Message }
+
+// SafeCall runs fn synchronously, recovering any panic instead of letting
+// it propagate (#993). This add-on has no supervised-restart design, so an
+// unrecovered panic anywhere reachable from a background goroutine or a
+// request-spawned helper goroutine (machine-adapter parsing, a scheduled
+// sync tick, a WaitGroup-bound fan-out fetch, ...) takes the whole process
+// down -- a panic inside the request-handling goroutine itself doesn't need
+// this (net/http's own per-connection recover already contains it), but
+// recover() never crosses a goroutine boundary, so anything spawned with a
+// bare `go` -- fire-and-forget or awaited via sync.WaitGroup -- is on its
+// own. logCtx prefixes the recovered panic's log line, matching this
+// codebase's "<package>: <what>: %v" convention.
+func SafeCall(logCtx string, fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("%s: panic recovered: %v", logCtx, r)
+		}
+	}()
+	fn()
+}
+
+// SafeGo runs fn in a new goroutine via SafeCall, so a panic inside it logs
+// and unwinds instead of crashing the process. Use for background/
+// fire-and-forget goroutines (a ticker loop, a periodic sync, a persistent
+// live-machine WS session, a post-response notification); use SafeCall
+// directly (no new goroutine) for a goroutine already spawned by the
+// caller, e.g. one signaling completion via a WaitGroup.
+func SafeGo(logCtx string, fn func()) {
+	go SafeCall(logCtx, fn)
+}

@@ -75,7 +75,7 @@ func (h *Handlers) postSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-	go h.poller.RunManualSync(context.Background())
+	httputil.SafeGo("system: manual sync", func() { h.poller.RunManualSync(context.Background()) })
 }
 
 // machineStatus ports GET /api/machine/status: the default machine's

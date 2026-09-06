@@ -41,6 +41,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/debug"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/importer"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -188,12 +189,14 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// generate thumbnails. Runs in the background (a large library is a lot
 	// of decodes) and exactly once, gated by a kv flag; best-effort, keeps
 	// the original bytes on any decode failure.
-	go img.MigrateExisting(
-		library.DefaultImageDir,
-		func() (bool, error) { return db.GetKVBool(sqlDB, "images_optimized_v1") },
-		func() error { return db.SetKVBool(sqlDB, "images_optimized_v1", true) },
-		log.Printf,
-	)
+	httputil.SafeGo("main: image migration", func() {
+		img.MigrateExisting(
+			library.DefaultImageDir,
+			func() (bool, error) { return db.GetKVBool(sqlDB, "images_optimized_v1") },
+			func() error { return db.SetKVBool(sqlDB, "images_optimized_v1", true) },
+			log.Printf,
+		)
+	})
 
 	// Phase 2f (#901): wire the share-card renderer's two cross-domain
 	// lookups (lib/card.js does both through a lazy require + try/catch).

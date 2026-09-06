@@ -9,6 +9,7 @@ import (
 
 	"nhooyr.io/websocket"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
@@ -115,7 +116,7 @@ func (c *gaggiuinoLiveClient) session(baseURL string) *gaggiuinoLiveSession {
 	s := &gaggiuinoLiveSession{cancel: cancel, done: make(chan struct{})}
 	c.sessions[baseURL] = s
 	s.idleTimer = time.AfterFunc(c.idleTimeout, func() { c.evictIdle(baseURL, s) })
-	go c.run(ctx, baseURL, s)
+	httputil.SafeGo("machines: gaggiuino live session", func() { c.run(ctx, baseURL, s) })
 	return s
 }
 

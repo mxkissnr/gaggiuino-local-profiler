@@ -115,7 +115,7 @@ func CreateBean(repo *Repository, imageDir string, body Entity) (Entity, Library
 	// Fire-and-forget image download — see service.go's SetBeanImage doc
 	// comment.
 	if imageURL, _ := body["imageUrl"].(string); imageURL != "" {
-		go SetBeanImage(repo, imageDir, id, imageURL)
+		httputil.SafeGo("library: bean image fetch", func() { SetBeanImage(repo, imageDir, id, imageURL) })
 	}
 
 	// Fire-and-forget region -> map-coordinates geocode (Phase 2g, #901) —

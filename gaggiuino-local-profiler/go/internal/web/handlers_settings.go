@@ -237,7 +237,9 @@ func (h *SettingsHandlers) settingsPage(w http.ResponseWriter, r *http.Request) 
 	for i, cat := range settingsCategoryNames {
 		go func(i int, cat string) {
 			defer wg.Done()
-			categories[i] = h.fetchCategory(r.Context(), adapter, machine, cat)
+			httputil.SafeCall("web: settings category fetch", func() {
+				categories[i] = h.fetchCategory(r.Context(), adapter, machine, cat)
+			})
 		}(i, cat)
 	}
 	wg.Wait()

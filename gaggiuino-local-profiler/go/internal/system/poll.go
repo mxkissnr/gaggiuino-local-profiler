@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -284,22 +285,26 @@ func (p *Poller) Start(ctx context.Context) {
 	// #953: the periodic shot-history pull (lib/sync.js's scheduleNextSync).
 	// A no-op until SetShotsRepo has been called (cmd/server does; tests
 	// generally don't).
-	go p.runScheduledSync(ctx)
-	go p.runTicker(ctx, backgroundHaCheckInterval, func() {
-		if err := p.checkAndApplyMachinePower(ctx); err != nil {
-			log.Printf("system: background HA check failed: %v", err)
-		}
+	httputil.SafeGo("system: scheduled sync", func() { p.runScheduledSync(ctx) })
+	httputil.SafeGo("system: background HA check", func() {
+		p.runTicker(ctx, backgroundHaCheckInterval, func() {
+			if err := p.checkAndApplyMachinePower(ctx); err != nil {
+				log.Printf("system: background HA check failed: %v", err)
+			}
+		})
 	})
-	go p.runTicker(ctx, preheatWatchInterval, func() { p.preheatWatchTick(ctx) })
+	httputil.SafeGo("system: preheat watch", func() {
+		p.runTicker(ctx, preheatWatchInterval, func() { p.preheatWatchTick(ctx) })
+	})
 	// ctx cancellation also tears the live-poll ticker down (its goroutine
 	// is otherwise only stopped by stopLivePolling on a machine-off
 	// transition). Node's process just exits; this gives the Go binary —
 	// and, load-bearing here, cmd/server's smoke test — a clean shutdown
 	// with no leaked poll goroutine.
-	go func() {
+	httputil.SafeGo("system: live poll shutdown watcher", func() {
 		<-ctx.Done()
 		p.stopLivePolling()
-	}()
+	})
 }
 
 func (p *Poller) runTicker(ctx context.Context, interval time.Duration, fn func()) {
@@ -396,7 +401,7 @@ func (p *Poller) startLivePolling() {
 	p.liveStop = stop
 	p.liveMu.Unlock()
 
-	go func() {
+	httputil.SafeGo("system: live poll loop", func() {
 		for {
 			select {
 			case <-ticker.C:
@@ -405,7 +410,7 @@ func (p *Poller) startLivePolling() {
 				return
 			}
 		}
-	}()
+	})
 
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
 
 // This file ports lib/geo.js + lib/services/LibraryService.js's geocodeBean
@@ -97,7 +99,7 @@ var GeocodeHook func(beanID int64, region, origin string)
 // nil-guard + goroutine + region-non-empty rule live in one place.
 func maybeGeocode(beanID int64, region, origin string) {
 	if GeocodeHook != nil && strings.TrimSpace(region) != "" {
-		go GeocodeHook(beanID, region, origin)
+		httputil.SafeGo("library: geocode bean", func() { GeocodeHook(beanID, region, origin) })
 	}
 }
 

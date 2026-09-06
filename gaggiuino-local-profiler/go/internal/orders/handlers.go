@@ -551,7 +551,7 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 		// Fire-and-forget, same as Node's un-awaited _broadcastShopState
 		// call after res.json(s) — the response must not wait on HA/person
 		// lookups.
-		go h.broadcastShopState(context.Background(), s, prev, recipients)
+		httputil.SafeGo("orders: broadcast shop state", func() { h.broadcastShopState(context.Background(), s, prev, recipients) })
 	}
 }
 

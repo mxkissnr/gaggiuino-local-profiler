@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
 
 // sync_triggers.go ports the three automatic drivers of the default
@@ -74,7 +76,7 @@ func (p *Poller) scheduleSyncAfterBrew() {
 		return
 	}
 	ctx := p.syncCtx()
-	go func() {
+	httputil.SafeGo("system: post-brew sync", func() {
 		select {
 		case <-time.After(syncAfterBrewDelay):
 		case <-ctx.Done():
@@ -88,7 +90,7 @@ func (p *Poller) scheduleSyncAfterBrew() {
 		if newMax, _ := p.shots.MaxNativeShotID(1); newMax > prevMax {
 			log.Printf("system: post-brew sync: caught up to new shot #%d", newMax)
 		}
-	}()
+	})
 }
 
 // maybeCatchUpAfterRecovery ports lib/poll.js's #725 block: called from the
@@ -108,11 +110,11 @@ func (p *Poller) maybeCatchUpAfterRecovery(prevReachable *bool) {
 		return
 	}
 	ctx := p.syncCtx()
-	go func() {
+	httputil.SafeGo("system: catch-up sync", func() {
 		if err := p.syncOnce(ctx); err != nil {
 			log.Printf("system: catch-up sync after reachability recovery failed: %v", err)
 		}
-	}()
+	})
 }
 
 // runScheduledSync ports lib/sync.js's scheduleNextSync() recursion as a
