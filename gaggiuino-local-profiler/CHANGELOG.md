@@ -1,8 +1,8 @@
 ## [Unreleased]
 ### Fixed
-- **(go-migration) A manually-entered or restored MQTT broker host is now checked against the same SSRF guard a machine's own host gets** (loopback/link-local/cloud-metadata addresses blocked), both when saving MQTT settings and before every broker connection attempt. Closes #988
-- **(go-migration) Outbound machine and URL-import requests now pin the exact IP address the SSRF guard just validated**, instead of handing the hostname to Go's HTTP/WebSocket client to resolve a second time at connect. This closes a DNS-rebinding window: a malicious DNS answer could previously pass the guard's lookup with a safe address and then answer a second, independent lookup at connect time with a private/loopback/metadata address instead. Closes #987
-- **(go-migration) A machine's persistent live WebSocket session now re-validates its host on every automatic reconnect**, not just when the session was first opened. Previously, once a session was established, its background reconnect loop kept dialing the same host every ~3s forever without re-running the SSRF guard — a host that started failing validation after the fact (e.g. re-pointed via DNS) would still get dialed indefinitely. Closes #986
+- **(go-migration) An MQTT broker host is now checked against the same address-safety guard a machine's own host gets**, including on every automatic reconnect. Closes #988
+- **(go-migration) Outbound machine and URL-import connections now pin the exact address the safety guard just validated**, closing a narrow window where a second, independent lookup could have been tricked into answering differently. Closes #987
+- **(go-migration) A machine's persistent live connection now re-validates its host on every automatic reconnect**, not just when first opened. Closes #986
 - **The shot sidebar stays responsive on installs with a very large shot history** — collapsed month groups now build their rows only when first opened, searching no longer re-scans the entire shot list once per row, the sidebar no longer rebuilds itself once per page while loading a large shot history in the background, and typing in the search box no longer re-filters on every keystroke. Closes #969
 
 ### Added
@@ -11,7 +11,7 @@
 - **Uploaded entity photos (beans, grinders, baskets, puck screens, shots) are now optimized on save.** Each image is downscaled to at most 1600 px on its long edge, re-encoded without embedded metadata (camera EXIF and GPS location tags are stripped), and stored next to a small thumbnail. Grid views can request the thumbnail, so libraries with many photos load noticeably less data. Existing photos are optimized once in the background on the first start after upgrading; originals are kept if an image can't be processed. Closes #961
 
 ### Changed
-- **(go-migration) Documented that `Machine.Host` must only be read through `BaseURLFor`'s SSRF-guarded path**, not directly — a doc-comment guardrail (on the field and in the package doc) for the single-path invariant the Go port currently holds by construction. No behavior change; a static grep-based check (mirroring `scripts/route-parity.sh`'s pattern) was considered and rejected as too false-positive-prone for a real Go struct field, see the package doc for the reasoning. Closes #989
+- **(go-migration) Documented that a machine's host must only be read through its existing guarded lookup path**, not directly — no behavior change. Closes #989
 - **The shot annotator's coffee/basket/puck-screen/recipe dropdowns are now built via the DOM API** instead of an HTML string, silencing a recurring false-positive security scan finding with no change in behaviour. Closes #946
 
 ### Deprecated
