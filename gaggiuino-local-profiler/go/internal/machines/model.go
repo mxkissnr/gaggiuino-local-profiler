@@ -9,9 +9,17 @@ import (
 // returned by every /api/machines* endpoint (see openapi.yaml's Machine
 // schema).
 type Machine struct {
-	ID             int64   `json:"id"`
-	Name           string  `json:"name"`
-	Type           string  `json:"type"` // "gaggiuino" | "gaggimate"
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"` // "gaggiuino" | "gaggimate"
+
+	// Host is the raw, unvalidated address as stored in the registry —
+	// never use it directly to open a connection. BaseURLFor (registry.go)
+	// is the one sanctioned path from a Machine to something you actually
+	// dial: it re-runs assertMachineHost's SSRF guard on every call, and
+	// every Adapter method already goes through it. See doc.go's "Machine.Host
+	// is registry-facade-only (#989)" section for why this is a doc comment
+	// and not an enforced check.
 	Host           string  `json:"host"`
 	SwitchEntity   *string `json:"switchEntity"`
 	Theme          *Theme  `json:"theme"`

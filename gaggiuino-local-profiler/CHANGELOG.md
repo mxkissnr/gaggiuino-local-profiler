@@ -11,6 +11,7 @@
 - **Uploaded entity photos (beans, grinders, baskets, puck screens, shots) are now optimized on save.** Each image is downscaled to at most 1600 px on its long edge, re-encoded without embedded metadata (camera EXIF and GPS location tags are stripped), and stored next to a small thumbnail. Grid views can request the thumbnail, so libraries with many photos load noticeably less data. Existing photos are optimized once in the background on the first start after upgrading; originals are kept if an image can't be processed. Closes #961
 
 ### Changed
+- **(go-migration) Documented that `Machine.Host` must only be read through `BaseURLFor`'s SSRF-guarded path**, not directly — a doc-comment guardrail (on the field and in the package doc) for the single-path invariant the Go port currently holds by construction. No behavior change; a static grep-based check (mirroring `scripts/route-parity.sh`'s pattern) was considered and rejected as too false-positive-prone for a real Go struct field, see the package doc for the reasoning. Closes #989
 - **The shot annotator's coffee/basket/puck-screen/recipe dropdowns are now built via the DOM API** instead of an HTML string, silencing a recurring false-positive security scan finding with no change in behaviour. Closes #946
 
 ### Deprecated
