@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"sync"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/netguard"
 )
 
 // This file ports lib/gaggiuino-mqtt-client.js (#608): the MQTT alternative
@@ -29,6 +32,39 @@ import (
 
 // staleAfter mirrors gaggiuino-mqtt-client.js's STALE_MS.
 const staleAfter = 15 * time.Second
+
+// mqttHostGuardTimeout bounds the SSRF guard's DNS lookup in connect()
+// (#990 code review): GetLiveSensorSnapshot/GetLiveSystemState call
+// connect() synchronously on every live-poll tick whenever no session is
+// open yet, so an unbounded context.Background() here would let a slow or
+// hanging resolution stall that polling goroutine indefinitely.
+const mqttHostGuardTimeout = 5 * time.Second
+
+// mqttDialer pins every paho-internal (re)connection — both connect()'s
+// initial dial and every automatic reconnect SetAutoReconnect(true)
+// triggers on its own — to the SSRF-guard-resolved IP (#988/#990 code
+// review): paho redials the broker independently via its own dialer on
+// every reconnect, so the one-time machines.AssertMachineHost check in
+// connect() below covers only the first connection attempt, not any
+// reconnect after a dropped connection. Uses the shared
+// netguard.GuardedDialer (also used by internal/machines/http.go and
+// internal/importer/fetch.go) via SetCustomOpenConnectionFn, which
+// replaces paho's own openConnection entirely — this app only ever adds a
+// "tcp://" broker (see AddBroker below), so openGuardedMQTTConnection
+// doesn't need to handle paho's ws/wss/unix branches.
+var mqttDialer = netguard.NewGuardedDialer(machines.AssertMachineHostResolved)
+
+// openGuardedMQTTConnection is connect()'s paho.OpenConnectionFunc: dials
+// uri.Host (a "host:port" broker address) through mqttDialer instead of
+// paho's own default openConnection, bounding the guard's DNS lookup +
+// dial to options.ConnectTimeout (the same 10s SetConnectTimeout below
+// configures) so a hanging resolution can't wedge paho's connect
+// goroutine forever.
+func openGuardedMQTTConnection(uri *url.URL, opts paho.ClientOptions) (net.Conn, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), opts.ConnectTimeout)
+	defer cancel()
+	return mqttDialer.DialContext(ctx, "tcp", uri.Host)
+}
 
 // Conn is the broker connection descriptor — { host, port, username,
 // password, prefix }, normally read straight from Repository by transport.go.
@@ -122,8 +158,15 @@ func (c *Client) connect(conn Conn) *session {
 	// SSRF guard a machine's own host gets before anything dials it.
 	// machines.AssertMachineHost's loopback/link-local/metadata-only
 	// predicate is the right threat model here too: a real MQTT broker
-	// legitimately lives in RFC1918 space, same as a real machine.
-	if err := machines.AssertMachineHost(context.Background(), conn.Host); err != nil {
+	// legitimately lives in RFC1918 space, same as a real machine. Bounded
+	// by mqttHostGuardTimeout (#990 code review), not context.Background()
+	// unbounded — connect() runs synchronously on every live-poll tick
+	// whenever no session is open yet, so a hanging DNS lookup here would
+	// otherwise stall that polling goroutine indefinitely.
+	guardCtx, cancel := context.WithTimeout(context.Background(), mqttHostGuardTimeout)
+	err := machines.AssertMachineHost(guardCtx, conn.Host)
+	cancel()
+	if err != nil {
 		log.Printf("Gaggiuino MQTT: broker host %q rejected by SSRF guard: %v", conn.Host, err)
 		s.mu.Lock()
 		s.connecting = false
@@ -137,7 +180,8 @@ func (c *Client) connect(conn Conn) *session {
 		SetConnectTimeout(10 * time.Second).
 		SetAutoReconnect(true).
 		SetConnectRetryInterval(3 * time.Second).
-		SetKeepAlive(30 * time.Second)
+		SetKeepAlive(30 * time.Second).
+		SetCustomOpenConnectionFn(openGuardedMQTTConnection)
 	if conn.Username != "" {
 		opts.SetUsername(conn.Username)
 	}

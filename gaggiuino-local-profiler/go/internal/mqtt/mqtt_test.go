@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -70,6 +71,18 @@ func TestConnect_RejectsSSRFBlockedBrokerHost(t *testing.T) {
 	}
 	if s.client != nil {
 		t.Fatal("session got a client despite the guard rejecting the host")
+	}
+}
+
+// TestOpenGuardedMQTTConnection_BlocksSSRFHost is the #990 code-review
+// regression test: paho's own SetAutoReconnect redials the broker through
+// SetCustomOpenConnectionFn (openGuardedMQTTConnection), entirely
+// independent of connect()'s one-time machines.AssertMachineHost check —
+// this proves that path is guarded too, not just the initial connect.
+func TestOpenGuardedMQTTConnection_BlocksSSRFHost(t *testing.T) {
+	_, err := openGuardedMQTTConnection(&url.URL{Host: "169.254.169.254:1883"}, *paho.NewClientOptions())
+	if err == nil {
+		t.Fatal("expected the SSRF guard to reject a cloud-metadata broker address")
 	}
 }
 

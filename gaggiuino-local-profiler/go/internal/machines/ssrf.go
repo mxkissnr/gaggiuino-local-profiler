@@ -96,3 +96,12 @@ func isSSRFBlocked(err error) bool {
 func AssertMachineHost(ctx context.Context, hostname string) error {
 	return assertMachineHost(ctx, hostname)
 }
+
+// AssertMachineHostResolved exports assertMachineHostResolved for the same
+// reason AssertMachineHost exports assertMachineHost — mqtt/client.go's
+// guarded MQTT dialer (#988 code review: paho's own auto-reconnect needs
+// the pin-friendly resolved-IP variant, not just the pass/fail check) uses
+// this rather than reimplementing the resolve-then-check plumbing.
+func AssertMachineHostResolved(ctx context.Context, hostname string) (net.IP, error) {
+	return assertMachineHostResolved(ctx, hostname)
+}
