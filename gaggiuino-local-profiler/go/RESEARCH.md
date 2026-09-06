@@ -3,6 +3,9 @@
 Companion to `go/README.md`. Findings only — no code in this package
 depends on anything below yet.
 
+- SQLite driver evaluation (modernc vs. ncruces, issue #958):
+  `RESEARCH-sqlite-driver.md`.
+
 ## 1. Protobuf sources for the Gaggiuino firmware protocol
 
 ### What's in this repo today
