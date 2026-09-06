@@ -74,6 +74,18 @@ jobs:
       - name: go test -race
         run: go test ./... -race
 
+      # BLOCKING govulncheck gate (#998, security audit #977 round 3
+      # finding 2.3). Fails the build on any *called* vulnerability — one on
+      # a live call path into the Go stdlib, an imported package, or a
+      # required module. Advisories in required-but-not-reachable modules do
+      # not fail the build: govulncheck exits non-zero only for a vuln the
+      # code actually calls, which is exactly the signal wanted here. No
+      # continue-on-error — a called vuln blocks the merge like a failing
+      # test. Version-pinned (not @latest) for reproducible CI; bump in
+      # lockstep with a deliberate review of the finding set.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
       # Fails the build if server.js / routes/*.js registers an HTTP route
       # the Go rewrite (cmd/server/main.go + every internal/* RegisterRoutes,
       # /ui/ sub-mux included) has no equivalent for. One-way: Go-only routes
