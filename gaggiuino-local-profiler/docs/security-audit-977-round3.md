@@ -59,7 +59,7 @@ to the latest patch.)
 | # | Severity | File:line | Finding |
 |---|----------|-----------|---------|
 | 2.1 | Medium (fixed this round) | `go/go.mod:3` | CI toolchain pinned to unpatched `go1.25.0`; `govulncheck` flags 28 stdlib CVEs (DoS / panic / quadratic-parsing in `crypto/x509`, `net/http`, `crypto/tls`, `encoding/asn1`, `net/url`, `encoding/pem`, `html/template`, …). **Fixed:** added `toolchain go1.25.14`; `govulncheck` now clean. |
-| 2.2 | Low (fixed this round) | `go/Dockerfile:59`, `go/Dockerfile:104` | `golang:1.25-alpine` (builder) and `alpine:3.22` (runtime) pinned by tag only, unlike the digest-pinned `node:22-slim` stages in the same file and the repo-root Node Dockerfile. **Fixed:** both pinned by digest; Renovate's `dockerfile` manager keeps existing digest pins current. |
+| 2.2 | Low (fixed this round) | `go/Dockerfile` (builder + runtime `FROM`) | `alpine:3.22` (runtime — the image that actually ships) pinned by tag only, unlike the digest-pinned `node:22-slim` stages in the same file and the repo-root Node Dockerfile. **Fixed:** `alpine:3.22` digest-pinned; Renovate's `dockerfile` manager keeps it current. The `golang:1.25-alpine` builder stage is deliberately left tag-only — it builds nothing that ships, and floating to the latest 1.25.x keeps it ahead of the `toolchain go1.25.14` directive in `go.mod` (finding 2.1), so `go build` never fetches a newer toolchain at image-build time. |
 | 2.3 | Low / Info | `.github/workflows/go-build.yaml` | No `govulncheck` step in Go CI, so a future dependency (or toolchain regression) with a *called* vulnerability would not be caught. **Filed as an issue** (advisory-vs-blocking is a maintainer call). |
 | 2.4 | Info (clean) | `Dockerfile` (repo root — the image real installs pull) | `node:22-slim` digest-pinned across all three stages; process drops root via `gosu node` in `docker-entrypoint.sh`; `HEALTHCHECK` present; no secret in any build arg (`GLP_DEV_BUILD` is a non-secret build tag); runtime `apt` limited to `wget fonts-liberation gosu`. No change needed. |
 | 2.5 | Info (clean) | `go/Dockerfile` | Non-root `glp` (uid 1000) created and `/data` chowned; root only for the entrypoint's bind-mount chown, then `su-exec glp`; `HEALTHCHECK` present; `CGO_ENABLED=0` static build; no build secret; runtime `apk` limited to `wget ca-certificates su-exec`. |
@@ -131,7 +131,7 @@ port. No feature-level regression.
 
 1. `internal/db/db.go` — `migrationTables` allowlist + `assertKnownTable()` guard on the two unavoidable `fmt.Sprintf` table-name interpolations (finding 1.2).
 2. `go/go.mod` — `toolchain go1.25.14` directive; `govulncheck` goes from 28 stdlib findings to 0 (finding 2.1).
-3. `go/Dockerfile` — digest-pin `golang:1.25-alpine` and `alpine:3.22` (finding 2.2).
+3. `go/Dockerfile` — digest-pin the `alpine:3.22` runtime stage (finding 2.2); the `golang:1.25-alpine` builder stays tag-only by design.
 
 ## Issues opened
 

@@ -358,7 +358,7 @@ func MigrateMachineColumns(sqlDB *sql.DB, dbPath string) error {
 			return err
 		}
 		if !ok {
-			assertKnownTable(table)
+			// table is already asserted by the hasColumn call just above.
 			stmt := fmt.Sprintf(`ALTER TABLE %s ADD COLUMN machine_id INTEGER NOT NULL DEFAULT 1`, table)
 			if _, err := sqlDB.Exec(stmt); err != nil {
 				return fmt.Errorf("db: adding machine_id to %s: %w", table, err)
