@@ -36,6 +36,13 @@
 // — modernc.org/sqlite is no different from better-sqlite3 here — so only
 // a restart picks up the new file, which is why the 200 response says
 // restartRequired (no in-process pool drain / reopen).
+//
+// GET /api/debug/export-db additionally carries a dedicated
+// "export-db:<ip>" feature rate limit (exportDBRateLimitPerMin, 5/min) on
+// top of the app-wide 600/min backstop — a tightening the Node route
+// (routes/debug.js) does not have, since the export streams the whole
+// SQLite file and checkpoints the WAL on every hit. See exportDB and
+// #999 / security audit #977 round 3 finding 3.2.
 package debug
 
 import (
@@ -52,8 +59,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 	_ "modernc.org/sqlite"
 )
 
@@ -76,12 +85,23 @@ type execer interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
+// exportDBRateLimitPerMin is the dedicated per-IP ceiling for
+// GET /api/debug/export-db (#999, security audit #977 round 3 finding 3.2).
+// The export streams the entire SQLite file, so it is both a bandwidth
+// amplifier and a WAL-checkpoint trigger on every hit. It gets its own
+// feature limiter on top of the app-wide 600/min backstop. This is
+// DELIBERATELY STRICTER THAN NODE: routes/debug.js feature-limits neither
+// this route nor /api/shots/{id}/card, relying on the shared backstop
+// alone. 5/min per IP is ample for a human pulling a manual DB backup.
+const exportDBRateLimitPerMin = 5
+
 // Handlers ports routes/debug.js's router plus routes/system.js's
 // /api/debug/machine handler.
 type Handlers struct {
 	db       execer
 	dbPath   string
 	registry *machines.Registry
+	rl       *ratelimit.KeyedLimiter
 
 	// devBuild / nonProd are captured at construction from the environment,
 	// matching routes/debug.js / routes/system.js reading process.env on a
@@ -103,6 +123,7 @@ func NewHandlers(db execer, dbPath string, registry *machines.Registry) *Handler
 		db:       db,
 		dbPath:   dbPath,
 		registry: registry,
+		rl:       ratelimit.NewKeyed(),
 		devBuild: os.Getenv("GLP_DEV_BUILD") != "",
 		nonProd:  os.Getenv("NODE_ENV") != "production",
 	}
@@ -132,9 +153,17 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 }
 
 // exportDB ports routes/debug.js's GET /api/debug/export-db.
-func (h *Handlers) exportDB(w http.ResponseWriter, _ *http.Request) {
+func (h *Handlers) exportDB(w http.ResponseWriter, r *http.Request) {
 	if !h.devBuild {
 		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	// Dedicated per-IP feature limit (#999) — checked after the devBuild
+	// gate so a non-dev build stays byte-for-byte indistinguishable from an
+	// unregistered route (never 429s).
+	if !h.rl.Allow("export-db:"+auth.RemoteIP(r), exportDBRateLimitPerMin) {
+		httputil.WriteError(w, http.StatusTooManyRequests, "Rate limit exceeded")
 		return
 	}
 

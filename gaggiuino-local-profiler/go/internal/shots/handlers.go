@@ -9,8 +9,10 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 )
 
 // This file ports routes/shots.js's Express router onto Go 1.22+'s
@@ -41,7 +43,23 @@ type Handlers struct {
 	repo     *Repository
 	imageDir string
 	card     cardDeps
+	rl       *ratelimit.KeyedLimiter
 }
+
+// cardRateLimitPerMin is the dedicated per-IP ceiling for
+// GET /api/shots/{id}/card (#999, security audit #977 round 3 finding 3.2).
+// The share-card render drives an SVG→PNG pass through the resvg-wasm pool
+// — a measured concurrency hot-spot (#977's c=10 card-render regression) —
+// so it gets its own feature limiter on top of the app-wide 600/min
+// backstop. This is DELIBERATELY STRICTER THAN NODE: routes/shots.js
+// feature-limits neither this route nor /api/debug/export-db, relying on
+// the shared backstop alone. 600 renders/min from one socket is a cheap
+// local DoS; 30/min covers any legitimate share/preview burst.
+//
+// A var, not a const, purely so the card-render benchmarks
+// (card_perf_test.go) can raise it past their request volume without a
+// real 60s wait — the same pattern as internal/debug's importDBMaxBytes.
+var cardRateLimitPerMin = 30
 
 // SetCardDeps wires the two cross-domain lookups the share-card renderer
 // (GET /api/shots/{id}/card) needs — the install-id short code and a
@@ -61,7 +79,7 @@ func (h *Handlers) SetCardDeps(installCode func() string, beanOriginCode func(co
 // the unexported imageDir field to point at a throwaway directory instead
 // (see helpers_test.go).
 func NewHandlers(repo *Repository) *Handlers {
-	return &Handlers{service: NewService(repo), repo: repo, imageDir: DefaultImageDir}
+	return &Handlers{service: NewService(repo), repo: repo, imageDir: DefaultImageDir, rl: ratelimit.NewKeyed()}
 }
 
 // RegisterRoutes registers every /shots.json and /api/shots/* route onto
@@ -373,6 +391,10 @@ func (h *Handlers) getShot(w http.ResponseWriter, r *http.Request) {
 // Go rollout is safe regardless. Node sets no Cache-Control on this route,
 // only Content-Type + Content-Disposition — matched exactly.
 func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
+	if !h.rl.Allow("card:"+auth.RemoteIP(r), cardRateLimitPerMin) {
+		writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		return
+	}
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
 		writeError(w, http.StatusBadRequest, "Invalid shot ID")

@@ -114,12 +114,22 @@ func BenchmarkCardRenderWarm(b *testing.B) {
 	for i := 0; i < resvgPoolSize+1; i++ {
 		doJSON(b, mux, http.MethodGet, "/api/shots/7/card", nil)
 	}
+	defer withUnlimitedCardRate()()
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if rec := doJSON(b, mux, http.MethodGet, "/api/shots/7/card", nil); rec.Code != http.StatusOK {
 			b.Fatalf("status %d", rec.Code)
 		}
 	}
+}
+
+// withUnlimitedCardRate lifts the card:<ip> feature limit (#999) for the
+// duration of a benchmark and returns a restore func.
+func withUnlimitedCardRate() func() {
+	prev := cardRateLimitPerMin
+	cardRateLimitPerMin = 1 << 30
+	return func() { cardRateLimitPerMin = prev }
 }
 
 func BenchmarkCardRenderConcurrent(b *testing.B) {
@@ -132,6 +142,8 @@ func BenchmarkCardRenderConcurrent(b *testing.B) {
 	for i := 0; i < resvgPoolSize+1; i++ {
 		doJSON(b, mux, http.MethodGet, "/api/shots/7/card", nil)
 	}
+
+	defer withUnlimitedCardRate()()
 
 	b.ResetTimer()
 	b.SetParallelism(10)

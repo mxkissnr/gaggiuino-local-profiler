@@ -23,6 +23,12 @@
 // template rasterised with a cgo-free resvg-wasm renderer, with a short
 // list of deliberate cosmetic deviations documented in card.go's header
 // (no frozen LEGACY_GLP layout, no shot-photo/icon.png, Go-font metrics).
+// It also carries one behavioral tightening the Node route does not have:
+// a dedicated "card:<ip>" feature rate limit (cardRateLimitPerMin, 30/min)
+// on top of the app-wide 600/min backstop — routes/shots.js relies on the
+// backstop alone, but the resvg-wasm render is a measured concurrency
+// hot-spot (#977), so the Go port limits it. See handlers.go's getCard and
+// #999 / security audit #977 round 3 finding 3.2.
 //
 // Still deliberately NOT ported, documented at its stub site rather than
 // silently missing:

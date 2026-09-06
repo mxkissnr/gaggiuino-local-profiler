@@ -125,6 +125,44 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 }
 
+// TestExportDB_RateLimited proves the dedicated export-db:<ip> feature
+// limit (#999 / security audit #977 round 3 finding 3.2,
+// exportDBRateLimitPerMin) — a tightening the Node route does not have.
+// Every httptest.NewRequest shares one RemoteAddr, so they share one
+// bucket: the first exportDBRateLimitPerMin requests stream the DB, the
+// next one 429s.
+func TestExportDB_RateLimited(t *testing.T) {
+	t.Setenv("GLP_DEV_BUILD", "dev")
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "glp.db")
+	sqlDB := openTestDB(t, dbPath)
+
+	mux := newMux(NewHandlers(sqlDB, dbPath, nil))
+	get := func() *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/debug/export-db", nil))
+		return rec
+	}
+	for i := 0; i < exportDBRateLimitPerMin; i++ {
+		if rec := get(); rec.Code != http.StatusOK {
+			t.Fatalf("request %d: status = %d, want 200 (limiter not yet tripped); body=%s", i, rec.Code, rec.Body.String())
+		}
+	}
+	if rec := get(); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("request %d: status = %d, want 429", exportDBRateLimitPerMin, rec.Code)
+	}
+
+	// A non-dev build 404s before the limiter is even consulted — the
+	// route must stay indistinguishable from an unregistered one.
+	t.Setenv("GLP_DEV_BUILD", "")
+	mux2 := newMux(NewHandlers(sqlDB, dbPath, nil))
+	rec := httptest.NewRecorder()
+	mux2.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/debug/export-db", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("non-dev build: status = %d, want 404", rec.Code)
+	}
+}
+
 // TestExportDB_SetsContentLength: the raw-DB download must carry an
 // accurate Content-Length so the frontend can render a determinate
 // progress bar (#960) — it is expected to equal the streamed body length.

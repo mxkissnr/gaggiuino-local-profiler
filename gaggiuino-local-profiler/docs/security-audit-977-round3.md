@@ -60,7 +60,7 @@ to the latest patch.)
 |---|----------|-----------|---------|
 | 2.1 | Medium (fixed this round) | `go/go.mod:3` | CI toolchain pinned to unpatched `go1.25.0`; `govulncheck` flags 28 stdlib CVEs (DoS / panic / quadratic-parsing in `crypto/x509`, `net/http`, `crypto/tls`, `encoding/asn1`, `net/url`, `encoding/pem`, `html/template`, …). **Fixed:** added `toolchain go1.25.14`; `govulncheck` now clean. |
 | 2.2 | Low (fixed this round) | `go/Dockerfile` (builder + runtime `FROM`) | `alpine:3.22` (runtime — the image that actually ships) pinned by tag only, unlike the digest-pinned `node:22-slim` stages in the same file and the repo-root Node Dockerfile. **Fixed:** `alpine:3.22` digest-pinned; Renovate's `dockerfile` manager keeps it current. The `golang:1.25-alpine` builder stage is deliberately left tag-only — it builds nothing that ships, and floating to the latest 1.25.x keeps it ahead of the `toolchain go1.25.14` directive in `go.mod` (finding 2.1), so `go build` never fetches a newer toolchain at image-build time. |
-| 2.3 | Low / Info | `.github/workflows/go-build.yaml` | No `govulncheck` step in Go CI, so a future dependency (or toolchain regression) with a *called* vulnerability would not be caught. **Filed as an issue** (advisory-vs-blocking is a maintainer call). |
+| 2.3 | Low / Info — **resolved** | `.github/workflows/go-build.yaml` | No `govulncheck` step in Go CI, so a future dependency (or toolchain regression) with a *called* vulnerability would not be caught. **Resolved (#998):** added a **blocking** `govulncheck` step to the `test` job (no `continue-on-error`), version-pinned to `golang.org/x/vuln@v1.7.0`. It fails the build on any *called* vulnerability (stdlib, imported, or required module on a live call path); advisories in required-but-not-reachable modules do not fail it (govulncheck's default exit behavior). Local run (toolchain `go1.25.14`, post-#1000) confirms **0 called vulnerabilities**, 0 in imported packages, 3 in required-but-not-called modules. |
 | 2.4 | Info (clean) | `Dockerfile` (repo root — the image real installs pull) | `node:22-slim` digest-pinned across all three stages; process drops root via `gosu node` in `docker-entrypoint.sh`; `HEALTHCHECK` present; no secret in any build arg (`GLP_DEV_BUILD` is a non-secret build tag); runtime `apt` limited to `wget fonts-liberation gosu`. No change needed. |
 | 2.5 | Info (clean) | `go/Dockerfile` | Non-root `glp` (uid 1000) created and `/data` chowned; root only for the entrypoint's bind-mount chown, then `su-exec glp`; `HEALTHCHECK` present; `CGO_ENABLED=0` static build; no build secret; runtime `apk` limited to `wget ca-certificates su-exec`. |
 | 2.6 | Info (clean) | `config.yaml` | No `privileged`, `host_network`, `host_pid`, `host_ipc`, `devices`, `usb`, `udev`, `full_access`, `docker_api`, or `map:` of sensitive host paths. `homeassistant_api` / `hassio_api` / `services: mqtt:want` each carry a code-referenced justification. `ports: 8099/tcp` is intentional and gated by the `expose_api_port` option (default open for upgrade-compat, documented in DOCS.md's trust model). |
@@ -113,31 +113,43 @@ inventory — no route escapes it. This matches `server.js`'s
 | `POST /api/orders` | `orders:<ip>` | 10/min | `routes/orders.js:349` | `internal/orders/handlers.go:964` ✅ |
 | htmx write actions (`/ui/` machines / library / menu) | `web-*:<ip>` | 10–30/min | (Go-only pages) | `internal/web/handlers_*.go` ✅ |
 | manual machine sync | 30 s debounce | — | `routes/system.js:282` | ported ✅ |
+| `GET /api/shots/{id}/card` (resvg render) | `card:<ip>` | 30/min | *(none — Go-only)* | `internal/shots/handlers.go` ⬆ **stricter than Node** (#999) |
+| `GET /api/debug/export-db` (full DB stream) | `export-db:<ip>` | 5/min | *(none — Go-only)* | `internal/debug/debug.go` ⬆ **stricter than Node** (#999) |
 
 Every Node feature-level `rateLimit()` call has an equivalent in the Go
-port. No feature-level regression.
+port. No feature-level regression. The last two rows are the Go port going
+*beyond* Node parity on purpose (finding 3.2 / #999).
 
 ### Findings
 
 | # | Severity | File:line | Finding |
 |---|----------|-----------|---------|
 | 3.1 | Info (clean) | `cmd/server/main.go:452-476` | App-wide limiter proven to wrap every route via the single shared mux. No unlimited endpoint exists. |
-| 3.2 | Low — needs maintainer decision | `internal/shots/handlers.go:77` (`GET /api/shots/{id}/card`), `internal/debug/debug.go:123` (`GET /api/debug/export-db`) | Two disproportionately expensive endpoints sit **only** under the generous 600/min backstop, with no dedicated feature limit: the card endpoint runs an SVG→PNG render through the resvg wasm pool (already a measured concurrency hot-spot — see #977's `c=10` card-render regression note), and export-db streams the entire SQLite file. 600 renders or 600 full-DB dumps per minute from one socket is a cheap local DoS / bandwidth amplifier. **This matches Node** (neither endpoint is feature-limited there either), so it is *not a Go regression* — but the Go port is the moment to add a small dedicated limit (e.g. `card:<ip>` ~30/min, `export-db:<ip>` ~5/min). Filed as an issue; behavioral change, so maintainer decision. |
+| 3.2 | Low — **resolved (stricter than Node, intentional)** | `internal/shots/handlers.go` (`GET /api/shots/{id}/card`), `internal/debug/debug.go` (`GET /api/debug/export-db`) | Two disproportionately expensive endpoints sat **only** under the generous 600/min backstop, with no dedicated feature limit: the card endpoint runs an SVG→PNG render through the resvg wasm pool (already a measured concurrency hot-spot — see #977's `c=10` card-render regression note), and export-db streams the entire SQLite file. 600 renders or 600 full-DB dumps per minute from one socket is a cheap local DoS / bandwidth amplifier. This matched Node (neither endpoint is feature-limited there either). **Resolved (#999):** each got a dedicated `ratelimit.KeyedLimiter` feature limit keyed exactly like the existing ones — `card:<ip>` at 30/min (`shots.cardRateLimitPerMin`), `export-db:<ip>` at 5/min (`debug.exportDBRateLimitPerMin`), both on top of the unchanged app-wide backstop, both returning `429 Rate limit exceeded`. IP resolution is `auth.RemoteIP` (raw socket address, no `X-Forwarded-For` — same ingress-trust behavior as every other feature limiter). **This is deliberately STRICTER THAN NODE**, noted as such in `internal/ratelimit/keyed.go`, `internal/shots/doc.go` and `internal/debug/debug.go`'s package comment, all referencing #999/#977. New tests: `internal/shots/handlers_test.go` `TestGetCard_RateLimited`, `internal/debug/debug_test.go` `TestExportDB_RateLimited`. |
 | 3.3 | Info — parity-preserved | `internal/ratelimit/doc.go` | Behind HA Ingress every browser shares **one** bucket (all ingress traffic arrives from the single Supervisor source IP), so the 600/min ceiling is effectively per-ingress, not per-user. Documented as intentional in `doc.go` and identical to Node (`server.js` never sets `trust proxy`). Trusting `X-Forwarded-For` here would let a LAN client on the exposed port spoof its key, which is the worse trade. No action; noted for completeness. |
 
 ---
 
-## Summary of changes shipped in the round-3 PR
+## Summary of changes shipped in the round-3 PR (#1000)
 
 1. `internal/db/db.go` — `migrationTables` allowlist + `assertKnownTable()` guard on the two unavoidable `fmt.Sprintf` table-name interpolations (finding 1.2).
 2. `go/go.mod` — `toolchain go1.25.14` directive; `govulncheck` goes from 28 stdlib findings to 0 (finding 2.1).
 3. `go/Dockerfile` — digest-pin the `alpine:3.22` runtime stage (finding 2.2); the `golang:1.25-alpine` builder stays tag-only by design.
 
+## Follow-up PR — #998 + #999 (the two maintainer-decision items)
+
+Max approved both. Shipped on `audit/977-ratelimit`:
+
+4. `.github/workflows/go-build.yaml` — blocking `govulncheck` step in the `test` job, pinned to `golang.org/x/vuln@v1.7.0`, no `continue-on-error` (finding 2.3 / #998). Local run post-#1000: **0 called vulnerabilities**.
+5. `internal/shots/handlers.go` — `card:<ip>` feature limiter, 30/min (finding 3.2 / #999).
+6. `internal/debug/debug.go` — `export-db:<ip>` feature limiter, 5/min (finding 3.2 / #999).
+7. `internal/ratelimit/keyed.go`, `internal/shots/doc.go`, `internal/debug/debug.go` — doc comments record both new limits as intentionally stricter than Node.
+
 ## Issues opened
 
 - **#997** — tracking issue for this round + the low-risk PR (findings 1.2, 2.1, 2.2).
-- **#998** (needs maintainer decision) — Finding 2.3: add `govulncheck` to `go-build.yaml`, advisory vs blocking.
-- **#999** (needs maintainer decision) — Finding 3.2: dedicated rate limits for `GET /api/shots/{id}/card` and `GET /api/debug/export-db` (behavioral change; also relevant to the #977 card-render concurrency note).
+- **#998** — Finding 2.3: add `govulncheck` to `go-build.yaml`. **Resolved:** blocking gate, pinned to `golang.org/x/vuln@v1.7.0`, fails on any *called* vuln.
+- **#999** — Finding 3.2: dedicated rate limits for `GET /api/shots/{id}/card` (`card:<ip>` 30/min) and `GET /api/debug/export-db` (`export-db:<ip>` 5/min). **Resolved (stricter than Node, intentional).**
 
 ## Not changed (out of scope / cosmetic)
 

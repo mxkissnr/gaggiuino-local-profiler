@@ -112,6 +112,36 @@ func TestGetCard_BadIDAndMissingShot(t *testing.T) {
 	}
 }
 
+// TestGetCard_RateLimited proves the dedicated card:<ip> feature limit
+// (#999 / security audit #977 round 3 finding 3.2, cardRateLimitPerMin).
+// The limiter runs before id-parsing/render, so this drives it with
+// missing-shot requests (404) and never pays a real resvg render: the
+// first cardRateLimitPerMin requests pass the limiter, the next one 429s.
+// Every httptest.NewRequest shares one RemoteAddr, so they share one
+// bucket.
+func TestGetCard_RateLimited(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	for i := 0; i < cardRateLimitPerMin; i++ {
+		rec := doJSON(t, mux, http.MethodGet, "/api/shots/999/card", nil)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("request %d: status = %d, want 404 (limiter not yet tripped)", i, rec.Code)
+		}
+	}
+	rec := doJSON(t, mux, http.MethodGet, "/api/shots/999/card", nil)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("request %d: status = %d, want 429", cardRateLimitPerMin, rec.Code)
+	}
+
+	// A fresh limiter (new Handlers = new bucket) is not tripped — proves
+	// the 429 above is the per-key window, not a global latch.
+	h2, _, _ := newTestHandlers(t)
+	if rec := doJSON(t, newMux(h2), http.MethodGet, "/api/shots/999/card", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("fresh limiter: status = %d, want 404", rec.Code)
+	}
+}
+
 func TestGetCard_HonorsAccent(t *testing.T) {
 	h, _, sqlDB := newTestHandlers(t)
 	mux := newMux(h)

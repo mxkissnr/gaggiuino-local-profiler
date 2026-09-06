@@ -18,9 +18,25 @@ import (
 // behavior. Entries older than 2 windows are swept lazily on Allow rather
 // than a background ticker (Node's setInterval(...,120_000) has no direct
 // equivalent worth adding a goroutine for at this scale).
+//
+// Most feature-level keys mirror a Node rateLimit() call 1:1 (orders,
+// restore, token, library scan/create). Two keys are DELIBERATELY STRICTER
+// THAN NODE, added in the Go port only (#999, security audit #977 round 3
+// finding 3.2): "card:<ip>" (30/min, internal/shots — resvg-wasm render
+// hot-spot) and "export-db:<ip>" (5/min, internal/debug — full-DB stream).
+// Node feature-limits neither route, leaving both under the shared 600/min
+// backstop alone; the Go rewrite is the moment to tighten them. The IP is
+// internal/auth.RemoteIP(r) — the raw socket address, never
+// X-Forwarded-For — so behind HA Ingress every browser shares one bucket
+// per key (all ingress traffic is one Supervisor source IP); see this
+// package's doc.go for why trusting the header would be the worse trade.
 type KeyedLimiter struct {
 	mu      sync.Mutex
 	windows map[string]*keyedWindow
+
+	// now is a test seam; nil means time.Now. Same pattern as
+	// internal/debug.Handlers.now.
+	now func() time.Time
 }
 
 type keyedWindow struct {
@@ -33,6 +49,16 @@ func NewKeyed() *KeyedLimiter {
 	return &KeyedLimiter{windows: make(map[string]*keyedWindow)}
 }
 
+// Reset drops every tracked window. Test-only helper for benchmarks that
+// fire far more than maxPerMinute requests at a feature-limited endpoint
+// (e.g. internal/shots' card-render benchmarks) and need to sidestep the
+// limit without a real 60s wait.
+func (l *KeyedLimiter) Reset() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.windows = make(map[string]*keyedWindow)
+}
+
 // Allow ports rateLimit(key, maxPerMinute): increments key's counter,
 // resetting it if more than 60s have elapsed since the window started, and
 // reports whether the incremented count is still within maxPerMinute.
@@ -40,6 +66,9 @@ func (l *KeyedLimiter) Allow(key string, maxPerMinute int) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := time.Now()
+	if l.now != nil {
+		now = l.now()
+	}
 	w, ok := l.windows[key]
 	if !ok || now.Sub(w.start) > time.Minute {
 		w = &keyedWindow{start: now}
