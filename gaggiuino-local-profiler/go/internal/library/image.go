@@ -84,7 +84,21 @@ func fetchBeanImage(dir string, beanID int64, imageURL string) string {
 	if u == "" || !isAllowedImageURL(u) {
 		return ""
 	}
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, u, nil)
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	// The exact-hostname allowlist above (isAllowedImageURL) is the primary
+	// SSRF defense here, same as ImageService.js — but a compromised/rebound
+	// DNS answer for an otherwise-trusted host could still resolve to an
+	// internal address, so this is the same assertPublicHost DNS-rebinding
+	// guard scan.go applies before its own outbound request.
+	if err := assertPublicHost(ctx, parsed.Hostname()); err != nil {
+		return ""
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return ""
 	}

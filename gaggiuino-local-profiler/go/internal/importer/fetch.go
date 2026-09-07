@@ -113,6 +113,14 @@ func (f *fetcher) safeGet(ctx context.Context, startURL string) (fetchResult, er
 // returns (result, "", nil); anything else returns an error (axios
 // validateStatus: s < 400).
 func (f *fetcher) doOnce(ctx context.Context, rawURL string, base *url.URL) (fetchResult, string, error) {
+	// safeGet already checked this hop's host before calling doOnce, but the
+	// check is repeated here, immediately before the request it guards, so
+	// the two are never separated by an interprocedural hop for anyone
+	// reading (or verifying) this function in isolation.
+	if err := assertPublicHost(ctx, base.Hostname()); err != nil {
+		return fetchResult{}, "", err
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fetchResult{}, "", err

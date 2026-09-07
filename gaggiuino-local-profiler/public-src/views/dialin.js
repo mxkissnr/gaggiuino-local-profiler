@@ -41,7 +41,7 @@ export async function renderDialin() {
       pAvg = pActive.length ? (pActive.reduce((a, pt) => a + pt.y, 0) / pActive.length).toFixed(1) + ' bar' : '–';
     }
 
-    const dose   = ann.dose  ? ann.dose + ' g'  : null;
+    const dose   = ann.dose  ? esc(String(ann.dose)) + ' g'  : null;
     const yield_ = s.weight  ? (s.weight / 10).toFixed(1) + ' g' : null;
     const ratio  = (ann.dose && s.weight) ? '1:' + (s.weight / 10 / ann.dose).toFixed(1) : null;
     const date   = new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });

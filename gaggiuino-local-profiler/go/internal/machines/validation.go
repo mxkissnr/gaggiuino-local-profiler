@@ -3,6 +3,7 @@ package machines
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
@@ -218,7 +219,11 @@ func (ph PhaseInput) toWirePhase() proto.PhaseDto {
 // ToWireProfile ports gaggiuino-ws-client.js's toWireProfile(profile).
 func (p ProfileInput) ToWireProfile() *proto.ProfileDto {
 	var id uint32
-	if p.ID != nil {
+	// Bounds-check before the narrowing cast — p.ID is an int64 (JSON body
+	// field or the {id} path wildcard, both parsed at up to 64 bits) and an
+	// out-of-range value must not silently truncate onto an unrelated
+	// device-side profile id.
+	if p.ID != nil && *p.ID >= 0 && *p.ID <= math.MaxUint32 {
 		id = uint32(*p.ID)
 	}
 
