@@ -1,4 +1,4 @@
-# Go preview channel: every push to `go-migration` (that touches go/) builds
+# Go preview channel: every push to `dev` (that touches go/) builds
 # the real go/Dockerfile image, pushes it to ghcr.io, and points the
 # separate manifest repository (mxkissnr/glp-go-preview-app) at it -- the
 # actual registry-push publish path for the Go rewrite, as opposed to
@@ -9,6 +9,11 @@
 # glp-dev-app entirely separately, with its own token
 # (secrets.DEV_ADDON_REPO_TOKEN) and its own manifest repo -- the two
 # channels are independent and this workflow never touches either.
+#
+# Trigger moved from `go-migration` to `dev` once the go-migration branch's
+# 128 commits were merged into dev (2026-09-07, #1012) and go-migration
+# became an ancestor of dev -- dev is now the live integration branch for
+# the Go rewrite; go-migration itself is no longer pushed to.
 #
 # Same reasoning as build-dev.yaml for why the manifest lives in another
 # repository, and why `version` gets rewritten there on every build: see
@@ -24,7 +29,7 @@ name: Publish Go preview channel image
 
 on:
   push:
-    branches: [go-migration]
+    branches: [dev]
     # #973: this image bakes in the built frontend (public-src/ -> public/)
     # as well as go/, so a `paths:` include list kept missing frontend-only
     # changes (e.g. #970/#972) -- paths-ignore, matching build-dev.yaml's own
@@ -40,7 +45,7 @@ env:
 permissions:
   contents: read
 
-# A newer push to go-migration makes an in-flight publish obsolete.
+# A newer push to dev makes an in-flight publish obsolete.
 concurrency:
   group: go-preview-publish
   cancel-in-progress: true
