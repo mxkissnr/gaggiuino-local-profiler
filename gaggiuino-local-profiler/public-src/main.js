@@ -618,6 +618,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // #1021: --accent-ink now has a light-theme-only override table (see
+  // machines-settings.js), so toggling dark<->light (manually or via the OS
+  // 'auto' listener in theme.js, which also fires this event) has to
+  // recompute it too, not just whenever the accent/machine choice itself
+  // changes.
+  onThemeChange(() => applyActiveMachineAccentTheme());
+
   applyTheme(localStorage.getItem(THEME_STORAGE_KEY) || 'dark');
 
   // #1019: migrates a pre-#1019 6-swatch value (amber/ocean/aurora/ember/

@@ -113,10 +113,14 @@
             --on-fill: #000;
             /* --accent-ink: the accent used as TEXT or an icon, as opposed to
                a fill. On dark surfaces the accent itself is readable, so this
-               is simply the accent. In the light theme it is not — see the
-               per-accent overrides there. Splitting the two is what lets the
-               fill stay exactly the configured brand colour while the text
-               form stays legible. */
+               is simply the accent. In the light theme it is not — #1021's
+               per-preset overrides for the 8 THEME_PRESETS are applied here
+               as an inline style by applyActiveMachineAccentTheme()
+               (components/machines-settings.js), not a CSS selector — see
+               the comment below where the old [data-accent]-scoped overrides
+               used to live. Splitting the two is what lets the fill stay
+               exactly the configured brand colour while the text form stays
+               legible. */
             --accent-ink:  var(--accent);
         }
 
@@ -151,13 +155,19 @@
             --on-fill: #fff;
         }
         /* #1019: the per-accent --accent-ink light-theme audit (#811, plus
-           Crema's whole separate warm-paper light block) is retired along
-           with the old 6-swatch set. The 8 new THEME_PRESETS deliberately
-           ship WITHOUT an equivalent hand-audited light-theme tuning pass —
-           --accent-ink simply falls back to the base :root's `var(--accent)`
-           in light theme too, same as it already does in dark. Tracked as a
-           follow-up (see the PR/issue this landed in) for a dedicated
-           contrast audit across all 8 presets, same precedent as #397/#404. */
+           Crema's whole separate warm-paper light block) was retired along
+           with the old 6-swatch [data-accent="..."] set, and those
+           selectors deliberately stay retired (#1021 does not reintroduce
+           them). #1021 redid the audit for the 8 new THEME_PRESETS instead —
+           same #397/#404/#811 precedent, same 4.5:1 floor against all four
+           light surfaces above, same "darken along the accent's own hue"
+           method — but applied through the inline-CSS-variable mechanism
+           applyActiveMachineAccentTheme() already uses for --accent itself
+           (see LIGHT_ACCENT_INK_OVERRIDES in components/machines-settings.js
+           and its test/theme-contrast.test.js coverage) rather than a new
+           CSS selector per preset. --accent-ink here in :root/[data-theme=
+           "light"] stays a plain var(--accent) alias either way — the
+           override, when one applies, always wins as an inline style. */
 
         /* #404: bundled locally (public-src/fonts/) so it renders fully
            offline / behind HA ingress — no external font CDN. Applied ONLY
