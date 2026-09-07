@@ -62,7 +62,7 @@ A custom Lovelace card that displays machine status, last shot summary, preheat 
 
 The profile selector reads and writes `select.gaggiuino_profiler_profile`, provided natively by the GLP Integration (v1.9.0+). The selector is automatically hidden when the entity is not present.
 
-Install via HACS: [github.com/mxkissnr/glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)
+**Ships bundled inside [GLP Integration](https://github.com/mxkissnr/glp-integration)** — no separate HACS listing or card download. Installing/updating the integration via HACS registers it automatically as a dashboard resource; just add a `type: custom:glp-card` card to your dashboard.
 
 ### GLP Order Card
 
@@ -72,7 +72,7 @@ Bean variants come from the coffee library via `/api/orders/active-beans`: only 
 
 **Stable order-to-bean attribution (backend, v2.21.0+):** `POST /api/orders` accepts an optional `beanId`, resolved server-side against the library's actual beans (a stale or unknown id becomes `null` rather than failing the order), and returns it on the order going forward (#563). ⚠ This is a backend/data-model fix only — no UI in this app or the Order Card currently displays or edits `beanId`; it exists so orders carry a stable bean reference for whichever release starts using it.
 
-Install via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/mxkissnr/glp-order-card)
+**Ships bundled inside [GLP Integration](https://github.com/mxkissnr/glp-integration)** — no separate HACS listing or card download. Installing/updating the integration via HACS registers it automatically as a dashboard resource; just add a `type: custom:glp-order-card` card to your dashboard.
 
 ### API token
 

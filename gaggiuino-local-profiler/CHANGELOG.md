@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Fixed
+- **DOCS.md/DOCS.de.md no longer describe GLP Shot Card/Order Card as needing a separate HACS install** — both cards have shipped bundled inside GLP Integration for a while now; the docs just hadn't caught up. Closes #1007
 - **The shot sidebar stays responsive on installs with a very large shot history** — collapsed month groups now build their rows only when first opened, searching no longer re-scans the entire shot list once per row, and typing in the search box no longer re-filters on every keystroke. Closes #969
 
 ### Changed
