@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Fixed
+- **The Settings → Theme toggle now correctly highlights whichever of Dark/Light/Auto is actually selected.** Clicking the unrelated WebSocket/MQTT transport toggle right below it used to silently break this — both buttons went permanently blank until the theme was reselected. Closes #1018
 - **The Live tab no longer freezes on stale readings when the live event stream goes silent mid-session without ever cleanly failing** — it now falls back to REST polling until the stream recovers, instead of trusting a connection that looked fine at first but stopped delivering updates. Closes #1016
 - **(go-migration) A panic in a background task (live-machine polling, scheduled sync, or a settings fetch) is now recovered and logged instead of crashing the whole add-on.** Closes #993
 - **(go-migration) A crafted shot-history file can no longer make the .slog parser preallocate a wildly oversized amount of memory.** Closes #992
@@ -11,6 +12,7 @@
 - **The shot sidebar stays responsive on installs with a very large shot history** — collapsed month groups now build their rows only when first opened, searching no longer re-scans the entire shot list once per row, the sidebar no longer rebuilds itself once per page while loading a large shot history in the background, and typing in the search box no longer re-filters on every keystroke. Closes #969
 
 ### Added
+- **A third "Auto" option next to Dark/Light in Settings → Theme follows the browser/OS colour-scheme preference live**, switching immediately if it changes while the app stays open, without a reload. Closes #1018
 - **GaggiMate machines now get a full profile editor** — Standard and Pro (Extended) profiles can be created, edited, and deleted from GLP, saved straight to the machine (GaggiMate keeps no local profile copy, so there's nothing to sync back). The preview chart mirrors GaggiMate's own profile visualization: continuous pressure/flow curves sampled the same way, solid where a phase actively controls that parameter and dashed where it's just a held value, with named phase regions and dividers. The shot chart now overlays the same named phases for GaggiMate shots.
 - **The descale operation mode is now surfaced as `isDescaling` in the machine status and live SSE payloads**, mirroring the existing steam/flush live-state fields. Closes #983
 - **Backup export/import and the dev-channel raw-database download/upload now show a progress bar (and disable their button) for the whole transfer**, instead of an unresponsive UI on a large database. Closes #960
