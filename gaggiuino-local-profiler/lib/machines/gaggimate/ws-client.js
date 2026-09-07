@@ -15,6 +15,31 @@ const WebSocket = require('ws');
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
+// evt:status's `m` (mode) field's exact enum isn't documented anywhere
+// public — best-effort until verified against real hardware: mode 1 is
+// treated as "brewing" (also the value adapter.js's getStatus() uses).
+const BREWING_MODE = 1;
+
+// mapEvtStatus normalises a raw evt:status frame (ct/tt/pr/m/p) into the
+// subset of the Gaggiuino /api/system/status shape lib/machine-state.js's
+// deriveMachineState() reads — so the live-poll loop can run a GaggiMate
+// machine's cached telemetry through the exact same derivation as a
+// Gaggiuino REST poll (#954). evt:status carries no weight/flow field and
+// no steam/flush signal, so those stay absent (deriveMachineState treats a
+// missing steamSwitchState as "not steaming", and its flush detection only
+// fires from a live sysState this path never has).
+function mapEvtStatus(evt) {
+    if (!evt) return {};
+    return {
+        temperature:       evt.ct ?? 0,
+        targetTemperature: evt.tt ?? 0,
+        pressure:          evt.pr ?? 0,
+        brewSwitchState:   evt.m === BREWING_MODE,
+        profileName:       evt.p ?? null,
+        raw:               evt,
+    };
+}
+
 function wsUrlFor(baseUrl) {
     const u = new URL(baseUrl);
     const proto = u.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -140,8 +165,13 @@ class GaggiMateLiveClient {
 
     close() {
         this.closed = true;
+        // Absorb the async 'error' event ws emits when close()/terminate()
+        // hits a socket still in CONNECTING state — without a listener
+        // Node.js rethrows it as an unhandled exception and crashes the
+        // process (mirrors PR #947's gaggiuino-live-client.js fix).
+        this._ws?.on('error', () => {});
         try { this._ws?.close(); } catch { /* ignore */ }
     }
 }
 
-module.exports = { wsUrlFor, request, waitForStatus, GaggiMateLiveClient };
+module.exports = { wsUrlFor, request, waitForStatus, mapEvtStatus, GaggiMateLiveClient };

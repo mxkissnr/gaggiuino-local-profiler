@@ -47,6 +47,14 @@ const { imagePath }  = require('../lib/services/ImageService');
 const { getDb }      = require('../lib/db');
 const state          = require('../lib/state');
 const { readZip }    = require('../lib/zip');
+const { bus, EVENTS } = require('../lib/events');
+const achievementService = require('../lib/services/AchievementService');
+const achievementRepo    = require('../lib/repositories/AchievementRepository');
+
+// #978: wired once (mirrors server.js's single boot-time init() call) so the
+// bulk-restore test below can observe how many times a real restore through
+// the actual route triggers achievement re-evaluation.
+achievementService.init();
 
 function makeApp() {
     const app = express();
@@ -190,6 +198,46 @@ describe('POST /api/restore', () => {
 
         const remaining = shotRepo.findAll().map(s => s.id).sort();
         expect(remaining).toEqual([5, 6]);
+    });
+
+    // #978: restoring a large backup into a non-empty install used to emit
+    // SHOT_SAVED once per restored shot, which triggered a full achievement
+    // context rebuild + every badge's check() that many times over -- a
+    // synchronous O(n^2) storm that blocked the event loop long enough for
+    // the Supervisor watchdog to kill the process mid-transaction (losing
+    // the entire restore, since it's one atomic transaction). This asserts
+    // both halves of the fix: achievements are still evaluated (not simply
+    // dropped), but only once for the whole restore, no matter how many
+    // shots it contains.
+    it('evaluates achievements exactly once for a large bulk restore, not once per shot', async () => {
+        seedOneShot();
+        getDb().exec('DELETE FROM achievements');
+
+        let evaluateCalls = 0;
+        const onShotSaved = () => { evaluateCalls++; };
+        bus.on(EVENTS.SHOT_SAVED, onShotSaved);
+
+        const N = 500;
+        const shots = [];
+        for (let i = 1; i <= N; i++) shots.push({ id: i, timestamp: 1700000000 + i, duration: 200 });
+        const good = { glp_backup: true, shots };
+
+        try {
+            const r = await restore(good);
+            expect(r.status).toBe(200);
+            const body = await r.json();
+            expect(body.shots).toBe(N);
+        } finally {
+            bus.off(EVENTS.SHOT_SAVED, onShotSaved);
+        }
+
+        expect(shotRepo.findAll()).toHaveLength(N);
+        // Exactly one SHOT_SAVED for the whole restore (this listener plus
+        // AchievementService's own — evaluateCalls only counts this test's).
+        expect(evaluateCalls).toBe(1);
+        // And achievements actually did get (re-)evaluated against the
+        // restored state, not merely skipped.
+        expect(Object.keys(achievementRepo.getAll()).length).toBeGreaterThan(0);
     });
 
     // #635: milks used to be the one library entity NOT sanitized on restore

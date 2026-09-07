@@ -136,6 +136,40 @@ describe('achievement evaluation (#812)', () => {
     expect(memDb.prepare('SELECT COUNT(*) c FROM achievements WHERE id = ?').get('first_shot').c).toBe(1);
   });
 
+  // #978: a progress-tracked badge (progressTarget set) calls setProgress()
+  // on every pass while still locked, which writes a row with unlocked_at
+  // NULL well before the badge actually crosses its target -- unlike the
+  // tests above, which only ever call evaluateAll() once the badge is
+  // already crossable, and so never exercise a pre-existing progress row.
+  // The old `INSERT OR IGNORE` in AchievementRepository.unlock() silently
+  // no-op'd against that already-existing row: unlocked_at stayed NULL
+  // forever, and every subsequent evaluateAll() call kept re-reporting
+  // shots_10 as newly unlocked, without end.
+  it('actually unlocks a progress-tracked badge once its target is crossed gradually', () => {
+    const insert = memDb.prepare(
+      `INSERT INTO shots (id, machine_id, timestamp, duration, data) VALUES (?, 1, ?, 280, '{}')`);
+    const now = Math.floor(Date.now() / 1000);
+
+    // Nine shots, evaluated one at a time -- each pass writes a progress row
+    // for shots_10 (locked, 9/10) before the badge is ever crossable.
+    for (let i = 1; i <= 9; i++) {
+      insert.run(i, now - i * 3600);
+      service.evaluateAll();
+    }
+    expect(repo.getAll().shots_10?.unlockedAt, 'shots_10 unlocked too early').toBeFalsy();
+
+    // The tenth shot crosses the target.
+    insert.run(10, now - 10 * 3600);
+    const unlocked = service.evaluateAll();
+    expect(unlocked, 'shots_10 did not unlock on the crossing pass').toContain('shots_10');
+    expect(repo.getAll().shots_10?.unlockedAt, 'shots_10 has no unlocked_at after crossing').toBeGreaterThan(0);
+
+    // A further pass (an eleventh shot) must not keep re-reporting it.
+    insert.run(11, now - 11 * 3600);
+    const again = service.evaluateAll();
+    expect(again, 'shots_10 kept re-unlocking after already being stamped').not.toContain('shots_10');
+  });
+
   it('withholds a secret badge\'s name and description until it is unlocked', () => {
     const secretId = registry.SECRET_IDS[0];
 

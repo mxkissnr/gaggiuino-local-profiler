@@ -383,9 +383,33 @@ export function _renderBeanSelect(selectedName, selectedBeanId) {
   }
   const byId = selectedBeanId != null ? options.find(o => o.id === selectedBeanId) : null;
   const selected = byId ? byId.name : selectedName;
-  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  select.innerHTML = `<option value=""></option>` +
-    options.map(o => `<option value="${esc(o.name)}"${o.id != null ? ` data-bean-id="${o.id}"` : ''}${o.name === selected ? ' selected' : ''}>${esc(o.name)}${o.empty ? ` (${t('lib_milk_empty')})` : ''}</option>`).join('');
+  // #946: built via the DOM API rather than an innerHTML string — every value
+  // is already esc()'d, but the innerHTML sink makes CodeQL re-raise
+  // js/xss-through-dom on every code move (#760, #93). textContent/value
+  // assignments carry no such sink.
+  const frag = document.createDocumentFragment();
+  frag.append(new Option('', ''));
+  for (const o of options) {
+    const label = o.name + (o.empty ? ` (${t('lib_milk_empty')})` : '');
+    const opt = new Option(label, o.name, false, o.name === selected);
+    if (o.id != null) opt.dataset.beanId = o.id;
+    frag.append(opt);
+  }
+  select.replaceChildren(frag);
+}
+
+// #946: shared builder for the pure ID-based library <select>s below. `data`
+// keys become data-* attributes (dataset.basketId -> data-basket-id), read
+// back by _buildAnnotationPayload via selectedOptions[0].dataset.
+function _fillIdSelect(select, noneLabel, items, selectedId, datasetKey) {
+  const frag = document.createDocumentFragment();
+  frag.append(new Option(noneLabel, ''));
+  for (const it of items) {
+    const opt = new Option(it.name, it.id, false, selectedId === it.id);
+    opt.dataset[datasetKey] = it.id;
+    frag.append(opt);
+  }
+  select.replaceChildren(frag);
 }
 
 // #635: baskets/puck screens are pure ID-based library selections (unlike
@@ -395,19 +419,13 @@ export function _renderBeanSelect(selectedName, selectedBeanId) {
 export function _renderBasketSelect(selectedId) {
   const select = document.getElementById('annBasket');
   if (!select) return;
-  const baskets = S.coffeeLibrary?.baskets || [];
-  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  select.innerHTML = `<option value="">${t('ann_basket_none')}</option>` +
-    baskets.map(b => `<option value="${b.id}" data-basket-id="${b.id}"${selectedId === b.id ? ' selected' : ''}>${esc(b.name)}</option>`).join('');
+  _fillIdSelect(select, t('ann_basket_none'), S.coffeeLibrary?.baskets || [], selectedId, 'basketId');
 }
 
 export function _renderPuckScreenSelect(selectedId) {
   const select = document.getElementById('annPuckScreen');
   if (!select) return;
-  const puckScreens = S.coffeeLibrary?.puckScreens || [];
-  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  select.innerHTML = `<option value="">${t('ann_puckscreen_none')}</option>` +
-    puckScreens.map(p => `<option value="${p.id}" data-puckscreen-id="${p.id}"${selectedId === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('');
+  _fillIdSelect(select, t('ann_puckscreen_none'), S.coffeeLibrary?.puckScreens || [], selectedId, 'puckscreenId');
 }
 
 export function _renderRecipeSelect(selectedId) {
@@ -417,9 +435,12 @@ export function _renderRecipeSelect(selectedId) {
   const recipes = S.coffeeLibrary?.recipes || [];
   if (!recipes.length) { field.style.display = 'none'; return; }
   field.style.display = '';
-  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  select.innerHTML = `<option value="">${t('ann_recipe_none')}</option>` +
-    recipes.map(r => `<option value="${r.id}"${r.id === selectedId ? ' selected' : ''}>${esc(r.name)}</option>`).join('');
+  // #946: DOM API, not an innerHTML string (see _renderBeanSelect). Recipes
+  // carry no data-* attribute — _buildAnnotationPayload reads annRecipe.value.
+  const frag = document.createDocumentFragment();
+  frag.append(new Option(t('ann_recipe_none'), ''));
+  for (const r of recipes) frag.append(new Option(r.name, r.id, false, r.id === selectedId));
+  select.replaceChildren(frag);
 }
 
 // ── Annotation panel ──────────────────────────────────────────────────────

@@ -6,6 +6,7 @@
 - **(go-migration) An MQTT broker host is now checked against the same address-safety guard a machine's own host gets**, including on every automatic reconnect. Closes #988
 - **(go-migration) Outbound machine and URL-import connections now pin the exact address the safety guard just validated**, closing a narrow window where a second, independent lookup could have been tricked into answering differently. Closes #987
 - **(go-migration) A machine's persistent live connection now re-validates its host on every automatic reconnect**, not just when first opened. Closes #986
+- **DOCS.md/DOCS.de.md no longer describe GLP Shot Card/Order Card as needing a separate HACS install** — both cards have shipped bundled inside GLP Integration for a while now; the docs just hadn't caught up. Closes #1007
 - **The shot sidebar stays responsive on installs with a very large shot history** — collapsed month groups now build their rows only when first opened, searching no longer re-scans the entire shot list once per row, the sidebar no longer rebuilds itself once per page while loading a large shot history in the background, and typing in the search box no longer re-filters on every keystroke. Closes #969
 
 ### Added

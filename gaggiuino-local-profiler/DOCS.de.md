@@ -62,7 +62,7 @@ Eine Custom Lovelace-Karte, die Maschinenstatus, letzten Shot, Aufwärm-Fortschr
 
 Die Profil-Auswahl liest und schreibt `select.gaggiuino_profiler_profile`, bereitgestellt nativ durch die GLP Integration (v1.9.0+). Die Auswahl wird automatisch ausgeblendet wenn die Entität nicht vorhanden ist.
 
-Installation via HACS: [github.com/mxkissnr/glp-lovelace-card](https://github.com/mxkissnr/glp-lovelace-card)
+**Ist bereits in [GLP Integration](https://github.com/mxkissnr/glp-integration) enthalten** — keine eigene HACS-Listung, kein separater Karten-Download nötig. Beim Installieren/Aktualisieren der Integration über HACS wird sie automatisch als Dashboard-Ressource registriert; einfach eine Karte vom Typ `custom:glp-card` zum Dashboard hinzufügen.
 
 ### GLP Order Card
 
@@ -72,7 +72,7 @@ Bohnen-Varianten kommen aus der Kaffee-Bibliothek über `/api/orders/active-bean
 
 **Stabile Bestellung-zu-Bohne-Zuordnung (Backend, ab v2.21.0):** `POST /api/orders` akzeptiert jetzt optional `beanId`, serverseitig gegen die tatsächlichen Bohnen der Bibliothek aufgelöst (eine veraltete oder unbekannte ID wird zu `null`, statt die Bestellung fehlschlagen zu lassen), und liefert sie fortan bei der Bestellung zurück (#563). ⚠ Das ist reine Backend-/Datenmodell-Korrektur — weder diese App noch die Order Card zeigen oder bearbeiten `beanId` aktuell in der Oberfläche; die Angabe existiert, damit Bestellungen eine stabile Bohnen-Referenz mitführen, sobald eine künftige Version sie nutzt.
 
-Installation via HACS: [github.com/mxkissnr/glp-order-card](https://github.com/mxkissnr/glp-order-card)
+**Ist bereits in [GLP Integration](https://github.com/mxkissnr/glp-integration) enthalten** — keine eigene HACS-Listung, kein separater Karten-Download nötig. Beim Installieren/Aktualisieren der Integration über HACS wird sie automatisch als Dashboard-Ressource registriert; einfach eine Karte vom Typ `custom:glp-order-card` zum Dashboard hinzufügen.
 
 ### API-Token
 
