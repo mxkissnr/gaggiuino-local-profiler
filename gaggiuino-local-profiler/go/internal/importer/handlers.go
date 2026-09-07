@@ -240,8 +240,10 @@ func (h *Handlers) resolve(ctx context.Context, parsed *url.URL, raw, host strin
 	if bean == nil {
 		jsonURL := shopifyJSONURL(parsed.Path, host)
 		if jsonURL != "" {
+			debugLogf("Import: generic-Shopify path for %s, jsonUrl=%s", host, jsonURL)
 			res, err := h.fetch.safeGet(ctx, jsonURL)
 			if err != nil {
+				debugLogf("Import: JSON fetch failed for %s: %v", host, err)
 				if isSSRFBlocked(err) {
 					return nil, "", err
 				}
@@ -249,8 +251,12 @@ func (h *Handlers) resolve(ctx context.Context, parsed *url.URL, raw, host strin
 					debugInfo["jsonFetchError"] = err.Error()
 				}
 			} else {
+				debugLogf("Import: JSON fetch %s -> status %d, %d bytes", jsonURL, res.status, len(res.body))
 				product := res.dataObject()
 				bean = parseGenericShopifyProduct(product, host)
+				if bean == nil {
+					debugLogf("Import: parseGenericShopifyProduct returned nil (no title in JSON)")
+				}
 				if bean != nil {
 					attachVariants(bean, product)
 					bean["source"] = host
@@ -292,6 +298,7 @@ func (h *Handlers) resolve(ctx context.Context, parsed *url.URL, raw, host strin
 // tryHTMLEnrich ports routes/import.js's tryHtmlEnrich.
 func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host, raw string, debugInfo map[string]any) (map[string]any, error) {
 	enrich := needsHTMLEnrich(bean, host)
+	debugLogf("Import: needsHtmlEnrich=%v", enrich)
 	if debugInfo != nil {
 		debugInfo["needsHtmlEnrich"] = enrich
 	}
@@ -311,6 +318,7 @@ func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host,
 		return bean, nil
 	}
 	htmlStr := res.dataString()
+	debugLogf("Import: HTML fetch %s -> status %d, %d chars", raw, res.status, len([]rune(htmlStr)))
 	if debugInfo != nil {
 		debugInfo["htmlFetchStatus"] = res.status
 		debugInfo["htmlLength"] = len([]rune(htmlStr))
@@ -321,13 +329,18 @@ func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host,
 	}
 	before := cloneBean(bean)
 	enriched := enrichGenericBeanFromHTML(bean, htmlStr, host)
-	if debugInfo != nil {
-		var changed []string
-		for k, v := range enriched {
-			if !reflect.DeepEqual(v, before[k]) {
-				changed = append(changed, k)
-			}
+	var changed []string
+	for k, v := range enriched {
+		if !reflect.DeepEqual(v, before[k]) {
+			changed = append(changed, k)
 		}
+	}
+	changedSummary := "(none)"
+	if len(changed) > 0 {
+		changedSummary = strings.Join(changed, ", ")
+	}
+	debugLogf("Import: HTML enrichment changed fields: %s", changedSummary)
+	if debugInfo != nil {
 		debugInfo["enrichedFieldsChanged"] = changed
 	}
 	return enriched, nil

@@ -8,6 +8,16 @@
 # refused) and this repo has no way to run real AppArmor mediation in CI —
 # only a Home Assistant OS install can confirm it.
 #
+# #977 CUTOVER NOTE — MANUAL STEP STILL REQUIRED, NOT DONE BY THIS PR: the
+# runtime this profile confines changed under it (Node/Debian -> Go/Alpine,
+# see below) as part of the #977 backend cutover. Nothing in this repo/CI
+# can exercise real AppArmor mediation, so this file's rules were updated
+# by inspection/comment only, never actually run in complain mode against
+# the new runtime. Before the #977 release ships to real installs, this
+# profile MUST be manually tested in complain mode on real Home Assistant
+# OS hardware and any denials it logs addressed — do NOT flip it to enforce
+# (or ship a release relying on it) on the strength of this PR alone.
+#
 # Runtime shape this profile is derived from (not a template):
 #   - #977: base image is now alpine:3.22 running the Go backend (go/,
 #     #901) instead of node:22-slim/server.js — see the repo-root

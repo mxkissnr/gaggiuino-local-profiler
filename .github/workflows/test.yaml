@@ -96,9 +96,14 @@ jobs:
     # the frontend, not just go-migration (which is no longer pushed to
     # post-cutover). Folded in here rather than left in go-build.yaml,
     # matching how version-release-check was folded into this same file
-    # instead of staying its own workflow. go-build.yaml's `docker` job
-    # (multi-arch image matrix) is unrelated to this gate and stays where
-    # it is, marked obsolete post-cutover in its own file.
+    # instead of staying its own workflow. go-build.yaml itself (its
+    # `docker` job, a second multi-arch build of this same repo-root
+    # Dockerfile) and go-preview-publish.yaml were deleted in this same PR
+    # — both were fully redundant to build.yaml/build-dev.yaml once the
+    # repo-root Dockerfile became the Go image; verified no branch
+    # protection rule or other workflow referenced either file's job names
+    # before deleting (dev has no branch protection at all; main only
+    # requires "Test and build" + CodeQL, both untouched by this change).
     runs-on: ubuntu-latest
     defaults:
       run:

@@ -3,9 +3,12 @@ package machines
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -27,6 +30,56 @@ type Registry struct {
 // NewRegistry wraps an already-open *sql.DB (see internal/db.Open).
 func NewRegistry(db *sql.DB) *Registry {
 	return &Registry{db: db}
+}
+
+// debugLoggingOptionsFile duplicates go/internal/system's own narrow
+// options.json read (see that package's options.go for the reasoning) —
+// this package doesn't otherwise depend on internal/system (which itself
+// imports internal/machines), so importing it here for one bool would be a
+// cycle. Same trade-off EnsureDefaultMachine's own legacy-options read
+// below already made.
+const debugLoggingOptionsFile = "/data/options.json"
+
+// isDebugLoggingEnabled ports lib/data.js's isDebugLoggingEnabled() /
+// loadOptions().debug_logging (#977 follow-up) — off by default, falling
+// back to GLP_DEBUG_LOGGING (#764, standalone Docker) when options.json is
+// missing or doesn't parse.
+func isDebugLoggingEnabled() bool {
+	data, err := os.ReadFile(debugLoggingOptionsFile)
+	if err != nil {
+		return os.Getenv("GLP_DEBUG_LOGGING") == "true"
+	}
+	var opts struct {
+		DebugLogging bool `json:"debug_logging"`
+	}
+	if err := json.Unmarshal(data, &opts); err != nil {
+		return os.Getenv("GLP_DEBUG_LOGGING") == "true"
+	}
+	return opts.DebugLogging
+}
+
+// LogRegistrySnapshot ports lib/machines/registry.js's
+// logRegistrySnapshot(): the whole machine registry as one log line,
+// behind debug_logging (#977 follow-up) so it doesn't spam production
+// logs. Called at startup and after every registry CRUD — see this
+// function's callers in cmd/server/main.go and handlers_registry.go.
+func (r *Registry) LogRegistrySnapshot() {
+	if !isDebugLoggingEnabled() {
+		return
+	}
+	list, err := r.ListMachines()
+	if err != nil {
+		return
+	}
+	if len(list) == 0 {
+		log.Printf("[debug] Machines: (none)")
+		return
+	}
+	parts := make([]string, len(list))
+	for i, m := range list {
+		parts[i] = fmt.Sprintf("#%d %q host=%s default=%v enabled=%v", m.ID, m.Name, m.Host, m.IsDefault, m.Enabled)
+	}
+	log.Printf("[debug] Machines: %s", strings.Join(parts, " | "))
 }
 
 type machineRow struct {

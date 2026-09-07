@@ -248,6 +248,14 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	importerHandlers.RegisterRoutes(mux)
 
 	registry := machines.NewRegistry(sqlDB)
+	// ports server.js's startup registry.logRegistrySnapshot() (#714) --
+	// behind debug_logging (#977 follow-up), so it's a no-op unless that
+	// option is on. Unlike Node, nothing has necessarily called
+	// EnsureDefaultMachine yet at this point (it's a lazy, per-request call
+	// in this Go port — see its own doc comment), so a genuinely fresh /data
+	// can log "(none)" here even though the default machine appears a
+	// moment later on the first real request.
+	registry.LogRegistrySnapshot()
 	machinesHandlers := machines.NewHandlers(registry, hub)
 	machinesHandlers.RegisterRoutes(mux)
 

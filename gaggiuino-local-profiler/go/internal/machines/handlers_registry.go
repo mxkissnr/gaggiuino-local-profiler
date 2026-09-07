@@ -54,6 +54,7 @@ func (h *Handlers) createMachine(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	h.registry.LogRegistrySnapshot()
 	writeJSON(w, http.StatusOK, machine)
 }
 
@@ -109,6 +110,7 @@ func (h *Handlers) updateMachine(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	h.registry.LogRegistrySnapshot()
 	writeJSON(w, http.StatusOK, machine)
 }
 
@@ -131,6 +133,7 @@ func (h *Handlers) deleteMachine(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	h.registry.LogRegistrySnapshot()
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -149,6 +152,7 @@ func (h *Handlers) setDefaultMachine(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	h.registry.LogRegistrySnapshot()
 	writeJSON(w, http.StatusOK, machine)
 }
 

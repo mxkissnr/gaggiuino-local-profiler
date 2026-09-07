@@ -2,6 +2,7 @@ package system
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"strconv"
 	"sync"
@@ -94,11 +95,12 @@ type statusOptions struct {
 	ordersEnabled       bool
 	apiPortExposed      bool
 	syncIntervalMinutes int
+	debugLogging        bool
 }
 
 // loadStatusOptions returns the cached (or freshly parsed, on a cache miss)
 // options.json fields isOrdersEnabled/isApiPortExposed/
-// loadSyncIntervalMinutes below all delegate to.
+// loadSyncIntervalMinutes/isDebugLoggingEnabled below all delegate to.
 func loadStatusOptions() statusOptions {
 	statusOptionsCache.mu.Lock()
 	defer statusOptionsCache.mu.Unlock()
@@ -128,18 +130,21 @@ func parseStatusOptionsFile() statusOptions {
 			ordersEnabled:       os.Getenv("GLP_ENABLE_ORDERS") == "true",
 			apiPortExposed:      os.Getenv("GLP_EXPOSE_API_PORT") != "false",
 			syncIntervalMinutes: syncIntervalMinutesFromEnv(),
+			debugLogging:        os.Getenv("GLP_DEBUG_LOGGING") == "true",
 		}
 	}
 	var raw struct {
 		EnableOrders  bool        `json:"enable_orders"`
 		ExposeAPIPort *bool       `json:"expose_api_port"`
 		SyncInterval  json.Number `json:"sync_interval"`
+		DebugLogging  bool        `json:"debug_logging"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return statusOptions{
 			ordersEnabled:       os.Getenv("GLP_ENABLE_ORDERS") == "true",
 			apiPortExposed:      os.Getenv("GLP_EXPOSE_API_PORT") != "false",
 			syncIntervalMinutes: syncIntervalMinutesFromEnv(),
+			debugLogging:        os.Getenv("GLP_DEBUG_LOGGING") == "true",
 		}
 	}
 
@@ -156,6 +161,7 @@ func parseStatusOptionsFile() statusOptions {
 		ordersEnabled:       raw.EnableOrders,
 		apiPortExposed:      apiPortExposed,
 		syncIntervalMinutes: syncInterval,
+		debugLogging:        raw.DebugLogging,
 	}
 }
 
@@ -199,4 +205,22 @@ func isApiPortExposed() bool {
 // matching loadOptions()'s own per-branch fallback chain.
 func loadSyncIntervalMinutes() int {
 	return loadStatusOptions().syncIntervalMinutes
+}
+
+// isDebugLoggingEnabled ports lib/data.js's isDebugLoggingEnabled() /
+// loadOptions().debug_logging (#977 follow-up): off by default, same as
+// isOrdersEnabled above, so verbose per-request diagnostic detail never
+// spams production logs unless explicitly switched on in the add-on's
+// Configuration UI (or GLP_DEBUG_LOGGING for standalone Docker, #764).
+func isDebugLoggingEnabled() bool {
+	return loadStatusOptions().debugLogging
+}
+
+// debugLogf ports lib/data.js's debugLog(message) — logs with a "[debug]"
+// prefix, but only when isDebugLoggingEnabled(). See sync.go/poll.go for
+// the call sites this backs (lib/sync.js/lib/poll.js's own debugLog calls).
+func debugLogf(format string, args ...any) {
+	if isDebugLoggingEnabled() {
+		log.Printf("[debug] "+format, args...)
+	}
 }
