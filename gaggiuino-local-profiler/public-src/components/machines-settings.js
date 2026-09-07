@@ -119,18 +119,11 @@ export function applyActiveMachineAccentTheme() {
   const swatchesEl = document.getElementById('accentSwatches');
   const noteEl = document.getElementById('accentMachineThemeNote');
 
-  let resolved = machineTheme;
-  if (!resolved) {
-    const savedKey = migrateLegacyAccent(localStorage.getItem('glp_accent_theme')) || 'amber-americano';
-    resolved = getThemePreset(savedKey) || getThemePreset('amber-americano');
-  }
-  if (!resolved) {
-    ['--accent', '--accent-from', '--accent-to', '--accent-text', '--accent-glow']
-      .forEach(prop => root.style.removeProperty(prop));
-    swatchesEl?.classList.remove('accent-swatches-disabled');
-    if (noteEl) noteEl.style.display = 'none';
-    return;
-  }
+  // getThemePreset('amber-americano') is a hardcoded, always-present
+  // THEME_PRESETS entry, so this chain always resolves — there is no
+  // "no accent at all" case left to handle.
+  const savedKey = migrateLegacyAccent(localStorage.getItem('glp_accent_theme')) || 'amber-americano';
+  const resolved = machineTheme || getThemePreset(savedKey) || getThemePreset('amber-americano');
   const rgbA = hexToRgb(resolved.a);
   const rgbB = hexToRgb(resolved.b);
   root.style.setProperty('--accent', resolved.a);
