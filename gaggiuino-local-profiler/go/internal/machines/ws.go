@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"time"
 
@@ -271,7 +272,10 @@ func wsUpdateProfile(ctx context.Context, baseURL string, profile ProfileInput) 
 		return proto.SavedProfileDto{}, err
 	}
 	for _, p := range dict.Profiles {
-		if uint32(p.ID) == uint32(*profile.ID) {
+		// Bounds-check before the narrowing cast — *profile.ID is an int64
+		// (parsed at up to 64 bits) and an out-of-range value must not
+		// silently truncate onto an unrelated device-side profile id.
+		if *profile.ID >= 0 && *profile.ID <= math.MaxUint32 && uint32(p.ID) == uint32(*profile.ID) {
 			return p, nil
 		}
 	}
