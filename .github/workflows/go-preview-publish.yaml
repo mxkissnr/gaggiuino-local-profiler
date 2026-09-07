@@ -1,3 +1,12 @@
+# OBSOLETE post-#977 (Go-backend cutover, 2026-09-07): the repo-root
+# Dockerfile is now the Go backend itself, published as the *main*
+# release/dev channel by build.yaml/build-dev.yaml -- a separate "preview
+# of the Go rewrite" channel no longer means anything distinct from that.
+# Left in place rather than deleted to avoid scope creep in the cutover PR
+# -- see a follow-up cleanup issue for removing this workflow (and its
+# manifest repo, mxkissnr/glp-go-preview-app) once the main channel has
+# been running the Go image for a while and this is confirmed unneeded.
+#
 # Go preview channel: every push to `dev` (that touches go/) builds
 # the real go/Dockerfile image, pushes it to ghcr.io, and points the
 # separate manifest repository (mxkissnr/glp-go-preview-app) at it -- the

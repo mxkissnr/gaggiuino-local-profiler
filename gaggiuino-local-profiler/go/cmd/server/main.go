@@ -17,10 +17,11 @@
 // plus the background polling loop that backs them (Phase 1g). A handful
 // of routes/system.js routes remain unrouted by design — see
 // go/internal/system/doc.go's "Scope" section for exactly which and why
-// (none of them are depended on by anything this phase ported). This
-// binary is not wired into the Docker image, CI, or the running add-on;
-// the Node app (server.js) remains the sole shipping entrypoint until the
-// rollout plan in go/README.md says otherwise.
+// (none of them are depended on by anything this phase ported). #977: this
+// binary is now the repo-root Dockerfile's own CMD (glp-server) — it is
+// the sole shipping entrypoint for every real install as of this cutover;
+// server.js remains in the tree but is no longer built or run in the
+// production image.
 package main
 
 import (

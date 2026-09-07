@@ -87,6 +87,82 @@ jobs:
       - name: Run E2E smoke test
         run: npm run test:e2e
 
+  go-test:
+    name: Go backend test/vet/build/vuln gate
+    # #977 cutover: this used to be go-build.yaml's own `test` job, scoped
+    # to push:[go-migration]/pull_request — now that the Go backend (go/,
+    # #901) is the shipping production image (repo-root Dockerfile), it
+    # needs to gate every PR/push the same way the `test` job above gates
+    # the frontend, not just go-migration (which is no longer pushed to
+    # post-cutover). Folded in here rather than left in go-build.yaml,
+    # matching how version-release-check was folded into this same file
+    # instead of staying its own workflow. go-build.yaml's `docker` job
+    # (multi-arch image matrix) is unrelated to this gate and stays where
+    # it is, marked obsolete post-cutover in its own file.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gaggiuino-local-profiler/go
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: gaggiuino-local-profiler/go/go.mod
+          cache-dependency-path: gaggiuino-local-profiler/go/go.sum
+
+      # templ generate writes the _templ.go files internal/web/templates'
+      # .templ sources need to be valid Go at all — git-ignored, so every
+      # fresh checkout (including this one) needs this before build/vet/
+      # test/fmt can even parse the package. Pinned to the same version
+      # go.mod already pulls in as the templ runtime library's own indirect
+      # dependency — see go/README.md's "Codegen" section.
+      - name: Install templ and generate
+        run: |
+          go install github.com/a-h/templ/cmd/templ@v0.3.1020
+          go generate ./...
+
+      - name: gofmt
+        run: |
+          fmt_out="$(gofmt -l .)"
+          if [ -n "$fmt_out" ]; then
+            echo "::error::gofmt needs to be run on:"
+            echo "$fmt_out"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test -race
+        run: go test ./... -race
+
+      # BLOCKING govulncheck gate (#998, security audit #977 round 3
+      # finding 2.3). Fails the build on any *called* vulnerability — one on
+      # a live call path into the Go stdlib, an imported package, or a
+      # required module. Advisories in required-but-not-reachable modules do
+      # not fail the build: govulncheck exits non-zero only for a vuln the
+      # code actually calls, which is exactly the signal wanted here. No
+      # continue-on-error — a called vuln blocks the merge like a failing
+      # test. Version-pinned (not @latest) for reproducible CI; bump in
+      # lockstep with a deliberate review of the finding set.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
+      # Fails the build if server.js / routes/*.js registers an HTTP route
+      # the Go backend (cmd/server/main.go + every internal/* RegisterRoutes,
+      # /ui/ sub-mux included) has no equivalent for. One-way: Go-only routes
+      # (the /ui/ templ fallback pages) are fine. Deferred routes go in the
+      # script's ALLOWLIST with a reference. No Go toolchain needed.
+      - name: route parity (Node vs Go)
+        run: bash scripts/route-parity.sh
+
   version-release-check:
     name: Verify a GitHub release exists for the bumped version
     # Only meaningful on a real push to main (not dev, not PRs) — the workflow-level

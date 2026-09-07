@@ -22,6 +22,7 @@
 - **Uploaded entity photos (beans, grinders, baskets, puck screens, shots) are now optimized on save.** Each image is downscaled to at most 1600 px on its long edge, re-encoded without embedded metadata (camera EXIF and GPS location tags are stripped), and stored next to a small thumbnail. Grid views can request the thumbnail, so libraries with many photos load noticeably less data. Existing photos are optimized once in the background on the first start after upgrading; originals are kept if an image can't be processed. Closes #961
 
 ### Changed
+- **The add-on's backend is now the Go rewrite instead of the Node.js/Express server it has run on since the project began.** This is an internal swap only — the REST API, WebSocket/SSE behavior, and Home Assistant integration are unchanged, and existing shot/library/machine data is used as-is. armv7/aarch64/amd64 are all still supported. Closes #977
 - **(go-migration) Documented that a machine's host must only be read through its existing guarded lookup path**, not directly — no behavior change. Closes #989
 - **The shot annotator's coffee/basket/puck-screen/recipe dropdowns are now built via the DOM API** instead of an HTML string, silencing a recurring false-positive security scan finding with no change in behaviour. Closes #946
 

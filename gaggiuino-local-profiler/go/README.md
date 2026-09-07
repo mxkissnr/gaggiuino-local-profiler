@@ -1,14 +1,17 @@
-# GLP App — Go rewrite (in progress)
+# GLP App — Go rewrite
 
-This directory holds the future Go implementation of the Gaggiuino Local
-Profiler backend and frontend. It exists **parallel to** the current
-Express/Node app (`server.js`, `lib/`, `routes/`, `public-src/`) at the repo
-root, which remains the shipping, stable implementation. Nothing under `go/`
-is wired into the repo-root Docker image or the running stable/dev add-on
-yet — the one exception is the standalone beta channel described in "Go
-preview channel (publishing)" below.
+This directory holds the Go implementation of the Gaggiuino Local Profiler
+backend and frontend. As of #977 (2026-09-07) it is the **shipping,
+production implementation** — the repo-root Dockerfile builds `go/` (this
+directory's `Dockerfile`, moved to the repo root) rather than the old
+Express/Node app (`server.js`, `lib/`, `routes/`, `public-src/`), which
+remains in the tree for reference but is no longer built into the release
+or dev-channel image. The rest of this document, written during the
+migration, still describes the phase-by-phase build-out of this directory
+and is kept as historical record; treat "not wired in yet" language further
+down as describing the pre-#977 state, not the current one.
 
-## Status: Phase 5 in progress (go-preview beta channel — mxkissnr/glp-go-preview-app + .github/workflows/go-preview-publish.yaml, on top of Phase 4's complete build-only CI, Phase 2's complete frontend and Phase 3b's complete backend)
+## Status: shipping (#977 cutover). Historical phase notes below: Phase 5 was in progress (go-preview beta channel — mxkissnr/glp-go-preview-app + .github/workflows/go-preview-publish.yaml, now redundant post-cutover, see that workflow's own header) on top of Phase 4's complete build-only CI, Phase 2's complete frontend and Phase 3b's complete backend
 
 Phase 0 was scaffolding only. Phase 1a ported the first two foundational
 packages everything else builds on. Phase 1b added a real, listening HTTP

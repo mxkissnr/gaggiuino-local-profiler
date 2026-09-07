@@ -1,11 +1,19 @@
+# OBSOLETE post-#977 (Go-backend cutover, 2026-09-07): the repo-root
+# Dockerfile now builds and ships this same go/Dockerfile image as the
+# actual release/dev-channel artifact via build.yaml/build-dev.yaml, so
+# this file's `docker` job below (a second, separate multi-arch build of
+# the same image, load: false/push: false, proving nothing build.yaml
+# doesn't already prove) is redundant to that path. Left in place rather
+# than deleted to avoid scope creep in the cutover PR — see a follow-up
+# cleanup issue for removing it. This file's old `test` job (gofmt/vet/
+# build/test/govulncheck/route-parity) has already been MOVED to
+# .github/workflows/test.yaml's `go-test` job, which is the one that now
+# actually gates PRs/pushes against dev; don't re-add a `test` job here.
+#
 # Go rewrite CI (#901 Phase 4, gaggiuino-local-profiler/go/ — see that
-# directory's README.md). Build-only: proves the Go backend compiles,
-# passes its own test suite, and containerizes into a working multi-arch
-# image — it never pushes anywhere (no ghcr.io, no registry login at all).
-# The Go rewrite has no release channel yet (that's Phase 5, still
-# undecided/unscheduled) — this workflow is separate from build.yaml/
-# build-dev.yaml, which remain the Node app's unchanged release/dev-channel
-# pipelines and are not touched by this file.
+# directory's README.md). Build-only: containerizes the Go backend into a
+# working multi-arch image and smoke-tests it — it never pushes anywhere
+# (no ghcr.io, no registry login at all).
 name: Go build (multi-arch, build-only)
 
 on:
@@ -27,76 +35,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: go build/vet/test
-    # Gitea Actions also auto-detects .github/workflows — skip there, GitHub-only.
-    if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: gaggiuino-local-profiler/go
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version-file: gaggiuino-local-profiler/go/go.mod
-          cache-dependency-path: gaggiuino-local-profiler/go/go.sum
-
-      # templ generate writes the _templ.go files internal/web/templates'
-      # .templ sources need to be valid Go at all — git-ignored, so every
-      # fresh checkout (including this one) needs this before build/vet/
-      # test/fmt can even parse the package. Pinned to the same version
-      # go.mod already pulls in as the templ runtime library's own indirect
-      # dependency — see go/README.md's "Codegen" section.
-      - name: Install templ and generate
-        run: |
-          go install github.com/a-h/templ/cmd/templ@v0.3.1020
-          go generate ./...
-
-      - name: gofmt
-        run: |
-          fmt_out="$(gofmt -l .)"
-          if [ -n "$fmt_out" ]; then
-            echo "::error::gofmt needs to be run on:"
-            echo "$fmt_out"
-            exit 1
-          fi
-
-      - name: go vet
-        run: go vet ./...
-
-      - name: go build
-        run: go build ./...
-
-      - name: go test -race
-        run: go test ./... -race
-
-      # BLOCKING govulncheck gate (#998, security audit #977 round 3
-      # finding 2.3). Fails the build on any *called* vulnerability — one on
-      # a live call path into the Go stdlib, an imported package, or a
-      # required module. Advisories in required-but-not-reachable modules do
-      # not fail the build: govulncheck exits non-zero only for a vuln the
-      # code actually calls, which is exactly the signal wanted here. No
-      # continue-on-error — a called vuln blocks the merge like a failing
-      # test. Version-pinned (not @latest) for reproducible CI; bump in
-      # lockstep with a deliberate review of the finding set.
-      - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
-
-      # Fails the build if server.js / routes/*.js registers an HTTP route
-      # the Go rewrite (cmd/server/main.go + every internal/* RegisterRoutes,
-      # /ui/ sub-mux included) has no equivalent for. One-way: Go-only routes
-      # (the /ui/ templ fallback pages) are fine. Deferred routes go in the
-      # script's ALLOWLIST with a reference. No Go toolchain needed.
-      - name: route parity (Node vs Go)
-        run: bash scripts/route-parity.sh
-
   docker:
     name: Docker build ${{ matrix.arch }}
-    needs: test
     # Gitea Actions also auto-detects .github/workflows — skip there, GitHub-only.
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
