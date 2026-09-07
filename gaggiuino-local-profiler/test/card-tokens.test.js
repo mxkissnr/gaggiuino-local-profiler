@@ -16,11 +16,16 @@ const { CARD_TOKENS } = require('../lib/card');
 // CARD_TOKENS constant has drifted from them.
 //
 // This does not implement full CSS cascade resolution -- it knows, by hand,
-// which of the four gray-scale blocks fully re-declares every property it
-// mirrors (all four do) so no inheritance step is needed for those. If a
-// future style.css change makes a block start relying on inheritance for a
+// which of the two gray-scale blocks fully re-declares every property it
+// mirrors (both do) so no inheritance step is needed for those. If a future
+// style.css change makes a block start relying on inheritance for a
 // property this test checks, this test's block map needs updating by hand,
 // same as lib/card.js's own CARD_TOKENS does.
+//
+// #1019: the crema-only dark/light variants (and their own style.css
+// [data-accent="crema"] / [data-theme="light"][data-accent="crema"] blocks)
+// were dropped along with Crema's whole special-cased accent behavior --
+// every accent, old and new, now shares just these two plain scales.
 const cssPath = path.join(__dirname, '..', 'public-src', 'style.css');
 const css = fs.readFileSync(cssPath, 'utf8');
 
@@ -44,10 +49,8 @@ function cssVar(block, name) {
   return m ? m[1].trim() : null;
 }
 
-const rootBlock        = blockFor(':root {');
-const cremaDarkBlock   = blockFor('[data-accent="crema"] {');
-const lightBlock       = blockFor('[data-theme="light"] {');
-const lightCremaBlock  = blockFor('[data-theme="light"][data-accent="crema"] {');
+const rootBlock  = blockFor(':root {');
+const lightBlock = blockFor('[data-theme="light"] {');
 
 describe('CARD_TOKENS mirrors public-src/style.css (#811 drift guard)', () => {
   it('type scale (--fs-1..6) matches :root', () => {
@@ -77,16 +80,8 @@ describe('CARD_TOKENS mirrors public-src/style.css (#811 drift guard)', () => {
     for (const k of grayKeys) expect(CARD_TOKENS.gray.dark[k]).toBe(cssVar(rootBlock, `gray-${k}`));
   });
 
-  it('dark-crema gray scale matches [data-accent="crema"]', () => {
-    for (const k of grayKeys) expect(CARD_TOKENS.gray['dark-crema'][k]).toBe(cssVar(cremaDarkBlock, `gray-${k}`));
-  });
-
   it('light gray scale matches [data-theme="light"]', () => {
     for (const k of grayKeys) expect(CARD_TOKENS.gray.light[k]).toBe(cssVar(lightBlock, `gray-${k}`));
-  });
-
-  it('light-crema gray scale matches [data-theme="light"][data-accent="crema"]', () => {
-    for (const k of grayKeys) expect(CARD_TOKENS.gray['light-crema'][k]).toBe(cssVar(lightCremaBlock, `gray-${k}`));
   });
 
   const semanticKeys = ['ok', 'warn', 'err'];
@@ -95,21 +90,7 @@ describe('CARD_TOKENS mirrors public-src/style.css (#811 drift guard)', () => {
     for (const k of semanticKeys) expect(CARD_TOKENS.semantic.dark[k]).toBe(cssVar(rootBlock, k));
   });
 
-  // dark-crema only overrides --err in style.css ([data-accent="crema"] has
-  // no --ok/--warn of its own) -- CARD_TOKENS.semantic['dark-crema'] mirrors
-  // that inheritance by hand, so ok/warn are checked against :root here,
-  // not against the crema block (which doesn't declare them at all).
-  it('dark-crema semantic colours match [data-accent="crema"] (err) and :root (ok/warn, inherited)', () => {
-    expect(CARD_TOKENS.semantic['dark-crema'].err).toBe(cssVar(cremaDarkBlock, 'err'));
-    expect(CARD_TOKENS.semantic['dark-crema'].ok).toBe(cssVar(rootBlock, 'ok'));
-    expect(CARD_TOKENS.semantic['dark-crema'].warn).toBe(cssVar(rootBlock, 'warn'));
-  });
-
   it('light semantic colours match [data-theme="light"]', () => {
     for (const k of semanticKeys) expect(CARD_TOKENS.semantic.light[k]).toBe(cssVar(lightBlock, k));
-  });
-
-  it('light-crema semantic colours match [data-theme="light"][data-accent="crema"]', () => {
-    for (const k of semanticKeys) expect(CARD_TOKENS.semantic['light-crema'][k]).toBe(cssVar(lightCremaBlock, k));
   });
 });

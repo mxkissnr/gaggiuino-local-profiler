@@ -56,13 +56,17 @@ function contrast(a, b) {
 
 // A variant is the full set of tokens in effect for one theme combination:
 // its own block layered over the blocks it inherits from.
+//
+// #1019: dropped the crema-only dark/light variants along with Crema's
+// whole special-cased accent behavior (the [data-accent="crema"] /
+// [data-theme="light"][data-accent="crema"] blocks these used to layer in
+// no longer exist) -- the 8 new THEME_PRESETS are all plain accent swaps of
+// these same two base gray/semantic scales, same as every other retired
+// legacy accent already was.
 const BASE = tokensOf(':root');
 const VARIANTS = {
-  dark:          BASE,
-  'crema dark':  { ...BASE, ...tokensOf('[data-accent="crema"]') },
-  light:         { ...BASE, ...tokensOf('[data-theme="light"]') },
-  'crema light': { ...BASE, ...tokensOf('[data-theme="light"]'),
-                   ...tokensOf('[data-theme="light"][data-accent="crema"]') },
+  dark:  BASE,
+  light: { ...BASE, ...tokensOf('[data-theme="light"]') },
 };
 
 const TEXT_ROLES    = ['--gray-100', '--gray-200', '--gray-300', '--gray-400',
@@ -119,53 +123,12 @@ describe('design token contrast (#811)', () => {
     }
   });
 
-  // The accent is the brand and is audited, not adjusted — but its TEXT
-  // form has to be readable, which on light grounds it is not.
-  describe('accent used as text (--accent-ink)', () => {
-    const LIGHT_ACCENTS = {
-      amber:  '[data-theme="light"]:not([data-accent]), [data-theme="light"][data-accent="amber"]',
-      ocean:  '[data-theme="light"][data-accent="ocean"]',
-      aurora: '[data-theme="light"][data-accent="aurora"]',
-      ember:  '[data-theme="light"][data-accent="ember"]',
-      forest: '[data-theme="light"][data-accent="forest"]',
-    };
-    const lightSurfaces = { ...BASE, ...tokensOf('[data-theme="light"]') };
-
-    for (const [accent, selector] of Object.entries(LIGHT_ACCENTS)) {
-      it(`${accent} ink clears ${AA}:1 on every light surface`, () => {
-        const ink = tokensOf(selector)['--accent-ink'];
-        expect(ink, `${accent} has no --accent-ink in the light theme`).toBeDefined();
-        for (const surface of SURFACE_ROLES) {
-          const ratio = contrast(ink, lightSurfaces[surface]);
-          expect(ratio, `${accent} ink ${ink} on ${surface} (${lightSurfaces[surface]}) = ${ratio.toFixed(2)}:1`)
-            .toBeGreaterThanOrEqual(AA);
-        }
-      });
-    }
-
-    it('crema light ink clears the floor on crema light surfaces', () => {
-      const crema = { ...BASE, ...tokensOf('[data-theme="light"]'),
-                      ...tokensOf('[data-theme="light"][data-accent="crema"]') };
-      for (const surface of SURFACE_ROLES) {
-        const ratio = contrast(crema['--accent-ink'], crema[surface]);
-        expect(ratio, `crema ink on ${surface} = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA);
-      }
-    });
-
-    it('every dark accent is readable as text without adjustment', () => {
-      // Documents WHY --accent-ink simply aliases --accent in the dark
-      // theme: if this ever fails, that alias is no longer safe.
-      const darkAccents = {
-        amber: '#f59e0b', ocean: '#38bdf8', aurora: '#a78bfa',
-        ember: '#fb923c', forest: '#34d399', crema: '#d4a24c',
-      };
-      for (const [name, hex] of Object.entries(darkAccents)) {
-        for (const surface of SURFACE_ROLES) {
-          const ratio = contrast(hex, BASE[surface]);
-          expect(ratio, `dark ${name} ${hex} on ${surface} = ${ratio.toFixed(2)}:1`)
-            .toBeGreaterThanOrEqual(AA);
-        }
-      }
-    });
-  });
+  // #1019: the old 6-swatch "accent used as text (--accent-ink)" audit
+  // (LIGHT_ACCENTS' per-accent light-theme --accent-ink overrides, plus
+  // Crema's own light block) is removed along with those overrides
+  // themselves -- the 8 new THEME_PRESETS deliberately ship WITHOUT an
+  // equivalent hand-audited light-theme tuning pass (--accent-ink simply
+  // falls back to the base :root's `var(--accent)` in both themes now).
+  // That audit is tracked as a dedicated follow-up issue instead, same
+  // #397/#404 precedent this file's own header comment already references.
 });

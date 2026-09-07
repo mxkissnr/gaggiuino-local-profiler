@@ -4,8 +4,38 @@
 // bootstrap touching dozens of element ids) that make importing it in a test
 // impractical; this module has none.
 import { THEME_CHANGE_EVENT } from './utils.js';
+import { THEME_PRESET_KEYS } from '../lib/machines/theme-presets.js';
 
 export const THEME_STORAGE_KEY = 'glp_theme';
+
+// #1019: maps the app's old, unrelated 6-swatch Settings -> Farbschema
+// values (amber/ocean/aurora/ember/forest/crema, see the now-retired
+// style.css [data-accent="..."] blocks) onto the nearest of the 8 named
+// THEME_PRESETS (lib/machines/theme-presets.js) that now back both the
+// per-machine theme picker and the Farbschema picker. Picked by color
+// proximity, not alphabetically -- ocean and forest both land on
+// frosty-flat-white (their nearest new preset happens to coincide; accepted
+// rather than forced apart) and aurora on mulberry-mocha rather than
+// twilight-turkish (aurora's purple/pink leans closer to mulberry-mocha's
+// hue than twilight-turkish's cyan/indigo).
+const LEGACY_ACCENT_MAP = {
+  amber:  'amber-americano',
+  ember:  'ember-espresso',
+  crema:  'copper-cortado',
+  ocean:  'frosty-flat-white',
+  forest: 'frosty-flat-white',
+  aurora: 'mulberry-mocha',
+};
+
+// Pure function (unit-testable without touching localStorage itself) --
+// idempotent on an already-valid preset key, maps a recognized legacy value
+// via the table above, and returns null for anything else (unset, or a
+// value from neither generation) so the caller can treat that the same as
+// "no preference recorded" and fall back to the default preset itself.
+export function migrateLegacyAccent(rawValue) {
+  if (THEME_PRESET_KEYS.includes(rawValue)) return rawValue;
+  return LEGACY_ACCENT_MAP[rawValue] || null;
+}
 
 // 'auto' means "follow the OS/browser prefers-color-scheme" -- <html
 // data-theme> only ever renders the two concrete values, never 'auto'

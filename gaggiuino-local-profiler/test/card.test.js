@@ -56,10 +56,16 @@ describe('installCodeFor (#811)', () => {
 // derived (lift toward text colour, same mechanic as glp-lovelace-card's
 // _applyAccentLineContrast() for --glp-aline).
 describe('buildPalette() line contrast (#811)', () => {
+  // #1019: updated from the old, unrelated 6-swatch names (amber/crema/
+  // ocean) to 3 of the 8 THEME_PRESETS now shared with the machine theme
+  // picker -- same "a few different accents" coverage intent as before,
+  // just against the current preset keys (border/gray/semantic contrast
+  // here doesn't actually depend on which accent is picked, but the combos
+  // should still name real presets rather than retired ones).
   const combos = [
-    ['amber', 'dark'], ['amber', 'light'],
-    ['crema', 'dark'], ['crema', 'light'],
-    ['ocean', 'dark'], ['ocean', 'light'],
+    ['amber-americano', 'dark'], ['amber-americano', 'light'],
+    ['copper-cortado', 'dark'], ['copper-cortado', 'light'],
+    ['frosty-flat-white', 'dark'], ['frosty-flat-white', 'light'],
   ];
 
   it.each(combos)('border/borderDim clear 3:1 against bgChart and bgCard (%s/%s)', (accent, theme) => {
