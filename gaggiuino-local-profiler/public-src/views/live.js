@@ -2,7 +2,8 @@ import Chart from 'chart.js/auto';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch, isApiPortBlocked } from '../api.js';
-import { mapToXY, formatTimeLabel, chartColors } from '../utils.js';
+import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints } from '../utils.js';
+import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
          resolveMachineIconState, MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
@@ -64,10 +65,15 @@ export function initLiveChart() {
   });
 
   // Re-apply reference shot after chart re-init
-  if (S.refShotId) {
-    const refShot = S.shots.find(s => s.id === S.refShotId);
-    if (refShot && window.getShotData) _applyRefDatasets(window.getShotData(refShot));
-  }
+  if (S.refShotId) _applyRefShotById(S.refShotId);
+}
+
+// #957: reference-overlay curves are lazy per shot now — fetch through the
+// curve cache, then feed _applyRefDatasets the mapped XY form.
+async function _applyRefShotById(shotId) {
+  const dp = await getShotCurve(shotId);
+  if (S.refShotId !== shotId) return; // ref changed while we were fetching
+  _applyRefDatasets(mapShotDatapoints(dp));
 }
 
 function _applyRefDatasets(d) {
@@ -84,7 +90,7 @@ export function populateRefSelector() {
   if (!sel) return;
   const prev = sel.value;
   sel.innerHTML = `<option value="">${t('ref_none')}</option>`;
-  S.shots.filter(s => (s.datapoints?.pressure?.length || 0) > 5)
+  S.shots.filter(s => s.hasChartData)
     .slice().reverse().slice(0, 40)
     .forEach(s => {
       const date    = new Date(s.timestamp * 1000).toLocaleDateString(localeFor(S.currentLang), { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -102,12 +108,11 @@ export function populateRefSelector() {
 
 export function autoApplyRefShot(profileName) {
   const match = S.shots
-    .filter(s => (s.profile?.name || s.profileName || '') === profileName
-              && (s.datapoints?.pressure?.length || 0) > 5)
+    .filter(s => (s.profile?.name || s.profileName || '') === profileName && s.hasChartData)
     .sort((a, b) => b.timestamp - a.timestamp)[0];
   if (!match) return;
   S.refShotId = match.id;
-  if (window.getShotData) _applyRefDatasets(window.getShotData(match));
+  _applyRefShotById(match.id);
   const sel = document.getElementById('refShotSelect');
   if (sel) sel.value = String(match.id);
   const btn = document.getElementById('refClearBtn');
@@ -119,7 +124,7 @@ export function onRefShotChange(val) {
   S.refShotId = parseInt(val);
   const shot = S.shots.find(s => s.id === S.refShotId);
   if (!shot) return;
-  if (window.getShotData) _applyRefDatasets(window.getShotData(shot));
+  _applyRefShotById(shot.id);
   const btn = document.getElementById('refClearBtn');
   if (btn) btn.style.display = '';
 }
@@ -310,6 +315,8 @@ export function setLiveBadge(state, detail = '') {
     // brewing (a shot) even though both are "something is actively running".
     steaming:    t('live_steaming'),
     flushing:    t('live_flushing'),
+    // #983: descale mirrors steam/flush's own badge treatment.
+    descaling:   t('live_descaling'),
     error:       detail || t('live_error_status'),
     idle:        t('live_ready_status'),
     unreachable: detail || t('live_unreachable_status')
@@ -408,8 +415,11 @@ export function handleLiveData(msg) {
   // by showing the heating state right between the two. Reuses the existing
   // preheat_warming key rather than adding a seventh translation of the same
   // idea.
+  // machineReachable == null means "never polled yet" (startup) — show
+  // connecting rather than "Maschine bereit" which implies confirmed reachability.
   const stillWarming = _lastPreheat && !_lastPreheat.ready && _lastPreheat.remaining > 0;
-  if (idleTitleEl) idleTitleEl.textContent = stillWarming ? t('preheat_warming') : t('machine_ready');
+  const neverPolled  = msg.machineReachable == null;
+  if (idleTitleEl) idleTitleEl.textContent = neverPolled ? t('live_connecting') : stillWarming ? t('preheat_warming') : t('machine_ready');
   if (idleTextEl)  idleTextEl.textContent  = t('live_idle_text');
 
   // #902: idle stats row -- always kept current (not gated behind the true-
@@ -424,20 +434,28 @@ export function handleLiveData(msg) {
   if (idlePressureEl)   idlePressureEl.textContent   = msg.pressure          != null ? `${msg.pressure.toFixed(1)} bar`          : '–';
   if (idleWaterEl)       idleWaterEl.textContent      = msg.waterLevel        != null ? `${msg.waterLevel}%`                     : '–';
 
-  // #902: steam/flush live sessions -- same live-content readout the brew
-  // branch below uses (duration/pressure/temperature), sourced from
-  // steamDatapoints/flushDatapoints instead of the brew shot's datapoints.
-  // No flow/weight equivalent for either mode (neither moves the scale), so
-  // those two tiles stay blank. Checked ahead of the pure-idle fallback
-  // below since steaming/flushing is itself a non-idle state.
-  if (msg.isSteaming || msg.isFlushing) {
-    const steaming     = msg.isSteaming;
-    const modeDp       = steaming ? (msg.steamDatapoints || {}) : (msg.flushDatapoints || {});
+  {
+    const waterStat = document.getElementById('liveIdleWaterStat');
+    if (waterStat) waterStat.style.display = msg.waterLevel != null ? '' : 'none';
+  }
+
+  // #902/#983: steam/flush/descale live sessions -- same live-content
+  // readout the brew branch below uses (duration/pressure/temperature),
+  // sourced from steamDatapoints/flushDatapoints/descaleDatapoints instead
+  // of the brew shot's datapoints. No flow/weight equivalent for any mode
+  // (none moves the scale), so those two tiles stay blank. Checked ahead of
+  // the pure-idle fallback below since each of these is itself a non-idle
+  // state.
+  if (msg.isSteaming || msg.isFlushing || msg.isDescaling) {
+    const badgeState  = msg.isSteaming ? 'steaming' : msg.isFlushing ? 'flushing' : 'descaling';
+    const modeDp       = msg.isSteaming ? (msg.steamDatapoints || {})
+      : msg.isFlushing  ? (msg.flushDatapoints || {})
+      : (msg.descaleDatapoints || {});
     const modeTimes    = modeDp.timeInMode || [];
     const modeLastIdx  = modeTimes.length - 1;
 
-    setLiveBadge(steaming ? 'steaming' : 'flushing');
-    metaEl.textContent       = steaming ? t('live_steaming') : t('live_flushing');
+    setLiveBadge(badgeState);
+    metaEl.textContent       = t(`live_${badgeState}`);
     contentEl.style.display  = 'block';
     idleEl.style.display     = 'none';
 

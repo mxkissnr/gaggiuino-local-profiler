@@ -1,0 +1,176 @@
+# Go rewrite CI (#901 Phase 4, gaggiuino-local-profiler/go/ — see that
+# directory's README.md). Build-only: proves the Go backend compiles,
+# passes its own test suite, and containerizes into a working multi-arch
+# image — it never pushes anywhere (no ghcr.io, no registry login at all).
+# The Go rewrite has no release channel yet (that's Phase 5, still
+# undecided/unscheduled) — this workflow is separate from build.yaml/
+# build-dev.yaml, which remain the Node app's unchanged release/dev-channel
+# pipelines and are not touched by this file.
+name: Go build (multi-arch, build-only)
+
+on:
+  push:
+    branches: [go-migration]
+    paths:
+      - 'gaggiuino-local-profiler/go/**'
+      - '.github/workflows/go-build.yaml'
+  pull_request:
+    paths:
+      - 'gaggiuino-local-profiler/go/**'
+      - '.github/workflows/go-build.yaml'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: go build/vet/test
+    # Gitea Actions also auto-detects .github/workflows — skip there, GitHub-only.
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gaggiuino-local-profiler/go
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: gaggiuino-local-profiler/go/go.mod
+          cache-dependency-path: gaggiuino-local-profiler/go/go.sum
+
+      # templ generate writes the _templ.go files internal/web/templates'
+      # .templ sources need to be valid Go at all — git-ignored, so every
+      # fresh checkout (including this one) needs this before build/vet/
+      # test/fmt can even parse the package. Pinned to the same version
+      # go.mod already pulls in as the templ runtime library's own indirect
+      # dependency — see go/README.md's "Codegen" section.
+      - name: Install templ and generate
+        run: |
+          go install github.com/a-h/templ/cmd/templ@v0.3.1020
+          go generate ./...
+
+      - name: gofmt
+        run: |
+          fmt_out="$(gofmt -l .)"
+          if [ -n "$fmt_out" ]; then
+            echo "::error::gofmt needs to be run on:"
+            echo "$fmt_out"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test -race
+        run: go test ./... -race
+
+      # BLOCKING govulncheck gate (#998, security audit #977 round 3
+      # finding 2.3). Fails the build on any *called* vulnerability — one on
+      # a live call path into the Go stdlib, an imported package, or a
+      # required module. Advisories in required-but-not-reachable modules do
+      # not fail the build: govulncheck exits non-zero only for a vuln the
+      # code actually calls, which is exactly the signal wanted here. No
+      # continue-on-error — a called vuln blocks the merge like a failing
+      # test. Version-pinned (not @latest) for reproducible CI; bump in
+      # lockstep with a deliberate review of the finding set.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
+      # Fails the build if server.js / routes/*.js registers an HTTP route
+      # the Go rewrite (cmd/server/main.go + every internal/* RegisterRoutes,
+      # /ui/ sub-mux included) has no equivalent for. One-way: Go-only routes
+      # (the /ui/ templ fallback pages) are fine. Deferred routes go in the
+      # script's ALLOWLIST with a reference. No Go toolchain needed.
+      - name: route parity (Node vs Go)
+        run: bash scripts/route-parity.sh
+
+  docker:
+    name: Docker build ${{ matrix.arch }}
+    needs: test
+    # Gitea Actions also auto-detects .github/workflows — skip there, GitHub-only.
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+          - arch: arm64
+            platform: linux/arm64
+          - arch: armv7
+            platform: linux/arm/v7
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Deliberately NOT used for the actual Go compile — go/Dockerfile's
+      # builder stage is pinned `--platform=$BUILDPLATFORM` and cross-
+      # compiles via GOOS/GOARCH/GOARM, so `go build` always runs natively
+      # on this runner's own amd64, no emulation, for every arch in the
+      # matrix — that's the whole point of #901 Phase 4 (see the
+      # Dockerfile's own top-of-file comment for the full reasoning,
+      # including why this compile-time win is what actually mattered for
+      # Node/better-sqlite3 and has no equivalent problem here at all).
+      # QEMU is only registered so buildx CAN still assemble the arm64/armv7
+      # *runtime* stage, whose `apk add`/`adduser` RUN steps execute a
+      # handful of tiny prebuilt packages for the target arch — a few
+      # seconds of emulation for that, not for compiling anything.
+      - name: Set up QEMU (runtime-stage package install only, not the Go build — see above)
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      # Build-only: push is deliberately false. No registry login step
+      # exists in this job at all — the Go rewrite has no release channel
+      # yet (Phase 5, not yet scheduled/decided), see go/README.md.
+      - name: Build image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          # Context is the repo subdir, not go/ — go/Dockerfile's frontend
+          # stage builds the Vite SPA bundle internal/webapp embeds (#901
+          # Phase 1), so public-src/, vite.config.js and lib/ must be in
+          # context. See go/Dockerfile's top-of-file comment.
+          context: ./gaggiuino-local-profiler
+          file: ./gaggiuino-local-profiler/go/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: false
+          # Only the amd64 image is loaded into the local Docker daemon —
+          # that's the only one this runner (itself amd64) can actually
+          # *run* a container from without QEMU-emulating the whole
+          # process, not just a package-manager install (see the smoke-test
+          # step below). arm64/armv7 are still fully build-verified (this
+          # step fails the job the same way for any arch if the image
+          # doesn't assemble), just not behaviorally smoke-tested here.
+          load: ${{ matrix.arch == 'amd64' }}
+          tags: glp-go:${{ matrix.arch }}
+          cache-from: type=gha,scope=go-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=go-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.title=GLP Go rewrite (unreleased)
+            org.opencontainers.image.description=Build-only CI image for the Go backend rewrite — not published, no release channel yet
+            org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      # go/scripts/smoke-test.sh's GLP_SMOKE_DOCKER_IMAGE mode (#901 Phase
+      # 4): runs the exact same REST/SSE/cross-domain assertions the native
+      # (go-build) smoke test already exercises, but against two real
+      # `docker run` containers from the image just built above — proving
+      # the whole container (entrypoint, privilege drop, embed.FS static
+      # assets, port, healthcheck) actually works end to end, not just the
+      # Go code in isolation.
+      - name: Smoke test (amd64 image, native container run)
+        if: matrix.arch == 'amd64'
+        run: GLP_SMOKE_DOCKER_IMAGE=glp-go:amd64 gaggiuino-local-profiler/go/scripts/smoke-test.sh

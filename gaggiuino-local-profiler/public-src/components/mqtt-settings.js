@@ -8,6 +8,7 @@
 import { apiFetch } from '../api.js';
 import { t } from '../i18n.js';
 import { CHECK_ICON_SVG } from '../icons.js';
+import { S } from '../state.js';
 
 let _selectedTransport = 'websocket';
 let _discovery = null;
@@ -37,6 +38,11 @@ export async function loadMqttSettings() {
 }
 
 export function renderMqttSettingsCard() {
+  const defaultMachine = (S.machines || []).find(m => m.isDefault) || (S.machines || [])[0];
+  const isGaggiMate = defaultMachine?.type === 'gaggimate';
+  const card = document.getElementById('mqttSettingsCard');
+  if (card) card.style.display = isGaggiMate ? 'none' : '';
+
   document.querySelectorAll('#mqttTransportToggle [data-mqtt-transport]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.mqttTransport === _selectedTransport);
   });

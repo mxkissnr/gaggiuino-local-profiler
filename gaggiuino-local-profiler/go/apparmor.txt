@@ -1,0 +1,107 @@
+#include <tunables/global>
+
+# GLP Go Preview — Gaggiuino Local Profiler (experimental Go rewrite)
+# AppArmor profile.
+#
+# Source of truth for the Go rewrite's AppArmor profile -- copied verbatim
+# into mxkissnr/glp-go-preview-app's glp_go_preview/apparmor.txt by
+# .github/workflows/go-preview-publish.yaml on every push to go-migration,
+# the same PROFILE_SRC/PROFILE_DST pattern build-dev.yaml already uses for
+# the repo root's (Node) apparmor.txt -> glp-dev-app. Edit this file, not
+# the copy in the manifest repository -- the next publish overwrites that
+# copy unconditionally.
+#
+# MUST BE VALIDATED IN complain MODE BEFORE THIS SHIPS AT enforce. See the
+# repo-root apparmor.txt / PR history for the exact steps. A too-tight
+# profile fails in the field with opaque errors (files silently unreadable,
+# sockets silently refused) and this repo has no way to run real AppArmor
+# mediation in CI -- only a Home Assistant OS install can confirm it.
+#
+# Runtime shape this profile is derived from (adapted from the repo root's
+# (Node) apparmor.txt for the Go binary's different runtime -- see
+# go/Dockerfile and go/docker-entrypoint.sh):
+#   - Base image: alpine:3.22 (not node:22-slim), no s6-overlay, init: false
+#     (config.yaml). docker-entrypoint.sh starts as root, `chown -R glp:glp
+#     /data` (the bind mount's owning UID varies per install, same reasoning
+#     as the repo root's #271), then `exec su-exec glp "$@"` to run
+#     `glp-server` unprivileged for the rest of the process lifetime --
+#     su-exec (not gosu) is the privilege-drop tool, at /sbin/su-exec.
+#   - All persistent state lives under /data: the SQLite DB (glp.db, plus
+#     its -wal/-shm files -- modernc.org/sqlite runs the same
+#     `PRAGMA journal_mode = WAL` as the Node app's better-sqlite3),
+#     api_token.txt, options.json (written by the Supervisor), and
+#     bean-images/. No legacy per-entity JSON migration files, no
+#     preheat_state.json, no profiles_cache.json -- those Node-only paths
+#     have no Go-side equivalent yet (see go/README.md's phase notes).
+#   - No native (N-API/CGo) addons at all: modernc.org/sqlite is pure Go,
+#     and there is no @napi-rs/canvas port yet (the share-card PNG endpoint
+#     is a stub, see internal/shots/doc.go) -- so unlike the Node app, this
+#     binary never opens a .node file or reads a TTF font at runtime. Every
+#     template/static asset is compiled into the single
+#     /usr/local/bin/glp-server binary via Go's embed.FS, so there is no
+#     /app directory at all in this image (the repo root profile's own
+#     /app/** ix rule below is kept as a harmless no-op for structural
+#     parity, not because this image has one).
+#   - Outbound network: the Gaggiuino/GaggiMate WebSocket clients
+#     (internal/machines) connect to whatever LAN host the user configures
+#     per machine; the Open Food Facts barcode-scan proxy and the GitHub
+#     update check (internal/library, internal/system) fetch over HTTPS;
+#     the homeassistant_api option proxies Core API calls (internal/ha).
+#     All of this is plain outbound TCP with normal DNS resolution --
+#     AppArmor network mediation can't scope by destination host, only by
+#     address family/socket type. Unlike the Node app/dev channel, the
+#     go-preview manifest requests no hassio_api and wants no MQTT service
+#     -- lib/mqtt-discovery.js has no Go port yet -- so there is no
+#     Supervisor-API-specific traffic to account for either.
+#
+# Strategy: a broad `file,` rule (default-deny still applies to every
+# capability, mount, module load, ptrace and raw socket NOT explicitly
+# granted below) rather than enumerating exact paths -- same strategy the
+# Node app's profile uses, kept identical here since a single static Go
+# binary has no dynamic native-addon lookups to hand-enumerate around
+# either way. The capability/network/exec lists ARE scoped tightly to what's
+# documented above.
+profile glp_go_preview flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+
+  # App's own file I/O: /data (DB + WAL/SHM, options.json, api_token.txt,
+  # bean-images), /tmp, /proc, and whatever the Go runtime itself needs.
+  file,
+
+  # Boot-time privilege drop performed by docker-entrypoint.sh: chown -R on
+  # the /data bind mount, then su-exec (setuid/setgid) from root to the glp
+  # user for the rest of the process's life.
+  capability chown,
+  capability dac_override,
+  capability fowner,
+  capability fsetid,
+  capability setgid,
+  capability setuid,
+
+  # Graceful shutdown (SIGTERM/SIGINT forwarding) between the entrypoint
+  # shell, su-exec, and the glp-server process it execs.
+  signal,
+
+  # Execute the entrypoint, su-exec, and glp-server itself within this same
+  # profile (ix = inherit) so nothing here needs its own child profile.
+  /usr/local/bin/docker-entrypoint.sh rix,
+  /usr/local/bin/glp-server rix,
+  /sbin/su-exec ix,
+  /usr/bin/** ix,
+  /usr/sbin/** ix,
+  /usr/local/bin/** ix,
+  # Kept for structural parity with the Node app's profile -- this image
+  # has no /app directory (embed.FS ships every asset inside the binary
+  # itself), so this rule matches nothing and is a harmless no-op here.
+  /app/** ix,
+
+  # WebSocket clients to user-configured LAN machines, HTTPS bean-import/
+  # update-check fetches, and Core API calls via the Supervisor proxy. No
+  # raw/packet sockets -- nothing in this codebase needs them.
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+}

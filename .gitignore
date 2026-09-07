@@ -1,6 +1,14 @@
 gaggiuino-local-profiler/node_modules/
 gaggiuino-local-profiler/public/
 gaggiuino-local-profiler/coverage/
+gaggiuino-local-profiler/go/**/*_templ.go
+
+# Phase 1 (#901): the Vite SPA bundle internal/webapp embeds is a build
+# artifact staged by `make -C go frontend` / the Dockerfile's frontend
+# stage. Only the committed dist/index.html placeholder is tracked, so a
+# bare `go build ./...` resolves the embed with no npm step.
+gaggiuino-local-profiler/go/internal/webapp/dist/*
+!gaggiuino-local-profiler/go/internal/webapp/dist/index.html
 
 # local runtime/verification artifacts — never committed, may contain live tokens
 **/data_verify_tmp/

@@ -215,6 +215,11 @@ function gaggiuinoPanelAndDisplay() {
           <rect x="31" y="56.2" width="18" height="3.6" rx="1.3" fill="${MINI_PRES}"/>
           <text x="40" y="59" text-anchor="middle" font-size="2.8" font-weight="600" fill="#0b0d12">FLUSH</text>
         </g>
+        <g class="d-descale">
+          <text x="40" y="53.4" text-anchor="middle" font-size="7.6" font-weight="600" fill="#fff">DESCALE</text>
+          <rect x="31" y="56.2" width="18" height="3.6" rx="1.3" fill="${MINI_PRES}"/>
+          <text x="40" y="59" text-anchor="middle" font-size="2.8" font-weight="600" fill="#0b0d12">DESCALE</text>
+        </g>
       </g>`;
     return { panel, disp };
 }
@@ -258,6 +263,10 @@ function gaggimatePanelAndDisplay() {
         <g class="d-flush">
           <text x="${cx}" y="${r(cy + 2.6)}" text-anchor="middle" font-size="6.6" font-weight="600" fill="#fff">FLUSH</text>
           <text x="${cx}" y="${r(cy + 8.4)}" text-anchor="middle" font-size="3.4" font-weight="600" fill="${MINI_PRES}">FLUSH</text>
+        </g>
+        <g class="d-descale">
+          <text x="${cx}" y="${r(cy + 2.6)}" text-anchor="middle" font-size="5.4" font-weight="600" fill="#fff">DESCALE</text>
+          <text x="${cx}" y="${r(cy + 8.4)}" text-anchor="middle" font-size="3.4" font-weight="600" fill="${MINI_PRES}">DESCALE</text>
         </g>
       </g>`;
     return { panel, disp };
@@ -345,6 +354,7 @@ export const MACHINE_ICON_MODES = Object.freeze({
     brewing:  Object.freeze(['is-on', 'is-hot', 'is-brewing']),
     steaming: Object.freeze(['is-on', 'is-hot', 'is-steaming']),
     flushing: Object.freeze(['is-on', 'is-hot', 'is-flushing']),
+    descaling: Object.freeze(['is-on', 'is-hot', 'is-descaling']),
 });
 
 /**
@@ -492,20 +502,23 @@ export function setMachineIconMode(rootEl, mode, heatFraction = 0) {
 // (components/topbar-machine-icon.js, #837) both call this, then hand the
 // result straight to setMachineIconMode().
 //
-// #902: steam/flush signal source -- msg.isSteaming/msg.isFlushing come
-// from lib/machine-state.js's deriveMachineState() (sensorSnap.steamActive/
-// status.steamSwitchState for steam; sysState.operationMode, normalized via
-// gaggiuino-proto.js's normalizeOperationMode(), for flush), surfaced on
-// every GET /api/live/data / LIVE_SNAPSHOT payload by lib/poll.js's
+// #902/#983: steam/flush/descale signal source -- msg.isSteaming/
+// msg.isFlushing/msg.isDescaling come from lib/machine-state.js's
+// deriveMachineState() (sensorSnap.steamActive/status.steamSwitchState for
+// steam; sysState.operationMode, normalized via gaggiuino-proto.js's
+// normalizeOperationMode(), for flush/descale), surfaced on every GET
+// /api/live/data / LIVE_SNAPSHOT payload by lib/poll.js's
 // buildLiveDataResponse(). Checked ahead of the isLive/heating/hot fallbacks
-// below since brewing/steaming/flushing are mutually exclusive machine
-// states, brewing taking priority if it were somehow reported alongside one
-// of the others.
+// below since brewing/steaming/flushing/descaling are mutually exclusive
+// machine states, checked in that priority order if somehow reported
+// alongside one another (mirrors poll.go's effectiveSteaming/
+// effectiveFlushing/effectiveDescaling priority guard).
 export function resolveMachineIconState(msg, preheat) {
     if (msg?.machineReachable === false) return { mode: 'off', heatFraction: 0 };
     if (msg?.isLive)                     return { mode: 'brewing', heatFraction: 1 };
     if (msg?.isSteaming)                 return { mode: 'steaming', heatFraction: 1 };
     if (msg?.isFlushing)                 return { mode: 'flushing', heatFraction: 1 };
+    if (msg?.isDescaling)                return { mode: 'descaling', heatFraction: 1 };
     if (preheat && !preheat.ready && preheat.remaining > 0) {
         return { mode: 'heating', heatFraction: Math.max(0, Math.min(1, preheat.pct || 0)) };
     }

@@ -54,7 +54,7 @@ const noDuplicateHelpersRule = {
 
 module.exports = [
   {
-    ignores: ['public/**', 'node_modules/**', 'docs/**', 'graphify-out/**'],
+    ignores: ['public/**', 'node_modules/**', 'docs/**', 'graphify-out/**', 'go/internal/web/static/vendor/**'],
   },
   js.configs.recommended,
   {
@@ -67,6 +67,31 @@ module.exports = [
     files: ['lib/**/*.js', 'routes/**/*.js', 'server.js', 'scripts/**/*.js', 'scripts/**/*.mjs'],
     languageOptions: {
       globals: globals.node,
+    },
+    rules: commonRules,
+  },
+  {
+    // go/**: the in-progress Go rewrite's Node-side test fixture generators
+    // (e.g. go/internal/db/testdata/gen_node_schema.js drives lib/db.js's
+    // real schema code to produce the reference fixture the Go schema is
+    // compared against) — not part of the shipping app, but still plain
+    // Node scripts that need Node globals like any other.
+    files: ['go/**/*.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+    rules: commonRules,
+  },
+  {
+    // go/internal/web/static/**: unlike the rest of go/**/*.js above, these
+    // ship to and run in the browser (embedded via internal/web/assets.go,
+    // loaded from templates/layout.templ) — same runtime as public-src/,
+    // hence the same browser globals, overriding the broader go/**/*.js
+    // Node-globals block above (later config wins on a matching, narrower
+    // `files` glob).
+    files: ['go/internal/web/static/**/*.js'],
+    languageOptions: {
+      globals: globals.browser,
     },
     rules: commonRules,
   },

@@ -56,7 +56,7 @@ describe('loadData (#644 race)', () => {
     const pB = new Promise(res => { resolveB = res; });
     let shotsCallCount = 0;
     fetchSpy.mockImplementation(url => {
-      if (url === 'shots.json?trash=1') return Promise.resolve({ ok: false });
+      if (url.includes('trash=1')) return Promise.resolve({ ok: false });
       shotsCallCount++;
       return shotsCallCount === 1 ? pA : pB; // call A fired first, call B fired second
     });
@@ -65,10 +65,10 @@ describe('loadData (#644 race)', () => {
     const callB = loadData(); // fired second, while A is still pending
 
     // B (the later-fired call) resolves first...
-    resolveB({ ok: true, json: async () => ([shotB]) });
+    resolveB({ ok: true, json: async () => ({ shots: [shotB], nextCursor: null, hasMore: false }) });
     await callB;
     // ...and A's stale response arrives after — it must not clobber B's data.
-    resolveA({ ok: true, json: async () => ([shotA]) });
+    resolveA({ ok: true, json: async () => ({ shots: [shotA], nextCursor: null, hasMore: false }) });
     await callA;
 
     expect(S.allShots).toEqual([shotB]);

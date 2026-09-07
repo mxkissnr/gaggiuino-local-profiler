@@ -1,0 +1,499 @@
+{
+  "cards": [
+    "basics",
+    "craft",
+    "beans",
+    "endurance",
+    "care",
+    "house",
+    "secret"
+  ],
+  "badges": [
+    {
+      "id": "first_connect",
+      "card": "basics",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "link"
+    },
+    {
+      "id": "first_bean",
+      "card": "basics",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "bean"
+    },
+    {
+      "id": "first_shot",
+      "card": "basics",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "cup"
+    },
+    {
+      "id": "first_profile",
+      "card": "basics",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "slider"
+    },
+    {
+      "id": "first_rating",
+      "card": "basics",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "star"
+    },
+    {
+      "id": "first_milk",
+      "card": "basics",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "jug"
+    },
+    {
+      "id": "shots_10",
+      "card": "basics",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 10
+      },
+      "stamp": "10"
+    },
+    {
+      "id": "first_maint",
+      "card": "basics",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "wrench"
+    },
+    {
+      "id": "score_90",
+      "card": "craft",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "90"
+    },
+    {
+      "id": "score_95",
+      "card": "craft",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "95"
+    },
+    {
+      "id": "ratio_exact",
+      "card": "craft",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "1:2"
+    },
+    {
+      "id": "dialed_in",
+      "card": "craft",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "target"
+    },
+    {
+      "id": "profile_edit",
+      "card": "craft",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "book"
+    },
+    {
+      "id": "temp_stable",
+      "card": "craft",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "shield"
+    },
+    {
+      "id": "pressure_flat",
+      "card": "craft",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "bolt"
+    },
+    {
+      "id": "blooming",
+      "card": "craft",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "drop"
+    },
+    {
+      "id": "countries_10",
+      "card": "beans",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 10
+      },
+      "stamp": "globe"
+    },
+    {
+      "id": "roasters_10",
+      "card": "beans",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 10
+      },
+      "stamp": "roast"
+    },
+    {
+      "id": "processes_3",
+      "card": "beans",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 3
+      },
+      "stamp": "leaf"
+    },
+    {
+      "id": "experimental",
+      "card": "beans",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "bolt"
+    },
+    {
+      "id": "patient",
+      "card": "beans",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "clock"
+    },
+    {
+      "id": "rested",
+      "card": "beans",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "moon"
+    },
+    {
+      "id": "altitude",
+      "card": "beans",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "map"
+    },
+    {
+      "id": "bean_empty",
+      "card": "beans",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "cup"
+    },
+    {
+      "id": "shots_100",
+      "card": "endurance",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 100
+      },
+      "stamp": "100"
+    },
+    {
+      "id": "shots_500",
+      "card": "endurance",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 500
+      },
+      "stamp": "500"
+    },
+    {
+      "id": "shots_1000",
+      "card": "endurance",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 1000
+      },
+      "stamp": "1000"
+    },
+    {
+      "id": "streak_7",
+      "card": "endurance",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 7
+      },
+      "stamp": "flame"
+    },
+    {
+      "id": "streak_30",
+      "card": "endurance",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 30
+      },
+      "stamp": "30d"
+    },
+    {
+      "id": "marathon",
+      "card": "endurance",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "5x"
+    },
+    {
+      "id": "night",
+      "card": "endurance",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "23"
+    },
+    {
+      "id": "early",
+      "card": "endurance",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "sun"
+    },
+    {
+      "id": "maint_30",
+      "card": "care",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 30
+      },
+      "stamp": "30d"
+    },
+    {
+      "id": "maint_all",
+      "card": "care",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 5
+      },
+      "stamp": "wrench"
+    },
+    {
+      "id": "backflush_10",
+      "card": "care",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 10
+      },
+      "stamp": "drop"
+    },
+    {
+      "id": "descale",
+      "card": "care",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "leaf"
+    },
+    {
+      "id": "backup",
+      "card": "care",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "shield"
+    },
+    {
+      "id": "two_machines",
+      "card": "care",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "2"
+    },
+    {
+      "id": "gaggimate",
+      "card": "care",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "gear"
+    },
+    {
+      "id": "up_to_date",
+      "card": "care",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "bolt"
+    },
+    {
+      "id": "orders_10",
+      "card": "house",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 10
+      },
+      "stamp": "10"
+    },
+    {
+      "id": "orders_50",
+      "card": "house",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 50
+      },
+      "stamp": "jug"
+    },
+    {
+      "id": "menu_custom",
+      "card": "house",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "book"
+    },
+    {
+      "id": "guest",
+      "card": "house",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "star"
+    },
+    {
+      "id": "price_low",
+      "card": "house",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "scale"
+    },
+    {
+      "id": "restock",
+      "card": "house",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "bean"
+    },
+    {
+      "id": "flavor_10",
+      "card": "house",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "progress": {
+        "current": 0,
+        "target": 10
+      },
+      "stamp": "target"
+    },
+    {
+      "id": "share",
+      "card": "house",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "map"
+    },
+    {
+      "id": "secret_leap_day",
+      "card": "secret",
+      "secret": true,
+      "unlocked": false,
+      "unlockedAt": null
+    },
+    {
+      "id": "secret_friday_13",
+      "card": "secret",
+      "secret": true,
+      "unlocked": false,
+      "unlockedAt": null
+    },
+    {
+      "id": "secret_witching_hour",
+      "card": "secret",
+      "secret": true,
+      "unlocked": false,
+      "unlockedAt": null
+    },
+    {
+      "id": "secret_new_year",
+      "card": "secret",
+      "secret": true,
+      "unlocked": false,
+      "unlockedAt": null
+    },
+    {
+      "id": "secret_palindrome_id",
+      "card": "secret",
+      "secret": true,
+      "unlocked": false,
+      "unlockedAt": null
+    },
+    {
+      "id": "secret_golden_shot",
+      "card": "secret",
+      "secret": true,
+      "unlocked": false,
+      "unlockedAt": null
+    }
+  ]
+}

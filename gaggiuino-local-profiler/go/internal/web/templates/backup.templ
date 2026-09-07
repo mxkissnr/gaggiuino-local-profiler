@@ -1,0 +1,52 @@
+package templates
+
+// This file is Phase 2e's (#901) Backup-domain page: GET /backup, a
+// download link for the existing GET /api/backup export plus an explicit
+// note on what this page deliberately does NOT build. See
+// go/internal/web/handlers_backup.go's own doc comment for the reasoning
+// behind that scope cut; this template just states the same decision to
+// the page's own reader, not only in a source comment.
+//
+// No htmx write action lives on this page at all: GET /api/backup already
+// exists (internal/backup/handlers.go) and needs no new handler here, and
+// restore is deliberately left to the JSON API — see handlers_backup.go.
+templ BackupPage() {
+	@Layout("Backup") {
+		<h1 class="page-title">Backup</h1>
+		<section class="settings-block">
+			<h2 class="trash-heading">Export</h2>
+			<p class="item-meta">
+				Downloads a full, all-sections, secrets-free JSON export
+				(shots, maintenance, orders, machines, settings).
+			</p>
+			<a class="btn" href="api/backup">Download backup (JSON)</a>
+			<p class="item-meta">
+				Scoped exports and passphrase-encrypted secrets need
+				<code>POST /api/backup</code>, which this page doesn't build a
+				form for yet — use the JSON API directly (see openapi.yaml's
+				Backup tag). This download link relies on the same trust this
+				page itself does (HA Ingress, or direct LAN/port access in
+				standalone mode) — it does not attach an X-GLP-Token header,
+				so it 401s a non-Ingress caller with expose_api_port disabled,
+				same as GET /api/token already does in that configuration
+				(see internal/web/doc.go's "Auth model" section).
+			</p>
+		</section>
+		<section class="settings-block">
+			<h2 class="trash-heading">Restore</h2>
+			<p class="item-meta">
+				Restoring a backup isn't built into this page. Use
+				<code>POST /api/restore</code> directly (see openapi.yaml's
+				Backup tag) with a valid X-GLP-Token — dry-run preview,
+				per-section apply, and passphrase-encrypted secrets are all
+				supported there today. A real upload UI needs the same
+				parse-then-preview flow
+				public-src/components/backup-modal.js implements client-side
+				(looksLikeZip sniffing, a dry-run round trip to build the
+				section-presence checklist, then a second confirmed
+				POST /api/restore) — building that well is its own
+				follow-up, not a corner of this phase.
+			</p>
+		</section>
+	}
+}

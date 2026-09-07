@@ -1,0 +1,429 @@
+[
+  {
+    "name": "PhaseStopConditionsDto/zero",
+    "hex": "",
+    "decoded": {
+      "time": 0,
+      "pressureAbove": 0,
+      "pressureBelow": 0,
+      "flowAbove": 0,
+      "flowBelow": 0,
+      "weight": 0,
+      "waterPumpedInPhase": 0
+    }
+  },
+  {
+    "name": "PhaseStopConditionsDto/populated",
+    "hex": "08b817150000d0401d9a99993f25000020402d0000003f35000010423d00002142",
+    "decoded": {
+      "time": 3000,
+      "pressureAbove": 6.5,
+      "pressureBelow": 1.2000000476837158,
+      "flowAbove": 2.5,
+      "flowBelow": 0.5,
+      "weight": 36,
+      "waterPumpedInPhase": 40.25
+    }
+  },
+  {
+    "name": "TransitionDto/populated",
+    "hex": "0d0000c03f15000010411803208827",
+    "decoded": {
+      "start": 1.5,
+      "end": 9,
+      "curve": 3,
+      "time": 5000,
+      "volume": 0
+    }
+  },
+  {
+    "name": "TransitionDto/instant",
+    "hex": "18042dcdcc4441",
+    "decoded": {
+      "start": 0,
+      "end": 0,
+      "curve": 4,
+      "time": 0,
+      "volume": 12.300000190734863
+    }
+  },
+  {
+    "name": "PhaseDto/full",
+    "hex": "0801120f0d0000c03f150000104118032088271d00002042220808b81735000010422d6666bb42320b507265696e667573696f6e",
+    "decoded": {
+      "type": 1,
+      "restriction": 40,
+      "waterTemperature": 93.69999694824219,
+      "name": "Preinfusion",
+      "skip": false,
+      "target": {
+        "start": 1.5,
+        "end": 9,
+        "curve": 3,
+        "time": 5000,
+        "volume": 0
+      },
+      "stopConditions": {
+        "time": 3000,
+        "pressureAbove": 0,
+        "pressureBelow": 0,
+        "flowAbove": 0,
+        "flowBelow": 0,
+        "weight": 36,
+        "waterPumpedInPhase": 0
+      }
+    }
+  },
+  {
+    "name": "PhaseDto/minimal-no-optionals",
+    "hex": "",
+    "decoded": {
+      "type": 0,
+      "restriction": 0,
+      "waterTemperature": 0,
+      "name": "",
+      "skip": false
+    }
+  },
+  {
+    "name": "PhaseDto/skip-true",
+    "hex": "08023801",
+    "decoded": {
+      "type": 2,
+      "restriction": 0,
+      "waterTemperature": 0,
+      "name": "",
+      "skip": true
+    }
+  },
+  {
+    "name": "GlobalStopConditionsDto/populated",
+    "hex": "08b0ea0115000020421d000036422001",
+    "decoded": {
+      "time": 30000,
+      "weight": 40,
+      "waterPumped": 45.5,
+      "switchToManualPressureCtrl": true,
+      "switchToManuaFlowCtrl": false
+    }
+  },
+  {
+    "name": "BrewRecipeDto/populated",
+    "hex": "0d0000904115000010421d00000040",
+    "decoded": {
+      "coffeeIn": 18,
+      "coffeeOut": 36,
+      "ratio": 2
+    }
+  },
+  {
+    "name": "ProfileDto/full",
+    "hex": "0a0c546573742050726f66696c6512210801120f0d0000c03f15000010411803208827220308b8172d0000bb4232027031122412100d000000401500000040180420a8c301220535000010422d0000b8423202703238011a0715000020422001250000ba422a0f0d0000904115000010421d000000403005",
+    "decoded": {
+      "name": "Test Profile",
+      "phases": [
+        {
+          "type": 1,
+          "restriction": 0,
+          "waterTemperature": 93.5,
+          "name": "p1",
+          "skip": false,
+          "target": {
+            "start": 1.5,
+            "end": 9,
+            "curve": 3,
+            "time": 5000,
+            "volume": 0
+          },
+          "stopConditions": {
+            "time": 3000,
+            "pressureAbove": 0,
+            "pressureBelow": 0,
+            "flowAbove": 0,
+            "flowBelow": 0,
+            "weight": 0,
+            "waterPumpedInPhase": 0
+          }
+        },
+        {
+          "type": 0,
+          "restriction": 0,
+          "waterTemperature": 92,
+          "name": "p2",
+          "skip": true,
+          "target": {
+            "start": 2,
+            "end": 2,
+            "curve": 4,
+            "time": 25000,
+            "volume": 0
+          },
+          "stopConditions": {
+            "time": 0,
+            "pressureAbove": 0,
+            "pressureBelow": 0,
+            "flowAbove": 0,
+            "flowBelow": 0,
+            "weight": 36,
+            "waterPumpedInPhase": 0
+          }
+        }
+      ],
+      "waterTemperature": 93,
+      "id": 5,
+      "globalStopConditions": {
+        "time": 0,
+        "weight": 40,
+        "waterPumped": 0,
+        "switchToManualPressureCtrl": true,
+        "switchToManuaFlowCtrl": false
+      },
+      "recipe": {
+        "coffeeIn": 18,
+        "coffeeOut": 36,
+        "ratio": 2
+      }
+    }
+  },
+  {
+    "name": "ProfileDto/no-optionals",
+    "hex": "0a0b4e6f4f7074696f6e616c731200",
+    "decoded": {
+      "name": "NoOptionals",
+      "phases": [
+        {
+          "type": 0,
+          "restriction": 0,
+          "waterTemperature": 0,
+          "name": "",
+          "skip": false
+        }
+      ],
+      "waterTemperature": 0,
+      "id": 0
+    }
+  },
+  {
+    "name": "WebSocketProfileIdCommandDto/populated",
+    "hex": "082a",
+    "decoded": {
+      "id": 42
+    }
+  },
+  {
+    "name": "WebSocketMessageDto/with-data",
+    "hex": "0a0b675f70726f665f646963741204deadbeef",
+    "decoded": {
+      "action": "g_prof_dict",
+      "data": "deadbeef"
+    }
+  },
+  {
+    "name": "WebSocketMessageDto/action-only",
+    "hex": "0a0b675f7379735f7374617465",
+    "decoded": {
+      "action": "g_sys_state",
+      "data": ""
+    }
+  },
+  {
+    "name": "WebSocketResponseDto/success",
+    "hex": "0a08635f6f706d6f6465",
+    "decoded": {
+      "action": "c_opmode",
+      "result": 0,
+      "errorMessage": ""
+    }
+  },
+  {
+    "name": "WebSocketResponseDto/error",
+    "hex": "0a0b635f746172655f70656e6410011a0462757379",
+    "decoded": {
+      "action": "c_tare_pend",
+      "result": 1,
+      "errorMessage": "busy"
+    }
+  },
+  {
+    "name": "SavedProfileDto/populated",
+    "hex": "08071208457370726573736f",
+    "decoded": {
+      "id": 7,
+      "name": "Espresso"
+    }
+  },
+  {
+    "name": "SavedProfilesDto/multiple",
+    "hex": "0a0c08011208457370726573736f0a09080212054c756e676f",
+    "decoded": {
+      "profiles": [
+        {
+          "id": 1,
+          "name": "Espresso"
+        },
+        {
+          "id": 2,
+          "name": "Lungo"
+        }
+      ]
+    }
+  },
+  {
+    "name": "SavedProfilesDto/empty",
+    "hex": "",
+    "decoded": {
+      "profiles": []
+    }
+  },
+  {
+    "name": "NotificationDto/service-test-complete",
+    "hex": "0801121553657276696365207465737420636f6d706c657465",
+    "decoded": {
+      "type": 1,
+      "message": "Service test complete"
+    }
+  },
+  {
+    "name": "UpdateSystemStateCommandDto/opmode",
+    "hex": "0804",
+    "decoded": {
+      "operationMode": 4,
+      "tarePending": false
+    }
+  },
+  {
+    "name": "UpdateSystemStateCommandDto/tare",
+    "hex": "1001",
+    "decoded": {
+      "operationMode": 0,
+      "tarePending": true
+    }
+  },
+  {
+    "name": "ServiceTestCommandDto/led",
+    "hex": "0803",
+    "decoded": {
+      "peripheral": 3
+    }
+  },
+  {
+    "name": "SensorStateSnapshotDto/zero",
+    "hex": "",
+    "decoded": {
+      "brewActive": false,
+      "steamActive": false,
+      "hotWaterSwitchState": false,
+      "temperature": 0,
+      "waterTemperature": 0,
+      "pressure": 0,
+      "pumpFlow": 0,
+      "weightFlow": 0,
+      "weight": 0,
+      "waterLevel": 0,
+      "boilerState": false,
+      "brewSwitchActive": false,
+      "valveState": false,
+      "steamValveState": false,
+      "valveBState": false,
+      "steamBoilerRelayState": false,
+      "pinBrewLevel": false,
+      "pinSteamLevel": false,
+      "pinWaterLevel": false,
+      "pinRelayLevel": false,
+      "pinValveLevel": false,
+      "pinValveBLevel": false,
+      "pinRelayValveBLevel": false,
+      "pinSteamValveRelayLevel": false,
+      "pinSteamBoilerRelayLevel": false,
+      "pinZcLevel": false,
+      "pinDimmerLevel": false,
+      "pinThermoCsLevel": false,
+      "pinThermoClkLevel": false,
+      "pinThermoDoLevel": false,
+      "pinThermoDiLevel": false,
+      "pinHx711SckLevel": false,
+      "pinHx711Dout1Level": false,
+      "pinHx711Dout2Level": false
+    }
+  },
+  {
+    "name": "SensorStateSnapshotDto/populated",
+    "hex": "0801256666bb422d3333ab4135333313413d66660640453333f33f4d333393415050580160016801880101980101a00101d00101d80101800201880201",
+    "decoded": {
+      "brewActive": true,
+      "steamActive": false,
+      "hotWaterSwitchState": false,
+      "temperature": 93.69999694824219,
+      "waterTemperature": 21.399999618530273,
+      "pressure": 9.199999809265137,
+      "pumpFlow": 2.0999999046325684,
+      "weightFlow": 1.899999976158142,
+      "weight": 18.399999618530273,
+      "waterLevel": 80,
+      "boilerState": true,
+      "brewSwitchActive": true,
+      "valveState": true,
+      "steamValveState": false,
+      "valveBState": false,
+      "steamBoilerRelayState": false,
+      "pinBrewLevel": true,
+      "pinSteamLevel": false,
+      "pinWaterLevel": true,
+      "pinRelayLevel": true,
+      "pinValveLevel": false,
+      "pinValveBLevel": false,
+      "pinRelayValveBLevel": false,
+      "pinSteamValveRelayLevel": false,
+      "pinSteamBoilerRelayLevel": false,
+      "pinZcLevel": true,
+      "pinDimmerLevel": true,
+      "pinThermoCsLevel": false,
+      "pinThermoClkLevel": false,
+      "pinThermoDoLevel": false,
+      "pinThermoDiLevel": false,
+      "pinHx711SckLevel": true,
+      "pinHx711Dout1Level": true,
+      "pinHx711Dout2Level": false
+    }
+  },
+  {
+    "name": "SystemStateDto/populated",
+    "hex": "08011001200130c0c4073a07373838396237644a0553544d33327001",
+    "decoded": {
+      "startupInitFinished": true,
+      "tofReady": true,
+      "isSteamForgottenON": false,
+      "scalesPresent": true,
+      "operationMode": 0,
+      "timeAlive": 123456,
+      "coreVersion": "7889b7d",
+      "tarePending": false,
+      "coreType": "STM32",
+      "thermocoupleFaulted": false,
+      "pressureSensorFaulted": false,
+      "thermocoupleFaultReason": "",
+      "pressureSensorFaultReason": "",
+      "pcbV2": true
+    }
+  },
+  {
+    "name": "SystemStateDto/zero",
+    "hex": "",
+    "decoded": {
+      "startupInitFinished": false,
+      "tofReady": false,
+      "isSteamForgottenON": false,
+      "scalesPresent": false,
+      "operationMode": 0,
+      "timeAlive": 0,
+      "coreVersion": "",
+      "tarePending": false,
+      "coreType": "",
+      "thermocoupleFaulted": false,
+      "pressureSensorFaulted": false,
+      "thermocoupleFaultReason": "",
+      "pressureSensorFaultReason": "",
+      "pcbV2": false
+    }
+  }
+]

@@ -2,8 +2,19 @@ import Chart from 'chart.js/auto';
 import { S }                                              from '../../state.js';
 import { t }                                              from '../../i18n.js';
 import { corsairPlugin, clearChartOnTouchEnd } from '../../constants.js';
-import { formatTimeLabel, chartColors }                   from '../../utils.js';
-import { getShotData }                                    from './utils.js';
+import { formatTimeLabel, chartColors, mapShotDatapoints } from '../../utils.js';
+import { getRawCurve, getCachedShotData }                 from '../../shot-curves.js';
+
+// #957: curves are lazy. updateView() (index.js) ensureCurves() for the
+// selected + comparand shots before switching to the P·Q / fullscreen chart,
+// so these synchronous cache reads hit; a synthetic/demo shot still carries
+// its own datapoints, used as the fallback.
+function _rawCurve(shot) {
+  return getRawCurve(shot.id) || shot.datapoints || {};
+}
+function _xyCurve(shot) {
+  return getCachedShotData(shot.id) || mapShotDatapoints(shot.datapoints);
+}
 
 // ── Chart tab switching ───────────────────────────────────────────────────
 
@@ -19,7 +30,7 @@ export function switchChartTab(tab) {
 // ── P·Q Chart ─────────────────────────────────────────────────────────────
 
 function getPQData(shot) {
-  const d = shot.datapoints || {};
+  const d = _rawCurve(shot);
   const tm = d.timeInShot || [];
   const p  = d.pressure   || [];
   const f  = d.pumpFlow   || [];
@@ -153,8 +164,8 @@ function renderFsChart() {
   }
 
   if (!S.chart) return;
-  const dA     = getShotData(shotA);
-  const maxTempA = Math.max(...(shotA.datapoints?.temperature || []).map(v => v / 10), 0);
+  const dA     = _xyCurve(shotA);
+  const maxTempA = Math.max(...(_rawCurve(shotA).temperature || []).map(v => v / 10), 0);
   const tms    = Math.ceil(maxTempA + 5) || 100;
   const maxTime = dA.rawTimes.length > 0 ? dA.rawTimes[dA.rawTimes.length - 1] : 60;
   const datasets = S.chart.data.datasets.map(ds => ({ ...ds, data: [...ds.data] }));

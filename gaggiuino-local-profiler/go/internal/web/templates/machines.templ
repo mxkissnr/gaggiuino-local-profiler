@@ -1,0 +1,271 @@
+package templates
+
+import "fmt"
+
+// This file is Phase 2c's (#901) Machines-domain counterpart to
+// library.templ: a list page over machines.Registry's rows (name, type,
+// host, default/enabled/reachable state), modeled on
+// public-src/components/machines-settings.js's machine list. Two write
+// actions, both htmx: setting a machine default (mirrors
+// POST /api/machines/{id}/default) and deleting a non-default machine
+// (mirrors DELETE /api/machines/{id}), the latter behind an Alpine confirm
+// step exactly like shots.templ's shotRowActive trash confirm — see the
+// dispatch brief's "Delete mit Alpine.js-Bestätigungsdialog (analog zum in
+// Phase 2a etablierten Alpine-Muster)" requirement. See live.templ for this
+// phase's other page — the live shot chart — which is NOT built the same
+// way (a vanilla-JS SSE consumer, not an htmx fragment page).
+
+// MachineRow is the display-ready projection of a machines.Machine.
+// Reachable is only ever non-nil for the default machine (nil for every
+// other configured one) — see internal/web/view_machines.go's toMachineRow
+// and internal/system/status.go's statusMachine, which establishes the same
+// "flat reachable status always describes the default machine" convention
+// this Go rewrite's background poller currently supports.
+type MachineRow struct {
+	ID        int64
+	Name      string
+	Type      string
+	Host      string
+	IsDefault bool
+	Enabled   bool
+	Reachable *bool
+}
+
+// MachinesPage is GET /machines: the "New machine" form plus every
+// registered machine, with a set-default action and (for any non-default
+// machine) a delete action.
+templ MachinesPage(rows []MachineRow, formError string) {
+	@Layout("Machines") {
+		<h1 class="page-title">Machines</h1>
+		@defaultMachineHeader(rows)
+		<div id="machines-content">
+			@newMachineForm(formError)
+			if len(rows) == 0 {
+				<div class="empty-state">No machines yet.</div>
+			} else {
+				@machineList(rows)
+			}
+		</div>
+	}
+}
+
+// MachinesContentFragment is the htmx response createMachineAction
+// (handlers_machines.go) answers with — the whole form+list block
+// re-rendered, targeting #machines-content with hx-swap="innerHTML" (the
+// same "answer 200 either way, re-render form+list together" convention
+// library.templ's own Create forms establish — see that file's doc
+// comment for why a non-2xx status here would leave a validation error
+// invisible to htmx's default responseHandling).
+templ MachinesContentFragment(rows []MachineRow, formError string) {
+	@newMachineForm(formError)
+	if len(rows) == 0 {
+		<div class="empty-state">No machines yet.</div>
+	} else {
+		@machineList(rows)
+	}
+}
+
+// defaultMachineHeader is this page's verdict-first header (design pass 3,
+// #901): the default machine's name plus its reachable/unreachable status —
+// what most visitors of this page actually came to check — ahead of the
+// full registry list below, mirroring shots.templ's shotInfo verdict-line/
+// verdict-subline pair. Renders nothing when there's no default machine yet
+// (a fresh, empty registry) or reachability isn't known for it (only ever
+// populated for the default machine — see MachineRow's own doc comment).
+// Deliberately only in MachinesPage, not MachinesContentFragment: creating
+// a new (non-default) machine never changes the current default's own
+// name/reachability, so this header doesn't need to be part of the
+// re-rendered create fragment.
+templ defaultMachineHeader(rows []MachineRow) {
+	if d, ok := defaultMachineRow(rows); ok {
+		<div class="machine-status-header">
+			<div class="verdict-line">
+				<span class="verdict-headline">{ d.Name }</span>
+				if d.Reachable != nil {
+					<span class="verdict-sep">·</span>
+					<span class={ "verdict-status", reachableClass(d.Reachable) }>{ reachableWord(d.Reachable) }</span>
+				}
+			</div>
+			<div class="verdict-subline">
+				Default machine · { d.Type }
+				if d.Host != "" {
+					{ " · " + d.Host }
+				}
+			</div>
+		</div>
+	}
+}
+
+// defaultMachineRow finds the registry's default machine among rows — there
+// is always at most one (internal/machines.Registry enforces exactly one
+// default once any machine exists).
+func defaultMachineRow(rows []MachineRow) (MachineRow, bool) {
+	for _, r := range rows {
+		if r.IsDefault {
+			return r, true
+		}
+	}
+	return MachineRow{}, false
+}
+
+// reachableClass/reachableWord substitute a colour-coded status word for
+// the numeric score verdict-score-num normally holds — there's no scalar
+// to show here, just reachable-or-not.
+func reachableClass(reachable *bool) string {
+	if reachable != nil && *reachable {
+		return "score-great"
+	}
+	return "score-bad"
+}
+
+func reachableWord(reachable *bool) string {
+	if reachable != nil && *reachable {
+		return "reachable"
+	}
+	return "unreachable"
+}
+
+// newMachineForm mirrors internal/machines.MachineInput's POST-required
+// fields (name, type, host — see internal/machines/create.go's
+// CreateMachineChecked, which this form's action calls) — no
+// switchEntity/theme fields, deferred the same way library.templ's Create
+// forms only expose 1-2 of their entity's optional fields.
+templ newMachineForm(formError string) {
+	<section class="new-entity-form">
+		<h2 class="trash-heading">New machine</h2>
+		if formError != "" {
+			<div class="badge badge-err">{ formError }</div>
+		}
+		<form class="order-form" hx-post="machines" hx-target="#machines-content" hx-swap="innerHTML">
+			<label class="item-meta" for="machine-name">Name</label>
+			<input class="filter-input" type="text" id="machine-name" name="name" required maxlength="100"/>
+			<label class="item-meta" for="machine-type">Type</label>
+			<select class="filter-input" id="machine-type" name="type">
+				<option value="gaggiuino">Gaggiuino</option>
+				<option value="gaggimate">GaggiMate</option>
+			</select>
+			<label class="item-meta" for="machine-host">Host</label>
+			<input class="filter-input" type="text" id="machine-host" name="host" maxlength="255" placeholder="192.168.1.50"/>
+			<button type="submit" class="btn">Add machine</button>
+		</form>
+	</section>
+}
+
+// MachineListFragment renders just the row list — the htmx response
+// setDefaultAction (handlers_machines.go) answers with, since setting a new
+// default changes two rows at once (the old default loses its badge, the
+// new one gains it), unlike a single-row toggle.
+templ MachineListFragment(rows []MachineRow) {
+	@machineList(rows)
+}
+
+templ machineList(rows []MachineRow) {
+	<div class="item-list" id="machine-list">
+		for _, row := range rows {
+			@machineRow(row)
+		}
+	</div>
+}
+
+templ machineRow(row MachineRow) {
+	<div class="item-row" id={ fmt.Sprintf("machine-row-%d", row.ID) }>
+		<div class="item-info">
+			<div class="item-name">
+				{ row.Name }
+				if row.IsDefault {
+					<span class="badge badge-speciality">default</span>
+				}
+				if !row.Enabled {
+					<span class="badge">disabled</span>
+				}
+				if row.Reachable != nil {
+					if *row.Reachable {
+						<span class="badge badge-ok">reachable</span>
+					} else {
+						<span class="badge badge-err">unreachable</span>
+					}
+				}
+			</div>
+			<div class="item-meta">
+				{ row.Type }
+				if row.Host != "" {
+					{ " · " + row.Host }
+				}
+			</div>
+		</div>
+		<div class="item-actions" x-data="{ confirming: false }">
+			<button
+				type="button"
+				class="btn"
+				hx-get={ fmt.Sprintf("machines/%d/edit", row.ID) }
+				hx-target={ fmt.Sprintf("#machine-row-%d", row.ID) }
+				hx-swap="outerHTML"
+			>
+				Edit
+			</button>
+			if !row.IsDefault {
+				<button
+					type="button"
+					class="btn"
+					hx-post={ fmt.Sprintf("machines/%d/default", row.ID) }
+					hx-target="#machine-list"
+					hx-swap="outerHTML"
+				>
+					Set default
+				</button>
+				<button type="button" class="btn btn-danger" x-show="!confirming" @click="confirming = true">
+					Delete
+				</button>
+				<span class="confirm-bar" x-show="confirming" x-cloak>
+					Delete this machine?
+					<button
+						type="button"
+						class="btn btn-danger"
+						hx-post={ fmt.Sprintf("machines/%d/delete", row.ID) }
+						hx-target={ fmt.Sprintf("#machine-row-%d", row.ID) }
+						hx-swap="outerHTML"
+					>
+						Yes
+					</button>
+					<button type="button" class="btn" @click="confirming = false">No</button>
+				</span>
+			}
+		</div>
+	</div>
+}
+
+// MachineFragment renders a single machine row on its own — the htmx
+// response GET /machines/{id} (a plain view-mode re-render, used by the Edit
+// form's Cancel button) answers with.
+templ MachineFragment(row MachineRow) {
+	@machineRow(row)
+}
+
+// MachineEditFragment renders machine id's inline edit form — see
+// library.templ's BeanEditFragment doc comment for the swap pattern this
+// mirrors. type/host mirror newMachineForm's own fields exactly — editing a
+// machine's name/type/host goes through the same
+// machines.UpdateMachineChecked validate -> SSRF-check -> UpdateMachine
+// sequence CreateMachineChecked establishes for creation (update.go).
+templ MachineEditFragment(row MachineRow, formError string) {
+	<div class="item-row item-row-edit" id={ fmt.Sprintf("machine-row-%d", row.ID) }>
+		<form class="order-form" hx-put={ fmt.Sprintf("machines/%d", row.ID) } hx-target={ fmt.Sprintf("#machine-row-%d", row.ID) } hx-swap="outerHTML">
+			if formError != "" {
+				<div class="badge badge-err">{ formError }</div>
+			}
+			<label class="item-meta" for={ fmt.Sprintf("machine-edit-name-%d", row.ID) }>Name</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("machine-edit-name-%d", row.ID) } name="name" required maxlength="100" value={ row.Name }/>
+			<label class="item-meta" for={ fmt.Sprintf("machine-edit-type-%d", row.ID) }>Type</label>
+			<select class="filter-input" id={ fmt.Sprintf("machine-edit-type-%d", row.ID) } name="type">
+				<option value="gaggiuino" selected?={ row.Type == "gaggiuino" }>Gaggiuino</option>
+				<option value="gaggimate" selected?={ row.Type == "gaggimate" }>GaggiMate</option>
+			</select>
+			<label class="item-meta" for={ fmt.Sprintf("machine-edit-host-%d", row.ID) }>Host</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("machine-edit-host-%d", row.ID) } name="host" maxlength="255" value={ row.Host }/>
+			<div class="item-actions">
+				<button type="submit" class="btn">Save</button>
+				<button type="button" class="btn" hx-get={ fmt.Sprintf("machines/%d", row.ID) } hx-target={ fmt.Sprintf("#machine-row-%d", row.ID) } hx-swap="outerHTML">Cancel</button>
+			</div>
+		</form>
+	</div>
+}

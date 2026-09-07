@@ -1,0 +1,108 @@
+package templates
+
+import "strings"
+
+// This file is Phase 2e's (#901) Settings-domain page: GET /settings shows
+// the default machine's Gaggiuino settings categories via internal/machines.
+// Adapter's GetSettings/UpdateSettings — the exact same #597 settings/
+// control proxy GET/POST /api/machine/settings(/{category}) uses (see
+// go/internal/web/handlers_settings.go's own doc comment). All five
+// categories are editable; boiler and system additionally run through
+// machines.ValidateBoilerSettings/ValidateSystemSettings before a save ever
+// reaches the machine — see handlers_settings.go's doc comment for why
+// those two specifically needed more than machines.ValidateSettingsPayload's
+// generic "is this JSON" check (code review finding #1, closed properly
+// rather than left as boiler/system's read-only revert).
+//
+// Every category is round-tripped as opaque JSON text, never parsed into
+// typed Go fields: internal/machines/doc.go's "bool-as-string quirk"
+// section documents several Gaggiuino settings fields that are the JSON
+// *strings* "true"/"false" rather than real booleans, and the adapter layer
+// already preserves that quirk end to end by treating a settings payload as
+// raw bytes throughout (json.RawMessage in, json.RawMessage out — see
+// gaggiuino_adapter.go's GetSettings/UpdateSettings). A pretty-printed
+// <textarea> round trip keeps this page in that same discipline: it never
+// decodes a category into a typed struct or a generic form-field set, so
+// there's no risk of this page's own code re-encoding a quoted "true"
+// string as an unquoted boolean (or vice versa) the way a naive per-field
+// form would have to explicitly guard against.
+
+// SettingsCategory is one category block — read-only <pre> or (when
+// Editable) an editable form. JSON is the pretty-printed raw settings
+// payload; FetchError is set instead when GetSettings itself failed (e.g.
+// the machine is unreachable), in which case JSON is empty.
+type SettingsCategory struct {
+	Name       string
+	JSON       string
+	FetchError string
+	Editable   bool
+}
+
+// SettingsPage is GET /settings. supported is false when the default
+// machine's adapter doesn't implement the settings/control proxy at all
+// (GaggiMate — see internal/machines.Capabilities.SettingsProxy), in which
+// case machineName is still shown but no category is fetched.
+templ SettingsPage(supported bool, machineName string, categories []SettingsCategory, saveErrors map[string]string) {
+	@Layout("Settings") {
+		<h1 class="page-title">Settings</h1>
+		<div class="item-meta">{ machineName }</div>
+		if !supported {
+			<div class="empty-state">This machine type does not support the settings proxy.</div>
+		} else {
+			for _, c := range categories {
+				@settingsCategoryBlock(c, saveErrors[c.Name])
+			}
+		}
+	}
+}
+
+// SettingsEditableFragment is the htmx response a category's save action
+// answers with — just that one block, re-fetched from the machine after a
+// successful save so the textarea reflects whatever the machine actually
+// persisted (which can differ from what was submitted — the machine's own
+// settings endpoint is the source of truth, not this page's form). Named
+// for the write action it answers, but renders through the same
+// settingsCategoryBlock every category uses.
+templ SettingsEditableFragment(editable SettingsCategory, saveError string) {
+	@settingsCategoryBlock(editable, saveError)
+}
+
+// settingsCategoryBlock is this page's one per-category block, both on
+// initial load (SettingsPage's loop) and in a save's fragment response
+// (SettingsEditableFragment) — the <section> itself carries the
+// "settings-{name}" id both times, so hx-target/hx-swap="outerHTML" always
+// replaces the same single element instead of leaving a stale wrapper
+// behind (#901 code review finding #2: an earlier version wrapped this
+// <section> in its own same-id <div>, so the two elements shared one DOM id
+// until a category was saved once, which collapsed just that category's
+// wrapper — inconsistent DOM between saved and unsaved categories).
+templ settingsCategoryBlock(c SettingsCategory, saveError string) {
+	<section class="settings-block" id={ "settings-" + c.Name }>
+		<h2 class="trash-heading">
+			{ titleCase(c.Name) }
+			if !c.Editable && c.FetchError == "" {
+				<span class="badge">read-only</span>
+			}
+		</h2>
+		if c.FetchError != "" {
+			<div class="badge badge-err">{ c.FetchError }</div>
+		} else if c.Editable {
+			if saveError != "" {
+				<div class="badge badge-err">{ saveError }</div>
+			}
+			<form class="order-form" hx-post={ "settings/" + c.Name } hx-target={ "#settings-" + c.Name } hx-swap="outerHTML">
+				<textarea class="filter-input settings-textarea" name="raw" rows="12">{ c.JSON }</textarea>
+				<button type="submit" class="btn">Save</button>
+			</form>
+		} else {
+			<pre class="settings-json settings-json-readonly">{ c.JSON }</pre>
+		}
+	</section>
+}
+
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}

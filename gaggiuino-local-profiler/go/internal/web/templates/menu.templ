@@ -1,0 +1,90 @@
+package templates
+
+import "fmt"
+
+// This file is Phase 2d's (#901) customer-facing counterpart to orders.templ:
+// GET /menu (the ordering form) and its one write action, POST /menu/order,
+// built on internal/orders.Service.PlaceOrder — the same function
+// internal/orders/handlers.go's own POST /api/orders calls, no new business
+// logic (see go/internal/web/handlers_orders.go's placeOrderAction). Scope
+// deliberately narrower than public-src/views/orders.js's own customer
+// surface: no per-item milk-variant picker, no menu admin, no notify
+// settings, no stats — the dispatch brief's own scope cut, matching the
+// same "one write path this phase, the rest deferred" pattern Phase 2b drew
+// for the Library domain's non-Beans entities. Bean selection (the one
+// cross-domain piece the brief does call out) reuses
+// library.GetActiveBeans — the exact same stock-aware, disabled-bean-
+// excluding projection GET /api/orders/active-beans already answers with.
+
+// MenuItemOption is one selectable item in the order form's <select>.
+type MenuItemOption struct {
+	Name  string
+	Emoji string
+}
+
+// BeanOption is one selectable bean in the order form's optional bean
+// <select> — id/name only, the two fields PlaceOrder's beanId actually needs
+// (see internal/orders/service.go's resolveBeanID).
+type BeanOption struct {
+	ID   int64
+	Name string
+}
+
+// MenuPage is GET /menu: the customer ordering form, or one of two
+// non-form states — enabled==false (the enable_orders add-on option is off,
+// see internal/orders.IsOrdersEnabled) or shopOpen==false (the orders_settings
+// "enabled" toggle — the barista's own open/closed switch, a separate flag
+// from the feature toggle, see internal/orders/repository.go's Settings).
+// formError, when non-empty, is rendered above the form on GET /menu?
+// re-render (used by placeOrderAction's own error responses to explain a
+// rejected submission if a future revision serves the whole page again —
+// today those responses target #menu-result and never reach this template
+// param path, but keeping it means the plumbing already round-trips a
+// server-side validation message the same way the rest of this package's
+// pages do for htmx write-action errors).
+templ MenuPage(enabled bool, shopOpen bool, items []MenuItemOption, beans []BeanOption, formError string) {
+	@Layout("Menu") {
+		<h1 class="page-title">Order</h1>
+		if !enabled {
+			<div class="empty-state">Orders feature disabled.</div>
+		} else if !shopOpen {
+			<div class="empty-state">Not accepting orders right now.</div>
+		} else if len(items) == 0 {
+			<div class="empty-state">No menu items configured.</div>
+		} else {
+			if formError != "" {
+				<div class="badge badge-err">{ formError }</div>
+			}
+			<div id="menu-result"></div>
+			<form class="order-form" hx-post="menu/order" hx-target="#menu-result" hx-swap="innerHTML">
+				<label class="item-meta" for="customer">Your name</label>
+				<input class="filter-input" type="text" id="customer" name="customer" required maxlength="50"/>
+				<label class="item-meta" for="item">Item</label>
+				<select class="filter-input" id="item" name="item" required>
+					for _, it := range items {
+						<option value={ it.Name }>{ it.Emoji + " " + it.Name }</option>
+					}
+				</select>
+				if len(beans) > 0 {
+					<label class="item-meta" for="beanId">Beans (optional)</label>
+					<select class="filter-input" id="beanId" name="beanId">
+						<option value="">No preference</option>
+						for _, b := range beans {
+							<option value={ fmt.Sprintf("%d", b.ID) }>{ b.Name }</option>
+						}
+					</select>
+				}
+				<label class="item-meta" for="note">Note (optional)</label>
+				<input class="filter-input" type="text" id="note" name="note" maxlength="200"/>
+				<button type="submit" class="btn">Place order</button>
+			</form>
+		}
+	}
+}
+
+// MenuOrderResult is POST /menu/order's success response — swapped into
+// #menu-result, leaving the form itself untouched so the customer can place
+// another order without re-filling the item/bean selects.
+templ MenuOrderResult(item string, customer string) {
+	<div class="badge badge-ok">Order placed: { item }{ " for " }{ customer }. We'll let you know when it's ready.</div>
+}

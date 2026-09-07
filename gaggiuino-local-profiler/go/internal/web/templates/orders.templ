@@ -1,0 +1,148 @@
+package templates
+
+import "fmt"
+
+// This file is Phase 2d's (#901) Orders-domain counterpart to machines.templ:
+// the barista-facing order queue — GET /orders, plus its three htmx write
+// actions (accept/complete/decline), all built on internal/orders' existing
+// Phase 1f Service/Repository (see go/internal/web/handlers_orders.go's own
+// doc comment for the full wiring). See menu.templ for this phase's other
+// page, the customer-facing ordering form.
+//
+// Live updates: the htmx SSE extension's `sse-swap` (#901, a later pass) —
+// `#orders-queue` itself owns the `sse-connect="api/events"` EventSource
+// (the same shared stream live.js's own vanilla-JS consumer opens
+// independently, and one of internal/auth.RequireToken's three
+// unconditional exemptions, since EventSource can't send custom headers)
+// and swaps in `EventOrdersUpdate` ("orders-update") events verbatim. An
+// earlier pass shipped htmx polling instead (`hx-trigger="every 10s"`,
+// mirroring public-src/views/orders.js's own
+// `setInterval(loadOrdersView, 10000)`), after finding SSE needed two real
+// fixes first, not a half-wired attempt: the vendored
+// static/vendor/htmx-sse-ext-2.0.10.js's `hx-trigger="sse:*"` handling
+// parses the trigger but never calls `source.addEventListener` for it
+// (dead code in this vendored version — only its `sse-swap` mechanism was
+// ever fully wired, which this pass uses instead of patching that dead
+// branch), and `sse-swap` needs an event's raw data to already BE the HTML
+// it swaps in, while `internal/sse.Handler`'s `send()` used to
+// unconditionally `json.Marshal` every event's Data (live.js's own JSON
+// consumers still need that encoding, so this couldn't just flip
+// globally). Both are fixed now: `sse.HTML` (internal/sse/sse.go) marks an
+// Event's Data as pre-rendered HTML to send through unmarshaled, and
+// `internal/orders.Service`'s new `OnQueueChanged` callback — wired in
+// `handlers_orders.go`'s `NewOrdersHandlers`, the same "callback field, not
+// a direct import" seam `internal/library`'s `SetOnGrinderDeleted` already
+// uses to avoid a package cycle — renders this exact `ordersQueueBody`
+// fragment and publishes it as `EventOrdersUpdate` after every
+// PlaceOrder/AcceptOrder/CompleteOrder/DeclineOrder, from ANY caller (the
+// REST API included, not just this page's own htmx actions), so every open
+// `/orders` tab updates live regardless of which surface changed the
+// queue. The write actions below still also directly re-render
+// `#orders-queue` via their own POST response (belt-and-braces: correct
+// even if a tab's SSE connection has dropped), so a client applies
+// whichever of the two arrives — its own POST response or the SSE
+// broadcast — without any special de-duplication, since both always
+// render the identical current queue state.
+templ OrdersPage(enabled bool, pending []OrderRow, accepted []OrderRow) {
+	@Layout("Orders") {
+		<h1 class="page-title">Orders</h1>
+		if !enabled {
+			<div class="empty-state">Orders feature disabled.</div>
+		} else {
+			<div id="orders-queue" sse-connect="api/events" sse-swap="orders-update" hx-swap="innerHTML">
+				@ordersQueueBody(pending, accepted)
+			</div>
+		}
+	}
+}
+
+// OrdersQueueFragment is the htmx response every write action (accept/
+// complete/decline) and the polling GET /orders/queue-fragment answer with —
+// the whole queue, not a single row, since accepting/completing/declining
+// moves an order between the pending and accepted sections (machines.templ's
+// MachineListFragment draws the same whole-list-over-single-row conclusion
+// for set-default, for the same reason).
+templ OrdersQueueFragment(pending []OrderRow, accepted []OrderRow) {
+	@ordersQueueBody(pending, accepted)
+}
+
+templ ordersQueueBody(pending []OrderRow, accepted []OrderRow) {
+	<section>
+		<h2 class="trash-heading">Pending</h2>
+		if len(pending) == 0 {
+			<div class="empty-state">No pending orders.</div>
+		} else {
+			<div class="item-list">
+				for _, row := range pending {
+					@orderRow(row)
+				}
+			</div>
+		}
+	</section>
+	<section class="trash-section">
+		<h2 class="trash-heading">Accepted</h2>
+		if len(accepted) == 0 {
+			<div class="empty-state">No accepted orders.</div>
+		} else {
+			<div class="item-list">
+				for _, row := range accepted {
+					@orderRow(row)
+				}
+			</div>
+		}
+	</section>
+}
+
+// OrderRow is the display-ready projection of an orders.Order this package's
+// templates render — see go/internal/web/view_orders.go's toOrderRow.
+type OrderRow struct {
+	ID         string
+	Item       string
+	Variant    string
+	Customer   string
+	Note       string
+	Status     string // "pending" or "accepted" — the only two this queue shows
+	CreatedAt  string // "HH:MM", server-rendered absolute time (see toOrderRow)
+	EtaMinutes int    // > 0 only for an accepted order with a set eta
+}
+
+templ orderRow(row OrderRow) {
+	<div class="item-row" id={ "order-row-" + row.ID }>
+		<div class="item-info">
+			<div class="item-name">
+				{ row.Item }
+				if row.Variant != "" {
+					<span class="badge">{ row.Variant }</span>
+				}
+			</div>
+			<div class="item-meta">
+				{ "for " + row.Customer }
+				if row.Note != "" {
+					{ " · " + row.Note }
+				}
+				{ " · " + row.CreatedAt }
+				if row.Status == "accepted" && row.EtaMinutes > 0 {
+					{ etaSuffix(row.EtaMinutes) }
+				}
+			</div>
+		</div>
+		<div class="item-actions">
+			if row.Status == "pending" {
+				<button type="button" class="btn" hx-post={ "orders/" + row.ID + "/accept" } hx-target="#orders-queue" hx-swap="innerHTML">
+					Accept
+				</button>
+			} else {
+				<button type="button" class="btn" hx-post={ "orders/" + row.ID + "/complete" } hx-target="#orders-queue" hx-swap="innerHTML">
+					Complete
+				</button>
+			}
+			<button type="button" class="btn btn-danger" hx-post={ "orders/" + row.ID + "/decline" } hx-target="#orders-queue" hx-swap="innerHTML">
+				Decline
+			</button>
+		</div>
+	</div>
+}
+
+func etaSuffix(minutes int) string {
+	return fmt.Sprintf(" · ready in ~%d min", minutes)
+}

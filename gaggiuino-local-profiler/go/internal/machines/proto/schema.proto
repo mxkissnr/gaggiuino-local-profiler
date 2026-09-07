@@ -1,0 +1,233 @@
+// Reference-only .proto source for the Gaggiuino machine's binary
+// WebSocket protocol — NOT compiled by anything in this repo (no
+// protoc/protoc-gen-go available in this build environment; see doc.go).
+// Reconstructed field-for-field from lib/gaggiuino-proto.js (this repo's
+// existing, live-verified protobuf-ts message descriptors — see that
+// file's own header comment for what's live-verified vs. transcribed from
+// docs) and cross-checked against gaggiuino/gaggiuino.github.io's
+// docs/rest-api/websocket.md inline schema blocks (go/RESEARCH.md). Where
+// the two sources agreed, both are reflected here; go/RESEARCH.md found no
+// disagreement worth flagging (the sources describe the same field set
+// with the same numbers/types down to the message-passthrough level).
+//
+// Written to be regeneratable: a future environment with protoc-gen-go
+// available can run
+//   protoc --go_out=. --go_opt=paths=source_relative schema.proto
+// and the field numbers/wire types below will produce Go structs
+// wire-compatible with the hand-written ones in messages.go (this repo
+// keeps the hand-written versions as the ones actually compiled and used
+// — see doc.go for why: float64 field types and pointer-optional message
+// fields matching this app's Go/JSON conventions rather than protoc-gen-go's
+// defaults).
+syntax = "proto3";
+package gaggiuino;
+
+// ── Profile ──────────────────────────────────────────────────────────────
+
+enum PhaseTypeDto {
+  FLOW = 0;
+  PRESSURE = 1;
+  MANUAL = 2;
+}
+
+enum TransitionCurveDto {
+  EASE_IN_OUT = 0;
+  EASE_IN = 1;
+  EASE_OUT = 2;
+  LINEAR = 3;
+  INSTANT = 4;
+}
+
+message PhaseStopConditionsDto {
+  uint32 time = 1;
+  float pressureAbove = 2;
+  float pressureBelow = 3;
+  float flowAbove = 4;
+  float flowBelow = 5;
+  float weight = 6;
+  float waterPumpedInPhase = 7;
+}
+
+message TransitionDto {
+  float start = 1;
+  float end = 2;
+  TransitionCurveDto curve = 3;
+  uint32 time = 4;
+  float volume = 5;
+}
+
+message PhaseDto {
+  PhaseTypeDto type = 1;
+  TransitionDto target = 2;
+  float restriction = 3;
+  PhaseStopConditionsDto stopConditions = 4;
+  float waterTemperature = 5;
+  string name = 6;
+  bool skip = 7;
+}
+
+message GlobalStopConditionsDto {
+  uint32 time = 1;
+  float weight = 2;
+  float waterPumped = 3;
+  bool switchToManualPressureCtrl = 4;
+  bool switchToManuaFlowCtrl = 5; // sic — matches the firmware's own typo, not fixed here
+}
+
+message BrewRecipeDto {
+  float coffeeIn = 1;
+  float coffeeOut = 2;
+  float ratio = 3;
+}
+
+message ProfileDto {
+  string name = 1;
+  repeated PhaseDto phases = 2;
+  GlobalStopConditionsDto globalStopConditions = 3;
+  float waterTemperature = 4;
+  BrewRecipeDto recipe = 5;
+  uint32 id = 6;
+}
+
+// ── Envelope + saved-profile-slot list ─────────────────────────────────
+
+message WebSocketProfileIdCommandDto {
+  uint32 id = 1;
+}
+
+// Every frame in both directions is one of these: `action` (a g_*/c_*
+// request or d_* push name, see go/internal/machines/ws.go) selects the
+// message type `data` holds, independently encoded.
+message WebSocketMessageDto {
+  string action = 1;
+  bytes data = 2;
+}
+
+enum WebSocketResponseResultDto {
+  SUCCESS = 0;
+  ERROR = 1;
+}
+
+// The generic `d_resp` acknowledgement for c_* commands.
+message WebSocketResponseDto {
+  string action = 1;
+  WebSocketResponseResultDto result = 2;
+  string errorMessage = 3;
+}
+
+message SavedProfileDto {
+  uint32 id = 1;
+  string name = 2;
+}
+
+// The `d_prof_dict` push (GetProfileDict/CreateNewProfile/UpdateProfile/
+// DeleteProfile all answer with this).
+message SavedProfilesDto {
+  repeated SavedProfileDto profiles = 1;
+}
+
+enum NotificationTypeDto {
+  INFO = 0;
+  SUCCESS = 1;
+  WARN = 2;
+  ERROR = 3;
+}
+
+// The `d_notif` push — mirrors the machine's on-screen/MQTT notifications;
+// notably the completion signal for c_service_test (no d_resp is sent for
+// that one command — see go/internal/machines/ws.go).
+message NotificationDto {
+  NotificationTypeDto type = 1;
+  string message = 2;
+}
+
+// ── #597 command / state messages (transcribed from
+// docs/rest-api/websocket.md, live-verified subset per
+// lib/gaggiuino-proto.js's header comment) ─────────────────────────────
+
+enum OperationModeDto {
+  BREW_AUTO = 0;
+  BREW_MANUAL = 1;
+  FLUSH = 2;
+  DESCALE = 3;
+  STEAM = 4;
+  FLUSH_AUTO = 5;
+  HOT_WATER = 6;
+  HOME = 7;
+}
+
+// Shared payload for c_opmode and c_tare_pend — each handler only reads
+// the field it cares about.
+message UpdateSystemStateCommandDto {
+  OperationModeDto operationMode = 1;
+  bool tarePending = 2;
+}
+
+enum ServiceTestPeripheralDto {
+  PUMP = 0;
+  VALVE = 1;
+  VALVE_B = 2;
+  LED = 3;
+}
+
+message ServiceTestCommandDto {
+  ServiceTestPeripheralDto peripheral = 1;
+}
+
+// Live sensor readings pushed continuously as `d_sensor_snap` — real
+// (unscaled) numbers, unlike the x10-scaled-integer shot/REST-status wire
+// formats.
+message SensorStateSnapshotDto {
+  bool brewActive = 1;
+  bool steamActive = 2;
+  bool hotWaterSwitchState = 3;
+  float temperature = 4;
+  float waterTemperature = 5;
+  float pressure = 6;
+  float pumpFlow = 7;
+  float weightFlow = 8;
+  float weight = 9;
+  uint32 waterLevel = 10;
+  bool boilerState = 11;
+  bool brewSwitchActive = 12;
+  bool valveState = 13;
+  bool steamValveState = 14;
+  bool valveBState = 15;
+  bool steamBoilerRelayState = 16;
+  bool pinBrewLevel = 17;
+  bool pinSteamLevel = 18;
+  bool pinWaterLevel = 19;
+  bool pinRelayLevel = 20;
+  bool pinValveLevel = 21;
+  bool pinValveBLevel = 22;
+  bool pinRelayValveBLevel = 23;
+  bool pinSteamValveRelayLevel = 24;
+  bool pinSteamBoilerRelayLevel = 25;
+  bool pinZcLevel = 26;
+  bool pinDimmerLevel = 27;
+  bool pinThermoCsLevel = 28;
+  bool pinThermoClkLevel = 29;
+  bool pinThermoDoLevel = 30;
+  bool pinThermoDiLevel = 31;
+  bool pinHx711SckLevel = 32;
+  bool pinHx711Dout1Level = 33;
+  bool pinHx711Dout2Level = 34;
+}
+
+// System/status info pushed on change and in response to g_sys_state.
+message SystemStateDto {
+  bool startupInitFinished = 1;
+  bool tofReady = 2;
+  bool isSteamForgottenON = 3;
+  bool scalesPresent = 4;
+  OperationModeDto operationMode = 5;
+  uint32 timeAlive = 6;
+  string coreVersion = 7;
+  bool tarePending = 8;
+  string coreType = 9;
+  bool thermocoupleFaulted = 10;
+  bool pressureSensorFaulted = 11;
+  string thermocoupleFaultReason = 12;
+  string pressureSensorFaultReason = 13;
+  bool pcbV2 = 14;
+}

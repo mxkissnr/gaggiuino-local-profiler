@@ -9,6 +9,13 @@ import { TARGET_ICON_SVG, WARNING_ICON_SVG } from '../icons.js';
 
 // ── Analytics entry point ─────────────────────────────────────────────────
 export function initAnalytics() {
+  // #957: S.allShots is filled by a background page walk after the Shots tab
+  // first paints. Analytics is a whole-history view — build from whatever is
+  // loaded now, and re-run once the walk finishes so the numbers settle on
+  // the full history. (Builders below read S.allShots / S.shots directly.)
+  if (!S.allShotsLoaded) {
+    window.onAllShotMetaLoaded = () => { window.onAllShotMetaLoaded = null; initAnalytics(); };
+  }
   buildSummaryKpis();
   buildTrendChart();
   buildCalendar();
@@ -60,10 +67,9 @@ export function buildSummaryKpis() {
   if (!el) return;
 
   const total   = S.shots.length;
-  const scored  = S.shots.filter(s => window.calcShotScore && window.getShotData
-    && window.calcShotScore(s, window.getShotData(s)) !== null);
+  const scored  = S.shots.filter(s => window.calcShotScore && window.calcShotScore(s) != null);
   const avgScore = scored.length
-    ? Math.round(scored.reduce((a, s) => a + window.calcShotScore(s, window.getShotData(s)), 0) / scored.length)
+    ? Math.round(scored.reduce((a, s) => a + window.calcShotScore(s), 0) / scored.length)
     : null;
 
   const totalG = S.shots.reduce((sum, s) => sum + (s.annotation?.dose || 0), 0);
@@ -89,8 +95,8 @@ export function buildSummaryKpis() {
   const warnEl = document.getElementById('trendWarning');
   if (warnEl) {
     const recent = scored.slice(-5);
-    if (recent.length >= 3 && window.calcShotScore && window.getShotData) {
-      const recentScores = recent.map(s => window.calcShotScore(s, window.getShotData(s)));
+    if (recent.length >= 3 && window.calcShotScore) {
+      const recentScores = recent.map(s => window.calcShotScore(s));
       const n = recentScores.length;
       const xs = recentScores.map((_, i) => i);
       const xm = (n - 1) / 2;
@@ -125,8 +131,8 @@ export function buildPersonalBests() {
 
   let bestShot = null, bestScore = -1;
   for (const s of S.shots) {
-    if (!window.calcShotScore || !window.getShotData) continue;
-    const sc = window.calcShotScore(s, window.getShotData(s));
+    if (!window.calcShotScore) continue;
+    const sc = window.calcShotScore(s);
     if (sc !== null && sc > bestScore) { bestScore = sc; bestShot = s; }
   }
 
@@ -190,7 +196,7 @@ export function _computeEquipmentStats(shots, getKey, getName) {
     if (key == null) continue;
     if (!byEquip[key]) byEquip[key] = { count: 0, scores: [], durations: [] };
     byEquip[key].count++;
-    const sc = window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null;
+    const sc = window.calcShotScore ? window.calcShotScore(s) : null;
     if (sc !== null) byEquip[key].scores.push(sc);
     const dur = (s.duration || 0) / 10;
     if (dur > 5) byEquip[key].durations.push(dur);
@@ -336,8 +342,8 @@ export function buildTimeOfDay() {
   for (const s of S.shots) {
     const h = new Date(s.timestamp * 1000).getHours();
     hours[h].count++;
-    if (window.calcShotScore && window.getShotData) {
-      const sc = window.calcShotScore(s, window.getShotData(s));
+    if (window.calcShotScore) {
+      const sc = window.calcShotScore(s);
       if (sc !== null) hours[h].scores.push(sc);
     }
   }
@@ -380,8 +386,8 @@ export function buildTrendChart() {
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
   const all = S.shots.filter(s => {
-    if (!window.calcShotScore || !window.getShotData) return false;
-    return window.calcShotScore(s, window.getShotData(s)) !== null;
+    if (!window.calcShotScore) return false;
+    return window.calcShotScore(s) !== null;
   });
   const src = S.trendWindow > 0 ? all.slice(-S.trendWindow) : all;
 
@@ -396,7 +402,7 @@ export function buildTrendChart() {
 
   const locale   = localeFor(S.currentLang);
   const labels   = src.map(s => new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }));
-  const scoreData = src.map(s => window.calcShotScore(s, window.getShotData(s)));
+  const scoreData = src.map(s => window.calcShotScore(s));
   const maData    = scoreData.map((_, i) => {
     const sl = scoreData.slice(Math.max(0, i - 4), i + 1);
     return Math.round(sl.reduce((a, b) => a + b, 0) / sl.length);
@@ -451,8 +457,8 @@ export function _renderCalendar() {
     if (!dayMap[key]) dayMap[key] = { count: 0, scores: [], lastId: null };
     dayMap[key].count++;
     dayMap[key].lastId = s.id;
-    if (window.calcShotScore && window.getShotData) {
-      const sc = window.calcShotScore(s, window.getShotData(s));
+    if (window.calcShotScore) {
+      const sc = window.calcShotScore(s);
       if (sc !== null) dayMap[key].scores.push(sc);
     }
   }
@@ -523,8 +529,8 @@ export function buildBeanStats() {
     if (!name) continue;
     if (!byBean[name]) byBean[name] = { count: 0, scores: [], durations: [], dialinShot: null };
     byBean[name].count++;
-    if (window.calcShotScore && window.getShotData) {
-      const sc = window.calcShotScore(s, window.getShotData(s));
+    if (window.calcShotScore) {
+      const sc = window.calcShotScore(s);
       if (sc !== null) {
         byBean[name].scores.push(sc);
         if (byBean[name].dialinShot === null && sc >= 80)
@@ -980,8 +986,8 @@ export function buildProfileChart() {
     const p = s.profile?.name || s.profileName || 'Unbekannt';
     if (!byProfile[p]) byProfile[p] = { scores: [], count: 0 };
     byProfile[p].count++;
-    if (window.calcShotScore && window.getShotData) {
-      const sc = window.calcShotScore(s, window.getShotData(s));
+    if (window.calcShotScore) {
+      const sc = window.calcShotScore(s);
       if (sc !== null) byProfile[p].scores.push(sc);
     }
   }
@@ -1093,7 +1099,7 @@ export function _computeBeanRanking(shots) {
   for (const [name, beanShots] of Object.entries(byBean)) {
     const sorted = [...beanShots].sort((a, b) => a.timestamp - b.timestamp);
     const scored = sorted
-      .map(s => ({ s, sc: window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null }))
+      .map(s => ({ s, sc: window.calcShotScore ? window.calcShotScore(s) : null }))
       .filter(x => x.sc !== null);
     const avgScore = scored.length ? Math.round(scored.reduce((a, x) => a + x.sc, 0) / scored.length) : null;
 
@@ -1179,7 +1185,13 @@ export function buildBeanRanking() {
 // regardless of whatever S.activeMachineId currently scopes the rest of
 // the app to. Only rendered once >=2 machines are registered.
 function _tempStability(shot) {
-  const temp = shot.datapoints?.temperature, target = shot.datapoints?.targetTemperature;
+  // #957: the server computes this scalar per GET /api/shots row
+  // (tempStabilityDev) from the same temp+target series it parses to score —
+  // no per-shot curve fetch needed here. Fall back to a local compute only
+  // for synthetic/demo shots that carry their own datapoints inline.
+  if (shot.tempStabilityDev !== undefined) return shot.tempStabilityDev;
+  const d = shot.datapoints || {};
+  const temp = d.temperature, target = d.targetTemperature;
   if (!temp?.length || !target?.length) return null;
   const n = Math.min(temp.length, target.length);
   let sum = 0, count = 0;
@@ -1201,7 +1213,7 @@ export function _computeMachineComparison(shots, machines) {
 
   return Object.values(byMachine).map(d => {
     const scored = d.shots
-      .map(s => window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null)
+      .map(s => window.calcShotScore ? window.calcShotScore(s) : null)
       .filter(sc => sc !== null);
     const avgScore = scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null;
 
@@ -1306,7 +1318,7 @@ function _renderDialinProgressionChart(beanName) {
 
   const labels    = shots.map((_, i) => `#${i + 1}`);
   const grindData = shots.map(s => _parseGrindNum(s.annotation?.grindSetting));
-  const scoreData = shots.map(s => window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null);
+  const scoreData = shots.map(s => window.calcShotScore ? window.calcShotScore(s) : null);
 
   S.dialinProgressionChart = new Chart(ctx, {
     type: 'line',

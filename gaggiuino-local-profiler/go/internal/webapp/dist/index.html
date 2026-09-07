@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GLP</title>
+</head>
+<body>
+    <!--
+      GLP SPA build placeholder.
+
+      This committed file is a stand-in so `go build ./...` and `go test ./...`
+      can resolve internal/webapp's `//go:embed all:dist` without the Vite
+      frontend build having run (CI's go-build.yaml test job runs exactly that,
+      with no npm step).
+
+      The real bundle is produced by `make -C go frontend` or the Dockerfile's
+      `frontend` stage, which overwrites this directory with
+      gaggiuino-local-profiler/public/. Everything else under dist/ is
+      git-ignored. See internal/webapp/doc.go.
+    -->
+    <div id="glp-app-root"></div>
+</body>
+</html>

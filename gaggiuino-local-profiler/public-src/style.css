@@ -1211,6 +1211,13 @@
         .lib-item-info { flex: 1; min-width: 0; }
         .lib-item-name { font-size: var(--fs-2); color: var(--gray-200); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-name .serif-display { font-size: var(--fs-3); font-weight: 600; }
+        /* Machine-profile list (library-profile-editor.js renderProfileList):
+           name + optional utility badge on one row — badge sits outside the
+           name's own ellipsis-truncation so it never gets clipped away. */
+        .lib-item-name-row { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+        .lib-item-name-row .lib-item-name { min-width: 0; }
+        .lib-utility-badge { flex-shrink: 0; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--gray-400); background: var(--gray-700); border-radius: 999px; padding: 1px var(--sp-2); }
+        .lib-item-utility .lib-item-name { opacity: .75; }
         /* #404: eyebrow above the bean name — small, muted, uppercase,
            same visual weight class as the recipe/process-card labels. */
         .lib-item-origin-eyebrow { font-size: var(--fs-1); color: var(--gray-600); margin-bottom: 2px; }
@@ -1518,10 +1525,12 @@
         #live-status-badge.ready       { color: var(--ok); }
         #live-status-badge.error       { color: var(--err); }
         #live-status-badge.unreachable { color: var(--err); }
-        /* #902: steaming/flushing get their own accent color, distinct from
-           brewing's --err red -- an active-but-not-a-shot process. */
+        /* #902/#983: steaming/flushing/descaling get their own accent color,
+           distinct from brewing's --err red -- an active-but-not-a-shot
+           process. */
         #live-status-badge.steaming,
-        #live-status-badge.flushing    { color: var(--accent-ink); }
+        #live-status-badge.flushing,
+        #live-status-badge.descaling   { color: var(--accent-ink); }
 
         #live-status-badge .badge-dot {
             width: 8px; height: 8px;
@@ -1530,7 +1539,8 @@
         }
         #live-status-badge.brewing .badge-dot,
         #live-status-badge.steaming .badge-dot,
-        #live-status-badge.flushing .badge-dot { animation: pulse 1.2s infinite; }
+        #live-status-badge.flushing .badge-dot,
+        #live-status-badge.descaling .badge-dot { animation: pulse 1.2s infinite; }
 
         #live-meta {
             display: flex;
@@ -2434,6 +2444,31 @@
         .pp-field label { font-size: var(--fs-1); color:var(--gray-500); }
         .pp-field input, .pp-field select { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); }
         .pp-field input:focus, .pp-field select:focus { outline:none; border-color:var(--gray-500); }
+        /* GaggiMate profile editor (gaggimate-profile-editor.js). Looks like
+           a near-duplicate of .pp-field input/select just above (same
+           colors/border/radius) — deliberately not merged: .pp-field lives
+           in the dense 2-4 column .pp-grid and needs the tighter sp-1
+           padding to fit, this form doesn't. */
+        .lib-btn-sm.active { background:var(--accent-from); color:var(--accent-text); }
+        .lib-select, .lib-input { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size:var(--fs-1); padding:var(--sp-2) var(--sp-2); }
+        .lib-select:focus, .lib-input:focus { outline:none; border-color:var(--gray-500); }
+        .lib-input { min-width:0; }
+        .flex-1 { flex:1; }
+        .gm-chart-container { flex-shrink:0; margin:.5rem 0 .75rem; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); overflow:hidden; height:180px; position:relative; }
+        /* Segmented-control look (shared background/border around the whole
+           group, tighter radius per button) so a row of mode buttons reads
+           as one group with a selection, not a loose row of buttons. */
+        .gm-toggle-group { display:inline-flex; gap:2px; flex-wrap:wrap; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); padding:2px; }
+        .gm-toggle-group .lib-btn-sm { border-radius:calc(var(--radius) - 2px); }
+        .gm-toggle-group .lib-btn-sm.active { box-shadow:0 1px 2px rgba(0,0,0,.25); }
+        .gm-phase { background:var(--gray-800); border-radius:var(--radius); padding:var(--sp-3); margin-bottom:var(--sp-2); }
+        .gm-phase-nav { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-3); flex-wrap:wrap; }
+        .gm-phase-nav span { flex:0 0 auto; font-size:var(--fs-1); color:var(--gray-400); }
+        .gm-dropdown { position:relative; display:inline-block; }
+        .gm-dropdown-menu { position:absolute; top:100%; left:0; z-index:200; background:var(--gray-800); border:1px solid var(--gray-600); border-radius:var(--radius); min-width:180px; padding:var(--sp-1) 0; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+        .gm-dropdown-item { display:block; width:100%; text-align:left; background:none; border:none; color:var(--gray-300); font-size:var(--fs-1); padding:var(--sp-2) var(--sp-3); cursor:pointer; }
+        .gm-dropdown-item:hover { background:var(--gray-700); color:var(--gray-100); }
+
         /* Guided Dial-In wizard modal (#310) — same fixed-height/flex-child
            pattern as .profile-editor-modal, but narrower (it's a linear
            step flow, not a dense multi-column form). */
@@ -2715,6 +2750,30 @@
             transition: width .2s ease;
         }
 
+        /* ── Backup/restore modal progress (#960) — reuses the shot-import
+           track/fill above; adds an indeterminate mode for transfers whose
+           size is genuinely unknown (Node backend sends no estimate header,
+           or the server-side restore phase after the upload completes). ── */
+        .backup-modal-progress {
+            display: flex;
+            align-items: center;
+            gap: var(--sp-2);
+            margin: var(--sp-2) 0;
+        }
+        #backupModalProgressLabel {
+            font-size: var(--fs-1);
+            color: var(--gray-500);
+            white-space: nowrap;
+        }
+        .sync-progress-track.indeterminate .sync-progress-fill {
+            width: 40% !important;
+            animation: glp-indeterminate 1.1s ease-in-out infinite;
+        }
+        @keyframes glp-indeterminate {
+            0% { margin-left: -40%; }
+            100% { margin-left: 100%; }
+        }
+
         /* ── Machine icon — live states (#811) ──────────────────────────
            Animated "Instrument" icon (public-src/machine-icon.js's
            machineIconAnimatedSvg()/setMachineIconMode()), ported from
@@ -2778,12 +2837,14 @@
         .machine-icon-live.is-brewing .d-brew { opacity: 1; }
         .machine-icon-live.is-steaming .d-ready { opacity: 0; }
         .machine-icon-live.is-steaming .d-steam { opacity: 1; }
-        /* #902: flush gets the display-badge treatment only (no milk-jug-
-           style illustration -- there's no equivalent physical action to
-           depict for a group-head flush the way there is for steaming
-           milk). */
+        /* #902/#983: flush/descale get the display-badge treatment only (no
+           milk-jug-style illustration -- there's no equivalent physical
+           action to depict for a group-head flush or a descale cycle the
+           way there is for steaming milk). */
         .machine-icon-live.is-flushing .d-ready { opacity: 0; }
         .machine-icon-live.is-flushing .d-flush { opacity: 1; }
+        .machine-icon-live.is-descaling .d-ready { opacity: 0; }
+        .machine-icon-live.is-descaling .d-descale { opacity: 1; }
 
         /* Bezug/brewing: the brew scale's cup fills to one third, crema
            settles on top last. Two steady streams from the basket,

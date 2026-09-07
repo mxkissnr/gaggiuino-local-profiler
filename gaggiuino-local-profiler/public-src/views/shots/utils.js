@@ -1,5 +1,5 @@
 import { S }                    from '../../state.js';
-import { mapToXY }              from '../../utils.js';
+import { mapShotDatapoints }    from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../../lib/score.js';
 
 // ── Bean age ───────────────────────────────────────────────────────────────
@@ -68,21 +68,14 @@ export function calcBeanAgeAtShot(beanName, shotTimestampSec, beanId) {
 
 // ── Shot data ─────────────────────────────────────────────────────────────
 
+// getShotData(shot) reads shot.datapoints directly — only valid for a shot
+// object that actually carries its curve blob (synthetic/demo data, a shot
+// just fetched from GET /api/shots/{id}, or a live-brew payload). List rows
+// from GET /api/shots no longer carry datapoints: go through the curve cache
+// (shot-curves.js getShotCurve / getCachedShotData) for those.
 export function getShotData(shot) {
   if (!shot) return null;
-  const d = shot.datapoints || {};
-  const t = d.timeInShot || [];
-  return {
-    rawTimes:       t.map(v => v / 10),
-    pressure:       mapToXY(t, d.pressure),
-    targetPressure: mapToXY(t, d.targetPressure),
-    flow:           mapToXY(t, d.pumpFlow),
-    targetFlow:     mapToXY(t, d.targetPumpFlow),
-    weight:         mapToXY(t, d.shotWeight || d.weight),
-    weightFlow:     mapToXY(t, d.weightFlow),
-    temp:           mapToXY(t, d.temperature),
-    targetTemp:     mapToXY(t, d.targetTemperature),
-  };
+  return mapShotDatapoints(shot.datapoints);
 }
 
 // Prefer the server-computed score; only recompute locally for synthetic data
