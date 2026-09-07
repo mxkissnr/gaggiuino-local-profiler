@@ -78,4 +78,16 @@ describe('resolveWorldMapColors (#1024)', () => {
     expect(c.backgroundColor).toBe('rgba(19,20,22,0.55)');
     expect(c.accentTo).toBe('#f97316');
   });
+
+  it('derives the bean-label text-outline halo (--gray-900) per theme instead of a fixed dark literal', () => {
+    stubTheme(DARK);
+    const dark = resolveWorldMapColors();
+    expect(dark.textBorderColor).toBe('rgba(19,20,22,0.7)');
+
+    stubTheme(LIGHT);
+    const light = resolveWorldMapColors();
+    expect(light.textBorderColor).toBe('rgba(247,247,246,0.7)');
+
+    expect(dark.textBorderColor).not.toBe(light.textBorderColor);
+  });
 });

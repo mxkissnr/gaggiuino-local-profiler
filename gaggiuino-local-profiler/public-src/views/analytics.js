@@ -636,6 +636,10 @@ export function resolveWorldMapColors() {
     areaColor:         _hexToRgba(land, .4),
     emphasisAreaColor: _hexToRgba(land, .6),
     borderColor:       _hexToRgba(border, .7),
+    // Text-outline halo behind a bean's map label, meant to keep it legible
+    // over the (accent-colored) land/scatter point beneath it regardless of
+    // theme — same background role as `bg` above, not a separate token.
+    textBorderColor:   _hexToRgba(bg, .7),
   };
 }
 
@@ -656,7 +660,7 @@ function _repaintWorldMapTheme() {
     },
     series: [
       { itemStyle: { areaColor: c.accentTo, borderColor: c.borderColor } },
-      { itemStyle: { color: c.accentTo, shadowColor: _hexToRgba(c.accentTo, .6) }, label: { color: c.mutedText } },
+      { itemStyle: { color: c.accentTo, shadowColor: _hexToRgba(c.accentTo, .6) }, label: { color: c.mutedText, textBorderColor: c.textBorderColor } },
     ],
   });
 }
@@ -1026,7 +1030,7 @@ export async function buildWorldMap() {
         data: points,
         symbolSize: 7,
         itemStyle: { color: c.accentTo, shadowBlur: 8, shadowColor: _hexToRgba(c.accentTo, .6) },
-        label: { show: false, color: c.mutedText, textBorderColor: 'rgba(9,9,11,.7)', textBorderWidth: 2 },
+        label: { show: false, color: c.mutedText, textBorderColor: c.textBorderColor, textBorderWidth: 2 },
         labelLayout: { hideOverlap: true },
         rippleEffect: { scale: 2.5 },
       },
