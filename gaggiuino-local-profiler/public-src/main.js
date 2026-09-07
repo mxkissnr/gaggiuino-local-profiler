@@ -40,6 +40,7 @@ import { t, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
 import { generateBeanQR } from './glp-qr.js';
 import { themeColor, THEME_CHANGE_EVENT, onThemeChange, applyChartTheme } from './utils.js';
+import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme } from './theme.js';
 import { openBackupExportModal, openBackupRestoreModal } from './components/backup-modal.js';
 
 import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
@@ -217,6 +218,9 @@ function copyApiToken() {
     .catch(() => {});
 }
 
+// #1018: live re-resolution while 'auto' is selected -- see theme.js.
+watchSystemTheme();
+
 // ── Expose everything on window (for HTML onclick handlers) ───────────────
 Object.assign(window, {
   // state & i18n
@@ -227,14 +231,12 @@ Object.assign(window, {
 
   // theme
   setTheme: (theme) => {
-    localStorage.setItem('glp_theme', theme);
-    document.documentElement.dataset.theme = theme;
-    document.querySelectorAll('.theme-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.themeVal === theme));
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    applyTheme(theme);
   },
   setAccentTheme: (name) => {
     localStorage.setItem('glp_accent_theme', name);
-    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT));  // #814, see _applyTheme
+    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT));  // #814, see theme.js's applyTheme()
     document.documentElement.dataset.accent = name;
     document.querySelectorAll('.accent-swatch').forEach(b =>
       b.classList.toggle('active', b.dataset.accent === name));
@@ -588,16 +590,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ── Theme ──────────────────────────────────────────────────────────────
-  const _applyTheme = (theme) => {
-    document.documentElement.dataset.theme = theme;
-    document.querySelectorAll('.theme-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.themeVal === theme));
-    // #814: Chart.js resolves its colours once, at construction. Setting the
-    // theme attribute repaints everything CSS controls but leaves every chart
-    // already on screen with the previous theme's legend, ticks and grid, so
-    // the views holding a live Chart instance need telling.
-    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT));
-  };
+  // applyTheme()/resolveTheme() live in theme.js (#1018), shared with
+  // window.setTheme and watchSystemTheme()'s OS prefers-color-scheme listener.
   // #814: one listener for every live Chart instance. Charts resolve their
   // chrome colours at construction, so without this a chart already on screen
   // keeps the previous theme's legend/ticks/grid until something else happens
@@ -612,7 +606,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  _applyTheme(localStorage.getItem('glp_theme') || 'dark');
+  applyTheme(localStorage.getItem(THEME_STORAGE_KEY) || 'dark');
 
   const _savedAccent = localStorage.getItem('glp_accent_theme') || 'amber';
   document.documentElement.dataset.accent = _savedAccent;
@@ -819,7 +813,12 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('glp_dialin_count', e.target.value);
     renderDialin();
   });
-  document.querySelectorAll('.theme-btn').forEach(btn => {
+  // #1018: scoped to #themeToggleGroup, not the bare .theme-btn class --
+  // #mqttTransportToggle below reuses that same class for its own toggle and
+  // has no data-theme-val, so an unscoped query used to also wire this click
+  // handler onto it, calling setTheme(undefined) and silently corrupting the
+  // stored theme (neither Dark nor Light showed .active afterwards).
+  document.querySelectorAll('#themeToggleGroup .theme-btn').forEach(btn => {
     // eslint-disable-next-line no-undef -- setTheme is assigned onto window above (Object.assign), resolves as a global at runtime
     btn.addEventListener('click', () => setTheme(btn.dataset.themeVal));
   });

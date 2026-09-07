@@ -430,9 +430,9 @@ GLP ships with six interface languages selectable in ⚙ Settings → Language:
 
 The selection is saved in `localStorage`. All UI strings, chart labels, grind recommendations, maintenance reminders, order status messages, and library labels are fully translated in all six languages. On first launch (before any language has been explicitly chosen), GLP defaults to your browser's language if it's one of the six above, and to **English** otherwise — never German by default for an unsupported browser language.
 
-### Light / Dark theme
+### Light / Dark / Auto theme
 
-GLP has a built-in theme toggle (⚙ Settings → Theme). The choice is saved in `localStorage` and applied immediately. **Dark** is the default; **Light** inverts the grey scale to a white-based palette.
+GLP has a built-in theme toggle (⚙ Settings → Theme) with three options. The choice is saved in `localStorage` and applied immediately. **Dark** is the default; **Light** inverts the grey scale to a white-based palette; **Auto** follows the browser/OS `prefers-color-scheme` setting and switches live if it changes while the app stays open — no reload needed. Auto tracks the browser/OS preference specifically, not Home Assistant's own configured theme, which isn't reliably readable through a plain Ingress-embedded view.
 
 ### Accent color scheme
 

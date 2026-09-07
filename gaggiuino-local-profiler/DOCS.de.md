@@ -434,9 +434,9 @@ GLP unterstützt sechs Oberflächensprachen, umschaltbar unter ⚙ Einstellungen
 
 Die Auswahl wird in `localStorage` gespeichert. Alle UI-Texte, Chart-Beschriftungen, Mahlgrad-Empfehlungen, Wartungserinnerungen, Bestellstatus-Meldungen und Bibliothekstexte sind in allen sechs Sprachen vollständig übersetzt. Beim ersten Start (bevor eine Sprache explizit gewählt wurde) verwendet GLP die Sprache deines Browsers, sofern sie eine der sechs obigen ist, sonst **Englisch** — niemals standardmäßig Deutsch bei einer nicht unterstützten Browsersprache.
 
-### Hell / Dunkel Theme
+### Hell / Dunkel / Auto Theme
 
-GLP hat einen eingebauten Theme-Wechsler (⚙ Einstellungen → Theme). Die Wahl wird in `localStorage` gespeichert und sofort angewandt. **Dark** ist die Voreinstellung; **Hell** kehrt die Grau-Skala auf eine weiß-basierte Palette um.
+GLP hat einen eingebauten Theme-Wechsler (⚙ Einstellungen → Theme) mit drei Optionen. Die Wahl wird in `localStorage` gespeichert und sofort angewandt. **Dark** ist die Voreinstellung; **Hell** kehrt die Grau-Skala auf eine weiß-basierte Palette um; **Auto** folgt der Browser-/OS-Einstellung `prefers-color-scheme` und wechselt live, wenn sich diese ändert, während die App geöffnet bleibt — kein Neuladen nötig. Auto folgt dabei gezielt der Browser-/OS-Präferenz, nicht dem eigenen konfigurierten Theme von Home Assistant, das über eine reine Ingress-eingebettete Ansicht nicht zuverlässig auslesbar ist.
 
 ### Farbschema (Akzentfarbe)
 
