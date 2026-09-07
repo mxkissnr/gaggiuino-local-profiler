@@ -237,13 +237,15 @@ Object.assign(window, {
   },
   setAccentTheme: (name) => {
     localStorage.setItem('glp_accent_theme', name);
-    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT));  // #814, see theme.js's applyTheme()
     // #1019: the only thing that still applies --accent-* now -- the
     // [data-accent="..."] CSS blocks that used to pick this up on their own
     // are retired, so a manual pick has to be pushed through the same
     // inline-var mechanism the active machine's own theme uses (and which
     // takes priority over this pick when the active machine has a theme set).
-    applyActiveMachineAccentTheme();
+    // #1021: this dispatch is what applies it -- the onThemeChange()
+    // listener registered below already calls applyActiveMachineAccentTheme()
+    // synchronously in response, so no separate direct call is needed here.
+    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT));  // #814, see theme.js's applyTheme()
     // Still recorded on <html> even though no CSS reads it any more (#1019
     // retired the [data-accent] selectors) -- shareCard() (views/shots/
     // index.js, #462) reads this to match the exported card to whatever
@@ -617,6 +619,13 @@ document.addEventListener('DOMContentLoaded', () => {
       applyChartTheme(S[key]);
     }
   });
+
+  // #1021: --accent-ink now has a light-theme-only override table (see
+  // machines-settings.js), so toggling dark<->light (manually or via the OS
+  // 'auto' listener in theme.js, which also fires this event) has to
+  // recompute it too, not just whenever the accent/machine choice itself
+  // changes.
+  onThemeChange(() => applyActiveMachineAccentTheme());
 
   applyTheme(localStorage.getItem(THEME_STORAGE_KEY) || 'dark');
 

@@ -82,6 +82,42 @@ function relativeLuminance({ r, g, b }) {
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 
+// #1021: --accent-ink light-theme overrides for the 8 THEME_PRESETS, picked
+// by the same hand-audit method #811 used for the old 6-accent set (see
+// git history on style.css around that PR): darken the raw preset hex
+// (`p.a`, the same stop applyActiveMachineAccentTheme() below uses for
+// --accent) along its own hue to the first value that clears the WCAG AA
+// 4.5:1 floor against the darkest of the four light-theme surfaces
+// (--raised, #e6e6e3 — the lowest-luminance of --gray-950/900/800/--raised,
+// so clearing it guarantees clearing the other three too). Only presets
+// that actually fail as raw hex get an entry here; ruby-ristretto (8.01:1
+// on --raised) and mulberry-mocha (7.18:1) already clear the floor
+// unmodified and are absent deliberately, not by oversight — see
+// test/theme-contrast.test.js.
+const LIGHT_ACCENT_INK_OVERRIDES = {
+  'amber-americano':   '#905c06',
+  'copper-cortado':    '#975730',
+  'twilight-turkish':  '#06708a',
+  'marbled-macchiato': '#905c06',
+  'ember-espresso':    '#b73e1a',
+  'frosty-flat-white': '#0f736b',
+};
+
+// Pure lookup (no DOM) so test/theme-contrast.test.js can assert the table
+// above against the four light surfaces directly, the same way it already
+// asserts the base token scale straight from style.css. `presetKey` is
+// whichever THEME_PRESETS key is actually driving the current accent (see
+// applyActiveMachineAccentTheme() below) — null for a fully custom
+// per-machine {a,b} theme, which this audit doesn't cover (the old #811
+// audit never covered arbitrary custom hex either, only the named
+// accents). Dark theme, an unaudited/custom key, or a preset that already
+// clears the floor raw all fall back to `accentHex` itself, i.e. the same
+// var(--accent) alias --accent-ink used everywhere before this audit.
+export function resolveAccentInk(presetKey, accentHex, isLightTheme) {
+  if (!isLightTheme || !presetKey) return accentHex;
+  return LIGHT_ACCENT_INK_OVERRIDES[presetKey] || accentHex;
+}
+
 // #604/#1019: reconciles the ACTIVE machine's per-machine colour theme
 // (#594, previously icon-only) into the global --accent-* variables. #1019
 // widened this from "only the default machine" to "whichever machine the
@@ -107,6 +143,11 @@ function relativeLuminance({ r, g, b }) {
 // --accent-glow doesn't need the same rigor (it's a low-alpha background
 // wash, not text-on-fill contrast) — a flat 15% alpha of the first stop
 // matches every existing preset's own glow convention (see style.css).
+// --accent-ink (#1021) is the odd one out: unlike --accent-text/-glow it
+// CAN'T be derived mathematically from the accent colour itself, because it
+// is that colour used as text on a near-white light-theme surface, not
+// paired with a #000/#fff/low-alpha counterpart — hence the hand-audited
+// LIGHT_ACCENT_INK_OVERRIDES table above instead of a formula here.
 export function applyActiveMachineAccentTheme() {
   const root = document.documentElement;
   // Some test doubles for `document` (and, in principle, any non-browser
@@ -115,7 +156,8 @@ export function applyActiveMachineAccentTheme() {
   // applyActiveMachineChange() right after this call regardless.
   if (!root) return;
   const machine = getActiveMachine();
-  const machineTheme = resolveTheme(machine?.theme);
+  const machineThemeRaw = machine?.theme || null;
+  const machineTheme = resolveTheme(machineThemeRaw);
   const swatchesEl = document.getElementById('accentSwatches');
   const noteEl = document.getElementById('accentMachineThemeNote');
 
@@ -133,6 +175,14 @@ export function applyActiveMachineAccentTheme() {
   const darkest = luminances.length ? Math.min(...luminances) : null;
   if (darkest != null) root.style.setProperty('--accent-text', darkest > 0.179 ? '#000' : '#fff');
   if (rgbA) root.style.setProperty('--accent-glow', `rgba(${rgbA.r},${rgbA.g},${rgbA.b},.15)`);
+  // #1021: the active machine's own theme, when it's a preset, carries its
+  // key straight through; when the machine has no theme of its own we fall
+  // back to the user's persisted Farbschema pick (savedKey, always a valid
+  // preset key). A fully custom per-machine {a,b} theme has no preset key
+  // at all -- resolveAccentInk() treats that the same as an unaudited one.
+  const activePresetKey = machineThemeRaw ? (machineThemeRaw.preset || null) : savedKey;
+  const isLightTheme = root.dataset?.theme === 'light';
+  root.style.setProperty('--accent-ink', resolveAccentInk(activePresetKey, resolved.a, isLightTheme));
   // The "disabled" dimmed styling + explainer note are only for when the
   // ACTIVE MACHINE's own theme is actually overriding the picker below --
   // when we fell back to the user's own pick above, that picker still

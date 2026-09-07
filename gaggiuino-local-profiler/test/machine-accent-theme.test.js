@@ -63,6 +63,7 @@ describe('applyActiveMachineAccentTheme (#604/#1019)', () => {
     for (const key of Object.keys(_localStorageStore)) delete _localStorageStore[key];
     root.style = new FakeStyle();
     root.classList = new FakeClassList();
+    delete root.dataset;
     S.machines = [];
     S.activeMachineId = null;
   });
@@ -217,6 +218,62 @@ describe('applyActiveMachineAccentTheme (#604/#1019)', () => {
     S.machines = [{ id: 1, isDefault: true, theme: { preset: 'amber-americano' } }];
     expect(() => applyActiveMachineAccentTheme()).not.toThrow();
     globalThis.document = savedDoc;
+  });
+
+  // #1021: --accent-ink light-theme override -- root.dataset is left
+  // undefined by FakeEl (no data-theme test double needed elsewhere), so
+  // these tests set it directly the same way applyTheme() (theme.js) would
+  // via documentElement.dataset.theme.
+  describe('--accent-ink light-theme override (#1021)', () => {
+    it('equals --accent (no override) in the dark theme, even for a preset with a light-theme override', () => {
+      root.dataset = { theme: 'dark' };
+      S.machines = [{ id: 1, isDefault: true, theme: { preset: 'amber-americano' } }];
+      applyActiveMachineAccentTheme();
+
+      expect(root.style.getPropertyValue('--accent-ink')).toBe('#f59e0b');
+    });
+
+    it('equals --accent (no override) when root.dataset is entirely absent (pre-applyTheme() boot state)', () => {
+      delete root.dataset;
+      S.machines = [{ id: 1, isDefault: true, theme: { preset: 'amber-americano' } }];
+      applyActiveMachineAccentTheme();
+
+      expect(root.style.getPropertyValue('--accent-ink')).toBe('#f59e0b');
+    });
+
+    it('applies the darkened override for a preset that fails raw in the light theme', () => {
+      root.dataset = { theme: 'light' };
+      S.machines = [{ id: 1, isDefault: true, theme: { preset: 'amber-americano' } }];
+      applyActiveMachineAccentTheme();
+
+      expect(root.style.getPropertyValue('--accent')).toBe('#f59e0b');
+      expect(root.style.getPropertyValue('--accent-ink')).toBe('#905c06');
+    });
+
+    it('leaves an already-compliant preset unmodified in the light theme', () => {
+      root.dataset = { theme: 'light' };
+      S.machines = [{ id: 1, isDefault: true, theme: { preset: 'ruby-ristretto' } }];
+      applyActiveMachineAccentTheme();
+
+      expect(root.style.getPropertyValue('--accent-ink')).toBe('#7f1d1d');
+    });
+
+    it('falls back to --accent for a fully custom {a,b} machine theme in the light theme (no preset key to look up)', () => {
+      root.dataset = { theme: 'light' };
+      S.machines = [{ id: 1, isDefault: true, theme: { a: '#f59e0b', b: '#f59e0b' } }];
+      applyActiveMachineAccentTheme();
+
+      expect(root.style.getPropertyValue('--accent-ink')).toBe('#f59e0b');
+    });
+
+    it('resolves the user\'s persisted Farbschema pick\'s override when the active machine has no theme of its own', () => {
+      root.dataset = { theme: 'light' };
+      S.machines = [{ id: 1, isDefault: true, theme: null }];
+      localStorage.setItem('glp_accent_theme', 'frosty-flat-white');
+      applyActiveMachineAccentTheme();
+
+      expect(root.style.getPropertyValue('--accent-ink')).toBe('#0f736b');
+    });
   });
 });
 

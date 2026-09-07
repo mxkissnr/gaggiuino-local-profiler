@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Fixed
+- **The Settings → Farbschema accent, when used as text (e.g. the star rating, active tabs, sort arrows), is now readable in the light theme for all 8 named presets.** Closes #1021
 - **The Settings → Theme toggle now correctly highlights whichever of Dark/Light/Auto is actually selected.** Clicking the unrelated WebSocket/MQTT transport toggle right below it used to silently break this — both buttons went permanently blank until the theme was reselected. Closes #1018
 - **The Live tab no longer freezes on stale readings when the live event stream goes silent mid-session without ever cleanly failing** — it now falls back to REST polling until the stream recovers, instead of trusting a connection that looked fine at first but stopped delivering updates. Closes #1016
 - **(go-migration) A panic in a background task (live-machine polling, scheduled sync, or a settings fetch) is now recovered and logged instead of crashing the whole add-on.** Closes #993
