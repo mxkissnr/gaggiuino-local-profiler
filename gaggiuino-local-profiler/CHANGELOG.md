@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Fixed
+- **The Statistics world map now follows the active Dark/Light/Auto theme instead of staying stuck on dark colours**, and updates immediately if you switch theme while the map is already open. Closes #1024
 - **The Settings → Farbschema accent, when used as text (e.g. the star rating, active tabs, sort arrows), is now readable in the light theme for all 8 named presets.** Closes #1021
 - **The Settings → Theme toggle now correctly highlights whichever of Dark/Light/Auto is actually selected.** Clicking the unrelated WebSocket/MQTT transport toggle right below it used to silently break this — both buttons went permanently blank until the theme was reselected. Closes #1018
 - **The Live tab no longer freezes on stale readings when the live event stream goes silent mid-session without ever cleanly failing** — it now falls back to REST polling until the stream recovers, instead of trusting a connection that looked fine at first but stopped delivering updates. Closes #1016
