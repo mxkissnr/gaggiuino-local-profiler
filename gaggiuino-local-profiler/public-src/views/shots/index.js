@@ -1033,8 +1033,12 @@ export async function shareCard(format = 'square') {
     // #462: the card should visually match whatever accent/theme the user
     // is actually looking at, not a hardcoded snapshot — same attributes
     // main.js applies to <html> (dataset.accent/dataset.theme), same
-    // defaults ('amber'/'dark', see _applyTheme()/_savedAccent in main.js).
-    const accent = document.documentElement.dataset.accent || 'amber';
+    // defaults ('amber-americano'/'dark', see applyTheme()/_savedAccent in
+    // main.js). #1019: dataset.accent no longer drives any CSS itself (the
+    // [data-accent] rules it used to key are retired), but is still set on
+    // every setAccentTheme() call purely so this stays in sync with the
+    // user's actual Farbschema pick.
+    const accent = document.documentElement.dataset.accent || 'amber-americano';
     const theme  = document.documentElement.dataset.theme  || 'dark';
     const r = await apiFetch(`api/shots/${shotId}/card?format=${encodeURIComponent(format)}&accent=${encodeURIComponent(accent)}&theme=${encodeURIComponent(theme)}`);
     if (!r.ok) {

@@ -81,13 +81,22 @@
             --warn:   #d3a03f;
             --err:    #e0705f;
 
-            /* ── Accent (Amber default) ──
-               The 6 app accents keep their exact values — they are the brand,
-               and they are audited rather than changed. All six clear 4.5:1
-               as text on every dark surface (worst: aurora 5.59:1). */
+            /* ── Accent (amber-americano default) ──
+               #1019: these are amber-americano's own values (see
+               lib/machines/theme-presets.js's THEME_PRESETS, the single
+               source of truth both the per-machine theme picker and the
+               Settings -> Farbschema picker now share) — this block only
+               exists so <html> already has a sensible accent painted before
+               JS runs applyActiveMachineAccentTheme() (machines-settings.js)
+               and overrides it inline with the actual resolved value. The
+               old per-swatch [data-accent="..."] blocks that used to live
+               here for the other 5 legacy swatches (plus Crema's warm-
+               neutral grayscale override) are retired entirely along with
+               them — every preset, including this default, now only ever
+               reaches the page via that one inline-style mechanism. */
             --accent:      #f59e0b;
             --accent-from: #f59e0b;
-            --accent-to:   #f97316;
+            --accent-to:   #f59e0b;
             --accent-text: #000;
             --accent-glow: rgba(245,158,11,.15);
             /* --on-fill: text/number sitting ON a full-strength semantic fill
@@ -109,31 +118,6 @@
                fill stay exactly the configured brand colour while the text
                form stays legible. */
             --accent-ink:  var(--accent);
-        }
-
-        /* ── Accent themes ── */
-        [data-accent="ocean"]  { --accent: #38bdf8; --accent-from: #3b82f6; --accent-to: #06b6d4; --accent-text: #000; --accent-glow: rgba(59,130,246,.15); }
-        [data-accent="aurora"] { --accent: #a78bfa; --accent-from: #6366f1; --accent-to: #a855f7; --accent-text: #fff; --accent-glow: rgba(167,139,250,.15); }
-        [data-accent="ember"]  { --accent: #fb923c; --accent-from: #ef4444; --accent-to: #f97316; --accent-text: #fff; --accent-glow: rgba(239,68,68,.15); }
-        [data-accent="forest"] { --accent: #34d399; --accent-from: #22c55e; --accent-to: #10b981; --accent-text: #000; --accent-glow: rgba(34,197,94,.15); }
-        /* #404: Crema is the only theme that also warms the neutral gray
-           scale (espresso-brown instead of true gray) — every other accent
-           only swaps --accent-*. Contrast checked against the same targets
-           #397 used for the base scale (label text >=4.5:1 on card/sidebar
-           surfaces): gray-600 vs gray-800 5.11:1, vs gray-900 5.84:1;
-           gray-500 vs gray-800 6.13:1, vs gray-900 7.01:1. */
-        [data-accent="crema"] {
-            --gray-100: #fbf5ec;
-            --gray-200: #f2e6d8; --gray-300: #dccbb6; --gray-400: #c9b8a4; --gray-500: #b0a08d; --gray-600: #a2917d;
-            --gray-700: #4e3a2b; --gray-800: #2e2118; --gray-900: #1e1611; --gray-950: #14100c;
-            /* #811: Crema needs its own --raised and --err. Its surfaces are
-               warmer and closer together than the graphite scale's, so the
-               shared --err (#e0705f) lands at 4.42:1 on a Crema --raised —
-               just under the floor. Lifted to #e17363 (4.54:1) rather than
-               dropping the nesting level. */
-            --raised: #38291e;
-            --err: #e17363;
-            --accent: #d4a24c; --accent-from: #d4a24c; --accent-to: #b8823a; --accent-text: #1c1410; --accent-glow: rgba(212,162,76,.15);
         }
 
         /* ── Light theme ── */
@@ -166,53 +150,14 @@
             --err:    #a83526;
             --on-fill: #fff;
         }
-        /* #811: --accent-ink for every accent in the light theme. The accent
-           is used as TEXT in 16 places, and on a light ground the brand
-           values are nowhere near readable: forest measured 1.54:1, ocean
-           1.71:1, ember 1.81:1, aurora 2.18:1, amber 2.55:1 — all
-           pre-existing, and all four of those accents had no light-theme
-           definition at all, so they kept their dark values on white.
-           --accent/--accent-from/--accent-to are untouched, so every fill,
-           gradient and glow stays exactly the configured brand colour; only
-           the text form is darkened, each to the first value along its own
-           hue that clears 4.5:1 on all four light surfaces. */
-        [data-theme="light"]:not([data-accent]), [data-theme="light"][data-accent="amber"] {
-            --accent: #d97706; --accent-from: #d97706; --accent-to: #ea580c;
-            --accent-ink: #9a5504;
-        }
-        [data-theme="light"][data-accent="ocean"]  { --accent-ink: #056e9c; }
-        [data-theme="light"][data-accent="aurora"] { --accent-ink: #6d3ff7; }
-        [data-theme="light"][data-accent="ember"]  { --accent-ink: #a74d03; }
-        [data-theme="light"][data-accent="forest"] { --accent-ink: #197553; }
-        /* #404: Crema's light variant reads as warm paper, not an inverted
-           dark palette — every neutral gets its own value rather than
-           falling back to the plain [data-theme="light"] gray scale above.
-           Contrast checked: gray-200 (text) vs gray-950 (page) 15.11:1;
-           gray-600 (muted label) vs gray-900 5.24:1, vs gray-800 4.58:1;
-           gray-500 vs gray-900 6.52:1, vs gray-800 5.70:1; accent (used as
-           text/links) vs gray-950/900/800: 6.74:1 / 5.94:1 / 5.19:1; white
-           accent-text vs accent-from/-to: 5.60:1 / 8.92:1 — all clear the
-           4.5:1 WCAG AA floor #397 established for this scale. */
-        [data-theme="light"][data-accent="crema"] {
-            --gray-100: #1a0f06;
-            --gray-200: #2a1b0f; --gray-300: #40301f; --gray-400: #55442f; --gray-500: #5f4c38;
-            /* #811: darkened from #6e5a44 so it still clears 4.5:1 on the new
-               --raised surface (4.54:1); it was 4.58:1 on --gray-800 before,
-               with no headroom left for a further step. */
-            --gray-600: #65523e;
-            --gray-700: #d4b48c; --gray-800: #ead5b5; --gray-900: #f3e4ce; --gray-950: #fbf3e7;
-            --raised: #e0c7a2;
-            /* #811: Crema's light surfaces are warm and dark enough that the
-               shared light semantics do not clear on them — measured 2.30:1
-               (ok), 3.44:1 (warn), 3.38:1 (err) before. Own values, each the
-               first along its hue to clear 4.5:1 on all four surfaces. */
-            --ok:   #0d622c;
-            --warn: #7a4a05;
-            --err:  #a71b1b;
-            --on-fill: #fff;
-            --accent: #7a4a21; --accent-from: #8b5e34; --accent-to: #6b3f1d; --accent-text: #fff; --accent-glow: rgba(122,74,33,.15);
-            --accent-ink: #7a4a21;
-        }
+        /* #1019: the per-accent --accent-ink light-theme audit (#811, plus
+           Crema's whole separate warm-paper light block) is retired along
+           with the old 6-swatch set. The 8 new THEME_PRESETS deliberately
+           ship WITHOUT an equivalent hand-audited light-theme tuning pass —
+           --accent-ink simply falls back to the base :root's `var(--accent)`
+           in light theme too, same as it already does in dark. Tracked as a
+           follow-up (see the PR/issue this landed in) for a dedicated
+           contrast audit across all 8 presets, same precedent as #397/#404. */
 
         /* #404: bundled locally (public-src/fonts/) so it renders fully
            offline / behind HA ingress — no external font CDN. Applied ONLY
@@ -1167,8 +1112,8 @@
         .accent-swatch { appearance: none; -webkit-appearance: none; -moz-appearance: none; width: 34px; height: 34px; border-radius: 50%; overflow: hidden; clip-path: circle(50%); -webkit-clip-path: circle(50%); border: 3px solid transparent; cursor: pointer; transition: transform .18s, border-color .18s; outline: none; background-repeat: no-repeat; background-position: center; background-size: 140% 140%; }
         .accent-swatch:hover { transform: scale(1.12); }
         .accent-swatch.active { border-color: var(--gray-200); transform: scale(1.18); box-shadow: 0 0 0 2px rgba(0,0,0,.4); }
-        /* #604: default machine's own theme is overriding the picker's
-           output (see applyDefaultMachineAccentTheme() in
+        /* #604/#1019: the active machine's own theme is overriding the
+           picker's output (see applyActiveMachineAccentTheme() in
            components/machines-settings.js) — swatches stay clickable
            (picker keeps recording the preference for when the machine theme
            is later cleared), just dimmed so it reads as "not currently in

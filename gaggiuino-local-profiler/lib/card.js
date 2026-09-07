@@ -5,6 +5,7 @@ const path   = require('path');
 const crypto = require('crypto');
 const { COFFEE_COUNTRY_CODES } = require('./coffee-countries');
 const { imagePath } = require('./services/ImageService');
+const { THEME_PRESETS } = require('./machines/theme-presets');
 
 let createCanvas = null;
 // eslint-disable-next-line no-useless-assignment -- this null is the fallback used if the require() below throws before the destructuring assignment completes; the rule doesn't model that exception path
@@ -116,28 +117,21 @@ const CARD_TOKENS = {
     fs: { 1: 0.8125, 2: 0.875, 3: 1, 4: 1.25, 5: 1.625, 6: 2.25 },  // rem
     sp: { 1: 4, 2: 8, 3: 12, 4: 16, 5: 24, 6: 32 },                  // px
     radius: 10, radiusSm: 4,                                          // px
-    // Gray scale per theme/accent combo, restricted to the roles this card
-    // actually reads (200 text / 400 soft / 500 muted / 700 line / 800
-    // card-chart surface / 900 card surface / 950 page background — same
-    // role naming style.css itself uses). Keyed by theme (and by accent for
-    // crema, the only accent that also warms the neutral scale —
-    // style.css [data-accent="crema"] / [data-theme="light"][data-accent=
-    // "crema"]).
+    // Gray scale per theme, restricted to the roles this card actually reads
+    // (200 text / 400 soft / 500 muted / 700 line / 800 card-chart surface /
+    // 900 card surface / 950 page background — same role naming style.css
+    // itself uses). #1019: dropped the crema-only warmed variants along with
+    // Crema's whole special-cased accent behavior -- every accent, old and
+    // new, is now a plain color swap of these two shared scales.
     gray: {
-        dark:          { 200: '#eceded', 400: '#b6babd', 500: '#a4a9ad', 700: '#2b2f33', 800: '#1a1c1f', 900: '#131416', 950: '#0d0e10' },
-        'dark-crema':  { 200: '#f2e6d8', 400: '#c9b8a4', 500: '#b0a08d', 700: '#4e3a2b', 800: '#2e2118', 900: '#1e1611', 950: '#14100c' },
-        light:         { 200: '#1b1d1f', 400: '#4a4e52', 500: '#585d61', 700: '#dcdcd8', 800: '#eeeeec', 900: '#f7f7f6', 950: '#ffffff' },
-        'light-crema': { 200: '#2a1b0f', 400: '#55442f', 500: '#5f4c38', 700: '#d4b48c', 800: '#ead5b5', 900: '#f3e4ce', 950: '#fbf3e7' },
+        dark:  { 200: '#eceded', 400: '#b6babd', 500: '#a4a9ad', 700: '#2b2f33', 800: '#1a1c1f', 900: '#131416', 950: '#0d0e10' },
+        light: { 200: '#1b1d1f', 400: '#4a4e52', 500: '#585d61', 700: '#dcdcd8', 800: '#eeeeec', 900: '#f7f7f6', 950: '#ffffff' },
     },
     // ok/warn/err mirror the same --ok/--warn/--err custom properties the
-    // gray scale above mirrors, keyed the same way. dark-crema has no own
-    // --ok/--warn block in style.css (only --err is overridden there), so it
-    // reuses dark's values -- same inheritance style.css itself relies on.
+    // gray scale above mirrors, keyed the same way.
     semantic: {
-        dark:          { ok: '#5cb98a', warn: '#d3a03f', err: '#e0705f' },
-        'dark-crema':  { ok: '#5cb98a', warn: '#d3a03f', err: '#e17363' },
-        light:         { ok: '#2f7350', warn: '#7d5510', err: '#a83526' },
-        'light-crema': { ok: '#0d622c', warn: '#7a4a05', err: '#a71b1b' },
+        dark:  { ok: '#5cb98a', warn: '#d3a03f', err: '#e0705f' },
+        light: { ok: '#2f7350', warn: '#7d5510', err: '#a83526' },
     },
 };
 const GRAY_SCALES = CARD_TOKENS.gray;
@@ -205,18 +199,18 @@ const LINE_COLORS = Object.fromEntries(
     })
 );
 
-// accent-from/accent-to per accent + theme (public-src/style.css
-// [data-accent=...] and [data-theme="light"][data-accent=...] blocks) — only
-// amber and crema define a light-specific override, the other four accents
-// keep the same gradient in both themes.
-const ACCENTS = {
-    amber:  { dark: ['#f59e0b', '#f97316'], light: ['#d97706', '#ea580c'] },
-    ocean:  { dark: ['#3b82f6', '#06b6d4'], light: ['#3b82f6', '#06b6d4'] },
-    aurora: { dark: ['#6366f1', '#a855f7'], light: ['#6366f1', '#a855f7'] },
-    ember:  { dark: ['#ef4444', '#f97316'], light: ['#ef4444', '#f97316'] },
-    forest: { dark: ['#22c55e', '#10b981'], light: ['#22c55e', '#10b981'] },
-    crema:  { dark: ['#d4a24c', '#b8823a'], light: ['#8b5e34', '#6b3f1d'] },
-};
+// accent-from/accent-to per accent, one shared value for both themes. #1019:
+// single source of truth is now lib/machines/theme-presets.js's
+// THEME_PRESETS (already shared frontend+backend) -- replaces the old,
+// unrelated 6-name amber/ocean/aurora/ember/forest/crema set (which also
+// had a hand-audited light-theme override for amber/crema specifically).
+// The 8 new presets deliberately ship without an equivalent light-theme
+// tuning pass (tracked as a follow-up issue), so every preset uses the same
+// a/b hex in both themes here too.
+const ACCENTS = Object.fromEntries(
+    THEME_PRESETS.map(p => [p.key, { dark: [p.a, p.b], light: [p.a, p.b] }])
+);
+const DEFAULT_ACCENT_KEY = 'amber-americano';
 
 function hexToRgb(hex) {
     const n = parseInt(hex.slice(1), 16);
@@ -225,17 +219,16 @@ function hexToRgb(hex) {
 
 // Builds the card's color palette for a given accent/theme pair. No
 // arguments at all reproduces the historic hardcoded snapshot exactly (see
-// LEGACY_GLP above); any explicit accent/theme (including 'amber'/'dark',
-// what the frontend now always sends) computes fresh from the current CSS
-// tokens instead.
+// LEGACY_GLP above); any explicit accent/theme (including an unrecognized or
+// pre-#1019 legacy accent name, which falls back to the default preset)
+// computes fresh from the current CSS tokens instead.
 function buildPalette(accent, theme) {
     if (!accent && !theme) return { ...LEGACY_GLP };
-    const a  = ACCENTS[accent] ? accent : 'amber';
+    const a  = ACCENTS[accent] ? accent : DEFAULT_ACCENT_KEY;
     const th = theme === 'light' ? 'light' : 'dark';
-    const key  = a === 'crema' ? `${th}-crema` : th;
-    const gray = GRAY_SCALES[key];
-    const line = LINE_COLORS[key];
-    const semantic = SEMANTIC_COLORS[key];
+    const gray = GRAY_SCALES[th];
+    const line = LINE_COLORS[th];
+    const semantic = SEMANTIC_COLORS[th];
     const [accentFrom, accentTo] = ACCENTS[a][th];
     return {
         bg: gray[950], bgCard: gray[900], bgChart: gray[800],
