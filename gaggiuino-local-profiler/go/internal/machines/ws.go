@@ -238,8 +238,8 @@ func wsGetProfileDict(ctx context.Context, baseURL string) ([]proto.SavedProfile
 	return dict.Profiles, nil
 }
 
-func wsGetProfileByID(ctx context.Context, baseURL string, id int) (*proto.ProfileDto, error) {
-	req := &proto.WebSocketProfileIdCommandDto{ID: uint32(id)}
+func wsGetProfileByID(ctx context.Context, baseURL string, id uint32) (*proto.ProfileDto, error) {
+	req := &proto.WebSocketProfileIdCommandDto{ID: id}
 	var profile proto.ProfileDto
 	if err := wsSendAndWait(ctx, baseURL, actionGetProfileByID, req.Marshal(), profile.Unmarshal); err != nil {
 		return nil, err
@@ -278,14 +278,14 @@ func wsUpdateProfile(ctx context.Context, baseURL string, profile ProfileInput) 
 	return proto.SavedProfileDto{}, fmt.Errorf("machine did not confirm profile id %d after update", *profile.ID)
 }
 
-func wsDeleteProfile(ctx context.Context, baseURL string, id int) ([]proto.SavedProfileDto, error) {
-	req := &proto.WebSocketProfileIdCommandDto{ID: uint32(id)}
+func wsDeleteProfile(ctx context.Context, baseURL string, id uint32) ([]proto.SavedProfileDto, error) {
+	req := &proto.WebSocketProfileIdCommandDto{ID: id}
 	var dict proto.SavedProfilesDto
 	if err := wsSendAndWait(ctx, baseURL, actionDeleteProfile, req.Marshal(), dict.Unmarshal); err != nil {
 		return nil, err
 	}
 	for _, p := range dict.Profiles {
-		if int(p.ID) == id {
+		if p.ID == id {
 			return nil, fmt.Errorf("machine did not confirm deletion of profile id %d", id)
 		}
 	}

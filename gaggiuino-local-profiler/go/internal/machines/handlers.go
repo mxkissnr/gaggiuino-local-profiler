@@ -178,6 +178,13 @@ func pathIDInt(r *http.Request) (int, bool) {
 	return n, err == nil
 }
 
+// pathIDStr returns the raw {id} path wildcard as a string — used for
+// profile operations where IDs may be either numeric (Gaggiuino) or
+// alphanumeric (GaggiMate, e.g. "lever", "adapt").
+func pathIDStr(r *http.Request) string {
+	return r.PathValue("id")
+}
+
 // requireProfileEditSupport ports routes/system.js's
 // requireProfileEditSupport(adapter, machine, res).
 func requireProfileEditSupport(w http.ResponseWriter, adapter Adapter, m *Machine) bool {

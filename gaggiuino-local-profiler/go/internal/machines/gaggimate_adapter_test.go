@@ -33,7 +33,7 @@ func TestGaggiMateAdapter_GetStatus(t *testing.T) {
 func TestGaggiMateAdapter_ProfileListLoadSelect(t *testing.T) {
 	allowLoopbackMachineHost(t)
 	fake := newFakeGaggiMateMachine()
-	fake.profiles = []map[string]any{{"id": float64(1), "name": "Espresso"}}
+	fake.profiles = []map[string]any{{"id": "1", "label": "Espresso", "name": "Espresso"}}
 	defer fake.Close()
 	a := newTestGaggiMateAdapter(t)
 	m := testGaggiMateMachine(fake.URL)
@@ -47,7 +47,7 @@ func TestGaggiMateAdapter_ProfileListLoadSelect(t *testing.T) {
 		t.Fatalf("unexpected profile list: %+v", list)
 	}
 
-	raw, err := a.GetProfile(ctx, m, 1)
+	raw, err := a.GetProfile(ctx, m, "1")
 	if err != nil {
 		t.Fatalf("GetProfile: %v", err)
 	}
@@ -55,18 +55,20 @@ func TestGaggiMateAdapter_ProfileListLoadSelect(t *testing.T) {
 		t.Fatalf("unexpected profile detail: %s", raw)
 	}
 
-	if err := a.SelectProfile(ctx, m, 1); err != nil {
+	if err := a.SelectProfile(ctx, m, "1"); err != nil {
 		t.Fatalf("SelectProfile: %v", err)
 	}
 }
 
-// GaggiMate's capabilities gate profile writes and the settings/control
-// proxy off entirely — verifies the capability flags handlers.go checks
-// before ever calling the corresponding adapter methods.
+// GaggiMate's capabilities gate the settings/control proxy off entirely but
+// allow full profile editing (create/update/delete forward to the machine's
+// own req:profiles:save/delete over WS, see gaggimate_adapter.go's doc
+// comment) — verifies the capability flags handlers.go checks before ever
+// calling the corresponding adapter methods.
 func TestGaggiMateAdapter_Capabilities(t *testing.T) {
 	caps := newTestGaggiMateAdapter(t).Capabilities()
-	if caps.ProfileEdit {
-		t.Error("GaggiMate Capabilities().ProfileEdit = true, want false (v1 UI-level gate)")
+	if !caps.ProfileEdit {
+		t.Error("GaggiMate Capabilities().ProfileEdit = false, want true (profile CRUD forwards to the machine)")
 	}
 	if caps.SettingsProxy {
 		t.Error("GaggiMate Capabilities().SettingsProxy = true, want false")

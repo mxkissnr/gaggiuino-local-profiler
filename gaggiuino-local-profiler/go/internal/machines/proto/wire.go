@@ -33,7 +33,7 @@ func (w *writer) tag(fieldNo, wireType int) {
 
 func (w *writer) varint(v uint64) {
 	for v >= 0x80 {
-		w.b = append(w.b, byte(v)|0x80)
+		w.b = append(w.b, byte(v&0x7f)|0x80)
 		v >>= 7
 	}
 	w.b = append(w.b, byte(v))

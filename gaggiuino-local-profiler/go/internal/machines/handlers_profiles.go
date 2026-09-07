@@ -3,6 +3,7 @@ package machines
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 )
 
@@ -49,7 +50,7 @@ func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
 		optionsRaw := make([]map[string]any, len(profiles))
 		for i, p := range profiles {
 			options[i] = p.Name
-			optionsRaw[i] = map[string]any{"id": p.ID, "name": p.Name}
+			optionsRaw[i] = map[string]any{"id": p.ID, "name": p.Name, "utility": p.Utility}
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"available":  len(profiles) > 0,
@@ -63,6 +64,7 @@ func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
 
 	raw, err := adapter.ListProfiles(r.Context(), machine)
 	if err != nil {
+		slog.Warn("listing machine profiles failed", "machineId", machine.ID, "err", err)
 		cached := h.profilesCache.get(machine.ID)
 		respond(cached, true)
 		return
@@ -82,14 +84,14 @@ func nullOrInt(n *int) any {
 
 func (h *Handlers) setMachineProfile(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Option    *string `json:"option"`
-		ID        *int    `json:"id"`
-		MachineID *int64  `json:"machineId"`
+		Option    *string         `json:"option"`
+		IDRaw     json.RawMessage `json:"id"`
+		MachineID *int64          `json:"machineId"`
 	}
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	if body.Option == nil && body.ID == nil {
+	if body.Option == nil && body.IDRaw == nil {
 		writeError(w, http.StatusBadRequest, "option or id required")
 		return
 	}
@@ -98,8 +100,10 @@ func (h *Handlers) setMachineProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	profileID := body.ID
-	if profileID == nil {
+	var profileID string
+	if body.IDRaw != nil {
+		profileID = jsonRawToProfileID(body.IDRaw)
+	} else {
 		profiles := h.profilesCache.get(machine.ID)
 		if len(profiles) == 0 {
 			fetched, err := adapter.ListProfiles(r.Context(), machine)
@@ -121,20 +125,19 @@ func (h *Handlers) setMachineProfile(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "Profile not found: "+*body.Option)
 			return
 		}
-		id := match.ID
-		profileID = &id
+		profileID = match.ID
 	}
 
-	if err := adapter.SelectProfile(r.Context(), machine, *profileID); err != nil {
+	if err := adapter.SelectProfile(r.Context(), machine, profileID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "profileId": *profileID})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "profileId": profileID})
 }
 
 func (h *Handlers) getMachineProfile(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathIDInt(r)
-	if !ok {
+	id := pathIDStr(r)
+	if id == "" {
 		writeError(w, http.StatusBadGateway, "invalid profile id")
 		return
 	}
@@ -153,19 +156,44 @@ func (h *Handlers) getMachineProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) createMachineProfile(w http.ResponseWriter, r *http.Request) {
-	var in ProfileInput
-	if !decodeJSONBody(w, r, &in) {
+	rawBody, ok := readRawJSONBody(w, r)
+	if !ok {
 		return
 	}
-	if err := in.Validate(); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid profile: "+err.Error())
-		return
+	// Extract machineId before full decode so we can resolve the machine
+	// type and branch: GaggiMate passes raw JSON through unchanged;
+	// Gaggiuino goes through ProfileInput/Validate/ToWireProfile.
+	var mid struct {
+		MachineID *int64 `json:"machineId"`
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, in.MachineID)
+	_ = json.Unmarshal(rawBody, &mid)
+	machine, adapter, ok := h.resolveWithAdapter(w, mid.MachineID)
 	if !ok {
 		return
 	}
 	if !requireProfileEditSupport(w, adapter, machine) {
+		return
+	}
+	if machine.Type == "gaggimate" {
+		if err := validateGaggiMateProfileBody(rawBody); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid profile: "+err.Error())
+			return
+		}
+		created, err := adapter.CreateProfile(r.Context(), machine, ProfileInput{RawBody: rawBody})
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, created)
+		return
+	}
+	var in ProfileInput
+	if err := json.Unmarshal(rawBody, &in); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if err := in.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid profile: "+err.Error())
 		return
 	}
 	created, err := adapter.CreateProfile(r.Context(), machine, in)
@@ -177,25 +205,51 @@ func (h *Handlers) createMachineProfile(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handlers) updateMachineProfile(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID64(r)
+	rawBody, ok := readRawJSONBody(w, r)
+	if !ok {
+		return
+	}
+	var mid struct {
+		MachineID *int64 `json:"machineId"`
+	}
+	_ = json.Unmarshal(rawBody, &mid)
+	machine, adapter, ok := h.resolveWithAdapter(w, mid.MachineID)
+	if !ok {
+		return
+	}
+	if !requireProfileEditSupport(w, adapter, machine) {
+		return
+	}
+	if machine.Type == "gaggimate" {
+		if err := validateGaggiMateProfileBody(rawBody); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid profile: "+err.Error())
+			return
+		}
+		// Inject the path {id} into the body when the client omitted it —
+		// without an id GaggiMate's save creates a duplicate instead of updating.
+		rawBody = injectIDIfAbsent(rawBody, pathIDStr(r))
+		updated, err := adapter.UpdateProfile(r.Context(), machine, ProfileInput{RawBody: rawBody})
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, updated)
+		return
+	}
+	// Gaggiuino: numeric path ID used as the canonical profile ID.
+	pathId, ok := pathID64(r)
 	if !ok {
 		writeError(w, http.StatusBadGateway, "invalid profile id")
 		return
 	}
 	var in ProfileInput
-	if !decodeJSONBody(w, r, &in) {
+	if err := json.Unmarshal(rawBody, &in); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	in.ID = &id
+	in.ID = &pathId
 	if err := in.Validate(); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid profile: "+err.Error())
-		return
-	}
-	machine, adapter, ok := h.resolveWithAdapter(w, in.MachineID)
-	if !ok {
-		return
-	}
-	if !requireProfileEditSupport(w, adapter, machine) {
 		return
 	}
 	updated, err := adapter.UpdateProfile(r.Context(), machine, in)
@@ -207,8 +261,8 @@ func (h *Handlers) updateMachineProfile(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handlers) deleteMachineProfile(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathIDInt(r)
-	if !ok {
+	id := pathIDStr(r)
+	if id == "" {
 		writeError(w, http.StatusBadGateway, "invalid profile id")
 		return
 	}

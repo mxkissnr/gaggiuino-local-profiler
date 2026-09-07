@@ -3,6 +3,9 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +24,17 @@ import (
 // session/reconnect/idle-eviction pattern as gaggiuinoLiveClient (live.go);
 // only the cached payload differs — one evt:status map, not the two typed
 // proto DTOs.
+//
+// Profile requests (req:profiles:*) are also sent through this persistent
+// connection via Request(), avoiding the "GaggiMate only allows one
+// concurrent WS client" problem that blocked the previous approach of
+// disconnecting the live client and opening a second short-lived connection.
+
+type gaggimateInflightReq struct {
+	resType string
+	rid     string
+	result  chan map[string]any
+}
 
 type gaggiMateLiveSession struct {
 	mu       sync.Mutex
@@ -29,9 +43,15 @@ type gaggiMateLiveSession struct {
 
 	cancel    context.CancelFunc
 	idleTimer *time.Timer
-	// done is closed by run() when it returns — tests observe termination
-	// without polling.
+	// done is closed by run() when it returns.
 	done chan struct{}
+
+	// inflight holds pending req:*/res:* correlations sent through the live conn.
+	inflightMu sync.Mutex
+	inflight   []*gaggimateInflightReq
+
+	// outgoing carries frames to send; connectOnce drains it in its select loop.
+	outgoing chan []byte
 }
 
 // gaggiMateLiveClient mirrors gaggiuinoLiveClient's sessions-map shape.
@@ -54,7 +74,11 @@ func (c *gaggiMateLiveClient) session(baseURL string) *gaggiMateLiveSession {
 		return s
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &gaggiMateLiveSession{cancel: cancel, done: make(chan struct{})}
+	s := &gaggiMateLiveSession{
+		cancel:   cancel,
+		done:     make(chan struct{}),
+		outgoing: make(chan []byte, 4),
+	}
 	c.sessions[baseURL] = s
 	s.idleTimer = time.AfterFunc(c.idleTimeout, func() { c.evictIdle(baseURL, s) })
 	httputil.SafeGo("machines: gaggimate live session", func() { c.run(ctx, baseURL, s) })
@@ -114,22 +138,138 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 	}
 	defer conn.CloseNow()
 
+	// Reader goroutine feeds frames into readCh so the select loop below can
+	// interleave reads with outgoing frame writes.
+	readCh := make(chan []byte, 1)
+	readErrCh := make(chan error, 1)
+	go func() {
+		for {
+			_, data, err := conn.Read(ctx)
+			if err != nil {
+				// Non-blocking: select loop may have already exited.
+				select {
+				case readErrCh <- err:
+				default:
+				}
+				return
+			}
+			select {
+			case readCh <- data:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	for {
-		_, data, err := conn.Read(ctx)
-		if err != nil {
+		select {
+		case data := <-readCh:
+			var msg map[string]any
+			if err := json.Unmarshal(data, &msg); err != nil {
+				continue
+			}
+			tp, _ := msg["tp"].(string)
+			if tp == "evt:status" {
+				s.mu.Lock()
+				s.status = msg
+				s.statusAt = time.Now()
+				s.mu.Unlock()
+			} else if strings.HasPrefix(tp, "res:") {
+				s.dispatchResponse(msg)
+			}
+
+		case frame := <-s.outgoing:
+			if err := conn.Write(ctx, websocket.MessageText, frame); err != nil {
+				return
+			}
+
+		case <-readErrCh:
+			return
+
+		case <-ctx.Done():
 			return
 		}
-		var msg map[string]any
-		if err := json.Unmarshal(data, &msg); err != nil {
-			continue
+	}
+}
+
+func (s *gaggiMateLiveSession) addInflight(req *gaggimateInflightReq) {
+	s.inflightMu.Lock()
+	s.inflight = append(s.inflight, req)
+	s.inflightMu.Unlock()
+}
+
+func (s *gaggiMateLiveSession) removeInflight(req *gaggimateInflightReq) {
+	s.inflightMu.Lock()
+	for i, r := range s.inflight {
+		if r == req {
+			s.inflight = append(s.inflight[:i], s.inflight[i+1:]...)
+			break
 		}
-		if msg["tp"] != "evt:status" {
-			continue
+	}
+	s.inflightMu.Unlock()
+}
+
+func (s *gaggiMateLiveSession) dispatchResponse(msg map[string]any) {
+	tp, _ := msg["tp"].(string)
+	msgRID := fmt.Sprint(msg["rid"])
+	s.inflightMu.Lock()
+	defer s.inflightMu.Unlock()
+	// TODO: rid-less frames match the first inflight of that resType (FIFO).
+	// DeleteProfile sends req:profiles:delete then req:profiles:list; a
+	// concurrent ListProfiles can race a rid-less list response to the wrong
+	// waiter. Fix: correlate by send-order within the same resType and add a
+	// test for two concurrent req:profiles:list calls.
+	for _, req := range s.inflight {
+		if req.resType == tp && (msg["rid"] == nil || req.rid == msgRID) {
+			select {
+			case req.result <- msg:
+			default:
+			}
+			return
 		}
-		s.mu.Lock()
-		s.status = msg
-		s.statusAt = time.Now()
-		s.mu.Unlock()
+	}
+}
+
+// Request sends a req:* frame through the persistent live WS connection and
+// waits for the matching res:* response. Reuses the existing connection so
+// there is no second dial — GaggiMate's single-client constraint is never hit.
+func (c *gaggiMateLiveClient) Request(ctx context.Context, baseURL, reqType string, payload map[string]any) (map[string]any, error) {
+	if len(reqType) < 4 || reqType[:4] != "req:" {
+		return nil, fmt.Errorf("not a request type: %s", reqType)
+	}
+	resType := "res:" + reqType[4:]
+	rid := rand.Intn(1_000_000_000)
+
+	frame := map[string]any{"tp": reqType, "rid": rid}
+	for k, v := range payload {
+		frame[k] = v
+	}
+	body, err := json.Marshal(frame)
+	if err != nil {
+		return nil, err
+	}
+
+	s := c.session(baseURL)
+	result := make(chan map[string]any, 1)
+	req := &gaggimateInflightReq{resType: resType, rid: fmt.Sprint(rid), result: result}
+	s.addInflight(req)
+	defer s.removeInflight(req)
+
+	select {
+	case s.outgoing <- body:
+	case <-s.done:
+		return nil, fmt.Errorf("live session closed before sending %s request", reqType)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	select {
+	case res := <-result:
+		return res, nil
+	case <-s.done:
+		return nil, fmt.Errorf("live session closed while waiting for %s", resType)
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -146,12 +286,15 @@ func (c *gaggiMateLiveClient) Status(baseURL string) (map[string]any, bool) {
 	return s.status, true
 }
 
-// Disconnect closes and forgets one machine's session.
+// Disconnect closes and forgets one machine's session. Non-blocking: the
+// session's run() goroutine exits asynchronously. Use DisconnectAndWait
+// when the caller needs the WS connection to be fully closed before
+// opening a new one.
 func (c *gaggiMateLiveClient) Disconnect(baseURL string) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	s, ok := c.sessions[baseURL]
 	if !ok {
+		c.mu.Unlock()
 		return
 	}
 	delete(c.sessions, baseURL)
@@ -161,6 +304,27 @@ func (c *gaggiMateLiveClient) Disconnect(baseURL string) {
 	}
 	s.mu.Unlock()
 	s.cancel()
+	c.mu.Unlock()
+}
+
+// DisconnectAndWait is like Disconnect but blocks until the session's
+// run() goroutine has exited.
+func (c *gaggiMateLiveClient) DisconnectAndWait(baseURL string) {
+	c.mu.Lock()
+	s, ok := c.sessions[baseURL]
+	if !ok {
+		c.mu.Unlock()
+		return
+	}
+	delete(c.sessions, baseURL)
+	s.mu.Lock()
+	if s.idleTimer != nil {
+		s.idleTimer.Stop()
+	}
+	s.mu.Unlock()
+	s.cancel()
+	c.mu.Unlock()
+	<-s.done
 }
 
 // DisconnectForHost is the registry host-change/eviction hook, matching

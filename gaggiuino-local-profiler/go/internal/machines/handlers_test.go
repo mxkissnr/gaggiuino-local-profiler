@@ -200,8 +200,17 @@ func TestHandlers_OpModeValidation(t *testing.T) {
 	}
 }
 
+// fakeNoProfileEditAdapter stands in for an adapter type that hasn't wired up
+// profile editing — both real adapters (gaggiuino, gaggimate) now report
+// ProfileEdit: true, so the 501 gate below is no longer reachable through
+// either of them and needs a fake to exercise it.
+type fakeNoProfileEditAdapter struct{ fakePanicAdapter }
+
+func (fakeNoProfileEditAdapter) Capabilities() Capabilities { return Capabilities{} }
+
 func TestHandlers_MachineProfileCreate_RequiresProfileEditSupport(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
+	h.gaggimate = fakeNoProfileEditAdapter{}
 	mux := newMux(h)
 
 	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machines", strings.NewReader(`{"name":"GM","type":"gaggimate","host":""}`)))
@@ -253,12 +262,12 @@ func TestHandlers_MachineProfileCRUD_EndToEnd(t *testing.T) {
 		t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body)
 	}
 	created := decodeBody(t, rec.Body.Bytes())
-	profileID := int64(created["id"].(float64))
+	profileID := created["id"].(string)
 	if created["name"] != "Espresso" {
 		t.Fatalf("unexpected created profile: %+v", created)
 	}
 
-	rec = doRequest(mux, httptest.NewRequest(http.MethodPut, "/api/machine/profile/"+strconv.FormatInt(profileID, 10), strings.NewReader(`{"name":"Espresso v2","phases":[{"type":"FLOW"}]}`)))
+	rec = doRequest(mux, httptest.NewRequest(http.MethodPut, "/api/machine/profile/"+profileID, strings.NewReader(`{"name":"Espresso v2","phases":[{"type":"FLOW"}]}`)))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("update status = %d, body = %s", rec.Code, rec.Body)
 	}
@@ -267,7 +276,7 @@ func TestHandlers_MachineProfileCRUD_EndToEnd(t *testing.T) {
 		t.Fatalf("update did not apply: %+v", updated)
 	}
 
-	rec = doRequest(mux, httptest.NewRequest(http.MethodDelete, "/api/machine/profile/"+strconv.FormatInt(profileID, 10), nil))
+	rec = doRequest(mux, httptest.NewRequest(http.MethodDelete, "/api/machine/profile/"+profileID, nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("delete status = %d, body = %s", rec.Code, rec.Body)
 	}

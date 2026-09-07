@@ -1525,6 +1525,27 @@
 
 </div><!-- /main -->
 
+<!-- GaggiMate profile editor modal: sibling of #main, not child — #main is
+     position:fixed with its own stacking context on mobile (z-index:40,
+     below #bottom-nav's 150), so a modal nested inside it can never outrank
+     the bottom nav no matter its own z-index. See #scanModal/#backupModal
+     below for the same working pattern. -->
+<div id="gmProfileEditorModal" class="guided-maint-overlay" style="display:none">
+    <div class="guided-maint-modal profile-editor-modal">
+        <div class="fw-header">
+            <h3 class="maint-section-title" id="gmEditorTitle" style="margin:0">GaggiMate Profil</h3>
+            <button type="button" class="fw-close-x" data-action="gm-editor-close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+        <div class="pe-scroll" id="gmEditorBody">
+            <!-- rendered by gaggimate-profile-editor.js -->
+        </div>
+        <div class="lib-form-actions">
+            <button class="lib-btn-sm" data-action="gm-editor-close">Abbrechen</button>
+            <button class="lib-save-btn" data-action="gm-editor-save">Auf Maschine speichern</button>
+        </div>
+    </div>
+</div>
+
 <!-- ── Barcode scan modal ── -->
 <div id="scanModal">
     <h3 data-i18n="scan_title">Barcode / QR scannen</h3>

@@ -113,6 +113,7 @@ export const S = {
   machines: [],
   activeMachineId: null,
   machineProfiles: [],
+  machineProfilesStale: false,
   profileEditId: null,
   profileEditBeanId: null,
   profilePreviewChart: null,

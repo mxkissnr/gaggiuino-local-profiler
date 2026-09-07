@@ -80,7 +80,7 @@ func (f *fakeSettingsAdapter) GetStatus(context.Context, *machines.Machine) (mac
 func (f *fakeSettingsAdapter) ListProfiles(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
 	return nil, f.notImplemented("ListProfiles")
 }
-func (f *fakeSettingsAdapter) GetProfile(context.Context, *machines.Machine, int) (json.RawMessage, error) {
+func (f *fakeSettingsAdapter) GetProfile(context.Context, *machines.Machine, string) (json.RawMessage, error) {
 	return nil, f.notImplemented("GetProfile")
 }
 func (f *fakeSettingsAdapter) CreateProfile(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
@@ -89,10 +89,10 @@ func (f *fakeSettingsAdapter) CreateProfile(context.Context, *machines.Machine, 
 func (f *fakeSettingsAdapter) UpdateProfile(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
 	return machines.ProfileSummary{}, f.notImplemented("UpdateProfile")
 }
-func (f *fakeSettingsAdapter) DeleteProfile(context.Context, *machines.Machine, int) ([]machines.ProfileSummary, error) {
+func (f *fakeSettingsAdapter) DeleteProfile(context.Context, *machines.Machine, string) ([]machines.ProfileSummary, error) {
 	return nil, f.notImplemented("DeleteProfile")
 }
-func (f *fakeSettingsAdapter) SelectProfile(context.Context, *machines.Machine, int) error {
+func (f *fakeSettingsAdapter) SelectProfile(context.Context, *machines.Machine, string) error {
 	return f.notImplemented("SelectProfile")
 }
 func (f *fakeSettingsAdapter) SaveSettings(context.Context, *machines.Machine) error {

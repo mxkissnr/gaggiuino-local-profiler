@@ -1211,6 +1211,13 @@
         .lib-item-info { flex: 1; min-width: 0; }
         .lib-item-name { font-size: var(--fs-2); color: var(--gray-200); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-name .serif-display { font-size: var(--fs-3); font-weight: 600; }
+        /* Machine-profile list (library-profile-editor.js renderProfileList):
+           name + optional utility badge on one row — badge sits outside the
+           name's own ellipsis-truncation so it never gets clipped away. */
+        .lib-item-name-row { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+        .lib-item-name-row .lib-item-name { min-width: 0; }
+        .lib-utility-badge { flex-shrink: 0; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--gray-400); background: var(--gray-700); border-radius: 999px; padding: 1px var(--sp-2); }
+        .lib-item-utility .lib-item-name { opacity: .75; }
         /* #404: eyebrow above the bean name — small, muted, uppercase,
            same visual weight class as the recipe/process-card labels. */
         .lib-item-origin-eyebrow { font-size: var(--fs-1); color: var(--gray-600); margin-bottom: 2px; }
@@ -2437,6 +2444,31 @@
         .pp-field label { font-size: var(--fs-1); color:var(--gray-500); }
         .pp-field input, .pp-field select { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); }
         .pp-field input:focus, .pp-field select:focus { outline:none; border-color:var(--gray-500); }
+        /* GaggiMate profile editor (gaggimate-profile-editor.js). Looks like
+           a near-duplicate of .pp-field input/select just above (same
+           colors/border/radius) — deliberately not merged: .pp-field lives
+           in the dense 2-4 column .pp-grid and needs the tighter sp-1
+           padding to fit, this form doesn't. */
+        .lib-btn-sm.active { background:var(--accent-from); color:var(--accent-text); }
+        .lib-select, .lib-input { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size:var(--fs-1); padding:var(--sp-2) var(--sp-2); }
+        .lib-select:focus, .lib-input:focus { outline:none; border-color:var(--gray-500); }
+        .lib-input { min-width:0; }
+        .flex-1 { flex:1; }
+        .gm-chart-container { flex-shrink:0; margin:.5rem 0 .75rem; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); overflow:hidden; height:180px; position:relative; }
+        /* Segmented-control look (shared background/border around the whole
+           group, tighter radius per button) so a row of mode buttons reads
+           as one group with a selection, not a loose row of buttons. */
+        .gm-toggle-group { display:inline-flex; gap:2px; flex-wrap:wrap; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); padding:2px; }
+        .gm-toggle-group .lib-btn-sm { border-radius:calc(var(--radius) - 2px); }
+        .gm-toggle-group .lib-btn-sm.active { box-shadow:0 1px 2px rgba(0,0,0,.25); }
+        .gm-phase { background:var(--gray-800); border-radius:var(--radius); padding:var(--sp-3); margin-bottom:var(--sp-2); }
+        .gm-phase-nav { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-3); flex-wrap:wrap; }
+        .gm-phase-nav span { flex:0 0 auto; font-size:var(--fs-1); color:var(--gray-400); }
+        .gm-dropdown { position:relative; display:inline-block; }
+        .gm-dropdown-menu { position:absolute; top:100%; left:0; z-index:200; background:var(--gray-800); border:1px solid var(--gray-600); border-radius:var(--radius); min-width:180px; padding:var(--sp-1) 0; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+        .gm-dropdown-item { display:block; width:100%; text-align:left; background:none; border:none; color:var(--gray-300); font-size:var(--fs-1); padding:var(--sp-2) var(--sp-3); cursor:pointer; }
+        .gm-dropdown-item:hover { background:var(--gray-700); color:var(--gray-100); }
+
         /* Guided Dial-In wizard modal (#310) — same fixed-height/flex-child
            pattern as .profile-editor-modal, but narrower (it's a linear
            step flow, not a dense multi-column form). */

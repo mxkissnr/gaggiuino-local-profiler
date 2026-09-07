@@ -100,7 +100,7 @@ func (f *fakeAdapter) notImplemented(name string) error {
 func (f *fakeAdapter) ListProfiles(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
 	return nil, f.notImplemented("ListProfiles")
 }
-func (f *fakeAdapter) GetProfile(context.Context, *machines.Machine, int) (json.RawMessage, error) {
+func (f *fakeAdapter) GetProfile(context.Context, *machines.Machine, string) (json.RawMessage, error) {
 	return nil, f.notImplemented("GetProfile")
 }
 func (f *fakeAdapter) CreateProfile(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
@@ -109,10 +109,10 @@ func (f *fakeAdapter) CreateProfile(context.Context, *machines.Machine, machines
 func (f *fakeAdapter) UpdateProfile(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
 	return machines.ProfileSummary{}, f.notImplemented("UpdateProfile")
 }
-func (f *fakeAdapter) DeleteProfile(context.Context, *machines.Machine, int) ([]machines.ProfileSummary, error) {
+func (f *fakeAdapter) DeleteProfile(context.Context, *machines.Machine, string) ([]machines.ProfileSummary, error) {
 	return nil, f.notImplemented("DeleteProfile")
 }
-func (f *fakeAdapter) SelectProfile(context.Context, *machines.Machine, int) error {
+func (f *fakeAdapter) SelectProfile(context.Context, *machines.Machine, string) error {
 	return f.notImplemented("SelectProfile")
 }
 func (f *fakeAdapter) Capabilities() machines.Capabilities { return machines.Capabilities{} }

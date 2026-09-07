@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
@@ -32,9 +33,39 @@ type Status struct {
 
 // ProfileSummary ports the {id, name} shape SavedProfileDto and the
 // machine's own REST profile-list endpoints both use.
+// ID is a string to accommodate both Gaggiuino (integer IDs like "5") and
+// GaggiMate (string IDs like "lever", "adapt"). The custom UnmarshalJSON
+// below accepts both JSON number and JSON string values.
 type ProfileSummary struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Utility bool   `json:"utility"` // GaggiMate-only (e.g. backflush) — always false for Gaggiuino
+}
+
+func (p *ProfileSummary) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		ID      json.RawMessage `json:"id"`
+		Name    string          `json:"name"`
+		Utility bool            `json:"utility"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	p.Name = raw.Name
+	p.Utility = raw.Utility
+	p.ID = jsonRawToProfileID(json.RawMessage(strings.TrimSpace(string(raw.ID))))
+	return nil
+}
+
+// jsonRawToProfileID converts a raw JSON value (number or string) to a plain
+// string profile ID. Gaggiuino sends integer IDs like 5; GaggiMate sends
+// string IDs like "lever".
+func jsonRawToProfileID(raw json.RawMessage) string {
+	s := string(raw)
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		return s[1 : len(s)-1]
+	}
+	return s
 }
 
 // Capabilities ports adapter-base.js's capabilities() return shape.
@@ -65,11 +96,11 @@ type Capabilities struct {
 type Adapter interface {
 	GetStatus(ctx context.Context, m *Machine) (Status, error)
 	ListProfiles(ctx context.Context, m *Machine) ([]ProfileSummary, error)
-	GetProfile(ctx context.Context, m *Machine, id int) (json.RawMessage, error)
+	GetProfile(ctx context.Context, m *Machine, id string) (json.RawMessage, error)
 	CreateProfile(ctx context.Context, m *Machine, profile ProfileInput) (ProfileSummary, error)
 	UpdateProfile(ctx context.Context, m *Machine, profile ProfileInput) (ProfileSummary, error)
-	DeleteProfile(ctx context.Context, m *Machine, id int) ([]ProfileSummary, error)
-	SelectProfile(ctx context.Context, m *Machine, id int) error
+	DeleteProfile(ctx context.Context, m *Machine, id string) ([]ProfileSummary, error)
+	SelectProfile(ctx context.Context, m *Machine, id string) error
 	Capabilities() Capabilities
 
 	GetSettings(ctx context.Context, m *Machine, category string) (json.RawMessage, error)

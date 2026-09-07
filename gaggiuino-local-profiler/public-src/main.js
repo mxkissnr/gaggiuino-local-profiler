@@ -116,6 +116,9 @@ import { loadMachineProfileList, updateProfileDatalist, renderProfileList,
          createProfileFromBean, applyBeanSuggestion, addProfilePhase, removeProfilePhase,
          sendProfileToMachine, renderProfilePreviewChart } from './views/library-profile-editor.js';
 
+import { openGaggiMateProfileEditor, openNewGaggiMateProfile,
+         handleGmEditorAction } from './views/gaggimate-profile-editor.js';
+
 import { renderDialin } from './views/dialin.js';
 
 import { openDialinWizard, closeDialinWizard, startDialinFromBean, renderDialinWizard, dialinGrinderChange,
@@ -148,6 +151,12 @@ import { renderWhatsNewCard } from './components/whats-new.js';
 import { attachAutocomplete } from './components/autocomplete.js';
 
 import { BEAN_ICON_SVG } from './icons.js';
+
+// Profile creation/editing branches to the GaggiMate editor instead of the
+// Gaggiuino one for GaggiMate machines — checked at 3 call sites below.
+function _isActiveMachineGaggiMate() {
+  return (S.machines || []).find(m => m.id === S.activeMachineId)?.type === 'gaggimate';
+}
 
 // ── Toast helper ──────────────────────────────────────────────────────────
 function showToast(msg, duration = 3000) {
@@ -788,7 +797,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('annBasket').addEventListener('change', scheduleAutoSave);
   document.getElementById('annPuckScreen').addEventListener('change', scheduleAutoSave);
-  document.getElementById('profileAddTrigger').addEventListener('click', openNewProfileForm);
+  document.getElementById('profileAddTrigger').addEventListener('click', () => {
+    if (_isActiveMachineGaggiMate()) openNewGaggiMateProfile();
+    else openNewProfileForm();
+  });
   document.getElementById('closeProfileFormBtn').addEventListener('click', closeProfileForm);
   document.getElementById('cancelProfileFormBtn').addEventListener('click', closeProfileForm);
   document.getElementById('addProfilePhaseBtn').addEventListener('click', addProfilePhase);
@@ -865,6 +877,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const action = el.dataset.action;
     const numId = () => Number(el.dataset.id);
     const strId = () => el.dataset.id;
+    // GaggiMate profile editor actions all share one prefix — route by that
+    // instead of listing all 18 action names as switch cases.
+    if (action.startsWith('gm-')) { handleGmEditorAction(action, el); return; }
     switch (action) {
       case 'open-new-bag':       openNewBagForm(numId()); break;
       case 'close-new-bag':      closeNewBagForm(numId()); break;
@@ -900,10 +915,16 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'delete-basket':      deleteBasket(numId()); break;
       case 'edit-puckscreen':    editPuckScreen(numId()); break;
       case 'delete-puckscreen':  deletePuckScreen(numId()); break;
-      case 'edit-profile':          editProfile(numId()); break;
-      case 'delete-profile':        deleteMachineProfile(numId()); break;
+      case 'edit-profile':
+        if (_isActiveMachineGaggiMate()) openGaggiMateProfileEditor(strId());
+        else editProfile(numId());
+        break;
+      case 'delete-profile':        deleteMachineProfile(strId()); break;
       case 'remove-profile-phase':  removeProfilePhase(Number(el.dataset.idx)); break;
-      case 'create-profile-from-bean': createProfileFromBean(numId()); break;
+      case 'create-profile-from-bean':
+        if (_isActiveMachineGaggiMate()) openNewGaggiMateProfile();
+        else createProfileFromBean(numId());
+        break;
       case 'restore-shot':       restoreShot(numId()); break;
       case 'perm-delete-shot':   permanentDeleteShot(numId()); break;
       case 'select-drink':       selectDrinkType(strId()); break;
@@ -935,7 +956,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'dialin-end':             dialinEnd(); break;
       case 'dialin-save-known-grind': dialinSaveKnownGrind(); break;
       case 'dialin-close':           dialinClose(); break;
-      case 'start-profile-dialin':      startProfileDialinFromList(numId()); break;
+      case 'start-profile-dialin':      startProfileDialinFromList(strId()); break;
       case 'profile-dialin-symptom':    profileDialinToggleSymptom(el.dataset.symptom); break;
       case 'profile-dialin-confirm-shot': profileDialinConfirmShot(numId(), el.dataset.match === '1'); break;
       case 'profile-dialin-accept-next':  profileDialinAcceptNext(); break;

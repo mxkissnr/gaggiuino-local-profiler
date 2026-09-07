@@ -38,7 +38,7 @@ func (f fakePanicAdapter) GetStatus(context.Context, *Machine) (Status, error) {
 func (f fakePanicAdapter) ListProfiles(context.Context, *Machine) ([]ProfileSummary, error) {
 	return nil, f.notImplemented("ListProfiles")
 }
-func (f fakePanicAdapter) GetProfile(context.Context, *Machine, int) (json.RawMessage, error) {
+func (f fakePanicAdapter) GetProfile(context.Context, *Machine, string) (json.RawMessage, error) {
 	return nil, f.notImplemented("GetProfile")
 }
 func (f fakePanicAdapter) CreateProfile(context.Context, *Machine, ProfileInput) (ProfileSummary, error) {
@@ -47,10 +47,10 @@ func (f fakePanicAdapter) CreateProfile(context.Context, *Machine, ProfileInput)
 func (f fakePanicAdapter) UpdateProfile(context.Context, *Machine, ProfileInput) (ProfileSummary, error) {
 	return ProfileSummary{}, f.notImplemented("UpdateProfile")
 }
-func (f fakePanicAdapter) DeleteProfile(context.Context, *Machine, int) ([]ProfileSummary, error) {
+func (f fakePanicAdapter) DeleteProfile(context.Context, *Machine, string) ([]ProfileSummary, error) {
 	return nil, f.notImplemented("DeleteProfile")
 }
-func (f fakePanicAdapter) SelectProfile(context.Context, *Machine, int) error {
+func (f fakePanicAdapter) SelectProfile(context.Context, *Machine, string) error {
 	return f.notImplemented("SelectProfile")
 }
 func (fakePanicAdapter) UpdateSettings(context.Context, *Machine, string, json.RawMessage) (json.RawMessage, error) {

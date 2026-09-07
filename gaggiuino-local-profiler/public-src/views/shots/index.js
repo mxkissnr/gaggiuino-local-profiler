@@ -2,7 +2,7 @@ import Chart from 'chart.js/auto';
 import { S, filterShotsByMachine }                            from '../../state.js';
 import { t }                                                  from '../../i18n.js';
 import { apiFetch, isApiPortBlocked }                         from '../../api.js';
-import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd } from '../../constants.js';
+import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges } from '../../constants.js';
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob,
@@ -31,6 +31,54 @@ import { openLightbox }                                       from '../../compon
 // allowed to write state, same pattern as loadMachineProfileList() in
 // library-profile-editor.js (#521, #644).
 let _loadDataReqToken = 0;
+
+// GaggiMate phase-name lookup cache, keyed by `${machineId}:${profileName}`.
+// Invalidated by invalidateGmPhaseCache() after a profile save.
+const _gmPhaseCache = new Map();
+
+export function invalidateGmPhaseCache(machineId) {
+  const prefix = `${machineId}:`;
+  for (const key of _gmPhaseCache.keys()) {
+    if (key.startsWith(prefix)) _gmPhaseCache.delete(key);
+  }
+}
+
+// GaggiMate only serves one WS request at a time — an overlapping call
+// (e.g. the live-status poll) can 503 even though the machine is fine.
+// Retries up to 3x; a real 4xx/other 5xx returns immediately.
+async function _fetchWithRetry(url, signal) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const r = await apiFetch(url, { signal });
+      if (r.ok || r.status < 500 || attempt === 3) return r;
+    } catch (e) {
+      if (attempt === 3 || signal?.aborted) throw e;
+    }
+    await new Promise(res => setTimeout(res, 400 * attempt));
+  }
+}
+
+// Resolves shotA's named GaggiMate profile phases, cache-first. Null on any
+// miss/failure — callers treat that as "no enhancement", not an error.
+async function _loadGmPhases(shotA, token) {
+  const mid = shotA.machineId;
+  const cacheKey = `${mid}:${shotA.profileName}`;
+  if (_gmPhaseCache.has(cacheKey)) return _gmPhaseCache.get(cacheKey);
+
+  let gmPhases = null;
+  try {
+    const r1 = await _fetchWithRetry(`api/machine/profiles?machineId=${mid}`, AbortSignal.timeout(6000));
+    const { optionsRaw: profiles = [] } = r1.ok && token === _updateViewToken ? await r1.json() : {};
+    const match = profiles.find(p => p.name === shotA.profileName || p.id === shotA.profileName);
+    const r2 = match && await _fetchWithRetry(`api/machine/profile/${match.id}?machineId=${mid}`, AbortSignal.timeout(6000));
+    const prof = r2?.ok && await r2.json();
+    if (prof?.phases?.length) gmPhases = buildGmPhaseRanges(prof.phases);
+  } catch (e) {
+    console.warn('[GLP] GaggiMate phase-name lookup failed:', e);
+  }
+  if (gmPhases) _gmPhaseCache.set(cacheKey, gmPhases); // only cache a hit — don't stick a transient failure
+  return gmPhases;
+}
 
 // #635: baskets/puck screens are pure ID-based library selections (see
 // annotation.js's _renderBasketSelect/_renderPuckScreenSelect) — this
@@ -355,6 +403,10 @@ function _setDeltaChip(id, delta, decimals = 0, unit = '', colorClass = null, ti
 
 let _updateViewToken = 0;
 
+// Set per updateView() call — lets the async GaggiMate-phases callback
+// rebuild the chart once gmPhases lands (see below for why rebuild, not mutate).
+let _buildShotChart = null;
+
 export async function updateView() {
   // #814: resolved per render, never at module load — the value has to be
   // whatever the ACTIVE theme resolves to right now.
@@ -548,6 +600,7 @@ export async function updateView() {
   }
 
   // Phases -> a compact sub-line on the Recipe zone's duration card (#398).
+  // The GaggiMate named-phase lookup below upgrades this later if it lands.
   const phases    = !shotB ? detectPhases(pressureTimes, pressureVals) : null;
   const phasesSub = document.getElementById('phasesSub');
   phasesSub.textContent = phases
@@ -724,41 +777,68 @@ export async function updateView() {
   if (S.currentChartTab === 'pq') updatePQChart();
 
   const ctx = document.getElementById('espressoShotChart');
-  const _existingChart = Chart.getChart(ctx);
-  if (_existingChart) _existingChart.destroy();
-  S.chart = null;
 
-  try {
-    S.chart = new Chart(ctx, {
-      type: 'line',
-      plugins: [corsairPlugin, phasePlugin],
-      data: { datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: { padding: { bottom: 20 } },
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          phases:  phases ? { preinfusion: phases.preinfusion, extraction: phases.extraction } : {},
-          legend:  {
-            display: true,
-            position: 'bottom',
-            labels: { color: C.text, font: { family: 'Figtree', size: window.innerWidth <= 600 ? 9 : 11 }, boxWidth: window.innerWidth <= 600 ? 8 : 12, padding: window.innerWidth <= 600 ? 4 : 8 }
+  // Rebuild rather than mutate options.plugins.phases in place — Chart.js
+  // doesn't reliably pick up in-place mutation on the next draw.
+  _buildShotChart = (phasesOpt) => {
+    const existing = Chart.getChart(ctx);
+    if (existing) existing.destroy();
+    try {
+      S.chart = new Chart(ctx, {
+        type: 'line',
+        plugins: [corsairPlugin, phasePlugin],
+        data: { datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { bottom: 20 } },
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            phases: phasesOpt,
+            legend:  {
+              display: true,
+              position: 'bottom',
+              labels: { color: C.text, font: { family: 'Figtree', size: window.innerWidth <= 600 ? 9 : 11 }, boxWidth: window.innerWidth <= 600 ? 8 : 12, padding: window.innerWidth <= 600 ? 4 : 8 }
+            },
+            tooltip: {
+              callbacks: {
+                title: ctx => {
+                  const time = ctx[0].parsed.x;
+                  const ph = phasesOpt.gaggimatePhases?.find(p => time >= p.t0 && time <= p.t1);
+                  const timeLabel = t('chart_time', formatTimeLabel(time));
+                  return ph?.name ? `${ph.name} — ${timeLabel}` : timeLabel;
+                },
+              },
+            }
           },
-          tooltip: { callbacks: { title: ctx => t('chart_time', formatTimeLabel(ctx[0].parsed.x)) } }
-        },
-        scales: {
-          x:  { type:'linear', min:0, max:Math.max(maxTimeA, maxTimeB, maxTimePrev), clip:false,
-                ticks:{ color:C.tick, font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
-                grid:{ color:C.grid } },
-          y:  { type:'linear', position:'left',  min:0, max:12, ticks:{color:C.tick, maxTicksLimit:6}, grid:{color:C.grid} },
-          y1: { type:'linear', position:'right', min:0, max:Number(tempMaxScale), ticks:{color:C.tick, maxTicksLimit:6}, grid:{drawOnChartArea:false} }
+          scales: {
+            x:  { type:'linear', min:0, max:Math.max(maxTimeA, maxTimeB, maxTimePrev), clip:false,
+                  ticks:{ color:C.tick, font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
+                  grid:{ color:C.grid } },
+            y:  { type:'linear', position:'left',  min:0, max:12, ticks:{color:C.tick, maxTicksLimit:6}, grid:{color:C.grid} },
+            y1: { type:'linear', position:'right', min:0, max:Number(tempMaxScale), ticks:{color:C.tick, maxTicksLimit:6}, grid:{drawOnChartArea:false} }
+          }
         }
-      }
+      });
+      clearChartOnTouchEnd(S.chart);
+    } catch (e) {
+      console.error('Chart creation error:', e);
+    }
+  };
+  S.chart = null;
+  _buildShotChart(phases ? { preinfusion: phases.preinfusion, extraction: phases.extraction } : {});
+
+  // GaggiMate: upgrade sub-line + chart once named phases land. Not awaited;
+  // must stay after _buildShotChart exists (a cache hit can resolve before
+  // it otherwise, since this fn has earlier awaits). Shots have no
+  // machineType of their own, hence the S.machines lookup.
+  const shotMachine = !shotB && S.machines?.find(m => m.id === (shotA.machineId ?? 1));
+  if (shotMachine?.type === 'gaggimate' && shotA.machineId) {
+    _loadGmPhases(shotA, token).then(gmPhases => {
+      if (!gmPhases || token !== _updateViewToken) return;
+      phasesSub.textContent = gmPhases.map(p => p.name).join(' · ');
+      _buildShotChart({ gaggimatePhases: gmPhases });
     });
-    clearChartOnTouchEnd(S.chart);
-  } catch (e) {
-    console.error('Chart creation error:', e);
   }
 }
 

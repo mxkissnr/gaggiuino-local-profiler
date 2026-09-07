@@ -76,6 +76,11 @@ type BrewRecipeInput struct {
 // POST/PUT /api/machine/profile[/{id}]. MachineID is read directly off the
 // decoded body by handlers.go (mirrors req.body?.machineId), not part of
 // the wire conversion.
+//
+// RawBody is set by handlers_profiles.go from the original request bytes —
+// not decoded from JSON — so GaggiMate's CreateProfile/UpdateProfile can
+// pass the profile through unmodified (GaggiMate has its own JSON shape,
+// unrelated to Gaggiuino's Phases/GlobalStopConditions structure).
 type ProfileInput struct {
 	ID                   *int64                     `json:"id"`
 	Name                 string                     `json:"name"`
@@ -84,6 +89,7 @@ type ProfileInput struct {
 	WaterTemperature     *float64                   `json:"waterTemperature"`
 	Recipe               *BrewRecipeInput           `json:"recipe"`
 	MachineID            *int64                     `json:"machineId"`
+	RawBody              json.RawMessage            `json:"-"`
 }
 
 const maxProfileNameLen = 200
@@ -106,6 +112,52 @@ func (p ProfileInput) Validate() error {
 		}
 	}
 	return nil
+}
+
+// validateGaggiMateProfileBody checks the minimum structural requirements for a
+// GaggiMate profile JSON before it is forwarded to the device. GaggiMate uses
+// "label" (not "name") and "phases" (same as Gaggiuino's phases field).
+func validateGaggiMateProfileBody(raw json.RawMessage) error {
+	var p struct {
+		Label  string `json:"label"`
+		Phases []any  `json:"phases"`
+	}
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return fmt.Errorf("invalid JSON: %w", err)
+	}
+	if len(p.Label) < 1 || len(p.Label) > maxProfileNameLen {
+		return fmt.Errorf("label must be 1-%d characters", maxProfileNameLen)
+	}
+	if len(p.Phases) < 1 {
+		return fmt.Errorf("phases must have at least 1 entry")
+	}
+	return nil
+}
+
+// injectIDIfAbsent injects {"id":<pathID>} into a GaggiMate profile JSON body
+// when the body carries no "id" key. A body that already has an id (even null)
+// is returned unchanged — the client's explicit value wins.
+func injectIDIfAbsent(raw json.RawMessage, pathID string) json.RawMessage {
+	if pathID == "" {
+		return raw
+	}
+	var check map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &check); err != nil {
+		return raw
+	}
+	if _, ok := check["id"]; ok {
+		return raw
+	}
+	idJSON, err := json.Marshal(pathID)
+	if err != nil {
+		return raw
+	}
+	check["id"] = idJSON
+	out, err := json.Marshal(check)
+	if err != nil {
+		return raw
+	}
+	return out
 }
 
 func floatOr(p *float64, def float64) float64 {

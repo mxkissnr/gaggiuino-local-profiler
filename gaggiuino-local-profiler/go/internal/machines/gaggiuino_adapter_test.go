@@ -3,6 +3,7 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
@@ -44,7 +45,7 @@ func TestGaggiuinoAdapter_ProfileCRUD_ViaWebSocket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateProfile: %v", err)
 	}
-	if created.Name != "Espresso" || created.ID == 0 {
+	if created.Name != "Espresso" || created.ID == "" {
 		t.Fatalf("unexpected created profile: %+v", created)
 	}
 
@@ -56,7 +57,7 @@ func TestGaggiuinoAdapter_ProfileCRUD_ViaWebSocket(t *testing.T) {
 		t.Fatalf("ListProfiles = %+v, want [%+v]", list, created)
 	}
 
-	id64 := int64(created.ID)
+	id64, _ := strconv.ParseInt(created.ID, 10, 64)
 	updated, err := a.UpdateProfile(ctx, m, ProfileInput{ID: &id64, Name: "Espresso v2", Phases: []PhaseInput{{Type: proto.PhaseFlow}}})
 	if err != nil {
 		t.Fatalf("UpdateProfile: %v", err)
@@ -82,7 +83,7 @@ func TestGaggiuinoAdapter_GetProfile_RESTFirstThenWSFallback(t *testing.T) {
 	m := testMachine(fake.URL)
 
 	// REST succeeds by default.
-	raw, err := a.GetProfile(context.Background(), m, 5)
+	raw, err := a.GetProfile(context.Background(), m, "5")
 	if err != nil {
 		t.Fatalf("GetProfile (REST): %v", err)
 	}
@@ -94,7 +95,7 @@ func TestGaggiuinoAdapter_GetProfile_RESTFirstThenWSFallback(t *testing.T) {
 
 	// Force REST to 404 — must fall back to the WS path.
 	fake.restProfileDetail404 = true
-	raw, err = a.GetProfile(context.Background(), m, 5)
+	raw, err = a.GetProfile(context.Background(), m, "5")
 	if err != nil {
 		t.Fatalf("GetProfile (WS fallback): %v", err)
 	}
