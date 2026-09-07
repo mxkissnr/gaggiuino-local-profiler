@@ -135,4 +135,51 @@ describe('public-src/sse.js', () => {
     connectEvents(() => {});
     expect(FakeEventSource.instances[0].url).toBe('api/events?token=abc123');
   });
+
+  // #1016: mid-session staleness -- a connected stream that goes silent
+  // (Ingress/proxy black-holed it) without ever firing onerror/onclose used
+  // to leave S.sseActive stuck at true forever, permanently suppressing the
+  // REST-polling fallback.
+  it('flips S.sseActive back to false if connected but no event arrives for the stale window, with no onerror at all', () => {
+    connectEvents(() => {});
+    const es = FakeEventSource.instances[0];
+    es._open();
+    expect(S.sseActive).toBe(true);
+
+    vi.advanceTimersByTime(39999);
+    expect(S.sseActive).toBe(true);
+
+    vi.advanceTimersByTime(1);
+    expect(S.sseActive).toBe(false);
+    // native reconnect must still be allowed to happen in the background
+    expect(es.closed).toBe(false);
+  });
+
+  it('a received event resets the staleness timer so a healthy stream never falsely goes inactive', () => {
+    onEvent('live-snapshot', () => {});
+    connectEvents(() => {});
+    const es = FakeEventSource.instances[0];
+    es._open();
+
+    // Keep emitting an event just before the stale window would elapse --
+    // should never trip, no matter how long the session runs.
+    for (let i = 0; i < 5; i++) {
+      vi.advanceTimersByTime(39000);
+      es._emit('live-snapshot', { seq: i });
+      expect(S.sseActive).toBe(true);
+    }
+  });
+
+  it('an event arriving after the stream had already gone stale restores S.sseActive without needing onopen', () => {
+    onEvent('live-snapshot', () => {});
+    connectEvents(() => {});
+    const es = FakeEventSource.instances[0];
+    es._open();
+
+    vi.advanceTimersByTime(40000);
+    expect(S.sseActive).toBe(false);
+
+    es._emit('live-snapshot', { seq: 1 });
+    expect(S.sseActive).toBe(true);
+  });
 });

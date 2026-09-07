@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Fixed
+- **The Live tab no longer freezes on stale readings when the live event stream goes silent mid-session without ever cleanly failing** — it now falls back to REST polling until the stream recovers, instead of trusting a connection that looked fine at first but stopped delivering updates. Closes #1016
 - **(go-migration) A panic in a background task (live-machine polling, scheduled sync, or a settings fetch) is now recovered and logged instead of crashing the whole add-on.** Closes #993
 - **(go-migration) A crafted shot-history file can no longer make the .slog parser preallocate a wildly oversized amount of memory.** Closes #992
 - **(go-migration) Fetching a GaggiMate machine's shot-history index no longer reads an unbounded amount of data into memory.** Closes #991
