@@ -21,11 +21,19 @@ export const EVENTS = {
 
 const WATCHDOG_MS = 8000;
 const MAX_STRIKES = 3;
+// #1016: lib/preheat.js's startPreheatWatcher() unconditionally emits a
+// PREHEAT_UPDATE every 30s regardless of machine/live state -- the one named
+// event the backend guarantees no matter what. STALE_MS sits comfortably
+// above that floor so normal jitter never false-positives, while still
+// catching a stream that has gone silent (Ingress/proxy killed it without a
+// clean close, token expiry, etc.) well within a session.
+const STALE_MS = 40000;
 
 let source = null;
 let everConnected = false;
 let strikes = 0;
 let watchdogTimer = null;
+let staleTimer = null;
 const listeners = new Map(); // type -> Set<cb>
 const attachedTypes = new Set(); // types with a native listener already wired on the current `source`
 
@@ -33,10 +41,32 @@ function clearWatchdog() {
   if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null; }
 }
 
+function clearStaleTimer() {
+  if (staleTimer) { clearTimeout(staleTimer); staleTimer = null; }
+}
+
+// Re-armed on every open + every received event (see dispatch() below). If
+// it ever fires, no traffic at all has arrived for STALE_MS despite having
+// connected once -- the mid-session counterpart to the first-connect
+// watchdog above. Unlike triggerFallback(), this does NOT tear down
+// `source`: EventSource's own native reconnect may still be working in the
+// background and can flip S.sseActive back to true via onopen once it
+// recovers, same as any other transient drop.
+function armStaleTimer() {
+  clearStaleTimer();
+  staleTimer = setTimeout(() => { S.sseActive = false; }, STALE_MS);
+}
+
 function dispatch(type) {
   return e => {
     let data;
     try { data = JSON.parse(e.data); } catch { return; }
+    // A real message is itself the strongest possible "still working" signal
+    // -- resets the stale window and (covering the rare case of traffic
+    // resuming on the same never-actually-closed connection, so onopen never
+    // re-fires) restores S.sseActive directly rather than waiting on onopen.
+    S.sseActive = true;
+    armStaleTimer();
     for (const cb of listeners.get(type) || []) cb(data);
   };
 }
@@ -68,6 +98,7 @@ export function connectEvents(onFallback) {
   disconnectEvents();
   everConnected = false;
   strikes = 0;
+  clearStaleTimer();
 
   const url = S.glpToken ? `api/events?token=${encodeURIComponent(S.glpToken)}` : 'api/events';
   source = new EventSource(url);
@@ -82,6 +113,7 @@ export function connectEvents(onFallback) {
     strikes = 0;
     S.sseActive = true;
     clearWatchdog();
+    armStaleTimer();
   };
 
   source.onerror = () => {
@@ -93,6 +125,7 @@ export function connectEvents(onFallback) {
 
 export function disconnectEvents() {
   clearWatchdog();
+  clearStaleTimer();
   if (source) { source.close(); source = null; }
   attachedTypes.clear();
 }
