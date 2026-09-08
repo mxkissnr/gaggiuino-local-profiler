@@ -341,8 +341,8 @@ func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host,
 	// bean object is a few dozen scalar/short-slice fields at most, and
 	// every call here already did a full HTTP HTML fetch immediately
 	// above, which dominates cost by orders of magnitude over that diff.
+	var changed []string
 	if debugInfo != nil || system.IsDebugLoggingEnabled() {
-		var changed []string
 		for k, v := range enriched {
 			if !reflect.DeepEqual(v, before[k]) {
 				changed = append(changed, k)
@@ -353,9 +353,9 @@ func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host,
 			changedSummary = strings.Join(changed, ", ")
 		}
 		system.DebugLogf("Import: HTML enrichment changed fields: %s", changedSummary)
-		if debugInfo != nil {
-			debugInfo["enrichedFieldsChanged"] = changed
-		}
+	}
+	if debugInfo != nil {
+		debugInfo["enrichedFieldsChanged"] = changed
 	}
 	return enriched, nil
 }

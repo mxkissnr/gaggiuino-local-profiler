@@ -47,6 +47,15 @@
 # removing the now-misowned final file rather than leaving a silent
 # root-owned backup sitting there unreported (#977 follow-up code review,
 # round 4).
+#
+# The marker touch/chown gets the same non-fatal treatment (#977 follow-up
+# code review, round 5): if the disk fills or goes read-only right after the
+# chown -R above but before the marker is written, `set -e` must not kill
+# the entrypoint before it reaches exec -- that would mean total outage on
+# every boot until the disk issue clears. A missing/misowned marker just
+# means the backup-check above runs again next boot, which is safe and
+# idempotent by design (see the marker-gating note further up), so a failure
+# here is logged as a warning and boot continues.
 set -e
 
 backup_data_file() {
@@ -68,14 +77,17 @@ backup_data_file() {
 if [ -d /data ]; then
     chown -R glp:glp /data
     if [ ! -f /data/.go-cutover-done ]; then
-        if [ -f /data/glp.db ]; then
-            backup_data_file glp.db
-            for sidecar in wal shm; do
-                backup_data_file "glp.db-$sidecar"
-            done
+        for f in glp.db glp.db-wal glp.db-shm; do
+            backup_data_file "$f"
+        done
+        if touch /data/.go-cutover-done; then
+            if ! chown glp:glp /data/.go-cutover-done; then
+                echo "WARNING: chown glp:glp failed on /data/.go-cutover-done, removing it so the backup-check re-runs next boot" >&2
+                rm -f /data/.go-cutover-done
+            fi
+        else
+            echo "WARNING: failed to write /data/.go-cutover-done, continuing anyway (backup-check will re-run next boot)" >&2
         fi
-        touch /data/.go-cutover-done
-        chown glp:glp /data/.go-cutover-done
     fi
 fi
 

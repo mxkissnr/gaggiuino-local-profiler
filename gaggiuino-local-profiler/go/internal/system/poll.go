@@ -475,34 +475,6 @@ func (p *Poller) pollTick() {
 	p.pollViaGaggiuinoStatus(ctx)
 }
 
-// debugTickLogCache throttles pollViaGaggiuinoStatus's per-tick debug-log
-// gate (#977 follow-up code review, round 4). debug_logging is a manual
-// Configuration-UI toggle, not something that needs sub-second pickup, so a
-// short TTL is enough -- it keeps the common (disabled) case down to a
-// plain time comparison on most ticks instead of a mutex-lock + os.Stat
-// every single second.
-var debugTickLogCache struct {
-	mu      sync.Mutex
-	checked time.Time
-	enabled bool
-}
-
-const debugTickLogTTL = 5 * time.Second
-
-// pollDebugLoggingEnabled is isDebugLoggingEnabled() throttled to
-// debugTickLogTTL for pollViaGaggiuinoStatus's hot path -- see
-// debugTickLogCache's doc comment above.
-func pollDebugLoggingEnabled() bool {
-	debugTickLogCache.mu.Lock()
-	defer debugTickLogCache.mu.Unlock()
-	if time.Since(debugTickLogCache.checked) < debugTickLogTTL {
-		return debugTickLogCache.enabled
-	}
-	debugTickLogCache.enabled = isDebugLoggingEnabled()
-	debugTickLogCache.checked = time.Now()
-	return debugTickLogCache.enabled
-}
-
 // pollViaGaggiuinoStatus ports pollViaGaggiuinoStatus(runtime). Despite the
 // name it is adapter-agnostic: adapter.GetStatus dispatches to the right
 // machine adapter, and for a GaggiMate default that call now reads the
@@ -534,17 +506,13 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	// the actual HTTP GET happens one layer down, inside the adapter
 	// (internal/machines/gaggiuino_adapter.go for a Gaggiuino default), so
 	// this traces the poll tick itself rather than the literal request line.
-	// Gated on pollDebugLoggingEnabled() rather than calling debugLogf
-	// directly (#977 follow-up code review, round 4): debugLogf's own
-	// isDebugLoggingEnabled() check still pays loadStatusOptions()'s
-	// mutex-lock + os.Stat on every call even on a cache hit, and unlike
-	// that cache's other callers -- GET /api/status (polled minutes apart)
-	// or sync.go's debugLogf calls (once per shot) -- this one fires every
-	// single pollInterval tick (1s) regardless of whether debug logging is
-	// even on. See pollDebugLoggingEnabled's doc comment for the TTL.
-	if pollDebugLoggingEnabled() {
-		debugLogf("poll: GET status from %s (%s)", machine.Host, machine.Type)
-	}
+	// Calling debugLogf directly is safe here despite firing every single
+	// pollInterval tick (1s): its isDebugLoggingEnabled() check goes through
+	// internal/config's shared cache, which now carries its own TTL sized
+	// for exactly this hot path (#977 follow-up code review, round 5 --
+	// see internal/config/debuglog.go's debugLoggingCache doc comment), so
+	// this no longer needs its own throttling wrapper.
+	debugLogf("poll: GET status from %s (%s)", machine.Host, machine.Type)
 	status, err := adapter.GetStatus(ctx, machine)
 	if err != nil {
 		p.state.mu.Lock()

@@ -148,6 +148,7 @@ func (h *MachinesHandlers) createMachineAction(w http.ResponseWriter, r *http.Re
 		httputil.InternalError(w, "web", err)
 		return
 	}
+	h.registry.LogRegistrySnapshot()
 	h.renderMachinesFragment(w, r, "")
 }
 
@@ -262,6 +263,7 @@ func (h *MachinesHandlers) updateAction(w http.ResponseWriter, r *http.Request) 
 		writeFragmentError(w, http.StatusNotFound, "Machine not found")
 		return
 	}
+	h.registry.LogRegistrySnapshot()
 	row, found, err := h.rowByID(id)
 	if err != nil {
 		httputil.InternalError(w, "web", err)

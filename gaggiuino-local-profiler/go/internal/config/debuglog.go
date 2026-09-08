@@ -23,12 +23,32 @@ var OptionsFile = "/data/options.json"
 // preheatMinutesCache/statusOptionsCache use, for the same reason: this
 // file is only ever rewritten by a rare Configuration-UI edit, not
 // something worth a fresh os.ReadFile+json.Unmarshal on every call.
+//
+// checked/cacheTTL add a second layer on top of the mtime check (#977
+// follow-up code review, round 5): this is the ONE shared debug_logging
+// cache now -- it used to be three independent hand-rolled caches (this
+// one, plus internal/system/poll.go's own debugTickLogCache wrapping it for
+// the 1s poll tick, plus sync.go's per-shot bulk-sync loop paying the
+// mtime check's mutex-lock+os.Stat unthrottled). A poll tick or a
+// historical backfill of many shots can call IsDebugLoggingEnabled() far
+// more often than options.json could plausibly change, so within cacheTTL
+// of the last check this skips the os.Stat entirely and just returns the
+// cached value; debug_logging is a manual Configuration-UI toggle, not
+// something that needs sub-second pickup, so a short TTL costs nothing in
+// practice while saving a stat call on every hot-path call.
 var debugLoggingCache struct {
 	mu      sync.Mutex
 	valid   bool // false until the first os.Stat succeeds
 	mtime   time.Time
+	checked time.Time
 	enabled bool
 }
+
+// cacheTTL is how long IsDebugLoggingEnabled() trusts its cached value
+// without even checking options.json's mtime -- sized for a 1-second poll
+// caller (internal/system/poll.go's pollViaGaggiuinoStatus), the tightest
+// hot path that calls this.
+const cacheTTL = 5 * time.Second
 
 // IsDebugLoggingEnabled ports lib/data.js's isDebugLoggingEnabled() /
 // loadOptions().debug_logging (#977 follow-up): off by default, falling
@@ -47,8 +67,13 @@ func IsDebugLoggingEnabled() bool {
 	debugLoggingCache.mu.Lock()
 	defer debugLoggingCache.mu.Unlock()
 
+	if debugLoggingCache.valid && time.Since(debugLoggingCache.checked) < cacheTTL {
+		return debugLoggingCache.enabled
+	}
+
 	info, statErr := os.Stat(OptionsFile)
 	if statErr == nil && debugLoggingCache.valid && info.ModTime().Equal(debugLoggingCache.mtime) {
+		debugLoggingCache.checked = time.Now()
 		return debugLoggingCache.enabled
 	}
 
@@ -58,6 +83,7 @@ func IsDebugLoggingEnabled() bool {
 		debugLoggingCache.mtime = info.ModTime()
 	}
 	debugLoggingCache.enabled = enabled
+	debugLoggingCache.checked = time.Now()
 	return enabled
 }
 

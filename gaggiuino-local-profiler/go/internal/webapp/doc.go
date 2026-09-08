@@ -78,7 +78,7 @@
 // `npm ci && npm run build` and stages gaggiuino-local-profiler/public
 // into it. Everything under dist/ is git-ignored EXCEPT a committed
 // dist/index.html placeholder, so a bare `go build ./...` / `go test ./...`
-// (CI's go-build.yaml test job runs exactly that, with no npm step)
+// (CI's test.yaml go-test job runs exactly that, with no npm step)
 // resolves the embed without the frontend toolchain. The `all:` prefix
 // keeps Vite's underscore/dot-prefixed emitted assets in the embed.
 package webapp
