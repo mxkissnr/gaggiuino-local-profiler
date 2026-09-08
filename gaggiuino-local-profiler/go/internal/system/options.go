@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/config"
 )
 
 // This mirrors internal/orders/options.go's isOrdersEnabled(): a narrow,
@@ -95,12 +97,15 @@ type statusOptions struct {
 	ordersEnabled       bool
 	apiPortExposed      bool
 	syncIntervalMinutes int
-	debugLogging        bool
 }
 
 // loadStatusOptions returns the cached (or freshly parsed, on a cache miss)
 // options.json fields isOrdersEnabled/isApiPortExposed/
-// loadSyncIntervalMinutes/isDebugLoggingEnabled below all delegate to.
+// loadSyncIntervalMinutes below all delegate to. debug_logging is NOT one
+// of these -- it's read via internal/config.IsDebugLoggingEnabled() (its
+// own leaf-package mtime-cache) instead, since internal/machines needs the
+// identical check and can't import this package (see that function's doc
+// comment for the cycle).
 func loadStatusOptions() statusOptions {
 	statusOptionsCache.mu.Lock()
 	defer statusOptionsCache.mu.Unlock()
@@ -130,21 +135,18 @@ func parseStatusOptionsFile() statusOptions {
 			ordersEnabled:       os.Getenv("GLP_ENABLE_ORDERS") == "true",
 			apiPortExposed:      os.Getenv("GLP_EXPOSE_API_PORT") != "false",
 			syncIntervalMinutes: syncIntervalMinutesFromEnv(),
-			debugLogging:        os.Getenv("GLP_DEBUG_LOGGING") == "true",
 		}
 	}
 	var raw struct {
 		EnableOrders  bool        `json:"enable_orders"`
 		ExposeAPIPort *bool       `json:"expose_api_port"`
 		SyncInterval  json.Number `json:"sync_interval"`
-		DebugLogging  bool        `json:"debug_logging"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return statusOptions{
 			ordersEnabled:       os.Getenv("GLP_ENABLE_ORDERS") == "true",
 			apiPortExposed:      os.Getenv("GLP_EXPOSE_API_PORT") != "false",
 			syncIntervalMinutes: syncIntervalMinutesFromEnv(),
-			debugLogging:        os.Getenv("GLP_DEBUG_LOGGING") == "true",
 		}
 	}
 
@@ -161,7 +163,6 @@ func parseStatusOptionsFile() statusOptions {
 		ordersEnabled:       raw.EnableOrders,
 		apiPortExposed:      apiPortExposed,
 		syncIntervalMinutes: syncInterval,
-		debugLogging:        raw.DebugLogging,
 	}
 }
 
@@ -207,13 +208,15 @@ func loadSyncIntervalMinutes() int {
 	return loadStatusOptions().syncIntervalMinutes
 }
 
-// isDebugLoggingEnabled ports lib/data.js's isDebugLoggingEnabled() /
-// loadOptions().debug_logging (#977 follow-up): off by default, same as
-// isOrdersEnabled above, so verbose per-request diagnostic detail never
-// spams production logs unless explicitly switched on in the add-on's
-// Configuration UI (or GLP_DEBUG_LOGGING for standalone Docker, #764).
+// isDebugLoggingEnabled delegates to internal/config's shared, mtime-cached
+// implementation (#977 follow-up code review, round 4) rather than
+// bundling debug_logging into loadStatusOptions/statusOptionsCache above --
+// internal/machines needs the identical check and can't import this
+// package (see internal/config.IsDebugLoggingEnabled's doc comment for the
+// cycle this was extracted to break), so both packages now share one
+// implementation instead of keeping independent copies.
 func isDebugLoggingEnabled() bool {
-	return loadStatusOptions().debugLogging
+	return config.IsDebugLoggingEnabled()
 }
 
 // debugLogf ports lib/data.js's debugLog(message) — logs with a "[debug]"
@@ -227,14 +230,11 @@ func debugLogf(format string, args ...any) {
 
 // IsDebugLoggingEnabled/DebugLogf are isDebugLoggingEnabled/debugLogf
 // exposed for internal/importer's HTML/JSON fetch traces (routes/
-// import.js's own debugLog call sites — #977 follow-up code review). Only
-// one third-party copy of this check would otherwise exist: CLAUDE.md's
-// #643 precedent requires a shared helper once the same logic is needed in
-// more than two places, and internal/system<->internal/importer has no
-// import cycle (unlike internal/machines, which is imported BY
-// internal/system — see machines/registry.go's own copy and its doc
-// comment for why that one stays separate) — this cached, mtime-checked
-// implementation (loadStatusOptions above) is the one to share rather than
-// importer's own uncached re-read-on-every-call copy it replaces.
+// import.js's own debugLog call sites — #977 follow-up code review):
+// internal/system<->internal/importer has no import cycle (unlike
+// internal/machines, which is imported BY internal/system — see
+// internal/config.IsDebugLoggingEnabled's doc comment for how that cycle
+// is broken instead), so importer just calls straight through to this
+// package's own wrapper around the shared internal/config implementation.
 func IsDebugLoggingEnabled() bool          { return isDebugLoggingEnabled() }
 func DebugLogf(format string, args ...any) { debugLogf(format, args...) }

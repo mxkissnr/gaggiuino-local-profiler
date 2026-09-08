@@ -39,23 +39,39 @@
 # container boot -- the marker still gets set (see above), and `set -e`
 # below only sees the recovery branch's own successful exit status, not
 # the failed cp/mv.
+#
+# backup_data_file() covers all three files (db, wal, shm) with one
+# implementation. Note the chown happens *after* the mv, so a chown failure
+# can't be caught by the `|| rm -f ...tmp` cleanup (the file's no longer at
+# the .tmp path by then) -- it's checked and handled explicitly instead, by
+# removing the now-misowned final file rather than leaving a silent
+# root-owned backup sitting there unreported (#977 follow-up code review,
+# round 4).
 set -e
+
+backup_data_file() {
+    src="/data/$1"
+    tmp="/data/$1.pre-go-backup.tmp"
+    final="/data/$1.pre-go-backup"
+    if [ -f "$src" ]; then
+        if cp "$src" "$tmp" && mv "$tmp" "$final"; then
+            if ! chown glp:glp "$final"; then
+                echo "WARNING: chown glp:glp failed on $final, removing to avoid a root-owned backup" >&2
+                rm -f "$final"
+            fi
+        else
+            rm -f "$tmp"
+        fi
+    fi
+}
 
 if [ -d /data ]; then
     chown -R glp:glp /data
     if [ ! -f /data/.go-cutover-done ]; then
         if [ -f /data/glp.db ]; then
-            cp /data/glp.db /data/glp.db.pre-go-backup.tmp \
-                && mv /data/glp.db.pre-go-backup.tmp /data/glp.db.pre-go-backup \
-                && chown glp:glp /data/glp.db.pre-go-backup \
-                || rm -f /data/glp.db.pre-go-backup.tmp
+            backup_data_file glp.db
             for sidecar in wal shm; do
-                if [ -f "/data/glp.db-$sidecar" ]; then
-                    cp "/data/glp.db-$sidecar" "/data/glp.db-$sidecar.pre-go-backup.tmp" \
-                        && mv "/data/glp.db-$sidecar.pre-go-backup.tmp" "/data/glp.db-$sidecar.pre-go-backup" \
-                        && chown glp:glp "/data/glp.db-$sidecar.pre-go-backup" \
-                        || rm -f "/data/glp.db-$sidecar.pre-go-backup.tmp"
-                fi
+                backup_data_file "glp.db-$sidecar"
             done
         fi
         touch /data/.go-cutover-done

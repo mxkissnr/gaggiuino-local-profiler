@@ -330,10 +330,17 @@ func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host,
 	}
 	before := cloneBean(bean)
 	enriched := enrichGenericBeanFromHTML(bean, htmlStr, host)
-	// #977 follow-up code review: this field-diff is O(fields) with a
-	// reflect.DeepEqual per field — only worth computing when something
-	// will actually consume it (the debug_logging trace below, or the
-	// `?debug=1` response's debugInfo), not on every bean-import request.
+	// #977 follow-up code review (round 4): global debug_logging enabling
+	// this field-diff (not just an explicit `?debug=1`'s debugInfo != nil)
+	// is deliberate, not an accidental widening -- it matches every other
+	// debugLogf/DebugLogf call already unconditional-when-globally-enabled
+	// in this same function (needsHtmlEnrich/HTML-fetch/JSON-fetch traces
+	// above and in resolve()), porting routes/import.js's debugLog call
+	// sites, which fire the same way in Node regardless of a per-request
+	// flag. The reflect.DeepEqual loop itself stays cheap in practice: a
+	// bean object is a few dozen scalar/short-slice fields at most, and
+	// every call here already did a full HTTP HTML fetch immediately
+	// above, which dominates cost by orders of magnitude over that diff.
 	if debugInfo != nil || system.IsDebugLoggingEnabled() {
 		var changed []string
 		for k, v := range enriched {

@@ -3,9 +3,9 @@
 # security-audited, smoke-tested (go/scripts/smoke-test.sh) and route-parity
 # checked (go/scripts/route-parity.sh) against the Node app before the flip.
 # This file used to live at go/Dockerfile while the Go image was build-only
-# CI (.github/workflows/go-build.yaml, still around post-flip but now
-# redundant to this file/build.yaml/build-dev.yaml — see that workflow's own
-# top-of-file comment); the Node app's history is preserved in git, its
+# CI (.github/workflows/go-build.yaml); that workflow has since been deleted
+# as redundant to this file/build.yaml/build-dev.yaml as part of this same
+# cutover. The Node app's history is preserved in git, its
 # source files (server.js, lib/, routes/) are left in the tree for now and
 # removed in a follow-up cleanup issue, not this one.
 #

@@ -3,16 +3,15 @@ package machines
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/url"
-	"os"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/config"
 )
 
 // Registry ports lib/machines/registry.js: one row per configured espresso
@@ -33,75 +32,13 @@ func NewRegistry(db *sql.DB) *Registry {
 	return &Registry{db: db}
 }
 
-// debugLoggingOptionsFile duplicates go/internal/system's own narrow
-// options.json read (see that package's options.go for the reasoning) —
-// this package doesn't otherwise depend on internal/system (which itself
-// imports internal/machines), so importing it here for one bool would be a
-// cycle. Same trade-off EnsureDefaultMachine's own legacy-options read
-// below already made.
-const debugLoggingOptionsFile = "/data/options.json"
-
-// debugLoggingCache caches isDebugLoggingEnabled()'s parsed result, keyed
-// on options.json's mtime — the same pattern go/internal/system/options.go's
-// preheatMinutesCache/statusOptionsCache already use, adopted here (#977
-// follow-up code review, round 3) after a second independent reviewer
-// re-flagged the plain re-read-on-every-call version: LogRegistrySnapshot
-// runs on every machine create/update/delete/set-default plus startup, not
-// just a rare config-UI-triggered path.
-var debugLoggingCache struct {
-	mu      sync.Mutex
-	valid   bool // false until the first os.Stat succeeds
-	mtime   time.Time
-	enabled bool
-}
-
-// isDebugLoggingEnabled ports lib/data.js's isDebugLoggingEnabled() /
-// loadOptions().debug_logging (#977 follow-up) — off by default, falling
-// back to GLP_DEBUG_LOGGING (#764, standalone Docker) when options.json is
-// missing or doesn't parse.
-func isDebugLoggingEnabled() bool {
-	debugLoggingCache.mu.Lock()
-	defer debugLoggingCache.mu.Unlock()
-
-	info, statErr := os.Stat(debugLoggingOptionsFile)
-	if statErr == nil && debugLoggingCache.valid && info.ModTime().Equal(debugLoggingCache.mtime) {
-		return debugLoggingCache.enabled
-	}
-
-	enabled := parseDebugLoggingFile()
-	debugLoggingCache.valid = statErr == nil
-	if statErr == nil {
-		debugLoggingCache.mtime = info.ModTime()
-	}
-	debugLoggingCache.enabled = enabled
-	return enabled
-}
-
-// parseDebugLoggingFile does isDebugLoggingEnabled()'s actual read+parse+
-// fallback chain — split out so isDebugLoggingEnabled itself only holds the
-// cache-check/cache-store logic, matching internal/system/options.go's own
-// parsePreheatMinutesFile/parseStatusOptionsFile split.
-func parseDebugLoggingFile() bool {
-	data, err := os.ReadFile(debugLoggingOptionsFile)
-	if err != nil {
-		return os.Getenv("GLP_DEBUG_LOGGING") == "true"
-	}
-	var opts struct {
-		DebugLogging bool `json:"debug_logging"`
-	}
-	if err := json.Unmarshal(data, &opts); err != nil {
-		return os.Getenv("GLP_DEBUG_LOGGING") == "true"
-	}
-	return opts.DebugLogging
-}
-
 // LogRegistrySnapshot ports lib/machines/registry.js's
 // logRegistrySnapshot(): the whole machine registry as one log line,
 // behind debug_logging (#977 follow-up) so it doesn't spam production
 // logs. Called at startup and after every registry CRUD — see this
 // function's callers in cmd/server/main.go and handlers_registry.go.
 func (r *Registry) LogRegistrySnapshot() {
-	if !isDebugLoggingEnabled() {
+	if !config.IsDebugLoggingEnabled() {
 		return
 	}
 	list, err := r.ListMachines()
