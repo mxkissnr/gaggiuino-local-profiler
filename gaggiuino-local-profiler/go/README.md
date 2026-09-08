@@ -745,9 +745,12 @@ go build ./...
 
 `.github/workflows/go-build.yaml` described in this section was deleted in
 the #977 cutover PR (redundant to `build.yaml`/`build-dev.yaml` once the
-repo-root Dockerfile became this same `go/Dockerfile`). `go/Dockerfile`
-itself is unaffected and still exists — see the repo-root `Dockerfile` for
-the version that actually ships.
+repo-root Dockerfile became this same content). `go/Dockerfile` and
+`go/docker-entrypoint.sh` themselves were also deleted (#977 follow-up
+code review, round 3) once that was the only thing still reading them —
+see the repo-root `Dockerfile`/`docker-entrypoint.sh` for the version that
+actually ships, which now carries this history in its own comments
+instead.
 
 `go/Dockerfile` and `.github/workflows/go-build.yaml` (repo root) exist so
 this binary's containerization is proven ahead of time, not so it ships:
@@ -853,7 +856,10 @@ above) also completed successfully for both non-amd64 targets.
 deleted in the #977 cutover PR — the full cutover this channel existed to
 preview ahead of has now happened, so a separate preview channel means
 nothing distinct from the main release/dev channels described in the
-top-level `README.md`/`DEVELOPMENT.md`.
+top-level `README.md`/`DEVELOPMENT.md`. `go/apparmor.txt`, described below
+as that workflow's source-of-truth file to copy, was also deleted (#977
+follow-up code review, round 3) once the workflow reading it was gone —
+the repo-root `apparmor.txt` is the one real profile now.
 
 A third, independent Home Assistant app channel — separate from both the
 stable app and the Node dev channel (`glp-dev-app`) — so the Go rewrite can

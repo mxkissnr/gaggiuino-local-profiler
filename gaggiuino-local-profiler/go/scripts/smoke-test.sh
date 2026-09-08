@@ -26,8 +26,12 @@
 # Phase 4 (#901): GLP_SMOKE_DOCKER_IMAGE, when set, points every assertion
 # below at two `docker run` containers from that image tag instead of two
 # native `go build`ed processes — the same checks, but proving the actual
-# go/Dockerfile image boots and serves correctly, not just the Go code in
-# isolation (see go/README.md's "Docker" section). Container /data is left
+# Docker image boots and serves correctly, not just the Go code in
+# isolation. Originally go/Dockerfile (see go/README.md's "Docker"
+# section, historical since #977); as of #977 this is the repo-root
+# Dockerfile — see .github/workflows/test.yaml's `docker-smoke` job, which
+# runs this script in exactly this mode against that image on every PR.
+# Container /data is left
 # unmounted (ephemeral, ok for a throwaway smoke run); the token file and
 # SQLite DB are read back out via `docker cp` rather than a bind mount, so
 # this never depends on the container's UID (1000, "glp") matching whatever
