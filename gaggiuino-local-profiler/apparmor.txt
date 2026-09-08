@@ -70,9 +70,12 @@ profile gaggiuino_local_profiler flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
   #include <abstractions/nameservice>
 
-  # App's own file I/O: /app (code + node_modules), /data (DB + WAL/SHM,
-  # config/options files, bean-images), /tmp, /proc, fonts, and whatever
-  # the Node/native-addon runtime itself needs.
+  # App's own file I/O: /data (DB + WAL/SHM, config/options files,
+  # bean-images), /tmp, /proc, and whatever the statically-linked Go binary
+  # itself needs. #977 follow-up code review: no /app directory exists any
+  # more (the old Node WORKDIR) — glp-server is a single file at
+  # /usr/local/bin/glp-server with the frontend bundle embedded via Go's
+  # embed.FS, not an on-disk code/node_modules tree.
   file,
 
   # Boot-time privilege drop performed by docker-entrypoint.sh: chown -R on
@@ -97,7 +100,6 @@ profile gaggiuino_local_profiler flags=(attach_disconnected,mediate_deleted) {
   /usr/local/bin/** ix,
   /bin/** ix,
   /sbin/** ix,
-  /app/** ix,
 
   # WebSocket/MQTT clients to user-configured LAN machines, HTTPS bean-
   # import fetches, Supervisor/Core API calls, and normal DNS resolution.

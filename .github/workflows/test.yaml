@@ -104,6 +104,13 @@ jobs:
     # protection rule or other workflow referenced either file's job names
     # before deleting (dev has no branch protection at all; main only
     # requires "Test and build" + CodeQL, both untouched by this change).
+    #
+    # #977 follow-up code review: go-build.yaml's original `test` job had
+    # its own Gitea-skip guard ("Gitea Actions also auto-detects
+    # .github/workflows — skip there, GitHub-only") that got lost in the
+    # move — restored here so this job doesn't now also run on the Gitea
+    # mirror runner.
+    if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -167,6 +174,47 @@ jobs:
       # script's ALLOWLIST with a reference. No Go toolchain needed.
       - name: route parity (Node vs Go)
         run: bash scripts/route-parity.sh
+
+  docker-smoke:
+    name: Docker image smoke test (amd64)
+    # #977 follow-up code review: deleting go-build.yaml (see go-test above)
+    # also deleted its `docker` job — the only CI step that ever built the
+    # actual repo-root Dockerfile and ran go/scripts/smoke-test.sh against a
+    # real `docker run` container, proving the entrypoint, privilege drop,
+    # embed.FS static assets, port, and healthcheck all work end to end, not
+    # just the Go code in isolation. Without a replacement, no PR-time check
+    # would build+run the image people actually install — build.yaml/
+    # build-dev.yaml only build (and push) on a release/dev push, they never
+    # smoke-test. amd64-only, matching go-build.yaml's own amd64-only smoke
+    # scope (arm64/armv7 stay build-verified only, via build.yaml's actual
+    # multi-arch release build — this job is a PR-time regression check, not
+    # a substitute for that).
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gaggiuino-local-profiler
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      - name: Build image (amd64, load into local daemon)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: ./gaggiuino-local-profiler
+          file: ./gaggiuino-local-profiler/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: glp-root:amd64
+          cache-from: type=gha,scope=root-amd64
+          cache-to: type=gha,mode=max,scope=root-amd64
+
+      - name: Smoke test (amd64 image, native container run)
+        run: GLP_SMOKE_DOCKER_IMAGE=glp-root:amd64 go/scripts/smoke-test.sh
 
   version-release-check:
     name: Verify a GitHub release exists for the bumped version

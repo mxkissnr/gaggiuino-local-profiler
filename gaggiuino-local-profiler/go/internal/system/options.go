@@ -224,3 +224,17 @@ func debugLogf(format string, args ...any) {
 		log.Printf("[debug] "+format, args...)
 	}
 }
+
+// IsDebugLoggingEnabled/DebugLogf are isDebugLoggingEnabled/debugLogf
+// exposed for internal/importer's HTML/JSON fetch traces (routes/
+// import.js's own debugLog call sites — #977 follow-up code review). Only
+// one third-party copy of this check would otherwise exist: CLAUDE.md's
+// #643 precedent requires a shared helper once the same logic is needed in
+// more than two places, and internal/system<->internal/importer has no
+// import cycle (unlike internal/machines, which is imported BY
+// internal/system — see machines/registry.go's own copy and its doc
+// comment for why that one stays separate) — this cached, mtime-checked
+// implementation (loadStatusOptions above) is the one to share rather than
+// importer's own uncached re-read-on-every-call copy it replaces.
+func IsDebugLoggingEnabled() bool          { return isDebugLoggingEnabled() }
+func DebugLogf(format string, args ...any) { debugLogf(format, args...) }
