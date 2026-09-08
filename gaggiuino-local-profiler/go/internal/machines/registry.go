@@ -486,6 +486,7 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("machines: committing restore: %w", err)
 	}
+	r.LogRegistrySnapshot()
 	return len(valid), nil
 }
 

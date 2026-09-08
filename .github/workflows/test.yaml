@@ -5,6 +5,9 @@ on:
     branches: [dev, main]
   pull_request:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
 
@@ -241,8 +244,25 @@ jobs:
           push: false
           load: ${{ matrix.arch == 'amd64' }}
           tags: glp-root:${{ matrix.arch }}
-          cache-from: type=gha,scope=root-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=root-${{ matrix.arch }}
+          # Per-arch scope (root-${arch}) is the pre-existing convention
+          # inherited verbatim from build.yaml/build-dev.yaml, kept so the
+          # Go-builder/runtime layers of each arch still cache separately.
+          # root-shared is added on top of it (#977 follow-up code review,
+          # round 6): the frontend stage above is architecture-independent
+          # (pinned --platform=$BUILDPLATFORM, no per-arch frontend output),
+          # so its npm ci/build layers have the same cache key on all three
+          # legs — writing/reading a shared scope alongside the per-arch one
+          # lets that identical layer be reused across arches (and across
+          # runs) instead of every matrix leg rebuilding the frontend from
+          # scratch. Cache-from tries root-shared first so a hit there skips
+          # straight past the frontend rebuild; cache-to still writes both,
+          # so the arch-specific layers stay isolated per scope.
+          cache-from: |
+            type=gha,scope=root-shared
+            type=gha,scope=root-${{ matrix.arch }}
+          cache-to: |
+            type=gha,mode=max,scope=root-shared
+            type=gha,mode=max,scope=root-${{ matrix.arch }}
 
       - name: Smoke test (amd64 image, native container run)
         if: matrix.arch == 'amd64'

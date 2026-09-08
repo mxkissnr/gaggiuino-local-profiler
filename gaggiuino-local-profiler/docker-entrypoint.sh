@@ -28,6 +28,17 @@
 # actually taken (no glp.db yet) or the attempt failed -- this is a single
 # opportunity by design, not a queue retried until it succeeds.
 #
+# The marker is never cleared by any code path here (#977 follow-up code
+# review, round 6): if an operator does the documented rollback -- restore
+# the Node image and glp.db.pre-go-backup -- and later retries the Go
+# cutover, the stale marker skips taking a *fresh* backup, since as far as
+# this script can tell the one-shot backup already happened. A second
+# Go-side failure on that retry then forces rollback to the old, stale
+# first backup, losing everything written during the Node interim. The
+# entrypoint has no way to detect a rollback that happened outside of it,
+# so this can't be auto-handled: anyone doing that manual rollback must
+# also `rm -f /data/.go-cutover-done` so the retry takes a fresh backup.
+#
 # The copy itself is atomic: cp to a .tmp name in the same directory, only
 # `mv` (atomic rename on the same filesystem) it onto the final
 # .pre-go-backup name once cp has fully succeeded. Without this, a copy
@@ -69,6 +80,7 @@ backup_data_file() {
                 rm -f "$final"
             fi
         else
+            echo "WARNING: backup of $src failed (cp/mv error), continuing without a pre-go-backup for this file" >&2
             rm -f "$tmp"
         fi
     fi
