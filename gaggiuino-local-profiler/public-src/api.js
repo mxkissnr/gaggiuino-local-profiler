@@ -10,7 +10,7 @@ export async function initToken() {
     // persist it (#522). #803: if the add-on's expose_api_port option is
     // turned off, this fetch 403s for a session that didn't arrive via HA
     // Ingress, and S.glpToken simply stays empty for the rest of this
-    // session — see server.js's isIngressRequest() and routes/system.js's
+    // session — see the backend's ingress-trust check (go/internal/auth) and go/internal/system's
     // GET /api/token.
     const headers = S.glpToken ? { 'X-GLP-Token': S.glpToken } : {};
     const r = await fetch('api/token', { headers });

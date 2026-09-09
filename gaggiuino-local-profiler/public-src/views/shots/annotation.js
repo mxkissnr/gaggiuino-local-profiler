@@ -213,7 +213,7 @@ export async function loadShotDefaults() {
 
 // Merges the configured shot defaults into a shot's annotation, but only
 // when that annotation is genuinely empty — i.e. this shot has never been
-// annotated (see routes/shots.js: a synced-but-untouched shot's annotation
+// annotated (see go/internal/shots: a synced-but-untouched shot's annotation
 // is always {}). Any existing annotation, even a single field, is returned
 // completely untouched: a configured default must never overwrite something
 // the user already recorded. Applied fields stay fully editable afterward —

@@ -1355,9 +1355,9 @@ export async function _handleScanResult(raw, status) {
     return;
   }
   // EAN/UPC → Open Food Facts, via the backend proxy: the CSP's connect-src
-  // is locked to 'self' (deliberate hardening, see server.js), so a direct
+  // is locked to 'self' (deliberate hardening, see go/internal/auth's CSP), so a direct
   // browser fetch to world.openfoodfacts.org is always blocked. The proxy
-  // (routes/library/scan.js) distinguishes "not found" (404) from any other
+  // (go/internal/library (barcode scan)) distinguishes "not found" (404) from any other
   // failure so this can show a specific message instead of one silent
   // catch-all error.
   status.textContent = t('scan_searching');

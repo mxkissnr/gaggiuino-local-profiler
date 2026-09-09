@@ -1,5 +1,5 @@
 // One modal drives both backup flows: choosing which of the six domains
-// (see routes/backup.js's BACKUP_SECTIONS) to export, and — for restore —
+// (see go/internal/backup's section list) to export, and — for restore —
 // previewing exactly what a file would change before anything is written.
 // A single shared implementation instead of two separate ones keeps the
 // section list and its labels from drifting apart between export and
@@ -12,7 +12,7 @@ import { shareOrDownloadBlob } from '../utils.js';
 const SECTION_KEYS = ['shots', 'maintenance', 'orders', 'machines', 'settings', 'secrets'];
 
 // Filename-safe local-time timestamp, e.g. "2026-08-06_08-32-05" -- mirrors
-// routes/backup.js's own backupTimestamp() (kept as two copies rather than
+// go/internal/backup's timestamp helper (kept as two copies rather than
 // one shared module since one runs in the browser and one in Node, same
 // reasoning SECTION_PRESENCE_KEYS/SECTION_PRESENCE_BUNDLE_KEYS already
 // accept). A bare date collapsed every backup taken the same day into one
@@ -24,7 +24,7 @@ function backupTimestamp() {
 }
 
 // Which top-level backup keys prove a given section actually has data in a
-// file being restored — mirrors routes/backup.js's SECTION_BUNDLE_KEYS.
+// file being restored — mirrors go/internal/backup's section-bundle keys.
 // Used only to decide which restore checkboxes to offer; export always
 // offers all six regardless of whether the *current* install has data in
 // them (an empty section is still a valid, deliberate choice to make).
@@ -168,7 +168,7 @@ function renderSectionCheckboxes(presentSections) {
 // two is ever set (see openBackupRestoreModal()). The zip path sends
 // sections/passphrase/dryRun as headers instead of inside the (binary) body
 // -- never as a URL query parameter, matching the reasoning
-// routes/backup.js documents above POST /api/backup for why a passphrase
+// go/internal/backup documents above POST /api/backup for why a passphrase
 // can't go in a URL. `sections === undefined` omits the header entirely,
 // which the backend reads as "fall back to the bundle's own recorded
 // `sections` field" -- used once, by openBackupRestoreModal()'s initial
@@ -259,7 +259,7 @@ export function openBackupExportModal() {
         showProgress(t('backup_progress_preparing'), null);
         try {
             // The response is already the zip binary (backup.json + real
-            // image files, see routes/backup.js's buildBackupZip()) -- no
+            // image files, see go/internal/backup's bundle builder) -- no
             // re-serialization needed, unlike the old JSON.stringify(bundle).
             // X-GLP-Backup-Estimate is an approximate size for the bar; the
             // Go backend sends it, the Node backend doesn't (then the bar
@@ -317,7 +317,7 @@ export async function openBackupRestoreModal(input) {
         // One dry-run round trip against the full file (no sections header,
         // so the backend falls back to "everything the file itself has")
         // gets the same section-presence information the legacy .json path
-        // computes instantly and locally -- see routes/backup.js's
+        // computes instantly and locally -- see go/internal/backup's
         // `sectionsPresent` field on the dry-run preview.
         restoreZipBytes = bytes;
         restoreBundle = null;
@@ -404,7 +404,7 @@ export async function openBackupRestoreModal(input) {
             if (!res.ok) { setBusy(false); hideProgress(); setError(t('backup_error', res.error)); return; }
             // The restore may have just replaced the API token this session is
             // using -- /api/token serves any caller that can reach the port
-            // (see routes/system.js), so re-fetching it is always safe and,
+            // (see go/internal/system), so re-fetching it is always safe and,
             // if it changed, required before any further apiFetch() call.
             if (res.secretsPresent && res.secretsRestored) await initToken();
             if (window.showToast) window.showToast(t('backup_progress_done'));

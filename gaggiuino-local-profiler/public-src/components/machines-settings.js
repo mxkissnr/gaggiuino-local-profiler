@@ -574,7 +574,7 @@ export async function deleteMachine(id, isDefault) {
 //
 // #731: this save is only a means to get a testable id -- it must not start
 // a shot import the way an explicit "Speichern" does, so triggerSync:false
-// is passed through to _saveMachine() (server-side gate in routes/machines.js).
+// is passed through to _saveMachine() (server-side gate in go/internal/machines).
 //
 // #730 review: the form stays open (and clickable) while the request is in
 // flight -- a double-click used to re-enter _saveMachine() with
