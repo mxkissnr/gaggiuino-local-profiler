@@ -12,104 +12,24 @@ const commonRules = {
   ],
 };
 
-// #638/#641/#643/#648: four bugs, same root cause -- code reading
-// opts.machine_host/opts.switch_entity directly instead of going through the
-// registry facade (lib/machines/registry.js's hostFor/switchEntityFor/
-// baseUrlFor/apiUrlFor). Blocks the pattern from reappearing outside the
-// three files that legitimately read options.json: the facade itself, the
-// URL-normalizer helpers it wraps, and the options.json-adoption pass.
-const machineConfigSourceOfTruthRule = {
-  'no-restricted-syntax': [
-    'error',
-    {
-      selector: "MemberExpression[property.name='machine_host']",
-      message: "Machine config comes from registry.hostFor()/baseUrlFor()/apiUrlFor(); options.json is a tracked input, not a source of truth (#638/#641/#643/#648).",
-    },
-    {
-      selector: "MemberExpression[property.name='switch_entity']",
-      message: "Machine config comes from registry.switchEntityFor(); options.json is a tracked input, not a source of truth (#638/#641/#643/#648).",
-    },
-  ],
-};
-
-// #679: resolveMachine() and requireSettingsProxySupport() were each
-// copy-pasted into a second file instead of shared (the same precursor
-// shape as #638/#641/#643/#648) -- now consolidated into
-// lib/machines/registry.js and routes/machine-control.js respectively.
-// Blocks either from being re-declared anywhere else so a future round
-// can't silently reintroduce a second copy.
-const noDuplicateHelpersRule = {
-  'no-restricted-syntax': [
-    'error',
-    {
-      selector: "FunctionDeclaration[id.name='resolveMachine']",
-      message: 'resolveMachine() lives in lib/machines/registry.js — import it from there instead of redeclaring (#679).',
-    },
-    {
-      selector: "FunctionDeclaration[id.name='requireSettingsProxySupport']",
-      message: 'requireSettingsProxySupport() lives in routes/machine-control.js — import it from there instead of redeclaring (#679).',
-    },
-  ],
-};
-
 module.exports = [
   {
-    ignores: ['public/**', 'node_modules/**', 'docs/**', 'graphify-out/**', 'go/internal/web/static/vendor/**'],
+    ignores: ['public/**', 'node_modules/**', 'docs/**', 'graphify-out/**', 'go/**'],
   },
   js.configs.recommended,
   {
-    files: ['eslint.config.js'],
-    languageOptions: {
-      globals: globals.node,
-    },
-  },
-  {
-    files: ['lib/**/*.js', 'routes/**/*.js', 'server.js', 'scripts/**/*.js', 'scripts/**/*.mjs'],
+    files: ['eslint.config.js', 'vite.config.js', 'vitest.config.js'],
     languageOptions: {
       globals: globals.node,
     },
     rules: commonRules,
   },
   {
-    // go/**: the in-progress Go rewrite's Node-side test fixture generators
-    // (e.g. go/internal/db/testdata/gen_node_schema.js drives lib/db.js's
-    // real schema code to produce the reference fixture the Go schema is
-    // compared against) — not part of the shipping app, but still plain
-    // Node scripts that need Node globals like any other.
-    files: ['go/**/*.js'],
+    files: ['scripts/**/*.js', 'scripts/**/*.mjs'],
     languageOptions: {
       globals: globals.node,
     },
     rules: commonRules,
-  },
-  {
-    // go/internal/web/static/**: unlike the rest of go/**/*.js above, these
-    // ship to and run in the browser (embedded via internal/web/assets.go,
-    // loaded from templates/layout.templ) — same runtime as public-src/,
-    // hence the same browser globals, overriding the broader go/**/*.js
-    // Node-globals block above (later config wins on a matching, narrower
-    // `files` glob).
-    files: ['go/internal/web/static/**/*.js'],
-    languageOptions: {
-      globals: globals.browser,
-    },
-    rules: commonRules,
-  },
-  {
-    files: ['lib/**/*.js', 'routes/**/*.js', 'server.js'],
-    ignores: ['lib/machines/registry.js', 'lib/data.js', 'lib/machines/options-adoption.js'],
-    languageOptions: {
-      globals: globals.node,
-    },
-    rules: machineConfigSourceOfTruthRule,
-  },
-  {
-    files: ['lib/**/*.js', 'routes/**/*.js', 'server.js'],
-    ignores: ['lib/machines/registry.js', 'routes/machine-control.js'],
-    languageOptions: {
-      globals: globals.node,
-    },
-    rules: noDuplicateHelpersRule,
   },
   {
     files: ['public-src/**/*.js'],

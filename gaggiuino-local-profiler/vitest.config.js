@@ -7,14 +7,19 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             reporter: ['text', 'json-summary', 'lcov'],
-            // Real measured baseline (2026-08-31): statements 54.24%, branches 47.14%,
-            // functions 43.57%, lines 57.78%. Thresholds set slightly below to avoid
-            // false-failing on minor variance while still catching real regressions.
+            // Frontend-only suite (the Node backend and its tests were removed
+            // in 3.0.0, #1028). Real measured baseline (2026-09-09):
+            // statements 36.19%, branches 32.17%, functions 27.06%,
+            // lines 37.84% — the denominator is dominated by large view
+            // modules (library.js, analytics.js, shots/index.js) that the
+            // targeted DOM tests only exercise in part. Thresholds set a few
+            // points below to absorb minor variance while still catching a
+            // real regression.
             thresholds: {
-                statements: 52,
-                branches: 45,
-                functions: 41,
-                lines: 55,
+                statements: 34,
+                branches: 30,
+                functions: 25,
+                lines: 35,
             },
         },
     },
