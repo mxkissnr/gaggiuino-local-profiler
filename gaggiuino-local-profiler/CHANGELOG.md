@@ -1,3 +1,5 @@
+## [Unreleased]
+
 ## [3.0.0] – 2026-09-09
 
 **Back up Home Assistant before updating.** This release replaces the entire add-on backend (Node.js → Go). Behaviour and the on-disk database are unchanged and you can still roll back to 2.x, but take a backup first.
