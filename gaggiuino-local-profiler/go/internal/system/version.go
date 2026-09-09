@@ -21,13 +21,14 @@ import (
 // endpoint itself, same as Node's own comment on why the cache exists).
 const versionCacheTTL = time.Hour
 
-// glpVersion mirrors lib/constants.js's GLP_VERSION. Duplicated here
-// (rather than imported — no shared "constants" package exists in this Go
-// port; every domain package that needs GLP_VERSION-shaped values defines
-// its own, see internal/db's schema version handling) — keep this in sync
-// with lib/constants.js's GLP_VERSION by hand until a release-time check
-// exists for it.
-const glpVersion = "2.35.0"
+// glpVersion is the GLP version this binary reports from GET /api/version.
+// config.yaml's `version:` is canonical; this const must match it and is
+// bumped alongside it at release time (CLAUDE.md's Versioning section).
+// Enforced by test/version-sync.test.js and scripts/release-check.mjs.
+// Duplicated rather than imported — no shared "constants" package exists in
+// this Go port; every domain package that needs a version-shaped value
+// defines its own, see internal/db's schema version handling.
+const glpVersion = "2.36.1"
 
 const releaseURL = "https://github.com/mxkissnr/gaggiuino-local-profiler/releases/latest"
 
