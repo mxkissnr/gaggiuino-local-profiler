@@ -55,7 +55,7 @@ const { S } = await import('../public-src/state.js');
 const { applyActiveMachineAccentTheme, renderAccentSwatches } = await import('../public-src/components/machines-settings.js');
 const { migrateLegacyAccent } = await import('../public-src/theme.js');
 const { t } = await import('../public-src/i18n.js');
-const { THEME_PRESET_KEYS } = await import('../lib/machines/theme-presets.js');
+const { THEME_PRESET_KEYS } = await import('../public-src/shared/theme-presets.js');
 
 describe('applyActiveMachineAccentTheme (#604/#1019)', () => {
   beforeEach(() => {

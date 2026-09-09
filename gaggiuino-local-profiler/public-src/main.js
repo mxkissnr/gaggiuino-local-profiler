@@ -25,7 +25,7 @@ if ('serviceWorker' in navigator) {
 
 // Installable PWA (v1.112.0): register the app-shell service worker, but only
 // when the server actually injected the manifest link into this page — see
-// server.js's isIngressRequest()/index.html route. Requests arriving through
+// the backend's ingress-trust check (go/internal/auth) and SPA index route. Requests arriving through
 // HA Ingress (the Companion App's embedded WebView) never get that link, so
 // this branch never runs there, which is the structural fix for the
 // v1.102.0 regression (that SW's fetch interception broke the Companion

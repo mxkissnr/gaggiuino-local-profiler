@@ -179,7 +179,7 @@ export function buildPersonalBests() {
 // name needs a lookup (_equipmentName() from views/shots/index.js). Grouped
 // by whatever getKey() returns (a grinder name, or a basket/puck-screen id
 // as a string via Object.entries) rather than by the resolved name, so two
-// same-named baskets (routes/library/baskets.js enforces no uniqueness)
+// same-named baskets (go/internal/library (baskets) enforces no uniqueness)
 // still render as separate cards — the name is only resolved for display,
 // after grouping.
 

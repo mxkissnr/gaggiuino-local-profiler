@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-
-// score.js uses module.exports — import via createRequire
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const { calcShotScore, calcShotScoreDetail } = require('../lib/score');
+import { calcShotScore, calcShotScoreDetail } from '../public-src/shared/score.js';
 
 describe('calcShotScore', () => {
     it('returns null for a shot with no datapoints', () => {

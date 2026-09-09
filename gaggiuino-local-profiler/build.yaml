@@ -1,8 +1,6 @@
-build_from:
-  amd64: ghcr.io/home-assistant/amd64-base:latest
-  armv7: ghcr.io/home-assistant/armv7-base:latest
-  aarch64: ghcr.io/home-assistant/aarch64-base:latest
-
+# The Dockerfile uses explicit `FROM` lines (node:22-slim, golang:alpine,
+# alpine:3.22) and no `ARG BUILD_FROM`, so `build_from` here would have no
+# effect — this file only carries the OCI image labels.
 labels:
   org.opencontainers.image.title: "GLP — Gaggiuino Local Profiler"
   org.opencontainers.image.description: "Local shot profiler for the Gaggiuino espresso machine"

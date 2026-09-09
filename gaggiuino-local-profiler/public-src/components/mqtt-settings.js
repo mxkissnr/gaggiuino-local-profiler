@@ -1,5 +1,5 @@
 // Live-data transport Settings card (#598) — WebSocket (default) / MQTT
-// toggle, backed by routes/mqtt.js. Broker connection fields are pre-filled
+// toggle, backed by go/internal/mqtt. Broker connection fields are pre-filled
 // from Supervisor auto-discovery (GET /api/mqtt/discovery) whenever a saved
 // host isn't already set, editable either way for setups where no MQTT
 // service is registered (manual entry fallback). The transport radio choice

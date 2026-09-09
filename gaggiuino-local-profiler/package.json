@@ -1,7 +1,6 @@
 {
-  "name": "gaggiuino-local-profiler-backend",
+  "name": "gaggiuino-local-profiler-frontend",
   "version": "2.36.1",
-  "main": "server.js",
   "scripts": {
     "build": "vite build",
     "dev": "vite",
@@ -9,30 +8,17 @@
     "test:watch": "vitest",
     "test:e2e": "node --test --test-force-exit test/e2e/*.test.mjs",
     "lint": "eslint .",
-    "release:check": "node scripts/release-check.mjs",
-    "test:docker": "node scripts/docker-standalone-test.mjs"
+    "release:check": "node scripts/release-check.mjs"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^1.0.6",
-    "@protobuf-ts/runtime": "^2.11.1",
-    "axios": "1.20.0",
-    "better-sqlite3": "13.0.3",
     "chart.js": "4.5.1",
-    "cheerio": "1.2.0",
     "echarts": "6.1.0",
-    "express": "5.2.1",
-    "express-rate-limit": "^8.6.2",
-    "js-yaml": "^5.3.0",
-    "mqtt": "^5.15.2",
     "qrcode": "1.5.4",
-    "topojson-client": "3.1.0",
-    "ws": "^8.21.3",
-    "zod": "4.5.4"
+    "topojson-client": "3.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^5.0.0",
-    "aedes": "^1.1.1",
     "eslint": "^10.8.1",
     "globals": "^17.11.0",
     "playwright": "^1.62.1",
@@ -40,7 +26,6 @@
     "vitest": "5.0.0"
   },
   "allowScripts": {
-    "better-sqlite3@13.0.1": true,
     "esbuild@0.25.12": true
   }
 }

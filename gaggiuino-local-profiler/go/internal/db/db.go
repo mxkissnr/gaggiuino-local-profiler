@@ -113,11 +113,10 @@ func Open(path string) (*sql.DB, error) {
 	return sqlDB, nil
 }
 
-// schemaSQL is lib/db.js's initSchema() template literal, ported verbatim
-// (including its comments) so the two stay diffable against each other.
-// Table/column/index definitions must stay byte-for-byte equivalent to the
-// Node schema — see db_schema_test.go, which pins the exact
-// `sqlite_master.sql` text this produces.
+// schemaSQL was ported verbatim (including its comments) from the former
+// lib/db.js's initSchema() template literal. Table/column/index definitions
+// are pinned against the frozen Node schema fixture by db_schema_test.go
+// (see its header and internal/db/doc.go).
 const schemaSQL = `
 	CREATE TABLE IF NOT EXISTS shots (
 		id          INTEGER PRIMARY KEY,

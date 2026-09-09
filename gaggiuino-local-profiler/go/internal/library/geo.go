@@ -36,10 +36,10 @@ const (
 	geoMinIntervalMS = 1100
 	geoCacheKey      = "geocode_cache"
 	geoCacheMax      = 500
-	// Keep in sync with lib/constants.js's GLP_VERSION by hand (same
-	// convention as internal/system/version.go's glpVersion) — Nominatim
-	// only needs a stable identifying User-Agent, not an exact value.
-	geoUserAgent = "GLP/2.35.0 (https://github.com/mxkissnr/gaggiuino-local-profiler)"
+	// Cosmetic — Nominatim only needs a stable identifying User-Agent, not
+	// an exact version. Bumped alongside config.yaml at release time (same
+	// convention as internal/system/version.go's glpVersion).
+	geoUserAgent = "GLP/2.36.1 (https://github.com/mxkissnr/gaggiuino-local-profiler)"
 )
 
 // Location mirrors lib/geo.js's { lat, lon, label } result shape — the

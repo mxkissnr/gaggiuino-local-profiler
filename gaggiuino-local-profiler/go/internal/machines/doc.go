@@ -95,22 +95,20 @@
 // though, beyond code review and Machine.Host's own field comment
 // (model.go) pointing here.
 //
-// The Node port had a static check for the equivalent invariant: an eslint
-// no-restricted-syntax rule (eslint.config.js, see the repo root CLAUDE.md)
-// blocking any read of opts.machine_host/opts.switch_entity outside three
-// named files. A grep-based script in the style of scripts/route-parity.sh
-// was considered as the Go-appropriate equivalent and rejected: unlike
-// Node's untyped opts bag, Machine.Host is a real exported Go struct field,
-// and "Host" alone is common enough elsewhere in ordinary Go code
-// (http.Request.Host, url.URL.Host, this very package's own
-// machineRow.Host in registry.go) that a textual pattern match can't
-// reliably tell "a Machine.Host read outside registry.go" from unrelated
-// code without type information a shell script doesn't have. A check that
-// noisy would train reviewers to ignore its failures — worse than no check
-// at all — unlike route-parity.sh's route strings, which have no such
-// naming collision. The doc comment plus review is the deliberate
-// substitute; revisit if this package ever gains enough Adapter
-// implementations or call sites that review alone stops being reliable.
+// The former Node port had a static check for the equivalent invariant: an
+// eslint no-restricted-syntax rule blocking any read of
+// opts.machine_host/opts.switch_entity outside three named files. A
+// grep-based equivalent was considered for Go and rejected: unlike Node's
+// untyped opts bag, Machine.Host is a real exported Go struct field, and
+// "Host" alone is common enough elsewhere in ordinary Go code
+// (http.Request.Host, url.URL.Host, this very package's own machineRow.Host
+// in registry.go) that a textual pattern match can't reliably tell "a
+// Machine.Host read outside registry.go" from unrelated code without type
+// information a shell script doesn't have. A check that noisy would train
+// reviewers to ignore its failures — worse than no check at all. The doc
+// comment plus review is the deliberate substitute; revisit if this package
+// ever gains enough Adapter implementations or call sites that review alone
+// stops being reliable.
 //
 // # What this phase deliberately does NOT port (and why)
 //

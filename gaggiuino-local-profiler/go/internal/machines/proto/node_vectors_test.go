@@ -11,10 +11,12 @@ import (
 )
 
 // This file is the cross-validation step doc.go describes: every vector in
-// testdata/node_vectors.json was produced by lib/gaggiuino-proto.js's real
-// @protobuf-ts/runtime-backed encoder/decoder (testdata/gen_node_vectors.js)
-// — the same code this app depends on in production. For each vector this
-// test:
+// testdata/node_vectors.json was produced by the former
+// lib/gaggiuino-proto.js's real @protobuf-ts/runtime-backed encoder/decoder
+// — the wire format the app spoke to Gaggiuino firmware before the Go
+// rewrite. That fixture is now frozen: the Node backend was removed in
+// 3.0.0 (#1028), archived at tag archive/node-backend-final. For each
+// vector this test:
 //
 //  1. Decodes the recorded hex bytes with this package's own Unmarshal and
 //     asserts the result matches Node's own recorded `decoded` value
@@ -38,7 +40,7 @@ func loadVectors(t *testing.T) []vector {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join("testdata", "node_vectors.json"))
 	if err != nil {
-		t.Fatalf("reading testdata/node_vectors.json (run gen_node_vectors.js first): %v", err)
+		t.Fatalf("reading testdata/node_vectors.json (frozen fixture, see this file's header): %v", err)
 	}
 	var vecs []vector
 	if err := json.Unmarshal(data, &vecs); err != nil {
@@ -86,14 +88,14 @@ var messageFactories = map[string]func() wireMessage{
 func TestNodeVectors(t *testing.T) {
 	vecs := loadVectors(t)
 	if len(vecs) == 0 {
-		t.Fatal("no vectors loaded — did you run gen_node_vectors.js?")
+		t.Fatal("no vectors loaded from the frozen testdata/node_vectors.json fixture")
 	}
 	for _, v := range vecs {
 		v := v
 		t.Run(v.Name, func(t *testing.T) {
 			typeName := typeNameOf(v.Name)
 			// WebSocketMessageDto's `data` bytes field needed a fixture-only
-			// hex-string normalization (see gen_node_vectors.js's addVector) —
+			// hex-string normalization (frozen into the fixture at generation time) —
 			// Go's own []byte JSON encoding is base64, so it gets its own
 			// comparison instead of the generic reflect.DeepEqual path below.
 			if typeName == "WebSocketMessageDto" {
@@ -143,7 +145,7 @@ func checkWebSocketMessageDto(t *testing.T, v vector) {
 	t.Helper()
 	var want struct {
 		Action string `json:"action"`
-		Data   string `json:"data"` // hex string, see gen_node_vectors.js's normalization
+		Data   string `json:"data"` // hex string, normalized into the frozen fixture
 	}
 	if err := json.Unmarshal(v.Decoded, &want); err != nil {
 		t.Fatalf("parsing fixture's decoded JSON: %v", err)

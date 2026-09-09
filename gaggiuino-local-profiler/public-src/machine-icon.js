@@ -14,7 +14,7 @@
 // resolveTheme()); the dark/chrome parts are fixed neutral greys (not pure
 // black) by design, so the icon stays legible on both the app's light and
 // dark backgrounds regardless of theme.
-import { resolveTheme } from '../lib/machines/theme-presets.js';
+import { resolveTheme } from './shared/theme-presets.js';
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 

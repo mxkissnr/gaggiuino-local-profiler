@@ -3,10 +3,7 @@
 // full/source-of-truth history; this is a curated highlight list meant to
 // be readable inside the app itself, not generated from CHANGELOG.md's
 // Markdown. Add a new entry here by hand whenever a release ships (see
-// CLAUDE.md's Commits section). Same isomorphic sharing pattern as
-// lib/machines/theme-presets.js (see vite.config.js's commonjsOptions):
-// pure data, no Node/DOM deps, importable from both the backend and the
-// ESM frontend build.
+// CLAUDE.md's Commits section). Pure data, no DOM deps.
 //
 // Highlight text is deliberately English-only, not run through i18n like
 // the rest of the UI — historical release notes aren't practical to
@@ -75,4 +72,4 @@ function getWhatsNewEntries() {
     return [...WHATS_NEW_ENTRIES].sort(compareVersionsDesc).slice(0, MAX_ENTRIES);
 }
 
-module.exports = { WHATS_NEW_ENTRIES, MAX_ENTRIES, getWhatsNewEntries };
+export { WHATS_NEW_ENTRIES, MAX_ENTRIES, getWhatsNewEntries };

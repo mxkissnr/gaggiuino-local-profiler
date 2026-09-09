@@ -206,7 +206,7 @@ function _pickPushEntry() {
 let _statusUpdateInFlight = false;
 
 // #464: an explicit machineId scopes the status-dot/hostname fields below to
-// that machine (see routes/system.js's /api/status). 'all'/null/undefined
+// that machine (see go/internal/system's /api/status). 'all'/null/undefined
 // fall back to the unscoped call (default machine), mirroring the same
 // convention views/live.js and views/maintenance.js already use for the
 // 'all' switcher value — so single-machine installs and the unparameterized
@@ -325,7 +325,7 @@ export async function updateStatus(machineId) {
     if (s.glpVersion) {
       const vEl = document.getElementById('glpVersionBadge');
       // s.devBuild is only ever present on the dev-channel image (see
-      // routes/system.js's /api/status and the Dockerfile's GLP_DEV_BUILD
+      // go/internal/system's /api/status and the Dockerfile's GLP_DEV_BUILD
       // build-arg) -- appending it here is a no-op for every real install.
       if (vEl) vEl.textContent = `v${s.glpVersion}` + (s.devBuild ? ` (${s.devBuild})` : '');
     }
@@ -335,7 +335,7 @@ export async function updateStatus(machineId) {
     if (s.devBuild) showDevBuildBanner(s.devBuild);
     // #722: raw-DB export button (Settings) is gated on the exact same
     // devBuild signal as the banner above -- never shown on a real install.
-    // The backend route (routes/debug.js) independently 404s regardless of
+    // The backend route (go/internal/debug) independently 404s regardless of
     // this, so this toggle is UI hygiene, not the safety mechanism.
     const devToolsCard = document.getElementById('devToolsCard');
     if (devToolsCard) devToolsCard.style.display = s.devBuild ? '' : 'none';
@@ -356,7 +356,7 @@ export async function updateStatus(machineId) {
 // apiFetch (adds X-GLP-Token) rather than a plain <a href>, since a plain
 // anchor navigation wouldn't carry that header for non-Ingress direct-port
 // access, only for HA Ingress traffic (which bypasses auth by Supervisor IP,
-// see server.js isIngressRequest()). The route itself (routes/debug.js)
+// see the backend's ingress-trust check (go/internal/auth)). The route itself (go/internal/debug)
 // still 404s outright on any real install regardless of how it's called.
 // #960: the Dev Tools card has no room for a progress bar, so the transfer
 // state shows as the button's own label ("Downloading… 42%") while the

@@ -11,7 +11,7 @@ import { t } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
 import { WARNING_ICON_SVG, CHECK_ICON_SVG, CLOSE_ICON_SVG } from '../icons.js';
 import { updateStatus } from './status.js';
-import { THEME_PRESETS, getThemePreset, resolveTheme } from '../../lib/machines/theme-presets.js';
+import { THEME_PRESETS, getThemePreset, resolveTheme } from '../shared/theme-presets.js';
 import { migrateLegacyAccent } from '../theme.js';
 import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
 import { renderTopbarMachineIcon } from './topbar-machine-icon.js';
@@ -574,7 +574,7 @@ export async function deleteMachine(id, isDefault) {
 //
 // #731: this save is only a means to get a testable id -- it must not start
 // a shot import the way an explicit "Speichern" does, so triggerSync:false
-// is passed through to _saveMachine() (server-side gate in routes/machines.js).
+// is passed through to _saveMachine() (server-side gate in go/internal/machines).
 //
 // #730 review: the form stays open (and clickable) while the request is in
 // flight -- a double-click used to re-enter _saveMachine() with

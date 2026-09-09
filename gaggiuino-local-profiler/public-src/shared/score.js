@@ -1,6 +1,8 @@
-// Canonical shot score (0–100). Single source of truth shared by the backend
-// (served as `score` on each shot) and the frontend. Pure function — no Node/DOM
-// deps so it works in both. Inputs are the raw shot object (×10 integer curves).
+// Frontend shot score (0–100). Mirrors the Go backend's own score
+// implementation (go/internal/shots), which is served as `score` on each
+// shot; kept here so the UI can rescore live/unsaved shots without a
+// round-trip. Pure function — no DOM deps. Inputs are the raw shot object
+// (×10 integer curves).
 
 function _stddev(vals) {
   if (vals.length < 2) return 0;
@@ -140,4 +142,4 @@ function calcShotScore(shot, bean) {
   return calcShotScoreDetail(shot, bean).score;
 }
 
-module.exports = { calcShotScore, calcShotScoreDetail };
+export { calcShotScore, calcShotScoreDetail };

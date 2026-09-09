@@ -12,7 +12,7 @@ Closes #
 - [ ] `CHANGELOG.md` updated
 - [ ] `DOCS.md` + `DOCS.de.md` updated (if user-facing change)
 - [ ] `README.md` features table updated (if new feature)
-- [ ] Version bumped in `server.js` and `config.yaml` (if applicable)
+- [ ] Version bumped in all four spots (`config.yaml`, `package.json`, `go/internal/system/version.go`, `go/internal/backup/bundle.go`) if applicable — `config.yaml` is canonical, `test/version-sync.test.js` enforces the match
 
 ## AI assistance disclosure
 

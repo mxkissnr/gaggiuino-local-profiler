@@ -33,7 +33,13 @@
     {
       "matchManagers": ["npm"],
       "matchDepTypes": ["dependencies"],
-      "description": "Runtime dependencies (server.js/lib/) ship in the add-on itself — always human-reviewed, never automerged, per this repo's regression policy.",
+      "description": "Frontend runtime dependencies (chart.js, echarts, …) ship in the SPA bundle — always human-reviewed, never automerged, per this repo's regression policy.",
+      "automerge": false
+    },
+    {
+      "matchManagers": ["gomod"],
+      "groupName": "go-dependencies",
+      "description": "The Go backend's module updates (go/go.mod) — grouped into one PR, human-reviewed, never automerged: they ship in the add-on image.",
       "automerge": false
     },
     {
@@ -47,13 +53,6 @@
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["major"],
       "groupName": "github-actions"
-    },
-    {
-      "matchManagers": ["dockerfile"],
-      "matchDepNames": ["node"],
-      "matchUpdateTypes": ["major"],
-      "enabled": false,
-      "description": "Held until armv7 support is resolved — node:24-slim dropped linux/arm/v7, this add-on still publishes an armv7 build. See #944."
     }
   ]
 }

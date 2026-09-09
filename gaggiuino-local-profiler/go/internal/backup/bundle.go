@@ -13,11 +13,11 @@ import (
 // incrementally so peak memory is O(one shot + one image), independent of
 // dataset size (#959).
 
-// glpVersion mirrors lib/constants.js's GLP_VERSION. Not read from the
-// same source Node's package.json-derived constant is (no Go equivalent
-// exists in this rewrite) — hardcoded to the version this Go port targets
-// parity with. Update alongside lib/constants.js's own GLP_VERSION bumps.
-const glpVersion = "2.35.0"
+// glpVersion is stamped into the backup bundle metadata. config.yaml's
+// `version:` is canonical; this const must match it and is bumped alongside
+// it at release time (CLAUDE.md's Versioning section). Enforced by
+// test/version-sync.test.js and scripts/release-check.mjs.
+const glpVersion = "2.36.1"
 
 // gatherSmallSections collects every bundle section that is small
 // regardless of shot/image count: coffee_library, blocklist, trash (via

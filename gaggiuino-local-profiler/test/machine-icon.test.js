@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { machineIconSvg, machineIconMiniSvg, machineIconAnimatedSvg,
          MACHINE_ICON_MODES, resolveMachineIconState } from '../public-src/machine-icon.js';
-import { THEME_PRESETS, resolveTheme } from '../lib/machines/theme-presets.js';
+import { THEME_PRESETS, resolveTheme } from '../public-src/shared/theme-presets.js';
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 

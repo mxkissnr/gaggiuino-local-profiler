@@ -66,8 +66,27 @@ jobs:
           cache: 'npm'
           cache-dependency-path: gaggiuino-local-profiler/package-lock.json
 
+      # The E2E harness (scripts/e2e-harness.mjs) builds and boots the real
+      # glp-server Go binary as the backend under test — the Node backend it
+      # used to require() in-process is gone (3.0.0, #1028).
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: gaggiuino-local-profiler/go/go.mod
+          cache-dependency-path: gaggiuino-local-profiler/go/go.sum
+
       - name: Install dependencies
         run: npm ci
+
+      # templ codegen for internal/web/templates (git-ignored _templ.go) —
+      # cmd/server imports that package, so the harness's `go build
+      # ./cmd/server` needs it. Pinned to the version go.mod already
+      # requires, same as the go-test job.
+      - name: Install templ and generate
+        working-directory: gaggiuino-local-profiler/go
+        run: |
+          go install github.com/a-h/templ/cmd/templ@v0.3.1020
+          go generate ./...
 
       # Own job (not a step in `test` above) so a Chromium download never
       # slows the unit test job — see #798.
@@ -173,14 +192,6 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
-      # Fails the build if server.js / routes/*.js registers an HTTP route
-      # the Go backend (cmd/server/main.go + every internal/* RegisterRoutes,
-      # /ui/ sub-mux included) has no equivalent for. One-way: Go-only routes
-      # (the /ui/ templ fallback pages) are fine. Deferred routes go in the
-      # script's ALLOWLIST with a reference. No Go toolchain needed.
-      - name: route parity (Node vs Go)
-        run: bash scripts/route-parity.sh
-
   docker-smoke:
     name: Docker image build+smoke test (${{ matrix.arch }})
     # #977 follow-up code review (2nd pass): deleting go-build.yaml (see
@@ -200,10 +211,9 @@ jobs:
     # and cross-compiles via GOOS/GOARCH/GOARM, so the actual `go build`
     # always runs natively on the runner's own amd64 for every arch in this
     # matrix, no emulation. `needs: go-test` (added in this same review
-    # round) means a red gofmt/vet/build/test/govulncheck/route-parity
-    # result skips this considerably more expensive multi-stage (npm
-    # frontend + Go compile x3 archs) build entirely instead of running it
-    # anyway.
+    # round) means a red gofmt/vet/build/test/govulncheck result skips this
+    # considerably more expensive multi-stage (npm frontend + Go compile x3
+    # archs) build entirely instead of running it anyway.
     needs: go-test
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest

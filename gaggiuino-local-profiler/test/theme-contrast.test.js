@@ -32,7 +32,7 @@ globalThis.window ??= globalThis;
 globalThis.document ??= { documentElement: {}, getElementById: () => undefined };
 
 const { resolveAccentInk } = await import('../public-src/components/machines-settings.js');
-const { THEME_PRESETS } = await import('../lib/machines/theme-presets.js');
+const { THEME_PRESETS } = await import('../public-src/shared/theme-presets.js');
 
 const CSS = fs.readFileSync(
   path.join(import.meta.dirname, '..', 'public-src', 'style.css'), 'utf8');

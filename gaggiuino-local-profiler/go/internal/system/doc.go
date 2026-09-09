@@ -28,8 +28,8 @@
 // Phase 2a (#901) routed the rest of routes/system.js's surface the
 // embedded Vite frontend / glp-integration call: GET /api/switch +
 // POST /api/switch/toggle (switch.go), GET /api/openapi.json (openapi.go —
-// the repo-root openapi.yaml is committed as go/internal/system/
-// openapi.yaml and served as JSON), POST /api/sync (sync.go — see its
+// go/internal/system/openapi.yaml is the canonical spec, embedded and
+// served as JSON), POST /api/sync (sync.go — see its
 // header for exactly what of lib/sync.js it does and does not port), and
 // GET /api/menu (routed ungated from internal/orders, which owns the menu
 // Repository). routes/system.js's whole surface is now routed: the last
