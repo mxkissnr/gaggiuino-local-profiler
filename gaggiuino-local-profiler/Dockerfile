@@ -1,13 +1,11 @@
-# Go backend (#977 cutover). Replaces the former Node.js production image
-# (server.js) as of this Dockerfile — the Go rewrite (go/, #901) was
-# security-audited, smoke-tested (go/scripts/smoke-test.sh) and route-parity
-# checked (go/scripts/route-parity.sh) against the Node app before the flip.
-# This file used to live at go/Dockerfile while the Go image was build-only
-# CI (.github/workflows/go-build.yaml); that workflow has since been deleted
-# as redundant to this file/build.yaml/build-dev.yaml as part of this same
-# cutover. The Node app's history is preserved in git, its
-# source files (server.js, lib/, routes/) are left in the tree for now and
-# removed in a follow-up cleanup issue, not this one.
+# Go backend. The Go rewrite (go/, #901) is the sole runtime as of the
+# #977 cutover; the legacy Node.js/Express backend source (server.js, lib/,
+# routes/) was removed from the tree in 3.0.0 (#1028) and its last in-tree
+# state is archived at tag `archive/node-backend-final` / branch
+# `legacy/node-backend`. This file used to live at go/Dockerfile while the
+# Go image was build-only CI (.github/workflows/go-build.yaml); that
+# workflow was deleted as redundant to this file/build.yaml/build-dev.yaml
+# during the cutover.
 #
 # Multi-arch strategy: native Go cross-compilation, not QEMU emulation, for
 # the expensive step. `--platform=$BUILDPLATFORM` below pins the builder
@@ -22,20 +20,19 @@
 # installs three tiny prebuilt packages.
 
 # ── Frontend stage: the Vite/rolldown SPA build ────────────────────────────
-# Host-platform only (no QEMU), same as the old Node builder stage. Output
-# is /app/public, copied into internal/webapp/dist/ in the Go builder below.
+# Host-platform only (no QEMU). Output is /app/public, copied into
+# internal/webapp/dist/ in the Go builder below. No toolchain packages
+# (python3/make/g++): the dependency set is frontend-only since 3.0.0
+# (#1028), so `npm ci` pulls Vite/esbuild prebuilts with nothing to compile.
 FROM --platform=$BUILDPLATFORM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS frontend
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
-    && rm -rf /var/lib/apt/lists/* \
-    && npm ci
+RUN npm ci
 
 COPY vite.config.js ./
 COPY public-src/ ./public-src/
-COPY lib/ ./lib/
 RUN npm run build
 
 # ── Go builder ────────────────────────────────────────────────────────────

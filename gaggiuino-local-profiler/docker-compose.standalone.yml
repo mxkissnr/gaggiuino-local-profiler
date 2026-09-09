@@ -8,9 +8,9 @@
 
 services:
   glp:
-    # GLP_STANDALONE_IMAGE/PORT/DATA_DIR let scripts/docker-standalone-test.mjs
-    # run this exact file against a locally-built image on an isolated port
-    # and temp data dir -- unset, the defaults below are unchanged.
+    # GLP_STANDALONE_IMAGE/PORT/DATA_DIR let a local test run this exact file
+    # against a locally-built image on an isolated port and temp data dir --
+    # unset, the defaults below are unchanged.
     image: ${GLP_STANDALONE_IMAGE:-ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:latest}
     container_name: glp
     restart: unless-stopped
