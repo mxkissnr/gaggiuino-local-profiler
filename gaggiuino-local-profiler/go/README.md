@@ -1,14 +1,17 @@
-# GLP App — Go rewrite (in progress)
+# GLP App — Go rewrite
 
-This directory holds the future Go implementation of the Gaggiuino Local
-Profiler backend and frontend. It exists **parallel to** the current
-Express/Node app (`server.js`, `lib/`, `routes/`, `public-src/`) at the repo
-root, which remains the shipping, stable implementation. Nothing under `go/`
-is wired into the repo-root Docker image or the running stable/dev add-on
-yet — the one exception is the standalone beta channel described in "Go
-preview channel (publishing)" below.
+This directory holds the Go implementation of the Gaggiuino Local Profiler
+backend and frontend. As of #977 (2026-09-07) it is the **shipping,
+production implementation** — the repo-root Dockerfile builds `go/` (this
+directory's `Dockerfile`, moved to the repo root) rather than the old
+Express/Node app (`server.js`, `lib/`, `routes/`, `public-src/`), which
+remains in the tree for reference but is no longer built into the release
+or dev-channel image. The rest of this document, written during the
+migration, still describes the phase-by-phase build-out of this directory
+and is kept as historical record; treat "not wired in yet" language further
+down as describing the pre-#977 state, not the current one.
 
-## Status: Phase 5 in progress (go-preview beta channel — mxkissnr/glp-go-preview-app + .github/workflows/go-preview-publish.yaml, on top of Phase 4's complete build-only CI, Phase 2's complete frontend and Phase 3b's complete backend)
+## Status: shipping (#977 cutover, 2026-09-07). CI is now `.github/workflows/test.yaml`'s `go-test` job (gofmt/vet/build/test/govulncheck/route-parity, folded in at cutover time, same as `version-release-check` before it) plus that same file's `docker-smoke` job (multi-arch matrix build of the repo-root Dockerfile — amd64/arm64/armv7, native Go cross-compile — plus `go/scripts/smoke-test.sh` against the amd64 image, on every PR), on top of the ordinary `build.yaml`/`build-dev.yaml` image builds — `go-build.yaml` and `go-preview-publish.yaml` (the Phase 4 build-only CI and Phase 5 go-preview beta channel this section used to describe) were both deleted as redundant in the cutover PR; the "CI"/"Docker"/"Go preview channel" sections further down describe that now-deleted setup and are kept only as historical record of how Phase 4/5 worked pre-cutover. Historical phase notes below: Phase 5 was in progress (go-preview beta channel — mxkissnr/glp-go-preview-app) on top of Phase 4's complete build-only CI, Phase 2's complete frontend and Phase 3b's complete backend
 
 Phase 0 was scaffolding only. Phase 1a ported the first two foundational
 packages everything else builds on. Phase 1b added a real, listening HTTP
@@ -462,8 +465,12 @@ go/
     smoke-test.sh            native-binary + (GLP_SMOKE_DOCKER_IMAGE mode) Docker-image smoke test (Phase 3a, extended Phase 4)
 ```
 
-`.github/workflows/go-build.yaml` (repo root) is this package's CI — see
-"Docker" below; it's separate from the repo root's Node-app workflows.
+This package's CI is `.github/workflows/test.yaml`'s `go-test` job (gofmt/
+vet/build/`go test -race`/govulncheck/route-parity) plus that same file's
+`docker-smoke` job (`needs: go-test`; multi-arch matrix build of the
+repo-root Dockerfile — amd64/arm64/armv7 — plus `go/scripts/smoke-test.sh`
+against the amd64 image) — both added at the #977 cutover, replacing the
+now-deleted `go-build.yaml`; see "Docker" below for that history.
 
 Every backend package under `internal/` is implemented — see
 `go/internal/system/doc.go` for the small, deliberate set of
@@ -512,9 +519,9 @@ parity in one step. The eleven templ pages are frozen, not deleted:
 a dedicated sub-mux) as a no-JS fallback. Their relative-path convention is
 unchanged — every route simply moved one segment deeper, together. Only a
 committed `internal/webapp/dist/index.html` placeholder is tracked in git,
-so a bare `go build ./...` (CI's go-build.yaml test job) resolves the embed
-with no npm step; the Docker image and `make frontend` supply the real
-bundle.
+so a bare `go build ./...` (CI's `go-test` job, `test.yaml`) resolves the
+embed with no npm step; the Docker image and `make frontend` supply the
+real bundle.
 
 **Status (Phase 2a-2e, #901, complete):** the tooling foundation plus every
 frontend domain's pages. Phase 2a's `GET /ui/shots` is a shot-history list built on
@@ -734,7 +741,16 @@ make frontend   # OPTIONAL: `npm ci && npm run build` at the repo root, staged
 go build ./...
 ```
 
-## Docker (#901 Phase 4, build-only — no release channel yet)
+## Docker (#901 Phase 4, build-only — no release channel yet) [HISTORICAL — see Status above]
+
+`.github/workflows/go-build.yaml` described in this section was deleted in
+the #977 cutover PR (redundant to `build.yaml`/`build-dev.yaml` once the
+repo-root Dockerfile became this same content). `go/Dockerfile` and
+`go/docker-entrypoint.sh` themselves were also deleted (#977 follow-up
+code review, round 3) once that was the only thing still reading them —
+see the repo-root `Dockerfile`/`docker-entrypoint.sh` for the version that
+actually ships, which now carries this history in its own comments
+instead.
 
 `go/Dockerfile` and `.github/workflows/go-build.yaml` (repo root) exist so
 this binary's containerization is proven ahead of time, not so it ships:
@@ -834,7 +850,16 @@ passed, 0 failed**, identical to the native-binary run's own 30/0. A real
 `docker buildx build --platform linux/arm64,linux/arm/v7` (see "Multi-arch"
 above) also completed successfully for both non-amd64 targets.
 
-## Go preview channel (publishing, #901 Phase 5)
+## Go preview channel (publishing, #901 Phase 5) [HISTORICAL — see Status above]
+
+`.github/workflows/go-preview-publish.yaml` described in this section was
+deleted in the #977 cutover PR — the full cutover this channel existed to
+preview ahead of has now happened, so a separate preview channel means
+nothing distinct from the main release/dev channels described in the
+top-level `README.md`/`DEVELOPMENT.md`. `go/apparmor.txt`, described below
+as that workflow's source-of-truth file to copy, was also deleted (#977
+follow-up code review, round 3) once the workflow reading it was gone —
+the repo-root `apparmor.txt` is the one real profile now.
 
 A third, independent Home Assistant app channel — separate from both the
 stable app and the Node dev channel (`glp-dev-app`) — so the Go rewrite can

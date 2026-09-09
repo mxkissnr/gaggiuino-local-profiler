@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
 
 // This file ports routes/import.js: GET /api/import/url plus GET/POST
@@ -240,8 +241,10 @@ func (h *Handlers) resolve(ctx context.Context, parsed *url.URL, raw, host strin
 	if bean == nil {
 		jsonURL := shopifyJSONURL(parsed.Path, host)
 		if jsonURL != "" {
+			system.DebugLogf("Import: generic-Shopify path for %s, jsonUrl=%s", host, jsonURL)
 			res, err := h.fetch.safeGet(ctx, jsonURL)
 			if err != nil {
+				system.DebugLogf("Import: JSON fetch failed for %s: %v", host, err)
 				if isSSRFBlocked(err) {
 					return nil, "", err
 				}
@@ -249,8 +252,12 @@ func (h *Handlers) resolve(ctx context.Context, parsed *url.URL, raw, host strin
 					debugInfo["jsonFetchError"] = err.Error()
 				}
 			} else {
+				system.DebugLogf("Import: JSON fetch %s -> status %d, %d bytes", jsonURL, res.status, len(res.body))
 				product := res.dataObject()
 				bean = parseGenericShopifyProduct(product, host)
+				if bean == nil {
+					system.DebugLogf("Import: parseGenericShopifyProduct returned nil (no title in JSON)")
+				}
 				if bean != nil {
 					attachVariants(bean, product)
 					bean["source"] = host
@@ -292,6 +299,7 @@ func (h *Handlers) resolve(ctx context.Context, parsed *url.URL, raw, host strin
 // tryHTMLEnrich ports routes/import.js's tryHtmlEnrich.
 func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host, raw string, debugInfo map[string]any) (map[string]any, error) {
 	enrich := needsHTMLEnrich(bean, host)
+	system.DebugLogf("Import: needsHtmlEnrich=%v", enrich)
 	if debugInfo != nil {
 		debugInfo["needsHtmlEnrich"] = enrich
 	}
@@ -311,6 +319,7 @@ func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host,
 		return bean, nil
 	}
 	htmlStr := res.dataString()
+	system.DebugLogf("Import: HTML fetch %s -> status %d, %d chars", raw, res.status, len([]rune(htmlStr)))
 	if debugInfo != nil {
 		debugInfo["htmlFetchStatus"] = res.status
 		debugInfo["htmlLength"] = len([]rune(htmlStr))
@@ -321,13 +330,31 @@ func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host,
 	}
 	before := cloneBean(bean)
 	enriched := enrichGenericBeanFromHTML(bean, htmlStr, host)
-	if debugInfo != nil {
-		var changed []string
+	// #977 follow-up code review (round 4): global debug_logging enabling
+	// this field-diff (not just an explicit `?debug=1`'s debugInfo != nil)
+	// is deliberate, not an accidental widening -- it matches every other
+	// debugLogf/DebugLogf call already unconditional-when-globally-enabled
+	// in this same function (needsHtmlEnrich/HTML-fetch/JSON-fetch traces
+	// above and in resolve()), porting routes/import.js's debugLog call
+	// sites, which fire the same way in Node regardless of a per-request
+	// flag. The reflect.DeepEqual loop itself stays cheap in practice: a
+	// bean object is a few dozen scalar/short-slice fields at most, and
+	// every call here already did a full HTTP HTML fetch immediately
+	// above, which dominates cost by orders of magnitude over that diff.
+	var changed []string
+	if debugInfo != nil || system.IsDebugLoggingEnabled() {
 		for k, v := range enriched {
 			if !reflect.DeepEqual(v, before[k]) {
 				changed = append(changed, k)
 			}
 		}
+		changedSummary := "(none)"
+		if len(changed) > 0 {
+			changedSummary = strings.Join(changed, ", ")
+		}
+		system.DebugLogf("Import: HTML enrichment changed fields: %s", changedSummary)
+	}
+	if debugInfo != nil {
 		debugInfo["enrichedFieldsChanged"] = changed
 	}
 	return enriched, nil

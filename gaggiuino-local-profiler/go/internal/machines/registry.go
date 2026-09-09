@@ -4,11 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net"
 	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/config"
 )
 
 // Registry ports lib/machines/registry.js: one row per configured espresso
@@ -27,6 +30,30 @@ type Registry struct {
 // NewRegistry wraps an already-open *sql.DB (see internal/db.Open).
 func NewRegistry(db *sql.DB) *Registry {
 	return &Registry{db: db}
+}
+
+// LogRegistrySnapshot ports lib/machines/registry.js's
+// logRegistrySnapshot(): the whole machine registry as one log line,
+// behind debug_logging (#977 follow-up) so it doesn't spam production
+// logs. Called at startup and after every registry CRUD — see this
+// function's callers in cmd/server/main.go and handlers_registry.go.
+func (r *Registry) LogRegistrySnapshot() {
+	if !config.IsDebugLoggingEnabled() {
+		return
+	}
+	list, err := r.ListMachines()
+	if err != nil {
+		return
+	}
+	if len(list) == 0 {
+		log.Printf("[debug] Machines: (none)")
+		return
+	}
+	parts := make([]string, len(list))
+	for i, m := range list {
+		parts[i] = fmt.Sprintf("#%d %q host=%s default=%v enabled=%v", m.ID, m.Name, m.Host, m.IsDefault, m.Enabled)
+	}
+	log.Printf("[debug] Machines: %s", strings.Join(parts, " | "))
 }
 
 type machineRow struct {
@@ -459,6 +486,7 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("machines: committing restore: %w", err)
 	}
+	r.LogRegistrySnapshot()
 	return len(valid), nil
 }
 

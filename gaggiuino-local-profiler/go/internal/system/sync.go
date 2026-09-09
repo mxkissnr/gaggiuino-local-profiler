@@ -309,6 +309,7 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 // `latestResponse.data?.[0]?.lastShotId`. A nil return means the machine
 // reported no lastShotId (a valid, non-error "nothing to sync" state).
 func (p *Poller) fetchLatestShotID(ctx context.Context, machineURL string) (*int64, error) {
+	debugLogf("GET %s/latest", machineURL) // ports lib/sync.js's debugLog(`GET ${machineUrl}/latest`), #714
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, machineURL+"/latest", nil)
 	if err != nil {
 		return nil, err
@@ -332,6 +333,7 @@ func (p *Poller) fetchLatestShotID(ctx context.Context, machineURL string) (*int
 	if !ok {
 		return nil, nil
 	}
+	debugLogf("/latest lastShotId=%d", id) // ports lib/sync.js's debugLog(`/latest raw response: ...`)
 	return &id, nil
 }
 
@@ -339,22 +341,28 @@ func (p *Poller) fetchLatestShotID(ctx context.Context, machineURL string) (*int
 // on an error (0 for a transport error), so the caller can special-case
 // 404 the way lib/sync.js's `err.response?.status === 404` branch does.
 func (p *Poller) fetchShot(ctx context.Context, machineURL string, id int64) (map[string]any, int, error) {
+	shotStartedAt := time.Now()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, machineURL+"/"+strconv.FormatInt(id, 10), nil)
 	if err != nil {
 		return nil, 0, err
 	}
 	resp, err := syncClient.Do(req)
 	if err != nil {
+		// ports lib/sync.js's debugLog(`GET ${machineUrl}/${i} failed after ${ms}ms: ${err.message}`)
+		debugLogf("GET %s/%d failed after %dms: %v", machineURL, id, time.Since(shotStartedAt).Milliseconds(), err)
 		return nil, 0, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		debugLogf("GET %s/%d failed after %dms: HTTP %d", machineURL, id, time.Since(shotStartedAt).Milliseconds(), resp.StatusCode)
 		return nil, resp.StatusCode, fmt.Errorf("machine returned HTTP %d for shot %d", resp.StatusCode, id)
 	}
 	var shot map[string]any
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&shot); err != nil {
 		return nil, resp.StatusCode, err
 	}
+	// ports lib/sync.js's debugLog(`GET ${machineUrl}/${i} -> ${ms}ms`)
+	debugLogf("GET %s/%d -> %dms", machineURL, id, time.Since(shotStartedAt).Milliseconds())
 	return shot, resp.StatusCode, nil
 }
 

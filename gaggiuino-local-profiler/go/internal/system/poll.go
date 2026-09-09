@@ -502,6 +502,17 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		return
 	}
 
+	// ports lib/poll.js's debugLog(`GET ${baseUrl}/api/system/status`) --
+	// the actual HTTP GET happens one layer down, inside the adapter
+	// (internal/machines/gaggiuino_adapter.go for a Gaggiuino default), so
+	// this traces the poll tick itself rather than the literal request line.
+	// Calling debugLogf directly is safe here despite firing every single
+	// pollInterval tick (1s): its isDebugLoggingEnabled() check goes through
+	// internal/config's shared cache, which now carries its own TTL sized
+	// for exactly this hot path (#977 follow-up code review, round 5 --
+	// see internal/config/debuglog.go's debugLoggingCache doc comment), so
+	// this no longer needs its own throttling wrapper.
+	debugLogf("poll: GET status from %s (%s)", machine.Host, machine.Type)
 	status, err := adapter.GetStatus(ctx, machine)
 	if err != nil {
 		p.state.mu.Lock()
@@ -559,8 +570,9 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		sysState, _ = adapter.GetLiveSystemState(ctx, machine)
 	}
 
+	rawStatus := rawStatusFrom(status, machine.HasWaterSensor)
 	result := deriveMachineState(DeriveInput{
-		Status:     rawStatusFrom(status, machine.HasWaterSensor),
+		Status:     rawStatus,
 		Now:        now,
 		SensorSnap: sensorSnap,
 		SysState:   sysState,
@@ -592,10 +604,16 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	if result.IsBrewing && p.state.liveAccum == nil {
 		p.state.liveAccum = &liveAccumState{startTime: now, profileName: result.ProfileName, prevWeight: ms.Weight}
 		log.Printf("system: brew started: profile %s", result.ProfileName)
+		// ports lib/poll.js's debugLog(`Brew started detail: brewSwitchState=... sensorBrewActive=... upTime=...`)
+		debugLogf("Brew started detail: brewSwitchState=%v sensorBrewActive=%v upTime=%d",
+			rawStatus.Brewing, sensorSnap != nil && sensorSnap.BrewActive, rawStatus.UpTime)
 	}
 	brewJustFinished := false
 	if !result.IsBrewing && p.state.liveAccum != nil {
 		log.Printf("system: brew finished")
+		// ports lib/poll.js's debugLog(`Brew finished detail: brewSwitchState=... sensorBrewActive=... upTime=...`)
+		debugLogf("Brew finished detail: brewSwitchState=%v sensorBrewActive=%v upTime=%d",
+			rawStatus.Brewing, sensorSnap != nil && sensorSnap.BrewActive, rawStatus.UpTime)
 		p.state.liveAccum = nil
 		p.state.liveSeq++
 		brewJustFinished = true

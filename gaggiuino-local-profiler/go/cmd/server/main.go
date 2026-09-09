@@ -17,10 +17,11 @@
 // plus the background polling loop that backs them (Phase 1g). A handful
 // of routes/system.js routes remain unrouted by design — see
 // go/internal/system/doc.go's "Scope" section for exactly which and why
-// (none of them are depended on by anything this phase ported). This
-// binary is not wired into the Docker image, CI, or the running add-on;
-// the Node app (server.js) remains the sole shipping entrypoint until the
-// rollout plan in go/README.md says otherwise.
+// (none of them are depended on by anything this phase ported). #977: this
+// binary is now the repo-root Dockerfile's own CMD (glp-server) — it is
+// the sole shipping entrypoint for every real install as of this cutover;
+// server.js remains in the tree but is no longer built or run in the
+// production image.
 package main
 
 import (
@@ -31,8 +32,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
@@ -62,6 +65,12 @@ import (
 // port. Overridable via GLP_PORT for local/dev runs of this binary outside
 // the add-on container, same pattern as dbPath/tokenPath below.
 const defaultPort = "8099"
+
+// shutdownTimeout bounds how long main() waits for in-flight requests to
+// drain during a graceful shutdown (SIGTERM/SIGINT) before giving up and
+// returning anyway -- docker stop's own default grace period before SIGKILL
+// is 10s, so this stays under that.
+const shutdownTimeout = 8 * time.Second
 
 // appConfig is the resolved runtime configuration buildApp needs — every
 // field is an env-var read in production (configFromEnv) and an explicit
@@ -99,8 +108,27 @@ func main() {
 		log.Fatalf("listening on %s: %v", addr, err)
 	}
 
-	log.Printf("GLP Go server listening on port %s", cfg.port)
 	srv := &http.Server{Handler: handler}
+
+	// Graceful shutdown: docker stop sends SIGTERM to this process directly
+	// (docker-entrypoint.sh execs it via su-exec, so there's no intermediate
+	// shell to relay the signal) and waits a grace period before SIGKILL.
+	// Catch it and drain in-flight requests via srv.Shutdown instead of
+	// letting the process die mid-request; sqlDB.Close() (deferred above)
+	// then runs once Serve returns below.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		sig := <-sigCh
+		log.Printf("received %s, shutting down gracefully", sig)
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("graceful shutdown did not complete cleanly: %v", err)
+		}
+	}()
+
+	log.Printf("GLP Go server listening on port %s", cfg.port)
 	if err := srv.Serve(tcpNoDelayListener{ln}); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}
@@ -247,6 +275,14 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	importerHandlers.RegisterRoutes(mux)
 
 	registry := machines.NewRegistry(sqlDB)
+	// ports server.js's startup registry.logRegistrySnapshot() (#714) --
+	// behind debug_logging (#977 follow-up), so it's a no-op unless that
+	// option is on. Unlike Node, nothing has necessarily called
+	// EnsureDefaultMachine yet at this point (it's a lazy, per-request call
+	// in this Go port — see its own doc comment), so a genuinely fresh /data
+	// can log "(none)" here even though the default machine appears a
+	// moment later on the first real request.
+	registry.LogRegistrySnapshot()
 	machinesHandlers := machines.NewHandlers(registry, hub)
 	machinesHandlers.RegisterRoutes(mux)
 

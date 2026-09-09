@@ -2,10 +2,13 @@ package system
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/config"
 )
 
 // This mirrors internal/orders/options.go's isOrdersEnabled(): a narrow,
@@ -98,7 +101,11 @@ type statusOptions struct {
 
 // loadStatusOptions returns the cached (or freshly parsed, on a cache miss)
 // options.json fields isOrdersEnabled/isApiPortExposed/
-// loadSyncIntervalMinutes below all delegate to.
+// loadSyncIntervalMinutes below all delegate to. debug_logging is NOT one
+// of these -- it's read via internal/config.IsDebugLoggingEnabled() (its
+// own leaf-package mtime-cache) instead, since internal/machines needs the
+// identical check and can't import this package (see that function's doc
+// comment for the cycle).
 func loadStatusOptions() statusOptions {
 	statusOptionsCache.mu.Lock()
 	defer statusOptionsCache.mu.Unlock()
@@ -200,3 +207,34 @@ func isApiPortExposed() bool {
 func loadSyncIntervalMinutes() int {
 	return loadStatusOptions().syncIntervalMinutes
 }
+
+// isDebugLoggingEnabled delegates to internal/config's shared, mtime-cached
+// implementation (#977 follow-up code review, round 4) rather than
+// bundling debug_logging into loadStatusOptions/statusOptionsCache above --
+// internal/machines needs the identical check and can't import this
+// package (see internal/config.IsDebugLoggingEnabled's doc comment for the
+// cycle this was extracted to break), so both packages now share one
+// implementation instead of keeping independent copies.
+func isDebugLoggingEnabled() bool {
+	return config.IsDebugLoggingEnabled()
+}
+
+// debugLogf ports lib/data.js's debugLog(message) — logs with a "[debug]"
+// prefix, but only when isDebugLoggingEnabled(). See sync.go/poll.go for
+// the call sites this backs (lib/sync.js/lib/poll.js's own debugLog calls).
+func debugLogf(format string, args ...any) {
+	if isDebugLoggingEnabled() {
+		log.Printf("[debug] "+format, args...)
+	}
+}
+
+// IsDebugLoggingEnabled/DebugLogf are isDebugLoggingEnabled/debugLogf
+// exposed for internal/importer's HTML/JSON fetch traces (routes/
+// import.js's own debugLog call sites — #977 follow-up code review):
+// internal/system<->internal/importer has no import cycle (unlike
+// internal/machines, which is imported BY internal/system — see
+// internal/config.IsDebugLoggingEnabled's doc comment for how that cycle
+// is broken instead), so importer just calls straight through to this
+// package's own wrapper around the shared internal/config implementation.
+func IsDebugLoggingEnabled() bool          { return isDebugLoggingEnabled() }
+func DebugLogf(format string, args ...any) { debugLogf(format, args...) }

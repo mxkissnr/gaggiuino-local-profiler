@@ -5,6 +5,9 @@ on:
     branches: [dev, main]
   pull_request:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
 
@@ -33,6 +36,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: docker-entrypoint.sh regression tests
+        run: sh test/docker-entrypoint.test.sh
 
       - name: Build
         run: npm run build
@@ -86,6 +92,184 @@ jobs:
 
       - name: Run E2E smoke test
         run: npm run test:e2e
+
+  go-test:
+    name: Go backend test/vet/build/vuln gate
+    # #977 cutover: this used to be go-build.yaml's own `test` job, scoped
+    # to push:[go-migration]/pull_request — now that the Go backend (go/,
+    # #901) is the shipping production image (repo-root Dockerfile), it
+    # needs to gate every PR/push the same way the `test` job above gates
+    # the frontend, not just go-migration (which is no longer pushed to
+    # post-cutover). Folded in here rather than left in go-build.yaml,
+    # matching how version-release-check was folded into this same file
+    # instead of staying its own workflow. go-build.yaml itself (its
+    # `docker` job, a second multi-arch build of this same repo-root
+    # Dockerfile) and go-preview-publish.yaml were deleted in this same PR
+    # — both were fully redundant to build.yaml/build-dev.yaml once the
+    # repo-root Dockerfile became the Go image; verified no branch
+    # protection rule or other workflow referenced either file's job names
+    # before deleting (dev has no branch protection at all; main only
+    # requires "Test and build" + CodeQL, both untouched by this change).
+    #
+    # #977 follow-up code review: go-build.yaml's original `test` job had
+    # its own Gitea-skip guard ("Gitea Actions also auto-detects
+    # .github/workflows — skip there, GitHub-only") that got lost in the
+    # move — restored here so this job doesn't now also run on the Gitea
+    # mirror runner.
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gaggiuino-local-profiler/go
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: gaggiuino-local-profiler/go/go.mod
+          cache-dependency-path: gaggiuino-local-profiler/go/go.sum
+
+      # templ generate writes the _templ.go files internal/web/templates'
+      # .templ sources need to be valid Go at all — git-ignored, so every
+      # fresh checkout (including this one) needs this before build/vet/
+      # test/fmt can even parse the package. Pinned to the same version
+      # go.mod already pulls in as the templ runtime library's own indirect
+      # dependency — see go/README.md's "Codegen" section.
+      - name: Install templ and generate
+        run: |
+          go install github.com/a-h/templ/cmd/templ@v0.3.1020
+          go generate ./...
+
+      - name: gofmt
+        run: |
+          fmt_out="$(gofmt -l .)"
+          if [ -n "$fmt_out" ]; then
+            echo "::error::gofmt needs to be run on:"
+            echo "$fmt_out"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test -race
+        run: go test ./... -race
+
+      # BLOCKING govulncheck gate (#998, security audit #977 round 3
+      # finding 2.3). Fails the build on any *called* vulnerability — one on
+      # a live call path into the Go stdlib, an imported package, or a
+      # required module. Advisories in required-but-not-reachable modules do
+      # not fail the build: govulncheck exits non-zero only for a vuln the
+      # code actually calls, which is exactly the signal wanted here. No
+      # continue-on-error — a called vuln blocks the merge like a failing
+      # test. Version-pinned (not @latest) for reproducible CI; bump in
+      # lockstep with a deliberate review of the finding set.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
+      # Fails the build if server.js / routes/*.js registers an HTTP route
+      # the Go backend (cmd/server/main.go + every internal/* RegisterRoutes,
+      # /ui/ sub-mux included) has no equivalent for. One-way: Go-only routes
+      # (the /ui/ templ fallback pages) are fine. Deferred routes go in the
+      # script's ALLOWLIST with a reference. No Go toolchain needed.
+      - name: route parity (Node vs Go)
+        run: bash scripts/route-parity.sh
+
+  docker-smoke:
+    name: Docker image build+smoke test (${{ matrix.arch }})
+    # #977 follow-up code review (2nd pass): deleting go-build.yaml (see
+    # go-test above) also deleted its `docker` job — the only CI step that
+    # multi-arch build-verified the real image (not just amd64) and ran
+    # go/scripts/smoke-test.sh against a real `docker run` container for
+    # amd64, proving the entrypoint, privilege drop, embed.FS static
+    # assets, port, and healthcheck all work end to end, not just the Go
+    # code in isolation. build.yaml/build-dev.yaml only build (and push) on
+    # a release/dev push, they never smoke-test, and an amd64-only version
+    # of this job (its first cut) missed exactly the kind of bug the old
+    # job caught: a QEMU-incompatible arm64/armv7 runtime-stage package.
+    # Matrix + native-cross-compile strategy restored verbatim from the
+    # deleted job: `docker/setup-qemu-action` below is only there for the
+    # runtime stage's tiny `apk add`/`adduser` RUN steps under emulation —
+    # the Dockerfile's builder stage is pinned `--platform=$BUILDPLATFORM`
+    # and cross-compiles via GOOS/GOARCH/GOARM, so the actual `go build`
+    # always runs natively on the runner's own amd64 for every arch in this
+    # matrix, no emulation. `needs: go-test` (added in this same review
+    # round) means a red gofmt/vet/build/test/govulncheck/route-parity
+    # result skips this considerably more expensive multi-stage (npm
+    # frontend + Go compile x3 archs) build entirely instead of running it
+    # anyway.
+    needs: go-test
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+          - arch: arm64
+            platform: linux/arm64
+          - arch: armv7
+            platform: linux/arm/v7
+    defaults:
+      run:
+        working-directory: gaggiuino-local-profiler
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Runtime-stage package install only (apk add/adduser under
+      # emulation), not the Go compile itself — see the job comment above.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      # Only the amd64 image is loaded into the local Docker daemon — the
+      # only one this runner (itself amd64) can actually run a container
+      # from without emulating the whole process. arm64/armv7 are still
+      # fully build-verified (this step fails the job the same way for any
+      # arch if the image doesn't assemble), just not behaviorally
+      # smoke-tested here — same scope the deleted go-build.yaml job had.
+      - name: Build image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: ./gaggiuino-local-profiler
+          file: ./gaggiuino-local-profiler/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: ${{ matrix.arch == 'amd64' }}
+          tags: glp-root:${{ matrix.arch }}
+          # Per-arch scope (root-${arch}) is the pre-existing convention
+          # inherited verbatim from build.yaml/build-dev.yaml, kept so the
+          # Go-builder/runtime layers of each arch still cache separately.
+          # root-shared is added on top of it (#977 follow-up code review,
+          # round 6): the frontend stage above is architecture-independent
+          # (pinned --platform=$BUILDPLATFORM, no per-arch frontend output),
+          # so its npm ci/build layers have the same cache key on all three
+          # legs — writing/reading a shared scope alongside the per-arch one
+          # lets that identical layer be reused across arches (and across
+          # runs) instead of every matrix leg rebuilding the frontend from
+          # scratch. Cache-from tries root-shared first so a hit there skips
+          # straight past the frontend rebuild; cache-to still writes both,
+          # so the arch-specific layers stay isolated per scope.
+          cache-from: |
+            type=gha,scope=root-shared
+            type=gha,scope=root-${{ matrix.arch }}
+          cache-to: |
+            type=gha,mode=max,scope=root-shared
+            type=gha,mode=max,scope=root-${{ matrix.arch }}
+
+      - name: Smoke test (amd64 image, native container run)
+        if: matrix.arch == 'amd64'
+        run: GLP_SMOKE_DOCKER_IMAGE=glp-root:amd64 go/scripts/smoke-test.sh
 
   version-release-check:
     name: Verify a GitHub release exists for the bumped version
