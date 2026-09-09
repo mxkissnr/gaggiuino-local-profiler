@@ -17,7 +17,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { bootServer, seed } from '../../scripts/e2e-harness.mjs';
+import { bootServer, seed, stopServer } from '../../scripts/e2e-harness.mjs';
 
 let browser, page;
 const consoleErrors = [];
@@ -45,10 +45,11 @@ before(async () => {
 
 after(async () => {
     await browser?.close();
-    // No process.exit() here on purpose — see scripts/e2e-harness.mjs's
-    // bootServer() comment: node:test needs to finish computing its exit
-    // code first, so termination is left to the test:e2e script's
-    // --test-force-exit flag instead.
+    // Stop the spawned glp-server child so it doesn't linger after the run.
+    // No process.exit() here on purpose — node:test needs to finish
+    // computing its exit code first, so final termination is left to the
+    // test:e2e script's --test-force-exit flag.
+    stopServer();
 });
 
 // Snapshots consoleErrors, runs the view transition, waits for its
@@ -77,7 +78,7 @@ const VIEWS = [
         name: 'Shots',
         nav: '#btnShots',
         // sidebar.js renders one `wrapper-<id>` element per shot (see
-        // components/mode.js's goToShot()) — seed() creates 7.
+        // components/mode.js's goToShot()) — the demo dataset seeds 12.
         ready: () => !!document.querySelector('[id^="wrapper-"]'),
     },
     {
@@ -86,7 +87,8 @@ const VIEWS = [
         // renderBeanList() (views/library.js) replaces #beanListUI's
         // content with real bean cards once S.coffeeLibrary loads —
         // checking for one of the seeded bean names proves it rendered the
-        // real data, not just an empty-state placeholder.
+        // real data, not just an empty-state placeholder. The demo dataset's
+        // first bean is "GLP Demo — Ethiopia Yirgacheffe".
         ready: () => (document.getElementById('beanListUI')?.textContent || '').includes('Yirgacheffe'),
     },
     {
@@ -142,8 +144,9 @@ const VIEWS = [
     {
         name: 'Settings',
         nav: '#btnSettings',
-        // renderMachinesList() (components/machines-settings.js) renders
-        // one .machine-row per machine — seed() creates 2.
+        // renderMachinesList() (components/machines-settings.js) renders one
+        // .machine-row per machine — the default row plus the second
+        // machine seed() adds.
         ready: () => document.querySelectorAll('#machinesList .machine-row').length >= 2,
     },
 ];

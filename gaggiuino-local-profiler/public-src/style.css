@@ -81,13 +81,22 @@
             --warn:   #d3a03f;
             --err:    #e0705f;
 
-            /* ── Accent (Amber default) ──
-               The 6 app accents keep their exact values — they are the brand,
-               and they are audited rather than changed. All six clear 4.5:1
-               as text on every dark surface (worst: aurora 5.59:1). */
+            /* ── Accent (amber-americano default) ──
+               #1019: these are amber-americano's own values (see
+               lib/machines/theme-presets.js's THEME_PRESETS, the single
+               source of truth both the per-machine theme picker and the
+               Settings -> Farbschema picker now share) — this block only
+               exists so <html> already has a sensible accent painted before
+               JS runs applyActiveMachineAccentTheme() (machines-settings.js)
+               and overrides it inline with the actual resolved value. The
+               old per-swatch [data-accent="..."] blocks that used to live
+               here for the other 5 legacy swatches (plus Crema's warm-
+               neutral grayscale override) are retired entirely along with
+               them — every preset, including this default, now only ever
+               reaches the page via that one inline-style mechanism. */
             --accent:      #f59e0b;
             --accent-from: #f59e0b;
-            --accent-to:   #f97316;
+            --accent-to:   #f59e0b;
             --accent-text: #000;
             --accent-glow: rgba(245,158,11,.15);
             /* --on-fill: text/number sitting ON a full-strength semantic fill
@@ -104,36 +113,15 @@
             --on-fill: #000;
             /* --accent-ink: the accent used as TEXT or an icon, as opposed to
                a fill. On dark surfaces the accent itself is readable, so this
-               is simply the accent. In the light theme it is not — see the
-               per-accent overrides there. Splitting the two is what lets the
-               fill stay exactly the configured brand colour while the text
-               form stays legible. */
+               is simply the accent. In the light theme it is not — #1021's
+               per-preset overrides for the 8 THEME_PRESETS are applied here
+               as an inline style by applyActiveMachineAccentTheme()
+               (components/machines-settings.js), not a CSS selector — see
+               the comment below where the old [data-accent]-scoped overrides
+               used to live. Splitting the two is what lets the fill stay
+               exactly the configured brand colour while the text form stays
+               legible. */
             --accent-ink:  var(--accent);
-        }
-
-        /* ── Accent themes ── */
-        [data-accent="ocean"]  { --accent: #38bdf8; --accent-from: #3b82f6; --accent-to: #06b6d4; --accent-text: #000; --accent-glow: rgba(59,130,246,.15); }
-        [data-accent="aurora"] { --accent: #a78bfa; --accent-from: #6366f1; --accent-to: #a855f7; --accent-text: #fff; --accent-glow: rgba(167,139,250,.15); }
-        [data-accent="ember"]  { --accent: #fb923c; --accent-from: #ef4444; --accent-to: #f97316; --accent-text: #fff; --accent-glow: rgba(239,68,68,.15); }
-        [data-accent="forest"] { --accent: #34d399; --accent-from: #22c55e; --accent-to: #10b981; --accent-text: #000; --accent-glow: rgba(34,197,94,.15); }
-        /* #404: Crema is the only theme that also warms the neutral gray
-           scale (espresso-brown instead of true gray) — every other accent
-           only swaps --accent-*. Contrast checked against the same targets
-           #397 used for the base scale (label text >=4.5:1 on card/sidebar
-           surfaces): gray-600 vs gray-800 5.11:1, vs gray-900 5.84:1;
-           gray-500 vs gray-800 6.13:1, vs gray-900 7.01:1. */
-        [data-accent="crema"] {
-            --gray-100: #fbf5ec;
-            --gray-200: #f2e6d8; --gray-300: #dccbb6; --gray-400: #c9b8a4; --gray-500: #b0a08d; --gray-600: #a2917d;
-            --gray-700: #4e3a2b; --gray-800: #2e2118; --gray-900: #1e1611; --gray-950: #14100c;
-            /* #811: Crema needs its own --raised and --err. Its surfaces are
-               warmer and closer together than the graphite scale's, so the
-               shared --err (#e0705f) lands at 4.42:1 on a Crema --raised —
-               just under the floor. Lifted to #e17363 (4.54:1) rather than
-               dropping the nesting level. */
-            --raised: #38291e;
-            --err: #e17363;
-            --accent: #d4a24c; --accent-from: #d4a24c; --accent-to: #b8823a; --accent-text: #1c1410; --accent-glow: rgba(212,162,76,.15);
         }
 
         /* ── Light theme ── */
@@ -166,53 +154,20 @@
             --err:    #a83526;
             --on-fill: #fff;
         }
-        /* #811: --accent-ink for every accent in the light theme. The accent
-           is used as TEXT in 16 places, and on a light ground the brand
-           values are nowhere near readable: forest measured 1.54:1, ocean
-           1.71:1, ember 1.81:1, aurora 2.18:1, amber 2.55:1 — all
-           pre-existing, and all four of those accents had no light-theme
-           definition at all, so they kept their dark values on white.
-           --accent/--accent-from/--accent-to are untouched, so every fill,
-           gradient and glow stays exactly the configured brand colour; only
-           the text form is darkened, each to the first value along its own
-           hue that clears 4.5:1 on all four light surfaces. */
-        [data-theme="light"]:not([data-accent]), [data-theme="light"][data-accent="amber"] {
-            --accent: #d97706; --accent-from: #d97706; --accent-to: #ea580c;
-            --accent-ink: #9a5504;
-        }
-        [data-theme="light"][data-accent="ocean"]  { --accent-ink: #056e9c; }
-        [data-theme="light"][data-accent="aurora"] { --accent-ink: #6d3ff7; }
-        [data-theme="light"][data-accent="ember"]  { --accent-ink: #a74d03; }
-        [data-theme="light"][data-accent="forest"] { --accent-ink: #197553; }
-        /* #404: Crema's light variant reads as warm paper, not an inverted
-           dark palette — every neutral gets its own value rather than
-           falling back to the plain [data-theme="light"] gray scale above.
-           Contrast checked: gray-200 (text) vs gray-950 (page) 15.11:1;
-           gray-600 (muted label) vs gray-900 5.24:1, vs gray-800 4.58:1;
-           gray-500 vs gray-900 6.52:1, vs gray-800 5.70:1; accent (used as
-           text/links) vs gray-950/900/800: 6.74:1 / 5.94:1 / 5.19:1; white
-           accent-text vs accent-from/-to: 5.60:1 / 8.92:1 — all clear the
-           4.5:1 WCAG AA floor #397 established for this scale. */
-        [data-theme="light"][data-accent="crema"] {
-            --gray-100: #1a0f06;
-            --gray-200: #2a1b0f; --gray-300: #40301f; --gray-400: #55442f; --gray-500: #5f4c38;
-            /* #811: darkened from #6e5a44 so it still clears 4.5:1 on the new
-               --raised surface (4.54:1); it was 4.58:1 on --gray-800 before,
-               with no headroom left for a further step. */
-            --gray-600: #65523e;
-            --gray-700: #d4b48c; --gray-800: #ead5b5; --gray-900: #f3e4ce; --gray-950: #fbf3e7;
-            --raised: #e0c7a2;
-            /* #811: Crema's light surfaces are warm and dark enough that the
-               shared light semantics do not clear on them — measured 2.30:1
-               (ok), 3.44:1 (warn), 3.38:1 (err) before. Own values, each the
-               first along its hue to clear 4.5:1 on all four surfaces. */
-            --ok:   #0d622c;
-            --warn: #7a4a05;
-            --err:  #a71b1b;
-            --on-fill: #fff;
-            --accent: #7a4a21; --accent-from: #8b5e34; --accent-to: #6b3f1d; --accent-text: #fff; --accent-glow: rgba(122,74,33,.15);
-            --accent-ink: #7a4a21;
-        }
+        /* #1019: the per-accent --accent-ink light-theme audit (#811, plus
+           Crema's whole separate warm-paper light block) was retired along
+           with the old 6-swatch [data-accent="..."] set, and those
+           selectors deliberately stay retired (#1021 does not reintroduce
+           them). #1021 redid the audit for the 8 new THEME_PRESETS instead —
+           same #397/#404/#811 precedent, same 4.5:1 floor against all four
+           light surfaces above, same "darken along the accent's own hue"
+           method — but applied through the inline-CSS-variable mechanism
+           applyActiveMachineAccentTheme() already uses for --accent itself
+           (see LIGHT_ACCENT_INK_OVERRIDES in components/machines-settings.js
+           and its test/theme-contrast.test.js coverage) rather than a new
+           CSS selector per preset. --accent-ink here in :root/[data-theme=
+           "light"] stays a plain var(--accent) alias either way — the
+           override, when one applies, always wins as an inline style. */
 
         /* #404: bundled locally (public-src/fonts/) so it renders fully
            offline / behind HA ingress — no external font CDN. Applied ONLY
@@ -1167,8 +1122,8 @@
         .accent-swatch { appearance: none; -webkit-appearance: none; -moz-appearance: none; width: 34px; height: 34px; border-radius: 50%; overflow: hidden; clip-path: circle(50%); -webkit-clip-path: circle(50%); border: 3px solid transparent; cursor: pointer; transition: transform .18s, border-color .18s; outline: none; background-repeat: no-repeat; background-position: center; background-size: 140% 140%; }
         .accent-swatch:hover { transform: scale(1.12); }
         .accent-swatch.active { border-color: var(--gray-200); transform: scale(1.18); box-shadow: 0 0 0 2px rgba(0,0,0,.4); }
-        /* #604: default machine's own theme is overriding the picker's
-           output (see applyDefaultMachineAccentTheme() in
+        /* #604/#1019: the active machine's own theme is overriding the
+           picker's output (see applyActiveMachineAccentTheme() in
            components/machines-settings.js) — swatches stay clickable
            (picker keeps recording the preference for when the machine theme
            is later cleared), just dimmed so it reads as "not currently in
@@ -1211,6 +1166,13 @@
         .lib-item-info { flex: 1; min-width: 0; }
         .lib-item-name { font-size: var(--fs-2); color: var(--gray-200); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-name .serif-display { font-size: var(--fs-3); font-weight: 600; }
+        /* Machine-profile list (library-profile-editor.js renderProfileList):
+           name + optional utility badge on one row — badge sits outside the
+           name's own ellipsis-truncation so it never gets clipped away. */
+        .lib-item-name-row { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+        .lib-item-name-row .lib-item-name { min-width: 0; }
+        .lib-utility-badge { flex-shrink: 0; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--gray-400); background: var(--gray-700); border-radius: 999px; padding: 1px var(--sp-2); }
+        .lib-item-utility .lib-item-name { opacity: .75; }
         /* #404: eyebrow above the bean name — small, muted, uppercase,
            same visual weight class as the recipe/process-card labels. */
         .lib-item-origin-eyebrow { font-size: var(--fs-1); color: var(--gray-600); margin-bottom: 2px; }
@@ -1518,10 +1480,12 @@
         #live-status-badge.ready       { color: var(--ok); }
         #live-status-badge.error       { color: var(--err); }
         #live-status-badge.unreachable { color: var(--err); }
-        /* #902: steaming/flushing get their own accent color, distinct from
-           brewing's --err red -- an active-but-not-a-shot process. */
+        /* #902/#983: steaming/flushing/descaling get their own accent color,
+           distinct from brewing's --err red -- an active-but-not-a-shot
+           process. */
         #live-status-badge.steaming,
-        #live-status-badge.flushing    { color: var(--accent-ink); }
+        #live-status-badge.flushing,
+        #live-status-badge.descaling   { color: var(--accent-ink); }
 
         #live-status-badge .badge-dot {
             width: 8px; height: 8px;
@@ -1530,7 +1494,8 @@
         }
         #live-status-badge.brewing .badge-dot,
         #live-status-badge.steaming .badge-dot,
-        #live-status-badge.flushing .badge-dot { animation: pulse 1.2s infinite; }
+        #live-status-badge.flushing .badge-dot,
+        #live-status-badge.descaling .badge-dot { animation: pulse 1.2s infinite; }
 
         #live-meta {
             display: flex;
@@ -2434,6 +2399,31 @@
         .pp-field label { font-size: var(--fs-1); color:var(--gray-500); }
         .pp-field input, .pp-field select { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); }
         .pp-field input:focus, .pp-field select:focus { outline:none; border-color:var(--gray-500); }
+        /* GaggiMate profile editor (gaggimate-profile-editor.js). Looks like
+           a near-duplicate of .pp-field input/select just above (same
+           colors/border/radius) — deliberately not merged: .pp-field lives
+           in the dense 2-4 column .pp-grid and needs the tighter sp-1
+           padding to fit, this form doesn't. */
+        .lib-btn-sm.active { background:var(--accent-from); color:var(--accent-text); }
+        .lib-select, .lib-input { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size:var(--fs-1); padding:var(--sp-2) var(--sp-2); }
+        .lib-select:focus, .lib-input:focus { outline:none; border-color:var(--gray-500); }
+        .lib-input { min-width:0; }
+        .flex-1 { flex:1; }
+        .gm-chart-container { flex-shrink:0; margin:.5rem 0 .75rem; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); overflow:hidden; height:180px; position:relative; }
+        /* Segmented-control look (shared background/border around the whole
+           group, tighter radius per button) so a row of mode buttons reads
+           as one group with a selection, not a loose row of buttons. */
+        .gm-toggle-group { display:inline-flex; gap:2px; flex-wrap:wrap; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); padding:2px; }
+        .gm-toggle-group .lib-btn-sm { border-radius:calc(var(--radius) - 2px); }
+        .gm-toggle-group .lib-btn-sm.active { box-shadow:0 1px 2px rgba(0,0,0,.25); }
+        .gm-phase { background:var(--gray-800); border-radius:var(--radius); padding:var(--sp-3); margin-bottom:var(--sp-2); }
+        .gm-phase-nav { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-3); flex-wrap:wrap; }
+        .gm-phase-nav span { flex:0 0 auto; font-size:var(--fs-1); color:var(--gray-400); }
+        .gm-dropdown { position:relative; display:inline-block; }
+        .gm-dropdown-menu { position:absolute; top:100%; left:0; z-index:200; background:var(--gray-800); border:1px solid var(--gray-600); border-radius:var(--radius); min-width:180px; padding:var(--sp-1) 0; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+        .gm-dropdown-item { display:block; width:100%; text-align:left; background:none; border:none; color:var(--gray-300); font-size:var(--fs-1); padding:var(--sp-2) var(--sp-3); cursor:pointer; }
+        .gm-dropdown-item:hover { background:var(--gray-700); color:var(--gray-100); }
+
         /* Guided Dial-In wizard modal (#310) — same fixed-height/flex-child
            pattern as .profile-editor-modal, but narrower (it's a linear
            step flow, not a dense multi-column form). */
@@ -2715,6 +2705,30 @@
             transition: width .2s ease;
         }
 
+        /* ── Backup/restore modal progress (#960) — reuses the shot-import
+           track/fill above; adds an indeterminate mode for transfers whose
+           size is genuinely unknown (Node backend sends no estimate header,
+           or the server-side restore phase after the upload completes). ── */
+        .backup-modal-progress {
+            display: flex;
+            align-items: center;
+            gap: var(--sp-2);
+            margin: var(--sp-2) 0;
+        }
+        #backupModalProgressLabel {
+            font-size: var(--fs-1);
+            color: var(--gray-500);
+            white-space: nowrap;
+        }
+        .sync-progress-track.indeterminate .sync-progress-fill {
+            width: 40% !important;
+            animation: glp-indeterminate 1.1s ease-in-out infinite;
+        }
+        @keyframes glp-indeterminate {
+            0% { margin-left: -40%; }
+            100% { margin-left: 100%; }
+        }
+
         /* ── Machine icon — live states (#811) ──────────────────────────
            Animated "Instrument" icon (public-src/machine-icon.js's
            machineIconAnimatedSvg()/setMachineIconMode()), ported from
@@ -2778,12 +2792,14 @@
         .machine-icon-live.is-brewing .d-brew { opacity: 1; }
         .machine-icon-live.is-steaming .d-ready { opacity: 0; }
         .machine-icon-live.is-steaming .d-steam { opacity: 1; }
-        /* #902: flush gets the display-badge treatment only (no milk-jug-
-           style illustration -- there's no equivalent physical action to
-           depict for a group-head flush the way there is for steaming
-           milk). */
+        /* #902/#983: flush/descale get the display-badge treatment only (no
+           milk-jug-style illustration -- there's no equivalent physical
+           action to depict for a group-head flush or a descale cycle the
+           way there is for steaming milk). */
         .machine-icon-live.is-flushing .d-ready { opacity: 0; }
         .machine-icon-live.is-flushing .d-flush { opacity: 1; }
+        .machine-icon-live.is-descaling .d-ready { opacity: 0; }
+        .machine-icon-live.is-descaling .d-descale { opacity: 1; }
 
         /* Bezug/brewing: the brew scale's cup fills to one third, crema
            settles on top last. Two steady streams from the basket,

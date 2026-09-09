@@ -15,6 +15,8 @@ const LANGS = { de, en, it: itLang, fr, es, nl };
 const NEW_KEYS = [
     'machine_ready', 'export_csv_title', 'export_shot_title', 'share_card_tooltip',
     'compare_title', 'please_wait', 'profile_unknown',
+    'backup_progress_download', 'backup_progress_upload', 'backup_progress_preparing',
+    'backup_progress_restoring', 'backup_progress_done', 'settings_devtools_export_db_failed',
 ];
 
 describe('i18n language files', () => {
@@ -60,6 +62,15 @@ describe('i18n language files', () => {
             for (const key of NEW_KEYS) {
                 expect(obj, `${name}.js missing ${key}`).toHaveProperty(key);
                 expect(obj[key], `${name}.js ${key} is empty`).toBeTruthy();
+            }
+        }
+    });
+
+    it('backup_progress_download/upload are functions that interpolate the percentage (#960)', () => {
+        for (const [name, obj] of Object.entries(LANGS)) {
+            for (const key of ['backup_progress_download', 'backup_progress_upload']) {
+                expect(typeof obj[key], `${name}.js ${key} should be a function`).toBe('function');
+                expect(obj[key](42), `${name}.js ${key}(42)`).toContain('42');
             }
         }
     });

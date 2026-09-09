@@ -1,0 +1,1001 @@
+/* Design-token pass (#901) — brings the full "Instrument" design system
+ * (public-src/style.css, released August 2026) onto the templ+htmx+Alpine
+ * frontend. This is NOT a new design: every token/formula below is copied
+ * from that file's :root block (and its [data-accent]/[data-theme="light"]
+ * layers), not re-derived, so the two frontends read as one product. See
+ * that file's own comments for the full rationale behind each value (radius
+ * count, type-scale floor, gray-scale roles, contrast audits, etc.) — they
+ * aren't repeated here.
+ *
+ * Ported in this pass:
+ *   - Full token set: radii, fs-1..fs-6, sp-1..sp-6, gray-100..950 (dark +
+ *     light), --raised, --ok/--warn/--err (dark + light), and all 6 accent
+ *     themes (amber default + ocean/aurora/ember/forest/crema) with their
+ *     light-theme --accent-ink overrides.
+ *   - Figtree (400+600) vendored locally under static/fonts/ — no external
+ *     font CDN, same offline-under-Ingress requirement as the Node app.
+ *   - Button/form/list/badge/nav formulas re-applied to this frontend's
+ *     already-generic class names (.btn, .item-row, .badge, ... — this
+ *     frontend uses global classes where the Node original uses contextual
+ *     ones; only the visual formula is copied, not the class structure).
+ *
+ * Deliberately deferred to a follow-up package (documented, not forgotten):
+ *   - Fraunces (serif display face) — only needed once a Library/Beans page
+ *     renders bean names with .serif-display; no such page exists here yet.
+ *   - A theme/accent SWITCHER UI — every token below is defined for both
+ *     [data-theme="light"] and every [data-accent="..."], but nothing in
+ *     this frontend sets those attributes yet (layout.templ hardcodes
+ *     data-theme="dark"), so only the default dark/amber combination is
+ *     currently reachable. Turning it on later is a data-* toggle, not a
+ *     CSS change.
+ *
+ * Design pass 2 (#901) adds on top of the above:
+ *   - The Shots list's Verdict header (.verdict-line/.verdict-score-num/
+ *     .verdict-sep/.verdict-headline/.verdict-subline below) — the score
+ *     as a hero figure, not a chip, ported from public-src/style.css's
+ *     .verdict-header family. See shots.templ's shotInfo doc comment for
+ *     what carried over and what (the advice-text computation) didn't.
+ *   - A muted, non-disabled treatment for read-only Settings categories
+ *     (.settings-readonly-badge, .settings-json's dimmed text) so
+ *     editable vs. read-only categories read as a tone difference, not a
+ *     greyed-out/disabled one.
+ *
+ * Design pass 3 (#901) brings the Library/Machines/Maintenance pages up to
+ * the same standard the Shots list's Verdict header set in design pass 2 —
+ * see go/README.md's "Create/Edit follow-up pass" paragraph for the
+ * surrounding functional context this visual pass shipped alongside:
+ *   - Bean/milk stock bars (.stock-bar*, .milk-stock-bar-*) — ported from
+ *     public-src/style.css's .lib-stock-bar/.lib-milk-stock-bar formulas,
+ *     purely supplementary to the exact gram/ml figure next to them.
+ *   - A KPI-tile row (.stat-row/.stat-tile/.stat-num/.stat-label) for the
+ *     Maintenance page's verdict-first due/soon/ok summary, ahead of the
+ *     per-task tile list — ported from public-src/style.css's .maint-tile
+ *     family, reusing --fs-5 for the count the same way .verdict-score-num
+ *     does for a shot's score.
+ *   - .verdict-status + .machine-status-header for the Machines page's
+ *     default-machine reachability header — a colour-coded status word
+ *     substituting for the numeric score .verdict-score-num normally
+ *     holds, composed with .score-great/.score-bad the same way.
+ */
+
+:root {
+  /* ── Radius ── two radii, not eight: --radius-sm for controls, --radius
+     for containers/cards. */
+  --radius: 10px;
+  --radius-sm: 4px;
+
+  /* ── Type scale ── six steps; a size not on this ladder is a
+     regression, not a nuance. */
+  --fs-1: 0.8125rem;
+  --fs-2: 0.875rem;
+  --fs-3: 1rem;
+  --fs-4: 1.25rem;
+  --fs-5: 1.625rem;
+  --fs-6: 2.25rem;
+
+  /* ── Spacing ladder ── a value off the ladder is a regression. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* ── Gray scale (dark theme) ── role-based, not brightness-based; the
+     scale inverts under [data-theme="light"] below, so --gray-200 is
+     always "primary text" and --gray-900 always "page background",
+     whichever theme is active.
+       100  strongest text (KPI values, large figures)
+       200  primary text
+       300  strong secondary text
+       400  soft text
+       500  muted text
+       600  muted, weakest
+       700  lines (border) — not a text colour
+       800  card / raised surface
+       900  page background
+       950  deepest surface
+  */
+  --gray-100: #f7f8f8;
+  --gray-200: #eceded;
+  --gray-300: #d0d3d5;
+  --gray-400: #b6babd;
+  --gray-500: #a4a9ad;
+  --gray-600: #93989c;
+  --gray-700: #2b2f33;
+  --gray-800: #1a1c1f;
+  --gray-900: #131416;
+  --gray-950: #0d0e10;
+  /* The nesting level that would otherwise be drawn as a card-in-a-card
+     with its own border — a surface step carries the hierarchy without
+     the boxes, which is what makes the border diet below possible. */
+  --raised: #232629;
+
+  /* ── Functional ── */
+  --ok: #5cb98a;
+  --warn: #d3a03f;
+  --err: #e0705f;
+
+  /* ── Accent (Amber default) ── */
+  --accent: #f59e0b;
+  --accent-from: #f59e0b;
+  --accent-to: #f97316;
+  --accent-text: #000;
+  --accent-glow: rgba(245, 158, 11, 0.15);
+  /* --on-fill: text/number sitting ON a full-strength semantic fill
+     (--ok/--warn/--err/--gray-600 used as a background). Black in the
+     dark theme, white in the light one — the dark theme's semantic
+     colours are the light, saturated ones. */
+  --on-fill: #000;
+  /* --accent-ink: the accent used as TEXT/icon rather than a fill. On
+     dark surfaces the accent itself is readable, so this is simply the
+     accent; the light theme overrides it per-accent below. */
+  --accent-ink: var(--accent);
+}
+
+/* ── Accent themes ── all 6 kept at their exact brand values; no
+   switcher UI wires these up yet (see header comment), but the tokens
+   are ready for one. */
+[data-accent="ocean"] {
+  --accent: #38bdf8;
+  --accent-from: #3b82f6;
+  --accent-to: #06b6d4;
+  --accent-text: #000;
+  --accent-glow: rgba(59, 130, 246, 0.15);
+}
+[data-accent="aurora"] {
+  --accent: #a78bfa;
+  --accent-from: #6366f1;
+  --accent-to: #a855f7;
+  --accent-text: #fff;
+  --accent-glow: rgba(167, 139, 250, 0.15);
+}
+[data-accent="ember"] {
+  --accent: #fb923c;
+  --accent-from: #ef4444;
+  --accent-to: #f97316;
+  --accent-text: #fff;
+  --accent-glow: rgba(239, 68, 68, 0.15);
+}
+[data-accent="forest"] {
+  --accent: #34d399;
+  --accent-from: #22c55e;
+  --accent-to: #10b981;
+  --accent-text: #000;
+  --accent-glow: rgba(34, 197, 94, 0.15);
+}
+/* Crema also warms the neutral gray scale (espresso-brown instead of true
+   gray) — every other accent only swaps --accent-*. */
+[data-accent="crema"] {
+  --gray-100: #fbf5ec;
+  --gray-200: #f2e6d8;
+  --gray-300: #dccbb6;
+  --gray-400: #c9b8a4;
+  --gray-500: #b0a08d;
+  --gray-600: #a2917d;
+  --gray-700: #4e3a2b;
+  --gray-800: #2e2118;
+  --gray-900: #1e1611;
+  --gray-950: #14100c;
+  --raised: #38291e;
+  --err: #e17363;
+  --accent: #d4a24c;
+  --accent-from: #d4a24c;
+  --accent-to: #b8823a;
+  --accent-text: #1c1410;
+  --accent-glow: rgba(212, 162, 76, 0.15);
+}
+
+/* ── Light theme ── same role scale, inverted: 100/200 are darkest here
+   because they are TEXT, 900/950 lightest because they are SURFACES. A
+   raised element gets DARKER in this theme (800 sits below 900) — the
+   opposite direction from dark, so --raised follows that same rule. */
+[data-theme="light"] {
+  --gray-100: #0e0f10;
+  --gray-200: #1b1d1f;
+  --gray-300: #303438;
+  --gray-400: #4a4e52;
+  --gray-500: #585d61;
+  --gray-600: #63686c;
+  --gray-700: #dcdcd8;
+  --gray-800: #eeeeec;
+  --gray-900: #f7f7f6;
+  --gray-950: #ffffff;
+  --raised: #e6e6e3;
+  --ok: #2f7350;
+  --warn: #7d5510;
+  --err: #a83526;
+  --on-fill: #fff;
+}
+/* --accent-ink for every accent in the light theme — the raw brand
+   values fail contrast on a light ground, so only the TEXT form is
+   darkened; --accent/--accent-from/--accent-to (fills/gradients/glows)
+   stay exactly the configured brand colour. */
+[data-theme="light"]:not([data-accent]),
+[data-theme="light"][data-accent="amber"] {
+  --accent: #d97706;
+  --accent-from: #d97706;
+  --accent-to: #ea580c;
+  --accent-ink: #9a5504;
+}
+[data-theme="light"][data-accent="ocean"] { --accent-ink: #056e9c; }
+[data-theme="light"][data-accent="aurora"] { --accent-ink: #6d3ff7; }
+[data-theme="light"][data-accent="ember"] { --accent-ink: #a74d03; }
+[data-theme="light"][data-accent="forest"] { --accent-ink: #197553; }
+/* Crema's light variant reads as warm paper, not an inverted dark
+   palette — every neutral gets its own value. */
+[data-theme="light"][data-accent="crema"] {
+  --gray-100: #1a0f06;
+  --gray-200: #2a1b0f;
+  --gray-300: #40301f;
+  --gray-400: #55442f;
+  --gray-500: #5f4c38;
+  --gray-600: #65523e;
+  --gray-700: #d4b48c;
+  --gray-800: #ead5b5;
+  --gray-900: #f3e4ce;
+  --gray-950: #fbf3e7;
+  --raised: #e0c7a2;
+  --ok: #0d622c;
+  --warn: #7a4a05;
+  --err: #a71b1b;
+  --on-fill: #fff;
+  --accent: #7a4a21;
+  --accent-from: #8b5e34;
+  --accent-to: #6b3f1d;
+  --accent-text: #fff;
+  --accent-glow: rgba(122, 74, 33, 0.15);
+  --accent-ink: #7a4a21;
+}
+
+/* Bundled locally (static/fonts/) so this renders fully offline / behind
+ * HA Ingress — no external font CDN, same rule public-src/style.css
+ * follows. 400/600 latin only, the two weights this frontend uses.
+ * Fraunces is NOT vendored here yet — see header comment. */
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/figtree-400-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/figtree-600-latin.woff2") format("woff2");
+}
+
+* { box-sizing: border-box; }
+
+/* Alpine's own convention: hide an x-show target before Alpine has booted
+ * and evaluated the expression, so the confirm bar doesn't flash visible
+ * for a frame on load (the <script defer> for Alpine runs after the DOM is
+ * parsed, so there's a brief window where no directive has run yet). */
+[x-cloak] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--gray-900);
+  color: var(--gray-200);
+  font-family: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: var(--fs-3);
+  /* Fixed-width digits everywhere — scores, durations, timestamps never
+     jitter/reflow as values change. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Form controls don't inherit font-family from the page by default (the
+   browser UA stylesheet gives them their own system font). */
+button, input, select, textarea { font-family: inherit; }
+
+/* Left icon sidebar (design pass 4, #901) — replaces the original flat
+ * .topnav row (a single horizontal tab strip) with a fixed vertical icon
+ * rail, per the screenshot-driven comparison against the Node app's own
+ * global nav (public-src/index.html's #content-topbar — see
+ * templates/layout.templ's header comment for exactly which file this
+ * is/isn't ported from). .app-shell is the sidebar+content flex row every
+ * page's <body> now wraps; .side-nav is the rail itself, .page is the
+ * scrollable content column beside it. */
+.app-shell {
+  display: flex;
+  align-items: stretch;
+  min-height: 100vh;
+}
+
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-4);
+  width: 176px;
+  flex-shrink: 0;
+  padding: var(--sp-4) var(--sp-2);
+  /* Border diet: a hard 1px separator replaced by a surface-fill step
+     (deepest surface, since the rail sits beside the page content),
+     matching the Node original's "surface, not a line" nesting rule. */
+  background: var(--gray-950);
+  overflow-y: auto;
+}
+
+.side-nav-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-ink);
+  padding: var(--sp-2) 0 var(--sp-3);
+}
+
+.side-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--gray-700);
+}
+
+.side-nav-group:last-child { border-bottom: none; padding-bottom: 0; }
+
+.side-nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  color: var(--gray-500);
+  text-decoration: none;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  transition: background-color .15s, color .15s;
+}
+
+.side-nav-link:hover { color: var(--gray-200); background: rgba(255, 255, 255, .04); }
+
+.side-nav-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.side-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Icon-only rail on narrow viewports — labels hidden, not the links
+   themselves, so every page stays reachable at any width. */
+@media (max-width: 700px) {
+  .side-nav { width: 56px; }
+  .side-nav-link { justify-content: center; padding: var(--sp-2); }
+  .side-nav-label { display: none; }
+}
+
+.page {
+  flex: 1;
+  min-width: 0;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--sp-5);
+}
+
+.page-title {
+  font-size: var(--fs-4);
+  margin: 0 0 var(--sp-4);
+}
+
+.filter-input {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-700);
+  background: var(--raised);
+  color: var(--gray-200);
+  font-size: var(--fs-2);
+  transition: border-color .15s;
+}
+
+.filter-input:focus {
+  outline: none;
+  border-color: var(--accent-ink);
+}
+
+.shot-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.shot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--raised);
+  border-radius: var(--radius);
+}
+
+.shot-info { display: flex; flex-direction: column; gap: 2px; }
+
+/* Verdict header (design pass 2, #901) — ported from public-src/
+ * style.css's .verdict-header family (see that file's #813/#816 comments
+ * for the "score ring became type" / "de-boxed" history this repeats).
+ * .verdict-line: score at display size + a plain "·" + the headline, one
+ * baseline-aligned row, no card, no border — flow text, not a badge. */
+.verdict-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.verdict-score-num {
+  font-size: var(--fs-5);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.verdict-sep {
+  font-size: var(--fs-5);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--gray-600);
+  flex-shrink: 0;
+}
+
+.verdict-headline {
+  font-size: var(--fs-3);
+  font-weight: 700;
+  color: var(--gray-200);
+}
+
+.verdict-subline {
+  color: var(--gray-500);
+  font-size: var(--fs-1);
+}
+
+/* Shots list badges (freshness/firmware, #901 design pass 4 follow-up) —
+ * .shot-badges is just a .verdict-subline with its .badge children laid
+ * out with a bit of breathing room; freshness itself reuses the generic
+ * .badge-ok/.badge-warn/.badge-err classes above (view.go's
+ * freshnessClass) rather than a parallel freshness-only palette. */
+.shot-badges { display: flex; gap: var(--sp-2); }
+
+/* Machines' default-machine status word (design pass 3, #901) — sits where
+ * .verdict-score-num normally would, a colour-coded word instead of a
+ * number since there's no scalar to show; combined with .score-great/
+ * .score-bad for colour, the same "two classes, one for weight/size, one
+ * for colour" composition .verdict-score-num + a score-class already use. */
+.verdict-status {
+  font-size: var(--fs-3);
+  font-weight: 700;
+}
+
+/* Wraps defaultMachineHeader's verdict-line/verdict-subline pair — unlike
+ * shots.templ's own use of those two classes (already spaced by
+ * .shot-list's row gap), this one stands alone above #machines-content and
+ * needs its own bottom margin so the "New machine" form below doesn't sit
+ * flush against it. */
+.machine-status-header { margin-bottom: var(--sp-4); }
+
+/* Generic small metadata-sized text for htmx error fragments (writeFragmentError,
+ * #901) — same size/base color formula as .verdict-subline/old .shot-meta, but
+ * named for its own (non-verdict) purpose since it renders on every domain's
+ * hx-target (shots, library, machines, maintenance, orders, settings), not just
+ * the Shots list. Callers add an inline color:var(--err) override on top. */
+.fragment-error {
+  color: var(--gray-500);
+  font-size: var(--fs-1);
+}
+
+.score-great { color: var(--ok); }
+.score-ok    { color: var(--warn); }
+.score-bad   { color: var(--err); }
+
+.shot-actions { display: flex; align-items: center; gap: var(--sp-2); }
+
+.btn {
+  background: var(--gray-800);
+  border: 1px solid var(--gray-700);
+  color: var(--gray-200);
+  border-radius: var(--radius);
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--fs-2);
+  cursor: pointer;
+  transition: background-color .15s, border-color .15s, color .15s;
+}
+
+.btn:hover { background: var(--raised); border-color: var(--gray-600); }
+.btn:active { background: var(--gray-700); }
+
+.btn-danger { color: var(--err); border-color: var(--err); }
+.btn-danger:hover { background: rgba(224, 112, 95, 0.12); }
+
+.btn-active {
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
+}
+
+/* Touch targets: list-row action buttons only need to grow to 44x44 on
+ * devices with no hover (touch) — gated on the feature query rather than
+ * a width breakpoint, same convention the Node original uses for its
+ * comparable/star hit areas. */
+@media (hover: none) {
+  .shot-actions .btn,
+  .item-actions .btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+.confirm-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-1);
+  color: var(--gray-500);
+}
+
+.empty-state, .loading-state {
+  color: var(--gray-500);
+  padding: var(--sp-5);
+  text-align: center;
+}
+
+/* Library pages (Beans/Grinders/Baskets/Puck Screens/Milks/Recipes):
+ * generic, entity-agnostic row classes so every library list page shares
+ * one set of rules instead of six near-duplicates. */
+.item-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+
+.item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--raised);
+  border-radius: var(--radius);
+}
+
+.item-row.disabled { opacity: 0.55; }
+
+/* Edit UI (#901, Library/Machines full Create/Edit follow-up pass): a row
+ * swapped into its inline edit form (BeanEditFragment et al.) drops
+ * .item-row's flex-row/space-between layout for a plain block one — the
+ * .order-form it wraps (same class the New-entity forms above already use)
+ * needs to stack its labeled fields vertically, not sit centered beside a
+ * second flex child that no longer exists once the row is one <form>. */
+.item-row-edit { display: block; }
+
+.item-info { display: flex; flex-direction: column; gap: 2px; }
+
+.item-name { font-weight: 600; display: flex; align-items: center; gap: var(--sp-2); }
+
+.item-meta {
+  color: var(--gray-500);
+  font-size: var(--fs-1);
+}
+
+.item-actions { display: flex; align-items: center; gap: var(--sp-2); }
+
+.badge {
+  font-size: var(--fs-1);
+  padding: 1px var(--sp-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-700);
+  color: var(--gray-500);
+}
+
+.badge-speciality { color: var(--accent-ink); border-color: var(--accent-ink); }
+
+.badge-ok   { color: var(--ok);   border-color: var(--ok); }
+.badge-err  { color: var(--err);  border-color: var(--err); }
+.badge-warn { color: var(--warn); border-color: var(--warn); }
+
+/* Bean stock bar (#901 design pass 3) — ported from public-src/style.css's
+ * .lib-stock-bar/.lib-stock-bar-fill: a small proportional bar next to the
+ * remaining-grams figure, purely supplementary (the exact gram number,
+ * .item-meta's own text, stays the source of truth) — see
+ * view_library.go's toBeanRow/clampPct for the percentage this renders. */
+.stock-bar {
+  display: inline-block;
+  width: 42px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--gray-700);
+  overflow: hidden;
+  vertical-align: middle;
+  margin-left: var(--sp-2);
+}
+
+.stock-bar-fill { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.stock-bar-fill.low { background: var(--err); }
+
+/* Milk stock bar (#901 design pass 3) — ported from public-src/style.css's
+ * .lib-milk-stock-bar-wrap/.lib-milk-stock-bar; full-width rather than the
+ * bean bar's inline 42px, since a milk row has no other trailing text this
+ * needs to sit flush against — see view_library.go's milkStockPct/
+ * milkStockClass for the 2000ml-is-a-full-bar/300ml-low formula this
+ * mirrors exactly. */
+.milk-stock-bar-wrap {
+  width: 120px;
+  height: 5px;
+  margin-top: var(--sp-1);
+  border-radius: 3px;
+  background: var(--gray-700);
+  overflow: hidden;
+}
+
+.milk-stock-bar-fill { height: 100%; border-radius: 3px; }
+.milk-stock-bar-fill.ok    { background: var(--ok); }
+.milk-stock-bar-fill.low   { background: var(--warn); }
+.milk-stock-bar-fill.empty { background: var(--err); }
+
+/* New-entity forms (Library/Machines create forms): raised card, same
+ * surface-step nesting principle as .item-row/.shot-row rather than a
+ * bordered box. */
+.new-entity-form {
+  margin-top: var(--sp-4);
+  padding: var(--sp-4);
+  background: var(--raised);
+  border-radius: var(--radius);
+}
+
+.new-entity-form .item-meta { display: block; margin-top: var(--sp-2); }
+
+/* Live page (templates/live.templ + static/live.js): the status
+ * badge/preheat widget/readouts/chart wrap static/live.js binds to and
+ * drives client-side. */
+.live-meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+
+.live-machine-name { font-weight: 600; }
+
+.live-status-badge {
+  font-size: var(--fs-1);
+  padding: 1px var(--sp-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-700);
+  color: var(--gray-500);
+}
+
+.live-status-badge.brewing     { color: var(--accent-ink); border-color: var(--accent-ink); }
+.live-status-badge.ready,
+.live-status-badge.idle        { color: var(--ok);     border-color: var(--ok); }
+.live-status-badge.unreachable { color: var(--err);    border-color: var(--err); }
+
+.preheat-warming {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0;
+}
+
+.preheat-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--gray-700);
+  overflow: hidden;
+}
+
+.preheat-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+}
+
+.live-idle {
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-5);
+  text-align: center;
+  color: var(--gray-500);
+}
+
+.live-readouts {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0;
+}
+
+.live-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2);
+  background: var(--raised);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.live-chart-wrap {
+  position: relative;
+  height: 360px;
+  background: var(--raised);
+  border-radius: var(--radius);
+  padding: var(--sp-3);
+}
+
+.trash-section {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--gray-700);
+}
+
+.trash-heading {
+  font-size: var(--fs-2);
+  color: var(--gray-500);
+  margin: 0 0 var(--sp-3);
+}
+
+/* Shots master-detail (Phase B, #901) — a narrow list column beside a wide
+ * detail column, replacing Phase 2a's single-column list-only page. The
+ * list column keeps .shot-list/.shot-row/.shot-info/.verdict-* from that
+ * original pass (still shared with .shot-detail's own header below);
+ * everything under .shot-detail-col is new. */
+.shots-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-5);
+}
+
+.shots-list-col {
+  width: 340px;
+  flex-shrink: 0;
+}
+
+.shots-detail-col {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Narrow viewports: stack instead of side-by-side (list first, so trashing/
+   picking a shot stays reachable without scrolling past the detail panel). */
+@media (max-width: 900px) {
+  .shots-layout { flex-direction: column; }
+  .shots-list-col { width: 100%; }
+}
+
+/* Compact list row: the read-only .shot-summary (score/coffee-or-profile/
+   dose/stars/date, hx-get-clickable) beside a SEPARATE .shot-actions
+   sibling (the icon-only delete button) — see shots.templ's shotRowActive
+   doc comment for why those two stay siblings, not nested. */
+.shot-summary { flex: 1; min-width: 0; cursor: pointer; }
+
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--gray-500);
+  cursor: pointer;
+  transition: background-color .15s, color .15s, border-color .15s;
+}
+
+.btn-icon:hover { background: var(--raised); border-color: var(--gray-700); }
+.btn-icon.btn-danger { color: var(--err); }
+.btn-icon.btn-danger:hover { background: rgba(224, 112, 95, 0.12); border-color: var(--err); }
+.btn-icon-svg { display: block; }
+
+@media (hover: none) {
+  .btn-icon { width: 44px; height: 44px; }
+}
+
+/* Detail panel — score/verdict header, dose->yield/ratio/duration Metrics
+   Grid, bean/grinder/grind-setting line, static post-shot chart. */
+.shot-detail-header { margin-bottom: var(--sp-4); }
+
+.shot-photo {
+  display: block;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-top: var(--sp-3);
+}
+
+.channeling-warning {
+  color: var(--err);
+  font-size: var(--fs-2);
+  font-weight: 600;
+  margin-bottom: var(--sp-4);
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.metric-tile {
+  padding: var(--sp-3);
+  background: var(--raised);
+  border-radius: var(--radius);
+}
+
+.metric-label { font-size: var(--fs-1); color: var(--gray-500); }
+
+.metric-value {
+  font-size: var(--fs-4);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+.metric-sub { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; }
+
+.bean-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-2);
+  margin-bottom: var(--sp-4);
+}
+
+.bean-name { font-weight: 600; }
+.bean-sep { color: var(--gray-600); }
+.grinder-label, .stars { color: var(--gray-500); }
+
+.shot-chart-wrap {
+  position: relative;
+  height: 360px;
+  background: var(--raised);
+  border-radius: var(--radius);
+  padding: var(--sp-3);
+}
+
+/* Score-delta chip + comparative grind-advice panel (#901, design pass 4
+ * follow-up) — .verdict-delta reuses .score-great/.score-ok/.score-bad
+ * for its colour (view_shots_detail.go's scoreDeltaClass), same "two
+ * classes, one for weight/size, one for colour" composition
+ * .verdict-score-num already uses. */
+.verdict-delta { font-weight: 600; font-size: var(--fs-3); }
+
+.comparative-advice {
+  font-size: var(--fs-2);
+  margin-bottom: var(--sp-4);
+}
+
+.compare-select {
+  margin-top: var(--sp-3);
+  max-width: 320px;
+}
+
+/* A/B compare mode (#901) — two shot-compare-side columns beside each
+ * other (stacked on narrow viewports, same breakpoint .shots-layout
+ * already uses), one shared chart below. */
+.shot-compare-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.shot-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+@media (max-width: 900px) {
+  .shot-compare-grid { grid-template-columns: 1fr; }
+}
+
+.shot-compare-side .verdict-line { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-1); }
+
+/* Orders/Menu pages: the customer order form (templates/menu.templ) and
+ * the Library/Machines create forms all share this layout, reusing
+ * .filter-input for text/select/date fields and .item-meta for labels
+ * rather than a parallel set of form-field classes. */
+.order-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  max-width: 360px;
+}
+
+.order-form .btn {
+  margin-top: var(--sp-2);
+  align-self: flex-start;
+}
+
+/* Maintenance/Backup/Settings pages. */
+
+/* Maintenance's verdict-first summary (design pass 3, #901) — three KPI
+ * tiles (due/soon/ok counts), ported from public-src/style.css's
+ * .maint-tile family, the punchline ahead of the per-task detail list
+ * below it. Reuses --raised (surface step, not a border) and --fs-5 (the
+ * same display size shots.templ's .verdict-score-num uses for its own
+ * hero figure) so a KPI count reads with the same weight as a shot score. */
+.stat-row { display: flex; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+
+.stat-tile {
+  flex: 1;
+  text-align: center;
+  padding: var(--sp-3);
+  background: var(--raised);
+  border-radius: var(--radius);
+}
+
+.stat-num {
+  font-size: var(--fs-5);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-num.due  { color: var(--err); }
+.stat-num.soon { color: var(--warn); }
+.stat-num.ok   { color: var(--ok); }
+
+.stat-label { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; }
+
+.maint-switcher { margin-bottom: var(--sp-4); flex-wrap: wrap; }
+
+.maint-bar {
+  height: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--gray-700);
+  overflow: hidden;
+  margin-top: var(--sp-1);
+}
+
+.maint-bar-fill { height: 100%; }
+.maint-bar-fill.ok   { background: var(--ok); }
+.maint-bar-fill.soon { background: var(--warn); }
+.maint-bar-fill.due  { background: var(--err); }
+
+.settings-block {
+  margin-bottom: var(--sp-5);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--gray-700);
+}
+
+.settings-json {
+  background: var(--raised);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3);
+  font-size: var(--fs-1);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Read-only categories (boiler/system): a tone difference from the
+ * editable ones, not a disabled one — text steps down one gray (still
+ * --gray-400, well short of the muted --gray-500/600 labels around it) so
+ * it stays fully legible against --raised rather than fading into it. */
+.settings-json-readonly { color: var(--gray-400); }
+
+.settings-textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  min-height: 200px;
+  resize: vertical;
+}

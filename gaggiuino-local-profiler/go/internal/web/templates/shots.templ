@@ -1,0 +1,243 @@
+package templates
+
+import "fmt"
+
+// ShotRow is the display-ready projection of a shots.Shot this package's
+// templates render. It lives here (not in the parent internal/web package)
+// so .templ files can reference its fields without an import cycle —
+// internal/web imports internal/web/templates to call ShotsPage, so the
+// type these templates render has to be defined on this side of that
+// import. internal/web/view.go's toShotRow builds one from a hydrated
+// shots.Shot plus its pre-computed score.
+type ShotRow struct {
+	ID           int64
+	Time         string
+	ProfileName  string
+	Score        *int
+	ScoreClass   string
+	Coffee       string
+	Dose         string
+	Duration     string
+	Rating       int
+	GrindSetting string
+	Grinder      string
+
+	// Badges (#901, design pass 4 follow-up) — see internal/web/view.go's
+	// freshnessDays/orderedByLabel/firmwareVersion for exactly what each
+	// reads and, for freshness, the deliberate list-vs-detail divergence
+	// from Node's own logic. All three are "" (Freshness: FreshnessLabel
+	// == "") when the underlying data isn't present on this shot — every
+	// use site below is a plain non-empty check, no separate "known" flag
+	// needed.
+	FreshnessLabel  string // e.g. "12d", already bucket-checked into [0,365]
+	FreshnessClass  string // "badge-ok" | "badge-warn" | "badge-err"
+	FirmwareVersion string
+	OrderedBy       string // "Customer · Item · Variant · note"
+}
+
+// ShotsPage is GET /shots: Phase B's (#901) master-detail view — a narrow
+// left column (compact shot list + trash section, both modeled on
+// public-src/components/sidebar.js's row fields) and a wide right column
+// (the selected shot's full detail, ShotDetailFragment) — replacing Phase
+// 2a's original single-column list-only page. detail is nil only when
+// there are no shots at all yet (shotDetailEmpty's empty state); any live
+// shot always has one, computed for the newest shot by default
+// (internal/web/handlers.go's listPage) or for whichever row's hx-get the
+// visitor last clicked (handlers.go's detailFragment, swapped into
+// #shot-detail below without a full page reload).
+templ ShotsPage(rows []ShotRow, trash []ShotRow, detail *ShotDetail, listCapped bool) {
+	@Layout("Shots") {
+		<h1 class="page-title">Shots</h1>
+		if len(rows) == 0 && len(trash) == 0 {
+			<div class="empty-state">No shots yet.</div>
+		} else {
+			<div class="shots-layout" x-data="{ filterText: '' }">
+				<div class="shots-list-col">
+					if listCapped {
+						<p class="list-cap-note">Showing the latest { fmt.Sprintf("%d", len(rows)) } shots. Open the full app for the complete, paginated history.</p>
+					}
+					<input
+						class="filter-input"
+						type="text"
+						placeholder="Filter by profile or coffee…"
+						x-model="filterText"
+						aria-label="Filter shots"
+					/>
+					<div class="shot-list" id="shot-list">
+						for _, row := range rows {
+							@shotRowActive(row)
+						}
+					</div>
+					if len(trash) > 0 {
+						<section class="trash-section">
+							<h2 class="trash-heading">Trash ({ fmt.Sprintf("%d", len(trash)) })</h2>
+							<div class="shot-list" id="trash-list">
+								for _, row := range trash {
+									@shotRowTrashed(row)
+								}
+							</div>
+						</section>
+					}
+				</div>
+				<div class="shots-detail-col" id="shot-detail">
+					if detail != nil {
+						@ShotDetailFragment(*detail)
+					} else {
+						@shotDetailEmpty()
+					}
+				</div>
+			</div>
+		}
+		<script defer src="web/static/vendor/chart-4.5.1.umd.min.js"></script>
+		<script defer src="web/static/shot-chart.js"></script>
+	}
+}
+
+// shotRowActive renders one compact row of the live (non-trashed) shot
+// list: score, date, coffee-or-profile name, star rating (shotSummary,
+// clickable — hx-get swaps the whole detail column, htmx's default
+// trigger for a non-form element is "click", no hx-trigger needed) and a
+// separate delete-icon button with an Alpine-driven confirm step
+// (x-data/x-show/@click — no bespoke JS), matching the dispatch brief's
+// "Score, Datum, Sterne, Kaffeename, Löschen-Icon" compact-row spec. The
+// two live as SIBLINGS (not nested) deliberately: htmx has no built-in
+// stopPropagation, so nesting the hx-post delete button inside the hx-get
+// row would fire both on one click; keeping them apart avoids that
+// entirely instead of reaching for an event-modifier workaround.
+templ shotRowActive(row ShotRow) {
+	<div class="shot-row" id={ fmt.Sprintf("shot-row-%d", row.ID) }>
+		<div
+			class="shot-summary"
+			hx-get={ fmt.Sprintf("shots/%d", row.ID) }
+			hx-target="#shot-detail"
+			hx-swap="innerHTML"
+			x-show="!filterText.length || $el.textContent.toLowerCase().includes(filterText.toLowerCase())"
+		>
+			@shotInfo(row)
+		</div>
+		<div class="shot-actions" x-data="{ confirming: false }">
+			<button type="button" class="btn-icon btn-danger" x-show="!confirming" @click="confirming = true" title="Trash this shot" aria-label="Trash this shot">
+				@trashIcon()
+			</button>
+			<span class="confirm-bar" x-show="confirming" x-cloak>
+				Delete?
+				<button
+					type="button"
+					class="btn btn-danger"
+					hx-post={ fmt.Sprintf("shots/%d/trash", row.ID) }
+					hx-target={ fmt.Sprintf("#shot-row-%d", row.ID) }
+					hx-swap="outerHTML"
+				>
+					Yes
+				</button>
+				<button type="button" class="btn" @click="confirming = false">No</button>
+			</span>
+		</div>
+	</div>
+}
+
+// shotRowTrashed renders one row of the trash section — no confirm step,
+// since restoring isn't destructive.
+templ shotRowTrashed(row ShotRow) {
+	<div class="shot-row" id={ fmt.Sprintf("trash-row-%d", row.ID) }>
+		<div class="shot-summary">
+			@shotInfo(row)
+		</div>
+		<div class="shot-actions">
+			<button
+				type="button"
+				class="btn"
+				hx-post={ fmt.Sprintf("shots/%d/restore", row.ID) }
+				hx-target={ fmt.Sprintf("#trash-row-%d", row.ID) }
+				hx-swap="outerHTML"
+			>
+				Restore
+			</button>
+		</div>
+	</div>
+}
+
+// shotInfo is the read-only compact-row content both row variants share:
+// score + coffee-or-profile-name headline (verdict-line, ported from
+// public-src/style.css's .verdict-header family — see the #816 de-boxing
+// history the original doc comment here described; only the CSS-class
+// structure and typography-not-badge principle are carried over), then a
+// muted subline with the profile name (when the headline used the coffee
+// name instead), dose, star rating, and date+time.
+templ shotInfo(row ShotRow) {
+	<div class="shot-info">
+		<div class="verdict-line">
+			if row.Score != nil {
+				<span class={ "verdict-score-num", row.ScoreClass }>{ fmt.Sprintf("%d", *row.Score) }</span>
+				<span class="verdict-sep">·</span>
+			}
+			<span class="verdict-headline">
+				if row.Coffee != "" {
+					{ row.Coffee }
+				} else {
+					{ row.ProfileName }
+				}
+			</span>
+		</div>
+		<div class="verdict-subline">
+			if row.Coffee != "" {
+				{ row.ProfileName }
+				{ " · " }
+			}
+			if row.Dose != "" {
+				{ row.Dose }
+				{ " · " }
+			}
+			if row.Rating > 0 {
+				{ stars(row.Rating) }
+				{ " · " }
+			}
+			{ row.Time }
+		</div>
+		if row.FreshnessLabel != "" || row.FirmwareVersion != "" {
+			<div class="verdict-subline shot-badges">
+				if row.FreshnessLabel != "" {
+					<span class={ "badge", row.FreshnessClass }>{ row.FreshnessLabel }</span>
+				}
+				if row.FirmwareVersion != "" {
+					<span class="badge">{ "fw " + row.FirmwareVersion }</span>
+				}
+			</div>
+		}
+		if row.OrderedBy != "" {
+			<div class="verdict-subline">☕ { row.OrderedBy }</div>
+		}
+	</div>
+}
+
+// stars renders row.Rating as a plain "★★★☆☆"-style string — the
+// text-only equivalent of sidebar.js's STAR_ICON_SVG.repeat(rating), kept
+// as text rather than inline SVG to avoid this being the file that first
+// needs to reckon with img-src/inline-SVG-under-CSP questions this
+// foundation package doesn't need to answer yet.
+func stars(rating int) string {
+	if rating < 0 {
+		rating = 0
+	}
+	if rating > 5 {
+		rating = 5
+	}
+	filled := ""
+	for i := 0; i < rating; i++ {
+		filled += "★"
+	}
+	for i := rating; i < 5; i++ {
+		filled += "☆"
+	}
+	return filled
+}
+
+// trashIcon is a small inline trash-can glyph for the compact row's
+// delete-icon button — plain markup (not templ.Raw of a Go-string
+// constant), unlike layout.templ's nav icons, since it never varies per
+// row and so needs no data-driven construction.
+templ trashIcon() {
+	<svg class="btn-icon-svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" width="16" height="16">
+		<path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"></path>
+	</svg>
+}

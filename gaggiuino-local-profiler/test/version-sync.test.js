@@ -1,21 +1,39 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { load } from 'js-yaml';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 
+// config.yaml's `version:` is the canonical GLP version (Home Assistant
+// Supervisor reads it directly). Every other place the version is hard-coded
+// must match it: package.json plus the two Go consts the backend serves from
+// (GET /api/version) and stamps into backup bundles. Bumped in exactly these
+// four spots at release time — see CLAUDE.md's Versioning section.
+function read(rel) {
+    return fs.readFileSync(path.join(ROOT, rel), 'utf8');
+}
+
 describe('version sync', () => {
-    it('keeps package.json, config.yaml and lib/constants.js on the same version', () => {
-        const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-        const config = load(fs.readFileSync(path.join(ROOT, 'config.yaml'), 'utf8'));
-        const constants = fs.readFileSync(path.join(ROOT, 'lib/constants.js'), 'utf8');
-        const constantsMatch = constants.match(/GLP_VERSION\s*=\s*'([^']+)'/);
+    const configMatch = read('config.yaml').match(/^version:\s*"([^"]+)"/m);
+    const canonical = configMatch && configMatch[1];
 
-        expect(constantsMatch).not.toBeNull();
-        const constantsVersion = constantsMatch[1];
+    it('has a parseable canonical version in config.yaml', () => {
+        expect(canonical).toMatch(/^\d+\.\d+\.\d+$/);
+    });
 
-        expect(pkg.version).toBe(config.version);
-        expect(pkg.version).toBe(constantsVersion);
+    it('matches package.json', () => {
+        expect(JSON.parse(read('package.json')).version).toBe(canonical);
+    });
+
+    it('matches go/internal/system/version.go glpVersion', () => {
+        const m = read('go/internal/system/version.go').match(/const\s+glpVersion\s*=\s*"([^"]+)"/);
+        expect(m).not.toBeNull();
+        expect(m[1]).toBe(canonical);
+    });
+
+    it('matches go/internal/backup/bundle.go glpVersion', () => {
+        const m = read('go/internal/backup/bundle.go').match(/const\s+glpVersion\s*=\s*"([^"]+)"/);
+        expect(m).not.toBeNull();
+        expect(m[1]).toBe(canonical);
     });
 });

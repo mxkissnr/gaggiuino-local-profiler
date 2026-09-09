@@ -8,7 +8,7 @@
   </a>
   <img src="https://img.shields.io/badge/Home%20Assistant-App-41bdf5?logo=home-assistant&style=flat-square" alt="HA App"/>
   <img src="https://img.shields.io/badge/arch-amd64%20%7C%20armv7%20%7C%20aarch64-6b7280?style=flat-square" alt="Architectures"/>
-  <img src="https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&style=flat-square" alt="Node.js"/>
+  <img src="https://img.shields.io/badge/Backend-Go-00ADD8?logo=go&style=flat-square" alt="Go backend"/>
   <img src="https://img.shields.io/badge/Built%20with-Claude%20by%20Anthropic-D97706?style=flat-square" alt="Built with Claude"/>
   <img src="https://img.shields.io/badge/status-Work%20In%20Progress-orange?style=flat-square" alt="Work In Progress"/>
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square" alt="License GPL-3.0"/>
@@ -22,6 +22,8 @@
 ---
 
 > **AI-generated project.** All code, tests, and documentation in this repo are written by Claude (Anthropic). Scope, hardware testing (Gaggia Classic + Gaggiuino), and release decisions are done by a human maintainer. Keep that in mind before installing this on your machine.
+
+> **armv7 (32-bit ARM) is supported.** The Go rewrite of the backend cross-compiles a static armv7 binary with a pure-Go SQLite driver, so the 32-bit ARM image is built and published alongside amd64 and aarch64. This lifts the earlier deprecation notice ([#944](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/944)), which existed only because the old Node.js image could no longer be built for that architecture. The armv7 image is not regularly tested on real hardware.
 
 > **Heads-up — this requires a machine running [Gaggiuino](https://gaggiuino.github.io/) or [GaggiMate](https://github.com/jniebuhr/gaggimate) firmware.** GLP does not work with stock espresso machines. Both are hardware mods (custom controller, pressure/temperature sensors) — Gaggiuino has full support, GaggiMate is experimental as of v2.0.0 (see the Multi-Machine row below). These mods aren't limited to one machine brand: **the "type" GLP asks for when you add a machine selects the firmware adapter it talks to, not the physical machine.** Any single-boiler machine with a Gaggiuino or GaggiMate board installed — Gaggia Classic, Rancilio Silvia, Lelit, and others — works identically from GLP's side. If your machine doesn't run either firmware yet, start there first.
 
@@ -60,14 +62,16 @@ Click the button above to add this repository directly to your Home Assistant �
 
 <p align="center">
   <img src="gaggiuino-local-profiler/docs/screenshots/shots.png" alt="Shots view with pressure/flow/weight/temperature chart" width="49%"/>
+</p>
+<p align="center">
   <img src="gaggiuino-local-profiler/docs/screenshots/library.png" alt="Coffee library with bean cards" width="49%"/>
-</p>
-<p align="center">
   <img src="gaggiuino-local-profiler/docs/screenshots/flavor-wheel.png" alt="Interactive flavor wheel for a bean" width="49%"/>
-  <img src="gaggiuino-local-profiler/docs/screenshots/analytics.png" alt="Analytics view with interactive coffee world map" width="49%"/>
 </p>
 <p align="center">
+  <img src="gaggiuino-local-profiler/docs/screenshots/analytics.png" alt="Analytics view with interactive coffee world map" width="49%"/>
   <img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance dashboard with summary tiles, next-due banner and per-machine task tiles" width="49%"/>
+</p>
+<p align="center">
   <img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison, bean ranking and dial-in progression" width="49%"/>
 </p>
 
@@ -79,7 +83,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-
 
 | | Feature | Description |
 |---|---|---|
-| 🔀 | **Multi-Machine** | Manage more than one espresso machine from a single add-on instance — Gaggiuino (full support) or [GaggiMate](https://github.com/jniebuhr/gaggimate) (experimental: sync + live status, read-only profiles). Shot sync now runs for every registered machine, not just the default one; live view stays default-machine-only for now. Maintenance (descaling/backflush/group head/gaskets) is tracked per machine; shared equipment (water filter, grinder) stays global. Existing single-machine installs upgrade automatically, no manual steps. |
+| 🔀 | **Multi-Machine** | Manage more than one espresso machine from a single add-on instance — Gaggiuino (full support) or [GaggiMate](https://github.com/jniebuhr/gaggimate) (experimental: sync + live status, full profile editing (Standard + Pro/Extended, create/edit/delete, saved straight to the machine) with a phase-accurate preview chart matching GaggiMate's own; water level with optional ALBA sensor; BLE-scale vs. estimated weight distinction in shot chart). Shot sync now runs for every registered machine, not just the default one; live view stays default-machine-only for now. Maintenance (descaling/backflush/group head/gaskets) is tracked per machine; shared equipment (water filter, grinder) stays global. Existing single-machine installs upgrade automatically, no manual steps. |
 | 📈 | **Shot Archive** | All shots with pressure, flow, weight and temperature curves |
 | 🔴 | **Live Mode** | Real-time display directly from the controller (`/api/system/status`); the Live tab, preheat/ready badge and the sidebar's shot counter push updates instantly over a live connection, falling back automatically to polling if one can't be established. While idle, the Live tab shows current temperature/target, pressure and water level instead of a bare "Ready to brew"; steam and flush mode get the same live treatment (timer, readouts, badge, animated machine icon) as brewing. Stale readings are cleared automatically if the machine drops off the network. |
 | 📡 | **MQTT Live-Data Transport** | Alternative to the WebSocket connection for live sensor/system data — subscribes to the Gaggiuino's own MQTT-published topics instead, toggled in Settings ("Live connection: WebSocket / MQTT"). Broker connection is auto-discovered via the HA Supervisor's MQTT service when available, with manual entry as a fallback, plus a one-click "Apply to machine" that points the machine's own MQTT client at the same broker. Feeds the exact same live-state cache the WebSocket transport does — `glp-integration` needs zero changes either way. Applies to the default machine only. |
@@ -119,8 +123,8 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-
 | 🔩 | **Grinder Burr Wear** | Shots and grams ground since the last burr swap, tracked separately from calendar-based cleaning maintenance since burrs dull by throughput, not time; one-click reset when burrs are replaced |
 | 📷 | **Barcode / QR Scanner** | Scan coffee bag barcodes (EAN/UPC) via camera — name and roaster looked up on Open Food Facts; GLP QR schema for full bean import between installations; each bean card generates a shareable QR code |
 | 🔗 | **Roaster URL Import** | Paste a product URL from kaffeebraun.com, hoppenworth-ploch.de or elbgold.com (each toggleable in settings) — name, roaster, photo, aromas, origin country, variety, roast type, processing, growing region, altitude/importer/harvest/price (where the shop provides them) and decaf flag are imported automatically; any other shop falls back to a generic Shopify / JSON-LD / webpage-metadata parser, and custom Shopify domains can be added; the generic Shopify parser also does a bounded, SSRF-checked HTML fallback fetch to fill in process/variety/producer/region/origin/elevation/roast-type/brew-guide fields some shop themes only render into the page HTML, never overwriting a value already found in the shop's JSON; imported beans show source, import method and import date |
-| 🌙 | **Light / Dark theme** | Built-in theme toggle (Settings); choice persisted in localStorage; matching `glp-ha-theme.yaml` for the full HA interface |
-| 🆕 | **What's New** | Always-visible "What's New" card at the top of Settings, listing the last 8 releases newest-first with short highlight bullets — source-of-truth history stays in `CHANGELOG.md`, this is a curated in-app subset (`lib/whats-new.js`), so you don't have to leave the app to see what changed |
+| 🌙 | **Light / Dark / Auto theme** | Built-in theme toggle (Settings) with a third Auto option that follows the browser/OS colour-scheme preference and switches live if it changes; choice persisted in localStorage; matching `glp-ha-theme.yaml` for the full HA interface |
+| 🆕 | **What's New** | Always-visible "What's New" card at the top of Settings, listing the last 8 releases newest-first with short highlight bullets — source-of-truth history stays in `CHANGELOG.md`, this is a curated in-app subset (`public-src/shared/whats-new.js`), so you don't have to leave the app to see what changed |
 | 🎛️ | **Profile Selector** | Lovelace card shows a dropdown to switch the active brew profile via `select.gaggiuino_profiler_profile` (provided by GLP Integration v1.9.0+) |
 | 📋 | **Order Management** | Barista backend tab to manage espresso orders — queue, accept with ETA, complete or decline with reason; configurable menu (emoji + drink name); bean and milk variants offered only while actually in stock (milk is deducted automatically on order completion) and while manually enabled — a bean can be temporarily excluded from ordering without deleting it or touching its stock, with customer-facing bean descriptions (taste notes, origin, processing); companion Lovelace card for customers (`glp-order-card`) |
 | 🧭 | **First-Run Onboarding & Demo Mode** | Dismissible banner when the machine isn't reachable; first-run panel with setup steps plus a "Load demo data" button that seeds a sample dataset (shots, beans, a blend, a recipe) so the app can be evaluated before connecting hardware; "End demo" removes exactly the seeded rows |
@@ -226,7 +230,7 @@ aspect_ratio: "16:9"
 
 ```
 Home Assistant Host
-├── GLP App  (Node.js / Express, Port 8099)
+├── GLP App  (Go, Port 8099)
 │   ├── /data/glp.db              ← SQLite database (shots, annotations, library, …)
 │   └── Supervisor API            ← HA switch control & sensor polling
 │

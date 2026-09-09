@@ -1,0 +1,133 @@
+// Package templates holds the .templ sources for the Go frontend (Phase
+// 2a, #901) and the _templ.go files `templ generate` produces from them.
+// The generated files are NOT committed (see the repo-root .gitignore) —
+// `go generate ./...` (or `make -C go generate`) must run before `go
+// build`/`go test` against this package; go/README.md's Frontend section
+// documents the exact command.
+package templates
+
+// Layout is the shared page shell every page templ renders into: <head>
+// with the vendored htmx/htmx-SSE-extension/Alpine(CSP build) <script>
+// tags (see go/internal/web/static/vendor/NOTICE.md for why the CSP
+// build), a fixed left icon sidebar (see navGroups below), and a content
+// slot. No inline <script> or <style> anywhere in this file or anything it
+// renders — the page runs under internal/auth.SecurityHeaders's CSP
+// (script-src 'self', no 'unsafe-inline'/'unsafe-eval'; style-src allows
+// 'unsafe-inline', but nothing here relies on that either) unmodified; see
+// that middleware's doc comment for the exact policy this must keep
+// satisfying.
+//
+// # Sidebar (design pass 4, #901)
+//
+// Replaces the original flat top-tab menu (a single <nav class="topnav">
+// row) with a fixed left icon rail, matching the screenshot comparison
+// against the Node app that motivated this pass: a persistent icon-driven
+// navigation surface, not a scrolling row of text tabs. The icon glyphs
+// and rail-icon/rail-label visual language are carried over from
+// public-src/index.html's #content-topbar nav (btnShots/btnLive/.../
+// rail-icon-slot/rail-label) — the Node app's actual *global* navigation —
+// not from public-src/components/sidebar.js, which despite its filename is
+// the shot-LIST panel (a Shots-page-only master list, always rendered
+// beside #main regardless of which mode/tab is active — see that file's
+// own updateMobileShotSidebarVisibility and mode.js's switchMode, which
+// never toggles #sidebar itself), not app-wide nav.
+//
+// Only routes this Go port actually registers are linked — see each
+// handlers*.go's RegisterRoutes for the authoritative route list. Node-only
+// destinations with no Go-side page yet (Analytics/Statistiken,
+// Dialin/Bezugslog, Achievements) are deliberately omitted rather than
+// linked to a 404.
+//
+// navGroups is a plain Go slice, not templ markup, so the three visual
+// groups (main flow, machine/ops management, coffee library) stay a single
+// source of truth instead of three near-duplicate <div> blocks — mirrors
+// the same "flat top-level list -> grouped" affordance the old
+// .topnav-group divs already established when nav went from one page to
+// eleven (#901's Phase-2b/c/d/e additions), just walked in a loop now that
+// the layout is vertical instead of horizontal.
+type navLink struct {
+	Href  string
+	Label string
+	// Icon is a raw inline <svg>...</svg> string (not templ.Component) —
+	// each icon is a short, page-specific path list not worth its own
+	// per-icon templ fragment; templ.Raw is safe here because every value
+	// is a compile-time literal below, never derived from request input.
+	Icon string
+}
+
+type navGroup struct {
+	Links []navLink
+}
+
+// rail-icon-slot/rail-label are ordinary 24x24 stroke-style glyphs at the
+// same width/weight (stroke-width 1.8) as public-src/style.css's own
+// .rail-icon formula — see style.css's .side-nav-icon rule in this Go
+// frontend's own stylesheet for the CSS side of that match.
+var navGroups = []navGroup{
+	{Links: []navLink{
+		{Href: "live", Label: "Live", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`},
+		{Href: "shots", Label: "Shots", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg>`},
+		{Href: "orders", Label: "Orders", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`},
+		{Href: "menu", Label: "Menu", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>`},
+	}},
+	{Links: []navLink{
+		{Href: "machines", Label: "Machines", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>`},
+		{Href: "maintenance", Label: "Maintenance", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-3 3-2.7-2.7z"/></svg>`},
+		{Href: "settings", Label: "Settings", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg>`},
+		{Href: "backup", Label: "Backup", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 3h22v5H1z"/><path d="M21 8v13H3V8"/><path d="M10 12h4"/></svg>`},
+	}},
+	{Links: []navLink{
+		{Href: "beans", Label: "Beans", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c4.5 0 8 3.8 8 8.5S16.5 21 12 21s-8-4.2-8-9.5S7.5 3 12 3z"/><path d="M12 3c-2.2 3-2.2 15 0 18"/></svg>`},
+		{Href: "grinders", Label: "Grinders", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v2M12 18v2M4 12h2M18 12h2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M17.7 6.3l-1.4 1.4M7.7 16.3l-1.4 1.4"/></svg>`},
+		{Href: "baskets", Label: "Baskets", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18l-2 10H5L3 9z"/><path d="M8 9V6a4 4 0 0 1 8 0v3"/></svg>`},
+		{Href: "puckscreens", Label: "Puck Screens", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>`},
+		{Href: "milks", Label: "Milks", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>`},
+		{Href: "recipes", Label: "Recipes", Icon: `<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>`},
+	}},
+}
+
+// Every href/src/hx-* path in this file (and every other .templ under
+// templates/) is deliberately path-relative with NO leading slash — see
+// internal/web/doc.go's "Ingress-safe relative paths" section for why
+// (root-absolute paths resolve against the browser's origin root, not the
+// HA Ingress session prefix, breaking CSS/JS/nav/htmx under Ingress) and
+// the exact convention every new page must follow. navLink.Href values
+// above are bare route names ("shots", not "/shots") for exactly that
+// reason.
+templ Layout(title string) {
+	<!DOCTYPE html>
+	<html lang="en" data-theme="dark">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · GLP</title>
+			<link rel="stylesheet" href="web/static/style.css"/>
+			<script src="web/static/vendor/htmx-2.0.10.min.js"></script>
+			<script src="web/static/vendor/htmx-sse-ext-2.0.10.js"></script>
+			<script defer src="web/static/vendor/alpine-csp-3.16.2.min.js"></script>
+			<script defer src="web/static/glp-token.js"></script>
+		</head>
+		<body hx-ext="sse">
+			<div class="app-shell">
+				<nav class="side-nav">
+					<a class="side-nav-brand" href="shots" title="GLP">
+						<svg class="side-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg>
+					</a>
+					for _, group := range navGroups {
+						<div class="side-nav-group">
+							for _, link := range group.Links {
+								<a class="side-nav-link" href={ templ.URL(link.Href) } title={ link.Label }>
+									@templ.Raw(link.Icon)
+									<span class="side-nav-label">{ link.Label }</span>
+								</a>
+							}
+						</div>
+					}
+				</nav>
+				<main class="page">
+					{ children... }
+				</main>
+			</div>
+		</body>
+	</html>
+}

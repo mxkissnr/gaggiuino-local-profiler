@@ -2,7 +2,7 @@ name: CodeQL
 
 on:
   push:
-    branches: [dev, main]
+    branches: [dev, main, go-migration]
   pull_request:
   schedule:
     - cron: "0 3 * * 1"
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   analyze:
-    name: Analyze (javascript-typescript)
+    name: Analyze (${{ matrix.language }})
     # Gitea Actions also auto-detects .github/workflows — skip there, GitHub-only.
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
@@ -22,15 +22,36 @@ jobs:
       contents: read
       security-events: write
 
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          # The Go rewrite (gaggiuino-local-profiler/go/). The Go extractor
+          # has no build-mode: none — autobuild finds the nested go.mod and
+          # runs `go build ./...` (cgo-free, so no C toolchain needed).
+          - language: go
+            build-mode: autobuild
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Set up Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: gaggiuino-local-profiler/go/go.mod
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
-          languages: javascript-typescript
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
           config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        with:
+          category: "/language:${{ matrix.language }}"

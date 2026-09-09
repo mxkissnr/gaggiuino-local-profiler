@@ -111,12 +111,17 @@ capability, no matter how many commits it took.
 At release time (see `glp-release-checklist` skill), bump exactly **one**
 step from `main`'s currently-released version — never further, and never
 skip ahead to whatever a dev commit's own CHANGELOG-drafting incorrectly
-speculated the version might become. Update all **three**:
-- `gaggiuino-local-profiler/lib/constants.js` → `const GLP_VERSION  = '...'`
+speculated the version might become. `config.yaml`'s `version:` is
+canonical (HA Supervisor reads it directly); update all **four** spots
+together, in one commit:
 - `gaggiuino-local-profiler/config.yaml` → `version: "..."`
-- `gaggiuino-local-profiler/package.json` → `"version": "..."` — easy to
-  forget; `test/version-sync.test.js` fails if it's out of sync with the
-  other two.
+- `gaggiuino-local-profiler/package.json` → `"version": "..."`
+- `gaggiuino-local-profiler/go/internal/system/version.go` → `const glpVersion = "..."`
+- `gaggiuino-local-profiler/go/internal/backup/bundle.go` → `const glpVersion = "..."`
+
+`test/version-sync.test.js` fails if any of the latter three drift from
+`config.yaml`; `scripts/release-check.mjs` check 1 does the same.
+(`go/internal/library/geo.go`'s `geoUserAgent` carries the version too — cosmetic, bump it along but it isn't gated.)
 
 ## Commits
 
@@ -128,9 +133,10 @@ Every commit that ships a feature or fix needs:
 3. `DOCS.md` **and** `DOCS.de.md` update if the feature is user-facing — both languages always in sync
 4. `README.md` features table update if it's a new feature
 
-Do **not** bump `GLP_VERSION`/`config.yaml`/`package.json` or touch
-`lib/whats-new.js` in a feature/fix commit — both happen once, together, at
-release time (see Versioning above and the `glp-release-checklist` skill).
+Do **not** bump the version (`config.yaml`/`package.json`/the two Go
+consts) or touch `public-src/shared/whats-new.js` in a feature/fix commit —
+both happen once, together, at release time (see Versioning above and the
+`glp-release-checklist` skill).
 
 At release time:
 ```
@@ -157,14 +163,18 @@ GLP is purely a client of the Gaggiuino machine's own WebSocket/REST API — nev
 
 ```
 gaggiuino-local-profiler/     ← HA app (main deliverable)
-  server.js                   ← Node.js/Express backend
-  routes/                     ← Express route handlers
-  lib/                        ← Backend services, repositories, helpers
-    machines/                 ← Machine registry (source of truth for machine config,
-                                 see Key conventions below), per-type adapters
-  public-src/                 ← Vite frontend source (views/, components/, i18n/, main.js)
+  go/                         ← Go backend (see go/README.md)
+    cmd/server/               ← main() — wires every internal/* domain together
+    internal/<domain>/        ← one package per concern (shots, library, machines,
+                                 orders, backup, db, auth, sse, system, …); each
+                                 registers its own HTTP routes
+    internal/machines/        ← machine registry (source of truth for machine
+                                 config, see Key conventions below) + per-type adapters
+    internal/webapp/          ← embeds public/ and serves the SPA at /
+  public-src/                 ← Vite frontend source (views/, components/, i18n/, shared/, main.js)
   public/                     ← Vite build output (generated via `npm run build`, not edited directly)
-  config.yaml                 ← HA app manifest + version
+  config.yaml                 ← HA app manifest + canonical version
+  Dockerfile                  ← multi-arch image: Vite build → Go cross-compile → Alpine runtime
   CHANGELOG.md
   DOCS.md                     ← English docs
   DOCS.de.md                  ← German docs (extra)
@@ -173,22 +183,19 @@ README.md                     ← Repo root README (English)
 
 ## Key conventions
 
-- **Machine config source of truth**: the `machines` SQLite table (`lib/machines/registry.js`)
-  is the only source of truth for a machine's host and switch entity — never
-  `options.json`. `options.json` (the HA add-on configuration) is a *tracked
-  input*: `lib/machines/options-adoption.js` adopts a changed add-on option
-  into the registry once, at startup; after that the registry's own value
-  (including one intentionally cleared via Settings → Machines) always wins.
-  Read machine config only through the facade —
-  `registry.hostFor()`/`switchEntityFor()`/`baseUrlFor()`/`apiUrlFor()`
-  (`machineId = null` means the default machine) — never
-  `opts.machine_host`/`opts.switch_entity` directly; an ESLint
-  `no-restricted-syntax` rule (`eslint.config.js`) enforces this outside the
-  three files that legitimately read `options.json`
-  (`lib/machines/registry.js`, `lib/data.js`, `lib/machines/options-adoption.js`).
-  This exists because #638/#641/#643/#648 were four separate bugs from the
-  same copy-pasted `opts`-shaped resolution logic — see the `## Unreleased`
-  history in `CHANGELOG.md` for the full writeup.
+- **Machine config source of truth**: the `machines` SQLite table
+  (`go/internal/machines`, the registry) is the only source of truth for a
+  machine's host and switch entity — never `options.json`. `options.json`
+  (the HA add-on configuration) is a *tracked input*: the registry adopts a
+  changed add-on option once, at startup; after that the registry's own
+  value (including one intentionally cleared via Settings → Machines) always
+  wins. Read machine config only through the registry's resolver methods
+  (`machineId = nil`/`0` means the default machine) — never off a raw
+  options bag. This exists because #638/#641/#643/#648 were four separate
+  bugs from the same copy-pasted `opts`-shaped resolution logic (the Node
+  backend backed the invariant with an ESLint `no-restricted-syntax` rule;
+  Go's typed `Machine.Host` field plus review is the substitute, see
+  `go/internal/machines/doc.go`) — full writeup in `CHANGELOG.md`.
 - `shot.timestamp` is Unix seconds, `shot.duration / 10` = seconds
 - `shot.profile?.name || shot.profileName` for profile name
 - `shot.annotation?.coffee` etc. — annotation fields are optional
@@ -196,7 +203,10 @@ README.md                     ← Repo root README (English)
 - All fetch calls use relative URLs (no leading `/`) for HA ingress compatibility
 - Chart.js is loaded from CDN; reuse existing chart instances (destroy before re-creating)
 - `/data/` is the persistent storage directory inside the app container
-- i18n: translations live in `public-src/i18n/{de,en,it,fr,es,nl}.js` — each exports a default object; `constants.js` re-exports them as `TRANSLATIONS`; add new keys to **all 6 files**
+- i18n: translations live in `public-src/i18n/{de,en,it,fr,es,nl}.js` — each exports a default object; `public-src/constants.js` re-exports them as `TRANSLATIONS`; add new keys to **all 6 files**
+- **PR AI disclosure** — every PR fills the PR template's "AI assistance disclosure" section
+  (`none`/`assisted`/`substantial`/`generated` + tool/model); every AI-assisted commit carries
+  a `Co-Authored-By:` trailer. CI enforces it. See CONTRIBUTING.md.
 
 ## GitHub project
 

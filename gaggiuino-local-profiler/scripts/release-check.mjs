@@ -3,7 +3,9 @@
 // (`npm run release:check`), not wired into CI. Writes nothing to disk.
 //
 // Fails (non-zero exit, one message per failed check) if any of:
-//  1. lib/constants.js's GLP_VERSION doesn't match config.yaml's version
+//  1. package.json, go/internal/system/version.go's glpVersion or
+//     go/internal/backup/bundle.go's glpVersion don't match config.yaml's
+//     canonical version
 //  2. CHANGELOG.md's topmost released heading (after skipping an optional
 //     "## [Unreleased]") doesn't equal the current version
 //  3. any docs/screenshots/*.png is older (by last commit) than the newest
@@ -18,7 +20,7 @@
 //     unneeded screenshot re-run) are cheap, false negatives (stale
 //     screenshots shipped) are not.
 //  4. DEVELOPMENT.md is older (by last commit) than the most recent commit
-//     touching lib/, routes/, public-src/, or server.js
+//     touching go/ or public-src/
 //  5. DOCS.md and DOCS.de.md have different heading level+order sequences
 //     (a translation-parity proxy — heading text itself is not compared)
 
@@ -450,22 +452,37 @@ function main() {
     const failures = [];
 
     // ── Check 1: version consistency ────────────────────────────────────
-    const constantsPath = path.join(packageRoot, 'lib', 'constants.js');
-    const constantsSrc  = readFileSync(constantsPath, 'utf8');
-    const versionMatch  = constantsSrc.match(/const\s+GLP_VERSION\s*=\s*'([^']+)'/);
-    const glpVersion    = versionMatch ? versionMatch[1] : null;
-
+    // config.yaml's version: is canonical (HA Supervisor reads it directly).
+    // package.json and the two Go consts served from GET /api/version /
+    // stamped into backup bundles must all match it — bumped in exactly
+    // these four spots at release time (CLAUDE.md's Versioning section).
     const configPath        = path.join(packageRoot, 'config.yaml');
     const configSrc         = readFileSync(configPath, 'utf8');
     const configVersionMatch = configSrc.match(/^version:\s*"?([^"\n]+?)"?\s*$/m);
     const configVersion     = configVersionMatch ? configVersionMatch[1] : null;
+    // `glpVersion` name kept for checks 2 and 4 below — it is the canonical
+    // version they compare against.
+    const glpVersion        = configVersion;
 
-    if (!glpVersion) {
-        failures.push(`Check 1 (version match): could not find GLP_VERSION in ${constantsPath}`);
-    } else if (!configVersion) {
+    if (!configVersion) {
         failures.push(`Check 1 (version match): could not find version: field in ${configPath}`);
-    } else if (glpVersion !== configVersion) {
-        failures.push(`Check 1 (version match): lib/constants.js GLP_VERSION="${glpVersion}" does not match config.yaml version="${configVersion}"`);
+    } else {
+        const versionSpots = [
+            { label: 'package.json "version"', file: path.join(packageRoot, 'package.json'),
+              re: /"version"\s*:\s*"([^"]+)"/ },
+            { label: 'go/internal/system/version.go glpVersion', file: path.join(packageRoot, 'go', 'internal', 'system', 'version.go'),
+              re: /const\s+glpVersion\s*=\s*"([^"]+)"/ },
+            { label: 'go/internal/backup/bundle.go glpVersion', file: path.join(packageRoot, 'go', 'internal', 'backup', 'bundle.go'),
+              re: /const\s+glpVersion\s*=\s*"([^"]+)"/ },
+        ];
+        for (const spot of versionSpots) {
+            const m = readFileSync(spot.file, 'utf8').match(spot.re);
+            if (!m) {
+                failures.push(`Check 1 (version match): could not read a version from ${spot.label}`);
+            } else if (m[1] !== configVersion) {
+                failures.push(`Check 1 (version match): ${spot.label}="${m[1]}" does not match config.yaml version="${configVersion}"`);
+            }
+        }
     }
 
     // ── Check 2: CHANGELOG heading ───────────────────────────────────────
@@ -478,7 +495,7 @@ function main() {
     if (!topHeading) {
         failures.push(`Check 2 (CHANGELOG heading): no released version heading found in ${changelogPath}`);
     } else if (glpVersion && topHeading !== glpVersion) {
-        failures.push(`Check 2 (CHANGELOG heading): topmost released heading is "${topHeading}", expected "${glpVersion}" (from lib/constants.js)`);
+        failures.push(`Check 2 (CHANGELOG heading): topmost released heading is "${topHeading}", expected "${glpVersion}" (from config.yaml)`);
     }
 
     // ── Check 3: screenshot freshness vs public-src/ ────────────────────
@@ -491,7 +508,7 @@ function main() {
     // ── Check 4: dev-stats (DEVELOPMENT.md) freshness vs feature commits ─
     const devStatsPathRel = 'DEVELOPMENT.md';
     const devStatsPathAbs = path.join(repoRoot, devStatsPathRel);
-    const featureDirs      = ['lib', 'routes', 'public-src', 'server.js'].map((p) => path.join(pkgRelDir, p));
+    const featureDirs      = ['go', 'public-src'].map((p) => path.join(pkgRelDir, p));
     let latestFeatureTime  = null;
     let latestFeaturePath  = null;
     for (const p of featureDirs) {

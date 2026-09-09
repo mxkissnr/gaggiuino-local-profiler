@@ -2,7 +2,7 @@ import Chart from 'chart.js/auto';
 import { S, filterShotsByMachine }                            from '../../state.js';
 import { t }                                                  from '../../i18n.js';
 import { apiFetch, isApiPortBlocked }                         from '../../api.js';
-import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd } from '../../constants.js';
+import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges } from '../../constants.js';
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob,
@@ -10,7 +10,9 @@ import {
 } from '../../utils.js';
 import { renderSidebar }                                      from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
-import { getShotData, calcShotScore, shotUsedBeanTarget, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
+import { calcShotScore, shotUsedBeanTarget, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
+import { mapShotDatapoints } from '../../utils.js';
+import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve, primeCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel }                              from './annotation.js';
 import { updatePQChart }                                      from './charts.js';
@@ -30,6 +32,54 @@ import { openLightbox }                                       from '../../compon
 // library-profile-editor.js (#521, #644).
 let _loadDataReqToken = 0;
 
+// GaggiMate phase-name lookup cache, keyed by `${machineId}:${profileName}`.
+// Invalidated by invalidateGmPhaseCache() after a profile save.
+const _gmPhaseCache = new Map();
+
+export function invalidateGmPhaseCache(machineId) {
+  const prefix = `${machineId}:`;
+  for (const key of _gmPhaseCache.keys()) {
+    if (key.startsWith(prefix)) _gmPhaseCache.delete(key);
+  }
+}
+
+// GaggiMate only serves one WS request at a time — an overlapping call
+// (e.g. the live-status poll) can 503 even though the machine is fine.
+// Retries up to 3x; a real 4xx/other 5xx returns immediately.
+async function _fetchWithRetry(url, signal) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const r = await apiFetch(url, { signal });
+      if (r.ok || r.status < 500 || attempt === 3) return r;
+    } catch (e) {
+      if (attempt === 3 || signal?.aborted) throw e;
+    }
+    await new Promise(res => setTimeout(res, 400 * attempt));
+  }
+}
+
+// Resolves shotA's named GaggiMate profile phases, cache-first. Null on any
+// miss/failure — callers treat that as "no enhancement", not an error.
+async function _loadGmPhases(shotA, token) {
+  const mid = shotA.machineId;
+  const cacheKey = `${mid}:${shotA.profileName}`;
+  if (_gmPhaseCache.has(cacheKey)) return _gmPhaseCache.get(cacheKey);
+
+  let gmPhases = null;
+  try {
+    const r1 = await _fetchWithRetry(`api/machine/profiles?machineId=${mid}`, AbortSignal.timeout(6000));
+    const { optionsRaw: profiles = [] } = r1.ok && token === _updateViewToken ? await r1.json() : {};
+    const match = profiles.find(p => p.name === shotA.profileName || p.id === shotA.profileName);
+    const r2 = match && await _fetchWithRetry(`api/machine/profile/${match.id}?machineId=${mid}`, AbortSignal.timeout(6000));
+    const prof = r2?.ok && await r2.json();
+    if (prof?.phases?.length) gmPhases = buildGmPhaseRanges(prof.phases);
+  } catch (e) {
+    console.warn('[GLP] GaggiMate phase-name lookup failed:', e);
+  }
+  if (gmPhases) _gmPhaseCache.set(cacheKey, gmPhases); // only cache a hit — don't stick a transient failure
+  return gmPhases;
+}
+
 // #635: baskets/puck screens are pure ID-based library selections (see
 // annotation.js's _renderBasketSelect/_renderPuckScreenSelect) — this
 // resolves an annotation's basketId/puckScreenId to the current library
@@ -41,6 +91,55 @@ export function _equipmentName(list, id) {
   return (list || []).find(e => e.id === id)?.name || null;
 }
 
+// #957: GET /api/shots is keyset-paginated and metadata-only (no curve
+// blobs). loadData() paints from page 1; loadAllShotMeta() then walks every
+// following page in the background so S.allShots ends up holding the full
+// shot-metadata history the non-visual consumers (analytics, dial-in
+// wizards, per-machine counts, findPreviousShot) still expect. Curve data is
+// fetched per shot on demand via shot-curves.js.
+const SHOTS_PAGE_LIMIT = 60;
+
+// #969: renderSidebar() rebuilds a DOM wrapper for every visible shot, so
+// calling it after every page of loadAllShotMeta()'s background walk made a
+// large history (e.g. 15k shots / 250 pages) effectively O(n^2) in render
+// work. Rebuild at most once per this interval during the walk instead.
+const RENDER_THROTTLE_MS = 400;
+
+// #957: GET /api/shots is Go-only. The shared frontend also runs against the
+// (frozen, bugfix-only) Node backend during the migration, which serves the
+// old full /shots.json dump and no paginated route — so on a 404 we fall
+// back to that dump, seeding the curve cache from the datapoints it carries
+// so the lazy per-shot loader is a pure cache hit there. `trash` toggles the
+// trashed list on either backend. Returns a normalised page:
+// { shots: <newest-first, metadata-only>, nextCursor, hasMore }.
+async function fetchShotsPage({ cursor = null, trash = false } = {}) {
+  const params = new URLSearchParams({ limit: String(SHOTS_PAGE_LIMIT) });
+  if (cursor) params.set('cursor', cursor);
+  if (trash) params.set('trash', '1');
+
+  const r = await apiFetch(`api/shots?${params}`);
+  if (r.status === 404) {
+    const fb = await apiFetch(trash ? 'shots.json?trash=1' : 'shots.json');
+    if (!fb.ok) return { error: fb.status };
+    const dump = await fb.json();               // full ASC array, datapoints inline
+    const shots = Array.isArray(dump) ? dump : [];
+    for (const s of shots) {
+      if (s && s.datapoints) {
+        // Seed the curve cache so the lazy per-shot loader is a pure cache
+        // hit on Node. The row keeps its datapoints (Node's existing shape),
+        // so the metadata-only readers just ignore the extra key.
+        primeCurve(s.id, s.datapoints);
+        s.hasChartData = (s.datapoints.timeInShot?.length || s.datapoints.pressure?.length || 0) > 0;
+      }
+    }
+    shots.reverse();                            // normalise to newest-first
+    return { shots, nextCursor: null, hasMore: false };
+  }
+  if (!r.ok) return { error: r.status };
+  const page = await r.json();
+  return { shots: page.shots || [], nextCursor: page.nextCursor ?? null, hasMore: !!page.hasMore };
+}
+
 export async function loadData() {
   const token = ++_loadDataReqToken;
   const shotsEl = document.getElementById('shots');
@@ -48,21 +147,23 @@ export async function loadData() {
 
   let fetched;
   try {
-    const r = await apiFetch('shots.json');
+    const page = await fetchShotsPage();
     if (token !== _loadDataReqToken) return;
-    if (!r.ok) {
+    if (page.error != null) {
       // #807: Shots is the landing view, so a session that arrived on the
       // direct port with expose_api_port off sees this 401 before it ever
       // sees the Settings card that explains it. Everything needed to
       // explain it is already client-side (see isApiPortBlocked), so say it
       // here instead of showing a bare status code.
-      shotsEl.innerHTML = isApiPortBlocked(r.status)
+      shotsEl.innerHTML = isApiPortBlocked(page.error)
         ? apiPortClosedHtml()
-        : `<div class="loading-state" style="color:#ef4444">HTTP ${r.status}</div>`;
+        : `<div class="loading-state" style="color:#ef4444">HTTP ${page.error}</div>`;
       return;
     }
-    fetched = await r.json();
-    if (token !== _loadDataReqToken) return;
+    fetched = [...page.shots].reverse(); // page is newest-first; keep S.allShots oldest-first
+    S.shotsPageCursor = page.hasMore ? page.nextCursor : null;
+    S.shotsHasMore    = !!page.hasMore;
+    S.allShotsLoaded  = !page.hasMore;
   } catch {
     if (token !== _loadDataReqToken) return;
     shotsEl.innerHTML =
@@ -112,15 +213,94 @@ export async function loadData() {
   // Re-evaluate the machine-unreachable banner as soon as shots finish loading,
   // instead of waiting for the next 30s updateStatus() poll (#288).
   updateMachineBanner();
+
+  // Background: pull every remaining page of shot metadata so S.allShots
+  // holds the full history for analytics / dial-in wizards / per-machine
+  // counts / findPreviousShot, without blocking first paint.
+  loadAllShotMeta(token, S.shotsPageCursor);
+}
+
+// loadAllShotMeta walks api/shots page by page (oldest direction) from
+// startCursor until the server reports no more, concatenating each page into
+// S.allShots and re-deriving S.shots. Guarded by the same _loadDataReqToken
+// as loadData, so a newer loadData() abandons a superseded walk. The loop is
+// driven entirely by the local `cursor` (never re-read from S across an
+// await), and every S write takes its value from the just-fetched page, so
+// there is no read-then-write race on S.
+let _metaWalkActive = false;
+
+export async function loadAllShotMeta(token, startCursor) {
+  if (_metaWalkActive) return;
+  _metaWalkActive = true;
+  let cursor = startCursor;
+  let done = false;
+  // #969: per-page state (S.allShots/S.shots/S.shotsPageCursor/S.shotsHasMore)
+  // still updates every page — cheap. Only the DOM rebuild is throttled;
+  // renderedSinceStart tracks whether the trailing render below has anything
+  // new to paint at all (a superseded/errored walk that never got a page
+  // shouldn't render).
+  let lastRenderAt = 0;
+  let renderedSinceStart = false;
+  try {
+    while (cursor && token === _loadDataReqToken) {
+      let page;
+      try {
+        page = await fetchShotsPage({ cursor });
+      } catch { return; }
+      if (token !== _loadDataReqToken) return;
+      if (page.error != null) break;
+
+      // Each page is newest-first and older than everything already loaded —
+      // reverse it to oldest-first and prepend.
+      const merged = [...[...(page.shots || [])].reverse(), ...S.allShots];
+      cursor = page.hasMore ? page.nextCursor : null;
+      done = !page.hasMore;
+      S.allShots        = merged;
+      S.shots           = filterShotsByMachine(merged, S.activeMachineId);
+      S.shotsPageCursor = cursor;
+      S.shotsHasMore    = !!page.hasMore;
+      renderedSinceStart = true;
+      const now = Date.now();
+      if (now - lastRenderAt >= RENDER_THROTTLE_MS) {
+        renderSidebar();
+        lastRenderAt = now;
+      }
+    }
+    if (token === _loadDataReqToken && done) {
+      S.shotsHasMore   = false;
+      S.allShotsLoaded = true;
+      // Analytics gates its builders on S.allShotsLoaded — let it re-run now
+      // that the full history is in memory.
+      window.onAllShotMetaLoaded?.();
+    }
+  } finally {
+    // eslint-disable-next-line require-atomic-updates -- single-flight guard; last-writer-wins reset is correct once no walk is in flight (same pattern as status.js triggerSync)
+    _metaWalkActive = false;
+    // #969: a trailing render covers both the throttle window swallowing the
+    // final page's paint, and the loop exiting early (superseded token or a
+    // fetch error) after it already mutated S.allShots/S.shots — but only
+    // when there's something new to show and this token is still current
+    // (a loadData() that superseded this walk owns the next render instead).
+    if (renderedSinceStart && token === _loadDataReqToken) renderSidebar();
+  }
+}
+
+// loadMoreShots pulls the next page on demand (sidebar infinite scroll). No-op
+// once the background walk has already loaded everything.
+export async function loadMoreShots() {
+  if (!S.shotsHasMore || !S.shotsPageCursor) return;
+  await loadAllShotMeta(_loadDataReqToken, S.shotsPageCursor);
 }
 
 // ── Trash ─────────────────────────────────────────────────────────────────
 
 export async function loadTrashData() {
   try {
-    const r = await apiFetch('shots.json?trash=1');
-    if (!r.ok) return;
-    S.trashedShots = await r.json();
+    // The trash TTL is 30 days, so a single page is plenty in practice. On
+    // the Node backend this falls back to shots.json?trash=1 (#957).
+    const page = await fetchShotsPage({ trash: true });
+    if (page.error != null) return;
+    S.trashedShots = page.shots || [];
     renderTrash();
   } catch { /* ignore */ }
 }
@@ -163,7 +343,9 @@ export async function trashShot(id) {
   try {
     const r = await apiFetch(`api/shots/${id}/trash`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
     if (!r.ok) throw new Error(await r.text());
+    evictCurve(id);
     S.shots = S.shots.filter(s => s.id !== id);
+    S.allShots = (S.allShots || []).filter(s => s.id !== id);
     if (S.primaryShotId === id) {
       S.primaryShotId = S.shots[0]?.id || null;
       if (S.primaryShotId) localStorage.setItem('glp_primaryShotId', S.primaryShotId);
@@ -196,6 +378,7 @@ export async function permanentDeleteShot(id) {
   try {
     const r = await apiFetch(`api/shots/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
     if (!r.ok) throw new Error(await r.text());
+    evictCurve(id);
     S.trashedShots = S.trashedShots.filter(s => s.id !== id);
     renderTrash();
   } catch (e) {
@@ -218,7 +401,13 @@ function _setDeltaChip(id, delta, decimals = 0, unit = '', colorClass = null, ti
   el.style.display = '';
 }
 
-export function updateView() {
+let _updateViewToken = 0;
+
+// Set per updateView() call — lets the async GaggiMate-phases callback
+// rebuild the chart once gmPhases lands (see below for why rebuild, not mutate).
+let _buildShotChart = null;
+
+export async function updateView() {
   // #814: resolved per render, never at module load — the value has to be
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
@@ -226,17 +415,27 @@ export function updateView() {
   const shotB = S.compareShotId ? S.shots.find(s => s.id === S.compareShotId) : null;
   if (!shotA) return;
 
-  const dA = getShotData(shotA);
-  const dB = getShotData(shotB);
-
   // Same-profile auto-compare (#402): most recent earlier shot with the same
   // profile on the same machine. Only meaningful outside A/B compare mode —
   // that feature stays untouched and unrelated to this same-profile pairing.
   const previousShot = !shotB ? findPreviousShot(S.shots, shotA) : null;
-  const dPrev         = previousShot ? getShotData(previousShot) : null;
 
-  const maxTempA = max((shotA.datapoints?.temperature || []).map(v => v / 10)) || 0;
-  const maxTempB = shotB ? (max((shotB.datapoints?.temperature || []).map(v => v / 10)) || 0) : 0;
+  // #957: curve data is lazy per shot now. Fetch the ones this render needs
+  // (A, the B comparand, the previous same-profile shot for the ghost curve)
+  // before building anything that reads a sample series. A newer updateView()
+  // call supersedes this one via the token guard.
+  const token = ++_updateViewToken;
+  await ensureCurves([shotA.id, shotB && shotB.id, previousShot && previousShot.id].filter(Boolean));
+  if (token !== _updateViewToken) return;
+
+  const dA    = getCachedShotData(shotA.id) || mapShotDatapoints({});
+  const dB    = shotB ? (getCachedShotData(shotB.id) || mapShotDatapoints({})) : null;
+  const dPrev = previousShot ? (getCachedShotData(previousShot.id) || mapShotDatapoints({})) : null;
+  const rawA  = getRawCurve(shotA.id) || {};
+  const rawB  = shotB ? (getRawCurve(shotB.id) || {}) : {};
+
+  const maxTempA = max((rawA.temperature || []).map(v => v / 10)) || 0;
+  const maxTempB = shotB ? (max((rawB.temperature || []).map(v => v / 10)) || 0) : 0;
   const tempMaxScale = Math.ceil(Math.max(maxTempA, maxTempB) + 5) || 100;
 
   const nameA = shotA.profile?.name || shotA.profileName || t('profile_unknown');
@@ -401,6 +600,7 @@ export function updateView() {
   }
 
   // Phases -> a compact sub-line on the Recipe zone's duration card (#398).
+  // The GaggiMate named-phase lookup below upgrades this later if it lands.
   const phases    = !shotB ? detectPhases(pressureTimes, pressureVals) : null;
   const phasesSub = document.getElementById('phasesSub');
   phasesSub.textContent = phases
@@ -468,6 +668,12 @@ export function updateView() {
       document.getElementById('grindAdviceComparativeIcon').innerHTML = compAdv.icon;
       document.getElementById('grindAdviceComparativeText').textContent = compAdv.text;
 
+      // #957: the comparative thumbnails each need their shot's curve — fetch
+      // the handful (typically 1-8) before rendering; _miniShotChart falls
+      // back to a no-data placeholder for any that are still missing.
+      await ensureCurves(compAdv.shots.map(x => x.shot.id));
+      if (token !== _updateViewToken) return;
+
       const locale   = localeFor(S.currentLang);
       const listHtml = compAdv.shots.map(({ shot: s, grind, score }) => {
         const date  = new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
@@ -534,7 +740,7 @@ export function updateView() {
     { label:t('chart_pressure')   + sfx, data: dA.pressure,  yAxisID:'y',  borderWidth:2.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
     { label:t('chart_flow')       + sfx, data: dA.flow,       yAxisID:'y',  borderWidth:2,   tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
     { label:t('chart_weightflow') + sfx, data: dA.weightFlow, yAxisID:'y',  borderWidth:2,   tension:.1, borderColor:'#9b59b6', backgroundColor:'transparent', pointStyle:false },
-    { label:t('chart_weight')     + sfx, data: dA.weight,     yAxisID:'y1', borderWidth:2,   tension:.1, borderColor:'#2ecc71', backgroundColor:'transparent', pointStyle:false },
+    { label:t(dA.weightIsReal ? 'chart_weight' : 'chart_weight_estimated') + sfx, data: dA.weight, yAxisID:'y1', borderWidth:2,   tension:.1, borderColor:'#2ecc71', backgroundColor:'transparent', pointStyle:false, ...(dA.weightIsReal ? {} : { borderDash:[5,5] }) },
     { label:t('chart_temp')       + sfx, data: dA.temp,       yAxisID:'y1', borderWidth:2.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
   ];
 
@@ -550,7 +756,7 @@ export function updateView() {
       { label:t('chart_pressure')   + ' (B)', data: dB.pressure,  yAxisID:'y',  borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(52,152,219,.65)',  backgroundColor:'transparent', pointStyle:false },
       { label:t('chart_flow')       + ' (B)', data: dB.flow,       yAxisID:'y',  borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(243,156,18,.65)',  backgroundColor:'transparent', pointStyle:false },
       { label:t('chart_weightflow') + ' (B)', data: dB.weightFlow, yAxisID:'y',  borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(155,89,182,.65)',  backgroundColor:'transparent', pointStyle:false },
-      { label:t('chart_weight')     + ' (B)', data: dB.weight,     yAxisID:'y1', borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.65)',  backgroundColor:'transparent', pointStyle:false },
+      { label:t(dB.weightIsReal ? 'chart_weight' : 'chart_weight_estimated') + ' (B)', data: dB.weight, yAxisID:'y1', borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.65)',  backgroundColor:'transparent', pointStyle:false },
       { label:t('chart_temp')       + ' (B)', data: dB.temp,       yAxisID:'y1', borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(231,76,60,.65)',   backgroundColor:'transparent', pointStyle:false }
     );
   }
@@ -563,7 +769,7 @@ export function updateView() {
     datasets.push(
       { label:t('chart_pressure') + ghostSfx, data: dPrev.pressure, yAxisID:'y',  borderDash:[2,3], borderWidth:1.5, tension:.1, borderColor:'rgba(52,152,219,.35)', backgroundColor:'transparent', pointStyle:false },
       { label:t('chart_flow')     + ghostSfx, data: dPrev.flow,     yAxisID:'y',  borderDash:[2,3], borderWidth:1.5, tension:.1, borderColor:'rgba(243,156,18,.35)', backgroundColor:'transparent', pointStyle:false },
-      { label:t('chart_weight')   + ghostSfx, data: dPrev.weight,   yAxisID:'y1', borderDash:[2,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.35)', backgroundColor:'transparent', pointStyle:false }
+      { label:t(dPrev.weightIsReal ? 'chart_weight' : 'chart_weight_estimated') + ghostSfx, data: dPrev.weight, yAxisID:'y1', borderDash:[2,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.35)', backgroundColor:'transparent', pointStyle:false }
     );
   }
 
@@ -571,48 +777,77 @@ export function updateView() {
   if (S.currentChartTab === 'pq') updatePQChart();
 
   const ctx = document.getElementById('espressoShotChart');
-  const _existingChart = Chart.getChart(ctx);
-  if (_existingChart) _existingChart.destroy();
-  S.chart = null;
 
-  try {
-    S.chart = new Chart(ctx, {
-      type: 'line',
-      plugins: [corsairPlugin, phasePlugin],
-      data: { datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: { padding: { bottom: 20 } },
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          phases:  phases ? { preinfusion: phases.preinfusion, extraction: phases.extraction } : {},
-          legend:  {
-            display: true,
-            position: 'bottom',
-            labels: { color: C.text, font: { family: 'Figtree', size: window.innerWidth <= 600 ? 9 : 11 }, boxWidth: window.innerWidth <= 600 ? 8 : 12, padding: window.innerWidth <= 600 ? 4 : 8 }
+  // Rebuild rather than mutate options.plugins.phases in place — Chart.js
+  // doesn't reliably pick up in-place mutation on the next draw.
+  _buildShotChart = (phasesOpt) => {
+    const existing = Chart.getChart(ctx);
+    if (existing) existing.destroy();
+    try {
+      S.chart = new Chart(ctx, {
+        type: 'line',
+        plugins: [corsairPlugin, phasePlugin],
+        data: { datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { bottom: 20 } },
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            phases: phasesOpt,
+            legend:  {
+              display: true,
+              position: 'bottom',
+              labels: { color: C.text, font: { family: 'Figtree', size: window.innerWidth <= 600 ? 9 : 11 }, boxWidth: window.innerWidth <= 600 ? 8 : 12, padding: window.innerWidth <= 600 ? 4 : 8 }
+            },
+            tooltip: {
+              callbacks: {
+                title: ctx => {
+                  const time = ctx[0].parsed.x;
+                  const ph = phasesOpt.gaggimatePhases?.find(p => time >= p.t0 && time <= p.t1);
+                  const timeLabel = t('chart_time', formatTimeLabel(time));
+                  return ph?.name ? `${ph.name} — ${timeLabel}` : timeLabel;
+                },
+              },
+            }
           },
-          tooltip: { callbacks: { title: ctx => t('chart_time', formatTimeLabel(ctx[0].parsed.x)) } }
-        },
-        scales: {
-          x:  { type:'linear', min:0, max:Math.max(maxTimeA, maxTimeB, maxTimePrev), clip:false,
-                ticks:{ color:C.tick, font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
-                grid:{ color:C.grid } },
-          y:  { type:'linear', position:'left',  min:0, max:12, ticks:{color:C.tick, maxTicksLimit:6}, grid:{color:C.grid} },
-          y1: { type:'linear', position:'right', min:0, max:Number(tempMaxScale), ticks:{color:C.tick, maxTicksLimit:6}, grid:{drawOnChartArea:false} }
+          scales: {
+            x:  { type:'linear', min:0, max:Math.max(maxTimeA, maxTimeB, maxTimePrev), clip:false,
+                  ticks:{ color:C.tick, font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
+                  grid:{ color:C.grid } },
+            y:  { type:'linear', position:'left',  min:0, max:12, ticks:{color:C.tick, maxTicksLimit:6}, grid:{color:C.grid} },
+            y1: { type:'linear', position:'right', min:0, max:Number(tempMaxScale), ticks:{color:C.tick, maxTicksLimit:6}, grid:{drawOnChartArea:false} }
+          }
         }
-      }
+      });
+      clearChartOnTouchEnd(S.chart);
+    } catch (e) {
+      console.error('Chart creation error:', e);
+    }
+  };
+  S.chart = null;
+  _buildShotChart(phases ? { preinfusion: phases.preinfusion, extraction: phases.extraction } : {});
+
+  // GaggiMate: upgrade sub-line + chart once named phases land. Not awaited;
+  // must stay after _buildShotChart exists (a cache hit can resolve before
+  // it otherwise, since this fn has earlier awaits). Shots have no
+  // machineType of their own, hence the S.machines lookup.
+  const shotMachine = !shotB && S.machines?.find(m => m.id === (shotA.machineId ?? 1));
+  if (shotMachine?.type === 'gaggimate' && shotA.machineId) {
+    _loadGmPhases(shotA, token).then(gmPhases => {
+      if (!gmPhases || token !== _updateViewToken) return;
+      phasesSub.textContent = gmPhases.map(p => p.name).join(' · ');
+      _buildShotChart({ gaggimatePhases: gmPhases });
     });
-    clearChartOnTouchEnd(S.chart);
-  } catch (e) {
-    console.error('Chart creation error:', e);
   }
 }
 
 // ── CSV Export ────────────────────────────────────────────────────────────
 
-function shotToCSVRow(shot) {
-  const d      = getShotData(shot);
+// d is the mapped XY curve bundle for this shot (from the curve cache) — the
+// caller fetches it via getShotCurve() first, since list rows no longer carry
+// datapoints (#957).
+function shotToCSVRow(shot, d) {
   const ann    = shot.annotation || {};
   const avgP   = avgActive(d.pressure.map(p => p.y), 1.5);
   const finalW = max(d.weight.map(p => p.y));
@@ -648,13 +883,18 @@ async function downloadCSV(rows, filename) {
 export async function exportCSV() {
   const shot = S.shots.find(s => s.id === S.primaryShotId);
   if (!shot) return;
+  await getShotCurve(shot.id);
   const date    = new Date(shot.timestamp * 1000).toISOString().slice(0, 10);
   const profile = (shot.profile?.name || shot.profileName || 'shot').replace(/[^a-z0-9]/gi, '_');
-  await downloadCSV([shotToCSVRow(shot)], `glp_shot_${date}_${profile}.csv`);
+  await downloadCSV([shotToCSVRow(shot, getCachedShotData(shot.id) || mapShotDatapoints({}))], `glp_shot_${date}_${profile}.csv`);
 }
 
 export async function exportAllCSV() {
-  await downloadCSV(S.shots.map(shotToCSVRow), 'glp_all_shots.csv');
+  // Rare, explicit user action — pull every shot's curve (bounded concurrency
+  // inside ensureCurves) before building the rows.
+  const list = S.shots;
+  await ensureCurves(list.map(s => s.id));
+  await downloadCSV(list.map(s => shotToCSVRow(s, getCachedShotData(s.id) || mapShotDatapoints({}))), 'glp_all_shots.csv');
 }
 
 // ── .shot export ──────────────────────────────────────────────────────────
@@ -662,7 +902,7 @@ export async function exportAllCSV() {
 export async function exportShot() {
   const shot = S.shots.find(s => s.id === S.primaryShotId);
   if (!shot) return;
-  const d   = shot.datapoints || {};
+  const d   = await getShotCurve(shot.id);
   const ann = shot.annotation || {};
   const timeArr = d.timeInShot || [];
 
@@ -717,7 +957,7 @@ export async function exportProfile() {
     return;
   }
 
-  const d    = shot.datapoints || {};
+  const d    = await getShotCurve(shot.id);
   const rawT = d.timeInShot     || [];
   const rawTP = d.targetPressure || [];
 
@@ -793,8 +1033,12 @@ export async function shareCard(format = 'square') {
     // #462: the card should visually match whatever accent/theme the user
     // is actually looking at, not a hardcoded snapshot — same attributes
     // main.js applies to <html> (dataset.accent/dataset.theme), same
-    // defaults ('amber'/'dark', see _applyTheme()/_savedAccent in main.js).
-    const accent = document.documentElement.dataset.accent || 'amber';
+    // defaults ('amber-americano'/'dark', see applyTheme()/_savedAccent in
+    // main.js). #1019: dataset.accent no longer drives any CSS itself (the
+    // [data-accent] rules it used to key are retired), but is still set on
+    // every setAccentTheme() call purely so this stays in sync with the
+    // user's actual Farbschema pick.
+    const accent = document.documentElement.dataset.accent || 'amber-americano';
     const theme  = document.documentElement.dataset.theme  || 'dark';
     const r = await apiFetch(`api/shots/${shotId}/card?format=${encodeURIComponent(format)}&accent=${encodeURIComponent(accent)}&theme=${encodeURIComponent(theme)}`);
     if (!r.ok) {

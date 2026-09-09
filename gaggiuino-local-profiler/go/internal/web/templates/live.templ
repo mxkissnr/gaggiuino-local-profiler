@@ -1,0 +1,58 @@
+package templates
+
+// LivePage is Phase 2c's (#901) live-shot page — the one deliberate
+// exception to every other Phase-2 page's templ+htmx pattern (see
+// go/README.md's Frontend section and internal/web/doc.go). Pressure/flow/
+// weight/temperature update several times a second over SSE during a pull;
+// round-tripping every one of those frames through a server-rendered htmx
+// fragment swap is the wrong tool for that job, per the already-agreed
+// frontend-stack decision. So this template renders only the static
+// chrome — page title, current machine name, and the DOM ids
+// static/live.js binds to for everything else (status badge, numeric
+// readouts, preheat widget, canvas) — and ships two <script> tags that do
+// the actual live rendering client-side: the vendored Chart.js UMD build
+// (static/vendor/, see vendor/NOTICE.md) and static/live.js itself, a
+// largely-unchanged port of public-src/views/live.js's chart/SSE logic
+// (see that file's own header comment for exactly what was and wasn't
+// carried over). Neither script needs htmx or Alpine — this page loads
+// them (via Layout) only because every page shares one <head>, not because
+// this page's own content uses them.
+templ LivePage(machineName string) {
+	@Layout("Live") {
+		<h1 class="page-title">Live</h1>
+		<div class="live-meta-row">
+			<span class="live-machine-name">{ machineName }</span>
+			<span id="live-status-badge" class="live-status-badge">
+				<span id="live-status-text">Connecting…</span>
+			</span>
+		</div>
+		<div id="live-meta" class="item-meta"></div>
+
+		<div id="preheat-ready-badge" class="badge badge-ok" style="display:none">Ready</div>
+		<div id="preheat-warming-wrap" class="preheat-warming" style="display:none">
+			<div class="preheat-bar"><div id="preheat-bar-fill" class="preheat-bar-fill"></div></div>
+			<span id="preheat-countdown" class="item-meta"></span>
+		</div>
+
+		<div id="live-idle" class="live-idle" style="display:none">
+			<div id="liveIdleTitle" class="item-name"></div>
+			<div id="liveIdleText" class="item-meta"></div>
+		</div>
+
+		<div id="live-content" class="live-content" style="display:none">
+			<div class="live-readouts">
+				<div class="live-readout"><span class="item-meta">Time</span><span id="liveTime">–</span></div>
+				<div class="live-readout"><span class="item-meta">Pressure</span><span id="livePressure">–</span></div>
+				<div class="live-readout"><span class="item-meta">Flow</span><span id="liveFlow">–</span></div>
+				<div class="live-readout"><span class="item-meta">Weight</span><span id="liveWeight">–</span></div>
+				<div class="live-readout"><span class="item-meta">Temp</span><span id="liveTemp">–</span></div>
+			</div>
+			<div class="live-chart-wrap">
+				<canvas id="liveChart"></canvas>
+			</div>
+		</div>
+
+		<script defer src="web/static/vendor/chart-4.5.1.umd.min.js"></script>
+		<script defer src="web/static/live.js"></script>
+	}
+}

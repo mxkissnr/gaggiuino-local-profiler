@@ -11,16 +11,17 @@ import { t } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
 import { WARNING_ICON_SVG, CHECK_ICON_SVG, CLOSE_ICON_SVG } from '../icons.js';
 import { updateStatus } from './status.js';
-import { THEME_PRESETS, resolveTheme } from '../../lib/machines/theme-presets.js';
+import { THEME_PRESETS, getThemePreset, resolveTheme } from '../shared/theme-presets.js';
+import { migrateLegacyAccent } from '../theme.js';
 import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
 import { renderTopbarMachineIcon } from './topbar-machine-icon.js';
 
-function escapeHtml(s) {
+export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 // preset key -> i18n label key, e.g. 'ember-espresso' -> 'theme_preset_ember_espresso'.
-function presetLabelKey(key) {
+export function presetLabelKey(key) {
   return `theme_preset_${key.replace(/-/g, '_')}`;
 }
 
@@ -46,6 +47,21 @@ export function getDefaultMachineId() {
   return (S.machines || []).find(m => m.isDefault)?.id ?? null;
 }
 
+// #1019: resolves the currently ACTIVE machine object (topbar switcher,
+// S.activeMachineId) rather than always the default one -- same
+// null/'all'-means-default fallback semantics as views/live.js's
+// _isActiveMachineLiveCapable(), plus falling back to the default machine
+// when a stale/removed id no longer matches anything. Reads S.machines/
+// S.activeMachineId live on every call, never cached, since both can change
+// independently of each other (machine list reload vs. topbar switch).
+export function getActiveMachine() {
+  const machines = S.machines || [];
+  const defaultMachine = machines.find(m => m.isDefault) || null;
+  const active = S.activeMachineId;
+  if (active == null || active === 'all') return defaultMachine;
+  return machines.find(m => m.id === active) || defaultMachine;
+}
+
 // #604: parses a validated "#rrggbb" hex string (see machineSchema in
 // lib/validation/schemas.js — theme.a/b are guaranteed hex by the time they
 // reach here) into {r,g,b}, or null for anything else.
@@ -66,20 +82,58 @@ function relativeLuminance({ r, g, b }) {
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 
-// #604: reconciles the default machine's per-machine colour theme (#594,
-// previously icon-only) into the global --accent-* variables that style.css's
-// [data-accent="..."] swatch presets normally drive, so it becomes the whole
-// app's accent instead of only the machine icon's. Only the DEFAULT
-// machine's theme does this — non-default machines stay icon-only (their own
-// device context), same default-machine-only scope as getDefaultMachineId()
-// above (and machine_coordinator.py's multi-machine scope note in the
-// sibling glp-integration repo).
+// #1021: --accent-ink light-theme overrides for the 8 THEME_PRESETS, picked
+// by the same hand-audit method #811 used for the old 6-accent set (see
+// git history on style.css around that PR): darken the raw preset hex
+// (`p.a`, the same stop applyActiveMachineAccentTheme() below uses for
+// --accent) along its own hue to the first value that clears the WCAG AA
+// 4.5:1 floor against the darkest of the four light-theme surfaces
+// (--raised, #e6e6e3 — the lowest-luminance of --gray-950/900/800/--raised,
+// so clearing it guarantees clearing the other three too). Only presets
+// that actually fail as raw hex get an entry here; ruby-ristretto (8.01:1
+// on --raised) and mulberry-mocha (7.18:1) already clear the floor
+// unmodified and are absent deliberately, not by oversight — see
+// test/theme-contrast.test.js.
+const LIGHT_ACCENT_INK_OVERRIDES = {
+  'amber-americano':   '#905c06',
+  'copper-cortado':    '#975730',
+  'twilight-turkish':  '#06708a',
+  'marbled-macchiato': '#905c06',
+  'ember-espresso':    '#b73e1a',
+  'frosty-flat-white': '#0f736b',
+};
+
+// Pure lookup (no DOM) so test/theme-contrast.test.js can assert the table
+// above against the four light surfaces directly, the same way it already
+// asserts the base token scale straight from style.css. `presetKey` is
+// whichever THEME_PRESETS key is actually driving the current accent (see
+// applyActiveMachineAccentTheme() below) — null for a fully custom
+// per-machine {a,b} theme, which this audit doesn't cover (the old #811
+// audit never covered arbitrary custom hex either, only the named
+// accents). Dark theme, an unaudited/custom key, or a preset that already
+// clears the floor raw all fall back to `accentHex` itself, i.e. the same
+// var(--accent) alias --accent-ink used everywhere before this audit.
+export function resolveAccentInk(presetKey, accentHex, isLightTheme) {
+  if (!isLightTheme || !presetKey) return accentHex;
+  return LIGHT_ACCENT_INK_OVERRIDES[presetKey] || accentHex;
+}
+
+// #604/#1019: reconciles the ACTIVE machine's per-machine colour theme
+// (#594, previously icon-only) into the global --accent-* variables. #1019
+// widened this from "only the default machine" to "whichever machine the
+// topbar switcher currently has active" (getActiveMachine() above), and
+// retired the style.css [data-accent="..."] swatch-preset blocks entirely —
+// this function (plus the identical inline-var mechanism the user's own
+// Farbschema pick now goes through below) is the SOLE place that sets these
+// vars, machine-driven or user-picked alike.
 //
-// Sets the 5 vars as inline styles on <html>, which always outrank the
-// [data-accent] stylesheet rules regardless of which swatch is selected —
-// same "inline style wins over the cascade" pattern glp-card.js's
-// _applySemanticColorContrast() uses. Clears them (falling back to the
-// swatch picker again) when the default machine has no theme set.
+// Sets the 5 vars as inline styles on <html>, which always outranks a
+// stylesheet rule regardless of cascade order — same "inline style wins"
+// pattern glp-card.js's _applySemanticColorContrast() uses. When the active
+// machine has no theme of its own, falls back to resolving the user's own
+// persisted Farbschema pick (post-migration, see theme.js's
+// migrateLegacyAccent()) instead of just clearing the vars — there is no
+// [data-accent] stylesheet fallback to catch that any more.
 //
 // --accent-text uses the DARKER of the two stops (a flat theme has a===b and
 // reduces to a single check) at the same 0.179 WCAG flip-point crossover
@@ -89,24 +143,29 @@ function relativeLuminance({ r, g, b }) {
 // --accent-glow doesn't need the same rigor (it's a low-alpha background
 // wash, not text-on-fill contrast) — a flat 15% alpha of the first stop
 // matches every existing preset's own glow convention (see style.css).
-export function applyDefaultMachineAccentTheme() {
+// --accent-ink (#1021) is the odd one out: unlike --accent-text/-glow it
+// CAN'T be derived mathematically from the accent colour itself, because it
+// is that colour used as text on a near-white light-theme surface, not
+// paired with a #000/#fff/low-alpha counterpart — hence the hand-audited
+// LIGHT_ACCENT_INK_OVERRIDES table above instead of a formula here.
+export function applyActiveMachineAccentTheme() {
   const root = document.documentElement;
   // Some test doubles for `document` (and, in principle, any non-browser
   // caller) don't provide documentElement — a no-op here rather than a
   // thrown error, since loadMachines() must still reach
   // applyActiveMachineChange() right after this call regardless.
   if (!root) return;
-  const machine = (S.machines || []).find(m => m.isDefault);
-  const resolved = resolveTheme(machine?.theme);
+  const machine = getActiveMachine();
+  const machineThemeRaw = machine?.theme || null;
+  const machineTheme = resolveTheme(machineThemeRaw);
   const swatchesEl = document.getElementById('accentSwatches');
   const noteEl = document.getElementById('accentMachineThemeNote');
-  if (!resolved) {
-    ['--accent', '--accent-from', '--accent-to', '--accent-text', '--accent-glow']
-      .forEach(prop => root.style.removeProperty(prop));
-    swatchesEl?.classList.remove('accent-swatches-disabled');
-    if (noteEl) noteEl.style.display = 'none';
-    return;
-  }
+
+  // getThemePreset('amber-americano') is a hardcoded, always-present
+  // THEME_PRESETS entry, so this chain always resolves — there is no
+  // "no accent at all" case left to handle.
+  const savedKey = migrateLegacyAccent(localStorage.getItem('glp_accent_theme')) || 'amber-americano';
+  const resolved = machineTheme || getThemePreset(savedKey) || getThemePreset('amber-americano');
   const rgbA = hexToRgb(resolved.a);
   const rgbB = hexToRgb(resolved.b);
   root.style.setProperty('--accent', resolved.a);
@@ -116,8 +175,20 @@ export function applyDefaultMachineAccentTheme() {
   const darkest = luminances.length ? Math.min(...luminances) : null;
   if (darkest != null) root.style.setProperty('--accent-text', darkest > 0.179 ? '#000' : '#fff');
   if (rgbA) root.style.setProperty('--accent-glow', `rgba(${rgbA.r},${rgbA.g},${rgbA.b},.15)`);
-  swatchesEl?.classList.add('accent-swatches-disabled');
-  if (noteEl) noteEl.style.display = '';
+  // #1021: the active machine's own theme, when it's a preset, carries its
+  // key straight through; when the machine has no theme of its own we fall
+  // back to the user's persisted Farbschema pick (savedKey, always a valid
+  // preset key). A fully custom per-machine {a,b} theme has no preset key
+  // at all -- resolveAccentInk() treats that the same as an unaudited one.
+  const activePresetKey = machineThemeRaw ? (machineThemeRaw.preset || null) : savedKey;
+  const isLightTheme = root.dataset?.theme === 'light';
+  root.style.setProperty('--accent-ink', resolveAccentInk(activePresetKey, resolved.a, isLightTheme));
+  // The "disabled" dimmed styling + explainer note are only for when the
+  // ACTIVE MACHINE's own theme is actually overriding the picker below --
+  // when we fell back to the user's own pick above, that picker still
+  // reflects and controls the accent normally.
+  swatchesEl?.classList.toggle('accent-swatches-disabled', !!machineTheme);
+  if (noteEl) noteEl.style.display = machineTheme ? '' : 'none';
 }
 
 export async function loadMachines() {
@@ -136,11 +207,13 @@ export async function loadMachines() {
     // is shown for every install (including single-machine ones), so this
     // runs unconditionally rather than being folded into that function.
     renderTopbarMachineIcon();
-    // #604: recomputes on every loadMachines() completion (startup, machine
-    // switch, and — since saveMachineForm() on success calls loadMachines()
-    // itself — every machine-edit save too) so switching the default machine
-    // or editing its theme updates the whole app's accent live, no reload.
-    applyDefaultMachineAccentTheme();
+    // #604/#1019: recomputes on every loadMachines() completion (startup,
+    // and — since saveMachineForm() on success calls loadMachines() itself —
+    // every machine-edit save too) so editing the active machine's theme
+    // updates the whole app's accent live, no reload. switchActiveMachine()
+    // below has its own direct call for the topbar-switch case, since that
+    // doesn't go through loadMachines() at all.
+    applyActiveMachineAccentTheme();
     // loadData() and loadMachines() both fire around startup with no fixed
     // order — if shots already loaded before the default machine was known,
     // S.shots was filtered against a null activeMachineId (i.e. unfiltered).
@@ -184,6 +257,10 @@ export function switchActiveMachine(rawValue) {
   const value = rawValue === 'all' ? 'all' : parseInt(rawValue, 10);
   setActiveMachine(value);
   renderTopbarMachineIcon();
+  // #1019: the actual bug fix -- switching the topbar machine used to leave
+  // the app accent on whichever machine was active before (or the default
+  // machine's, pre-#1019), since only loadMachines() ever recomputed it.
+  applyActiveMachineAccentTheme();
   applyActiveMachineChange();
 }
 
@@ -275,6 +352,25 @@ function renderThemeSwatches() {
   });
 }
 
+// #1019: Settings -> Farbschema picker -- renders the same 8 THEME_PRESETS
+// as renderThemeSwatches() above (same per-preset swatch markup shape, no
+// "none"/"custom" options since this picker always resolves to a concrete
+// preset), replacing the old, unrelated 6-swatch static buttons that used
+// to live directly in index.html. Marks whichever preset is currently
+// persisted to localStorage as .active and wires each button straight to
+// window.setAccentTheme() -- there's nothing static left for main.js to
+// delegate a single click listener from, unlike the old swatches.
+export function renderAccentSwatches() {
+  const wrap = document.getElementById('accentSwatches');
+  if (!wrap) return;
+  const current = migrateLegacyAccent(localStorage.getItem('glp_accent_theme')) || 'amber-americano';
+  wrap.innerHTML = THEME_PRESETS.map(p => `<button type="button" class="accent-swatch${current === p.key ? ' active' : ''}" data-preset-key="${escapeHtml(p.key)}" style="${p.a === p.b ? `background-color:${p.a}` : `background-image:linear-gradient(135deg,${p.a},${p.b})`}" title="${escapeHtml(t(presetLabelKey(p.key)))}" aria-label="${escapeHtml(t(presetLabelKey(p.key)))}"></button>`).join('');
+  wrap.querySelectorAll('[data-preset-key]').forEach(btn => {
+    // eslint-disable-next-line no-undef -- setAccentTheme is assigned onto window in main.js (Object.assign), resolves as a global at runtime
+    btn.addEventListener('click', () => setAccentTheme(btn.dataset.presetKey));
+  });
+}
+
 // Keeps the swatch active-states and the custom colour inputs in sync with
 // _selectedTheme — called after every selection change (swatch click or
 // custom colour/gradient-toggle edit).
@@ -326,6 +422,16 @@ export function onThemeGradientToggleChange() {
   syncThemeFormUI();
 }
 
+function syncWaterSensorRowVisibility() {
+  const type = document.getElementById('machineFormType')?.value;
+  const row = document.getElementById('machineWaterSensorRow');
+  if (row) row.style.display = type === 'gaggimate' ? '' : 'none';
+}
+
+export function onMachineTypeChange() {
+  syncWaterSensorRowVisibility();
+}
+
 export function openMachineForm(machine) {
   const card = document.getElementById('machineFormCard');
   if (!card) return;
@@ -334,9 +440,11 @@ export function openMachineForm(machine) {
   document.getElementById('machineFormType').value = machine?.type || 'gaggiuino';
   document.getElementById('machineFormHost').value = machine?.host || '';
   document.getElementById('machineFormSwitch').value = machine?.switchEntity || '';
+  document.getElementById('machineFormWaterSensor').checked = machine?.hasWaterSensor || false;
   document.getElementById('machineFormTestResult').textContent = '';
   _selectedTheme = machine?.theme || null;
   syncThemeFormUI();
+  syncWaterSensorRowVisibility();
   card.style.display = '';
 }
 
@@ -362,12 +470,14 @@ export function closeMachineForm() {
 // strictly, so an extra JSON field would be unclean at best.
 async function _saveMachine({ triggerSync = true } = {}) {
   const id = document.getElementById('machineFormId').value;
+  const type = document.getElementById('machineFormType').value;
   const payload = {
     name: document.getElementById('machineFormName').value.trim(),
-    type: document.getElementById('machineFormType').value,
+    type,
     host: document.getElementById('machineFormHost').value.trim(),
     switchEntity: document.getElementById('machineFormSwitch').value.trim() || null,
     theme: _selectedTheme,
+    hasWaterSensor: type === 'gaggimate' ? (document.getElementById('machineFormWaterSensor')?.checked || false) : false,
   };
   if (!payload.name || !payload.host) return null;
   const base   = id ? `api/machines/${id}` : 'api/machines';
@@ -464,7 +574,7 @@ export async function deleteMachine(id, isDefault) {
 //
 // #731: this save is only a means to get a testable id -- it must not start
 // a shot import the way an explicit "Speichern" does, so triggerSync:false
-// is passed through to _saveMachine() (server-side gate in routes/machines.js).
+// is passed through to _saveMachine() (server-side gate in go/internal/machines).
 //
 // #730 review: the form stays open (and clickable) while the request is in
 // flight -- a double-click used to re-enter _saveMachine() with

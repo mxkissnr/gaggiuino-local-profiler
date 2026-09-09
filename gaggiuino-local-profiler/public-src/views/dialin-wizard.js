@@ -13,7 +13,9 @@ import { S }                     from '../state.js';
 import { t }                     from '../i18n.js';
 import { apiFetch }              from '../api.js';
 import { esc, detectChanneling, calcBrewRatio, scoreColor } from '../utils.js';
-import { getShotData, calcShotScore } from './shots/utils.js';
+import { calcShotScore } from './shots/utils.js';
+import { getShotCurve } from '../shot-curves.js';
+import { mapShotDatapoints } from '../utils.js';
 import { calcBestGrindCombosForBean, _miniShotChart, _parseGrindNum } from './shots/grind.js';
 import { calcNextGrindSuggestion, isConverged } from '../dialin-convergence.js';
 import { renderSidebar, updateSidebarHighlighting } from '../components/sidebar.js';
@@ -132,14 +134,14 @@ function _suggestStartGrind(beanName, grinderName, beanId) {
 
 // ── Round evaluation ────────────────────────────────────────────────────
 
-function _evalShot(shot) {
-  const data  = getShotData(shot);
+async function _evalShot(shot) {
+  const data  = mapShotDatapoints(await getShotCurve(shot.id)); // #957: curve is lazy per shot
   const secs  = (shot.duration || 0) / 10;
   const pTimes = data.pressure.map(p => p.x);
   const pAll   = data.pressure.map(p => p.y);
   const channeling = detectChanneling(pTimes, pAll);
   const ratio = calcBrewRatio(shot, data);
-  const score = calcShotScore(shot, data);
+  const score = calcShotScore(shot);
   return { secs, channeling, ratio, score };
 }
 
@@ -262,7 +264,7 @@ export async function dialinConfirmShot(shotId, isMatch) {
     }
   } catch { /* keep going even if the annotate call fails */ }
 
-  const evald = _evalShot(S.shots.find(sh => sh.id === shotId) || shot);
+  const evald = await _evalShot(S.shots.find(sh => sh.id === shotId) || shot);
   s.reviewRound = {
     grindSetting: _parseGrindNum(s.pendingGrind) ?? parseFloat(s.pendingGrind) ?? 0,
     shotId, score: evald.score, seconds: evald.secs, ratio: evald.ratio, channeling: evald.channeling,
@@ -319,6 +321,14 @@ export function renderDialinWizard() {
 
   // active
   if (!s.candidateShotId && !s.reviewRound) _checkForCandidate(s);
+  // #957: the candidate's mini-chart needs its curve — fetch it, then
+  // re-render so the thumbnail fills in (it shows a placeholder until then).
+  if (s.candidateShotId && window.getRawCurve && !window.getRawCurve(s.candidateShotId)) {
+    const pendingId = s.candidateShotId;
+    getShotCurve(pendingId).then(() => {
+      if (S.dialinSession?.candidateShotId === pendingId) renderDialinWizard();
+    });
+  }
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   body.innerHTML = _renderRound(s);
 }

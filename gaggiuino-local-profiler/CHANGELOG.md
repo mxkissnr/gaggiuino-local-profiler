@@ -1,4 +1,38 @@
-## [Unreleased]
+## [3.0.0] – 2026-09-09
+
+**Back up Home Assistant before updating.** This release replaces the entire add-on backend (Node.js → Go). Behaviour and the on-disk database are unchanged and you can still roll back to 2.x, but take a backup first.
+
+### Changed
+- **The add-on now runs on a Go backend instead of Node.js**, with no visible change in behaviour. Closes #977
+- **The legacy Node.js/Express backend source has been removed from the repository** — the Go backend has been the only runtime since the #977 cutover; its last in-tree state is archived at tag `archive/node-backend-final`. Closes #1028
+- **armv7 (32-bit ARM) is no longer deprecated** — the Go backend cross-compiles a static armv7 image with a pure-Go SQLite driver, so the constraint that prompted the deprecation is gone. Closes #944
+- **The `debug_logging` add-on option works the same on the Go backend.** Closes #977
+- **The shot annotator's dropdowns are now built via the DOM API** instead of an HTML string, silencing a recurring false-positive security-scan finding with no change in behaviour. Closes #946
+
+### Added
+- **The Settings → Farbschema accent picker now offers the same 8 named presets as the per-machine colour theme picker**, and the app accent follows whichever machine is active in the topbar switcher. An existing pick from the old 6-colour set is migrated automatically to its nearest new preset. Closes #1019
+- **A third "Auto" option next to Dark/Light in Settings → Theme follows the browser/OS colour-scheme preference live**, without a reload. Closes #1018
+- **GaggiMate machines now get first-class support** — foundational GaggiMate integration across the stack, plus a full profile editor: Standard and Pro profiles can be created, edited and deleted from GLP and saved straight to the machine, with a preview chart that mirrors GaggiMate's own profile visualization, and the shot chart overlays the same named phases. Thanks to @Paul-Lukas for the GaggiMate work (#981, #996).
+- **The descale operation mode is now surfaced as `isDescaling` in the machine status and live SSE payloads**, mirroring the existing steam/flush live-state fields. Closes #983
+- **Backup export/import and the dev-channel raw-database download/upload now show a progress bar (and disable their button) for the whole transfer.** Closes #960
+- **Uploaded entity photos are now optimized on save** — downscaled to at most 1600 px on the long edge, re-encoded without camera EXIF/GPS metadata, and stored next to a thumbnail that grid views can request. Existing photos are optimized once in the background on the first start after upgrading. Closes #961
+
+### Fixed
+- **The Statistics world map now follows the active Dark/Light/Auto theme** instead of staying stuck on dark colours, and updates immediately if you switch theme while the map is open. Closes #1024
+- **The Settings → Farbschema accent, when used as text (star rating, active tabs, sort arrows), is now readable in the light theme for all 8 presets.** Closes #1021
+- **The Settings → Theme toggle now correctly highlights whichever of Dark/Light/Auto is selected** — clicking the transport toggle below it used to blank both. Closes #1018
+- **The Live tab no longer freezes on stale readings when the live event stream goes silent mid-session** — it falls back to REST polling until the stream recovers. Closes #1016
+- **The shot sidebar stays responsive on installs with a very large shot history** — collapsed month groups build their rows lazily, search is indexed, and the sidebar no longer rebuilds itself once per page during a large background load. Closes #969
+- **A panic in a background task (live-machine polling, scheduled sync, or a settings fetch) is now recovered and logged instead of crashing the whole add-on.** Closes #993
+- **A crafted shot-history file can no longer make the GaggiMate `.slog` parser preallocate a wildly oversized amount of memory.** Closes #992
+- **Fetching a GaggiMate machine's shot-history index no longer reads an unbounded amount of data into memory.** Closes #991
+- **An MQTT broker host is now checked against the same address-safety guard a machine's own host gets**, including on every automatic reconnect. Closes #988
+- **Outbound machine and URL-import connections now pin the exact address the safety guard just validated.** Closes #987
+- **A machine's persistent live connection now re-validates its host on every automatic reconnect**, not just when first opened. Closes #986
+- **DOCS.md/DOCS.de.md no longer describe GLP Shot Card / Order Card as needing a separate HACS install** — both ship bundled inside GLP Integration. Closes #1007
+
+### Removed
+- **The Node.js runtime dependencies, the standalone `docker-compose` Node path, and the Node-only test suites** are gone along with the backend source. Closes #1028
 
 ## [2.36.1] – 2026-08-30
 ### Fixed

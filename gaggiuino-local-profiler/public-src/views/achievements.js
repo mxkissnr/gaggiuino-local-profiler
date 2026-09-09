@@ -1,5 +1,5 @@
 // #812: the achievements ("stamp card") view. Renders the 54-badge catalogue
-// (lib/achievements/registry.js, served by routes/achievements.js) as a
+// (go/internal/achievements) as a
 // printed cardboard card, per PLAN.md section 5 — not an app panel, not a
 // level/score UI. Seven categories sit side by side from the very first
 // visit (CARD_KEYS below, mirrored from the backend) so an unlockable-only-

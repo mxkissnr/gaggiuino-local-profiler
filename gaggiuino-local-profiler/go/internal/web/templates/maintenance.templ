@@ -1,0 +1,189 @@
+package templates
+
+import "fmt"
+
+// This file is Phase 2e's (#901) Maintenance-domain counterpart to
+// machines.templ: per-machine maintenance task tracking (descaling/
+// backflush/grouphead/gaskets/waterfilter, plus one entry per currently
+// registered grinder), with one htmx write action — "mark done" — built on
+// internal/maintenance.MarkTaskDone (service.go), the same function
+// routes/maintenance.js's POST /api/maintenance/:task/done now calls
+// through too (see go/internal/web/handlers_maintenance.go's own doc
+// comment). Threshold editing and the maintenance log view (both present in
+// public-src/views/maintenance.js) are deliberately NOT built in this
+// phase — see handlers_maintenance.go's doc comment for why.
+
+// MaintMachineOption is one entry in the machine switcher — plain page
+// links (like machines.templ has no htmx-fragment machine switcher of its
+// own to model this on), not an htmx swap, since changing machines also
+// changes which tasks even exist (grinder set can differ per install, though
+// grinders are shared equipment in practice — #338).
+type MaintMachineOption struct {
+	ID   int64
+	Name string
+}
+
+// MaintTile is the display-ready projection of one internal/maintenance.Stat
+// entry — see go/internal/web/view_maintenance.go's toMaintTile.
+type MaintTile struct {
+	Task           string
+	Title          string
+	Status         string // "due" | "soon" | "ok" | "never"
+	Pct            float64
+	Detail         string // e.g. "12 / 200 shots", "40 / 60 days", "never done"
+	ThresholdShots *int64
+	ThresholdDays  *int64
+}
+
+// MaintenancePage is GET /maintenance: every tracked task for
+// currentMachineID, plus a machine switcher when more than one machine is
+// registered.
+templ MaintenancePage(machineOptions []MaintMachineOption, currentMachineID int64, tiles []MaintTile) {
+	@Layout("Maintenance") {
+		<h1 class="page-title">Maintenance</h1>
+		if len(tiles) > 0 {
+			@maintSummary(maintCounts(tiles))
+		}
+		if len(machineOptions) > 1 {
+			<div class="item-actions maint-switcher">
+				for _, m := range machineOptions {
+					if m.ID == currentMachineID {
+						<span class="btn btn-active">{ m.Name }</span>
+					} else {
+						<a class="btn" href={ templ.URL(fmt.Sprintf("maintenance?machineId=%d", m.ID)) }>{ m.Name }</a>
+					}
+				}
+			</div>
+		}
+		<div id="maint-list">
+			@maintList(tiles, currentMachineID)
+		</div>
+	}
+}
+
+// MaintenanceListFragment is the htmx response the "mark done" action
+// answers with — the whole task list, not a single tile, mirroring
+// machines.templ's MachineListFragment/orders.templ's OrdersQueueFragment
+// precedent for "this write changes more than the one row it targets"
+// (marking a task done shifts its own pct/status/detail, which is the
+// targeted tile itself, but re-rendering the whole list is simpler and
+// consistent with those precedents rather than a special one-tile path).
+templ MaintenanceListFragment(tiles []MaintTile, machineID int64) {
+	@maintList(tiles, machineID)
+}
+
+// maintSummary is this page's verdict-first header (design pass 3, #901) —
+// ported from public-src/views/maintenance.js's _renderMaintSummary (three
+// KPI tiles: due/soon/ok counts), the punchline every visitor of this page
+// actually wants ("does anything need attention right now") ahead of the
+// per-task detail list below it. No card border, --raised surface step
+// only, same de-boxing rule the rest of this package's cards already
+// follow.
+templ maintSummary(due, soon, ok int) {
+	<div class="stat-row">
+		<div class="stat-tile">
+			<div class="stat-num due">{ fmt.Sprintf("%d", due) }</div>
+			<div class="stat-label">due</div>
+		</div>
+		<div class="stat-tile">
+			<div class="stat-num soon">{ fmt.Sprintf("%d", soon) }</div>
+			<div class="stat-label">soon</div>
+		</div>
+		<div class="stat-tile">
+			<div class="stat-num ok">{ fmt.Sprintf("%d", ok) }</div>
+			<div class="stat-label">ok</div>
+		</div>
+	</div>
+}
+
+// maintCounts tallies tiles into the same three buckets maintBarClass
+// collapses status into (a "never" tile is exactly as actionable as a
+// "due" one — both mean "no completion on record" — so it counts as due
+// here too).
+func maintCounts(tiles []MaintTile) (due, soon, ok int) {
+	for _, t := range tiles {
+		switch t.Status {
+		case "due", "never":
+			due++
+		case "soon":
+			soon++
+		default:
+			ok++
+		}
+	}
+	return due, soon, ok
+}
+
+templ maintList(tiles []MaintTile, machineID int64) {
+	<div class="item-list" id="maint-list">
+		if len(tiles) == 0 {
+			<div class="empty-state">No maintenance tasks tracked.</div>
+		} else {
+			for _, tile := range tiles {
+				@maintTile(tile, machineID)
+			}
+		}
+	</div>
+}
+
+templ maintTile(tile MaintTile, machineID int64) {
+	<div class="item-row" id={ "maint-row-" + tile.Task }>
+		<div class="item-info">
+			<div class="item-name">
+				{ tile.Title }
+				@maintStatusBadge(tile.Status)
+			</div>
+			<div class="item-meta">{ tile.Detail }</div>
+			<div class="maint-bar"><div class={ "maint-bar-fill", maintBarClass(tile.Status) } style={ maintBarWidth(tile.Pct) }></div></div>
+		</div>
+		<div class="item-actions">
+			<button
+				type="button"
+				class="btn"
+				hx-post={ fmt.Sprintf("maintenance/%s/done?machineId=%d", tile.Task, machineID) }
+				hx-target="#maint-list"
+				hx-swap="outerHTML"
+			>
+				Mark done
+			</button>
+		</div>
+	</div>
+}
+
+templ maintStatusBadge(status string) {
+	switch status {
+		case "due":
+			<span class="badge badge-err">due</span>
+		case "soon":
+			<span class="badge badge-warn">soon</span>
+		case "never":
+			<span class="badge badge-warn">never done</span>
+		default:
+			<span class="badge badge-ok">ok</span>
+	}
+}
+
+func maintBarClass(status string) string {
+	switch status {
+	case "due", "never":
+		return "due"
+	case "soon":
+		return "soon"
+	default:
+		return "ok"
+	}
+}
+
+// maintBarWidth builds the one dynamic inline style this package uses (every
+// other page sticks to CSS classes) — clamped to [0,1] and formatted as a
+// plain integer percentage, so the interpolated value is never anything but
+// digits and the two fixed literal characters around them.
+func maintBarWidth(pct float64) string {
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 1 {
+		pct = 1
+	}
+	return fmt.Sprintf("width: %d%%", int(pct*100))
+}

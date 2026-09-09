@@ -2,13 +2,20 @@ import Chart from 'chart.js/auto';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName } from '../constants.js';
-import { scoreClass, chartColors } from '../utils.js';
+import { scoreClass, chartColors, themeColor, onThemeChange } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
 import { TARGET_ICON_SVG, WARNING_ICON_SVG } from '../icons.js';
 
 // ── Analytics entry point ─────────────────────────────────────────────────
 export function initAnalytics() {
+  // #957: S.allShots is filled by a background page walk after the Shots tab
+  // first paints. Analytics is a whole-history view — build from whatever is
+  // loaded now, and re-run once the walk finishes so the numbers settle on
+  // the full history. (Builders below read S.allShots / S.shots directly.)
+  if (!S.allShotsLoaded) {
+    window.onAllShotMetaLoaded = () => { window.onAllShotMetaLoaded = null; initAnalytics(); };
+  }
   buildSummaryKpis();
   buildTrendChart();
   buildCalendar();
@@ -60,10 +67,9 @@ export function buildSummaryKpis() {
   if (!el) return;
 
   const total   = S.shots.length;
-  const scored  = S.shots.filter(s => window.calcShotScore && window.getShotData
-    && window.calcShotScore(s, window.getShotData(s)) !== null);
+  const scored  = S.shots.filter(s => window.calcShotScore && window.calcShotScore(s) != null);
   const avgScore = scored.length
-    ? Math.round(scored.reduce((a, s) => a + window.calcShotScore(s, window.getShotData(s)), 0) / scored.length)
+    ? Math.round(scored.reduce((a, s) => a + window.calcShotScore(s), 0) / scored.length)
     : null;
 
   const totalG = S.shots.reduce((sum, s) => sum + (s.annotation?.dose || 0), 0);
@@ -89,8 +95,8 @@ export function buildSummaryKpis() {
   const warnEl = document.getElementById('trendWarning');
   if (warnEl) {
     const recent = scored.slice(-5);
-    if (recent.length >= 3 && window.calcShotScore && window.getShotData) {
-      const recentScores = recent.map(s => window.calcShotScore(s, window.getShotData(s)));
+    if (recent.length >= 3 && window.calcShotScore) {
+      const recentScores = recent.map(s => window.calcShotScore(s));
       const n = recentScores.length;
       const xs = recentScores.map((_, i) => i);
       const xm = (n - 1) / 2;
@@ -125,8 +131,8 @@ export function buildPersonalBests() {
 
   let bestShot = null, bestScore = -1;
   for (const s of S.shots) {
-    if (!window.calcShotScore || !window.getShotData) continue;
-    const sc = window.calcShotScore(s, window.getShotData(s));
+    if (!window.calcShotScore) continue;
+    const sc = window.calcShotScore(s);
     if (sc !== null && sc > bestScore) { bestScore = sc; bestShot = s; }
   }
 
@@ -173,7 +179,7 @@ export function buildPersonalBests() {
 // name needs a lookup (_equipmentName() from views/shots/index.js). Grouped
 // by whatever getKey() returns (a grinder name, or a basket/puck-screen id
 // as a string via Object.entries) rather than by the resolved name, so two
-// same-named baskets (routes/library/baskets.js enforces no uniqueness)
+// same-named baskets (go/internal/library (baskets) enforces no uniqueness)
 // still render as separate cards — the name is only resolved for display,
 // after grouping.
 
@@ -190,7 +196,7 @@ export function _computeEquipmentStats(shots, getKey, getName) {
     if (key == null) continue;
     if (!byEquip[key]) byEquip[key] = { count: 0, scores: [], durations: [] };
     byEquip[key].count++;
-    const sc = window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null;
+    const sc = window.calcShotScore ? window.calcShotScore(s) : null;
     if (sc !== null) byEquip[key].scores.push(sc);
     const dur = (s.duration || 0) / 10;
     if (dur > 5) byEquip[key].durations.push(dur);
@@ -336,8 +342,8 @@ export function buildTimeOfDay() {
   for (const s of S.shots) {
     const h = new Date(s.timestamp * 1000).getHours();
     hours[h].count++;
-    if (window.calcShotScore && window.getShotData) {
-      const sc = window.calcShotScore(s, window.getShotData(s));
+    if (window.calcShotScore) {
+      const sc = window.calcShotScore(s);
       if (sc !== null) hours[h].scores.push(sc);
     }
   }
@@ -380,8 +386,8 @@ export function buildTrendChart() {
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
   const all = S.shots.filter(s => {
-    if (!window.calcShotScore || !window.getShotData) return false;
-    return window.calcShotScore(s, window.getShotData(s)) !== null;
+    if (!window.calcShotScore) return false;
+    return window.calcShotScore(s) !== null;
   });
   const src = S.trendWindow > 0 ? all.slice(-S.trendWindow) : all;
 
@@ -396,7 +402,7 @@ export function buildTrendChart() {
 
   const locale   = localeFor(S.currentLang);
   const labels   = src.map(s => new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }));
-  const scoreData = src.map(s => window.calcShotScore(s, window.getShotData(s)));
+  const scoreData = src.map(s => window.calcShotScore(s));
   const maData    = scoreData.map((_, i) => {
     const sl = scoreData.slice(Math.max(0, i - 4), i + 1);
     return Math.round(sl.reduce((a, b) => a + b, 0) / sl.length);
@@ -451,8 +457,8 @@ export function _renderCalendar() {
     if (!dayMap[key]) dayMap[key] = { count: 0, scores: [], lastId: null };
     dayMap[key].count++;
     dayMap[key].lastId = s.id;
-    if (window.calcShotScore && window.getShotData) {
-      const sc = window.calcShotScore(s, window.getShotData(s));
+    if (window.calcShotScore) {
+      const sc = window.calcShotScore(s);
       if (sc !== null) dayMap[key].scores.push(sc);
     }
   }
@@ -523,8 +529,8 @@ export function buildBeanStats() {
     if (!name) continue;
     if (!byBean[name]) byBean[name] = { count: 0, scores: [], durations: [], dialinShot: null };
     byBean[name].count++;
-    if (window.calcShotScore && window.getShotData) {
-      const sc = window.calcShotScore(s, window.getShotData(s));
+    if (window.calcShotScore) {
+      const sc = window.calcShotScore(s);
       if (sc !== null) {
         byBean[name].scores.push(sc);
         if (byBean[name].dialinShot === null && sc >= 80)
@@ -576,6 +582,7 @@ let _worldTopo = null;
 let _worldMapRegistered = false;
 let _echartsInstance = null;
 let _resizeBound = false;
+let _worldMapThemeListenerRegistered = false;
 // #797: echarts + topojson-client (~380 kB gzip combined) are dynamic
 // imports now, only fetched once the map actually has data to draw — cached
 // as a promise (not the resolved modules) so a second buildWorldMap() call
@@ -601,6 +608,61 @@ function _hexToRgba(hex, alpha) {
   const num = parseInt(h, 16);
   const r = (num >> 16) & 255, g = (num >> 8) & 255, b = num & 255;
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// #1024: every color ECharts needs for the map was a hardcoded dark-theme
+// literal (backgroundColor, geo/land fill+borders) except accentTo/mutedText,
+// which already resolved live from CSS custom properties — the same class of
+// bug #814 fixed for Chart.js charts (chartColors()/themeColor(), both in
+// utils.js). Resolved here the same way, via themeColor() + _hexToRgba(),
+// and factored into its own function so both the initial setOption() below
+// and the onThemeChange repaint further down build the exact same colors.
+// MUST be called at paint time, not cached — see themeColor()'s own comment.
+//
+// Token choices: background from --gray-900 (page-background role; dark
+// theme's #131416 keeps this visually close to the old rgba(9,9,11,.55)
+// literal, light theme's #f7f7f6 gives a light wash instead of a dark box),
+// land fill from --gray-600 and borders from --gray-500 (the app's two
+// "muted chrome" roles elsewhere, e.g. chartColors()'s own tick color) —
+// alphas (.55/.4/.7/.6) kept identical to the original literals.
+export function resolveWorldMapColors() {
+  const bg     = themeColor('--gray-900', '#131416');
+  const land   = themeColor('--gray-600', '#93989c');
+  const border = themeColor('--gray-500', '#a4a9ad');
+  return {
+    accentTo:          themeColor('--accent-to', '#f97316'),
+    mutedText:         themeColor('--gray-500', '#71717a'),
+    backgroundColor:   _hexToRgba(bg, .55),
+    areaColor:         _hexToRgba(land, .4),
+    emphasisAreaColor: _hexToRgba(land, .6),
+    borderColor:       _hexToRgba(border, .7),
+    // Text-outline halo behind a bean's map label, meant to keep it legible
+    // over the (accent-colored) land/scatter point beneath it regardless of
+    // theme — same background role as `bg` above, not a separate token.
+    textBorderColor:   _hexToRgba(bg, .7),
+  };
+}
+
+// #1024: unlike the Chart.js charts (which re-theme in place via
+// applyChartTheme(), see main.js's onThemeChange() registration), the map
+// never repainted on a theme switch at all — switching Dark/Light/Auto while
+// Statistics was already open left it on whatever colors it was built with.
+// Partial setOption() (no notMerge flag) only touches the color-bearing keys
+// below — no need to refetch topojson or redo the beans/shots aggregation.
+function _repaintWorldMapTheme() {
+  if (!_echartsInstance) return; // map not built yet (view closed / no data)
+  const c = resolveWorldMapColors();
+  _echartsInstance.setOption({
+    backgroundColor: c.backgroundColor,
+    geo: {
+      itemStyle: { areaColor: c.areaColor, borderColor: c.borderColor },
+      emphasis: { itemStyle: { areaColor: c.emphasisAreaColor } },
+    },
+    series: [
+      { itemStyle: { areaColor: c.accentTo, borderColor: c.borderColor } },
+      { itemStyle: { color: c.accentTo, shadowColor: _hexToRgba(c.accentTo, .6) }, label: { color: c.mutedText, textBorderColor: c.textBorderColor } },
+    ],
+  });
 }
 
 // Pure helper (unit-testable): given a list of [lon, lat] coordinates with
@@ -756,6 +818,18 @@ export async function buildWorldMap() {
   const wrap = document.getElementById('worldMapWrap');
   if (!wrap) return;
 
+  // #1024: register once ever, not once per buildWorldMap() call (mirrors
+  // the _worldMapRegistered guard below for echarts.registerMap) -- the
+  // listener itself is a no-op via _repaintWorldMapTheme()'s _echartsInstance
+  // check whenever the map hasn't been built yet. Guarded on `window` existing
+  // since onThemeChange() (utils.js) binds to it unconditionally, and this
+  // function is also exercised in headless unit tests with no window global
+  // (test/analytics-world-map-race.test.js).
+  if (!_worldMapThemeListenerRegistered && typeof window !== 'undefined') {
+    onThemeChange(_repaintWorldMapTheme);
+    _worldMapThemeListenerRegistered = true;
+  }
+
   // bean name (lowercased) → { bean, origins:[{code, weight}] }, restricted to
   // known coffee countries. A blend's weights come from its per-country
   // percent when set (normalized to sum to 1), else split equally across its
@@ -902,11 +976,10 @@ export async function buildWorldMap() {
     points.push({ name: bean.name, value: [...coord, shots], _region: bean.region || null, label });
   }
 
-  // Brand colors, read live from the CSS custom properties so the map
-  // follows whichever accent/theme the user has picked (not just amber).
-  const cs = getComputedStyle(document.documentElement);
-  const accentTo = (cs.getPropertyValue('--accent-to') || '#f97316').trim() || '#f97316';
-  const mutedText = (cs.getPropertyValue('--gray-500') || '#71717a').trim() || '#71717a';
+  // Brand + chrome colors, read live from the CSS custom properties so the
+  // map follows whichever accent/theme the user has picked (#1024: this used
+  // to be true only for accentTo/mutedText, with the rest hardcoded dark).
+  const c = resolveWorldMapColors();
 
   if (!_echartsInstance) {
     container.innerHTML = ''; // clear the loading message before echarts takes over this node
@@ -920,7 +993,7 @@ export async function buildWorldMap() {
   const { center, zoom } = computeMapBoundingView(boundingCoords);
 
   _echartsInstance.setOption({
-    backgroundColor: 'rgba(9,9,11,.55)',
+    backgroundColor: c.backgroundColor,
     tooltip: {
       formatter: (params) => {
         if (params.seriesType === 'map') {
@@ -942,22 +1015,22 @@ export async function buildWorldMap() {
     },
     geo: {
       map: 'world', roam: true, scaleLimit: { min: 1, max: 12 }, center, zoom,
-      itemStyle: { areaColor: 'rgba(82,82,91,.4)', borderColor: 'rgba(113,113,122,.7)', borderWidth: 0.5 },
-      emphasis: { itemStyle: { areaColor: 'rgba(82,82,91,.6)' }, label: { show: false } },
+      itemStyle: { areaColor: c.areaColor, borderColor: c.borderColor, borderWidth: 0.5 },
+      emphasis: { itemStyle: { areaColor: c.emphasisAreaColor }, label: { show: false } },
     },
     series: [
       {
         type: 'map', map: 'world', geoIndex: 0,
         data: mapData,
-        itemStyle: { areaColor: accentTo, borderColor: 'rgba(113,113,122,.7)', borderWidth: 0.5 },
+        itemStyle: { areaColor: c.accentTo, borderColor: c.borderColor, borderWidth: 0.5 },
         emphasis: { label: { show: false } },
       },
       {
         type: 'effectScatter', coordinateSystem: 'geo',
         data: points,
         symbolSize: 7,
-        itemStyle: { color: accentTo, shadowBlur: 8, shadowColor: _hexToRgba(accentTo, .6) },
-        label: { show: false, color: mutedText, textBorderColor: 'rgba(9,9,11,.7)', textBorderWidth: 2 },
+        itemStyle: { color: c.accentTo, shadowBlur: 8, shadowColor: _hexToRgba(c.accentTo, .6) },
+        label: { show: false, color: c.mutedText, textBorderColor: c.textBorderColor, textBorderWidth: 2 },
         labelLayout: { hideOverlap: true },
         rippleEffect: { scale: 2.5 },
       },
@@ -980,8 +1053,8 @@ export function buildProfileChart() {
     const p = s.profile?.name || s.profileName || 'Unbekannt';
     if (!byProfile[p]) byProfile[p] = { scores: [], count: 0 };
     byProfile[p].count++;
-    if (window.calcShotScore && window.getShotData) {
-      const sc = window.calcShotScore(s, window.getShotData(s));
+    if (window.calcShotScore) {
+      const sc = window.calcShotScore(s);
       if (sc !== null) byProfile[p].scores.push(sc);
     }
   }
@@ -1093,7 +1166,7 @@ export function _computeBeanRanking(shots) {
   for (const [name, beanShots] of Object.entries(byBean)) {
     const sorted = [...beanShots].sort((a, b) => a.timestamp - b.timestamp);
     const scored = sorted
-      .map(s => ({ s, sc: window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null }))
+      .map(s => ({ s, sc: window.calcShotScore ? window.calcShotScore(s) : null }))
       .filter(x => x.sc !== null);
     const avgScore = scored.length ? Math.round(scored.reduce((a, x) => a + x.sc, 0) / scored.length) : null;
 
@@ -1179,7 +1252,13 @@ export function buildBeanRanking() {
 // regardless of whatever S.activeMachineId currently scopes the rest of
 // the app to. Only rendered once >=2 machines are registered.
 function _tempStability(shot) {
-  const temp = shot.datapoints?.temperature, target = shot.datapoints?.targetTemperature;
+  // #957: the server computes this scalar per GET /api/shots row
+  // (tempStabilityDev) from the same temp+target series it parses to score —
+  // no per-shot curve fetch needed here. Fall back to a local compute only
+  // for synthetic/demo shots that carry their own datapoints inline.
+  if (shot.tempStabilityDev !== undefined) return shot.tempStabilityDev;
+  const d = shot.datapoints || {};
+  const temp = d.temperature, target = d.targetTemperature;
   if (!temp?.length || !target?.length) return null;
   const n = Math.min(temp.length, target.length);
   let sum = 0, count = 0;
@@ -1201,7 +1280,7 @@ export function _computeMachineComparison(shots, machines) {
 
   return Object.values(byMachine).map(d => {
     const scored = d.shots
-      .map(s => window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null)
+      .map(s => window.calcShotScore ? window.calcShotScore(s) : null)
       .filter(sc => sc !== null);
     const avgScore = scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null;
 
@@ -1306,7 +1385,7 @@ function _renderDialinProgressionChart(beanName) {
 
   const labels    = shots.map((_, i) => `#${i + 1}`);
   const grindData = shots.map(s => _parseGrindNum(s.annotation?.grindSetting));
-  const scoreData = shots.map(s => window.calcShotScore && window.getShotData ? window.calcShotScore(s, window.getShotData(s)) : null);
+  const scoreData = shots.map(s => window.calcShotScore ? window.calcShotScore(s) : null);
 
   S.dialinProgressionChart = new Chart(ctx, {
     type: 'line',

@@ -1,7 +1,7 @@
 // App-shell service worker for the installable PWA (v1.112.0).
 //
 // This file is only ever registered by pages served OUTSIDE HA Ingress —
-// server.js only injects the <link rel="manifest"> (which main.js checks
+// the backend only injects the <link rel="manifest"> (which main.js checks
 // for before calling register()) for non-Ingress requests. The HA Companion
 // App's embedded WebView loads GLP through Ingress and therefore never sees
 // this script run. That's a deliberate structural fix: the previous

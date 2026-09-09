@@ -1,0 +1,308 @@
+package templates
+
+import "fmt"
+
+// ShotDetail is the display-ready projection of a single shot for the
+// Shots master-detail view's right-hand column (Phase B, #901) — the
+// detail-panel counterpart to ShotRow's compact-list-row projection.
+// internal/web/view_shots_detail.go's toShotDetail builds one from a
+// hydrated shots.Shot plus shots.ComputeShotMetrics/ComputeGrindAdvice.
+//
+// Modeled on public-src/views/shots/index.js's updateView() — the Node
+// shot-detail's fields this Go port covers: the Verdict header (score +
+// one-line dial-in advice +, in non-compare mode, a score-delta chip
+// against the same-profile previous shot), the Recipe zone (dose->yield,
+// ratio+EY, duration+phase split), the bean/grinder/grind-setting line,
+// the shot photo, a same-profile ghost-curve chart overlay, the
+// comparative grind-advice panel, and A/B compare mode (ShotCompareDetail/
+// ShotCompareFragment below) — design pass 4's follow-up pass (#901)
+// closes every one of these, previously deferred for needing the full
+// shot history rather than just one shot (see internal/shots/
+// comparative.go and Service.GetPreviousByProfile). Freshness/firmware
+// badges and the "ordered by" line stay list-only (shots.templ), per that
+// package's own #901 badges pass — a detail view showing the one shot the
+// visitor is already looking at doesn't need its own freshness/ordered-by
+// restated, unlike a list scanning many shots at once.
+type ShotDetail struct {
+	ID           int64
+	ProfileName  string
+	DateTime     string
+	Score        *int
+	ScoreClass   string
+	VerdictIcon  string
+	VerdictText  string
+	Coffee       string
+	GrinderLabel string
+	HasDoseYield bool
+	DoseYield    string
+	HasRatio     bool
+	Ratio        string
+	// EY is already the full "EY 19.4 %" label, empty when unset — unlike
+	// the other Has*-gated fields, its own emptiness is the gate (see
+	// ShotDetailFragment below), since it's always shown alongside Ratio,
+	// never standalone.
+	EY         string
+	Duration   string
+	PhasesSub  string
+	Channeling bool
+	Rating     int
+	HasImage   bool
+	ImageURL   string
+	HasChart   bool
+
+	// Score-delta chip (#901, design pass 4 follow-up): "+5 vs Shot 42" —
+	// only ever set outside compare mode (internal/web/view_shots_detail.go's
+	// enrichWithComparison), mirroring index.js's own `!shotB` gate on
+	// computing it at all.
+	HasScoreDelta   bool
+	ScoreDeltaText  string
+	ScoreDeltaClass string
+
+	// Ghost-curve overlay (#901): the same-profile previous shot's id, fed
+	// to static/shot-chart.js as data-ghost-shot-id so it can fetch and
+	// dashed-overlay that shot's own pressure/flow/weight curves. 0 means
+	// none (never a valid shot id) — HasGhost is the explicit gate anyway,
+	// matching this file's other Has*-gated fields.
+	HasGhost    bool
+	GhostShotID int64
+
+	// Comparative grind-advice panel (#901): "N comparable shots: grind X
+	// → score Y — grind finer", from
+	// shots.Service.GetComparativeGrindAdvice — a second, history-aware
+	// opinion alongside VerdictText's own single-shot heuristic, shown as
+	// its own line rather than replacing VerdictText (the two can and do
+	// disagree — see shots/comparative.go's own doc comment).
+	HasComparativeAdvice   bool
+	ComparativeAdviceIcon  string
+	ComparativeAdviceText  string
+	ComparativeAdviceClass string
+
+	// CompareOptions populates the "Compare with…" <select> — every other
+	// live shot, newest first (same order the list column already uses).
+	// Empty in compare mode itself (ShotCompareDetail has no dropdown of
+	// its own — see ShotCompareFragment's "Exit compare" link instead).
+	CompareOptions []ShotCompareOption
+}
+
+// ShotCompareOption is one entry in the "Compare with…" <select> —
+// view_shots_detail.go builds the list from the same []ShotRow the list
+// column already has, so no extra query is needed just for the dropdown.
+type ShotCompareOption struct {
+	ID    int64
+	Label string
+}
+
+// ShotDetailFragment renders the shot-detail column's content — both GET
+// /shots' initial full-page render (the newest live shot, pre-selected)
+// and GET /shots/{id}'s htmx fragment swap (any row's onclick selection)
+// render this same template, so the two can never visually drift apart.
+// The outer #shot-detail div (ShotsPage's own markup) is the htmx swap
+// target; this fragment is only ever the *content* of that div.
+templ ShotDetailFragment(d ShotDetail) {
+	<div class="shot-detail">
+		<div class="shot-detail-header">
+			<div class="verdict-line">
+				if d.Score != nil {
+					<span class={ "verdict-score-num", d.ScoreClass }>{ fmt.Sprintf("%d", *d.Score) }</span>
+					<span class="verdict-sep">·</span>
+				}
+				<span class="verdict-headline">
+					if d.VerdictIcon != "" {
+						{ d.VerdictIcon + " " }
+					}
+					{ d.VerdictText }
+				</span>
+				if d.HasScoreDelta {
+					<span class="verdict-sep">·</span>
+					<span class={ "verdict-delta", d.ScoreDeltaClass }>{ d.ScoreDeltaText }</span>
+				}
+			</div>
+			<div class="verdict-subline">{ d.ProfileName } · Shot { fmt.Sprintf("%d", d.ID) } · { d.DateTime }</div>
+			if len(d.CompareOptions) > 0 {
+				<select class="filter-input compare-select" name="compare" hx-get={ fmt.Sprintf("shots/%d", d.ID) } hx-trigger="change" hx-target="#shot-detail" hx-swap="innerHTML" hx-include="this">
+					<option value="">Compare with…</option>
+					for _, opt := range d.CompareOptions {
+						<option value={ fmt.Sprintf("%d", opt.ID) }>{ opt.Label }</option>
+					}
+				</select>
+			}
+			if d.HasImage {
+				<img class="shot-photo" src={ templ.URL(d.ImageURL) } alt="Shot photo"/>
+			}
+		</div>
+		if d.Channeling {
+			<div class="channeling-warning">⚡ Channeling detected</div>
+		}
+		if d.HasComparativeAdvice {
+			<div class={ "comparative-advice", d.ComparativeAdviceClass }>
+				if d.ComparativeAdviceIcon != "" {
+					{ d.ComparativeAdviceIcon + " " }
+				}
+				{ d.ComparativeAdviceText }
+			</div>
+		}
+		<div class="metrics-grid">
+			if d.HasDoseYield {
+				<div class="metric-tile">
+					<div class="metric-label">Dose → Yield</div>
+					<div class="metric-value">{ d.DoseYield }</div>
+				</div>
+			}
+			if d.HasRatio {
+				<div class="metric-tile">
+					<div class="metric-label">Ratio</div>
+					<div class="metric-value">{ d.Ratio }</div>
+					if d.EY != "" {
+						<div class="metric-sub">{ d.EY }</div>
+					}
+				</div>
+			}
+			if d.Duration != "" {
+				<div class="metric-tile">
+					<div class="metric-label">Duration</div>
+					<div class="metric-value">{ d.Duration }</div>
+					if d.PhasesSub != "" {
+						<div class="metric-sub">{ d.PhasesSub }</div>
+					}
+				</div>
+			}
+		</div>
+		<div class="bean-line">
+			<span class="bean-name">
+				if d.Coffee != "" {
+					{ d.Coffee }
+				} else {
+					{ "–" }
+				}
+			</span>
+			if d.GrinderLabel != "" {
+				<span class="bean-sep">·</span>
+				<span class="grinder-label">{ d.GrinderLabel }</span>
+			}
+			if d.Rating > 0 {
+				<span class="bean-sep">·</span>
+				<span class="stars">{ stars(d.Rating) }</span>
+			}
+		</div>
+		if d.HasChart {
+			<div class="shot-chart-wrap">
+				if d.HasGhost {
+					<canvas id="shotDetailChart" data-shot-id={ fmt.Sprintf("%d", d.ID) } data-ghost-shot-id={ fmt.Sprintf("%d", d.GhostShotID) }></canvas>
+				} else {
+					<canvas id="shotDetailChart" data-shot-id={ fmt.Sprintf("%d", d.ID) }></canvas>
+				}
+			</div>
+		} else {
+			<div class="empty-state">No curve data recorded for this shot.</div>
+		}
+	</div>
+}
+
+// shotDetailEmpty is GET /shots' right-hand column when there is no shot
+// (live or trashed) to show at all — a brand new install with zero shots
+// recorded yet.
+templ shotDetailEmpty() {
+	<div class="empty-state">No shot selected.</div>
+}
+
+// ShotCompareDetail is A/B compare mode's projection (#901, design pass 4
+// follow-up) — two independently-built ShotDetail values (same
+// toShotDetail every single-shot view uses, so the two panels can never
+// visually drift from what single-shot mode itself would show for either
+// shot), neither carrying score-delta/ghost/comparative-advice/
+// CompareOptions fields (view_shots_detail.go's enrichWithComparison is
+// never called for either side — those three features are same-profile-
+// history features for ONE shot, not meaningful once the visitor has
+// already explicitly picked a second shot to diff against).
+type ShotCompareDetail struct {
+	A ShotDetail
+	B ShotDetail
+}
+
+// ShotCompareFragment renders GET /shots/{id}?compare={id2}'s response —
+// both shots' verdict/metrics/bean-line side by side, then ONE shared
+// chart (static/shot-chart.js's data-compare-shot-id branch draws both
+// curves onto it — see that file's own doc comment for the exact
+// solid-A/dashed-.65-alpha-B styling this mirrors from index.js). "Exit
+// compare" returns to A's own plain single-shot view.
+templ ShotCompareFragment(cd ShotCompareDetail) {
+	<div class="shot-detail shot-compare">
+		<div class="shot-compare-header">
+			<div class="verdict-subline">Compare: Shot { fmt.Sprintf("%d", cd.A.ID) } vs. Shot { fmt.Sprintf("%d", cd.B.ID) }</div>
+			<button type="button" class="btn" hx-get={ fmt.Sprintf("shots/%d", cd.A.ID) } hx-target="#shot-detail" hx-swap="innerHTML">
+				✕ Exit compare
+			</button>
+		</div>
+		<div class="shot-compare-grid">
+			@shotCompareSide(cd.A, "A")
+			@shotCompareSide(cd.B, "B")
+		</div>
+		if cd.A.HasChart {
+			<div class="shot-chart-wrap">
+				<canvas id="shotDetailChart" data-shot-id={ fmt.Sprintf("%d", cd.A.ID) } data-compare-shot-id={ fmt.Sprintf("%d", cd.B.ID) }></canvas>
+			</div>
+		} else {
+			<div class="empty-state">No curve data recorded for shot { fmt.Sprintf("%d", cd.A.ID) }.</div>
+		}
+	</div>
+}
+
+// shotCompareSide renders one shot's verdict/metrics/bean-line — the same
+// information ShotDetailFragment's own header/metrics-grid/bean-line
+// sections show, condensed into one compare-mode column. label ("A"/"B")
+// disambiguates the two panels, matching the chart legend's own "(A)"/"(B)"
+// dataset-label suffixes (static/shot-chart.js's buildDatasets).
+templ shotCompareSide(d ShotDetail, label string) {
+	<div class="shot-compare-side">
+		<div class="verdict-line">
+			<span class="badge">{ label }</span>
+			if d.Score != nil {
+				<span class={ "verdict-score-num", d.ScoreClass }>{ fmt.Sprintf("%d", *d.Score) }</span>
+			}
+		</div>
+		<div class="verdict-subline">{ d.ProfileName } · Shot { fmt.Sprintf("%d", d.ID) } · { d.DateTime }</div>
+		<div class="metrics-grid">
+			if d.HasDoseYield {
+				<div class="metric-tile">
+					<div class="metric-label">Dose → Yield</div>
+					<div class="metric-value">{ d.DoseYield }</div>
+				</div>
+			}
+			if d.HasRatio {
+				<div class="metric-tile">
+					<div class="metric-label">Ratio</div>
+					<div class="metric-value">{ d.Ratio }</div>
+					if d.EY != "" {
+						<div class="metric-sub">{ d.EY }</div>
+					}
+				</div>
+			}
+			if d.Duration != "" {
+				<div class="metric-tile">
+					<div class="metric-label">Duration</div>
+					<div class="metric-value">{ d.Duration }</div>
+					if d.PhasesSub != "" {
+						<div class="metric-sub">{ d.PhasesSub }</div>
+					}
+				</div>
+			}
+		</div>
+		<div class="bean-line">
+			<span class="bean-name">
+				if d.Coffee != "" {
+					{ d.Coffee }
+				} else {
+					{ "–" }
+				}
+			</span>
+			if d.GrinderLabel != "" {
+				<span class="bean-sep">·</span>
+				<span class="grinder-label">{ d.GrinderLabel }</span>
+			}
+			if d.Rating > 0 {
+				<span class="bean-sep">·</span>
+				<span class="stars">{ stars(d.Rating) }</span>
+			}
+		</div>
+	</div>
+}

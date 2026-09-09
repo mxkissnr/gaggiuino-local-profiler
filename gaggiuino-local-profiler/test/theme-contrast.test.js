@@ -17,6 +17,23 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 
+// #1021: resolveAccentInk() (components/machines-settings.js) is the module
+// under test for the "accent used as text" describe block below -- that
+// module's own top-level IIFE reads localStorage on import (restoreActive
+// Machine()), so it needs the same minimal fake-DOM globals
+// test/machine-accent-theme.test.js already sets up, imported here first.
+const _localStorageStore = {};
+globalThis.localStorage ??= {
+  getItem: (k) => (k in _localStorageStore ? _localStorageStore[k] : null),
+  setItem: (k, v) => { _localStorageStore[k] = String(v); },
+};
+globalThis.navigator ??= { language: 'en-US' };
+globalThis.window ??= globalThis;
+globalThis.document ??= { documentElement: {}, getElementById: () => undefined };
+
+const { resolveAccentInk } = await import('../public-src/components/machines-settings.js');
+const { THEME_PRESETS } = await import('../public-src/shared/theme-presets.js');
+
 const CSS = fs.readFileSync(
   path.join(import.meta.dirname, '..', 'public-src', 'style.css'), 'utf8');
 
@@ -56,13 +73,17 @@ function contrast(a, b) {
 
 // A variant is the full set of tokens in effect for one theme combination:
 // its own block layered over the blocks it inherits from.
+//
+// #1019: dropped the crema-only dark/light variants along with Crema's
+// whole special-cased accent behavior (the [data-accent="crema"] /
+// [data-theme="light"][data-accent="crema"] blocks these used to layer in
+// no longer exist) -- the 8 new THEME_PRESETS are all plain accent swaps of
+// these same two base gray/semantic scales, same as every other retired
+// legacy accent already was.
 const BASE = tokensOf(':root');
 const VARIANTS = {
-  dark:          BASE,
-  'crema dark':  { ...BASE, ...tokensOf('[data-accent="crema"]') },
-  light:         { ...BASE, ...tokensOf('[data-theme="light"]') },
-  'crema light': { ...BASE, ...tokensOf('[data-theme="light"]'),
-                   ...tokensOf('[data-theme="light"][data-accent="crema"]') },
+  dark:  BASE,
+  light: { ...BASE, ...tokensOf('[data-theme="light"]') },
 };
 
 const TEXT_ROLES    = ['--gray-100', '--gray-200', '--gray-300', '--gray-400',
@@ -119,53 +140,52 @@ describe('design token contrast (#811)', () => {
     }
   });
 
-  // The accent is the brand and is audited, not adjusted — but its TEXT
-  // form has to be readable, which on light grounds it is not.
-  describe('accent used as text (--accent-ink)', () => {
-    const LIGHT_ACCENTS = {
-      amber:  '[data-theme="light"]:not([data-accent]), [data-theme="light"][data-accent="amber"]',
-      ocean:  '[data-theme="light"][data-accent="ocean"]',
-      aurora: '[data-theme="light"][data-accent="aurora"]',
-      ember:  '[data-theme="light"][data-accent="ember"]',
-      forest: '[data-theme="light"][data-accent="forest"]',
-    };
-    const lightSurfaces = { ...BASE, ...tokensOf('[data-theme="light"]') };
+  // #1021: successor to the #1019-removed "accent used as text
+  // (--accent-ink)" block above (see git blame on this file around that
+  // merge) -- redone for the 8 new THEME_PRESETS against resolveAccentInk()
+  // (components/machines-settings.js) instead of the old per-accent
+  // [data-accent="..."] CSS selectors, which stay retired. Reads the four
+  // light surfaces straight from the already-parsed `light` VARIANTS tokens
+  // above, so this stays correct if the surface values themselves ever move.
+  describe('accent used as text (--accent-ink, #1021)', () => {
+    const lightSurfaces = VARIANTS.light;
 
-    for (const [accent, selector] of Object.entries(LIGHT_ACCENTS)) {
-      it(`${accent} ink clears ${AA}:1 on every light surface`, () => {
-        const ink = tokensOf(selector)['--accent-ink'];
-        expect(ink, `${accent} has no --accent-ink in the light theme`).toBeDefined();
+    for (const p of THEME_PRESETS) {
+      it(`${p.key} ink clears ${AA}:1 on every light surface`, () => {
+        const ink = resolveAccentInk(p.key, p.a, true);
         for (const surface of SURFACE_ROLES) {
           const ratio = contrast(ink, lightSurfaces[surface]);
-          expect(ratio, `${accent} ink ${ink} on ${surface} (${lightSurfaces[surface]}) = ${ratio.toFixed(2)}:1`)
+          expect(ratio, `${p.key} ink ${ink} (raw ${p.a}) on ${surface} (${lightSurfaces[surface]}) = ${ratio.toFixed(2)}:1`)
             .toBeGreaterThanOrEqual(AA);
         }
       });
     }
 
-    it('crema light ink clears the floor on crema light surfaces', () => {
-      const crema = { ...BASE, ...tokensOf('[data-theme="light"]'),
-                      ...tokensOf('[data-theme="light"][data-accent="crema"]') };
-      for (const surface of SURFACE_ROLES) {
-        const ratio = contrast(crema['--accent-ink'], crema[surface]);
-        expect(ratio, `crema ink on ${surface} = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA);
+    it('is a no-op outside the light theme for every preset', () => {
+      // #1021 is scoped to the light theme only (per the issue: the dark
+      // theme keeps whatever it already had, unaudited, same as every other
+      // preset property) -- unlike --accent-text/-glow this can't also
+      // assert dark-surface readability here, because unlike the old
+      // 6-accent system (which curated a separate bright value per accent
+      // specifically for the dark theme) these 8 presets use ONE hex for
+      // both themes, and at least one (ruby-ristretto, #7f1d1d) is already
+      // low-contrast on the dark theme's own dark surfaces -- a pre-existing,
+      // out-of-scope fact this audit doesn't touch either way.
+      for (const p of THEME_PRESETS) {
+        expect(resolveAccentInk(p.key, p.a, false), `${p.key} ink should be unmodified (${p.a}) outside the light theme`).toBe(p.a);
       }
     });
 
-    it('every dark accent is readable as text without adjustment', () => {
-      // Documents WHY --accent-ink simply aliases --accent in the dark
-      // theme: if this ever fails, that alias is no longer safe.
-      const darkAccents = {
-        amber: '#f59e0b', ocean: '#38bdf8', aurora: '#a78bfa',
-        ember: '#fb923c', forest: '#34d399', crema: '#d4a24c',
-      };
-      for (const [name, hex] of Object.entries(darkAccents)) {
-        for (const surface of SURFACE_ROLES) {
-          const ratio = contrast(hex, BASE[surface]);
-          expect(ratio, `dark ${name} ${hex} on ${surface} = ${ratio.toFixed(2)}:1`)
-            .toBeGreaterThanOrEqual(AA);
-        }
+    it('leaves an already-compliant preset (ruby-ristretto, mulberry-mocha) unmodified in the light theme too', () => {
+      for (const key of ['ruby-ristretto', 'mulberry-mocha']) {
+        const raw = THEME_PRESETS.find(p => p.key === key).a;
+        expect(resolveAccentInk(key, raw, true)).toBe(raw);
       }
+    });
+
+    it('falls back to the raw accent hex for a preset key with no override entry (unaudited/custom)', () => {
+      expect(resolveAccentInk('not-a-real-preset', '#123456', true)).toBe('#123456');
+      expect(resolveAccentInk(null, '#123456', true)).toBe('#123456');
     });
   });
 });

@@ -1,0 +1,864 @@
+package templates
+
+import "fmt"
+
+// This file is Phase 2b's (#901) Library-domain counterpart to shots.templ:
+// a read list page per entity (Beans, Grinders, Baskets, Puck Screens,
+// Milks, Recipes), modeled on public-src/views/library.js's
+// renderBeanList/renderGrinderList/renderBasketList/renderPuckScreenList/
+// renderMilkList/renderRecipeList (see internal/web/view_library.go's
+// projection functions for exactly which fields each Row type carries and
+// why). Beans was the "full pattern" page (list + toggle-active) in Phase
+// 2b; a later pass (#901, the Go web-UI Create/Edit follow-up prompted by
+// "ich kann garnix anlegen") gave every one of these six pages a "New ..."
+// create form too, each posting straight to internal/library.CreateBean/
+// CreateGrinder/CreateBasket/CreatePuckScreen/CreateMilk/CreateRecipe
+// (internal/library/create.go) — the exact same read-validate-save
+// functions POST /api/library/{bean,grinder,basket,puckscreen,milk,recipe}
+// also call, per this package's "call the service layer, not a new
+// reimplementation" convention. Only the fields each entity's REST create
+// endpoint actually requires or most commonly sets are exposed here (name
+// plus 1-2 more), not the full field set — see go/README.md's Status
+// section for the explicit scope call ("erster nutzbarer Durchstich", not
+// a full CRUD/edit UI; editing an existing entity and the two dozen
+// optional bean fields the REST API also accepts stay out of scope).
+//
+// Every create form answers 200 either way (success or validation
+// failure) and swaps its own errors into the SAME fragment the success
+// path re-renders (the entity's "*Content" templ below) — not
+// writeFragmentError's non-2xx-status convention every other write action
+// in this package uses. htmx 2.0's own default responseHandling table
+// (see static/vendor/htmx-2.0.10.min.js) does NOT swap 4xx/5xx responses
+// into the DOM at all ({code:"[45]..",swap:false,error:true}), so a
+// writeFragmentError-style 400 here would leave a validation error
+// invisible in a real browser — exactly the failure mode
+// templates/menu.templ's own MenuPage formError doc comment already
+// flagged as a known, unwired gap for that page's own non-2xx error path.
+// These six create actions are the first ones in this package to close
+// that gap properly instead of repeating it.
+
+// stockBarWidth builds the one dynamic inline style both the bean and milk
+// stock bars use — mirrors maintenance.templ's own maintBarWidth for the
+// same reason (a CSS class can't parameterize a percentage, and the value
+// is already clamped to [0,100] by the view-layer functions that compute
+// it, so this only ever formats digits).
+func stockBarWidth(pct float64) string {
+	return fmt.Sprintf("width: %.0f%%", pct)
+}
+
+// ── Beans ──────────────────────────────────────────────────────────────
+
+// BeanRow is the display-ready projection of a library.Entity bean.
+type BeanRow struct {
+	ID         int64
+	Name       string
+	Roaster    string
+	Category   string // raw "normal"/"speciality" — Edit form's <select> value
+	Speciality bool
+	Decaf      bool
+	Enabled    bool
+	RoastDate  string
+	Notes      string
+	StockG     string  // "250 g" or "" when untracked
+	StockGRaw  float64 // raw grams — Edit form's number input value
+	Remaining  string  // "180 g remaining" or "" when untracked/unknown
+	StockPct   float64 // 0-100, only meaningful when Remaining != ""
+	StockLow   bool    // remaining < 100g — mirrors public-src's lib-inv-remaining.low
+	BagCount   int
+}
+
+// BeansPage is GET /beans: the "New bean" form plus every bean in the
+// library, each with a toggle-active htmx action.
+templ BeansPage(rows []BeanRow, formError string) {
+	@Layout("Beans") {
+		<h1 class="page-title">Beans</h1>
+		<div id="beans-content">
+			@beansContent(rows, formError)
+		</div>
+	}
+}
+
+// BeansContentFragment is the htmx response createBeanAction
+// (handlers_library.go) answers with — the whole form+list block
+// re-rendered, targeting #beans-content with hx-swap="innerHTML": a
+// successful submission clears the form (a fresh empty one renders) and
+// shows the new bean in the list; a validation failure re-renders the same
+// block with formError set, in place, without losing the list.
+templ BeansContentFragment(rows []BeanRow, formError string) {
+	@beansContent(rows, formError)
+}
+
+templ beansContent(rows []BeanRow, formError string) {
+	<section class="new-entity-form">
+		<h2 class="trash-heading">New bean</h2>
+		if formError != "" {
+			<div class="badge badge-err">{ formError }</div>
+		}
+		<form class="order-form" hx-post="beans" hx-target="#beans-content" hx-swap="innerHTML">
+			<label class="item-meta" for="bean-name">Name</label>
+			<input class="filter-input" type="text" id="bean-name" name="name" required maxlength="200"/>
+			<label class="item-meta" for="bean-roaster">Roaster</label>
+			<input class="filter-input" type="text" id="bean-roaster" name="roaster" maxlength="200"/>
+			<label class="item-meta" for="bean-category">Category</label>
+			<select class="filter-input" id="bean-category" name="category">
+				<option value="normal">Normal</option>
+				<option value="speciality">Speciality</option>
+			</select>
+			<button type="submit" class="btn">Add bean</button>
+		</form>
+	</section>
+	if len(rows) == 0 {
+		<div class="empty-state">No beans yet.</div>
+	} else {
+		<div class="item-list" id="bean-list">
+			for _, row := range rows {
+				@beanRow(row)
+			}
+		</div>
+	}
+}
+
+// BeanFragment renders a single bean row on its own — the htmx response
+// toggleBeanActiveAction (internal/web/handlers_library.go) answers with,
+// swapped into the list in place via hx-swap="outerHTML" so the row's label/
+// styling reflect the new enabled state without a full page reload.
+templ BeanFragment(row BeanRow) {
+	@beanRow(row)
+}
+
+templ beanRow(row BeanRow) {
+	<div class={ "item-row", templ.KV("disabled", !row.Enabled) } id={ fmt.Sprintf("bean-row-%d", row.ID) }>
+		<div class="item-info">
+			<div class="item-name">
+				{ row.Name }
+				if row.Speciality {
+					<span class="badge badge-speciality">speciality</span>
+				}
+				if row.Decaf {
+					<span class="badge">decaf</span>
+				}
+				if !row.Enabled {
+					<span class="badge">disabled</span>
+				}
+			</div>
+			<div class="item-meta">
+				if row.Roaster != "" {
+					{ row.Roaster }
+				}
+				if row.RoastDate != "" {
+					{ " · roasted " + row.RoastDate }
+				}
+				if row.StockG != "" {
+					{ " · " + row.StockG }
+					if row.Remaining != "" {
+						{ " (" + row.Remaining + " left)" }
+						<span class="stock-bar" title={ fmt.Sprintf("%.0f%%", row.StockPct) }>
+							<span class={ "stock-bar-fill", templ.KV("low", row.StockLow) } style={ stockBarWidth(row.StockPct) }></span>
+						</span>
+					}
+				}
+				if row.BagCount > 1 {
+					{ fmt.Sprintf(" · %d bags", row.BagCount) }
+				}
+			</div>
+		</div>
+		<div class="item-actions">
+			<button
+				type="button"
+				class="btn"
+				hx-get={ fmt.Sprintf("beans/%d/edit", row.ID) }
+				hx-target={ fmt.Sprintf("#bean-row-%d", row.ID) }
+				hx-swap="outerHTML"
+			>
+				Edit
+			</button>
+			<button
+				type="button"
+				class="btn"
+				hx-post={ fmt.Sprintf("beans/%d/toggle-active", row.ID) }
+				hx-target={ fmt.Sprintf("#bean-row-%d", row.ID) }
+				hx-swap="outerHTML"
+			>
+				if row.Enabled {
+					Disable
+				} else {
+					Enable
+				}
+			</button>
+		</div>
+	</div>
+}
+
+// BeanEditFragment renders bean id's inline edit form — the htmx response
+// beanEditAction (handlers_library.go) answers `GET /beans/{id}/edit` with,
+// swapped over the row via hx-swap="outerHTML". Saving (hx-put="beans/{id}")
+// or cancelling (hx-get="beans/{id}") both swap the same #bean-row-{id}
+// element back to a plain @beanRow.
+templ BeanEditFragment(row BeanRow, formError string) {
+	<div class="item-row item-row-edit" id={ fmt.Sprintf("bean-row-%d", row.ID) }>
+		<form class="order-form" hx-put={ fmt.Sprintf("beans/%d", row.ID) } hx-target={ fmt.Sprintf("#bean-row-%d", row.ID) } hx-swap="outerHTML">
+			if formError != "" {
+				<div class="badge badge-err">{ formError }</div>
+			}
+			<label class="item-meta" for={ fmt.Sprintf("bean-edit-name-%d", row.ID) }>Name</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("bean-edit-name-%d", row.ID) } name="name" required maxlength="200" value={ row.Name }/>
+			<label class="item-meta" for={ fmt.Sprintf("bean-edit-roaster-%d", row.ID) }>Roaster</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("bean-edit-roaster-%d", row.ID) } name="roaster" maxlength="200" value={ row.Roaster }/>
+			<label class="item-meta" for={ fmt.Sprintf("bean-edit-category-%d", row.ID) }>Category</label>
+			<select class="filter-input" id={ fmt.Sprintf("bean-edit-category-%d", row.ID) } name="category">
+				<option value="normal" selected?={ row.Category != "speciality" }>Normal</option>
+				<option value="speciality" selected?={ row.Category == "speciality" }>Speciality</option>
+			</select>
+			<label class="item-meta" for={ fmt.Sprintf("bean-edit-roastdate-%d", row.ID) }>Roast date</label>
+			<input class="filter-input" type="date" id={ fmt.Sprintf("bean-edit-roastdate-%d", row.ID) } name="roastDate" value={ row.RoastDate }/>
+			<label class="item-meta" for={ fmt.Sprintf("bean-edit-stockg-%d", row.ID) }>Stock (g)</label>
+			<input class="filter-input" type="number" id={ fmt.Sprintf("bean-edit-stockg-%d", row.ID) } name="stock_g" min="0" step="0.1" value={ fmt.Sprintf("%g", row.StockGRaw) }/>
+			<label class="item-meta">
+				<input type="hidden" name="decaf_present" value="1"/>
+				<input type="checkbox" name="decaf" value="true" checked?={ row.Decaf }/>
+				Decaf
+			</label>
+			<label class="item-meta" for={ fmt.Sprintf("bean-edit-notes-%d", row.ID) }>Notes</label>
+			<textarea class="filter-input" id={ fmt.Sprintf("bean-edit-notes-%d", row.ID) } name="notes" maxlength="1000">{ row.Notes }</textarea>
+			<div class="item-actions">
+				<button type="submit" class="btn">Save</button>
+				<button type="button" class="btn" hx-get={ fmt.Sprintf("beans/%d", row.ID) } hx-target={ fmt.Sprintf("#bean-row-%d", row.ID) } hx-swap="outerHTML">Cancel</button>
+			</div>
+		</form>
+	</div>
+}
+
+// ── Grinders ───────────────────────────────────────────────────────────
+
+// GrinderRow is the display-ready projection of a library.Entity grinder,
+// including its computed (not stored) wear stats — see
+// library.ComputeGrinderWearStats.
+type GrinderRow struct {
+	ID              int64
+	Name            string
+	BurrType        string
+	PurchaseDate    string
+	Notes           string
+	ShotsSinceBurrs int
+	GramsSinceBurrs string // pre-formatted, e.g. "1.2 kg" or "340 g"
+}
+
+// GrindersPage is GET /grinders: the "New grinder" form plus every grinder
+// in the library (read-only list otherwise — no per-grinder write action
+// beyond creation in this package, see the dispatch brief's own scope
+// call).
+templ GrindersPage(rows []GrinderRow, formError string) {
+	@Layout("Grinders") {
+		<h1 class="page-title">Grinders</h1>
+		<div id="grinders-content">
+			@grindersContent(rows, formError)
+		</div>
+	}
+}
+
+templ GrindersContentFragment(rows []GrinderRow, formError string) {
+	@grindersContent(rows, formError)
+}
+
+templ grindersContent(rows []GrinderRow, formError string) {
+	<section class="new-entity-form">
+		<h2 class="trash-heading">New grinder</h2>
+		if formError != "" {
+			<div class="badge badge-err">{ formError }</div>
+		}
+		<form class="order-form" hx-post="grinders" hx-target="#grinders-content" hx-swap="innerHTML">
+			<label class="item-meta" for="grinder-name">Name</label>
+			<input class="filter-input" type="text" id="grinder-name" name="name" required maxlength="200"/>
+			<label class="item-meta" for="grinder-burrtype">Burr type</label>
+			<input class="filter-input" type="text" id="grinder-burrtype" name="burrType" maxlength="200"/>
+			<label class="item-meta" for="grinder-purchasedate">Purchase date</label>
+			<input class="filter-input" type="date" id="grinder-purchasedate" name="purchaseDate"/>
+			<button type="submit" class="btn">Add grinder</button>
+		</form>
+	</section>
+	if len(rows) == 0 {
+		<div class="empty-state">No grinders yet.</div>
+	} else {
+		<div class="item-list">
+			for _, row := range rows {
+				@grinderRow(row)
+			}
+		</div>
+	}
+}
+
+// GrinderFragment renders a single grinder row on its own — the htmx
+// response GET /grinders/{id} (a plain view-mode re-render, used by the Edit
+// form's Cancel button) answers with.
+templ GrinderFragment(row GrinderRow) {
+	@grinderRow(row)
+}
+
+templ grinderRow(row GrinderRow) {
+	<div class="item-row" id={ fmt.Sprintf("grinder-row-%d", row.ID) }>
+		<div class="item-info">
+			<div class="item-name">{ row.Name }</div>
+			<div class="item-meta">
+				if row.BurrType != "" {
+					{ row.BurrType }
+				}
+				if row.PurchaseDate != "" {
+					{ " · purchased " + row.PurchaseDate }
+				}
+				{ fmt.Sprintf(" · %d shots / %s since burr swap", row.ShotsSinceBurrs, row.GramsSinceBurrs) }
+			</div>
+		</div>
+		<div class="item-actions">
+			<button
+				type="button"
+				class="btn"
+				hx-get={ fmt.Sprintf("grinders/%d/edit", row.ID) }
+				hx-target={ fmt.Sprintf("#grinder-row-%d", row.ID) }
+				hx-swap="outerHTML"
+			>
+				Edit
+			</button>
+		</div>
+	</div>
+}
+
+// GrinderEditFragment renders grinder id's inline edit form — see
+// BeanEditFragment's own doc comment for the swap pattern this mirrors.
+templ GrinderEditFragment(row GrinderRow, formError string) {
+	<div class="item-row item-row-edit" id={ fmt.Sprintf("grinder-row-%d", row.ID) }>
+		<form class="order-form" hx-put={ fmt.Sprintf("grinders/%d", row.ID) } hx-target={ fmt.Sprintf("#grinder-row-%d", row.ID) } hx-swap="outerHTML">
+			if formError != "" {
+				<div class="badge badge-err">{ formError }</div>
+			}
+			<label class="item-meta" for={ fmt.Sprintf("grinder-edit-name-%d", row.ID) }>Name</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("grinder-edit-name-%d", row.ID) } name="name" required maxlength="200" value={ row.Name }/>
+			<label class="item-meta" for={ fmt.Sprintf("grinder-edit-burrtype-%d", row.ID) }>Burr type</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("grinder-edit-burrtype-%d", row.ID) } name="burrType" maxlength="200" value={ row.BurrType }/>
+			<label class="item-meta" for={ fmt.Sprintf("grinder-edit-purchasedate-%d", row.ID) }>Purchase date</label>
+			<input class="filter-input" type="date" id={ fmt.Sprintf("grinder-edit-purchasedate-%d", row.ID) } name="purchaseDate" value={ row.PurchaseDate }/>
+			<label class="item-meta" for={ fmt.Sprintf("grinder-edit-notes-%d", row.ID) }>Notes</label>
+			<textarea class="filter-input" id={ fmt.Sprintf("grinder-edit-notes-%d", row.ID) } name="notes" maxlength="1000">{ row.Notes }</textarea>
+			<div class="item-actions">
+				<button type="submit" class="btn">Save</button>
+				<button type="button" class="btn" hx-get={ fmt.Sprintf("grinders/%d", row.ID) } hx-target={ fmt.Sprintf("#grinder-row-%d", row.ID) } hx-swap="outerHTML">Cancel</button>
+			</div>
+		</form>
+	</div>
+}
+
+// ── Baskets ────────────────────────────────────────────────────────────
+
+// BasketRow is the display-ready projection of a library.Entity basket.
+// DoseCapacity/HoleCount are already free-text strings on the entity itself
+// (routes/library/baskets.js's `trimMax(body["doseCapacity"], 50)` et al. —
+// see internal/library/handlers_baskets.go's createBasket), not numbers this
+// package formats, matching public-src/views/library.js's renderBasketList.
+type BasketRow struct {
+	ID           int64
+	Name         string
+	WallType     string
+	Shape        string
+	DoseCapacity string
+	HoleCount    string
+	Notes        string
+}
+
+templ BasketsPage(rows []BasketRow, formError string) {
+	@Layout("Baskets") {
+		<h1 class="page-title">Baskets</h1>
+		<div id="baskets-content">
+			@basketsContent(rows, formError)
+		</div>
+	}
+}
+
+templ BasketsContentFragment(rows []BasketRow, formError string) {
+	@basketsContent(rows, formError)
+}
+
+// basketWallTypeOptions/basketShapeOptions mirror
+// internal/library/handlers_baskets.go's basketWallTypes/basketShapes enum
+// sets exactly (CreateBasket, which this form posts to, rejects anything
+// else) — duplicated here rather than imported since that package's enum
+// maps are unexported and, being a fixed, stable vocabulary, not worth
+// exporting just for this one call site.
+templ basketsContent(rows []BasketRow, formError string) {
+	<section class="new-entity-form">
+		<h2 class="trash-heading">New basket</h2>
+		if formError != "" {
+			<div class="badge badge-err">{ formError }</div>
+		}
+		<form class="order-form" hx-post="baskets" hx-target="#baskets-content" hx-swap="innerHTML">
+			<label class="item-meta" for="basket-name">Name</label>
+			<input class="filter-input" type="text" id="basket-name" name="name" required maxlength="200"/>
+			<label class="item-meta" for="basket-walltype">Wall type</label>
+			<select class="filter-input" id="basket-walltype" name="wallType">
+				<option value="">—</option>
+				<option value="pressurized">Pressurized</option>
+				<option value="single-wall">Single-wall</option>
+				<option value="precision-machined">Precision-machined</option>
+				<option value="high-flow">High-flow</option>
+			</select>
+			<label class="item-meta" for="basket-shape">Shape</label>
+			<select class="filter-input" id="basket-shape" name="shape">
+				<option value="">—</option>
+				<option value="straight">Straight</option>
+				<option value="tapered">Tapered</option>
+			</select>
+			<button type="submit" class="btn">Add basket</button>
+		</form>
+	</section>
+	if len(rows) == 0 {
+		<div class="empty-state">No baskets yet.</div>
+	} else {
+		<div class="item-list">
+			for _, row := range rows {
+				@basketRow(row)
+			}
+		</div>
+	}
+}
+
+// BasketFragment renders a single basket row on its own — the htmx response
+// GET /baskets/{id} (a plain view-mode re-render, used by the Edit form's
+// Cancel button) answers with.
+templ BasketFragment(row BasketRow) {
+	@basketRow(row)
+}
+
+templ basketRow(row BasketRow) {
+	<div class="item-row" id={ fmt.Sprintf("basket-row-%d", row.ID) }>
+		<div class="item-info">
+			<div class="item-name">{ row.Name }</div>
+			<div class="item-meta">
+				if row.WallType != "" {
+					{ row.WallType }
+				}
+				if row.Shape != "" {
+					{ " · " + row.Shape }
+				}
+				if row.DoseCapacity != "" {
+					{ " · " + row.DoseCapacity }
+				}
+				if row.HoleCount != "" {
+					{ " · " + row.HoleCount + " holes" }
+				}
+			</div>
+		</div>
+		<div class="item-actions">
+			<button
+				type="button"
+				class="btn"
+				hx-get={ fmt.Sprintf("baskets/%d/edit", row.ID) }
+				hx-target={ fmt.Sprintf("#basket-row-%d", row.ID) }
+				hx-swap="outerHTML"
+			>
+				Edit
+			</button>
+		</div>
+	</div>
+}
+
+// BasketEditFragment renders basket id's inline edit form — see
+// BeanEditFragment's own doc comment for the swap pattern this mirrors.
+// wallType/shape <select> options mirror basketsContent's own — see that
+// templ's doc comment for why they're duplicated rather than shared with
+// internal/library's own enum maps.
+templ BasketEditFragment(row BasketRow, formError string) {
+	<div class="item-row item-row-edit" id={ fmt.Sprintf("basket-row-%d", row.ID) }>
+		<form class="order-form" hx-put={ fmt.Sprintf("baskets/%d", row.ID) } hx-target={ fmt.Sprintf("#basket-row-%d", row.ID) } hx-swap="outerHTML">
+			if formError != "" {
+				<div class="badge badge-err">{ formError }</div>
+			}
+			<label class="item-meta" for={ fmt.Sprintf("basket-edit-name-%d", row.ID) }>Name</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("basket-edit-name-%d", row.ID) } name="name" required maxlength="200" value={ row.Name }/>
+			<label class="item-meta" for={ fmt.Sprintf("basket-edit-walltype-%d", row.ID) }>Wall type</label>
+			<select class="filter-input" id={ fmt.Sprintf("basket-edit-walltype-%d", row.ID) } name="wallType">
+				<option value="" selected?={ row.WallType == "" }>—</option>
+				<option value="pressurized" selected?={ row.WallType == "pressurized" }>Pressurized</option>
+				<option value="single-wall" selected?={ row.WallType == "single-wall" }>Single-wall</option>
+				<option value="precision-machined" selected?={ row.WallType == "precision-machined" }>Precision-machined</option>
+				<option value="high-flow" selected?={ row.WallType == "high-flow" }>High-flow</option>
+			</select>
+			<label class="item-meta" for={ fmt.Sprintf("basket-edit-shape-%d", row.ID) }>Shape</label>
+			<select class="filter-input" id={ fmt.Sprintf("basket-edit-shape-%d", row.ID) } name="shape">
+				<option value="" selected?={ row.Shape == "" }>—</option>
+				<option value="straight" selected?={ row.Shape == "straight" }>Straight</option>
+				<option value="tapered" selected?={ row.Shape == "tapered" }>Tapered</option>
+			</select>
+			<label class="item-meta" for={ fmt.Sprintf("basket-edit-dosecapacity-%d", row.ID) }>Dose capacity</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("basket-edit-dosecapacity-%d", row.ID) } name="doseCapacity" maxlength="50" value={ row.DoseCapacity }/>
+			<label class="item-meta" for={ fmt.Sprintf("basket-edit-holecount-%d", row.ID) }>Hole count</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("basket-edit-holecount-%d", row.ID) } name="holeCount" maxlength="50" value={ row.HoleCount }/>
+			<label class="item-meta" for={ fmt.Sprintf("basket-edit-notes-%d", row.ID) }>Notes</label>
+			<textarea class="filter-input" id={ fmt.Sprintf("basket-edit-notes-%d", row.ID) } name="notes" maxlength="1000">{ row.Notes }</textarea>
+			<div class="item-actions">
+				<button type="submit" class="btn">Save</button>
+				<button type="button" class="btn" hx-get={ fmt.Sprintf("baskets/%d", row.ID) } hx-target={ fmt.Sprintf("#basket-row-%d", row.ID) } hx-swap="outerHTML">Cancel</button>
+			</div>
+		</form>
+	</div>
+}
+
+// ── Puck screens ───────────────────────────────────────────────────────
+
+// PuckScreenRow is the display-ready projection of a library.Entity puck
+// screen.
+type PuckScreenRow struct {
+	ID        int64
+	Name      string
+	Thickness string
+	Material  string
+	Notes     string
+}
+
+templ PuckScreensPage(rows []PuckScreenRow, formError string) {
+	@Layout("Puck Screens") {
+		<h1 class="page-title">Puck Screens</h1>
+		<div id="puckscreens-content">
+			@puckScreensContent(rows, formError)
+		</div>
+	}
+}
+
+templ PuckScreensContentFragment(rows []PuckScreenRow, formError string) {
+	@puckScreensContent(rows, formError)
+}
+
+// puckScreenThicknessOptions mirrors
+// internal/library/handlers_puckscreens.go's puckScreenThicknesses enum set
+// exactly — see basketsContent's own doc comment for why this is a
+// deliberate, stable duplication rather than an import.
+templ puckScreensContent(rows []PuckScreenRow, formError string) {
+	<section class="new-entity-form">
+		<h2 class="trash-heading">New puck screen</h2>
+		if formError != "" {
+			<div class="badge badge-err">{ formError }</div>
+		}
+		<form class="order-form" hx-post="puckscreens" hx-target="#puckscreens-content" hx-swap="innerHTML">
+			<label class="item-meta" for="puckscreen-name">Name</label>
+			<input class="filter-input" type="text" id="puckscreen-name" name="name" required maxlength="200"/>
+			<label class="item-meta" for="puckscreen-thickness">Thickness</label>
+			<select class="filter-input" id="puckscreen-thickness" name="thickness">
+				<option value="">—</option>
+				<option value="very-thin">Very thin</option>
+				<option value="thin">Thin</option>
+				<option value="medium">Medium</option>
+				<option value="thick">Thick</option>
+			</select>
+			<label class="item-meta" for="puckscreen-material">Material</label>
+			<input class="filter-input" type="text" id="puckscreen-material" name="material" maxlength="200"/>
+			<button type="submit" class="btn">Add puck screen</button>
+		</form>
+	</section>
+	if len(rows) == 0 {
+		<div class="empty-state">No puck screens yet.</div>
+	} else {
+		<div class="item-list">
+			for _, row := range rows {
+				@puckScreenRow(row)
+			}
+		</div>
+	}
+}
+
+// PuckScreenFragment renders a single puck screen row on its own — the htmx
+// response GET /puckscreens/{id} (a plain view-mode re-render, used by the
+// Edit form's Cancel button) answers with.
+templ PuckScreenFragment(row PuckScreenRow) {
+	@puckScreenRow(row)
+}
+
+templ puckScreenRow(row PuckScreenRow) {
+	<div class="item-row" id={ fmt.Sprintf("puckscreen-row-%d", row.ID) }>
+		<div class="item-info">
+			<div class="item-name">{ row.Name }</div>
+			<div class="item-meta">
+				if row.Thickness != "" {
+					{ row.Thickness }
+				}
+				if row.Material != "" {
+					{ " · " + row.Material }
+				}
+			</div>
+		</div>
+		<div class="item-actions">
+			<button
+				type="button"
+				class="btn"
+				hx-get={ fmt.Sprintf("puckscreens/%d/edit", row.ID) }
+				hx-target={ fmt.Sprintf("#puckscreen-row-%d", row.ID) }
+				hx-swap="outerHTML"
+			>
+				Edit
+			</button>
+		</div>
+	</div>
+}
+
+// PuckScreenEditFragment renders puck screen id's inline edit form — see
+// BeanEditFragment's own doc comment for the swap pattern this mirrors.
+templ PuckScreenEditFragment(row PuckScreenRow, formError string) {
+	<div class="item-row item-row-edit" id={ fmt.Sprintf("puckscreen-row-%d", row.ID) }>
+		<form class="order-form" hx-put={ fmt.Sprintf("puckscreens/%d", row.ID) } hx-target={ fmt.Sprintf("#puckscreen-row-%d", row.ID) } hx-swap="outerHTML">
+			if formError != "" {
+				<div class="badge badge-err">{ formError }</div>
+			}
+			<label class="item-meta" for={ fmt.Sprintf("puckscreen-edit-name-%d", row.ID) }>Name</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("puckscreen-edit-name-%d", row.ID) } name="name" required maxlength="200" value={ row.Name }/>
+			<label class="item-meta" for={ fmt.Sprintf("puckscreen-edit-thickness-%d", row.ID) }>Thickness</label>
+			<select class="filter-input" id={ fmt.Sprintf("puckscreen-edit-thickness-%d", row.ID) } name="thickness">
+				<option value="" selected?={ row.Thickness == "" }>—</option>
+				<option value="very-thin" selected?={ row.Thickness == "very-thin" }>Very thin</option>
+				<option value="thin" selected?={ row.Thickness == "thin" }>Thin</option>
+				<option value="medium" selected?={ row.Thickness == "medium" }>Medium</option>
+				<option value="thick" selected?={ row.Thickness == "thick" }>Thick</option>
+			</select>
+			<label class="item-meta" for={ fmt.Sprintf("puckscreen-edit-material-%d", row.ID) }>Material</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("puckscreen-edit-material-%d", row.ID) } name="material" maxlength="200" value={ row.Material }/>
+			<label class="item-meta" for={ fmt.Sprintf("puckscreen-edit-notes-%d", row.ID) }>Notes</label>
+			<textarea class="filter-input" id={ fmt.Sprintf("puckscreen-edit-notes-%d", row.ID) } name="notes" maxlength="1000">{ row.Notes }</textarea>
+			<div class="item-actions">
+				<button type="submit" class="btn">Save</button>
+				<button type="button" class="btn" hx-get={ fmt.Sprintf("puckscreens/%d", row.ID) } hx-target={ fmt.Sprintf("#puckscreen-row-%d", row.ID) } hx-swap="outerHTML">Cancel</button>
+			</div>
+		</form>
+	</div>
+}
+
+// ── Milks ──────────────────────────────────────────────────────────────
+
+// MilkRow is the display-ready projection of a library.Entity milk.
+type MilkRow struct {
+	ID         int64
+	Name       string
+	Emoji      string
+	StockMl    string  // pre-formatted, e.g. "500 ml"
+	StockMlRaw float64 // raw ml — Edit form's number input value
+	StockPct   float64 // 0-100, 2000ml == a full bar — see milkStockPct
+	StockClass string  // "ok" | "low" | "empty" — see milkStockClass
+}
+
+templ MilksPage(rows []MilkRow, formError string) {
+	@Layout("Milks") {
+		<h1 class="page-title">Milks</h1>
+		<div id="milks-content">
+			@milksContent(rows, formError)
+		</div>
+	}
+}
+
+templ MilksContentFragment(rows []MilkRow, formError string) {
+	@milksContent(rows, formError)
+}
+
+templ milksContent(rows []MilkRow, formError string) {
+	<section class="new-entity-form">
+		<h2 class="trash-heading">New milk</h2>
+		if formError != "" {
+			<div class="badge badge-err">{ formError }</div>
+		}
+		<form class="order-form" hx-post="milks" hx-target="#milks-content" hx-swap="innerHTML">
+			<label class="item-meta" for="milk-name">Name</label>
+			<input class="filter-input" type="text" id="milk-name" name="name" required maxlength="100"/>
+			<label class="item-meta" for="milk-emoji">Emoji</label>
+			<input class="filter-input" type="text" id="milk-emoji" name="emoji" maxlength="8" placeholder="🥛"/>
+			<label class="item-meta" for="milk-stockml">Stock (ml)</label>
+			<input class="filter-input" type="number" id="milk-stockml" name="stockMl" min="0" step="1"/>
+			<button type="submit" class="btn">Add milk</button>
+		</form>
+	</section>
+	if len(rows) == 0 {
+		<div class="empty-state">No milks yet.</div>
+	} else {
+		<div class="item-list">
+			for _, row := range rows {
+				@milkRow(row)
+			}
+		</div>
+	}
+}
+
+// MilkFragment renders a single milk row on its own — the htmx response
+// GET /milks/{id} (a plain view-mode re-render, used by the Edit form's
+// Cancel button) answers with.
+templ MilkFragment(row MilkRow) {
+	@milkRow(row)
+}
+
+templ milkRow(row MilkRow) {
+	<div class="item-row" id={ fmt.Sprintf("milk-row-%d", row.ID) }>
+		<div class="item-info">
+			<div class="item-name">{ row.Emoji } { row.Name }</div>
+			if row.StockMl != "" {
+				<div class="item-meta">{ row.StockMl }</div>
+				<div class="milk-stock-bar-wrap">
+					<div class={ "milk-stock-bar-fill", row.StockClass } style={ stockBarWidth(row.StockPct) }></div>
+				</div>
+			}
+		</div>
+		<div class="item-actions">
+			<button
+				type="button"
+				class="btn"
+				hx-get={ fmt.Sprintf("milks/%d/edit", row.ID) }
+				hx-target={ fmt.Sprintf("#milk-row-%d", row.ID) }
+				hx-swap="outerHTML"
+			>
+				Edit
+			</button>
+		</div>
+	</div>
+}
+
+// MilkEditFragment renders milk id's inline edit form — see
+// BeanEditFragment's own doc comment for the swap pattern this mirrors.
+templ MilkEditFragment(row MilkRow, formError string) {
+	<div class="item-row item-row-edit" id={ fmt.Sprintf("milk-row-%d", row.ID) }>
+		<form class="order-form" hx-put={ fmt.Sprintf("milks/%d", row.ID) } hx-target={ fmt.Sprintf("#milk-row-%d", row.ID) } hx-swap="outerHTML">
+			if formError != "" {
+				<div class="badge badge-err">{ formError }</div>
+			}
+			<label class="item-meta" for={ fmt.Sprintf("milk-edit-name-%d", row.ID) }>Name</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("milk-edit-name-%d", row.ID) } name="name" required maxlength="100" value={ row.Name }/>
+			<label class="item-meta" for={ fmt.Sprintf("milk-edit-emoji-%d", row.ID) }>Emoji</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("milk-edit-emoji-%d", row.ID) } name="emoji" maxlength="8" value={ row.Emoji }/>
+			<label class="item-meta" for={ fmt.Sprintf("milk-edit-stockml-%d", row.ID) }>Stock (ml)</label>
+			<input class="filter-input" type="number" id={ fmt.Sprintf("milk-edit-stockml-%d", row.ID) } name="stockMl" min="0" step="1" value={ fmt.Sprintf("%g", row.StockMlRaw) }/>
+			<div class="item-actions">
+				<button type="submit" class="btn">Save</button>
+				<button type="button" class="btn" hx-get={ fmt.Sprintf("milks/%d", row.ID) } hx-target={ fmt.Sprintf("#milk-row-%d", row.ID) } hx-swap="outerHTML">Cancel</button>
+			</div>
+		</form>
+	</div>
+}
+
+// ── Recipes ────────────────────────────────────────────────────────────
+
+// RecipeRow is the display-ready projection of a library.Entity recipe.
+type RecipeRow struct {
+	ID         int64
+	Name       string
+	BrewMethod string
+	DrinkType  string
+	Notes      string
+}
+
+templ RecipesPage(rows []RecipeRow, formError string) {
+	@Layout("Recipes") {
+		<h1 class="page-title">Recipes</h1>
+		<div id="recipes-content">
+			@recipesContent(rows, formError)
+		</div>
+	}
+}
+
+templ RecipesContentFragment(rows []RecipeRow, formError string) {
+	@recipesContent(rows, formError)
+}
+
+// recipeBrewMethodOptions mirrors internal/library/handlers_recipes.go's
+// validBrewMethods enum set exactly — see basketsContent's own doc comment
+// for why this is a deliberate, stable duplication rather than an import.
+// Submitting anything else (or omitting it) is not a validation error on
+// the CreateRecipe side — brewMethodOrOther silently falls back to
+// "other" — so this <select> has no blank/unset option, unlike the
+// Baskets/Puck Screens ones above.
+templ recipesContent(rows []RecipeRow, formError string) {
+	<section class="new-entity-form">
+		<h2 class="trash-heading">New recipe</h2>
+		if formError != "" {
+			<div class="badge badge-err">{ formError }</div>
+		}
+		<form class="order-form" hx-post="recipes" hx-target="#recipes-content" hx-swap="innerHTML">
+			<label class="item-meta" for="recipe-name">Name</label>
+			<input class="filter-input" type="text" id="recipe-name" name="name" required maxlength="200"/>
+			<label class="item-meta" for="recipe-brewmethod">Brew method</label>
+			<select class="filter-input" id="recipe-brewmethod" name="brewMethod">
+				<option value="espresso">Espresso</option>
+				<option value="aeropress">Aeropress</option>
+				<option value="v60">V60</option>
+				<option value="french_press">French press</option>
+				<option value="moka">Moka</option>
+				<option value="cold_brew">Cold brew</option>
+				<option value="other">Other</option>
+			</select>
+			<label class="item-meta" for="recipe-drinktype">Drink type</label>
+			<input class="filter-input" type="text" id="recipe-drinktype" name="drinkType" maxlength="50"/>
+			<button type="submit" class="btn">Add recipe</button>
+		</form>
+	</section>
+	if len(rows) == 0 {
+		<div class="empty-state">No recipes yet.</div>
+	} else {
+		<div class="item-list">
+			for _, row := range rows {
+				@recipeRow(row)
+			}
+		</div>
+	}
+}
+
+// RecipeFragment renders a single recipe row on its own — the htmx response
+// GET /recipes/{id} (a plain view-mode re-render, used by the Edit form's
+// Cancel button) answers with.
+templ RecipeFragment(row RecipeRow) {
+	@recipeRow(row)
+}
+
+templ recipeRow(row RecipeRow) {
+	<div class="item-row" id={ fmt.Sprintf("recipe-row-%d", row.ID) }>
+		<div class="item-info">
+			<div class="item-name">{ row.Name }</div>
+			<div class="item-meta">
+				{ row.BrewMethod }
+				if row.DrinkType != "" {
+					{ " · " + row.DrinkType }
+				}
+			</div>
+		</div>
+		<div class="item-actions">
+			<button
+				type="button"
+				class="btn"
+				hx-get={ fmt.Sprintf("recipes/%d/edit", row.ID) }
+				hx-target={ fmt.Sprintf("#recipe-row-%d", row.ID) }
+				hx-swap="outerHTML"
+			>
+				Edit
+			</button>
+		</div>
+	</div>
+}
+
+// RecipeEditFragment renders recipe id's inline edit form — see
+// BeanEditFragment's own doc comment for the swap pattern this mirrors.
+templ RecipeEditFragment(row RecipeRow, formError string) {
+	<div class="item-row item-row-edit" id={ fmt.Sprintf("recipe-row-%d", row.ID) }>
+		<form class="order-form" hx-put={ fmt.Sprintf("recipes/%d", row.ID) } hx-target={ fmt.Sprintf("#recipe-row-%d", row.ID) } hx-swap="outerHTML">
+			if formError != "" {
+				<div class="badge badge-err">{ formError }</div>
+			}
+			<label class="item-meta" for={ fmt.Sprintf("recipe-edit-name-%d", row.ID) }>Name</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("recipe-edit-name-%d", row.ID) } name="name" required maxlength="200" value={ row.Name }/>
+			<label class="item-meta" for={ fmt.Sprintf("recipe-edit-brewmethod-%d", row.ID) }>Brew method</label>
+			<select class="filter-input" id={ fmt.Sprintf("recipe-edit-brewmethod-%d", row.ID) } name="brewMethod">
+				<option value="espresso" selected?={ row.BrewMethod == "espresso" }>Espresso</option>
+				<option value="aeropress" selected?={ row.BrewMethod == "aeropress" }>Aeropress</option>
+				<option value="v60" selected?={ row.BrewMethod == "v60" }>V60</option>
+				<option value="french_press" selected?={ row.BrewMethod == "french_press" }>French press</option>
+				<option value="moka" selected?={ row.BrewMethod == "moka" }>Moka</option>
+				<option value="cold_brew" selected?={ row.BrewMethod == "cold_brew" }>Cold brew</option>
+				<option value="other" selected?={ row.BrewMethod == "other" }>Other</option>
+			</select>
+			<label class="item-meta" for={ fmt.Sprintf("recipe-edit-drinktype-%d", row.ID) }>Drink type</label>
+			<input class="filter-input" type="text" id={ fmt.Sprintf("recipe-edit-drinktype-%d", row.ID) } name="drinkType" maxlength="50" value={ row.DrinkType }/>
+			<label class="item-meta" for={ fmt.Sprintf("recipe-edit-notes-%d", row.ID) }>Notes</label>
+			<textarea class="filter-input" id={ fmt.Sprintf("recipe-edit-notes-%d", row.ID) } name="notes" maxlength="1000">{ row.Notes }</textarea>
+			<div class="item-actions">
+				<button type="submit" class="btn">Save</button>
+				<button type="button" class="btn" hx-get={ fmt.Sprintf("recipes/%d", row.ID) } hx-target={ fmt.Sprintf("#recipe-row-%d", row.ID) } hx-swap="outerHTML">Cancel</button>
+			</div>
+		</form>
+	</div>
+}

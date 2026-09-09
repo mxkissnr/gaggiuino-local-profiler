@@ -102,6 +102,19 @@ export const GUIDED_MAINT_STEPS = {
   descaling: ['guided_descaling_1', 'guided_descaling_2', 'guided_descaling_3', 'guided_descaling_4', 'guided_descaling_5', 'guided_descaling_6'],
 };
 
+// phases[] -> {name, phaseType, t0, t1} ranges for phasePlugin's
+// gaggimatePhases option. Shared by the profile editor and shot chart.
+export function buildGmPhaseRanges(phases) {
+  const ranges = [];
+  let t = 0;
+  (phases || []).forEach((ph, i) => {
+    const dur = ph.duration || 5;
+    ranges.push({ name: ph.name || `Phase ${i + 1}`, phaseType: ph.phase || 'brew', t0: t, t1: t + dur });
+    t += dur;
+  });
+  return ranges;
+}
+
 // ── Phase background plugin ───────────────────────────────────────────────
 // #814: the phase shading draws straight onto the canvas, so it cannot inherit
 // anything from CSS. Its label text and divider were fixed light-on-dark values
@@ -113,14 +126,32 @@ const PHASE_INK = {
   dark:  { pre: 'rgba(147,197,253,0.9)',  ext: 'rgba(251,191,36,0.9)',  divider: 'rgba(255,255,255,0.35)' },
   light: { pre: 'rgba(21,79,138,0.95)',   ext: 'rgba(124,72,4,0.95)',   divider: 'rgba(0,0,0,0.35)' },
 };
+const _currentInk = () => PHASE_INK[document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'];
 
 export const phasePlugin = {
   id: 'phases',
   beforeDatasetsDraw(chart, _args, opts) {
-    if (!opts?.preinfusion) return;
     const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
-    // Both light variants (plain and Crema) carry data-theme="light".
-    const ink = PHASE_INK[document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'];
+
+    // GaggiMate: shade one region per named phase, before the datasets draw.
+    const gmPhases = opts?.gaggimatePhases;
+    if (gmPhases && Array.isArray(gmPhases) && gmPhases.length > 0) {
+      ctx.save();
+      for (const ph of gmPhases) {
+        const px0 = Math.min(Math.max(x.getPixelForValue(ph.t0), left), right);
+        const px1 = Math.min(Math.max(x.getPixelForValue(ph.t1), left), right);
+        const w   = px1 - px0;
+        if (w <= 0) continue;
+        ctx.fillStyle = ph.phaseType === 'preinfusion' ? 'rgba(52,152,219,0.13)' : 'rgba(243,156,18,0.10)';
+        ctx.fillRect(px0, top, w, bottom - top);
+      }
+      ctx.restore();
+      return;
+    }
+
+    // Gaggiuino: two-region preinfusion/extraction shading.
+    if (!opts?.preinfusion) return;
+    const ink = _currentInk();
     const preEnd   = Math.min(Math.max(x.getPixelForValue(opts.preinfusion), left), right);
     const totalEnd = Math.min(Math.max(x.getPixelForValue(opts.preinfusion + opts.extraction), left), right);
 
@@ -161,6 +192,61 @@ export const phasePlugin = {
       ctx.beginPath(); ctx.roundRect(preEnd + 6, labelY - 12, w + 12, 16, 4); ctx.fill();
       ctx.fillStyle = ink.ext;
       ctx.textAlign = 'left'; ctx.fillText(lbl, preEnd + 12, labelY);
+    }
+
+    ctx.restore();
+  },
+  afterDatasetsDraw(chart, _args, opts) {
+    const gmPhases = opts?.gaggimatePhases;
+    if (!gmPhases || !Array.isArray(gmPhases) || gmPhases.length === 0) return;
+
+    const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+    const ink = _currentInk();
+
+    // Dividers + labels, drawn after the lines so they sit on top.
+    ctx.save();
+    ctx.font = '600 10px Figtree, sans-serif';
+
+    for (let i = 0; i < gmPhases.length; i++) {
+      const ph  = gmPhases[i];
+      const px0 = Math.min(Math.max(x.getPixelForValue(ph.t0), left), right);
+      const px1 = Math.min(Math.max(x.getPixelForValue(ph.t1), left), right);
+      const w   = px1 - px0;
+      if (w <= 0) continue;
+
+      const isPreinf = ph.phaseType === 'preinfusion';
+
+      if (i > 0) {
+        ctx.beginPath();
+        ctx.strokeStyle = ink.divider;
+        ctx.setLineDash([5, 4]);
+        ctx.lineWidth = 1;
+        ctx.moveTo(px0, top);
+        ctx.lineTo(px0, bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Rotated label fits narrower columns than a horizontal pill would.
+      if (w > 10 && ph.name) {
+        const maxLen = bottom - top - 16;
+        let lbl = ph.name;
+        while (lbl.length > 1 && ctx.measureText(lbl).width > maxLen) lbl = lbl.slice(0, -1);
+        if (ctx.measureText(lbl).width <= maxLen) {
+          const text = lbl.length < ph.name.length && lbl.length > 1 ? lbl.slice(0, -1) + '…' : lbl;
+          const textWidth = ctx.measureText(text).width;
+          ctx.save();
+          // Anchor `textWidth` below the top edge, text grows upward from
+          // there (rotate(-90) convention) — keeps it flush against the top.
+          ctx.translate(px0 + Math.min(10, w / 2), top + 8 + textWidth);
+          ctx.rotate(-Math.PI / 2);
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = isPreinf ? ink.pre : ink.ext;
+          ctx.fillText(text, 0, 0);
+          ctx.restore();
+        }
+      }
     }
 
     ctx.restore();

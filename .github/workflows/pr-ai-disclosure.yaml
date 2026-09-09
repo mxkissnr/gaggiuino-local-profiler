@@ -1,0 +1,53 @@
+name: PR AI disclosure
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: AI assistance disclosure present
+    runs-on: ubuntu-latest
+    # Skip bot dependency PRs (renovate/dependabot) — no AI authoring involved.
+    if: >
+      github.event.pull_request.user.login != 'renovate[bot]' &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      !contains(github.event.pull_request.labels.*.name, 'dependencies')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate disclosure
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          body_file="$(mktemp)"; printf '%s' "$PR_BODY" > "$body_file"
+
+          levels=$(grep -cE '^[[:space:]]*-[[:space:]]*\[[xX]\][[:space:]]*\*\*(none|assisted|substantial|generated)\*\*' "$body_file" || true)
+          if [ "$levels" -ne 1 ]; then
+            echo "::error::Tick exactly one AI assistance level (none/assisted/substantial/generated). Found: $levels"
+            exit 1
+          fi
+
+          if ! grep -qE '^[[:space:]]*Tools[[:space:]]*/[[:space:]]*models used:[[:space:]]*\S' "$body_file"; then
+            echo "::error::Fill in the 'Tools / models used:' line in the AI assistance disclosure section."
+            exit 1
+          fi
+
+          if grep -qE '^[[:space:]]*-[[:space:]]*\[[xX]\][[:space:]]*\*\*none\*\*' "$body_file"; then
+            if git log --format='%B' "${BASE_SHA}..${HEAD_SHA}" \
+                 | grep -qiE 'Co-Authored-By:.*(Claude|Copilot|Cursor|Codeium|Windsurf|Devin|Gemini|ChatGPT|GPT-|noreply@anthropic)'; then
+              echo "::error::Commits carry an AI Co-Authored-By trailer, but the PR discloses 'none'."
+              exit 1
+            fi
+          fi
+
+          echo "AI assistance disclosure OK."

@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { machineIconSvg, machineIconMiniSvg, machineIconAnimatedSvg,
          MACHINE_ICON_MODES, resolveMachineIconState } from '../public-src/machine-icon.js';
-import { THEME_PRESETS, resolveTheme } from '../lib/machines/theme-presets.js';
+import { THEME_PRESETS, resolveTheme } from '../public-src/shared/theme-presets.js';
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -163,5 +163,37 @@ describe('machineIconAnimatedSvg() flush display group (#902)', () => {
     it('renders a .d-flush group alongside .d-steam for both machine kinds', () => {
         expect(machineIconAnimatedSvg(null, 'gaggiuino')).toContain('class="d-flush"');
         expect(machineIconAnimatedSvg(null, 'gaggimate')).toContain('class="d-flush"');
+    });
+});
+
+// #983: descale wiring, mirroring the #902 steam/flush tests above.
+describe('resolveMachineIconState() descale (#983)', () => {
+    it('resolves isDescaling to the descaling mode', () => {
+        expect(resolveMachineIconState({ isDescaling: true }, null)).toEqual({ mode: 'descaling', heatFraction: 1 });
+    });
+
+    it('isFlushing takes priority over isDescaling', () => {
+        expect(resolveMachineIconState({ isFlushing: true, isDescaling: true }, null)).toEqual({ mode: 'flushing', heatFraction: 1 });
+    });
+
+    it('isLive (brewing) takes priority over isDescaling', () => {
+        expect(resolveMachineIconState({ isLive: true, isDescaling: true }, null)).toEqual({ mode: 'brewing', heatFraction: 1 });
+    });
+
+    it('machineReachable:false takes priority over isDescaling', () => {
+        expect(resolveMachineIconState({ machineReachable: false, isDescaling: true }, null)).toEqual({ mode: 'off', heatFraction: 0 });
+    });
+});
+
+describe('MACHINE_ICON_MODES descaling (#983)', () => {
+    it('descaling mode carries is-on/is-hot/is-descaling classes, same shape as flushing', () => {
+        expect(MACHINE_ICON_MODES.descaling).toEqual(['is-on', 'is-hot', 'is-descaling']);
+    });
+});
+
+describe('machineIconAnimatedSvg() descale display group (#983)', () => {
+    it('renders a .d-descale group alongside .d-flush for both machine kinds', () => {
+        expect(machineIconAnimatedSvg(null, 'gaggiuino')).toContain('class="d-descale"');
+        expect(machineIconAnimatedSvg(null, 'gaggimate')).toContain('class="d-descale"');
     });
 });

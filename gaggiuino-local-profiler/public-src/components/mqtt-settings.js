@@ -1,5 +1,5 @@
 // Live-data transport Settings card (#598) — WebSocket (default) / MQTT
-// toggle, backed by routes/mqtt.js. Broker connection fields are pre-filled
+// toggle, backed by go/internal/mqtt. Broker connection fields are pre-filled
 // from Supervisor auto-discovery (GET /api/mqtt/discovery) whenever a saved
 // host isn't already set, editable either way for setups where no MQTT
 // service is registered (manual entry fallback). The transport radio choice
@@ -8,6 +8,7 @@
 import { apiFetch } from '../api.js';
 import { t } from '../i18n.js';
 import { CHECK_ICON_SVG } from '../icons.js';
+import { S } from '../state.js';
 
 let _selectedTransport = 'websocket';
 let _discovery = null;
@@ -37,6 +38,11 @@ export async function loadMqttSettings() {
 }
 
 export function renderMqttSettingsCard() {
+  const defaultMachine = (S.machines || []).find(m => m.isDefault) || (S.machines || [])[0];
+  const isGaggiMate = defaultMachine?.type === 'gaggimate';
+  const card = document.getElementById('mqttSettingsCard');
+  if (card) card.style.display = isGaggiMate ? 'none' : '';
+
   document.querySelectorAll('#mqttTransportToggle [data-mqtt-transport]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.mqttTransport === _selectedTransport);
   });

@@ -1,36 +1,34 @@
 # Development Stats
 
-Generated 2026-08-30 by `scripts/dev-stats.mjs`. Re-run it any time to refresh these numbers — they are computed live from git history, not hand-maintained.
+Generated 2026-09-09 by `scripts/dev-stats.mjs`. Re-run it any time to refresh these numbers — they are computed live from git history, not hand-maintained.
 
 ## Timeline
 
-The GLP ecosystem (this app + 3 companion repos) has been in development since **2026-05-20** — **103 days** as of the last commit (2026-08-30).
+The GLP ecosystem (this app + 3 companion repos) has been in development since **2026-05-20** — **113 days** as of the last commit (2026-09-09).
 
 | Repo | First commit | Last commit | Commits | Claude co-authored |
 |---|---|---|---|---|
-| gaggiuino-local-profiler | 2026-05-20 | 2026-08-30 | 1086 | 760 (70%) |
-| glp-integration | 2026-05-22 | 2026-08-26 | 167 | 84 (50%) |
-| glp-lovelace-card | 2026-05-24 | 2026-08-26 | 159 | 96 (60%) |
-| glp-order-card | 2026-05-25 | 2026-08-26 | 118 | 60 (51%) |
-| **Combined** | **2026-05-20** | **2026-08-30** | **1530** | **1000 (65%)** |
+| gaggiuino-local-profiler | 2026-05-20 | 2026-09-09 | 1197 | 827 (69%) |
+| glp-integration | 2026-05-22 | 2026-09-07 | 175 | 79 (45%) |
+| glp-lovelace-card | 2026-05-24 | 2026-09-07 | 161 | 89 (55%) |
+| glp-order-card | 2026-05-25 | 2026-09-07 | 127 | 61 (48%) |
+| **Combined** | **2026-05-20** | **2026-09-09** | **1660** | **1056 (64%)** |
 
-![Commits per repo](docs/dev-stats/commits-per-repo.png)
-
-Combined line changes (insertions + deletions across all commits): **399.025**, of which **306.852** landed in Claude-co-authored commits.
+Combined line changes (insertions + deletions across all commits): **519.128**, of which **419.591** landed in Claude-co-authored commits.
 
 Commits without a Claude co-author line are presumed human-only (manual fixes, merges, config tweaks) — not independently verified.
 
 ## Hours of development (lower-bound estimate)
 
-Clustering each repo's commit timestamps into working sessions — commits within 2h of each other join the same session, and each session gets a 30-minute lead-in credited ahead of its first commit — gives a combined **453.2 hours** across all four repos.
+Clustering each repo's commit timestamps into working sessions — commits within 2h of each other join the same session, and each session gets a 30-minute lead-in credited ahead of its first commit — gives a combined **503.9 hours** across all four repos.
 
 | Repo | Hours (session-clustered) |
 |---|---|
-| gaggiuino-local-profiler | 278.0 |
-| glp-integration | 64.6 |
-| glp-lovelace-card | 59.2 |
-| glp-order-card | 51.4 |
-| **Combined** | **453.2** |
+| gaggiuino-local-profiler | 318.8 |
+| glp-integration | 68.5 |
+| glp-lovelace-card | 62.3 |
+| glp-order-card | 54.3 |
+| **Combined** | **503.9** |
 
 This is a **lower-bound estimate derived from git commit timestamps only**, not measured time — it undercounts real work because a long AI-agentic session (orchestration, agent dispatch, review between infrequent commits) can run for hours between commits.
 
@@ -38,21 +36,19 @@ This is a **lower-bound estimate derived from git commit timestamps only**, not 
 
 | Model | Commits |
 |---|---|
-| Claude Sonnet 5 | 515 |
+| Claude Sonnet 5 | 565 |
 | Claude Sonnet 4.6 | 348 |
 | Claude Opus 4.8 | 47 |
+| Claude Opus 5 | 43 |
 | Claude Fable 5 | 40 |
-| Claude Opus 5 | 36 |
 | Claude | 11 |
-| Claude Haiku 4.5 | 3 |
-
-![Claude model breakdown by commits](docs/dev-stats/model-breakdown.png)
+| Claude Haiku 4.5 | 2 |
 
 The exact co-author string varies by era as model names changed over the project's lifetime — this table groups by the literal string used in each commit, so the same underlying model released under a new name shows up as a separate row.
 
 ## Claude Pro subscription cost
 
-Max pays a flat **$20/month** for Claude Pro, regardless of usage volume — this is the actual subscription cost, not a token-usage estimate. 4 months since the first commit (2026-05-20) works out to **$80.00**.
+Max pays a flat **$20/month** for Claude Pro, regardless of usage volume — this is the actual subscription cost, not a token-usage estimate. 5 months since the first commit (2026-05-20) works out to **$100.00**.
 
 This assumes a continuous subscription for the whole span — it does not account for any gaps where the subscription might have lapsed.
 

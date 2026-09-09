@@ -25,7 +25,7 @@ if ('serviceWorker' in navigator) {
 
 // Installable PWA (v1.112.0): register the app-shell service worker, but only
 // when the server actually injected the manifest link into this page — see
-// server.js's isIngressRequest()/index.html route. Requests arriving through
+// the backend's ingress-trust check (go/internal/auth) and SPA index route. Requests arriving through
 // HA Ingress (the Companion App's embedded WebView) never get that link, so
 // this branch never runs there, which is the structural fix for the
 // v1.102.0 regression (that SW's fetch interception broke the Companion
@@ -40,6 +40,7 @@ import { t, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
 import { generateBeanQR } from './glp-qr.js';
 import { themeColor, THEME_CHANGE_EVENT, onThemeChange, applyChartTheme } from './utils.js';
+import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme, migrateLegacyAccent } from './theme.js';
 import { openBackupExportModal, openBackupRestoreModal } from './components/backup-modal.js';
 
 import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
@@ -63,6 +64,12 @@ import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggl
          exportCSV, exportAllCSV, exportShot, exportProfile, shareCard,
          loadDrinkMenu, loadMilkTypes, selectDrinkType, selectMilkType,
          selectFrozenPortion, _renderFrozenPortionPills } from './views/shots.js';
+
+// #957: shot curve data is fetched lazily per shot (list rows are
+// metadata-only). Views reach the cache through these window globals, same
+// as they already do for getShotData / calcShotScore.
+import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData,
+         primeCurve, evictCurve } from './shot-curves.js';
 
 import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, clearReferenceShot,
          connectLiveStream, disconnectLiveStream, setLiveBadge, handleLiveData,
@@ -110,6 +117,9 @@ import { loadMachineProfileList, updateProfileDatalist, renderProfileList,
          createProfileFromBean, applyBeanSuggestion, addProfilePhase, removeProfilePhase,
          sendProfileToMachine, renderProfilePreviewChart } from './views/library-profile-editor.js';
 
+import { openGaggiMateProfileEditor, openNewGaggiMateProfile,
+         handleGmEditorAction } from './views/gaggimate-profile-editor.js';
+
 import { renderDialin } from './views/dialin.js';
 
 import { openDialinWizard, closeDialinWizard, startDialinFromBean, renderDialinWizard, dialinGrinderChange,
@@ -123,7 +133,8 @@ import { startProfileDialinFromList, profileDialinClose,
 import { loadDemoData, endDemo } from './components/onboarding.js';
 
 import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, renderMachinesList,
-         onThemeCustomColorAChange, onThemeCustomColorBChange, onThemeGradientToggleChange } from './components/machines-settings.js';
+         onThemeCustomColorAChange, onThemeCustomColorBChange, onThemeGradientToggleChange, onMachineTypeChange,
+         applyActiveMachineAccentTheme, renderAccentSwatches } from './components/machines-settings.js';
 
 import { openSetupWizard, closeSetupWizard, setupWizardGetStarted, setupWizardSkipToDemo,
          shouldOpenSetupWizard } from './views/setup-wizard.js';
@@ -132,7 +143,7 @@ import { handleTopbarLiveSnapshotEvent, handleTopbarPreheatUpdateEvent,
          handleTopbarMachineIconClick, closeEasterEggPanel,
          bindEasterEggPanelEscape } from './components/topbar-machine-icon.js';
 
-import { loadMqttSettings, setMqttTransport, saveMqttSettings, applyMqttToMachine } from './components/mqtt-settings.js';
+import { loadMqttSettings, renderMqttSettingsCard, setMqttTransport, saveMqttSettings, applyMqttToMachine } from './components/mqtt-settings.js';
 
 import { loadNotifySettingsCard, saveNotifySettings } from './components/notify-settings.js';
 
@@ -142,6 +153,12 @@ import { renderWhatsNewCard } from './components/whats-new.js';
 import { attachAutocomplete } from './components/autocomplete.js';
 
 import { BEAN_ICON_SVG } from './icons.js';
+
+// Profile creation/editing branches to the GaggiMate editor instead of the
+// Gaggiuino one for GaggiMate machines — checked at 3 call sites below.
+function _isActiveMachineGaggiMate() {
+  return (S.machines || []).find(m => m.id === S.activeMachineId)?.type === 'gaggimate';
+}
 
 // ── Toast helper ──────────────────────────────────────────────────────────
 function showToast(msg, duration = 3000) {
@@ -202,6 +219,9 @@ function copyApiToken() {
     .catch(() => {});
 }
 
+// #1018: live re-resolution while 'auto' is selected -- see theme.js.
+watchSystemTheme();
+
 // ── Expose everything on window (for HTML onclick handlers) ───────────────
 Object.assign(window, {
   // state & i18n
@@ -212,17 +232,28 @@ Object.assign(window, {
 
   // theme
   setTheme: (theme) => {
-    localStorage.setItem('glp_theme', theme);
-    document.documentElement.dataset.theme = theme;
-    document.querySelectorAll('.theme-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.themeVal === theme));
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    applyTheme(theme);
   },
   setAccentTheme: (name) => {
     localStorage.setItem('glp_accent_theme', name);
-    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT));  // #814, see _applyTheme
+    // #1019: the only thing that still applies --accent-* now -- the
+    // [data-accent="..."] CSS blocks that used to pick this up on their own
+    // are retired, so a manual pick has to be pushed through the same
+    // inline-var mechanism the active machine's own theme uses (and which
+    // takes priority over this pick when the active machine has a theme set).
+    // #1021: this dispatch is what applies it -- the onThemeChange()
+    // listener registered below already calls applyActiveMachineAccentTheme()
+    // synchronously in response, so no separate direct call is needed here.
+    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT));  // #814, see theme.js's applyTheme()
+    // Still recorded on <html> even though no CSS reads it any more (#1019
+    // retired the [data-accent] selectors) -- shareCard() (views/shots/
+    // index.js, #462) reads this to match the exported card to whatever
+    // preset the user actually picked, independent of this DOM attribute's
+    // now-defunct original CSS purpose.
     document.documentElement.dataset.accent = name;
     document.querySelectorAll('.accent-swatch').forEach(b =>
-      b.classList.toggle('active', b.dataset.accent === name));
+      b.classList.toggle('active', b.dataset.presetKey === name));
   },
 
   // api
@@ -258,6 +289,13 @@ Object.assign(window, {
   // shots view
   getShotData,
   calcShotScore,
+  // #957 curve cache
+  getShotCurve,
+  ensureCurves,
+  getRawCurve,
+  getShotDataById: getCachedShotData,
+  primeCurve,
+  evictCurve,
   loadData,
   loadTrashData,
   renderTrash,
@@ -566,16 +604,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ── Theme ──────────────────────────────────────────────────────────────
-  const _applyTheme = (theme) => {
-    document.documentElement.dataset.theme = theme;
-    document.querySelectorAll('.theme-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.themeVal === theme));
-    // #814: Chart.js resolves its colours once, at construction. Setting the
-    // theme attribute repaints everything CSS controls but leaves every chart
-    // already on screen with the previous theme's legend, ticks and grid, so
-    // the views holding a live Chart instance need telling.
-    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT));
-  };
+  // applyTheme()/resolveTheme() live in theme.js (#1018), shared with
+  // window.setTheme and watchSystemTheme()'s OS prefers-color-scheme listener.
   // #814: one listener for every live Chart instance. Charts resolve their
   // chrome colours at construction, so without this a chart already on screen
   // keeps the previous theme's legend/ticks/grid until something else happens
@@ -590,17 +620,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  _applyTheme(localStorage.getItem('glp_theme') || 'dark');
+  // #1021: --accent-ink now has a light-theme-only override table (see
+  // machines-settings.js), so toggling dark<->light (manually or via the OS
+  // 'auto' listener in theme.js, which also fires this event) has to
+  // recompute it too, not just whenever the accent/machine choice itself
+  // changes.
+  onThemeChange(() => applyActiveMachineAccentTheme());
 
-  const _savedAccent = localStorage.getItem('glp_accent_theme') || 'amber';
+  applyTheme(localStorage.getItem(THEME_STORAGE_KEY) || 'dark');
+
+  // #1019: migrates a pre-#1019 6-swatch value (amber/ocean/aurora/ember/
+  // forest/crema) to its nearest of the 8 THEME_PRESETS, and is a no-op on
+  // an already-migrated value -- written back so this doesn't silently
+  // re-run every load (harmless if it did, but there's no reason to).
+  const _savedAccent = migrateLegacyAccent(localStorage.getItem('glp_accent_theme')) || 'amber-americano';
+  localStorage.setItem('glp_accent_theme', _savedAccent);
   document.documentElement.dataset.accent = _savedAccent;
-  document.querySelectorAll('.accent-swatch').forEach(b =>
-    b.classList.toggle('active', b.dataset.accent === _savedAccent));
+  renderAccentSwatches();
 
   // ── Static element wiring ──────────────────────────────────────────────
   document.getElementById('collapseBtn').addEventListener('click', toggleDesktopSidebar);
   document.getElementById('expandSidebarBtn').addEventListener('click', toggleDesktopSidebar);
-  document.getElementById('shotSearch').addEventListener('input', e => filterShots(e.target.value));
+  // #969: filterShots() does 3 full DOM passes over the shot list; on a
+  // large history that's too much work to redo synchronously on every
+  // keystroke. Debounce so a fast typist only pays for it once per pause.
+  let _searchDebounce = null;
+  document.getElementById('shotSearch').addEventListener('input', e => {
+    const value = e.target.value;
+    clearTimeout(_searchDebounce);
+    _searchDebounce = setTimeout(() => filterShots(value), 150);
+  });
   document.getElementById('sortNewest').addEventListener('click', () => setSortMode('newest'));
   document.getElementById('sortScore').addEventListener('click', () => setSortMode('score'));
   document.getElementById('sortRating').addEventListener('click', () => setSortMode('rating'));
@@ -767,7 +816,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('annBasket').addEventListener('change', scheduleAutoSave);
   document.getElementById('annPuckScreen').addEventListener('change', scheduleAutoSave);
-  document.getElementById('profileAddTrigger').addEventListener('click', openNewProfileForm);
+  document.getElementById('profileAddTrigger').addEventListener('click', () => {
+    if (_isActiveMachineGaggiMate()) openNewGaggiMateProfile();
+    else openNewProfileForm();
+  });
   document.getElementById('closeProfileFormBtn').addEventListener('click', closeProfileForm);
   document.getElementById('cancelProfileFormBtn').addEventListener('click', closeProfileForm);
   document.getElementById('addProfilePhaseBtn').addEventListener('click', addProfilePhase);
@@ -786,13 +838,14 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('glp_dialin_count', e.target.value);
     renderDialin();
   });
-  document.querySelectorAll('.theme-btn').forEach(btn => {
+  // #1018: scoped to #themeToggleGroup, not the bare .theme-btn class --
+  // #mqttTransportToggle below reuses that same class for its own toggle and
+  // has no data-theme-val, so an unscoped query used to also wire this click
+  // handler onto it, calling setTheme(undefined) and silently corrupting the
+  // stored theme (neither Dark nor Light showed .active afterwards).
+  document.querySelectorAll('#themeToggleGroup .theme-btn').forEach(btn => {
     // eslint-disable-next-line no-undef -- setTheme is assigned onto window above (Object.assign), resolves as a global at runtime
     btn.addEventListener('click', () => setTheme(btn.dataset.themeVal));
-  });
-  document.querySelectorAll('.accent-swatch').forEach(btn => {
-    // eslint-disable-next-line no-undef -- setAccentTheme is assigned onto window above (Object.assign), resolves as a global at runtime
-    btn.addEventListener('click', () => setAccentTheme(btn.dataset.accent));
   });
   document.querySelectorAll('.lang-option-btn').forEach(btn => {
     btn.addEventListener('click', () => setLang(btn.dataset.lang));
@@ -818,6 +871,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('setupWizardModal')?.addEventListener('click', e => {
     if (e.target.id === 'setupWizardModal') closeSetupWizard();
   });
+  document.getElementById('machineFormType')?.addEventListener('change', onMachineTypeChange);
   document.getElementById('machineThemeCustomA')?.addEventListener('input', onThemeCustomColorAChange);
   document.getElementById('machineThemeCustomB')?.addEventListener('input', onThemeCustomColorBChange);
   document.getElementById('machineThemeGradientToggle')?.addEventListener('change', onThemeGradientToggleChange);
@@ -843,6 +897,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const action = el.dataset.action;
     const numId = () => Number(el.dataset.id);
     const strId = () => el.dataset.id;
+    // GaggiMate profile editor actions all share one prefix — route by that
+    // instead of listing all 18 action names as switch cases.
+    if (action.startsWith('gm-')) { handleGmEditorAction(action, el); return; }
     switch (action) {
       case 'open-new-bag':       openNewBagForm(numId()); break;
       case 'close-new-bag':      closeNewBagForm(numId()); break;
@@ -878,10 +935,16 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'delete-basket':      deleteBasket(numId()); break;
       case 'edit-puckscreen':    editPuckScreen(numId()); break;
       case 'delete-puckscreen':  deletePuckScreen(numId()); break;
-      case 'edit-profile':          editProfile(numId()); break;
-      case 'delete-profile':        deleteMachineProfile(numId()); break;
+      case 'edit-profile':
+        if (_isActiveMachineGaggiMate()) openGaggiMateProfileEditor(strId());
+        else editProfile(numId());
+        break;
+      case 'delete-profile':        deleteMachineProfile(strId()); break;
       case 'remove-profile-phase':  removeProfilePhase(Number(el.dataset.idx)); break;
-      case 'create-profile-from-bean': createProfileFromBean(numId()); break;
+      case 'create-profile-from-bean':
+        if (_isActiveMachineGaggiMate()) openNewGaggiMateProfile();
+        else createProfileFromBean(numId());
+        break;
       case 'restore-shot':       restoreShot(numId()); break;
       case 'perm-delete-shot':   permanentDeleteShot(numId()); break;
       case 'select-drink':       selectDrinkType(strId()); break;
@@ -913,7 +976,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'dialin-end':             dialinEnd(); break;
       case 'dialin-save-known-grind': dialinSaveKnownGrind(); break;
       case 'dialin-close':           dialinClose(); break;
-      case 'start-profile-dialin':      startProfileDialinFromList(numId()); break;
+      case 'start-profile-dialin':      startProfileDialinFromList(strId()); break;
       case 'profile-dialin-symptom':    profileDialinToggleSymptom(el.dataset.symptom); break;
       case 'profile-dialin-confirm-shot': profileDialinConfirmShot(numId(), el.dataset.match === '1'); break;
       case 'profile-dialin-accept-next':  profileDialinAcceptNext(); break;
@@ -1005,6 +1068,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // very first render always saw an empty shot list and nothing ever re-rendered it
     // once the real shots arrived. Re-render once both are guaranteed to be ready.
     await machinesPromise;
+    renderMqttSettingsCard();
     renderMachinesList();
     loadMachineProfileList();
     // #750: awaited (was fire-and-forget) so the installId comparison inside
