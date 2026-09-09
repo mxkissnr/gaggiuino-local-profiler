@@ -9,7 +9,7 @@
 import { mkdirSync, cpSync, existsSync } from 'fs';
 import path from 'path';
 import { chromium } from 'playwright';
-import { appRoot, bootServer, seed } from './e2e-harness.mjs';
+import { appRoot, bootServer, seed, stopServer } from './e2e-harness.mjs';
 
 const outDir = path.join(appRoot, 'docs', 'screenshots');
 
@@ -101,7 +101,8 @@ async function main() {
         console.log(`Copied screenshots into wiki repo at ${wikiImages}`);
     }
 
-    process.exit(0);
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+main()
+    .then(() => { stopServer(); process.exit(0); })
+    .catch(err => { console.error(err); stopServer(); process.exit(1); });

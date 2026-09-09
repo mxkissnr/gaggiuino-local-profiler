@@ -14,7 +14,15 @@ const commonRules = {
 
 module.exports = [
   {
-    ignores: ['public/**', 'node_modules/**', 'docs/**', 'graphify-out/**', 'go/**'],
+    // go/ is Go, not JS — except the browser scripts under
+    // internal/web/static/ (the no-JS /ui/ fallback pages, embedded via
+    // assets.go), which are linted by the dedicated block below. The
+    // minified vendor bundles next to them, and the transient staged Vite
+    // build under internal/webapp/dist/, stay ignored.
+    ignores: [
+      'public/**', 'node_modules/**', 'docs/**', 'graphify-out/**',
+      'go/internal/web/static/vendor/**', 'go/internal/webapp/dist/**',
+    ],
   },
   js.configs.recommended,
   {
@@ -33,6 +41,16 @@ module.exports = [
   },
   {
     files: ['public-src/**/*.js'],
+    languageOptions: {
+      globals: globals.browser,
+    },
+    rules: commonRules,
+  },
+  {
+    // go/internal/web/static/**: hand-written browser scripts embedded via
+    // internal/web/assets.go and loaded by the no-JS /ui/ fallback pages —
+    // same runtime as public-src/, hence browser globals.
+    files: ['go/internal/web/static/**/*.js'],
     languageOptions: {
       globals: globals.browser,
     },

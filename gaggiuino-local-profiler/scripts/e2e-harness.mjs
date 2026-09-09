@@ -60,23 +60,28 @@ function buildServerBinary() {
     }
 
     const placeholderIndex = readFileSync(path.join(distDir, 'index.html'));
-
-    rmSync(distDir, { recursive: true, force: true });
-    mkdirSync(distDir, { recursive: true });
-    cpSync(publicDir, distDir, { recursive: true });
-
-    // templ generate — internal/web/templates' .templ sources aren't valid
-    // Go until this runs (git-ignored _templ.go output). `go run` the
-    // pinned CLI so this works with no global install.
-    execFileSync('go', ['run', `github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}`, 'generate'],
-        { cwd: templatesDir, stdio: 'inherit' });
-
     const binPath = path.join(tmpDataDir, 'glp-server');
-    execFileSync('go', ['build', '-o', binPath, './cmd/server'], { cwd: goDir, stdio: 'inherit' });
 
-    rmSync(distDir, { recursive: true, force: true });
-    mkdirSync(distDir, { recursive: true });
-    writeFileSync(path.join(distDir, 'index.html'), placeholderIndex);
+    try {
+        rmSync(distDir, { recursive: true, force: true });
+        mkdirSync(distDir, { recursive: true });
+        cpSync(publicDir, distDir, { recursive: true });
+
+        // templ generate — internal/web/templates' .templ sources aren't
+        // valid Go until this runs (git-ignored _templ.go output). `go run`
+        // the pinned CLI so this works with no global install.
+        execFileSync('go', ['run', `github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}`, 'generate'],
+            { cwd: templatesDir, stdio: 'inherit' });
+
+        execFileSync('go', ['build', '-o', binPath, './cmd/server'], { cwd: goDir, stdio: 'inherit' });
+    } finally {
+        // Always restore the committed placeholder so a failed build never
+        // leaves the full SPA staged in the git-ignored-except-index.html
+        // dist tree (which would dirty the tree and poison a bare go build).
+        rmSync(distDir, { recursive: true, force: true });
+        mkdirSync(distDir, { recursive: true });
+        writeFileSync(path.join(distDir, 'index.html'), placeholderIndex);
+    }
 
     return binPath;
 }
