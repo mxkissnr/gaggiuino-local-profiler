@@ -9,19 +9,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// This file ports routes/system.js's GET /api/openapi.json (Phase 2a,
-// #901): Node reads the repo-root openapi.yaml and serves it as JSON via
-// js-yaml (getOpenApiSpec()'s `_openApiSpec` one-shot cache). The Go binary
-// can't `go:embed` a file outside its own module, so openapi.yaml is
-// committed as a copy here (go/internal/system/openapi.yaml) and
-// openapi_test.go's TestOpenAPICopyInSync fails CI the moment it drifts
-// from the source of truth at ../../../openapi.yaml.
+// GET /api/openapi.json serves the API spec. openapi.yaml in this package
+// is the canonical spec, embedded via go:embed and served as JSON.
 //
-// The YAML -> JSON conversion happens once, lazily, on the first request
-// (mirroring Node's lazy `_openApiSpec` cache). Object key order is not
-// preserved (Go maps are unordered, and JSON object key order carries no
-// meaning) — every consumer of this endpoint is a spec renderer that keys
-// by name, and Node's own js-yaml output order isn't a contract either.
+// The YAML -> JSON conversion happens once, lazily, on the first request.
+// Object key order is not preserved (Go maps are unordered, and JSON
+// object key order carries no meaning) — every consumer of this endpoint
+// is a spec renderer that keys by name.
 
 //go:embed openapi.yaml
 var openAPIYAML []byte

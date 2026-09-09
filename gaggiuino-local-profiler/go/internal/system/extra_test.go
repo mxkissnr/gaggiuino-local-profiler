@@ -2,7 +2,6 @@ package system
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
@@ -76,19 +75,6 @@ func TestGetOpenAPI(t *testing.T) {
 	}
 	if _, ok := doc["paths"].(map[string]any); !ok {
 		t.Errorf("converted spec missing `paths` object")
-	}
-}
-
-// TestOpenAPICopyInSync fails the moment go/internal/system/openapi.yaml
-// drifts from the repo-root source of truth it's a committed copy of (see
-// openapi.go's header comment).
-func TestOpenAPICopyInSync(t *testing.T) {
-	source, err := os.ReadFile("../../../openapi.yaml")
-	if err != nil {
-		t.Fatalf("reading repo-root openapi.yaml: %v", err)
-	}
-	if string(source) != string(openAPIYAML) {
-		t.Fatalf("go/internal/system/openapi.yaml is out of sync with ../../../openapi.yaml — re-copy it")
 	}
 }
 
