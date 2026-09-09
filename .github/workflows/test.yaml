@@ -78,6 +78,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # templ codegen for internal/web/templates (git-ignored _templ.go) —
+      # cmd/server imports that package, so the harness's `go build
+      # ./cmd/server` needs it. Pinned to the version go.mod already
+      # requires, same as the go-test job.
+      - name: Install templ and generate
+        working-directory: gaggiuino-local-profiler/go
+        run: |
+          go install github.com/a-h/templ/cmd/templ@v0.3.1020
+          go generate ./...
+
       # Own job (not a step in `test` above) so a Chromium download never
       # slows the unit test job — see #798.
       - name: Install Playwright Chromium
