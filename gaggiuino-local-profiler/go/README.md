@@ -1,17 +1,50 @@
-# GLP App — Go rewrite
+# GLP backend
 
-This directory holds the Go implementation of the Gaggiuino Local Profiler
-backend and frontend. As of #977 (2026-09-07) it is the **shipping,
-production implementation** — the repo-root Dockerfile builds `go/` (this
-directory's `Dockerfile`, moved to the repo root) rather than the old
-Express/Node app (`server.js`, `lib/`, `routes/`, `public-src/`), which
-remains in the tree for reference but is no longer built into the release
-or dev-channel image. The rest of this document, written during the
-migration, still describes the phase-by-phase build-out of this directory
-and is kept as historical record; treat "not wired in yet" language further
-down as describing the pre-#977 state, not the current one.
+This directory is the GLP backend: a single static Go binary (`net/http` +
+`modernc.org/sqlite`, no CGo) that serves the REST/SSE API and embeds and
+serves the Vite SPA built from `../public-src`. It is the only backend —
+the legacy Node.js/Express implementation (`server.js`, `lib/`, `routes/`)
+was removed from the tree in 3.0.0 (#1028); its last in-tree state is
+archived at tag `archive/node-backend-final` and branch
+`legacy/node-backend`.
 
-## Status: shipping (#977 cutover, 2026-09-07). CI is now `.github/workflows/test.yaml`'s `go-test` job (gofmt/vet/build/test/govulncheck/route-parity, folded in at cutover time, same as `version-release-check` before it) plus that same file's `docker-smoke` job (multi-arch matrix build of the repo-root Dockerfile — amd64/arm64/armv7, native Go cross-compile — plus `go/scripts/smoke-test.sh` against the amd64 image, on every PR), on top of the ordinary `build.yaml`/`build-dev.yaml` image builds — `go-build.yaml` and `go-preview-publish.yaml` (the Phase 4 build-only CI and Phase 5 go-preview beta channel this section used to describe) were both deleted as redundant in the cutover PR; the "CI"/"Docker"/"Go preview channel" sections further down describe that now-deleted setup and are kept only as historical record of how Phase 4/5 worked pre-cutover. Historical phase notes below: Phase 5 was in progress (go-preview beta channel — mxkissnr/glp-go-preview-app) on top of Phase 4's complete build-only CI, Phase 2's complete frontend and Phase 3b's complete backend
+The repo-root `Dockerfile` builds this directory (Vite build → Go
+cross-compile → Alpine runtime) for amd64, armv7 and aarch64.
+
+## Orientation
+
+- Entrypoint: `cmd/server/main.go` — opens the DB, loads/creates the API
+  token, wires every `internal/<domain>` package's `RegisterRoutes` into
+  one `net/http` handler chain (security headers → rate limiter → token
+  auth), listens on port 8099.
+- One package per concern under `internal/`: `shots`, `library`,
+  `machines` (+ `machines/proto` for the Gaggiuino binary WS codec),
+  `orders`, `maintenance`, `backup`, `importer`, `db`, `auth`,
+  `ratelimit`, `sse`, `system` (status/preheat/version/demo), `ha`,
+  `mqtt`, `img`, `achievements`, `netguard`, `webapp` (SPA embed + serve),
+  `web` (frozen no-JS templ fallback under `/ui/`).
+- Each package has a `doc.go` that is the authoritative description of what
+  it does and why. The narrative below is the migration history and is
+  kept as background — the `doc.go` files are current.
+
+## Config
+
+Runtime configuration is env vars (all optional, sensible defaults):
+`GLP_PORT` (8099), `GLP_DB_PATH` (`/data/glp.db`), `GLP_TOKEN_FILE`
+(`/data/api_token.txt`), `GLP_ENABLE_ORDERS`, `GLP_SYNC_INTERVAL`,
+`GLP_PREHEAT_TIME`, `GLP_DEBUG_LOGGING`, `GLP_HA_URL` + `GLP_HA_TOKEN`
+(standalone HA integration), `MACHINE_URL`, `GLP_RATE_LIMIT_*`. Inside the
+HA add-on the Supervisor writes `/data/options.json` and those take
+precedence over the env fallbacks.
+
+The version string served from `GET /api/version` lives in
+`internal/system/version.go` (`glpVersion`); it and
+`internal/backup/bundle.go`'s copy must match `../config.yaml`'s canonical
+`version:` — enforced by `../test/version-sync.test.js`.
+
+---
+
+## Migration history (background)
 
 Phase 0 was scaffolding only. Phase 1a ported the first two foundational
 packages everything else builds on. Phase 1b added a real, listening HTTP
@@ -411,17 +444,15 @@ Replace Node/Express + better-sqlite3 with a single static Go binary
 `better-sqlite3` rebuild pain on Home Assistant's ARM hardware, cut the
 resource footprint, and remove the npm supply-chain surface.
 
-This is a rollout, not a rewrite-and-flip: the plan is to ship the Go
-binary first on the dev channel as an opt-in beta alongside the existing
-Node image, promote it to the stable/main add-on only once it's proven
-itself there, and keep Node as the fallback until then — no big-bang cutover.
-Two things anchor that compatibility bar:
+The rollout ran in phases on a `go-migration` branch, then a dev-channel
+beta, then the #977 cutover that made this the shipping image. Two
+compatibility bars anchored it and still hold:
 
-- `openapi.yaml` at the repo root is the frozen contract — every Go endpoint
-  must match paths, methods, status codes, and response shapes exactly, so
-  `glp-integration`, `glp-lovelace-card`, and `glp-order-card` don't need to
-  care which binary answers a request.
-- The existing `/data/glp.db` SQLite file must keep opening unchanged — no
+- The API contract: every endpoint keeps the paths, methods, status codes
+  and response shapes `glp-integration`, `glp-lovelace-card` and
+  `glp-order-card` depend on. `internal/system/openapi.yaml` (served at
+  `/api/openapi.json`) is the current spec.
+- The existing `/data/glp.db` SQLite file keeps opening unchanged — no
   data migration, only schema compatibility (see `internal/db/doc.go`).
 
 Security parity with the Node app's ingress-trust model (HA Ingress vs.
@@ -720,11 +751,10 @@ and it's the only caller this fetch is expected to fail for.
 
 ## Contract
 
-`openapi.yaml` at the repo root (kept in sync with the Node app's actual
-routes as of this package's creation) is the frozen reference contract for
-this rewrite — every Go endpoint must match it exactly (paths, methods,
-status codes, response shapes) before it's considered done, verified via
-contract tests against recorded Node traffic (Phase 0/1, not yet built).
+`internal/system/openapi.yaml`, served at `/api/openapi.json`, is the API
+spec. External consumers (`glp-integration`, `glp-lovelace-card`,
+`glp-order-card`) depend on the paths, methods, status codes and response
+shapes it documents.
 
 ## Building
 

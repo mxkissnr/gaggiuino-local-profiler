@@ -13,14 +13,13 @@ boot: auto
 homeassistant_api: true
 # hassio_api: was kept from #330 (self-update button, removed by #516) and a
 # Supervisor-token check (removed by #534) with no live use in between --
-# but #598 gave it a real one: lib/mqtt-discovery.js calls the Supervisor's
-# own /services/mqtt endpoint (SUPERVISOR_API, distinct from HA_API/
-# homeassistant_api below, which only proxies the *Core* API) to
-# auto-discover a registered MQTT broker. That endpoint is populated by the
-# `services: - mqtt:want` declaration further down, and reading it requires
-# this permission. #779 caught the previous version of this comment
-# claiming no code path used it -- no longer true, don't remove this again
-# without re-checking lib/mqtt-discovery.js first.
+# but #598 gave it a real one: go/internal/mqtt/discovery.go calls the
+# Supervisor's own /services/mqtt endpoint (a different root than the Core
+# API that homeassistant_api below proxies) to auto-discover a registered
+# MQTT broker. That endpoint is populated by the `services: - mqtt:want`
+# declaration further down, and reading it requires this permission. #779
+# caught an earlier version of this comment claiming no code path used it --
+# no longer true, re-check go/internal/mqtt/discovery.go before removing.
 hassio_api: true
 init: false
 ingress: true
@@ -31,8 +30,8 @@ ingress_port: 8099
 # default transport and MQTT is opt-in from Settings, with manual host/port/
 # user/pass entry as a fallback when no MQTT service is registered at all.
 # "want" is enough to get the Supervisor's /services/mqtt endpoint
-# (lib/mqtt-discovery.js) populated whenever an MQTT service (e.g. the
-# Mosquitto broker add-on) *is* present.
+# (go/internal/mqtt/discovery.go) populated whenever an MQTT service (e.g.
+# the Mosquitto broker add-on) *is* present.
 services:
   - mqtt:want
 ports:
@@ -43,23 +42,24 @@ panel_icon: mdi:coffee
 panel_title: "GLP"
 # #662: machine_host/switch_entity are deprecated here (soft removal --
 # removed from schema/options so the Configuration UI stops offering them;
-# NOT removed from lib/machines/options-adoption.js's TRACKED list, which
-# already treats an option absent from options.json as "never adopt" and
-# was built with exactly this deprecation in mind, see that file's own
-# comments). Machine #1 now configures like every other machine (#2+
-# already worked this way) -- only in-app, via Settings -> Machines.
+# the machine registry's option-adoption pass treats an option absent from
+# options.json as "never adopt", built with exactly this deprecation in
+# mind -- see go/internal/machines/doc.go). Machine #1 now configures like
+# every other machine (#2+ already worked this way) -- only in-app, via
+# Settings -> Machines.
 options:
   sync_interval: 5
   preheat_time: 20
   enable_orders: false
   debug_logging: false
   # #803: default true (open) so no existing install's behaviour changes on
-  # upgrade -- see lib/data.js's isApiPortExposed() and routes/system.js's
-  # GET /api/token. Turning this off returns 403 from that one endpoint for
-  # any request that didn't arrive via HA Ingress; it does not unmap port
-  # 8099 itself, and it does not narrow the trust boundary below the whole
-  # Supervisor add-on network (isFromSupervisor() in server.js trusts all of
-  # 172.30.0.0/16, not just the Ingress proxy). Breaks direct-port browser
+  # upgrade -- see go/internal/system/options.go's isApiPortExposed and
+  # go/internal/system/handlers.go's GET /api/token. Turning this off
+  # returns 403 from that one endpoint for any request that didn't arrive
+  # via HA Ingress; it does not unmap port 8099 itself, and it does not
+  # narrow the trust boundary below the whole Supervisor add-on network
+  # (go/internal/auth trusts all of 172.30.0.0/16, not just the Ingress
+  # proxy). Breaks direct-port browser
   # access to the app entirely (this includes the installable PWA -- it's
   # just the installed form of the same UI), plus first-time setup of the
   # GLP Order Card's direct-URL mode, since none of those have any other way

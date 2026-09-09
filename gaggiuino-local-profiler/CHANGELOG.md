@@ -22,13 +22,12 @@
 - **Uploaded entity photos (beans, grinders, baskets, puck screens, shots) are now optimized on save.** Each image is downscaled to at most 1600 px on its long edge, re-encoded without embedded metadata (camera EXIF and GPS location tags are stripped), and stored next to a small thumbnail. Grid views can request the thumbnail, so libraries with many photos load noticeably less data. Existing photos are optimized once in the background on the first start after upgrading; originals are kept if an image can't be processed. Closes #961
 
 ### Changed
+- **The legacy Node.js/Express backend source has been removed from the repository** — the Go backend has been the only runtime since the #977 cutover, and its last in-tree state is archived at tag `archive/node-backend-final`. Closes #1028
+- **armv7 (32-bit ARM) is no longer deprecated** — the Go backend cross-compiles a static armv7 image with a pure-Go SQLite driver, so the constraint that prompted the deprecation is gone. Closes #944
 - **The add-on's backend is now the Go rewrite instead of Node.js**, with no visible change in behavior. Closes #977
 - **The `debug_logging` add-on option now also works on the Go backend**, same as before. Closes #977
 - **(go-migration) Documented that a machine's host must only be read through its existing guarded lookup path**, not directly — no behavior change. Closes #989
 - **The shot annotator's coffee/basket/puck-screen/recipe dropdowns are now built via the DOM API** instead of an HTML string, silencing a recurring false-positive security scan finding with no change in behaviour. Closes #946
-
-### Deprecated
-- **armv7 support is planned for removal in a future release.** Node.js no longer publishes official Docker images for 32-bit ARM past v22 — staying on armv7 means staying on an increasingly outdated Node major indefinitely, the same tradeoff that led Home Assistant OS itself to drop several 32-bit ARM boards. No removal date is set yet; this is an early heads-up for anyone still running the add-on on a 32-bit ARM device (e.g. an older Raspberry Pi on a 32-bit OS image) to plan a move to a 64-bit image before support ends. Track #944 for updates.
 
 ## [2.36.1] – 2026-08-30
 ### Fixed

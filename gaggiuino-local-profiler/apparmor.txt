@@ -8,34 +8,29 @@
 # refused) and this repo has no way to run real AppArmor mediation in CI —
 # only a Home Assistant OS install can confirm it.
 #
-# #977 CUTOVER NOTE — MANUAL STEP STILL REQUIRED, NOT DONE BY THIS PR: the
-# runtime this profile confines changed under it (Node/Debian -> Go/Alpine,
-# see below) as part of the #977 backend cutover. Nothing in this repo/CI
-# can exercise real AppArmor mediation, so this file's rules were updated
-# by inspection/comment only, never actually run in complain mode against
-# the new runtime. Before the #977 release ships to real installs, this
-# profile MUST be manually tested in complain mode on real Home Assistant
-# OS hardware and any denials it logs addressed — do NOT flip it to enforce
-# (or ship a release relying on it) on the strength of this PR alone.
+# VALIDATION STILL REQUIRED ON REAL HARDWARE: nothing in this repo/CI can
+# exercise real AppArmor mediation, so this file's rules were written by
+# inspection of the runtime shape below, never run in complain mode. Before
+# any release relies on this profile at enforce, it MUST be tested in
+# complain mode on real Home Assistant OS hardware and any denials it logs
+# addressed — do NOT flip it to enforce on the strength of a PR alone.
 #
-# Runtime shape this profile is derived from (not a template):
-#   - #977: base image is now alpine:3.22 running the Go backend (go/,
-#     #901) instead of node:22-slim/server.js — see the repo-root
-#     Dockerfile. No s6-overlay, init: false (config.yaml).
+# Runtime shape this profile is derived from (not a template) — the Go
+# backend on Alpine, the only runtime as of the #977 cutover (the last
+# Node source was removed from the tree in 3.0.0, #1028):
+#   - Base image alpine:3.22 running the Go backend (go/) — see the
+#     repo-root Dockerfile. No s6-overlay, init: false (config.yaml).
 #     docker-entrypoint.sh starts as root, `chown -R glp:glp /data` (the
 #     bind mount's owning UID varies per install, see #271), then
 #     `exec su-exec glp "$@"` to run `glp-server` unprivileged for the rest
-#     of the process lifetime. The exec/file rules below were written for
-#     the Node runtime and have NOT yet been re-validated in complain mode
-#     against this Alpine/Go runtime shape — see the warning at the top of
-#     this file. In particular: no node_modules/native-addon tree exists
-#     any more (modernc.org/sqlite and the Go stdlib are pure Go, no CGo),
-#     and the shell/exec chain is Alpine's busybox (/bin, /sbin) rather
-#     than Debian's coreutils/dash, which the broad `file,`/`ix` rules
-#     below were not specifically written against.
+#     of the process lifetime. No node_modules/native-addon tree exists
+#     (modernc.org/sqlite and the Go stdlib are pure Go, no CGo), and the
+#     shell/exec chain is Alpine's busybox (/bin, /sbin) rather than
+#     Debian's coreutils/dash — the broad `file,`/`ix` rules below cover
+#     both but were not narrowed to busybox specifically.
 #   - All persistent state lives under /data: the SQLite DB (glp.db, plus
 #     its -wal/-shm files — go/internal/db opens with `PRAGMA journal_mode
-#     = WAL`, same as the old lib/db.js), a one-time glp.db.pre-go-backup
+#     = WAL`), a one-time glp.db.pre-go-backup
 #     snapshot (see docker-entrypoint.sh), legacy per-entity JSON files
 #     kept only as one-time migration sources, api_token.txt,
 #     preheat_state.json, options.json, profiles_cache.json, and
@@ -44,10 +39,11 @@
 #     HTTP — nothing is written to a temp/backup directory.
 #   - The Go binary is statically linked (CGO_ENABLED=0) and embeds the
 #     built SPA (go/internal/webapp's go:embed) — no native addons, no
-#     node_modules, no separate font files to read at runtime (chart/image
-#     rendering that used @napi-rs/canvas + fonts-liberation in the Node
-#     app has a different, still-being-audited implementation on this
-#     backend; re-check for any new file paths it needs before enforcing).
+#     node_modules. Nothing reads a font file at runtime: the shot-card
+#     PNG renderer (go/internal/shots/card.go) rasterises via resvg-go on
+#     wazero (pure Go/wasm, no CGo) using the Go typeface whose .TTF bytes
+#     are compiled into golang.org/x/image/font/gofont — the Node app's
+#     @napi-rs/canvas + system Liberation/DejaVu fonts are gone.
 #   - Outbound network: the Gaggiuino/GaggiMate WebSocket and MQTT clients
 #     (go/internal/machines, go/internal/mqtt) connect to whatever LAN host
 #     the user configures per machine; the bean-import fetch hits a small
@@ -59,13 +55,12 @@
 #
 # Strategy: a broad `file,` rule (default-deny still applies to every
 # capability, mount, module load, ptrace and raw socket NOT explicitly
-# granted below) rather than enumerating exact paths — kept broad through
-# the #977 cutover rather than narrowed, since this repo still has no way
-# to run real AppArmor mediation in CI and a too-tight profile fails
-# silently in the field. The capability/network/exec lists ARE scoped
-# tightly to what's documented above; /bin/** and /sbin/** ix were added
-# for #977 since Alpine's busybox shell/su-exec live there, not under
-# /usr/bin or /usr/local/bin like their Debian/gosu equivalents did.
+# granted below) rather than enumerating exact paths — kept broad because
+# this repo still has no way to run real AppArmor mediation in CI and a
+# too-tight profile fails silently in the field. The capability/network/
+# exec lists ARE scoped tightly to what's documented above; /bin/** and
+# /sbin/** ix cover Alpine's busybox shell/su-exec, which live there rather
+# than under /usr/bin or /usr/local/bin.
 profile gaggiuino_local_profiler flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
   #include <abstractions/nameservice>

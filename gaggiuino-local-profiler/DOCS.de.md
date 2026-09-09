@@ -19,7 +19,7 @@ Das GLP-Ökosystem (GLP = Gaggiuino Local Profiler) besteht aus vier unabhängig
          ▼
   ┌──────────────────────────────────┐
   │       GLP App                 │  ← dieses App
-  │  Node.js-Server, Port 8099       │
+  │  Go-Server, Port 8099            │
   │  speichert Shots in /data/       │
   │  REST-API + Web-Oberfläche       │
   └────────┬─────────────────────────┘
@@ -103,7 +103,7 @@ Für die Order Card im Direkt-URL-Modus kopierst du den Token weiterhin einmalig
 Sei präzise darüber, was das schließt und was nicht:
 
 - Es betrifft ausschließlich `GET /api/token` selbst. Es gibt Port 8099 nicht frei vom Host-Mapping und wirkt sich auf keinen anderen Endpunkt aus — eine Anfrage, die bereits einen gültigen `X-GLP-Token`-Header mitbringt (z. B. einen zuvor in die YAML einer Order Card kopierten), funktioniert weiterhin, von überall, das den Port erreichen kann. Beschreibe diese Option nicht als "authentifiziert" oder allgemein "geschützt" für den Token-Endpunkt — sie schließt eine bestimmte Art, an einen Token zu kommen, nicht den generellen API-Zugriff.
-- Sie schließt den Endpunkt gegen dein **LAN**, nicht gegen das Supervisor-Add-on-Netzwerk. `isSupervisorIp()` vertraut dem gesamten `172.30.0.0/16` (dem kompletten Supervisor-Netzwerk), nicht nur dem Ingress-Proxy — siehe den Kommentar in `server.js`. Ein anderes Add-on in diesem Netzwerk ist von dieser Option nicht betroffen.
+- Sie schließt den Endpunkt gegen dein **LAN**, nicht gegen das Supervisor-Add-on-Netzwerk. Die Vertrauensprüfung behandelt das gesamte `172.30.0.0/16` (das komplette Supervisor-Netzwerk) als vertrauenswürdig, nicht nur den Ingress-Proxy — siehe `go/internal/auth`. Ein anderes Add-on in diesem Netzwerk ist von dieser Option nicht betroffen.
 - **Direkter Browser-Zugriff auf die App über den Port funktioniert dann komplett nicht mehr** — jeder Browser, der `http://<host>:8099` direkt öffnet, nicht nur die installierte PWA (die PWA ist nur die installierte Form derselben Oberfläche), bekommt beim Laden keinen Token mehr und jede weitere API-Anfrage dieser Sitzung schlägt danach mit 401 fehl. Die **erstmalige Einrichtung des Direkt-URL-Modus der Order Card** bricht aus demselben Grund: keine der beiden hat eine andere Möglichkeit zur Authentifizierung. Eine Order Card, die bereits `glp_token` in ihrer YAML gesetzt hat, funktioniert weiter, da das nur ein `X-GLP-Token`-Header an einem anderen Endpunkt ist — nur das *Beschaffen* eines neuen Tokens braucht Direktzugriff auf den Port. Nur der Zugriff über HA Ingress bleibt uneingeschränkt funktionsfähig.
 
 Standard ist `true` (unverändertes, offenes Verhalten) — jede bestehende Installation funktioniert exakt wie bisher weiter; du musst dies aktiv abschalten.
@@ -169,11 +169,13 @@ App Store — **HA Container**, **HA Core** sowie jedes Docker-basierte
 NAS-Setup (Unraid, TrueNAS SCALE, Synology, …) mit einer eigenen, separaten
 HA-Container-Instanz.
 
-> ⚠ **armv7 gilt als veraltet und wird in einer künftigen Version entfernt**
-> (noch kein Datum festgelegt, siehe
-> [#944](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/944)) — Node.js
-> veröffentlicht ab v22 keine offiziellen Docker-Images mehr für 32-Bit-ARM. Wer auf
-> einem 32-Bit-ARM-Gerät läuft, sollte auf ein 64-Bit-OS-Image umziehen.
+> ℹ **armv7 (32-Bit-ARM) wird unterstützt.** Das Go-Backend cross-kompiliert ein
+> statisches armv7-Binary mit einem reinen Go-SQLite-Treiber, sodass dieses Image
+> zusammen mit amd64 und aarch64 gebaut und veröffentlicht wird. Damit entfällt der
+> frühere Veraltet-Hinweis
+> ([#944](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/944)), der nur
+> bestand, weil sich das alte Node.js-Image für diese Architektur nicht mehr bauen
+> ließ. Das armv7-Image wird nicht regelmäßig auf echter Hardware getestet.
 
 ```bash
 docker run -d --name glp --restart unless-stopped \
@@ -280,7 +282,7 @@ Eine Alternative zur obigen WebSocket-Verbindung, um Live-Sensor-/Systemdaten vo
 - **Umschalter**: Settings → „Live-Verbindung" → WebSocket (Standard) oder MQTT. Der Wechsel auf MQTT braucht einen Broker-Host — entweder automatisch erkannt oder manuell eingetragen (siehe unten) — bevor er wirksam wird; ohne konfigurierten Host bleibt GLP stillschweigend bei WebSocket, selbst wenn MQTT ausgewählt ist.
 - **Broker-Auto-Discovery**: Mit `services: [mqtt:want]` in `config.yaml` fragt das Add-on den `/services/mqtt`-Endpunkt des HA-Supervisors nach dem Broker, gegen den die MQTT-Integration von Home Assistant selbst bereits konfiguriert ist (z. B. das Mosquitto-Broker-Add-on), und trägt Host/Port/Benutzername/Passwort automatisch in die Settings ein. Installationen ohne registrierten MQTT-Dienst (oder Nicht-Supervised-Installationen) fallen auf manuelle Eingabe zurück — jedes Feld bleibt in jedem Fall editierbar.
 - **„Auf Maschine übertragen" per Klick**: schreibt dieselbe Broker-Verbindung auf die eigenen MQTT-Client-Settings der Gaggiuino (`mqttEnabled`/`mqttHost`/`mqttPort`/`mqttUsername`/`mqttPassword`/`mqttTopicPrefix`, über den obigen Settings-Proxy) — die Verbindungsdaten müssen so nicht doppelt eingetragen werden.
-- **Derselbe Live-State-Cache, unabhängig vom Transport**: `GET /api/machine/live` und die in `GET /api/machine/status` eingemischten Felder sind byteidentisch, egal welcher Transport sie geliefert hat — `lib/live-transport.js` leitet jeden Cache-Read entweder an die WebSocket-Session oder das MQTT-Abonnement weiter, beide füllen exakt dieselbe Feldform. `glp-integration` braucht dafür keine Änderung, da es ausschließlich mit der eigenen `/api/*`-Schnittstelle von GLP spricht.
+- **Derselbe Live-State-Cache, unabhängig vom Transport**: `GET /api/machine/live` und die in `GET /api/machine/status` eingemischten Felder sind byteidentisch, egal welcher Transport sie geliefert hat — `go/internal/machines` leitet jeden Cache-Read entweder an die WebSocket-Session oder das MQTT-Abonnement weiter, beide füllen exakt dieselbe Feldform. `glp-integration` braucht dafür keine Änderung, da es ausschließlich mit der eigenen `/api/*`-Schnittstelle von GLP spricht.
 - **Primäre Sensorwerte nutzen jetzt tatsächlich die Push-Daten (v2.27.2)**: `temperature`/`pressure`/`weight` — auch in `GET /api/machine/status`, den Sensoren von `glp-integration` und der Live-Shot-Aufzeichnung — stammen jetzt aus dem jeweils frischesten gecachten Snapshot, WS oder MQTT, und fallen nur dann auf den REST-Poll zurück, wenn keiner der beiden Transporte einen frischen Wert hat. `targetTemperature` bleibt weiterhin aus dem aktiven Profil/REST bezogen, da es sich um einen konfigurierten Sollwert handelt und nicht um einen Wert, den einer der beiden Transporte meldet.
 - **Umfang**: MQTT gilt ausschließlich für die **Standardmaschine** (der klassische Ein-Maschinen-Fall) — zusätzliche Maschinen in [Multi-Maschinen](#multi-maschinen-modus-v200)-Setups bleiben unabhängig vom Umschalter immer bei ihrer eigenen WebSocket-Session, da Broker/Topic-Präfix an eine physische Einheit gebunden sind. Steuerbefehle (`opmode`/`tare`/manuelles Brühen) und die native HA-MQTT-Discovery der Maschine sind beide bewusst nicht Teil dieses Transport-Umschalters — Befehle laufen weiterhin über den bestehenden WebSocket-basierten Proxy oben.
 
@@ -448,7 +450,7 @@ Eine eigene **Erfolge**-Ansicht zeigt eine Pappkarte im Stempelkarten-Look: 54 A
 
 ### Neuigkeiten (In-App-Changelog, v2.28.0)
 
-⚙ Einstellungen → **Neuigkeiten** zeigt die letzten 8 GLP-Releases, neueste zuerst, jeweils mit einer kurzen Liste der wichtigsten Änderungen — so siehst du auf einen Blick, was sich geändert hat, ohne die App zu verlassen oder in GitHub zu suchen. Diese Karte ist eine kuratierte, von Hand gepflegte Teilmenge (`lib/whats-new.js`) und keine gerenderte Kopie der vollständigen Historie: **`CHANGELOG.md` bleibt die maßgebliche Quelle** für jede jemals ausgelieferte Änderung; die In-App-Karte zeigt pro Release nur einen kurzen Auszug, begrenzt auf die letzten 8. Der Text der Neuigkeiten bleibt unabhängig von der UI-Sprache auf Englisch — nur Titel und Beschreibung der Karte selbst sind übersetzt, derselbe Ansatz wie bei Shot-Anmerkungen und Verkostungsnotizen.
+⚙ Einstellungen → **Neuigkeiten** zeigt die letzten 8 GLP-Releases, neueste zuerst, jeweils mit einer kurzen Liste der wichtigsten Änderungen — so siehst du auf einen Blick, was sich geändert hat, ohne die App zu verlassen oder in GitHub zu suchen. Diese Karte ist eine kuratierte, von Hand gepflegte Teilmenge (`public-src/shared/whats-new.js`) und keine gerenderte Kopie der vollständigen Historie: **`CHANGELOG.md` bleibt die maßgebliche Quelle** für jede jemals ausgelieferte Änderung; die In-App-Karte zeigt pro Release nur einen kurzen Auszug, begrenzt auf die letzten 8. Der Text der Neuigkeiten bleibt unabhängig von der UI-Sprache auf Englisch — nur Titel und Beschreibung der Karte selbst sind übersetzt, derselbe Ansatz wie bei Shot-Anmerkungen und Verkostungsnotizen.
 
 ### Standardwerte für Shot-Notizen
 

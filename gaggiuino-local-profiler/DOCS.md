@@ -19,7 +19,7 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces
          ▼
   ┌──────────────────────────────────┐
   │         GLP App               │  ← this app
-  │  Node.js server, port 8099       │
+  │  Go server, port 8099            │
   │  stores data in /data/glp.db     │
   │  REST API + web UI               │
   └────────┬─────────────────────────┘
@@ -103,7 +103,7 @@ For the Order Card in direct-URL mode you still copy the token once from **Setti
 Be precise about what this does and doesn't close:
 
 - It only gates `GET /api/token` itself. It does not unmap port 8099, and it does not affect any other endpoint — a request that already carries a valid `X-GLP-Token` header (e.g. one copied earlier into an Order Card's YAML) still works, from anywhere that can reach the port. Do not describe this option as making the token endpoint "authenticated" or "protected" in general; it closes one specific way of *obtaining* a token, not general API access.
-- It closes the endpoint against your **LAN**, not against the Supervisor add-on network. `isSupervisorIp()` trusts all of `172.30.0.0/16` (the whole Supervisor network), not the Ingress proxy specifically — see the comment in `server.js`. Another add-on running on that same network is unaffected by this option.
+- It closes the endpoint against your **LAN**, not against the Supervisor add-on network. The trust check treats all of `172.30.0.0/16` (the whole Supervisor network) as trusted, not the Ingress proxy specifically — see `go/internal/auth`. Another add-on running on that same network is unaffected by this option.
 - **Direct-port browser access to the app UI stops working entirely** once this is off — any browser opening `http://<host>:8099` directly, not just the installed PWA (the PWA is just the installed form of that same UI), fails to get a token on load and every subsequent API call then 401s. **First-time setup of the Order Card's direct-URL mode** breaks too, for the same reason: neither has any other way to authenticate. An Order Card that already has `glp_token` set in its YAML from before keeps working, since that's just an `X-GLP-Token` header on a different endpoint — only *obtaining* a new token requires direct-port access. Only HA Ingress access remains functional.
 
 Default is `true` (unchanged, open behaviour) — every existing install keeps working exactly as it does today; you have to turn this off explicitly.
@@ -168,10 +168,12 @@ Home Assistant installs that have no Supervisor and therefore no Add-on Store �
 **HA Container**, **HA Core**, and any Docker-based NAS setup (Unraid, TrueNAS
 SCALE, Synology, …) running its own separate HA Container instance.
 
-> ⚠ **armv7 is deprecated and planned for removal in a future release** (no date set
-> yet, see [#944](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/944)) —
-> Node.js no longer publishes official Docker images for 32-bit ARM past v22. If you're
-> on a 32-bit ARM device, plan a move to a 64-bit OS image.
+> ℹ **armv7 (32-bit ARM) is supported.** The Go backend cross-compiles a static armv7
+> binary with a pure-Go SQLite driver, so that image is built and published alongside
+> amd64 and aarch64. This lifts the earlier deprecation notice
+> ([#944](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/944)), which only
+> existed because the old Node.js image could no longer be built for that architecture.
+> The armv7 image is not regularly tested on real hardware.
 
 ```bash
 docker run -d --name glp --restart unless-stopped \
@@ -276,7 +278,7 @@ An alternative to the WebSocket connection above for getting live sensor/system 
 - **Toggle**: Settings → "Live connection" → WebSocket (default) or MQTT. Switching to MQTT needs a broker host — either auto-discovered or entered manually (see below) — before it takes effect; with no host configured GLP silently stays on WebSocket even if MQTT is selected.
 - **Broker auto-discovery**: with `services: [mqtt:want]` declared in `config.yaml`, the add-on asks the HA Supervisor's `/services/mqtt` endpoint for the broker Home Assistant's own MQTT integration is already configured against (e.g. the Mosquitto broker add-on) and pre-fills host/port/username/password in Settings. Installs with no MQTT service registered at all (or non-Supervised installs) fall back to manual entry — every field stays editable either way.
 - **One-click "Apply to machine"**: writes the same broker connection onto the Gaggiuino's own MQTT client settings (`mqttEnabled`/`mqttHost`/`mqttPort`/`mqttUsername`/`mqttPassword`/`mqttTopicPrefix`, via the settings proxy above), so the connection details don't need to be typed twice.
-- **Same live-state cache, either transport**: `GET /api/machine/live` and the fields merged into `GET /api/machine/status` are byte-identical regardless of which transport produced them — `lib/live-transport.js` dispatches each cache read to either the WebSocket session or the MQTT subscription, both feeding the exact same field shape. `glp-integration` needs zero changes, since it only ever talks to GLP's own `/api/*` contract.
+- **Same live-state cache, either transport**: `GET /api/machine/live` and the fields merged into `GET /api/machine/status` are byte-identical regardless of which transport produced them — `go/internal/machines` dispatches each cache read to either the WebSocket session or the MQTT subscription, both feeding the exact same field shape. `glp-integration` needs zero changes, since it only ever talks to GLP's own `/api/*` contract.
 - **Primary sensor values actually use the push data (v2.27.2)**: `temperature`/`pressure`/`weight` — including in `GET /api/machine/status`, `glp-integration`'s sensors, and live shot recording — now come from whichever transport's cached snapshot is freshest, WS or MQTT, falling back to the REST poll only when neither transport has a fresh reading yet. `targetTemperature` stays sourced from the active profile/REST, since it's a configured setpoint rather than something either transport reports.
 - **Scope**: MQTT only ever applies to the **default machine** (the classic single-machine case) — [multi-machine](#multi-machine-v200) installs' additional machines always stay on their own WebSocket session regardless of the toggle, since the broker/topic-prefix is scoped to one physical unit. Command writes (`opmode`/`tare`/manual-brew) and the machine's own native HA MQTT Discovery are both out of scope for this transport switch — commands stay on the existing WebSocket-based proxy above.
 
@@ -444,7 +446,7 @@ A dedicated **Achievements** view shows a printed-cardboard "stamp card": 54 bad
 
 ### What's New (in-app changelog, v2.28.0)
 
-⚙ Settings → **What's New** shows the last 8 GLP releases, newest first, each with a short list of highlights — so you can see what changed without leaving the app or digging through GitHub. This card is a curated, hand-maintained subset (`lib/whats-new.js`) rather than a rendered copy of the full history: **`CHANGELOG.md` stays the source of truth** for every change ever shipped; the in-app card only ever shows a short highlight per release, capped at the last 8. Highlight text is English-only regardless of your UI language — only the card's own title and description are translated, the same approach taken for shot annotations and tasting notes.
+⚙ Settings → **What's New** shows the last 8 GLP releases, newest first, each with a short list of highlights — so you can see what changed without leaving the app or digging through GitHub. This card is a curated, hand-maintained subset (`public-src/shared/whats-new.js`) rather than a rendered copy of the full history: **`CHANGELOG.md` stays the source of truth** for every change ever shipped; the in-app card only ever shows a short highlight per release, capped at the last 8. Highlight text is English-only regardless of your UI language — only the card's own title and description are translated, the same approach taken for shot annotations and tasting notes.
 
 ### Shot logging defaults
 
