@@ -32,8 +32,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
@@ -63,6 +65,12 @@ import (
 // port. Overridable via GLP_PORT for local/dev runs of this binary outside
 // the add-on container, same pattern as dbPath/tokenPath below.
 const defaultPort = "8099"
+
+// shutdownTimeout bounds how long main() waits for in-flight requests to
+// drain during a graceful shutdown (SIGTERM/SIGINT) before giving up and
+// returning anyway -- docker stop's own default grace period before SIGKILL
+// is 10s, so this stays under that.
+const shutdownTimeout = 8 * time.Second
 
 // appConfig is the resolved runtime configuration buildApp needs — every
 // field is an env-var read in production (configFromEnv) and an explicit
@@ -100,8 +108,27 @@ func main() {
 		log.Fatalf("listening on %s: %v", addr, err)
 	}
 
-	log.Printf("GLP Go server listening on port %s", cfg.port)
 	srv := &http.Server{Handler: handler}
+
+	// Graceful shutdown: docker stop sends SIGTERM to this process directly
+	// (docker-entrypoint.sh execs it via su-exec, so there's no intermediate
+	// shell to relay the signal) and waits a grace period before SIGKILL.
+	// Catch it and drain in-flight requests via srv.Shutdown instead of
+	// letting the process die mid-request; sqlDB.Close() (deferred above)
+	// then runs once Serve returns below.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		sig := <-sigCh
+		log.Printf("received %s, shutting down gracefully", sig)
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("graceful shutdown did not complete cleanly: %v", err)
+		}
+	}()
+
+	log.Printf("GLP Go server listening on port %s", cfg.port)
 	if err := srv.Serve(tcpNoDelayListener{ln}); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}

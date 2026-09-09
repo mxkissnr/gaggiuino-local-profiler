@@ -320,6 +320,7 @@ func (h *MachinesHandlers) setDefaultAction(w http.ResponseWriter, r *http.Reque
 		writeFragmentError(w, http.StatusNotFound, "Machine not found")
 		return
 	}
+	h.registry.LogRegistrySnapshot()
 	rows, err := h.rows()
 	if err != nil {
 		httputil.InternalError(w, "web", err)
@@ -366,6 +367,7 @@ func (h *MachinesHandlers) deleteAction(w http.ResponseWriter, r *http.Request) 
 		writeFragmentError(w, http.StatusNotFound, "Machine not found")
 		return
 	}
+	h.registry.LogRegistrySnapshot()
 	w.WriteHeader(http.StatusOK)
 }
 

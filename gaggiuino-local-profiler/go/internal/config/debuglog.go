@@ -38,7 +38,7 @@ var OptionsFile = "/data/options.json"
 // practice while saving a stat call on every hot-path call.
 var debugLoggingCache struct {
 	mu      sync.Mutex
-	valid   bool // false until the first os.Stat succeeds
+	valid   bool // false until the first call computes a result -- true whether that came from a stat'd options.json or the #764 no-file/env-var fallback
 	mtime   time.Time
 	checked time.Time
 	enabled bool
@@ -78,7 +78,15 @@ func IsDebugLoggingEnabled() bool {
 	}
 
 	enabled := parseDebugLoggingFile()
-	debugLoggingCache.valid = statErr == nil
+	// valid latches true even when options.json is permanently absent (#764
+	// standalone Docker): that outcome is just as cacheable as a
+	// successfully stat'd file, and leaving valid false here defeated the
+	// line-70 TTL fast-path for this configuration -- every call re-ran the
+	// failing os.Stat and os.ReadFile instead of trusting the cache like
+	// the file-exists case does. mtime is left untouched when statErr != nil
+	// so the line-75 mtime shortcut still only ever fires once we've
+	// actually stat'd a real file.
+	debugLoggingCache.valid = true
 	if statErr == nil {
 		debugLoggingCache.mtime = info.ModTime()
 	}

@@ -59,6 +59,21 @@
 # root-owned backup sitting there unreported (#977 follow-up code review,
 # round 4).
 #
+# Each of glp.db/-wal/-shm is backed up as its own independent atomic
+# cp+mv, not as one atomic group covering all three -- a torn snapshot
+# across the three (e.g. glp.db and glp.db-wal from two different moments)
+# is only safe to accept because the old (Node) container is already fully
+# stopped by the time this entrypoint runs: nothing is writing to any of
+# the three files during this boot-time backup window, so "per-file atomic,
+# taken one after another" and "all three atomic together" describe the
+# same on-disk result here. This ordering would NOT be safe against a
+# concurrent writer (#977 follow-up code review, round 7 -- doc-only, no
+# code change).
+#
+# backup_data_file() also refuses to ever overwrite an existing
+# .pre-go-backup file for a given source (round 7): see its own check
+# below, and the marker-vs-backup-existence note in run_pre_go_backup().
+#
 # The marker touch/chown gets the same non-fatal treatment (#977 follow-up
 # code review, round 5): if the disk fills or goes read-only right after the
 # chown -R above but before the marker is written, `set -e` must not kill
@@ -67,12 +82,34 @@
 # means the backup-check above runs again next boot, which is safe and
 # idempotent by design (see the marker-gating note further up), so a failure
 # here is logged as a warning and boot continues.
+#
+# backup_data_file()/run_pre_go_backup() are split into named functions, and
+# the block that calls them is guarded below (#977 follow-up code review,
+# round 7), so test/docker-entrypoint.test.sh can `. docker-entrypoint.sh`
+# and call them directly against a throwaway DATA_DIR -- these were only
+# ever manually re-verified via ad-hoc scenario scripts across rounds 3-6
+# before this. DATA_DIR/DOCKER_ENTRYPOINT_TEST are both no-ops in the real
+# container (default to /data, unset respectively); nothing about a normal
+# boot changes.
 set -e
 
+DATA_DIR="${GLP_DATA_DIR:-/data}"
+
 backup_data_file() {
-    src="/data/$1"
-    tmp="/data/$1.pre-go-backup.tmp"
-    final="/data/$1.pre-go-backup"
+    src="$DATA_DIR/$1"
+    tmp="$DATA_DIR/$1.pre-go-backup.tmp"
+    final="$DATA_DIR/$1.pre-go-backup"
+    if [ -f "$final" ]; then
+        # Round 7 fix: never overwrite a backup that's already there. This
+        # is what makes a missing/misowned .go-cutover-done marker harmless
+        # rather than dangerous -- run_pre_go_backup() only gates the whole
+        # loop on the marker, so a marker that failed to stick (see its own
+        # WARNING branches below) makes this function run again on the next
+        # boot; without this check, that re-run would cp the by-then
+        # Go-modified glp.db over the real pre-cutover Node backup, silently
+        # destroying the one thing the whole feature exists to preserve.
+        return 0
+    fi
     if [ -f "$src" ]; then
         if cp "$src" "$tmp" && mv "$tmp" "$final"; then
             if ! chown glp:glp "$final"; then
@@ -86,21 +123,41 @@ backup_data_file() {
     fi
 }
 
-if [ -d /data ]; then
-    chown -R glp:glp /data
-    if [ ! -f /data/.go-cutover-done ]; then
-        for f in glp.db glp.db-wal glp.db-shm; do
-            backup_data_file "$f"
-        done
-        if touch /data/.go-cutover-done; then
-            if ! chown glp:glp /data/.go-cutover-done; then
-                echo "WARNING: chown glp:glp failed on /data/.go-cutover-done, removing it so the backup-check re-runs next boot" >&2
-                rm -f /data/.go-cutover-done
+run_pre_go_backup() {
+    if [ -d "$DATA_DIR" ]; then
+        # Round 7 fix: hardened like the three chown calls below it (warn +
+        # continue) instead of letting `set -e` abort the whole boot -- this
+        # one previously ran unguarded, inconsistently with the rest of this
+        # function.
+        if ! chown -R glp:glp "$DATA_DIR"; then
+            echo "WARNING: chown -R glp:glp failed on $DATA_DIR, continuing anyway" >&2
+        fi
+        if [ ! -f "$DATA_DIR/.go-cutover-done" ]; then
+            for f in glp.db glp.db-wal glp.db-shm; do
+                backup_data_file "$f"
+            done
+            if touch "$DATA_DIR/.go-cutover-done"; then
+                if ! chown glp:glp "$DATA_DIR/.go-cutover-done"; then
+                    echo "WARNING: chown glp:glp failed on $DATA_DIR/.go-cutover-done, removing it so the backup-check re-runs next boot" >&2
+                    rm -f "$DATA_DIR/.go-cutover-done"
+                fi
+            else
+                echo "WARNING: failed to write $DATA_DIR/.go-cutover-done, continuing anyway (backup-check will re-run next boot)" >&2
             fi
-        else
-            echo "WARNING: failed to write /data/.go-cutover-done, continuing anyway (backup-check will re-run next boot)" >&2
         fi
     fi
-fi
+}
 
-exec su-exec glp "$@"
+# Round 7 fix: checked against the exact sentinel "1", not just "any value
+# set", and logged loudly when active -- test/docker-entrypoint.test.sh is
+# the only thing that should ever set this. A stray/misconfigured
+# DOCKER_ENTRYPOINT_TEST in a real container would otherwise make it skip
+# run_pre_go_backup and exec, i.e. silently exit without starting the
+# server at all; this makes that failure mode visible in the logs instead
+# of a silent, unexplained container exit.
+if [ "${DOCKER_ENTRYPOINT_TEST:-}" = "1" ]; then
+    echo "DOCKER_ENTRYPOINT_TEST=1: test mode, NOT starting the server (this must never be set in a real container)" >&2
+else
+    run_pre_go_backup
+    exec su-exec glp "$@"
+fi

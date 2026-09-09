@@ -37,6 +37,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: docker-entrypoint.sh regression tests
+        run: sh test/docker-entrypoint.test.sh
+
       - name: Build
         run: npm run build
 

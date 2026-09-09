@@ -80,8 +80,10 @@ func TestIsDebugLoggingEnabled_OnOff(t *testing.T) {
 
 // TestIsDebugLoggingEnabled_MissingFileFallsBackToEnv covers the #764
 // standalone-Docker fallback (GLP_DEBUG_LOGGING) when options.json doesn't
-// exist -- a missing file never becomes "valid" (statErr != nil), so every
-// call re-checks the env var rather than latching onto a stale value.
+// exist. Round 7's fix latches the no-file outcome as "valid" too (like the
+// file-exists case), so this now goes through expireCacheTTLForTest between
+// assertions the same way the mtime-based tests below do -- otherwise the
+// second env-var change would be masked by the still-live TTL fast path.
 func TestIsDebugLoggingEnabled_MissingFileFallsBackToEnv(t *testing.T) {
 	resetDebugLoggingCacheForTest(t)
 	OptionsFile = filepath.Join(t.TempDir(), "does-not-exist.json")
@@ -91,9 +93,50 @@ func TestIsDebugLoggingEnabled_MissingFileFallsBackToEnv(t *testing.T) {
 		t.Error("missing options.json, no env: IsDebugLoggingEnabled() = true, want false")
 	}
 
+	expireCacheTTLForTest(t)
 	t.Setenv("GLP_DEBUG_LOGGING", "true")
 	if !IsDebugLoggingEnabled() {
 		t.Error("missing options.json, GLP_DEBUG_LOGGING=true: IsDebugLoggingEnabled() = false, want true")
+	}
+}
+
+// TestIsDebugLoggingEnabled_MissingFileLatchesTTLFastPath is the round-7
+// regression test for the bug this fixes: a permanently-absent options.json
+// (#764 standalone Docker) used to leave debugLoggingCache.valid == false
+// forever, so IsDebugLoggingEnabled() re-ran os.Stat and
+// parseDebugLoggingFile's os.ReadFile on every single call -- including the
+// 1-second poll-tick hot path -- rather than hitting the same TTL fast path
+// (line 70) the file-exists case gets. Proof: change the env var within
+// cacheTTL of the first call and confirm it is NOT picked up, mirroring
+// TestIsDebugLoggingEnabled_TTLSuppressesMtimeCheck's approach for the
+// mtime-cache case.
+func TestIsDebugLoggingEnabled_MissingFileLatchesTTLFastPath(t *testing.T) {
+	resetDebugLoggingCacheForTest(t)
+	OptionsFile = filepath.Join(t.TempDir(), "does-not-exist.json")
+
+	t.Setenv("GLP_DEBUG_LOGGING", "false")
+	if IsDebugLoggingEnabled() {
+		t.Fatal("IsDebugLoggingEnabled() = true, want false")
+	}
+
+	debugLoggingCache.mu.Lock()
+	valid := debugLoggingCache.valid
+	debugLoggingCache.mu.Unlock()
+	if !valid {
+		t.Fatal("debugLoggingCache.valid = false after a no-file call, want true (must latch so the TTL fast path engages)")
+	}
+
+	// A genuine env-var change, but the TTL has not been expired -- must not
+	// be picked up yet, proving the cache is actually short-circuiting
+	// os.Stat/os.ReadFile rather than happening to return the same answer.
+	t.Setenv("GLP_DEBUG_LOGGING", "true")
+	if IsDebugLoggingEnabled() {
+		t.Fatal("IsDebugLoggingEnabled() = true, want false (within cacheTTL, must not re-check yet)")
+	}
+
+	expireCacheTTLForTest(t)
+	if !IsDebugLoggingEnabled() {
+		t.Fatal("IsDebugLoggingEnabled() = false, want true (TTL expired, env change now picked up)")
 	}
 }
 
