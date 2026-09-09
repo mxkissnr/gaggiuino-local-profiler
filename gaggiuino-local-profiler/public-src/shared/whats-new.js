@@ -15,6 +15,11 @@
 // caps it defensively so an out-of-order manual edit can't silently show
 // entries in the wrong order or let the list grow unbounded.
 const WHATS_NEW_ENTRIES = [
+    { version: '3.0.0', date: '2026-09-09', highlights: [
+        'The add-on now runs on a Go backend instead of Node.js, with no visible change in behaviour. Back up Home Assistant before updating.',
+        'armv7 (32-bit ARM) is no longer deprecated — the Go backend builds a static armv7 image again.',
+        'First-class GaggiMate support: foundational integration across the stack plus a full Standard/Pro profile editor, saved straight to the machine. Thanks to @Paul-Lukas.',
+    ] },
     { version: '2.36.0', date: '2026-08-24', highlights: [
         'The Live tab now shows current temperature/target, pressure and water level even while idle, instead of just "Ready to brew".',
         'Steam and flush mode now get the same live treatment as brewing: a timer, live readouts, a badge and the animated machine icon.',
@@ -44,13 +49,6 @@ const WHATS_NEW_ENTRIES = [
     ] },
     { version: '2.33.0', date: '2026-08-11', highlights: [
         'Added standalone Docker install support for Home Assistant setups without a Supervisor (HA Container, HA Core, Unraid, TrueNAS SCALE, …): a ready-made docker-compose.standalone.yml, plus env-var config and an optional HA long-lived-token integration.',
-    ] },
-    { version: '2.32.0', date: '2026-08-11', highlights: [
-        'Heads up if you manage the machine host/switch entity via the add-on\'s Configuration tab: those fields are removed there. Your existing value carries over automatically, but from now on the default machine is configured entirely under Settings → Machines instead.',
-        'Added a guided first-run setup wizard: a fresh install with no machines configured now gets a welcome -> connect machine -> done walkthrough, with a one-click demo-data option and a "Restart setup tour" control in Settings → Machines.',
-        'The Live tab and the sidebar\'s shot counter now update in real time instead of only polling every few seconds, falling back automatically if a live connection can\'t be established.',
-        'Settings → Machines: "Test connection" now saves the machine automatically first, you can change the default machine or delete any machine, and the host field can be left empty to save a machine as "not configured yet".',
-        'Fixed several shot-sync sticking points (a stuck backfill, an out-of-range shot id) and the Live tab\'s flow reading always showing 0.',
     ] },
 ];
 

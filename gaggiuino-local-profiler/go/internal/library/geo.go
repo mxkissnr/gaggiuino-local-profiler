@@ -39,7 +39,7 @@ const (
 	// Cosmetic — Nominatim only needs a stable identifying User-Agent, not
 	// an exact version. Bumped alongside config.yaml at release time (same
 	// convention as internal/system/version.go's glpVersion).
-	geoUserAgent = "GLP/2.36.1 (https://github.com/mxkissnr/gaggiuino-local-profiler)"
+	geoUserAgent = "GLP/3.0.0 (https://github.com/mxkissnr/gaggiuino-local-profiler)"
 )
 
 // Location mirrors lib/geo.js's { lat, lon, label } result shape — the
