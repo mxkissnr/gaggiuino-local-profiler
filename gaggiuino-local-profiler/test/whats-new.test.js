@@ -1,8 +1,8 @@
-// #610: in-app "What's New" changelog data (lib/whats-new.js). Pure data +
-// getter, no Node/DOM deps, so it's tested directly the same way
-// lib/machines/theme-presets.js is (see test/validation.test.js).
+// #610: in-app "What's New" changelog data
+// (public-src/shared/whats-new.js). Pure data + getter, no DOM deps, so
+// it's tested directly.
 import { describe, it, expect } from 'vitest';
-import { WHATS_NEW_ENTRIES, MAX_ENTRIES, getWhatsNewEntries } from '../lib/whats-new.js';
+import { WHATS_NEW_ENTRIES, MAX_ENTRIES, getWhatsNewEntries } from '../public-src/shared/whats-new.js';
 
 const SEMVER_RE = /^\d+\.\d+\.\d+$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

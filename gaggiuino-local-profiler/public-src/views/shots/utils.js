@@ -1,6 +1,6 @@
 import { S }                    from '../../state.js';
 import { mapShotDatapoints }    from '../../utils.js';
-import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../../lib/score.js';
+import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
 
 // ── Bean age ───────────────────────────────────────────────────────────────
 

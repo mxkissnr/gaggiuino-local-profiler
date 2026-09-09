@@ -11,7 +11,7 @@ import { t } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
 import { WARNING_ICON_SVG, CHECK_ICON_SVG, CLOSE_ICON_SVG } from '../icons.js';
 import { updateStatus } from './status.js';
-import { THEME_PRESETS, getThemePreset, resolveTheme } from '../../lib/machines/theme-presets.js';
+import { THEME_PRESETS, getThemePreset, resolveTheme } from '../shared/theme-presets.js';
 import { migrateLegacyAccent } from '../theme.js';
 import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
 import { renderTopbarMachineIcon } from './topbar-machine-icon.js';

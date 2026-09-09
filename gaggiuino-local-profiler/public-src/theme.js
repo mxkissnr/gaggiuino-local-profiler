@@ -4,7 +4,7 @@
 // bootstrap touching dozens of element ids) that make importing it in a test
 // impractical; this module has none.
 import { THEME_CHANGE_EVENT } from './utils.js';
-import { THEME_PRESET_KEYS } from '../lib/machines/theme-presets.js';
+import { THEME_PRESET_KEYS } from './shared/theme-presets.js';
 
 export const THEME_STORAGE_KEY = 'glp_theme';
 

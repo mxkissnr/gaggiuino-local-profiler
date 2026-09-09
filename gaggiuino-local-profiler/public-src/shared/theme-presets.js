@@ -1,10 +1,9 @@
-// Machine colour theme presets (#594). Single source of truth shared by the
-// backend (theme validation in lib/validation/schemas.js) and the frontend
-// (theme picker UI) — same sharing pattern as lib/score.js (see vite.config.js
-// commonjsOptions). Pure data, no Node/DOM deps so it works in both.
+// Machine colour theme presets (#594). Frontend copy for the theme picker
+// UI; the Go backend validates the stored theme value independently
+// (go/internal/machines). Pure data, no DOM deps.
 //
-// Each preset has a stable `key` (the value stored in machines.theme, see
-// lib/db.js's machines table comment) plus a two-stop gradient `a`/`b`. A
+// Each preset has a stable `key` (the value stored in machines.theme) plus
+// a two-stop gradient `a`/`b`. A
 // flat-colour preset just repeats the same hex in both stops. i18n label
 // keys follow the `theme_preset_<key with _ instead of ->` convention, added
 // to all six public-src/i18n/*.js files.
@@ -38,4 +37,4 @@ function resolveTheme(theme) {
     return null;
 }
 
-module.exports = { THEME_PRESETS, THEME_PRESET_KEYS, getThemePreset, resolveTheme };
+export { THEME_PRESETS, THEME_PRESET_KEYS, getThemePreset, resolveTheme };
