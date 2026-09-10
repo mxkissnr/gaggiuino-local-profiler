@@ -15,6 +15,9 @@
 // caps it defensively so an out-of-order manual edit can't silently show
 // entries in the wrong order or let the list grow unbounded.
 const WHATS_NEW_ENTRIES = [
+    { version: '3.0.1', date: '2026-09-10', highlights: [
+        'Fixed: demo mode\'s shot detail (curve chart, P·Q view and average pressure/temperature) is no longer blank.',
+    ] },
     { version: '3.0.0', date: '2026-09-09', highlights: [
         'The add-on now runs on a Go backend instead of Node.js, with no visible change in behaviour. Back up Home Assistant before updating.',
         'armv7 (32-bit ARM) is no longer deprecated — the Go backend builds a static armv7 image again.',
@@ -46,9 +49,6 @@ const WHATS_NEW_ENTRIES = [
     { version: '2.33.1', date: '2026-08-11', highlights: [
         'Fixed theme/accent colour swatches (Settings → Machines → Farbe, and the app-wide colour scheme picker) showing a square edge instead of a fully filled circle on some browsers.',
         'Fixed shot-import progress showing the total shrinking mid-backfill during a large sync.',
-    ] },
-    { version: '2.33.0', date: '2026-08-11', highlights: [
-        'Added standalone Docker install support for Home Assistant setups without a Supervisor (HA Container, HA Core, Unraid, TrueNAS SCALE, …): a ready-made docker-compose.standalone.yml, plus env-var config and an optional HA long-lived-token integration.',
     ] },
 ];
 

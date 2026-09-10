@@ -1,6 +1,6 @@
 {
   "name": "gaggiuino-local-profiler-frontend",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "scripts": {
     "build": "vite build",
     "dev": "vite",

@@ -1,4 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// Pin "now" so the OLD_A/OLD_B/OLD_C day offsets below always land three
+// full calendar months back with every shot in the same month. Without this
+// the test rotted whenever the real date made a 3-day offset window straddle
+// a month boundary (it did on 2026-09-10).
+const FIXED_NOW = new Date('2026-09-15T12:00:00Z');
 
 // sidebar.js's import chain touches state.js/i18n.js, which read
 // localStorage/navigator at module load time — stub the minimum browser
@@ -80,8 +86,10 @@ function installDocument() {
 }
 
 const DAY = 86400000;
+// Relative to FIXED_NOW, not the real clock — the month keys are derived the
+// same way the shots are seeded, so they can't drift apart as real time moves.
 const monthKeyOf = daysAgo => {
-  const d = new Date(Date.now() - daysAgo * DAY);
+  const d = new Date(FIXED_NOW.getTime() - daysAgo * DAY);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 const mkShot = (id, daysAgo) => ({
@@ -95,8 +103,9 @@ const countWrappers = () => collect(shotsEl, n => n.classList.contains('shot-wra
 const monthBody = key => collect(shotsEl, n => n.id === `monthGroup-${key}`)[0];
 
 // Three fully-distinct older calendar months (well past the 14-day recent
-// window) plus three shots in the last few days.
-const OLD_A = 110, OLD_B = 75, OLD_C = 40;
+// window) plus three shots in the last few days. Offsets chosen so that,
+// relative to FIXED_NOW, each 3-day window sits mid-month.
+const OLD_A = 153, OLD_B = 92, OLD_C = 31;
 const KEY_A = monthKeyOf(OLD_A), KEY_B = monthKeyOf(OLD_B), KEY_C = monthKeyOf(OLD_C);
 
 function seedShots() {
@@ -110,6 +119,7 @@ function seedShots() {
 
 describe('sidebar lazy month groups (#969)', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ now: FIXED_NOW });
     installDocument();
     S._expandedMonths = new Set();
     S.currentFilter = '';
@@ -118,6 +128,10 @@ describe('sidebar lazy month groups (#969)', () => {
     S.currentSort = 'newest';
     S.sortAsc = false;
     seedShots();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('builds wrappers only for recent day-groups, not for collapsed months', () => {

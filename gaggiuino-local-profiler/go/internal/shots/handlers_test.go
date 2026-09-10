@@ -197,6 +197,48 @@ func TestGetShot_IncludesPreviousShotOnSameProfile(t *testing.T) {
 	}
 }
 
+// TestGetShot_ResolvesDemoRangeID guards the #1034 fix: demo-seed shots get
+// ids in the demoIDBase..demoIDMax band (far above MaxShotID), and GET
+// /api/shots/{id} has to reach them — otherwise demo mode's shot detail
+// (curve, P·Q, average pressure) renders empty because the per-shot curve
+// fetch #957 introduced 200-nulls. An id just past the demo band is still
+// rejected the same way an over-MaxShotID real id always was.
+func TestGetShot_ResolvesDemoRangeID(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+
+	const demoID = demoIDBase + 1 // 900000001 — first id the demo seed hands out
+	dur := int64(300)
+	insertShot(t, sqlDB, demoID, 1000, &dur, "Demo Profile 1",
+		map[string]any{"datapoints": map[string]any{
+			"pressure":   []float64{9, 9, 9},
+			"timeInShot": []float64{0, 1, 2},
+		}}, nil)
+
+	rec := doJSON(t, mux, http.MethodGet, "/api/shots/900000001", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	body := decodeBody(t, rec.Body.Bytes())
+	if body["id"] == nil || int64(body["id"].(float64)) != demoID {
+		t.Fatalf("expected the demo shot row (id %d), got %+v", demoID, body)
+	}
+	data, ok := body["datapoints"].(map[string]any)
+	if !ok || len(data["pressure"].([]any)) != 3 {
+		t.Errorf("expected the demo shot's datapoints to come back, got %+v", body["datapoints"])
+	}
+
+	// demoIDMax (2*demoIDBase) itself and anything between MaxShotID and
+	// demoIDBase stay rejected (200 null, exactly as an over-ceiling real id
+	// always was).
+	for _, path := range []string{"/api/shots/1800000000", "/api/shots/500000000"} {
+		rec := doJSON(t, mux, http.MethodGet, path, nil)
+		if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != "null" {
+			t.Errorf("%s: status=%d body=%q, want 200 null", path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
 // ── /api/shots/{id}/card ───────────────────────────────────────────────
 
 func TestGetCard_StatusCodes(t *testing.T) {
