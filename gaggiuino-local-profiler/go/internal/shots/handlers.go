@@ -150,10 +150,17 @@ func jsParseInt(s string) (int64, bool) {
 	return v, true
 }
 
-// parseID ports routes/shots.js's parseId(param).
+// parseID ports routes/shots.js's parseId(param). Accepts a real shot id
+// (1..MaxShotID) or a demo-seed shot id (the tight demoIDBase..demoIDMax
+// band, which sits far above MaxShotID — see model.go for why the route
+// must reach these). Everything else — non-numeric, < 1, or a value between
+// MaxShotID and the demo band — is rejected exactly as before.
 func parseID(param string) (int64, bool) {
 	id, ok := jsParseInt(param)
-	if !ok || id < 1 || id > MaxShotID {
+	if !ok || id < 1 {
+		return 0, false
+	}
+	if id > MaxShotID && (id < demoIDBase || id >= demoIDMax) {
 		return 0, false
 	}
 	return id, true

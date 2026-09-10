@@ -10,8 +10,26 @@ import (
 )
 
 // MaxShotID mirrors lib/constants.js's MAX_SHOT_ID: the highest value a
-// shot id (native or multi-machine synthetic) can ever take.
+// real shot id (native or multi-machine synthetic) can ever take.
 const MaxShotID = 99_999_999
+
+// Demo-mode shots (POST /api/demo/seed) are seeded with ids in a high,
+// deliberately out-of-band range starting at demoIDBase — chosen to sit far
+// above MaxShotID so they never collide with a real machine's native or
+// multi-machine-synthetic ids (see internal/system/demo.go's demoIDBase,
+// and internal/achievements which redefines the same constant per-package).
+// parseID has to let this band through: without it GET /api/shots/{id}
+// (and annotate / trash / card / image) 200-nulls every demo shot, which is
+// what left demo mode's shot detail (curve, P·Q, average pressure) empty
+// once #957 moved curve data to a per-shot fetch instead of shipping it in
+// the bulk list payload the Node backend's /shots.json fallback still primed.
+// Bounded tight rather than accepting the whole demoIDBase..2*demoIDBase
+// namespace: the seed creates ~12 shots, so demoIDMax is ample headroom
+// without widening the accepted id space further than needed.
+const (
+	demoIDBase = 900_000_000
+	demoIDMax  = demoIDBase + 1_000_000
+)
 
 // machineIDOffset mirrors lib/machines/index.js's MACHINE_ID_OFFSET. That
 // file (lib/machines/index.js -> internal/machines, still a Phase 0

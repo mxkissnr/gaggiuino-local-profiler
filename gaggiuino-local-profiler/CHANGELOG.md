@@ -1,4 +1,6 @@
 ## [Unreleased]
+### Fixed
+- **Demo mode's shot detail is no longer empty** — the curve chart, P·Q view and average-pressure/temperature figures now render for demo shots, which since 3.0.0 had been coming back blank. Closes #1034
 
 ## [3.0.0] – 2026-09-09
 
