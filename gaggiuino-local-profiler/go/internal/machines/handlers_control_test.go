@@ -54,3 +54,46 @@ func TestFirmwareVersion_ParallelSettingsFetch(t *testing.T) {
 		t.Fatalf("updateAvailable = %v, want true", body["updateAvailable"])
 	}
 }
+
+// #1037: a failing GitHub latest-release lookup must not 502 the whole
+// endpoint -- the locally-known installed coreVersion still has to reach
+// Home Assistant, with latest: null.
+func TestFirmwareVersion_GitHubFailureStillReportsInstalled(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+	fake.settingsBody = []byte(`{"coreVersion":"aaa1111","releaseChannel":0}`)
+
+	github := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+	}))
+	defer github.Close()
+	overrideReleasesAPI(t, github.URL)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr(fake.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/machine/firmware/version?machineId="+strconv.FormatInt(machine.ID, 10), nil)
+	rec := doRequest(mux, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s; want 200 despite GitHub failure", rec.Code, rec.Body)
+	}
+	body := decodeBody(t, rec.Body.Bytes())
+	if body["installed"] != "aaa1111" {
+		t.Fatalf("installed = %v, want aaa1111", body["installed"])
+	}
+	if body["latest"] != nil {
+		t.Fatalf("latest = %v, want nil", body["latest"])
+	}
+	if body["updateAvailable"] != false {
+		t.Fatalf("updateAvailable = %v, want false", body["updateAvailable"])
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func fakeGitHubReleases(t *testing.T, releases []githubRelease) *httptest.Server {
@@ -89,6 +90,75 @@ func TestFirmwareChecker_CachesPerChannel(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("expected 1 HTTP call across 2 GetLatestFirmwareRelease calls (cached), got %d", calls)
+	}
+}
+
+// #1037: a GitHub rate-limit / non-2xx must surface as an error (so the
+// caller can fall back to its last known result) and must NOT be cached as
+// a "no matching release" nil.
+func TestFirmwareChecker_RateLimitIsAnErrorNotCached(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+	}))
+	t.Cleanup(srv.Close)
+	overrideReleasesAPI(t, srv.URL)
+
+	c := NewFirmwareChecker()
+	stable := 0
+	if _, err := c.GetLatestFirmwareRelease(context.Background(), &stable); err == nil {
+		t.Fatal("expected an error on HTTP 403, got nil")
+	}
+	// Not cached: a second call retries the network rather than returning a
+	// cached nil.
+	if _, err := c.GetLatestFirmwareRelease(context.Background(), &stable); err == nil {
+		t.Fatal("expected the second call to retry (not serve a cached failure)")
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 HTTP calls (failure not cached), got %d", calls)
+	}
+}
+
+// #1037: once a good result is known, a later transient GitHub failure
+// serves the stale result instead of propagating the error.
+func TestFirmwareChecker_ServesStaleResultOnTransientFailure(t *testing.T) {
+	fail := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fail {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]githubRelease{
+			{TagName: "main-good111", PublishedAt: "2026-02-01T00:00:00Z", HTMLURL: "https://example.com/good"},
+		})
+	}))
+	t.Cleanup(srv.Close)
+	overrideReleasesAPI(t, srv.URL)
+
+	c := NewFirmwareChecker()
+	stable := 0
+	rel, err := c.GetLatestFirmwareRelease(context.Background(), &stable)
+	if err != nil || rel == nil || rel.Hash != "good111" {
+		t.Fatalf("warm-up fetch: rel=%+v err=%v", rel, err)
+	}
+
+	// Age the cache entry past its TTL and make GitHub start failing.
+	c.mu.Lock()
+	e := c.cache[0]
+	e.fetchedAt = time.Now().Add(-2 * firmwareCacheTTL)
+	c.cache[0] = e
+	c.mu.Unlock()
+	fail = true
+
+	rel, err = c.GetLatestFirmwareRelease(context.Background(), &stable)
+	if err != nil {
+		t.Fatalf("expected stale result to be served, got error: %v", err)
+	}
+	if rel == nil || rel.Hash != "good111" {
+		t.Fatalf("expected stale hash good111, got %+v", rel)
 	}
 }
 
