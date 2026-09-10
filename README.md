@@ -248,8 +248,8 @@ Home Assistant Host
 ## Development at a glance
 
 <p align="center">
-  <img src="docs/dev-stats/commits-per-repo.png" alt="Commits per repo" width="49%"/>
-  <img src="docs/dev-stats/model-breakdown.png" alt="Claude model breakdown by commits" width="49%"/>
+  <img src="docs/dev-stats/commits-per-repo.svg" alt="Commits per repo" width="49%"/>
+  <img src="docs/dev-stats/model-breakdown.svg" alt="Claude model breakdown by commits" width="49%"/>
 </p>
 
 Full numbers (timeline, per-model breakdown, cost estimate) generated live from git history: see [DEVELOPMENT.md](DEVELOPMENT.md).

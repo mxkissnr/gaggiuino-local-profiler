@@ -17,7 +17,6 @@
 // clusterIntoSessions() below.
 
 import { execSync } from 'child_process';
-import { createRequire } from 'module';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
@@ -40,38 +39,14 @@ function resolveCompanionDir(relativeDir, canonicalDir) {
     return existsSync(path.join(relativeDir, '.git')) ? relativeDir : canonicalDir;
 }
 
-// ── Optional chart rendering (@napi-rs/canvas — same optional-dependency
-// pattern as lib/card.js: skip charts silently if the native module or system
-// fonts aren't available, since this script must keep working headless). ──
-const require = createRequire(import.meta.url);
-let createCanvas = null;
-let chartFont = 'sans-serif';
-try {
-    const canvasLib = require('@napi-rs/canvas');
-    createCanvas = canvasLib.createCanvas;
-    const { GlobalFonts } = canvasLib;
-    const FONT_CANDIDATES = [
-        '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-        '/usr/share/fonts/TTF/DejaVuSans.ttf',
-    ];
-    for (const fp of FONT_CANDIDATES) {
-        if (existsSync(fp)) GlobalFonts.registerFromPath(fp);
-    }
-    let families = [];
-    if (GlobalFonts.getFamilies) {
-        try {
-            const raw = GlobalFonts.getFamilies();
-            const parsed = JSON.parse(Buffer.isBuffer(raw) ? raw.toString() : JSON.stringify(raw));
-            families = Array.isArray(parsed) ? parsed.map(f => f.family || f) : [];
-        } catch { /* ignore */ }
-    }
-    chartFont = families.includes('Liberation Sans') ? 'Liberation Sans'
-        : families.includes('DejaVu Sans') ? 'DejaVu Sans'
-        : 'sans-serif';
-} catch {
-    createCanvas = null;
-}
+// ── Chart rendering (dependency-free inline SVG) ────────────────────────
+//
+// #1028 dropped @napi-rs/canvas from the dependency set, so these charts
+// are hand-rolled as SVG string templates instead — no native module, no
+// system-font probing, nothing to install. GitHub renders inline SVG in
+// markdown, and each chart carries its own opaque dark background rect with
+// every mark/label given an explicit contrasting fill (never currentColor),
+// so it reads the same in GitHub's light and dark markdown themes.
 
 // Dark-surface chart palette (matches the app's own dark UI / docs/screenshots).
 // Categorical hues used in fixed order — see dataviz skill's color-formula.md.
@@ -81,72 +56,53 @@ const CHART = {
     inkSecondary: '#c3c2b7',
     baseline: '#383835',
     colors: ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'],
+    fontStack: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
 };
 
-// Horizontal bar chart: thin marks (22px, under the 24px cap), 4px rounded
-// data-end at the bar's tip, square at the baseline, value label at the tip,
-// category label to the left — see dataviz skill's marks-and-anatomy.md.
-function drawHorizontalBarChart(title, items) {
-    if (!createCanvas || !items.length) return null;
+function xmlEsc(s) {
+    return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// Horizontal bar chart as an SVG document string: thin marks (22px, under
+// the 24px cap), 4px rounded data-end at the bar's tip, square at the
+// baseline, value label at the tip, category label to the left — see
+// dataviz skill's marks-and-anatomy.md. Same geometry the @napi-rs/canvas
+// version used before #1028. Returns null for an empty series.
+function barChartSVG(title, items) {
+    if (!items.length) return null;
     const width = 640, barH = 22, gap = 14, topPad = 46, bottomPad = 16, leftPad = 190, rightPad = 60;
     const height = topPad + items.length * (barH + gap) - gap + bottomPad;
-    const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext('2d');
-
-    ctx.fillStyle = CHART.surface;
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.fillStyle = CHART.ink;
-    ctx.font = `600 15px "${chartFont}"`;
-    ctx.textAlign = 'left';
-    ctx.fillText(title, 20, 28);
-
     const maxVal = Math.max(...items.map(i => i.value), 1);
     const chartW = width - leftPad - rightPad;
+
+    const parts = [
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family="${CHART.fontStack}">`,
+        `<rect width="${width}" height="${height}" fill="${CHART.surface}"/>`,
+        `<text x="20" y="28" fill="${CHART.ink}" font-size="15" font-weight="600">${xmlEsc(title)}</text>`,
+        `<line x1="${leftPad}" y1="${topPad - 8}" x2="${leftPad}" y2="${topPad + items.length * (barH + gap) - gap}" stroke="${CHART.baseline}" stroke-width="1"/>`,
+    ];
 
     items.forEach((item, i) => {
         const y = topPad + i * (barH + gap);
         const barW = Math.max(2, Math.round((item.value / maxVal) * chartW));
         const r = Math.min(4, barW / 2, barH / 2);
         const color = CHART.colors[i % CHART.colors.length];
-
-        ctx.fillStyle = CHART.inkSecondary;
-        ctx.font = `400 13px "${chartFont}"`;
-        ctx.textAlign = 'right';
-        ctx.fillText(item.label, leftPad - 12, y + barH / 2 + 4);
-
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(leftPad, y);
-        ctx.lineTo(leftPad + barW - r, y);
-        ctx.arcTo(leftPad + barW, y, leftPad + barW, y + r, r);
-        ctx.lineTo(leftPad + barW, y + barH - r);
-        ctx.arcTo(leftPad + barW, y + barH, leftPad + barW - r, y + barH, r);
-        ctx.lineTo(leftPad, y + barH);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = CHART.ink;
-        ctx.font = `600 13px "${chartFont}"`;
-        ctx.textAlign = 'left';
-        ctx.fillText(String(item.value), leftPad + barW + 10, y + barH / 2 + 4);
+        const mid = y + barH / 2 + 4;
+        // Square left edge, 4px-rounded right edge — matches the old canvas path.
+        const bar = `M${leftPad},${y} H${leftPad + barW - r} Q${leftPad + barW},${y} ${leftPad + barW},${y + r}`
+            + ` V${y + barH - r} Q${leftPad + barW},${y + barH} ${leftPad + barW - r},${y + barH} H${leftPad} Z`;
+        parts.push(
+            `<text x="${leftPad - 12}" y="${mid}" fill="${CHART.inkSecondary}" font-size="13" text-anchor="end">${xmlEsc(item.label)}</text>`,
+            `<path d="${bar}" fill="${color}"/>`,
+            `<text x="${leftPad + barW + 10}" y="${mid}" fill="${CHART.ink}" font-size="13" font-weight="600">${item.value}</text>`,
+        );
     });
 
-    ctx.strokeStyle = CHART.baseline;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(leftPad, topPad - 8);
-    ctx.lineTo(leftPad, topPad + items.length * (barH + gap) - gap);
-    ctx.stroke();
-
-    return canvas.toBuffer('image/png');
+    parts.push('</svg>');
+    return parts.join('\n') + '\n';
 }
 
 function renderCharts(results, combinedModelCounts) {
-    if (!createCanvas) {
-        console.warn('@napi-rs/canvas unavailable — skipping chart generation');
-        return false;
-    }
     const outDir = path.join(appRepoRoot, 'docs', 'dev-stats');
     mkdirSync(outDir, { recursive: true });
 
@@ -157,11 +113,11 @@ function renderCharts(results, combinedModelCounts) {
         .map(([label, value]) => ({ label, value }))
         .sort((a, b) => b.value - a.value);
 
-    const commitsPng = drawHorizontalBarChart('Commits per repo', repoItems);
-    if (commitsPng) writeFileSync(path.join(outDir, 'commits-per-repo.png'), commitsPng);
-    const modelPng = drawHorizontalBarChart('Claude model breakdown (by commits)', modelItems);
-    if (modelPng) writeFileSync(path.join(outDir, 'model-breakdown.png'), modelPng);
-    return true;
+    const commitsSvg = barChartSVG('Commits per repo', repoItems);
+    if (commitsSvg) writeFileSync(path.join(outDir, 'commits-per-repo.svg'), commitsSvg);
+    const modelSvg = barChartSVG('Claude model breakdown (by commits)', modelItems);
+    if (modelSvg) writeFileSync(path.join(outDir, 'model-breakdown.svg'), modelSvg);
+    return !!(commitsSvg || modelSvg);
 }
 
 const REPOS = [
@@ -351,7 +307,7 @@ function main() {
     const combinedPct = combined.totalCommits ? Math.round(100 * combined.aiCommits / combined.totalCommits) : 0;
     lines.push(`| **Combined** | **${fmtDate(combined.firstDate)}** | **${fmtDate(combined.lastDate)}** | **${combined.totalCommits}** | **${combined.aiCommits} (${combinedPct}%)** |`);
     lines.push('');
-    if (chartsRendered) { lines.push('![Commits per repo](docs/dev-stats/commits-per-repo.png)'); lines.push(''); }
+    if (chartsRendered) { lines.push('![Commits per repo](docs/dev-stats/commits-per-repo.svg)'); lines.push(''); }
     lines.push(`Combined line changes (insertions + deletions across all commits): **${combined.totalLines.toLocaleString()}**, of which **${combined.aiLines.toLocaleString()}** landed in Claude-co-authored commits.`);
     lines.push('');
     lines.push('Commits without a Claude co-author line are presumed human-only (manual fixes, merges, config tweaks) — not independently verified.');
@@ -377,7 +333,7 @@ function main() {
         lines.push(`| ${model} | ${count} |`);
     }
     lines.push('');
-    if (chartsRendered) { lines.push('![Claude model breakdown by commits](docs/dev-stats/model-breakdown.png)'); lines.push(''); }
+    if (chartsRendered) { lines.push('![Claude model breakdown by commits](docs/dev-stats/model-breakdown.svg)'); lines.push(''); }
     lines.push('The exact co-author string varies by era as model names changed over the project\'s lifetime — this table groups by the literal string used in each commit, so the same underlying model released under a new name shows up as a separate row.');
     lines.push('');
     lines.push('## Claude Pro subscription cost');
