@@ -4,10 +4,10 @@
 <line x1="190" y1="38" x2="190" y2="284" stroke="#383835" stroke-width="1"/>
 <text x="178" y="61" fill="#c3c2b7" font-size="13" text-anchor="end">Claude Sonnet 5</text>
 <path d="M190,46 H576 Q580,46 580,50 V64 Q580,68 576,68 H190 Z" fill="#3987e5"/>
-<text x="590" y="61" fill="#ffffff" font-size="13" font-weight="600">553</text>
+<text x="590" y="61" fill="#ffffff" font-size="13" font-weight="600">560</text>
 <text x="178" y="97" fill="#c3c2b7" font-size="13" text-anchor="end">Claude Sonnet 4.6</text>
-<path d="M190,82 H431 Q435,82 435,86 V100 Q435,104 431,104 H190 Z" fill="#199e70"/>
-<text x="445" y="97" fill="#ffffff" font-size="13" font-weight="600">348</text>
+<path d="M190,82 H428 Q432,82 432,86 V100 Q432,104 428,104 H190 Z" fill="#199e70"/>
+<text x="442" y="97" fill="#ffffff" font-size="13" font-weight="600">348</text>
 <text x="178" y="133" fill="#c3c2b7" font-size="13" text-anchor="end">Claude Opus 4.8</text>
 <path d="M190,118 H219 Q223,118 223,122 V136 Q223,140 219,140 H190 Z" fill="#c98500"/>
 <text x="233" y="133" fill="#ffffff" font-size="13" font-weight="600">47</text>
