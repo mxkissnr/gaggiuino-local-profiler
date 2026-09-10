@@ -1,4 +1,7 @@
 ## [Unreleased]
+### Changed
+- **Documentation cleanup: "app" terminology to match Home Assistant's add-on rename, a shorter armv7 note, a tidier README screenshot grid and a description of the machine valve fields.** Closes #1039
+
 ### Fixed
 - **The machine firmware check no longer breaks when GitHub is unreachable.** A rate-limited or timed-out latest-release lookup now returns the installed firmware version with `latest: null` instead of failing the whole request, serves the last known result while the failure lasts, and runs on its own timeout independent of the caller — so Home Assistant's machine firmware entity stops showing "Unknown". Closes #1037
 
