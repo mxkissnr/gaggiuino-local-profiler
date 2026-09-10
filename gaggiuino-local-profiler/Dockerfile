@@ -24,7 +24,12 @@
 # internal/webapp/dist/ in the Go builder below. No toolchain packages
 # (python3/make/g++): the dependency set is frontend-only since 3.0.0
 # (#1028), so `npm ci` pulls Vite/esbuild prebuilts with nothing to compile.
-FROM --platform=$BUILDPLATFORM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS frontend
+# node:24 dropped its 32-bit ARM (arm/v7) images, but this stage is pinned to
+# the CI runner's own architecture via --platform=$BUILDPLATFORM (amd64) and
+# its output is architecture-independent, so that has no bearing here.
+# Digest-pinned (multi-arch manifest) like the alpine runtime stage below;
+# Renovate's dockerfile manager keeps it current.
+FROM --platform=$BUILDPLATFORM node:24-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS frontend
 
 WORKDIR /app
 
@@ -36,7 +41,7 @@ COPY public-src/ ./public-src/
 RUN npm run build
 
 # ── Go builder ────────────────────────────────────────────────────────────
-# Tag-pinned only (not by digest, unlike the node:22-slim / alpine:3.22
+# Tag-pinned only (not by digest, unlike the node:24-slim / alpine:3.22
 # stages): this stage builds nothing that ships, and floating to the latest
 # 1.25.x patch is deliberate — it keeps the build toolchain ahead of, or
 # equal to, the `toolchain go1.25.14` directive in go/go.mod, so `go build`
@@ -77,7 +82,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
 # pattern the old Node image used (#271). Alpine also gives HEALTHCHECK a
 # plain `wget`, and ships a CA bundle for the outbound HTTPS calls to Open
 # Food Facts (barcode scan) and GitHub (update check).
-# Digest-pinned like the node:22-slim stage above — this is the image that
+# Digest-pinned like the node:24-slim stage above — this is the image that
 # actually ships, so a moved upstream tag must not change it silently.
 # Renovate's dockerfile manager keeps the digest current.
 FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
