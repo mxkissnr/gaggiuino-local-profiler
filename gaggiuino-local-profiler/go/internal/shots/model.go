@@ -23,12 +23,14 @@ const MaxShotID = 99_999_999
 // what left demo mode's shot detail (curve, P·Q, average pressure) empty
 // once #957 moved curve data to a per-shot fetch instead of shipping it in
 // the bulk list payload the Node backend's /shots.json fallback still primed.
-// Bounded tight rather than accepting the whole demoIDBase..2*demoIDBase
-// namespace: the seed creates ~12 shots, so demoIDMax is ample headroom
-// without widening the accepted id space further than needed.
+// Accept the whole demoIDBase..2*demoIDBase namespace, matching
+// internal/achievements' own copy of this range — the demo bean/profile
+// offset scheme (+101/+201/+301, and room to grow) lives in that space too,
+// so a tighter band here would only invite the exact divergence #1034 was.
+// Still a bounded, well-below-int64 window far above any real id.
 const (
 	demoIDBase = 900_000_000
-	demoIDMax  = demoIDBase + 1_000_000
+	demoIDMax  = demoIDBase * 2
 )
 
 // machineIDOffset mirrors lib/machines/index.js's MACHINE_ID_OFFSET. That

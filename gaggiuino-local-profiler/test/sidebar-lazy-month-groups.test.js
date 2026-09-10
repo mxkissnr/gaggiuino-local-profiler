@@ -86,8 +86,10 @@ function installDocument() {
 }
 
 const DAY = 86400000;
+// Relative to FIXED_NOW, not the real clock — the month keys are derived the
+// same way the shots are seeded, so they can't drift apart as real time moves.
 const monthKeyOf = daysAgo => {
-  const d = new Date(Date.now() - daysAgo * DAY);
+  const d = new Date(FIXED_NOW.getTime() - daysAgo * DAY);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 const mkShot = (id, daysAgo) => ({

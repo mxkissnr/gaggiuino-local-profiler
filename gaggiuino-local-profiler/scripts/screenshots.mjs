@@ -69,8 +69,11 @@ async function waitForPaint(page, sel, { timeout = 20000, quietMs = 500 } = {}) 
         }
         prev = fp;
         if (now - start > timeout) {
-            if (fp === null) throw new Error(`waitForPaint: ${sel} never painted within ${timeout}ms`);
-            return; // painted but still animating at the deadline — good enough
+            // Best-effort tool: a sparse chart the prime-stride sampler never
+            // lands on reads as fp===null forever. Warn and move on rather
+            // than aborting the whole regeneration over one uncertain view.
+            if (fp === null) console.warn(`waitForPaint: ${sel} not confirmed painted within ${timeout}ms — capturing anyway`);
+            return;
         }
         await page.waitForTimeout(120);
     }
@@ -109,7 +112,8 @@ async function shootView(page, sel, filePath, { fromTop = true, pad = 24 } = {})
         (function walk(node) {
             for (const c of node.children) {
                 const r = c.getBoundingClientRect();
-                const painty = paint.test(c.tagName);
+                // inline <svg> reports tagName 'svg' (lowercase, SVG namespace)
+                const painty = paint.test((c.tagName || '').toUpperCase());
                 const leaf = c.children.length === 0;
                 if (r.height > 0 && (painty || (leaf && c.textContent.trim()))) {
                     bottom = Math.max(bottom, r.bottom);

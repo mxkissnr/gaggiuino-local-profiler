@@ -228,9 +228,10 @@ func TestGetShot_ResolvesDemoRangeID(t *testing.T) {
 		t.Errorf("expected the demo shot's datapoints to come back, got %+v", body["datapoints"])
 	}
 
-	// demoIDMax itself and anything between MaxShotID and demoIDBase stay
-	// rejected (200 null, exactly as an over-ceiling real id always was).
-	for _, path := range []string{"/api/shots/901000000", "/api/shots/500000000"} {
+	// demoIDMax (2*demoIDBase) itself and anything between MaxShotID and
+	// demoIDBase stay rejected (200 null, exactly as an over-ceiling real id
+	// always was).
+	for _, path := range []string{"/api/shots/1800000000", "/api/shots/500000000"} {
 		rec := doJSON(t, mux, http.MethodGet, path, nil)
 		if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != "null" {
 			t.Errorf("%s: status=%d body=%q, want 200 null", path, rec.Code, rec.Body.String())
