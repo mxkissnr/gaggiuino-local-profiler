@@ -2,6 +2,8 @@ package maintenance
 
 import (
 	"errors"
+	"math"
+	"strings"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -76,6 +78,20 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 	}
 	now := time.Now().UnixMilli()
 
+	// Fetch annotated doses once if any grinder task tracks threshold_g.
+	var annotatedDoses []shots.AnnotatedDose
+	for key, task := range maint {
+		if strings.HasPrefix(key, "grinder_") {
+			if _, ok := jsPositiveInt(task["threshold_g"]); ok {
+				annotatedDoses, err = shotsRepo.GetAnnotatedDoses()
+				if err != nil {
+					return nil, err
+				}
+				break
+			}
+		}
+	}
+
 	result := make(map[string]Stat, len(maint))
 	for key, task := range maint {
 		shotList := scopedShots
@@ -102,6 +118,15 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 
 		thresholdShots, hasShots := jsPositiveInt(task["threshold_shots"])
 		thresholdDays, hasDays := jsPositiveInt(task["threshold_days"])
+		thresholdG, hasG := jsPositiveInt(task["threshold_g"])
+		var gramsSince float64
+		if strings.HasPrefix(key, "grinder_") && annotatedDoses != nil {
+			for _, d := range annotatedDoses {
+				if d.Dose != nil && d.Timestamp*1000 > lastTs {
+					gramsSince += *d.Dose
+				}
+			}
+		}
 		var pct float64
 		switch {
 		case hasShots && hasDays:
@@ -120,6 +145,8 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 			if daysSince != nil {
 				pct = float64(daysSince.(int64)) / float64(thresholdDays)
 			}
+		case hasG:
+			pct = gramsSince / float64(thresholdG)
 		}
 
 		status := "never"
@@ -146,6 +173,9 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 		stat["shotsSince"] = shotsSince
 		stat["pct"] = pct
 		stat["status"] = status
+		if strings.HasPrefix(key, "grinder_") {
+			stat["gramsSince"] = int64(math.Round(gramsSince))
+		}
 		result[key] = stat
 	}
 	return result, nil

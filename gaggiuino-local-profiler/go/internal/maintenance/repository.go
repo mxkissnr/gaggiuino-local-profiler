@@ -101,15 +101,55 @@ func (r *Repository) GetMaintenance(machineID int64) (map[string]Task, error) {
 		}
 		key := fmt.Sprintf("grinder_%d", gid)
 		s := saved[key]
+		thresholdShots := valueOrDefault(s, "threshold_shots", 200)
+		if _, ok := s["threshold_shots"]; ok {
+			thresholdShots = valueOrNil(s, "threshold_shots")
+		}
 		task := Task{
 			"lastDate":        valueOrNil(s, "lastDate"),
-			"threshold_shots": valueOrDefault(s, "threshold_shots", 200),
+			"threshold_shots": thresholdShots,
 			"threshold_days":  valueOrDefault(s, "threshold_days", nil),
+			"threshold_g":     valueOrDefault(s, "threshold_g", nil),
 			"grinderName":     g["name"],
+		}
+		if d, ok := s["disabled"]; ok {
+			task["disabled"] = d
 		}
 		result[key] = task
 	}
+
+	// Include any user-defined custom_* tasks stored in DB.
+	for key, task := range saved {
+		if isCustomTask(key) {
+			result[key] = task
+		}
+	}
 	return result, nil
+}
+
+// SaveCustomTask creates or updates a single custom maintenance task.
+func (r *Repository) SaveCustomTask(machineID int64, key string, task Task) error {
+	b, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("maintenance: encoding custom task %s: %w", key, err)
+	}
+	if _, err := r.db.Exec(
+		`INSERT OR REPLACE INTO maintenance (machine_id, key, data) VALUES (?,?,?)`,
+		machineID, key, string(b),
+	); err != nil {
+		return fmt.Errorf("maintenance: saving custom task %s: %w", key, err)
+	}
+	return nil
+}
+
+// DeleteCustomTask removes a custom_* task row from the maintenance table.
+func (r *Repository) DeleteCustomTask(machineID int64, key string) error {
+	if _, err := r.db.Exec(
+		`DELETE FROM maintenance WHERE machine_id = ? AND key = ?`, machineID, key,
+	); err != nil {
+		return fmt.Errorf("maintenance: deleting custom task %s: %w", key, err)
+	}
+	return nil
 }
 
 func valueOrNil(t Task, key string) any {

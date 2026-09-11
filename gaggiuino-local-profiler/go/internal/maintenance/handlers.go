@@ -40,6 +40,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/maintenance", h.getMaintenance)
 	mux.HandleFunc("POST /api/maintenance/{task}/done", h.taskDone)
 	mux.HandleFunc("POST /api/maintenance/{task}/threshold", h.taskThreshold)
+	mux.HandleFunc("POST /api/maintenance/custom", h.customCreate)
+	mux.HandleFunc("DELETE /api/maintenance/custom/{key}", h.customDelete)
 	mux.HandleFunc("GET /api/maintenance/log", h.getLog)
 	mux.HandleFunc("POST /api/maintenance/log", h.postLog)
 	mux.HandleFunc("DELETE /api/maintenance/log/{id}", h.deleteLog)
@@ -236,7 +238,31 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 		t["threshold_shots"] = clampThreshold(v, 1, 10000)
 	}
 	if v, present := body["threshold_days"]; present {
-		t["threshold_days"] = clampThreshold(v, 1, 365)
+		t["threshold_days"] = clampThreshold(v, 1, 3650)
+	}
+	if v, present := body["disabled"]; present {
+		if b, ok := v.(bool); ok {
+			if b {
+				t["disabled"] = true
+			} else {
+				delete(t, "disabled")
+			}
+		}
+	}
+	if isCustomTask(task) {
+		if v, present := body["label"]; present {
+			if s, ok := v.(string); ok {
+				s = strings.TrimSpace(s)
+				if s != "" && len(s) <= 100 {
+					t["label"] = s
+				}
+			}
+		}
+	}
+	if strings.HasPrefix(task, "grinder_") {
+		if v, present := body["threshold_g"]; present {
+			t["threshold_g"] = clampThreshold(v, 1, 100000)
+		}
 	}
 	maint[task] = t
 	if err := h.repo.SaveMaintenance(maint, machineID); err != nil {
@@ -351,4 +377,79 @@ func (h *Handlers) deleteLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// customCreate handles POST /api/maintenance/custom — creates a user-defined
+// maintenance task. Body: { label: string, threshold_shots?: number, threshold_days?: number }
+func (h *Handlers) customCreate(w http.ResponseWriter, r *http.Request) {
+	body, ok := decodeJSONBody(w, r)
+	if !ok {
+		return
+	}
+	label, _ := body["label"].(string)
+	label = strings.TrimSpace(label)
+	if label == "" {
+		writeError(w, http.StatusBadRequest, "label required")
+		return
+	}
+	if len(label) > 100 {
+		label = label[:100]
+	}
+	key := slugifyLabel(label)
+	if key == "" {
+		writeError(w, http.StatusBadRequest, "label produced empty key")
+		return
+	}
+	machineID := activeMachineID(r)
+	maint, err := h.repo.GetMaintenance(machineID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if _, exists := maint[key]; exists {
+		writeError(w, http.StatusConflict, "task with this key already exists")
+		return
+	}
+	task := Task{
+		"label":           label,
+		"lastDate":        nil,
+		"threshold_shots": clampThreshold(body["threshold_shots"], 1, 10000),
+		"threshold_days":  clampThreshold(body["threshold_days"], 1, 3650),
+	}
+	if err := h.repo.SaveCustomTask(machineID, key, task); err != nil {
+		internalError(w, err)
+		return
+	}
+	maint[key] = task
+	stats, err := ComputeMaintenanceStats(h.shotsRepo, maint, machineID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+// customDelete handles DELETE /api/maintenance/custom/{key}.
+func (h *Handlers) customDelete(w http.ResponseWriter, r *http.Request) {
+	key := r.PathValue("key")
+	if !isCustomTask(key) {
+		writeError(w, http.StatusBadRequest, "Invalid custom task key")
+		return
+	}
+	machineID := activeMachineID(r)
+	if err := h.repo.DeleteCustomTask(machineID, key); err != nil {
+		internalError(w, err)
+		return
+	}
+	maint, err := h.repo.GetMaintenance(machineID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	stats, err := ComputeMaintenanceStats(h.shotsRepo, maint, machineID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
 }

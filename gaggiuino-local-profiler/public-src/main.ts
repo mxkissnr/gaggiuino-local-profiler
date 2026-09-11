@@ -88,7 +88,8 @@ import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBea
 import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope,
          renderMaintenanceDashboard, maintStatusLabel,
          openMaintLogForm, closeMaintLogForm, submitMaintLogEntry, deleteMaintLogEntry,
-         openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState } from './views/maintenance.js';
+         openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState,
+         toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask } from './views/maintenance.js';
 import { loadAchievementsView } from './views/achievements.js';
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo } from './components/flavor-wheel.js';
 
@@ -369,6 +370,9 @@ Object.assign(window, {
   closeMaintLogForm,
   submitMaintLogEntry,
   deleteMaintLogEntry,
+  toggleMaintDisabled,
+  addCustomMaintTask,
+  deleteCustomMaintTask,
 
   // orders view
   loadOrdersView,
@@ -966,13 +970,16 @@ document.addEventListener('DOMContentLoaded', () => {
       // #807: the "why is this empty" notices (in-view block and app-wide
       // banner, components/api-port-notice.js) both link here.
       case 'goto-settings':      switchMode('settings'); break;
-      case 'set-maint-mode':     setMaintMode(el.dataset.task, el.dataset.mode, el.dataset.machineId); break;
+      case 'set-maint-mode':     setMaintMode(el.dataset.task, el.dataset.mode, el.dataset.machineId, el.dataset.currentShots, el.dataset.currentDays, el.dataset.currentG); break;
       case 'mark-maint-done':    markMaintDone(el.dataset.task, el.dataset.machineId); break;
       case 'open-guided-maint':  openGuidedMaint(el.dataset.task, el.dataset.machineId); break;
+      case 'toggle-maint-disabled': toggleMaintDisabled(el.dataset.task, el.dataset.machineId, el.dataset.disabled === 'true'); break;
+      case 'add-custom-maint-task':  addCustomMaintTask(el.dataset.machineId); break;
+      case 'delete-custom-maint-task': deleteCustomMaintTask(el.dataset.task, el.dataset.machineId); break;
       case 'guided-maint-done':  submitGuidedMaint(); break;
       case 'guided-maint-cancel': closeGuidedMaint(); break;
       case 'set-maint-scope':    setMaintScope(el.dataset.scope); break;
-      case 'toggle-maint-detail': el.closest('.maint-mini')?.classList.toggle('expanded'); break;
+      case 'toggle-maint-detail': el.closest('.maint-card')?.classList.toggle('expanded'); break;
       case 'set-bean-rank-sort': setBeanRankSort(el.dataset.key); break;
       case 'open-flavor-wheel':   openFlavorWheel(numId()); break;
       case 'close-flavor-wheel':  closeFlavorWheel(); break;
@@ -1008,6 +1015,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!el) return;
     if (el.dataset.action === 'save-maint-threshold') {
       saveMaintThreshold(el.dataset.task, el.dataset.field, el.value, el.dataset.machineId);
+    }
+    if (el.dataset.action === 'rename-maint-label') {
+      renameCustomMaintTask(el.dataset.task, el.value, el.dataset.machineId);
     }
     if (el.dataset.action === 'dialin-grinder-select') {
       dialinGrinderChange();
