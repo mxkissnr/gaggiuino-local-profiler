@@ -113,21 +113,36 @@ type githubRelease struct {
 // page. All current releases fit on one page so this hasn't produced a
 // wrong answer yet, but the moment a channel's releases span more than one
 // page, the old early-return could silently pick a stale one.
+//
+// #1042 (actual root cause, found by live-testing against the real GitHub
+// API rather than only the fake test server): `cancel()` for a page's
+// request context used to fire right after `firmwareHTTPClient.Do(req)`
+// returned, before `resp.Body` was read. Against `httptest`'s local,
+// same-process fake server the response body is already fully buffered by
+// the time `Do` returns, so the early cancel was harmless there and every
+// existing test passed -- but against the real, network-latency-bearing
+// GitHub API, `resp.Body` is still being streamed off the connection when
+// the context gets canceled, and `json.Decode` then reliably fails with
+// "context canceled". That decode error was silently folded into the same
+// `break` as "no more pages" below, so a live poll NEVER found a match,
+// on any channel, 100% of the time -- not a flaky edge case. `cancel` is
+// now deferred to function return (bounded: at most firmwareMaxPages
+// deferred cancels, freed within the same call) so the context stays live
+// for the whole decode.
 func fetchLatestRelease(ctx context.Context, prefix string) (*githubRelease, error) {
 	var best *githubRelease
 	var bestPublished time.Time
 	for page := 1; page <= firmwareMaxPages; page++ {
 		url := fmt.Sprintf("%s?page=%d", releasesAPI, page)
 		reqCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
 		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
 		if err != nil {
-			cancel()
 			return nil, err
 		}
 		req.Header.Set("Accept", "application/vnd.github+json")
 		req.Header.Set("User-Agent", "gaggiuino-local-profiler")
 		resp, err := firmwareHTTPClient.Do(req)
-		cancel()
 		if err != nil {
 			return nil, err
 		}
