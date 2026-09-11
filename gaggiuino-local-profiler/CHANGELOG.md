@@ -4,6 +4,7 @@
 
 ### Fixed
 - **The machine firmware check no longer breaks when GitHub is unreachable.** A rate-limited or timed-out latest-release lookup now returns the installed firmware version with `latest: null` instead of failing the whole request, serves the last known result while the failure lasts, and runs on its own timeout independent of the caller — so Home Assistant's machine firmware entity stops showing "Unknown". Closes #1037
+- **The machine firmware update entity now actually detects available updates.** The GitHub latest-release lookup was cancelling its own network request before finishing reading the response, so it never found a match and silently reported "up to date" every single time; a genuine no-match result is also no longer cached as good for a full hour. Closes #1042
 
 ## [3.0.1] – 2026-09-10
 ### Fixed
