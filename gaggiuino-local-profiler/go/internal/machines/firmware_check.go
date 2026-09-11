@@ -35,6 +35,13 @@ var firmwareHTTPClient = &http.Client{}
 // are rate-limited to 60 req/hr, so this must never be queried per-poll.
 const firmwareCacheTTL = time.Hour
 
+// firmwareFetchTimeout bounds a whole GetLatestFirmwareRelease GitHub lookup
+// (up to firmwareMaxPages pages). #1037: the lookup runs on a context
+// detached from the caller's request deadline — the integration's own 10s
+// client timeout, already mostly spent on the two machine-settings
+// round-trips, was starving the GitHub call and 502ing the endpoint.
+const firmwareFetchTimeout = 20 * time.Second
+
 // firmwareMaxPages ports MAX_PAGES (#673).
 const firmwareMaxPages = 5
 
@@ -96,6 +103,19 @@ func fetchLatestRelease(ctx context.Context, prefix string) (*githubRelease, err
 		if err != nil {
 			return nil, err
 		}
+		// #1037: a non-2xx (esp. 403/429 — the unauthenticated GitHub rate
+		// limit is 60 req/hr and the LAN's egress IP is shared between the
+		// stable, DEV and Go-Preview apps) returns a JSON *object*, not an
+		// array. Treating that as "no more results" silently cached a nil
+		// "no release found" for an hour; surface it as an error instead so
+		// the caller can serve its last known good result.
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
+				return nil, fmt.Errorf("github releases API rate-limited (HTTP %d)", resp.StatusCode)
+			}
+			return nil, fmt.Errorf("github releases API returned HTTP %d", resp.StatusCode)
+		}
 		var releases []githubRelease
 		err = json.NewDecoder(resp.Body).Decode(&releases)
 		resp.Body.Close()
@@ -147,8 +167,20 @@ func (c *FirmwareChecker) GetLatestFirmwareRelease(ctx context.Context, channel 
 		return entry.result, nil
 	}
 
-	release, err := fetchLatestRelease(ctx, prefix)
+	// #1037: detach from the caller's request deadline (it's near-exhausted
+	// on a slow poll) but keep values so an outer cancel still propagates.
+	fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), firmwareFetchTimeout)
+	defer cancel()
+	release, err := fetchLatestRelease(fetchCtx, prefix)
 	if err != nil {
+		// Serve the last known good result rather than propagating -- a
+		// transient GitHub failure (rate limit, network, timeout) must not
+		// make the machine's update status vanish. A failed fetch is never
+		// cached as a result. Surface the error only when there's nothing
+		// to fall back to.
+		if ok && entry.result != nil {
+			return entry.result, nil
+		}
 		return nil, err
 	}
 	var result *FirmwareRelease

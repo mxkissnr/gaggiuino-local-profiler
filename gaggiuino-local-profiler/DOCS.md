@@ -94,16 +94,16 @@ The API token grants full API access — including `/api/restore`, which wipes a
 
 This is a deliberate trade-off (#533). Direct-port access is how the installable PWA and the Order Card's direct-URL mode work, and neither has another way to obtain a token: the UI has no token input, and the token is no longer cached in the browser. Restricting the endpoint to Supervisor-internal callers (as #276 did) left those clients working only as long as they still held a token cached from before that change — when that copy was removed in v2.19.1, direct-port access broke outright.
 
-**The add-on maps port 8099 to your host by default** (`ports: 8099/tcp: 8099` in `config.yaml`), even if you only ever use HA Ingress and never touch the PWA or the Order Card's direct-URL mode. If that's you, the port being open buys you nothing and, per the trust model above, is equivalent to exposing your whole GLP database (and machine control) to your LAN. To close it: **Settings → Add-ons → GLP → Configuration → Network**, and clear/disable the host port for 8099/tcp, then restart the add-on. Only leave it mapped if you actually use the PWA or a direct-URL Order Card.
+**The app maps port 8099 to your host by default** (`ports: 8099/tcp: 8099` in `config.yaml`), even if you only ever use HA Ingress and never touch the PWA or the Order Card's direct-URL mode. If that's you, the port being open buys you nothing and, per the trust model above, is equivalent to exposing your whole GLP database (and machine control) to your LAN. To close it: **Settings → Apps → GLP → Configuration → Network**, and clear/disable the host port for 8099/tcp, then restart the app. Only leave it mapped if you actually use the PWA or a direct-URL Order Card.
 
 For the Order Card in direct-URL mode you still copy the token once from **Settings → API Token** into the card YAML; nothing about that flow changed.
 
-**A lighter alternative: `expose_api_port: false` (#803).** Unmapping the port entirely (above) closes everything on it. If you'd rather keep the port mapped — say, for a direct-URL Order Card that's already set up — but stop new/unknown callers on your LAN from fetching a token in the first place, set this add-on option to `false` instead. `GET /api/token` then returns `403` for any request that didn't arrive via HA Ingress; the Ingress panel is unaffected and keeps working exactly as before. Direct-port sessions still reach the app itself, but every data request fails with `401` — since #807 the app says so instead of showing a bare status code: an in-view notice on the Shots view and a dismissible banner on every other view explain that direct-port access is turned off and link to Settings.
+**A lighter alternative: `expose_api_port: false` (#803).** Unmapping the port entirely (above) closes everything on it. If you'd rather keep the port mapped — say, for a direct-URL Order Card that's already set up — but stop new/unknown callers on your LAN from fetching a token in the first place, set this app option to `false` instead. `GET /api/token` then returns `403` for any request that didn't arrive via HA Ingress; the Ingress panel is unaffected and keeps working exactly as before. Direct-port sessions still reach the app itself, but every data request fails with `401` — since #807 the app says so instead of showing a bare status code: an in-view notice on the Shots view and a dismissible banner on every other view explain that direct-port access is turned off and link to Settings.
 
 Be precise about what this does and doesn't close:
 
 - It only gates `GET /api/token` itself. It does not unmap port 8099, and it does not affect any other endpoint — a request that already carries a valid `X-GLP-Token` header (e.g. one copied earlier into an Order Card's YAML) still works, from anywhere that can reach the port. Do not describe this option as making the token endpoint "authenticated" or "protected" in general; it closes one specific way of *obtaining* a token, not general API access.
-- It closes the endpoint against your **LAN**, not against the Supervisor add-on network. The trust check treats all of `172.30.0.0/16` (the whole Supervisor network) as trusted, not the Ingress proxy specifically — see `go/internal/auth`. Another add-on running on that same network is unaffected by this option.
+- It closes the endpoint against your **LAN**, not against the Supervisor app network. The trust check treats all of `172.30.0.0/16` (the whole Supervisor network) as trusted, not the Ingress proxy specifically — see `go/internal/auth`. Another app running on that same network is unaffected by this option.
 - **Direct-port browser access to the app UI stops working entirely** once this is off — any browser opening `http://<host>:8099` directly, not just the installed PWA (the PWA is just the installed form of that same UI), fails to get a token on load and every subsequent API call then 401s. **First-time setup of the Order Card's direct-URL mode** breaks too, for the same reason: neither has any other way to authenticate. An Order Card that already has `glp_token` set in its YAML from before keeps working, since that's just an `X-GLP-Token` header on a different endpoint — only *obtaining* a new token requires direct-port access. Only HA Ingress access remains functional.
 
 Default is `true` (unchanged, open behaviour) — every existing install keeps working exactly as it does today; you have to turn this off explicitly.
@@ -116,7 +116,7 @@ A machine-readable OpenAPI 3.0.3 specification of all endpoints is served at `GE
 
 ## Quick start
 
-Start the app, then set your Gaggiuino controller's IP/hostname (and, optionally, an HA switch entity to power it on/off) under **Settings → Machines** — the default machine (#1) is configured the same way as any additional machine, entirely in-app; there's no add-on option for this.
+Start the app, then set your Gaggiuino controller's IP/hostname (and, optionally, an HA switch entity to power it on/off) under **Settings → Machines** — the default machine (#1) is configured the same way as any additional machine, entirely in-app; there's no app option for this.
 
 Verify connectivity from the HA terminal:
 ```bash
@@ -153,27 +153,22 @@ On narrow viewports (phones, portrait tablets) the topbar tabs are hidden and a 
 | `sync_interval` | Auto-sync interval in minutes (1–60) | `5` |
 | `preheat_time` | Warmup time in minutes — how long after switch-on until the machine is ready to brew (1–120) | `20` |
 | `enable_orders` | Enable the order management system — barista backend tab + customer order card support; disabled by default | `false` |
-| `debug_logging` | Verbose diagnostic logging (e.g. every step of the bean import flow) in the add-on log — off by default so it never spams normal operation, switch on when actually diagnosing something | `false` |
-| `expose_api_port` | Whether `GET /api/token` answers requests that don't arrive via HA Ingress (#803). Turning this off stops **direct-port browser access to the app** from working at all (this includes the installable PWA — it's just the installed form of that same UI), and breaks **first-time setup of the Order Card's direct-URL mode**, since none of those have any other way to obtain a token — an already-configured direct-URL Order Card keeps working. Does not unmap port 8099 itself, and does not narrow the trust boundary below the whole Supervisor add-on network. See [Trust model](#trust-model) above. | `true` |
+| `debug_logging` | Verbose diagnostic logging (e.g. every step of the bean import flow) in the app log — off by default so it never spams normal operation, switch on when actually diagnosing something | `false` |
+| `expose_api_port` | Whether `GET /api/token` answers requests that don't arrive via HA Ingress (#803). Turning this off stops **direct-port browser access to the app** from working at all (this includes the installable PWA — it's just the installed form of that same UI), and breaks **first-time setup of the Order Card's direct-URL mode**, since none of those have any other way to obtain a token — an already-configured direct-URL Order Card keeps working. Does not unmap port 8099 itself, and does not narrow the trust boundary below the whole Supervisor app network. See [Trust model](#trust-model) above. | `true` |
 | `port` | Port the app server listens on (1024–65535) | `8099` |
 
-**Machine host and switch entity are configured in-app, not here.** They used to be add-on options (`machine_host`/`switch_entity`); as of this release they've been removed from the add-on's Configuration page entirely — set them under **Settings → Machines** instead, for the default machine (#1) exactly the same way as any additional machine. An upgrading install's previously-configured values are carried over automatically; nothing to redo.
+**Machine host and switch entity are configured in-app, not here.** They used to be app options (`machine_host`/`switch_entity`); as of this release they've been removed from the app's Configuration page entirely — set them under **Settings → Machines** instead, for the default machine (#1) exactly the same way as any additional machine. An upgrading install's previously-configured values are carried over automatically; nothing to redo.
 
 ## Standalone Docker Installation
 
 GLP is published as a plain multi-arch Docker image
 (`ghcr.io/mxkissnr/gaggiuino-local-profiler/{arch}`, `amd64`/`armv7`/`aarch64`), so
 it runs on any Docker host, not just Home Assistant OS. This is the path for
-Home Assistant installs that have no Supervisor and therefore no Add-on Store —
+Home Assistant installs that have no Supervisor and therefore no Home Assistant app store —
 **HA Container**, **HA Core**, and any Docker-based NAS setup (Unraid, TrueNAS
 SCALE, Synology, …) running its own separate HA Container instance.
 
-> ℹ **armv7 (32-bit ARM) is supported.** The Go backend cross-compiles a static armv7
-> binary with a pure-Go SQLite driver, so that image is built and published alongside
-> amd64 and aarch64. This lifts the earlier deprecation notice
-> ([#944](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/944)), which only
-> existed because the old Node.js image could no longer be built for that architecture.
-> The armv7 image is not regularly tested on real hardware.
+> ℹ **armv7 (32-bit ARM) is supported** alongside amd64 and aarch64. The armv7 image is not regularly tested on real hardware.
 
 ```bash
 docker run -d --name glp --restart unless-stopped \
@@ -193,18 +188,18 @@ bean images and API token, and must survive container restarts/updates.
 
 ### Env vars that replace Supervisor-only config
 
-Two things the HA Supervisor normally provides for free — the add-on's own
+Two things the HA Supervisor normally provides for free — the app's own
 Configuration page and a Supervisor token for talking back to HA — don't exist
 outside HA OS. GLP falls back to environment variables for both, all optional:
 
 | Env var | Replaces | Notes |
 |---|---|---|
 | `MACHINE_URL` | Settings → Machines (default machine host) | Same effect as setting the host in-app; still editable in Settings afterward |
-| `GLP_SYNC_INTERVAL` | `sync_interval` add-on option | Minutes, 1–60, default `5` |
-| `GLP_PREHEAT_TIME` | `preheat_time` add-on option | Minutes, 1–120, default `20` |
-| `GLP_ENABLE_ORDERS` | `enable_orders` add-on option | `true`/`false`, default `false` |
-| `GLP_DEBUG_LOGGING` | `debug_logging` add-on option | `true`/`false`, default `false` |
-| `GLP_EXPOSE_API_PORT` | `expose_api_port` add-on option | `true`/`false`, default `true` |
+| `GLP_SYNC_INTERVAL` | `sync_interval` app option | Minutes, 1–60, default `5` |
+| `GLP_PREHEAT_TIME` | `preheat_time` app option | Minutes, 1–120, default `20` |
+| `GLP_ENABLE_ORDERS` | `enable_orders` app option | `true`/`false`, default `false` |
+| `GLP_DEBUG_LOGGING` | `debug_logging` app option | `true`/`false`, default `false` |
+| `GLP_EXPOSE_API_PORT` | `expose_api_port` app option | `true`/`false`, default `true` |
 | `GLP_HA_URL` + `GLP_HA_TOKEN` | `SUPERVISOR_TOKEN` (HA API access) | Restores auto-sync, switch-entity power control and push notifications — see below. Both must be set together. |
 
 `GLP_HA_TOKEN` is a normal Home Assistant **long-lived access token**: in HA,
@@ -221,20 +216,20 @@ options](#configuration-options) above.
 
 ### What's different without a Supervisor
 
-| Feature | HA OS / Supervisor add-on | Docker standalone |
+| Feature | HA OS / Supervisor app | Docker standalone |
 |---|---|---|
 | Ingress sidebar panel | ✅ native | ❌ — use a Lovelace iframe/Webpage card pointed at `http://<docker-host>:8099` instead (see [Embed in HA Dashboard](../README.md#-embed-in-ha-dashboard)) |
-| Update notification | ✅ (Add-on Store) | ✅ — the app checks GitHub releases itself either way |
+| Update notification | ✅ (Home Assistant app store) | ✅ — the app checks GitHub releases itself either way |
 | HA auto-sync / switch-entity power control / push notifications | ✅ automatic | ✅ with `GLP_HA_URL` + `GLP_HA_TOKEN` |
 | MQTT auto-discovery | ✅ | ❌ — enter the broker host/port/user/password manually under Settings → MQTT (already the fallback path on HA OS too when no MQTT service is registered) |
-| App configuration (`sync_interval`, etc.) | ✅ Add-on Configuration page | ✅ via env vars, see table above |
+| App configuration (`sync_interval`, etc.) | ✅ App Configuration page | ✅ via env vars, see table above |
 | Machine configuration (Settings → Machines) | ✅ | ✅ identical, unchanged |
-| GLP Integration (HACS) — sensors, Order/Shot Card zero-config mode | ✅ auto-discovers the add-on | ✅ — enter the GLP URL manually on the integration's config step (auto-discovery needs a Supervisor) |
+| GLP Integration (HACS) — sensors, Order/Shot Card zero-config mode | ✅ auto-discovers the app | ✅ — enter the GLP URL manually on the integration's config step (auto-discovery needs a Supervisor) |
 | Backup/restore (in-app export) | ✅ | ✅ identical, unchanged |
 
 ## Multi-machine (v2.0.0)
 
-GLP can manage more than one espresso machine from a single add-on instance — no second add-on install needed. Each machine is either:
+GLP can manage more than one espresso machine from a single app instance — no second app install needed. Each machine is either:
 
 > The `type` you pick when adding a machine (Settings → Machines) selects the **firmware adapter** GLP talks to — it is not a physical-brand setting. There is no Gaggia-specific (or any other brand-specific) logic anywhere in GLP. Any single-boiler machine running a Gaggiuino or GaggiMate controller board — Gaggia Classic, Rancilio Silvia, Lelit, and others — works identically once you pick the matching `type`.
 
@@ -250,7 +245,7 @@ GLP can manage more than one espresso machine from a single add-on instance — 
 | Profile create/update/delete | ✅ | ✅ (Standard + Pro, saved straight to the machine) |
 | Brew start from GLP | ❌ (machine has no start API either) | ❌ (no start API) |
 
-On upgrade from a pre-2.0.0 install, the existing `machine_host`/`switch_entity` add-on options were automatically migrated into machine #1 (named "Gaggiuino", marked as the **default machine**) — no manual steps, and every existing URL, shot id, image and annotation keeps working exactly as before. (Those two add-on options have since been removed from the Configuration page entirely — see [Configuration options](#configuration-options) above.) Add further machines from the app's **Settings** view (name, type, host, optional HA switch entity); the form's "Test connection" button saves the machine first (if it hasn't been already) and then tests it, showing the result inline while the form stays open — this implicit save never starts a shot import on its own (see below), only an explicit "Save" click does (and only "Save" closes the form). The default machine keeps its original REST API surface untouched.
+On upgrade from a pre-2.0.0 install, the existing `machine_host`/`switch_entity` app options were automatically migrated into machine #1 (named "Gaggiuino", marked as the **default machine**) — no manual steps, and every existing URL, shot id, image and annotation keeps working exactly as before. (Those two app options have since been removed from the Configuration page entirely — see [Configuration options](#configuration-options) above.) Add further machines from the app's **Settings** view (name, type, host, optional HA switch entity); the form's "Test connection" button saves the machine first (if it hasn't been already) and then tests it, showing the result inline while the form stays open — this implicit save never starts a shot import on its own (see below), only an explicit "Save" click does (and only "Save" closes the form). The default machine keeps its original REST API surface untouched.
 
 Any machine's row has a **"Set as default"** button, and every machine — including the current default — can now be **deleted**, both behind a confirmation. Deleting the current default while other machines still exist requires reassigning the default to another machine first (a deliberate two-step flow, not an automatic reassignment); deleting the very last remaining machine is always blocked, since at least one machine must exist at all times.
 
@@ -266,8 +261,8 @@ Phase 1 of making `glp-integration` a full replacement for the community [ALERTu
 
 - **Settings**: `GET /api/machine/settings?category=<boiler|system|display|scales|led|theme|versions>` (category omitted returns all) and `POST /api/machine/settings/<category>` proxy the machine's own `GET/POST /api/settings/*` — which already applies and persists to flash in one call. `POST /api/machine/settings/save` additionally persists whatever's currently applied in RAM to flash over the machine's WebSocket channel (`c_save_settings`) — mirroring the machine's own RAM-apply/flash-persist split, for parity with the community integration rather than something GLP's REST-based settings writes above need.
 - **Control**: `POST /api/machine/opmode` (`{mode}` — `BREW_AUTO`/`FLUSH`/`DESCALE`/`STEAM`/`FLUSH_AUTO`/`HOT_WATER`/`HOME`), `POST /api/machine/tare` (requests a scale tare), `POST /api/machine/service-test` (`{peripheral}` — `PUMP`/`VALVE`/`VALVE_B`/`LED`, only takes effect while the machine is idle), and `POST /api/machine/profile/save` (persists the currently active profile + its ID to flash). `BREW_MANUAL` is deliberately not an accepted `opmode` value — live-verified against a real machine that entering it while idle is a silent no-op (no acknowledgement, mode unchanged), so GLP can't remote-start a shot this way and doesn't pretend to.
-- **Firmware**: `GET /api/machine/firmware/progress` and `POST /api/machine/firmware/update` proxy the machine's own OTA update-and-poll flow. `GET /api/machine/firmware/version` (#620 Phase 1) additionally answers whether an update is even available before triggering one — the machine's own API has no such check (`GET /api/settings/versions` only reports the *installed* commit-hash version); this compares it against the latest matching release on the firmware's own GitHub project ([`Zer0-bit/gaggiuino`](https://github.com/Zer0-bit/gaggiuino), filtered by the machine's configured `system.releaseChannel`, cached for an hour to stay well under GitHub's unauthenticated rate limit), returning `{ installed, latest, updateAvailable, releaseUrl }`. Groundwork for a future `glp-integration` firmware `update` entity — no GLP UI exposes this yet either.
-- **Live sensor/system state**: `GET /api/machine/live` returns the latest cached `SensorStateSnapshotDto`/`SystemStateDto` pushed over a persistent WebSocket session GLP keeps open per machine (reused across every poll, respecting the firmware's 3-connection limit) — `null` for either field until the machine's first push arrives. The same cache feeds extra fields (`pumpFlow`, `weightFlow`, `waterTemperature`, `boilerState`/`valveState`/`steamValveState`/`valveBState`/`steamBoilerRelayState`, `thermocoupleFaulted`/`thermocoupleFaultReason`, `pressureSensorFaulted`/`pressureSensorFaultReason`) into the default machine's `GET /api/machine/status` once available.
+- **Firmware**: `GET /api/machine/firmware/progress` and `POST /api/machine/firmware/update` proxy the machine's own OTA update-and-poll flow. `GET /api/machine/firmware/version` (#620 Phase 1) additionally answers whether an update is even available before triggering one — the machine's own API has no such check (`GET /api/settings/versions` only reports the *installed* commit-hash version); this compares it against the latest matching release on the firmware's own GitHub project ([`Zer0-bit/gaggiuino`](https://github.com/Zer0-bit/gaggiuino), filtered by the machine's configured `system.releaseChannel`, cached for an hour to stay well under GitHub's unauthenticated rate limit), returning `{ installed, latest, updateAvailable, releaseUrl }`. If the GitHub lookup fails (rate limit, network) the endpoint still returns `200` with `installed` set and `latest: null`, and serves the last known good `latest` while a transient failure lasts — a GitHub outage never hides the installed firmware version. Consumed by `glp-integration`'s machine firmware `update` entity.
+- **Live sensor/system state**: `GET /api/machine/live` returns the latest cached `SensorStateSnapshotDto`/`SystemStateDto` pushed over a persistent WebSocket session GLP keeps open per machine (reused across every poll, respecting the firmware's 3-connection limit) — `null` for either field until the machine's first push arrives. The same cache feeds extra fields (`pumpFlow`, `weightFlow`, `waterTemperature`, `boilerState`/`valveState`/`steamValveState`/`valveBState`/`steamBoilerRelayState`, `thermocoupleFaulted`/`thermocoupleFaultReason`, `pressureSensorFaulted`/`pressureSensorFaultReason`) into the default machine's `GET /api/machine/status` once available. `valveState` is the main three-way brew solenoid at the group head, open during a shot and closed afterwards to vent line pressure. `valveBState` is a second solenoid present only on certain Gaggiuino hardware builds (dual-circuit / Mega / hot-water-tap mods), otherwise always closed.
 
 All of the above are documented in [`openapi.yaml`](openapi.yaml)/`GET /api/openapi.json` (see [API spec](#api-spec)) and every `machineId`-scoped like the rest of the `/api/machine/*` surface.
 
@@ -276,7 +271,7 @@ All of the above are documented in [`openapi.yaml`](openapi.yaml)/`GET /api/open
 An alternative to the WebSocket connection above for getting live sensor/system data out of the machine: instead of GLP maintaining its own WebSocket session, it subscribes as an MQTT client to the topics the Gaggiuino's own built-in MQTT client publishes (`<prefix>/sensors`, `<prefix>/system`, plus `shot`/`profile/active`/`maintenance`/`notification`/`status`, all documented in the machine project's own [MQTT.md](https://github.com/gaggiuino/gaggiuino.github.io/blob/main/docs/rest-api/MQTT.md)). Deliberately **not** the machine's native Home Assistant MQTT Discovery — GLP stays the single data path and single HA device rather than splitting entities across two uncoordinated integrations.
 
 - **Toggle**: Settings → "Live connection" → WebSocket (default) or MQTT. Switching to MQTT needs a broker host — either auto-discovered or entered manually (see below) — before it takes effect; with no host configured GLP silently stays on WebSocket even if MQTT is selected.
-- **Broker auto-discovery**: with `services: [mqtt:want]` declared in `config.yaml`, the add-on asks the HA Supervisor's `/services/mqtt` endpoint for the broker Home Assistant's own MQTT integration is already configured against (e.g. the Mosquitto broker add-on) and pre-fills host/port/username/password in Settings. Installs with no MQTT service registered at all (or non-Supervised installs) fall back to manual entry — every field stays editable either way.
+- **Broker auto-discovery**: with `services: [mqtt:want]` declared in `config.yaml`, the app asks the HA Supervisor's `/services/mqtt` endpoint for the broker Home Assistant's own MQTT integration is already configured against (e.g. the Mosquitto broker app) and pre-fills host/port/username/password in Settings. Installs with no MQTT service registered at all (or non-Supervised installs) fall back to manual entry — every field stays editable either way.
 - **One-click "Apply to machine"**: writes the same broker connection onto the Gaggiuino's own MQTT client settings (`mqttEnabled`/`mqttHost`/`mqttPort`/`mqttUsername`/`mqttPassword`/`mqttTopicPrefix`, via the settings proxy above), so the connection details don't need to be typed twice.
 - **Same live-state cache, either transport**: `GET /api/machine/live` and the fields merged into `GET /api/machine/status` are byte-identical regardless of which transport produced them — `go/internal/machines` dispatches each cache read to either the WebSocket session or the MQTT subscription, both feeding the exact same field shape. `glp-integration` needs zero changes, since it only ever talks to GLP's own `/api/*` contract.
 - **Primary sensor values actually use the push data (v2.27.2)**: `temperature`/`pressure`/`weight` — including in `GET /api/machine/status`, `glp-integration`'s sensors, and live shot recording — now come from whichever transport's cached snapshot is freshest, WS or MQTT, falling back to the REST poll only when neither transport has a fresh reading yet. `targetTemperature` stays sourced from the active profile/REST, since it's a configured setpoint rather than something either transport reports.

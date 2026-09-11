@@ -3,6 +3,7 @@ package machines
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync"
 
@@ -307,12 +308,14 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	wg.Wait()
+	// #1037: only `versions` failing is a hard error -- without the machine's
+	// coreVersion the response has nothing to say. A failed `system` fetch
+	// just falls back to the default release channel, and a failed GitHub
+	// latest-release lookup returns HTTP 200 with `latest: null` -- a
+	// transient GitHub/network problem must not hide the locally-known
+	// installed firmware version from Home Assistant.
 	if versionsErr != nil {
 		writeError(w, http.StatusBadGateway, versionsErr.Error())
-		return
-	}
-	if systemErr != nil {
-		writeError(w, http.StatusBadGateway, systemErr.Error())
 		return
 	}
 	var versions struct {
@@ -320,13 +323,17 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.Unmarshal(versionsRaw, &versions)
 	var system map[string]any
-	_ = json.Unmarshal(systemRaw, &system)
+	if systemErr != nil {
+		slog.Warn("firmware version: system settings fetch failed, using default release channel", "err", systemErr)
+	} else {
+		_ = json.Unmarshal(systemRaw, &system)
+	}
 
 	channel := ParseReleaseChannel(system["releaseChannel"])
 	latest, err := h.firmware.GetLatestFirmwareRelease(r.Context(), channel)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
-		return
+		slog.Warn("firmware version: latest-release lookup failed, reporting installed version only", "err", err)
+		latest = nil
 	}
 
 	installed := versions.CoreVersion

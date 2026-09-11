@@ -23,7 +23,7 @@
 
 > **AI-generated project.** All code, tests, and documentation in this repo are written by Claude (Anthropic). Scope, hardware testing (Gaggia Classic + Gaggiuino), and release decisions are done by a human maintainer. Keep that in mind before installing this on your machine.
 
-> **armv7 (32-bit ARM) is supported.** The Go rewrite of the backend cross-compiles a static armv7 binary with a pure-Go SQLite driver, so the 32-bit ARM image is built and published alongside amd64 and aarch64. This lifts the earlier deprecation notice ([#944](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/944)), which existed only because the old Node.js image could no longer be built for that architecture. The armv7 image is not regularly tested on real hardware.
+> **armv7 (32-bit ARM) is supported** alongside amd64 and aarch64. The armv7 image is not regularly tested on real hardware.
 
 > **Heads-up — this requires a machine running [Gaggiuino](https://gaggiuino.github.io/) or [GaggiMate](https://github.com/jniebuhr/gaggimate) firmware.** GLP does not work with stock espresso machines. Both are hardware mods (custom controller, pressure/temperature sensors) — Gaggiuino has full support, GaggiMate is experimental as of v2.0.0 (see the Multi-Machine row below). These mods aren't limited to one machine brand: **the "type" GLP asks for when you add a machine selects the firmware adapter it talks to, not the physical machine.** Any single-boiler machine with a Gaggiuino or GaggiMate board installed — Gaggia Classic, Rancilio Silvia, Lelit, and others — works identically from GLP's side. If your machine doesn't run either firmware yet, start there first.
 
@@ -60,20 +60,20 @@ Click the button above to add this repository directly to your Home Assistant �
 
 ## 📸 Screenshots
 
-<p align="center">
-  <img src="gaggiuino-local-profiler/docs/screenshots/shots.png" alt="Shots view with pressure/flow/weight/temperature chart" width="49%"/>
-</p>
-<p align="center">
-  <img src="gaggiuino-local-profiler/docs/screenshots/library.png" alt="Coffee library with bean cards" width="49%"/>
-  <img src="gaggiuino-local-profiler/docs/screenshots/flavor-wheel.png" alt="Interactive flavor wheel for a bean" width="49%"/>
-</p>
-<p align="center">
-  <img src="gaggiuino-local-profiler/docs/screenshots/analytics.png" alt="Analytics view with interactive coffee world map" width="49%"/>
-  <img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance dashboard with summary tiles, next-due banner and per-machine task tiles" width="49%"/>
-</p>
-<p align="center">
-  <img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison, bean ranking and dial-in progression" width="49%"/>
-</p>
+<table>
+  <tr>
+    <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/shots.png" alt="Shots view with pressure/flow/weight/temperature chart" width="100%"/></td>
+    <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/flavor-wheel.png" alt="Interactive flavor wheel for a bean" width="100%"/></td>
+  </tr>
+  <tr>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/analytics.png" alt="Analytics view with interactive coffee world map" width="100%"/></td>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison, bean ranking and dial-in progression" width="100%"/></td>
+  </tr>
+  <tr>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance dashboard with summary tiles, next-due banner and per-machine task tiles" width="100%"/></td>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/library.png" alt="Coffee library with bean cards" width="100%"/></td>
+  </tr>
+</table>
 
 More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-in, Live, Orders, Settings). Regenerated on demand via `node scripts/screenshots.mjs`.
 
@@ -83,7 +83,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-
 
 | | Feature | Description |
 |---|---|---|
-| 🔀 | **Multi-Machine** | Manage more than one espresso machine from a single add-on instance — Gaggiuino (full support) or [GaggiMate](https://github.com/jniebuhr/gaggimate) (experimental: sync + live status, full profile editing (Standard + Pro/Extended, create/edit/delete, saved straight to the machine) with a phase-accurate preview chart matching GaggiMate's own; water level with optional ALBA sensor; BLE-scale vs. estimated weight distinction in shot chart). Shot sync now runs for every registered machine, not just the default one; live view stays default-machine-only for now. Maintenance (descaling/backflush/group head/gaskets) is tracked per machine; shared equipment (water filter, grinder) stays global. Existing single-machine installs upgrade automatically, no manual steps. |
+| 🔀 | **Multi-Machine** | Manage more than one espresso machine from a single app instance — Gaggiuino (full support) or [GaggiMate](https://github.com/jniebuhr/gaggimate) (experimental: sync + live status, full profile editing (Standard + Pro/Extended, create/edit/delete, saved straight to the machine) with a phase-accurate preview chart matching GaggiMate's own; water level with optional ALBA sensor; BLE-scale vs. estimated weight distinction in shot chart). Shot sync now runs for every registered machine, not just the default one; live view stays default-machine-only for now. Maintenance (descaling/backflush/group head/gaskets) is tracked per machine; shared equipment (water filter, grinder) stays global. Existing single-machine installs upgrade automatically, no manual steps. |
 | 📈 | **Shot Archive** | All shots with pressure, flow, weight and temperature curves |
 | 🔴 | **Live Mode** | Real-time display directly from the controller (`/api/system/status`); the Live tab, preheat/ready badge and the sidebar's shot counter push updates instantly over a live connection, falling back automatically to polling if one can't be established. While idle, the Live tab shows current temperature/target, pressure and water level instead of a bare "Ready to brew"; steam and flush mode get the same live treatment (timer, readouts, badge, animated machine icon) as brewing. Stale readings are cleared automatically if the machine drops off the network. |
 | 📡 | **MQTT Live-Data Transport** | Alternative to the WebSocket connection for live sensor/system data — subscribes to the Gaggiuino's own MQTT-published topics instead, toggled in Settings ("Live connection: WebSocket / MQTT"). Broker connection is auto-discovered via the HA Supervisor's MQTT service when available, with manual entry as a fallback, plus a one-click "Apply to machine" that points the machine's own MQTT client at the same broker. Feeds the exact same live-state cache the WebSocket transport does — `glp-integration` needs zero changes either way. Applies to the default machine only. |
@@ -180,7 +180,7 @@ Set your controller's IP/hostname — and, optionally, an HA switch entity to po
 
 ## 🐳 Standalone Docker Install (Unraid, TrueNAS, HA Container, …)
 
-No HA Supervisor, no Add-on Store — this is for HA Container/HA Core installs (Unraid, TrueNAS SCALE and similar). GLP already ships as a plain multi-arch image, so it runs like any other Docker app:
+No HA Supervisor, no Home Assistant app store — this is for HA Container/HA Core installs (Unraid, TrueNAS SCALE and similar). GLP already ships as a plain multi-arch image, so it runs like any other Docker app:
 
 ```bash
 docker run -d --name glp --restart unless-stopped \
@@ -188,12 +188,12 @@ docker run -d --name glp --restart unless-stopped \
   ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:latest
 ```
 
-Or use the ready-made [`docker-compose.standalone.yml`](gaggiuino-local-profiler/docker-compose.standalone.yml) (`docker compose -f docker-compose.standalone.yml up -d`) — it also documents the optional env vars that replace Supervisor-only add-on config and HA integration for this install path. Then:
+Or use the ready-made [`docker-compose.standalone.yml`](gaggiuino-local-profiler/docker-compose.standalone.yml) (`docker compose -f docker-compose.standalone.yml up -d`) — it also documents the optional env vars that replace Supervisor-only app config and HA integration for this install path. Then:
 
 - **GLP Integration** ([Step 2](#step-2--install-the-glp-integration-recommended) above) — auto-discovery needs a Supervisor, so on the config step just enter `http://<docker-host>:8099` manually.
 - **Dashboard panel** — no Ingress, so embed it as a normal iframe/Webpage card pointed at `http://<docker-host>:8099` (see [Embed in HA Dashboard](#-embed-in-ha-dashboard) below) instead of a sidebar panel.
 
-Full walkthrough, env-var reference and a feature-parity table against the Supervisor add-on: see [DOCS.md](gaggiuino-local-profiler/DOCS.md#standalone-docker-installation) / [DOCS.de.md](gaggiuino-local-profiler/DOCS.de.md#standalone-docker-installation).
+Full walkthrough, env-var reference and a feature-parity table against the Supervisor-managed app: see [DOCS.md](gaggiuino-local-profiler/DOCS.md#standalone-docker-installation) / [DOCS.de.md](gaggiuino-local-profiler/DOCS.de.md#standalone-docker-installation).
 
 ---
 
@@ -205,7 +205,7 @@ Full walkthrough, env-var reference and a feature-parity table against the Super
 
 Machine host and switch entity are configured in-app under **Settings → Machines**, not here — see [DOCS.md](gaggiuino-local-profiler/DOCS.md#configuration-options) for details.
 
-Updates run through the Home Assistant Add-on Store — the app itself only checks and shows whether a newer version is available, it never triggers an install (no elevated Supervisor role required).
+Updates run through the Home Assistant app store — the app itself only checks and shows whether a newer version is available, it never triggers an install (no elevated Supervisor role required).
 
 ---
 
