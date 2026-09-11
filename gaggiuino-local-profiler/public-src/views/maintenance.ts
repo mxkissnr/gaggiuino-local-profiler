@@ -16,8 +16,12 @@ interface MaintTaskData {
   shotsSince: number;
   threshold_shots?: number | null;
   threshold_days?: number | null;
+  threshold_g?: number | null;
+  gramsSince?: number | null;
   machineSyncedAt?: string | number | null;
   grinderName?: string | null;
+  disabled?: boolean;
+  label?: string | null;
 }
 
 interface MaintMachineGroup {
@@ -66,9 +70,10 @@ const TASK_ICON_PATHS: Record<string, string> = {
   gaskets:     '<circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="2"/>',
   waterfilter: '<path d="M8 2.5S4 7 4 9.8a4 4 0 0 0 8 0C12 7 8 2.5 8 2.5z"/>',
   grinder:     '<circle cx="8" cy="8" r="2"/><path d="M8 2v2.5M8 11.5V14M2 8h2.5M11.5 8H14M4 4l1.8 1.8M10.2 10.2 12 12M12 4l-1.8 1.8M5.8 10.2 4 12"/>',
+  custom:      '<path d="M10.5 2.5a2 2 0 0 1 2.83 2.83l-7 7L3 13l.67-3.33 7-7z"/>',
 };
 function taskIconSvg(task: string): string {
-  const key  = task.startsWith('grinder_') ? 'grinder' : task;
+  const key = task.startsWith('grinder_') ? 'grinder' : task.startsWith('custom_') ? 'custom' : task;
   const path = TASK_ICON_PATHS[key] || '';
   return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">${path}</svg>`;
 }
@@ -81,6 +86,7 @@ function isGlobalTask(task: string): boolean {
 
 function taskTitle(task: string, d: MaintTaskData): string {
   if (task.startsWith('grinder_')) return d.grinderName || task;
+  if (task.startsWith('custom_')) return d.label || task.replace(/^custom_/, '').replace(/_/g, ' ');
   return t(MAINT_META[task]?.key || task);
 }
 
@@ -149,6 +155,15 @@ export function _normalizeMaintTiles(data: MaintResponse | null | undefined, sco
   return tiles;
 }
 
+// Split tiles into active and disabled groups.
+function _partitionTiles(tiles: MaintTile[]): { active: MaintTile[]; disabled: MaintTile[] } {
+  const active: MaintTile[] = [], disabled: MaintTile[] = [];
+  for (const tile of tiles) {
+    (tile.d.disabled ? disabled : active).push(tile);
+  }
+  return { active, disabled };
+}
+
 function _summaryCounts(tiles: MaintTile[]): { due: number; soon: number; ok: number } {
   let due = 0, soon = 0, ok = 0;
   for (const { d } of tiles) {
@@ -197,9 +212,10 @@ export async function loadMaintenanceView(): Promise<void> {
 
 export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScope): void {
   const container = document.getElementById('maint-cards') as HTMLElement;
-  const tiles      = _normalizeMaintTiles(data, scope);
-  const counts     = _summaryCounts(tiles);
-  const nextTile   = _pickNextDueTile(tiles);
+  const allTiles   = _normalizeMaintTiles(data, scope);
+  const { active, disabled } = _partitionTiles(allTiles);
+  const counts     = _summaryCounts(active);
+  const nextTile   = _pickNextDueTile(active);
   const hasMachines = (S.machines || []).length > 1;
 
   container.innerHTML = `
@@ -210,6 +226,8 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
       <span class="maint-scope-hint" id="maintScopeHint">${t('maint_shared_once')}</span>
     </div>
     <div class="maint-grid-compact" id="maintGrid"></div>
+    <div class="maint-custom-section" id="maintCustomSection"></div>
+    <div class="maint-disabled-section" id="maintDisabledSection" style="display:none"></div>
   `;
 
   (document.getElementById('maintSummary') as HTMLElement).innerHTML = `
@@ -229,15 +247,55 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
       ...S.machines.map(m => `<button class="${scope === m.id ? 'on' : ''}" data-action="set-maint-scope" data-scope="${m.id}">${esc(m.name as string)}</button>`),
     ].join('');
     const hint = document.getElementById('maintScopeHint');
-    if (hint) hint.style.display = tiles.some(x => x.isGlobal) ? '' : 'none';
+    if (hint) hint.style.display = active.some(x => x.isGlobal) ? '' : 'none';
   }
 
   const grid = document.getElementById('maintGrid') as HTMLElement;
   grid.innerHTML = '';
-  for (const tile of tiles) grid.appendChild(_buildMaintMiniTile(tile));
+  for (const tile of active) grid.appendChild(_buildMaintMiniTile(tile));
+
+  _renderCustomSection(document.getElementById('maintCustomSection'), scope);
+
+  const disabledSec = document.getElementById('maintDisabledSection');
+  if (disabled.length > 0) {
+    disabledSec.style.display = '';
+    _renderDisabledSection(disabledSec, disabled);
+  }
 
   const badge = document.getElementById('maintBadge');
   if (badge) badge.style.display = counts.due > 0 ? 'inline-block' : 'none';
+}
+
+function _renderCustomSection(container: HTMLElement | null, scope: MaintScope): void {
+  if (!container) return;
+  const writeMid = _writeMachineId(scope === 'all' ? undefined : scope);
+  // codeql[js/xss-through-dom] false positive: esc() applied
+  container.innerHTML = `
+    <details class="maint-custom-add">
+      <summary>Eigene Wartung hinzufügen</summary>
+      <div class="maint-custom-form">
+        <input type="text" id="customTaskLabel" placeholder="Name (z.B. Rückspülen mit Reiniger)" maxlength="100">
+        <div class="maint-custom-thresholds">
+          <label>Alle <input type="number" id="customTaskShots" min="1" max="10000" placeholder="–"> Bezüge</label>
+          <label>Alle <input type="number" id="customTaskDays" min="1" max="3650" placeholder="–"> Tage</label>
+        </div>
+        <button data-action="add-custom-maint-task" data-machine-id="${writeMid}">Hinzufügen</button>
+      </div>
+    </details>
+  `;
+}
+
+function _renderDisabledSection(container: HTMLElement, tiles: MaintTile[]): void {
+  const rows = tiles.map(tile => {
+    const title = taskTitle(tile.task, tile.d);
+    return `<div class="maint-disabled-row">
+      <span class="icon">${taskIconSvg(tile.task)}</span>
+      <span>${esc(title)}</span>
+      <button class="maint-reenable-btn" data-action="toggle-maint-disabled" data-task="${esc(tile.task)}" data-machine-id="${tile.machineId}" data-disabled="false">Aktivieren</button>
+    </div>`;
+  }).join('');
+  // codeql[js/xss-through-dom] false positive: esc() applied
+  container.innerHTML = `<details class="maint-disabled-details"><summary>Deaktivierte Wartungen (${tiles.length})</summary>${rows}</details>`;
 }
 
 function _renderNextBanner(container: HTMLElement | null, tile: MaintTile | null): void {
@@ -264,49 +322,93 @@ function _renderNextBanner(container: HTMLElement | null, tile: MaintTile | null
 function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
   const { task, d, machineName, machineId, isGlobal, showMachineTag } = tile;
   const title = taskTitle(task, d);
+  const isCustom = task.startsWith('custom_');
+  const isGrinder = task.startsWith('grinder_');
 
   const machineTagText = isGlobal ? t('maint_shared_tag') : (showMachineTag ? machineName : null);
 
-  const countText = d.status === 'never'
-    ? t('maint_never_done')
-    : d.threshold_shots != null
-      ? `${d.shotsSince} / ${d.threshold_shots} ${t('maint_by_shots')}`
-      : d.threshold_days != null
-        ? `${d.daysSince} / ${d.threshold_days} ${t('maint_by_days')}`
-        : t('maint_never_done');
+  // Determine current threshold mode.
+  const hasShots = d.threshold_shots != null;
+  const hasDays  = d.threshold_days  != null;
+  const hasG     = isGrinder && d.threshold_g != null;
+  const mode = hasG ? 'g' : hasShots && hasDays ? 'both' : hasShots ? 'shots' : hasDays ? 'days' : 'shots';
 
-  const mode = d.threshold_shots !== null ? 'shots' : 'days';
-  const val  = mode === 'shots' ? d.threshold_shots : d.threshold_days;
+  // Count text for the meta row.
+  let countText;
+  if (d.status === 'never') {
+    countText = t('maint_never_done');
+  } else if (hasShots && hasDays) {
+    countText = `${d.shotsSince}/${d.threshold_shots} ${t('maint_by_shots')} · ${d.daysSince ?? '?'}/${d.threshold_days} ${t('maint_by_days')}`;
+  } else if (hasShots) {
+    countText = `${d.shotsSince} / ${d.threshold_shots} ${t('maint_by_shots')}`;
+  } else if (hasDays) {
+    countText = `${d.daysSince ?? '?'} / ${d.threshold_days} ${t('maint_by_days')}`;
+  } else if (hasG) {
+    countText = `${d.gramsSince ?? 0}g / ${d.threshold_g}g`;
+  } else {
+    countText = t('maint_never_done');
+  }
 
+  // Threshold inputs — shown based on mode.
+  const shotsVal = d.threshold_shots ?? '';
+  const daysVal  = d.threshold_days  ?? '';
+  const gVal     = d.threshold_g ?? '';
+  const shotsInput = `<label class="maint-threshold-field">
+    <span>Bezüge</span>
+    <input type="number" min="1" max="10000" value="${shotsVal}" placeholder="–"
+        data-action="save-maint-threshold" data-task="${task}" data-field="threshold_shots" data-machine-id="${machineId}">
+  </label>`;
+  const daysInput = `<label class="maint-threshold-field">
+    <span>Tage</span>
+    <input type="number" min="1" max="3650" value="${daysVal}" placeholder="–"
+        data-action="save-maint-threshold" data-task="${task}" data-field="threshold_days" data-machine-id="${machineId}">
+  </label>`;
+  const gInput = `<label class="maint-threshold-field">
+    <span>Gramm</span>
+    <input type="number" min="1" max="100000" value="${gVal}" placeholder="–"
+        data-action="save-maint-threshold" data-task="${task}" data-field="threshold_g" data-machine-id="${machineId}">
+  </label>`;
+  const thresholdFields = mode === 'g' ? gInput : mode === 'shots' ? shotsInput : mode === 'days' ? daysInput : shotsInput + daysInput;
+
+  const pct = Math.round(d.pct * 100);
   const el = document.createElement('div');
-  el.className = `maint-mini status-${d.status}`;
+  el.className = `maint-card status-${d.status}`;
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   el.innerHTML = `
-    <div class="top">
-      <span><span class="icon">${taskIconSvg(task)}</span>${esc(title)}</span>
-      <span class="maint-status-pill ${d.status}">${maintStatusLabel(d.status)}</span>
-    </div>
-    <div class="maint-bar-track"><div class="maint-bar-fill ${d.status}" style="width:${Math.round(d.pct * 100)}%"></div></div>
-    <div class="n">
-      ${machineTagText ? `<span class="shot-machine-badge">${esc(machineTagText)}</span>` : ''}
-      <span class="num">${esc(countText)}</span>
-      ${d.machineSyncedAt ? `<span class="maint-auto-synced" title="${esc(t('maint_auto_synced_hint'))}">${esc(t('maint_auto_synced'))}</span>` : ''}
-    </div>
-    <button class="maint-detail-toggle" type="button" data-action="toggle-maint-detail">${esc(t('maint_tile_details'))}</button>
-    <div class="detail">
-      <div class="maint-mode-toggle">
-        <button class="maint-mode-btn${mode === 'shots' ? ' active' : ''}"
-            data-action="set-maint-mode" data-task="${task}" data-mode="shots" data-machine-id="${machineId}">${t('maint_by_shots')}</button>
-        <button class="maint-mode-btn${mode === 'days' ? ' active' : ''}"
-            data-action="set-maint-mode" data-task="${task}" data-mode="days" data-machine-id="${machineId}">${t('maint_by_days')}</button>
+    <div class="maint-card-indicator"></div>
+    <div class="maint-card-body">
+      <div class="maint-card-header">
+        <span class="maint-card-icon">${taskIconSvg(task)}</span>
+        <span class="maint-card-title">${esc(title)}</span>
+        <span class="maint-card-chip ${d.status}">${maintStatusLabel(d.status)}</span>
       </div>
-      <label class="maint-threshold-field">
-        <input type="number" min="1" max="9999" value="${val}"
-            data-action="save-maint-threshold" data-task="${task}" data-field="${mode === 'shots' ? 'threshold_shots' : 'threshold_days'}" data-machine-id="${machineId}">
-      </label>
-      <div class="actions">
-        <button class="maint-done-btn" data-action="mark-maint-done" data-task="${task}" data-machine-id="${machineId}">${t('maint_done_btn')}</button>
-        ${GUIDED_MAINT_STEPS[task] ? `<button class="maint-guide-btn" data-action="open-guided-maint" data-task="${task}" data-machine-id="${machineId}">${t('guided_open')}</button>` : ''}
+      <div class="maint-card-progress"><div class="maint-card-progress-fill ${d.status}" style="width:${pct}%"></div></div>
+      <div class="maint-card-meta">
+        ${machineTagText ? `<span class="shot-machine-badge">${esc(machineTagText)}</span>` : ''}
+        <span class="maint-card-count">${esc(countText)}</span>
+        ${d.machineSyncedAt ? `<span class="maint-auto-synced" title="${esc(t('maint_auto_synced_hint'))}">${esc(t('maint_auto_synced'))}</span>` : ''}
+      </div>
+      <button class="maint-detail-toggle" type="button" data-action="toggle-maint-detail" data-task="${task}">${esc(t('maint_tile_details'))}</button>
+      <div class="detail">
+        <div class="maint-mode-seg">
+          <button class="${mode === 'shots' ? 'active' : ''}" data-action="set-maint-mode" data-task="${task}" data-mode="shots" data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">Bezüge</button>
+          <button class="${mode === 'days'  ? 'active' : ''}" data-action="set-maint-mode" data-task="${task}" data-mode="days"  data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">Tage</button>
+          <button class="${mode === 'both'  ? 'active' : ''}" data-action="set-maint-mode" data-task="${task}" data-mode="both"  data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">Beides</button>
+          ${isGrinder ? `<button class="${mode === 'g' ? 'active' : ''}" data-action="set-maint-mode" data-task="${task}" data-mode="g" data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">Gramm</button>` : ''}
+        </div>
+        <div class="maint-threshold-inputs">${thresholdFields}</div>
+        ${isCustom ? `<label class="maint-threshold-field maint-rename-field">
+          <span>Name</span>
+          <input type="text" maxlength="100" value="${esc(d.label || '')}"
+              data-action="rename-maint-label" data-task="${task}" data-machine-id="${machineId}">
+        </label>` : ''}
+        <div class="maint-card-actions">
+          <button class="maint-done-btn" data-action="mark-maint-done" data-task="${task}" data-machine-id="${machineId}">${t('maint_done_btn')}</button>
+          ${isCustom
+            ? `<button class="maint-delete-btn" data-action="delete-custom-maint-task" data-task="${task}" data-machine-id="${machineId}">Löschen</button>`
+            : `<button class="maint-disable-btn" data-action="toggle-maint-disabled" data-task="${task}" data-machine-id="${machineId}" data-disabled="true">Deaktivieren</button>`
+          }
+        </div>
       </div>
     </div>
   `;
@@ -370,19 +472,89 @@ export async function markMaintDone(task: string, machineId?: string | number | 
 }
 
 export async function saveMaintThreshold(task: string, field: string, value: string, machineId?: string | number | null): Promise<void> {
+  // empty string → null (clears the threshold)
+  const parsed = value === '' || value == null ? null : parseInt(value, 10);
   try {
-    await saveMaintenanceThreshold(task, _writeMachineId(machineId), { [field]: parseInt(value) });
+    await saveMaintenanceThreshold(task, _writeMachineId(machineId), { [field]: parsed });
   } catch { /* ignore */ }
 }
 
-export async function setMaintMode(task: string, mode: string, machineId?: string | number | null): Promise<void> {
-  const defaults = { shots: 200, days: 30 };
-  const body = mode === 'shots'
-    ? { threshold_shots: defaults.shots, threshold_days: null }
-    : { threshold_shots: null, threshold_days: defaults.days };
+export async function setMaintMode(
+  task: string,
+  mode: string,
+  machineId?: string | number | null,
+  currentShots?: string,
+  currentDays?: string,
+  currentG?: string,
+): Promise<void> {
+  const expandedTask = (document.querySelector('.maint-card.expanded .maint-detail-toggle') as HTMLElement | null)?.dataset?.task;
+  const defShots = parseInt(currentShots ?? '', 10) || 200;
+  const defDays  = parseInt(currentDays  ?? '', 10) || 30;
+  const defG     = parseInt(currentG     ?? '', 10) || 10000;
+  const body = mode === 'shots' ? { threshold_shots: defShots, threshold_days: null, threshold_g: null }
+             : mode === 'days'  ? { threshold_shots: null,     threshold_days: defDays, threshold_g: null }
+             : mode === 'g'     ? { threshold_shots: null,     threshold_days: null, threshold_g: defG }
+             :                    { threshold_shots: defShots, threshold_days: defDays, threshold_g: null };
   try {
     await saveMaintenanceThreshold(task, _writeMachineId(machineId), body);
     await loadMaintenanceView();
+    if (expandedTask) {
+      document.querySelector(`.maint-detail-toggle[data-task="${CSS.escape(expandedTask)}"]`)
+        ?.closest('.maint-card')?.classList.add('expanded');
+    }
+  } catch { /* ignore */ }
+}
+
+export async function toggleMaintDisabled(task: string, machineId?: string | number | null, disabled?: boolean): Promise<void> {
+  try {
+    await saveMaintenanceThreshold(task, _writeMachineId(machineId), { disabled });
+    await loadMaintenanceView();
+  } catch { /* ignore */ }
+}
+
+export async function addCustomMaintTask(machineId?: string | number | null): Promise<void> {
+  const label = (document.getElementById('customTaskLabel') as HTMLInputElement | null)?.value.trim();
+  if (!label) return;
+  const shots = (document.getElementById('customTaskShots') as HTMLInputElement | null)?.value;
+  const days  = (document.getElementById('customTaskDays') as HTMLInputElement | null)?.value;
+  const body = {
+    label,
+    threshold_shots: shots ? parseInt(shots, 10) : null,
+    threshold_days:  days  ? parseInt(days,  10) : null,
+  };
+  try {
+    await apiFetch(`api/maintenance/custom?machineId=${_writeMachineId(machineId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    await loadMaintenanceView();
+  } catch { /* ignore */ }
+}
+
+export async function deleteCustomMaintTask(task: string, machineId?: string | number | null): Promise<void> {
+  if (!confirm(`Eigene Wartung "${task.replace('custom_', '')}" wirklich löschen?`)) return;
+  try {
+    await apiFetch(`api/maintenance/custom/${task}?machineId=${_writeMachineId(machineId)}`, { method: 'DELETE' });
+    await loadMaintenanceView();
+  } catch { /* ignore */ }
+}
+
+export async function renameCustomMaintTask(task: string, newLabel: string, machineId?: string | number | null): Promise<void> {
+  const label = newLabel.trim();
+  if (!label) return;
+  const expandedTask = (document.querySelector('.maint-card.expanded .maint-detail-toggle') as HTMLElement | null)?.dataset?.task;
+  try {
+    await apiFetch(`api/maintenance/${task}/threshold?machineId=${_writeMachineId(machineId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label }),
+    });
+    await loadMaintenanceView();
+    if (expandedTask) {
+      document.querySelector(`.maint-detail-toggle[data-task="${CSS.escape(expandedTask)}"]`)
+        ?.closest('.maint-card')?.classList.add('expanded');
+    }
   } catch { /* ignore */ }
 }
 
