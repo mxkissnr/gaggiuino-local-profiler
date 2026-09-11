@@ -1442,6 +1442,14 @@
                     <span data-i18n="settings_machine_water_sensor">Wasserstandssensor verbaut (ALBA)</span>
                 </label>
             </div>
+            <div id="machineReleaseChannelRow" style="display:none">
+                <label class="machine-form-label" data-i18n="settings_machine_release_channel">Release-Kanal</label>
+                <select id="machineFormReleaseChannel" class="machine-form-input">
+                    <option value="0" data-i18n="settings_machine_release_channel_stable">Stable</option>
+                    <option value="1" data-i18n="settings_machine_release_channel_test">Test</option>
+                    <option value="2" data-i18n="settings_machine_release_channel_debug">Debug</option>
+                </select>
+            </div>
             <label class="machine-form-label" data-i18n="settings_machine_theme">Farbe</label>
             <div class="machine-theme-picker-row">
                 <div class="machine-theme-swatches" id="machineThemeSwatches"></div>
@@ -1454,6 +1462,19 @@
                     <span data-i18n="settings_machine_theme_gradient">Verlauf</span>
                 </label>
                 <input type="color" id="machineThemeCustomB" class="machine-theme-color-input" value="#f59e0b" style="display:none">
+            </div>
+            <div id="machineFirmwareSection" class="machine-firmware-section" style="display:none">
+                <h4 class="machine-firmware-title" data-i18n="settings_machine_firmware_title">Firmware</h4>
+                <p id="machineFirmwareStatus" class="machine-firmware-status"></p>
+                <div id="machineFirmwareUpdateBanner" class="machine-firmware-update-banner" style="display:none">
+                    <span id="machineFirmwareUpdateMsg"></span>
+                    <a id="machineFirmwareChangelogLink" href="#" target="_blank" rel="noopener" data-i18n="update_changelog">Änderungsprotokoll</a>
+                    <button type="button" id="machineFirmwareUpdateBtn" class="backup-btn" data-i18n="settings_machine_firmware_update_btn">Update starten</button>
+                </div>
+                <div id="machineFirmwareProgressBar" class="machine-firmware-progress-bar" style="display:none">
+                    <span id="machineFirmwareProgressLabel"></span>
+                    <div class="sync-progress-track"><div class="sync-progress-fill"></div></div>
+                </div>
             </div>
             <div class="machine-form-actions">
                 <button id="machineFormTestBtn" type="button" class="backup-btn" data-i18n="settings_machine_test">Verbindung testen</button>

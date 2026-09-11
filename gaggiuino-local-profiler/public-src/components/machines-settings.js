@@ -30,6 +30,13 @@ export function presetLabelKey(key) {
 // input value (preset key vs. {a,b} custom colours). Reset in openMachineForm().
 let _selectedTheme = null;
 
+// #1044: the currently-editing gaggiuino machine's full 'system' settings
+// category, as last fetched by loadReleaseChannel() -- kept so
+// _saveReleaseChannel() can post the whole object back with only
+// releaseChannel changed (see that function's own comment for why a full
+// round trip, not a bare {releaseChannel} partial).
+let _machineSystemSettings = null;
+
 (function restoreActiveMachine() {
   const stored = localStorage.getItem('glp_active_machine');
   if (stored) S.activeMachineId = stored === 'all' ? 'all' : parseInt(stored, 10);
@@ -428,8 +435,226 @@ function syncWaterSensorRowVisibility() {
   if (row) row.style.display = type === 'gaggimate' ? '' : 'none';
 }
 
+// #1044: the release-channel selector and firmware-update section are both
+// Gaggiuino-only, same conditional-visibility pattern as the water-sensor
+// row above -- but unlike hasWaterSensor (a plain field on GLP's own
+// machine record), both proxy through the machine's own settings-proxy API
+// (GET/POST api/machine/settings, api/machine/firmware/*), which needs a
+// real, already-saved machineId to resolve against. A brand-new,
+// not-yet-saved machine therefore shows neither section; editing it again
+// after the initial save does.
+function syncGaggiuinoOnlyRowsVisibility() {
+  const type = document.getElementById('machineFormType')?.value;
+  const id = document.getElementById('machineFormId')?.value;
+  const show = type === 'gaggiuino' && !!id;
+  const channelRow = document.getElementById('machineReleaseChannelRow');
+  if (channelRow) channelRow.style.display = show ? '' : 'none';
+  const fwSection = document.getElementById('machineFirmwareSection');
+  if (fwSection) fwSection.style.display = show ? '' : 'none';
+}
+
 export function onMachineTypeChange() {
   syncWaterSensorRowVisibility();
+  syncGaggiuinoOnlyRowsVisibility();
+  stopFirmwarePolling();
+}
+
+// #1044: GET api/machine/settings?category=system -- the same settings-
+// proxy route internal/web's own (server-rendered) Settings page uses (see
+// go/internal/web/handlers_settings.go's doc comment), just consumed here
+// from the SPA for the one field this form edits (releaseChannel) instead
+// of that page's full opaque-JSON-textarea round trip. Keeps the whole
+// fetched object in _machineSystemSettings so _saveReleaseChannel() below
+// can post it back with only releaseChannel changed.
+async function loadReleaseChannel(machineId) {
+  const select = document.getElementById('machineFormReleaseChannel');
+  if (!select) return;
+  try {
+    const r = await apiFetch(`api/machine/settings?machineId=${machineId}&category=system`);
+    if (!r.ok) return;
+    const settings = await r.json();
+    _machineSystemSettings = (settings && typeof settings === 'object') ? settings : {};
+    const ch = Number(_machineSystemSettings.releaseChannel);
+    select.value = [0, 1, 2].includes(ch) ? String(ch) : '0';
+  } catch { /* offline/unreachable -- leave the select at its default */ }
+}
+
+// #1044: called from saveMachineForm() after the main machine record has
+// already saved successfully. A no-op whenever the release-channel row
+// isn't currently shown (GaggiMate, or a machine that hasn't been saved
+// yet -- see syncGaggiuinoOnlyRowsVisibility() above), so this is safe to
+// call unconditionally on every save.
+async function _saveReleaseChannel(machineId) {
+  const row = document.getElementById('machineReleaseChannelRow');
+  const select = document.getElementById('machineFormReleaseChannel');
+  if (!row || !select || row.style.display === 'none') return;
+  const channel = parseInt(select.value, 10);
+  const payload = { ...(_machineSystemSettings || {}), machineId: Number(machineId), releaseChannel: channel };
+  try {
+    await apiFetch('api/machine/settings/system', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+  } catch { /* best-effort -- the main machine record already saved either way */ }
+}
+
+// ── Firmware update (#1044) ─────────────────────────────────────────────
+// GET api/machine/firmware/version + POST .../update + GET .../progress
+// (go/internal/machines/handlers_control.go, unused by the frontend before
+// this) -- status/trigger/progress for the machine's own OTA flow. There is
+// no SSE push for firmware progress on the backend (unlike shot-import
+// progress, components/status.js's renderSyncProgressBar/
+// pollSyncProgressFallback), so this is polling-only throughout.
+
+const FIRMWARE_POLL_INTERVAL_MS = 2000;
+// ~10 minutes of polling before giving up inconclusively -- a real OTA
+// (download + flash + reboot) normally finishes well inside this.
+const FIRMWARE_POLL_MAX_TICKS = 300;
+
+let _firmwarePollTimer = null;
+let _firmwarePollMachineId = null;
+
+async function loadFirmwareStatus(machineId) {
+  const statusEl = document.getElementById('machineFirmwareStatus');
+  if (!statusEl) return;
+  statusEl.textContent = t('settings_machine_firmware_checking');
+  try {
+    const r = await apiFetch(`api/machine/firmware/version?machineId=${machineId}`);
+    if (!r.ok) { statusEl.textContent = t('settings_machine_firmware_check_failed'); return; }
+    renderFirmwareStatus(await r.json());
+  } catch {
+    statusEl.textContent = t('settings_machine_firmware_check_failed');
+  }
+}
+
+function renderFirmwareStatus(data) {
+  const statusEl = document.getElementById('machineFirmwareStatus');
+  const banner = document.getElementById('machineFirmwareUpdateBanner');
+  const msgEl = document.getElementById('machineFirmwareUpdateMsg');
+  const linkEl = document.getElementById('machineFirmwareChangelogLink');
+  if (!statusEl) return;
+  statusEl.textContent = data?.installed
+    ? t('settings_machine_firmware_installed', data.installed)
+    : t('settings_machine_firmware_unknown');
+  if (!banner) return;
+  if (data?.updateAvailable && data.latest) {
+    if (msgEl) msgEl.textContent = t('settings_machine_firmware_update_available', data.latest);
+    if (linkEl) linkEl.href = data.releaseUrl || '#';
+    banner.style.display = '';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+export async function triggerMachineFirmwareUpdate() {
+  const id = document.getElementById('machineFormId')?.value;
+  if (!id) return;
+  const btn = document.getElementById('machineFirmwareUpdateBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch('api/machine/firmware/update', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ machineId: Number(id) }),
+    });
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      if (window.showToast) window.showToast(t('settings_machine_firmware_trigger_failed', data.error || r.status));
+      if (btn) btn.disabled = false;
+      return;
+    }
+    startFirmwarePolling(Number(id));
+  } catch {
+    if (window.showToast) window.showToast(t('settings_machine_firmware_trigger_failed', ''));
+    if (btn) btn.disabled = false;
+  }
+}
+
+function stopFirmwarePolling() {
+  if (_firmwarePollTimer) { clearTimeout(_firmwarePollTimer); _firmwarePollTimer = null; }
+  _firmwarePollMachineId = null;
+  const btn = document.getElementById('machineFirmwareUpdateBtn');
+  if (btn) btn.disabled = false;
+}
+
+function startFirmwarePolling(machineId) {
+  stopFirmwarePolling();
+  _firmwarePollMachineId = machineId;
+  const btn = document.getElementById('machineFirmwareUpdateBtn');
+  if (btn) btn.disabled = true;
+  _pollFirmwareProgressTick(machineId, { ticks: 0, failCount: 0, seenActive: false });
+}
+
+// #1044: the machine reboots to apply the OTA near the end of a real
+// update, so a short run of fetch failures right after having seen active
+// progress is the expected "device is rebooting" shape, not a genuine
+// error -- treated as success below. A failure run with no active progress
+// ever observed (machine simply unreachable) is a genuine failure instead.
+async function _pollFirmwareProgressTick(machineId, state) {
+  // A stale cycle (form closed/reopened, or a poll for a different machine
+  // started) must not keep writing into now-irrelevant DOM -- mirrors
+  // _testMachine()'s own still-current-machine guard.
+  if (_firmwarePollMachineId !== machineId) return;
+  let ok = false;
+  let progress = null;
+  try {
+    const r = await apiFetch(`api/machine/firmware/progress?machineId=${machineId}`);
+    ok = r.ok;
+    if (ok) progress = await r.json().catch(() => null);
+  } catch { /* ok stays false */ }
+  if (_firmwarePollMachineId !== machineId) return; // went stale while the fetch was in flight
+
+  if (!ok || !progress) {
+    state.failCount++;
+    if (state.failCount >= 3) { finishFirmwarePolling(machineId, state.seenActive); return; }
+    _firmwarePollTimer = setTimeout(() => _pollFirmwareProgressTick(machineId, state), FIRMWARE_POLL_INTERVAL_MS);
+    return;
+  }
+  state.failCount = 0;
+
+  const active = String(progress.status || '').toUpperCase() !== 'IDLE';
+  if (active) {
+    state.seenActive = true;
+    renderFirmwareProgressBar(progress);
+  } else if (state.seenActive) {
+    // Was active, now idle again -- the update ran to completion.
+    finishFirmwarePolling(machineId, true);
+    return;
+  }
+  // else: still idle and never seen active yet -- the trigger may not have
+  // taken effect on the machine's side yet, keep polling.
+
+  state.ticks++;
+  if (state.ticks >= FIRMWARE_POLL_MAX_TICKS) { finishFirmwarePolling(machineId, null); return; }
+  _firmwarePollTimer = setTimeout(() => _pollFirmwareProgressTick(machineId, state), FIRMWARE_POLL_INTERVAL_MS);
+}
+
+// success: true = update completed, false = genuinely unreachable/failed,
+// null = gave up inconclusively (safety-cap timeout) without claiming either.
+function finishFirmwarePolling(machineId, success) {
+  stopFirmwarePolling();
+  renderFirmwareProgressBar(null);
+  if (success === true) {
+    if (window.showToast) window.showToast(t('settings_machine_firmware_update_success_toast'));
+    loadFirmwareStatus(machineId);
+  } else if (success === false) {
+    if (window.showToast) window.showToast(t('settings_machine_firmware_update_failed_toast'));
+  } else {
+    if (window.showToast) window.showToast(t('settings_machine_firmware_update_timeout_toast'));
+  }
+}
+
+// Mirrors components/status.js's renderSyncProgressBar() -- same
+// hide-when-null / label+fill-width shape, reusing that file's own
+// .sync-progress-track/.sync-progress-fill classes (style.css), just
+// against this section's own bar/label elements instead of the sidebar's.
+function renderFirmwareProgressBar(progress) {
+  const bar = document.getElementById('machineFirmwareProgressBar');
+  if (!bar) return;
+  if (!progress) { bar.style.display = 'none'; return; }
+  const label = document.getElementById('machineFirmwareProgressLabel');
+  const fill = bar.querySelector('.sync-progress-fill');
+  const pct = Math.max(0, Math.min(100, Number(progress.progress) || 0));
+  if (fill) fill.style.width = `${pct}%`;
+  if (label) label.textContent = t('settings_machine_firmware_progress_label', Math.round(pct));
+  bar.style.display = '';
 }
 
 export function openMachineForm(machine) {
@@ -445,12 +670,25 @@ export function openMachineForm(machine) {
   _selectedTheme = machine?.theme || null;
   syncThemeFormUI();
   syncWaterSensorRowVisibility();
+  syncGaggiuinoOnlyRowsVisibility();
+  stopFirmwarePolling();
+  _machineSystemSettings = null;
+  const fwStatus = document.getElementById('machineFirmwareStatus');
+  if (fwStatus) fwStatus.textContent = '';
+  const fwBanner = document.getElementById('machineFirmwareUpdateBanner');
+  if (fwBanner) fwBanner.style.display = 'none';
+  renderFirmwareProgressBar(null);
+  if (machine?.id && machine.type === 'gaggiuino') {
+    loadReleaseChannel(machine.id);
+    loadFirmwareStatus(machine.id);
+  }
   card.style.display = '';
 }
 
 export function closeMachineForm() {
   const card = document.getElementById('machineFormCard');
   if (card) card.style.display = 'none';
+  stopFirmwarePolling();
 }
 
 // #727: shared by saveMachineForm() and testMachineForm() so the
@@ -528,6 +766,9 @@ async function _testMachine(id) {
 export async function saveMachineForm() {
   const id = await _saveMachine();
   if (id !== null) {
+    // #1044: a no-op unless the release-channel row is actually shown (see
+    // syncGaggiuinoOnlyRowsVisibility()) -- safe to call unconditionally.
+    await _saveReleaseChannel(id);
     closeMachineForm();
     loadMachines();
     // #748: dedicated signal for an *explicit* save, separate from the
