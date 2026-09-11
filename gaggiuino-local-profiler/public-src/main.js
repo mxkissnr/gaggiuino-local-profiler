@@ -134,7 +134,7 @@ import { loadDemoData, endDemo } from './components/onboarding.js';
 
 import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, renderMachinesList,
          onThemeCustomColorAChange, onThemeCustomColorBChange, onThemeGradientToggleChange, onMachineTypeChange,
-         applyActiveMachineAccentTheme, renderAccentSwatches } from './components/machines-settings.js';
+         applyActiveMachineAccentTheme, renderAccentSwatches, triggerMachineFirmwareUpdate } from './components/machines-settings.js';
 
 import { openSetupWizard, closeSetupWizard, setupWizardGetStarted, setupWizardSkipToDemo,
          shouldOpenSetupWizard } from './views/setup-wizard.js';
@@ -867,6 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('machineFormCancelBtn')?.addEventListener('click', closeMachineForm);
   document.getElementById('machineFormSaveBtn')?.addEventListener('click', saveMachineForm);
   document.getElementById('machineFormTestBtn')?.addEventListener('click', testMachineForm);
+  document.getElementById('machineFirmwareUpdateBtn')?.addEventListener('click', triggerMachineFirmwareUpdate);
   document.getElementById('restartSetupWizardBtn')?.addEventListener('click', () => openSetupWizard());
   document.getElementById('setupWizardModal')?.addEventListener('click', e => {
     if (e.target.id === 'setupWizardModal') closeSetupWizard();

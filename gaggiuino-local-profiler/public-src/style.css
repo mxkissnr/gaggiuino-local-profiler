@@ -815,6 +815,21 @@
         .machine-form-actions .backup-btn { display:inline-block; }
         .machine-form-test-result { font-size: var(--fs-1); color:var(--gray-400); min-height:1em; }
 
+        /* Firmware update (#1044) — Gaggiuino-only section of #machineFormCard.
+           .machine-firmware-update-banner deliberately echoes the accent-bg/
+           link/dismiss language of #glpUpdateBanner (components/update-check.js)
+           rather than copying it verbatim -- it lives inline in the form
+           instead of as a fixed page-top banner, so text colour reuses
+           --accent-text the same way but layout follows the form's own
+           card/flex conventions. */
+        .machine-firmware-title { font-size: var(--fs-1); color:var(--gray-500); margin: 0; text-transform:uppercase; letter-spacing:.03em; }
+        .machine-firmware-status { font-size: var(--fs-2); color:var(--gray-300); margin: 0; }
+        .machine-firmware-update-banner { display:flex; align-items:center; gap: var(--sp-3); flex-wrap:wrap; background:var(--accent); color:var(--accent-text); border-radius:var(--radius); padding: var(--sp-2) var(--sp-3); }
+        .machine-firmware-update-banner span { flex:1; font-size: var(--fs-1); font-weight:500; }
+        .machine-firmware-update-banner a { color:var(--accent-text); font-size: var(--fs-1); text-decoration:underline; white-space:nowrap; }
+        .machine-firmware-progress-bar { display:flex; align-items:center; gap: var(--sp-2); }
+        .machine-firmware-progress-bar #machineFirmwareProgressLabel { font-size: var(--fs-1); color:var(--gray-500); white-space:nowrap; }
+
         /* Machine colour theme (#594) */
         .machine-theme-picker-row { display:flex; align-items:center; gap: var(--sp-4); }
         .machine-theme-swatches { display:flex; gap: var(--sp-2); flex-wrap:wrap; margin: 2px 0 var(--sp-1); flex:1; }

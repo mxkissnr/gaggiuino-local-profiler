@@ -1,4 +1,7 @@
 ## [Unreleased]
+### Added
+- **Gaggiuino machines can now check for, trigger, and track firmware updates directly from the web app**, with a release-channel (stable/test/debug) selector alongside it in the machine's edit form — both were already fully working on the backend but had no UI before. Closes #1044
+
 ### Changed
 - **Documentation cleanup: "app" terminology to match Home Assistant's add-on rename, a shorter armv7 note, a tidier README screenshot grid and a description of the machine valve fields.** Closes #1039
 
