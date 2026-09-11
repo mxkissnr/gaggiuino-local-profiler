@@ -1,10 +1,13 @@
 package machines
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -53,6 +56,42 @@ func TestFirmwareChecker_FindsMatchingChannel(t *testing.T) {
 	}
 }
 
+// #1042: fetchLatestRelease must pick the globally latest matching-prefix
+// release by published_at across ALL scanned pages, not just return the
+// first page that happens to contain any match. Zer0-bit/gaggiuino's real
+// releases list is not reliably ordered by published_at (see the header
+// comment on fetchLatestRelease), so an earlier page can contain an older
+// match while a newer one sits on a later page.
+func TestFirmwareChecker_PicksLatestAcrossPages(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Query().Get("page") {
+		case "", "1":
+			_ = json.NewEncoder(w).Encode([]githubRelease{
+				{TagName: "main-old0001", PublishedAt: "2026-01-01T00:00:00Z", HTMLURL: "https://example.com/old"},
+			})
+		case "2":
+			_ = json.NewEncoder(w).Encode([]githubRelease{
+				{TagName: "main-new0002", PublishedAt: "2026-06-01T00:00:00Z", HTMLURL: "https://example.com/new"},
+			})
+		default:
+			w.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	overrideReleasesAPI(t, srv.URL)
+
+	c := NewFirmwareChecker()
+	stable := 0
+	rel, err := c.GetLatestFirmwareRelease(context.Background(), &stable)
+	if err != nil {
+		t.Fatalf("GetLatestFirmwareRelease: %v", err)
+	}
+	if rel == nil || rel.Hash != "new0002" {
+		t.Fatalf("expected the later-published release from page 2, got %+v", rel)
+	}
+}
+
 func TestFirmwareChecker_NoMatchReturnsNilNotError(t *testing.T) {
 	srv := fakeGitHubReleases(t, []githubRelease{
 		{TagName: "other-ccc3333", PublishedAt: "2026-01-01T00:00:00Z", HTMLURL: "https://example.com/x"},
@@ -70,11 +109,50 @@ func TestFirmwareChecker_NoMatchReturnsNilNotError(t *testing.T) {
 	}
 }
 
+// #1042: a clean HTTP success with no matching-prefix release must be
+// logged distinctly from the existing GitHub-error path, since a silently
+// cached nil was previously indistinguishable in the logs from "genuinely
+// up to date".
+func TestFirmwareChecker_NoMatchLogsDistinctlyFromError(t *testing.T) {
+	srv := fakeGitHubReleases(t, []githubRelease{
+		{TagName: "other-ccc3333", PublishedAt: "2026-01-01T00:00:00Z", HTMLURL: "https://example.com/x"},
+	})
+	overrideReleasesAPI(t, srv.URL)
+
+	var buf bytes.Buffer
+	origLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(origLogger) })
+
+	c := NewFirmwareChecker()
+	stable := 0
+	rel, err := c.GetLatestFirmwareRelease(context.Background(), &stable)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rel != nil {
+		t.Fatalf("expected nil release for no matching tag, got %+v", rel)
+	}
+
+	logged := buf.String()
+	if !strings.Contains(logged, "no release matched channel tag prefix") {
+		t.Fatalf("expected a log line about no matching release, got: %s", logged)
+	}
+	if strings.Contains(logged, "latest-release lookup failed") {
+		t.Fatalf("no-match path must not log the GitHub-error message, got: %s", logged)
+	}
+}
+
 func TestFirmwareChecker_CachesPerChannel(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
+		page := r.URL.Query().Get("page")
 		w.Header().Set("Content-Type", "application/json")
+		if page != "" && page != "1" {
+			w.Write([]byte(`[]`))
+			return
+		}
 		_ = json.NewEncoder(w).Encode([]githubRelease{{TagName: "main-abc0000", PublishedAt: "2026-01-01T00:00:00Z", HTMLURL: "https://example.com"}})
 	}))
 	t.Cleanup(srv.Close)
@@ -85,11 +163,12 @@ func TestFirmwareChecker_CachesPerChannel(t *testing.T) {
 	if _, err := c.GetLatestFirmwareRelease(context.Background(), &stable); err != nil {
 		t.Fatalf("first call: %v", err)
 	}
+	callsAfterFirst := calls
 	if _, err := c.GetLatestFirmwareRelease(context.Background(), &stable); err != nil {
 		t.Fatalf("second call: %v", err)
 	}
-	if calls != 1 {
-		t.Fatalf("expected 1 HTTP call across 2 GetLatestFirmwareRelease calls (cached), got %d", calls)
+	if calls != callsAfterFirst {
+		t.Fatalf("expected no additional HTTP calls on the second GetLatestFirmwareRelease call (cached), went from %d to %d", callsAfterFirst, calls)
 	}
 }
 

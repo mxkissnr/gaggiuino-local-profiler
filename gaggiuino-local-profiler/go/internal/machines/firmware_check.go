@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -34,6 +35,16 @@ var firmwareHTTPClient = &http.Client{}
 // firmwareCacheTTL ports CACHE_TTL_MS — unauthenticated GitHub API calls
 // are rate-limited to 60 req/hr, so this must never be queried per-poll.
 const firmwareCacheTTL = time.Hour
+
+// firmwareNegativeCacheTTL bounds how long a "fetched successfully but no
+// release matched this channel's tag prefix" outcome is cached (#1042).
+// Unlike a real match, a no-match result is cheap to reverify and, if it
+// reflects a transient GitHub listing/ordering quirk rather than a genuine
+// absence of matching releases, shouldn't silently persist for the full
+// hour. Ten minutes still keeps this well within the 60 req/hr budget (one
+// channel retrying at this rate is 6 req/hr) while recovering far sooner
+// than firmwareCacheTTL would.
+const firmwareNegativeCacheTTL = 10 * time.Minute
 
 // firmwareFetchTimeout bounds a whole GetLatestFirmwareRelease GitHub lookup
 // (up to firmwareMaxPages pages). #1037: the lookup runs on a context
@@ -84,10 +95,27 @@ type githubRelease struct {
 	HTMLURL     string `json:"html_url"`
 }
 
-// fetchLatestRelease ports fetchLatestRelease(prefix) (#673): scans pages
-// newest-first, stopping at the first page containing a matching-prefix
-// release, bounded to firmwareMaxPages.
+// fetchLatestRelease ports fetchLatestRelease(prefix) (#673): scans up to
+// firmwareMaxPages pages and returns the matching-prefix release with the
+// latest published_at across ALL of them.
+//
+// #1042: this used to return as soon as ANY page yielded a matching-prefix
+// release, using only that page's own best-by-published_at. That silently
+// assumed the GitHub releases list is ordered newest-published-first. Live-
+// checking Zer0-bit/gaggiuino's actual /releases response disproved that:
+// this repo edits a small, fixed set of release objects in place (retagging
+// + republishing) rather than creating new ones, so every release shares
+// the same created_at and the list's order has no reliable relationship to
+// published_at at all -- e.g. on page 1, "main-d8b6219" (published
+// 2026-04-19) sorts ahead of "main-61bd042" (published 2026-09-07, the true
+// latest). Stopping at the first page with a match would have returned the
+// April release as "latest" while a newer one sat on the same or a later
+// page. All current releases fit on one page so this hasn't produced a
+// wrong answer yet, but the moment a channel's releases span more than one
+// page, the old early-return could silently pick a stale one.
 func fetchLatestRelease(ctx context.Context, prefix string) (*githubRelease, error) {
+	var best *githubRelease
+	var bestPublished time.Time
 	for page := 1; page <= firmwareMaxPages; page++ {
 		url := fmt.Sprintf("%s?page=%d", releasesAPI, page)
 		reqCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -123,8 +151,6 @@ func fetchLatestRelease(ctx context.Context, prefix string) (*githubRelease, err
 			break // no more pages / malformed page — treat as "no more results"
 		}
 
-		var best *githubRelease
-		var bestPublished time.Time
 		for i := range releases {
 			rel := releases[i]
 			if !strings.HasPrefix(rel.TagName, prefix) {
@@ -140,11 +166,8 @@ func fetchLatestRelease(ctx context.Context, prefix string) (*githubRelease, err
 				bestPublished = published
 			}
 		}
-		if best != nil {
-			return best, nil
-		}
 	}
-	return nil, nil
+	return best, nil
 }
 
 // GetLatestFirmwareRelease ports getLatestFirmwareRelease(channel):
@@ -163,8 +186,14 @@ func (c *FirmwareChecker) GetLatestFirmwareRelease(ctx context.Context, channel 
 	c.mu.Lock()
 	entry, ok := c.cache[ch]
 	c.mu.Unlock()
-	if ok && time.Since(entry.fetchedAt) < firmwareCacheTTL {
-		return entry.result, nil
+	if ok {
+		ttl := firmwareCacheTTL
+		if entry.result == nil {
+			ttl = firmwareNegativeCacheTTL
+		}
+		if time.Since(entry.fetchedAt) < ttl {
+			return entry.result, nil
+		}
 	}
 
 	// #1037: detach from the caller's request deadline (it's near-exhausted
@@ -190,6 +219,14 @@ func (c *FirmwareChecker) GetLatestFirmwareRelease(ctx context.Context, channel 
 			PublishedAt: release.PublishedAt,
 			ReleaseURL:  release.HTMLURL,
 		}
+	} else {
+		// #1042: a clean HTTP success with zero matching-prefix tags across
+		// firmwareMaxPages pages is indistinguishable from "genuinely up to
+		// date" unless logged -- this was silently cached as a good "no
+		// update" result for the full TTL with no trace in the logs,
+		// distinct from (and easy to confuse with) the GitHub-error slog.Warn
+		// in handlers_control.go's firmwareVersion handler.
+		slog.Info("firmware check: no release matched channel tag prefix", "channel", ch, "prefix", prefix, "pagesScanned", firmwareMaxPages)
 	}
 	c.mu.Lock()
 	c.cache[ch] = firmwareCacheEntry{fetchedAt: time.Now(), result: result}
