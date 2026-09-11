@@ -15,6 +15,9 @@
 // caps it defensively so an out-of-order manual edit can't silently show
 // entries in the wrong order or let the list grow unbounded.
 const WHATS_NEW_ENTRIES = [
+    { version: '3.0.2', date: '2026-09-11', highlights: [
+        'Fixed: the machine firmware check no longer stops reporting the installed version when GitHub is temporarily unreachable.',
+    ] },
     { version: '3.0.1', date: '2026-09-10', highlights: [
         'Fixed: demo mode\'s shot detail (curve chart, P·Q view and average pressure/temperature) is no longer blank.',
     ] },
@@ -45,10 +48,6 @@ const WHATS_NEW_ENTRIES = [
     ] },
     { version: '2.33.2', date: '2026-08-11', highlights: [
         'Sidebar shot counter cleaned up: removed the redundant "(N)" text next to the flap-board counter and moved the counter in front of the "Shots" label.',
-    ] },
-    { version: '2.33.1', date: '2026-08-11', highlights: [
-        'Fixed theme/accent colour swatches (Settings → Machines → Farbe, and the app-wide colour scheme picker) showing a square edge instead of a fully filled circle on some browsers.',
-        'Fixed shot-import progress showing the total shrinking mid-backfill during a large sync.',
     ] },
 ];
 

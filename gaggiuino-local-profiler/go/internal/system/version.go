@@ -28,7 +28,7 @@ const versionCacheTTL = time.Hour
 // Duplicated rather than imported — no shared "constants" package exists in
 // this Go port; every domain package that needs a version-shaped value
 // defines its own, see internal/db's schema version handling.
-const glpVersion = "3.0.1"
+const glpVersion = "3.0.2"
 
 const releaseURL = "https://github.com/mxkissnr/gaggiuino-local-profiler/releases/latest"
 

@@ -1,4 +1,6 @@
 ## [Unreleased]
+
+## [3.0.2] – 2026-09-11
 ### Changed
 - **Documentation cleanup: "app" terminology to match Home Assistant's add-on rename, a shorter armv7 note, a tidier README screenshot grid and a description of the machine valve fields.** Closes #1039
 
