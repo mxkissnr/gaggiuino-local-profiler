@@ -3,6 +3,7 @@ package library
 import (
 	"errors"
 	"reflect"
+	"sort"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -252,4 +253,219 @@ func DeductMilkByName(repo *Repository, name string, ml float64) (Entity, bool, 
 		return nil, false, err
 	}
 	return milk, true, nil
+}
+
+// BagStatus is one bag's computed (never persisted) queue position and
+// consumption after replaying every dose matching its bean, in sortOrder.
+type BagStatus struct {
+	BagID      int64
+	ConsumedG  int64
+	RemainingG int64
+	Current    bool
+}
+
+// SimulateBagQueue is the single source of truth for "which bag is
+// current" and "how much has each bag consumed" — replaces the old
+// bags[len-1]/most-recently-opened convention with a manually-orderable
+// queue (see #sortOrder rework). Tracked bags (finite, non-negative
+// stock_g — the trailing bag falls back to bean.stock_g exactly like
+// ComputeBeanRemaining, for beans predating per-bag stock tracking) are
+// sorted by effectiveSortOrder ascending. Every matching dose (chronological
+// order) is drawn from the queue head; once a bag's stock_g is exhausted the
+// head advances to the next bag and the remainder of that same dose is
+// drawn from it too — this is what makes a shot that empties the current
+// bag mid-pull correctly spill its overflow onto the next one. Untracked
+// bags (no stock_g ever set) are omitted entirely: we don't know their
+// capacity, so we can't say anything about their consumption or make them
+// current.
+func SimulateBagQueue(bean Entity, doseRows []shots.AnnotatedDose, allBeans []Entity) []BagStatus {
+	bags := bagsOf(bean)
+	if len(bags) == 0 {
+		return nil
+	}
+	type qEntry struct {
+		id     int64
+		sort   int64
+		stockG float64
+	}
+	var queue []qEntry
+	for i, raw := range bags {
+		bg, ok := raw.(Entity)
+		if !ok {
+			continue
+		}
+		stockG, hasStock := jsParseFloat(bg["stock_g"])
+		if !hasStock && i == len(bags)-1 {
+			stockG, hasStock = jsParseFloat(bean["stock_g"])
+		}
+		if !hasStock || stockG < 0 {
+			continue
+		}
+		id, _ := idOf(bg, "id")
+		queue = append(queue, qEntry{id, effectiveSortOrder(bg), stockG})
+	}
+	if len(queue) == 0 {
+		return nil
+	}
+	sort.Slice(queue, func(i, j int) bool { return queue[i].sort < queue[j].sort })
+
+	name := lowerOrEmpty(strOf(bean["name"]))
+	beanID, hasBeanID := idOf(bean, "id")
+	idExists := make(map[int64]bool, len(allBeans))
+	for _, b := range allBeans {
+		if bid, ok := idOf(b, "id"); ok {
+			idExists[bid] = true
+		}
+	}
+	matches := func(row shots.AnnotatedDose) bool {
+		if row.BeanID != nil && idExists[*row.BeanID] {
+			return hasBeanID && *row.BeanID == beanID
+		}
+		return lowerOrEmpty(row.Coffee) == name
+	}
+	rows := make([]shots.AnnotatedDose, 0, len(doseRows))
+	for _, row := range doseRows {
+		if row.Dose == nil || *row.Dose == 0 || !matches(row) {
+			continue
+		}
+		rows = append(rows, row)
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Timestamp < rows[j].Timestamp })
+
+	consumed := make([]float64, len(queue))
+	head := 0
+	for _, row := range rows {
+		remainingDose := *row.Dose
+		for remainingDose > 0 && head < len(queue) {
+			avail := queue[head].stockG - consumed[head]
+			if avail < 0 {
+				avail = 0
+			}
+			take := remainingDose
+			if avail < take {
+				take = avail
+			}
+			consumed[head] += take
+			remainingDose -= take
+			if consumed[head] >= queue[head].stockG {
+				head++
+			} else {
+				break
+			}
+		}
+	}
+	// A bag manually zeroed out (stock_g set to exactly its own consumedG,
+	// or created with stock_g:0 outright — "Als leer markieren"/"Bestand
+	// anpassen" to 0) is exhausted from the moment it's saved, whether or
+	// not another dose ever gets logged against it. The advance-head check
+	// above only fires from inside the dose-processing loop, so a bag that
+	// starts (or ends up) exhausted with no further matching doses to
+	// trigger it would otherwise sit stuck at `head` forever, still
+	// reporting current:true. Sweep past every already-exhausted bag once
+	// more after the replay, independent of whether any dose touched it.
+	for head < len(queue) && consumed[head] >= queue[head].stockG {
+		head++
+	}
+	out := make([]BagStatus, len(queue))
+	for i, e := range queue {
+		rem := e.stockG - consumed[i]
+		if rem < 0 {
+			rem = 0
+		}
+		out[i] = BagStatus{
+			BagID:      e.id,
+			ConsumedG:  mathRoundInt(consumed[i]),
+			RemainingG: mathRoundInt(rem),
+			Current:    i == head,
+		}
+	}
+	return out
+}
+
+// decorateBeanStatus returns a copy of bean with computed, non-persisted
+// status fields attached — the bean-level counterpart of getLibrary's
+// existing withWearEntity grinder decoration. bean-level remainingG mirrors
+// ComputeBeanRemaining (attribution-independent, so it's correct regardless
+// of queue order); consumedG is the sum of SimulateBagQueue's per-bag
+// consumption. Every bag gets consumedG/remainingG/current attached so the
+// frontend never has to replay doseRows itself — only bags SimulateBagQueue
+// could resolve (tracked ones) get these fields; untracked bags are left
+// untouched.
+func decorateBeanStatus(bean Entity, doseRows []shots.AnnotatedDose, allBeans []Entity) Entity {
+	out := make(Entity, len(bean)+2)
+	for k, v := range bean {
+		out[k] = v
+	}
+	if remaining, ok := ComputeBeanRemaining(bean, doseRows, allBeans); ok {
+		out["remainingG"] = remaining
+	}
+	statuses := SimulateBagQueue(bean, doseRows, allBeans)
+	if len(statuses) == 0 {
+		return out
+	}
+	statusByID := make(map[int64]BagStatus, len(statuses))
+	var totalConsumed int64
+	for _, s := range statuses {
+		statusByID[s.BagID] = s
+		totalConsumed += s.ConsumedG
+	}
+	out["consumedG"] = totalConsumed
+	bags := bagsOf(bean)
+	newBags := make([]any, len(bags))
+	for i, raw := range bags {
+		bg, ok := raw.(Entity)
+		if !ok {
+			newBags[i] = raw
+			continue
+		}
+		id, hasID := idOf(bg, "id")
+		st, found := statusByID[id]
+		if !hasID || !found {
+			newBags[i] = bg
+			continue
+		}
+		nb := make(Entity, len(bg)+3)
+		for k, v := range bg {
+			nb[k] = v
+		}
+		nb["consumedG"] = st.ConsumedG
+		nb["remainingG"] = st.RemainingG
+		nb["current"] = st.Current
+		newBags[i] = nb
+	}
+	out["bags"] = newBags
+	return out
+}
+
+// resolveCurrentBagSimple picks the current bag for Go call sites (freeze)
+// that don't need gram-accurate consumption — just "which bag is the user
+// drawing from right now": the lowest-effectiveSortOrder bag with a
+// positive stock_g. Falls back to the array-last bag (old convention) when
+// no bag is stock-tracked at all, so freezing on an untracked bean still
+// attaches somewhere sensible.
+func resolveCurrentBagSimple(bean Entity) Entity {
+	bags := bagsOf(bean)
+	if len(bags) == 0 {
+		return nil
+	}
+	var best Entity
+	bestSort := int64(0)
+	for _, raw := range bags {
+		bg, ok := raw.(Entity)
+		if !ok {
+			continue
+		}
+		stockG, hasStock := jsParseFloat(bg["stock_g"])
+		if !hasStock || !(stockG > 0) {
+			continue
+		}
+		s := effectiveSortOrder(bg)
+		if best == nil || s < bestSort {
+			best, bestSort = bg, s
+		}
+	}
+	if best != nil {
+		return best
+	}
+	return activeBag(bean)
 }

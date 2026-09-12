@@ -57,3 +57,109 @@ func TestSameBag_DistinctMapsWithEqualFieldsAreNotSame(t *testing.T) {
 		t.Fatal("sameBag(a, a) = false; the exact same bag must compare equal to itself")
 	}
 }
+
+// TestSimulateBagQueue_ManuallyZeroedBagAdvancesHeadWithoutDoses regresses a
+// bug reported live: adjusting a bag's stock down to exactly its own
+// consumedG (or straight to 0 via "Als leer markieren") must retire that
+// bag immediately, even when no further dose ever gets logged against it —
+// the queue's head must not get stuck waiting for a dose event that will
+// never come.
+func TestSimulateBagQueue_ManuallyZeroedBagAdvancesHeadWithoutDoses(t *testing.T) {
+	beanID := int64(1)
+	bean := Entity{
+		"id": beanID, "name": "Brasil",
+		"bags": []any{
+			// Manually zeroed out — no doses at all were ever logged for
+			// this bean, matching "Bestand anpassen" straight to 0 on a
+			// bag that was never actually brewed from.
+			Entity{"id": int64(1), "stock_g": float64(0), "openedAt": int64(1000), "sortOrder": int64(0)},
+			Entity{"id": int64(2), "stock_g": float64(200), "openedAt": int64(2000), "sortOrder": int64(1)},
+		},
+	}
+	statuses := SimulateBagQueue(bean, nil, []Entity{bean})
+	if len(statuses) != 2 {
+		t.Fatalf("len(statuses) = %d, want 2", len(statuses))
+	}
+	if statuses[0].Current {
+		t.Fatalf("statuses[0] (zeroed bag) current = true, want false — must not get stuck as current with no doses to advance past it")
+	}
+	if !statuses[1].Current {
+		t.Fatalf("statuses[1] current = false, want true — should take over once bag[0] is exhausted")
+	}
+	if statuses[0].RemainingG != 0 {
+		t.Fatalf("statuses[0].RemainingG = %d, want 0", statuses[0].RemainingG)
+	}
+}
+
+// TestSimulateBagQueue_SortOrderDeterminesCurrent verifies bag[2] (added
+// later, chronologically newer openedAt) never becomes current while
+// bag[1] still has stock — the sortOrder queue rule (lowest sortOrder with
+// remaining>0 wins) replaces the old "most recently opened bag" rule.
+func TestSimulateBagQueue_SortOrderDeterminesCurrent(t *testing.T) {
+	beanID := int64(1)
+	bean := Entity{
+		"id": beanID, "name": "Brasil",
+		"bags": []any{
+			Entity{"id": int64(1), "stock_g": float64(100), "openedAt": int64(1000), "sortOrder": int64(0)},
+			Entity{"id": int64(2), "stock_g": float64(200), "openedAt": int64(2000), "sortOrder": int64(1)},
+		},
+	}
+	statuses := SimulateBagQueue(bean, nil, []Entity{bean})
+	if len(statuses) != 2 {
+		t.Fatalf("len(statuses) = %d, want 2", len(statuses))
+	}
+	if !statuses[0].Current || statuses[1].Current {
+		t.Fatalf("statuses = %+v; want bag[0] (lowest sortOrder) current, not bag[1]", statuses)
+	}
+}
+
+// TestSimulateBagQueue_SplitDoseOverflowsIntoNextBag verifies a single dose
+// larger than the current bag's remaining stock spills the overflow onto
+// the next bag in queue order, and that bag becomes current afterward —
+// the "shot empties the bag mid-pull" scenario the sortOrder rework exists
+// to handle.
+func TestSimulateBagQueue_SplitDoseOverflowsIntoNextBag(t *testing.T) {
+	beanID := int64(1)
+	bean := Entity{
+		"id": beanID, "name": "Brasil",
+		"bags": []any{
+			Entity{"id": int64(1), "stock_g": float64(15), "openedAt": int64(1000), "sortOrder": int64(0)},
+			Entity{"id": int64(2), "stock_g": float64(300), "openedAt": int64(2000), "sortOrder": int64(1)},
+		},
+	}
+	dose := 18.0 // bag1 only has 15g left -> 15g from bag1, 3g overflow into bag2
+	doseRows := []shots.AnnotatedDose{{BeanID: &beanID, Dose: &dose, Timestamp: 5000}}
+	statuses := SimulateBagQueue(bean, doseRows, []Entity{bean})
+	if len(statuses) != 2 {
+		t.Fatalf("len(statuses) = %d, want 2", len(statuses))
+	}
+	if statuses[0].ConsumedG != 15 || statuses[0].RemainingG != 0 {
+		t.Fatalf("bag1 = %+v, want consumed=15 remaining=0", statuses[0])
+	}
+	if statuses[1].ConsumedG != 3 || statuses[1].RemainingG != 297 {
+		t.Fatalf("bag2 = %+v, want consumed=3 remaining=297", statuses[1])
+	}
+	if statuses[0].Current || !statuses[1].Current {
+		t.Fatalf("statuses = %+v; want bag2 current after bag1 is exhausted", statuses)
+	}
+}
+
+// TestSimulateBagQueue_OpenedAtFallbackForLegacyBags verifies bags without
+// an explicit sortOrder (data predating this field) still order correctly
+// by falling back to openedAt, so old beans don't need a migration.
+func TestSimulateBagQueue_OpenedAtFallbackForLegacyBags(t *testing.T) {
+	beanID := int64(1)
+	bean := Entity{
+		"id": beanID, "name": "Brasil",
+		"bags": []any{
+			// No sortOrder on either bag — must fall back to openedAt, and
+			// bag1 (older openedAt) must still resolve as current.
+			Entity{"id": int64(1), "stock_g": float64(100), "openedAt": int64(1000)},
+			Entity{"id": int64(2), "stock_g": float64(200), "openedAt": int64(2000)},
+		},
+	}
+	statuses := SimulateBagQueue(bean, nil, []Entity{bean})
+	if len(statuses) != 2 || !statuses[0].Current || statuses[1].Current {
+		t.Fatalf("statuses = %+v; want bag[0] (older openedAt) current", statuses)
+	}
+}
