@@ -99,6 +99,37 @@ func TestFirmwareVersion_GitHubFailureStillReportsInstalled(t *testing.T) {
 	}
 }
 
+// #1046: firmware/version now auto-loads for every Gaggiuino row as soon as
+// the Settings view renders (previously only on an explicit "open Edit
+// form" click), so an ordinary unreachable machine hits this on every
+// Settings open. Unlike a recovered panic (still 502, see
+// TestFirmwareVersion_PanicDuringSettingsFetchReturns502), a plain
+// GetSettings failure must degrade to a 200 "unknown" body -- a 502 here is
+// a real network response the browser itself logs as a console error
+// (`Failed to load resource: ... 502`) regardless of any client-side
+// .catch(), which the E2E smoke test correctly flags as broken UX for the
+// common case of an offline machine. Mirrors testMachine()'s
+// (handlers_registry.go) always-200 "reachable: false" shape for the same
+// kind of expected, non-buggy failure.
+func TestFirmwareVersion_UnreachableMachineDegradesTo200(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machines", nil)) // seed default (gaggiuino, unreachable)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/machine/firmware/version", nil)
+	rec := doRequest(mux, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("firmware/version against unreachable machine status = %d, want 200, body = %s", rec.Code, rec.Body)
+	}
+	body := decodeBody(t, rec.Body.Bytes())
+	if body["installed"] != nil {
+		t.Fatalf("installed = %v, want nil", body["installed"])
+	}
+	if body["updateAvailable"] != false {
+		t.Fatalf("updateAvailable = %v, want false", body["updateAvailable"])
+	}
+}
+
 // #1044: handler-level coverage for POST /api/machine/firmware/update and
 // GET /api/machine/firmware/progress -- the version endpoint above already
 // had HTTP-level tests, these two didn't (the adapter-level behavior itself
