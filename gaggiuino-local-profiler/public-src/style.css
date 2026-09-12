@@ -803,6 +803,18 @@
         .machine-row-shot-count { font-size: var(--fs-1); color:var(--gray-500); }
         .machine-row-badge { font-size: var(--fs-1); color:var(--err); background:rgba(239,68,68,.15); border-radius:var(--radius); padding: 2px var(--sp-2); }
         .machine-row-badge-experimental { font-size: var(--fs-1); color:#f59e0b; background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.35); border-radius:var(--radius); padding: 2px var(--sp-2); display:inline-flex; align-items:center; gap: var(--sp-1); }
+        /* #1046: firmware status badge, moved here from #machineFormCard
+           (#1044) so update-available is visible on the row without opening
+           Edit. .machine-row-firmware-panel is a plain flex sibling of the
+           badge (not nested inside it), so its own flex-basis:100% can force
+           the expand panel onto its own line within .machine-row's existing
+           flex-wrap without any extra wrapper. Only the -update variant gets
+           a pointer cursor -- the plain/muted badges never grow a panel to
+           expand, see toggleMachineFirmwarePanel() in machines-settings.js. */
+        .machine-row-firmware-badge { font-size: var(--fs-1); color:var(--gray-300); background:var(--gray-900); border-radius:var(--radius); padding: 2px var(--sp-2); }
+        .machine-row-firmware-badge-muted { color:var(--gray-600); }
+        .machine-row-firmware-badge-update { color:var(--accent-text); background:var(--accent); cursor:pointer; }
+        .machine-row-firmware-panel { display:flex; flex-direction:column; gap: var(--sp-2); flex-basis:100%; }
         .machine-row-actions { margin-left: auto; display:flex; gap: var(--sp-2); }
         .machine-row-actions button { background:none; border:none; color:var(--gray-400); cursor:pointer; font-size: var(--fs-1); padding: 2px var(--sp-1); }
         .machine-row-actions button:hover { color:var(--gray-200); }
@@ -815,20 +827,20 @@
         .machine-form-actions .backup-btn { display:inline-block; }
         .machine-form-test-result { font-size: var(--fs-1); color:var(--gray-400); min-height:1em; }
 
-        /* Firmware update (#1044) — Gaggiuino-only section of #machineFormCard.
-           .machine-firmware-update-banner deliberately echoes the accent-bg/
-           link/dismiss language of #glpUpdateBanner (components/update-check.js)
-           rather than copying it verbatim -- it lives inline in the form
-           instead of as a fixed page-top banner, so text colour reuses
-           --accent-text the same way but layout follows the form's own
-           card/flex conventions. */
-        .machine-firmware-title { font-size: var(--fs-1); color:var(--gray-500); margin: 0; text-transform:uppercase; letter-spacing:.03em; }
-        .machine-firmware-status { font-size: var(--fs-2); color:var(--gray-300); margin: 0; }
+        /* Firmware update (#1044, moved from #machineFormCard onto the
+           machines-list row's expand panel by #1046) — badge styling is
+           above, next to .machine-row-actions; this is the panel's own
+           content. .machine-firmware-update-banner deliberately echoes the
+           accent-bg/link/dismiss language of #glpUpdateBanner (components/
+           update-check.js) rather than copying it verbatim -- it lives
+           inline in the row panel instead of as a fixed page-top banner, so
+           text colour reuses --accent-text the same way but layout follows
+           the panel's own flex conventions. */
         .machine-firmware-update-banner { display:flex; align-items:center; gap: var(--sp-3); flex-wrap:wrap; background:var(--accent); color:var(--accent-text); border-radius:var(--radius); padding: var(--sp-2) var(--sp-3); }
         .machine-firmware-update-banner span { flex:1; font-size: var(--fs-1); font-weight:500; }
         .machine-firmware-update-banner a { color:var(--accent-text); font-size: var(--fs-1); text-decoration:underline; white-space:nowrap; }
         .machine-firmware-progress-bar { display:flex; align-items:center; gap: var(--sp-2); }
-        .machine-firmware-progress-bar #machineFirmwareProgressLabel { font-size: var(--fs-1); color:var(--gray-500); white-space:nowrap; }
+        .machine-firmware-progress-bar .machine-firmware-progress-label { font-size: var(--fs-1); color:var(--gray-500); white-space:nowrap; }
 
         /* Machine colour theme (#594) */
         .machine-theme-picker-row { display:flex; align-items:center; gap: var(--sp-4); }
