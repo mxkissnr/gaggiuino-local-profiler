@@ -198,9 +198,11 @@ components:
         source:        { type: string, maxLength: 200, description: Import source URL domain }
         sourceUrl:     { type: string, nullable: true }
         importedAt:    { type: string, format: date, maxLength: 10 }
+        remainingG: { type: integer, readOnly: true, description: "Computed, not stored — sum of tracked bags' stock minus consumed doses (ComputeBeanRemaining). Attribution-independent, correct regardless of bag queue order." }
+        consumedG:  { type: integer, readOnly: true, description: "Computed, not stored — sum of every tracked bag's consumedG (SimulateBagQueue)." }
         bags:
           type: array
-          description: Bag history — new-bag/freeze-portions/thaw-portion/adjust-frozen-portion/delete-bag operate on this.
+          description: Bag history — new-bag/freeze-portions/thaw-portion/adjust-frozen-portion/delete-bag/reorder-bags operate on this.
           items:
             type: object
             properties:
@@ -209,6 +211,10 @@ components:
               stock_g:    { type: number, nullable: true }
               openedAt:   { type: integer, description: Unix ms }
               batchNumber: { type: string, maxLength: 50 }
+              sortOrder:  { type: integer, description: "Manual queue position — lower sorts first, drawn from sooner. Bags without it (predating this field) fall back to openedAt. Set via new-bag (appended after every existing bag) or POST .../reorder-bags; also settable directly on PUT .../bag/{bagId}." }
+              consumedG:  { type: integer, readOnly: true, description: "Computed, not stored — grams consumed from this specific bag (SimulateBagQueue). Only present for tracked bags (stock_g set)." }
+              remainingG: { type: integer, readOnly: true, description: "Computed, not stored — stock_g minus consumedG, clamped at 0." }
+              current:    { type: boolean, readOnly: true, description: "Computed, not stored — true for the one bag currently being drawn from (lowest sortOrder among tracked bags with remainingG>0)." }
               frozenPortions:
                 type: array
                 items:
@@ -1005,6 +1011,27 @@ paths:
         "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
         "404": { description: Not found }
 
+  /api/library/bean/{id}/reorder-bags:
+    post:
+      tags: [Library]
+      summary: Bulk-reassign sortOrder for the bean's not-yet-current ("upcoming") bags in one write
+      description: Assigns sequential sortOrder values (strictly above the current bag's) to the given bags in the given order — replaces sending one PUT per bag to swap positions.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bagIds]
+              properties:
+                bagIds: { type: array, items: { type: integer }, description: "Bag IDs in the desired queue order" }
+      responses:
+        "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
+        "400": { description: bagIds missing/invalid }
+        "404": { description: Bean or a referenced bag not found }
+
   /api/library/bean/{id}/freeze-portions:
     post:
       tags: [Library]
@@ -1071,6 +1098,28 @@ paths:
         "404": { description: Bean or frozen portion not found }
 
   /api/library/bean/{id}/bag/{bagId}:
+    put:
+      tags: [Library]
+      summary: Edit a bag's mutable fields (full-replace; sortOrder is the one optional/partial field — omitted keeps its current value)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: bagId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roastDate:   { type: string, format: date }
+                stock_g:     { type: number, nullable: true }
+                price_eur:   { type: number, nullable: true }
+                batchNumber: { type: string, maxLength: 50 }
+                sortOrder:   { type: integer }
+      responses:
+        "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
+        "400": { description: Invalid roastDate/stock_g/price_eur }
+        "404": { description: Not found }
     delete:
       tags: [Library]
       summary: Delete a bag from a bean's bag history (the last remaining bag cannot be deleted)
