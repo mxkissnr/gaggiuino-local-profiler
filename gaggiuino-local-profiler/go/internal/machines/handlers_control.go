@@ -289,6 +289,7 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 	// concurrently instead of paying two round-trips back to back.
 	var versionsRaw, systemRaw json.RawMessage
 	var versionsErr, systemErr error
+	var versionsPanicked bool
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
@@ -297,6 +298,7 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 			versionsRaw, versionsErr = adapter.GetSettings(r.Context(), machine, "versions")
 		}) {
 			versionsErr = fmt.Errorf("internal error fetching versions settings")
+			versionsPanicked = true
 		}
 	}()
 	go func() {
@@ -308,14 +310,28 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	wg.Wait()
-	// #1037: only `versions` failing is a hard error -- without the machine's
-	// coreVersion the response has nothing to say. A failed `system` fetch
-	// just falls back to the default release channel, and a failed GitHub
-	// latest-release lookup returns HTTP 200 with `latest: null` -- a
-	// transient GitHub/network problem must not hide the locally-known
-	// installed firmware version from Home Assistant.
+	// #1037: a recovered panic is a genuine backend bug, not a routine
+	// offline machine -- keep surfacing that as 502 (see
+	// TestFirmwareVersion_PanicDuringSettingsFetchReturns502).
+	//
+	// #1046: every other `versions` fetch failure (the ordinary case: the
+	// machine's host is simply unreachable) used to also 502 here, back when
+	// this endpoint only ever fired from an explicit "open Edit form" click.
+	// #1046 moved the call onto every Gaggiuino row's automatic list-render
+	// load, so an offline machine now hits this on every Settings open --
+	// same tolerant-of-unreachable shape testMachine() (handlers_registry.go)
+	// already uses for "Verbindung testen", degrading to a 200 with nulled-
+	// out fields instead of a 502 the browser itself logs as a console error
+	// regardless of any client-side .catch().
 	if versionsErr != nil {
-		writeError(w, http.StatusBadGateway, versionsErr.Error())
+		if versionsPanicked {
+			writeError(w, http.StatusBadGateway, versionsErr.Error())
+			return
+		}
+		slog.Warn("firmware version: versions settings fetch failed, reporting unknown", "err", versionsErr)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"installed": nil, "latest": nil, "updateAvailable": false, "releaseUrl": nil,
+		})
 		return
 	}
 	var versions struct {
