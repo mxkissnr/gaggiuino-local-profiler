@@ -487,8 +487,8 @@ func TestSaveEditableAction_InvalidJSONRejected(t *testing.T) {
 
 // TestSettingsPagesRequireAuthBehindRequireToken verifies the one write
 // action this page registers — POST /settings/display — requires either
-// genuine HA Ingress or a valid X-GLP-Token, while GET /settings stays
-// reachable without one, exactly like every earlier phase's write actions.
+// genuine HA Ingress or a valid X-GLP-Token, and (#1048) that GET /settings
+// now requires the same, exactly like every earlier phase's write actions.
 func TestSettingsPagesRequireAuthBehindRequireToken(t *testing.T) {
 	const testToken = "test-fixture-token-not-a-real-secret"
 
@@ -516,8 +516,11 @@ func TestSettingsPagesRequireAuthBehindRequireToken(t *testing.T) {
 		return rec
 	}
 
-	if rec := doAuthedRequest("GET", "/settings", "", nil); rec.Code != http.StatusOK {
-		t.Errorf("GET /settings without a token: status = %d, want 200", rec.Code)
+	if rec := doAuthedRequest("GET", "/settings", "", nil); rec.Code != http.StatusUnauthorized {
+		t.Errorf("GET /settings without a token: status = %d, want 401", rec.Code)
+	}
+	if rec := doAuthedRequest("GET", "/settings", testToken, nil); rec.Code != http.StatusOK {
+		t.Errorf("GET /settings with a valid token: status = %d, want 200", rec.Code)
 	}
 	form := url.Values{"raw": {`{"lcdDarkMode":"true"}`}}
 	if rec := doAuthedRequest("POST", "/settings/display", "", form); rec.Code != http.StatusUnauthorized {

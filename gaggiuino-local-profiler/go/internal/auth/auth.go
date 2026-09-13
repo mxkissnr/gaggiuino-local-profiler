@@ -132,9 +132,17 @@ func LoadOrCreateToken(path string) (string, error) {
 
 // writeTokenFile ports lib/helpers.js's writeFileSafe (write-to-.tmp then
 // rename, so a reader can never observe a partially-written token file).
+//
+// #1057: 0o600, not 0o644 — this file holds the live X-GLP-Token, so any
+// other local account on the host (or another container sharing the /data
+// bind mount) had read access to the credential that guards every other
+// endpoint. docker-entrypoint.sh's `chown -R glp:glp /data` runs as root
+// before dropping to the unprivileged glp user, so the file stays readable
+// by the one account that actually needs it (the exec'd server process)
+// regardless of this tightened mode.
 func writeTokenFile(path, content string) error {
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(tmp, []byte(content), 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)
@@ -184,18 +192,115 @@ func SecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// publicStaticPaths are exact GET/HEAD request paths that stay reachable
+// with no token — the production SPA's own bootstrap surface, embedded and
+// served by internal/webapp from the Vite build output (see
+// gaggiuino-local-profiler/public/ and vite.config.js). Every entry here
+// serves compiled, request-independent bytes with no live database
+// content, matching what public-src/index.html and its scripts reference
+// directly (not through apiFetch(), so none of these requests ever carries
+// an X-GLP-Token):
+//
+//   - "/" and "/index.html": the SPA shell (also the Docker HEALTHCHECK
+//     target, which curls "/" expecting 200 with no token).
+//   - "/manifest.json", "/sw.js": the PWA manifest and service worker,
+//     fetched by the browser itself, not by any app JS.
+//   - "/icon.png": index.html's <link rel="apple-touch-icon">.
+//   - "/countries-110m.json": world-map topojson data, fetched directly by
+//     public-src/views/analytics.js's plain fetch() (see that file).
+//
+// #1048: this is an explicit allowlist, not the inverse of an /api/ prefix
+// check the old bypass used — see this function's caller for why. Adding a
+// new top-level static file to public-src's root (bypassing the hashed
+// public/assets/ pipeline entirely) needs a new literal entry here, same
+// as adding a new public /api/ route needs its own carve-out below.
+var publicStaticPaths = map[string]bool{
+	"/":                    true,
+	"/index.html":          true,
+	"/manifest.json":       true,
+	"/sw.js":               true,
+	"/icon.png":            true,
+	"/countries-110m.json": true,
+}
+
+// publicStaticPrefixes are path prefixes that stay reachable the same way
+// as publicStaticPaths, for content whose exact filename varies (Vite's
+// content-hashed build output) or that lives under its own dedicated
+// static subtree with no live data anywhere in it.
+var publicStaticPrefixes = []string{
+	// public/assets/*: Vite's content-hashed JS/CSS/font bundle for the SPA
+	// — the filenames change on every build, so no exact-match entry above
+	// would stay accurate.
+	"/assets/",
+	// internal/web's vendored htmx/Alpine, first-party glp-token.js, and
+	// style.css (see internal/web/assets.go) — plain library/script/style
+	// bytes, no live data, needed even though the /ui/ pages that load them
+	// now require a token themselves (see isPublicStaticPath's doc comment
+	// and internal/web/doc.go's "Auth model" section).
+	"/ui/web/static/",
+}
+
+// isPublicStaticPath reports whether path is on the fixed allowlist of
+// static, request-independent bytes that may bypass RequireToken for
+// GET/HEAD (see RequireToken's own doc comment for the CSRF-relevant
+// GET/HEAD scoping this sits inside).
+//
+// #1048: this replaces a blanket "not under /api/" bypass. That rule was
+// sound while the only non-/api/ surface was the SPA's own static bundle;
+// it stopped being sound once internal/web's templ pages (#901, mounted
+// under /ui/) started rendering live database content — shots, the coffee
+// library, machines with their configured hosts, the order queue with
+// customer names, maintenance — from server-side data, not compiled
+// assets. Under the old rule any LAN host reaching the app's exposed port
+// could read all of that with zero credentials, no token or Ingress
+// required, simply by requesting a /ui/* path. Enumerating the actual
+// static surface instead means a *future* route registered outside /api/
+// (in mux or uiMux, whether or not it happens to live under /ui/) is
+// gated by default — the developer has to deliberately add it here to
+// open it back up, rather than the previous default of open-unless-under-
+// /api/.
+//
+// One consequence, stated here because it is easy to miss: this makes
+// every /ui/* page (internal/web's templ pages) require a token or genuine
+// Ingress for a plain GET too, not just their htmx write actions. Those
+// pages' own nav links (templates/layout.templ) are ordinary <a href>
+// anchors, not htmx-boosted — a full browser navigation, which cannot
+// attach a custom X-GLP-Token header. glp-token.js only ever wires the
+// token into htmx requests (its documented mechanism), not page loads. So
+// under HA Ingress this fix changes nothing (IsIngressRequest already
+// bypasses earlier, unconditionally, for every method) but a direct-port/
+// standalone LAN client with no Ingress session can no longer reach a
+// /ui/* page as a normal browser navigation at all, valid token or not —
+// there is no mechanism today for a plain GET to present one. That is the
+// intended, narrower trade-off of closing this hole: a reduced-scope fix
+// that is correct beats a complete one that is wrong. Restoring direct-
+// port navigability for those pages (e.g. a short-lived signed query
+// param, or a session cookie minted from GET /api/token) is a separate,
+// deliberate feature, not folded into this fix.
+func isPublicStaticPath(path string) bool {
+	if publicStaticPaths[path] {
+		return true
+	}
+	for _, prefix := range publicStaticPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // RequireToken returns middleware porting server.js's API-token-auth
 // app.use block (the req.glpAuthenticated / req.glpIsIngress computation
 // and the five-way if-chain that follows it, lines ~143-173): same checks,
 // same order, so the same requests pass or fail under both implementations
 // — with one deliberate divergence, not a paraphrase of the rest: the
-// non-/api/ bypass below is scoped to GET/HEAD, where server.js's
-// equivalent line (`if (!req.path.startsWith('/api/') && req.path !==
-// '/shots.json') return next();`) has no method check at all. That's safe
-// in server.js only because no write route is ever registered outside
-// /api/ there (routes/*.js's mutating endpoints all live under /api/,
-// static files/index.html are the only non-/api/ surface) — a precondition
-// that stopped holding once internal/web (#901, Phase 2a) registered POST
+// static-bypass below is scoped to GET/HEAD, where server.js's equivalent
+// line (`if (!req.path.startsWith('/api/') && req.path !== '/shots.json')
+// return next();`) has no method check at all. That's safe in server.js
+// only because no write route is ever registered outside /api/ there
+// (routes/*.js's mutating endpoints all live under /api/, static files/
+// index.html are the only non-/api/ surface) — a precondition that stopped
+// holding once internal/web (#901, Phase 2a) registered POST
 // /shots/{id}/trash and .../restore outside /api/. Scoping the bypass to
 // GET/HEAD here closes that CSRF hole for those two routes and any future
 // one like them, without having to special-case each route individually.
@@ -254,11 +359,16 @@ func RequireToken(token string) func(http.Handler) http.Handler {
 			// registered GET handler, so both must bypass identically —
 			// see internal/web.Handlers.RegisterRoutes' "GET /shots"
 			// pattern), so scoping the bypass to those two methods keeps
-			// today's unauthenticated static/page reads working while
+			// today's unauthenticated static reads working while
 			// automatically gating any future write route registered
 			// outside /api/, without needing a per-route opt-in.
+			//
+			// #1048: the path itself must additionally be on the explicit
+			// static allowlist (isPublicStaticPath) — see that function's
+			// doc comment for why the old "not under /api/" rule let any
+			// LAN host read the live data internal/web's /ui/ pages render.
 			if (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
-				!strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/shots.json" {
+				isPublicStaticPath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}

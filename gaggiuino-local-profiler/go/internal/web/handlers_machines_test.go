@@ -395,13 +395,12 @@ func TestChartJS_Vendored_Served(t *testing.T) {
 // actually does (mirroring handlers_test.go's
 // TestTrashRestore_RequireAuthBehindRequireToken and
 // handlers_library_test.go's TestLibraryPagesRequireAuthBehindRequireToken)
-// and confirms GET /machines and GET /live stay reachable without a token,
-// while the two write actions this phase adds — POST /machines/{id}/default
-// and POST /machines/{id}/delete — require either genuine HA Ingress or a
-// valid X-GLP-Token, exactly like every earlier phase's write actions. This
-// is the check #901's own dispatch brief calls out every new write route
-// must get: Phase 2a shipped with exactly this class of CSRF gap before it
-// was caught in review.
+// and confirms GET /machines and GET /live now require either genuine HA
+// Ingress or a valid X-GLP-Token (#1048), same as the two write actions
+// this phase adds — POST /machines/{id}/default and
+// POST /machines/{id}/delete — always did. This is the check #901's own
+// dispatch brief calls out every new write route must get: Phase 2a shipped
+// with exactly this class of CSRF gap before it was caught in review.
 func TestMachinesPagesRequireAuthBehindRequireToken(t *testing.T) {
 	const testToken = "test-fixture-token-not-a-real-secret"
 
@@ -435,8 +434,11 @@ func TestMachinesPagesRequireAuthBehindRequireToken(t *testing.T) {
 	}
 
 	for _, path := range []string{"/machines", "/live"} {
-		if rec := doAuthedRequest("GET", path, ""); rec.Code != http.StatusOK {
-			t.Errorf("GET %s without a token: status = %d, want 200", path, rec.Code)
+		if rec := doAuthedRequest("GET", path, ""); rec.Code != http.StatusUnauthorized {
+			t.Errorf("GET %s without a token: status = %d, want 401", path, rec.Code)
+		}
+		if rec := doAuthedRequest("GET", path, testToken); rec.Code != http.StatusOK {
+			t.Errorf("GET %s with a valid token: status = %d, want 200", path, rec.Code)
 		}
 	}
 
@@ -447,14 +449,21 @@ func TestMachinesPagesRequireAuthBehindRequireToken(t *testing.T) {
 		t.Errorf("POST /machines with a valid token: status = %d, want 200, body = %s", rec.Code, rec.Body.String())
 	}
 
-	// The Edit UI's PUT save action — GET (view/edit fragment) stays public,
-	// PUT (the actual write) requires the same token every other write here
-	// does.
-	if rec := doAuthedRequest("GET", "/machines/1", ""); rec.Code != http.StatusOK {
-		t.Errorf("GET /machines/1 without a token: status = %d, want 200", rec.Code)
+	// The Edit UI's PUT save action — GET (view/edit fragment) and PUT (the
+	// actual write) now both require the same token (#1048 closed the GET
+	// bypass these pages used to get as a side effect of living outside
+	// /api/).
+	if rec := doAuthedRequest("GET", "/machines/1", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("GET /machines/1 without a token: status = %d, want 401", rec.Code)
 	}
-	if rec := doAuthedRequest("GET", "/machines/1/edit", ""); rec.Code != http.StatusOK {
-		t.Errorf("GET /machines/1/edit without a token: status = %d, want 200", rec.Code)
+	if rec := doAuthedRequest("GET", "/machines/1", testToken); rec.Code != http.StatusOK {
+		t.Errorf("GET /machines/1 with a valid token: status = %d, want 200", rec.Code)
+	}
+	if rec := doAuthedRequest("GET", "/machines/1/edit", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("GET /machines/1/edit without a token: status = %d, want 401", rec.Code)
+	}
+	if rec := doAuthedRequest("GET", "/machines/1/edit", testToken); rec.Code != http.StatusOK {
+		t.Errorf("GET /machines/1/edit with a valid token: status = %d, want 200", rec.Code)
 	}
 	if rec := doAuthedRequest("PUT", "/machines/1", ""); rec.Code != http.StatusUnauthorized {
 		t.Errorf("PUT /machines/1 without a token: status = %d, want 401", rec.Code)

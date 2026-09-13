@@ -8,6 +8,8 @@
 ### Fixed
 - **The machine firmware check no longer breaks when GitHub is unreachable.** A rate-limited or timed-out latest-release lookup now returns the installed firmware version with `latest: null` instead of failing the whole request, serves the last known result while the failure lasts, and runs on its own timeout independent of the caller — so Home Assistant's machine firmware entity stops showing "Unknown". Closes #1037
 - **The machine firmware update entity now actually detects available updates.** The GitHub latest-release lookup was cancelling its own network request before finishing reading the response, so it never found a match and silently reported "up to date" every single time; a genuine no-match result is also no longer cached as good for a full hour. Closes #1042
+- **The read-only fallback pages no longer leak live shot, coffee-library, machine, and order data to anyone who can reach the add-on's exposed network port — they now require the same access token as the rest of the app.** One side effect: those specific pages can no longer be opened over a direct, non-Ingress connection at all, only through Home Assistant's own panel, since a plain page load has no way to present a token yet. Closes #1048
+- **The saved access token file is no longer readable by other local accounts on the host** — it's now written with owner-only file permissions, like every other secret this app stores. Closes #1057
 
 ## [3.0.1] – 2026-09-10
 ### Fixed

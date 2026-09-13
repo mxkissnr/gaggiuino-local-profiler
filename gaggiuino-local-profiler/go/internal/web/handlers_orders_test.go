@@ -646,10 +646,9 @@ func TestPlaceOrderAction_FeatureDisabled(t *testing.T) {
 // actually does (mirroring handlers_test.go's
 // TestTrashRestore_RequireAuthBehindRequireToken and
 // handlers_library_test.go's TestLibraryPagesRequireAuthBehindRequireToken)
-// and confirms every GET page stays reachable without a token, while every
-// write action this phase adds — accept/complete/decline and
-// POST /menu/order — requires either genuine HA Ingress or a valid
-// X-GLP-Token.
+// and confirms every GET page now requires either genuine HA Ingress or a
+// valid X-GLP-Token (#1048), the same as every write action this phase
+// adds — accept/complete/decline and POST /menu/order.
 func TestOrdersMenuPagesRequireAuthBehindRequireToken(t *testing.T) {
 	const testToken = "test-fixture-token-not-a-real-secret"
 	t.Setenv("GLP_ENABLE_ORDERS", "true")
@@ -691,8 +690,11 @@ func TestOrdersMenuPagesRequireAuthBehindRequireToken(t *testing.T) {
 	}
 
 	for _, path := range []string{"/orders", "/orders/queue-fragment", "/menu"} {
-		if rec := doAuthed("GET", path, "", nil); rec.Code != http.StatusOK {
-			t.Errorf("GET %s without a token: status = %d, want 200, body = %s", path, rec.Code, rec.Body.String())
+		if rec := doAuthed("GET", path, "", nil); rec.Code != http.StatusUnauthorized {
+			t.Errorf("GET %s without a token: status = %d, want 401", path, rec.Code)
+		}
+		if rec := doAuthed("GET", path, testToken, nil); rec.Code != http.StatusOK {
+			t.Errorf("GET %s with a valid token: status = %d, want 200, body = %s", path, rec.Code, rec.Body.String())
 		}
 	}
 

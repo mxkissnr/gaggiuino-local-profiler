@@ -717,14 +717,14 @@ func TestCreateRecipeAction_RoundTrip(t *testing.T) {
 // routes behind auth.RequireToken the same way cmd/server actually does
 // (mirroring handlers_test.go's TestTrashRestore_RequireAuthBehindRequireToken
 // for the Shots page) and confirms every GET /beans, /grinders, /baskets,
-// /puckscreens, /milks, /recipes page stays reachable without a token, while
-// the one write action this phase adds — POST /beans/{id}/toggle-active —
-// requires either genuine HA Ingress or a valid X-GLP-Token, exactly like
-// the Shots page's trash/restore actions. This is the check #901's own
-// dispatch brief calls out: Phase 2a shipped with exactly this class of bug
-// (a write route missing RequireToken's CSRF-relevant GET/HEAD scoping)
-// before it was caught in review, so this page's write action is verified
-// the same way from the start.
+// /puckscreens, /milks, /recipes page now requires either genuine HA
+// Ingress or a valid X-GLP-Token (#1048), exactly like the one write action
+// this phase adds — POST /beans/{id}/toggle-active — and the Shots page's
+// trash/restore actions always did. This is the check #901's own dispatch
+// brief calls out: Phase 2a shipped with exactly this class of bug (a write
+// route missing RequireToken's CSRF-relevant GET/HEAD scoping) before it
+// was caught in review, so this page's write action is verified the same
+// way from the start.
 func TestLibraryPagesRequireAuthBehindRequireToken(t *testing.T) {
 	const testToken = "test-fixture-token-not-a-real-secret"
 
@@ -760,8 +760,11 @@ func TestLibraryPagesRequireAuthBehindRequireToken(t *testing.T) {
 	}
 
 	for _, path := range []string{"/beans", "/grinders", "/baskets", "/puckscreens", "/milks", "/recipes"} {
-		if rec := doAuthedRequest("GET", path, ""); rec.Code != http.StatusOK {
-			t.Errorf("GET %s without a token: status = %d, want 200", path, rec.Code)
+		if rec := doAuthedRequest("GET", path, ""); rec.Code != http.StatusUnauthorized {
+			t.Errorf("GET %s without a token: status = %d, want 401", path, rec.Code)
+		}
+		if rec := doAuthedRequest("GET", path, testToken); rec.Code != http.StatusOK {
+			t.Errorf("GET %s with a valid token: status = %d, want 200", path, rec.Code)
 		}
 	}
 
@@ -787,13 +790,20 @@ func TestLibraryPagesRequireAuthBehindRequireToken(t *testing.T) {
 		}
 	}
 
-	// The Edit UI's PUT save action must be behind the same bypass — GET
-	// (view/edit fragment) stays public, PUT (the actual write) doesn't.
-	if rec := doAuthedRequest("GET", "/beans/1", ""); rec.Code != http.StatusOK {
-		t.Errorf("GET /beans/1 without a token: status = %d, want 200", rec.Code)
+	// The Edit UI's PUT save action must be behind the same auth check as
+	// the page itself — GET (view/edit fragment) and PUT (the actual write)
+	// both require a token now (#1048).
+	if rec := doAuthedRequest("GET", "/beans/1", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("GET /beans/1 without a token: status = %d, want 401", rec.Code)
 	}
-	if rec := doAuthedRequest("GET", "/beans/1/edit", ""); rec.Code != http.StatusOK {
-		t.Errorf("GET /beans/1/edit without a token: status = %d, want 200", rec.Code)
+	if rec := doAuthedRequest("GET", "/beans/1", testToken); rec.Code != http.StatusOK {
+		t.Errorf("GET /beans/1 with a valid token: status = %d, want 200", rec.Code)
+	}
+	if rec := doAuthedRequest("GET", "/beans/1/edit", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("GET /beans/1/edit without a token: status = %d, want 401", rec.Code)
+	}
+	if rec := doAuthedRequest("GET", "/beans/1/edit", testToken); rec.Code != http.StatusOK {
+		t.Errorf("GET /beans/1/edit with a valid token: status = %d, want 200", rec.Code)
 	}
 	if rec := doAuthedRequest("PUT", "/beans/1", ""); rec.Code != http.StatusUnauthorized {
 		t.Errorf("PUT /beans/1 without a token: status = %d, want 401", rec.Code)

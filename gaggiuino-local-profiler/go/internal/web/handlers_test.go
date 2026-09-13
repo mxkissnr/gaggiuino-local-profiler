@@ -316,9 +316,10 @@ func TestTrashAction_NotFound(t *testing.T) {
 // routes behind auth.RequireToken the same way cmd/server actually does
 // (unlike newTestServer's bare mux above, which never applies auth
 // middleware and so can't exercise this) and confirms the #901 code-review
-// CSRF fix end to end: the two write actions 401 without a token, while
-// GET /shots stays reachable without one — see internal/web/doc.go's
-// "Auth model" section.
+// CSRF fix end to end: the two write actions 401 without a token. #1048
+// additionally closed GET /shots's own bypass — it now demands the same
+// token (or genuine Ingress) as the write actions, not just static assets
+// — see internal/web/doc.go's "Auth model" section.
 func TestTrashRestore_RequireAuthBehindRequireToken(t *testing.T) {
 	const testToken = "test-fixture-token-not-a-real-secret"
 
@@ -348,8 +349,11 @@ func TestTrashRestore_RequireAuthBehindRequireToken(t *testing.T) {
 		return rec
 	}
 
-	if rec := doAuthedRequest("GET", "/shots", ""); rec.Code != http.StatusOK {
-		t.Errorf("GET /shots without a token: status = %d, want 200", rec.Code)
+	if rec := doAuthedRequest("GET", "/shots", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("GET /shots without a token: status = %d, want 401", rec.Code)
+	}
+	if rec := doAuthedRequest("GET", "/shots", testToken); rec.Code != http.StatusOK {
+		t.Errorf("GET /shots with a valid token: status = %d, want 200", rec.Code)
 	}
 	if rec := doAuthedRequest("POST", "/shots/1/trash", ""); rec.Code != http.StatusUnauthorized {
 		t.Errorf("POST /shots/1/trash without a token: status = %d, want 401", rec.Code)
@@ -686,9 +690,21 @@ func TestGlpTokenJS_WaitsForTokenBeforeIssuingHtmxRequests(t *testing.T) {
 // browser's Trash click. If RegisterRoutes ever registered a route under a
 // different token, or getToken and RequireToken ever fell out of sync,
 // this (unlike a test with a hardcoded shared token) would catch it.
+//
+// #1048: this flow now only completes under genuine HA Ingress — the
+// primary access path, where IsIngressRequest's unconditional bypass makes
+// the page load, the token fetch, and the trash POST all pass regardless
+// of isPublicStaticPath. The Supervisor-network RemoteAddr + X-Ingress-Path
+// header below stand in for that. See
+// TestBrowserFlow_DirectPortPageLoadNowRequiresToken immediately below for
+// the flip side: a direct-port/LAN client (no Ingress) can no longer even
+// complete step 1, the deliberate, documented consequence of closing this
+// hole — see internal/web/doc.go's "Auth model" section and
+// internal/auth/auth.go's isPublicStaticPath doc comment.
 func TestBrowserFlow_FetchedTokenAuthorizesTrash(t *testing.T) {
 	const testToken = "test-fixture-token-not-a-real-secret"
-	const remoteAddr = "192.168.1.50:1234" // LAN, not Ingress/Supervisor
+	const remoteAddr = "172.30.1.5:1234" // Supervisor network -> genuine Ingress
+	const ingressPath = "/api/hassio_ingress/abc123"
 
 	dbPath := filepath.Join(t.TempDir(), "glp.db")
 	sqlDB, err := db.Open(dbPath)
@@ -712,16 +728,18 @@ func TestBrowserFlow_FetchedTokenAuthorizesTrash(t *testing.T) {
 	// (TestListPage_LoadsTokenScript above pins that it's actually linked).
 	pageReq := httptest.NewRequest(http.MethodGet, "/shots", nil)
 	pageReq.RemoteAddr = remoteAddr
+	pageReq.Header.Set("X-Ingress-Path", ingressPath)
 	pageRec := httptest.NewRecorder()
 	handler.ServeHTTP(pageRec, pageReq)
 	if pageRec.Code != http.StatusOK {
-		t.Fatalf("GET /shots: status = %d, want 200", pageRec.Code)
+		t.Fatalf("GET /shots via Ingress: status = %d, want 200", pageRec.Code)
 	}
 
 	// Step 2: glp-token.js's fetchToken() — GET /api/token, no header yet
 	// (fresh page load, no token cached).
 	tokenReq := httptest.NewRequest(http.MethodGet, "/api/token", nil)
 	tokenReq.RemoteAddr = remoteAddr
+	tokenReq.Header.Set("X-Ingress-Path", ingressPath)
 	tokenRec := httptest.NewRecorder()
 	handler.ServeHTTP(tokenRec, tokenReq)
 	if tokenRec.Code != http.StatusOK {
@@ -741,11 +759,46 @@ func TestBrowserFlow_FetchedTokenAuthorizesTrash(t *testing.T) {
 	// X-GLP-Token to the Trash button's POST.
 	trashReq := httptest.NewRequest(http.MethodPost, "/shots/1/trash", nil)
 	trashReq.RemoteAddr = remoteAddr
+	trashReq.Header.Set("X-Ingress-Path", ingressPath)
 	trashReq.Header.Set("X-GLP-Token", tokenBody.APIToken)
 	trashRec := httptest.NewRecorder()
 	handler.ServeHTTP(trashRec, trashReq)
 	if trashRec.Code != http.StatusOK {
 		t.Errorf("POST /shots/1/trash with the fetched token: status = %d, want 200, body = %s", trashRec.Code, trashRec.Body.String())
+	}
+}
+
+// TestBrowserFlow_DirectPortPageLoadNowRequiresToken pins #1048's
+// documented behavior change: a direct-port/standalone LAN client with no
+// Ingress session can no longer complete step 1 of the browser flow above
+// at all. Before this fix GET /shots (any /ui/ page) fell through the old
+// "not under /api/" bypass unconditionally; now it needs the same
+// token/Ingress check every write action already required, and a plain
+// browser navigation has no mechanism to attach X-GLP-Token — see
+// internal/web/doc.go's "Auth model" section for the full consequence.
+func TestBrowserFlow_DirectPortPageLoadNowRequiresToken(t *testing.T) {
+	const testToken = "test-fixture-token-not-a-real-secret"
+
+	dbPath := filepath.Join(t.TempDir(), "glp.db")
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("db.Open: %v", err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+
+	repo := shots.NewRepository(sqlDB)
+	upsertTestShot(t, repo, 1, 1_700_000_000, "Espresso Classic", nil)
+
+	mux := http.NewServeMux()
+	NewHandlers(shots.NewService(repo)).RegisterRoutes(mux)
+	handler := auth.RequireToken(testToken)(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/shots", nil)
+	req.RemoteAddr = "192.168.1.50:1234" // LAN, not Ingress/Supervisor
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("GET /shots from a direct-port LAN client with no token: status = %d, want 401", rec.Code)
 	}
 }
 

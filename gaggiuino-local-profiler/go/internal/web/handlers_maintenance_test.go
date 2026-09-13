@@ -178,10 +178,10 @@ func TestDoneAction_UnknownTask(t *testing.T) {
 
 // TestMaintenancePagesRequireAuthBehindRequireToken verifies the one write
 // action this page registers — POST /maintenance/{task}/done — requires
-// either genuine HA Ingress or a valid X-GLP-Token, while GET /maintenance
-// stays reachable without one, exactly like every earlier phase's write
-// actions (this is the check #901's dispatch brief calls out every new
-// write route must get).
+// either genuine HA Ingress or a valid X-GLP-Token, and (#1048) that
+// GET /maintenance now requires the same, exactly like every earlier
+// phase's write actions (this is the check #901's dispatch brief calls out
+// every new write route must get).
 func TestMaintenancePagesRequireAuthBehindRequireToken(t *testing.T) {
 	const testToken = "test-fixture-token-not-a-real-secret"
 
@@ -199,8 +199,11 @@ func TestMaintenancePagesRequireAuthBehindRequireToken(t *testing.T) {
 		return rec
 	}
 
-	if rec := doAuthedRequest("GET", "/maintenance", ""); rec.Code != http.StatusOK {
-		t.Errorf("GET /maintenance without a token: status = %d, want 200", rec.Code)
+	if rec := doAuthedRequest("GET", "/maintenance", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("GET /maintenance without a token: status = %d, want 401", rec.Code)
+	}
+	if rec := doAuthedRequest("GET", "/maintenance", testToken); rec.Code != http.StatusOK {
+		t.Errorf("GET /maintenance with a valid token: status = %d, want 200", rec.Code)
 	}
 	donePath := "/maintenance/descaling/done"
 	if rec := doAuthedRequest("POST", donePath, ""); rec.Code != http.StatusUnauthorized {

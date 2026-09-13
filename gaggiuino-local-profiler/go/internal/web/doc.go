@@ -47,15 +47,40 @@
 //
 // # Auth model
 //
-// GET /shots and /web/static/* are deliberately NOT gated by
-// internal/auth.RequireToken's X-GLP-Token check — same as every static
-// asset the Node app serves today. server.js's public-src frontend fetches
-// its own token via GET /api/token and attaches it to its own XHR calls
-// (see public-src/api.js's initToken()); the static shell that bootstraps
-// that fetch was never itself gated, and neither is this package's read-only
-// page. Protected the same way the rest of the static frontend already is
-// — HA Ingress's own auth in front of the add-on, or physical/LAN access to
-// the exposed port in standalone mode.
+// #1048: every page this package registers (GET /shots and everything else
+// listed in the file layout above) DOES require internal/auth.RequireToken's
+// X-GLP-Token check — or genuine HA Ingress — for a plain GET/HEAD, same as
+// any write action. This used to be a deliberate carve-out ("GET /shots and
+// /web/static/* are deliberately NOT gated ... same as every static asset
+// the Node app serves today"), reasoned by analogy to the Node app's actual
+// static shell. That analogy stopped holding once these pages started
+// rendering live server-side data instead of compiled assets — a shots
+// list, the coffee library, machines with their configured hosts, the order
+// queue with customer names, maintenance — so any LAN host that could reach
+// the exposed port could read all of it with zero credentials, no different
+// from calling the JSON API with no token. internal/auth.isPublicStaticPath
+// now allowlists only the genuinely static, request-independent surface
+// (the SPA's own bundle, plus this package's own /web/static/* — vendored
+// htmx/Alpine, style.css, glp-token.js, still public since none of it is
+// live data); everything this package registers is excluded from that list
+// by design, so a plain GET here now falls through to the same
+// token/Ingress check as every /api/ route. See internal/auth/auth.go's
+// isPublicStaticPath and RequireToken doc comments for the exact rule.
+//
+// The practical consequence: HA Ingress access (the primary path,
+// RequireToken's IsIngressRequest bypass) is unaffected — that check runs
+// before the GET/HEAD static-allowlist check and covers every method
+// unconditionally. But a direct-port/standalone LAN client with no Ingress
+// session can no longer open a /ui/* page as a plain browser navigation at
+// all, valid token or not: every nav link here (templates/layout.templ) is
+// an ordinary <a href>, not htmx-boosted, and a full-page GET has no way to
+// carry a custom X-GLP-Token header — glp-token.js (see its own doc
+// comment) only ever wires the token into htmx requests, never into page
+// loads. That is an accepted, narrower scope for this fix, not an
+// oversight: restoring direct-port navigability for these pages would need
+// a new mechanism (e.g. a short-lived signed query param, or a session
+// cookie minted from GET /api/token) that this change deliberately does not
+// add.
 //
 // The htmx write actions — POST /shots/{id}/trash, POST /shots/{id}/restore,
 // (Phase 2b) POST /beans/{id}/toggle-active in handlers_library.go,
@@ -63,8 +88,9 @@
 // handlers_machines.go, (Phase 2d) POST /orders/{id}/{accept,complete,
 // decline} and POST /menu/order in handlers_orders.go, and (Phase 2e)
 // POST /maintenance/{task}/done in handlers_maintenance.go and
-// POST /settings/display in handlers_settings.go — are NOT part of
-// that carve-out: RequireToken's bypass in
+// POST /settings/display in handlers_settings.go — need that same
+// token/Ingress check GET now requires too, and always did: RequireToken's
+// static-allowlist bypass in
 // internal/auth/auth.go is scoped to GET/HEAD requests specifically (a #901
 // code-review fix — it originally matched any non-/api/ path regardless of
 // method, which let any third-party page in the user's browser trigger

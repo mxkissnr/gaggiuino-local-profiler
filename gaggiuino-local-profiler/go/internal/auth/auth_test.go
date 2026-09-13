@@ -113,6 +113,109 @@ func TestRequireToken_NonAPIPathBypassesAuth(t *testing.T) {
 	}
 }
 
+// TestIsPublicStaticPath is a table-driven pin of #1048's explicit
+// allowlist: every entry in publicStaticPaths/publicStaticPrefixes stays
+// public, and everything else — most importantly a /ui/ page and
+// /shots.json, both of which the old "not under /api/" bypass let through
+// — does not. See isPublicStaticPath's own doc comment for the full
+// rationale.
+func TestIsPublicStaticPath(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"root", "/", true},
+		{"index.html", "/index.html", true},
+		{"manifest.json", "/manifest.json", true},
+		{"service worker", "/sw.js", true},
+		{"apple touch icon", "/icon.png", true},
+		{"countries topojson", "/countries-110m.json", true},
+		{"vite hashed asset", "/assets/index-abc123.js", true},
+		{"vite hashed asset nested", "/assets/fonts/figtree.woff2", true},
+		{"internal/web static asset", "/ui/web/static/glp-token.js", true},
+		{"internal/web static asset nested", "/ui/web/static/vendor/htmx.min.js", true},
+		{"a /ui/ page itself is not static", "/ui/shots", false},
+		{"a /ui/ page itself is not static (machines)", "/ui/machines", false},
+		{"bare /ui/ index redirect target", "/ui/", false},
+		{"shots.json still requires a token", "/shots.json", false},
+		{"an /api/ route", "/api/shots", false},
+		{"prefix lookalike, not the real prefix", "/assetsx/foo.js", false},
+		{"exact-path lookalike, not the real path", "/index.html.bak", false},
+		{"empty path", "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := isPublicStaticPath(c.path); got != c.want {
+				t.Errorf("isPublicStaticPath(%q) = %v, want %v", c.path, got, c.want)
+			}
+		})
+	}
+}
+
+// TestRequireToken_StaticAllowlist drives isPublicStaticPath's table above
+// through the actual RequireToken middleware, so it also pins the
+// GET/HEAD scoping and the token/Ingress fallbacks around it, not just the
+// path predicate in isolation.
+func TestRequireToken_StaticAllowlist(t *testing.T) {
+	cases := []struct {
+		name   string
+		method string
+		path   string
+		want   int
+	}{
+		{"root", http.MethodGet, "/", http.StatusOK},
+		{"index.html via HEAD", http.MethodHead, "/index.html", http.StatusOK},
+		{"manifest.json", http.MethodGet, "/manifest.json", http.StatusOK},
+		{"service worker", http.MethodGet, "/sw.js", http.StatusOK},
+		{"icon", http.MethodGet, "/icon.png", http.StatusOK},
+		{"countries topojson", http.MethodGet, "/countries-110m.json", http.StatusOK},
+		{"vite hashed asset", http.MethodGet, "/assets/index-abc123.js", http.StatusOK},
+		{"internal/web static asset", http.MethodGet, "/ui/web/static/glp-token.js", http.StatusOK},
+		{"a /ui/ page now demands a token", http.MethodGet, "/ui/shots", http.StatusUnauthorized},
+		{"/shots.json still demands a token", http.MethodGet, "/shots.json", http.StatusUnauthorized},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			req := httptest.NewRequest(c.method, c.path, nil)
+			req.RemoteAddr = "192.168.1.50:1234" // LAN, not Ingress/Supervisor
+			rec := httptest.NewRecorder()
+			newAuthedHandler().ServeHTTP(rec, req)
+			if rec.Code != c.want {
+				t.Errorf("%s %s without a token: status = %d, want %d", c.method, c.path, rec.Code, c.want)
+			}
+		})
+	}
+}
+
+// TestRequireToken_UIPageWithValidTokenPasses confirms a /ui/ page is
+// reachable with a valid X-GLP-Token, the flip side of the "now demands a
+// token" row in TestRequireToken_StaticAllowlist above.
+func TestRequireToken_UIPageWithValidTokenPasses(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/ui/shots", nil)
+	req.RemoteAddr = "192.168.1.50:1234"
+	req.Header.Set("X-GLP-Token", testToken)
+	rec := httptest.NewRecorder()
+	newAuthedHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected /ui/shots with a valid token to pass, got %d", rec.Code)
+	}
+}
+
+// TestRequireToken_UIPageIngressBypass confirms a genuine HA Ingress
+// request to a /ui/ page is unaffected by #1048 — IsIngressRequest bypasses
+// ahead of, and independently of, the GET/HEAD static allowlist.
+func TestRequireToken_UIPageIngressBypass(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/ui/shots", nil)
+	req.RemoteAddr = "172.30.1.5:1234"
+	req.Header.Set("X-Ingress-Path", "/api/hassio_ingress/abc123")
+	rec := httptest.NewRecorder()
+	newAuthedHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected genuine Ingress request to /ui/shots to bypass auth, got %d", rec.Code)
+	}
+}
+
 // TestRequireToken_NonAPIWritePathRequiresAuth pins the #901 code-review
 // fix: the non-/api/ bypass must not swallow write methods. Before the
 // fix, any POST/PUT/DELETE to a path outside /api/ (e.g. the htmx write
@@ -161,14 +264,17 @@ func TestRequireToken_NonAPIWritePathIngressBypass(t *testing.T) {
 
 // TestRequireToken_HeadRequestBypassesAuth verifies HEAD gets the same
 // bypass as GET — net/http.ServeMux itself routes HEAD to a "GET ..."
-// registered pattern, so the two need identical auth treatment.
+// registered pattern, so the two need identical auth treatment. Uses an
+// allowlisted static path (#1048 narrowed the bypass to
+// isPublicStaticPath's fixed set — "/shots" itself, a /ui/ page, is no
+// longer one of them, see TestRequireToken_StaticAllowlist).
 func TestRequireToken_HeadRequestBypassesAuth(t *testing.T) {
-	req := httptest.NewRequest(http.MethodHead, "/shots", nil)
+	req := httptest.NewRequest(http.MethodHead, "/index.html", nil)
 	req.RemoteAddr = "192.168.1.50:1234"
 	rec := httptest.NewRecorder()
 	newAuthedHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("HEAD /shots without a token: status = %d, want 200", rec.Code)
+		t.Fatalf("HEAD /index.html without a token: status = %d, want 200", rec.Code)
 	}
 }
 
