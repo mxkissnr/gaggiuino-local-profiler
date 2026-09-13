@@ -19,7 +19,6 @@ import (
 func devMux(t *testing.T) *http.ServeMux {
 	t.Helper()
 	t.Setenv("GLP_DEV_BUILD", "dev")
-	t.Setenv("NODE_ENV", "development")
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "glp.db")
 	return newMux(NewHandlers(openTestDB(t, dbPath), dbPath, nil))

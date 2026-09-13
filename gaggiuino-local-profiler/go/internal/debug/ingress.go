@@ -15,7 +15,7 @@
 // ONE URL through the real HA panel and read back a green/red verdict.
 //
 // Gating matches GET /api/debug/machine exactly: registered only when
-// NODE_ENV !== 'production' (h.nonProd), and — like every /api/debug/*
+// GLP_DEV_BUILD is set (h.devBuild), and — like every /api/debug/*
 // route — it sits behind auth.RequireToken, so a genuine ingress request
 // (Supervisor-network source IP + X-Ingress-Path) bypasses the token and a
 // bare-port request needs one. No new gating is invented here.

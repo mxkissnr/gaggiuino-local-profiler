@@ -2674,7 +2674,7 @@ paths:
     get:
       tags: [System]
       summary: Raw response from the machine's /api/system/status (for debugging)
-      description: Only registered when NODE_ENV !== 'production' (H2 — avoids leaking internal network topology on a real install).
+      description: Only registered when GLP_DEV_BUILD is set (H2 — avoids leaking internal network topology on a real install).
       responses:
         "200":
           description: Debug info

@@ -4,7 +4,7 @@
 //   - GET  /api/debug/export-db  — stream the raw glp.db file as a download
 //   - POST /api/debug/import-db  — replace glp.db 1:1 from an uploaded file
 //   - GET  /api/debug/machine    — raw dump of the default machine's
-//     /api/system/status (routes/system.js, gated on NODE_ENV)
+//     /api/system/status (routes/system.js, gated on GLP_DEV_BUILD)
 //
 // The two DB routes are gated on GLP_DEV_BUILD exactly the way
 // routes/debug.js gates them: the flag check is the first thing each
@@ -78,6 +78,10 @@ var importDBMaxBytes int64 = 500 * 1024 * 1024
 // (Buffer.from('SQLite format 3\0')).
 var sqliteMagic = []byte("SQLite format 3\x00")
 
+// debugMachineHTTPClient is the machine handler's default httpGet
+// transport (#1049) — package-level so it's built once, not per request.
+var debugMachineHTTPClient = machines.NewGuardedHTTPClient(5 * time.Second)
+
 // execer is the only DB capability this package needs: routes/debug.js runs
 // getDb().pragma('wal_checkpoint(TRUNCATE)') before both the export
 // download and the pre-import backup. *sql.DB satisfies it.
@@ -103,20 +107,24 @@ type Handlers struct {
 	registry *machines.Registry
 	rl       *ratelimit.KeyedLimiter
 
-	// devBuild / nonProd are captured at construction from the environment,
-	// matching routes/debug.js / routes/system.js reading process.env on a
-	// value that never changes for a process lifetime.
+	// devBuild is captured at construction from the environment, matching
+	// routes/debug.js reading process.env on a value that never changes for
+	// a process lifetime. #1051: this single flag now gates every debug
+	// route (export-db/import-db already used it; machine/ingress/
+	// ingress/sse-probe used a separate NODE_ENV != production check that
+	// GLP_DEV_BUILD's sibling build-dev.yaml workflow never actually set,
+	// so those three routes were live on every real install — see this
+	// package's doc comment and RegisterRoutes below).
 	devBuild bool
-	nonProd  bool
 
 	// now / httpGet are test seams; nil means use the real ones.
 	now     func() time.Time
 	httpGet func(ctx context.Context, url string) (*http.Response, error)
 }
 
-// NewHandlers captures the GLP_DEV_BUILD / NODE_ENV state once and wires
-// the DB handle (for the WAL checkpoint), the on-disk glp.db path (the
-// file the export streams and the import replaces — cmd/server's resolved
+// NewHandlers captures the GLP_DEV_BUILD state once and wires the DB
+// handle (for the WAL checkpoint), the on-disk glp.db path (the file the
+// export streams and the import replaces — cmd/server's resolved
 // GLP_DB_PATH / db.DefaultPath), and the machine registry.
 func NewHandlers(db execer, dbPath string, registry *machines.Registry) *Handlers {
 	return &Handlers{
@@ -125,7 +133,6 @@ func NewHandlers(db execer, dbPath string, registry *machines.Registry) *Handler
 		registry: registry,
 		rl:       ratelimit.NewKeyed(),
 		devBuild: os.Getenv("GLP_DEV_BUILD") != "",
-		nonProd:  os.Getenv("NODE_ENV") != "production",
 	}
 }
 
@@ -136,16 +143,17 @@ func (h *Handlers) clock() time.Time {
 	return time.Now()
 }
 
-// RegisterRoutes mounts the debug routes. /api/debug/machine is registered
-// only when NODE_ENV !== 'production', exactly as routes/system.js guards
-// it (`if (process.env.NODE_ENV !== 'production')`) — on a production build
-// the route genuinely does not exist and 404s.
+// RegisterRoutes mounts the debug routes. /api/debug/machine (and the two
+// ingress routes) are registered only when GLP_DEV_BUILD is set (#1051) —
+// on a real install (GLP_DEV_BUILD unset, see Dockerfile) these routes
+// genuinely do not exist and 404, same gating export-db/import-db already
+// used.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/debug/export-db", h.exportDB)
 	mux.HandleFunc("POST /api/debug/import-db", h.importDB)
-	if h.nonProd {
+	if h.devBuild {
 		mux.HandleFunc("GET /api/debug/machine", h.machine)
-		// Same gating as /api/debug/machine (NODE_ENV != production, behind
+		// Same gating as /api/debug/machine (GLP_DEV_BUILD unset, behind
 		// auth.RequireToken) — see ingress.go's package doc.
 		mux.HandleFunc("GET /api/debug/ingress", h.ingress)
 		mux.HandleFunc("GET /api/debug/ingress/sse-probe", h.ingressSSEProbe)
@@ -314,8 +322,11 @@ func (h *Handlers) machine(w http.ResponseWriter, r *http.Request) {
 			if reqErr != nil {
 				return nil, reqErr
 			}
-			client := &http.Client{Timeout: 5 * time.Second}
-			return client.Do(req)
+			// #1049: route through the same machines.machinesDialer guard
+			// BaseURLFor's own host check relies on — a bare *http.Client
+			// here would fall back to http.DefaultTransport, which
+			// re-resolves baseURL's hostname unguarded at connect time.
+			return debugMachineHTTPClient.Do(req)
 		}
 	}
 
