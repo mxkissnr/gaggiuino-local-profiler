@@ -2,7 +2,7 @@ import Chart from 'chart.js/auto';
 import { S } from '../state.js';
 import { t } from '../i18n.js';
 import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName } from '../constants.js';
-import { scoreClass, chartColors, themeColor, onThemeChange } from '../utils.js';
+import { esc, scoreClass, chartColors, themeColor, onThemeChange } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
 import { TARGET_ICON_SVG, WARNING_ICON_SVG } from '../icons.js';
@@ -49,7 +49,6 @@ function calcLongestStreak(shots) {
   return max;
 }
 
-const _esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 // #811: was the hardcoded #52525b (Tailwind zinc-600) on every chart's tick
 // labels -- a fixed dark-theme gray that didn't track --gray-600 across
 // themes/accents. Canvas needs a resolved color, not a CSS var() reference,
@@ -109,7 +108,7 @@ export function buildSummaryKpis() {
         // #811: the ⚠ glyph came out of the translated string; the icon is
         // rendered here instead so translators never carry markup. `n`/`drop`
         // are numbers computed above, so there is no untrusted input here.
-        warnEl.innerHTML = `${WARNING_ICON_SVG} ${_esc(t('analytics_trend_warning', n, drop))}`;
+        warnEl.innerHTML = `${WARNING_ICON_SVG} ${esc(t('analytics_trend_warning', n, drop))}`;
         warnEl.style.display = '';
       } else {
         warnEl.style.display = 'none';
@@ -159,8 +158,8 @@ export function buildPersonalBests() {
       link: bestShot.id });
   }
   if (streak > 0) rows.push({ lbl: t('analytics_longest_streak'), val: t('analytics_days', streak) });
-  if (favBean)    rows.push({ lbl: t('analytics_fav_bean'),    val: `${_esc(favBean[0])} <span class="bests-count">${favBean[1]} ${t('bean_stat_shots')}</span>` });
-  if (favProfile) rows.push({ lbl: t('analytics_fav_profile'), val: `${_esc(favProfile[0])} <span class="bests-count">${favProfile[1]} ${t('bean_stat_shots')}</span>` });
+  if (favBean)    rows.push({ lbl: t('analytics_fav_bean'),    val: `${esc(favBean[0])} <span class="bests-count">${favBean[1]} ${t('bean_stat_shots')}</span>` });
+  if (favProfile) rows.push({ lbl: t('analytics_fav_profile'), val: `${esc(favProfile[0])} <span class="bests-count">${favProfile[1]} ${t('bean_stat_shots')}</span>` });
   if (busiestDay) {
     const d = new Date(busiestDay[0]).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
     rows.push({ lbl: t('analytics_busiest_day'), val: `${d} <span class="bests-count">${busiestDay[1]} ${t('bean_stat_shots')}</span>` });
@@ -230,7 +229,7 @@ function _renderEquipmentStats(containerId, entries, emptyKey) {
   let html = '<div class="bean-cards">';
   for (const d of entries) {
     html += `<div class="bean-card">
-      <div class="bean-card-name" title="${_esc(d.name)}">${_esc(d.name)}</div>
+      <div class="bean-card-name" title="${esc(d.name)}">${esc(d.name)}</div>
       <div class="bean-card-stats">
         <div class="bean-stat"><span class="bean-stat-val">${d.count}</span><span class="bean-stat-lbl">${t('bean_stat_shots')}</span></div>
         ${d.avgScore    !== null ? `<div class="bean-stat"><span class="bean-stat-val ${scoreClass(d.avgScore)}">${d.avgScore}</span><span class="bean-stat-lbl">${t('bean_stat_avg')}</span></div>` : ''}
@@ -554,7 +553,6 @@ export function buildBeanStats() {
     const bestSc = d.scores.length    ? Math.max(...d.scores) : null;
     const avgDur = d.durations.length ? (d.durations.reduce((a, b) => a + b, 0) / d.durations.length).toFixed(1) : null;
     const scCls  = avgSc !== null ? scoreClass(avgSc) : '';
-    const esc    = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     html += `<div class="bean-card">
       <div class="bean-card-name" title="${esc(name)}">${esc(name)}</div>
       <div class="bean-card-stats">
@@ -830,12 +828,12 @@ export function worldMapTooltipFormatter(params) {
     // already implied by the total, no need to repeat it per-bean.
     const beanList = [...stats.beans].map(beanName => {
       const share = stats.beanShots.get(beanName);
-      return Number.isInteger(share) ? _esc(beanName) : `${_esc(beanName)} (${share})`;
+      return Number.isInteger(share) ? esc(beanName) : `${esc(beanName)} (${share})`;
     }).join(', ');
     return `${name}: ${stats.shots} ${t('analytics_map_shots')} (${beanList})`;
   }
   const region = params.data?._region;
-  return `${_esc(params.name)}${region ? ' · ' + _esc(region) : ''}`;
+  return `${esc(params.name)}${region ? ' · ' + esc(region) : ''}`;
 }
 
 export async function buildWorldMap() {
@@ -1146,11 +1144,11 @@ export function buildWeekdayHourHeatmap() {
   for (let h = 0; h < 24; h++) html += `<div class="wh-hourlabel">${h % 3 === 0 ? h : ''}</div>`;
   html += '</div>';
   for (let wd = 0; wd < 7; wd++) {
-    html += `<div class="wh-row"><div class="wh-label">${_esc(weekdayLabels[wd])}</div>`;
+    html += `<div class="wh-row"><div class="wh-label">${esc(weekdayLabels[wd])}</div>`;
     for (let h = 0; h < 24; h++) {
       const c = matrix[wd][h];
       const title = `${weekdayLabels[wd]} ${String(h).padStart(2, '0')}:00 — ${c} Shot${c === 1 ? '' : 's'}`;
-      html += `<div class="wh-cell wh-l${level(c)}" title="${_esc(title)}"></div>`;
+      html += `<div class="wh-cell wh-l${level(c)}" title="${esc(title)}"></div>`;
     }
     html += '</div>';
   }
@@ -1232,7 +1230,7 @@ export function buildBeanRanking() {
   ];
 
   const headerHtml = cols.map(([k, lbl]) =>
-    `<th data-action="set-bean-rank-sort" data-key="${k}">${_esc(lbl)}${arrow(k)}</th>`).join('');
+    `<th data-action="set-bean-rank-sort" data-key="${k}">${esc(lbl)}${arrow(k)}</th>`).join('');
 
   const rowsHtml = rows.map(r => {
     const scoreCell = r.avgScore !== null ? `<span class="${scoreClass(r.avgScore)}">${r.avgScore}</span>` : '–';
@@ -1241,10 +1239,10 @@ export function buildBeanRanking() {
       : r.trend < -0.5 ? `<span class="trend-down">▼ ${r.trend}</span>`
       : `<span class="trend-flat">▬ ${r.trend}</span>`;
     return `<tr>
-      <td>${_esc(r.name)}</td>
+      <td>${esc(r.name)}</td>
       <td class="num">${r.shots}</td>
       <td class="num">${scoreCell}</td>
-      <td>${r.lastGrind ? _esc(r.lastGrind) : '–'}</td>
+      <td>${r.lastGrind ? esc(r.lastGrind) : '–'}</td>
       <td>${trendCell}</td>
     </tr>`;
   }).join('');
@@ -1320,7 +1318,7 @@ export function buildMachineComparison() {
   }
 
   const rowsHtml = rows.map(r => `<tr>
-    <td>${_esc(r.name)}</td>
+    <td>${esc(r.name)}</td>
     <td class="num">${r.count}</td>
     <td class="num">${r.avgScore !== null ? `<span class="${scoreClass(r.avgScore)}">${r.avgScore}</span>` : '–'}</td>
     <td class="num">${r.avgDuration !== null ? r.avgDuration + 's' : '–'}</td>
@@ -1361,7 +1359,7 @@ export function buildDialinProgression() {
   }
 
   const prevValue = sel.value;
-  sel.innerHTML = beanNames.map(n => `<option value="${_esc(n)}">${_esc(n)}</option>`).join('');
+  sel.innerHTML = beanNames.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
   sel.value = beanNames.includes(prevValue) ? prevValue : beanNames[0];
   _renderDialinProgressionChart(sel.value);
 }

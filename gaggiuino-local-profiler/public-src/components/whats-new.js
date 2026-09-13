@@ -5,10 +5,7 @@
 // to render immediately at startup rather than waiting on initToken() like
 // the token-gated cards do.
 import { getWhatsNewEntries } from '../shared/whats-new.js';
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
+import { esc as escapeHtml } from '../utils.js';
 
 export function renderWhatsNewCard() {
   const list = document.getElementById('whatsNewList');

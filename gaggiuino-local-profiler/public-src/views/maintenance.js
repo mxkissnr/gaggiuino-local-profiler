@@ -343,8 +343,6 @@ export async function setMaintMode(task, mode, machineId) {
 
 // ── Maintenance Log ───────────────────────────────────────────────────────
 
-const _logEsc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-
 export async function loadMaintLog() {
   const el = document.getElementById('maintLog');
   if (!el) return;
@@ -386,10 +384,10 @@ export function renderMaintLog(entries) {
       : ((S.machines || []).find(m => m.id === e.machineId)?.name || e.machine || '');
     return `<tr>
       <td>${dateStr}</td>
-      <td>${_logEsc(taskLabel(e))}${isManual ? `<span class="maint-log-manual-badge">${t('maint_log_manual_badge')}</span>` : ''}</td>
-      <td>${machineTag ? `<span class="shot-machine-badge">${_logEsc(machineTag)}</span>` : ''}</td>
+      <td>${esc(taskLabel(e))}${isManual ? `<span class="maint-log-manual-badge">${t('maint_log_manual_badge')}</span>` : ''}</td>
+      <td>${machineTag ? `<span class="shot-machine-badge">${esc(machineTag)}</span>` : ''}</td>
       <td class="num">${e.shotCountAtTime ?? '–'}</td>
-      <td>${e.notes ? _logEsc(e.notes) : ''}
+      <td>${e.notes ? esc(e.notes) : ''}
         <button class="maint-log-del-btn" data-action="delete-maint-log" data-id="${e.id}" title="${t('maint_log_confirm_delete')}">${t('maint_log_delete')}</button>
       </td>
     </tr>`;

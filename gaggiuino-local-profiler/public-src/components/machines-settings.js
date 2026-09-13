@@ -15,10 +15,7 @@ import { THEME_PRESETS, getThemePreset, resolveTheme } from '../shared/theme-pre
 import { migrateLegacyAccent } from '../theme.js';
 import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
 import { renderTopbarMachineIcon } from './topbar-machine-icon.js';
-
-export function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
+import { esc as escapeHtml } from '../utils.js';
 
 // preset key -> i18n label key, e.g. 'ember-espresso' -> 'theme_preset_ember_espresso'.
 export function presetLabelKey(key) {
