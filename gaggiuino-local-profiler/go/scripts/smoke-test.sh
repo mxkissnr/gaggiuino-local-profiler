@@ -209,13 +209,23 @@ grep -qi '^Cache-Control: no-cache, no-store, must-revalidate' <<<"$root_headers
 # manifest link must be injected.
 grep -q 'rel="manifest"' "$SMOKE_DIR/root.html" && ok "GET / injects the PWA manifest link for a non-Ingress request" || bad "GET / did not inject the manifest link"
 
-ui_code=$(curl -s -o "$SMOKE_DIR/ui-shots.html" -w '%{http_code}' "$BASE_A/ui/shots")
-[[ "$ui_code" == "200" ]] && ok "GET /ui/shots -> 200 (templ page still reachable)" || bad "GET /ui/shots: $ui_code"
+# #1048: the templ pages under /ui/ are no longer on auth.RequireToken's
+# static bypass — that allowlist now covers only request-independent assets,
+# not the pages that render live database content. curl here is neither an
+# Ingress request (no Supervisor source IP) nor carrying a token, so both
+# the page and the bare-/ui/ redirect must now be refused. The vendored
+# assets beneath them stay public, since they are static bytes.
+ui_code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_A/ui/shots")
+[[ "$ui_code" == "401" ]] && ok "GET /ui/shots -> 401 without a token (#1048)" || bad "GET /ui/shots: expected 401, got $ui_code"
+ui_authed=$(curl -s -o "$SMOKE_DIR/ui-shots.html" -w '%{http_code}' -H "X-GLP-Token: $TOKEN_A" "$BASE_A/ui/shots")
+[[ "$ui_authed" == "200" ]] && ok "GET /ui/shots -> 200 with a token" || bad "GET /ui/shots with a token: $ui_authed"
 grep -q 'class="side-nav"' "$SMOKE_DIR/ui-shots.html" && ok "GET /ui/shots renders the templ shell" || bad "GET /ui/shots is not the templ page: $(head -c 200 "$SMOKE_DIR/ui-shots.html")"
 css_code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_A/ui/web/static/style.css")
-[[ "$css_code" == "200" ]] && ok "GET /ui/web/static/style.css -> 200 (vendored assets moved with the pages)" || bad "GET /ui/web/static/style.css: $css_code"
-ui_root=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE_A/ui/")
-[[ "$ui_root" == 302* ]] && ok "GET /ui/ -> 302 (relative redirect to shots)" || bad "GET /ui/: $ui_root"
+[[ "$css_code" == "200" ]] && ok "GET /ui/web/static/style.css -> 200 (static assets stay public)" || bad "GET /ui/web/static/style.css: $css_code"
+ui_root=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_A/ui/")
+[[ "$ui_root" == "401" ]] && ok "GET /ui/ -> 401 without a token (#1048)" || bad "GET /ui/: expected 401, got $ui_root"
+ui_root_authed=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -H "X-GLP-Token: $TOKEN_A" "$BASE_A/ui/")
+[[ "$ui_root_authed" == 302* ]] && ok "GET /ui/ -> 302 with a token (relative redirect to shots)" || bad "GET /ui/ with a token: $ui_root_authed"
 
 if [[ -n "$DOCKER_IMAGE" ]]; then
 	for asset in manifest.json sw.js; do
