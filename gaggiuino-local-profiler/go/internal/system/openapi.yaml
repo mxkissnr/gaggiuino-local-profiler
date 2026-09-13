@@ -2441,7 +2441,7 @@ paths:
       tags: [Mqtt]
       summary: Current live-data transport settings (Settings-page WebSocket/MQTT toggle + broker connection)
       responses:
-        "200": { description: "{ transport: 'websocket'|'mqtt', host, port, username, password, prefix }" }
+        "200": { description: "{ transport: 'websocket'|'mqtt', host, port, username, hasPassword, prefix } — hasPassword replaces the stored password, which is never echoed back (#1050)" }
     post:
       tags: [Mqtt]
       summary: Save the live-data transport settings. Drops any already-open MQTT session so a changed broker/prefix/credentials takes effect on the next read.
@@ -2449,7 +2449,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, properties: { transport: { type: string, enum: [websocket, mqtt] }, host: { type: string }, port: { type: integer }, username: { type: string }, password: { type: string }, prefix: { type: string } } }
+            schema: { type: object, properties: { transport: { type: string, enum: [websocket, mqtt] }, host: { type: string }, port: { type: integer }, username: { type: string }, password: { type: string, description: "Omit to keep the stored password unchanged (#1050); a present value always overwrites it unless clearPassword is also set." }, clearPassword: { type: boolean, description: "Wipe the stored password regardless of the password field (#1062)." }, prefix: { type: string } } }
       responses:
         "200": { description: Saved settings }
         "400": { description: Invalid settings payload }

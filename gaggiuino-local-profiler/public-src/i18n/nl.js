@@ -295,7 +295,7 @@ export default {
     settings_mqtt_title:'Live-verbinding', settings_mqtt_desc:'Hoe GLP live sensordata van de machine ontvangt.',
     settings_mqtt_transport_ws:'WebSocket (standaard)', settings_mqtt_transport_mqtt:'MQTT',
     settings_mqtt_discovered:'Broker automatisch gevonden via Home Assistant', settings_mqtt_not_discovered:'Geen MQTT-service gevonden via Home Assistant — handmatig invoeren',
-    settings_mqtt_host:'Broker-host', settings_mqtt_port:'Poort', settings_mqtt_username:'Gebruikersnaam (optioneel)', settings_mqtt_password:'Wachtwoord (optioneel)', settings_mqtt_prefix:'Topic-prefix',
+    settings_mqtt_host:'Broker-host', settings_mqtt_port:'Poort', settings_mqtt_username:'Gebruikersnaam (optioneel)', settings_mqtt_password:'Wachtwoord (optioneel)', settings_mqtt_password_stored:'Ongewijzigd — laat leeg om te behouden', settings_mqtt_password_remove:'Wachtwoord verwijderen', settings_mqtt_prefix:'Topic-prefix',
     settings_mqtt_save:'Opslaan', settings_mqtt_apply:'Toepassen op machine', settings_mqtt_host_required:'Voer een broker-host in',
     settings_mqtt_saved:'Opgeslagen', settings_mqtt_save_error:(msg)=>`Fout: ${msg}`,
     settings_mqtt_applying:'Toepassen …', settings_mqtt_applied:'Toegepast op de machine', settings_mqtt_apply_error:(msg)=>`Fout: ${msg}`,

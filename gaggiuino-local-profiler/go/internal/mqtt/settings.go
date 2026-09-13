@@ -38,6 +38,35 @@ func defaultSettings() Settings {
 	return Settings{Transport: TransportWebSocket, Host: "", Port: 1883, Username: "", Password: "", Prefix: "gaggiuino"}
 }
 
+// SettingsView is the redacted shape GET/POST /api/mqtt/settings actually
+// serialise to the client (#1050): Settings itself keeps a real Password
+// field because it round-trips through kv (json.Marshal in SaveSettings,
+// json.Unmarshal in GetSettings) and every internal consumer (client.go's
+// connect, handlers.go's applyToMachine) needs the real value — only the
+// HTTP response redacts it, down to a bool, the same "never echo a secret
+// back" rule backup/bundle.go's plaintext export already follows for this
+// exact field.
+type SettingsView struct {
+	Transport   TransportKind `json:"transport"`
+	Host        string        `json:"host"`
+	Port        int           `json:"port"`
+	Username    string        `json:"username"`
+	HasPassword bool          `json:"hasPassword"`
+	Prefix      string        `json:"prefix"`
+}
+
+// redact builds the client-facing view of s.
+func redact(s Settings) SettingsView {
+	return SettingsView{
+		Transport:   s.Transport,
+		Host:        s.Host,
+		Port:        s.Port,
+		Username:    s.Username,
+		HasPassword: s.Password != "",
+		Prefix:      s.Prefix,
+	}
+}
+
 // Repository is the kv-backed mqtt-settings store.
 type Repository struct{ db *sql.DB }
 
