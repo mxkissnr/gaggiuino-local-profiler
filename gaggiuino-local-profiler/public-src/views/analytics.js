@@ -813,6 +813,31 @@ function _splitGeometryAtAntimeridian(geometry) {
   return geometry;
 }
 
+// World-map tooltip content, factored out of buildWorldMap()'s setOption()
+// call so it can be unit-tested without echarts/DOM (same reasoning as
+// computeMapBoundingView/splitAntimeridianRing above). Bean names and regions
+// reach this from the Library (typed by hand) or the bean importer (scraped
+// from a roaster's website), so both branches escape everything that isn't a
+// fixed country code or a plain number before it's handed to echarts, which
+// renders a formatter's return value as tooltip innerHTML (#1054).
+export function worldMapTooltipFormatter(params) {
+  if (params.seriesType === 'map') {
+    const stats = params.data?._stats;
+    if (!stats) return null;
+    const name = countryName(params.name, S.currentLang);
+    // Annotate a bean's weighted contribution only when it's a blend
+    // (non-integer share) — a single-origin bean's full count is
+    // already implied by the total, no need to repeat it per-bean.
+    const beanList = [...stats.beans].map(beanName => {
+      const share = stats.beanShots.get(beanName);
+      return Number.isInteger(share) ? _esc(beanName) : `${_esc(beanName)} (${share})`;
+    }).join(', ');
+    return `${name}: ${stats.shots} ${t('analytics_map_shots')} (${beanList})`;
+  }
+  const region = params.data?._region;
+  return `${_esc(params.name)}${region ? ' · ' + _esc(region) : ''}`;
+}
+
 export async function buildWorldMap() {
   const token = ++_worldMapReqToken;
   const wrap = document.getElementById('worldMapWrap');
@@ -995,23 +1020,7 @@ export async function buildWorldMap() {
   _echartsInstance.setOption({
     backgroundColor: c.backgroundColor,
     tooltip: {
-      formatter: (params) => {
-        if (params.seriesType === 'map') {
-          const stats = params.data?._stats;
-          if (!stats) return null;
-          const name = countryName(params.name, S.currentLang);
-          // Annotate a bean's weighted contribution only when it's a blend
-          // (non-integer share) — a single-origin bean's full count is
-          // already implied by the total, no need to repeat it per-bean.
-          const beanList = [...stats.beans].map(beanName => {
-            const share = stats.beanShots.get(beanName);
-            return Number.isInteger(share) ? beanName : `${beanName} (${share})`;
-          }).join(', ');
-          return `${name}: ${stats.shots} ${t('analytics_map_shots')} (${beanList})`;
-        }
-        const region = params.data?._region;
-        return `${params.name}${region ? ' · ' + region : ''}`;
-      },
+      formatter: worldMapTooltipFormatter,
     },
     geo: {
       map: 'world', roam: true, scaleLimit: { min: 1, max: 12 }, center, zoom,
