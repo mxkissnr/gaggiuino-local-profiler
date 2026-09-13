@@ -41,14 +41,18 @@ COPY public-src/ ./public-src/
 RUN npm run build
 
 # ── Go builder ────────────────────────────────────────────────────────────
-# Tag-pinned only (not by digest, unlike the node:24-slim / alpine:3.22
-# stages): this stage builds nothing that ships, and floating to the latest
-# 1.25.x patch is deliberate — it keeps the build toolchain ahead of, or
-# equal to, the `toolchain go1.25.14` directive in go/go.mod, so `go build`
-# never has to fetch a newer toolchain at image-build time (which would fail
-# in a network-restricted buildx/CI builder). Renovate's gomod manager bumps
-# that go.mod directive on its own cadence; this tag needs no maintenance.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+# Digest-pinned (#1063, Scorecard pinned-dependencies) like the node:24-slim
+# / alpine:3.22 stages; Renovate's dockerfile manager keeps it current the
+# same way. This stage builds nothing that ships, so the pin is about
+# supply-chain reproducibility, not the toolchain-currency concern that
+# used to justify floating the tag here: at pin time this digest already
+# resolves to 1.25.14-alpine3.24, at or ahead of the `toolchain go1.25.14`
+# directive in go/go.mod, so `go build` doesn't need to fetch a newer
+# toolchain at image-build time. If go.mod's directive is bumped ahead of
+# Renovate's next digest PR, `go build` falls back to downloading the
+# newer toolchain itself — ubuntu-latest GitHub-hosted runners have
+# network access, so that degrades to a slower build rather than failing.
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT

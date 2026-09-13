@@ -50,8 +50,13 @@ const manualSyncCooldown = 30 * time.Second
 const syncHTTPTimeout = 10 * time.Second
 
 // syncClient is a dedicated client so the per-request timeout above is
-// explicit and independent of ha.Client / adapter clients.
-var syncClient = &http.Client{Timeout: syncHTTPTimeout}
+// explicit and independent of ha.Client / adapter clients. It dials
+// through machines.NewGuardedHTTPClient (#1049) rather than a bare
+// *http.Client: fetchLatestShotID/fetchShot hit the default machine's own
+// BaseURLFor host, the same SSRF-guarded threat model as every other
+// machine call in this app, and a bare client's http.DefaultTransport
+// would re-resolve that hostname unguarded at connect time.
+var syncClient = machines.NewGuardedHTTPClient(syncHTTPTimeout)
 
 // SetShotsRepo wires the shots Repository the manual-sync pull loop
 // persists into. Kept a setter (not a NewPoller parameter) so the three
