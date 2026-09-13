@@ -1128,6 +1128,68 @@
         .annotation-field textarea { resize: vertical; min-height: 58px; }
         .annotation-field.full-width { grid-column: 1 / -1; }
         .annotation-actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+
+        /* ── Live pre-shot setup panel (Material Design card) ─────── */
+        #live-shot-setup {
+            margin-top: var(--sp-4);
+            background: var(--gray-900);
+            border: 1px solid var(--gray-700);
+            border-radius: 12px;
+            overflow: hidden;
+            /* overflow:hidden clears min-size in flex layout, allowing the panel
+               to shrink to 0. flex-shrink:0 when open prevents this so all
+               fields remain visible — the parent flex container scrolls instead.
+               min-height ensures the toggle button is always fully visible even
+               when the parent flex container squeezes the closed panel. */
+            min-height: calc(var(--sp-3) * 2 + 1.2 * 0.875rem + 2px);
+        }
+        #live-shot-setup.open { flex-shrink: 0; }
+        #lsToggle {
+            width: 100%;
+            display: flex; align-items: center; gap: var(--sp-3);
+            padding: var(--sp-3) var(--sp-4);
+            background: transparent; border: none;
+            color: var(--gray-300); font-size: var(--fs-2); font-weight: 500;
+            cursor: pointer; text-align: left;
+            transition: background .15s, color .15s;
+        }
+        #lsToggle:hover { background: rgba(255,255,255,.04); color: var(--gray-100); }
+        .ls-icon { width: 16px; height: 16px; flex-shrink: 0; color: var(--gray-500); }
+        .ls-chevron { width: 16px; height: 16px; flex-shrink: 0; margin-left: auto; color: var(--gray-600); transition: transform .2s; }
+        #live-shot-setup.open #lsToggle {
+            color: var(--accent);
+            border-bottom: 1px solid var(--gray-700);
+        }
+        #live-shot-setup.open .ls-icon { color: var(--accent); }
+        #live-shot-setup.open .ls-chevron { transform: rotate(180deg); color: var(--accent); }
+        #lsToggle span { flex: 1; }
+
+        #lsFields {
+            display: none;
+            padding: var(--sp-4);
+        }
+        #live-shot-setup.open #lsFields { display: block; }
+        .ls-fields-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--sp-3);
+        }
+        .ls-fields-footer {
+            display: flex; justify-content: flex-end;
+            margin-top: var(--sp-3); padding-top: var(--sp-3);
+            border-top: 1px solid var(--gray-800);
+        }
+        #lsReset {
+            background: transparent;
+            border: 1px solid var(--gray-700);
+            border-radius: var(--radius);
+            color: var(--gray-500);
+            font-size: var(--fs-1);
+            padding: var(--sp-1) var(--sp-3);
+            cursor: pointer;
+            transition: border-color .15s, color .15s;
+        }
+        #lsReset:hover { border-color: var(--gray-500); color: var(--gray-300); }
         .ordered-by-badge { font-size: var(--fs-1); color: #a16207; background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.25); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); display: inline-flex; align-items: center; gap: var(--sp-1); }
         .autosave-status { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-1); color: var(--ok); opacity: 0; transition: opacity .3s; pointer-events: none; }
         .autosave-status.visible { opacity: 1; }

@@ -116,6 +116,8 @@ const fr: Partial<Translations> = {
     easter_egg_stat_sse_live:'en direct', easter_egg_stat_sse_poll:'interrogation', easter_egg_close:'Fermer',
     live_waiting:'En attente du shot …', live_disabled:'Live désactivé (machine éteinte)',
     machine_ready:'Machine prête',
+    machine_cold_title:'Machine froide',
+    live_setup_toggle:'Configurer le café', live_setup_reset:'Réinitialiser',
     ref_label:'Référence:', ref_none:'— pas de shot de référence —', ref_clear:`${CLOSE_ICON_SVG} Effacer`,
     ref_pressure:'Réf: Pression', ref_flow:'Réf: Débit', ref_weight:'Réf: Poids', ref_temp:'Réf: Temp',
     chart_pressure:'Pression', chart_flow:'Débit', chart_weightflow:'Débit poids',

@@ -116,6 +116,8 @@ const it: Partial<Translations> = {
     easter_egg_stat_sse_live:'live', easter_egg_stat_sse_poll:'polling', easter_egg_close:'Chiudi',
     live_waiting:'In attesa dello shot …', live_disabled:'Live disabilitato (macchina spenta)',
     machine_ready:'Macchina pronta',
+    machine_cold_title:'Macchina fredda',
+    live_setup_toggle:'Configura bevanda', live_setup_reset:'Reimposta',
     ref_label:'Riferimento:', ref_none:'— nessuno shot di riferimento —', ref_clear:`${CLOSE_ICON_SVG} Rimuovi`,
     ref_pressure:'Rif: Pressione', ref_flow:'Rif: Flusso', ref_weight:'Rif: Peso', ref_temp:'Rif: Temp',
     chart_pressure:'Pressione', chart_flow:'Flusso', chart_weightflow:'Flusso peso',
