@@ -607,3 +607,31 @@ func TestImage_PostDeleteMissingShotIs404(t *testing.T) {
 		t.Fatalf("DELETE missing shot: status = %d, want 404", rec.Code)
 	}
 }
+
+// TestPostImage_RateLimited proves the dedicated image:<ip> feature limit
+// (#1056, imageRateLimitPerMin) on POST /api/shots/{id}/image — the same
+// pattern as TestGetCard_RateLimited in card_test.go. The limiter runs
+// before id-parsing, so this drives it with missing-shot requests (404) and
+// never pays a real decode/encode pass: the first imageRateLimitPerMin
+// requests pass the limiter, the next one 429s. Every httptest.NewRequest
+// shares one RemoteAddr, so they share one bucket.
+func TestPostImage_RateLimited(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	post := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/shots/999999/image", bytes.NewReader(pngMagic))
+		req.Header.Set("Content-Type", "image/png")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+	for i := 0; i < imageRateLimitPerMin; i++ {
+		if rec := post(); rec.Code != http.StatusNotFound {
+			t.Fatalf("request %d: status = %d, want 404 (limiter not yet tripped)", i, rec.Code)
+		}
+	}
+	if rec := post(); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("request %d: status = %d, want 429", imageRateLimitPerMin, rec.Code)
+	}
+}

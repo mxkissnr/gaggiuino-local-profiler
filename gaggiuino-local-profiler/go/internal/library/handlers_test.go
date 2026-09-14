@@ -823,6 +823,33 @@ func TestCreateBean_RateLimited(t *testing.T) {
 	}
 }
 
+// TestPostBeanImage_RateLimited proves the dedicated image:<ip> feature
+// limit (#1056, imageRateLimitPerMin) shared by every library entity's
+// POST .../image route. rateLimitImage runs before the entity lookup, so
+// this drives it against a nonexistent bean id (404) and never pays a real
+// decode/encode pass: the first imageRateLimitPerMin requests pass the
+// limiter, the next one 429s.
+func TestPostBeanImage_RateLimited(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	post := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/library/bean/999999/image", bytes.NewReader(makeJPEG(t, 4, 4)))
+		req.Header.Set("Content-Type", "image/jpeg")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+	for i := 0; i < imageRateLimitPerMin; i++ {
+		if rec := post(); rec.Code != http.StatusNotFound {
+			t.Fatalf("request %d: status = %d, want 404 (limiter not yet tripped); body=%s", i, rec.Code, rec.Body.String())
+		}
+	}
+	if rec := post(); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("request %d: status = %d, want 429", imageRateLimitPerMin, rec.Code)
+	}
+}
+
 func itoa(id int64) string {
 	return strconv.FormatInt(id, 10)
 }

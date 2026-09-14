@@ -14,6 +14,7 @@
 - **The machine firmware update entity now actually detects available updates.** The GitHub latest-release lookup was cancelling its own network request before finishing reading the response, so it never found a match and silently reported "up to date" every single time; a genuine no-match result is also no longer cached as good for a full hour. Closes #1042
 - **The Statistics world map tooltip no longer renders bean or region names as HTML**, which could otherwise be used to inject markup into the page via a bean name (including one pulled in automatically by the bean importer). Closes #1054
 - **`GET /api/mqtt/settings` no longer returns the broker password in cleartext**, and a stored password can now be explicitly removed. Responses report `hasPassword` instead of the real value, saving without a `password` field keeps the stored one unchanged, and a new "Remove password" toggle in the Settings UI sends `clearPassword: true` to wipe it outright — previously a stored password could only be overwritten, never deleted. Closes #1050, #1062
+- **Downloading a full backup and uploading a shot, bean, grinder, basket, or puck screen photo now each carry their own per-minute rate limit** instead of relying solely on the shared app-wide cap, since both are unusually expensive requests to let one client repeat without limit. Closes #1056
 
 ## [3.0.2] – 2026-09-11
 ### Changed
