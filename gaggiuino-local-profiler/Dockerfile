@@ -85,7 +85,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
 # Digest-pinned like the node:24-slim stage above — this is the image that
 # actually ships, so a moved upstream tag must not change it silently.
 # Renovate's dockerfile manager keeps the digest current.
-FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 
 # Empty by default -- only .github/workflows/build-dev.yaml passes this
 # build-arg (as dev-<run_number>); the release build (build.yaml) never sets
