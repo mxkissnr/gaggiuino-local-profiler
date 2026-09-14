@@ -1,6 +1,6 @@
 {
   "name": "gaggiuino-local-profiler-frontend",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "scripts": {
     "build": "vite build",
     "dev": "vite",
@@ -22,7 +22,7 @@
     "eslint": "^10.8.1",
     "globals": "^17.11.0",
     "playwright": "^1.62.1",
-    "vite": "8.2.2",
+    "vite": "8.3.0",
     "vitest": "5.0.0"
   },
   "allowScripts": {

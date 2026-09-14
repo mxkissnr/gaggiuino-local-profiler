@@ -295,7 +295,7 @@ export default {
     settings_mqtt_title:'Live-Verbindung', settings_mqtt_desc:'Wie GLP Live-Sensordaten von der Maschine bezieht.',
     settings_mqtt_transport_ws:'WebSocket (Standard)', settings_mqtt_transport_mqtt:'MQTT',
     settings_mqtt_discovered:'Broker automatisch über Home Assistant erkannt', settings_mqtt_not_discovered:'Kein MQTT-Dienst über Home Assistant erkannt — bitte manuell eintragen',
-    settings_mqtt_host:'Broker-Host', settings_mqtt_port:'Port', settings_mqtt_username:'Benutzername (optional)', settings_mqtt_password:'Passwort (optional)', settings_mqtt_prefix:'Topic-Präfix',
+    settings_mqtt_host:'Broker-Host', settings_mqtt_port:'Port', settings_mqtt_username:'Benutzername (optional)', settings_mqtt_password:'Passwort (optional)', settings_mqtt_password_stored:'Unverändert — leer lassen zum Beibehalten', settings_mqtt_password_remove:'Passwort entfernen', settings_mqtt_prefix:'Topic-Präfix',
     settings_mqtt_save:'Speichern', settings_mqtt_apply:'Auf Maschine übertragen', settings_mqtt_host_required:'Bitte einen Broker-Host angeben',
     settings_mqtt_saved:'Gespeichert', settings_mqtt_save_error:(msg)=>`Fehler: ${msg}`,
     settings_mqtt_applying:'Übertrage …', settings_mqtt_applied:'An die Maschine übertragen', settings_mqtt_apply_error:(msg)=>`Fehler: ${msg}`,

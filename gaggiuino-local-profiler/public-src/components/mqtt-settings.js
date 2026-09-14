@@ -12,6 +12,14 @@ import { S } from '../state.js';
 
 let _selectedTransport = 'websocket';
 let _discovery = null;
+// #1050/#1062: GET /api/mqtt/settings no longer echoes the stored broker
+// password back (it reports `hasPassword` instead), so the form cannot
+// pre-fill the field. This tracks whether one is stored, so
+// saveMqttSettings() can tell "the user left it alone" (omit the key ->
+// backend keeps the stored value) apart from "there was never one" (send
+// the empty string), and so the "Remove password" toggle only shows up
+// when there is something to remove.
+let _hasStoredPassword = false;
 
 export async function loadMqttSettings() {
   try {
@@ -27,7 +35,16 @@ export async function loadMqttSettings() {
     document.getElementById('mqttHost').value     = settings.host || (_discovery.available ? _discovery.host : '') || '';
     document.getElementById('mqttPort').value      = settings.port || (_discovery.available ? _discovery.port : '') || 1883;
     document.getElementById('mqttUsername').value  = settings.username || (_discovery.available ? _discovery.username : '') || '';
-    document.getElementById('mqttPassword').value   = settings.password || (_discovery.available ? _discovery.password : '') || '';
+    _hasStoredPassword = !!settings.hasPassword;
+    // Only auto-discovery may pre-fill this; a stored password is never sent
+    // to the client, so the field stays blank and the placeholder says so.
+    const pwEl = document.getElementById('mqttPassword');
+    pwEl.value = _hasStoredPassword ? '' : ((_discovery.available ? _discovery.password : '') || '');
+    pwEl.placeholder = _hasStoredPassword ? t('settings_mqtt_password_stored') : '';
+    const removeRow = document.getElementById('mqttPasswordRemoveRow');
+    if (removeRow) removeRow.style.display = _hasStoredPassword ? '' : 'none';
+    const removeCb = document.getElementById('mqttPasswordRemove');
+    if (removeCb) removeCb.checked = false;
     document.getElementById('mqttPrefix').value    = settings.prefix || 'gaggiuino';
 
     const hint = document.getElementById('mqttDiscoveryHint');
@@ -62,9 +79,18 @@ export async function saveMqttSettings() {
     host:      document.getElementById('mqttHost').value.trim(),
     port:      parseInt(document.getElementById('mqttPort').value, 10) || 1883,
     username:  document.getElementById('mqttUsername').value.trim(),
-    password:  document.getElementById('mqttPassword').value,
     prefix:    document.getElementById('mqttPrefix').value.trim() || 'gaggiuino',
   };
+  const removeCb = document.getElementById('mqttPasswordRemove');
+  if (removeCb && removeCb.checked) {
+    // #1062: explicit removal, independent of whatever's left in the field.
+    payload.clearPassword = true;
+  } else {
+    // #1050: an empty field while a password is stored means "unchanged" —
+    // omitting the key tells the backend to keep it. Sending "" would wipe it.
+    const pw = document.getElementById('mqttPassword').value;
+    if (pw !== '' || !_hasStoredPassword) payload.password = pw;
+  }
   if (payload.transport === 'mqtt' && !payload.host) {
     if (resultEl) resultEl.textContent = t('settings_mqtt_host_required');
     return;
