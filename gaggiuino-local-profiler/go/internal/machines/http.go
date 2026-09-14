@@ -34,6 +34,37 @@ var httpClient = &http.Client{
 	Transport: &http.Transport{DialContext: machinesDialer.DialContext},
 }
 
+// NewGuardedHTTPClient returns an *http.Client dialing exclusively through
+// machinesDialer — the same guard httpClient above uses — for the two call
+// sites outside this package that also reach a user-configured machine
+// host over plain net/http: system/sync.go's manual shot-history pull and
+// debug/debug.go's GET /api/debug/machine probe (#1049). Both used to build
+// their own bare *http.Client, which left http.DefaultTransport (proxy-
+// aware, no dial guard at all) in play — a hostname that passed
+// machines.BaseURLFor's check at request time could still resolve
+// somewhere else entirely by the time that unguarded transport dialed it
+// (DNS rebinding), and a 3xx response would be followed there automatically.
+//
+// timeout sets the client's overall per-request Timeout (each call site
+// keeps its own existing constant rather than sharing one here).
+//
+// CheckRedirect is deliberately left at net/http's default (follow, up to
+// 10 hops) rather than refusing redirects outright: every hop's connection
+// — including a redirected one — dials through this same guarded Transport,
+// so a redirect to a blocked (loopback/link-local/metadata) address fails
+// at dial time exactly like the initial request would; there is no
+// separate window a CheckRedirect check would need to close. This differs
+// from internal/importer/fetch.go, which fetches arbitrary user-pasted
+// URLs (a wider threat model, assertPublicHost) and caps redirect hops
+// explicitly for that reason — a user's own configured machine host has no
+// such need.
+func NewGuardedHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: &http.Transport{DialContext: machinesDialer.DialContext},
+	}
+}
+
 // httpGetBytes issues a GET request and returns the raw response body
 // bytes — deliberately not JSON-decoded-then-re-encoded anywhere along
 // settings-proxy paths (see gaggiuino_adapter.go's GetSettings/

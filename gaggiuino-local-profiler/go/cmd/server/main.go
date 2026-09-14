@@ -287,16 +287,19 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	machinesHandlers.RegisterRoutes(mux)
 
 	// Phase 2e (#901): routes/debug.js — GET /api/debug/export-db,
-	// POST /api/debug/import-db (both gated on GLP_DEV_BUILD) — plus
-	// routes/system.js's H2 GET /api/debug/machine (registered only when
-	// NODE_ENV !== 'production'). importDB's own http.MaxBytesReader is the
+	// POST /api/debug/import-db — plus routes/system.js's H2 GET
+	// /api/debug/machine. All three (and the two ingress routes below) are
+	// gated on GLP_DEV_BUILD (#1051: previously /api/debug/machine and the
+	// ingress routes used a NODE_ENV != production check instead, but
+	// nothing in the shipped image ever sets NODE_ENV, so they were live on
+	// every real install). importDB's own http.MaxBytesReader is the
 	// route-scoped 500 MB body ceiling server.js:192 sets with
 	// express.raw({ limit: '500mb' }) — see the handler-chain comment below
 	// and go/internal/debug/debug.go.
 	//
 	// Phase 3 (#901): GET /api/debug/ingress (+ /sse-probe) — a Go-only
 	// HA-ingress self-diagnostic for opening through the real HA panel, same
-	// NODE_ENV != production gating as /api/debug/machine. See
+	// GLP_DEV_BUILD gating as /api/debug/machine. See
 	// go/internal/debug/ingress.go.
 	debug.NewHandlers(sqlDB, dbPath, registry).RegisterRoutes(mux)
 

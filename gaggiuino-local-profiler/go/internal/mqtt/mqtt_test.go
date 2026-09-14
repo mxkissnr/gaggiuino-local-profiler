@@ -282,6 +282,106 @@ func TestRoute_SettingsGetPost(t *testing.T) {
 	}
 }
 
+// TestRoute_SettingsGet_NeverReturnsPassword is the #1050 regression test:
+// the stored broker password must never be serialized back to the client,
+// and the redacted view must instead say whether one is set.
+func TestRoute_SettingsGet_NeverReturnsPassword(t *testing.T) {
+	_, repo, m := newRoutes(t, &fakeAdapter{}, fakeSupervisor{err: errors.New("x")})
+	if _, err := repo.SaveSettings(Settings{
+		Transport: TransportMQTT, Host: "192.168.1.50", Port: 1883,
+		Username: "u", Password: "super-secret", Prefix: "gaggiuino",
+	}); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	body := decode(t, do(t, m, http.MethodGet, "/api/mqtt/settings", ""))
+	if _, present := body["password"]; present {
+		t.Fatalf("GET /api/mqtt/settings leaked a password field: %v", body)
+	}
+	if body["hasPassword"] != true {
+		t.Fatalf("hasPassword = %v, want true", body["hasPassword"])
+	}
+	if raw, _ := json.Marshal(body); strings.Contains(string(raw), "super-secret") {
+		t.Fatalf("GET /api/mqtt/settings leaked the stored password: %s", raw)
+	}
+}
+
+// TestRoute_SettingsPost_AbsentPasswordKeepsStored is the #1050 regression
+// test's write-path counterpart: since GET never echoes the real password
+// (above), the Settings UI's re-submitted form omits it entirely when
+// unchanged — POST must then keep the previously stored password instead
+// of overwriting it with an empty string.
+func TestRoute_SettingsPost_AbsentPasswordKeepsStored(t *testing.T) {
+	_, repo, m := newRoutes(t, &fakeAdapter{}, fakeSupervisor{err: errors.New("x")})
+	if _, err := repo.SaveSettings(Settings{
+		Transport: TransportMQTT, Host: "192.168.1.50", Port: 1883,
+		Username: "u", Password: "super-secret", Prefix: "gaggiuino",
+	}); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	rec := do(t, m, http.MethodPost, "/api/mqtt/settings",
+		`{"transport":"mqtt","host":"192.168.1.50","port":1883,"username":"u","prefix":"gaggiuino"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if repo.GetSettings().Password != "super-secret" {
+		t.Fatalf("POST without a password field wiped the stored password: %+v", repo.GetSettings())
+	}
+
+	// A POST that DOES include a new password still overwrites it.
+	rec = do(t, m, http.MethodPost, "/api/mqtt/settings",
+		`{"transport":"mqtt","host":"192.168.1.50","port":1883,"username":"u","password":"new-secret","prefix":"gaggiuino"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if repo.GetSettings().Password != "new-secret" {
+		t.Fatalf("POST with a new password did not persist it: %+v", repo.GetSettings())
+	}
+}
+
+// TestRoute_SettingsPost_ClearPassword is the #1062 regression test: an
+// explicit clearPassword:true must wipe a stored password even though the
+// omitted-password path above would otherwise keep it, and even if a
+// password value is also present in the same request (clearPassword wins).
+func TestRoute_SettingsPost_ClearPassword(t *testing.T) {
+	_, repo, m := newRoutes(t, &fakeAdapter{}, fakeSupervisor{err: errors.New("x")})
+	if _, err := repo.SaveSettings(Settings{
+		Transport: TransportMQTT, Host: "192.168.1.50", Port: 1883,
+		Username: "u", Password: "super-secret", Prefix: "gaggiuino",
+	}); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	rec := do(t, m, http.MethodPost, "/api/mqtt/settings",
+		`{"transport":"mqtt","host":"192.168.1.50","port":1883,"username":"u","prefix":"gaggiuino","clearPassword":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if repo.GetSettings().Password != "" {
+		t.Fatalf("clearPassword:true did not wipe the stored password: %+v", repo.GetSettings())
+	}
+	if decode(t, rec)["hasPassword"] != false {
+		t.Fatalf("response hasPassword = %v, want false", decode(t, rec)["hasPassword"])
+	}
+
+	// clearPassword:true wins even when a password value is also sent.
+	if _, err := repo.SaveSettings(Settings{
+		Transport: TransportMQTT, Host: "192.168.1.50", Port: 1883,
+		Username: "u", Password: "super-secret", Prefix: "gaggiuino",
+	}); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	rec = do(t, m, http.MethodPost, "/api/mqtt/settings",
+		`{"transport":"mqtt","host":"192.168.1.50","port":1883,"username":"u","password":"ignored","prefix":"gaggiuino","clearPassword":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if repo.GetSettings().Password != "" {
+		t.Fatalf("clearPassword:true with a password field present should still wipe it: %+v", repo.GetSettings())
+	}
+}
+
 // TestRoute_SettingsPost_RejectsSSRFBlockedHost is the #988 regression
 // test's HTTP-handler-level counterpart: POSTing a broker host the shared
 // machine-host SSRF guard blocks must 400 and must not persist.

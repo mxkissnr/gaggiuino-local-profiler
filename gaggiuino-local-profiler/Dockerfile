@@ -41,18 +41,18 @@ COPY public-src/ ./public-src/
 RUN npm run build
 
 # ── Go builder ────────────────────────────────────────────────────────────
-# Tag-pinned only (not by digest, unlike the node:24-slim / alpine:3.22
-# stages): this stage builds nothing that ships, and floating to the latest
-# 1.27.x patch is deliberate — it keeps the build toolchain ahead of, or
-# equal to, the `toolchain go1.27.1` directive in go/go.mod, so `go build`
-# never has to fetch a newer toolchain at image-build time (which would fail
-# in a network-restricted buildx/CI builder). Renovate's gomod manager bumps
-# that go.mod directive on its own cadence; this tag needs no maintenance —
-# except that the major.minor here must be bumped by hand whenever Renovate
-# advances go.mod's `go` directive past this image's Go line (Renovate's
-# dockerfile manager only tracks digests within the pinned line, not the
-# line itself).
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
+# Digest-pinned (#1063, Scorecard pinned-dependencies) like the node:24-slim
+# / alpine:3.22 stages; Renovate's dockerfile manager keeps it current the
+# same way. This stage builds nothing that ships, so the pin is about
+# supply-chain reproducibility, not the toolchain-currency concern that
+# used to justify floating the tag here: at pin time this digest already
+# resolves to a 1.27.x toolchain, ahead of the `toolchain go1.25.14`
+# directive in go/go.mod, so `go build` doesn't need to fetch a newer
+# toolchain at image-build time. If go.mod's directive is bumped ahead of
+# Renovate's next digest PR, `go build` falls back to downloading the
+# newer toolchain itself — ubuntu-latest GitHub-hosted runners have
+# network access, so that degrades to a slower build rather than failing.
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:cf6fca6641884b8433441b2b0652976f975e1d0fdd26d177eaaf8596087f3125 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -89,7 +89,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
 # Digest-pinned like the node:24-slim stage above — this is the image that
 # actually ships, so a moved upstream tag must not change it silently.
 # Renovate's dockerfile manager keeps the digest current.
-FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 
 # Empty by default -- only .github/workflows/build-dev.yaml passes this
 # build-arg (as dev-<run_number>); the release build (build.yaml) never sets

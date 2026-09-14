@@ -16,6 +16,7 @@ const testIngressPath = "/api/hassio_ingress/0123456789abcdef0123456789abcdef"
 
 func ingressMux(t *testing.T) *http.ServeMux {
 	t.Helper()
+	t.Setenv("GLP_DEV_BUILD", "dev")
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "glp.db")
 	sqlDB := openTestDB(t, dbPath)
@@ -183,14 +184,17 @@ func TestIngress_FormatQueryOverridesAccept(t *testing.T) {
 }
 
 func TestIngress_NotRegisteredInProduction(t *testing.T) {
-	t.Setenv("NODE_ENV", "production")
-	mux := ingressMux(t)
+	t.Setenv("GLP_DEV_BUILD", "")
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "glp.db")
+	sqlDB := openTestDB(t, dbPath)
+	mux := newMux(NewHandlers(sqlDB, dbPath, nil))
 
 	for _, path := range []string{"/api/debug/ingress", "/api/debug/ingress/sse-probe"} {
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 		if rec.Code != http.StatusNotFound {
-			t.Errorf("GET %s under NODE_ENV=production: status = %d, want 404", path, rec.Code)
+			t.Errorf("GET %s with GLP_DEV_BUILD unset: status = %d, want 404", path, rec.Code)
 		}
 	}
 }

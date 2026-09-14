@@ -61,7 +61,7 @@ func (h *Handlers) discovery(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) getSettings(w http.ResponseWriter, _ *http.Request) {
-	httputil.WriteJSON(w, http.StatusOK, h.repo.GetSettings())
+	httputil.WriteJSON(w, http.StatusOK, redact(h.repo.GetSettings()))
 }
 
 func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
@@ -73,6 +73,18 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httputil.WriteError(w, http.StatusBadRequest, "invalid MQTT settings")
 		return
+	}
+	// #1062: an explicit clearPassword wipes the stored password regardless
+	// of whatever's in the password field, taking priority over both the
+	// "keep unchanged" and "overwrite" cases below.
+	if clear, _ := body["clearPassword"].(bool); clear {
+		parsed.Password = ""
+	} else if _, present := body["password"]; !present {
+		// #1050: getSettings never echoes the real password back (see above),
+		// so the Settings UI's re-submitted form has no way to send it back
+		// unchanged — an absent password field means "keep the stored one",
+		// not "clear it".
+		parsed.Password = h.repo.GetSettings().Password
 	}
 	// #988: reject a broker host the SSRF guard would refuse to dial, same
 	// threat model as a machine's own host (client.go's connect() re-checks
@@ -95,7 +107,7 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 	// takes effect on the very next read (mirrors gaggiuinoMqtt.disconnectAll()).
 	h.transport.DisconnectAll()
 	log.Printf("MQTT live-data transport settings updated")
-	httputil.WriteJSON(w, http.StatusOK, saved)
+	httputil.WriteJSON(w, http.StatusOK, redact(saved))
 }
 
 func (h *Handlers) applyToMachine(w http.ResponseWriter, r *http.Request) {

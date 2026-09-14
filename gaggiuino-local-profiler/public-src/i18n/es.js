@@ -295,7 +295,7 @@ export default {
     settings_mqtt_title:'Conexión en vivo', settings_mqtt_desc:'Cómo obtiene GLP los datos de sensores en vivo desde la máquina.',
     settings_mqtt_transport_ws:'WebSocket (predeterminado)', settings_mqtt_transport_mqtt:'MQTT',
     settings_mqtt_discovered:'Broker detectado automáticamente a través de Home Assistant', settings_mqtt_not_discovered:'No se detectó ningún servicio MQTT a través de Home Assistant — introdúzcalo manualmente',
-    settings_mqtt_host:'Host del broker', settings_mqtt_port:'Puerto', settings_mqtt_username:'Usuario (opcional)', settings_mqtt_password:'Contraseña (opcional)', settings_mqtt_prefix:'Prefijo de topic',
+    settings_mqtt_host:'Host del broker', settings_mqtt_port:'Puerto', settings_mqtt_username:'Usuario (opcional)', settings_mqtt_password:'Contraseña (opcional)', settings_mqtt_password_stored:'Sin cambios — dejar vacío para conservar', settings_mqtt_password_remove:'Eliminar contraseña', settings_mqtt_prefix:'Prefijo de topic',
     settings_mqtt_save:'Guardar', settings_mqtt_apply:'Aplicar a la máquina', settings_mqtt_host_required:'Introduce un host de broker',
     settings_mqtt_saved:'Guardado', settings_mqtt_save_error:(msg)=>`Error: ${msg}`,
     settings_mqtt_applying:'Aplicando …', settings_mqtt_applied:'Aplicado a la máquina', settings_mqtt_apply_error:(msg)=>`Error: ${msg}`,

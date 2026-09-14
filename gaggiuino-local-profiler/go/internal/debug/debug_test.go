@@ -356,7 +356,7 @@ func TestDebugRoutes_404WhenNotDevBuild(t *testing.T) {
 }
 
 func TestDebugMachine_NotRegisteredInProduction(t *testing.T) {
-	t.Setenv("NODE_ENV", "production")
+	t.Setenv("GLP_DEV_BUILD", "")
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "glp.db")
 	sqlDB := openTestDB(t, dbPath)
@@ -365,12 +365,12 @@ func TestDebugMachine_NotRegisteredInProduction(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/debug/machine", nil))
 	if rec.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want 404 (route not registered under NODE_ENV=production)", rec.Code)
+		t.Errorf("status = %d, want 404 (route not registered when GLP_DEV_BUILD is unset)", rec.Code)
 	}
 }
 
 func TestDebugMachine_ReportsUnreachableMachine(t *testing.T) {
-	t.Setenv("NODE_ENV", "development")
+	t.Setenv("GLP_DEV_BUILD", "dev")
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "glp.db")
 	sqlDB := openTestDB(t, dbPath)

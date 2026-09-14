@@ -5,7 +5,8 @@ go 1.26.0
 // Pin the build toolchain to a patched 1.27.x so `go build`/`go test` in CI
 // (actions/setup-go reads this file) and local dev pick up the Go standard-
 // library security fixes govulncheck flags against a bare 1.26.0 — the
-// golang:1.27-alpine Docker builder already floats to the latest patch.
+// digest-pinned golang:1.27-alpine Docker builder (Dockerfile) already
+// resolves to a toolchain at or ahead of this directive.
 toolchain go1.27.1
 
 require (
