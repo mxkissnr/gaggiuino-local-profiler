@@ -48,7 +48,7 @@ RUN npm run build
 # never has to fetch a newer toolchain at image-build time (which would fail
 # in a network-restricted buildx/CI builder). Renovate's gomod manager bumps
 # that go.mod directive on its own cadence; this tag needs no maintenance.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
