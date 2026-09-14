@@ -43,12 +43,16 @@ RUN npm run build
 # ── Go builder ────────────────────────────────────────────────────────────
 # Tag-pinned only (not by digest, unlike the node:24-slim / alpine:3.22
 # stages): this stage builds nothing that ships, and floating to the latest
-# 1.25.x patch is deliberate — it keeps the build toolchain ahead of, or
-# equal to, the `toolchain go1.25.14` directive in go/go.mod, so `go build`
+# 1.27.x patch is deliberate — it keeps the build toolchain ahead of, or
+# equal to, the `toolchain go1.27.1` directive in go/go.mod, so `go build`
 # never has to fetch a newer toolchain at image-build time (which would fail
 # in a network-restricted buildx/CI builder). Renovate's gomod manager bumps
-# that go.mod directive on its own cadence; this tag needs no maintenance.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+# that go.mod directive on its own cadence; this tag needs no maintenance —
+# except that the major.minor here must be bumped by hand whenever Renovate
+# advances go.mod's `go` directive past this image's Go line (Renovate's
+# dockerfile manager only tracks digests within the pinned line, not the
+# line itself).
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT

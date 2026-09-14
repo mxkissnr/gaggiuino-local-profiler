@@ -2,10 +2,10 @@ module github.com/mxkissnr/gaggiuino-local-profiler/go
 
 go 1.26.0
 
-// Pin the build toolchain to a patched 1.25.x so `go build`/`go test` in CI
+// Pin the build toolchain to a patched 1.27.x so `go build`/`go test` in CI
 // (actions/setup-go reads this file) and local dev pick up the Go standard-
-// library security fixes govulncheck flags against a bare 1.25.0 — the
-// golang:1.25-alpine Docker builder already floats to the latest patch.
+// library security fixes govulncheck flags against a bare 1.26.0 — the
+// golang:1.27-alpine Docker builder already floats to the latest patch.
 toolchain go1.27.1
 
 require (
