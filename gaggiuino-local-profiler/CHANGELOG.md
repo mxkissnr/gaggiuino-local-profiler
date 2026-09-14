@@ -11,6 +11,13 @@
 - **The machine firmware update entity now actually detects available updates.** The GitHub latest-release lookup was cancelling its own network request before finishing reading the response, so it never found a match and silently reported "up to date" every single time; a genuine no-match result is also no longer cached as good for a full hour. Closes #1042
 - **The Statistics world map tooltip no longer renders bean or region names as HTML**, which could otherwise be used to inject markup into the page via a bean name (including one pulled in automatically by the bean importer). Closes #1054
 
+## [3.0.2] – 2026-09-11
+### Changed
+- **Documentation cleanup: "app" terminology to match Home Assistant's add-on rename, a shorter armv7 note, a tidier README screenshot grid and a description of the machine valve fields.** Closes #1039
+
+### Fixed
+- **The machine firmware check no longer breaks when GitHub is unreachable.** A rate-limited or timed-out latest-release lookup now returns the installed firmware version with `latest: null` instead of failing the whole request, serves the last known result while the failure lasts, and runs on its own timeout independent of the caller — so Home Assistant's machine firmware entity stops showing "Unknown". Closes #1037
+
 ## [3.0.1] – 2026-09-10
 ### Fixed
 - **Demo mode's shot detail is no longer empty** — the curve chart, P·Q view and average-pressure/temperature figures now render for demo shots, which since 3.0.0 had been coming back blank. Closes #1034
