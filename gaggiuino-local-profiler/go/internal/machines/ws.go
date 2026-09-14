@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
@@ -23,11 +23,10 @@ import (
 // pattern (lib/gaggiuino-live-client.js's port) this machine type also
 // uses, for continuously-pushed sensor/system-state data.
 //
-// nhooyr.io/websocket (per this phase's task brief) is used as the client
-// library — its own package doc now points at a fork, coder/websocket,
-// as the actively maintained home, but the API is unchanged and the
-// module still resolves and builds correctly, so this port uses the
-// explicitly-specified module path as directed.
+// github.com/coder/websocket is used as the client library — the fork of
+// the original nhooyr.io/websocket that took over as the actively
+// maintained home once nhooyr.io/websocket was marked deprecated
+// upstream (#1058). The API is unchanged.
 
 // wsDefaultTimeout ports gaggiuino-ws-client.js's DEFAULT_TIMEOUT_MS.
 const wsDefaultTimeout = 8 * time.Second
