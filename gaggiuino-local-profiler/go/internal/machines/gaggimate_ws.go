@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 )
 
 // This file ports lib/machines/gaggimate/ws-client.js's request()/

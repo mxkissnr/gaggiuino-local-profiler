@@ -32,7 +32,7 @@
 //   - ws.go / live.go — lib/gaggiuino-ws-client.js's short-lived-
 //     connection-per-request client (profile CRUD, #597 commands) and
 //     lib/gaggiuino-live-client.js's persistent auto-reconnecting session
-//     (cached d_sensor_snap/d_sys_state pushes), both on nhooyr.io/websocket.
+//     (cached d_sensor_snap/d_sys_state pushes), both on github.com/coder/websocket.
 //   - gaggiuino_adapter.go / http.go — the Gaggiuino Adapter implementation:
 //     REST calls (net/http) plus ws.go/live.go for what has no REST
 //     equivalent.

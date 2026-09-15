@@ -131,6 +131,16 @@ func backupTimestamp() string {
 	return time.Now().Format("2006-01-02_15-04-05")
 }
 
+// backupRateLimitPerMin is the dedicated per-IP ceiling for GET /api/backup
+// (#1056). The legacy export streams the entire database plus every stored
+// image on every hit — strictly more than GET /api/debug/export-db, which
+// only streams the raw SQLite file and is already limited to 5/min (#999,
+// security audit #977 round 3 finding 3.2) — so it gets the same feature
+// limiter on top of the app-wide 600/min backstop. This is DELIBERATELY
+// STRICTER THAN NODE: routes/backup.js feature-limits neither this route
+// nor the image-upload routes, relying on the shared backstop alone.
+const backupRateLimitPerMin = 5
+
 // ── GET /api/backup ──────────────────────────────────────────────────────
 
 // getBackup ports GET /api/backup: always the unscoped, all-sections,
@@ -138,6 +148,10 @@ func backupTimestamp() string {
 // (backup.json's contents plus an inline base64 `images` map), never
 // assembled in RAM (#959).
 func (h *Handlers) getBackup(w http.ResponseWriter, r *http.Request) {
+	if !h.rl.Allow("backup:"+auth.RemoteIP(r), backupRateLimitPerMin) {
+		writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		return
+	}
 	small, err := h.deps.gatherSmallSections("")
 	if err != nil {
 		internalError(w, err)

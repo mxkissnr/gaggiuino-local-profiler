@@ -130,6 +130,9 @@ func (h *Handlers) getPuckScreenImage(w http.ResponseWriter, r *http.Request) {
 
 // postPuckScreenImage ports POST /api/library/puckscreen/:id/image.
 func (h *Handlers) postPuckScreenImage(w http.ResponseWriter, r *http.Request) {
+	if !h.rateLimitImage(w, r) {
+		return
+	}
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	lib, err := h.repo.GetLibrary()
 	if err != nil {

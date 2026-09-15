@@ -6,6 +6,8 @@
 - **Documentation cleanup: "app" terminology to match Home Assistant's add-on rename, a shorter armv7 note, a tidier README screenshot grid and a description of the machine valve fields.** Closes #1039
 - **Consolidated several duplicated HTML-escaping helpers scattered across the web app onto a single shared one**, so machine names, "what's new" entries, world-map tooltips and other user-supplied text are all sanitized the same consistent way before being rendered. Closes #1053
 - **The Docker build's Go toolchain base image is now pinned to a digest**, matching the other build stages, for a reproducible supply chain. Closes #1063
+- **The machine WebSocket connection now runs on the actively maintained fork of its client library**, since the previous one was deprecated upstream with maintenance moved elsewhere. Closes #1058
+- **Corrected a Dockerfile comment that wrongly claimed the Go builder stage "builds nothing that ships"**, when it actually compiles the exact server binary the runtime image ships. Closes #1052
 
 ### Fixed
 - **Manual shot sync and the machine debug probe now route their network calls through the same protection every other machine request already used**, so a machine host that changes what it points to after being saved — or that answers with a redirect — can no longer make the app reach an address it was never meant to. Closes #1049
@@ -14,6 +16,7 @@
 - **The machine firmware update entity now actually detects available updates.** The GitHub latest-release lookup was cancelling its own network request before finishing reading the response, so it never found a match and silently reported "up to date" every single time; a genuine no-match result is also no longer cached as good for a full hour. Closes #1042
 - **The Statistics world map tooltip no longer renders bean or region names as HTML**, which could otherwise be used to inject markup into the page via a bean name (including one pulled in automatically by the bean importer). Closes #1054
 - **`GET /api/mqtt/settings` no longer returns the broker password in cleartext**, and a stored password can now be explicitly removed. Responses report `hasPassword` instead of the real value, saving without a `password` field keeps the stored one unchanged, and a new "Remove password" toggle in the Settings UI sends `clearPassword: true` to wipe it outright — previously a stored password could only be overwritten, never deleted. Closes #1050, #1062
+- **Downloading a full backup and uploading a shot, bean, grinder, basket, or puck screen photo now each carry their own per-minute rate limit** instead of relying solely on the shared app-wide cap, since both are unusually expensive requests to let one client repeat without limit. Closes #1056
 
 ## [3.0.2] – 2026-09-11
 ### Changed

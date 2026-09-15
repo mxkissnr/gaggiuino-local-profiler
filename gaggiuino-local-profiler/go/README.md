@@ -124,7 +124,7 @@ library domain on top of that same pattern:
   (`internal/machines/proto`, a from-scratch hand-written wire codec since
   no `.proto` sources exist anywhere for this firmware, cross-validated
   field-for-field against `lib/gaggiuino-proto.js`'s real
-  `@protobuf-ts/runtime` output) over `nhooyr.io/websocket`, plus
+  `@protobuf-ts/runtime` output) over `github.com/coder/websocket`, plus
   GaggiMate's JSON WebSocket protocol. `live.go`'s persistent Gaggiuino WS
   session caches every live sensor/system-state push, read (not
   re-polled) by Phase 1g's `internal/system.Poller` — this phase's own

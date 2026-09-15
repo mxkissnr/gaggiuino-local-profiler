@@ -48,6 +48,25 @@ func TestGetBackup_EmptyInstall(t *testing.T) {
 	}
 }
 
+// TestGetBackup_RateLimited proves the dedicated backup:<ip> feature limit
+// (#1056, backupRateLimitPerMin) on GET /api/backup — the same pattern as
+// internal/debug's TestExportDB_RateLimited. Every httptest.NewRequest
+// shares one RemoteAddr, so they share one bucket: the first
+// backupRateLimitPerMin requests stream the export, the next one 429s.
+func TestGetBackup_RateLimited(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	for i := 0; i < backupRateLimitPerMin; i++ {
+		if rec := doJSON(t, mux, http.MethodGet, "/api/backup", nil); rec.Code != http.StatusOK {
+			t.Fatalf("request %d: status = %d, want 200 (limiter not yet tripped)", i, rec.Code)
+		}
+	}
+	if rec := doJSON(t, mux, http.MethodGet, "/api/backup", nil); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("request %d: status = %d, want 429", backupRateLimitPerMin, rec.Code)
+	}
+}
+
 func TestPostBackup_ZipContainsBackupJSON(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)

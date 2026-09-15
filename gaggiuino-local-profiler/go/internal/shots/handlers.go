@@ -61,6 +61,17 @@ type Handlers struct {
 // real 60s wait — the same pattern as internal/debug's importDBMaxBytes.
 var cardRateLimitPerMin = 30
 
+// imageRateLimitPerMin is the dedicated per-IP ceiling for
+// POST /api/shots/{id}/image (#1056). Every upload runs a full decode,
+// downscale, re-encode and thumbnail pass (img.Save -> img.Optimize) on up
+// to img.MaxBytes — the most CPU-expensive authenticated route in the app
+// without a feature limit before this. Set to the same ceiling as
+// cardRateLimitPerMin: a legitimate client never needs to burst uploads
+// faster than the share-card renderer's own limit. This is DELIBERATELY
+// STRICTER THAN NODE: routes/shots.js feature-limits neither this route nor
+// GET /api/shots/{id}/card, relying on the shared 600/min backstop alone.
+const imageRateLimitPerMin = 30
+
 // SetCardDeps wires the two cross-domain lookups the share-card renderer
 // (GET /api/shots/{id}/card) needs — the install-id short code and a
 // bean-name → origin-country-code resolver. cmd/server passes closures over
@@ -575,6 +586,10 @@ func (h *Handlers) getImage(w http.ResponseWriter, r *http.Request) {
 // postImage ports POST /api/shots/:id/image (raw body upload, no URL
 // fetch — see image.go's doc comment).
 func (h *Handlers) postImage(w http.ResponseWriter, r *http.Request) {
+	if !h.rl.Allow("image:"+auth.RemoteIP(r), imageRateLimitPerMin) {
+		writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		return
+	}
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
 		writeError(w, http.StatusBadRequest, "Invalid shot ID")

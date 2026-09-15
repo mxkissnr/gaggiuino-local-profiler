@@ -12,6 +12,7 @@ toolchain go1.27.1
 require (
 	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/a-h/templ v0.3.1020
+	github.com/coder/websocket v1.8.15
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/goccy/go-json v0.10.6
 	github.com/kanrichan/resvg-go v0.0.1
@@ -21,7 +22,6 @@ require (
 	golang.org/x/time v0.16.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.58.0
-	nhooyr.io/websocket v1.8.17
 )
 
 require (
