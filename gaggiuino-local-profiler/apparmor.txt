@@ -2,18 +2,28 @@
 
 # GLP — Gaggiuino Local Profiler AppArmor profile.
 #
-# MUST BE VALIDATED IN complain MODE BEFORE THIS SHIPS AT enforce. See the
-# PR description for the exact steps. A too-tight profile fails in the
-# field with opaque errors (files silently unreadable, sockets silently
-# refused) and this repo has no way to run real AppArmor mediation in CI —
-# only a Home Assistant OS install can confirm it.
+# STATUS: shipped at `enforce` since #787, never validated. config.yaml
+# carries no `apparmor:` key, so the Supervisor applies this profile at
+# enforce on every Home Assistant OS install — but its rules were written by
+# inspection of the runtime shape below, and no complain-mode run has ever
+# been done on real hardware. Nothing in this repo or its CI can exercise
+# real AppArmor mediation, so only a Home Assistant OS install can confirm
+# it. That hardware validation is still owed and is tracked in #1055.
 #
-# VALIDATION STILL REQUIRED ON REAL HARDWARE: nothing in this repo/CI can
-# exercise real AppArmor mediation, so this file's rules were written by
-# inspection of the runtime shape below, never run in complain mode. Before
-# any release relies on this profile at enforce, it MUST be tested in
-# complain mode on real Home Assistant OS hardware and any denials it logs
-# addressed — do NOT flip it to enforce on the strength of a PR alone.
+# Until it happens, read this file as advisory defense-in-depth, not as a
+# containment boundary:
+#   - The broad `file,` rule below leaves filesystem access effectively
+#     unmediated, so it does NOT confine a compromised glp-server to /data.
+#     The capability, network and exec lists, plus the default-deny on
+#     everything not granted, are the parts that actually bite.
+#   - A too-tight profile fails in the field with opaque errors (files
+#     silently unreadable, sockets silently refused), which is the risk the
+#     broad `file,` rule deliberately trades away.
+#   - It stays at enforce rather than being disabled on purpose: the scoped
+#     rules still restrict meaningfully, and switching the profile off would
+#     grant strictly more than leaving it on. Any future narrowing of
+#     `file,` must be driven by denials actually collected in complain mode
+#     on real hardware (see #1055), not by inspection.
 #
 # Runtime shape this profile is derived from (not a template) — the Go
 # backend on Alpine, the only runtime as of the #977 cutover (the last
