@@ -8,7 +8,8 @@
 # inspection of the runtime shape below, and no complain-mode run has ever
 # been done on real hardware. Nothing in this repo or its CI can exercise
 # real AppArmor mediation, so only a Home Assistant OS install can confirm
-# it. That hardware validation is still owed and is tracked in #1055.
+# it. That hardware validation is still owed; it is tracked separately in
+# #1079.
 #
 # Until it happens, read this file as advisory defense-in-depth, not as a
 # containment boundary:
@@ -23,7 +24,7 @@
 #     rules still restrict meaningfully, and switching the profile off would
 #     grant strictly more than leaving it on. Any future narrowing of
 #     `file,` must be driven by denials actually collected in complain mode
-#     on real hardware (see #1055), not by inspection.
+#     on real hardware (see #1079), not by inspection.
 #
 # Runtime shape this profile is derived from (not a template) — the Go
 # backend on Alpine, the only runtime as of the #977 cutover (the last
