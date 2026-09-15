@@ -495,6 +495,9 @@ func (h *Handlers) getBeanImage(w http.ResponseWriter, r *http.Request) {
 // fallback — no URL fetch, no SSRF surface, unlike bean creation's
 // imageUrl field).
 func (h *Handlers) postBeanImage(w http.ResponseWriter, r *http.Request) {
+	if !h.rateLimitImage(w, r) {
+		return
+	}
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	lib, err := h.repo.GetLibrary()
 	if err != nil {

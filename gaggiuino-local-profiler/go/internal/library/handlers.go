@@ -148,6 +148,29 @@ func (h *Handlers) rateLimitCreate(w http.ResponseWriter, r *http.Request) bool 
 	return false
 }
 
+// imageRateLimitPerMin is the dedicated per-IP ceiling for every library
+// entity's POST .../image upload route (bean/grinder/basket/puckscreen,
+// #1056). Each upload runs a full decode, downscale, re-encode and
+// thumbnail pass (img.Save -> img.Optimize) on up to img.MaxBytes — the
+// most CPU-expensive authenticated route family in the app without a
+// feature limit before this. Set to the same ceiling rateLimitCreate
+// already uses for library creates, and matches the shot-card renderer's
+// own 30/min (internal/shots.cardRateLimitPerMin). DELIBERATELY STRICTER
+// THAN NODE: routes/library/*.js feature-limits creates/scans only, never
+// image uploads, relying on the shared 600/min backstop alone.
+const imageRateLimitPerMin = 30
+
+// rateLimitImage ports the same `lib:<ip>`-shaped guard as rateLimitCreate,
+// scoped to its own `image:<ip>` key so image uploads don't share a budget
+// with entity creates.
+func (h *Handlers) rateLimitImage(w http.ResponseWriter, r *http.Request) bool {
+	if h.limiter.allow("image:"+auth.RemoteIP(r), imageRateLimitPerMin) {
+		return true
+	}
+	writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+	return false
+}
+
 // ── GET /api/library, GET /api/library/beans-info ─────────────────────────
 
 // getLibrary ports GET /api/library: the full Library object, grinders

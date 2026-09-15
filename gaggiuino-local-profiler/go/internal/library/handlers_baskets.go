@@ -131,6 +131,9 @@ func (h *Handlers) getBasketImage(w http.ResponseWriter, r *http.Request) {
 
 // postBasketImage ports POST /api/library/basket/:id/image.
 func (h *Handlers) postBasketImage(w http.ResponseWriter, r *http.Request) {
+	if !h.rateLimitImage(w, r) {
+		return
+	}
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	lib, err := h.repo.GetLibrary()
 	if err != nil {

@@ -43,15 +43,19 @@ RUN npm run build
 # ── Go builder ────────────────────────────────────────────────────────────
 # Digest-pinned (#1063, Scorecard pinned-dependencies) like the node:24-slim
 # / alpine:3.22 stages; Renovate's dockerfile manager keeps it current the
-# same way. This stage builds nothing that ships, so the pin is about
-# supply-chain reproducibility, not the toolchain-currency concern that
-# used to justify floating the tag here: at pin time this digest already
-# resolves to a 1.27.x toolchain, ahead of the `toolchain go1.25.14`
-# directive in go/go.mod, so `go build` doesn't need to fetch a newer
-# toolchain at image-build time. If go.mod's directive is bumped ahead of
-# Renovate's next digest PR, `go build` falls back to downloading the
-# newer toolchain itself — ubuntu-latest GitHub-hosted runners have
-# network access, so that degrades to a slower build rather than failing.
+# same way. This stage compiles /out/glp-server (see the `go build` below)
+# and that exact binary is COPYed into the runtime image further down, so
+# the digest pin is about the supply-chain integrity of the shipped
+# artifact itself, not just build reproducibility (#1052 — an earlier
+# version of this comment wrongly claimed the stage "builds nothing that
+# ships"). The pin also carries a toolchain-currency concern: at pin time
+# this digest already resolves to a 1.27.x toolchain, ahead of the
+# `toolchain go1.25.14` directive in go/go.mod, so `go build` doesn't need
+# to fetch a newer toolchain at image-build time. If go.mod's directive is
+# bumped ahead of Renovate's next digest PR, `go build` falls back to
+# downloading the newer toolchain itself — ubuntu-latest GitHub-hosted
+# runners have network access, so that degrades to a slower build rather
+# than failing.
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:cf6fca6641884b8433441b2b0652976f975e1d0fdd26d177eaaf8596087f3125 AS builder
 ARG TARGETOS
 ARG TARGETARCH

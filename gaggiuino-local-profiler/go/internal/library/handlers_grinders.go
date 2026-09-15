@@ -155,6 +155,9 @@ func (h *Handlers) getGrinderImage(w http.ResponseWriter, r *http.Request) {
 
 // postGrinderImage ports POST /api/library/grinder/:id/image.
 func (h *Handlers) postGrinderImage(w http.ResponseWriter, r *http.Request) {
+	if !h.rateLimitImage(w, r) {
+		return
+	}
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	lib, err := h.repo.GetLibrary()
 	if err != nil {
