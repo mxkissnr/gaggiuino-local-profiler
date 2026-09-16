@@ -28,7 +28,10 @@ id_rsa
 id_rsa.*
 
 .memsearch/
-graphify-out/
+# No trailing slash: graphify-out exists as a symlink in some checkouts, and
+# a `graphify-out/` pattern only matches real directories — which is how the
+# symlink kept getting re-added to the index despite being "ignored" (#1033).
+graphify-out
 .claude/settings.local.json
 **/.claude/skills/
 **/.agents/
