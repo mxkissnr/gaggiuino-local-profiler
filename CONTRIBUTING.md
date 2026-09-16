@@ -51,11 +51,34 @@ Include:
 | Area | Details |
 |---|---|
 | Backend | Go — `gaggiuino-local-profiler/go/` (`cmd/server` entrypoint, one `internal/<domain>` package per concern; see `go/README.md`) |
-| Frontend | Vite build from `gaggiuino-local-profiler/public-src/` (views/, components/, i18n/, main.js, shared/) — `public/` is generated build output, not edited directly; the Go binary serves it via `//go:embed` |
+| Frontend | SPA source is `gaggiuino-local-profiler/public-src/` (views/, components/, i18n/, main.js, shared/); the production bundle is built from Go into `go/internal/webapp/dist/`, which the server embeds via `//go:embed`. See [Frontend build](#frontend-build) — `npm`/Vite is the local dev server only |
 | Routes | Each `internal/<domain>` package registers its own HTTP routes (`RegisterRoutes`), wired together in `go/cmd/server/main.go` |
 | Storage | SQLite (`go/internal/db`, `modernc.org/sqlite` — pure Go, no CGo) at `/data/glp.db` for shot data **and** machine config (the `machines` table is the source of truth — see [CLAUDE.md](CLAUDE.md#key-conventions)); `/data/*.json` for token, preheat state, profile cache, and `options.json` (a tracked *input* to the machine registry, adopted on start — not live config, see `go/internal/machines`) |
 | Translations | UI strings via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES/NL) — add all 6 languages for new keys |
 | URLs | Always relative (no leading `/`) for HA ingress compatibility |
+
+## Frontend build
+
+The SPA is built two different ways, for two different purposes — they no longer share a tool:
+
+| Purpose | Command | Tool |
+|---|---|---|
+| Production bundle (Docker image + CI, embedded via `//go:embed`) | `make -C go frontend`, or `go run ./cmd/frontend-build` from `go/` | esbuild's Go API (`go/cmd/frontend-build`) — no Node involved |
+| Local dev server with HMR | `npm run dev` | Vite |
+
+`go/cmd/frontend-build` reads `public-src/index.html`, bundles `public-src/` into `go/internal/webapp/dist/`
+(with hashed filenames and relative `./assets/...` URLs, both load-bearing for HA ingress — see #797),
+and rewrites the module `<script>` tag the way Vite's HTML plugin used to. The Dockerfile's builder
+stage and `scripts/e2e-harness.mjs` both call it, so the shipped image and the E2E server embed the
+same bundle.
+
+Node is therefore a **local-dev-only** dependency: it is not in the image and not in CI's build gate
+(`npm ci` there is only for lint/vitest/Playwright). `npm run build` still exists if you want to diff
+Vite's bundle against the Go builder's, but nothing shipped uses it.
+
+Note that `make -C go frontend` overwrites the committed `go/internal/webapp/dist/index.html`
+placeholder, so `git status` will show the dist tree as modified afterwards — `git checkout --
+gaggiuino-local-profiler/go/internal/webapp/dist` puts it back (the e2e harness restores it itself).
 
 ## Versioning
 

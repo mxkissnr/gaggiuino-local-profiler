@@ -2,13 +2,14 @@
 
 This directory is the GLP backend: a single static Go binary (`net/http` +
 `modernc.org/sqlite`, no CGo) that serves the REST/SSE API and embeds and
-serves the Vite SPA built from `../public-src`. It is the only backend —
+serves the SPA built from `../public-src`, bundled by
+`cmd/frontend-build` (esbuild's Go API, #1033). It is the only backend —
 the legacy Node.js/Express implementation (`server.js`, `lib/`, `routes/`)
 was removed from the tree in 3.0.0 (#1028); its last in-tree state is
 archived at tag `archive/node-backend-final` and branch
 `legacy/node-backend`.
 
-The repo-root `Dockerfile` builds this directory (Vite build → Go
+The repo-root `Dockerfile` builds this directory (esbuild SPA bundle → Go
 cross-compile → Alpine runtime) for amd64, armv7 and aarch64.
 
 ## Orientation
@@ -488,8 +489,8 @@ go/
     web/                   templ+htmx+Alpine pages, now the frozen no-JS fallback view mounted under /ui/ (Phase 1 parity round, #901): GET /ui/shots (Phase 2a) + Library (2b) + Machines/Live (2c) + Orders/Menu (2d) + Maintenance/Settings/Backup (2e)
       templates/             .templ sources (own package — see internal/web/doc.go)
       static/                vendored htmx/Alpine/Chart.js + style.css + live.js, embedded via embed.FS
-    webapp/                 the production frontend: the existing Vite SPA bundle (gaggiuino-local-profiler/public-src) embedded via //go:embed and served at / (Phase 1 parity round, #901 — see internal/webapp/doc.go)
-  Makefile                 `make generate`/`build`/`vet`/`test`/`fmt-check` — templ codegen first, every target (Phase 2a); `make frontend` stages the Vite build into internal/webapp/dist (Phase 1 parity round)
+    webapp/                 the production frontend: the SPA from gaggiuino-local-profiler/public-src, bundled by cmd/frontend-build (esbuild's Go API, #1033) and embedded via //go:embed, served at / (Phase 1 parity round, #901 — see internal/webapp/doc.go)
+  Makefile                 `make generate`/`build`/`vet`/`test`/`fmt-check` — templ codegen first, every target (Phase 2a); `make frontend` bundles the SPA into internal/webapp/dist via cmd/frontend-build (#1033)
   Dockerfile               build-only multi-arch image, native Go cross-compile (implemented, Phase 4, see "Docker")
   docker-entrypoint.sh     chown /data + drop to unprivileged `glp` user, mirrors the repo-root Node entrypoint (Phase 4)
   scripts/
@@ -543,7 +544,7 @@ i18n, the annotator, achievements — is ~15-20k lines chasing a target that
 keeps moving as `dev` ships, and the SPA already builds to relative-path,
 REST+SSE-only assets that run behind HA Ingress unmodified. So
 `internal/webapp` embeds that build output (`//go:embed all:dist`, staged
-by `make frontend` or the Dockerfile's `frontend` stage) and serves it at
+by `make frontend` or the Dockerfile's builder stage) and serves it at
 `/`, byte-for-byte the UI the Node app serves today, reaching frontend
 parity in one step. The eleven templ pages are frozen, not deleted:
 `cmd/server` mounts them under a `/ui/` prefix (via `http.StripPrefix` onto
@@ -764,10 +765,11 @@ make generate   # templ codegen — required before build/vet/test, see "Fronten
                 # (needs the `templ` CLI on PATH; `make generate` auto-installs
                 # it via `go install github.com/a-h/templ/cmd/templ@latest`
                 # if missing — see "Frontend"'s "Codegen" section)
-make frontend   # OPTIONAL: `npm ci && npm run build` at the repo root, staged
-                # into internal/webapp/dist for the //go:embed. Skip it and the
-                # binary embeds the committed dist/index.html placeholder
-                # instead (fine for backend work; the real SPA won't be served).
+make frontend   # OPTIONAL: runs cmd/frontend-build (esbuild's Go API, #1033),
+                # which bundles ../public-src into internal/webapp/dist for the
+                # //go:embed — no npm/Vite involved. Skip it and the binary
+                # embeds the committed dist/index.html placeholder instead
+                # (fine for backend work; the real SPA won't be served).
 go build ./...
 ```
 

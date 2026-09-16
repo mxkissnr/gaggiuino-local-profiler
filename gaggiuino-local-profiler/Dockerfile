@@ -19,30 +19,9 @@
 # runtime stage's own `apk add` below, which — unlike a C++ compile —
 # installs three tiny prebuilt packages.
 
-# ── Frontend stage: the Vite/rolldown SPA build ────────────────────────────
-# Host-platform only (no QEMU). Output is /app/public, copied into
-# internal/webapp/dist/ in the Go builder below. No toolchain packages
-# (python3/make/g++): the dependency set is frontend-only since 3.0.0
-# (#1028), so `npm ci` pulls Vite/esbuild prebuilts with nothing to compile.
-# node:24 dropped its 32-bit ARM (arm/v7) images, but this stage is pinned to
-# the CI runner's own architecture via --platform=$BUILDPLATFORM (amd64) and
-# its output is architecture-independent, so that has no bearing here.
-# Digest-pinned (multi-arch manifest) like the alpine runtime stage below;
-# Renovate's dockerfile manager keeps it current.
-FROM --platform=$BUILDPLATFORM node:24-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS frontend
-
-WORKDIR /app
-
-COPY package.json package-lock.json ./
-RUN npm ci
-
-COPY vite.config.js ./
-COPY public-src/ ./public-src/
-RUN npm run build
-
 # ── Go builder ────────────────────────────────────────────────────────────
-# Digest-pinned (#1063, Scorecard pinned-dependencies) like the node:24-slim
-# / alpine:3.22 stages; Renovate's dockerfile manager keeps it current the
+# Digest-pinned (#1063, Scorecard pinned-dependencies) like the alpine
+# runtime stage below; Renovate's dockerfile manager keeps it current the
 # same way. This stage compiles /out/glp-server (see the `go build` below)
 # and that exact binary is COPYed into the runtime image further down, so
 # the digest pin is about the supply-chain integrity of the shipped
@@ -74,11 +53,16 @@ RUN go mod download
 RUN go install github.com/a-h/templ/cmd/templ@v0.3.1020
 
 COPY go/ .
-# Replace the committed dist/index.html placeholder with the real Vite
-# build so internal/webapp's `//go:embed all:dist` picks up the full bundle.
-RUN rm -rf internal/webapp/dist
-COPY --from=frontend /app/public ./internal/webapp/dist
+# The SPA bundle internal/webapp embeds via `//go:embed all:dist` is built
+# here, from Go, with esbuild's Go API (#1033) — no Node stage, no `npm ci`
+# in the image. This replaces the committed dist/index.html placeholder the
+# COPY above brought in; cmd/frontend-build wipes and rebuilds the whole
+# directory. `go run` cross-compiles nothing: the tool runs natively on
+# $BUILDPLATFORM and its output is architecture-independent, so all three
+# matrix arches get byte-identical assets.
+COPY public-src/ ./public-src/
 RUN templ generate
+RUN go run ./cmd/frontend-build -src ./public-src -out ./internal/webapp/dist
 
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
     go build -trimpath -ldflags="-s -w" -o /out/glp-server ./cmd/server

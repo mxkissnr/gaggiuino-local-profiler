@@ -14,6 +14,7 @@ require (
 	github.com/a-h/templ v0.3.1020
 	github.com/coder/websocket v1.8.15
 	github.com/eclipse/paho.mqtt.golang v1.5.1
+	github.com/evanw/esbuild v0.28.2
 	github.com/goccy/go-json v0.10.6
 	github.com/kanrichan/resvg-go v0.0.1
 	golang.org/x/crypto v0.57.0
