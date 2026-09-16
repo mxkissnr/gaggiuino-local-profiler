@@ -23,6 +23,14 @@
 // instead of Vite's separate vendor-chartjs chunk; total first-load bytes
 // are unaffected, just in one request instead of two.
 //
+// esbuild resolves the SPA's bare imports (echarts, chart.js/auto,
+// topojson-client) out of node_modules, so the dependency tree is still a
+// prerequisite — but only `npm ci`, never `npm run build`: no Vite bundle is
+// involved. The Dockerfile copies node_modules out of a deps-only Node stage
+// and CI's go-test job runs `npm ci` before the Go tests, both because the
+// first CI round of #1033 failed with "Could not resolve" once the old Node
+// stage stopped installing it.
+//
 // Vite stays a local-dev dependency (`npm run dev`, HMR) — esbuild's watch
 // mode has no HMR, and this command is only the production image/CI path.
 // See CONTRIBUTING.md's "Frontend build" section.
@@ -41,29 +49,63 @@ import (
 )
 
 func main() {
-	srcDir := flag.String("src", "../public-src", "frontend source directory (Vite's former root)")
-	outDir := flag.String("out", "internal/webapp/dist", "build output directory")
+	srcDir := flag.String("src", "../public-src", "frontend source directory (Vite's former root), relative to the current working directory")
+	outDir := flag.String("out", "internal/webapp/dist", "build output directory, relative to the current working directory")
+	nodeModules := flag.String("node-modules", "", "dependency tree for esbuild's bare-import resolution (default: node_modules next to -src)")
 	flag.Parse()
 
-	if err := run(*srcDir, *outDir); err != nil {
+	if err := run(*srcDir, *outDir, *nodeModules); err != nil {
 		log.Fatalf("frontend-build: %v", err)
 	}
 }
 
-func run(srcDir, outDir string) error {
-	entry := filepath.Join(srcDir, "main.js")
-	indexHTML := filepath.Join(srcDir, "index.html")
-	for _, required := range []string{entry, indexHTML} {
+// run is the whole build: validate the inputs, bundle public-src/main.js with
+// esbuild, copy public-src/public/ verbatim, then rewrite index.html's script
+// tag into the hashed entry script + modulepreload links + stylesheet link.
+func run(srcDir, outDir, nodeModulesFlag string) error {
+	srcAbs, err := filepath.Abs(srcDir)
+	if err != nil {
+		return fmt.Errorf("resolve source dir: %w", err)
+	}
+	entryAbs := filepath.Join(srcAbs, "main.js")
+	indexAbs := filepath.Join(srcAbs, "index.html")
+	for _, required := range []string{entryAbs, indexAbs} {
 		if _, err := os.Stat(required); err != nil {
 			return fmt.Errorf("required source file: %w", err)
 		}
 	}
+	// Validated before any build work so a template that lost its entry tag
+	// fails immediately, with a message naming the file, instead of after a
+	// full bundle pass.
+	srcHTML, err := os.ReadFile(indexAbs)
+	if err != nil {
+		return fmt.Errorf("read index.html: %w", err)
+	}
+	if !strings.Contains(string(srcHTML), origScriptTag) {
+		return fmt.Errorf("%s: expected script tag %q not found", indexAbs, origScriptTag)
+	}
 
-	// The output dir is used as an absolute path: esbuild writes metafile
-	// keys relative to the *working directory* (absolute for outputs
-	// outside it, e.g. a -out under /tmp), so relFromOutDir has to anchor
-	// both sides the same way to keep producing the "./…" URLs that
-	// index.html must carry.
+	// The frontend root is the directory public-src/ lives in — Vite's former
+	// root, where package.json and node_modules sit. It doubles as esbuild's
+	// AbsWorkingDir, so path resolution and the metafile keys below don't
+	// depend on the process's working directory: `go run ./cmd/frontend-build`
+	// and `go test` (which runs with the package dir as CWD) behave the same.
+	rootAbs := filepath.Dir(srcAbs)
+	entryRel, err := filepath.Rel(rootAbs, entryAbs)
+	if err != nil {
+		return fmt.Errorf("resolve entry point relative to %s: %w", rootAbs, err)
+	}
+
+	nodeModulesAbs, err := nodeModulesDir(rootAbs, nodeModulesFlag)
+	if err != nil {
+		return err
+	}
+
+	// The output dir is resolved to an absolute path because esbuild writes
+	// metafile keys relative to AbsWorkingDir (absolute for outputs outside
+	// it, e.g. a -out under /tmp), so relFromOutDir has to anchor both sides
+	// the same way to keep producing the "./…" URLs that index.html must
+	// carry.
 	outAbs, err := filepath.Abs(outDir)
 	if err != nil {
 		return fmt.Errorf("resolve output dir: %w", err)
@@ -77,17 +119,22 @@ func run(srcDir, outDir string) error {
 	}
 
 	result := api.Build(api.BuildOptions{
-		EntryPoints: []string{entry},
-		Bundle:      true,
-		Splitting:   true,
-		Platform:    api.PlatformBrowser,
-		Format:      api.FormatESModule,
-		Outdir:      assetsDir,
-		Metafile:    true,
-		Write:       true,
-		EntryNames:  "[name]-[hash]",
-		ChunkNames:  "[name]-[hash]",
-		AssetNames:  "[name]-[hash]",
+		EntryPoints:   []string{entryRel},
+		AbsWorkingDir: rootAbs,
+		// Explicit rather than relying on esbuild's own node_modules walk: in
+		// the image the tree is COPYed in from the deps stage, and this keeps
+		// that location authoritative (and greppable) instead of implicit.
+		NodePaths:  []string{nodeModulesAbs},
+		Bundle:     true,
+		Splitting:  true,
+		Platform:   api.PlatformBrowser,
+		Format:     api.FormatESModule,
+		Outdir:     assetsDir,
+		Metafile:   true,
+		Write:      true,
+		EntryNames: "[name]-[hash]",
+		ChunkNames: "[name]-[hash]",
+		AssetNames: "[name]-[hash]",
 		// Vite 8's implicit build target ("baseline-widely-available":
 		// chrome111/edge111/firefox114/safari16.4/ios16.4, see Vite's own
 		// ESBUILD_BASELINE_WIDELY_AVAILABLE_TARGET). Carried over because
@@ -126,15 +173,54 @@ func run(srcDir, outDir string) error {
 		return fmt.Errorf("parse metafile: %w", err)
 	}
 
-	if err := copyPublicDir(filepath.Join(srcDir, "public"), outAbs); err != nil {
+	if err := copyPublicDir(filepath.Join(srcAbs, "public"), outAbs); err != nil {
 		return fmt.Errorf("copy public assets: %w", err)
 	}
 
-	if err := writeIndexHTML(indexHTML, outAbs, meta, entry); err != nil {
+	if err := writeIndexHTML(string(srcHTML), outAbs, meta, rootAbs, entryAbs); err != nil {
 		return fmt.Errorf("write index.html: %w", err)
 	}
 
 	return nil
+}
+
+// nodeModulesDir returns the dependency tree esbuild resolves the SPA's bare
+// imports (echarts, chart.js/auto, topojson-client) from: -node-modules when
+// given, otherwise node_modules next to public-src. A missing tree is a hard
+// error rather than a warning, because esbuild's own failure mode is a wall
+// of "Could not resolve" lines that says nothing about the actual cause —
+// exactly what #1033's first CI round produced once the old Node stage
+// stopped installing the dependencies.
+func nodeModulesDir(root, flagValue string) (string, error) {
+	dir := flagValue
+	if dir == "" {
+		dir = filepath.Join(root, "node_modules")
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("resolve node_modules: %w", err)
+	}
+	fi, err := os.Stat(abs)
+	if err != nil {
+		return "", fmt.Errorf("node_modules not found at %s (esbuild resolves the SPA's "+
+			"echarts/chart.js/topojson-client imports from it): run `npm ci` in %s, or point "+
+			"-node-modules at an existing dependency tree", abs, root)
+	}
+	if !fi.IsDir() {
+		return "", fmt.Errorf("node_modules path %s is not a directory", abs)
+	}
+	return abs, nil
+}
+
+// resolve turns a metafile path into an absolute one. esbuild reports both
+// the entry point and the output paths relative to AbsWorkingDir (absolute
+// for paths outside it), never relative to the process's working directory,
+// so every path this command reads back has to be anchored to base.
+func resolve(base, p string) string {
+	if filepath.IsAbs(p) {
+		return filepath.Clean(p)
+	}
+	return filepath.Join(base, p)
 }
 
 // metaImport is one entry of an output's metafile "imports" list. Kind is
@@ -170,21 +256,17 @@ func parseMetafile(raw string) (*metafile, error) {
 }
 
 // entryOutput returns the output path whose entryPoint is entry. Both sides
-// are compared as absolute paths rather than as raw strings: esbuild
-// normalizes the entry point it echoes back into the metafile (it drops a
-// leading "./", for instance), so a literal match against whatever the
-// caller passed to -src isn't reliable.
-func (m *metafile) entryOutput(entry string) (string, metaOutput, bool) {
-	want, err := filepath.Abs(entry)
-	if err != nil {
-		return "", metaOutput{}, false
-	}
+// are normalized against base (AbsWorkingDir) instead of being compared as
+// raw strings: esbuild echoes the entry point back in its own normalized form
+// (relative to AbsWorkingDir, a leading "./" dropped), so a literal match
+// against whatever the caller passed to -src isn't reliable.
+func (m *metafile) entryOutput(base, entry string) (string, metaOutput, bool) {
+	want := resolve(base, entry)
 	for p, o := range m.Outputs {
 		if o.EntryPoint == "" {
 			continue
 		}
-		got, err := filepath.Abs(o.EntryPoint)
-		if err == nil && got == want {
+		if resolve(base, o.EntryPoint) == want {
 			return p, o, true
 		}
 	}
@@ -221,20 +303,16 @@ func (m *metafile) staticImportClosure(outputPath string) []string {
 	return order
 }
 
-// relFromOutDir returns p (an output path from the metafile) as a
-// "./"-prefixed relative URL from outDir's own root — the same
-// relative-path convention vite.config.js's `base: './'` produced, required
-// for HA Ingress's dynamic path prefix.
-func relFromOutDir(outDir, p string) (string, error) {
+// relFromOutDir returns p (an output path from the metafile, relative to
+// base/AbsWorkingDir) as a "./"-prefixed relative URL from outDir's own root
+// — the same relative-path convention vite.config.js's `base: './'`
+// produced, required for HA Ingress's dynamic path prefix.
+func relFromOutDir(base, outDir, p string) (string, error) {
 	outAbs, err := filepath.Abs(outDir)
 	if err != nil {
 		return "", err
 	}
-	pAbs, err := filepath.Abs(p)
-	if err != nil {
-		return "", err
-	}
-	rel, err := filepath.Rel(outAbs, pAbs)
+	rel, err := filepath.Rel(outAbs, resolve(base, p))
 	if err != nil {
 		return "", err
 	}
@@ -264,35 +342,28 @@ func copyPublicDir(publicDir, outDir string) error {
 const origScriptTag = `<script type="module" src="./main.js"></script>`
 
 // writeIndexHTML mirrors what Vite's HTML plugin does to public-src/index.html:
-// remove the source module <script> tag and inject, just before </head>,
-// the hashed entry script, modulepreload links for its static-import
-// closure, and a stylesheet link for its CSS bundle.
-func writeIndexHTML(srcIndex, outDir string, meta *metafile, entry string) error {
-	raw, err := os.ReadFile(srcIndex)
-	if err != nil {
-		return err
-	}
-	html := string(raw)
+// strip the source module <script> tag and inject, just before </head>, the
+// hashed entry script, modulepreload links for its static-import closure, and
+// a stylesheet link for its CSS bundle. srcHTML is the source file run() has
+// already validated to carry origScriptTag; entry and the metafile paths are
+// resolved against base (AbsWorkingDir) when they're relative.
+func writeIndexHTML(srcHTML, outDir string, meta *metafile, base, entry string) error {
+	html := strings.Replace(srcHTML, origScriptTag, "", 1)
 
-	if !strings.Contains(html, origScriptTag) {
-		return fmt.Errorf("%s: expected script tag %q not found", srcIndex, origScriptTag)
-	}
-	html = strings.Replace(html, origScriptTag, "", 1)
-
-	outputPath, out, ok := meta.entryOutput(entry)
+	outputPath, out, ok := meta.entryOutput(base, entry)
 	if !ok {
 		return fmt.Errorf("metafile has no output for entry point %s", entry)
 	}
 
 	var b strings.Builder
-	scriptSrc, err := relFromOutDir(outDir, outputPath)
+	scriptSrc, err := relFromOutDir(base, outDir, outputPath)
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(&b, "  <script type=\"module\" crossorigin src=%q></script>\n", scriptSrc)
 
 	for _, chunkPath := range meta.staticImportClosure(outputPath) {
-		href, err := relFromOutDir(outDir, chunkPath)
+		href, err := relFromOutDir(base, outDir, chunkPath)
 		if err != nil {
 			return err
 		}
@@ -300,7 +371,7 @@ func writeIndexHTML(srcIndex, outDir string, meta *metafile, entry string) error
 	}
 
 	if out.CSSBundle != "" {
-		href, err := relFromOutDir(outDir, out.CSSBundle)
+		href, err := relFromOutDir(base, outDir, out.CSSBundle)
 		if err != nil {
 			return err
 		}
@@ -308,7 +379,7 @@ func writeIndexHTML(srcIndex, outDir string, meta *metafile, entry string) error
 	}
 
 	if !strings.Contains(html, "</head>") {
-		return fmt.Errorf("%s: no </head> to inject build output before", srcIndex)
+		return fmt.Errorf("index.html has no </head> to inject build output before")
 	}
 	html = strings.Replace(html, "</head>", b.String()+"</head>", 1)
 
