@@ -80,6 +80,23 @@ Note that `make -C go frontend` overwrites the committed `go/internal/webapp/dis
 placeholder, so `git status` will show the dist tree as modified afterwards — `git checkout --
 gaggiuino-local-profiler/go/internal/webapp/dist` puts it back (the e2e harness restores it itself).
 
+### HA-ingress gate for a frontend change
+
+`go/cmd/server/smoke_test.go`'s `TestIngressSmoke_*` set is the gate #797 established and #1033
+re-uses (no leading-slash `href`/`src`/`action`/`hx-*`, relative `Location`, PWA gating, SSE
+unbuffered, ingress auth). It resolves `//go:embed all:dist` at **compile time**, so it only
+exercises the bundle that happens to be in `dist/` — run it with the real one in place, not against
+the 810-byte placeholder that a bare `go test ./...` sees:
+
+```sh
+make -C go frontend
+(cd go && go test ./cmd/server/ -run TestIngressSmoke -v)
+git checkout -- gaggiuino-local-profiler/go/internal/webapp/dist
+```
+
+`scripts/e2e-harness.mjs` does both halves on its own (builds the bundle, boots the real server,
+restores the placeholder), which is why the E2E job asserts against the real bundle.
+
 ## Versioning
 
 `MAJOR.MINOR.PATCH` — patch for fixes, minor for new features. `gaggiuino-local-profiler/config.yaml`'s `version:` is canonical; three more spots must be bumped to match it in the same commit: `package.json`, `go/internal/system/version.go` (`glpVersion`) and `go/internal/backup/bundle.go` (`glpVersion`). `test/version-sync.test.js` and `scripts/release-check.mjs` enforce the match.
