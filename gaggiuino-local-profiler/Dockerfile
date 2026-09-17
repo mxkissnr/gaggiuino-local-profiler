@@ -19,30 +19,31 @@
 # runtime stage's own `apk add` below, which — unlike a C++ compile —
 # installs three tiny prebuilt packages.
 
-# ── Frontend stage: the Vite/rolldown SPA build ────────────────────────────
-# Host-platform only (no QEMU). Output is /app/public, copied into
-# internal/webapp/dist/ in the Go builder below. No toolchain packages
-# (python3/make/g++): the dependency set is frontend-only since 3.0.0
-# (#1028), so `npm ci` pulls Vite/esbuild prebuilts with nothing to compile.
-# node:24 dropped its 32-bit ARM (arm/v7) images, but this stage is pinned to
-# the CI runner's own architecture via --platform=$BUILDPLATFORM (amd64) and
-# its output is architecture-independent, so that has no bearing here.
+# ── Frontend deps: `npm ci` only, no Vite build ──────────────────────────
+# The SPA is bundled by Go (cmd/frontend-build, #1033), but esbuild still
+# resolves the app's bare imports (echarts, chart.js/auto, topojson-client)
+# out of node_modules, so the image needs the dependency tree — just never a
+# `npm run build`. This is the same stage the Vite build used to run in,
+# reduced to `npm ci`; its output is COPYed into the builder below.
+#
+# Host-platform only (no QEMU) and dependency-only, so there's nothing to
+# compile: since 3.0.0 (#1028) the dependency set is frontend-only, so this
+# pulls prebuilts with no toolchain packages (python3/make/g++). node:24
+# dropped its 32-bit ARM (arm/v7) images, but this stage is pinned to the CI
+# runner's own architecture via --platform=$BUILDPLATFORM (amd64) and its
+# output is architecture-independent, so that has no bearing here.
 # Digest-pinned (multi-arch manifest) like the alpine runtime stage below;
 # Renovate's dockerfile manager keeps it current.
-FROM --platform=$BUILDPLATFORM node:24-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS frontend
+FROM --platform=$BUILDPLATFORM node:24-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS frontend-deps
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY vite.config.js ./
-COPY public-src/ ./public-src/
-RUN npm run build
-
 # ── Go builder ────────────────────────────────────────────────────────────
-# Digest-pinned (#1063, Scorecard pinned-dependencies) like the node:24-slim
-# / alpine:3.22 stages; Renovate's dockerfile manager keeps it current the
+# Digest-pinned (#1063, Scorecard pinned-dependencies) like the alpine
+# runtime stage below; Renovate's dockerfile manager keeps it current the
 # same way. This stage compiles /out/glp-server (see the `go build` below)
 # and that exact binary is COPYed into the runtime image further down, so
 # the digest pin is about the supply-chain integrity of the shipped
@@ -74,11 +75,24 @@ RUN go mod download
 RUN go install github.com/a-h/templ/cmd/templ@v0.3.1020
 
 COPY go/ .
-# Replace the committed dist/index.html placeholder with the real Vite
-# build so internal/webapp's `//go:embed all:dist` picks up the full bundle.
-RUN rm -rf internal/webapp/dist
-COPY --from=frontend /app/public ./internal/webapp/dist
+# The SPA bundle internal/webapp embeds via `//go:embed all:dist` is built
+# here, from Go, with esbuild's Go API (#1033): templ generate, then
+# cmd/frontend-build, which wipes and rebuilds the whole dist/ directory
+# (replacing the committed dist/index.html placeholder the COPY above brought
+# in). No Vite build runs in the image — but esbuild resolves the SPA's bare
+# imports out of node_modules, so the dependency tree is COPYed in from the
+# `npm ci` stage above and found at /src/node_modules (the frontend root,
+# which cmd/frontend-build also uses as esbuild's AbsWorkingDir). Dropping
+# that COPY is what broke this build's first CI round: esbuild reported
+# "Could not resolve echarts/chart.js/auto/topojson-client" with no hint that
+# the dependency tree was the missing piece.
+# `go run` cross-compiles nothing: the tool runs natively on $BUILDPLATFORM
+# and its output is architecture-independent, so all three matrix arches get
+# byte-identical assets.
+COPY public-src/ ./public-src/
+COPY --from=frontend-deps /app/node_modules ./node_modules
 RUN templ generate
+RUN go run ./cmd/frontend-build -src ./public-src -out ./internal/webapp/dist
 
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
     go build -trimpath -ldflags="-s -w" -o /out/glp-server ./cmd/server

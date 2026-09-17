@@ -3,10 +3,11 @@ gaggiuino-local-profiler/public/
 gaggiuino-local-profiler/coverage/
 gaggiuino-local-profiler/go/**/*_templ.go
 
-# Phase 1 (#901): the Vite SPA bundle internal/webapp embeds is a build
-# artifact staged by `make -C go frontend` / the Dockerfile's frontend
-# stage. Only the committed dist/index.html placeholder is tracked, so a
-# bare `go build ./...` resolves the embed with no npm step.
+# Phase 1 (#901): the SPA bundle internal/webapp embeds is a build artifact,
+# produced by `make -C go frontend` or the Dockerfile's builder stage via
+# cmd/frontend-build (esbuild's Go API, #1033). Only the committed
+# dist/index.html placeholder is tracked, so a bare `go build ./...` resolves
+# the embed with no frontend build step.
 gaggiuino-local-profiler/go/internal/webapp/dist/*
 !gaggiuino-local-profiler/go/internal/webapp/dist/index.html
 
@@ -27,10 +28,14 @@ id_rsa
 id_rsa.*
 
 .memsearch/
-graphify-out/
+# No trailing slash: graphify-out exists as a symlink in some checkouts, and
+# a `graphify-out/` pattern only matches real directories — which is how the
+# symlink kept getting re-added to the index despite being "ignored" (#1033).
+graphify-out
 .claude/settings.local.json
 **/.claude/skills/
 **/.agents/
 **/skills-lock.json
 __pycache__/
 *.pyc
+.graphify_root

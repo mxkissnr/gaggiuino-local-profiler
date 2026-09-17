@@ -4,6 +4,7 @@
 
 ### Changed
 - **Corrected the AppArmor profile's header, which told reviewers not to ship the profile at enforce although it has shipped at enforce since before 3.0.0**, and made it state what is actually unverified instead. Closes #1055
+- **The frontend is now bundled from Go with esbuild's own API instead of a Node/Vite Docker stage**, so the image and CI are Node-free and cold builds skip `npm ci`. Closes #1033
 - **Documentation cleanup: "app" terminology to match Home Assistant's add-on rename, a shorter armv7 note, a tidier README screenshot grid and a description of the machine valve fields.** Closes #1039
 - **Consolidated several duplicated HTML-escaping helpers scattered across the web app onto a single shared one**, so machine names, "what's new" entries, world-map tooltips and other user-supplied text are all sanitized the same consistent way before being rendered. Closes #1053
 - **The Docker build's Go toolchain base image is now pinned to a digest**, matching the other build stages, for a reproducible supply chain. Closes #1063
