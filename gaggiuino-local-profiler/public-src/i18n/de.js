@@ -289,6 +289,7 @@ export default {
     settings_machine_firmware_badge_current:(v)=>`FW ${v}`, settings_machine_firmware_badge_update:(v)=>`Update: ${v}`,
     settings_machine_firmware_update_available:(latest)=>`Firmware-Update verfügbar: ${latest}`, settings_machine_firmware_update_btn:'Update starten',
     settings_machine_firmware_progress_label:(pct)=>`Firmware-Update läuft… ${pct}%`, settings_machine_firmware_trigger_failed:(msg)=>`Update konnte nicht gestartet werden: ${msg}`,
+    settings_machine_firmware_progress_label_staged:(type, pct)=>`${({ C_FW: 'Controller-Firmware', F_FW: 'Display-Firmware', F_FS: 'Display-Dateisystem' })[type] || 'Firmware'} wird aktualisiert… ${pct}%`,
     settings_machine_firmware_update_success_toast:'Firmware-Update abgeschlossen', settings_machine_firmware_update_failed_toast:'Firmware-Update fehlgeschlagen',
     settings_machine_firmware_update_timeout_toast:'Firmware-Update läuft noch — Status direkt an der Maschine prüfen',
     settings_restart_setup_wizard:'Setup-Tour neu starten',

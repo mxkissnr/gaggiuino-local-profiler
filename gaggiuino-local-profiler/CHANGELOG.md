@@ -12,6 +12,7 @@
 - **Corrected a Dockerfile comment that wrongly claimed the Go builder stage "builds nothing that ships"**, when it actually compiles the exact server binary the runtime image ships. Closes #1052
 
 ### Fixed
+- **The firmware-update progress bar now names the firmware stage being flashed**, so a normal reset to 0% between components during a multi-part update no longer looks like the update crashed and restarted. Closes #1085
 - **Manual shot sync and the machine debug probe now route their network calls through the same protection every other machine request already used**, so a machine host that changes what it points to after being saved — or that answers with a redirect — can no longer make the app reach an address it was never meant to. Closes #1049
 - **The developer-only debug endpoints are now genuinely absent from release builds.** Three of them were gated on a setting that nothing in the shipped image ever applied, so they existed on every installation despite being documented as development-only. Closes #1051
 - **The machine firmware check no longer breaks when GitHub is unreachable.** A rate-limited or timed-out latest-release lookup now returns the installed firmware version with `latest: null` instead of failing the whole request, serves the last known result while the failure lasts, and runs on its own timeout independent of the caller — so Home Assistant's machine firmware entity stops showing "Unknown". Closes #1037

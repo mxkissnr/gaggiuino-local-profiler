@@ -705,15 +705,24 @@ function finishFirmwarePolling(machineId, row, success) {
 // hide-when-null / label+fill-width shape, reusing that file's own
 // .sync-progress-track/.sync-progress-fill classes (style.css), just
 // against this row panel's own bar/label elements instead of the sidebar's.
-function renderFirmwareProgressBar(row, progress) {
+export function renderFirmwareProgressBar(row, progress) {
   const bar = row.querySelector('.machine-firmware-progress-bar');
   if (!bar) return;
   if (!progress) { bar.style.display = 'none'; return; }
   const label = bar.querySelector('.machine-firmware-progress-label');
   const fill = bar.querySelector('.sync-progress-fill');
   const pct = Math.max(0, Math.min(100, Number(progress.progress) || 0));
+  const rounded = Math.round(pct);
   if (fill) fill.style.width = `${pct}%`;
-  if (label) label.textContent = t('settings_machine_firmware_progress_label', Math.round(pct));
+  if (label) {
+    // #1085: update-all flashes several OTA components in sequence and the
+    // machine restarts its own 0-100% cycle for each one -- name the stage
+    // from the machine's `type` discriminator (C_FW/F_FW/F_FS) so a reset
+    // to 0% reads as a stage change instead of a crash.
+    label.textContent = progress.type
+      ? t('settings_machine_firmware_progress_label_staged', progress.type, rounded)
+      : t('settings_machine_firmware_progress_label', rounded);
+  }
   bar.style.display = '';
 }
 

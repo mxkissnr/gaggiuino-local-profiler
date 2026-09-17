@@ -289,6 +289,7 @@ export default {
     settings_machine_firmware_badge_current:(v)=>`FW ${v}`, settings_machine_firmware_badge_update:(v)=>`Actualización: ${v}`,
     settings_machine_firmware_update_available:(latest)=>`Actualización de firmware disponible: ${latest}`, settings_machine_firmware_update_btn:'Iniciar actualización',
     settings_machine_firmware_progress_label:(pct)=>`Actualizando firmware… ${pct}%`, settings_machine_firmware_trigger_failed:(msg)=>`No se pudo iniciar la actualización: ${msg}`,
+    settings_machine_firmware_progress_label_staged:(type, pct)=>`Actualizando ${({ C_FW: 'firmware del controlador', F_FW: 'firmware de la pantalla', F_FS: 'sistema de archivos de la pantalla' })[type] || 'firmware'}… ${pct}%`,
     settings_machine_firmware_update_success_toast:'Actualización de firmware completada', settings_machine_firmware_update_failed_toast:'Error al actualizar el firmware',
     settings_machine_firmware_update_timeout_toast:'La actualización de firmware sigue en curso — comprueba el estado directamente en la máquina',
     settings_restart_setup_wizard:'Reiniciar el tour de configuración',
