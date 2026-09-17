@@ -3,6 +3,7 @@
 - **Gaggiuino machines can now check for, trigger, and track firmware updates directly from the web app**, with a status badge right on the machine's own row in the machines list (installed/latest version, no click needed to see whether an update is available) that expands into a trigger button and progress bar, plus a release-channel (stable/test/debug) selector in the machine's edit form. Both were already fully working on the backend but had no UI before. Closes #1044, #1046
 
 ### Changed
+- **Corrected the AppArmor profile's header, which told reviewers not to ship the profile at enforce although it has shipped at enforce since before 3.0.0**, and made it state what is actually unverified instead. Closes #1055
 - **Documentation cleanup: "app" terminology to match Home Assistant's add-on rename, a shorter armv7 note, a tidier README screenshot grid and a description of the machine valve fields.** Closes #1039
 - **Consolidated several duplicated HTML-escaping helpers scattered across the web app onto a single shared one**, so machine names, "what's new" entries, world-map tooltips and other user-supplied text are all sanitized the same consistent way before being rendered. Closes #1053
 - **The Docker build's Go toolchain base image is now pinned to a digest**, matching the other build stages, for a reproducible supply chain. Closes #1063
