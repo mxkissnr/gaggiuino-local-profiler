@@ -3,6 +3,7 @@
 - **Gaggiuino machines can now check for, trigger, and track firmware updates directly from the web app**, with a status badge right on the machine's own row in the machines list (installed/latest version, no click needed to see whether an update is available) that expands into a trigger button and progress bar, plus a release-channel (stable/test/debug) selector in the machine's edit form. Both were already fully working on the backend but had no UI before. Closes #1044, #1046
 
 ### Changed
+- **The AppArmor profile's header now records that the profile was validated in complain mode on real hardware with zero denials**, instead of claiming that validation is still owed. Closes #1083
 - **Corrected the AppArmor profile's header, which told reviewers not to ship the profile at enforce although it has shipped at enforce since before 3.0.0**, and made it state what is actually unverified instead. Closes #1055
 - **The frontend is now bundled from Go with esbuild's own API instead of a Node/Vite Docker stage**, so the image and CI are Node-free and cold builds skip `npm ci`. Closes #1033
 - **Documentation cleanup: "app" terminology to match Home Assistant's add-on rename, a shorter armv7 note, a tidier README screenshot grid and a description of the machine valve fields.** Closes #1039
