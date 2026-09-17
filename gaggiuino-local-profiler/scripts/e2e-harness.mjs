@@ -7,17 +7,16 @@
 // test, #798).
 //
 // The Node backend this used to boot in-process was removed in 3.0.0
-// (#1028); the harness now compiles cmd/server from go/ with the freshly
-// built Vite SPA staged into the //go:embed dist tree, exactly the way
-// go/Makefile's `frontend` target and the Dockerfile's frontend stage do.
-// Callers must run `npm run build` first so gaggiuino-local-profiler/public
-// exists.
+// (#1028); the harness now compiles cmd/server from go/ with the SPA built
+// into the //go:embed dist tree by go/cmd/frontend-build (esbuild's Go API,
+// #1033) — the same command go/Makefile's `frontend` target and the
+// Dockerfile's builder stage run. No npm step is needed by callers.
 //
 // Requires `npx playwright install chromium` once beforehand for consumers
 // that drive Chromium (this module itself never touches Playwright).
 
 import { spawn, execFileSync } from 'child_process';
-import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync, cpSync, existsSync } from 'fs';
+import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -50,28 +49,24 @@ async function waitForServer(url, timeoutMs = 30000) {
     throw new Error(`Server did not become ready at ${url} within ${timeoutMs}ms`);
 }
 
-// Builds glp-server with the real SPA embedded. Stages public/ into the
-// git-ignored dist tree, restores the committed placeholder index.html
-// afterwards so the working tree is left clean.
+// Builds glp-server with the real SPA embedded. The bundle itself is
+// produced by go/cmd/frontend-build (esbuild's Go API, #1033), which owns
+// the git-ignored dist tree and wipes it first; the committed placeholder
+// index.html is restored afterwards so the working tree is left clean.
 function buildServerBinary() {
-    const publicDir = path.join(appRoot, 'public');
-    if (!existsSync(path.join(publicDir, 'index.html'))) {
-        throw new Error(`${publicDir}/index.html is missing — run \`npm run build\` before the E2E harness`);
-    }
-
     const placeholderIndex = readFileSync(path.join(distDir, 'index.html'));
     const binPath = path.join(tmpDataDir, 'glp-server');
 
     try {
-        rmSync(distDir, { recursive: true, force: true });
-        mkdirSync(distDir, { recursive: true });
-        cpSync(publicDir, distDir, { recursive: true });
-
         // templ generate — internal/web/templates' .templ sources aren't
         // valid Go until this runs (git-ignored _templ.go output). `go run`
         // the pinned CLI so this works with no global install.
         execFileSync('go', ['run', `github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}`, 'generate'],
             { cwd: templatesDir, stdio: 'inherit' });
+
+        // Frontend bundle → internal/webapp/dist (the //go:embed tree), then
+        // the server binary that embeds it.
+        execFileSync('go', ['run', './cmd/frontend-build'], { cwd: goDir, stdio: 'inherit' });
 
         execFileSync('go', ['build', '-o', binPath, './cmd/server'], { cwd: goDir, stdio: 'inherit' });
     } finally {
