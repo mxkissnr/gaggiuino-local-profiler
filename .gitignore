@@ -34,3 +34,4 @@ graphify-out/
 **/skills-lock.json
 __pycache__/
 *.pyc
+.graphify_root
