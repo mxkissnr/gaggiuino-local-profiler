@@ -2,21 +2,29 @@
 
 # GLP — Gaggiuino Local Profiler AppArmor profile.
 #
-# STATUS: shipped at `enforce` since #787, never validated. config.yaml
-# carries no `apparmor:` key, so the Supervisor applies this profile at
-# enforce on every Home Assistant OS install — but its rules were written by
-# inspection of the runtime shape below, and no complain-mode run has ever
-# been done on real hardware. Nothing in this repo or its CI can exercise
-# real AppArmor mediation, so only a Home Assistant OS install can confirm
-# it. That hardware validation is still owed; it is tracked separately in
-# #1079.
+# STATUS: shipped at `enforce` since #787; validated in complain mode on a
+# real Home Assistant OS install on 2026-09-17 (#1079). config.yaml carries
+# no `apparmor:` key, so the Supervisor applies this profile at enforce on
+# every Home Assistant OS install. The rules were originally written by
+# inspection of the runtime shape below — nothing in this repo or its CI can
+# exercise real AppArmor mediation — so the profile was loaded in complain
+# mode on real hardware and the app was exercised end to end: machine
+# add/edit, a shot over WebSocket, a shot over MQTT, a full backup download,
+# a bean-image import and a shot-card PNG render. All three sources checked
+# (`dmesg`, `journalctl -k`, and the HA host log) recorded zero AppArmor
+# events — no denials, and no `ALLOWED` near-misses either — and the profile
+# was then reset to enforce. Full result in #1079.
 #
-# Until it happens, read this file as advisory defense-in-depth, not as a
-# containment boundary:
+# Read this file as advisory defense-in-depth, not as a containment
+# boundary:
 #   - The broad `file,` rule below leaves filesystem access effectively
 #     unmediated, so it does NOT confine a compromised glp-server to /data.
 #     The capability, network and exec lists, plus the default-deny on
 #     everything not granted, are the parts that actually bite.
+#   - Validation found nothing the app was blocked from, or nearly blocked
+#     from, so there is no evidence to narrow `file,`: the broad rule is now
+#     a deliberate, tested choice rather than an untested one, and narrowing
+#     it would risk the failure mode below for no measured gain.
 #   - A too-tight profile fails in the field with opaque errors (files
 #     silently unreadable, sockets silently refused), which is the risk the
 #     broad `file,` rule deliberately trades away.
@@ -24,7 +32,7 @@
 #     rules still restrict meaningfully, and switching the profile off would
 #     grant strictly more than leaving it on. Any future narrowing of
 #     `file,` must be driven by denials actually collected in complain mode
-#     on real hardware (see #1079), not by inspection.
+#     on real hardware, not by inspection.
 #
 # Runtime shape this profile is derived from (not a template) — the Go
 # backend on Alpine, the only runtime as of the #977 cutover (the last
@@ -67,7 +75,8 @@
 # Strategy: a broad `file,` rule (default-deny still applies to every
 # capability, mount, module load, ptrace and raw socket NOT explicitly
 # granted below) rather than enumerating exact paths — kept broad because
-# this repo still has no way to run real AppArmor mediation in CI and a
+# this repo still has no way to run real AppArmor mediation in CI, the
+# complain-mode validation above found no path that needed narrowing, and a
 # too-tight profile fails silently in the field. The capability/network/
 # exec lists ARE scoped tightly to what's documented above; /bin/** and
 # /sbin/** ix cover Alpine's busybox shell/su-exec, which live there rather
