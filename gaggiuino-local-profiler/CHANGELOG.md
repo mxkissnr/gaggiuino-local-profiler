@@ -11,6 +11,7 @@
 - **The Docker build's Go toolchain base image is now pinned to a digest**, matching the other build stages, for a reproducible supply chain. Closes #1063
 - **The machine WebSocket connection now runs on the actively maintained fork of its client library**, since the previous one was deprecated upstream with maintenance moved elsewhere. Closes #1058
 - **Corrected a Dockerfile comment that wrongly claimed the Go builder stage "builds nothing that ships"**, when it actually compiles the exact server binary the runtime image ships. Closes #1052
+- **Issues referenced by a PR merged into the `dev` branch are now closed automatically**, matching GitHub's own behavior for merges into `main`. Closes #1087
 
 ### Fixed
 - **Manual shot sync and the machine debug probe now route their network calls through the same protection every other machine request already used**, so a machine host that changes what it points to after being saved — or that answers with a redirect — can no longer make the app reach an address it was never meant to. Closes #1049

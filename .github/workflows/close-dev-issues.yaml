@@ -1,0 +1,62 @@
+name: Close issues on dev merge
+
+# GitHub's own "Closes #N" auto-close only fires on a merge into the
+# repository's default branch (main). This repo does almost all of its work
+# on dev, so it reproduces the same behavior for dev merges — see #1087.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [dev]
+
+permissions:
+  issues: write
+
+jobs:
+  close-referenced-issues:
+    name: Close issues referenced by the merged PR
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    steps:
+      - name: Close referenced issues
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const re = /\b(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\s*:?\s*#(\d+)/gi;
+            const issueNumbers = [...new Set([...body.matchAll(re)].map(m => Number(m[1])))];
+
+            if (issueNumbers.length === 0) {
+              core.info('No "Closes #N"-style references found in the PR body.');
+              return;
+            }
+
+            for (const issueNumber of issueNumbers) {
+              const { data: issue } = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+              });
+
+              if (issue.state === 'closed') {
+                core.info(`#${issueNumber} is already closed, skipping.`);
+                continue;
+              }
+
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                state: 'closed',
+                state_reason: 'completed',
+              });
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `Closed automatically — referenced by #${context.payload.pull_request.number}, merged into \`dev\`.`,
+              });
+
+              core.info(`Closed #${issueNumber}.`);
+            }
