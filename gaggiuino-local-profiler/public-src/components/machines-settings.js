@@ -701,6 +701,28 @@ function finishFirmwarePolling(machineId, row, success) {
   }
 }
 
+// update-all flashes several components one after another, each restarting
+// its own 0-100% cycle, and progress.type names the component currently
+// being flashed. Codes come from the firmware's own REST API doc
+// (GET /api/firmware/progress, field notes): C_FW | F_FW | F_FS. Without
+// naming the stage, a component boundary reads as the bar silently
+// resetting to 0% (#1085).
+const FIRMWARE_STAGE_KEYS = {
+  C_FW: 'settings_machine_firmware_stage_c_fw',
+  F_FW: 'settings_machine_firmware_stage_f_fw',
+  F_FS: 'settings_machine_firmware_stage_f_fs',
+};
+
+// Named stage when the firmware reports a type this build knows, the plain
+// "updating firmware" label otherwise -- an unrecognised (or absent) type
+// must still render something sane rather than an empty label.
+export function firmwareProgressLabel(progress, pct) {
+  const stageKey = FIRMWARE_STAGE_KEYS[String(progress?.type || '').toUpperCase()];
+  return stageKey
+    ? t('settings_machine_firmware_progress_stage_label', t(stageKey), pct)
+    : t('settings_machine_firmware_progress_label', pct);
+}
+
 // Mirrors components/status.js's renderSyncProgressBar() -- same
 // hide-when-null / label+fill-width shape, reusing that file's own
 // .sync-progress-track/.sync-progress-fill classes (style.css), just
@@ -711,9 +733,9 @@ function renderFirmwareProgressBar(row, progress) {
   if (!progress) { bar.style.display = 'none'; return; }
   const label = bar.querySelector('.machine-firmware-progress-label');
   const fill = bar.querySelector('.sync-progress-fill');
-  const pct = Math.max(0, Math.min(100, Number(progress.progress) || 0));
+  const pct = Math.round(Math.max(0, Math.min(100, Number(progress.progress) || 0)));
   if (fill) fill.style.width = `${pct}%`;
-  if (label) label.textContent = t('settings_machine_firmware_progress_label', Math.round(pct));
+  if (label) label.textContent = firmwareProgressLabel(progress, pct);
   bar.style.display = '';
 }
 

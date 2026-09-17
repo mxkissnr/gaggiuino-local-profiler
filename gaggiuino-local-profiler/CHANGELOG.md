@@ -19,6 +19,7 @@
 - **The Statistics world map tooltip no longer renders bean or region names as HTML**, which could otherwise be used to inject markup into the page via a bean name (including one pulled in automatically by the bean importer). Closes #1054
 - **`GET /api/mqtt/settings` no longer returns the broker password in cleartext**, and a stored password can now be explicitly removed. Responses report `hasPassword` instead of the real value, saving without a `password` field keeps the stored one unchanged, and a new "Remove password" toggle in the Settings UI sends `clearPassword: true` to wipe it outright — previously a stored password could only be overwritten, never deleted. Closes #1050, #1062
 - **Downloading a full backup and uploading a shot, bean, grinder, basket, or puck screen photo now each carry their own per-minute rate limit** instead of relying solely on the shared app-wide cap, since both are unusually expensive requests to let one client repeat without limit. Closes #1056
+- **The firmware update progress bar now names the component being flashed** — controller firmware, frontend firmware or frontend filesystem, as reported by the machine's own progress endpoint — instead of showing a bare percentage. A multi-component OTA flashes each one in sequence with its own 0-100% cycle, so the bar dropping back to 0% at a component boundary used to look like the update had crashed and restarted. Closes #1085
 
 ## [3.0.2] – 2026-09-11
 ### Changed

@@ -289,6 +289,8 @@ export default {
     settings_machine_firmware_badge_current:(v)=>`FW ${v}`, settings_machine_firmware_badge_update:(v)=>`Aggiornamento: ${v}`,
     settings_machine_firmware_update_available:(latest)=>`Aggiornamento firmware disponibile: ${latest}`, settings_machine_firmware_update_btn:'Avvia aggiornamento',
     settings_machine_firmware_progress_label:(pct)=>`Aggiornamento firmware in corso… ${pct}%`, settings_machine_firmware_trigger_failed:(msg)=>`Impossibile avviare l'aggiornamento: ${msg}`,
+    settings_machine_firmware_progress_stage_label:(stage, pct)=>`${stage}… ${pct}%`, settings_machine_firmware_stage_c_fw:'Firmware del controller',
+    settings_machine_firmware_stage_f_fw:'Firmware del frontend', settings_machine_firmware_stage_f_fs:'Filesystem del frontend',
     settings_machine_firmware_update_success_toast:'Aggiornamento firmware completato', settings_machine_firmware_update_failed_toast:'Aggiornamento firmware non riuscito',
     settings_machine_firmware_update_timeout_toast:'Aggiornamento firmware ancora in corso — controlla direttamente sulla macchina',
     settings_restart_setup_wizard:'Riavvia il tour di configurazione',

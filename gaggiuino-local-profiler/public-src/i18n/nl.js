@@ -289,6 +289,8 @@ export default {
     settings_machine_firmware_badge_current:(v)=>`FW ${v}`, settings_machine_firmware_badge_update:(v)=>`Update: ${v}`,
     settings_machine_firmware_update_available:(latest)=>`Firmware-update beschikbaar: ${latest}`, settings_machine_firmware_update_btn:'Update starten',
     settings_machine_firmware_progress_label:(pct)=>`Firmware wordt bijgewerkt… ${pct}%`, settings_machine_firmware_trigger_failed:(msg)=>`Update kon niet worden gestart: ${msg}`,
+    settings_machine_firmware_progress_stage_label:(stage, pct)=>`${stage}… ${pct}%`, settings_machine_firmware_stage_c_fw:'Controllerfirmware',
+    settings_machine_firmware_stage_f_fw:'Frontendfirmware', settings_machine_firmware_stage_f_fs:'Frontend-bestandssysteem',
     settings_machine_firmware_update_success_toast:'Firmware-update voltooid', settings_machine_firmware_update_failed_toast:'Firmware-update mislukt',
     settings_machine_firmware_update_timeout_toast:'Firmware-update loopt nog — controleer de status rechtstreeks op de machine',
     settings_restart_setup_wizard:'Installatietour herstarten',
