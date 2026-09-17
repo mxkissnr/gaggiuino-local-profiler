@@ -23,7 +23,7 @@
     "globals": "^17.11.0",
     "playwright": "^1.62.1",
     "vite": "8.3.0",
-    "vitest": "5.0.0"
+    "vitest": "5.0.1"
   },
   "allowScripts": {
     "esbuild@0.25.12": true
