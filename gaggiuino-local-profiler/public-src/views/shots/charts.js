@@ -1,5 +1,6 @@
 import Chart from 'chart.js/auto';
-import { S }                                              from '../../state.js';
+import { S }                                              from '../../state/index.js';
+import * as chartRegistry                                 from '../../state/charts.js';
 import { t }                                              from '../../i18n.js';
 import { corsairPlugin, clearChartOnTouchEnd } from '../../constants.js';
 import { formatTimeLabel, chartColors, mapShotDatapoints } from '../../utils.js';
@@ -16,7 +17,7 @@ function _xyCurve(shot) {
   return getCachedShotData(shot.id) || mapShotDatapoints(shot.datapoints);
 }
 
-// ── Chart tab switching ───────────────────────────────────────────────────
+// ── Chart tab switching ───────────────────────────────────────────────
 
 export function switchChartTab(tab) {
   S.currentChartTab = tab;
@@ -27,7 +28,7 @@ export function switchChartTab(tab) {
   if (tab === 'pq') updatePQChart();
 }
 
-// ── P·Q Chart ─────────────────────────────────────────────────────────────
+// ── P·Q Chart ─────────────────────────────────────────────────────────
 
 function getPQData(shot) {
   const d = _rawCurve(shot);
@@ -51,7 +52,7 @@ export function updatePQChart() {
   if (!shotA) return;
 
   const canvas = document.getElementById('pqChart');
-  if (S.pqChart) { S.pqChart.destroy(); S.pqChart = null; }
+  chartRegistry.dispose('pqChart');
 
   const shotB = S.compareShotId ? S.shots.find(s => s.id === S.compareShotId) : null;
   const dataA = getPQData(shotA);
@@ -73,7 +74,7 @@ export function updatePQChart() {
       borderDash: [4,3], borderWidth: 2, pointRadius: 1, pointHoverRadius: 3 }
   );
 
-  S.pqChart = new Chart(canvas, {
+  chartRegistry.set('pqChart', new Chart(canvas, {
     type: 'scatter',
     data: { datasets },
     options: {
@@ -91,10 +92,10 @@ export function updatePQChart() {
              ticks: { color: C.tick }, grid: { color: C.grid } }
       }
     }
-  });
+  }));
 }
 
-// ── Fullscreen chart ──────────────────────────────────────────────────────
+// ── Fullscreen chart ──────────────────────────────────────────────────
 
 export function openChartFullscreen() {
   document.getElementById('chartFullscreen').classList.add('open');
@@ -109,7 +110,7 @@ export function openChartFullscreen() {
 export function closeChartFullscreen() {
   document.getElementById('chartFullscreen').classList.remove('open');
   document.body.style.overflow = '';
-  if (S.fsChart) { S.fsChart.destroy(); S.fsChart = null; }
+  chartRegistry.dispose('fsChart');
   screen.orientation?.unlock?.();
 }
 
@@ -126,9 +127,7 @@ function renderFsChart() {
   const C = chartColors();
   const shotA = S.shots.find(s => s.id === S.primaryShotId);
   if (!shotA) return;
-  const existing = Chart.getChart('espressoShotChartFs');
-  if (existing) existing.destroy();
-  S.fsChart = null;
+  chartRegistry.dispose('fsChart');
 
   const canvas = document.getElementById('espressoShotChartFs');
 
@@ -137,7 +136,7 @@ function renderFsChart() {
     const xMax = data.length
       ? Math.max(3, Math.ceil(Math.max(...data.map(d => d.x)) * 1.1 * 2) / 2)
       : 5;
-    S.fsChart = new Chart(canvas, {
+    chartRegistry.set('fsChart', new Chart(canvas, {
       type: 'scatter',
       data: { datasets: [{ label: `Shot ${shotA.id}`, data,
           showLine: true, tension: 0.2, fill: false,
@@ -158,19 +157,20 @@ function renderFsChart() {
                ticks: { color: C.tick }, grid: { color: C.grid } }
         }
       }
-    });
-    clearChartOnTouchEnd(S.fsChart);
+    }));
+    clearChartOnTouchEnd(chartRegistry.get('fsChart'));
     return;
   }
 
-  if (!S.chart) return;
+  const shotChart = chartRegistry.get('chart');
+  if (!shotChart) return;
   const dA     = _xyCurve(shotA);
   const maxTempA = Math.max(...(_rawCurve(shotA).temperature || []).map(v => v / 10), 0);
   const tms    = Math.ceil(maxTempA + 5) || 100;
   const maxTime = dA.rawTimes.length > 0 ? dA.rawTimes[dA.rawTimes.length - 1] : 60;
-  const datasets = S.chart.data.datasets.map(ds => ({ ...ds, data: [...ds.data] }));
+  const datasets = shotChart.data.datasets.map(ds => ({ ...ds, data: [...ds.data] }));
 
-  S.fsChart = new Chart(canvas, {
+  chartRegistry.set('fsChart', new Chart(canvas, {
     type: 'line',
     plugins: [corsairPlugin],
     data: { datasets },
@@ -190,6 +190,6 @@ function renderFsChart() {
         y1: { type:'linear', position:'right', min:0, max:tms, ticks:{color:C.tick}, grid:{drawOnChartArea:false} }
       }
     }
-  });
-  clearChartOnTouchEnd(S.fsChart);
+  }));
+  clearChartOnTouchEnd(chartRegistry.get('fsChart'));
 }

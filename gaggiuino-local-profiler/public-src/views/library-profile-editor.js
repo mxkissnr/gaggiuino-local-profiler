@@ -9,7 +9,8 @@
 // renumbers all remaining rows/ids/data-idx after a removal, same as
 // removeRecipeStep().
 import Chart from 'chart.js/auto';
-import { S } from '../state.js';
+import { S } from '../state/index.js';
+import * as chartRegistry from '../state/charts.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { esc } from '../utils.js';
@@ -94,7 +95,7 @@ export async function deleteMachineProfile(id) {
   await loadMachineProfileList();
 }
 
-// ── Editor modal ─────────────────────────────────────────────────────────
+// ── Editor modal ──────────────────────────────────────────────────────
 export function openProfileForm(profile, beanId) {
   S.profileEditId     = profile?.id ?? null;
   S.profileEditBeanId = beanId ?? null;
@@ -117,7 +118,7 @@ export function closeProfileForm() {
   S.profileEditBeanId = null;
   document.getElementById('profileEditorModal').classList.remove('open');
   document.getElementById('profileEditorModal').style.display = 'none';
-  if (S.profilePreviewChart) { S.profilePreviewChart.destroy(); S.profilePreviewChart = null; }
+  chartRegistry.dispose('profilePreviewChart');
 }
 
 export function openNewProfileForm() {
@@ -276,7 +277,7 @@ function _collectProfile() {
   };
 }
 
-// ── "Send to machine" ───────────────────────────────────────────────────
+// ── "Send to machine" ───────────────────────────────────────────────
 export async function sendProfileToMachine() {
   const profile = _collectProfile();
   if (!profile.name) { document.getElementById('profileFormName').focus(); return; }
@@ -295,7 +296,7 @@ export async function sendProfileToMachine() {
   await loadMachineProfileList();
 }
 
-// ── Preview chart ─────────────────────────────────────────────────────────
+// ── Preview chart ─────────────────────────────────────────────────────
 // Synthesizes a time series from the phase list — pro-Phase target.curve
 // interpolation from start→end over target.time ms — and draws it exactly
 // like the shot-detail chart draws its dashed target-curves (destroy-before-
@@ -344,9 +345,7 @@ export function _synthesizeSeries(phases) {
 export function renderProfilePreviewChart() {
   const ctx = document.getElementById('profilePreviewChart');
   if (!ctx) return;
-  const existing = Chart.getChart(ctx);
-  if (existing) existing.destroy();
-  S.profilePreviewChart = null;
+  chartRegistry.dispose('profilePreviewChart');
 
   const phases = _collectPhases();
   const series = _synthesizeSeries(phases);
@@ -363,7 +362,7 @@ export function renderProfilePreviewChart() {
   const pressurePoints = series.map(pt => ({ x: pt.x, y: pt.type === 'PRESSURE' ? pt.y : null }));
   const flowPoints     = series.map(pt => ({ x: pt.x, y: pt.type !== 'PRESSURE' ? pt.y : null }));
 
-  S.profilePreviewChart = new Chart(ctx, {
+  chartRegistry.set('profilePreviewChart', new Chart(ctx, {
     type: 'line',
     data: {
       datasets: [
@@ -403,5 +402,5 @@ export function renderProfilePreviewChart() {
         y: { title: { display: true, text: t('profile_preview_y_axis') } },
       },
     },
-  });
+  }));
 }
