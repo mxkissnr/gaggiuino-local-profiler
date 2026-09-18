@@ -423,7 +423,6 @@ Object.assign(window, {
   deleteGrinder,
   toggleBeanQR,
   generateBeanQR,
-  toggleBagHistory,
   openNewBagForm,
   closeNewBagForm,
   saveNewBag,
@@ -926,7 +925,6 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'open-new-bag':       openNewBagForm(numId()); break;
       case 'close-new-bag':      closeNewBagForm(numId()); break;
       case 'save-new-bag':       saveNewBag(numId()); break;
-      case 'toggle-bag-history':   toggleBagHistory(numId()); break;
       case 'toggle-month-group':  toggleMonthGroup(strId()); break;
       case 'delete-bag':         deleteBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'open-bag-stock-edit':  openBagStockEdit(Number(el.dataset.bagId)); break;

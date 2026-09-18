@@ -557,15 +557,6 @@ function loadBeanThumbnails() {
   });
 }
 
-export function toggleBagHistory(id) {
-  const wrap = document.getElementById(`bagHistory${id}`);
-  const btn  = document.getElementById(`bagHistoryBtn${id}`);
-  if (!wrap) return;
-  const open = wrap.style.display === 'none';
-  wrap.style.display = open ? '' : 'none';
-  if (btn) btn.textContent = (open ? '▾ ' : '▸ ') + t('lib_bag_history');
-}
-
 export function openNewBagForm(id) {
   document.getElementById(`newBagForm${id}`).style.display = '';
 }
