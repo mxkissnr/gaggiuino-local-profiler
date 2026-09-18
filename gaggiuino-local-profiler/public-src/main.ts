@@ -106,7 +106,7 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage, resetGrinderBurrs, deleteGrinderZeroPointEntry,
          toggleBeanQR,
          openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
-         openNewBagDialog, openEditBagDialog, closeBagDialog, saveBagDialog,
+         openEditBag, closeEditBag, saveEditBag,
          openBagStockEdit, closeBagStockEdit, saveBagStock, markBagEmpty, togglePastBags,
          toggleBagCard, reorderBags,
          openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, filterShotsByBean,
@@ -427,6 +427,9 @@ Object.assign(window, {
   closeNewBagForm,
   saveNewBag,
   deleteBag,
+  openEditBag,
+  closeEditBag,
+  saveEditBag,
   openBagStockEdit,
   closeBagStockEdit,
   saveBagStock,
@@ -927,6 +930,9 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'save-new-bag':       saveNewBag(numId()); break;
       case 'toggle-month-group':  toggleMonthGroup(strId()); break;
       case 'delete-bag':         deleteBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'open-edit-bag':        openEditBag(Number(el.dataset.bagId)); break;
+      case 'close-edit-bag':       closeEditBag(); break;
+      case 'save-edit-bag':        saveEditBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'open-bag-stock-edit':  openBagStockEdit(Number(el.dataset.bagId)); break;
       case 'close-bag-stock-edit': closeBagStockEdit(); break;
       case 'save-bag-stock-edit':  saveBagStock(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;

@@ -197,6 +197,7 @@ function renderBagCard(b, entry, state, beans, canDelete) {
   const { bg, consumed, stockG, remaining } = entry;
   const pct = remaining != null && stockG > 0 ? Math.round((remaining / stockG) * 100) : null;
   const editingStock = S._bagStockEditId === bg.id;
+  const editingFull  = S._bagFullEditId === bg.id;
   const expanded = _expandedBagCards.has(bg.id);
   // Past bags are locked out of editing except the single most recently
   // emptied one (classifyBeanBags' isLastEmpty) — lets a "verklickt"
@@ -229,6 +230,25 @@ function renderBagCard(b, entry, state, beans, canDelete) {
          <button class="lib-btn-sm" data-action="close-bag-stock-edit" data-bean-id="${b.id}">${t('lib_cancel')}</button>
        </div>`
     : '';
+  // Full-detail edit (roastDate/original weight/price/batch number) — the
+  // pencil icon's target. Distinct from stockRow above: that one only ever
+  // adjusts remaining stock (via consumedG math), this one PUTs every
+  // field updateBag accepts at once, same contract putBagStock already
+  // relies on for its own partial (stock-only) writes.
+  const editRow = editingFull
+    ? `<div class="lib-new-bag-form" style="display:flex">
+         <div class="lib-new-bag-fields">
+           <input type="date" class="lib-new-bag-input" id="editBagRoastDate${bg.id}" title="${t('lib_bag_roast_date')}" value="${bg.roastDate || ''}" max="${todayIsoDate()}">
+           <input type="number" class="lib-new-bag-input" id="editBagStock${bg.id}" placeholder="${t('lib_bag_stock')}" min="0" step="1" value="${stockG ?? ''}">
+           <input type="number" class="lib-new-bag-input" id="editBagPrice${bg.id}" placeholder="${t('lib_bag_price')}" min="0" step="0.01" value="${bg.price_eur ?? ''}">
+           <input type="text" class="lib-new-bag-input" id="editBagBatchNumber${bg.id}" placeholder="${t('lib_bag_batch_number')}" maxlength="50" value="${esc(bg.batchNumber || '')}">
+         </div>
+         <div class="lib-form-actions">
+           <button class="lib-btn-sm" data-action="close-edit-bag" data-bean-id="${b.id}">${t('lib_cancel')}</button>
+           <button class="lib-save-btn" data-action="save-edit-bag" data-bean-id="${b.id}" data-bag-id="${bg.id}">${t('lib_bag_save')}</button>
+         </div>
+       </div>`
+    : '';
   const dragHandle = state === 'upcoming'
     ? `<span class="lib-bag-drag-handle" data-bag-drag-handle data-bean-id="${b.id}" data-bag-id="${bg.id}" title="${t('lib_bag_reorder_handle')}">⠿</span>`
     : '';
@@ -242,16 +262,17 @@ function renderBagCard(b, entry, state, beans, canDelete) {
     </div>
     <div class="lib-bag-card-body" style="${expanded ? '' : 'display:none'}">
       <div class="lib-bag-card-actions">
-        ${canEdit ? `<button class="lib-bag-edit-btn" data-action="open-edit-bag" data-bean-id="${b.id}" data-bag-id="${bg.id}" title="${t('lib_bag_edit')}">${ICON_PENCIL}</button>` : ''}
+        ${canEdit && !editingFull ? `<button class="lib-bag-edit-btn" data-action="open-edit-bag" data-bean-id="${b.id}" data-bag-id="${bg.id}" title="${t('lib_bag_edit')}">${ICON_PENCIL}</button>` : ''}
         ${canDelete ? `<button class="lib-bag-del" data-action="delete-bag" data-bean-id="${b.id}" data-bag-id="${bg.id}" title="${t('lib_bag_delete')}">${ICON_TRASH}</button>` : ''}
       </div>
-      <div class="lib-bag-card-details">
+      ${editingFull ? '' : `<div class="lib-bag-card-details">
         ${details.length ? details.join('') : `<span class="lib-bag-empty-note">${t('lib_bag_stock_untracked')}</span>`}
-      </div>
-      ${canAdjust && !editingStock ? `<div class="lib-bag-card-actions-row">
+      </div>`}
+      ${canAdjust && !editingStock && !editingFull ? `<div class="lib-bag-card-actions-row">
         <button class="lib-btn-sm" data-action="open-bag-stock-edit" data-bag-id="${bg.id}">${t('lib_stock_edit_btn')}</button>
       </div>` : ''}
       ${stockRow}
+      ${editRow}
     </div>
   </div>`;
 }
@@ -605,6 +626,44 @@ export function closeBagStockEdit() {
   renderBeanList();
 }
 
+// ── Full bag edit (roastDate/weight/price/batch number) — the bag card's
+// pencil icon. Distinct from the stock-adjust flow above (open/close/save-
+// BagStockEdit): that one only ever touches remaining stock via consumedG
+// math; this one lets every field updateBag accepts be corrected at once
+// (e.g. a mistyped roast date or batch number).
+export function openEditBag(bagId) {
+  S._bagFullEditId = bagId;
+  renderBeanList();
+}
+
+export function closeEditBag() {
+  S._bagFullEditId = null;
+  renderBeanList();
+}
+
+export async function saveEditBag(beanId, bagId) {
+  const roastDate   = document.getElementById(`editBagRoastDate${bagId}`)?.value.trim() || '';
+  const stock_g     = parseFloat(document.getElementById(`editBagStock${bagId}`)?.value);
+  const price_eur   = parseFloat(document.getElementById(`editBagPrice${bagId}`)?.value);
+  const batchNumber = document.getElementById(`editBagBatchNumber${bagId}`)?.value.trim() || '';
+  const r = await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      roastDate,
+      stock_g: Number.isNaN(stock_g) ? null : stock_g,
+      price_eur: Number.isNaN(price_eur) ? null : price_eur,
+      batchNumber,
+    }),
+  });
+  if (!r.ok) return;
+  const saved = await r.json();
+  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
+  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  S._bagFullEditId = null;
+  renderBeanList();
+}
+
 // PUT /bag/{id} replaces the full bag record (see updateBag server-side) —
 // every call here must resend roastDate/price_eur/batchNumber alongside
 // the new stock_g, or those fields get silently blanked.
@@ -724,107 +783,6 @@ export async function reorderBags(beanId, bagIds) {
   const saved = await r.json();
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
-  renderBeanList();
-}
-
-// ── Bag dialog (new / edit) ───────────────────────────────────────────────
-// State: which bean + bag we're editing (null = new bag)
-let _bagDialogBeanId = null;
-let _bagDialogBagId  = null; // null = new bag
-
-export function openNewBagDialog(beanId) {
-  _bagDialogBeanId = beanId;
-  _bagDialogBagId  = null;
-  const overlay = document.getElementById('bagDialogOverlay');
-  if (!overlay) return;
-  document.getElementById('bagDialogTitle').textContent = t('lib_new_bag_title');
-  document.getElementById('bagDialogRoastDate').value = '';
-  document.getElementById('bagDialogRoastDate').max = new Date().toISOString().slice(0, 10);
-  document.getElementById('bagDialogStock').value = '';
-  document.getElementById('bagDialogPrice').value = '';
-  document.getElementById('bagDialogBatch').value = '';
-  document.getElementById('bagDialogRoastDateLabel').textContent = t('lib_bag_roast_date');
-  document.getElementById('bagDialogStockLabel').textContent = t('lib_bag_stock');
-  document.getElementById('bagDialogPriceLabel').textContent = t('lib_bag_price');
-  document.getElementById('bagDialogBatchLabel').textContent = t('lib_bag_batch_number');
-  overlay.querySelector('[data-action="close-bag-dialog"]').textContent = t('lib_cancel');
-  overlay.querySelector('[data-action="save-bag-dialog"]').textContent = t('lib_new_bag_save');
-  overlay.style.display = 'flex';
-  document.getElementById('bagDialogRoastDate').focus();
-}
-
-export function openEditBagDialog(beanId, bagId) {
-  const bean = S.coffeeLibrary.beans.find(b => b.id === beanId);
-  if (!bean) return;
-  const bags = Array.isArray(bean.bags) ? bean.bags : [];
-  const bag = bags.find(bg => bg.id === bagId);
-  if (!bag) return;
-  _bagDialogBeanId = beanId;
-  _bagDialogBagId  = bagId;
-  const overlay = document.getElementById('bagDialogOverlay');
-  if (!overlay) return;
-  document.getElementById('bagDialogTitle').textContent = t('lib_bag_edit');
-  document.getElementById('bagDialogRoastDate').max = new Date().toISOString().slice(0, 10);
-  document.getElementById('bagDialogRoastDate').value = bag.roastDate || '';
-  document.getElementById('bagDialogStock').value = bag.stock_g ?? '';
-  document.getElementById('bagDialogPrice').value = bag.price_eur ?? '';
-  document.getElementById('bagDialogBatch').value = bag.batchNumber || '';
-  document.getElementById('bagDialogRoastDateLabel').textContent = t('lib_bag_roast_date');
-  document.getElementById('bagDialogStockLabel').textContent = t('lib_bag_stock');
-  document.getElementById('bagDialogPriceLabel').textContent = t('lib_bag_price');
-  document.getElementById('bagDialogBatchLabel').textContent = t('lib_bag_batch_number');
-  overlay.querySelector('[data-action="close-bag-dialog"]').textContent = t('lib_cancel');
-  overlay.querySelector('[data-action="save-bag-dialog"]').textContent = t('lib_bag_save');
-  overlay.style.display = 'flex';
-}
-
-export function closeBagDialog() {
-  const overlay = document.getElementById('bagDialogOverlay');
-  if (overlay) overlay.style.display = 'none';
-  _bagDialogBeanId = null;
-  _bagDialogBagId  = null;
-}
-
-export async function saveBagDialog() {
-  if (_bagDialogBeanId == null) return;
-  const roastDate   = document.getElementById('bagDialogRoastDate')?.value.trim() || '';
-  const stockRaw    = document.getElementById('bagDialogStock')?.value.trim() || '';
-  const priceRaw    = document.getElementById('bagDialogPrice')?.value.trim() || '';
-  const stock_g     = stockRaw === '' ? null : parseFloat(stockRaw);
-  const price_eur   = priceRaw === '' ? null : parseFloat(priceRaw);
-  const batchNumber = document.getElementById('bagDialogBatch')?.value.trim() || '';
-  if ((stock_g != null && (!Number.isFinite(stock_g) || stock_g < 0)) ||
-      (price_eur != null && (!Number.isFinite(price_eur) || price_eur < 0))) {
-    alert(t('lib_bag_invalid_number'));
-    return;
-  }
-  if (roastDate && roastDate > todayIsoDate()) {
-    alert(t('lib_bag_future_roast'));
-    document.getElementById('bagDialogRoastDate')?.focus();
-    return;
-  }
-  const body = { roastDate, stock_g, price_eur, batchNumber };
-
-  let r;
-  if (_bagDialogBagId == null) {
-    // A new bag joins the back of the queue (server assigns the next
-    // sortOrder) — it does NOT become current while an earlier bag still
-    // has stock, so there's nothing to warn about here anymore (see
-    // go/internal/library/handlers_beans.go's newBag).
-    r = await apiFetch(`api/library/bean/${_bagDialogBeanId}/new-bag`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    });
-  } else {
-    // edit existing bag
-    r = await apiFetch(`api/library/bean/${_bagDialogBeanId}/bag/${_bagDialogBagId}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    });
-  }
-  if (!r.ok) return;
-  const saved = await r.json();
-  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === _bagDialogBeanId);
-  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
-  closeBagDialog();
   renderBeanList();
 }
 
