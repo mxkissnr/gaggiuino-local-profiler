@@ -380,6 +380,8 @@ components:
         notes:     { type: string, maxLength: 500 }
         shotCount: { type: integer }
         machineId: { type: integer }
+        grinderName: { type: string, description: "Resolved display name for a grinder_* task, added on read" }
+        label:       { type: string, description: "Resolved display label for a custom_* task, added on read" }
 
     # ── Orders ────────────────────────────────────────────────────────────
 

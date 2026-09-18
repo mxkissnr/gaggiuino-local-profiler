@@ -219,6 +219,7 @@ type LogEntry struct {
 	ShotCountAtTime int64  `json:"shotCountAtTime"`
 	Notes           string `json:"notes"`
 	GrinderName     string `json:"grinderName,omitempty"`
+	Label           string `json:"label,omitempty"`
 }
 
 // GetMaintenanceLog ports LibraryRepository.js's getMaintenanceLog
@@ -244,6 +245,29 @@ func (r *Repository) GetMaintenanceLog(machineID int64) ([]LogEntry, error) {
 			if name, _ := g["name"].(string); name != "" {
 				grinderNames[fmt.Sprintf("grinder_%d", gid)] = name
 			}
+		}
+	}
+
+	// Custom task labels — unlike grinder names (global equipment, keyed by
+	// task alone), a custom_ task is defined per machine (customCreate saves
+	// it under activeMachineID(r)), so two different machines' tasks can
+	// share the same slugified key with different labels — the lookup key
+	// must include machineID.
+	customLabels := map[string]string{}
+	rawTasks, err := r.GetAllMaintenanceRaw()
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rawTasks {
+		if !isCustomTask(row.Key) {
+			continue
+		}
+		var t Task
+		if err := json.Unmarshal(row.Data, &t); err != nil {
+			continue
+		}
+		if label, _ := t["label"].(string); label != "" {
+			customLabels[fmt.Sprintf("%d:%s", row.MachineID, row.Key)] = label
 		}
 	}
 
@@ -274,6 +298,9 @@ func (r *Repository) GetMaintenanceLog(machineID int64) ([]LogEntry, error) {
 		e.Notes = notes.String
 		if name, ok := grinderNames[e.Task]; ok {
 			e.GrinderName = name
+		}
+		if label, ok := customLabels[fmt.Sprintf("%d:%s", e.MachineID, e.Task)]; ok {
+			e.Label = label
 		}
 		out = append(out, e)
 	}
