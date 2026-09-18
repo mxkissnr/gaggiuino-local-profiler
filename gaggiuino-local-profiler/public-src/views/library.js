@@ -169,6 +169,11 @@ function classifyBeanBags(b) {
   return { current, upcoming, past };
 }
 
+// Bean ids with an in-flight toggle-active request — disables the eye icon
+// button for that bean so a slow connection can't double-fire the toggle
+// before the first request's re-render lands.
+const _pendingBeanActiveToggles = new Set();
+
 // Bag cards are collapsed by default (space-saving on mobile) — this Set
 // tracks which bag ids are expanded, mirroring the _pendingBeanActiveToggles
 // module-state pattern already used elsewhere in this file.
@@ -1308,11 +1313,19 @@ export async function deleteBean(id) {
 // The bean stays fully visible/editable in the library either way; only its
 // presence in /api/orders/active-beans changes.
 export async function toggleBeanActive(id) {
-  const saved = await libraryApi.toggleBeanActive(id);
-  if (!saved) return;
-  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
-  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  if (_pendingBeanActiveToggles.has(id)) return;
+  _pendingBeanActiveToggles.add(id);
   renderBeanList();
+  try {
+    const r = await apiFetch(`api/library/bean/${id}/toggle-active`, { method: 'POST' });
+    if (!r.ok) return;
+    const saved = await r.json();
+    const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
+    if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  } finally {
+    _pendingBeanActiveToggles.delete(id);
+    renderBeanList();
+  }
 }
 
 // ── Grinder form ──────────────────────────────────────────────────────────

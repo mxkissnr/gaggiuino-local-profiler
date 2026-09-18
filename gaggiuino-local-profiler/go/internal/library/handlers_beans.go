@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
@@ -425,6 +426,48 @@ func (h *Handlers) deleteBag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.writeEnrichedBean(w, bean)
+}
+
+// validateBagFloatField parses body[key] with the same parseFloat-or-null
+// idiom as floatOrNilFalsy, but — unlike bean-level price_eur's
+// sanitizePrice, which silently clamps an out-of-range/unparseable value to
+// nil — treats a present-but-non-numeric or negative value as a hard 400.
+// Bag stock_g/price_eur are only ever set by the app's own numeric inputs,
+// so a value that fails to parse here means a client bug, not a legitimate
+// free-text omission the way a roaster-entered bean price can be.
+func validateBagFloatField(body Entity, key string) (any, bool) {
+	v, present := body[key]
+	if !present {
+		return nil, true
+	}
+	f, ok := jsParseFloat(v)
+	if !ok || f < 0 {
+		return nil, false
+	}
+	if f == 0 {
+		return nil, true
+	}
+	return f, true
+}
+
+// validateBagRoastDate ports updateBag's roastDate gate: a date parseable
+// as YYYY-MM-DD that's more than a day in the future almost certainly means
+// a client clock/timezone bug rather than an intentional future roast date,
+// so it's rejected outright — unlike bean-level roastDate (trimMax), which
+// never validates the string's content, just its length.
+func validateBagRoastDate(body Entity) (string, bool) {
+	roastDate := trimMax(body["roastDate"], 10)
+	if roastDate == "" {
+		return roastDate, true
+	}
+	parsed, err := time.Parse("2006-01-02", roastDate)
+	if err != nil {
+		return roastDate, true
+	}
+	if parsed.After(time.Now().AddDate(0, 0, 1)) {
+		return roastDate, false
+	}
+	return roastDate, true
 }
 
 // updateBag handles PUT /api/library/bean/{id}/bag/{bagId}: edit any bag's
