@@ -3,6 +3,7 @@ import { S, filterShotsByMachine }                            from '../../state/
 import * as chartRegistry                                     from '../../state/charts.js';
 import { t }                                                  from '../../i18n.js';
 import { apiFetch, isApiPortBlocked }                         from '../../api.js';
+import { listShots, listShotsDump, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShotCard } from '../../api/shots.js';
 import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges } from '../../constants.js';
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
@@ -114,13 +115,9 @@ const RENDER_THROTTLE_MS = 400;
 // trashed list on either backend. Returns a normalised page:
 // { shots: <newest-first, metadata-only>, nextCursor, hasMore }.
 async function fetchShotsPage({ cursor = null, trash = false } = {}) {
-  const params = new URLSearchParams({ limit: String(SHOTS_PAGE_LIMIT) });
-  if (cursor) params.set('cursor', cursor);
-  if (trash) params.set('trash', '1');
-
-  const r = await apiFetch(`api/shots?${params}`);
+  const r = await listShots({ limit: SHOTS_PAGE_LIMIT, cursor, trash });
   if (r.status === 404) {
-    const fb = await apiFetch(trash ? 'shots.json?trash=1' : 'shots.json');
+    const fb = await listShotsDump({ trash });
     if (!fb.ok) return { error: fb.status };
     const dump = await fb.json();               // full ASC array, datapoints inline
     const shots = Array.isArray(dump) ? dump : [];
@@ -342,7 +339,7 @@ export function toggleTrash() {
 
 export async function trashShot(id) {
   try {
-    const r = await apiFetch(`api/shots/${id}/trash`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    const r = await sendShotToTrash(id);
     if (!r.ok) throw new Error(await r.text());
     evictCurve(id);
     S.shots = S.shots.filter(s => s.id !== id);
@@ -366,7 +363,7 @@ export async function trashShot(id) {
 
 export async function restoreShot(id) {
   try {
-    const r = await apiFetch(`api/shots/${id}/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    const r = await restoreShotFromTrash(id);
     if (!r.ok) throw new Error(await r.text());
     await loadData();
   } catch (e) {
@@ -377,7 +374,7 @@ export async function restoreShot(id) {
 export async function permanentDeleteShot(id) {
   if (!confirm(t('confirm_perm_delete', id))) return;
   try {
-    const r = await apiFetch(`api/shots/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    const r = await deleteShotPermanently(id);
     if (!r.ok) throw new Error(await r.text());
     evictCurve(id);
     S.trashedShots = S.trashedShots.filter(s => s.id !== id);
@@ -877,7 +874,7 @@ async function downloadCSV(rows, filename) {
                   'Dose (g)','Ratio','Avg Temp (C)','Rating','Coffee','Grinder','Grind Setting',
                   'Basket','Puck Screen','Notes'];
   const csv  = [header.join(','), ...rows].join('\r\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
   await shareOrDownloadBlob(blob, filename, { title: t('export_csv_title') });
 }
 
@@ -1041,7 +1038,7 @@ export async function shareCard(format = 'square') {
     // user's actual Farbschema pick.
     const accent = document.documentElement.dataset.accent || 'amber-americano';
     const theme  = document.documentElement.dataset.theme  || 'dark';
-    const r = await apiFetch(`api/shots/${shotId}/card?format=${encodeURIComponent(format)}&accent=${encodeURIComponent(accent)}&theme=${encodeURIComponent(theme)}`);
+    const r = await getShotCard(shotId, { format, accent, theme });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       throw new Error(err.error || r.statusText);
