@@ -555,7 +555,7 @@ const de: Partial<Translations> = {
     profile_no_phases_error:'Mindestens eine Phase ist erforderlich',
     profile_editor_title:'Profil-Editor',
     profile_form_name:'Name *', profile_form_water_temp:'Wassertemperatur (°C)',
-    profile_form_coffee_in:'Dosis (g)', profile_form_coffee_out:'Ausbeute (g)', profile_form_form_ratio:'Ratio',
+    profile_form_coffee_in:'Dosis (g)', profile_form_coffee_out:'Ausbeute (g)', profile_form_ratio:'Ratio',
     profile_form_weight:'Stopp-Gewicht (g)',
     profile_phases_title:'Phasen', profile_add_phase:'+ Phase', profile_apply_suggestion:'Bohnen-Vorschlag anwenden',
     profile_phase_name:'Phasenname', profile_phase_skip:'Überspringen',
