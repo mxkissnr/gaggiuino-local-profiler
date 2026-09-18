@@ -1,0 +1,330 @@
+import type { Chart } from 'chart.js';
+import { TRANSLATIONS } from '../constants.js';
+
+// ── State ─────────────────────────────────────────────────────────────────
+// S is one flat runtime object — every view reads S.<field> directly. The
+// slice interfaces below exist only to type that object; they are intersected
+// into AppState and deliberately do not nest anything at runtime.
+
+// #957: shot rows are METADATA-ONLY — every hydrated-shot field except the
+// `datapoints` curve blob, plus `.score`/`.usedBeanTarget`/`.hasChartData`.
+// Curve data lives in shot-curves.js, fetched per shot on demand.
+export interface ShotMeta {
+  id: number;
+  machineId?: number | null;
+  timestamp: number;
+  [key: string]: unknown;
+}
+
+export interface MachineRecord {
+  id: number;
+  [key: string]: unknown;
+}
+
+export interface MachineProfileRow {
+  name: string;
+  [key: string]: unknown;
+}
+
+export interface BeanFilter {
+  id: number;
+  name: string;
+}
+
+export type LibraryRow = Record<string, unknown>;
+
+export interface CoffeeLibrary {
+  beans: LibraryRow[];
+  grinders: LibraryRow[];
+}
+
+// BarcodeDetector is not in TypeScript's DOM lib yet; only the shape GLP uses.
+export interface BarcodeDetectorLike {
+  detect(source: CanvasImageSource): Promise<{ rawValue: string }[]>;
+}
+
+export interface ShotsSlice {
+  shots: ShotMeta[];
+  allShots: ShotMeta[];
+  shotsPageCursor: string | null;
+  shotsHasMore: boolean;
+  allShotsLoaded: boolean;
+  trashedShots: ShotMeta[];
+  primaryShotId: number | null;
+  compareShotId: number | null;
+  currentRating: number;
+  currentSort: string;
+  sortAsc: boolean;
+  currentFilter: string;
+  beanFilter: BeanFilter | null;
+  _expandedMonths: Set<string>;
+  chart: Chart | null;
+  pqChart: Chart | null;
+  fsChart: Chart | null;
+  currentChartTab: string;
+  currentFsTab: string;
+  trashOpen: boolean;
+}
+
+export interface LiveSlice {
+  livePollInterval: number | null;
+  preheatPollInterval: number | null;
+  liveChart: Chart | null;
+  refShotId: number | null;
+  liveIsActive: boolean;
+  liveLastSeq: number;
+  liveWasLive: boolean;
+  liveBrewStartWall: number | null;
+  liveTimerTick: number | null;
+  machinePowerState: string | null;
+  machineReachable: boolean | null;
+}
+
+export interface LibrarySlice {
+  coffeeLibrary: CoffeeLibrary;
+  drinkMenu: LibraryRow[];
+  milkTypes: LibraryRow[];
+  shotDefaults: Record<string, unknown> | null;
+  beanEditId: number | null;
+  _beanStockEditId: number | null;
+  grinderEditId: number | null;
+  basketEditId: number | null;
+  puckScreenEditId: number | null;
+  _scanStream: MediaStream | null;
+  _scanDetector: BarcodeDetectorLike | null;
+  _scanActive: boolean;
+  profileEditId: number | null;
+  profileEditBeanId: number | null;
+  profilePreviewChart: Chart | null;
+}
+
+export interface OrdersSlice {
+  _ordersMenuOpen: boolean;
+  _ordersPollTimer: number | null;
+  _ordersEtaSelected: Record<number, number>;
+  _ordersDeclineOpen: Record<number, boolean>;
+  _ordersStatsOpen: boolean;
+}
+
+export interface MachinesSlice {
+  machines: MachineRecord[];
+  activeMachineId: number | 'all' | null;
+  machineProfiles: MachineProfileRow[];
+  machineProfilesStale: boolean;
+  legacyMachineOptionsPending: boolean; // #662
+}
+
+export interface UiSlice {
+  currentMode: string;
+  trendChart: Chart | null;
+  profileBarChart: Chart | null;
+  doseDistChart: Chart | null;
+  ratioDistChart: Chart | null;
+  timeOfDayChart: Chart | null;
+  dialinProgressionChart: Chart | null;
+  trendWindow: number;
+  _calendarResizeObserver: ResizeObserver | null;
+  _urlImportSource: string | null;
+  _urlImportedAt: string | number | null;
+  _urlImportSourceUrl: string | null;
+}
+
+export interface WizardSlice {
+  dialinSession: Record<string, unknown> | null;
+  profileDialinSession: Record<string, unknown> | null;
+  setupWizardOpen: boolean;
+  setupWizardStep: string;
+}
+
+// Cross-cutting fields that don't belong to any one feature area.
+export interface CoreSlice {
+  currentLang: string;
+  glpToken: string;
+  apiPortExposed: boolean;
+  sseActive: boolean | null;
+  isDemo: boolean;
+}
+
+export type AppState = CoreSlice & ShotsSlice & LiveSlice & LibrarySlice &
+  OrdersSlice & MachinesSlice & UiSlice & WizardSlice;
+
+export const S: AppState = {
+  // navigator.language used to be trusted as-is, with no
+  // check against the languages GLP actually ships (TRANSLATIONS below) —
+  // an unsupported browser locale (e.g. pt, pl, sv) fell through to
+  // i18n.js's own TRANSLATIONS.de fallback, showing the entire UI in German
+  // to a non-German user by construction. Validate against the real key set
+  // here instead and fall back to English, matching every other
+  // unsupported-language fallback in this codebase (i18n.js's t(),
+  // constants.js's localeFor(), the backend's getHaLanguage()/notifyT()).
+  currentLang: ((): string => {
+    const stored = localStorage.getItem('glp_lang');
+    const lang = stored || navigator.language.slice(0, 2).toLowerCase();
+    return Object.prototype.hasOwnProperty.call(TRANSLATIONS, lang) ? lang : 'en';
+  })(),
+  // In-memory only (#522) — never persisted to localStorage. A fresh token is
+  // fetched on every load via initToken()'s /api/token call (see api.js).
+  glpToken: '',
+  // #803: mirrors /api/status's exposeApiPort field. Starts true (the add-on
+  // default) so a session that hasn't polled /api/status yet never shows the
+  // "port closed" explanation it hasn't actually confirmed.
+  apiPortExposed: true,
+  // S.shots is the currently *visible* (machine-filtered) set every existing
+  // view (sidebar, analytics, ...) already reads; S.allShots is the full
+  // unfiltered fetch from the server, re-filtered into S.shots whenever
+  // S.activeMachineId changes (#325) — see filterShotsByMachine() below and
+  // applyActiveMachineChange() in components/machines-settings.js.
+  //
+  // #957: both hold METADATA-ONLY rows now — every hydrated-shot field EXCEPT
+  // the `datapoints` curve blob, plus `.score` / `.usedBeanTarget` /
+  // `.hasChartData`. Curve data is fetched per shot on demand and cached in
+  // shot-curves.js. loadData() paints S.shots/S.allShots from page 1 of
+  // GET /api/shots, then loadAllShotMeta() walks the rest into S.allShots in
+  // the background (cursor + hasMore below track that walk; allShotsLoaded
+  // flips true when it finishes).
+  shots: [],
+  allShots: [],
+  shotsPageCursor: null,
+  shotsHasMore: false,
+  allShotsLoaded: false,
+  trashedShots: [],
+  chart: null,
+  primaryShotId: null,
+  compareShotId: null,
+  currentRating: 0,
+  currentMode: 'shots',
+  trashOpen: false,
+  livePollInterval: null,
+  preheatPollInterval: null,
+  liveChart: null,
+  refShotId: null,
+  liveIsActive: false,
+  liveLastSeq: -1,
+  liveWasLive: false,
+  liveBrewStartWall: null,
+  liveTimerTick: null,
+  pqChart: null,
+  currentChartTab: 'zeit',
+  machinePowerState: null,
+  currentSort: 'newest',
+  sortAsc: false,
+  fsChart: null,
+  currentFsTab: 'zeit',
+  coffeeLibrary: { beans: [], grinders: [] },
+  drinkMenu: [],
+  milkTypes: [],
+  shotDefaults: null,
+  beanEditId: null,
+  _beanStockEditId: null,
+  grinderEditId: null,
+  basketEditId: null,
+  puckScreenEditId: null,
+  trendChart: null,
+  profileBarChart: null,
+  doseDistChart: null,
+  ratioDistChart: null,
+  timeOfDayChart: null,
+  dialinProgressionChart: null,
+  trendWindow: 30,
+  _calendarResizeObserver: null,
+  currentFilter: '',
+  // Structured bean filter (shot history) — set by clicking a bean in the
+  // Library view; ANDed with the free-text S.currentFilter search in
+  // filterShots() (sidebar.js). { id, name } or null for "no filter".
+  beanFilter: null,
+  // #439: which month-tier sidebar groups are expanded — in-memory only
+  // (never mirrored to localStorage), so it survives re-renders/shot
+  // switches within a session but resets on a fresh page load, matching the
+  // pre-#399 sidebar's month-accordion behavior.
+  _expandedMonths: new Set(),
+  _urlImportSource: null,
+  _urlImportedAt: null,
+  _urlImportSourceUrl: null,
+  _scanStream: null,
+  _scanDetector: null,
+  _scanActive: false,
+  _ordersMenuOpen: true,
+  _ordersPollTimer: null,
+  _ordersEtaSelected: {},
+  _ordersDeclineOpen: {},
+  _ordersStatsOpen: false,
+  machineReachable: null,
+  legacyMachineOptionsPending: false, // #662
+  // #735: SSE push connection state -- null = "not yet known" (treated the
+  // same as false by consumers until proven true), true once EventSource
+  // has successfully opened at least once, false once fallback detection
+  // (see sse.js) has given up on it for this session.
+  sseActive: null,
+  isDemo: false,
+  // Multi-machine registry (#319) — S.machines mirrors GET /api/machines;
+  // activeMachineId is restored from localStorage in machines-settings.js.
+  machines: [],
+  activeMachineId: null,
+  machineProfiles: [],
+  machineProfilesStale: false,
+  profileEditId: null,
+  profileEditBeanId: null,
+  profilePreviewChart: null,
+  // Guided Dial-In (#310) — session is client-only, mirrored to localStorage
+  // so a reload doesn't lose an in-progress dial-in (see dialin-wizard.js).
+  dialinSession: ((): Record<string, unknown> | null => {
+    try { return JSON.parse(localStorage.getItem('glp_dialin_session') || 'null') as Record<string, unknown> | null; }
+    catch { return null; }
+  })(),
+  // Profile Dial-In (#313) — same client-only, localStorage-mirrored pattern
+  // as dialinSession, adapted for tuning a machine profile's phases (see
+  // profile-dialin-wizard.js) instead of a single grind number.
+  profileDialinSession: ((): Record<string, unknown> | null => {
+    try { return JSON.parse(localStorage.getItem('glp_profile_dialin_session') || 'null') as Record<string, unknown> | null; }
+    catch { return null; }
+  })(),
+  // First-run setup wizard (#744) — in-memory only, deliberately not
+  // mirrored to localStorage (unlike dialinSession above): a reload mid-wizard
+  // just reopens at the welcome step, which is fine since the wizard's own
+  // trigger condition (zero machines configured) still holds either way.
+  // See views/setup-wizard.js.
+  setupWizardOpen: false,
+  setupWizardStep: 'welcome',
+};
+
+// Per-machine values must be keyed by machine id, never held as a single
+// scalar. Bug precedent: one shared scalar let machine A's value show up for
+// machine B (#730/#732 machine accent colour, #742/#743 sync-progress toast).
+// The correct reference implementations already exist — per-machine Maps in
+// components/status.js and components/machines-settings.js — and stay where
+// they are for now: adopting this alias for the remaining call sites is
+// package A4/A5 work, not A2b.
+export type PerMachine<T> = ReadonlyMap<number, T>;
+
+// ── Reactive pub/sub ──────────────────────────────────────────────────────
+// Lightweight wrapper: setState() mutates S and notifies subscribers for
+// that key. Direct S mutations (S.shots = [...]) continue to work as before
+// and don't notify — use setState() for reactive updates going forward.
+
+const _subs = new Map<keyof AppState, Set<(value: unknown) => void>>();
+
+export function subscribe<K extends keyof AppState>(key: K, callback: (value: AppState[K]) => void): () => void {
+  let subs = _subs.get(key);
+  if (!subs) { subs = new Set(); _subs.set(key, subs); }
+  const cb = callback as (value: unknown) => void;
+  subs.add(cb);
+  return () => { subs.delete(cb); };
+}
+
+export function setState<K extends keyof AppState>(key: K, value: AppState[K]): void {
+  S[key] = value;
+  _subs.get(key)?.forEach(cb => cb(value));
+}
+
+// Multi-machine shot filtering (#325). `activeMachineId` of null (machines
+// not loaded yet) or the sentinel 'all' means "show everything" — a shot
+// with no machineId at all (e.g. cached/pre-#317 data) is treated as
+// belonging to the default machine (id 1), matching the backend's own
+// default-machine convention.
+export function filterShotsByMachine<T extends { machineId?: number | null }>(
+  shots: T[],
+  activeMachineId: number | 'all' | null,
+): T[] {
+  if (activeMachineId == null || activeMachineId === 'all') return shots;
+  return shots.filter(s => (s.machineId ?? 1) === activeMachineId);
+}
