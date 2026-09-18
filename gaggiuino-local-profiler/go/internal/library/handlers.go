@@ -75,6 +75,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/library/bean/{id}/freeze-portions", h.freezePortions)
 	mux.HandleFunc("POST /api/library/bean/{id}/thaw-portion", h.thawPortion)
 	mux.HandleFunc("POST /api/library/bean/{id}/adjust-frozen-portion", h.adjustFrozenPortion)
+	mux.HandleFunc("PUT /api/library/bean/{id}/bag/{bagId}", h.updateBag)
 	mux.HandleFunc("DELETE /api/library/bean/{id}/bag/{bagId}", h.deleteBag)
 	mux.HandleFunc("POST /api/library/bean/{id}/delete", h.deleteBean)
 	mux.HandleFunc("POST /api/library/bean/{id}/toggle-active", h.toggleBeanActive)

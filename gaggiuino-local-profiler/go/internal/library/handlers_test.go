@@ -386,6 +386,41 @@ func TestBean_NewBagJoinsBackOfQueue_DoesNotBecomeCurrent(t *testing.T) {
 	}
 }
 
+// TestBean_UpdateBag_RouteIsRegistered guards a regression where updateBag
+// (handlers_beans.go) existed and was fully implemented but was never
+// registered on the mux — every PUT to /api/library/bean/{id}/bag/{bagId}
+// 404'd with Go's default "404 page not found" (not the app's own JSON
+// 404), silently breaking stock-adjust, mark-empty, and the bag-edit
+// pencil button all at once, discovered via the latter. Goes through the
+// real mux (newMux), not a direct handler call, specifically so a missing
+// route registration can't hide behind the test.
+func TestBean_UpdateBag_RouteIsRegistered(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, bean := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	bags, _ := bean["bags"].([]any)
+	firstBag, _ := bags[0].(map[string]any)
+	bagID := int64(firstBag["id"].(float64))
+
+	rec := doJSON(t, mux, http.MethodPut, "/api/library/bean/"+itoa(id)+"/bag/"+itoa(bagID),
+		mustMarshal(t, map[string]any{"roastDate": "2026-08-20", "stock_g": 280, "batchNumber": "B-42"}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT bag status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	updated := decodeBody(t, rec.Body.Bytes())
+	updatedBags, _ := updated["bags"].([]any)
+	updatedBag, _ := updatedBags[0].(map[string]any)
+	if updatedBag["roastDate"] != "2026-08-20" {
+		t.Errorf("roastDate = %v, want 2026-08-20", updatedBag["roastDate"])
+	}
+	if updatedBag["stock_g"] != float64(280) {
+		t.Errorf("stock_g = %v, want 280", updatedBag["stock_g"])
+	}
+	if updatedBag["batchNumber"] != "B-42" {
+		t.Errorf("batchNumber = %v, want B-42", updatedBag["batchNumber"])
+	}
+}
+
 // TestBean_ReorderBags_ClientOrderWinsAndCurrentStaysProtected covers the
 // reorder-bags endpoint: two never-touched upcoming bags get reordered by
 // the client, and the still-current first bag's queue position must not be
