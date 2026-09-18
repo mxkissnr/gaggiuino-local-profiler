@@ -40,7 +40,7 @@ if ('serviceWorker' in navigator && document.querySelector('link[rel="manifest"]
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
-import { S } from './state.js';
+import { S } from './state/index.js';
 import { initToken, apiFetch } from './api.js';
 import { t, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
