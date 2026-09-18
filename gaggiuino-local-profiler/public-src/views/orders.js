@@ -1,4 +1,5 @@
-import { S } from '../state.js';
+import { S } from '../state/index.js';
+import * as timerRegistry from '../state/timers.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { esc } from '../utils.js';
@@ -65,11 +66,11 @@ export function startOrdersPolling() {
   }
   S._knownPendingIds = null; // reset so first load doesn't trigger notify
   loadOrdersView();
-  S._ordersPollTimer = setInterval(loadOrdersView, 10000);
+  timerRegistry.set('_ordersPollTimer', setInterval(loadOrdersView, 10000));
 }
 
 export function stopOrdersPolling() {
-  if (S._ordersPollTimer) { clearInterval(S._ordersPollTimer); S._ordersPollTimer = null; }
+  timerRegistry.dispose('_ordersPollTimer');
 }
 
 export async function setOrdersEnabled(enabled) {
