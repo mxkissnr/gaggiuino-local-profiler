@@ -421,6 +421,29 @@ func TestBean_UpdateBag_RouteIsRegistered(t *testing.T) {
 	}
 }
 
+// TestBean_UpdateBag_NullPriceClearsRatherThanRejects guards a regression
+// found live alongside the missing-route bug above: the bag-edit form
+// sends price_eur: null (not an omitted key) when the field is left blank
+// — validateBagFloatField's !present check alone doesn't catch a present-
+// but-null value, so it fell through to jsParseFloat(nil), which is
+// "not ok", and the whole PUT 400'd as "invalid price_eur" even though
+// clearing an optional price is exactly the same "nothing to see here"
+// case an omitted key already handles correctly.
+func TestBean_UpdateBag_NullPriceClearsRatherThanRejects(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, bean := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	bags, _ := bean["bags"].([]any)
+	firstBag, _ := bags[0].(map[string]any)
+	bagID := int64(firstBag["id"].(float64))
+
+	rec := doJSON(t, mux, http.MethodPut, "/api/library/bean/"+itoa(id)+"/bag/"+itoa(bagID),
+		mustMarshal(t, map[string]any{"roastDate": "", "stock_g": 298, "price_eur": nil, "batchNumber": "X"}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT bag with price_eur:null status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 // TestBean_ReorderBags_ClientOrderWinsAndCurrentStaysProtected covers the
 // reorder-bags endpoint: two never-touched upcoming bags get reordered by
 // the client, and the still-current first bag's queue position must not be
