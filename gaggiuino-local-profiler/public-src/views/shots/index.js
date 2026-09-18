@@ -1,5 +1,6 @@
 import Chart from 'chart.js/auto';
 import { S, filterShotsByMachine }                            from '../../state/index.js';
+import * as chartRegistry                                     from '../../state/charts.js';
 import { t }                                                  from '../../i18n.js';
 import { apiFetch, isApiPortBlocked }                         from '../../api.js';
 import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges } from '../../constants.js';
@@ -773,7 +774,7 @@ export async function updateView() {
     );
   }
 
-  if (S.pqChart) { S.pqChart.destroy(); S.pqChart = null; }
+  chartRegistry.dispose('pqChart');
   if (S.currentChartTab === 'pq') updatePQChart();
 
   const ctx = document.getElementById('espressoShotChart');
@@ -784,7 +785,7 @@ export async function updateView() {
     const existing = Chart.getChart(ctx);
     if (existing) existing.destroy();
     try {
-      S.chart = new Chart(ctx, {
+      chartRegistry.set('chart', new Chart(ctx, {
         type: 'line',
         plugins: [corsairPlugin, phasePlugin],
         data: { datasets },
@@ -819,13 +820,13 @@ export async function updateView() {
             y1: { type:'linear', position:'right', min:0, max:Number(tempMaxScale), ticks:{color:C.tick, maxTicksLimit:6}, grid:{drawOnChartArea:false} }
           }
         }
-      });
-      clearChartOnTouchEnd(S.chart);
+      }));
+      clearChartOnTouchEnd(chartRegistry.get('chart'));
     } catch (e) {
       console.error('Chart creation error:', e);
     }
   };
-  S.chart = null;
+  chartRegistry.dispose('chart');
   _buildShotChart(phases ? { preinfusion: phases.preinfusion, extraction: phases.extraction } : {});
 
   // GaggiMate: upgrade sub-line + chart once named phases land. Not awaited;
