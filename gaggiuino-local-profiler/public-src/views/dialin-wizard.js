@@ -6,10 +6,10 @@
 // the manual panel would send.
 //
 // Session state (S.dialinSession) is client-only and mirrored to
-// localStorage.glp_dialin_session (see state.js) so a reload mid-session
+// localStorage.glp_dialin_session (see state/index.ts) so a reload mid-session
 // doesn't lose progress. It only ever references real shot ids; annotation
 // data lives on the shot itself via the normal annotate endpoint.
-import { S }                     from '../state.js';
+import { S }                     from '../state/index.js';
 import { t }                     from '../i18n.js';
 import { apiFetch }              from '../api.js';
 import { esc, detectChanneling, calcBrewRatio, scoreColor } from '../utils.js';
@@ -478,4 +478,3 @@ function _renderChips(rounds) {
     `<div class="dw-chip" style="border-color:${scoreColor(r.score)}">${esc(String(r.grindSetting))} → ${r.score ?? '–'}</div>`
   ).join('')}</div>`;
 }
-
