@@ -14,7 +14,7 @@
 // machine (api/machine/profile/:id) before the next round starts waiting —
 // there's no separate "save" step, the machine is always in sync with the
 // session's current profile.
-import { S }             from '../state.js';
+import { S }             from '../state/index.js';
 import { t }              from '../i18n.js';
 import { apiFetch }       from '../api.js';
 import { esc, scoreColor } from '../utils.js';
@@ -187,7 +187,6 @@ export async function profileDialinOverride() {
   const nextProfile = applyPhaseAdjustment(s.profile, sug);
   const ok = await _sendUpdatedProfile(s, nextProfile);
   if (!ok) return;
-
   s.rounds.push(round);
   s.reviewRound = null;
   s.pendingSymptoms = [];
@@ -362,4 +361,3 @@ function _renderChips(rounds) {
 function _bestRound(rounds) {
   return [...(rounds || [])].filter(r => r.score != null).sort((a, b) => b.score - a.score)[0] || null;
 }
-
