@@ -1,7 +1,7 @@
 // GaggiMate profile editor — Standard + Pro. _profile is the source of
 // truth; _render() rebuilds #gmEditorBody from it on every change.
 import Chart from 'chart.js/auto';
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { esc } from '../utils.js';
