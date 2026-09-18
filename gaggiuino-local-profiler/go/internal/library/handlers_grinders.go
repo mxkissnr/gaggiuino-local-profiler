@@ -64,6 +64,37 @@ func (h *Handlers) updateGrinder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, grinder)
 }
 
+// setGrinderZeroPoint handles PUT /api/library/grinder/:id/zero-point: logs
+// a new zero-point activation (see zero_point.go) so grind-setting
+// suggestions/comparisons can correct for drift after a cleaning without
+// every past shot's recorded grindSetting needing to be rewritten.
+func (h *Handlers) setGrinderZeroPoint(w http.ResponseWriter, r *http.Request) {
+	id, noMatch := parseIDParam(r.PathValue("id"))
+	body, ok := decodeJSONBody(w, r)
+	if !ok {
+		return
+	}
+	if noMatch {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	zeroPoint, ok := jsParseFloat(body["zeroPoint"])
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid zeroPoint")
+		return
+	}
+	grinder, found, err := SetGrinderZeroPoint(h.repo, id, zeroPoint)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, grinder)
+}
+
 // resetBurrs ports POST /api/library/grinder/:id/reset-burrs.
 func (h *Handlers) resetBurrs(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))

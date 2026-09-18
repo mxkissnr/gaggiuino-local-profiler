@@ -170,6 +170,8 @@ const en: Translations = {
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',
     lib_grinder_burr_type:'Burr type', lib_grinder_burr_type_ph:'Conical steel',
     lib_grinder_purchase_date:'Purchase date', lib_grinder_image:'Photo',
+    lib_grinder_zero_point:'Zero point',
+    lib_grinder_zero_point_hint:'After cleaning: update the zero point here instead of adjusting every recipe. Suggestions/comparisons correct for it automatically.',
     lib_cancel:'Cancel', lib_save:'Save',
     lib_empty_beans:'No beans saved yet', lib_empty_grinders:'No grinders saved yet',
     lib_btn_edit:'Edit', lib_btn_delete:'Delete',

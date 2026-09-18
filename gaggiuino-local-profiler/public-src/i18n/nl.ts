@@ -170,6 +170,8 @@ const nl: Partial<Translations> = {
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',
     lib_grinder_burr_type:'Maaltype', lib_grinder_burr_type_ph:'Conisch staal',
     lib_grinder_purchase_date:'Aankoopdatum', lib_grinder_image:'Foto',
+    lib_grinder_zero_point:'Nulpunt',
+    lib_grinder_zero_point_hint:'Na het reinigen: werk hier het nulpunt bij in plaats van elk recept aan te passen. Suggesties/vergelijkingen corrigeren automatisch.',
     lib_cancel:'Annuleren', lib_save:'Opslaan',
     lib_empty_beans:'Nog geen bonen opgeslagen', lib_empty_grinders:'Nog geen molens opgeslagen',
     lib_btn_edit:'Bewerken', lib_btn_delete:'Verwijderen',

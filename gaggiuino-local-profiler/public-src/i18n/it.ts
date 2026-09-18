@@ -170,6 +170,8 @@ const it: Partial<Translations> = {
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Click',
     lib_grinder_burr_type:'Tipo di macine', lib_grinder_burr_type_ph:'Conico acciaio',
     lib_grinder_purchase_date:'Data di acquisto', lib_grinder_image:'Foto',
+    lib_grinder_zero_point:'Punto zero',
+    lib_grinder_zero_point_hint:'Dopo la pulizia: aggiorna qui il punto zero invece di modificare ogni ricetta. Suggerimenti/confronti si correggono automaticamente.',
     lib_cancel:'Annulla', lib_save:'Salva',
     lib_empty_beans:'Nessun grano salvato', lib_empty_grinders:'Nessun macinino salvato',
     lib_btn_edit:'Modifica', lib_btn_delete:'Elimina',
