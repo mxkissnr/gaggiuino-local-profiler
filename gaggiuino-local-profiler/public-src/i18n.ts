@@ -1,11 +1,6 @@
-// state.js is still JavaScript (the state split is package A2b); only the slice
-// i18n.ts reads is declared here so this module can be checked meanwhile.
-// @ts-expect-error -- state.js is untyped until package A2b (state split) converts it
-import { S as _S } from './state.js';
+import { S } from './state/index.js';
 import { TRANSLATIONS } from './constants.js';
 import { STAR_ICON_SVG } from './icons.js';
-
-const S = _S as { currentLang: string; currentMode: string };
 
 // Cross-module entry points main.js wires onto `window` (kept off direct
 // imports to avoid circular deps); declared so the calls below stay typed.
@@ -40,7 +35,7 @@ function dictionary(lang: string): Translations | undefined {
 export function t(key: string, ...args: unknown[]): string {
   // Falls back to English, not German, for a key missing in the active
   // language's file — S.currentLang is already validated against
-  // TRANSLATIONS at startup (see state.js), so this only ever fires for an
+  // TRANSLATIONS at startup (see state/index.ts), so this only ever fires for an
   // individual key that's out of sync across the 6 language files.
   const val = dictionary(S.currentLang)?.[key] ?? dictionary('en')?.[key] ?? key;
   return typeof val === 'function' ? val(...args) : val;

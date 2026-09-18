@@ -1,4 +1,4 @@
-import { S } from './state.js';
+import { S } from './state/index.js';
 
 // #735: thin wrapper around EventSource for the single multiplexed
 // GET /api/events stream (sync-progress/sync-complete now, live-snapshot/

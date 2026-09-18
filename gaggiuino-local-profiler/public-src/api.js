@@ -1,4 +1,4 @@
-import { S } from './state.js';
+import { S } from './state/index.js';
 
 export async function initToken() {
   // Migration for pre-#522 installs: the token used to be cached in

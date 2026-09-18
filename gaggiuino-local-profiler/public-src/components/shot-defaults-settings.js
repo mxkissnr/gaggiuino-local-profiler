@@ -6,7 +6,7 @@
 // settings themselves and keeps S.shotDefaults (loaded once at app init by
 // loadShotDefaults()) in sync after a save.
 import { apiFetch } from '../api.js';
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
 import { loadShotDefaults, loadDrinkMenu } from '../views/shots/annotation.js';
