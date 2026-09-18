@@ -13,7 +13,7 @@ globalThis.localStorage ??= {
 globalThis.navigator ??= { language: 'en-US' };
 globalThis.window ??= globalThis;
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { loadMachines } = await import('../public-src/components/machines-settings.js');
 
 // Generic permissive fetch stub — loadMachines()'s own applyActiveMachineChange()

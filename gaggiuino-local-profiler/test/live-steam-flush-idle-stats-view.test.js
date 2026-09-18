@@ -19,7 +19,7 @@ vi.mock('../public-src/machine-icon.js', () => ({
   MACHINE_ICON_LIVE_CLASS: 'machine-icon-live',
 }));
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { handleLiveData, setLiveBadge } = await import('../public-src/views/live.js');
 
 function makeFakeDocument() {

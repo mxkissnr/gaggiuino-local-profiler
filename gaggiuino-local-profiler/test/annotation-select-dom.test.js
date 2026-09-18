@@ -11,7 +11,7 @@ import { installFakeOptionDom } from './helpers/fake-option-dom.js';
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator    ??= { language: 'en-US' };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { _renderBasketSelect, _renderPuckScreenSelect, _renderRecipeSelect, _renderBeanSelect } =
   await import('../public-src/views/shots/annotation.js');
 

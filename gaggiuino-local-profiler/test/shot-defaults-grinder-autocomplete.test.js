@@ -19,7 +19,7 @@ vi.mock('../public-src/views/shots/annotation.js', () => ({
   loadDrinkMenu: vi.fn(),
 }));
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { renderShotDefaultsSettingsCard } = await import('../public-src/components/shot-defaults-settings.js');
 
 function makeFakeDocument(fields) {

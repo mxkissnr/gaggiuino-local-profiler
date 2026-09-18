@@ -16,7 +16,7 @@ globalThis.window ??= globalThis;
 // tests use is enough here, since only the pure label helper is exercised.
 globalThis.document = { getElementById: () => undefined, querySelectorAll: () => [] };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { firmwareProgressLabel } = await import('../public-src/components/machines-settings.js');
 const en = (await import('../public-src/i18n/en.js')).default;
 const de = (await import('../public-src/i18n/de.js')).default;

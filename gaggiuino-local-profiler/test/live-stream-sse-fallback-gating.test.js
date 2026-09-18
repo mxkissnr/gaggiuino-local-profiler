@@ -40,7 +40,7 @@ vi.mock('../public-src/components/machines-settings.js', () => ({
   getDefaultMachineId: () => null,
 }));
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { connectLiveStream, disconnectLiveStream } = await import('../public-src/views/live.js');
 
 function makeFakeDocument() {

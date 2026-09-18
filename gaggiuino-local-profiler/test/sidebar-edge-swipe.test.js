@@ -21,7 +21,7 @@ class FakeEl {
   setAttribute() {}
 }
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { handleEdgeSwipeStart, handleEdgeSwipeEnd } = await import('../public-src/components/sidebar.js');
 
 function touch(x) { return { touches: [{ clientX: x }] }; }

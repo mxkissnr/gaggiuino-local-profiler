@@ -1,5 +1,5 @@
 import Chart from 'chart.js/auto';
-import { S, filterShotsByMachine }                            from '../../state.js';
+import { S, filterShotsByMachine }                            from '../../state/index.js';
 import { t }                                                  from '../../i18n.js';
 import { apiFetch, isApiPortBlocked }                         from '../../api.js';
 import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges } from '../../constants.js';

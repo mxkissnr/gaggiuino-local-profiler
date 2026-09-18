@@ -17,7 +17,7 @@ vi.mock('../public-src/api.js', () => ({
   apiFetch: (...args) => apiFetchMock(...args),
 }));
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { fetchLiveData } = await import('../public-src/views/live.js');
 
 function makeFakeDocument() {

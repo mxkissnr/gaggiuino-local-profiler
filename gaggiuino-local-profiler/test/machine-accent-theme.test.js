@@ -51,7 +51,7 @@ globalThis.document = {
   getElementById: fakeElement,
 };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { applyActiveMachineAccentTheme, renderAccentSwatches } = await import('../public-src/components/machines-settings.js');
 const { migrateLegacyAccent } = await import('../public-src/theme.js');
 const { t } = await import('../public-src/i18n.js');

@@ -23,7 +23,7 @@ globalThis.localStorage = {
 globalThis.navigator ??= { language: 'en-US' };
 globalThis.window ??= globalThis;
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { updateStatus, handleSyncProgressEvent, handleSyncCompleteEvent } = await import('../public-src/components/status.js');
 
 function makeFakeDocument() {

@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator    ??= { language: 'en-US' };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { buildWorldMap } = await import('../public-src/views/analytics.js');
 
 // #648: buildWorldMap()'s countries-110m.json fetch had no request-generation-

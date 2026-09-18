@@ -35,7 +35,7 @@ function fakeElement(id) { return (elements[id] ??= new FakeEl()); }
 
 globalThis.document = { getElementById: fakeElement };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 // Node's own built-in `navigator` global (present since Node 21) reflects the
 // host OS locale rather than a fixed 'en-US' -- S.currentLang's own
 // navigator.language-based default (state.js) is therefore host-locale-

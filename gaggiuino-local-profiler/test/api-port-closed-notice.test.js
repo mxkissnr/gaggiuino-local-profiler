@@ -18,7 +18,7 @@ globalThis.sessionStorage = {
   removeItem: k => _session.delete(k),
 };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { isApiPortBlocked } = await import('../public-src/api.js');
 const { apiPortClosedHtml, updateApiPortClosedBanner } =
   await import('../public-src/components/api-port-notice.js');

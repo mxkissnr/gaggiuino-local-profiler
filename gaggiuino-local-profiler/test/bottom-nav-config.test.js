@@ -15,7 +15,7 @@ globalThis.localStorage = {
 };
 globalThis.navigator ??= { language: 'en-US' };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const {
   STORAGE_KEY, MAX_MAIN_BAR, DEFAULT_MAIN_BAR, ALL_IDS,
   getBottomNavConfig, setBottomNavConfig, computeSettingsRows, renderBottomNav,

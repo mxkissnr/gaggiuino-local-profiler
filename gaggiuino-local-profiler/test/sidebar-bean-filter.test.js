@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator    ??= { language: 'en-US' };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { filterShots, setBeanFilter, clearBeanFilter } = await import('../public-src/components/sidebar.js');
 
 // filterShots() reads/writes DOM nodes by selector — stub only what it

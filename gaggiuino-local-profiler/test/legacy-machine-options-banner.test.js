@@ -15,7 +15,7 @@ globalThis.sessionStorage = {
   removeItem: k => { _sessionStore.delete(k); },
 };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { updateLegacyMachineOptionsBanner } = await import('../public-src/components/onboarding.js');
 
 function makeFakeDocument() {

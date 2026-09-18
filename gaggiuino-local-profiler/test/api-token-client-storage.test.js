@@ -15,7 +15,7 @@ globalThis.localStorage = {
 };
 globalThis.navigator ??= { language: 'en-US' };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { initToken, apiFetch } = await import('../public-src/api.js');
 
 // Snapshot the calls made while the modules above were *imported* (i.e.

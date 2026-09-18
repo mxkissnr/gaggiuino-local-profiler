@@ -15,7 +15,7 @@ beforeAll(async () => {
     configurable: true, writable: true,
   });
   ({ resolveBeanForAnnotation } = await import('../public-src/views/shots/utils.js'));
-  ({ S } = await import('../public-src/state.js'));
+  ({ S } = await import('../public-src/state/index.js'));
 });
 
 beforeEach(() => {

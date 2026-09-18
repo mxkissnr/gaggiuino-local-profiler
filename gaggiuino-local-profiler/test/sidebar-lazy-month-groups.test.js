@@ -14,7 +14,7 @@ globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator    ??= { language: 'en-US' };
 globalThis.window       ??= {};
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { renderSidebar, toggleMonthGroup, filterShots } =
   await import('../public-src/components/sidebar.js');
 

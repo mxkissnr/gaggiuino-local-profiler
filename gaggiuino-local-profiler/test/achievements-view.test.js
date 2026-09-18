@@ -28,7 +28,7 @@ import fr from '../public-src/i18n/fr.js';
 import es from '../public-src/i18n/es.js';
 import nl from '../public-src/i18n/nl.js';
 
-import { S } from '../public-src/state.js';
+import { S } from '../public-src/state/index.js';
 import { askewDeg, formatStampedOn, isCardFull, fieldHtml } from '../public-src/views/achievements.js';
 
 const LANGS = { de, en, it: itLang, fr, es, nl };

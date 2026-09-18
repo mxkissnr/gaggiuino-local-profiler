@@ -1,4 +1,5 @@
-import { S } from '../state.js';
+import { S } from '../state/index.js';
+import * as timerRegistry from '../state/timers.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, toIsoDateInput, todayIsoDate, isoDateInputToMs } from '../utils.js';
@@ -1305,21 +1306,22 @@ export async function openScanModal() {
   status.className = '';
   modal.classList.add('open');
   try {
-    S._scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    video.srcObject = S._scanStream;
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    timerRegistry.set('_scanStream', stream);
+    video.srcObject = stream;
   } catch {
     status.textContent = t('scan_error');
     status.className = 'error';
     return;
   }
   S._scanActive   = true;
-  S._scanDetector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code', 'data_matrix'] });
+  timerRegistry.set('_scanDetector', new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code', 'data_matrix'] }));
   _runScanLoop();
 }
 
 export function closeScanModal() {
   S._scanActive = false;
-  if (S._scanStream) { S._scanStream.getTracks().forEach(t => t.stop()); S._scanStream = null; }
+  timerRegistry.dispose('_scanStream');
   document.getElementById('scanModal').classList.remove('open');
   document.getElementById('scanVideo').srcObject = null;
 }
@@ -1331,7 +1333,7 @@ export async function _runScanLoop() {
     await new Promise(r => setTimeout(r, 300));
     if (!S._scanActive) break;
     try {
-      const codes = await S._scanDetector.detect(video);
+      const codes = await timerRegistry.get('_scanDetector').detect(video);
       if (!codes.length) continue;
       const raw = codes[0].rawValue;
       // eslint-disable-next-line require-atomic-updates -- this loop-exit flag is idempotent; closeScanModal() setting it concurrently to the same false value is harmless

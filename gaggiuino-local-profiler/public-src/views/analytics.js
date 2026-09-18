@@ -1,5 +1,7 @@
 import Chart from 'chart.js/auto';
-import { S } from '../state.js';
+import { S } from '../state/index.js';
+import * as chartRegistry from '../state/charts.js';
+import * as timerRegistry from '../state/timers.js';
 import { t } from '../i18n.js';
 import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName } from '../constants.js';
 import { esc, scoreClass, chartColors, themeColor, onThemeChange } from '../utils.js';
@@ -277,7 +279,7 @@ export function buildDistribution() {
 function _buildDoseDist() {
   const ctx = document.getElementById('doseDistChart');
   if (!ctx) return;
-  if (S.doseDistChart) { S.doseDistChart.destroy(); S.doseDistChart = null; }
+  chartRegistry.dispose('doseDistChart');
   const doses = S.shots.map(s => s.annotation?.dose).filter(d => d != null && d > 5 && d < 50);
   if (doses.length < 5) {
     ctx.parentElement.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_distribution')}</p>`;
@@ -288,7 +290,7 @@ function _buildDoseDist() {
   const buckets = {};
   for (let b = lo; b <= hi + 0.001; b += 0.5) buckets[b.toFixed(1)] = 0;
   for (const d of doses) { const k = (Math.floor(d * 2) / 2).toFixed(1); if (k in buckets) buckets[k]++; }
-  S.doseDistChart = new Chart(ctx, {
+  chartRegistry.set('doseDistChart', new Chart(ctx, {
     type: 'bar',
     data: { labels: Object.keys(buckets).map(k => k + 'g'),
             datasets: [{ data: Object.values(buckets), backgroundColor: 'rgba(239,68,68,.6)', borderRadius: 3, borderSkipped: false }] },
@@ -299,13 +301,13 @@ function _buildDoseDist() {
         y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(63,63,70,.3)' } }
       }
     }
-  });
+  }));
 }
 
 function _buildRatioDist() {
   const ctx = document.getElementById('ratioDistChart');
   if (!ctx) return;
-  if (S.ratioDistChart) { S.ratioDistChart.destroy(); S.ratioDistChart = null; }
+  chartRegistry.dispose('ratioDistChart');
   const ratios = S.shots
     .map(s => s.annotation?.dose && s.weight ? (s.weight / 10) / s.annotation.dose : null)
     .filter(r => r != null && r > 1 && r < 4);
@@ -318,7 +320,7 @@ function _buildRatioDist() {
   const buckets = {};
   for (let b = lo; b <= hi + 0.001; b += 0.1) buckets[b.toFixed(1)] = 0;
   for (const r of ratios) { const k = (Math.floor(r * 10) / 10).toFixed(1); if (k in buckets) buckets[k]++; }
-  S.ratioDistChart = new Chart(ctx, {
+  chartRegistry.set('ratioDistChart', new Chart(ctx, {
     type: 'bar',
     data: { labels: Object.keys(buckets).map(k => '1:' + k),
             datasets: [{ data: Object.values(buckets), backgroundColor: 'rgba(132,204,22,.6)', borderRadius: 3, borderSkipped: false }] },
@@ -329,14 +331,14 @@ function _buildRatioDist() {
         y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(63,63,70,.3)' } }
       }
     }
-  });
+  }));
 }
 
 // ── Time of Day ───────────────────────────────────────────────────────────
 export function buildTimeOfDay() {
   const ctx = document.getElementById('timeOfDayChart');
   if (!ctx) return;
-  if (S.timeOfDayChart) { S.timeOfDayChart.destroy(); S.timeOfDayChart = null; }
+  chartRegistry.dispose('timeOfDayChart');
   const hours = Array.from({ length: 24 }, () => ({ count: 0, scores: [] }));
   for (const s of S.shots) {
     const h = new Date(s.timestamp * 1000).getHours();
@@ -351,7 +353,7 @@ export function buildTimeOfDay() {
     return;
   }
   const avgSc = h => h.scores.length ? Math.round(h.scores.reduce((a, b) => a + b, 0) / h.scores.length) : null;
-  S.timeOfDayChart = new Chart(ctx, {
+  chartRegistry.set('timeOfDayChart', new Chart(ctx, {
     type: 'bar',
     data: {
       labels: hours.map((_, i) => String(i).padStart(2, '0') + ':00'),
@@ -369,7 +371,7 @@ export function buildTimeOfDay() {
         y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(63,63,70,.3)' } }
       }
     }
-  });
+  }));
 }
 
 export function setTrendWindow(n) {
@@ -392,7 +394,7 @@ export function buildTrendChart() {
 
   const ctx = document.getElementById('trendChart');
   if (!ctx) return;
-  if (S.trendChart) { S.trendChart.destroy(); S.trendChart = null; }
+  chartRegistry.dispose('trendChart');
 
   if (src.length < 2) {
     ctx.parentElement.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_trend')}</p>`;
@@ -407,7 +409,7 @@ export function buildTrendChart() {
     return Math.round(sl.reduce((a, b) => a + b, 0) / sl.length);
   });
 
-  S.trendChart = new Chart(ctx, {
+  chartRegistry.set('trendChart', new Chart(ctx, {
     type: 'line',
     data: {
       labels,
@@ -432,16 +434,17 @@ export function buildTrendChart() {
         y: { min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: 'rgba(63,63,70,.3)' } }
       }
     }
-  });
+  }));
 }
 
 export function buildCalendar() {
   const el = document.getElementById('shotCalendar');
   if (!el) return;
 
-  if (!S._calendarResizeObserver) {
-    S._calendarResizeObserver = new ResizeObserver(() => _renderCalendar());
-    S._calendarResizeObserver.observe(el);
+  if (!timerRegistry.get('_calendarResizeObserver')) {
+    const observer = new ResizeObserver(() => _renderCalendar());
+    timerRegistry.set('_calendarResizeObserver', observer);
+    observer.observe(el);
   }
   _renderCalendar();
 }
@@ -1074,7 +1077,7 @@ export function buildProfileChart() {
   const wrap = document.getElementById('profileChartWrap');
   const ctx  = document.getElementById('profileChart');
   if (!ctx) return;
-  if (S.profileBarChart) { S.profileBarChart.destroy(); S.profileBarChart = null; }
+  chartRegistry.dispose('profileBarChart');
 
   if (entries.length === 0) {
     wrap.innerHTML = `<p class="empty-note">${t('analytics_no_profiles')}</p>`;
@@ -1086,7 +1089,7 @@ export function buildProfileChart() {
   const bgColor = sc => sc >= 88 ? 'rgba(34,197,94,.7)' : sc >= 75 ? 'rgba(132,204,22,.7)'
                      : sc >= 60 ? 'rgba(234,179,8,.7)'  : sc >= 45 ? 'rgba(249,115,22,.7)' : 'rgba(239,68,68,.7)';
 
-  S.profileBarChart = new Chart(ctx, {
+  chartRegistry.set('profileBarChart', new Chart(ctx, {
     type: 'bar',
     data: {
       labels:   entries.map(e => e.name.length > 20 ? e.name.slice(0, 19) + '…' : e.name),
@@ -1104,7 +1107,7 @@ export function buildProfileChart() {
         y: { ticks: { color: C.tick, font: { size: 11 } }, grid: { display: false } }
       }
     }
-  });
+  }));
 }
 
 // ── Weekday x Hour heatmap ─────────────────────────────────────────────────
@@ -1374,7 +1377,7 @@ function _renderDialinProgressionChart(beanName) {
   const C = chartColors();
   const ctx = document.getElementById('dialinProgressionChart');
   if (!ctx) return;
-  if (S.dialinProgressionChart) { S.dialinProgressionChart.destroy(); S.dialinProgressionChart = null; }
+  chartRegistry.dispose('dialinProgressionChart');
 
   if (!beanName) {
     ctx.parentElement.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_beans')}</p>`;
@@ -1394,7 +1397,7 @@ function _renderDialinProgressionChart(beanName) {
   const grindData = shots.map(s => _parseGrindNum(s.annotation?.grindSetting));
   const scoreData = shots.map(s => window.calcShotScore ? window.calcShotScore(s) : null);
 
-  S.dialinProgressionChart = new Chart(ctx, {
+  chartRegistry.set('dialinProgressionChart', new Chart(ctx, {
     type: 'line',
     data: {
       labels,
@@ -1417,5 +1420,5 @@ function _renderDialinProgressionChart(beanName) {
         y1: { position: 'right', min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { drawOnChartArea: false } },
       },
     },
-  });
+  }));
 }

@@ -47,7 +47,7 @@ describe('public-src/sse.js', () => {
     FakeEventSource.instances = [];
     globalThis.EventSource = FakeEventSource;
 
-    ({ S } = await import('../public-src/state.js'));
+    ({ S } = await import('../public-src/state/index.js'));
     ({ connectEvents, disconnectEvents, onEvent } = await import('../public-src/sse.js'));
     S.sseActive = null;
     S.glpToken = '';

@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator    ??= { language: 'en-US' };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { toggleMonthGroup } = await import('../public-src/components/sidebar.js');
 
 // toggleMonthGroup() reads/writes exactly two DOM nodes by id/selector —

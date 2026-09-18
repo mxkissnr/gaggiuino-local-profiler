@@ -12,7 +12,7 @@ globalThis.localStorage ??= {
 };
 globalThis.navigator ??= { language: 'en-US' };
 
-const { S, setState } = await import('../public-src/state.js');
+const { S, setState } = await import('../public-src/state/index.js');
 const { shouldOpenSetupWizard, syncInstallId } = await import('../public-src/views/setup-wizard.js');
 
 const COMPLETED_KEY  = 'glp_setup_wizard_completed';

@@ -14,7 +14,7 @@ globalThis.localStorage = {
 };
 globalThis.navigator ??= { language: 'en-US' };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { updateStatus } = await import('../public-src/components/status.js');
 
 function makeFakeDocument() {
