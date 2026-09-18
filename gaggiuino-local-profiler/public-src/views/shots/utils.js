@@ -1,4 +1,4 @@
-import { S }                    from '../../state.js';
+import { S }                    from '../../state/index.js';
 import { mapShotDatapoints }    from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
 

@@ -1,5 +1,5 @@
 // First-run onboarding + demo mode UI (#274).
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { devBannerHeight } from './dev-banner.js';

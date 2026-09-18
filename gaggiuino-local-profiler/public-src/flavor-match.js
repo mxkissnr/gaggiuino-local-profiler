@@ -133,7 +133,7 @@ export function findAutoZoomTarget(categories) {
 // ── Sunburst color helpers ───────────────────────────────────────────────
 // Pure (no DOM/ECharts dependency), kept here alongside the other
 // wheel-adjacent pure logic so they stay unit-testable — flavor-wheel.js
-// imports state.js, which touches localStorage at module scope and can't be
+// imports state/index.ts, which touches localStorage at module scope and can't be
 // imported under vitest's node test environment.
 
 const NEUTRAL_FALLBACK = '#71717a'; // gray-500, only hit if a node id is somehow missing from SCA_FLAVOR_COLORS

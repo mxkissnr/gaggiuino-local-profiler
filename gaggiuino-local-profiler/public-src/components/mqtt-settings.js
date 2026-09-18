@@ -8,7 +8,7 @@
 import { apiFetch } from '../api.js';
 import { t } from '../i18n.js';
 import { CHECK_ICON_SVG } from '../icons.js';
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 
 let _selectedTransport = 'websocket';
 let _discovery = null;
