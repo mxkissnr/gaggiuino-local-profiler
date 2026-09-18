@@ -9,7 +9,7 @@
 // too — its colors are hardcoded (see the --ach-* custom properties in
 // style.css's "Achievements view" section), never the app's --gray-*/--err
 // etc. theme tokens.
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { localeFor } from '../constants.js';
