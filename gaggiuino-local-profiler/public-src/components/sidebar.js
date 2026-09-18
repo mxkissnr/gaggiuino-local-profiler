@@ -1,4 +1,4 @@
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { localeFor } from '../constants.js';
 import { esc, scoreClass, formatTimeLabel, groupShotsByDay } from '../utils.js';
@@ -229,7 +229,7 @@ export function updateSidebarHighlighting() {
 // Bean filter (shot history) — set via a bean click in the Library view
 // (library.js filterShotsByBean()). Structured, ANDed with the free-text
 // search below rather than replacing it, mirroring how the machine filter
-// (filterShotsByMachine, state.js) sits alongside search instead of
+// (filterShotsByMachine, state/index.ts) sits alongside search instead of
 // competing with it. Indicator lives in the sidebar's search area.
 export function setBeanFilter(id, name) {
   S.beanFilter = { id, name };
