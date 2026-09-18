@@ -1,4 +1,4 @@
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { MAINT_META, GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
