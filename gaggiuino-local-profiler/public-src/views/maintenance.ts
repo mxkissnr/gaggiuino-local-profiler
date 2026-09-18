@@ -46,6 +46,13 @@ interface MaintTile {
   showMachineTag: boolean;
 }
 
+// The subset of fields taskTitle resolves a display name from — shared by
+// live tiles (MaintTaskData) and log entries (MaintLogEntry).
+interface MaintTaskNames {
+  grinderName?: string | null;
+  label?: string | null;
+}
+
 interface MaintLogEntry {
   id: number;
   task: string;
@@ -53,6 +60,7 @@ interface MaintLogEntry {
   machineId?: number | null;
   machine?: string | null;
   grinderName?: string | null;
+  label?: string | null;
   shotCountAtTime?: number | null;
   notes?: string | null;
 }
@@ -84,7 +92,7 @@ function isGlobalTask(task: string): boolean {
   return task === 'waterfilter' || task.startsWith('grinder_');
 }
 
-function taskTitle(task: string, d: MaintTaskData): string {
+function taskTitle(task: string, d: MaintTaskNames): string {
   if (task.startsWith('grinder_')) return d.grinderName || task;
   if (task.startsWith('custom_')) return d.label || task.replace(/^custom_/, '').replace(/_/g, ' ');
   return t(MAINT_META[task]?.key || task);
@@ -104,6 +112,15 @@ export function maintStatusLabel(status: string): string {
 // once >1 machine is registered — single-machine installs always resolve to
 // the (only) active machine.
 let _maintScope: MaintScope = 'all';
+
+// Last-rendered active (non-disabled) tiles, keyed for openMaintLogForm's
+// task dropdown — the ONLY correct source for "which tasks exist right
+// now with what display name", since it's built by the exact same
+// _normalizeMaintTiles/_partitionTiles/taskTitle path the dashboard cards
+// themselves render from (previously the log form independently listed
+// MAINT_META's 5 static keys only, silently dropping every custom_/
+// grinder_ task and never respecting a task's disabled state).
+let _lastActiveTiles: MaintTile[] = [];
 
 function _effectiveScope(): MaintScope {
   if ((S.machines || []).length <= 1) return S.activeMachineId === 'all' ? 1 : (S.activeMachineId ?? 1);
@@ -156,7 +173,7 @@ export function _normalizeMaintTiles(data: MaintResponse | null | undefined, sco
 }
 
 // Split tiles into active and disabled groups.
-function _partitionTiles(tiles: MaintTile[]): { active: MaintTile[]; disabled: MaintTile[] } {
+export function _partitionTiles(tiles: MaintTile[]): { active: MaintTile[]; disabled: MaintTile[] } {
   const active: MaintTile[] = [], disabled: MaintTile[] = [];
   for (const tile of tiles) {
     (tile.d.disabled ? disabled : active).push(tile);
@@ -214,6 +231,7 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   const container = document.getElementById('maint-cards') as HTMLElement;
   const allTiles   = _normalizeMaintTiles(data, scope);
   const { active, disabled } = _partitionTiles(allTiles);
+  _lastActiveTiles = active;
   const counts     = _summaryCounts(active);
   const nextTile   = _pickNextDueTile(active);
   const hasMachines = (S.machines || []).length > 1;
@@ -570,13 +588,6 @@ export async function loadMaintLog(): Promise<void> {
   } catch { el.innerHTML = ''; }
 }
 
-function taskLabel(entry: MaintLogEntry): string {
-  const task = entry.task;
-  if (MAINT_META[task]) return t(MAINT_META[task].key);
-  if (task.startsWith('grinder_')) return entry.grinderName || task.replace('grinder_', 'Grinder ');
-  return task;
-}
-
 export function renderMaintLog(entries: MaintLogEntry[]): void {
   const el = document.getElementById('maintLog');
   if (!el) return;
@@ -601,7 +612,7 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
       : ((S.machines || []).find(m => m.id === e.machineId)?.name || e.machine || '');
     return `<tr>
       <td>${dateStr}</td>
-      <td>${esc(taskLabel(e))}${isManual ? `<span class="maint-log-manual-badge">${t('maint_log_manual_badge')}</span>` : ''}</td>
+      <td>${esc(taskTitle(e.task, e))}${isManual ? `<span class="maint-log-manual-badge">${t('maint_log_manual_badge')}</span>` : ''}</td>
       <td>${machineTag ? `<span class="shot-machine-badge">${esc(machineTag as string)}</span>` : ''}</td>
       <td class="num">${e.shotCountAtTime ?? '–'}</td>
       <td>${e.notes ? esc(e.notes) : ''}
@@ -619,15 +630,32 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
   </table></div>`;
 }
 
+// Builds the manual-log-entry task dropdown's options from the dashboard's
+// own currently-active tiles — the same set of tasks the cards show, with
+// the same resolved names (custom labels, grinder names), and never a
+// disabled task (dashboard vs. log-entry-form mismatch bug report).
+// Deduped by task key: 'all' scope has one tile per machine per task, but
+// a manual log entry only needs to name the task once. Exported (pure, no
+// DOM) for testing.
+export function _maintLogTaskOptions(tiles: MaintTile[]): { task: string; label: string }[] {
+  const seen = new Set<string>();
+  const options: { task: string; label: string }[] = [];
+  for (const tile of tiles) {
+    if (seen.has(tile.task)) continue;
+    seen.add(tile.task);
+    options.push({ task: tile.task, label: taskTitle(tile.task, tile.d) });
+  }
+  return options;
+}
+
 export function openMaintLogForm(): void {
   const form = document.getElementById('maintLogForm');
   if (!form) return;
-  // Populate task dropdown
   const sel = document.getElementById('maintLogTask') as HTMLSelectElement;
   sel.innerHTML = '';
-  for (const [task, meta] of Object.entries(MAINT_META)) {
+  for (const { task, label } of _maintLogTaskOptions(_lastActiveTiles)) {
     const opt = document.createElement('option');
-    opt.value = task; opt.textContent = t(meta.key);
+    opt.value = task; opt.textContent = label;
     sel.appendChild(opt);
   }
   // Set date to today

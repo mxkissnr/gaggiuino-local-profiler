@@ -220,3 +220,36 @@ func TestMaintenanceLog_PostRequiresTask_EmptyBody(t *testing.T) {
 		t.Fatalf("status = %d; want 400 for a bodyless request; body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestMaintenanceLog_CustomTaskEntryCarriesLabel guards the maintenance-log
+// vs. dashboard mismatch bug report: the dashboard resolves a custom_ task's
+// display name from its stored `label`, but log entries only carried the
+// raw custom_<slug> key with no way to recover that label — GetMaintenanceLog
+// must now enrich each custom_ entry with the label of the task as it exists
+// for that entry's own machineId (two machines can slugify to the same key
+// with different labels, since customCreate scopes tasks per machine).
+func TestMaintenanceLog_CustomTaskEntryCarriesLabel(t *testing.T) {
+	h, repo, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/maintenance/custom", mustMarshal(t, map[string]any{"label": "Rückspülen mit Reiniger"}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("customCreate status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = doJSON(t, mux, http.MethodPost, "/api/maintenance/log", mustMarshal(t, map[string]any{"task": "custom_ruckspulen_mit_reiniger", "notes": "done"}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("post log status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+
+	entries, err := repo.GetMaintenanceLog(0)
+	if err != nil {
+		t.Fatalf("GetMaintenanceLog: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 log entry, got %d", len(entries))
+	}
+	if entries[0].Label != "Rückspülen mit Reiniger" {
+		t.Errorf("Label = %q, want %q", entries[0].Label, "Rückspülen mit Reiniger")
+	}
+}

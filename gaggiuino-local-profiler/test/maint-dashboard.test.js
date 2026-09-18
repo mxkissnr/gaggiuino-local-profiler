@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 // maintenance.js pulls in state.js (localStorage/navigator at module load)
 // and i18n.js — neither is available in the plain Node test environment, so
 // stub the minimum before importing, same approach as best-grind-combo.test.js.
-let _normalizeMaintTiles, _pickNextDueTile;
+let _normalizeMaintTiles, _pickNextDueTile, _partitionTiles, _maintLogTaskOptions;
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -14,7 +14,7 @@ beforeAll(async () => {
     value: { language: 'en' },
     configurable: true, writable: true,
   });
-  ({ _normalizeMaintTiles, _pickNextDueTile } = await import('../public-src/views/maintenance.js'));
+  ({ _normalizeMaintTiles, _pickNextDueTile, _partitionTiles, _maintLogTaskOptions } = await import('../public-src/views/maintenance.js'));
 });
 
 const task = (status, overrides = {}) => ({
@@ -91,5 +91,44 @@ describe('_pickNextDueTile (#393 — "Als Nächstes" banner target)', () => {
     ];
     const picked = _pickNextDueTile(tiles);
     expect(picked.task).toBe('descaling');
+  });
+});
+
+// #: dashboard-vs-log mismatch bug report — the manual log-entry form's task
+// dropdown must offer exactly the tasks the dashboard cards show (custom
+// labels, grinder names, never a disabled task), not just MAINT_META's 5
+// static keys.
+describe('_maintLogTaskOptions', () => {
+  it('resolves custom and grinder task names the same way the dashboard cards do', () => {
+    const tiles = [
+      { task: 'descaling', d: task('due') },
+      { task: 'grinder_1', d: task('never', { grinderName: 'Niche Zero' }) },
+      { task: 'custom_ruckspulen', d: task('ok', { label: 'Rückspülen mit Reiniger' }) },
+    ];
+    const options = _maintLogTaskOptions(tiles);
+    expect(options).toEqual([
+      { task: 'descaling', label: expect.any(String) },
+      { task: 'grinder_1', label: 'Niche Zero' },
+      { task: 'custom_ruckspulen', label: 'Rückspülen mit Reiniger' },
+    ]);
+  });
+
+  it('excludes disabled tasks (via _partitionTiles, which callers run first)', () => {
+    const allTiles = [
+      { task: 'descaling', d: task('due') },
+      { task: 'backflush', d: { ...task('ok'), disabled: true } },
+    ];
+    const { active } = _partitionTiles(allTiles);
+    const options = _maintLogTaskOptions(active);
+    expect(options.map(o => o.task)).toEqual(['descaling']);
+  });
+
+  it('dedups a task that appears once per machine under "all" scope to a single option', () => {
+    const tiles = [
+      { task: 'descaling', machineId: 1, d: task('due') },
+      { task: 'descaling', machineId: 2, d: task('ok') },
+    ];
+    const options = _maintLogTaskOptions(tiles);
+    expect(options).toHaveLength(1);
   });
 });
