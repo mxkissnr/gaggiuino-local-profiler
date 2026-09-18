@@ -1,4 +1,4 @@
-import { S }                              from '../../state.js';
+import { S }                              from '../../state/index.js';
 import { t }                              from '../../i18n.js';
 import { apiFetch }                       from '../../api.js';
 import { esc, germanToIso }              from '../../utils.js';
