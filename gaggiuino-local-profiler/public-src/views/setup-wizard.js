@@ -15,7 +15,7 @@
 // wires them once, directly to saveMachineForm()/testMachineForm()) and the
 // SSRF-guard error surfacing, id-rewrite-on-success and staleness guards
 // documented in machines-settings.js all apply here for free.
-import { S, subscribe } from '../state.js';
+import { S, subscribe } from '../state/index.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
 import { openMachineForm } from '../components/machines-settings.js';

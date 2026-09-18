@@ -14,7 +14,7 @@
 // lib/machine-state.js's deriveMachineState() (sensorSnap.steamActive/
 // sysState.operationMode), so steaming and flushing are now told apart from
 // heating and from each other, not just inferred from temperature.
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
 import { machineIconAnimatedSvg, setMachineIconMode, resolveMachineIconState,
