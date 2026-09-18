@@ -1,6 +1,7 @@
 import { S }                              from '../../state/index.js';
 import { t }                              from '../../i18n.js';
 import { apiFetch }                       from '../../api.js';
+import { annotateShot, getShotDefaults, postShotImage, deleteShotImage } from '../../api/shots.js';
 import { esc, germanToIso }              from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { calcBeanAgeAtShot, _roastDateFromLibrary } from './utils.js';
@@ -154,9 +155,7 @@ async function _performAnnotationSave() {
   const shot = S.shots.find(s => s.id === id);
   const payload = _buildAnnotationPayload(shot);
   try {
-    const r = await apiFetch(`api/shots/${id}/annotate`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-    });
+    const r = await annotateShot(id, payload);
     if (r.ok) {
       _maybeDeductMilk(shot, payload);
       _maybeAdjustFrozenPortion(shot, payload);
@@ -206,8 +205,7 @@ export async function loadDrinkMenu() {
 // components/shot-defaults-settings.js whenever the Settings card saves.
 export async function loadShotDefaults() {
   try {
-    const r = await apiFetch('api/shots/defaults');
-    if (r.ok) S.shotDefaults = await r.json();
+    S.shotDefaults = await getShotDefaults();
   } catch { /* non-critical */ }
 }
 
@@ -514,9 +512,7 @@ export async function uploadShotImage(input) {
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
   if (!blob) return;
-  const r = await apiFetch(`api/shots/${id}/image`, {
-    method: 'POST', headers: { 'Content-Type': blob.type }, body: blob,
-  });
+  const r = await postShotImage(id, blob);
   if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
   const saved = await r.json();
   const idx = S.shots.findIndex(s => s.id === id);
@@ -530,7 +526,7 @@ export async function uploadShotImage(input) {
 export async function removeShotImage() {
   if (!S.primaryShotId) return;
   const id = S.primaryShotId;
-  const r = await apiFetch(`api/shots/${id}/image`, { method: 'DELETE' });
+  const r = await deleteShotImage(id);
   if (!r.ok) return;
   const idx = S.shots.findIndex(s => s.id === id);
   if (idx !== -1) delete S.shots[idx].image;
