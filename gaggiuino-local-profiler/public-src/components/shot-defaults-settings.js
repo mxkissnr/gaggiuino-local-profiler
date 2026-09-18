@@ -5,7 +5,7 @@
 // only place that actually applies them. This module only loads/saves the
 // settings themselves and keeps S.shotDefaults (loaded once at app init by
 // loadShotDefaults()) in sync after a save.
-import { apiFetch } from '../api.js';
+import { saveShotDefaults } from '../api/shots.js';
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
@@ -87,12 +87,8 @@ export async function saveShotDefaultsSettings() {
     dose:         parseFloat(document.getElementById('sdDose')?.value) || null,
   };
 
-  const r = await apiFetch('api/shots/defaults', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (r.ok) S.shotDefaults = await r.json();
+  const saved = await saveShotDefaults(body).catch(() => null);
+  if (saved) S.shotDefaults = saved;
 
   const btn = document.getElementById('shotDefaultsSaveBtn');
   if (btn) {

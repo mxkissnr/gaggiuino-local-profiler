@@ -33,6 +33,18 @@ export async function apiFetch(url: string, opts: RequestInit = {}): Promise<Res
   return fetch(url, opts);
 }
 
+// apiFetchJson runs a request through apiFetch and parses the JSON body as T.
+// A non-ok status rejects with the response text as the error message, so
+// callers can keep their existing `.catch(() => fallback)` shape; a network or
+// parse failure rejects the same way. `T` is the caller's view of the
+// documented response body — schema.gen.ts documents only a subset of what
+// most endpoints actually return, so the domain modules pass their own types.
+export async function apiFetchJson<T>(url: string, opts: RequestInit = {}): Promise<T> {
+  const r = await apiFetch(url, opts);
+  if (!r.ok) throw new Error(await r.text().catch(() => r.statusText));
+  return (await r.json()) as T;
+}
+
 export interface ApiFetchToBlobOptions {
   opts?: RequestInit;
   onProgress?: (received: number, total: number | null) => void;

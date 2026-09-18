@@ -1,4 +1,4 @@
-import { apiFetch } from './api.js';
+import { getShot } from './api/shots.js';
 import { mapShotDatapoints } from './utils.js';
 
 // Per-shot curve cache (#957). GET /api/shots now returns metadata-only rows
@@ -37,13 +37,9 @@ function _mergeScaleFlag(shot) {
 }
 
 function _fetchCurve(id) {
-  return apiFetch('api/shots/' + id)
-    .then(r => {
-      if (!r.ok) { _pending.delete(id); return null; } // transient — allow a later retry
-      return r.json();
-    })
+  return getShot(id)
     .then(shot => {
-      if (!shot) return {};
+      if (!shot) { _pending.delete(id); return {}; } // transient — allow a later retry
       // The detail endpoint already ships the previous same-profile shot in
       // full — seed it so the auto-compare ghost curve is instant too.
       if (shot.previousShot && shot.previousShot.id != null && shot.previousShot.datapoints) {

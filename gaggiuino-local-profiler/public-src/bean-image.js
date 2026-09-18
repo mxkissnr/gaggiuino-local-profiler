@@ -1,4 +1,5 @@
 import { apiFetch } from './api.js';
+import { shotImageUrl } from './api/shots.js';
 
 // Bean/grinder/shot images require the auth token, so <img src="api/...">
 // can't be used directly — fetch as a blob and hand back an object URL
@@ -53,7 +54,7 @@ export function invalidatePuckScreenImage(puckScreenId) {
 }
 
 export function loadShotImageBlobUrl(shotId) {
-  return _load(`shot:${shotId}`, `api/shots/${shotId}/image`);
+  return _load(`shot:${shotId}`, shotImageUrl(shotId));
 }
 
 export function invalidateShotImage(shotId) {

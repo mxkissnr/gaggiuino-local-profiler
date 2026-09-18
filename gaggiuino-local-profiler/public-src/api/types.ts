@@ -99,3 +99,96 @@ export interface HydratedShot extends Shot {
   /** Detail only: the previous same-profile shot, already scored. */
   previousShot?: HydratedShot | null;
 }
+
+/**
+ * GET/POST /api/shots/defaults (#654) — the per-install values pre-filled
+ * into a brand-new shot's annotation panel. Mirrors
+ * go/internal/shots/defaults.go's stored blob exactly (all seven keys are
+ * always present; nil values stay null, the string stays "").
+ */
+export interface ShotDefaults {
+  drinkType: string | null;
+  coffee: string | null;
+  beanId: number | null;
+  basketId: number | null;
+  puckScreenId: number | null;
+  grinder: string;
+  dose: number | null;
+}
+
+// ── Orders (go/internal/orders) ──────────────────────────────────────────
+
+export type Order = components['schemas']['Order'];
+export type MenuItem = components['schemas']['MenuItem'];
+export type OrdersSettings = components['schemas']['OrdersSettings'];
+/** Map of haUserId → notify service name ("notify.mobile_app_phone"). */
+export type NotifyMapping = components['schemas']['NotifyMapping'];
+
+/**
+ * POST /api/orders/settings body — the backend requires `enabled` as a
+ * boolean and overwrites the whole stored settings blob, so every save
+ * round-trips the other keys it wants to keep.
+ */
+export type OrdersSettingsUpdate = OrdersSettings & { enabled: boolean };
+
+/** One entry of GET /api/orders/queue-eta's `positions` map. */
+export interface QueuePosition {
+  position: number;
+  suggestedEta: number;
+}
+
+/**
+ * GET /api/orders/queue-eta — mirrors go/internal/orders/service.go's
+ * QueueEta: rolling prep-time estimate plus a queue position for every
+ * pending order.
+ */
+export interface QueueEta {
+  acceptedRemaining: number;
+  pendingCount: number;
+  prepTime: number;
+  positions: Record<string, QueuePosition>;
+}
+
+/**
+ * One row of GET /api/orders/milk-stock: a library milk entity plus the two
+ * order-derived fields go/internal/orders' handler adds.
+ */
+export interface MilkStock {
+  id?: number;
+  name?: string;
+  emoji?: string;
+  stockMl?: number;
+  /** Total ml active (accepted + pending) orders demand of this milk. */
+  demand: number;
+  /** stockMl - demand, floored at 0. */
+  remaining: number;
+}
+
+/** One row of GET /api/orders/stats's `customers`. */
+export interface OrderCustomerStat {
+  name: string;
+  count: number;
+  favItem: string | null;
+  lastAt: number;
+}
+
+/** GET /api/orders/stats — completed-order rollups (go/internal/orders' stats handler). */
+export interface OrderStats {
+  total: number;
+  customers: OrderCustomerStat[];
+  mostPopular: { item: string; count: number } | null;
+  /** Only present when more than one machine has completed orders. */
+  byMachine?: { machineId: number; machineName: string | null; count: number }[] | null;
+}
+
+/** One HA notify service (go/internal/ha's NotifyService). */
+export interface NotifyService {
+  id: string;
+  name: string;
+}
+
+/** GET /api/orders/notify-mapping — per-HA-user mapping plus the known customer names. */
+export interface NotifyMappingView {
+  mapping: NotifyMapping;
+  customers: Record<string, string>;
+}
