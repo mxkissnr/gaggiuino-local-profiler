@@ -2,6 +2,12 @@ import { S } from '../state/index.js';
 import * as timerRegistry from '../state/timers.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
+import {
+  getOrdersSettings, postOrdersSettings, listOrders, getOrdersMenu, getQueueEta, getMilkStock,
+  getOrdersStats, postOrderAccept, postOrderDecline, postOrderComplete, deleteOrderById,
+  deleteOrderHistory, putMenuItem, deleteMenuItem, postOrdersMenu, getNotifyServices,
+  getNotifyMapping, postNotifyMapping,
+} from '../api/orders.js';
 import { esc } from '../utils.js';
 import { localeFor } from '../constants.js';
 // #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
@@ -75,17 +81,13 @@ export function stopOrdersPolling() {
 
 export async function setOrdersEnabled(enabled) {
   try {
-    const res = await apiFetch('api/orders/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled })
-    });
+    const res = await postOrdersSettings({ enabled });
     if (!res.ok) throw new Error('save failed');
     _updateOrdersToggleUI(enabled);
   } catch {
     // Save failed — reload actual state from server so toggle reflects reality
     try {
-      const settings = await apiFetch('api/orders/settings').then(r => r.json());
+      const settings = await getOrdersSettings();
       _updateOrdersToggleUI(settings.enabled);
     } catch { /* ignore */ }
   }
@@ -104,7 +106,7 @@ export function _updateOrdersToggleUI(enabled) {
 export async function loadOrdersView() {
   const [sw, settings] = await Promise.all([
     apiFetch('api/switch').then(r => r.json()).catch(() => ({})),
-    apiFetch('api/orders/settings').then(r => r.json()).catch(() => ({ enabled: true })),
+    getOrdersSettings().catch(() => ({ enabled: true })),
   ]);
   const machineOff = sw.configured && sw.state === false;
   const banner = document.getElementById('orders-machine-off-banner');
@@ -112,10 +114,10 @@ export async function loadOrdersView() {
   _updateOrdersToggleUI(settings.enabled);
 
   const [orders, menu, queueEta, milkStock] = await Promise.all([
-    apiFetch('api/orders').then(r => r.json()).catch(() => []),
-    apiFetch('api/orders/menu').then(r => r.json()).catch(() => []),
-    apiFetch('api/orders/queue-eta').then(r => r.json()).catch(() => null),
-    apiFetch('api/orders/milk-stock').then(r => r.json()).catch(() => []),
+    listOrders().catch(() => []),
+    getOrdersMenu().catch(() => []),
+    getQueueEta().catch(() => null),
+    getMilkStock().catch(() => []),
   ]);
   S._ordersQueueEta = queueEta;
 
@@ -123,7 +125,7 @@ export async function loadOrdersView() {
   renderOrdersMenuAdmin(menu);
   renderMilkStock(milkStock);
   if (S._ordersStatsOpen) {
-    apiFetch('api/orders/stats').then(r => r.json()).then(renderOrdersStats).catch(() => {});
+    getOrdersStats().then(renderOrdersStats).catch(() => {});
   }
 
   const pendingOrders = orders.filter(o => o.status === 'pending');
@@ -321,7 +323,7 @@ export function renderOrderCard(o, ctx) {
 export async function acceptOrder(id) {
   const etaCustom = document.getElementById(`etaCustom_${id}`);
   const eta = etaCustom ? (parseInt(etaCustom.value) || S._ordersEtaSelected[id] || 5) : (S._ordersEtaSelected[id] || 5);
-  await apiFetch(`api/orders/${id}/accept`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eta }) });
+  await postOrderAccept(id, eta);
   loadOrdersView();
 }
 
@@ -333,13 +335,13 @@ export function toggleDeclineRow(id) {
 export async function submitDecline(id) {
   const input  = document.getElementById(`declineReason_${id}`);
   const reason = input ? input.value.trim() : '';
-  await apiFetch(`api/orders/${id}/decline`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
+  await postOrderDecline(id, reason);
   delete S._ordersDeclineOpen[id];
   loadOrdersView();
 }
 
 export async function completeOrder(id) {
-  await apiFetch(`api/orders/${id}/complete`, { method: 'POST' });
+  await postOrderComplete(id);
   loadOrdersView();
 }
 
@@ -382,29 +384,21 @@ export async function renderOrdersMenuAdmin(menu) {
       const id   = btn.dataset.menuTrend;
       const item = menu.find(m => m.id === id);
       if (!item) return;
-      await apiFetch(`api/orders/menu/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trending: !item.trending }),
-      });
+      await putMenuItem(id, { trending: !item.trending });
       loadOrdersView();
     });
   });
   list.querySelectorAll('[data-menu-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm(t('orders_confirm_delete_item'))) return;
-      await apiFetch(`api/orders/menu/${btn.dataset.menuDel}`, { method: 'DELETE' });
+      await deleteMenuItem(btn.dataset.menuDel);
       loadOrdersView();
     });
   });
   list.querySelectorAll('[data-milk-ml]').forEach(inp => {
     inp.addEventListener('change', async () => {
       const id = inp.dataset.milkMl;
-      await apiFetch(`api/orders/menu/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ milkMl: parseFloat(inp.value) || null }),
-      });
+      await putMenuItem(id, { milkMl: parseFloat(inp.value) || null });
     });
   });
   list.querySelectorAll('[data-menu-use-beans]').forEach(btn => {
@@ -412,11 +406,7 @@ export async function renderOrdersMenuAdmin(menu) {
       const id   = btn.dataset.menuUseBeans;
       const item = menu.find(m => m.id === id);
       if (!item) return;
-      await apiFetch(`api/orders/menu/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ useBeans: !item.useBeans }),
-      });
+      await putMenuItem(id, { useBeans: !item.useBeans });
       loadOrdersView();
     });
   });
@@ -425,11 +415,7 @@ export async function renderOrdersMenuAdmin(menu) {
       const id   = btn.dataset.menuUseMilks;
       const item = menu.find(m => m.id === id);
       if (!item) return;
-      await apiFetch(`api/orders/menu/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ useMilks: !item.useMilks }),
-      });
+      await putMenuItem(id, { useMilks: !item.useMilks });
       loadOrdersView();
     });
   });
@@ -442,11 +428,7 @@ export async function renderOrdersMenuAdmin(menu) {
       const item  = menu.find(m => m.id === id);
       if (!item) return;
       const variants = [...(item.variants || []), val];
-      await apiFetch(`api/orders/menu/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ variants }),
-      });
+      await putMenuItem(id, { variants });
       loadOrdersView();
     });
   });
@@ -457,11 +439,7 @@ export async function renderOrdersMenuAdmin(menu) {
       const item    = menu.find(m => m.id === id);
       if (!item) return;
       const variants = (item.variants || []).filter(v => v !== variant);
-      await apiFetch(`api/orders/menu/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ variants }),
-      });
+      await putMenuItem(id, { variants });
       loadOrdersView();
     });
   });
@@ -489,7 +467,6 @@ export function renderOrdersStats(stats) {
       <div class="orders-stats-row"><span>${t('orders_stats_fav')}</span><span class="orders-stats-val">${c.favItem ? esc(c.favItem) : '–'}</span></div>
       <div class="orders-stats-row"><span>${t('orders_stats_last')}</span><span class="orders-stats-val">${fmtDate(c.lastAt)}</span></div>
     </div>`).join('');
-
   el.innerHTML = `
     <div class="orders-stats-global">
       <div class="orders-stats-global-item">
@@ -505,13 +482,13 @@ export function renderOrdersStats(stats) {
 }
 
 export async function deleteOrder(id) {
-  await apiFetch(`api/orders/${id}`, { method: 'DELETE' });
+  await deleteOrderById(id);
   loadOrdersView();
 }
 
 export async function clearOrderHistory() {
   if (!confirm(t('orders_confirm_clear_history'))) return;
-  await apiFetch('api/orders/history', { method: 'DELETE' });
+  await deleteOrderHistory();
   loadOrdersView();
 }
 
@@ -520,9 +497,9 @@ export async function loadNotifyMappingView() {
   if (!section) return;
 
   const [{ mapping, customers }, services, settings] = await Promise.all([
-    apiFetch('api/orders/notify-mapping').then(r => r.json()).catch(() => ({ mapping: {}, customers: {} })),
-    apiFetch('api/orders/notify-services').then(r => r.json()).catch(() => null),
-    apiFetch('api/orders/settings').then(r => r.json()).catch(() => ({})),
+    getNotifyMapping().catch(() => ({ mapping: {}, customers: {} })),
+    getNotifyServices().catch(() => null),
+    getOrdersSettings().catch(() => ({})),
   ]);
 
   if (services === null) {
@@ -624,12 +601,8 @@ export async function saveBroadcastRecipients() {
   if (!list) return;
   const recipients = [...list.querySelectorAll('input[type="checkbox"]:checked')]
     .map(cb => cb.dataset.svc).filter(Boolean);
-  const settings = await apiFetch('api/orders/settings').then(r => r.json()).catch(() => ({}));
-  await apiFetch('api/orders/settings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled: settings.enabled ?? true, broadcastRecipients: recipients }),
-  });
+  const settings = await getOrdersSettings().catch(() => ({}));
+  await postOrdersSettings({ enabled: settings.enabled ?? true, broadcastRecipients: recipients });
   const btn = document.getElementById('ordersBroadcastSaveBtn');
   if (btn) {
     btn.innerHTML = `${CHECK_ICON_SVG} ${t('orders_broadcast_saved')}`;
@@ -640,16 +613,12 @@ export async function saveBroadcastRecipients() {
 export async function saveNotifyToggles() {
   const list = document.getElementById('ordersTypesList');
   if (!list) return;
-  const settings = await apiFetch('api/orders/settings').then(r => r.json()).catch(() => ({}));
+  const settings = await getOrdersSettings().catch(() => ({}));
   const body = { enabled: settings.enabled ?? true };
   list.querySelectorAll('[data-notify-key]').forEach(cb => {
     body[cb.dataset.notifyKey] = cb.checked;
   });
-  await apiFetch('api/orders/settings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  await postOrdersSettings(body);
   const btn = document.getElementById('ordersTypesSaveBtn');
   if (btn) {
     btn.innerHTML = `${CHECK_ICON_SVG} ${t('orders_types_saved')}`;
@@ -660,12 +629,8 @@ export async function saveNotifyToggles() {
 export async function saveBaristaNotify() {
   const sel = document.getElementById('ordersBaristaSelect');
   if (!sel) return;
-  const settings = await apiFetch('api/orders/settings').then(r => r.json()).catch(() => ({}));
-  await apiFetch('api/orders/settings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled: settings.enabled ?? true, baristaNotifyService: sel.value || null }),
-  });
+  const settings = await getOrdersSettings().catch(() => ({}));
+  await postOrdersSettings({ enabled: settings.enabled ?? true, baristaNotifyService: sel.value || null });
   const btn = document.getElementById('ordersBaristaSaveBtn');
   if (btn) {
     btn.innerHTML = `${CHECK_ICON_SVG} ${t('orders_barista_saved')}`;
@@ -680,11 +645,7 @@ export async function saveNotifyMapping() {
   list.querySelectorAll('[data-uid]').forEach(sel => {
     updates[sel.dataset.uid] = sel.value;
   });
-  await apiFetch('api/orders/notify-mapping', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates),
-  });
+  await postNotifyMapping(updates);
   const btn = document.getElementById('ordersNotifySaveBtn');
   if (btn) {
     btn.innerHTML = `${CHECK_ICON_SVG} ${t('orders_notify_saved')}`;
@@ -708,7 +669,7 @@ export async function addOrderMenuItem() {
   const name    = nameEl?.value.trim();
   const emoji   = emojiEl?.value.trim() || '☕';
   if (!name) return;
-  await apiFetch('api/orders/menu', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, emoji }) });
+  await postOrdersMenu({ name, emoji });
   if (nameEl)  nameEl.value  = '';
   if (emojiEl) emojiEl.value = '';
   loadOrdersView();
