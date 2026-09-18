@@ -2,10 +2,10 @@
 // list, add, edit, delete and test-connect the machines this GLP instance
 // manages, against the /api/machines API added in #317. Also renders the
 // topbar machine switcher and drives S.activeMachineId, which
-// filterShotsByMachine() (state.js) and applyActiveMachineChange() below
+// filterShotsByMachine() (state/index.ts) and applyActiveMachineChange() below
 // use to keep the Shots list / Analytics / Live view scoped to the
 // selected machine.
-import { S, setState, filterShotsByMachine } from '../state.js';
+import { S, setState, filterShotsByMachine } from '../state/index.js';
 import { apiFetch } from '../api.js';
 import { t } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
