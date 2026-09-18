@@ -1,6 +1,6 @@
 import { FLAVOR_WHEEL } from '../flavor-data.js';
 import { matchFlavors, markLit, colorForNode, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../flavor-match.js';
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
 import { loadBeanImageBlobUrl } from '../bean-image.js';
