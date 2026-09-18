@@ -1288,7 +1288,12 @@ async function saveBeanInternal(openBagDialogAfter) {
   closeBeanForm();
   renderBeanList();
   if (extraRecipesToImport.length) renderRecipeList();
-  if (wasCreate && openBagDialogAfter) openNewBagDialog(saved.id);
+  // openNewBagForm toggles the new bean's own card's inline
+  // #newBagForm<id> (renderBeanList above must run first so that card
+  // exists) — NOT openNewBagDialog, a modal-overlay entry point left over
+  // from an earlier design that has no matching HTML in index.html at all
+  // (dead code: calling it was a silent no-op, the actual bug report).
+  if (wasCreate && openBagDialogAfter) openNewBagForm(saved.id);
 }
 
 export async function deleteBean(id) {
