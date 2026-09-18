@@ -149,7 +149,7 @@ describe('shot detail view i18n wiring', () => {
 
 describe('setLang() re-renders the open shot view', () => {
     const __dirname = dirname(fileURLToPath(import.meta.url));
-    const src = readFileSync(join(__dirname, '../public-src/i18n.js'), 'utf8');
+    const src = readFileSync(join(__dirname, '../public-src/i18n.ts'), 'utf8');
 
     it('calls window.updateView() when switching language while on the shots view', () => {
         // Regression guard: the Chart.js legend, grind advice and phase tags are only
