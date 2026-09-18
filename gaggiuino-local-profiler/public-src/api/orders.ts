@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchJson } from './transport.js';
+import { apiFetch, apiFetchJson } from './fetch.js';
 import type {
   MenuItem, MilkStock, NotifyMapping, NotifyMappingView, NotifyService, Order, OrderStats,
   OrdersSettings, OrdersSettingsUpdate, QueueEta,
@@ -9,9 +9,9 @@ import type {
 // Package A3b of the TS migration (#1110).
 //
 // Same contract as api/shots.ts: URL building and the JSON-headers boilerplate
-// live here. Read helpers parse and reject on a non-ok status (callers keep
-// their `.catch(() => fallback)`); mutation helpers return the raw Response
-// where the caller inspects `ok`/`status`.
+// live here, and each helper keeps the error handling of the call it replaced —
+// the Response-returning ones let the caller inspect `ok`/`status`, the rest
+// parse their body via apiFetchJson (see api/fetch.ts).
 
 // ── Settings ─────────────────────────────────────────────────────────────
 

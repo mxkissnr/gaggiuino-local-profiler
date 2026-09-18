@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchJson } from './transport.js';
+import { apiFetch } from './fetch.js';
 import type { HydratedShot, ShotAnnotation, ShotDefaults } from './types.js';
 
 // Typed client for the `shots` domain (go/internal/shots — every route that
@@ -7,10 +7,10 @@ import type { HydratedShot, ShotAnnotation, ShotDefaults } from './types.js';
 // their own runs.
 //
 // URL building lives here so the views never assemble an endpoint string or
-// repeat the JSON-headers boilerplate. Read helpers that parse a body return
-// the parsed domain type and reject on a non-ok status (callers keep their
-// `.catch(() => fallback)` shape); helpers whose result the caller inspects
-// (`ok`/`status`/`text`/`blob`) return the raw Response unchanged.
+// repeat the JSON-headers boilerplate. Helpers whose result the caller
+// inspects (`ok`/`status`/`text`/`blob`) return the raw Response unchanged;
+// the rest parse their body into the domain type and keep the error semantics
+// of the call they replaced — see api/fetch.ts.
 
 /** Query parameters for GET /api/shots — the keyset-paginated metadata list. */
 export interface ListShotsParams {
@@ -74,18 +74,27 @@ export function annotateShot(id: number, annotation: ShotAnnotation): Promise<Re
   });
 }
 
-/** GET /api/shots/defaults — the per-install annotation defaults (#654). */
-export function getShotDefaults(): Promise<ShotDefaults> {
-  return apiFetchJson<ShotDefaults>('api/shots/defaults');
+/**
+ * GET /api/shots/defaults — the per-install annotation defaults (#654).
+ * Resolves to null on a non-ok response so the caller keeps the defaults it
+ * already has cached.
+ */
+export async function getShotDefaults(): Promise<ShotDefaults | null> {
+  const r = await apiFetch('api/shots/defaults');
+  return r.ok ? ((await r.json()) as ShotDefaults) : null;
 }
 
-/** POST /api/shots/defaults — save the defaults and return what was stored. */
-export function saveShotDefaults(defaults: ShotDefaults): Promise<ShotDefaults> {
-  return apiFetchJson<ShotDefaults>('api/shots/defaults', {
+/**
+ * POST /api/shots/defaults — save the defaults and return what was stored;
+ * null when the save failed, so the caller keeps its previous state.
+ */
+export async function saveShotDefaults(defaults: ShotDefaults): Promise<ShotDefaults | null> {
+  const r = await apiFetch('api/shots/defaults', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(defaults),
   });
+  return r.ok ? ((await r.json()) as ShotDefaults) : null;
 }
 
 /** POST /api/shots/{id}/trash — soft-delete. */
