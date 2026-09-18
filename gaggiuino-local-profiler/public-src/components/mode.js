@@ -1,4 +1,4 @@
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 import { updateMobileShotSidebarVisibility } from './sidebar.js';
 import { applyBottomNavActiveState } from './bottom-nav.js';
 

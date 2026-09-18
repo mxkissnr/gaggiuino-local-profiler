@@ -1,5 +1,5 @@
 // GLP QR schema: glp://coffee?name=...&roaster=...&notes=...&roastDate=...
-// Deliberately separated from views/library.js (which imports state.js,
+// Deliberately separated from views/library.js (which imports state/index.ts,
 // touching localStorage at module scope — not importable under vitest's
 // node environment) so this pure encode/decode logic stays unit-testable.
 

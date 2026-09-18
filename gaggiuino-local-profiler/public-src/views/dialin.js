@@ -1,4 +1,4 @@
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { localeFor } from '../constants.js';
 import { esc, scoreColor } from '../utils.js';
