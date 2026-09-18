@@ -205,7 +205,8 @@ export async function loadDrinkMenu() {
 // components/shot-defaults-settings.js whenever the Settings card saves.
 export async function loadShotDefaults() {
   try {
-    S.shotDefaults = await getShotDefaults();
+    const defaults = await getShotDefaults();
+    if (defaults) S.shotDefaults = defaults;
   } catch { /* non-critical */ }
 }
 
