@@ -170,6 +170,8 @@ const de: Partial<Translations> = {
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',
     lib_grinder_burr_type:'Mahlwerk', lib_grinder_burr_type_ph:'Konisch Stahl',
     lib_grinder_purchase_date:'Kaufdatum', lib_grinder_image:'Bild',
+    lib_grinder_zero_point:'Nullpunkt',
+    lib_grinder_zero_point_hint:'Nach dem Reinigen: Nullpunkt hier aktualisieren, statt jedes Rezept anzupassen. Vorschläge/Vergleiche rechnen automatisch um.',
     lib_cancel:'Abbrechen', lib_save:'Speichern',
     lib_empty_beans:'Noch keine Bohnen gespeichert', lib_empty_grinders:'Noch keine Mühlen gespeichert',
     lib_btn_edit:'Bearbeiten', lib_btn_delete:'Löschen',

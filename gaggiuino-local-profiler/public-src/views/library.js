@@ -14,6 +14,7 @@ import { openImageCropEditor } from '../components/image-crop.js';
 import { openLightbox } from '../components/lightbox.js';
 import { generateBeanQR, parseGlpQrParams } from '../glp-qr.js';
 import { calcBestGrindCombosForBean } from './shots/grind.js';
+import { currentGrinderZeroPoint } from '../grind-zero.js';
 import { renderShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
 import { sumConsumedDoses, computeBeanRemaining, remainingToStockG } from '../bean-math.js';
 import { TARGET_ICON_SVG, SLIDERS_ICON_SVG, FLAVOR_WHEEL_ICON_SVG, COFFEE_ICON_SVG, WATER_DROP_ICON_SVG, SNOWFLAKE_ICON_SVG, LINK_ICON_SVG, WRENCH_ICON_SVG, STAR_ICON_SVG, WARNING_ICON_SVG, CLOSE_ICON_SVG, EDIT_ICON_SVG } from '../icons.js';
@@ -590,6 +591,7 @@ export function renderGrinderList() {
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   el.innerHTML = grinders.map(g => {
     const extra = [g.burrType, g.purchaseDate].filter(Boolean).join(' · ');
+    const zeroPoint = currentGrinderZeroPoint(g);
     return `
     <div class="lib-item">
       ${g.image ? `<img class="lib-grinder-thumb" data-grinder-id="${g.id}" alt="">` : ''}
@@ -597,6 +599,7 @@ export function renderGrinderList() {
         <div class="lib-item-name">${esc(g.name)}</div>
         ${extra ? `<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : ''}
         ${g.notes ? `<div class="lib-item-sub">${esc(g.notes)}</div>` : ''}
+        ${zeroPoint != null ? `<div class="lib-item-sub">${t('lib_grinder_zero_point')}: ${esc(String(zeroPoint))}</div>` : ''}
         ${g.wear ? `<div class="lib-item-sub lib-grinder-wear">
           <span>${WRENCH_ICON_SVG} ${t('lib_grinder_wear', g.wear.shotsSinceBurrs, formatWearGrams(g.wear.gramsSinceBurrs))}</span>
           <button class="lib-btn-sm lib-grinder-reset-burrs" data-action="reset-grinder-burrs" data-id="${g.id}">${t('lib_grinder_reset_burrs')}</button>
@@ -923,6 +926,11 @@ export function openGrinderForm(grinder) {
   attachAutocomplete(document.getElementById('grinderFormBurrType'), () => BURR_TYPE_SUGGESTIONS);
   document.getElementById('grinderFormPurchaseDate').value = toIsoDateInput(grinder?.purchaseDate);
   document.getElementById('grinderFormImageField').style.display = grinder ? '' : 'none';
+  // Zero-point tracking only makes sense once a grinder already has shot
+  // history to correct — hidden for a brand-new grinder, same as the photo
+  // field above.
+  document.getElementById('grinderFormZeroPointField').style.display = grinder ? '' : 'none';
+  document.getElementById('grinderFormZeroPoint').value = currentGrinderZeroPoint(grinder) ?? '';
   document.getElementById('grinderAddForm').classList.add('open');
   document.getElementById('grinderAddTrigger').style.display = 'none';
   document.getElementById('grinderFormName').focus();
@@ -945,8 +953,23 @@ export async function saveGrinder() {
   const burrType     = document.getElementById('grinderFormBurrType').value.trim();
   const purchaseDate = document.getElementById('grinderFormPurchaseDate').value.trim();
   if (!name) { document.getElementById('grinderFormName').focus(); return; }
-  const saved = await libraryApi.saveGrinder(S.grinderEditId, { name, notes, burrType, purchaseDate });
+  let saved = await libraryApi.saveGrinder(S.grinderEditId, { name, notes, burrType, purchaseDate });
   if (!saved) return;
+
+  if (S.grinderEditId) {
+    const zpRaw = document.getElementById('grinderFormZeroPoint').value.trim();
+    if (zpRaw !== '') {
+      const zeroPoint = parseFloat(zpRaw);
+      if (!Number.isNaN(zeroPoint) && zeroPoint !== currentGrinderZeroPoint(saved)) {
+        const zr = await apiFetch(`api/library/grinder/${S.grinderEditId}/zero-point`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zeroPoint }),
+        });
+        if (zr.ok) saved = await zr.json();
+      }
+    }
+  }
+
+
   if (S.grinderEditId) {
     const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === S.grinderEditId);
     // The PUT response doesn't recompute wear stats — keep the existing ones

@@ -240,6 +240,14 @@ components:
         purchaseDate:  { type: string, maxLength: 10 }
         burrsResetAt:  { type: string, description: "ISO date/timestamp — start of the burr-wear counting window, see POST .../reset-burrs" }
         image:         { type: string, nullable: true, description: "File extension of the stored photo, if any" }
+        zeroPointHistory:
+          type: array
+          description: "Chronological log of every zero-point activation (PUT .../zero-point) — the last entry is the current value. Absent/empty for a grinder that has never had one set, in which case grind settings display and compare as raw recorded values unchanged."
+          items:
+            type: object
+            properties:
+              zeroPoint: { type: number }
+              since:     { type: integer, description: "Timestamp (ms) this value became active" }
         wear:
           type: object
           description: Computed burr-wear stats (shots/grams since burrsResetAt), added on read.
@@ -1194,6 +1202,26 @@ paths:
       responses:
         "200": { description: "Updated grinder (with recomputed `wear`)", content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
         "404": { description: Not found }
+
+  /api/library/grinder/{id}/zero-point:
+    put:
+      tags: [Library]
+      summary: "Log a new zero-point activation — corrects grind-setting suggestions/comparisons for drift (e.g. after cleaning) without rewriting any past shot's recorded value"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [zeroPoint]
+              properties:
+                zeroPoint: { type: number }
+      responses:
+        "200": { description: "Updated grinder (with the new zeroPointHistory entry)", content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
+        "400": { description: Invalid zeroPoint, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/library/grinder/{id}/delete:
     post:

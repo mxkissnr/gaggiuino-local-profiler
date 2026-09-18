@@ -1,9 +1,11 @@
 import { t }                               from '../../i18n.js';
+import { S }                               from '../../state/index.js';
 import { detectChanneling, calcBrewRatio } from '../../utils.js';
 import type { ShotSeries } from '../../utils.js';
 import { calcShotScore }                   from './utils.js';
 import type { ShotLike }                   from './utils.js';
 import { getRawCurve }                     from '../../shot-curves.js';
+import { normalizeGrindToNow }             from '../../grind-zero.js';
 import { LIGHTNING_ICON_SVG, SCALE_ICON_SVG, BAR_CHART_ICON_SVG } from '../../icons.js';
 
 interface GrindAnnotation {
@@ -127,6 +129,17 @@ export function calcGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice 
   return { type: 'ok', icon: '✓', text: `${t('grind_ok')} – ${secs.toFixed(0)} s${avgP > 0 ? `, ${avgP.toFixed(1)} bar Ø` : ''}` };
 }
 
+// Parses a shot's own recorded grindSetting and normalizes it to what it
+// would read on the grinder TODAY (see grind-zero.js) — so a comparison or
+// average built across shots straddling a zero-point reset (e.g. after
+// cleaning) stays meaningful, without any past shot's recorded value
+// needing to be rewritten. A no-op when the shot's grinder never tracked a
+// zero point.
+function _currentGrindNum(grinderName: string | null | undefined, grindSettingStr: string | number | null | undefined, shotTimestampSec: number | undefined): number | null {
+  const raw = _parseGrindNum(grindSettingStr);
+  return normalizeGrindToNow(S.coffeeLibrary?.grinders, grinderName, raw, shotTimestampSec != null ? shotTimestampSec * 1000 : undefined) ?? null;
+}
+
 export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[]): ComparativeAdvice | null {
   const ann          = shot.annotation || {};
   const coffee       = ann.coffee?.trim().toLowerCase();
@@ -134,7 +147,7 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
   const grinder      = ann.grinder?.trim().toLowerCase();
   const profile      = (shot.profile?.name || shot.profileName || '').trim().toLowerCase();
   const dose         = parseFloat(ann.dose as string) || null;
-  const currentGrind = _parseGrindNum(ann.grindSetting);
+  const currentGrind = _currentGrindNum(ann.grinder, ann.grindSetting, shot.timestamp);
   if (!coffee || !grinder) return null;
 
   // #456: beanId-first match when both sides have one — a row whose beanId
@@ -161,7 +174,7 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
 
   const byGrind: Record<number, number[]> = {};
   comparable.forEach(s => {
-    const g   = _parseGrindNum(s.annotation?.grindSetting) as number;
+    const g   = _currentGrindNum(s.annotation?.grinder, s.annotation?.grindSetting, s.timestamp) as number;
     const sc  = calcShotScore(s) as number;
     const key = Math.round(g * 2) / 2;
     if (!byGrind[key]) byGrind[key] = [];
@@ -178,7 +191,7 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
   const n         = comparable.length;
   const bestScore = Math.round(bestAvg);
   const shots: ComparativeShot[] = comparable
-    .map(s => ({ shot: s, grind: _parseGrindNum(s.annotation?.grindSetting), score: calcShotScore(s) as number }))
+    .map(s => ({ shot: s, grind: _currentGrindNum(s.annotation?.grinder, s.annotation?.grindSetting, s.timestamp), score: calcShotScore(s) as number }))
     .sort((a, b) => b.score - a.score);
 
   if (currentGrind === null)
@@ -226,7 +239,7 @@ export function calcBestGrindCombosForBean(
   const byCombo: Record<string, { grinder: string; grindSetting: number; scores: number[] }> = {};
   scored.forEach(s => {
     const grinder = (s.annotation?.grinder as string).trim();
-    const grind    = Math.round((_parseGrindNum(s.annotation?.grindSetting) as number) * 2) / 2;
+    const grind    = Math.round((_currentGrindNum(grinder, s.annotation?.grindSetting, s.timestamp) as number) * 2) / 2;
     const key      = `${grinder.toLowerCase()}${grind}`;
     if (!byCombo[key]) byCombo[key] = { grinder, grindSetting: grind, scores: [] };
     byCombo[key].scores.push(calcShotScore(s) as number);

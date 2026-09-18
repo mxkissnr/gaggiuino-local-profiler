@@ -170,6 +170,8 @@ const es: Partial<Translations> = {
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clicks',
     lib_grinder_burr_type:'Tipo de muelas', lib_grinder_burr_type_ph:'Cónicas de acero',
     lib_grinder_purchase_date:'Fecha de compra', lib_grinder_image:'Foto',
+    lib_grinder_zero_point:'Punto cero',
+    lib_grinder_zero_point_hint:'Después de limpiar: actualiza el punto cero aquí en lugar de ajustar cada receta. Las sugerencias/comparaciones se corrigen automáticamente.',
     lib_cancel:'Cancelar', lib_save:'Guardar',
     lib_empty_beans:'No hay granos guardados', lib_empty_grinders:'No hay molinos guardados',
     lib_btn_edit:'Editar', lib_btn_delete:'Eliminar',

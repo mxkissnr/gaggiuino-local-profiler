@@ -170,6 +170,8 @@ const fr: Partial<Translations> = {
     lib_grinder_name_ph:'Niche Zero', lib_grinder_notes_ph:'Espresso: 23 Clics',
     lib_grinder_burr_type:'Type de meules', lib_grinder_burr_type_ph:'Coniques acier',
     lib_grinder_purchase_date:"Date d'achat", lib_grinder_image:'Photo',
+    lib_grinder_zero_point:'Point zéro',
+    lib_grinder_zero_point_hint:"Après un nettoyage : mettez à jour le point zéro ici plutôt que chaque recette. Les suggestions/comparaisons se corrigent automatiquement.",
     lib_cancel:'Annuler', lib_save:'Enregistrer',
     lib_empty_beans:'Aucun grain enregistré', lib_empty_grinders:'Aucun moulin enregistré',
     lib_btn_edit:'Modifier', lib_btn_delete:'Supprimer',
