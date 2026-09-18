@@ -419,6 +419,46 @@ function _updateMilkFieldVisibility(): void {
   field.style.display = (S.milkTypes?.length && drinkId) ? '' : 'none';
 }
 
+// Same select-with-"other"-fallback grinder field as dialin-wizard.js's
+// _renderGrinderField/dialinGrinderChange, but DOM-mutating (fills an
+// existing <select>/<input> pair by id) instead of returning an HTML
+// string, since live.js's pre-shot setup panel's markup is static in
+// index.html rather than re-rendered from a template each time.
+export function renderGrinderField(selectId, otherId, currentValue) {
+  const select = document.getElementById(selectId);
+  const other  = document.getElementById(otherId);
+  if (!select) return;
+  const grinders    = S.coffeeLibrary?.grinders || [];
+  const knownNames  = new Set(grinders.map(g => g.name));
+  const isOther     = !!currentValue && !knownNames.has(currentValue);
+  select.innerHTML = grinders.map(g =>
+    `<option value="${esc(g.name)}"${!isOther && currentValue === g.name ? ' selected' : ''}>${esc(g.name)}</option>`
+  ).join('') + `<option value="__other__"${isOther ? ' selected' : ''}>${t('dialin_wizard_grinder_other')}</option>`;
+  if (other) {
+    other.style.display = isOther ? '' : 'none';
+    other.value = isOther ? currentValue : '';
+  }
+}
+
+// Resolves the field's effective value: the select's own value, or the
+// free-text fallback input's value when "other…" is selected.
+export function getGrinderFieldValue(selectId, otherId) {
+  const select = document.getElementById(selectId);
+  const other  = document.getElementById(otherId);
+  if (!select) return '';
+  if (select.value === '__other__') return other?.value.trim() || '';
+  return select.value;
+}
+
+// Toggles the free-text fallback input's visibility on select change —
+// mirrors dialin-wizard.js's dialinGrinderChange.
+export function handleGrinderFieldChange(selectId, otherId) {
+  const select = document.getElementById(selectId);
+  const other  = document.getElementById(otherId);
+  if (!select || !other) return;
+  other.style.display = select.value === '__other__' ? '' : 'none';
+}
+
 // selectedBeanId, when given, takes priority over selectedName: id survives
 // a bean rename, name does not. Without it (or when it no longer resolves
 // in the current library — e.g. a deleted bean), falls back to matching by
