@@ -12,6 +12,7 @@
 import { S }                     from '../state/index.js';
 import { t }                     from '../i18n.js';
 import { apiFetch }              from '../api.js';
+import { annotateShot }          from '../api/shots.js';
 import { esc, detectChanneling, calcBrewRatio, scoreColor } from '../utils.js';
 import { calcShotScore } from './shots/utils.js';
 import { getShotCurve } from '../shot-curves.js';
@@ -253,9 +254,7 @@ export async function dialinConfirmShot(shotId, isMatch) {
     dose: s.dose || null, recipeId: s.recipeId || null,
   };
   try {
-    const r = await apiFetch(`api/shots/${shotId}/annotate`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-    });
+    const r = await annotateShot(shotId, payload);
     if (r.ok) {
       const idx = S.shots.findIndex(sh => sh.id === shotId);
       if (idx !== -1) S.shots[idx].annotation = { ...S.shots[idx].annotation, ...payload };
