@@ -7,7 +7,7 @@
 // instead of being fixed in markup. mode.js's active-state toggling and
 // status.js's Live/Orders capability gating both keep reading these ids via
 // getElementById() exactly as before and need no changes.
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { switchMode } from './mode.js';
 
@@ -65,7 +65,7 @@ function bnDomId(id) {
 // Parses+validates the persisted main-bar selection: drops unknown/duplicate
 // ids, forces "shots" to always be present and first (#431 — it's the
 // mandatory primary mobile screen), and caps the result at MAX_MAIN_BAR.
-// Same JSON-blob-with-try/catch-fallback convention as state.js's
+// Same JSON-blob-with-try/catch-fallback convention as state/index.ts's
 // dialinSession/profileDialinSession.
 export function getBottomNavConfig() {
   let parsed = null;
