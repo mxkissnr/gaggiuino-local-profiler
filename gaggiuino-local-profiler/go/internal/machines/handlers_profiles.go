@@ -1,11 +1,22 @@
 package machines
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 )
+
+// profileLiveFetchTimeout bounds every live GetStatus/ListProfiles/GetProfile
+// call in this file — matches system/handlers.go's machineStatusProbeTimeout.
+// Without it, an unreachable machine (e.g. gaggimate.local's mDNS name not
+// resolving) blocks on the OS resolver's own multi-retry timeout (tens of
+// seconds, observed hanging past 60s in the wild) before the offline
+// local-cache fallback below ever gets a chance to run — turning what's
+// supposed to be an instant "stale" response into an apparent total outage.
+const profileLiveFetchTimeout = 5 * time.Second
 
 // This file ports routes/system.js's "Machine profiles" section
 // (GET /api/machine/profiles, POST /api/machine/profile/set,
@@ -41,7 +52,10 @@ func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status, err := adapter.GetStatus(r.Context(), machine)
+	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout)
+	defer cancel()
+
+	status, err := adapter.GetStatus(liveCtx, machine)
 	var currentID *int
 	var currentName *string
 	if err == nil {
@@ -68,7 +82,7 @@ func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	raw, err := adapter.ListProfiles(r.Context(), machine)
+	raw, err := adapter.ListProfiles(liveCtx, machine)
 	if err != nil {
 		slog.Warn("listing machine profiles failed", "machineId", machine.ID, "err", err)
 		cached, lerr := h.profilesRepo.ListByMachine(machine.ID)
@@ -205,7 +219,9 @@ func (h *Handlers) getMachineProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	profile, err := adapter.GetProfile(r.Context(), machine, id)
+	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout)
+	defer cancel()
+	profile, err := adapter.GetProfile(liveCtx, machine, id)
 	if err != nil {
 		slog.Warn("fetching machine profile failed, falling back to local copy", "machineId", machine.ID, "profileId", id, "err", err)
 		row, lerr := h.profilesRepo.Get(machine.ID, id)
