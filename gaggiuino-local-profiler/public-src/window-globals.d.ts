@@ -22,4 +22,8 @@ interface Window {
   loadMaintenanceView?: () => void;
   loadAchievementsView?: () => void;
   setAccentTheme?: (key: string) => void;
+  initAnalytics?: () => void;
+  renderDialin?: () => void;
+  renderBeanList?: () => void;
+  renderGrinderList?: () => void;
 }

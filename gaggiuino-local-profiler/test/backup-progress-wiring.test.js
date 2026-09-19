@@ -14,8 +14,8 @@ import { dirname, join } from 'path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const read = (p) => readFileSync(join(__dirname, '..', p), 'utf8');
 
-describe('backup-modal.js progress wiring', () => {
-  const src = read('public-src/components/backup-modal.js');
+describe('backup-modal.ts progress wiring', () => {
+  const src = read('public-src/components/backup-modal.ts');
 
   it('imports requestBackup and postRestore from api/system.js', () => {
     expect(src).toMatch(/import\s*\{[^}]*\brequestBackup\b[^}]*\}\s*from\s*'\.\.\/api\/system\.js'/);
@@ -23,7 +23,7 @@ describe('backup-modal.js progress wiring', () => {
   });
 
   it('disables both modal buttons for the whole transfer (setBusy)', () => {
-    expect(src).toMatch(/function setBusy\(on\)\s*\{[\s\S]*confirmBtn\.disabled = on;[\s\S]*cancelBtn\.disabled = on;/);
+    expect(src).toMatch(/function setBusy\(on[^)]*\)[^{]*\{[\s\S]*confirmBtn\.disabled = on;[\s\S]*cancelBtn\.disabled = on;/);
     expect(src).toContain('setBusy(true)');
   });
 
@@ -49,8 +49,8 @@ describe('api/system.ts backup/restore transport', () => {
   });
 });
 
-describe('status.js Dev Tools progress wiring', () => {
-  const src = read('public-src/components/status.js');
+describe('status.ts Dev Tools progress wiring', () => {
+  const src = read('public-src/components/status.ts');
 
   it('imports exportDevDb and importDevDb from api/system.js', () => {
     expect(src).toMatch(/import\s*\{[\s\S]*\bexportDevDb\b[\s\S]*\}\s*from\s*'\.\.\/api\/system\.js'/);
@@ -58,7 +58,7 @@ describe('status.js Dev Tools progress wiring', () => {
   });
 
   it('shows transfer state in the button label and disables it (withButtonProgress)', () => {
-    expect(src).toMatch(/function withButtonProgress\(btn, work\)/);
+    expect(src).toMatch(/function withButtonProgress(?:<[^>]*>)?\(/);
     expect(src).toContain('btn.disabled = true');
   });
 });
