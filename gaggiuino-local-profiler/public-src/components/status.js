@@ -1,7 +1,12 @@
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { localeFor } from '../constants.js';
-import { apiFetch, apiFetchToBlob, apiUpload } from '../api.js';
+import {
+  getStatus, getSwitch, toggleSwitch,
+  triggerSync as triggerSyncRequest,
+  exportDevDb as exportDevDbRequest,
+  importDevDb as importDevDbRequest,
+} from '../api/system.js';
 import { shareOrDownloadBlob } from '../utils.js';
 import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge, updateLegacyMachineOptionsBanner } from './onboarding.js';
 import { updateApiPortClosedBanner } from './api-port-notice.js';
@@ -215,10 +220,9 @@ export async function updateStatus(machineId) {
   if (_statusUpdateInFlight) return;
   _statusUpdateInFlight = true;
   try {
-    const qs = (machineId != null && machineId !== 'all') ? `?machineId=${encodeURIComponent(machineId)}` : '';
     const [statusRes, switchRes] = await Promise.all([
-      apiFetch(`api/status${qs}`),
-      apiFetch('api/switch').catch(() => null)
+      getStatus(machineId),
+      getSwitch().catch(() => null)
     ]);
     if (!statusRes.ok) return;
     const s = await statusRes.json();
@@ -378,11 +382,9 @@ export async function exportDevDb() {
   const btn = document.getElementById('devExportDbBtn') || { textContent: '', disabled: false };
   try {
     await withButtonProgress(btn, async (setLabel) => {
-      const res = await apiFetchToBlob('api/debug/export-db', {
-        onProgress: (received, total) => setLabel(total
-          ? t('backup_progress_download', Math.floor((received / total) * 100))
-          : t('backup_progress_preparing')),
-      });
+      const res = await exportDevDbRequest((received, total) => setLabel(total
+        ? t('backup_progress_download', Math.floor((received / total) * 100))
+        : t('backup_progress_preparing')));
       if (!res.ok) {
         if (window.showToast) window.showToast(t('settings_devtools_export_db_failed'));
         return;
@@ -418,14 +420,9 @@ export async function importDevDb(file) {
   if (input) input.disabled = true;
   try {
     await withButtonProgress(label, async (setLabel) => {
-      const res = await apiUpload('api/debug/import-db', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: await file.arrayBuffer(),
-        onProgress: (sent, total) => setLabel(sent >= total
-          ? t('backup_progress_restoring')
-          : t('backup_progress_upload', Math.floor((sent / total) * 100))),
-      });
+      const res = await importDevDbRequest(await file.arrayBuffer(), (sent, total) => setLabel(sent >= total
+        ? t('backup_progress_restoring')
+        : t('backup_progress_upload', Math.floor((sent / total) * 100))));
       let body = {};
       try { body = JSON.parse(res.text || '{}'); } catch { /* non-JSON body */ }
       if (!res.ok) { alert(body.error || t('settings_devtools_import_db_failed')); return; }
@@ -483,12 +480,12 @@ export async function toggleMachinePower() {
   btn.disabled = true;
   if (railBtn) railBtn.disabled = true;
   try {
-    const r = await apiFetch('api/switch/toggle', { method: 'POST' });
+    const r = await toggleSwitch();
     if (r.ok) {
       const result = await r.json();
       updatePowerButton({ configured: true, state: result.state });
       setTimeout(async () => {
-        const sr = await apiFetch('api/switch').catch(() => null);
+        const sr = await getSwitch().catch(() => null);
         if (sr?.ok) updatePowerButton(await sr.json());
       }, 2000);
     }
@@ -504,7 +501,7 @@ export async function triggerSync() {
   btn.disabled = true;
   btn.textContent = '↻ …';
   try {
-    const r = await apiFetch('api/sync', { method: 'POST' });
+    const r = await triggerSyncRequest();
     if (r.status === 429) {
       const d = await r.json();
       btn.textContent = d.error || t('please_wait');
