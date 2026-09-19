@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '../public-src/components/backup-modal.js'), 'utf8');
+const src = readFileSync(join(__dirname, '../public-src/components/backup-modal.ts'), 'utf8');
 
 function restoreConfirmBlock() {
     const start = src.indexOf('confirmBtn.onclick = async () => {');
