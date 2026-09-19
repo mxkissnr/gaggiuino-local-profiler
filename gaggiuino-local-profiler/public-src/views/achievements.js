@@ -11,7 +11,7 @@
 // etc. theme tokens.
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
-import { apiFetch } from '../api.js';
+import { getAchievements } from '../api/system.js';
 import { localeFor } from '../constants.js';
 import { esc } from '../utils.js';
 
@@ -262,7 +262,7 @@ export async function loadAchievementsView() {
   if (!container) return;
   container.innerHTML = `<div class="loading-state">${t('ach_loading')}</div>`;
   try {
-    const r = await apiFetch(`api/achievements?lang=${S.currentLang}`);
+    const r = await getAchievements(S.currentLang);
     const data = await r.json();
     _state.badges = data.badges || [];
     _state.page = 0;
