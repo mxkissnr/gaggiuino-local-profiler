@@ -28,6 +28,7 @@ export function renderShotDefaultsSettingsCard(): void {
   const drinkSelect = document.getElementById('sdDrinkType');
   if (drinkSelect) {
     const options = (S.drinkMenu || []) as unknown as DrinkRow[];
+    // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
     drinkSelect.innerHTML = `<option value="">${esc(t('sd_none'))}</option>` +
       options.map(m => `<option value="${esc(m.id)}"${d.drinkType === m.id ? ' selected' : ''}>${esc(m.emoji)} ${esc(m.name)}</option>`).join('');
   }
