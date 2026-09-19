@@ -39,7 +39,7 @@ export async function saveNotifySettings(): Promise<void> {
   const list = document.getElementById('notifySettingsList');
   if (!list) return;
   const settings: OrdersSettings = await getOrdersSettings().catch(() => ({}));
-  const body: OrdersSettingsUpdate = { ...settings, enabled: settings.enabled ?? true };
+  const body: OrdersSettingsUpdate = { enabled: settings.enabled ?? true };
   list.querySelectorAll<HTMLInputElement>('[data-notify-key]').forEach(cb => {
     const key = cb.dataset.notifyKey as NotifyKey;
     body[key] = cb.checked;
