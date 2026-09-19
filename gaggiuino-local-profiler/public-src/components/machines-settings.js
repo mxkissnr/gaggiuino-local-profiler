@@ -6,7 +6,7 @@
 // use to keep the Shots list / Analytics / Live view scoped to the
 // selected machine.
 import { S, setState, filterShotsByMachine } from '../state/index.js';
-import { apiFetch } from '../api.js';
+import * as machinesApi from '../api/machines.js';
 import { t } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
 import { WARNING_ICON_SVG, CHECK_ICON_SVG, CLOSE_ICON_SVG } from '../icons.js';
@@ -197,9 +197,8 @@ export function applyActiveMachineAccentTheme() {
 
 export async function loadMachines() {
   try {
-    const r = await apiFetch('api/machines');
-    if (!r.ok) return;
-    const machines = await r.json();
+    const machines = await machinesApi.listMachines();
+    if (!machines) return;
     setState('machines', machines);
     if (!S.activeMachineId) {
       const def = machines.find(m => m.isDefault) || machines[0];
@@ -476,10 +475,9 @@ async function loadReleaseChannel(machineId) {
   const select = document.getElementById('machineFormReleaseChannel');
   if (!select) return;
   try {
-    const r = await apiFetch(`api/machine/settings?machineId=${machineId}&category=system`);
-    if (!r.ok) return;
-    const settings = await r.json();
-    _machineSystemSettings = (settings && typeof settings === 'object') ? settings : {};
+    const settings = await machinesApi.getMachineSettings(machineId, 'system');
+    if (!settings) return;
+    _machineSystemSettings = settings;
     const ch = Number(_machineSystemSettings.releaseChannel);
     select.value = [0, 1, 2].includes(ch) ? String(ch) : '0';
   } catch { /* offline/unreachable -- leave the select at its default */ }
@@ -497,9 +495,7 @@ async function _saveReleaseChannel(machineId) {
   const channel = parseInt(select.value, 10);
   const payload = { ...(_machineSystemSettings || {}), machineId: Number(machineId), releaseChannel: channel };
   try {
-    await apiFetch('api/machine/settings/system', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-    });
+    await machinesApi.saveMachineSettings('system', payload);
   } catch { /* best-effort -- the main machine record already saved either way */ }
 }
 
@@ -541,9 +537,7 @@ function stopAllFirmwarePolls() {
 
 async function loadFirmwareStatus(machineId, row) {
   try {
-    const r = await apiFetch(`api/machine/firmware/version?machineId=${machineId}`);
-    if (!r.ok) { renderFirmwareRow(machineId, row, null); return; }
-    renderFirmwareRow(machineId, row, await r.json());
+    renderFirmwareRow(machineId, row, await machinesApi.getFirmwareVersion(machineId));
   } catch {
     renderFirmwareRow(machineId, row, null);
   }
@@ -614,9 +608,7 @@ async function triggerMachineFirmwareUpdate(machineId, row) {
   const btn = row.querySelector('.machine-firmware-update-btn');
   if (btn) btn.disabled = true;
   try {
-    const r = await apiFetch('api/machine/firmware/update', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ machineId: Number(machineId) }),
-    });
+    const r = await machinesApi.triggerFirmwareUpdate(machineId);
     if (!r.ok) {
       const data = await r.json().catch(() => ({}));
       if (window.showToast) window.showToast(t('settings_machine_firmware_trigger_failed', data.error || r.status));
@@ -653,9 +645,8 @@ async function _pollFirmwareProgressTick(machineId, row, poll) {
   let ok = false;
   let progress = null;
   try {
-    const r = await apiFetch(`api/machine/firmware/progress?machineId=${machineId}`);
-    ok = r.ok;
-    if (ok) progress = await r.json().catch(() => null);
+    progress = await machinesApi.getFirmwareProgress(machineId);
+    ok = progress !== null;
   } catch { /* ok stays false */ }
   if (_firmwarePolls.get(machineId) !== poll) return; // went stale while the fetch was in flight
 
@@ -792,11 +783,8 @@ async function _saveMachine({ triggerSync = true } = {}) {
     hasWaterSensor: type === 'gaggimate' ? (document.getElementById('machineFormWaterSensor')?.checked || false) : false,
   };
   if (!payload.name || !payload.host) return null;
-  const base   = id ? `api/machines/${id}` : 'api/machines';
-  const url    = triggerSync ? base : `${base}?sync=0`;
-  const method = id ? 'PUT' : 'POST';
   const resultEl = document.getElementById('machineFormTestResult');
-  const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const r = await machinesApi.saveMachine(id || null, payload, { triggerSync });
   if (r.ok) {
     const data = await r.json().catch(() => ({}));
     return id || data?.id || null;
@@ -825,7 +813,7 @@ async function _testMachine(id) {
   if (!resultEl) return;
   resultEl.textContent = t('settings_machine_testing');
   try {
-    const r = await apiFetch(`api/machines/${id}/test`, { method: 'POST' });
+    const r = await machinesApi.testMachine(id);
     const data = await r.json().catch(() => ({}));
     if (String(document.getElementById('machineFormId').value) !== String(id)) return;
     resultEl.innerHTML = data.reachable
@@ -857,7 +845,7 @@ export async function saveMachineForm() {
 // badge/actions and getDefaultMachineId() consumers (views/live.js,
 // applyDefaultMachineAccentTheme() below) pick up the change.
 export async function setDefaultMachine(id) {
-  const r = await apiFetch(`api/machines/${id}/default`, { method: 'POST' });
+  const r = await machinesApi.setDefaultMachine(id);
   if (r.ok) loadMachines();
 }
 
@@ -871,7 +859,7 @@ export async function setDefaultMachine(id) {
 export async function deleteMachine(id, isDefault) {
   const confirmKey = isDefault ? 'settings_machine_delete_default_confirm' : 'settings_machine_delete_confirm';
   if (!confirm(t(confirmKey))) return;
-  const r = await apiFetch(`api/machines/${id}`, { method: 'DELETE' });
+  const r = await machinesApi.deleteMachine(id);
   if (r.ok) { loadMachines(); return; }
   const body = await r.json().catch(() => ({}));
   if (window.showToast) window.showToast(body.error || t('settings_machine_delete_failed'));
