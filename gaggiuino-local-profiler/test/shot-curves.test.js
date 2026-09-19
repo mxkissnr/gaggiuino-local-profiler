@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator    ??= { language: 'en-US' };
 
-const apiModule = await import('../public-src/api.js');
+const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
 const curves = await import('../public-src/shot-curves.js');
 

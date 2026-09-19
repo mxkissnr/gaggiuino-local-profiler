@@ -19,7 +19,7 @@ globalThis.sessionStorage = {
 };
 
 const { S } = await import('../public-src/state/index.js');
-const { isApiPortBlocked } = await import('../public-src/api.js');
+const { isApiPortBlocked } = await import('../public-src/api/transport.js');
 const { apiPortClosedHtml, updateApiPortClosedBanner } =
   await import('../public-src/components/api-port-notice.js');
 

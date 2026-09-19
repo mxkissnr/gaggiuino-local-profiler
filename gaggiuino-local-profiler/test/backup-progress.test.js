@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// api.js -> state.js touches localStorage/navigator at module-load time —
+// api/transport.js -> state.js touches localStorage/navigator at module-load time —
 // stub the minimum browser globals so the module graph imports under
 // vitest's node environment (same pattern as api-token-client-storage.test.js).
 const _store = new Map();
@@ -12,7 +12,7 @@ globalThis.localStorage = {
 globalThis.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const { apiFetchToBlob, apiUpload } = await import('../public-src/api.js');
+const { apiFetchToBlob, apiUpload } = await import('../public-src/api/transport.js');
 
 function fakeHeaders(entries) {
   const m = new Map(entries);

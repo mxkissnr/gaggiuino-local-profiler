@@ -41,7 +41,7 @@ if ('serviceWorker' in navigator && document.querySelector('link[rel="manifest"]
 }
 
 import { S } from './state/index.js';
-import { initToken, apiFetch } from './api.js';
+import { initToken, apiFetch } from './api/transport.js';
 import { t, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
 import { generateBeanQR } from './glp-qr.js';

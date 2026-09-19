@@ -1,15 +1,8 @@
-// Package A3d: the api.js shim is being retired, and the seam the domain
-// clients call through is now api/transport.ts. Importing the binding (rather
-// than calling api/transport.ts's apiFetch from inside each client) keeps it
-// swappable: a test that spies on transport.js's apiFetch still intercepts
-// every domain request, because the re-export the spy patches and the binding
-// read here are the same live module binding.
-//
-// api.js still exists for the call sites not yet swept (views/library.js's
-// import-URL calls, views/shots/index.js's GaggiMate profile fetch, main.ts's
-// own import) — it re-exports apiFetch from transport.js, so those raw calls
-// and the typed clients below still resolve to the same live binding. Delete
-// it only once those have moved over too.
+// The seam every domain client (`./shots.js`, `./orders.js`, etc.) calls
+// through, rather than importing api/transport.ts's apiFetch directly: a
+// test that spies/mocks transport.js's apiFetch still intercepts every
+// domain request, because the binding read here is the same live module
+// binding as the one the spy patches.
 import { apiFetch as _apiFetch } from './transport.js';
 
 type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;
@@ -19,7 +12,8 @@ type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;
 // `_apiFetch` is never snapshotted into a local at import time — so a stub
 // installed on transport.js's apiFetch intercepts the domain clients'
 // requests too.
-export const apiFetch: FetchFn = (url, opts) => _apiFetch(url, opts);
+export const apiFetch: FetchFn = (url, opts) =>
+  opts === undefined ? _apiFetch(url) : _apiFetch(url, opts);
 
 // apiFetchJson is the read-side companion to apiFetch: it runs a request
 // through the facade above and parses the JSON body as T. Deliberately

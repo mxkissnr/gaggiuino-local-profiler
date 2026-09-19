@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// library-profile-editor.js imports state.js/i18n.js/api.js, which read
+// library-profile-editor.js imports state.js/i18n.js/api/transport.js, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals needed so the module graph can be imported under vitest's node
 // environment (same pattern as test/milk-deduct-gate.test.js).
@@ -8,7 +8,7 @@ globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator    ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const apiModule = await import('../public-src/api.js');
+const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
 const { _synthesizeSeries, _collectPhases, loadMachineProfileList } = await import('../public-src/views/library-profile-editor.js');
 

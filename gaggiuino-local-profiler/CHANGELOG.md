@@ -1,4 +1,5 @@
 ## [Unreleased]
+- **Replaced the frontend's 136 scattered, untyped API call sites with a typed, generated-from-OpenAPI client**, consolidating URL-building and machine-ID handling that used to be duplicated per call site into one module per backend area. Closes #1110
 - **Converted the frontend's core utility, config, translation, and state modules to TypeScript**, including a typed application-state object and dedicated chart/timer-lifecycle registries. Closes #1108
 - **Added the TypeScript toolchain and a blocking type-check gate in CI, the first step of migrating the frontend to TypeScript.** Closes #1106
 - **`DEVELOPMENT.md`'s AI model breakdown now recognizes every AI co-author, not just Claude**, and separates Max's flat-rate Claude Pro subscription cost from usage-billed models like DeepSeek instead of implying a single subscription covers all of them. Closes #1100

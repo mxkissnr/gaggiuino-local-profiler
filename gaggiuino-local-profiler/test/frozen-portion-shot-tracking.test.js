@@ -8,7 +8,7 @@ globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator    ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const apiModule = await import('../public-src/api.js');
+const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch').mockResolvedValue({
     ok: true, json: async () => ({}),
 });

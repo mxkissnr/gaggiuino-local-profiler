@@ -17,7 +17,7 @@ const renderSidebarSpy = vi.fn();
 vi.mock('../public-src/components/sidebar.js', () => ({ renderSidebar: renderSidebarSpy }));
 
 const { S } = await import('../public-src/state/index.js');
-const apiModule = await import('../public-src/api.js');
+const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
 const { loadAllShotMeta } = await import('../public-src/views/shots/index.js');
 

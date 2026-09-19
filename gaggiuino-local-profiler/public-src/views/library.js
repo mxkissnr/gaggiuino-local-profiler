@@ -1,7 +1,7 @@
 import { S } from '../state/index.js';
 import * as timerRegistry from '../state/timers.js';
 import { t } from '../i18n.js';
-import { apiFetch } from '../api.js';
+import { importFromUrl as apiImportFromUrl, getImportSettings, saveImportSettings } from '../api/system.js';
 import * as libraryApi from '../api/library.js';
 import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, toIsoDateInput, todayIsoDate, isoDateInputToMs } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, localeFor, countryName } from '../constants.js';
@@ -1026,7 +1026,7 @@ export async function importFromUrl() {
   btn.textContent = t('lib_url_importing');
   btn.disabled = true;
   try {
-    const r = await apiFetch(`api/import/url?url=${encodeURIComponent(url)}`);
+    const r = await apiImportFromUrl(url);
     if (r.status === 400) {
       alert(t('lib_url_unsupported'));
       return;
@@ -1184,7 +1184,7 @@ export async function toggleImportSettings() {
 }
 
 async function _loadAndRenderImportSettings() {
-  const r = await apiFetch('api/import/settings');
+  const r = await getImportSettings();
   if (!r.ok) return;
   const data = await r.json();
   S._importSettings = data;
@@ -1220,10 +1220,7 @@ async function _saveProviderToggle(providerId, enabled) {
     .map(p => p.id === providerId ? { ...p, enabled } : p)
     .filter(p => !p.enabled)
     .map(p => p.id);
-  const r = await apiFetch('api/import/settings', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ disabledProviders, customShopifyDomains: current.customShopifyDomains }),
-  });
+  const r = await saveImportSettings({ disabledProviders, customShopifyDomains: current.customShopifyDomains });
   if (r.ok) await _loadAndRenderImportSettings();
 }
 
@@ -1233,10 +1230,7 @@ export async function addCustomShopifyDomain() {
   if (!domain) return;
   const current = S._importSettings || { providers: [], customShopifyDomains: [] };
   const domains = [...new Set([...current.customShopifyDomains, domain])];
-  const r = await apiFetch('api/import/settings', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ customShopifyDomains: domains }),
-  });
+  const r = await saveImportSettings({ customShopifyDomains: domains });
   if (r.ok) {
     input.value = '';
     await _loadAndRenderImportSettings();
@@ -1248,10 +1242,7 @@ export async function addCustomShopifyDomain() {
 async function _removeCustomShopifyDomain(domain) {
   const current = S._importSettings || { providers: [], customShopifyDomains: [] };
   const domains = current.customShopifyDomains.filter(d => d !== domain);
-  const r = await apiFetch('api/import/settings', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ customShopifyDomains: domains }),
-  });
+  const r = await saveImportSettings({ customShopifyDomains: domains });
   if (r.ok) await _loadAndRenderImportSettings();
 }
 

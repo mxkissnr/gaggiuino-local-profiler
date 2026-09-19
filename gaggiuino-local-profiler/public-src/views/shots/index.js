@@ -2,8 +2,9 @@ import Chart from 'chart.js/auto';
 import { S, filterShotsByMachine }                            from '../../state/index.js';
 import * as chartRegistry                                     from '../../state/charts.js';
 import { t }                                                  from '../../i18n.js';
-import { apiFetch, isApiPortBlocked }                         from '../../api.js';
+import { isApiPortBlocked }                                   from '../../api/transport.js';
 import { listShots, listShotsDump, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShotCard } from '../../api/shots.js';
+import { fetchMachineProfilesResponse, fetchMachineProfileResponse } from '../../api/machines.js';
 import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges } from '../../constants.js';
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
@@ -48,10 +49,10 @@ export function invalidateGmPhaseCache(machineId) {
 // GaggiMate only serves one WS request at a time — an overlapping call
 // (e.g. the live-status poll) can 503 even though the machine is fine.
 // Retries up to 3x; a real 4xx/other 5xx returns immediately.
-async function _fetchWithRetry(url, signal) {
+async function _fetchWithRetry(fetcher, signal) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const r = await apiFetch(url, { signal });
+      const r = await fetcher(signal);
       if (r.ok || r.status < 500 || attempt === 3) return r;
     } catch (e) {
       if (attempt === 3 || signal?.aborted) throw e;
@@ -69,10 +70,10 @@ async function _loadGmPhases(shotA, token) {
 
   let gmPhases = null;
   try {
-    const r1 = await _fetchWithRetry(`api/machine/profiles?machineId=${mid}`, AbortSignal.timeout(6000));
+    const r1 = await _fetchWithRetry(signal => fetchMachineProfilesResponse(mid, signal), AbortSignal.timeout(6000));
     const { optionsRaw: profiles = [] } = r1.ok && token === _updateViewToken ? await r1.json() : {};
     const match = profiles.find(p => p.name === shotA.profileName || p.id === shotA.profileName);
-    const r2 = match && await _fetchWithRetry(`api/machine/profile/${match.id}?machineId=${mid}`, AbortSignal.timeout(6000));
+    const r2 = match && await _fetchWithRetry(signal => fetchMachineProfileResponse(match.id, mid, signal), AbortSignal.timeout(6000));
     const prof = r2?.ok && await r2.json();
     if (prof?.phases?.length) gmPhases = buildGmPhaseRanges(prof.phases);
   } catch (e) {

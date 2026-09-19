@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// api.js/state.js's import chain touches localStorage/navigator at module
+// api/transport.js/state.js's import chain touches localStorage/navigator at module
 // load time — stub the minimum browser globals so the module graph can be
 // imported under vitest's node environment, same pattern as
 // test/bottom-nav-config.test.js. Backed by a real Map store (not an
@@ -16,7 +16,7 @@ globalThis.localStorage = {
 globalThis.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const { initToken, apiFetch } = await import('../public-src/api.js');
+const { initToken, apiFetch } = await import('../public-src/api/transport.js');
 
 // Snapshot the calls made while the modules above were *imported* (i.e.
 // state.js's module-level `glpToken: ...` initializer) before beforeEach

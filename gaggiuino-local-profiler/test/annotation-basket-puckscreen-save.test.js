@@ -6,7 +6,7 @@ globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator    ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const apiModule = await import('../public-src/api.js');
+const apiModule = await import('../public-src/api/transport.js');
 // r.ok:false keeps _performAnnotationSave from reaching the post-save
 // renderSidebar()/updateSidebarHighlighting() calls (heavier DOM deps not
 // stubbed here) — the payload sent to apiFetch is captured regardless.
