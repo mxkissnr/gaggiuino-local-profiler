@@ -16,7 +16,7 @@
 // session's current profile.
 import { S }             from '../state/index.js';
 import { t }              from '../i18n.js';
-import { apiFetch }       from '../api.js';
+import * as machinesApi from '../api/machines.js';
 import { esc, scoreColor } from '../utils.js';
 import { calcShotScore } from './shots/utils.js';
 import { _miniShotChart } from './shots/grind.js';
@@ -77,9 +77,8 @@ export function openProfileDialinWizard(profile) {
 // (the list only holds {id, name}) before opening, since dial-in needs the
 // real phases to compute suggestions against.
 export async function startProfileDialinFromList(id) {
-  const r = await apiFetch(`api/machine/profile/${id}`);
-  if (!r.ok) { window.showToast?.(t('profile_load_error')); return; }
-  const profile = await r.json();
+  const profile = await machinesApi.getMachineProfile(id);
+  if (!profile) { window.showToast?.(t('profile_load_error')); return; }
   openProfileDialinWizard(profile);
 }
 
@@ -123,9 +122,7 @@ export function profileDialinToggleSymptom(symptom) {
 async function _sendUpdatedProfile(s, nextProfile) {
   const token = (s._profileReqToken || 0) + 1;
   s._profileReqToken = token;
-  const r = await apiFetch(`api/machine/profile/${s.profileId}`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nextProfile),
-  });
+  const r = await machinesApi.saveMachineProfile(s.profileId, nextProfile);
   if (!r.ok) {
     const body = await r.json().catch(() => ({}));
     window.showToast?.(t('profile_send_error') + (body.error ? `: ${body.error}` : ''));
