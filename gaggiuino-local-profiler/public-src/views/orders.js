@@ -1,7 +1,7 @@
 import { S } from '../state/index.js';
 import * as timerRegistry from '../state/timers.js';
 import { t } from '../i18n.js';
-import { apiFetch } from '../api.js';
+import { getSwitch } from '../api/system.js';
 import {
   getOrdersSettings, postOrdersSettings, listOrders, getOrdersMenu, getQueueEta, getMilkStock,
   getOrdersStats, postOrderAccept, postOrderDecline, postOrderComplete, deleteOrderById,
@@ -105,7 +105,7 @@ export function _updateOrdersToggleUI(enabled) {
 
 export async function loadOrdersView() {
   const [sw, settings] = await Promise.all([
-    apiFetch('api/switch').then(r => r.json()).catch(() => ({})),
+    getSwitch().then(r => r.json()).catch(() => ({})),
     getOrdersSettings().catch(() => ({ enabled: true })),
   ]);
   const machineOff = sw.configured && sw.state === false;
