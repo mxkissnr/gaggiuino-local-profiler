@@ -3,7 +3,8 @@ import { S } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import * as timerRegistry from '../state/timers.js';
 import { t } from '../i18n.js';
-import { apiFetch, isApiPortBlocked } from '../api.js';
+import { isApiPortBlocked } from '../api/transport.js';
+import { getPreheat, getLiveData } from '../api/system.js';
 import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints } from '../utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
@@ -180,7 +181,7 @@ export function connectLiveStream() {
 
 export async function fetchPreheatData() {
   try {
-    const r = await apiFetch('api/preheat');
+    const r = await getPreheat();
     if (!r.ok) return;
     updatePreheatWidget(await r.json());
   } catch { /* ignore */ }
@@ -252,7 +253,7 @@ export function updatePreheatWidget(d) {
 
 export async function fetchLiveData() {
   try {
-    const r = await apiFetch('api/live/data');
+    const r = await getLiveData();
     if (!r.ok) {
       // #807: same reasoning as the Shots view -- a bare "HTTP 401" in the
       // Live badge says nothing about the deliberately-closed direct port.
