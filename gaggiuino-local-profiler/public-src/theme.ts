@@ -4,10 +4,7 @@
 // bootstrap touching dozens of element ids) that make importing it in a test
 // impractical; this module has none.
 import { THEME_CHANGE_EVENT } from './utils.js';
-// @ts-expect-error -- shared/theme-presets.js is untyped until a later package converts it
-import { THEME_PRESET_KEYS as _THEME_PRESET_KEYS } from './shared/theme-presets.js';
-
-const THEME_PRESET_KEYS = _THEME_PRESET_KEYS as readonly string[];
+import { THEME_PRESET_KEYS } from './shared/theme-presets.js';
 
 export const THEME_STORAGE_KEY: string = 'glp_theme';
 
