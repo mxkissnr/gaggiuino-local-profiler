@@ -135,6 +135,30 @@ export async function getMachineProfile(
 }
 
 /**
+ * Low-level GET /api/machine/profiles — the raw Response, for the GaggiMate
+ * phase-name lookup in views/shots/index.js. That caller retries on a
+ * transient 5xx (GaggiMate serves one WS request at a time) and inspects
+ * `.ok` itself, so it can't go through {@link listMachineProfiles}'s
+ * parse-to-null wrapper. Passing `signal` lets the caller time the attempt
+ * out.
+ */
+export function fetchMachineProfilesResponse(
+  machineId: string | number,
+  signal?: AbortSignal,
+): Promise<Response> {
+  return apiFetch(`api/machine/profiles?machineId=${machineId}`, signal ? { signal } : undefined);
+}
+
+/** Low-level GET /api/machine/profile/{id} counterpart to {@link fetchMachineProfilesResponse}. */
+export function fetchMachineProfileResponse(
+  id: string | number,
+  machineId: string | number,
+  signal?: AbortSignal,
+): Promise<Response> {
+  return apiFetch(`api/machine/profile/${id}?machineId=${machineId}`, signal ? { signal } : undefined);
+}
+
+/**
  * POST/PUT /api/machine/profile[/{id}] — create (`id` null) or update a
  * profile and push it to the machine. The caller reads the server's error body
  * on a non-ok, so this returns the raw Response.

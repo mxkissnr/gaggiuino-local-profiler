@@ -270,3 +270,23 @@ export interface MachineSaveInput {
   theme?: unknown;
   hasWaterSensor?: boolean;
 }
+
+// ── MQTT (go/internal/mqtt) ──────────────────────────────────────────────
+
+/**
+ * GET/POST /api/mqtt/settings (go/internal/mqtt's SettingsView). GET is
+ * redacted: it reports `hasPassword` instead of the stored password (#1050).
+ * POST accepts the same keys plus the write-only `password`/`clearPassword`
+ * pair, hence the index signature.
+ */
+export interface MqttSettings {
+  transport?: string;
+  host?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  clearPassword?: boolean;
+  prefix?: string;
+  hasPassword?: boolean;
+  [key: string]: unknown;
+}

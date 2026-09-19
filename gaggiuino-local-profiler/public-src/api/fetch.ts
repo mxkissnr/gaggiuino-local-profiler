@@ -1,17 +1,19 @@
-// @ts-expect-error TS7016: api.js is untyped JS (the shim is deleted once the
-// A3 sweep finishes) — imported on purpose, see below.
-import { apiFetch as _apiFetch } from '../api.js';
+// Package A3d: the api.js shim is gone, so the seam the domain clients call
+// through is now api/transport.ts directly. Importing the binding (rather
+// than calling api/transport.ts's apiFetch from inside each client) keeps it
+// swappable: a test that spies on transport.js's apiFetch still intercepts
+// every domain request, because the re-export the spy patches and the binding
+// read here are the same live module binding.
+import { apiFetch as _apiFetch } from './transport.js';
 
 type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;
 
 // The typed transport handle the domain clients (`./shots.js`, `./orders.js`)
-// call through. Each invocation reads api.js's re-exported apiFetch at call
-// time — `_apiFetch` is never snapshotted into a local at import time — so a
-// stub installed on api.js's apiFetch (the seam the test suite swaps out, and
-// the one every remaining raw call site still uses) intercepts the domain
-// clients' requests too. That indirection is the reason the clients must not
-// import api/transport.ts directly.
-export const apiFetch: FetchFn = (url, opts) => (_apiFetch as FetchFn)(url, opts);
+// call through. Each invocation reads transport.js's apiFetch at call time —
+// `_apiFetch` is never snapshotted into a local at import time — so a stub
+// installed on transport.js's apiFetch intercepts the domain clients'
+// requests too.
+export const apiFetch: FetchFn = (url, opts) => _apiFetch(url, opts);
 
 // apiFetchJson is the read-side companion to apiFetch: it runs a request
 // through the facade above and parses the JSON body as T. Deliberately
