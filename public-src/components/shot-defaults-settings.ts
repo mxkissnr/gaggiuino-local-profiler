@@ -1,0 +1,107 @@
+// Settings → "Shot logging defaults" card (#654): lets the user configure
+// optional default values (Drink Type, Coffee/Bean, Basket, Puck Screen,
+// Grinder, Dose) that get auto-prefilled into a brand-new shot's annotation
+// panel — see views/shots/annotation.js's _applyShotDefaults(), which is the
+// only place that actually applies them. This module only loads/saves the
+// settings themselves and keeps S.shotDefaults (loaded once at app init by
+// loadShotDefaults()) in sync after a save.
+import { saveShotDefaults } from '../api/shots.js';
+import { S } from '../state/index.js';
+import { t } from '../i18n.js';
+import { esc } from '../utils.js';
+import { loadShotDefaults, loadDrinkMenu } from '../views/shots/annotation.js';
+import { attachAutocomplete } from './autocomplete.js';
+import { CHECK_ICON_SVG } from '../icons.js';
+import type { ShotDefaults } from '../api/types.js';
+
+// state/index.ts types these rows loosely as Record<string, unknown>; the
+// lookups below read the same menu/bean/basket/puck-screen entries
+// views/shots/annotation.js and views/library.js populate.
+interface DrinkRow { id: string; name: string; emoji?: string }
+interface CatalogRow { id: number; name: string }
+interface CatalogLibrary { beans?: CatalogRow[]; baskets?: CatalogRow[]; puckScreens?: CatalogRow[] }
+
+export function renderShotDefaultsSettingsCard(): void {
+  const d = (S.shotDefaults || {}) as Partial<ShotDefaults>;
+  const lib = (S.coffeeLibrary || {}) as unknown as CatalogLibrary;
+
+  const drinkSelect = document.getElementById('sdDrinkType');
+  if (drinkSelect) {
+    const options = (S.drinkMenu || []) as unknown as DrinkRow[];
+    drinkSelect.innerHTML = `<option value="">${esc(t('sd_none'))}</option>` +
+      options.map(m => `<option value="${esc(m.id)}"${d.drinkType === m.id ? ' selected' : ''}>${esc(m.emoji)} ${esc(m.name)}</option>`).join('');
+  }
+
+  const coffeeSelect = document.getElementById('sdCoffee');
+  if (coffeeSelect) {
+    const beans = lib.beans || [];
+    // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
+    coffeeSelect.innerHTML = `<option value="">${esc(t('sd_none'))}</option>` +
+      beans.map(b => `<option value="${esc(b.name)}" data-bean-id="${b.id}"${d.coffee === b.name ? ' selected' : ''}>${esc(b.name)}</option>`).join('');
+  }
+
+  const basketSelect = document.getElementById('sdBasket');
+  if (basketSelect) {
+    const baskets = lib.baskets || [];
+    // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
+    basketSelect.innerHTML = `<option value="">${esc(t('ann_basket_none'))}</option>` +
+      baskets.map(b => `<option value="${b.id}"${d.basketId === b.id ? ' selected' : ''}>${esc(b.name)}</option>`).join('');
+  }
+
+  const puckSelect = document.getElementById('sdPuckScreen');
+  if (puckSelect) {
+    const puckScreens = lib.puckScreens || [];
+    // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
+    puckSelect.innerHTML = `<option value="">${esc(t('ann_puckscreen_none'))}</option>` +
+      puckScreens.map(p => `<option value="${p.id}"${d.puckScreenId === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('');
+  }
+
+  const grinderInput = document.getElementById('sdGrinder') as HTMLInputElement | null;
+  if (grinderInput) {
+    grinderInput.value = d.grinder || '';
+    // #691: was a plain text input with no suggestions, unlike the real
+    // annotation panel's #annGrinder (main.js). attachAutocomplete() is a
+    // no-op if this input already has one attached (guards on
+    // input._autocomplete), so calling it on every render here is safe.
+    attachAutocomplete(grinderInput, () => S.coffeeLibrary?.grinders?.map(g => g.name) || []);
+  }
+
+  const doseInput = document.getElementById('sdDose') as HTMLInputElement | null;
+  if (doseInput) doseInput.value = d.dose != null ? String(d.dose) : '';
+}
+
+// #526-style race: loadDrinkMenu() is also fired unawaited from main.js's
+// init sequence (for the annotation panel's drink pills) — awaiting it again
+// here is a cheap no-op once it's already resolved, and guarantees this
+// card's drink-type options aren't rendered off the still-empty S.drinkMenu
+// default when this runs first. The coffeeLibrary half of the same race
+// (beans/baskets/puckScreens) is covered by the re-render loadLibrary()
+// itself does — see views/library.js.
+export async function loadShotDefaultsSettingsCard(): Promise<void> {
+  await Promise.all([loadShotDefaults(), loadDrinkMenu()]);
+  renderShotDefaultsSettingsCard();
+}
+
+export async function saveShotDefaultsSettings(): Promise<void> {
+  const coffeeSelect = document.getElementById('sdCoffee') as HTMLSelectElement | null;
+  const beanIdAttr   = coffeeSelect?.selectedOptions[0]?.dataset.beanId;
+
+  const body: ShotDefaults = {
+    drinkType:    (document.getElementById('sdDrinkType') as HTMLSelectElement | null)?.value || null,
+    coffee:       coffeeSelect?.value || null,
+    beanId:       beanIdAttr ? parseInt(beanIdAttr, 10) : null,
+    basketId:     parseInt((document.getElementById('sdBasket') as HTMLSelectElement | null)?.value ?? '', 10) || null,
+    puckScreenId: parseInt((document.getElementById('sdPuckScreen') as HTMLSelectElement | null)?.value ?? '', 10) || null,
+    grinder:      (document.getElementById('sdGrinder') as HTMLInputElement | null)?.value.trim() || '',
+    dose:         parseFloat((document.getElementById('sdDose') as HTMLInputElement | null)?.value ?? '') || null,
+  };
+
+  const saved = await saveShotDefaults(body).catch(() => null);
+  if (saved) S.shotDefaults = saved as unknown as Record<string, unknown>;
+
+  const btn = document.getElementById('shotDefaultsSaveBtn');
+  if (btn) {
+    btn.innerHTML = `${CHECK_ICON_SVG} ${t('sd_saved')}`;
+    setTimeout(() => { btn.textContent = t('sd_save'); }, 2000);
+  }
+}
