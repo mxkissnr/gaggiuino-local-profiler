@@ -6,7 +6,8 @@
 // restore, the same reasoning `lib/machines/options-adoption.js` documents
 // for tracked options.
 import { t } from '../i18n.js';
-import { apiFetch, apiFetchToBlob, apiUpload, initToken } from '../api.js';
+import { initToken } from '../api/transport.js';
+import { requestBackup, postRestore } from '../api/system.js';
 import { shareOrDownloadBlob } from '../utils.js';
 
 const SECTION_KEYS = ['shots', 'maintenance', 'orders', 'machines', 'settings', 'secrets'];
@@ -163,36 +164,10 @@ function renderSectionCheckboxes(presentSections) {
     }
 }
 
-// Restore accepts either an already-parsed legacy .json bundle
-// (restoreBundle) or raw .zip bytes (restoreZipBytes) -- exactly one of the
-// two is ever set (see openBackupRestoreModal()). The zip path sends
-// sections/passphrase/dryRun as headers instead of inside the (binary) body
-// -- never as a URL query parameter, matching the reasoning
-// go/internal/backup documents above POST /api/backup for why a passphrase
-// can't go in a URL. `sections === undefined` omits the header entirely,
-// which the backend reads as "fall back to the bundle's own recorded
-// `sections` field" -- used once, by openBackupRestoreModal()'s initial
-// "what's in this file" probe, before the user has touched any checkbox.
-function postRestore({ sections, passphrase, dryRun, onProgress }) {
-    if (restoreZipBytes) {
-        const headers = { 'Content-Type': 'application/zip' };
-        if (sections !== undefined) headers['X-GLP-Sections'] = JSON.stringify(sections);
-        if (passphrase !== undefined) headers['X-GLP-Passphrase'] = passphrase;
-        if (dryRun) headers['X-GLP-Dry-Run'] = 'true';
-        // The real (non-dry-run) upload gets an XHR so upload progress is
-        // observable; the shim gives back the same { ok, status, json() }
-        // shape the rest of this module already expects from a Response.
-        if (onProgress) {
-            return apiUpload('api/restore', { method: 'POST', headers, body: restoreZipBytes, onProgress })
-                .then(res => ({ ok: res.ok, status: res.status, json: async () => JSON.parse(res.text || '{}') }));
-        }
-        return apiFetch('api/restore', { method: 'POST', headers, body: restoreZipBytes });
-    }
-    return apiFetch('api/restore', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...restoreBundle, dryRun, sections, passphrase }),
-    });
-}
+// The restore request itself (URL, zip headers, JSON/zip body, upload
+// progress) is built by api/system.ts's postRestore(); this module only owns
+// the modal state (which of restoreBundle/restoreZipBytes is set) and passes
+// it in.
 
 // Only meaningful for restore: calls the dry-run path so the preview shown
 // to the user is computed by the exact same sanitizers/schemas the real
@@ -204,7 +179,7 @@ async function refreshRestorePreview() {
     const sections = checkedSections();
     const passphrase = els().secretsCb.checked ? els().passInput.value : undefined;
     try {
-        const r = await postRestore({ sections, passphrase, dryRun: true });
+        const r = await postRestore({ bundle: restoreBundle ?? undefined, zipBytes: restoreZipBytes, sections, passphrase, dryRun: true });
         const body = await r.json();
         if (!r.ok || !body.preview) { preview.textContent = ''; return; }
         const p = body.preview;
@@ -263,14 +238,11 @@ export function openBackupExportModal() {
             // re-serialization needed, unlike the old JSON.stringify(bundle).
             // X-GLP-Backup-Estimate is an approximate size for the bar; the
             // Go backend sends it, the Node backend doesn't (then the bar
-            // stays indeterminate). apiFetchToBlob buffers the whole zip in
+            // stays indeterminate). requestBackup() buffers the whole zip in
             // memory before the download — fine for these file sizes.
-            const res = await apiFetchToBlob('api/backup', {
-                opts: {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sections, passphrase: wantsSecrets ? passphrase : undefined }),
-                },
-                estimateHeader: 'X-GLP-Backup-Estimate',
+            const res = await requestBackup({
+                sections,
+                passphrase: wantsSecrets ? passphrase : undefined,
                 onProgress: (received, total) => {
                     if (total) showProgress(t('backup_progress_download', clampPct(received, total)), clampPct(received, total));
                     else showProgress(t('backup_progress_preparing'), null);
@@ -322,10 +294,11 @@ export async function openBackupRestoreModal(input) {
         restoreZipBytes = bytes;
         restoreBundle = null;
         try {
-            const r = await postRestore({ sections: undefined, passphrase: undefined, dryRun: true });
+            const r = await postRestore({ bundle: restoreBundle ?? undefined, zipBytes: restoreZipBytes, sections: undefined, passphrase: undefined, dryRun: true });
             const body = await r.json();
             if (!r.ok || !body.preview) {
                 alert(t('backup_invalid'));
+                // eslint-disable-next-line require-atomic-updates -- restoreZipBytes is module-local modal state; this handler is its only writer while the modal is open
                 restoreZipBytes = null;
                 // eslint-disable-next-line require-atomic-updates -- `input` is the caller's DOM element, not shared module state; nothing else writes input.value concurrently
                 input.value = '';
@@ -334,6 +307,7 @@ export async function openBackupRestoreModal(input) {
             present = new Set(body.preview.sectionsPresent);
         } catch (e) {
             alert(t('backup_error', e.message));
+            // eslint-disable-next-line require-atomic-updates -- see above
             restoreZipBytes = null;
             // eslint-disable-next-line require-atomic-updates -- see above
             input.value = '';
@@ -396,7 +370,7 @@ export async function openBackupRestoreModal(input) {
                 }
                 : undefined;
             if (!restoreZipBytes) showProgress(t('backup_progress_restoring'), null);
-            const r = await postRestore({ sections, passphrase, dryRun: undefined, onProgress });
+            const r = await postRestore({ bundle: restoreBundle ?? undefined, zipBytes: restoreZipBytes, sections, passphrase, dryRun: undefined, onProgress });
             // Upload bytes are all sent by the time the promise resolves;
             // the server-side apply is genuinely unbounded from here.
             showProgress(t('backup_progress_restoring'), null);
