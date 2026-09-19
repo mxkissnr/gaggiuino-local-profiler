@@ -192,3 +192,81 @@ export interface NotifyMappingView {
   mapping: NotifyMapping;
   customers: Record<string, string>;
 }
+
+// ── Library (go/internal/library) ────────────────────────────────────────
+
+export type Bean = components['schemas']['Bean'];
+export type Grinder = components['schemas']['Grinder'];
+export type Basket = components['schemas']['Basket'];
+export type PuckScreen = components['schemas']['PuckScreen'];
+export type Recipe = components['schemas']['Recipe'];
+export type Milk = components['schemas']['Milk'];
+
+/** GET /api/library — the whole snapshot the Library tab renders from. */
+export type CoffeeLibrary = components['schemas']['Library'];
+
+// ── Machines (go/internal/machines) ──────────────────────────────────────
+
+export type Machine = components['schemas']['Machine'];
+export type MachineInput = components['schemas']['MachineInput'];
+
+type MachineProfileInput = components['schemas']['MachineProfileInput'];
+
+/**
+ * A machine profile as GET/POST/PUT /api/machine/profile[/{id}] carries it.
+ * Covers both shapes the app touches: the Gaggiuino one
+ * (MachineProfileInput — name/phases/recipe/...) and the GaggiMate one
+ * gaggimate-profile-editor.js uses (label/description/temperature/phases).
+ */
+export interface MachineProfile {
+  id?: string | number;
+  name?: string;
+  label?: string;
+  description?: string;
+  temperature?: number;
+  type?: string;
+  utility?: boolean;
+  favorite?: boolean;
+  waterTemperature?: number;
+  phases?: MachineProfileInput['phases'];
+  recipe?: MachineProfileInput['recipe'];
+  globalStopConditions?: MachineProfileInput['globalStopConditions'];
+  [key: string]: unknown;
+}
+
+/** GET /api/machine/profiles — the profile list plus its offline/stale flag. */
+export interface MachineProfileList {
+  optionsRaw?: MachineProfile[];
+  stale?: boolean;
+}
+
+/** GET /api/machine/settings — the opaque per-machine settings blob (only `releaseChannel` is read today). */
+export interface MachineSystemSettings {
+  releaseChannel?: number;
+  [key: string]: unknown;
+}
+
+/** GET /api/machine/firmware/version — the machine's OTA status. */
+export interface FirmwareVersion {
+  installed?: string | null;
+  latest?: string | null;
+  updateAvailable?: boolean;
+  releaseUrl?: string | null;
+  [key: string]: unknown;
+}
+
+/** GET /api/machine/firmware/progress — one poll of the OTA progress. */
+export interface FirmwareProgress {
+  status?: string;
+  [key: string]: unknown;
+}
+
+/** POST/PUT /api/machines body — the fields the Settings machine form sends. */
+export interface MachineSaveInput {
+  name: string;
+  type: 'gaggiuino' | 'gaggimate';
+  host: string;
+  switchEntity?: string | null;
+  theme?: unknown;
+  hasWaterSensor?: boolean;
+}
