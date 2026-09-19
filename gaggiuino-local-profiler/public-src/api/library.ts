@@ -107,6 +107,11 @@ export async function resetGrinderBurrs(id: number): Promise<Grinder | null> {
   return _jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/reset-burrs`, { method: 'POST' }));
 }
 
+/** PUT /api/library/grinder/{id}/zero-point — record a new zero-point activation. */
+export async function setGrinderZeroPoint(id: number, zeroPoint: number): Promise<Grinder | null> {
+  return _jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/zero-point`, _json('PUT', { zeroPoint })));
+}
+
 /** POST /api/library/grinder/{id}/image — upload a (cropped) grinder photo; raw Response. */
 export function uploadGrinderImage(id: number, blob: Blob): Promise<Response> {
   return apiFetch(`api/library/grinder/${id}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });

@@ -961,10 +961,8 @@ export async function saveGrinder() {
     if (zpRaw !== '') {
       const zeroPoint = parseFloat(zpRaw);
       if (!Number.isNaN(zeroPoint) && zeroPoint !== currentGrinderZeroPoint(saved)) {
-        const zr = await apiFetch(`api/library/grinder/${S.grinderEditId}/zero-point`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zeroPoint }),
-        });
-        if (zr.ok) saved = await zr.json();
+        const updated = await libraryApi.setGrinderZeroPoint(S.grinderEditId, zeroPoint);
+        if (updated) saved = updated;
       }
     }
   }
