@@ -437,15 +437,12 @@ func (h *Handlers) deleteBag(w http.ResponseWriter, r *http.Request) {
 // free-text omission the way a roaster-entered bean price can be.
 func validateBagFloatField(body Entity, key string) (any, bool) {
 	v, present := body[key]
-	if !present {
+	if !present || v == nil {
 		return nil, true
 	}
 	f, ok := jsParseFloat(v)
 	if !ok || f < 0 {
 		return nil, false
-	}
-	if f == 0 {
-		return nil, true
 	}
 	return f, true
 }
@@ -541,9 +538,13 @@ func (h *Handlers) updateBag(w http.ResponseWriter, r *http.Request) {
 		bag["sortOrder"] = sortOrder
 		bags[bagIdx] = bag
 		bean["bags"] = bags
-		if bagIdx == len(bags)-1 {
-			bean["roastDate"] = bag["roastDate"]
-			bean["stock_g"] = bag["stock_g"]
+		// Sync bean-level fields only when the edited bag is the one SimulateBagQueue
+		// considers current — not the array-last bag, which differs after reorderBags.
+		if cur := resolveCurrentBagSimple(bean); cur != nil {
+			if cid, ok := idOf(cur, "id"); ok && cid == bagID {
+				bean["roastDate"] = bag["roastDate"]
+				bean["stock_g"] = bag["stock_g"]
+			}
 		}
 		lib.Beans[idx] = bean
 		return nil
@@ -554,7 +555,6 @@ func (h *Handlers) updateBag(w http.ResponseWriter, r *http.Request) {
 	}
 	h.writeEnrichedBean(w, bean)
 }
-
 
 // deleteBean ports POST /api/library/bean/:id/delete.
 func (h *Handlers) deleteBean(w http.ResponseWriter, r *http.Request) {
@@ -768,12 +768,12 @@ func (h *Handlers) postBeanImage(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) writeEnrichedBean(w http.ResponseWriter, bean Entity) {
 	lib, err := h.repo.GetLibrary()
 	if err != nil {
-		writeJSON(w, http.StatusOK, bean)
+		internalError(w, err)
 		return
 	}
 	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
 	if err != nil {
-		writeJSON(w, http.StatusOK, bean)
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, decorateBeanStatus(bean, doseRows, lib.Beans))
