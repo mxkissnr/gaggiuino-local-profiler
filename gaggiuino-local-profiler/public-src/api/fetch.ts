@@ -1,9 +1,15 @@
-// Package A3d: the api.js shim is gone, so the seam the domain clients call
-// through is now api/transport.ts directly. Importing the binding (rather
+// Package A3d: the api.js shim is being retired, and the seam the domain
+// clients call through is now api/transport.ts. Importing the binding (rather
 // than calling api/transport.ts's apiFetch from inside each client) keeps it
 // swappable: a test that spies on transport.js's apiFetch still intercepts
 // every domain request, because the re-export the spy patches and the binding
 // read here are the same live module binding.
+//
+// api.js still exists for the call sites not yet swept (views/library.js's
+// import-URL calls, views/shots/index.js's GaggiMate profile fetch, main.ts's
+// own import) — it re-exports apiFetch from transport.js, so those raw calls
+// and the typed clients below still resolve to the same live binding. Delete
+// it only once those have moved over too.
 import { apiFetch as _apiFetch } from './transport.js';
 
 type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;
