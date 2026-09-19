@@ -1,6 +1,7 @@
 import { S }                              from '../../state/index.js';
 import { t }                              from '../../i18n.js';
 import { apiFetch }                       from '../../api.js';
+import { deductMilk, adjustFrozenPortion, listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, postShotImage, deleteShotImage } from '../../api/shots.js';
 import { esc, germanToIso }              from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
@@ -31,16 +32,12 @@ export function _maybeDeductMilk(shot, payload) {
   if (payload.milkType === prevMilkType && payload.drinkType === prevDrinkType) return;
   const menuItem = S.drinkMenu?.find(m => m.id === payload.drinkType);
   if (!(menuItem?.milkMl > 0)) return;
-  apiFetch(`api/library/milk/${payload.milkType}/deduct`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ml: menuItem.milkMl }),
-  }).then(r2 => {
-    if (r2.ok) r2.json().then(updated => {
-      if (S.milkTypes) {
-        const mi = S.milkTypes.findIndex(m => m.id === updated.id);
-        if (mi !== -1) S.milkTypes[mi] = updated;
-      }
-    });
+  deductMilk(payload.milkType, menuItem.milkMl).then(updated => {
+    if (!updated) return;
+    if (S.milkTypes) {
+      const mi = S.milkTypes.findIndex(m => m.id === updated.id);
+      if (mi !== -1) S.milkTypes[mi] = updated;
+    }
   }).catch(() => {});
 }
 
@@ -69,10 +66,7 @@ function _adjustFrozenPortionRemaining(portionId, delta) {
   const { bean, portion } = found;
   const current = Number.isFinite(portion.remainingCount) ? portion.remainingCount : portion.portionCount;
   const remainingCount = Math.min(Math.max(current + delta, 0), portion.portionCount);
-  apiFetch(`api/library/bean/${bean.id}/adjust-frozen-portion`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ portionId, remainingCount }),
-  }).then(r => r.ok ? r.json() : null).then(updated => {
+  adjustFrozenPortion(bean.id, { portionId, remainingCount }).then(updated => {
     if (!updated) return;
     const idx = S.coffeeLibrary.beans.findIndex(b => b.id === bean.id);
     if (idx !== -1) S.coffeeLibrary.beans[idx] = updated;
@@ -234,8 +228,8 @@ export function _applyShotDefaults(ann) {
 
 export async function loadMilkTypes() {
   try {
-    const r = await apiFetch('api/library/milks');
-    if (r.ok) S.milkTypes = await r.json();
+    const milks = await listMilks();
+    if (milks) S.milkTypes = milks;
   } catch { /* non-critical */ }
 }
 
