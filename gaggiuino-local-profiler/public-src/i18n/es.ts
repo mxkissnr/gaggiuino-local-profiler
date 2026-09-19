@@ -172,6 +172,8 @@ const es: Partial<Translations> = {
     lib_grinder_purchase_date:'Fecha de compra', lib_grinder_image:'Foto',
     lib_grinder_zero_point:'Punto cero',
     lib_grinder_zero_point_hint:'Después de limpiar: actualiza el punto cero aquí en lugar de ajustar cada receta. Las sugerencias/comparaciones se corrigen automáticamente.',
+    lib_grinder_zero_point_since:'Activo desde (vacío = ahora)',
+    lib_grinder_zero_point_delete:'Eliminar entrada de punto cero',
     lib_cancel:'Cancelar', lib_save:'Guardar',
     lib_empty_beans:'No hay granos guardados', lib_empty_grinders:'No hay molinos guardados',
     lib_btn_edit:'Editar', lib_btn_delete:'Eliminar',

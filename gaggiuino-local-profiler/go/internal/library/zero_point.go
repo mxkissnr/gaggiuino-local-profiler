@@ -67,11 +67,17 @@ func zeroPointAtTime(grinder Entity, timestampMs int64) (float64, bool) {
 }
 
 // SetGrinderZeroPoint appends a new zero-point activation for grinder id,
-// mirroring resetBurrs' read-mutate-save shape (handlers_grinders.go). A
-// no-op on the history (still succeeds) when the new value equals the
-// grinder's current one, so a debounced frontend input re-sending the same
-// value repeatedly can't pile up redundant entries.
-func SetGrinderZeroPoint(repo *Repository, id int64, zeroPoint float64) (Entity, bool, error) {
+// mirroring resetBurrs' read-mutate-save shape (handlers_grinders.go). since
+// is the millisecond epoch when this zero point became active; pass 0 to use
+// the current time (same as before this parameter existed). History is kept
+// sorted by since so zeroPointAtTime stays correct after retroactive inserts.
+// Idempotent: "now" inserts skip when the latest value is already equal;
+// retroactive inserts skip when the exact (since,value) pair already exists.
+func SetGrinderZeroPoint(repo *Repository, id int64, zeroPoint float64, since int64) (Entity, bool, error) {
+	retroactive := since != 0
+	if !retroactive {
+		since = newID()
+	}
 	lib, err := repo.GetLibrary()
 	if err != nil {
 		return nil, false, err
@@ -81,10 +87,74 @@ func SetGrinderZeroPoint(repo *Repository, id int64, zeroPoint float64) (Entity,
 		return nil, false, nil
 	}
 	grinder := lib.Grinders[idx]
-	if current, ok := currentGrinderZeroPoint(grinder); !ok || current != zeroPoint {
-		history, _ := grinder["zeroPointHistory"].([]any)
-		grinder["zeroPointHistory"] = append(history, Entity{"zeroPoint": zeroPoint, "since": newID()})
+	history := zeroPointHistoryOf(grinder)
+	// Idempotency:
+	//   "now" inserts (retroactive=false): skip when latest value already equals
+	//     the new value — same behaviour as before this parameter was added.
+	//   Retroactive inserts: skip only when the exact (since,value) pair exists,
+	//     so callers can insert past entries idempotently without stomping different
+	//     values that might have been recorded at neighboring times.
+	skip := false
+	if !retroactive {
+		if current, ok := currentGrinderZeroPoint(grinder); ok && current == zeroPoint {
+			skip = true
+		}
+	} else {
+		for _, e := range history {
+			if e.since == since && e.zeroPoint == zeroPoint {
+				skip = true
+				break
+			}
+		}
 	}
+	if !skip {
+		raw, _ := grinder["zeroPointHistory"].([]any)
+		raw = append(raw, Entity{"zeroPoint": zeroPoint, "since": since})
+		// Keep sorted by since so zeroPointAtTime's linear scan stays correct.
+		sort.Slice(raw, func(i, j int) bool {
+			ei, _ := raw[i].(Entity)
+			ej, _ := raw[j].(Entity)
+			si, _ := idOf(ei, "since")
+			sj, _ := idOf(ej, "since")
+			return si < sj
+		})
+		grinder["zeroPointHistory"] = raw
+	}
+	lib.Grinders[idx] = grinder
+	if err := repo.SaveLibrary(lib); err != nil {
+		return nil, false, err
+	}
+	return grinder, true, nil
+}
+
+// DeleteGrinderZeroPointEntry removes the history entry with the given since
+// value. Returns (grinder, true, nil) on success, (nil, false, nil) when the
+// grinder doesn't exist, and (nil, false, err) on I/O error. Silently succeeds
+// when no entry with that since exists (idempotent).
+func DeleteGrinderZeroPointEntry(repo *Repository, id int64, since int64) (Entity, bool, error) {
+	lib, err := repo.GetLibrary()
+	if err != nil {
+		return nil, false, err
+	}
+	idx := findGrinderIndex(lib, id)
+	if idx == -1 {
+		return nil, false, nil
+	}
+	grinder := lib.Grinders[idx]
+	raw, _ := grinder["zeroPointHistory"].([]any)
+	filtered := make([]any, 0, len(raw))
+	for _, r := range raw {
+		entry, ok := r.(Entity)
+		if !ok {
+			continue
+		}
+		s, ok := idOf(entry, "since")
+		if ok && s == since {
+			continue // remove this entry
+		}
+		filtered = append(filtered, r)
+	}
+	grinder["zeroPointHistory"] = filtered
 	lib.Grinders[idx] = grinder
 	if err := repo.SaveLibrary(lib); err != nil {
 		return nil, false, err

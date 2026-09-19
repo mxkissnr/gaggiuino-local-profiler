@@ -172,6 +172,8 @@ const en: Translations = {
     lib_grinder_purchase_date:'Purchase date', lib_grinder_image:'Photo',
     lib_grinder_zero_point:'Zero point',
     lib_grinder_zero_point_hint:'After cleaning: update the zero point here instead of adjusting every recipe. Suggestions/comparisons correct for it automatically.',
+    lib_grinder_zero_point_since:'Active since (empty = now)',
+    lib_grinder_zero_point_delete:'Delete zero-point entry',
     lib_cancel:'Cancel', lib_save:'Save',
     lib_empty_beans:'No beans saved yet', lib_empty_grinders:'No grinders saved yet',
     lib_btn_edit:'Edit', lib_btn_delete:'Delete',

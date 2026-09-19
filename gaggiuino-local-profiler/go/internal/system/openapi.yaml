@@ -1218,9 +1218,21 @@ paths:
               required: [zeroPoint]
               properties:
                 zeroPoint: { type: number }
+                since: { type: integer, description: "Unix ms epoch. Omit or 0 to log the entry at the current time; set to insert a retroactive entry (e.g. a burr change that happened in the past)." }
       responses:
         "200": { description: "Updated grinder (with the new zeroPointHistory entry)", content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
         "400": { description: Invalid zeroPoint, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/library/grinder/{id}/zero-point/{since}:
+    delete:
+      tags: [Library]
+      summary: "Remove one zero-point history entry (identified by its `since` unix-ms timestamp). Idempotent — succeeds even if no matching entry exists."
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: since, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: "Updated grinder (entry removed)", content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
         "404": { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/library/grinder/{id}/delete:
