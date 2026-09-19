@@ -49,8 +49,8 @@ describe('api/system.ts backup/restore transport', () => {
   });
 });
 
-describe('status.js Dev Tools progress wiring', () => {
-  const src = read('public-src/components/status.js');
+describe('status.ts Dev Tools progress wiring', () => {
+  const src = read('public-src/components/status.ts');
 
   it('imports exportDevDb and importDevDb from api/system.js', () => {
     expect(src).toMatch(/import\s*\{[\s\S]*\bexportDevDb\b[\s\S]*\}\s*from\s*'\.\.\/api\/system\.js'/);
@@ -58,7 +58,7 @@ describe('status.js Dev Tools progress wiring', () => {
   });
 
   it('shows transfer state in the button label and disables it (withButtonProgress)', () => {
-    expect(src).toMatch(/function withButtonProgress\(btn, work\)/);
+    expect(src).toMatch(/function withButtonProgress(?:<[^>]*>)?\(/);
     expect(src).toContain('btn.disabled = true');
   });
 });
