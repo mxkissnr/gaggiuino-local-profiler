@@ -9,7 +9,7 @@
 //     just come up empty (library, orders, maintenance, analytics all
 //     `return` on a failed fetch), which is just as unexplained.
 import { t } from '../i18n.js';
-import { isApiPortBlocked } from '../api.js';
+import { isApiPortBlocked } from '../api/transport.js';
 import { devBannerHeight } from './dev-banner.js';
 import { themeColor } from '../utils.js';
 import { CLOSE_ICON_SVG } from '../icons.js';

@@ -1,4 +1,4 @@
-import { apiFetch } from './api.js';
+import { apiFetch } from './api/transport.js';
 import { shotImageUrl } from './api/shots.js';
 
 // Bean/grinder/shot images require the auth token, so <img src="api/...">

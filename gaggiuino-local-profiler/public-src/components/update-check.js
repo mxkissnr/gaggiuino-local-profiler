@@ -1,11 +1,11 @@
-import { apiFetch } from '../api.js';
+import { getVersion } from '../api/system.js';
 import { t } from '../i18n.js';
 import { devBannerHeight } from './dev-banner.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
 
 export async function checkForUpdate() {
     try {
-        const r = await apiFetch('api/version');
+        const r = await getVersion();
         if (!r.ok) return;
         const data = await r.json();
         if (data.update_available) showUpdateBanner(data);

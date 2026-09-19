@@ -1,7 +1,7 @@
 // First-run onboarding + demo mode UI (#274).
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
-import { apiFetch } from '../api.js';
+import { seedDemoData, endDemoData } from '../api/system.js';
 import { devBannerHeight } from './dev-banner.js';
 import { themeColor } from '../utils.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
@@ -132,7 +132,7 @@ export async function loadDemoData() {
   const btn = document.getElementById('onboardingDemoBtn');
   if (btn) { btn.disabled = true; btn.textContent = t('onboarding_demo_loading'); }
   try {
-    const r = await apiFetch('api/demo/seed', { method: 'POST' });
+    const r = await seedDemoData();
     if (r.ok) {
       if (window.loadData) await window.loadData();
       if (window.loadLibrary) await window.loadLibrary();
@@ -148,7 +148,7 @@ export async function loadDemoData() {
 export async function endDemo() {
   if (!confirm(t('demo_mode_end_confirm'))) return;
   try {
-    const r = await apiFetch('api/demo/end', { method: 'POST' });
+    const r = await endDemoData();
     if (r.ok) {
       updateDemoBadge(false);
       if (window.loadData) await window.loadData();
