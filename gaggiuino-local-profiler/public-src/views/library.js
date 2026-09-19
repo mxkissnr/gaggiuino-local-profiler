@@ -2,6 +2,7 @@ import { S } from '../state/index.js';
 import * as timerRegistry from '../state/timers.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
+import * as libraryApi from '../api/library.js';
 import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, toIsoDateInput, todayIsoDate, isoDateInputToMs } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, localeFor, countryName } from '../constants.js';
 import { setBeanFilter } from '../components/sidebar.js';
@@ -68,9 +69,9 @@ function lastUsedGrindForBean(bean, shots) {
 // ── Library load ──────────────────────────────────────────────────────────
 export async function loadLibrary() {
   try {
-    const r = await apiFetch('api/library');
-    if (!r.ok) return;
-    S.coffeeLibrary = await r.json();
+    const library = await libraryApi.getLibrary();
+    if (!library) return;
+    S.coffeeLibrary = library;
     if (!S.coffeeLibrary.recipes)     S.coffeeLibrary.recipes     = [];
     if (!S.coffeeLibrary.milks)       S.coffeeLibrary.milks       = [];
     if (!S.coffeeLibrary.baskets)     S.coffeeLibrary.baskets     = [];
@@ -417,9 +418,8 @@ export function closeNewBagForm(id) {
 
 export async function deleteBag(beanId, bagId) {
   if (!confirm(t('lib_bag_delete') + '?')) return;
-  const r = await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, { method: 'DELETE' });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.deleteBeanBag(beanId, bagId);
+  if (!saved) return;
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   renderBeanList();
@@ -429,13 +429,8 @@ export async function saveNewBag(id) {
   const roastDate   = document.getElementById(`newBagRoastDate${id}`)?.value.trim() || '';
   const stock_g     = parseFloat(document.getElementById(`newBagStock${id}`)?.value) || null;
   const batchNumber = document.getElementById(`newBagBatchNumber${id}`)?.value.trim() || '';
-  const r = await apiFetch(`api/library/bean/${id}/new-bag`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ roastDate, stock_g, batchNumber }),
-  });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.addBeanBag(id, { roastDate, stock_g, batchNumber });
+  if (!saved) return;
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   renderBeanList();
@@ -457,13 +452,8 @@ export async function saveBeanStock(id) {
   const bean = S.coffeeLibrary.beans.find(b => b.id === id);
   if (!bean) return;
   const stock_g = remainingToStockG(bean, annotationDoseRows(), S.coffeeLibrary.beans, val);
-  const r = await apiFetch(`api/library/bean/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ stock_g }),
-  });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.saveBean(id, { stock_g });
+  if (!saved) return;
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   S._beanStockEditId = null;
@@ -501,13 +491,8 @@ export async function saveFreezePortions(id) {
   const portionWeight_g = parseFloat(document.getElementById(`freezePortionWeight${id}`)?.value);
   const frozenAt = isoDateInputToMs(document.getElementById(`freezeDate${id}`)?.value) ?? Date.now();
   if (!(portionCount > 0) || !(portionWeight_g > 0)) return;
-  const r = await apiFetch(`api/library/bean/${id}/freeze-portions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ portionCount, portionWeight_g, frozenAt }),
-  });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.freezeBeanPortions(id, { portionCount, portionWeight_g, frozenAt });
+  if (!saved) return;
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   renderBeanList();
@@ -519,13 +504,8 @@ export async function saveFreezePortions(id) {
 // badge switches to the closed-out "thawed" style) once remainingCount
 // reaches 0 server-side.
 export async function thawPortion(beanId, portionId) {
-  const r = await apiFetch(`api/library/bean/${beanId}/thaw-portion`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ portionId, count: 1 }),
-  });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.thawBeanPortion(beanId, { portionId, count: 1 });
+  if (!saved) return;
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   renderBeanList();
@@ -553,13 +533,8 @@ export async function saveEditFrozenForm(beanId, portionId) {
   if (Number.isFinite(remainingCount)) body.remainingCount = remainingCount;
   if (portionWeight_g > 0) body.portionWeight_g = portionWeight_g;
   if (frozenAt != null) body.frozenAt = frozenAt;
-  const r = await apiFetch(`api/library/bean/${beanId}/adjust-frozen-portion`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ portionId, ...body }),
-  });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.adjustFrozenPortion(beanId, { portionId, ...body });
+  if (!saved) return;
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   renderBeanList();
@@ -894,15 +869,12 @@ export async function saveBean() {
     if (S._urlImportImageUrl) payload.imageUrl = S._urlImportImageUrl;
     if (S._urlImportSourceUrl) payload.sourceUrl = S._urlImportSourceUrl;
   }
-  const body = JSON.stringify(payload);
-  const url  = S.beanEditId ? `api/library/bean/${S.beanEditId}` : 'api/library/bean';
   // #451: capture which opt-in Brew Guide recipe candidates are still
   // checked before closeBeanForm() clears both the DOM and this state.
   const extraRecipesToImport = (S._urlImportExtraRecipes || []).filter((_, i) =>
     document.querySelector(`[data-extra-recipe-idx="${i}"]`)?.checked);
-  const r    = await apiFetch(url, { method: S.beanEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.saveBean(S.beanEditId, payload);
+  if (!saved) return;
   if (S.beanEditId) {
     const idx = S.coffeeLibrary.beans.findIndex(b => b.id === S.beanEditId);
     if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
@@ -910,11 +882,10 @@ export async function saveBean() {
     S.coffeeLibrary.beans.push(saved);
   }
   for (const recipe of extraRecipesToImport) {
-    const recipeBody = JSON.stringify({ ...recipe, brewMethod: 'espresso', beanName: saved.name });
-    const rr = await apiFetch('api/library/recipe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: recipeBody });
-    if (rr.ok) {
+    const importedRecipe = await libraryApi.saveRecipe(null, { ...recipe, brewMethod: 'espresso', beanName: saved.name });
+    if (importedRecipe) {
       if (!S.coffeeLibrary.recipes) S.coffeeLibrary.recipes = [];
-      S.coffeeLibrary.recipes.push(await rr.json());
+      S.coffeeLibrary.recipes.push(importedRecipe);
     }
   }
   updateLibraryDatalist();
@@ -925,7 +896,7 @@ export async function saveBean() {
 
 export async function deleteBean(id) {
   if (!confirm(t('lib_confirm_delete_bean'))) return;
-  const r = await apiFetch(`api/library/bean/${id}/delete`, { method: 'POST' });
+  const r = await libraryApi.deleteBeanPermanently(id);
   if (!r.ok) return;
   S.coffeeLibrary.beans = S.coffeeLibrary.beans.filter(b => b.id !== id);
   updateLibraryDatalist();
@@ -936,9 +907,8 @@ export async function deleteBean(id) {
 // The bean stays fully visible/editable in the library either way; only its
 // presence in /api/orders/active-beans changes.
 export async function toggleBeanActive(id) {
-  const r = await apiFetch(`api/library/bean/${id}/toggle-active`, { method: 'POST' });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.toggleBeanActive(id);
+  if (!saved) return;
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   renderBeanList();
@@ -975,11 +945,8 @@ export async function saveGrinder() {
   const burrType     = document.getElementById('grinderFormBurrType').value.trim();
   const purchaseDate = document.getElementById('grinderFormPurchaseDate').value.trim();
   if (!name) { document.getElementById('grinderFormName').focus(); return; }
-  const body = JSON.stringify({ name, notes, burrType, purchaseDate });
-  const url  = S.grinderEditId ? `api/library/grinder/${S.grinderEditId}` : 'api/library/grinder';
-  const r    = await apiFetch(url, { method: S.grinderEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.saveGrinder(S.grinderEditId, { name, notes, burrType, purchaseDate });
+  if (!saved) return;
   if (S.grinderEditId) {
     const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === S.grinderEditId);
     // The PUT response doesn't recompute wear stats — keep the existing ones
@@ -995,9 +962,8 @@ export async function saveGrinder() {
 
 export async function resetGrinderBurrs(id) {
   if (!confirm(t('lib_grinder_confirm_reset_burrs'))) return;
-  const r = await apiFetch(`api/library/grinder/${id}/reset-burrs`, { method: 'POST' });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.resetGrinderBurrs(id);
+  if (!saved) return;
   const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === id);
   if (idx !== -1) S.coffeeLibrary.grinders[idx] = saved;
   renderGrinderList();
@@ -1010,9 +976,7 @@ export async function uploadBeanImage(id, input) {
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
   if (!blob) return;
-  const r = await apiFetch(`api/library/bean/${id}/image`, {
-    method: 'POST', headers: { 'Content-Type': blob.type }, body: blob,
-  });
+  const r = await libraryApi.uploadBeanImage(id, blob);
   if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
   const saved = await r.json();
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
@@ -1028,9 +992,7 @@ export async function uploadGrinderImage(id, input) {
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
   if (!blob) return;
-  const r = await apiFetch(`api/library/grinder/${id}/image`, {
-    method: 'POST', headers: { 'Content-Type': blob.type }, body: blob,
-  });
+  const r = await libraryApi.uploadGrinderImage(id, blob);
   if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
   const saved = await r.json();
   const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === id);
@@ -1041,7 +1003,7 @@ export async function uploadGrinderImage(id, input) {
 
 export async function deleteGrinder(id) {
   if (!confirm(t('lib_confirm_delete_grinder'))) return;
-  const r = await apiFetch(`api/library/grinder/${id}/delete`, { method: 'POST' });
+  const r = await libraryApi.deleteGrinderPermanently(id);
   if (!r.ok) return;
   S.coffeeLibrary.grinders = S.coffeeLibrary.grinders.filter(g => g.id !== id);
   updateLibraryDatalist();
@@ -1364,7 +1326,7 @@ export async function _handleScanResult(raw, status) {
   // catch-all error.
   status.textContent = t('scan_searching');
   try {
-    const r = await apiFetch(`api/library/scan/${encodeURIComponent(raw)}`);
+    const r = await libraryApi.scanBarcode(raw);
     if (r.status === 404) {
       status.textContent = t('scan_not_found');
       status.className = 'error';
@@ -1555,10 +1517,8 @@ export async function saveRecipe() {
     notes:         document.getElementById('recipeFormNotes').value.trim(),
     steps:         _collectSteps(),
   };
-  const url = S.recipeEditId ? `api/library/recipe/${S.recipeEditId}` : 'api/library/recipe';
-  const r   = await apiFetch(url, { method: S.recipeEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.saveRecipe(S.recipeEditId, payload);
+  if (!saved) return;
   if (!Array.isArray(S.coffeeLibrary.recipes)) S.coffeeLibrary.recipes = [];
   if (S.recipeEditId) {
     const idx = S.coffeeLibrary.recipes.findIndex(r => r.id === S.recipeEditId);
@@ -1572,7 +1532,7 @@ export async function saveRecipe() {
 
 export async function deleteRecipe(id) {
   if (!confirm(t('lib_confirm_delete_recipe'))) return;
-  const r = await apiFetch(`api/library/recipe/${id}/delete`, { method: 'POST' });
+  const r = await libraryApi.deleteRecipePermanently(id);
   if (!r.ok) return;
   S.coffeeLibrary.recipes = (S.coffeeLibrary.recipes || []).filter(r => r.id !== id);
   renderRecipeList();
@@ -1626,12 +1586,8 @@ export async function saveMilk() {
   const emoji   = document.getElementById('milkFormEmoji')?.value.trim() || '🥛';
   const stockMl = parseFloat(document.getElementById('milkFormStock')?.value) || 0;
   if (!name) return;
-  const r = await apiFetch('api/library/milk', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, emoji, stockMl }),
-  });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.createMilk({ name, emoji, stockMl });
+  if (!saved) return;
   if (!S.coffeeLibrary.milks) S.coffeeLibrary.milks = [];
   S.coffeeLibrary.milks.push(saved);
   closeMilkForm();
@@ -1641,12 +1597,8 @@ export async function saveMilk() {
 export async function restockMilk(id) {
   const val = parseFloat(document.getElementById(`milkRestock_${id}`)?.value);
   if (!val || val <= 0) return;
-  const r = await apiFetch(`api/library/milk/${id}/restock`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ml: val }),
-  });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.restockMilk(id, val);
+  if (!saved) return;
   const idx = (S.coffeeLibrary.milks || []).findIndex(m => m.id === id);
   if (idx !== -1) S.coffeeLibrary.milks[idx] = saved;
   renderMilkList();
@@ -1654,7 +1606,7 @@ export async function restockMilk(id) {
 
 export async function deleteMilk(id) {
   if (!confirm(t('lib_milk_delete') + '?')) return;
-  const r = await apiFetch(`api/library/milk/${id}`, { method: 'DELETE' });
+  const r = await libraryApi.deleteMilkById(id);
   if (!r.ok) return;
   S.coffeeLibrary.milks = (S.coffeeLibrary.milks || []).filter(m => m.id !== id);
   renderMilkList();
@@ -1742,11 +1694,8 @@ export async function saveBasket() {
   const holeCount    = document.getElementById('basketFormHoleCount').value.trim();
   const notes        = document.getElementById('basketFormNotes').value.trim();
   if (!name) { document.getElementById('basketFormName').focus(); return; }
-  const body = JSON.stringify({ name, doseCapacity, wallType, shape, holeCount, notes });
-  const url  = S.basketEditId ? `api/library/basket/${S.basketEditId}` : 'api/library/basket';
-  const r    = await apiFetch(url, { method: S.basketEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.saveBasket(S.basketEditId, { name, doseCapacity, wallType, shape, holeCount, notes });
+  if (!saved) return;
   if (!S.coffeeLibrary.baskets) S.coffeeLibrary.baskets = [];
   if (S.basketEditId) {
     const idx = S.coffeeLibrary.baskets.findIndex(b => b.id === S.basketEditId);
@@ -1765,9 +1714,7 @@ export async function uploadBasketImage(id, input) {
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
   if (!blob) return;
-  const r = await apiFetch(`api/library/basket/${id}/image`, {
-    method: 'POST', headers: { 'Content-Type': blob.type }, body: blob,
-  });
+  const r = await libraryApi.uploadBasketImage(id, blob);
   if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
   const saved = await r.json();
   const idx = (S.coffeeLibrary.baskets || []).findIndex(b => b.id === id);
@@ -1778,7 +1725,7 @@ export async function uploadBasketImage(id, input) {
 
 export async function deleteBasket(id) {
   if (!confirm(t('lib_confirm_delete_basket'))) return;
-  const r = await apiFetch(`api/library/basket/${id}`, { method: 'DELETE' });
+  const r = await libraryApi.deleteBasketById(id);
   if (!r.ok) return;
   S.coffeeLibrary.baskets = (S.coffeeLibrary.baskets || []).filter(b => b.id !== id);
   renderBasketList();
@@ -1855,11 +1802,8 @@ export async function savePuckScreen() {
   const material  = document.getElementById('puckScreenFormMaterial').value.trim();
   const notes     = document.getElementById('puckScreenFormNotes').value.trim();
   if (!name) { document.getElementById('puckScreenFormName').focus(); return; }
-  const body = JSON.stringify({ name, thickness, material, notes });
-  const url  = S.puckScreenEditId ? `api/library/puckscreen/${S.puckScreenEditId}` : 'api/library/puckscreen';
-  const r    = await apiFetch(url, { method: S.puckScreenEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.savePuckScreen(S.puckScreenEditId, { name, thickness, material, notes });
+  if (!saved) return;
   if (!S.coffeeLibrary.puckScreens) S.coffeeLibrary.puckScreens = [];
   if (S.puckScreenEditId) {
     const idx = S.coffeeLibrary.puckScreens.findIndex(p => p.id === S.puckScreenEditId);
@@ -1878,9 +1822,7 @@ export async function uploadPuckScreenImage(id, input) {
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
   if (!blob) return;
-  const r = await apiFetch(`api/library/puckscreen/${id}/image`, {
-    method: 'POST', headers: { 'Content-Type': blob.type }, body: blob,
-  });
+  const r = await libraryApi.uploadPuckScreenImage(id, blob);
   if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
   const saved = await r.json();
   const idx = (S.coffeeLibrary.puckScreens || []).findIndex(p => p.id === id);
@@ -1891,7 +1833,7 @@ export async function uploadPuckScreenImage(id, input) {
 
 export async function deletePuckScreen(id) {
   if (!confirm(t('lib_confirm_delete_puckscreen'))) return;
-  const r = await apiFetch(`api/library/puckscreen/${id}`, { method: 'DELETE' });
+  const r = await libraryApi.deletePuckScreenById(id);
   if (!r.ok) return;
   S.coffeeLibrary.puckScreens = (S.coffeeLibrary.puckScreens || []).filter(p => p.id !== id);
   renderPuckScreenList();
