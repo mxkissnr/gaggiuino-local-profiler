@@ -1,6 +1,6 @@
 import { S }                              from '../../state/index.js';
 import { t }                              from '../../i18n.js';
-import { apiFetch }                       from '../../api.js';
+import { getMenu } from '../../api/system.js';
 import { deductMilk, adjustFrozenPortion, listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, postShotImage, deleteShotImage } from '../../api/shots.js';
 import { esc, germanToIso }              from '../../utils.js';
@@ -188,7 +188,7 @@ export function flushAutoSave() {
 
 export async function loadDrinkMenu() {
   try {
-    const r = await apiFetch('api/menu');
+    const r = await getMenu();
     if (r.ok) S.drinkMenu = await r.json();
   } catch { /* non-critical */ }
 }
