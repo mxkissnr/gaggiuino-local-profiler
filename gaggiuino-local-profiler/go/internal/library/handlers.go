@@ -84,6 +84,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/library/grinder/{id}", h.updateGrinder)
 	mux.HandleFunc("POST /api/library/grinder/{id}/reset-burrs", h.resetBurrs)
 	mux.HandleFunc("PUT /api/library/grinder/{id}/zero-point", h.setGrinderZeroPoint)
+	mux.HandleFunc("DELETE /api/library/grinder/{id}/zero-point/{since}", h.deleteGrinderZeroPoint)
 	mux.HandleFunc("POST /api/library/grinder/{id}/delete", h.deleteGrinder)
 	mux.HandleFunc("GET /api/library/grinder/{id}/image", h.getGrinderImage)
 	mux.HandleFunc("POST /api/library/grinder/{id}/image", h.postGrinderImage)

@@ -68,6 +68,8 @@ func (h *Handlers) updateGrinder(w http.ResponseWriter, r *http.Request) {
 // a new zero-point activation (see zero_point.go) so grind-setting
 // suggestions/comparisons can correct for drift after a cleaning without
 // every past shot's recorded grindSetting needing to be rewritten.
+// Optional body field `since` (ms epoch int) enables retroactive entries;
+// omit or pass 0 to use the current time (existing behaviour).
 func (h *Handlers) setGrinderZeroPoint(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)
@@ -83,7 +85,35 @@ func (h *Handlers) setGrinderZeroPoint(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid zeroPoint")
 		return
 	}
-	grinder, found, err := SetGrinderZeroPoint(h.repo, id, zeroPoint)
+	var since int64
+	if sv, ok2 := body["since"]; ok2 {
+		if sv64, ok3 := jsParseIntLoose(sv); ok3 {
+			since = sv64
+		}
+	}
+	grinder, found, err := SetGrinderZeroPoint(h.repo, id, zeroPoint, since)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, grinder)
+}
+
+// deleteGrinderZeroPoint handles DELETE /api/library/grinder/:id/zero-point/:since.
+// Removes the zero-point history entry with the given since value (ms epoch).
+// Silently succeeds when no such entry exists (idempotent).
+func (h *Handlers) deleteGrinderZeroPoint(w http.ResponseWriter, r *http.Request) {
+	id, noMatch := parseIDParam(r.PathValue("id"))
+	since, sinceNoMatch := parseIDParam(r.PathValue("since"))
+	if noMatch || sinceNoMatch {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	grinder, found, err := DeleteGrinderZeroPointEntry(h.repo, id, since)
 	if err != nil {
 		internalError(w, err)
 		return

@@ -1558,6 +1558,8 @@ export interface paths {
                 content: {
                     "application/json": {
                         zeroPoint: number;
+                        /** @description Unix ms epoch. Omit or 0 to log the entry at the current time; set to insert a retroactive entry (e.g. a burr change that happened in the past). */
+                        since?: number;
                     };
                 };
             };
@@ -1593,6 +1595,54 @@ export interface paths {
         };
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/library/grinder/{id}/zero-point/{since}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove one zero-point history entry (identified by its `since` unix-ms timestamp). Idempotent — succeeds even if no matching entry exists. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                    since: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Updated grinder (entry removed) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Grinder"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;

@@ -151,3 +151,100 @@ func TestSetGrinderZeroPoint_UnknownGrinder404s(t *testing.T) {
 		t.Fatalf("status = %d, want 404; body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestSetGrinderZeroPoint_PastSince verifies that a retroactive insert (since
+// explicitly provided) is sorted into the correct chronological position and
+// that zeroPointAtTime still returns the right value for shots between entries.
+func TestSetGrinderZeroPoint_PastSince(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/grinder", mustMarshal(t, map[string]any{"name": "Ode 2"}))
+	grinder := decodeBody(t, rec.Body.Bytes())
+	id := int64(grinder["id"].(float64))
+
+	// Insert "current" zero point (since=0 → now).
+	const nowZP = 44.5
+	doJSON(t, mux, http.MethodPut, "/api/library/grinder/"+itoa(id)+"/zero-point", mustMarshal(t, map[string]any{"zeroPoint": nowZP}))
+
+	// Retroactively insert an earlier entry (since < now).
+	const pastSince = int64(1_000_000)
+	const pastZP = 42.0
+	rec = doJSON(t, mux, http.MethodPut, "/api/library/grinder/"+itoa(id)+"/zero-point",
+		mustMarshal(t, map[string]any{"zeroPoint": pastZP, "since": pastSince}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("retroactive set status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	updated := decodeBody(t, rec.Body.Bytes())
+	history, _ := updated["zeroPointHistory"].([]any)
+	if len(history) != 2 {
+		t.Fatalf("expected 2 history entries, got %d: %+v", len(history), history)
+	}
+
+	// First entry must be the retroactive one (smallest since).
+	e0, _ := history[0].(map[string]any)
+	s0, _ := jsParseFloat(e0["since"])
+	if int64(s0) != pastSince {
+		t.Fatalf("first entry since = %v, want %d", s0, pastSince)
+	}
+	zp0, _ := jsParseFloat(e0["zeroPoint"])
+	if zp0 != pastZP {
+		t.Fatalf("first entry zeroPoint = %v, want %v", zp0, pastZP)
+	}
+
+	// Retroactive idempotency: re-sending the same (since,value) is a no-op.
+	rec = doJSON(t, mux, http.MethodPut, "/api/library/grinder/"+itoa(id)+"/zero-point",
+		mustMarshal(t, map[string]any{"zeroPoint": pastZP, "since": pastSince}))
+	updated = decodeBody(t, rec.Body.Bytes())
+	history, _ = updated["zeroPointHistory"].([]any)
+	if len(history) != 2 {
+		t.Fatalf("idempotent re-send must not grow history, got %d entries", len(history))
+	}
+}
+
+// TestDeleteZeroPointEntry verifies removal of a single zero-point history
+// entry via DELETE /api/library/grinder/:id/zero-point/:since.
+func TestDeleteZeroPointEntry(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/grinder", mustMarshal(t, map[string]any{"name": "Ode 2"}))
+	grinder := decodeBody(t, rec.Body.Bytes())
+	id := int64(grinder["id"].(float64))
+
+	// Insert two entries.
+	const since1 = int64(1_000_000)
+	const since2 = int64(2_000_000)
+	doJSON(t, mux, http.MethodPut, "/api/library/grinder/"+itoa(id)+"/zero-point",
+		mustMarshal(t, map[string]any{"zeroPoint": 42.0, "since": since1}))
+	doJSON(t, mux, http.MethodPut, "/api/library/grinder/"+itoa(id)+"/zero-point",
+		mustMarshal(t, map[string]any{"zeroPoint": 44.5, "since": since2}))
+
+	// Delete the first entry.
+	rec = doJSON(t, mux, http.MethodDelete, "/api/library/grinder/"+itoa(id)+"/zero-point/"+itoa(since1), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	updated := decodeBody(t, rec.Body.Bytes())
+	history, _ := updated["zeroPointHistory"].([]any)
+	if len(history) != 1 {
+		t.Fatalf("expected 1 entry after delete, got %d: %+v", len(history), history)
+	}
+	remaining, _ := history[0].(map[string]any)
+	rs, _ := jsParseFloat(remaining["since"])
+	if int64(rs) != since2 {
+		t.Fatalf("remaining entry since = %v, want %d", rs, since2)
+	}
+
+	// Delete of unknown since is a no-op (idempotent), not a 404.
+	rec = doJSON(t, mux, http.MethodDelete, "/api/library/grinder/"+itoa(id)+"/zero-point/999999", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete unknown since status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Delete on unknown grinder returns 404.
+	rec = doJSON(t, mux, http.MethodDelete, "/api/library/grinder/999999/zero-point/"+itoa(since2), nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("delete on unknown grinder status = %d, want 404; body=%s", rec.Code, rec.Body.String())
+	}
+}

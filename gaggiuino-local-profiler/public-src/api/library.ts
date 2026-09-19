@@ -107,9 +107,19 @@ export async function resetGrinderBurrs(id: number): Promise<Grinder | null> {
   return _jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/reset-burrs`, { method: 'POST' }));
 }
 
-/** PUT /api/library/grinder/{id}/zero-point — record a new zero-point activation. */
-export async function setGrinderZeroPoint(id: number, zeroPoint: number): Promise<Grinder | null> {
-  return _jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/zero-point`, _json('PUT', { zeroPoint })));
+/**
+ * PUT /api/library/grinder/{id}/zero-point — record a new zero-point
+ * activation. `since` (ms epoch) inserts retroactively; omit for "now".
+ */
+export async function setGrinderZeroPoint(id: number, zeroPoint: number, since?: number): Promise<Grinder | null> {
+  const body: { zeroPoint: number; since?: number } = { zeroPoint };
+  if (since) body.since = since;
+  return _jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/zero-point`, _json('PUT', body)));
+}
+
+/** DELETE /api/library/grinder/{id}/zero-point/{since} — remove one history entry. */
+export async function deleteGrinderZeroPoint(id: number, since: number): Promise<Grinder | null> {
+  return _jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/zero-point/${since}`, { method: 'DELETE' }));
 }
 
 /** POST /api/library/grinder/{id}/image — upload a (cropped) grinder photo; raw Response. */

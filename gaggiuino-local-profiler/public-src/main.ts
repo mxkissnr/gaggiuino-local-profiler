@@ -102,7 +102,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
          openBeanForm, closeBeanForm, editBean, saveBean, deleteBean, toggleBeanActive, uploadBeanImage,
-         openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage, resetGrinderBurrs,
+         openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage, resetGrinderBurrs, deleteGrinderZeroPointEntry,
          toggleBeanQR,
          toggleBagHistory, openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
          openBeanStockEdit, closeBeanStockEdit, saveBeanStock,
@@ -934,6 +934,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'edit-grinder':       editGrinder(numId()); break;
       case 'delete-grinder':     deleteGrinder(numId()); break;
       case 'reset-grinder-burrs': resetGrinderBurrs(numId()); break;
+      case 'delete-grinder-zero-point': deleteGrinderZeroPointEntry(numId(), Number(el.dataset.since)); break;
       case 'edit-recipe':        editRecipe(numId()); break;
       case 'delete-recipe':      deleteRecipe(numId()); break;
       case 'remove-recipe-step': removeRecipeStep(Number(el.dataset.idx)); break;

@@ -931,6 +931,8 @@ export function openGrinderForm(grinder) {
   // field above.
   document.getElementById('grinderFormZeroPointField').style.display = grinder ? '' : 'none';
   document.getElementById('grinderFormZeroPoint').value = currentGrinderZeroPoint(grinder) ?? '';
+  document.getElementById('grinderFormZeroPointSince').value = '';
+  renderGrinderZeroPointHistory(grinder);
   document.getElementById('grinderAddForm').classList.add('open');
   document.getElementById('grinderAddTrigger').style.display = 'none';
   document.getElementById('grinderFormName').focus();
@@ -947,6 +949,34 @@ export function editGrinder(id) {
   if (g) openGrinderForm(g);
 }
 
+function renderGrinderZeroPointHistory(grinder) {
+  const el = document.getElementById('grinderFormZeroPointHistory');
+  if (!el) return;
+  const history = grinder?.zeroPointHistory;
+  if (!Array.isArray(history) || !history.length) { el.innerHTML = ''; return; }
+  const sorted = [...history].sort((a, b) => a.since - b.since);
+  el.innerHTML = `<div class="zp-history">${sorted.map(e => {
+    const date = new Date(e.since).toLocaleDateString();
+    return `<div class="zp-history-entry">
+      <span>${esc(String(e.zeroPoint))} &mdash; ${esc(date)}</span>
+      <button type="button" class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder-zero-point" data-id="${grinder.id}" data-since="${e.since}" title="${t('lib_grinder_zero_point_delete')}">&#x2715;</button>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+export async function deleteGrinderZeroPointEntry(grinderId, since) {
+  const updated = await libraryApi.deleteGrinderZeroPoint(grinderId, since);
+  if (!updated) return;
+  const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === grinderId);
+  if (idx !== -1) S.coffeeLibrary.grinders[idx] = { ...updated, wear: S.coffeeLibrary.grinders[idx].wear };
+  renderGrinderList();
+  // Refresh history in open form if editing the same grinder.
+  if (S.grinderEditId === grinderId) {
+    document.getElementById('grinderFormZeroPoint').value = currentGrinderZeroPoint(updated) ?? '';
+    renderGrinderZeroPointHistory(updated);
+  }
+}
+
 export async function saveGrinder() {
   const name         = document.getElementById('grinderFormName').value.trim();
   const notes        = document.getElementById('grinderFormNotes').value.trim();
@@ -957,11 +987,16 @@ export async function saveGrinder() {
   if (!saved) return;
 
   if (S.grinderEditId) {
-    const zpRaw = document.getElementById('grinderFormZeroPoint').value.trim();
+    const zpRaw    = document.getElementById('grinderFormZeroPoint').value.trim();
+    const sinceRaw = document.getElementById('grinderFormZeroPointSince').value.trim();
     if (zpRaw !== '') {
       const zeroPoint = parseFloat(zpRaw);
-      if (!Number.isNaN(zeroPoint) && zeroPoint !== currentGrinderZeroPoint(saved)) {
-        const updated = await libraryApi.setGrinderZeroPoint(S.grinderEditId, zeroPoint);
+      const sinceMs   = sinceRaw ? new Date(sinceRaw).getTime() : 0;
+      // For "now" inserts (sinceMs=0) the backend deduplicates on value;
+      // for retroactive inserts we always send (dedup is on exact since+value pair).
+      const isRetroactive = sinceMs > 0;
+      if (!Number.isNaN(zeroPoint) && (isRetroactive || zeroPoint !== currentGrinderZeroPoint(saved))) {
+        const updated = await libraryApi.setGrinderZeroPoint(S.grinderEditId, zeroPoint, isRetroactive ? sinceMs : undefined);
         if (updated) saved = updated;
       }
     }

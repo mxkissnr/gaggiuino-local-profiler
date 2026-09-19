@@ -172,6 +172,8 @@ const it: Partial<Translations> = {
     lib_grinder_purchase_date:'Data di acquisto', lib_grinder_image:'Foto',
     lib_grinder_zero_point:'Punto zero',
     lib_grinder_zero_point_hint:'Dopo la pulizia: aggiorna qui il punto zero invece di modificare ogni ricetta. Suggerimenti/confronti si correggono automaticamente.',
+    lib_grinder_zero_point_since:'Attivo da (vuoto = ora)',
+    lib_grinder_zero_point_delete:'Elimina voce punto zero',
     lib_cancel:'Annulla', lib_save:'Salva',
     lib_empty_beans:'Nessun grano salvato', lib_empty_grinders:'Nessun macinino salvato',
     lib_btn_edit:'Modifica', lib_btn_delete:'Elimina',
