@@ -12,7 +12,7 @@ import Chart from 'chart.js/auto';
 import { S } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import { t } from '../i18n.js';
-import { apiFetch } from '../api.js';
+import * as machinesApi from '../api/machines.js';
 import { esc } from '../utils.js';
 import { suggestProfileFromBean } from '../profile-suggestion.js';
 import { TARGET_ICON_SVG } from '../icons.js';
@@ -35,15 +35,14 @@ let _profileListReqToken = 0;
 // otherwise eslint's require-atomic-updates can't tell that the later
 // S.machineProfiles write is guarded by the token check below, not racing
 // on this read.
-function _profileListUrl() {
-  return `api/machine/profiles?machineId=${S.activeMachineId ?? ''}`;
+function _profileListRequest() {
+  return machinesApi.listMachineProfiles(S.activeMachineId ?? '');
 }
 
 export async function loadMachineProfileList() {
   const token = ++_profileListReqToken;
-  const r = await apiFetch(_profileListUrl());
-  if (!r.ok) return;
-  const data = await r.json();
+  const data = await _profileListRequest();
+  if (!data) return;
   if (token !== _profileListReqToken) return;
   S.machineProfiles = Array.isArray(data.optionsRaw) ? data.optionsRaw : [];
   S.machineProfilesStale = !!data.stale;
@@ -82,15 +81,14 @@ export function renderProfileList() {
 }
 
 export async function editProfile(id) {
-  const r = await apiFetch(`api/machine/profile/${id}?machineId=${S.activeMachineId ?? ''}`);
-  if (!r.ok) { window.showToast?.(t('profile_load_error')); return; }
-  const profile = await r.json();
+  const profile = await machinesApi.getMachineProfile(id, S.activeMachineId ?? '');
+  if (!profile) { window.showToast?.(t('profile_load_error')); return; }
   openProfileForm(profile);
 }
 
 export async function deleteMachineProfile(id) {
   if (!confirm(t('profile_confirm_delete'))) return;
-  const r = await apiFetch(`api/machine/profile/${id}?machineId=${S.activeMachineId ?? ''}`, { method: 'DELETE' });
+  const r = await machinesApi.deleteMachineProfile(id, S.activeMachineId ?? '');
   if (!r.ok) { window.showToast?.(t('profile_send_error')); return; }
   await loadMachineProfileList();
 }
@@ -284,9 +282,7 @@ export async function sendProfileToMachine() {
   if (!profile.phases.length) { window.showToast?.(t('profile_no_phases_error')); return; }
   if (!confirm(t('profile_confirm_send'))) return;
 
-  const url    = S.profileEditId ? `api/machine/profile/${S.profileEditId}` : 'api/machine/profile';
-  const method = S.profileEditId ? 'PUT' : 'POST';
-  const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...profile, machineId: S.activeMachineId }) });
+  const r = await machinesApi.saveMachineProfile(S.profileEditId ?? null, { ...profile, machineId: S.activeMachineId });
   if (!r.ok) {
     const body = await r.json().catch(() => ({}));
     window.showToast?.(t('profile_send_error') + (body.error ? `: ${body.error}` : ''));
