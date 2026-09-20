@@ -8,14 +8,17 @@
 // test/dev-banner.test.js already do under vitest's node environment.
 import { describe, it, expect, beforeEach } from 'vitest';
 
-globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
-globalThis.navigator ??= { language: 'en-US' };
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge test/helpers/fake-option-dom.ts uses).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+g.navigator ??= { language: 'en-US' };
 
-const _session = new Map();
-globalThis.sessionStorage = {
-  getItem: k => (_session.has(k) ? _session.get(k) : null),
-  setItem: (k, v) => _session.set(k, String(v)),
-  removeItem: k => _session.delete(k),
+const _session = new Map<string, string>();
+g.sessionStorage = {
+  getItem: (k: string) => (_session.has(k) ? _session.get(k) : null),
+  setItem: (k: string, v: string) => _session.set(k, String(v)),
+  removeItem: (k: string) => _session.delete(k),
 };
 
 const { S } = await import('../public-src/state/index.js');
@@ -23,34 +26,55 @@ const { isApiPortBlocked } = await import('../public-src/api/transport.js');
 const { apiPortClosedHtml, updateApiPortClosedBanner } =
   await import('../public-src/components/api-port-notice.js');
 
-function makeFakeDocument() {
-  const registry = new Map();
+// The DOM stand-in the banner component builds against: only the members the
+// component and these tests touch.
+interface FakeNode {
+  id?: string;
+  style: Record<string, unknown>;
+  textContent: string;
+  dataset: Record<string, unknown>;
+  offsetHeight: number;
+  children: FakeNode[];
+  _listeners: Record<string, () => void>;
+  append: (...kids: FakeNode[]) => void;
+  addEventListener: (ev: string, fn: () => void) => void;
+  remove: () => void;
+}
+
+interface FakeDocument {
+  body: { style: Record<string, unknown>; insertAdjacentElement: (position: string, el: FakeNode) => void };
+  getElementById: (id: string) => FakeNode | undefined;
+  createElement: () => FakeNode;
+}
+
+function makeFakeDocument(): FakeDocument {
+  const registry = new Map<string, FakeNode>();
   const body = {
     style: {},
-    insertAdjacentElement: (_pos, el) => { registry.set(el.id, el); },
+    insertAdjacentElement: (_pos: string, el: FakeNode) => { registry.set(el.id as string, el); },
   };
   return {
     body,
     getElementById: id => registry.get(id),
     createElement: () => {
-      const el = {
+      const el: FakeNode = {
         style: {}, textContent: '', dataset: {}, offsetHeight: 34, children: [],
         _listeners: {},
-        append: (...kids) => el.children.push(...kids),
+        append: (...kids) => { el.children.push(...kids); },
         addEventListener: (ev, fn) => { el._listeners[ev] = fn; },
-        remove: () => registry.delete(el.id),
+        remove: () => { registry.delete(el.id as string); },
       };
       return el;
     },
   };
 }
 
-let doc;
+let doc: FakeDocument;
 
 beforeEach(() => {
   _session.clear();
   doc = makeFakeDocument();
-  globalThis.document = doc;
+  g.document = doc;
   S.glpToken = '';
   S.apiPortExposed = true;
 });
@@ -102,8 +126,8 @@ describe('app-wide banner (#807)', () => {
     updateApiPortClosedBanner();
     const banner = doc.getElementById('glpApiPortClosedBanner');
     expect(banner).toBeDefined();
-    expect(banner.children.some(c => c.dataset.action === 'goto-settings')).toBe(true);
-    expect(banner.children[0].textContent).toContain('expose_api_port');
+    expect(banner?.children.some(c => c.dataset.action === 'goto-settings')).toBe(true);
+    expect(banner?.children[0].textContent).toContain('expose_api_port');
   });
 
   it('is not shown in the default (port exposed) state', () => {
@@ -126,8 +150,8 @@ describe('app-wide banner (#807)', () => {
     S.apiPortExposed = false;
     updateApiPortClosedBanner();
     const banner = doc.getElementById('glpApiPortClosedBanner');
-    const closeBtn = banner.children[banner.children.length - 1];
-    closeBtn._listeners.click();
+    const closeBtn = banner?.children[banner.children.length - 1];
+    closeBtn?._listeners.click();
 
     expect(doc.getElementById('glpApiPortClosedBanner')).toBeUndefined();
     updateApiPortClosedBanner();
