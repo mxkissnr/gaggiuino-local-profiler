@@ -121,6 +121,13 @@ describe('apiFetchToBlob', () => {
 describe('apiUpload', () => {
   let lastXHR: FakeXHR | undefined;
 
+  // FakeXHR hands each constructed instance to this helper: passing `this` as
+  // an argument registers it without the no-this-alias pattern of assigning
+  // `this` straight to a variable.
+  function captureXHR(xhr: FakeXHR): void {
+    lastXHR = xhr;
+  }
+
   class FakeXHR {
     upload: { onprogress?: (e: { lengthComputable: boolean; loaded: number; total: number }) => void } = {};
     headers: Record<string, string> = {};
@@ -132,7 +139,7 @@ describe('apiUpload', () => {
     onload?: () => void;
     onerror?: () => void;
     constructor() {
-      lastXHR = this;
+      captureXHR(this);
     }
     open(method: string, url: string) { this.method = method; this.url = url; }
     setRequestHeader(k: string, v: string) { this.headers[k] = v; }
