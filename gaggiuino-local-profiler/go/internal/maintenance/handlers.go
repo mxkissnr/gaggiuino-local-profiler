@@ -353,8 +353,8 @@ func (h *Handlers) postLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	notes, _ := body["notes"].(string)
-	if len(notes) > 500 {
-		notes = notes[:500]
+	if runes := []rune(notes); len(runes) > 500 {
+		notes = string(runes[:500])
 	}
 	entry, err := h.repo.AddMaintenanceLogEntry(task, notes, machineHostname(h.registry), shotCountFor(h.shotsRepo, task, machineID), machineID)
 	if err != nil {
