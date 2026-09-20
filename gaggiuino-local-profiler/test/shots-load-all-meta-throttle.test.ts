@@ -1,12 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { ShotMeta } from '../public-src/state/index.js';
 
 // shots/index.js's import chain touches state.js/i18n.js, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
-// environment (same pattern as test/shots-load-data-race.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
-globalThis.window       ??= {};
+// environment (same pattern as test/api-port-closed-notice.test.ts). vitest's
+// node environment has no browser globals, so the fakes go through a loose
+// view of globalThis rather than satisfying the full Storage/Navigator/Window
+// shapes.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator    ??= { language: 'en-US' };
+g.window       ??= {};
 
 // #969: loadAllShotMeta() calls renderSidebar() after every page of its
 // background walk — mock it out so the assertions below can count calls
@@ -22,8 +27,11 @@ const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
 const { loadAllShotMeta } = await import('../public-src/views/shots/index.js');
 
 // Builds a fake api/shots?cursor=... response for one page.
-function pageResponse(shots, { nextCursor, hasMore }) {
-  return { ok: true, json: async () => ({ shots, nextCursor, hasMore }) };
+function pageResponse(
+  shots: ShotMeta[],
+  { nextCursor, hasMore }: { nextCursor: string | null; hasMore: boolean },
+): Response {
+  return { ok: true, json: async () => ({ shots, nextCursor, hasMore }) } as unknown as Response;
 }
 
 describe('loadAllShotMeta render throttle (#969)', () => {
