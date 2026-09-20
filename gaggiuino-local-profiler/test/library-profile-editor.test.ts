@@ -147,7 +147,7 @@ describe('duplicateProfile', () => {
     };
     fetchSpy.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({
+      json: () => Promise.resolve({
         id: 'p1', name: 'Turbo Shot', waterTemperature: 93,
         recipe: { coffeeIn: 18, coffeeOut: 36, ratio: 2 },
         globalStopConditions: { weight: 36 },
@@ -184,10 +184,10 @@ describe('loadMachineProfileList (#521 race)', () => {
     const callB = loadMachineProfileList();
 
     // B (the later-fired call) resolves first...
-    resolveB({ ok: true, json: async () => ({ optionsRaw: [{ id: 'b', name: 'B' }] }) } as unknown as Response);
+    resolveB({ ok: true, json: () => Promise.resolve({ optionsRaw: [{ id: 'b', name: 'B' }] }) } as unknown as Response);
     await callB;
     // ...and A's stale response arrives after — it must not clobber B's data.
-    resolveA({ ok: true, json: async () => ({ optionsRaw: [{ id: 'a', name: 'A' }] }) } as unknown as Response);
+    resolveA({ ok: true, json: () => Promise.resolve({ optionsRaw: [{ id: 'a', name: 'A' }] }) } as unknown as Response);
     await callA;
 
     expect(S.machineProfiles).toEqual([{ id: 'b', name: 'B' }]);
