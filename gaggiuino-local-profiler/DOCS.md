@@ -74,6 +74,14 @@ Bean variants come from the coffee library via `/api/orders/active-beans`: only 
 
 **Ships bundled inside [GLP Integration](https://github.com/mxkissnr/glp-integration)** — no separate HACS listing or card download. Installing/updating the integration via HACS registers it automatically as a dashboard resource; just add a `type: custom:glp-order-card` card to your dashboard.
 
+### Kiosk mode
+
+A self-contained ordering page for a tablet that stays on the table: a guest enters a name, picks a drink plus optional variants and a note, places the order and sees a confirmation with the estimated time. Six seconds after an order the page resets to the name step, ready for the next guest.
+
+Next to the order flow, a queue panel lists the active orders (waiting / being prepared) with their estimated times and refreshes every 8 seconds; the menu and the open/closed state refresh every 30 seconds.
+
+Reachable at `/ui/kiosk` — through the Ingress prefix on Home Assistant, or at `http://<host>:<port>/ui/kiosk` on a standalone Docker install. It needs the ordering feature to be enabled (`enable_orders: true`); without it the page shows a "not enabled" banner. No separate login is required.
+
 ### API token
 
 All components authenticate automatically via a shared token:
