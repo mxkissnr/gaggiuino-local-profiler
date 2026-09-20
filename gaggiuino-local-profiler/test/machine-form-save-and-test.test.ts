@@ -85,7 +85,7 @@ describe('testMachineForm (#729/#733)', () => {
   it('on save success, tests the newly-created machine id, shows the result inline, and leaves the form open', async () => {
     setFormFields({ id: '' }); // brand-new machine — no id yet, POST path
     const calls: FetchCall[] = [];
-    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
+    g.fetch = (url: string, opts?: RequestInit) => {
       calls.push({ url: String(url), method: opts?.method });
       // #731: the implicit save behind "Test connection" carries ?sync=0 so
       // the server doesn't start an import for it -- see machines-settings.js.
@@ -115,7 +115,7 @@ describe('testMachineForm (#729/#733)', () => {
   it('on save success while editing an existing machine, tests against the existing id and leaves the form open', async () => {
     setFormFields({ id: '9' }); // editing — PUT path
     const calls: FetchCall[] = [];
-    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
+    g.fetch = (url: string, opts?: RequestInit) => {
       calls.push({ url: String(url), method: opts?.method });
       if (String(url) === 'api/machines/9?sync=0' && opts?.method === 'PUT') {
         return okJson({ id: 9, name: 'Test Machine' });
@@ -142,7 +142,7 @@ describe('testMachineForm (#729/#733)', () => {
   it('on save failure (server-rejected), shows the save error and never calls the test endpoint', async () => {
     setFormFields({ id: '' });
     const calls: FetchCall[] = [];
-    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
+    g.fetch = (url: string, opts?: RequestInit) => {
       calls.push({ url: String(url), method: opts?.method });
       return errorJson(400, { error: 'host not allowed' });
     };
@@ -173,7 +173,7 @@ describe('testMachineForm (#729/#733)', () => {
   it('#730 regression guard: writes the new id back into the form on success, so a second call would PUT instead of POST again', async () => {
     setFormFields({ id: '' });
     let calls: FetchCall[] = [];
-    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
+    g.fetch = (url: string, opts?: RequestInit) => {
       calls.push({ url: String(url), method: opts?.method });
       if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
         return okJson({ id: 42, name: 'Test Machine' });
@@ -204,7 +204,7 @@ describe('testMachineForm (#729/#733)', () => {
   // belt-and-suspenders alongside the id-rewrite above.
   it('#730 regression guard: disables the test button for the whole in-flight window, re-enabling once it settles', async () => {
     setFormFields({ id: '' });
-    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
+    g.fetch = (url: string, opts?: RequestInit) => {
       if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
         return okJson({ id: 42, name: 'Test Machine' });
       }
@@ -234,7 +234,7 @@ describe('testMachineForm (#729/#733)', () => {
     setFormFields({ id: '9' });
     let resolveTest!: (value: unknown) => void;
     const pendingTest = new Promise(res => { resolveTest = res; });
-    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
+    g.fetch = (url: string, opts?: RequestInit) => {
       if (String(url) === 'api/machines/9?sync=0' && opts?.method === 'PUT') {
         return okJson({ id: 9, name: 'Test Machine' });
       }
@@ -255,7 +255,7 @@ describe('testMachineForm (#729/#733)', () => {
     fakeElement('machineFormId').value = 17;
     fakeElement('machineFormTestResult').textContent = '';
 
-    resolveTest({ ok: true, json: async () => ({ ok: true, reachable: true }) });
+    resolveTest({ ok: true, json: () => Promise.resolve({ ok: true, reachable: true }) });
     await pending;
 
     expect(fakeElement('machineFormTestResult').textContent).toBe('');
@@ -266,7 +266,7 @@ describe('testMachineForm (#729/#733)', () => {
   // anything downstream, or the setup wizard closes/advances prematurely.
   it('#748: does NOT set S.machineExplicitSave (implicit save-before-test stays distinct from an explicit save)', async () => {
     setFormFields({ id: '' });
-    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
+    g.fetch = (url: string, opts?: RequestInit) => {
       if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
         return okJson({ id: 42, name: 'Test Machine' });
       }
@@ -291,7 +291,7 @@ describe('saveMachineForm (unchanged behavior)', () => {
 
   it('on success still closes the form and reloads the machines list', async () => {
     setFormFields({ id: '' });
-    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
+    g.fetch = (url: string, opts?: RequestInit) => {
       if (String(url) === 'api/machines' && opts?.method === 'POST') {
         return okJson({ id: 5, name: 'Test Machine' });
       }
@@ -310,7 +310,7 @@ describe('saveMachineForm (unchanged behavior)', () => {
   // distinguishable; testMachineForm() (above) deliberately never touches it.
   it('on success sets S.machineExplicitSave to the saved id (#748)', async () => {
     setFormFields({ id: '' });
-    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
+    g.fetch = (url: string, opts?: RequestInit) => {
       if (String(url) === 'api/machines' && opts?.method === 'POST') {
         return okJson({ id: 5, name: 'Test Machine' });
       }

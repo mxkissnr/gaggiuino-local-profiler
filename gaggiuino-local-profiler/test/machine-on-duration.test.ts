@@ -49,7 +49,7 @@ function makeFakeDocument(): FakeDocument {
 }
 
 function mockStatusResponse(overrides: Record<string, unknown>): void {
-  g.fetch = vi.fn((url: RequestInfo | URL) => {
+  g.fetch = vi.fn((url: string) => {
     if (String(url).startsWith('api/status')) {
       return Promise.resolve({
         ok: true,
