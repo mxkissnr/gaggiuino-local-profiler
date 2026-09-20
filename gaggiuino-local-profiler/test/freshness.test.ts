@@ -63,7 +63,7 @@ describe('frozenPortionAgeDays', () => {
 
     it('returns null for a missing/malformed portion or unparseable roast date', () => {
         expect(frozenPortionAgeDays('2026-06-25', null, now)).toBeNull();
-        expect(frozenPortionAgeDays('2026-06-25', {}, now)).toBeNull();
+        expect(frozenPortionAgeDays('2026-06-25', {} as { frozenAt: number }, now)).toBeNull();
         expect(frozenPortionAgeDays('', { frozenAt: now - DAY }, now)).toBeNull();
     });
 });
@@ -96,7 +96,7 @@ describe('todayIsoDate', () => {
 describe('isoDateInputToMs', () => {
     it('parses a YYYY-MM-DD value into a local-noon epoch timestamp', () => {
         const ms = isoDateInputToMs('2026-06-25');
-        const d = new Date(ms);
+        const d = new Date(ms!);
         expect(d.getFullYear()).toBe(2026);
         expect(d.getMonth()).toBe(5);
         expect(d.getDate()).toBe(25);
