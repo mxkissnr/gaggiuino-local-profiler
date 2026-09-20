@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterSuggestions, attachAutocomplete } from '../public-src/components/autocomplete.js';
+import { filterSuggestions, attachAutocomplete, type AutocompleteHandle } from '../public-src/components/autocomplete.js';
 
 describe('filterSuggestions — pure filtering logic', () => {
   const list = ['Bourbon', 'Bourbon Rojo', 'Geisha', 'Gesha', 'SL28', 'Caturra'];
@@ -51,9 +51,51 @@ describe('filterSuggestions — pure filtering logic', () => {
 // createElement/appendChild/classList/attribute/event calls
 // attachAutocomplete() actually makes, mirroring the "fake minimal
 // document" convention in test/bottom-nav-config.test.js.
-function makeFakeDoc() {
-  function createElement(tag) {
-    const el = {
+interface FakeEvent {
+  type: string;
+  key?: string;
+  preventDefault(): void;
+}
+type FakeListener = (evt: FakeEvent) => void;
+
+interface FakeElement {
+  tagName: string;
+  id: string;
+  className: string;
+  style: Record<string, unknown>;
+  dataset: Record<string, unknown>;
+  hidden: boolean;
+  value: string;
+  parentNode: FakeElement | null;
+  ownerDocument: FakeDocument | null;
+  _attrs: Record<string, string>;
+  _listeners: Record<string, FakeListener[]>;
+  _children: FakeElement[];
+  _text: string;
+  _html: string;
+  classList: { _set: Set<string>; add(c: string): void; remove(c: string): void; contains(c: string): boolean };
+  readonly children: FakeElement[];
+  textContent: string;
+  innerHTML: string;
+  setAttribute(k: string, v: unknown): void;
+  getAttribute(k: string): string | null;
+  removeAttribute(k: string): void;
+  appendChild(child: FakeElement): FakeElement;
+  insertBefore(newNode: FakeElement, ref: FakeElement): FakeElement;
+  addEventListener(type: string, fn: FakeListener): void;
+  dispatchEvent(evt: FakeEvent): boolean;
+  fire(type: string, props?: Partial<FakeEvent>): void;
+  focus(): void;
+  blur(): void;
+}
+
+interface FakeDocument {
+  createElement(tag: string): FakeElement;
+}
+
+function makeFakeDoc(): FakeDocument {
+  function createElement(tag: string): FakeElement {
+    const el: FakeElement = {
       tagName: String(tag).toUpperCase(),
       id: '',
       className: '',
@@ -69,7 +111,7 @@ function makeFakeDoc() {
       _text: '',
       _html: '',
       classList: {
-        _set: new Set(),
+        _set: new Set<string>(),
         add(c) { this._set.add(c); },
         remove(c) { this._set.delete(c); },
         contains(c) { return this._set.has(c); },
@@ -110,15 +152,15 @@ function makeFakeDoc() {
   return { createElement };
 }
 
-function setup(getOptions) {
+function setup(getOptions: () => unknown) {
   const doc = makeFakeDoc();
   const field = doc.createElement('div');
   const input = doc.createElement('input');
   input.id = 'beanFormVariety';
   input.ownerDocument = doc;
   field.appendChild(input);
-  const handle = attachAutocomplete(input, getOptions);
-  const list = field._children.find(c => c.tagName === 'DIV')._children.find(c => c.tagName === 'UL');
+  const handle = attachAutocomplete(input as unknown as HTMLInputElement, getOptions) as AutocompleteHandle;
+  const list = field._children.find(c => c.tagName === 'DIV')!._children.find(c => c.tagName === 'UL')!;
   return { doc, field, input, list, handle };
 }
 
@@ -136,7 +178,7 @@ describe('attachAutocomplete — DOM wiring', () => {
 
   it('is idempotent — attaching twice returns the same handle and does not re-wrap', () => {
     const { input, field, handle } = setup(options);
-    const second = attachAutocomplete(input, options);
+    const second = attachAutocomplete(input as unknown as HTMLInputElement, options);
     expect(second).toBe(handle);
     expect(field._children).toHaveLength(1);
   });
