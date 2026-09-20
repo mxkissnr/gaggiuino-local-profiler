@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"sync"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
@@ -22,38 +21,11 @@ import (
 
 const jsonBodyLimit = 16 * 1024 // express.json({ limit: '16kb' }) — server.js's global default.
 
-// profilesCache ports routes/system.js's getProfilesCacheFor/setProfilesCacheFor
-// (#340): a last-known profile list per machine, served when a live fetch
-// fails. In-memory only for every machine including the default one — Node
-// additionally persists the default machine's cache to PROFILES_CACHE_FILE
-// across restarts (defaultRuntime.machineProfiles); this Go port doesn't,
-// since this binary isn't wired into a running add-on process where
-// restart-persistence matters yet (see go/README.md) — a real gap to close
-// before cutover, not before this phase, tracked here rather than silently
-// dropped.
-type profilesCache struct {
-	mu        sync.Mutex
-	byMachine map[int64][]ProfileSummary
-}
-
-func newProfilesCache() *profilesCache {
-	return &profilesCache{byMachine: make(map[int64][]ProfileSummary)}
-}
-
-func (c *profilesCache) get(machineID int64) []ProfileSummary {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if p, ok := c.byMachine[machineID]; ok {
-		return p
-	}
-	return []ProfileSummary{}
-}
-
-func (c *profilesCache) set(machineID int64, profiles []ProfileSummary) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.byMachine[machineID] = profiles
-}
+// The old in-memory-only profilesCache (routes/system.js's
+// getProfilesCacheFor/setProfilesCacheFor, #340) is gone — replaced by
+// ProfilesRepository (profiles_repo.go), a real local-first cache/outbox
+// that also survives restarts and lets create/update/delete succeed while
+// offline instead of just degrading reads. See handlers_profiles.go.
 
 // Handlers wires Registry + the two concrete adapters + FirmwareChecker
 // into net/http handlers. gaggiuino/gaggimate are typed as the Adapter
@@ -67,16 +39,18 @@ type Handlers struct {
 	gaggiuino     Adapter
 	gaggimate     Adapter
 	firmware      *FirmwareChecker
-	profilesCache *profilesCache
+	profilesRepo  *ProfilesRepository
 	liveClient    *gaggiuinoLiveClient
 	gaggimateLive *gaggiMateLiveClient
 }
 
 // NewHandlers builds Handlers around registry (backed by the same *sql.DB
-// cmd/server already opens once, see registry.go's NewRegistry) and hub
+// cmd/server already opens once, see registry.go's NewRegistry), hub
 // (internal/sse's pub/sub broker — see live.go for how machine-pushed live
-// data reaches it).
-func NewHandlers(registry *Registry, hub *sse.Hub) *Handlers {
+// data reaches it), and profilesRepo (the local-first profile
+// cache/outbox, offline-editor rework — see profiles_repo.go; replaces the
+// old in-memory-only profilesCache).
+func NewHandlers(registry *Registry, hub *sse.Hub, profilesRepo *ProfilesRepository) *Handlers {
 	live := newGaggiuinoLiveClient(hub)
 	gmLive := newGaggiMateLiveClient()
 	return &Handlers{
@@ -84,7 +58,7 @@ func NewHandlers(registry *Registry, hub *sse.Hub) *Handlers {
 		gaggiuino:     NewGaggiuinoAdapter(live),
 		gaggimate:     NewGaggiMateAdapter(gmLive),
 		firmware:      NewFirmwareChecker(),
-		profilesCache: newProfilesCache(),
+		profilesRepo:  profilesRepo,
 		liveClient:    live,
 		gaggimateLive: gmLive,
 	}

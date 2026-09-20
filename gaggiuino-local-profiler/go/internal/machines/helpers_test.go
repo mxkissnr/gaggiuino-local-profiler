@@ -34,7 +34,7 @@ func newTestRegistry(t *testing.T) (*Registry, *sql.DB) {
 func newTestHandlers(t *testing.T) (*Handlers, *Registry, *sql.DB) {
 	t.Helper()
 	registry, sqlDB := newTestRegistry(t)
-	h := NewHandlers(registry, sse.NewHub())
+	h := NewHandlers(registry, sse.NewHub(), NewProfilesRepository(sqlDB))
 	return h, registry, sqlDB
 }
 

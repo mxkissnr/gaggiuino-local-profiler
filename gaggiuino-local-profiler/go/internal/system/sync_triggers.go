@@ -90,7 +90,31 @@ func (p *Poller) scheduleSyncAfterBrew() {
 		if newMax, _ := p.shots.MaxNativeShotID(1); newMax > prevMax {
 			log.Printf("system: post-brew sync: caught up to new shot #%d", newMax)
 		}
+		// A shot just finished syncing, so the machine is definitely
+		// reachable right now — cheap opportunity to also flush any
+		// profile edits made while it was offline, no extra network cost
+		// beyond what already just happened.
+		p.pushDirtyProfilesForDefaultMachine(ctx)
 	})
+}
+
+// pushDirtyProfilesForDefaultMachine resolves the default machine and pushes
+// its pending profile edits — shared by scheduleSyncAfterBrew and
+// maybeCatchUpAfterRecovery below, both of which only ever act on the
+// default machine (see this file's header comment on that scope). A second,
+// non-default machine is instead covered by profile_sync.go's periodic
+// runProfileSyncSweep.
+func (p *Poller) pushDirtyProfilesForDefaultMachine(ctx context.Context) {
+	if p.profilesRepo == nil {
+		return
+	}
+	machine, err := p.registry.GetDefaultMachine()
+	if err != nil || machine == nil {
+		return
+	}
+	if err := p.PushDirtyProfiles(ctx, machine.ID); err != nil {
+		log.Printf("system: post-brew profile sync failed: %v", err)
+	}
 }
 
 // maybeCatchUpAfterRecovery ports lib/poll.js's #725 block: called from the
@@ -114,6 +138,10 @@ func (p *Poller) maybeCatchUpAfterRecovery(prevReachable *bool) {
 		if err := p.syncOnce(ctx); err != nil {
 			log.Printf("system: catch-up sync after reachability recovery failed: %v", err)
 		}
+		// The machine just came back — flush any profile edits made while
+		// it was gone. This is what makes "profiles sync alongside shots"
+		// literally true for the default machine's reconnect path.
+		p.pushDirtyProfilesForDefaultMachine(ctx)
 	})
 }
 

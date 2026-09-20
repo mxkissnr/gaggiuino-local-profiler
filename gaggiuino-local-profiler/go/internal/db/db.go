@@ -401,6 +401,39 @@ func MigrateMachineColumns(sqlDB *sql.DB, dbPath string) error {
 		return fmt.Errorf("db: creating idx_shots_ts_id: %w", err)
 	}
 
+	// machine_profiles: local-first offline cache/outbox for machine
+	// profiles (Go-only, no Node equivalent — same "additive Exec, not in
+	// schemaSQL" reasoning as shot_score_cache above). Profiles used to live
+	// exclusively on the physical machine with zero local persistence, so
+	// editing one while the machine was unreachable hard-failed outright
+	// (2026-09-09 bug report). Every write now lands here first (can never
+	// fail due to the machine being offline) and gets pushed to the machine
+	// opportunistically; sync_status tracks whether that push has happened
+	// yet. remote_id is NULL for a profile created while offline (the
+	// machine hasn't assigned a real id yet) — see
+	// internal/machines/profiles_repo.go's local: id-prefix scheme for how
+	// the HTTP layer addresses such a row before it has one.
+	if _, err := sqlDB.Exec(`CREATE TABLE IF NOT EXISTS machine_profiles (
+		local_id        INTEGER PRIMARY KEY,
+		machine_id      INTEGER NOT NULL,
+		remote_id       TEXT,
+		name            TEXT NOT NULL DEFAULT '',
+		data            TEXT NOT NULL DEFAULT '{}',
+		utility         INTEGER NOT NULL DEFAULT 0,
+		sync_status     TEXT NOT NULL DEFAULT 'synced',
+		last_sync_error TEXT,
+		created_at      INTEGER NOT NULL,
+		updated_at      INTEGER NOT NULL
+	)`); err != nil {
+		return fmt.Errorf("db: creating machine_profiles: %w", err)
+	}
+	if _, err := sqlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_machine_profiles_machine ON machine_profiles(machine_id)`); err != nil {
+		return fmt.Errorf("db: creating idx_machine_profiles_machine: %w", err)
+	}
+	if _, err := sqlDB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_machine_profiles_remote ON machine_profiles(machine_id, remote_id) WHERE remote_id IS NOT NULL`); err != nil {
+		return fmt.Errorf("db: creating idx_machine_profiles_remote: %w", err)
+	}
+
 	ok, err := hasColumn(sqlDB, "maintenance", "machine_id")
 	if err != nil {
 		return err

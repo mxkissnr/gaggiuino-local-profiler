@@ -283,7 +283,8 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// can log "(none)" here even though the default machine appears a
 	// moment later on the first real request.
 	registry.LogRegistrySnapshot()
-	machinesHandlers := machines.NewHandlers(registry, hub)
+	profilesRepo := machines.NewProfilesRepository(sqlDB)
+	machinesHandlers := machines.NewHandlers(registry, hub, profilesRepo)
 	machinesHandlers.RegisterRoutes(mux)
 
 	// Phase 2e (#901): routes/debug.js — GET /api/debug/export-db,
@@ -348,6 +349,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// Phase 2a (#901): POST /api/sync's manual shot-history pull loop
 	// persists through shotsRepo — see go/internal/system/sync.go.
 	poller.SetShotsRepo(shotsRepo)
+	// Offline profile editor (2026-09-09): pushes locally-saved profile
+	// edits to the machine on reconnect/after a brew/periodically — see
+	// go/internal/system/profile_sync.go.
+	poller.SetProfilesRepo(profilesRepo)
 
 	// Phase 2d (#901): MQTT live-data transport (#608). mqttRepo is the
 	// Settings-page toggle + broker connection (kv.key = 'mqtt_settings', no

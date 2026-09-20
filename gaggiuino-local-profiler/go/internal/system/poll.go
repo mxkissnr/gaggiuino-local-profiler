@@ -202,6 +202,12 @@ type Poller struct {
 	// unchanged. nil until cmd/server sets it — RunManualSync no-ops then.
 	shots *shots.Repository
 
+	// profilesRepo is the offline-profile-editor local cache/outbox, wired
+	// via SetProfilesRepo (profile_sync.go) — same rationale as shots
+	// above. nil until cmd/server sets it — every profile_sync.go function
+	// no-ops then.
+	profilesRepo *machines.ProfilesRepository
+
 	// liveTransport is the optional MQTT live-data override (#608), wired via
 	// SetLiveTransport. nil in tests and when MQTT support isn't compiled in
 	// — the poller then always reads live data through the adapter's WS path,
@@ -295,6 +301,13 @@ func (p *Poller) Start(ctx context.Context) {
 	})
 	httputil.SafeGo("system: preheat watch", func() {
 		p.runTicker(ctx, preheatWatchInterval, func() { p.preheatWatchTick(ctx) })
+	})
+	// #profile-sync: catches every machine besides the default one —
+	// maybeCatchUpAfterRecovery/scheduleSyncAfterBrew (sync_triggers.go)
+	// only ever run for the default machine, so a second registered machine
+	// with pending offline profile edits has no other trigger to reach it.
+	httputil.SafeGo("system: profile sync sweep", func() {
+		p.runTicker(ctx, profilesSyncInterval, func() { p.runProfileSyncSweep(ctx) })
 	})
 	// ctx cancellation also tears the live-poll ticker down (its goroutine
 	// is otherwise only stopped by stopLivePolling on a machine-off

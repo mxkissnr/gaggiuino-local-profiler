@@ -85,9 +85,12 @@ func TestSchemaMatchesNodeFixture(t *testing.T) {
 	// comparison; extend these when adding another Go-only table/index.
 	goOnlyTables := map[string]bool{
 		"shot_score_cache": true, // #957 read-through score cache
+		"machine_profiles": true, // offline profile editor local cache/outbox
 	}
 	goOnlyIndexes := map[string]bool{
-		"idx_shots_ts_id": true, // #957 keyset-page order
+		"idx_shots_ts_id":              true, // #957 keyset-page order
+		"idx_machine_profiles_machine": true,
+		"idx_machine_profiles_remote":  true,
 	}
 	for name := range goOnlyTables {
 		if _, ok := got.Tables[name]; !ok {

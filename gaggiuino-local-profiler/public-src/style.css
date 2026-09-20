@@ -1343,6 +1343,9 @@
         @media (max-width: 640px) { .lib-form-grid { grid-template-columns: 1fr; } }
         .lib-form-field { display: flex; flex-direction: column; gap: var(--sp-1); }
         .lib-form-field label { font-size: var(--fs-1); color: var(--gray-400); }
+        /* Native title-attribute tooltip on the label itself, this icon is
+           just the visual affordance that there's more to read on hover. */
+        .gm-field-hint { cursor: help; opacity: .6; }
         .lib-form-field input, .lib-form-field select { background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); }
         .lib-form-field select { cursor: pointer; }
         .lib-form-field input:focus, .lib-form-field select:focus { outline: none; border-color: var(--gray-500); }
@@ -2447,7 +2450,16 @@
         .gm-phase-nav { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-3); flex-wrap:wrap; }
         .gm-phase-nav span { flex:0 0 auto; font-size:var(--fs-1); color:var(--gray-400); }
         .gm-dropdown { position:relative; display:inline-block; }
-        .gm-dropdown-menu { position:absolute; top:100%; left:0; z-index:200; background:var(--gray-800); border:1px solid var(--gray-600); border-radius:var(--radius); min-width:180px; padding:var(--sp-1) 0; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+        /* This is a <ul> — list-style/margin were never reset, so its
+           default browser bullet/indent showed next to every item (2026-
+           09-09 bug report). max-height+overflow-y is a safety net for a
+           very long stop-conditions list even after the up/down flip below. */
+        .gm-dropdown-menu { position:absolute; top:100%; left:0; z-index:200; background:var(--gray-800); border:1px solid var(--gray-600); border-radius:var(--radius); min-width:180px; padding:var(--sp-1) 0; margin:0; list-style:none; box-shadow:0 4px 16px rgba(0,0,0,.4); max-height:min(60vh, 320px); overflow-y:auto; }
+        /* Toggled on by the gm-pro-target-menu handler (gaggimate-profile-
+           editor.js) when opening downward would push the menu past the
+           viewport bottom — anchors it above the trigger instead, the same
+           flip any standard dropdown/select does. */
+        .gm-dropdown-menu.gm-dropdown-menu-up { top:auto; bottom:100%; }
         .gm-dropdown-item { display:block; width:100%; text-align:left; background:none; border:none; color:var(--gray-300); font-size:var(--fs-1); padding:var(--sp-2) var(--sp-3); cursor:pointer; }
         .gm-dropdown-item:hover { background:var(--gray-700); color:var(--gray-100); }
 

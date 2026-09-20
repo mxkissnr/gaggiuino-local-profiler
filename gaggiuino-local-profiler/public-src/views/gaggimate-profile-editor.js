@@ -63,9 +63,18 @@ export async function saveGaggiMateProfile() {
       window.showToast?.(err.error || t('gm_toast_save_error'));
       return;
     }
+    // The backend now saves locally first and only degrades to
+    // syncStatus !== 'synced' when the machine itself couldn't be reached —
+    // still a 200, not an error (see handlers_profiles.go's offline-editor
+    // rework). Only a real validation/unsupported error (400/501, handled
+    // above) is still a hard failure here.
+    const saved = await r.json().catch(() => ({}));
     invalidateGmPhaseCache(machineId);
     closeGaggiMateEditor();
     await loadMachineProfileList();
+    if (saved.syncStatus && saved.syncStatus !== 'synced') {
+      window.showToast?.(t('gm_toast_saved_offline'));
+    }
   } finally {
     // eslint-disable-next-line require-atomic-updates -- guarded by _saving check at entry
     _saving = false;
@@ -636,7 +645,7 @@ function _renderProPhase(ph, i) {
               data-action="gm-pro-ramp-duration" data-idx="${i}">
           </div>
           <div class="lib-form-field">
-            <label>${t('gm_field_ramp_start')}</label>
+            <label title="${t('gm_ramp_start_hint')}">${t('gm_field_ramp_start')} <span class="gm-field-hint">ⓘ</span></label>
             ${_toggleGroup('gm-pro-ramp-adaptive',
               [{ val: '0', label: t('gm_ramp_start_prev') }, { val: '1', label: t('gm_ramp_start_current') }],
               trans.adaptive ? '1' : '0', i)}
@@ -726,7 +735,7 @@ function _bindInputs() {
       case 'gm-pro-duration':     _setPhase(idx, { duration: num() }); break;
       case 'gm-pro-temperature':  _setPhase(idx, { temperature: num() }); break;
       case 'gm-std-pump-power':
-      case 'gm-pro-pump-power':   _setPhase(idx, { pump: parseFloat(el.value) || 100 }); break;
+      case 'gm-pro-pump-power': { const pv = parseFloat(el.value); _setPhase(idx, { pump: isNaN(pv) ? 100 : pv }); break; }
       case 'gm-pro-pressure':     _setPhase(idx, { pump: { ...ph().pump, pressure: num() } }); break;
       case 'gm-pro-flow':         _setPhase(idx, { pump: { ...ph().pump, flow: num() } }); break;
       case 'gm-pro-ramp-duration':
@@ -822,7 +831,22 @@ export function handleGmEditorAction(action, el) {
       break;
     case 'gm-pro-target-menu': {
       const menu = document.getElementById(`gmTargetMenu${idx}`);
-      if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+      if (!menu) break;
+      const opening = menu.style.display === 'none';
+      if (opening) {
+        // The trigger ("+ Hinzufügen") usually sits near the bottom of a
+        // long scrollable phase-editor panel — always opening downward
+        // (the CSS default, top:100%) routinely pushed the menu past the
+        // panel/viewport bottom, forcing a scroll to even see it (2026-09-09
+        // bug report). Flip to open upward when there isn't enough room
+        // below, same as any standard dropdown/select would.
+        menu.classList.remove('gm-dropdown-menu-up');
+        menu.style.display = 'block';
+        const fitsBelow = menu.getBoundingClientRect().bottom <= window.innerHeight;
+        menu.classList.toggle('gm-dropdown-menu-up', !fitsBelow);
+      } else {
+        menu.style.display = 'none';
+      }
       break;
     }
     case 'gm-pro-add-target':

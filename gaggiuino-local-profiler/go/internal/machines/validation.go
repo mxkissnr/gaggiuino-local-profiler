@@ -135,10 +135,10 @@ func validateGaggiMateProfileBody(raw json.RawMessage) error {
 	return nil
 }
 
-// injectIDIfAbsent injects {"id":<pathID>} into a GaggiMate profile JSON body
+// InjectIDIfAbsent injects {"id":<pathID>} into a GaggiMate profile JSON body
 // when the body carries no "id" key. A body that already has an id (even null)
 // is returned unchanged — the client's explicit value wins.
-func injectIDIfAbsent(raw json.RawMessage, pathID string) json.RawMessage {
+func InjectIDIfAbsent(raw json.RawMessage, pathID string) json.RawMessage {
 	if pathID == "" {
 		return raw
 	}
