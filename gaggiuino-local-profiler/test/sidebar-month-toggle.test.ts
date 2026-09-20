@@ -5,8 +5,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as test/milk-deduct-gate.test.js and
 // test/library-profile-editor.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge the other typed fixtures use).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator    ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 const { toggleMonthGroup } = await import('../public-src/components/sidebar.js');
@@ -15,15 +18,15 @@ const { toggleMonthGroup } = await import('../public-src/components/sidebar.js')
 // stub only those, same "fake minimal document" approach as
 // test/library-profile-editor.test.js's fakeRow(), rather than pulling in
 // a full jsdom/happy-dom dependency this repo doesn't otherwise use.
-function fakeMonthGroup(key, label, expanded) {
+function fakeMonthGroup(key: string, label: string, expanded: boolean) {
   const body = { id: `monthGroup-${key}`, style: { display: expanded ? '' : 'none' } };
   const header = {
     dataset: { action: 'toggle-month-group', id: key },
     textContent: `${expanded ? '▾' : '▸'} ${label}`,
   };
-  globalThis.document = {
-    getElementById: id => (id === body.id ? body : undefined),
-    querySelector: sel => (sel === `[data-action="toggle-month-group"][data-id="${key}"]` ? header : undefined),
+  g.document = {
+    getElementById: (id: string) => (id === body.id ? body : undefined),
+    querySelector: (sel: string) => (sel === `[data-action="toggle-month-group"][data-id="${key}"]` ? header : undefined),
   };
   return { body, header };
 }
@@ -57,7 +60,7 @@ describe('toggleMonthGroup (#439 month-accordion restore)', () => {
   });
 
   it('is a defensive no-op when the body element is missing', () => {
-    globalThis.document = { getElementById: () => undefined, querySelector: () => undefined };
+    g.document = { getElementById: () => undefined, querySelector: () => undefined };
     expect(() => toggleMonthGroup('2099-01')).not.toThrow();
     expect(S._expandedMonths.has('2099-01')).toBe(false);
   });

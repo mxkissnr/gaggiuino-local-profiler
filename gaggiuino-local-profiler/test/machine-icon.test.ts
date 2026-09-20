@@ -18,8 +18,8 @@ describe('machineIconSvg / machineIconMiniSvg theme rendering (#594)', () => {
     it('renders a preset theme\'s resolved hex stops', () => {
         const preset = THEME_PRESETS.find(p => p.key === 'ember-espresso');
         const svg = machineIconSvg({ preset: 'ember-espresso' });
-        expect(svg).toContain(preset.a);
-        expect(svg).toContain(preset.b);
+        expect(svg).toContain(preset!.a);
+        expect(svg).toContain(preset!.b);
         expect(svg).not.toContain('var(--accent-from)');
     });
 
@@ -66,7 +66,7 @@ describe('machineIconSvg / machineIconMiniSvg theme rendering (#594)', () => {
     it('every gradient id is unique across repeated calls so multiple icons in one document never collide', () => {
         const first = machineIconSvg(null);
         const second = machineIconSvg(null);
-        const idOf = (svg) => svg.match(/id="(glp-machine-icon-\d+)"/)[1];
+        const idOf = (svg: string) => svg.match(/id="(glp-machine-icon-\d+)"/)![1];
         expect(idOf(first)).not.toBe(idOf(second));
     });
 });
@@ -120,8 +120,8 @@ describe('resolveTheme (lib/machines/theme-presets.js)', () => {
     it('resolves every known preset key to a valid #rrggbb pair', () => {
         for (const p of THEME_PRESETS) {
             const resolved = resolveTheme({ preset: p.key });
-            expect(resolved.a).toMatch(HEX_RE);
-            expect(resolved.b).toMatch(HEX_RE);
+            expect(resolved!.a).toMatch(HEX_RE);
+            expect(resolved!.b).toMatch(HEX_RE);
         }
     });
 
