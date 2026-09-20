@@ -116,6 +116,8 @@ const de: Partial<Translations> = {
     easter_egg_stat_sse_live:'live', easter_egg_stat_sse_poll:'Abfrage', easter_egg_close:'Schließen',
     live_waiting:'Warte auf Bezug …', live_disabled:'Live deaktiviert (Maschine aus)',
     machine_ready:'Maschine bereit',
+    machine_cold_title:'Maschine kalt',
+    live_setup_toggle:'Bezug einstellen', live_setup_reset:'Zurücksetzen',
     ref_label:'Referenz:', ref_none:'— kein Referenz-Shot —', ref_clear:`${CLOSE_ICON_SVG} Löschen`,
     ref_pressure:'Ref: Druck', ref_flow:'Ref: Fluss', ref_weight:'Ref: Gewicht', ref_temp:'Ref: Temp',
     chart_pressure:'Druck', chart_flow:'Pumpenfluss', chart_weightflow:'Gewichtsfluss',

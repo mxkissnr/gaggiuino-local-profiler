@@ -5,12 +5,15 @@ import * as timerRegistry from '../state/timers.js';
 import { t } from '../i18n.js';
 import { isApiPortBlocked } from '../api/transport.js';
 import { getPreheat, getLiveData } from '../api/system.js';
+import { annotateShot } from '../api/shots.js';
 import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints } from '../utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
          resolveMachineIconState, MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
 import { localeFor } from '../constants.js';
+import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange,
+         _renderBeanSelect, _renderBasketSelect, _renderPuckScreenSelect, _renderRecipeSelect } from './shots/annotation.js';
 
 // Multi-machine live gating (#325, #341) — shot sync now covers every
 // registered machine (lib/sync.js's syncOtherMachines()), but real-time
@@ -23,6 +26,144 @@ function _isActiveMachineLiveCapable() {
   if (active == null || active === 'all') return true;
   const defaultId = getDefaultMachineId();
   return defaultId == null || active === defaultId;
+}
+
+// ── Pre-shot setup (bean/dose/grinder/grind/basket/puckscreen/recipe) ──────
+// Lets the user pick the upcoming shot's setup right on the Live/idle screen
+// instead of only after the fact on the Shots detail view. The draft is
+// sticky per machine (most sessions pull several shots in a row with the
+// same bean/grinder/basket) and gets written onto the next shot's annotation
+// automatically once that shot finishes syncing (see fetchLiveData's "brew
+// just ended" branch below) — same POST api/shots/{id}/annotate endpoint and
+// field shape shots/annotation.js's own auto-save uses, just triggered from
+// here instead of from the annotation panel's own fields.
+function _liveSetupStorageKey() {
+  return `glp_live_shot_setup_${S.activeMachineId ?? 'default'}`;
+}
+
+function _loadLiveSetupDraft() {
+  try {
+    return JSON.parse(localStorage.getItem(_liveSetupStorageKey())) || {};
+  } catch {
+    return {};
+  }
+}
+
+function _saveLiveSetupDraft(draft) {
+  localStorage.setItem(_liveSetupStorageKey(), JSON.stringify(draft));
+}
+
+let _lsWired = false;
+
+export function renderLiveShotSetupPanel() {
+  // Some tests substitute a minimal fake `document` (getElementById only,
+  // no createDocumentFragment) to exercise connectLiveStream()'s timer logic
+  // without needing full DOM support for the chart it also touches — same
+  // environment this panel would otherwise crash in for no functional
+  // reason (every real browser has createDocumentFragment).
+  if (typeof document.createDocumentFragment !== 'function') return;
+  const draft = _loadLiveSetupDraft();
+  _renderBeanSelect(draft.coffee || '', draft.beanId ?? null, 'lsBean');
+  _renderBasketSelect(draft.basketId ?? null, 'lsBasket');
+  _renderPuckScreenSelect(draft.puckScreenId ?? null, 'lsPuckScreen');
+  _renderRecipeSelect(draft.recipeId ?? null, 'lsRecipeField', 'lsRecipe');
+  renderGrinderField('lsGrinder', 'lsGrinderOther', draft.grinder || '');
+  const doseEl = document.getElementById('lsDose');
+  const grindEl = document.getElementById('lsGrindSetting');
+  if (doseEl)  doseEl.value  = draft.dose ?? '';
+  if (grindEl) grindEl.value = draft.grindSetting || '';
+
+  if (_lsWired) return;
+  _lsWired = true;
+
+  document.getElementById('lsToggle')?.addEventListener('click', () => {
+    document.getElementById('live-shot-setup')?.classList.toggle('open');
+  });
+
+  const beanSelect = document.getElementById('lsBean');
+  beanSelect?.addEventListener('change', () => {
+    const d = _loadLiveSetupDraft();
+    d.coffee = beanSelect.value;
+    d.beanId = beanSelect.selectedOptions[0]?.dataset.beanId
+      ? parseInt(beanSelect.selectedOptions[0].dataset.beanId, 10) : null;
+    // Prefill grinder/grind setting from the bean's known-grind-setting
+    // record (dial-in-wizard's own prefill source, see library.js) — only
+    // when the user hasn't already typed something into those fields, so
+    // this never clobbers a manual override.
+    if (!d.grinder && !d.grindSetting && d.beanId != null) {
+      const bean = (S.coffeeLibrary?.beans || []).find(b => b.id === d.beanId);
+      const known = bean?.knownGrindSettings?.[0];
+      if (known) { d.grinder = known.grinder || ''; d.grindSetting = known.grindSetting || ''; }
+    }
+    _saveLiveSetupDraft(d);
+    renderLiveShotSetupPanel();
+  });
+
+  document.getElementById('lsGrinder')?.addEventListener('change', () => {
+    handleGrinderFieldChange('lsGrinder', 'lsGrinderOther');
+    const d = _loadLiveSetupDraft();
+    d.grinder = getGrinderFieldValue('lsGrinder', 'lsGrinderOther');
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsGrinderOther')?.addEventListener('input', () => {
+    const d = _loadLiveSetupDraft();
+    d.grinder = getGrinderFieldValue('lsGrinder', 'lsGrinderOther');
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsGrindSetting')?.addEventListener('input', () => {
+    const d = _loadLiveSetupDraft();
+    d.grindSetting = document.getElementById('lsGrindSetting').value.trim();
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsDose')?.addEventListener('input', () => {
+    const d = _loadLiveSetupDraft();
+    d.dose = parseFloat(document.getElementById('lsDose').value) || null;
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsBasket')?.addEventListener('change', () => {
+    const d = _loadLiveSetupDraft();
+    const sel = document.getElementById('lsBasket');
+    d.basketId = sel.selectedOptions[0]?.dataset.basketId ? parseInt(sel.selectedOptions[0].dataset.basketId, 10) : null;
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsPuckScreen')?.addEventListener('change', () => {
+    const d = _loadLiveSetupDraft();
+    const sel = document.getElementById('lsPuckScreen');
+    d.puckScreenId = sel.selectedOptions[0]?.dataset.puckscreenId ? parseInt(sel.selectedOptions[0].dataset.puckscreenId, 10) : null;
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsRecipe')?.addEventListener('change', () => {
+    const d = _loadLiveSetupDraft();
+    d.recipeId = parseInt(document.getElementById('lsRecipe').value, 10) || null;
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsReset')?.addEventListener('click', () => {
+    localStorage.removeItem(_liveSetupStorageKey());
+    renderLiveShotSetupPanel();
+  });
+}
+
+// Writes the current draft onto shotId's annotation — called once a shot
+// that started while this draft was active finishes syncing. Only fills
+// fields the draft actually has a value for; an empty draft results in an
+// empty payload, which is harmless (matches what auto-save would have sent
+// for an untouched annotation panel anyway).
+async function _applyLiveSetupToShot(shotId) {
+  const draft = _loadLiveSetupDraft();
+  if (!Object.keys(draft).length) return;
+  const payload = {
+    coffee: draft.coffee || '', beanId: draft.beanId ?? null,
+    basketId: draft.basketId ?? null, puckScreenId: draft.puckScreenId ?? null,
+    grinder: draft.grinder || '', grindSetting: draft.grindSetting || '',
+    dose: draft.dose ?? null, recipeId: draft.recipeId ?? null,
+  };
+  try {
+    const r = await annotateShot(shotId, payload);
+    if (r.ok) {
+      const idx = S.shots.findIndex(s => s.id === shotId);
+      if (idx !== -1) S.shots[idx].annotation = { ...S.shots[idx].annotation, ...payload };
+    }
+  } catch { /* best-effort — the shot still exists, just unannotated */ }
 }
 
 // ── Live chart init ───────────────────────────────────────────────────────
@@ -158,6 +299,7 @@ export function connectLiveStream() {
   if (content) content.style.display = '';
   disconnectLiveStream();
   initLiveChart();
+  renderLiveShotSetupPanel();
   setLiveBadge('connecting');
   S.liveLastSeq = -1;
   S.liveWasLive = false;
@@ -273,10 +415,19 @@ export async function fetchLiveData() {
       autoApplyRefShot(msg.profileName);
     }
 
-    // Brew just ended → reload shot list after sync delay
+    // Brew just ended → reload shot list after sync delay, then write the
+    // pre-shot setup panel's draft (bean/dose/grinder/grind/basket/
+    // puckscreen/recipe) onto the freshly-synced shot. Snapshotting via
+    // _applyLiveSetupToShot's own read happens after loadData resolves, not
+    // captured here, since a sticky draft is expected to still be current a
+    // few seconds later — see that function's own doc comment.
     if (S.liveWasLive && !msg.isLive && msg.seq !== S.liveLastSeq) {
       S.liveLastSeq = msg.seq;
-      setTimeout(() => { if (window.loadData) window.loadData(); }, 4000);
+      setTimeout(async () => {
+        if (window.loadData) await window.loadData();
+        const newest = S.shots[S.shots.length - 1];
+        if (newest) _applyLiveSetupToShot(newest.id);
+      }, 4000);
     }
     S.liveWasLive = msg.isLive;
 

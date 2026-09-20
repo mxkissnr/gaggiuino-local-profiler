@@ -336,12 +336,55 @@ function _updateMilkFieldVisibility() {
   field.style.display = (S.milkTypes?.length && drinkId) ? '' : 'none';
 }
 
+// Same select-with-"other"-fallback grinder field as dialin-wizard.js's
+// _renderGrinderField/dialinGrinderChange, but DOM-mutating (fills an
+// existing <select>/<input> pair by id) instead of returning an HTML
+// string, since live.js's pre-shot setup panel's markup is static in
+// index.html rather than re-rendered from a template each time.
+export function renderGrinderField(selectId, otherId, currentValue) {
+  const select = document.getElementById(selectId);
+  const other  = document.getElementById(otherId);
+  if (!select) return;
+  const grinders    = S.coffeeLibrary?.grinders || [];
+  const knownNames  = new Set(grinders.map(g => g.name));
+  const isOther     = !!currentValue && !knownNames.has(currentValue);
+  select.innerHTML = grinders.map(g =>
+    `<option value="${esc(g.name)}"${!isOther && currentValue === g.name ? ' selected' : ''}>${esc(g.name)}</option>`
+  ).join('') + `<option value="__other__"${isOther ? ' selected' : ''}>${t('dialin_wizard_grinder_other')}</option>`;
+  if (other) {
+    other.style.display = isOther ? '' : 'none';
+    other.value = isOther ? currentValue : '';
+  }
+}
+
+// Resolves the field's effective value: the select's own value, or the
+// free-text fallback input's value when "other…" is selected.
+export function getGrinderFieldValue(selectId, otherId) {
+  const select = document.getElementById(selectId);
+  const other  = document.getElementById(otherId);
+  if (!select) return '';
+  if (select.value === '__other__') return other?.value.trim() || '';
+  return select.value;
+}
+
+// Toggles the free-text fallback input's visibility on select change —
+// mirrors dialin-wizard.js's dialinGrinderChange.
+export function handleGrinderFieldChange(selectId, otherId) {
+  const select = document.getElementById(selectId);
+  const other  = document.getElementById(otherId);
+  if (!select || !other) return;
+  other.style.display = select.value === '__other__' ? '' : 'none';
+}
+
 // selectedBeanId, when given, takes priority over selectedName: id survives
 // a bean rename, name does not. Without it (or when it no longer resolves
 // in the current library — e.g. a deleted bean), falls back to matching by
 // name, same as before this second parameter existed.
-export function _renderBeanSelect(selectedName, selectedBeanId) {
-  const select = document.getElementById('annCoffee');
+// selectId defaults to the annotation panel's own #annCoffee — views/live.js's
+// pre-shot setup panel passes '#lsBean' to reuse this same in-stock/exhausted
+// bean-listing logic instead of duplicating it.
+export function _renderBeanSelect(selectedName, selectedBeanId, selectId = 'annCoffee') {
+  const select = document.getElementById(selectId);
   if (!select) return;
   const allBeans = S.coffeeLibrary?.beans || [];
   // #933 (was #915): exhausted (zero-stock) beans used to be dropped from
@@ -409,21 +452,25 @@ function _fillIdSelect(select, noneLabel, items, selectedId, datasetKey) {
 // beans, there's no free-text legacy value to preserve) — value and
 // data-basket-id/data-puckscreen-id both carry the id, mirroring
 // _renderBeanSelect's data-attribute pattern for _buildAnnotationPayload.
-export function _renderBasketSelect(selectedId) {
-  const select = document.getElementById('annBasket');
+// selectId/fieldId default to the annotation panel's own elements —
+// views/live.js's pre-shot setup panel (#lsBasket/#lsPuckScreen/#lsRecipe)
+// passes its own ids to reuse this same library-backed population logic
+// instead of duplicating it.
+export function _renderBasketSelect(selectedId, selectId = 'annBasket') {
+  const select = document.getElementById(selectId);
   if (!select) return;
   _fillIdSelect(select, t('ann_basket_none'), S.coffeeLibrary?.baskets || [], selectedId, 'basketId');
 }
 
-export function _renderPuckScreenSelect(selectedId) {
-  const select = document.getElementById('annPuckScreen');
+export function _renderPuckScreenSelect(selectedId, selectId = 'annPuckScreen') {
+  const select = document.getElementById(selectId);
   if (!select) return;
   _fillIdSelect(select, t('ann_puckscreen_none'), S.coffeeLibrary?.puckScreens || [], selectedId, 'puckscreenId');
 }
 
-export function _renderRecipeSelect(selectedId) {
-  const field  = document.getElementById('recipeField');
-  const select = document.getElementById('annRecipe');
+export function _renderRecipeSelect(selectedId, fieldId = 'recipeField', selectId = 'annRecipe') {
+  const field  = document.getElementById(fieldId);
+  const select = document.getElementById(selectId);
   if (!field || !select) return;
   const recipes = S.coffeeLibrary?.recipes || [];
   if (!recipes.length) { field.style.display = 'none'; return; }

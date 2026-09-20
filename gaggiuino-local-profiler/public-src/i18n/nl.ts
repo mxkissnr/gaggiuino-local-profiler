@@ -116,6 +116,8 @@ const nl: Partial<Translations> = {
     easter_egg_stat_sse_live:'live', easter_egg_stat_sse_poll:'polling', easter_egg_close:'Sluiten',
     live_waiting:'Wachten op shot …', live_disabled:'Live uitgeschakeld (machine uit)',
     machine_ready:'Machine klaar',
+    machine_cold_title:'Machine koud',
+    live_setup_toggle:'Bezug instellen', live_setup_reset:'Resetten',
     ref_label:'Referentie:', ref_none:'— geen referentieshot —', ref_clear:`${CLOSE_ICON_SVG} Verwijderen`,
     ref_pressure:'Ref: Druk', ref_flow:'Ref: Stroom', ref_weight:'Ref: Gewicht', ref_temp:'Ref: Temp',
     chart_pressure:'Druk', chart_flow:'Pompstroom', chart_weightflow:'Gewichtsstroom',

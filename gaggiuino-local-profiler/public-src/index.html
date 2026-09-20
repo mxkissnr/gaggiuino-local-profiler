@@ -1117,6 +1117,55 @@
                     <div class="idle-stat-label" data-i18n="live_idle_water_label">Wasserstand</div>
                 </div>
             </div>
+
+            <!-- Pre-shot setup: bean/dose/grinder/grind/basket/puckscreen/recipe
+                 chosen here get written onto the next completed shot's
+                 annotation automatically once it syncs (views/live.js). Sticky
+                 across shots (same setup usually applies to several pulls in a
+                 row) — #lsReset clears it back to empty. -->
+            <div id="live-shot-setup">
+                <button id="lsToggle" type="button">
+                    <svg class="ls-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>
+                    <span data-i18n="live_setup_toggle">Bezug einstellen</span>
+                    <svg class="ls-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div id="lsFields">
+                    <div class="ls-fields-grid">
+                        <div class="annotation-field">
+                            <label for="lsBean" data-i18n="ann_coffee">Kaffee / Bohne</label>
+                            <select id="lsBean"></select>
+                        </div>
+                        <div class="annotation-field">
+                            <label for="lsDose" data-i18n="ann_dose">Dosis (g)</label>
+                            <input type="number" id="lsDose" step="0.1" min="0">
+                        </div>
+                        <div class="annotation-field">
+                            <label for="lsGrinder" data-i18n="ann_grinder">Mühle</label>
+                            <select id="lsGrinder"></select>
+                            <input type="text" id="lsGrinderOther" style="display:none">
+                        </div>
+                        <div class="annotation-field">
+                            <label for="lsGrindSetting" data-i18n="ann_grind_setting">Mahlgrad</label>
+                            <input type="text" id="lsGrindSetting">
+                        </div>
+                        <div class="annotation-field">
+                            <label for="lsBasket" data-i18n="ann_basket">Sieb</label>
+                            <select id="lsBasket"></select>
+                        </div>
+                        <div class="annotation-field">
+                            <label for="lsPuckScreen" data-i18n="ann_puckscreen">Puck Screen</label>
+                            <select id="lsPuckScreen"></select>
+                        </div>
+                        <div class="annotation-field" id="lsRecipeField">
+                            <label for="lsRecipe" data-i18n="ann_recipe">Rezept</label>
+                            <select id="lsRecipe"></select>
+                        </div>
+                    </div>
+                    <div class="ls-fields-footer">
+                        <button id="lsReset" type="button" data-i18n="live_setup_reset">Zurücksetzen</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div><!-- #live-view -->
 
