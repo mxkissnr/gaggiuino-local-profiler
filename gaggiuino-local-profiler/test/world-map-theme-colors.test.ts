@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 
+// vitest's node environment has no browser globals; the globals this file
+// swaps in are reached through a loose view of globalThis (the same bridge
+// test/api-port-closed-notice.test.ts uses).
+const g = globalThis as unknown as Record<string, unknown>;
+
 // analytics.js pulls in state.js/i18n.js (localStorage/navigator at module
 // load) -- same minimal stub other analytics test files use (see
 // world-map-antimeridian.test.js, analytics-world-map-race.test.js).
-let resolveWorldMapColors;
+let resolveWorldMapColors: (typeof import('../public-src/views/analytics.js'))['resolveWorldMapColors'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -24,10 +29,10 @@ beforeAll(async () => {
 // light-theme token values actually declared in style.css (:root vs.
 // [data-theme="light"], same source test/theme-contrast.test.js audits)
 // without needing a real stylesheet or DOM.
-function stubTheme(tokens) {
-  globalThis.document = { documentElement: {} };
-  globalThis.getComputedStyle = () => ({
-    getPropertyValue: (name) => tokens[name] || '',
+function stubTheme(tokens: Record<string, string>) {
+  g.document = { documentElement: {} };
+  g.getComputedStyle = () => ({
+    getPropertyValue: (name: string) => tokens[name] || '',
   });
 }
 
@@ -72,8 +77,8 @@ describe('resolveWorldMapColors (#1024)', () => {
   });
 
   it('falls back to the old dark-theme literals when no stylesheet has applied yet', () => {
-    globalThis.document = { documentElement: {} };
-    globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
+    g.document = { documentElement: {} };
+    g.getComputedStyle = () => ({ getPropertyValue: () => '' });
     const c = resolveWorldMapColors();
     expect(c.backgroundColor).toBe('rgba(19,20,22,0.55)');
     expect(c.accentTo).toBe('#f97316');

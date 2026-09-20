@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 // analytics.js pulls in state.js/i18n.js (localStorage/navigator at module
 // load) -- same minimal stub other analytics test files use (see
 // world-map-antimeridian.test.js, world-map-theme-colors.test.js).
-let worldMapTooltipFormatter;
+let worldMapTooltipFormatter: (typeof import('../public-src/views/analytics.js'))['worldMapTooltipFormatter'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {

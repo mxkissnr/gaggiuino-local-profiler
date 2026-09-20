@@ -4,7 +4,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 // and i18n.js — neither is available in the plain Node test environment, so
 // stub the minimum before importing, same approach as
 // best-grind-combo.test.js / share-or-download.test.js.
-let splitAntimeridianRing;
+let splitAntimeridianRing: (typeof import('../public-src/views/analytics.js'))['splitAntimeridianRing'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {

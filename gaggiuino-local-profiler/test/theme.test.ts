@@ -6,10 +6,52 @@
 import { describe, it, expect, vi } from 'vitest';
 import { resolveTheme, applyTheme, watchSystemTheme, THEME_STORAGE_KEY } from '../public-src/theme.js';
 
+// vitest's node environment has no browser globals; the one global this file
+// swaps in and out is reached through a loose view of globalThis, the same
+// bridge test/api-port-closed-notice.test.ts uses.
+const g = globalThis as unknown as Record<string, unknown>;
+
+type RealWindow = Window & typeof globalThis;
+
+interface FakeButton {
+  dataset: { themeVal: string | undefined };
+  classList: {
+    toggle: (name: string, on: boolean) => void;
+    contains: (name: string) => boolean;
+  };
+}
+
+interface FakeDoc {
+  documentElement: { dataset: Record<string, string> };
+  querySelectorAll: (sel: string) => FakeButton[];
+}
+
+interface FakeMql {
+  readonly matches: boolean;
+  _win: FakeWin | null;
+  addEventListener: (type: string, cb: () => void) => void;
+}
+
+interface FakeWin {
+  prefersDark: boolean;
+  matchMedia: (query: string) => FakeMql;
+  fireChange: () => void;
+  dispatchEvent: (e: { type: string }) => number;
+  CustomEvent: new (type: string) => { type: string };
+  events: string[];
+}
+
+// applyTheme()/watchSystemTheme() take the real Document/Window/Storage types;
+// the fakes below implement only the sliver of each those functions touch, so
+// they're cast at the call sites rather than made to look like the whole thing.
+const asDoc = (doc: FakeDoc): Document => doc as unknown as Document;
+const asWin = (win: FakeWin): RealWindow => win as unknown as RealWindow;
+const asStorage = (storage: unknown): Storage => storage as Storage;
+
 // A button as #themeToggleGroup's real markup declares it: class list +
 // data-theme-val, nothing else applyTheme() touches.
-function fakeButton(themeVal) {
-  const classes = new Set(['theme-btn']);
+function fakeButton(themeVal: string | undefined): FakeButton {
+  const classes = new Set<string>(['theme-btn']);
   return {
     dataset: { themeVal },
     classList: {
@@ -19,7 +61,7 @@ function fakeButton(themeVal) {
   };
 }
 
-function fakeDoc(buttons) {
+function fakeDoc(buttons: FakeButton[]): FakeDoc {
   return {
     documentElement: { dataset: {} },
     querySelectorAll: sel =>
@@ -27,32 +69,39 @@ function fakeDoc(buttons) {
   };
 }
 
+// Stand-in for window.CustomEvent: applyTheme() constructs one and hands it to
+// dispatchEvent(), which reads `.type` back off it.
+class FakeCustomEvent {
+  type: string;
+  constructor(type: string) { this.type = type; }
+}
+
 // Fake `window`: a matchMedia stub whose `matches` and `change` listener are
 // controlled by the test, plus the two globals applyTheme()/watchSystemTheme()
 // call on it (dispatchEvent/CustomEvent).
-function fakeWin(prefersDark = false) {
-  const listeners = [];
-  const events = [];
+function fakeWin(prefersDark = false): FakeWin {
+  const listeners: Array<() => void> = [];
+  const events: string[] = [];
   return {
     prefersDark,
     matchMedia: () => ({
-      get matches() { return this._win.prefersDark; },
+      get matches() { return this._win!.prefersDark; },
       _win: null,
       addEventListener: (type, cb) => { if (type === 'change') listeners.push(cb); },
     }),
-    fireChange() { listeners.forEach(cb => cb()); },
+    fireChange: () => { listeners.forEach(cb => cb()); },
     dispatchEvent: e => events.push(e.type),
-    CustomEvent: function (type) { this.type = type; },
+    CustomEvent: FakeCustomEvent,
     events,
   };
 }
 // matchMedia's returned object needs a live reference back to the win to
 // read the current `prefersDark` -- wire it up after construction so
 // `win.prefersDark = true` later is reflected without re-creating the MQL.
-function linkWin(win) {
+function linkWin(win: FakeWin): FakeWin {
   const realMatchMedia = win.matchMedia;
-  win.matchMedia = (...args) => {
-    const mql = realMatchMedia(...args);
+  win.matchMedia = query => {
+    const mql = realMatchMedia(query);
     mql._win = win;
     return mql;
   };
@@ -76,7 +125,7 @@ describe('applyTheme active-state class (#1018)', () => {
     const dark = fakeButton('dark'), light = fakeButton('light'), auto = fakeButton('auto');
     const doc = fakeDoc([dark, light, auto]);
     const win = linkWin(fakeWin(false));
-    applyTheme('dark', { doc, win });
+    applyTheme('dark', { doc: asDoc(doc), win: asWin(win) });
     expect(dark.classList.contains('active')).toBe(true);
     expect(light.classList.contains('active')).toBe(false);
     expect(auto.classList.contains('active')).toBe(false);
@@ -87,7 +136,7 @@ describe('applyTheme active-state class (#1018)', () => {
     const dark = fakeButton('dark'), light = fakeButton('light'), auto = fakeButton('auto');
     const doc = fakeDoc([dark, light, auto]);
     const win = linkWin(fakeWin(true));
-    applyTheme('light', { doc, win });
+    applyTheme('light', { doc: asDoc(doc), win: asWin(win) });
     expect(light.classList.contains('active')).toBe(true);
     expect(dark.classList.contains('active')).toBe(false);
     expect(auto.classList.contains('active')).toBe(false);
@@ -101,7 +150,7 @@ describe('applyTheme active-state class (#1018)', () => {
     const dark = fakeButton('dark'), light = fakeButton('light'), auto = fakeButton('auto');
     const doc = fakeDoc([dark, light, auto]);
     const win = linkWin(fakeWin(true));
-    applyTheme('auto', { doc, win });
+    applyTheme('auto', { doc: asDoc(doc), win: asWin(win) });
     expect(auto.classList.contains('active')).toBe(true);
     expect(dark.classList.contains('active')).toBe(false);
     expect(light.classList.contains('active')).toBe(false);
@@ -121,7 +170,7 @@ describe('applyTheme active-state class (#1018)', () => {
     mqttBtn.classList.toggle('active', true); // pre-existing, unrelated .active
     const doc = fakeDoc([dark, light]); // querySelectorAll is scoped -- mqttBtn never returned
     const win = linkWin(fakeWin(false));
-    applyTheme('dark', { doc, win });
+    applyTheme('dark', { doc: asDoc(doc), win: asWin(win) });
     expect(dark.classList.contains('active')).toBe(true);
     expect(mqttBtn.classList.contains('active')).toBe(true); // untouched
   });
@@ -129,7 +178,7 @@ describe('applyTheme active-state class (#1018)', () => {
   it('fires the theme-change event so live charts re-theme', () => {
     const doc = fakeDoc([fakeButton('dark')]);
     const win = linkWin(fakeWin(false));
-    applyTheme('dark', { doc, win });
+    applyTheme('dark', { doc: asDoc(doc), win: asWin(win) });
     expect(win.events).toContain('glp-theme-change');
   });
 });
@@ -144,10 +193,10 @@ describe('watchSystemTheme (#1018 live auto re-resolution)', () => {
     // watchSystemTheme() calls applyTheme() with its own default doc
     // (globalThis.document) unless we stub that too -- give it a global doc
     // stand-in via globalThis for the duration of this test.
-    const realDocument = globalThis.document;
-    globalThis.document = doc;
+    const realDocument = g.document;
+    g.document = doc;
     try {
-      watchSystemTheme({ win, storage });
+      watchSystemTheme({ win: asWin(win), storage: asStorage(storage) });
       expect(doc.documentElement.dataset.theme).not.toBe('dark'); // not applied yet, just watching
 
       win.prefersDark = true;
@@ -157,7 +206,7 @@ describe('watchSystemTheme (#1018 live auto re-resolution)', () => {
       expect(doc.documentElement.dataset.theme).toBe('dark');
       expect(auto.classList.contains('active')).toBe(true);
     } finally {
-      globalThis.document = realDocument;
+      g.document = realDocument;
     }
   });
 
@@ -168,7 +217,7 @@ describe('watchSystemTheme (#1018 live auto re-resolution)', () => {
     const win = linkWin(fakeWin(false));
     const storage = { getItem: () => 'dark', setItem: () => {} };
 
-    watchSystemTheme({ win, storage });
+    watchSystemTheme({ win: asWin(win), storage: asStorage(storage) });
     win.prefersDark = true;
     win.fireChange();
 
