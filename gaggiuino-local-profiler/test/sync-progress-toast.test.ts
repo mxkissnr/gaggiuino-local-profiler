@@ -13,29 +13,54 @@
 //
 // Same fake-document convention as test/status-update-machine-id.test.js.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { ShotMeta } from '../public-src/state/index.js';
 
-const _store = new Map();
-globalThis.localStorage = {
-  getItem: k => (_store.has(k) ? _store.get(k) : null),
-  setItem: (k, v) => { _store.set(k, String(v)); },
-  removeItem: k => { _store.delete(k); },
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge test/sse-frontend.test.ts uses) so the
+// minimal fakes below need not satisfy the full Storage/Navigator/Window shapes.
+const g = globalThis as unknown as Record<string, unknown>;
+
+const _store = new Map<string, string>();
+g.localStorage = {
+  getItem: (k: string) => (_store.has(k) ? _store.get(k) : null),
+  setItem: (k: string, v: unknown) => { _store.set(k, String(v)); },
+  removeItem: (k: string) => { _store.delete(k); },
 };
-globalThis.navigator ??= { language: 'en-US' };
-globalThis.window ??= globalThis;
+g.navigator ??= { language: 'en-US' };
+g.window ??= globalThis;
+
+// status.ts reaches all three through the global `window`, which is globalThis
+// in this environment.
+interface FakeWindow {
+  showToast?: (msg: string) => void;
+  updateFlapCounter?: (n: number) => void;
+  loadData?: () => void | Promise<void>;
+}
+const win = g.window as FakeWindow;
 
 const { S } = await import('../public-src/state/index.js');
 const { updateStatus, handleSyncProgressEvent, handleSyncCompleteEvent } = await import('../public-src/components/status.js');
 
+interface FakeElement {
+  className: string;
+  textContent: string;
+  title: string;
+  style: Record<string, string>;
+  disabled: boolean;
+  querySelector: () => FakeElement;
+}
+
 function makeFakeDocument() {
-  const registry = new Map();
-  function makeElement() {
-    const el = { className: '', textContent: '', title: '', style: {}, disabled: false };
-    el.querySelector = () => makeElement();
-    return el;
+  const registry = new Map<string, FakeElement>();
+  function makeElement(): FakeElement {
+    return {
+      className: '', textContent: '', title: '', style: {}, disabled: false,
+      querySelector: () => makeElement(),
+    };
   }
   return {
-    getElementById: id => registry.get(id),
-    _preRegister(id) {
+    getElementById: (id: string): FakeElement => registry.get(id)!,
+    _preRegister(id: string): FakeElement {
       const el = makeElement();
       registry.set(id, el);
       return el;
@@ -44,17 +69,18 @@ function makeFakeDocument() {
 }
 
 describe('SSE push: handleSyncProgressEvent()/handleSyncCompleteEvent() (#735)', () => {
-  let doc, toastCalls;
+  let doc: ReturnType<typeof makeFakeDocument>;
+  let toastCalls: string[];
 
   beforeEach(() => {
     doc = makeFakeDocument();
     ['syncProgressBar', 'syncProgressLabel'].forEach(id => doc._preRegister(id));
-    globalThis.document = doc;
+    g.document = doc;
     S.activeMachineId = null;
     S.currentLang = 'en';
 
     toastCalls = [];
-    globalThis.window.showToast = msg => toastCalls.push(msg);
+    win.showToast = msg => toastCalls.push(msg);
   });
 
   it('renders the bar directly from a progress push, no fetch involved', () => {
@@ -95,20 +121,21 @@ describe('SSE push: handleSyncProgressEvent()/handleSyncCompleteEvent() (#735)',
 });
 
 describe('SSE push: shot-counter live update via handleSyncProgressEvent()/handleSyncCompleteEvent() (#742)', () => {
-  let doc, loadDataCalls;
+  let doc: ReturnType<typeof makeFakeDocument>;
+  let loadDataCalls: number;
 
   beforeEach(() => {
     doc = makeFakeDocument();
     ['syncProgressBar', 'syncProgressLabel'].forEach(id => doc._preRegister(id));
-    globalThis.document = doc;
+    g.document = doc;
     S.activeMachineId = null;
     S.currentLang = 'en';
-    S.shots = new Array(37); // baseline shot count before any backfill starts
+    S.shots = new Array<ShotMeta>(37); // baseline shot count before any backfill starts
 
-    globalThis.window.showToast = () => {};
-    globalThis.window.updateFlapCounter = vi.fn();
+    win.showToast = () => {};
+    win.updateFlapCounter = vi.fn();
     loadDataCalls = 0;
-    globalThis.window.loadData = () => { loadDataCalls++; };
+    win.loadData = () => { loadDataCalls++; };
   });
 
   // status.js's _midSyncCurrent/_globalBaseline are module-scoped, not reset
@@ -122,14 +149,14 @@ describe('SSE push: shot-counter live update via handleSyncProgressEvent()/handl
 
   it('shows baseline + current on the first progress event of a new backfill', () => {
     handleSyncProgressEvent({ machineId: 1, current: 3, total: 10 });
-    expect(globalThis.window.updateFlapCounter).toHaveBeenLastCalledWith(40); // 37 + 3
+    expect(win.updateFlapCounter).toHaveBeenLastCalledWith(40); // 37 + 3
   });
 
   it('keeps advancing the same baseline on later ticks of the same sequence', () => {
     handleSyncProgressEvent({ machineId: 1, current: 1, total: 10 });
     handleSyncProgressEvent({ machineId: 1, current: 5, total: 10 });
     handleSyncProgressEvent({ machineId: 1, current: 10, total: 10 });
-    expect(globalThis.window.updateFlapCounter).toHaveBeenLastCalledWith(47); // 37 + 10
+    expect(win.updateFlapCounter).toHaveBeenLastCalledWith(47); // 37 + 10
   });
 
   it('does not call window.loadData() per tick -- too expensive at this cadence', () => {
@@ -146,10 +173,10 @@ describe('SSE push: shot-counter live update via handleSyncProgressEvent()/handl
   // base instead, so the total only ever goes forward.
   it('folds a machine\'s prior progress into the shared base when it restarts its own sequence without ever completing', () => {
     handleSyncProgressEvent({ machineId: 1, current: 10, total: 10 });
-    expect(globalThis.window.updateFlapCounter).toHaveBeenLastCalledWith(47); // 37 + 10
+    expect(win.updateFlapCounter).toHaveBeenLastCalledWith(47); // 37 + 10
 
     handleSyncProgressEvent({ machineId: 1, current: 1, total: 5 });
-    expect(globalThis.window.updateFlapCounter).toHaveBeenLastCalledWith(48); // (37 + 10) + 1, not 37 + 1
+    expect(win.updateFlapCounter).toHaveBeenLastCalledWith(48); // (37 + 10) + 1, not 37 + 1
   });
 
   // #742 review regression guard: an earlier version tracked a baseline PER
@@ -164,18 +191,18 @@ describe('SSE push: shot-counter live update via handleSyncProgressEvent()/handl
   // contributing its own `current` on top of it.
   it('combines concurrent machines into one shared total instead of flickering between separate per-machine baselines', () => {
     handleSyncProgressEvent({ machineId: 1, current: 5, total: 10 });
-    expect(globalThis.window.updateFlapCounter).toHaveBeenLastCalledWith(42); // 37 + 5
+    expect(win.updateFlapCounter).toHaveBeenLastCalledWith(42); // 37 + 5
 
     // Machine 2 joins in -- must ADD to the shared total, not replace it
     // with its own independent baseline.
     handleSyncProgressEvent({ machineId: 2, current: 2, total: 8 });
-    expect(globalThis.window.updateFlapCounter).toHaveBeenLastCalledWith(44); // 37 + 5 + 2
+    expect(win.updateFlapCounter).toHaveBeenLastCalledWith(44); // 37 + 5 + 2
 
     handleSyncProgressEvent({ machineId: 1, current: 8, total: 10 });
-    expect(globalThis.window.updateFlapCounter).toHaveBeenLastCalledWith(47); // 37 + 8 + 2
+    expect(win.updateFlapCounter).toHaveBeenLastCalledWith(47); // 37 + 8 + 2
 
     handleSyncProgressEvent({ machineId: 2, current: 4, total: 8 });
-    expect(globalThis.window.updateFlapCounter).toHaveBeenLastCalledWith(49); // 37 + 8 + 4
+    expect(win.updateFlapCounter).toHaveBeenLastCalledWith(49); // 37 + 8 + 4
   });
 
   // #742 review: a machine finishing (success or failure) must not make the
@@ -184,10 +211,10 @@ describe('SSE push: shot-counter live update via handleSyncProgressEvent()/handl
   it('a machine finishing does not drop the displayed total while another is still mid-sync', () => {
     handleSyncProgressEvent({ machineId: 1, current: 5, total: 10 });
     handleSyncProgressEvent({ machineId: 2, current: 3, total: 8 });
-    expect(globalThis.window.updateFlapCounter).toHaveBeenLastCalledWith(45); // 37 + 5 + 3
+    expect(win.updateFlapCounter).toHaveBeenLastCalledWith(45); // 37 + 5 + 3
 
     handleSyncCompleteEvent({ machineId: 1, total: 10, success: false });
-    expect(globalThis.window.updateFlapCounter).toHaveBeenLastCalledWith(45); // unchanged -- machine 1's 5 folded into the base
+    expect(win.updateFlapCounter).toHaveBeenLastCalledWith(45); // unchanged -- machine 1's 5 folded into the base
   });
 
   it('reconciles via window.loadData() on a successful completion', () => {
@@ -208,22 +235,27 @@ describe('SSE push: shot-counter live update via handleSyncProgressEvent()/handl
 
     // Simulate window.loadData() (mocked above, doesn't really touch
     // S.shots) having reconciled the real count.
-    S.shots = new Array(47);
+    S.shots = new Array<ShotMeta>(47);
 
     handleSyncProgressEvent({ machineId: 1, current: 1, total: 5 });
-    expect(globalThis.window.updateFlapCounter).toHaveBeenLastCalledWith(48); // 47 + 1, not 37 + 10 + 1
+    expect(win.updateFlapCounter).toHaveBeenLastCalledWith(48); // 47 + 1, not 37 + 10 + 1
   });
 });
 
+type SyncProgressEntry = { machineId: number; current: number; total: number };
+interface FakeResponse { ok: boolean; json: () => Promise<unknown> }
+
 describe('Polling fallback: updateStatus() import-complete toast (#731, S.sseActive=false)', () => {
-  let doc, toastCalls;
+  let doc: ReturnType<typeof makeFakeDocument>;
+  let toastCalls: string[];
+  let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     doc = makeFakeDocument();
     ['statusDot', 'railStatusDot', 'syncTime', 'machineSubtitle', 'railMachineName',
      'glpVersionBadge', 'btnOrders', 'bnOrders', 'powerBtn', 'btnLive',
      'syncProgressBar', 'syncProgressLabel'].forEach(id => doc._preRegister(id));
-    globalThis.document = doc;
+    g.document = doc;
     S.primaryShotId = null;
     S.currentLang = 'en';
     // #735: this describe block exists specifically to exercise the
@@ -232,19 +264,20 @@ describe('Polling fallback: updateStatus() import-complete toast (#731, S.sseAct
     S.sseActive = false;
 
     toastCalls = [];
-    globalThis.window.showToast = msg => toastCalls.push(msg);
+    win.showToast = msg => toastCalls.push(msg);
   });
 
-  function mockStatus(syncProgress) {
-    globalThis.fetch = vi.fn(url => {
+  function mockStatus(syncProgress: SyncProgressEntry[]) {
+    fetchMock = vi.fn((url: string | URL) => {
       if (String(url).startsWith('api/status')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ lastSync: '2026-01-01T00:00:00.000Z', syncProgress }),
+          json: () => Promise.resolve({ lastSync: '2026-01-01T00:00:00.000Z', syncProgress }),
         });
       }
       return Promise.resolve({ ok: false }); // api/switch
     });
+    g.fetch = fetchMock;
   }
 
   it('does not toast on the very first poll, even with no active import', async () => {
@@ -310,20 +343,21 @@ describe('Polling fallback: updateStatus() import-complete toast (#731, S.sseAct
   // _lastSyncProgress map could otherwise both observe the same
   // just-finished import and double-fire its completion toast.
   it('#734 regression guard: a second updateStatus() call while one is already in flight is a no-op, not a duplicate poll', async () => {
-    let resolveFetch;
-    const pending = new Promise(res => { resolveFetch = res; });
-    globalThis.fetch = vi.fn(url => {
+    let resolveFetch!: (value: FakeResponse) => void;
+    const pending = new Promise<FakeResponse>(res => { resolveFetch = res; });
+    fetchMock = vi.fn((url: string | URL) => {
       if (String(url).startsWith('api/status')) return pending;
       return Promise.resolve({ ok: false });
     });
+    g.fetch = fetchMock;
 
     const first = updateStatus();
     const second = updateStatus(); // fires while `first` is still awaiting the fetch above
 
-    resolveFetch({ ok: true, json: async () => ({ lastSync: '2026-01-01T00:00:00.000Z', syncProgress: [] }) });
+    resolveFetch({ ok: true, json: () => Promise.resolve({ lastSync: '2026-01-01T00:00:00.000Z', syncProgress: [] }) });
     await Promise.all([first, second]);
 
     // Only the first call's fetch actually ran -- the second returned immediately.
-    expect(globalThis.fetch.mock.calls.filter(c => String(c[0]).startsWith('api/status')).length).toBe(1);
+    expect(fetchMock.mock.calls.filter((c: unknown[]) => String(c[0]).startsWith('api/status')).length).toBe(1);
   });
 });
