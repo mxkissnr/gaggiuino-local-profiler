@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateBeanQR, parseGlpQrParams } from '../public-src/glp-qr.js';
+import { generateBeanQR, parseGlpQrParams, type GlpQrBean } from '../public-src/glp-qr.js';
 
 describe('generateBeanQR', () => {
   it('encodes name, roaster, roastDate and notes as glp:// URL params', () => {
@@ -35,7 +35,7 @@ describe('parseGlpQrParams', () => {
   });
 
   it('round-trips a bean through generateBeanQR -> parseGlpQrParams', () => {
-    const bean = { name: 'Yirgacheffe', roaster: 'Kaffee Braun', roastDate: '15.06.2026', notes: 'Jasmin, Zitrone' };
+    const bean: GlpQrBean = { name: 'Yirgacheffe', roaster: 'Kaffee Braun', roastDate: '15.06.2026', notes: 'Jasmin, Zitrone' };
     const parsed = parseGlpQrParams(generateBeanQR(bean));
     expect(parsed).toEqual(bean);
   });
