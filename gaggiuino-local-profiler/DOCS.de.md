@@ -74,6 +74,14 @@ Bohnen-Varianten kommen aus der Kaffee-Bibliothek über `/api/orders/active-bean
 
 **Ist bereits in [GLP Integration](https://github.com/mxkissnr/glp-integration) enthalten** — keine eigene HACS-Listung, kein separater Karten-Download nötig. Beim Installieren/Aktualisieren der Integration über HACS wird sie automatisch als Dashboard-Ressource registriert; einfach eine Karte vom Typ `custom:glp-order-card` zum Dashboard hinzufügen.
 
+### Kiosk-Modus
+
+Eine eigenständige Bestellseite für ein Tablet, das auf dem Tisch stehen bleibt: Ein Gast gibt seinen Namen ein, wählt ein Getränk samt optionalen Varianten und einer Notiz, gibt die Bestellung auf und sieht eine Bestätigung mit der geschätzten Zeit. Sechs Sekunden nach einer Bestellung springt die Seite von selbst zurück zum Namensschritt, bereit für den nächsten Gast.
+
+Neben dem Bestellablauf listet ein Warteschlangen-Panel die aktiven Bestellungen (wartend / in Zubereitung) mit ihren geschätzten Zeiten auf und aktualisiert sich alle 8 Sekunden; Menü und Offen-/Geschlossen-Status aktualisieren sich alle 30 Sekunden.
+
+Erreichbar unter `/ui/kiosk` — auf Home Assistant über das Ingress-Präfix, bei einer Standalone-Docker-Installation unter `http://<host>:<port>/ui/kiosk`. Erfordert, dass die Bestellfunktion aktiviert ist (`enable_orders: true`); ohne sie zeigt die Seite einen „nicht aktiviert“-Hinweis. Eine separate Anmeldung ist nicht nötig.
+
 ### API-Token
 
 Alle Komponenten authentifizieren sich automatisch über einen gemeinsamen Token:
