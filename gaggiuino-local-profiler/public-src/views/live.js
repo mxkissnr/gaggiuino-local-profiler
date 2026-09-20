@@ -50,18 +50,20 @@ function _loadLiveSetupDraft() {
 }
 
 function _saveLiveSetupDraft(draft) {
-  localStorage.setItem(_liveSetupStorageKey(), JSON.stringify(draft));
+  try {
+    localStorage.setItem(_liveSetupStorageKey(), JSON.stringify(draft));
+  } catch (e) {
+    // Quota exceeded / private-browsing storage restrictions — the draft
+    // just doesn't persist across reloads this time; every field is still
+    // live in the DOM for the current session, so this is a degraded
+    // experience, not a broken one.
+    console.error('[GLP] saving live shot setup draft failed:', e);
+  }
 }
 
 let _lsWired = false;
 
 export function renderLiveShotSetupPanel() {
-  // Some tests substitute a minimal fake `document` (getElementById only,
-  // no createDocumentFragment) to exercise connectLiveStream()'s timer logic
-  // without needing full DOM support for the chart it also touches — same
-  // environment this panel would otherwise crash in for no functional
-  // reason (every real browser has createDocumentFragment).
-  if (typeof document.createDocumentFragment !== 'function') return;
   const draft = _loadLiveSetupDraft();
   _renderBeanSelect(draft.coffee || '', draft.beanId ?? null, 'lsBean');
   _renderBasketSelect(draft.basketId ?? null, 'lsBasket');
@@ -144,26 +146,47 @@ export function renderLiveShotSetupPanel() {
 }
 
 // Writes the current draft onto shotId's annotation — called once a shot
-// that started while this draft was active finishes syncing. Only fills
-// fields the draft actually has a value for; an empty draft results in an
-// empty payload, which is harmless (matches what auto-save would have sent
-// for an untouched annotation panel anyway).
+// that started while this draft was active finishes syncing. Only sends
+// the fields the draft actually has a value for (an empty draft sends
+// nothing — no-ops rather than a POST) and only when the shot's annotation
+// is still blank: by the time this runs (4s after brew end + sync delay),
+// the backend's shot-defaults auto-fill (#654) may already have populated
+// it from the bean/grinder library defaults for this machine, and blindly
+// overwriting here would silently clobber that instead of merging with it
+// — this feature only ever fills a shot that would otherwise stay
+// unannotated, same as #654 itself.
 async function _applyLiveSetupToShot(shotId) {
   const draft = _loadLiveSetupDraft();
   if (!Object.keys(draft).length) return;
-  const payload = {
-    coffee: draft.coffee || '', beanId: draft.beanId ?? null,
-    basketId: draft.basketId ?? null, puckScreenId: draft.puckScreenId ?? null,
-    grinder: draft.grinder || '', grindSetting: draft.grindSetting || '',
-    dose: draft.dose ?? null, recipeId: draft.recipeId ?? null,
-  };
+  const shot = S.shots.find(s => s.id === shotId);
+  const existing = shot?.annotation || {};
+  const alreadyAnnotated = !!(existing.coffee || existing.beanId != null || existing.grinder ||
+    existing.grindSetting || existing.dose != null || existing.basketId != null ||
+    existing.puckScreenId != null || existing.recipeId != null);
+  if (alreadyAnnotated) return;
+
+  const payload = {};
+  if (draft.coffee) { payload.coffee = draft.coffee; payload.beanId = draft.beanId ?? null; }
+  if (draft.grinder) payload.grinder = draft.grinder;
+  if (draft.grindSetting) payload.grindSetting = draft.grindSetting;
+  if (draft.dose != null) payload.dose = draft.dose;
+  if (draft.basketId != null) payload.basketId = draft.basketId;
+  if (draft.puckScreenId != null) payload.puckScreenId = draft.puckScreenId;
+  if (draft.recipeId != null) payload.recipeId = draft.recipeId;
+  if (!Object.keys(payload).length) return;
+
   try {
     const r = await annotateShot(shotId, payload);
     if (r.ok) {
       const idx = S.shots.findIndex(s => s.id === shotId);
       if (idx !== -1) S.shots[idx].annotation = { ...S.shots[idx].annotation, ...payload };
     }
-  } catch { /* best-effort — the shot still exists, just unannotated */ }
+  } catch (e) {
+    // Best-effort — the shot still exists, just unannotated — but log it
+    // rather than swallowing silently, matching every other network-call
+    // catch in this file.
+    console.error('[GLP] applying live shot setup to shot', shotId, 'failed:', e);
+  }
 }
 
 // ── Live chart init ───────────────────────────────────────────────────────
@@ -421,11 +444,27 @@ export async function fetchLiveData() {
     // _applyLiveSetupToShot's own read happens after loadData resolves, not
     // captured here, since a sticky draft is expected to still be current a
     // few seconds later — see that function's own doc comment.
+    //
+    // The target shot is picked by machine + id, not S.shots[length-1]:
+    // machineId is captured now (S.activeMachineId can change during the
+    // 4s wait in a multi-machine setup — the draft that's about to be
+    // applied belongs to whichever machine was live when the brew ended,
+    // not whichever machine happens to be selected when the timer fires),
+    // and priorNewestId is the highest id already synced for that machine
+    // before this brew — after loadData() reloads, the highest id above
+    // that watermark is unambiguously "the shot this brew produced", never
+    // an older shot the sync happened to reorder and never a steam/flush
+    // session (those never create shots.Shot rows at all, so they can't
+    // satisfy `id > priorNewestId` regardless of timing).
     if (S.liveWasLive && !msg.isLive && msg.seq !== S.liveLastSeq) {
       S.liveLastSeq = msg.seq;
+      const machineId = S.activeMachineId;
+      const priorNewestId = S.shots.reduce((max, s) => (s.machineId === machineId && s.id > max ? s.id : max), 0);
       setTimeout(async () => {
         if (window.loadData) await window.loadData();
-        const newest = S.shots[S.shots.length - 1];
+        const newest = S.shots
+          .filter(s => s.machineId === machineId && s.id > priorNewestId)
+          .sort((a, b) => b.id - a.id)[0];
         if (newest) _applyLiveSetupToShot(newest.id);
       }, 4000);
     }

@@ -40,6 +40,25 @@ vi.mock('../public-src/components/machines-settings.js', () => ({
   getDefaultMachineId: () => null,
 }));
 
+// The live-shot-setup panel's bean/basket/puckscreen/recipe selects are
+// real <select>-population logic (new Option(), replaceChildren()) with no
+// bearing on the SSE/REST-fallback gating this file tests — stubbed to
+// no-ops rather than teaching the fake document below a second DOM API
+// surface it doesn't otherwise need. grind.js's suggestion heuristic reads
+// S.shots/S.coffeeLibrary directly and isn't wired to anything here either.
+vi.mock('../public-src/views/shots/annotation.js', () => ({
+  renderGrinderField: () => {},
+  getGrinderFieldValue: () => '',
+  handleGrinderFieldChange: () => {},
+  _renderBeanSelect: () => {},
+  _renderBasketSelect: () => {},
+  _renderPuckScreenSelect: () => {},
+  _renderRecipeSelect: () => {},
+}));
+vi.mock('../public-src/views/shots/grind.js', () => ({
+  suggestGrindForBeanGrinder: () => null,
+}));
+
 const { S } = await import('../public-src/state/index.js');
 const { connectLiveStream, disconnectLiveStream } = await import('../public-src/views/live.js');
 
@@ -47,9 +66,12 @@ function makeFakeDocument() {
   const registry = new Map();
   function makeElement() {
     return {
-      className: '', textContent: '', style: {},
-      classList: { add() {}, remove() {}, contains: () => false },
+      className: '', textContent: '', style: {}, value: '',
+      classList: { add() {}, remove() {}, contains: () => false, toggle() {} },
       querySelector: () => null,
+      addEventListener() {},
+      removeEventListener() {},
+      selectedOptions: [],
     };
   }
   return {
