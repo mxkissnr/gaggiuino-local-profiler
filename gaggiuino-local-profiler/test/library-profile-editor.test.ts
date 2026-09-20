@@ -20,14 +20,6 @@ const { _synthesizeSeries, _collectPhases, loadMachineProfileList, duplicateProf
 // with no jsdom, so stub the minimum `document` needed: one fake .pp-row
 // whose querySelector resolves the handful of input selectors the code
 // touches, keyed by class name.
-// The minimal <input> shape the editor reads/writes off a fetched field.
-interface FakeFormField {
-  value: string;
-  style: Record<string, string>;
-  classList: { add(): void; remove(): void };
-  focus(): void;
-}
-
 function fakeRow(fields: Record<string, string | boolean>) {
   return {
     querySelector(selector: string) {
@@ -37,6 +29,14 @@ function fakeRow(fields: Record<string, string | boolean>) {
       return typeof v === 'boolean' ? { checked: v } : { value: v };
     },
   };
+}
+
+// The minimal <input> shape the editor reads/writes off a fetched field.
+interface FakeFormField {
+  value: string;
+  style: Record<string, string>;
+  classList: { add(): void; remove(): void };
+  focus(): void;
 }
 
 // Phase boundaries land on the same x (e.g. phase 1 ends and phase 2 starts
