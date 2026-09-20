@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { execFileSync } from 'child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import path from 'path';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
     checkScreenshotFreshness,
     stripJsLikeComments,
@@ -27,20 +27,20 @@ import {
 // faked git — a fully mocked git layer is exactly what hid the #529
 // shell-quoting bug in dev-stats.mjs.
 describe('release-check screenshot freshness (#537)', () => {
-    const repos = [];
+    const repos: string[] = [];
 
     afterEach(() => {
         while (repos.length) {
-            rmSync(repos.pop(), { recursive: true, force: true });
+            rmSync(repos.pop()!, { recursive: true, force: true });
         }
     });
 
-    function run(repo, args) {
+    function run(repo: string, args: string[]): string {
         return execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
     }
 
     let commitSeq = 0;
-    function commitAll(repo, message) {
+    function commitAll(repo: string, message: string): void {
         commitSeq += 1;
         // Real successive `git commit` calls can land in the same wall-clock
         // second, which would make the "newer than the screenshot" ordering
@@ -58,19 +58,19 @@ describe('release-check screenshot freshness (#537)', () => {
         });
     }
 
-    function makeRepo() {
-        const repo = mkdtempSync(path.join(tmpdir(), 'glp-release-check-'));
+    function makeRepo(): string {
+        const repo = mkdtempSync(join(tmpdir(), 'glp-release-check-'));
         repos.push(repo);
         run(repo, ['init', '--quiet', '-b', 'main']);
         run(repo, ['config', 'user.email', 'test@example.com']);
         run(repo, ['config', 'user.name', 'Test']);
-        mkdirSync(path.join(repo, 'public-src'), { recursive: true });
-        mkdirSync(path.join(repo, 'docs', 'screenshots'), { recursive: true });
+        mkdirSync(join(repo, 'public-src'), { recursive: true });
+        mkdirSync(join(repo, 'docs', 'screenshots'), { recursive: true });
         return repo;
     }
 
-    function writeFile(repo, relPath, body) {
-        writeFileSync(path.join(repo, 'public-src', relPath), body);
+    function writeFile(repo: string, relPath: string, body: string): void {
+        writeFileSync(join(repo, 'public-src', relPath), body);
     }
 
     // extraFiles lets a test seed additional public-src/ files (main.js,
@@ -78,12 +78,12 @@ describe('release-check screenshot freshness (#537)', () => {
     // only the test's own follow-up commit is newer than the screenshot —
     // otherwise "add main.js" would itself be a brand-new (and correctly
     // relevant) file-creation commit newer than the screenshot.
-    function seedRepo(repo, indexHtmlBody, extraFiles = {}) {
+    function seedRepo(repo: string, indexHtmlBody: string, extraFiles: Record<string, string> = {}): void {
         writeFile(repo, 'index.html', indexHtmlBody);
         for (const [relPath, body] of Object.entries(extraFiles)) {
             writeFile(repo, relPath, body);
         }
-        writeFileSync(path.join(repo, 'docs', 'screenshots', 'shot.png'), Buffer.from([0, 1, 2, 3]));
+        writeFileSync(join(repo, 'docs', 'screenshots', 'shot.png'), Buffer.from([0, 1, 2, 3]));
         commitAll(repo, 'initial: seed screenshot + public-src');
     }
 
