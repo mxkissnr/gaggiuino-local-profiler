@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 )
@@ -133,6 +134,36 @@ func TestCustomTask_LabelTruncatesByRunesNotBytes(t *testing.T) {
 		}
 	}
 	t.Fatalf("created task not found in response: %+v", created)
+}
+
+// TestMaintenanceLog_NotesTruncateByRunesNotBytes verifies the 500-char cap
+// on POST /api/maintenance/log notes is applied on a rune boundary. Slicing
+// by byte index (notes[:500]) would split a multi-byte character
+// mid-encoding for non-ASCII input like this one ("€" is 3 bytes but one
+// rune), leaving invalid UTF-8 in the stored notes.
+func TestMaintenanceLog_NotesTruncateByRunesNotBytes(t *testing.T) {
+	h, repo, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	notes := strings.Repeat("€", 600) // 600 runes, 1800 bytes
+	rec := doJSON(t, mux, http.MethodPost, "/api/maintenance/log", mustMarshal(t, map[string]any{"task": "backflush", "notes": notes}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+
+	entries, err := repo.GetMaintenanceLog(0)
+	if err != nil {
+		t.Fatalf("GetMaintenanceLog: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 log entry, got %d", len(entries))
+	}
+	if got := len([]rune(entries[0].Notes)); got != 500 {
+		t.Errorf("notes rune count = %d, want 500", got)
+	}
+	if !utf8.ValidString(entries[0].Notes) {
+		t.Errorf("notes is not valid UTF-8 after truncation: %q", entries[0].Notes)
+	}
 }
 
 func TestTaskDone_MarksLastDateAndLogs(t *testing.T) {
