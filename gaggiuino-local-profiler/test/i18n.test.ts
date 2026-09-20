@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 import de from '../public-src/i18n/de.js';
 import en from '../public-src/i18n/en.js';
@@ -10,6 +10,11 @@ import fr from '../public-src/i18n/fr.js';
 import es from '../public-src/i18n/es.js';
 import nl from '../public-src/i18n/nl.js';
 import { LOCALE_MAP, localeFor } from '../public-src/constants.js';
+
+// localeFor()'s declared parameter is `string`, but the app feeds it a
+// possibly-unset S.currentLang; this test pins the runtime tolerance for
+// undefined/null, so the probe goes through a wider local signature.
+const localeForUnset = localeFor as (lang: string | null | undefined) => string;
 
 const LANGS = { de, en, it: itLang, fr, es, nl };
 const NEW_KEYS = [
@@ -47,8 +52,8 @@ describe('i18n language files', () => {
     it('localeFor() falls back to en-US, not de-DE, for an unsupported/missing language', () => {
         expect(localeFor('pt')).toBe('en-US');
         expect(localeFor('xx')).toBe('en-US');
-        expect(localeFor(undefined)).toBe('en-US');
-        expect(localeFor(null)).toBe('en-US');
+        expect(localeForUnset(undefined)).toBe('en-US');
+        expect(localeForUnset(null)).toBe('en-US');
     });
 
     it('localeFor() returns the exact LOCALE_MAP entry for every supported language', () => {
@@ -70,7 +75,7 @@ describe('i18n language files', () => {
         for (const [name, obj] of Object.entries(LANGS)) {
             for (const key of ['backup_progress_download', 'backup_progress_upload']) {
                 expect(typeof obj[key], `${name}.js ${key} should be a function`).toBe('function');
-                expect(obj[key](42), `${name}.js ${key}(42)`).toContain('42');
+                expect((obj[key] as (pct: number) => string)(42), `${name}.js ${key}(42)`).toContain('42');
             }
         }
     });
@@ -78,7 +83,7 @@ describe('i18n language files', () => {
     it('compare_title is a function that interpolates both shot ids', () => {
         for (const [name, obj] of Object.entries(LANGS)) {
             expect(typeof obj.compare_title, `${name}.js compare_title should be a function`).toBe('function');
-            const rendered = obj.compare_title(11, 22);
+            const rendered = (obj.compare_title as (a: number, b: number) => string)(11, 22);
             expect(rendered, `${name}.js compare_title output`).toContain('11');
             expect(rendered, `${name}.js compare_title output`).toContain('22');
         }
