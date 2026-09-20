@@ -23,7 +23,7 @@ describe('shot-curves cache (#957)', () => {
   it('memoises: one fetch per id no matter how many callers', async () => {
     fetchSpy.mockImplementation(url => {
       const id = Number(url.split('/').pop());
-      return Promise.resolve({ ok: true, json: async () => ({ id, datapoints: dp(id) }) } as unknown as Response);
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ id, datapoints: dp(id) }) } as unknown as Response);
     });
 
     const [a, b, c] = await Promise.all([
@@ -45,7 +45,7 @@ describe('shot-curves cache (#957)', () => {
       await new Promise(r => setTimeout(r, 5));
       inFlight--;
       const id = Number(url.split('/').pop());
-      return { ok: true, json: async () => ({ id, datapoints: dp(id) }) } as unknown as Response;
+      return { ok: true, json: () => Promise.resolve({ id, datapoints: dp(id) }) } as unknown as Response;
     });
 
     await curves.ensureCurves([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
@@ -64,7 +64,7 @@ describe('shot-curves cache (#957)', () => {
   it('evictCurve drops the entry so the next get refetches', async () => {
     fetchSpy.mockImplementation(url => {
       const id = Number(url.split('/').pop());
-      return Promise.resolve({ ok: true, json: async () => ({ id, datapoints: dp(id) }) } as unknown as Response);
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ id, datapoints: dp(id) }) } as unknown as Response);
     });
     await curves.getShotCurve(5);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -79,14 +79,14 @@ describe('shot-curves cache (#957)', () => {
   it('a failed fetch is not cached (retries next call) and resolves to {}', async () => {
     fetchSpy.mockResolvedValueOnce({ ok: false } as unknown as Response);
     expect(await curves.getShotCurve(9)).toEqual({});
-    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 9, datapoints: dp(9) }) } as unknown as Response);
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: 9, datapoints: dp(9) }) } as unknown as Response);
     expect(await curves.getShotCurve(9)).toEqual(dp(9));
   });
 
   it('seeds the previousShot the detail endpoint ships alongside', async () => {
     fetchSpy.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ id: 20, datapoints: dp(20), previousShot: { id: 19, datapoints: dp(19) } }),
+      json: () => Promise.resolve({ id: 20, datapoints: dp(20), previousShot: { id: 19, datapoints: dp(19) } }),
     } as unknown as Response);
     await curves.getShotCurve(20);
     // 19 should now be cached without its own fetch
