@@ -29,7 +29,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
