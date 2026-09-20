@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func TestProfilesRepository_UpsertDirty_CreateThenUpdateStaysPendingCreate(t *testing.T) {
@@ -39,6 +40,66 @@ func TestProfilesRepository_UpsertDirty_CreateThenUpdateStaysPendingCreate(t *te
 	}
 }
 
+// TestProfilesRepository_MarkSynced_StaleUpdatedAtIsANoOp guards the
+// lost-update race a concurrent push and a fresh edit can hit: a sync
+// worker reads a dirty row, starts pushing it, and while that push is in
+// flight the same row is edited again (bumping updated_at). If MarkSynced
+// used only local_id, it would mark the row synced based on the stale
+// push, silently dropping the newer edit (it's no longer "dirty", so no
+// future sweep would ever send it). The expectedUpdatedAt guard must make
+// this call a no-op instead, leaving the row exactly as UpsertDirty left it.
+func TestProfilesRepository_MarkSynced_StaleUpdatedAtIsANoOp(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	remote := "r1"
+	row, err := repo.UpsertDirty(1, nil, &remote, "Original", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	staleUpdatedAt := row.UpdatedAt
+
+	// Simulate a concurrent edit landing after the sync worker read `row`
+	// but before its MarkSynced call. updated_at has millisecond
+	// resolution, so force the clock forward at least 1ms to make the two
+	// writes reliably distinguishable.
+	time.Sleep(2 * time.Millisecond)
+	edited, err := repo.UpsertDirty(1, &row.LocalID, &remote, "Edited mid-push", json.RawMessage(`{"v":2}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty (concurrent edit): %v", err)
+	}
+	if edited.UpdatedAt == staleUpdatedAt {
+		t.Fatalf("UpdatedAt did not advance: %d == %d", edited.UpdatedAt, staleUpdatedAt)
+	}
+
+	if err := repo.MarkSynced(row.LocalID, staleUpdatedAt); err != nil {
+		t.Fatalf("MarkSynced (stale): %v", err)
+	}
+
+	got, err := repo.Get(1, "r1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.SyncStatus == ProfileSyncSynced {
+		t.Fatalf("SyncStatus = synced, want the row to stay dirty — the stale MarkSynced must not have applied")
+	}
+	if got.Name != "Edited mid-push" {
+		t.Fatalf("Name = %q, want the concurrent edit to survive: %q", got.Name, "Edited mid-push")
+	}
+
+	// The real (non-stale) MarkSynced call must still work.
+	if err := repo.MarkSynced(row.LocalID, edited.UpdatedAt); err != nil {
+		t.Fatalf("MarkSynced (current): %v", err)
+	}
+	got, err = repo.Get(1, "r1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.SyncStatus != ProfileSyncSynced {
+		t.Fatalf("SyncStatus = %q, want synced after the matching-updated_at call", got.SyncStatus)
+	}
+}
+
 func TestProfilesRepository_ReplaceRemoteID_MarksSyncedAndGettableByRemoteID(t *testing.T) {
 	_, sqlDB := newTestRegistry(t)
 	repo := NewProfilesRepository(sqlDB)
@@ -47,7 +108,7 @@ func TestProfilesRepository_ReplaceRemoteID_MarksSyncedAndGettableByRemoteID(t *
 	if err != nil {
 		t.Fatalf("UpsertDirty: %v", err)
 	}
-	if err := repo.ReplaceRemoteID(row.LocalID, "lever", "Offline Profile"); err != nil {
+	if err := repo.ReplaceRemoteID(row.LocalID, row.UpdatedAt, "lever", "Offline Profile"); err != nil {
 		t.Fatalf("ReplaceRemoteID: %v", err)
 	}
 
@@ -139,7 +200,7 @@ func TestProfilesRepository_PruneStaleSynced_RemovesMissingSyncedButKeepsDirty(t
 	if err != nil {
 		t.Fatalf("UpsertDirty: %v", err)
 	}
-	if err := repo.ReplaceRemoteID(dirtyRow.LocalID, dirtyRemote, "Local Edit"); err != nil {
+	if err := repo.ReplaceRemoteID(dirtyRow.LocalID, dirtyRow.UpdatedAt, dirtyRemote, "Local Edit"); err != nil {
 		t.Fatalf("ReplaceRemoteID: %v", err)
 	}
 	if _, err := repo.UpsertDirty(1, &dirtyRow.LocalID, &dirtyRemote, "Local Edit Changed", json.RawMessage(`{"v":2}`)); err != nil {

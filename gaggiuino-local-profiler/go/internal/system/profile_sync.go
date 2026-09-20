@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
@@ -37,10 +38,31 @@ func (p *Poller) SetProfilesRepo(repo *machines.ProfilesRepository) { p.profiles
 // moves on rather than aborting the whole batch — the next sweep (whichever
 // trigger fires next) simply tries again, which is enough backoff on its
 // own without a separate retry-count/backoff scheme.
+//
+// The 60s periodic sweep, the post-brew trigger, and the reachability-
+// recovery trigger (sync_triggers.go) can all fire for the same machine
+// within the same window. Without serializing per machine, two concurrent
+// runs could both read the same DirtyRows() snapshot and push the same
+// pending row twice — e.g. two CreateProfile calls for one pending_create
+// row, leaving a duplicate on the machine before either write lands (the
+// ReplaceRemoteID/MarkSynced optimistic-lock guard in profiles_repo.go
+// stops a *stale write* from clobbering a newer edit, but doesn't stop the
+// *duplicate remote push* itself — that needs mutual exclusion, not a
+// version check). TryLock+skip rather than blocking Lock: this is already
+// "fire and forget, next sweep retries" by design, so a second trigger
+// finding a push already in flight for this machine can just skip — no
+// rows are lost, the next trigger (or this one, next interval) tries again.
 func (p *Poller) PushDirtyProfiles(ctx context.Context, machineID int64) error {
 	if p.profilesRepo == nil {
 		return nil
 	}
+	muAny, _ := p.profileSyncLocks.LoadOrStore(machineID, &sync.Mutex{})
+	mu := muAny.(*sync.Mutex)
+	if !mu.TryLock() {
+		return nil
+	}
+	defer mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
@@ -62,7 +84,9 @@ func (p *Poller) PushDirtyProfiles(ctx context.Context, machineID int64) error {
 	for _, row := range rows {
 		if err := p.pushOneProfile(ctx, machine, adapter, row); err != nil {
 			log.Printf("system: pushing profile %d (machine %d) failed, will retry next sweep: %v", row.LocalID, machineID, err)
-			_ = p.profilesRepo.MarkSyncError(row.LocalID, err.Error())
+			if merr := p.profilesRepo.MarkSyncError(row.LocalID, err.Error()); merr != nil {
+				log.Printf("system: recording sync error for profile %d also failed: %v", row.LocalID, merr)
+			}
 		}
 	}
 	return nil
@@ -82,7 +106,7 @@ func (p *Poller) pushOneProfile(ctx context.Context, machine *machines.Machine, 
 		if err != nil {
 			return err
 		}
-		return p.profilesRepo.ReplaceRemoteID(row.LocalID, created.ID, created.Name)
+		return p.profilesRepo.ReplaceRemoteID(row.LocalID, row.UpdatedAt, created.ID, created.Name)
 	case machines.ProfileSyncDirty:
 		if row.RemoteID == nil {
 			// Shouldn't happen (dirty implies a prior successful sync gave
@@ -99,7 +123,7 @@ func (p *Poller) pushOneProfile(ctx context.Context, machine *machines.Machine, 
 			if err != nil {
 				return err
 			}
-			return p.profilesRepo.ReplaceRemoteID(row.LocalID, created.ID, created.Name)
+			return p.profilesRepo.ReplaceRemoteID(row.LocalID, row.UpdatedAt, created.ID, created.Name)
 		}
 		var in machines.ProfileInput
 		if machine.Type == "gaggimate" {
@@ -118,7 +142,7 @@ func (p *Poller) pushOneProfile(ctx context.Context, machine *machines.Machine, 
 		if _, err := adapter.UpdateProfile(ctx, machine, in); err != nil {
 			return err
 		}
-		return p.profilesRepo.MarkSynced(row.LocalID)
+		return p.profilesRepo.MarkSynced(row.LocalID, row.UpdatedAt)
 	case machines.ProfileSyncPendingDelete:
 		if row.RemoteID == nil {
 			return p.profilesRepo.HardDelete(row.LocalID)

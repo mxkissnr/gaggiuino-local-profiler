@@ -245,6 +245,12 @@ type Poller struct {
 	// no-ops then.
 	profilesRepo *machines.ProfilesRepository
 
+	// profileSyncLocks serializes PushDirtyProfiles per machine — see that
+	// function's own doc comment (profile_sync.go) for why a concurrent
+	// second run for the same machine is a correctness problem, not just a
+	// wasted duplicate push.
+	profileSyncLocks sync.Map // map[int64]*sync.Mutex
+
 	// liveTransport is the optional MQTT live-data override (#608), wired via
 	// SetLiveTransport. nil in tests and when MQTT support isn't compiled in
 	// — the poller then always reads live data through the adapter's WS path,

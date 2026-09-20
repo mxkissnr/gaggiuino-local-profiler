@@ -3,10 +3,67 @@ package system
 import (
 	"context"
 	"encoding/json"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 )
+
+// TestPushDirtyProfiles_ConcurrentCallsForSameMachineAreSerialized verifies
+// the per-machine mutex: two overlapping PushDirtyProfiles calls for the
+// same machine (e.g. the periodic sweep and a post-brew trigger firing in
+// the same window) must not both push — the second one, finding a push for
+// this machine already in flight, skips rather than racing the first (see
+// PushDirtyProfiles' own doc comment on why a race here is a correctness
+// problem: two concurrent CreateProfile calls for one pending row would
+// leave a duplicate on the machine).
+func TestPushDirtyProfiles_ConcurrentCallsForSameMachineAreSerialized(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	if _, err := repo.UpsertDirty(1, nil, nil, "Slow Push", json.RawMessage(`{}`)); err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+
+	var calls int32
+	inFlight := make(chan struct{})
+	release := make(chan struct{})
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		atomic.AddInt32(&calls, 1)
+		close(inFlight)
+		<-release
+		return machines.ProfileSummary{ID: "gm-1", Name: "Slow Push"}, nil
+	}
+
+	done := make(chan error, 2)
+	go func() { done <- p.PushDirtyProfiles(context.Background(), 1) }()
+
+	select {
+	case <-inFlight:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first PushDirtyProfiles never reached the adapter call")
+	}
+
+	// The first call now holds the per-machine lock inside the (blocked)
+	// adapter call. A second call for the same machine must skip instead
+	// of blocking behind it or racing it.
+	go func() { done <- p.PushDirtyProfiles(context.Background(), 1) }()
+
+	if err := <-done; err != nil {
+		t.Fatalf("second (concurrent) PushDirtyProfiles: %v", err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("first PushDirtyProfiles: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("adapter.CreateProfile call count = %d, want 1 (the concurrent call should have skipped, not pushed a duplicate)", got)
+	}
+}
 
 func TestPushDirtyProfiles_PendingCreate_SucceedsAndReplacesRemoteID(t *testing.T) {
 	fake := &fakeAdapter{}
