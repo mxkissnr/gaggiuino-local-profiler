@@ -1536,6 +1536,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/library/grinder/{id}/zero-point": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Log a new zero-point activation — corrects grind-setting suggestions/comparisons for drift (e.g. after cleaning) without rewriting any past shot's recorded value */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        zeroPoint: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated grinder (with the new zeroPointHistory entry) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Grinder"];
+                    };
+                };
+                /** @description Invalid zeroPoint */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/library/grinder/{id}/delete": {
         parameters: {
             query?: never;
@@ -6629,6 +6691,12 @@ export interface components {
             burrsResetAt?: string;
             /** @description File extension of the stored photo, if any */
             image?: string | null;
+            /** @description Chronological log of every zero-point activation (PUT .../zero-point) — the last entry is the current value. Absent/empty for a grinder that has never had one set, in which case grind settings display and compare as raw recorded values unchanged. */
+            zeroPointHistory?: {
+                zeroPoint?: number;
+                /** @description Timestamp (ms) this value became active */
+                since?: number;
+            }[];
             /** @description Computed burr-wear stats (shots/grams since burrsResetAt), added on read. */
             wear?: {
                 shots?: number;
