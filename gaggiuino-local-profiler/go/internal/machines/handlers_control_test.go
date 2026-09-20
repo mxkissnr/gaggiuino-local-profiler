@@ -226,3 +226,105 @@ func TestFirmwareUpdateAndProgress_AdapterErrorMapsTo502(t *testing.T) {
 		t.Fatalf("firmware/progress against unreachable machine status = %d, want 502, body = %s", rec.Code, rec.Body)
 	}
 }
+
+// callbackError lets the firmware-update callback tests fail the hook
+// without pulling an extra import into this file.
+type callbackError struct{}
+
+func (callbackError) Error() string { return "callback boom" }
+
+// #1136: a successful firmware-update trigger must run the
+// OnFirmwareUpdate hook exactly once, with the machine that was updated.
+func TestTriggerFirmwareUpdate_CallbackRunsOnceOnSuccess(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr(fake.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+
+	var seen []int64
+	h.SetOnFirmwareUpdate(func(m *Machine) error {
+		seen = append(seen, m.ID)
+		return nil
+	})
+
+	body := `{"machineId":` + strconv.FormatInt(machine.ID, 10) + `}`
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/firmware/update", strings.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST firmware/update status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if len(seen) != 1 || seen[0] != machine.ID {
+		t.Fatalf("callback calls = %v, want exactly one call with machine id %d", seen, machine.ID)
+	}
+}
+
+// #1136: the hook is a best-effort side effect -- its own error (or panic)
+// must never turn an already-successful update into a non-200 response.
+func TestTriggerFirmwareUpdate_CallbackFailureDoesNotAffectResponse(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr(fake.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+
+	body := `{"machineId":` + strconv.FormatInt(machine.ID, 10) + `}`
+
+	h.SetOnFirmwareUpdate(func(*Machine) error { return callbackError{} })
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/firmware/update", strings.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("returned-error callback: status = %d, want 200, body = %s", rec.Code, rec.Body)
+	}
+
+	h.SetOnFirmwareUpdate(func(*Machine) error { panic("callback boom") })
+	rec = doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/firmware/update", strings.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("panicking callback: status = %d, want 200, body = %s", rec.Code, rec.Body)
+	}
+	if !jsonContains(rec.Body.String(), `"success":true`) {
+		t.Fatalf("unexpected firmware update result: %s", rec.Body.String())
+	}
+}
+
+// #1136: an adapter error means the update never started, so the hook must
+// not run (and a nil hook must be a no-op rather than a panic).
+func TestTriggerFirmwareUpdate_CallbackSkippedOnAdapterErrorAndNil(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machines", nil)) // seed default (gaggiuino, unreachable)
+
+	called := false
+	h.SetOnFirmwareUpdate(func(*Machine) error {
+		called = true
+		return nil
+	})
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/firmware/update", strings.NewReader(`{}`)))
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("firmware/update against unreachable machine: status = %d, want 502, body = %s", rec.Code, rec.Body)
+	}
+	if called {
+		t.Fatalf("callback ran even though the adapter errored")
+	}
+
+	h.SetOnFirmwareUpdate(nil)
+	rec = doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/firmware/update", strings.NewReader(`{}`)))
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("firmware/update with nil hook: status = %d, want 502, body = %s", rec.Code, rec.Body)
+	}
+}

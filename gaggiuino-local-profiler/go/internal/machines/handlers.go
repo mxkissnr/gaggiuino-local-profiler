@@ -70,6 +70,15 @@ type Handlers struct {
 	profilesCache *profilesCache
 	liveClient    *gaggiuinoLiveClient
 	gaggimateLive *gaggiMateLiveClient
+
+	// onFirmwareUpdate runs after a firmware update has been triggered
+	// successfully (see triggerFirmwareUpdate in handlers_control.go). Set
+	// via SetOnFirmwareUpdate by cmd/server, which uses it to record the
+	// update in the machine's maintenance log (#1136). A callback rather
+	// than a direct import for the same reason as
+	// library.Handlers.SetOnGrinderDeleted: internal/maintenance already
+	// imports internal/machines, so the wiring has to run this direction.
+	onFirmwareUpdate func(m *Machine) error
 }
 
 // NewHandlers builds Handlers around registry (backed by the same *sql.DB
@@ -88,6 +97,18 @@ func NewHandlers(registry *Registry, hub *sse.Hub) *Handlers {
 		liveClient:    live,
 		gaggimateLive: gmLive,
 	}
+}
+
+// SetOnFirmwareUpdate wires the side effect to run after a machine
+// firmware update has been triggered successfully (#1136). cmd/server uses
+// it to add a `firmware_update` entry to the machine's maintenance log;
+// internal/maintenance imports internal/machines, so wiring this as a
+// callback here avoids the import cycle a direct dependency would create.
+// A nil hook (never wired, e.g. in this package's own unit tests) is a
+// no-op. The callback's error is logged, never surfaced to the client --
+// the update itself already succeeded.
+func (h *Handlers) SetOnFirmwareUpdate(fn func(m *Machine) error) {
+	h.onFirmwareUpdate = fn
 }
 
 // disconnectLiveForHost tears down both persistent live sessions for a host

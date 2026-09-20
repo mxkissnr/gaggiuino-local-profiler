@@ -383,3 +383,55 @@ func TestMaintenanceLog_CustomTaskEntryCarriesLabel(t *testing.T) {
 		t.Errorf("Label = %q, want %q", entries[0].Label, "Rückspülen mit Reiniger")
 	}
 }
+
+// TestFirmwareUpdate_LogEntryRecordedWithoutDisturbingStats is #1136's
+// maintenance-side guarantee: a `firmware_update` row written straight to
+// the log (as cmd/server's machines.Handlers.SetOnFirmwareUpdate callback
+// does) must be listed by GetMaintenanceLog, must survive a backup restore,
+// and must NOT become a tracked task in ComputeMaintenanceStats --
+// firmware_update is a log-only event, never a due/soon/ok tile.
+func TestFirmwareUpdate_LogEntryRecordedWithoutDisturbingStats(t *testing.T) {
+	h, repo, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	if _, err := repo.AddMaintenanceLogEntry("firmware_update", "", "192.0.2.10", 0, 1); err != nil {
+		t.Fatalf("AddMaintenanceLogEntry: %v", err)
+	}
+
+	log, err := repo.GetMaintenanceLog(0)
+	if err != nil {
+		t.Fatalf("GetMaintenanceLog: %v", err)
+	}
+	found := false
+	for _, e := range log {
+		if e.Task == "firmware_update" {
+			found = true
+			if e.Machine != "192.0.2.10" {
+				t.Errorf("machine = %q, want %q", e.Machine, "192.0.2.10")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("firmware_update entry missing from log: %+v", log)
+	}
+
+	raw, err := repo.GetAllMaintenanceLogRaw()
+	if err != nil {
+		t.Fatalf("GetAllMaintenanceLogRaw: %v", err)
+	}
+	if err := repo.RestoreMaintenanceLogRaw(raw); err != nil {
+		t.Fatalf("RestoreMaintenanceLogRaw rejected the firmware_update entry: %v", err)
+	}
+
+	rec := doJSON(t, mux, http.MethodGet, "/api/maintenance", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/maintenance status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	stats := decodeBody(t, rec.Body.Bytes())
+	if _, ok := stats["firmware_update"]; ok {
+		t.Errorf("firmware_update must not appear as a maintenance stat: %+v", stats)
+	}
+	if _, ok := stats["descaling"]; !ok {
+		t.Errorf("descaling missing from stats: %+v", stats)
+	}
+}

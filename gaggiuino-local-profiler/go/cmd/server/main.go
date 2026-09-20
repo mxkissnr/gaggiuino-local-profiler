@@ -29,6 +29,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -426,6 +427,15 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// `grinder_{id}` maintenance-table row, via a callback (not a direct
 	// import) since internal/maintenance already imports internal/library.
 	libraryHandlers.SetOnGrinderDeleted(maintenanceRepo.DeleteGrinderTask)
+
+	// #1136: a firmware update triggered from the app shows up in the
+	// machine's maintenance log. Wired as a callback (not a direct import)
+	// for the same import-cycle reason as the grinder-delete hook above --
+	// internal/maintenance already imports internal/machines.
+	machinesHandlers.SetOnFirmwareUpdate(func(m *machines.Machine) error {
+		_, err := maintenanceRepo.AddMaintenanceLogEntry("firmware_update", "", m.Host, 0, m.ID)
+		return err
+	})
 
 	// Phase 2b (#901): the achievements ("stamp card") domain —
 	// GET /api/achievements. A pure-logic port reading across shots,
