@@ -1,6 +1,10 @@
 ## [Unreleased]
-- **Grinders can now log a zero-point history, so re-zeroing a grinder after cleaning no longer means rewriting past shots' grind settings — grind-setting suggestions and comparisons correct for the drift automatically.** Closes #1125
-- **Added custom maintenance tasks** — track your own reminders (a name plus an optional shots and/or days interval) next to the five built-in ones, rename or delete them, and disable any task without deleting it. Closes #1125
+- **Fixed the bottom navigation covering the end of page content.** Part of #1125
+- **Added a kiosk page for a tablet on the table: guests enter their name, pick a drink and place an order, and see the live queue with estimated times.** Part of #1125
+- **Machine profiles can now be duplicated.** Part of #1125
+- **Converted most of the frontend's test suite to TypeScript**, typing fixtures and mocks under the strict compiler settings; the tests for the three largest views follow with those views. Part of #1133
+- **Grinders can now log a zero-point history, so re-zeroing a grinder after cleaning no longer means rewriting past shots' grind settings — grind-setting suggestions and comparisons correct for the drift automatically.** Part of #1125
+- **Added custom maintenance tasks** — track your own reminders (a name plus an optional shots and/or days interval) next to the five built-in ones, rename or delete them, and disable any task without deleting it. Part of #1125
 - **Converted the frontend's remaining standalone helper modules (image URLs, flavor data and matching, dial-in suggestions, machine icons, score and theme helpers) to TypeScript**, replacing their temporary type stubs with real types. Part of #1126
 - **Converted most of the frontend's page-level view modules to TypeScript**, adding types for their DOM handling, state, and chart configuration; the three largest views follow once the open contributor changes to them have landed. Part of #1115
 - **Converted most of the frontend's UI component modules to TypeScript**, adding types for their props, state, and DOM handling. Part of #1113
