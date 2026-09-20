@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -34,6 +35,104 @@ func TestTaskDone_UnknownTask404(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d; want 404; body=%s", rec.Code, rec.Body.String())
 	}
+}
+
+// TestTaskDone_UnknownCustomTask404 verifies canonicalTask checks a
+// custom_* key against the machine's actual maintenance rows instead of
+// accepting anything shaped like custom_[a-z0-9_-]+ — a request naming a
+// never-created (or already-deleted) custom key must 404, not silently
+// create a phantom task row.
+func TestTaskDone_UnknownCustomTask404(t *testing.T) {
+	h, _, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	rec := doJSON(t, mux, http.MethodPost, "/api/maintenance/custom_never_created/done", mustMarshal(t, map[string]any{}))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d; want 404; body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = doJSON(t, mux, http.MethodGet, "/api/maintenance", nil)
+	stats := decodeBody(t, rec.Body.Bytes())
+	if _, exists := stats["custom_never_created"]; exists {
+		t.Errorf("phantom task row was created: %+v", stats)
+	}
+}
+
+// TestCustomTaskThreshold_UnknownCustomTask404 mirrors the same check for
+// POST .../threshold, the other write path that used to accept an
+// unchecked custom_* key.
+func TestCustomTaskThreshold_UnknownCustomTask404(t *testing.T) {
+	h, _, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	rec := doJSON(t, mux, http.MethodPost, "/api/maintenance/custom_never_created/threshold",
+		mustMarshal(t, map[string]any{"threshold_days": 30}))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d; want 404; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestCustomTaskLog_UnknownCustomTask400 mirrors the same check for
+// POST /api/maintenance/log referencing a custom_* task.
+func TestCustomTaskLog_UnknownCustomTask400(t *testing.T) {
+	h, _, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	rec := doJSON(t, mux, http.MethodPost, "/api/maintenance/log",
+		mustMarshal(t, map[string]any{"task": "custom_never_created"}))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d; want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestCustomTask_CreateThenDoneWorks verifies a custom task created via
+// POST .../custom can then be marked done — the existence check must not
+// reject a real, just-created custom key.
+func TestCustomTask_CreateThenDoneWorks(t *testing.T) {
+	h, _, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	rec := doJSON(t, mux, http.MethodPost, "/api/maintenance/custom", mustMarshal(t, map[string]any{"label": "Descale line"}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	created := decodeBody(t, rec.Body.Bytes())
+	if _, exists := created["custom_descale_line"]; !exists {
+		t.Fatalf("expected custom_descale_line in create response: %+v", created)
+	}
+
+	rec = doJSON(t, mux, http.MethodPost, "/api/maintenance/custom_descale_line/done", mustMarshal(t, map[string]any{}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("done status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestCustomTask_LabelTruncatesByRunesNotBytes verifies a label over 100
+// runes is truncated on a rune boundary — slicing by byte index (label[:100])
+// would panic or split a multi-byte character mid-encoding for non-ASCII
+// input like this one (each "é" is 2 bytes, so 60 of them is 120 bytes but
+// only 60 runes).
+func TestCustomTask_LabelTruncatesByRunesNotBytes(t *testing.T) {
+	h, _, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	// "ä" is 2 bytes in UTF-8, and slugifyLabel maps it to ASCII "a" (still
+	// producing a valid non-empty key) while the raw (truncated) label
+	// stored on the task keeps the original character.
+	label := strings.Repeat("ä", 150) // 150 runes, 300 bytes
+	rec := doJSON(t, mux, http.MethodPost, "/api/maintenance/custom", mustMarshal(t, map[string]any{"label": label}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	created := decodeBody(t, rec.Body.Bytes())
+	for _, stat := range created {
+		s, ok := stat.(map[string]any)
+		if !ok {
+			continue
+		}
+		if lbl, ok := s["label"].(string); ok && strings.HasPrefix(lbl, "ä") {
+			if got := len([]rune(lbl)); got != 100 {
+				t.Errorf("label rune count = %d, want 100", got)
+			}
+			return
+		}
+	}
+	t.Fatalf("created task not found in response: %+v", created)
 }
 
 func TestTaskDone_MarksLastDateAndLogs(t *testing.T) {

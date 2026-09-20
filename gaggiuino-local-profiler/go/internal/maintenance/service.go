@@ -32,13 +32,13 @@ var ErrUnknownTask = errors.New("unknown maintenance task")
 // package's service.go) after the web queue was found to skip the
 // customer HA-notify side effect a REST-handler-only method held.
 func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *library.Repository, registry *machines.Registry, rawTask, notes string, machineID int64) (map[string]Stat, error) {
-	task, valid := canonicalTask(libRepo, rawTask)
-	if !valid {
-		return nil, ErrUnknownTask
-	}
 	maint, err := repo.GetMaintenance(machineID)
 	if err != nil {
 		return nil, err
+	}
+	task, valid := canonicalTask(libRepo, maint, rawTask)
+	if !valid {
+		return nil, ErrUnknownTask
 	}
 	t := maint[task]
 	if t == nil {

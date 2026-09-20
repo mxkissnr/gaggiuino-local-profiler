@@ -1647,10 +1647,44 @@ paths:
               type: object
               properties:
                 threshold_shots: { type: integer, minimum: 1, maximum: 10000, nullable: true }
-                threshold_days:  { type: integer, minimum: 1, maximum: 365, nullable: true }
+                threshold_days:  { type: integer, minimum: 1, maximum: 3650, nullable: true, description: "Static/grinder_* tasks are additionally capped at 365 server-side; custom_* tasks accept the full range." }
+                label: { type: string, maxLength: 100, description: "custom_* tasks only — renames the task's display label." }
       responses:
         "200": { description: Updated stats, content: { application/json: { schema: { $ref: '#/components/schemas/MaintenanceStats' } } } }
         "404": { description: Unknown task, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/maintenance/custom:
+    post:
+      tags: [Maintenance]
+      summary: Create a user-defined maintenance task
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer }, description: "Defaults to 1" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label:           { type: string, maxLength: 100 }
+                threshold_shots: { type: integer, minimum: 1, maximum: 10000, nullable: true }
+                threshold_days:  { type: integer, minimum: 1, maximum: 3650, nullable: true }
+      responses:
+        "200": { description: Updated stats, content: { application/json: { schema: { $ref: '#/components/schemas/MaintenanceStats' } } } }
+        "400": { description: Missing/empty label, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "409": { description: A task with the slugified key already exists, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/maintenance/custom/{key}:
+    delete:
+      tags: [Maintenance]
+      summary: Delete a user-defined maintenance task
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string } }
+        - { name: machineId, in: query, schema: { type: integer }, description: "Defaults to 1" }
+      responses:
+        "200": { description: Updated stats, content: { application/json: { schema: { $ref: '#/components/schemas/MaintenanceStats' } } } }
+        "400": { description: key is not a valid custom_* task key, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/maintenance/log:
     get:
