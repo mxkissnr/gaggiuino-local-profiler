@@ -1,22 +1,34 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { ShotMeta } from '../public-src/state/index.js';
 
 // shots/index.js's import chain touches state.js/i18n.js, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as test/library-profile-editor.test.js and
-// test/library-load-render-race.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
+// test/library-load-render-race.test.js). vitest's node environment has no
+// browser globals, so the fakes go through a loose view of globalThis rather
+// than satisfying the full Storage/Navigator/Document shapes (the same bridge
+// test/shots-load-all-meta-throttle.test.ts uses).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator    ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
 const { loadData } = await import('../public-src/views/shots/index.js');
 
+// The few nodes the load path writes to; it sets either innerHTML or style on
+// each of them, so both stay optional.
+interface FakeShotsElement {
+  innerHTML?: string;
+  style?: Record<string, string>;
+}
+
 // Stub only the DOM the load path touches, same "fake minimal document"
 // approach the other frontend tests use instead of pulling in jsdom.
 function fakeDocument() {
-  const elements = {
+  const elements: Record<string, FakeShotsElement> = {
     shots:          { innerHTML: '' },
     'empty-state':  { style: {} },
     'chart-area':   { style: {} },
@@ -24,14 +36,20 @@ function fakeDocument() {
   return {
     elements,
     document: {
-      getElementById: id => elements[id],
+      getElementById: (id: string) => elements[id],
       querySelectorAll: () => [],
     },
   };
 }
 
-const shotA = { id: 1, machineId: 1, timestamp: 1000, duration: 250 };
-const shotB = { id: 2, machineId: 1, timestamp: 2000, duration: 250 };
+const shotA: ShotMeta = { id: 1, machineId: 1, timestamp: 1000, duration: 250 };
+const shotB: ShotMeta = { id: 2, machineId: 1, timestamp: 2000, duration: 250 };
+
+// One api/shots response body. A `json: async () => …` would trip
+// @typescript-eslint/require-await, hence the explicit Promise.resolve.
+function shotsResponse(shots: ShotMeta[]): Response {
+  return { ok: true, json: () => Promise.resolve({ shots, nextCursor: null, hasMore: false }) } as unknown as Response;
+}
 
 describe('loadData (#644 race)', () => {
   beforeEach(() => {
@@ -49,14 +67,17 @@ describe('loadData (#644 race)', () => {
 
   it('the later-fired call wins even when its response resolves before the earlier call\'s', async () => {
     const { document } = fakeDocument();
-    globalThis.document = document;
+    g.document = document;
 
-    let resolveA, resolveB;
-    const pA = new Promise(res => { resolveA = res; });
-    const pB = new Promise(res => { resolveB = res; });
+    // Assigned by the promise executors below, so TS cannot prove they are
+    // set before the explicit resolve calls further down.
+    let resolveA!: (value: Response) => void;
+    let resolveB!: (value: Response) => void;
+    const pA = new Promise<Response>(res => { resolveA = res; });
+    const pB = new Promise<Response>(res => { resolveB = res; });
     let shotsCallCount = 0;
-    fetchSpy.mockImplementation(url => {
-      if (url.includes('trash=1')) return Promise.resolve({ ok: false });
+    fetchSpy.mockImplementation((url: string) => {
+      if (url.includes('trash=1')) return Promise.resolve({ ok: false } as unknown as Response);
       shotsCallCount++;
       return shotsCallCount === 1 ? pA : pB; // call A fired first, call B fired second
     });
@@ -65,10 +86,10 @@ describe('loadData (#644 race)', () => {
     const callB = loadData(); // fired second, while A is still pending
 
     // B (the later-fired call) resolves first...
-    resolveB({ ok: true, json: async () => ({ shots: [shotB], nextCursor: null, hasMore: false }) });
+    resolveB(shotsResponse([shotB]));
     await callB;
     // ...and A's stale response arrives after — it must not clobber B's data.
-    resolveA({ ok: true, json: async () => ({ shots: [shotA], nextCursor: null, hasMore: false }) });
+    resolveA(shotsResponse([shotA]));
     await callA;
 
     expect(S.allShots).toEqual([shotB]);
