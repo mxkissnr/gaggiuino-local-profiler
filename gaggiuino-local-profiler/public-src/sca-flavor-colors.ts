@@ -12,7 +12,7 @@
 // extensions beyond the strict official wheel and have no source entry, so
 // they fall back to their resolved parent color: apricot, stone_fruit,
 // mandarin, lemonade, hay_straw, meaty_brothy.
-export const SCA_FLAVOR_COLORS = {
+export const SCA_FLAVOR_COLORS: Record<string, string> = {
   fruity: '#ee1d23',
   berry: '#ed2c4b',
   blackberry: '#090819',

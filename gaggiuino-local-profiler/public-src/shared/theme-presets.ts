@@ -7,7 +7,18 @@
 // flat-colour preset just repeats the same hex in both stops. i18n label
 // keys follow the `theme_preset_<key with _ instead of ->` convention, added
 // to all six public-src/i18n/*.js files.
-const THEME_PRESETS = [
+export interface ThemePreset {
+    key: string;
+    a: string;
+    b: string;
+}
+
+export interface ThemeStops {
+    a: string;
+    b: string;
+}
+
+const THEME_PRESETS: ThemePreset[] = [
     { key: 'amber-americano',   a: '#f59e0b', b: '#f59e0b' },
     { key: 'ruby-ristretto',    a: '#7f1d1d', b: '#7f1d1d' },
     { key: 'copper-cortado',    a: '#c2703d', b: '#e8b4a0' },
@@ -20,20 +31,21 @@ const THEME_PRESETS = [
 
 const THEME_PRESET_KEYS = THEME_PRESETS.map(p => p.key);
 
-function getThemePreset(key) {
+function getThemePreset(key: unknown): ThemePreset | null {
     return THEME_PRESETS.find(p => p.key === key) || null;
 }
 
 // Resolves a stored machines.theme value (see lib/db.js) to concrete {a,b}
 // hex stops, or null if unset/unknown. Used wherever the actual colour is
 // needed (icon rendering, list swatches) rather than the raw stored shape.
-function resolveTheme(theme) {
+function resolveTheme(theme: unknown): ThemeStops | null {
     if (!theme) return null;
-    if (theme.preset) {
-        const preset = getThemePreset(theme.preset);
+    const t = theme as { preset?: string; a?: string; b?: string };
+    if (t.preset) {
+        const preset = getThemePreset(t.preset);
         return preset ? { a: preset.a, b: preset.b } : null;
     }
-    if (theme.a && theme.b) return { a: theme.a, b: theme.b };
+    if (t.a && t.b) return { a: t.a, b: t.b };
     return null;
 }
 

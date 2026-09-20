@@ -30,17 +30,46 @@
 // a longer preinfusion (more time to saturate evenly before pressure
 // builds), a lower target ramp pressure, and a lower brew temperature
 // (porous pucks extract faster, so a lower temp avoids over-extraction).
-export function suggestProfileFromBean(bean) {
-  const gentle = !!(bean?.decaf || bean?.process?.toLowerCase() === 'natural');
+/** One phase of the suggested profile (phaseSchema-shaped). */
+export interface ProfileSuggestionPhase {
+  name: string;
+  type: string;
+  target?: { start?: number; end?: number; curve?: string; time?: number };
+  restriction?: number;
+  stopConditions?: Record<string, number>;
+}
 
-  const ratio = _parseBrewRatio(bean?.brewRatio);
+/** The machine-profile draft suggestProfileFromBean() builds for a bean. */
+export interface ProfileSuggestion {
+  name: string;
+  waterTemperature: number;
+  recipe: { coffeeIn: number; coffeeOut: number; ratio: number };
+  phases: ProfileSuggestionPhase[];
+  globalStopConditions: { weight: number };
+}
+
+/**
+ * The bean fields suggestProfileFromBean() reads off its argument. Declared
+ * unknown because callers hand it a state LibraryRow (Record<string, unknown>).
+ */
+export interface BeanSuggestionInput {
+  name?: unknown;
+  decaf?: unknown;
+  process?: unknown;
+  brewRatio?: unknown;
+}
+
+export function suggestProfileFromBean(bean: BeanSuggestionInput | null | undefined): ProfileSuggestion {
+  const gentle = !!(bean?.decaf || (bean?.process as string | null | undefined)?.toLowerCase() === 'natural');
+
+  const ratio = _parseBrewRatio(bean?.brewRatio as string | number | undefined);
   const coffeeIn  = 18;
   const coffeeOut = ratio ? Math.round(coffeeIn * ratio * 10) / 10 : 36;
 
   const rampPressure = gentle ? 7 : 9;
 
   return {
-    name: bean?.name ? `${bean.name} (Vorschlag)` : 'Neues Profil',
+    name: bean?.name ? `${bean.name as string} (Vorschlag)` : 'Neues Profil',
     waterTemperature: gentle ? 92 : 93,
     recipe: {
       coffeeIn,
@@ -104,7 +133,7 @@ export function suggestProfileFromBean(bean) {
 // bean.brewRatio is a free-text field like "1:2.2" (see beanFormBrewRatio in
 // index.html) — returns the numeric part after the colon, or null if it
 // can't be parsed as "1:<number>".
-function _parseBrewRatio(brewRatio) {
+function _parseBrewRatio(brewRatio: string | number | null | undefined): number | null {
   if (!brewRatio) return null;
   const m = String(brewRatio).trim().match(/^1\s*:\s*([\d.]+)$/);
   if (!m) return null;

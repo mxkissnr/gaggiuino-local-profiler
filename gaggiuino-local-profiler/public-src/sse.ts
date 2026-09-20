@@ -29,19 +29,19 @@ const MAX_STRIKES = 3;
 // clean close, token expiry, etc.) well within a session.
 const STALE_MS = 40000;
 
-let source = null;
+let source: EventSource | null = null;
 let everConnected = false;
 let strikes = 0;
-let watchdogTimer = null;
-let staleTimer = null;
-const listeners = new Map(); // type -> Set<cb>
-const attachedTypes = new Set(); // types with a native listener already wired on the current `source`
+let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+let staleTimer: ReturnType<typeof setTimeout> | null = null;
+const listeners = new Map<string, Set<(data: unknown) => void>>(); // type -> Set<cb>
+const attachedTypes = new Set<string>(); // types with a native listener already wired on the current `source`
 
-function clearWatchdog() {
+function clearWatchdog(): void {
   if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null; }
 }
 
-function clearStaleTimer() {
+function clearStaleTimer(): void {
   if (staleTimer) { clearTimeout(staleTimer); staleTimer = null; }
 }
 
@@ -52,15 +52,15 @@ function clearStaleTimer() {
 // `source`: EventSource's own native reconnect may still be working in the
 // background and can flip S.sseActive back to true via onopen once it
 // recovers, same as any other transient drop.
-function armStaleTimer() {
+function armStaleTimer(): void {
   clearStaleTimer();
   staleTimer = setTimeout(() => { S.sseActive = false; }, STALE_MS);
 }
 
-function dispatch(type) {
+function dispatch(type: string): (e: MessageEvent) => void {
   return e => {
-    let data;
-    try { data = JSON.parse(e.data); } catch { return; }
+    let data: unknown;
+    try { data = JSON.parse(e.data as string); } catch { return; }
     // A real message is itself the strongest possible "still working" signal
     // -- resets the stale window and (covering the rare case of traffic
     // resuming on the same never-actually-closed connection, so onopen never
@@ -74,7 +74,7 @@ function dispatch(type) {
 // One native EventSource listener per event type, fanning out to every
 // registered callback for that type -- avoids re-wrapping/leaking a fresh
 // closure per onEvent() call, and keeps offEvent() a plain Set.delete().
-function attachType(type) {
+function attachType(type: string): void {
   if (!source || attachedTypes.has(type)) return;
   source.addEventListener(type, dispatch(type));
   attachedTypes.add(type);
@@ -84,7 +84,7 @@ function attachType(type) {
 // fallback. Only ever reached via a call site that already checked
 // `!everConnected` -- a normal auto-reconnect after a mid-session drop must
 // NOT re-trigger this, only "never once connected" does.
-function triggerFallback(onFallback) {
+function triggerFallback(onFallback?: () => void): void {
   S.sseActive = false;
   disconnectEvents();
   onFallback?.();
@@ -94,7 +94,7 @@ function triggerFallback(onFallback) {
 // `onFallback` fires at most once, only if the connection has NEVER
 // successfully opened -- a normal EventSource auto-reconnect after a
 // mid-session drop must not flicker the app back into polling mode.
-export function connectEvents(onFallback) {
+export function connectEvents(onFallback?: () => void): void {
   disconnectEvents();
   everConnected = false;
   strikes = 0;
@@ -123,19 +123,19 @@ export function connectEvents(onFallback) {
   };
 }
 
-export function disconnectEvents() {
+export function disconnectEvents(): void {
   clearWatchdog();
   clearStaleTimer();
   if (source) { source.close(); source = null; }
   attachedTypes.clear();
 }
 
-export function onEvent(type, cb) {
+export function onEvent(type: string, cb: (data: unknown) => void): void {
   if (!listeners.has(type)) listeners.set(type, new Set());
-  listeners.get(type).add(cb);
+  listeners.get(type)!.add(cb);
   attachType(type);
 }
 
-export function offEvent(type, cb) {
+export function offEvent(type: string, cb: (data: unknown) => void): void {
   listeners.get(type)?.delete(cb);
 }
