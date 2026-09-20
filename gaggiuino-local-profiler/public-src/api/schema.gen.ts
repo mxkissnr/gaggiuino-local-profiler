@@ -2772,7 +2772,10 @@ export interface paths {
                 content: {
                     "application/json": {
                         threshold_shots?: number | null;
+                        /** @description Static/grinder_* tasks are additionally capped at 365 server-side; custom_* tasks accept the full range. */
                         threshold_days?: number | null;
+                        /** @description custom_* tasks only — renames the task's display label. */
+                        label?: string;
                     };
                 };
             };
@@ -2798,6 +2801,121 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/custom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a user-defined maintenance task */
+        post: {
+            parameters: {
+                query?: {
+                    /** @description Defaults to 1 */
+                    machineId?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        label: string;
+                        threshold_shots?: number | null;
+                        threshold_days?: number | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated stats */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MaintenanceStats"];
+                    };
+                };
+                /** @description Missing/empty label */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description A task with the slugified key already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/custom/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a user-defined maintenance task */
+        delete: {
+            parameters: {
+                query?: {
+                    /** @description Defaults to 1 */
+                    machineId?: number;
+                };
+                header?: never;
+                path: {
+                    key: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Updated stats */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MaintenanceStats"];
+                    };
+                };
+                /** @description key is not a valid custom_* task key */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;

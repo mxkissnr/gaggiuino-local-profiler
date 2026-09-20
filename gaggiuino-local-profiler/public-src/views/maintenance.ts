@@ -291,14 +291,14 @@ function _renderCustomSection(container: HTMLElement | null, scope: MaintScope):
   // codeql[js/xss-through-dom] false positive: esc() applied
   container.innerHTML = `
     <details class="maint-custom-add">
-      <summary>Eigene Wartung hinzufügen</summary>
+      <summary>${esc(t('maint_custom_add_summary'))}</summary>
       <div class="maint-custom-form">
-        <input type="text" id="customTaskLabel" placeholder="Name (z.B. Rückspülen mit Reiniger)" maxlength="100">
+        <input type="text" id="customTaskLabel" placeholder="${esc(t('maint_custom_label_ph'))}" maxlength="100">
         <div class="maint-custom-thresholds">
-          <label>Alle <input type="number" id="customTaskShots" min="1" max="10000" placeholder="–"> Bezüge</label>
-          <label>Alle <input type="number" id="customTaskDays" min="1" max="3650" placeholder="–"> Tage</label>
+          <label>${esc(t('maint_custom_every'))} <input type="number" id="customTaskShots" min="1" max="10000" placeholder="–"> ${esc(t('maint_unit_shots'))}</label>
+          <label>${esc(t('maint_custom_every'))} <input type="number" id="customTaskDays" min="1" max="3650" placeholder="–"> ${esc(t('maint_by_days'))}</label>
         </div>
-        <button data-action="add-custom-maint-task" data-machine-id="${esc(writeMid)}">Hinzufügen</button>
+        <button data-action="add-custom-maint-task" data-machine-id="${esc(writeMid)}">${esc(t('maint_custom_add'))}</button>
       </div>
     </details>
   `;
@@ -310,11 +310,11 @@ function _renderDisabledSection(container: HTMLElement, tiles: MaintTile[]): voi
     return `<div class="maint-disabled-row">
       <span class="icon">${taskIconSvg(tile.task)}</span>
       <span>${esc(title)}</span>
-      <button class="maint-reenable-btn" data-action="toggle-maint-disabled" data-task="${esc(tile.task)}" data-machine-id="${tile.machineId}" data-disabled="false">Aktivieren</button>
+      <button class="maint-reenable-btn" data-action="toggle-maint-disabled" data-task="${esc(tile.task)}" data-machine-id="${tile.machineId}" data-disabled="false">${esc(t('maint_enable_btn'))}</button>
     </div>`;
   }).join('');
   // codeql[js/xss-through-dom] false positive: esc() applied
-  container.innerHTML = `<details class="maint-disabled-details"><summary>Deaktivierte Wartungen (${tiles.length})</summary>${rows}</details>`;
+  container.innerHTML = `<details class="maint-disabled-details"><summary>${esc(t('maint_disabled_section', tiles.length))}</summary>${rows}</details>`;
 }
 
 function _renderNextBanner(container: HTMLElement | null, tile: MaintTile | null): void {
@@ -373,19 +373,19 @@ function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
   const daysVal  = d.threshold_days  ?? '';
   const gVal     = d.threshold_g ?? '';
   const shotsInput = `<label class="maint-threshold-field">
-    <span>Bezüge</span>
+    <span>${esc(t('maint_unit_shots'))}</span>
     <input type="number" min="1" max="10000" value="${shotsVal}" placeholder="–"
-        data-action="save-maint-threshold" data-task="${task}" data-field="threshold_shots" data-machine-id="${machineId}">
+        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_shots" data-machine-id="${machineId}">
   </label>`;
   const daysInput = `<label class="maint-threshold-field">
-    <span>Tage</span>
+    <span>${esc(t('maint_by_days'))}</span>
     <input type="number" min="1" max="3650" value="${daysVal}" placeholder="–"
-        data-action="save-maint-threshold" data-task="${task}" data-field="threshold_days" data-machine-id="${machineId}">
+        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_days" data-machine-id="${machineId}">
   </label>`;
   const gInput = `<label class="maint-threshold-field">
-    <span>Gramm</span>
+    <span>${esc(t('maint_unit_grams'))}</span>
     <input type="number" min="1" max="100000" value="${gVal}" placeholder="–"
-        data-action="save-maint-threshold" data-task="${task}" data-field="threshold_g" data-machine-id="${machineId}">
+        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_g" data-machine-id="${machineId}">
   </label>`;
   const thresholdFields = mode === 'g' ? gInput : mode === 'shots' ? shotsInput : mode === 'days' ? daysInput : shotsInput + daysInput;
 
@@ -407,25 +407,25 @@ function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
         <span class="maint-card-count">${esc(countText)}</span>
         ${d.machineSyncedAt ? `<span class="maint-auto-synced" title="${esc(t('maint_auto_synced_hint'))}">${esc(t('maint_auto_synced'))}</span>` : ''}
       </div>
-      <button class="maint-detail-toggle" type="button" data-action="toggle-maint-detail" data-task="${task}">${esc(t('maint_tile_details'))}</button>
+      <button class="maint-detail-toggle" type="button" data-action="toggle-maint-detail" data-task="${esc(task)}">${esc(t('maint_tile_details'))}</button>
       <div class="detail">
         <div class="maint-mode-seg">
-          <button class="${mode === 'shots' ? 'active' : ''}" data-action="set-maint-mode" data-task="${task}" data-mode="shots" data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">Bezüge</button>
-          <button class="${mode === 'days'  ? 'active' : ''}" data-action="set-maint-mode" data-task="${task}" data-mode="days"  data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">Tage</button>
-          <button class="${mode === 'both'  ? 'active' : ''}" data-action="set-maint-mode" data-task="${task}" data-mode="both"  data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">Beides</button>
-          ${isGrinder ? `<button class="${mode === 'g' ? 'active' : ''}" data-action="set-maint-mode" data-task="${task}" data-mode="g" data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">Gramm</button>` : ''}
+          <button class="${mode === 'shots' ? 'active' : ''}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="shots" data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">${esc(t('maint_unit_shots'))}</button>
+          <button class="${mode === 'days'  ? 'active' : ''}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="days"  data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">${esc(t('maint_by_days'))}</button>
+          <button class="${mode === 'both'  ? 'active' : ''}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="both"  data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">${esc(t('maint_mode_both'))}</button>
+          ${isGrinder ? `<button class="${mode === 'g' ? 'active' : ''}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="g" data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">${esc(t('maint_unit_grams'))}</button>` : ''}
         </div>
         <div class="maint-threshold-inputs">${thresholdFields}</div>
         ${isCustom ? `<label class="maint-threshold-field maint-rename-field">
-          <span>Name</span>
+          <span>${esc(t('maint_rename_label'))}</span>
           <input type="text" maxlength="100" value="${esc(d.label || '')}"
-              data-action="rename-maint-label" data-task="${task}" data-machine-id="${machineId}">
+              data-action="rename-maint-label" data-task="${esc(task)}" data-machine-id="${machineId}">
         </label>` : ''}
         <div class="maint-card-actions">
-          <button class="maint-done-btn" data-action="mark-maint-done" data-task="${task}" data-machine-id="${machineId}">${t('maint_done_btn')}</button>
+          <button class="maint-done-btn" data-action="mark-maint-done" data-task="${esc(task)}" data-machine-id="${machineId}">${t('maint_done_btn')}</button>
           ${isCustom
-            ? `<button class="maint-delete-btn" data-action="delete-custom-maint-task" data-task="${task}" data-machine-id="${machineId}">Löschen</button>`
-            : `<button class="maint-disable-btn" data-action="toggle-maint-disabled" data-task="${task}" data-machine-id="${machineId}" data-disabled="true">Deaktivieren</button>`
+            ? `<button class="maint-delete-btn" data-action="delete-custom-maint-task" data-task="${esc(task)}" data-machine-id="${machineId}">${esc(t('maint_log_delete'))}</button>`
+            : `<button class="maint-disable-btn" data-action="toggle-maint-disabled" data-task="${esc(task)}" data-machine-id="${machineId}" data-disabled="true">${esc(t('maint_disable_btn'))}</button>`
           }
         </div>
       </div>
@@ -548,7 +548,7 @@ export async function addCustomMaintTask(machineId?: string | number | null): Pr
 }
 
 export async function deleteCustomMaintTask(task: string, machineId?: string | number | null): Promise<void> {
-  if (!confirm(`Eigene Wartung "${task.replace('custom_', '')}" wirklich löschen?`)) return;
+  if (!confirm(t('maint_confirm_delete_custom', task.replace('custom_', '')))) return;
   try {
     await deleteCustomMaintenanceTask(task, _writeMachineId(machineId));
     await loadMaintenanceView();

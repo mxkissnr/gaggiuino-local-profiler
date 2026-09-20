@@ -97,11 +97,23 @@ func slugifyLabel(label string) string {
 // comment flags; Go maps have no prototype-pollution equivalent, but the
 // "only ever a program-owned key" discipline is kept for parity and because
 // it's simply the correct thing to do regardless).
-func canonicalTask(libRepo *library.Repository, raw string) (string, bool) {
+//
+// maint is the caller's already-loaded (machine-scoped) maintenance map —
+// needed here because, unlike the static/grinder_N task families (whose
+// validity is a program-owned constant/library lookup), a custom_* key's
+// validity is "does a task with this key actually exist for this machine".
+// Without checking that, a request naming an unknown or already-deleted
+// custom_* key would pass the regex shape check and every write-side
+// caller (taskThreshold, MarkTaskDone, postLog) would silently create a
+// phantom task row instead of 404ing.
+func canonicalTask(libRepo *library.Repository, maint map[string]Task, raw string) (string, bool) {
 	if staticMaintenanceTasks[raw] {
 		return raw, true
 	}
 	if customTaskRe.MatchString(raw) {
+		if _, exists := maint[raw]; !exists {
+			return "", false
+		}
 		return raw, true
 	}
 	m := grinderTaskRe.FindStringSubmatch(raw)
