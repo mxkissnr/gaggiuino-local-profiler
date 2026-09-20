@@ -54,15 +54,15 @@ function mockResponses({ switchBody }: { switchBody: { configured: boolean; stat
     if (String(url).startsWith('api/status')) {
       return Promise.resolve({
         ok: true,
-        json: async () => ({ lastSync: '2026-01-01T00:00:00.000Z', machineHostname: 'kitchen.local' }),
+        json: () => Promise.resolve({ lastSync: '2026-01-01T00:00:00.000Z', machineHostname: 'kitchen.local' }),
       });
     }
     if (String(url).startsWith('api/switch/toggle')) {
-      return Promise.resolve({ ok: true, json: async () => ({ state: switchBody?.state ?? true }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ state: switchBody?.state ?? true }) });
     }
     if (String(url).startsWith('api/switch')) {
       return switchBody
-        ? Promise.resolve({ ok: true, json: async () => switchBody })
+        ? Promise.resolve({ ok: true, json: () => Promise.resolve(switchBody) })
         : Promise.resolve({ ok: false });
     }
     return Promise.resolve({ ok: false });
