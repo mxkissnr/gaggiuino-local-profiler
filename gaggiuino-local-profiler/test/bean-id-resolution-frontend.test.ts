@@ -3,7 +3,8 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 // Same stubbing approach as grind-baseline.test.js/best-grind-combo.test.js:
 // views/shots/utils.js pulls in state.js, which needs localStorage/navigator
 // at module load.
-let resolveBeanForAnnotation, S;
+let resolveBeanForAnnotation: (typeof import('../public-src/views/shots/utils.js'))['resolveBeanForAnnotation'];
+let S: (typeof import('../public-src/state/index.js'))['S'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -19,7 +20,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  S.coffeeLibrary = { beans: [{ id: 1, name: 'Lucky Punch' }, { id: 2, name: 'El Cubanito' }] };
+  S.coffeeLibrary = { beans: [{ id: 1, name: 'Lucky Punch' }, { id: 2, name: 'El Cubanito' }] } as unknown as typeof S.coffeeLibrary;
 });
 
 describe('resolveBeanForAnnotation (#456, frontend mirror)', () => {
@@ -34,7 +35,7 @@ describe('resolveBeanForAnnotation (#456, frontend mirror)', () => {
   });
 
   it('falls back to a name match (advisory best-guess) when beanId points at a bean that no longer exists', () => {
-    S.coffeeLibrary = { beans: [{ id: 99, name: 'Lucky Punch' }] };
+    S.coffeeLibrary = { beans: [{ id: 99, name: 'Lucky Punch' }] } as unknown as typeof S.coffeeLibrary;
     expect(resolveBeanForAnnotation({ coffee: 'Lucky Punch', beanId: 1 })?.id).toBe(99);
   });
 
