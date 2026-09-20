@@ -10,12 +10,18 @@ declare module 'node:child_process' {
     export function execFileSync(
         file: string,
         args: readonly string[],
-        options: { cwd: string; encoding: string },
+        options: {
+            cwd: string;
+            encoding?: string;
+            env?: Record<string, string | undefined>;
+        },
     ): string;
 }
 
 declare module 'node:fs' {
     export function readFileSync(path: string, encoding: string): string;
+    export function writeFileSync(path: string, data: string | Uint8Array): void;
+    export function mkdirSync(path: string, options?: { recursive?: boolean }): void;
     export function mkdtempSync(prefix: string): string;
     export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
 }
@@ -32,6 +38,13 @@ declare module 'node:path' {
 
 declare module 'node:url' {
     export function fileURLToPath(url: string | URL): string;
+}
+
+// Node globals the tests read directly (vitest runs them on Node, where both
+// exist; only their declarations are missing from this browser-oriented lib).
+declare const process: { env: Record<string, string | undefined> };
+declare class Buffer extends Uint8Array {
+    static from(data: readonly number[]): Buffer;
 }
 
 interface ImportMeta {

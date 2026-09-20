@@ -64,13 +64,13 @@ describe('calcShotScore — bean-aware target (#450)', () => {
     it('scores temperature against bean.brewTempC instead of the generic band when set', () => {
         const baseline = calcShotScore(shot); // avgT=90.5°C, in-band -> full marks pre-#450
         const withBeanTarget = calcShotScore(shot, { brewTempC: 93 }); // 2.5°C off the bean's own target
-        expect(withBeanTarget).toBeLessThan(baseline);
+        expect(withBeanTarget).toBeLessThan(baseline!);
     });
 
     it('scores dose:yield ratio against bean.brewRatio instead of the generic band when set', () => {
         const baseline = calcShotScore(shot); // r=2.2, in-band -> full marks pre-#450
         const withBeanTarget = calcShotScore(shot, { brewRatio: '1:1.8' }); // 0.4 off the bean's own target
-        expect(withBeanTarget).toBeLessThan(baseline);
+        expect(withBeanTarget).toBeLessThan(baseline!);
     });
 
     it('ignores an unparsable brewRatio string rather than throwing', () => {

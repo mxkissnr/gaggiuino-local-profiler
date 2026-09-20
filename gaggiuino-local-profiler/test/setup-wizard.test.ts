@@ -4,13 +4,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 // at module load time — stub the minimum browser globals needed so the
 // module graph can be imported under vitest's node environment (same pattern
 // as test/profile-dialin-wizard.test.js).
-const store = {};
-globalThis.localStorage ??= {
-  getItem: k => (k in store ? store[k] : null),
-  setItem: (k, v) => { store[k] = v; },
-  removeItem: k => { delete store[k]; },
+const store: Record<string, string> = {};
+// globalThis carries the full DOM type; stub only the sliver state.js reads.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= {
+  getItem: (k: string) => (k in store ? store[k] : null),
+  setItem: (k: string, v: string) => { store[k] = v; },
+  removeItem: (k: string) => { delete store[k]; },
 };
-globalThis.navigator ??= { language: 'en-US' };
+g.navigator ??= { language: 'en-US' };
 
 const { S, setState } = await import('../public-src/state/index.js');
 const { shouldOpenSetupWizard, syncInstallId } = await import('../public-src/views/setup-wizard.js');
@@ -57,7 +59,7 @@ describe('shouldOpenSetupWizard (#744, #746)', () => {
 // renderSetupWizard() a no-op past the state change, so these tests can
 // drive the subscription without a full DOM.
 describe('setup wizard connect->done auto-advance (#748)', () => {
-  globalThis.document ??= { getElementById: () => undefined };
+  g.document ??= { getElementById: () => undefined };
 
   beforeEach(() => {
     S.setupWizardOpen = true;
@@ -65,7 +67,7 @@ describe('setup wizard connect->done auto-advance (#748)', () => {
   });
 
   it('advances to done on an explicit save (machineExplicitSave signal)', () => {
-    setState('machineExplicitSave', 42);
+    setState('machineExplicitSave' as Parameters<typeof setState>[0], 42);
     expect(S.setupWizardStep).toBe('done');
   });
 
@@ -76,12 +78,12 @@ describe('setup wizard connect->done auto-advance (#748)', () => {
 
   it('ignores machineExplicitSave when the wizard is not open or not on the connect step', () => {
     S.setupWizardOpen = false;
-    setState('machineExplicitSave', 42);
+    setState('machineExplicitSave' as Parameters<typeof setState>[0], 42);
     expect(S.setupWizardStep).toBe('connect');
 
     S.setupWizardOpen = true;
     S.setupWizardStep = 'welcome';
-    setState('machineExplicitSave', 42);
+    setState('machineExplicitSave' as Parameters<typeof setState>[0], 42);
     expect(S.setupWizardStep).toBe('welcome');
   });
 });
