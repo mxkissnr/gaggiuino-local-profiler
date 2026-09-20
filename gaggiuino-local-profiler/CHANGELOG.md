@@ -1,4 +1,5 @@
 ## [Unreleased]
+- **Added custom maintenance tasks** — track your own reminders (a name plus an optional shots and/or days interval) next to the five built-in ones, rename or delete them, and disable any task without deleting it. Closes #1125
 - **Converted the frontend's remaining standalone helper modules (image URLs, flavor data and matching, dial-in suggestions, machine icons, score and theme helpers) to TypeScript**, replacing their temporary type stubs with real types. Part of #1126
 - **Converted most of the frontend's page-level view modules to TypeScript**, adding types for their DOM handling, state, and chart configuration; the three largest views follow once the open contributor changes to them have landed. Part of #1115
 - **Converted most of the frontend's UI component modules to TypeScript**, adding types for their props, state, and DOM handling. Part of #1113
