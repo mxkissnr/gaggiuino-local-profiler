@@ -3,8 +3,12 @@ import { describe, it, expect } from 'vitest';
 // analytics.js pulls in state.js (localStorage/navigator at module load) —
 // same minimal stub other analytics test files use (analytics-new-charts.test.js,
 // world-map-antimeridian.test.js, library-load-render-race.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge test/shots-load-all-meta-throttle.test.ts
+// uses) so the minimal fakes below need not satisfy the full DOM shapes.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator    ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 const { buildWorldMap } = await import('../public-src/views/analytics.js');
@@ -33,16 +37,19 @@ function fakeWrap() {
 describe('buildWorldMap (#648 fetch race guard)', () => {
   it('a stale (earlier-fired, later-resolving) call\'s rejection does not overwrite a newer call\'s completed result', async () => {
     const wrap = fakeWrap();
-    globalThis.document = { getElementById: id => (id === 'worldMapWrap' ? wrap : null) };
+    g.document = { getElementById: (id: string) => (id === 'worldMapWrap' ? wrap : null) };
 
     S.coffeeLibrary = { beans: [{ id: 1, name: 'Test Bean', origin: 'ET' }], grinders: [] };
     S.shots = [];
 
-    let rejectA, rejectB;
-    const pA = new Promise((_res, rej) => { rejectA = rej; });
-    const pB = new Promise((_res, rej) => { rejectB = rej; });
+    // Assigned by the promise executors below, so TS cannot prove they are
+    // set before the explicit reject calls further down.
+    let rejectA!: (reason: Error) => void;
+    let rejectB!: (reason: Error) => void;
+    const pA = new Promise<unknown>((_res, rej) => { rejectA = rej; });
+    const pB = new Promise<unknown>((_res, rej) => { rejectB = rej; });
     let callCount = 0;
-    globalThis.fetch = () => {
+    g.fetch = () => {
       callCount++;
       return callCount === 1 ? pA : pB;
     };
