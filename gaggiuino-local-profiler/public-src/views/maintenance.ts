@@ -298,7 +298,7 @@ function _renderCustomSection(container: HTMLElement | null, scope: MaintScope):
           <label>Alle <input type="number" id="customTaskShots" min="1" max="10000" placeholder="–"> Bezüge</label>
           <label>Alle <input type="number" id="customTaskDays" min="1" max="3650" placeholder="–"> Tage</label>
         </div>
-        <button data-action="add-custom-maint-task" data-machine-id="${writeMid}">Hinzufügen</button>
+        <button data-action="add-custom-maint-task" data-machine-id="${esc(writeMid)}">Hinzufügen</button>
       </div>
     </details>
   `;
