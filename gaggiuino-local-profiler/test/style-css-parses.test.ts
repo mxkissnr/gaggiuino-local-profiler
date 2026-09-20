@@ -5,9 +5,9 @@
 // "--gray-*/--err", and the "*/" inside it closed the comment early, so the
 // rest of the prose was parsed as CSS.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import postcss from 'postcss';
 
 const here = dirname(fileURLToPath(import.meta.url));
