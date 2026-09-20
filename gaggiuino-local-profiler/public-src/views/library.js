@@ -646,18 +646,13 @@ export async function saveEditBag(beanId, bagId) {
   const stock_g     = parseFloat(document.getElementById(`editBagStock${bagId}`)?.value);
   const price_eur   = parseFloat(document.getElementById(`editBagPrice${bagId}`)?.value);
   const batchNumber = document.getElementById(`editBagBatchNumber${bagId}`)?.value.trim() || '';
-  const r = await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      roastDate,
-      stock_g: Number.isNaN(stock_g) ? null : stock_g,
-      price_eur: Number.isNaN(price_eur) ? null : price_eur,
-      batchNumber,
-    }),
+  const saved = await libraryApi.updateBeanBag(beanId, bagId, {
+    roastDate,
+    stock_g: Number.isNaN(stock_g) ? null : stock_g,
+    price_eur: Number.isNaN(price_eur) ? null : price_eur,
+    batchNumber,
   });
-  if (!r.ok) return;
-  const saved = await r.json();
+  if (!saved) return;
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   S._bagFullEditId = null;
@@ -671,18 +666,13 @@ async function putBagStock(beanId, bagId, newStockG) {
   const bean = S.coffeeLibrary.beans.find(b => b.id === beanId);
   const bag = bean?.bags?.find(bg => bg.id === bagId);
   if (!bag) return false;
-  const r = await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      roastDate: bag.roastDate || '',
-      stock_g: newStockG,
-      price_eur: bag.price_eur ?? null,
-      batchNumber: bag.batchNumber || '',
-    }),
+  const saved = await libraryApi.updateBeanBag(beanId, bagId, {
+    roastDate: bag.roastDate || '',
+    stock_g: newStockG,
+    price_eur: bag.price_eur ?? null,
+    batchNumber: bag.batchNumber || '',
   });
-  if (!r.ok) return false;
-  const saved = await r.json();
+  if (!saved) return false;
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   return true;
@@ -696,6 +686,7 @@ export async function saveBagStock(beanId, bagId) {
   if (!bean || !bag) return;
   const newStockG = Math.round(val + (bag.consumedG ?? 0));
   if (!(await putBagStock(beanId, bagId, newStockG))) return;
+  // eslint-disable-next-line require-atomic-updates -- bagId is the per-call function parameter, not shared state
   S._bagStockEditId = null;
   renderBeanList();
 }
@@ -776,11 +767,8 @@ if (typeof document !== 'undefined') {
 }
 
 export async function reorderBags(beanId, bagIds) {
-  const r = await apiFetch(`api/library/bean/${beanId}/reorder-bags`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bagIds }),
-  });
-  if (!r.ok) return;
-  const saved = await r.json();
+  const saved = await libraryApi.reorderBeanBags(beanId, bagIds);
+  if (!saved) return;
   const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
   if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   renderBeanList();
@@ -1227,15 +1215,11 @@ async function saveBeanInternal(openBagDialogAfter) {
   if (S.beanEditId && price_eur) {
     const activeBagForSave = classifyBeanBags(saved).current?.bg || null;
     if (activeBagForSave) {
-      const rb = await apiFetch(`api/library/bean/${S.beanEditId}/bag/${activeBagForSave.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roastDate: activeBagForSave.roastDate || '', stock_g: activeBagForSave.stock_g ?? null,
-          batchNumber: activeBagForSave.batchNumber || '', price_eur: parseFloat(price_eur) || null,
-        }),
+      const savedWithBag = await libraryApi.updateBeanBag(S.beanEditId, activeBagForSave.id, {
+        roastDate: activeBagForSave.roastDate || '', stock_g: activeBagForSave.stock_g ?? null,
+        batchNumber: activeBagForSave.batchNumber || '', price_eur: parseFloat(price_eur) || null,
       });
-      if (rb.ok) {
-        const savedWithBag = await rb.json();
+      if (savedWithBag) {
         const idx2 = S.coffeeLibrary.beans.findIndex(b => b.id === S.beanEditId);
         if (idx2 !== -1) S.coffeeLibrary.beans[idx2] = savedWithBag;
       }
@@ -1271,9 +1255,8 @@ export async function toggleBeanActive(id) {
   _pendingBeanActiveToggles.add(id);
   renderBeanList();
   try {
-    const r = await apiFetch(`api/library/bean/${id}/toggle-active`, { method: 'POST' });
-    if (!r.ok) return;
-    const saved = await r.json();
+    const saved = await libraryApi.toggleBeanActive(id);
+    if (!saved) return;
     const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
     if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
   } finally {
