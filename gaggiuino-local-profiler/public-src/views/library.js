@@ -959,7 +959,7 @@ function renderGrinderZeroPointHistory(grinder) {
     const date = new Date(e.since).toLocaleDateString();
     return `<div class="zp-history-entry">
       <span>${esc(String(e.zeroPoint))} &mdash; ${esc(date)}</span>
-      <button type="button" class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder-zero-point" data-id="${grinder.id}" data-since="${e.since}" title="${t('lib_grinder_zero_point_delete')}">&#x2715;</button>
+      <button type="button" class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder-zero-point" data-id="${esc(grinder.id)}" data-since="${esc(e.since)}" title="${t('lib_grinder_zero_point_delete')}">&#x2715;</button>
     </div>`;
   }).join('')}</div>`;
 }
