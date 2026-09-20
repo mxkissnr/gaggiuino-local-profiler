@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { groupShotsByDay } from '../public-src/utils.js';
 
 const NOW = new Date(2026, 6, 21, 15, 0, 0); // 2026-07-21 15:00 local
-const ts = (y, m, d, h = 12) => Math.floor(new Date(y, m - 1, d, h).getTime() / 1000);
-const formatRecent = (d) => `recent-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const formatOlder = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const ts = (y: number, m: number, d: number, h = 12): number => Math.floor(new Date(y, m - 1, d, h).getTime() / 1000);
+const formatRecent = (d: Date): string => `recent-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const formatOlder = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
 describe('groupShotsByDay', () => {
     it('groups today, yesterday and recent shots into separate buckets with correct labels', () => {

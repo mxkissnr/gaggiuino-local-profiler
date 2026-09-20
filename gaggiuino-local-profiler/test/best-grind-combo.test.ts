@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import type { GrindShot } from '../public-src/views/shots/grind.js';
 
 // grind.js pulls in state.js (localStorage/navigator at module load) and
 // i18n.js — neither is available in the plain Node test environment, so
 // stub the minimum before importing, same approach as share-or-download.test.js.
-let calcBestGrindCombosForBean;
+let calcBestGrindCombosForBean: (typeof import('../public-src/views/shots/grind.js'))['calcBestGrindCombosForBean'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -20,7 +21,7 @@ beforeAll(async () => {
 // Shots carry a pre-computed .score (server-side), which calcShotScore()
 // in shots/utils.js prefers over recomputing — so tests just set .score
 // directly instead of faking datapoints.
-const shot = (coffee, grinder, grindSetting, score) => ({
+const shot = (coffee: string, grinder: string, grindSetting: string, score: number): GrindShot => ({
   annotation: { coffee, grinder, grindSetting },
   score,
 });
@@ -45,7 +46,7 @@ describe('calcBestGrindCombosForBean', () => {
       shot('Bean A', 'Niche Zero', '18', 80),
       shot('Bean A', 'Niche Zero', '18', 88),
     ];
-    const result = calcBestGrindCombosForBean('bean a', uniform); // case-insensitive
+    const result = calcBestGrindCombosForBean('bean a', uniform)!; // case-insensitive
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ grinder: 'Niche Zero', grindSetting: 18, shotCount: 3 });
     expect(result[0].avgScore).toBe(Math.round((90 + 80 + 88) / 3));
@@ -60,7 +61,7 @@ describe('calcBestGrindCombosForBean', () => {
       shot('Bean A', 'Niche Zero', '18', 93),
       shot('Bean A', 'Niche Zero', '18', 97),
     ];
-    const result = calcBestGrindCombosForBean('Bean A', shots);
+    const result = calcBestGrindCombosForBean('Bean A', shots)!;
     expect(result[0]).toMatchObject({ grinder: 'Niche Zero', grindSetting: 18 });
     expect(result[0].avgScore).toBe(95);
   });
@@ -74,7 +75,7 @@ describe('calcBestGrindCombosForBean', () => {
       shot('Bean A', 'DF64', '20', 92),
       shot('Bean A', 'DF64', '20', 94),
     ];
-    const result = calcBestGrindCombosForBean('Bean A', shots);
+    const result = calcBestGrindCombosForBean('Bean A', shots)!;
     expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({ grinder: 'DF64', grindSetting: 20, avgScore: 92 });
     expect(result[1]).toMatchObject({ grinder: 'Niche Zero', grindSetting: 18, avgScore: 70 });
@@ -88,7 +89,7 @@ describe('calcBestGrindCombosForBean', () => {
       { annotation: { coffee: 'Bean A', grinder: '', grindSetting: '18' }, score: 99 },
       { annotation: { coffee: 'Bean A', grinder: 'Niche Zero', grindSetting: '' }, score: 99 },
     ];
-    const result = calcBestGrindCombosForBean('Bean A', shots);
+    const result = calcBestGrindCombosForBean('Bean A', shots)!;
     expect(result).toHaveLength(1);
     expect(result[0].shotCount).toBe(3);
   });
