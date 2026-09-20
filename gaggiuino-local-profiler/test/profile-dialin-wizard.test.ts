@@ -5,8 +5,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // globals needed so the module graph can be imported under vitest's node
 // environment (same pattern as test/milk-deduct-gate.test.js and
 // test/library-profile-editor.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge the other typed fixtures use).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator    ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
@@ -20,12 +23,19 @@ const { profileDialinOverride } = await import('../public-src/views/profile-dial
 // between the two overlapping calls lets each call compute a distinct
 // nextProfile, the same "fake minimal document" approach used elsewhere in
 // this suite instead of pulling in jsdom.
-function fakeDocument(overrideValue) {
+function fakeDocument(overrideValue: string) {
   const input = { value: overrideValue };
   return {
-    getElementById: id => (id === 'pdwOverrideInput' ? input : undefined),
+    getElementById: (id: string) => (id === 'pdwOverrideInput' ? input : undefined),
     querySelectorAll: () => [],
   };
+}
+
+// state/index.ts types the session as Record<string, unknown>; name only the
+// fields this test reads after the two racing calls settle.
+interface DialinSessionView {
+  profile: { waterTemperature: number };
+  rounds: { appliedAdjustment: { delta: number } }[];
 }
 
 describe('profileDialinOverride / _sendUpdatedProfile (#521 race)', () => {
@@ -49,29 +59,31 @@ describe('profileDialinOverride / _sendUpdatedProfile (#521 race)', () => {
   });
 
   it('the later-fired override call wins even when its PUT resolves before the earlier call\'s', async () => {
-    let resolveA, resolveB;
-    const pA = new Promise(res => { resolveA = res; });
-    const pB = new Promise(res => { resolveB = res; });
+    let resolveA!: (value: Response) => void;
+    let resolveB!: (value: Response) => void;
+    const pA = new Promise<Response>(res => { resolveA = res; });
+    const pB = new Promise<Response>(res => { resolveB = res; });
     fetchSpy.mockImplementationOnce(() => pA); // call A — fired first, target 94
     fetchSpy.mockImplementationOnce(() => pB); // call B — fired second (still while A pending), target 96
 
-    globalThis.document = fakeDocument('94');
+    g.document = fakeDocument('94');
     const callA = profileDialinOverride();
 
-    globalThis.document = fakeDocument('96');
+    g.document = fakeDocument('96');
     const callB = profileDialinOverride();
 
     // B (the later-fired call) resolves first...
-    resolveB({ ok: true });
+    resolveB({ ok: true } as unknown as Response);
     await callB;
     // ...and A's stale response arrives after — it must not clobber B's write.
-    resolveA({ ok: true });
+    resolveA({ ok: true } as unknown as Response);
     await callA;
 
-    expect(S.profileDialinSession.profile.waterTemperature).toBe(96);
+    const session = S.profileDialinSession as unknown as DialinSessionView;
+    expect(session.profile.waterTemperature).toBe(96);
     // Only B's round should have been recorded — A's write lost the race and
     // bailed out via `if (!ok) return;` before pushing its round.
-    expect(S.profileDialinSession.rounds).toHaveLength(1);
-    expect(S.profileDialinSession.rounds[0].appliedAdjustment.delta).toBe(4); // 96 - 92
+    expect(session.rounds).toHaveLength(1);
+    expect(session.rounds[0].appliedAdjustment.delta).toBe(4); // 96 - 92
   });
 });
