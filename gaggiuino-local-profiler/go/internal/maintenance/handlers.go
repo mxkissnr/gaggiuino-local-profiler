@@ -219,15 +219,15 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	task, valid := canonicalTask(h.libRepo, r.PathValue("task"))
-	if !valid {
-		writeError(w, http.StatusNotFound, "Unknown task")
-		return
-	}
 	machineID := activeMachineID(r)
 	maint, err := h.repo.GetMaintenance(machineID)
 	if err != nil {
 		internalError(w, err)
+		return
+	}
+	task, valid := canonicalTask(h.libRepo, maint, r.PathValue("task"))
+	if !valid {
+		writeError(w, http.StatusNotFound, "Unknown task")
 		return
 	}
 	t := maint[task]
@@ -238,7 +238,17 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 		t["threshold_shots"] = clampThreshold(v, 1, 10000)
 	}
 	if v, present := body["threshold_days"]; present {
-		t["threshold_days"] = clampThreshold(v, 1, 3650)
+		// Custom tasks are user-defined and may legitimately track something
+		// done on a multi-year cadence (e.g. "replace water line" every 5
+		// years) — 3650 (10y) headroom for those. The built-in static/
+		// grinder_* tasks keep the original 365 (1y) cap: raising it for
+		// them too would be a silent behavior change for existing installs
+		// no one asked for.
+		max := int64(365)
+		if isCustomTask(task) {
+			max = 3650
+		}
+		t["threshold_days"] = clampThreshold(v, 1, max)
 	}
 	if v, present := body["disabled"]; present {
 		if b, ok := v.(bool); ok {
@@ -325,8 +335,14 @@ func (h *Handlers) postLog(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	machineID := activeMachineID(r)
+	maint, err := h.repo.GetMaintenance(machineID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
 	rawTask, _ := body["task"].(string)
-	task, valid := canonicalTask(h.libRepo, rawTask)
+	task, valid := canonicalTask(h.libRepo, maint, rawTask)
 	if !valid {
 		writeError(w, http.StatusBadRequest, "Invalid task")
 		return
@@ -340,7 +356,6 @@ func (h *Handlers) postLog(w http.ResponseWriter, r *http.Request) {
 	if len(notes) > 500 {
 		notes = notes[:500]
 	}
-	machineID := activeMachineID(r)
 	entry, err := h.repo.AddMaintenanceLogEntry(task, notes, machineHostname(h.registry), shotCountFor(h.shotsRepo, task, machineID), machineID)
 	if err != nil {
 		internalError(w, err)
@@ -392,8 +407,8 @@ func (h *Handlers) customCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "label required")
 		return
 	}
-	if len(label) > 100 {
-		label = label[:100]
+	if runes := []rune(label); len(runes) > 100 {
+		label = string(runes[:100])
 	}
 	key := slugifyLabel(label)
 	if key == "" {
