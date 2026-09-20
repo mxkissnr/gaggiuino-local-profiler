@@ -30,5 +30,6 @@ interface Window {
   getShotDataById?: (id: number) => { pressure?: { x: number; y: number }[] } | null;
   getRawCurve?: (id: number | null | undefined) => unknown;
   getShotCurve?: (id: number | null | undefined) => Promise<unknown>;
-  onAllShotMetaLoaded?: () => void;
+  onAllShotMetaLoaded?: (() => void) | null;
+  goToShot?: (id: number) => void;
 }
