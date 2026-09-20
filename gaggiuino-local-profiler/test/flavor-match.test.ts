@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { FLAVOR_WHEEL, FLAVOR_ALIASES } from '../public-src/flavor-data.js';
+import { FLAVOR_WHEEL, FLAVOR_ALIASES, type FlavorNode } from '../public-src/flavor-data.js';
 import { SCA_FLAVOR_COLORS } from '../public-src/sca-flavor-colors.js';
 import { matchFlavors, normalizeFlavor, colorForNode, muteHex, contrastTextColor, markLit, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../public-src/flavor-match.js';
 
-function collectIds(nodes, seen = new Set()) {
+function collectIds(nodes: FlavorNode[], seen: Set<string> = new Set()): Set<string> {
   for (const n of nodes) {
     seen.add(n.id);
     if (n.children) collectIds(n.children, seen);
@@ -23,7 +23,7 @@ describe('FLAVOR_WHEEL structure', () => {
   it('every node has a non-empty label in all 6 UI languages', () => {
     (function walk(nodes) {
       for (const n of nodes) {
-        for (const lang of ['de', 'en', 'it', 'fr', 'es', 'nl']) {
+        for (const lang of ['de', 'en', 'it', 'fr', 'es', 'nl'] as const) {
           expect(n[lang], `${lang} label for ${n.id}`).toBeTruthy();
         }
         if (n.children) walk(n.children);
@@ -172,8 +172,8 @@ describe('parentIdOf / pathToNode / nodeById', () => {
   });
 
   it('looks up a node by id regardless of depth', () => {
-    expect(nodeById('cherry').en).toBe('Cherry');
-    expect(nodeById('fruity').en).toBe('Fruity');
+    expect(nodeById('cherry')?.en).toBe('Cherry');
+    expect(nodeById('fruity')?.en).toBe('Fruity');
     expect(nodeById('does_not_exist')).toBe(null);
   });
 });
@@ -181,7 +181,7 @@ describe('parentIdOf / pathToNode / nodeById', () => {
 describe('findAutoZoomTarget', () => {
   // markLit mutates FLAVOR_WHEEL's own nodes; each call fully re-derives
   // _lit from the matched set passed in, so tests don't need manual reset.
-  function litCategories(flavors) {
+  function litCategories(flavors: string[]): FlavorNode[] {
     const { matched } = matchFlavors(flavors);
     FLAVOR_WHEEL.forEach(cat => markLit(cat, matched));
     return FLAVOR_WHEEL;

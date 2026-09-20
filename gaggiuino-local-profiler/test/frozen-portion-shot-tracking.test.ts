@@ -1,20 +1,65 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { CoffeeLibrary, LibraryRow } from '../public-src/state/index.js';
 
 // annotation.js imports state.js, which reads localStorage/navigator at
 // module load time — stub the minimum browser globals needed so the module
 // graph can be imported under vitest's node environment (same pattern as
 // test/milk-deduct-gate.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
+// globalThis carries the full DOM type; stub only the sliver state.js reads.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator    ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch').mockResolvedValue({
     ok: true, json: async () => ({}),
-});
+} as unknown as Response);
 const { _maybeAdjustFrozenPortion, _renderFrozenPortionPills } = await import('../public-src/views/shots/annotation.js');
 
-function makeBean(portions) {
+interface FrozenPortionFixture {
+    id: number;
+    portionCount: number;
+    remainingCount: number;
+    frozenAt?: number;
+    thawedAt?: number;
+}
+
+// Mirrors the non-exported AnnotationPayload contract in
+// public-src/views/shots/annotation.ts; only frozenPortionId varies below.
+interface AnnotationPayloadFixture {
+    rating: number | null;
+    coffee: string;
+    beanId: number | null;
+    basketId: number | null;
+    puckScreenId: number | null;
+    grinder: string;
+    grindSetting: string;
+    dose: number | null;
+    roastDate: string | null;
+    tds: number | null;
+    notes: string;
+    drinkType: string | null;
+    milkType: number | null;
+    recipeId: number | null;
+    beanAgeDays: number | null;
+    frozenPortionId: number | null;
+}
+
+function payload(frozenPortionId: number | null): AnnotationPayloadFixture {
+    return {
+        rating: null, coffee: '', beanId: null, basketId: null, puckScreenId: null,
+        grinder: '', grindSetting: '', dose: null, roastDate: null, tds: null,
+        notes: '', drinkType: null, milkType: null, recipeId: null, beanAgeDays: null,
+        frozenPortionId,
+    };
+}
+
+function library(beans: LibraryRow[]): CoffeeLibrary {
+    return { beans, grinders: [] };
+}
+
+function makeBean(portions: FrozenPortionFixture[]) {
     return { id: 1, name: 'Flower Power', bags: [{ id: 1, frozenPortions: portions }] };
 }
 
@@ -27,27 +72,27 @@ beforeEach(() => {
 // on a real change" contract, applied to frozen-portion remainingCount.
 describe('_maybeAdjustFrozenPortion', () => {
     it('decrements remainingCount when a frozen portion is newly picked for a shot with no prior annotation', () => {
-        S.coffeeLibrary = { beans: [makeBean([{ id: 100, portionCount: 20, remainingCount: 20 }])] };
-        _maybeAdjustFrozenPortion(undefined, { frozenPortionId: 100 });
+        S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 20 }])]);
+        _maybeAdjustFrozenPortion(undefined, payload(100));
         expect(fetchSpy).toHaveBeenCalledWith('api/library/bean/1/adjust-frozen-portion', expect.objectContaining({
             method: 'POST', body: JSON.stringify({ portionId: 100, remainingCount: 19 }),
         }));
     });
 
     it('does not double-decrement when re-saving the exact same portion choice', () => {
-        S.coffeeLibrary = { beans: [makeBean([{ id: 100, portionCount: 20, remainingCount: 19 }])] };
-        const shot = { annotation: { frozenPortionId: 100 } };
-        _maybeAdjustFrozenPortion(shot, { frozenPortionId: 100 });
+        S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 19 }])]);
+        const shot = { id: 1, annotation: { frozenPortionId: 100 } };
+        _maybeAdjustFrozenPortion(shot, payload(100));
         expect(fetchSpy).not.toHaveBeenCalled();
     });
 
     it('reverses the previous portion and applies the new one when the choice changes', () => {
-        S.coffeeLibrary = { beans: [makeBean([
+        S.coffeeLibrary = library([makeBean([
             { id: 100, portionCount: 20, remainingCount: 19 },
             { id: 200, portionCount: 5, remainingCount: 5 },
-        ])] };
-        const shot = { annotation: { frozenPortionId: 100 } };
-        _maybeAdjustFrozenPortion(shot, { frozenPortionId: 200 });
+        ])]);
+        const shot = { id: 1, annotation: { frozenPortionId: 100 } };
+        _maybeAdjustFrozenPortion(shot, payload(200));
         expect(fetchSpy).toHaveBeenCalledWith('api/library/bean/1/adjust-frozen-portion', expect.objectContaining({
             body: JSON.stringify({ portionId: 100, remainingCount: 20 }),
         }));
@@ -58,9 +103,9 @@ describe('_maybeAdjustFrozenPortion', () => {
     });
 
     it('reverses the previous portion (increments it back) when switching back to "not frozen"', () => {
-        S.coffeeLibrary = { beans: [makeBean([{ id: 100, portionCount: 20, remainingCount: 19 }])] };
-        const shot = { annotation: { frozenPortionId: 100 } };
-        _maybeAdjustFrozenPortion(shot, { frozenPortionId: null });
+        S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 19 }])]);
+        const shot = { id: 1, annotation: { frozenPortionId: 100 } };
+        _maybeAdjustFrozenPortion(shot, payload(null));
         expect(fetchSpy).toHaveBeenCalledWith('api/library/bean/1/adjust-frozen-portion', expect.objectContaining({
             body: JSON.stringify({ portionId: 100, remainingCount: 20 }),
         }));
@@ -68,25 +113,25 @@ describe('_maybeAdjustFrozenPortion', () => {
     });
 
     it('never increments a reversed portion above its own portionCount', () => {
-        S.coffeeLibrary = { beans: [makeBean([{ id: 100, portionCount: 20, remainingCount: 20 }])] };
+        S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 20 }])]);
         // Shouldn't normally happen (remainingCount already at max), but the
         // clamp must hold regardless of how the previous state got there.
-        const shot = { annotation: { frozenPortionId: 100 } };
-        _maybeAdjustFrozenPortion(shot, { frozenPortionId: null });
+        const shot = { id: 1, annotation: { frozenPortionId: 100 } };
+        _maybeAdjustFrozenPortion(shot, payload(null));
         expect(fetchSpy).toHaveBeenCalledWith('api/library/bean/1/adjust-frozen-portion', expect.objectContaining({
             body: JSON.stringify({ portionId: 100, remainingCount: 20 }),
         }));
     });
 
     it('does nothing when neither the previous nor the new annotation used a frozen portion', () => {
-        S.coffeeLibrary = { beans: [makeBean([{ id: 100, portionCount: 20, remainingCount: 20 }])] };
-        _maybeAdjustFrozenPortion(undefined, { frozenPortionId: null });
+        S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 20 }])]);
+        _maybeAdjustFrozenPortion(undefined, payload(null));
         expect(fetchSpy).not.toHaveBeenCalled();
     });
 
     it('does nothing when the referenced portion no longer exists in the library', () => {
-        S.coffeeLibrary = { beans: [] };
-        _maybeAdjustFrozenPortion(undefined, { frozenPortionId: 999 });
+        S.coffeeLibrary = library([]);
+        _maybeAdjustFrozenPortion(undefined, payload(999));
         expect(fetchSpy).not.toHaveBeenCalled();
     });
 });
@@ -98,19 +143,22 @@ function fakePanelDom() {
     const field     = { style: { display: 'none' } };
     const container = { innerHTML: '' };
     const hidden    = { value: '' };
-    globalThis.document = {
-        getElementById: id => ({
-            frozenPortionField: field,
-            frozenPortionPillsContainer: container,
-            annFrozenPortionId: hidden,
-        }[id]),
+    g.document = {
+        getElementById: (id: string) => {
+            const nodes: Record<string, unknown> = {
+                frozenPortionField: field,
+                frozenPortionPillsContainer: container,
+                annFrozenPortionId: hidden,
+            };
+            return nodes[id];
+        },
     };
     return { field, container, hidden };
 }
 
 describe('_renderFrozenPortionPills', () => {
     it('hides the field entirely when the bean has no active frozen portions', () => {
-        S.coffeeLibrary = { beans: [makeBean([])] };
+        S.coffeeLibrary = library([makeBean([])]);
         const { field, container } = fakePanelDom();
         _renderFrozenPortionPills('Flower Power', Date.now(), null);
         expect(field.style.display).toBe('none');
@@ -118,17 +166,17 @@ describe('_renderFrozenPortionPills', () => {
     });
 
     it('hides the field when the only portions are already fully thawed (remainingCount 0)', () => {
-        S.coffeeLibrary = { beans: [makeBean([{ id: 100, portionCount: 20, remainingCount: 0, thawedAt: Date.now() }])] };
+        S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 0, thawedAt: Date.now() }])]);
         const { field } = fakePanelDom();
         _renderFrozenPortionPills('Flower Power', Date.now(), null);
         expect(field.style.display).toBe('none');
     });
 
     it('shows one "not frozen" pill plus one pill per active portion, always including "not frozen"', () => {
-        S.coffeeLibrary = { beans: [makeBean([
+        S.coffeeLibrary = library([makeBean([
             { id: 100, portionCount: 20, remainingCount: 19, frozenAt: Date.now() },
             { id: 200, portionCount: 5, remainingCount: 5, frozenAt: Date.now() },
-        ])] };
+        ])]);
         const { field, container } = fakePanelDom();
         _renderFrozenPortionPills('Flower Power', Date.now(), null);
         expect(field.style.display).toBe('');
@@ -139,7 +187,7 @@ describe('_renderFrozenPortionPills', () => {
     });
 
     it('marks the selected portion pill active and sets the hidden input value', () => {
-        S.coffeeLibrary = { beans: [makeBean([{ id: 100, portionCount: 20, remainingCount: 19, frozenAt: Date.now() }])] };
+        S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 19, frozenAt: Date.now() }])]);
         const { hidden } = fakePanelDom();
         _renderFrozenPortionPills('Flower Power', Date.now(), 100);
         expect(hidden.value).toBe('100');
@@ -153,7 +201,7 @@ describe('_renderFrozenPortionPills', () => {
                 { id: 2, openedAt: 999999999999, frozenPortions: [{ id: 200, portionCount: 5, remainingCount: 5 }] },
             ],
         };
-        S.coffeeLibrary = { beans: [bean] };
+        S.coffeeLibrary = library([bean]);
         const { container } = fakePanelDom();
         // A shot timestamped before bag 2 was ever opened must resolve to bag 1.
         _renderFrozenPortionPills('Flower Power', 2000, null);
