@@ -12,7 +12,24 @@ import { describe, it, expect, beforeAll } from 'vitest';
 // `echarts` import, see #509) takes the browser-UA-sniffing branch
 // instead of its own headless-node short-circuit, and throws matching
 // against an undefined UA otherwise.
-let _computeBeanRanking, _computeMachineComparison;
+type Analytics = typeof import('../public-src/views/analytics.js');
+let _computeBeanRanking: Analytics['_computeBeanRanking'];
+let _computeMachineComparison: Analytics['_computeMachineComparison'];
+
+// views/analytics.js's ShotRow interface isn't exported; derive it from a
+// helper under test so the fixtures stay shape-checked against it.
+type ShotRow = Parameters<Analytics['_computeBeanRanking']>[0][number];
+
+interface ShotOverrides {
+  id?: number;
+  timestamp?: number;
+  duration?: number;
+  machineId?: number | null;
+  score?: number;
+  coffee?: string | null;
+  grindSetting?: string | number | null;
+  datapoints?: { temperature?: (number | null)[]; targetTemperature?: (number | null)[] } | null;
+}
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -33,7 +50,7 @@ beforeAll(async () => {
   ({ _computeBeanRanking, _computeMachineComparison } = await import('../public-src/views/analytics.js'));
 });
 
-const shot = (overrides = {}) => ({
+const shot = (overrides: ShotOverrides = {}): ShotRow => ({
   id: overrides.id ?? 1,
   timestamp: overrides.timestamp ?? 0,
   duration: overrides.duration ?? 280, // 28.0s
@@ -53,10 +70,10 @@ describe('_computeBeanRanking (#394)', () => {
     const rows = _computeBeanRanking(shots);
     const a = rows.find(r => r.name === 'Bean A');
     const b = rows.find(r => r.name === 'Bean B');
-    expect(a.shots).toBe(2);
-    expect(a.avgScore).toBe(85);
-    expect(b.shots).toBe(1);
-    expect(b.avgScore).toBe(70);
+    expect(a?.shots).toBe(2);
+    expect(a?.avgScore).toBe(85);
+    expect(b?.shots).toBe(1);
+    expect(b?.avgScore).toBe(70);
   });
 
   it('ignores shots with no bean annotated', () => {
@@ -103,10 +120,10 @@ describe('_computeMachineComparison (#394)', () => {
     const rows = _computeMachineComparison(shots, machines);
     const m1 = rows.find(r => r.name === 'Gaggiuino');
     const m2 = rows.find(r => r.name === 'GaggiMate Sim');
-    expect(m1.count).toBe(2);
-    expect(m1.avgScore).toBe(85);
-    expect(m2.count).toBe(1);
-    expect(m2.avgScore).toBe(70);
+    expect(m1?.count).toBe(2);
+    expect(m1?.avgScore).toBe(85);
+    expect(m2?.count).toBe(1);
+    expect(m2?.avgScore).toBe(70);
   });
 
   it('computes average duration in seconds, ignoring near-zero noise durations', () => {
@@ -116,7 +133,7 @@ describe('_computeMachineComparison (#394)', () => {
       shot({ machineId: 1, duration: 10 }),  // 1.0s, filtered out as noise
     ];
     const rows = _computeMachineComparison(shots, machines);
-    expect(rows.find(r => r.name === 'Gaggiuino').avgDuration).toBe(30);
+    expect(rows.find(r => r.name === 'Gaggiuino')?.avgDuration).toBe(30);
   });
 
   it('computes temperature stability as the mean absolute deviation from target, in whole degrees', () => {
@@ -131,7 +148,7 @@ describe('_computeMachineComparison (#394)', () => {
     ];
     const rows = _computeMachineComparison(shots, machines);
     // deviations: 0, 0.5, 1.0 -> mean 0.5
-    expect(rows.find(r => r.name === 'Gaggiuino').avgStability).toBe(0.5);
+    expect(rows.find(r => r.name === 'Gaggiuino')?.avgStability).toBe(0.5);
   });
 
   it('returns null stability/duration/score for a machine with no shots', () => {
