@@ -9,44 +9,53 @@
 // under test to run without a real browser.
 import { describe, it, expect, beforeEach } from 'vitest';
 
-const _localStorageStore = {};
-globalThis.localStorage ??= {
-  getItem: (k) => (k in _localStorageStore ? _localStorageStore[k] : null),
-  setItem: (k, v) => { _localStorageStore[k] = String(v); },
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge test/dev-banner.test.ts uses) so the
+// minimal fakes below need not satisfy the full Storage/Navigator/Window shapes.
+const g = globalThis as unknown as Record<string, unknown>;
+
+const _localStorageStore: Record<string, string> = {};
+g.localStorage ??= {
+  getItem: (k: string) => (k in _localStorageStore ? _localStorageStore[k] : null),
+  setItem: (k: string, v: unknown) => { _localStorageStore[k] = String(v); },
 };
-globalThis.navigator ??= { language: 'en-US' };
-globalThis.window ??= globalThis;
+g.navigator ??= { language: 'en-US' };
+g.window ??= globalThis;
 
 class FakeStyle {
-  constructor() { this._props = {}; }
-  setProperty(k, v) { this._props[k] = v; }
-  removeProperty(k) { delete this._props[k]; }
-  getPropertyValue(k) { return this._props[k] ?? ''; }
+  _props: Record<string, string> = {};
+  display = '';
+  setProperty(k: string, v: string): void { this._props[k] = v; }
+  removeProperty(k: string): void { delete this._props[k]; }
+  getPropertyValue(k: string): string { return this._props[k] ?? ''; }
 }
 class FakeClassList {
-  constructor() { this._set = new Set(); }
-  add(c) { this._set.add(c); }
-  remove(c) { this._set.delete(c); }
-  contains(c) { return this._set.has(c); }
-  toggle(c, force) {
+  _set: Set<string> = new Set();
+  add(c: string): void { this._set.add(c); }
+  remove(c: string): void { this._set.delete(c); }
+  contains(c: string): boolean { return this._set.has(c); }
+  toggle(c: string, force?: boolean): void {
     const on = force ?? !this._set.has(c);
     if (on) this._set.add(c); else this._set.delete(c);
   }
 }
 class FakeEl {
-  constructor() { this.style = new FakeStyle(); this.classList = new FakeClassList(); this.innerHTML = ''; }
+  style: FakeStyle = new FakeStyle();
+  classList: FakeClassList = new FakeClassList();
+  innerHTML = '';
+  dataset?: Record<string, string>;
   // renderAccentSwatches() binds click listeners on its own querySelectorAll()
   // result -- irrelevant here since these tests assert on the rendered
   // innerHTML string directly rather than simulating a click (same pattern
   // test/machines-settings-theme-form.test.js uses for renderThemeSwatches()).
-  querySelectorAll() { return []; }
+  querySelectorAll(): unknown[] { return []; }
 }
 
-const elements = {};
-function fakeElement(id) { return (elements[id] ??= new FakeEl()); }
+const elements: Record<string, FakeEl> = {};
+function fakeElement(id: string): FakeEl { return (elements[id] ??= new FakeEl()); }
 const root = new FakeEl();
 
-globalThis.document = {
+g.document = {
   documentElement: root,
   getElementById: fakeElement,
 };
@@ -213,11 +222,11 @@ describe('applyActiveMachineAccentTheme (#604/#1019)', () => {
   });
 
   it('does not throw when documentElement is unavailable (e.g. a bare test double for `document`)', () => {
-    const savedDoc = globalThis.document;
-    globalThis.document = { getElementById: () => undefined };
+    const savedDoc = g.document;
+    g.document = { getElementById: () => undefined };
     S.machines = [{ id: 1, isDefault: true, theme: { preset: 'amber-americano' } }];
     expect(() => applyActiveMachineAccentTheme()).not.toThrow();
-    globalThis.document = savedDoc;
+    g.document = savedDoc;
   });
 
   // #1021: --accent-ink light-theme override -- root.dataset is left
@@ -319,8 +328,8 @@ describe('renderAccentSwatches (#1019)', () => {
     localStorage.setItem('glp_accent_theme', 'twilight-turkish');
     renderAccentSwatches();
     const html = fakeElement('accentSwatches').innerHTML;
-    const twilightBtn = html.match(/<button[^>]*data-preset-key="twilight-turkish"[^>]*>/)[0];
-    const amberBtn = html.match(/<button[^>]*data-preset-key="amber-americano"[^>]*>/)[0];
+    const twilightBtn = html.match(/<button[^>]*data-preset-key="twilight-turkish"[^>]*>/)![0];
+    const amberBtn = html.match(/<button[^>]*data-preset-key="amber-americano"[^>]*>/)![0];
     expect(twilightBtn).toContain('active');
     expect(amberBtn).not.toContain('active');
   });
@@ -328,7 +337,7 @@ describe('renderAccentSwatches (#1019)', () => {
   it('defaults to amber-americano marked active when nothing is persisted', () => {
     renderAccentSwatches();
     const html = fakeElement('accentSwatches').innerHTML;
-    const amberBtn = html.match(/<button[^>]*data-preset-key="amber-americano"[^>]*>/)[0];
+    const amberBtn = html.match(/<button[^>]*data-preset-key="amber-americano"[^>]*>/)![0];
     expect(amberBtn).toContain('active');
   });
 
@@ -337,7 +346,7 @@ describe('renderAccentSwatches (#1019)', () => {
     const html = fakeElement('accentSwatches').innerHTML;
     for (const key of THEME_PRESET_KEYS) {
       const label = t(`theme_preset_${key.replace(/-/g, '_')}`);
-      const btn = html.match(new RegExp(`<button[^>]*data-preset-key="${key}"[^>]*>`))[0];
+      const btn = html.match(new RegExp(`<button[^>]*data-preset-key="${key}"[^>]*>`))![0];
       expect(btn).toContain(`title="${label}"`);
     }
   });
