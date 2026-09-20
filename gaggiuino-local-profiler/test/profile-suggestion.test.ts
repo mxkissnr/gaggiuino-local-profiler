@@ -1,8 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { suggestProfileFromBean } from '../public-src/profile-suggestion.js';
+import { suggestProfileFromBean, type ProfileSuggestion, type ProfileSuggestionPhase } from '../public-src/profile-suggestion.js';
 
-function findPhase(profile, name) {
-  return profile.phases.find(p => p.name === name);
+// Every phase in the fixed 4-phase Sertao skeleton carries a target and
+// stopConditions, so the finder hands those back non-optionally.
+type SkeletonPhase = ProfileSuggestionPhase & {
+  target: NonNullable<ProfileSuggestionPhase['target']>;
+  stopConditions: NonNullable<ProfileSuggestionPhase['stopConditions']>;
+};
+
+function findPhase(profile: ProfileSuggestion, name: string): SkeletonPhase {
+  return profile.phases.find(p => p.name === name) as SkeletonPhase;
 }
 
 describe('suggestProfileFromBean', () => {
