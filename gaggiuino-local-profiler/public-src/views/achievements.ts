@@ -15,8 +15,23 @@ import { getAchievements } from '../api/system.js';
 import { localeFor } from '../constants.js';
 import { esc } from '../utils.js';
 
-const CARD_KEYS = ['basics', 'craft', 'beans', 'endurance', 'care', 'house', 'secret'];
-const CARD_NAME_KEYS = {
+// The badge record as GET /api/achievements serves it (see
+// AchievementService.getState): only unlocked/secret badges carry name and
+// description.
+interface Achievement {
+  id: string;
+  card: string;
+  stamp: string;
+  secret?: boolean;
+  unlocked?: boolean;
+  unlockedAt?: number | null;
+  name?: string | null;
+  description?: string | null;
+  progress?: { current: number; target: number } | null;
+}
+
+const CARD_KEYS: string[] = ['basics', 'craft', 'beans', 'endurance', 'care', 'house', 'secret'];
+const CARD_NAME_KEYS: Record<string, string> = {
   basics: 'ach_card_basics', craft: 'ach_card_craft', beans: 'ach_card_beans',
   endurance: 'ach_card_endurance', care: 'ach_card_care', house: 'ach_card_house',
   secret: 'ach_card_secret',
@@ -30,7 +45,7 @@ const CARD_NAME_KEYS = {
 // viewBox stampSvg() wraps them in; they are not general-purpose nav icons
 // (no independent viewBox/currentColor sizing), which is why they live here
 // rather than in icons.js alongside the *_ICON_SVG rail-icon exports.
-const ACH_STAMP_MOTIFS = {
+const ACH_STAMP_MOTIFS: Record<string, string> = {
   gear:   '<circle cx="27" cy="26.6" r="3.4"/><path d="M27 17.6v3M27 32.6v3M18 26.6h3M33 26.6h3M20.6 20.2l2.1 2.1M31.3 30.9l2.1 2.1M33.4 20.2l-2.1 2.1M22.7 30.9l-2.1 2.1"/>',
   scale:  '<path d="M27 17.4v18.4M20 21.4h14"/><path d="M18.4 21.4 15 28a3.4 3.4 0 0 0 6.8 0z"/><path d="M35.6 21.4 39 28a3.4 3.4 0 0 1-6.8 0z"/>',
   bolt:   '<path d="M28.4 16.6 20 30.2h6l-1 9 8.4-13.6h-6z"/>',
@@ -55,7 +70,7 @@ const ACH_STAMP_MOTIFS = {
   clock:  '<circle cx="27" cy="26.6" r="8.4"/><path d="M27 20.9v5.7l4 2.3"/>',
 };
 
-function stampInnerSvg(stampKey) {
+function stampInnerSvg(stampKey: string): string {
   const motif = ACH_STAMP_MOTIFS[stampKey];
   if (motif) return motif;
   // Text stamps ('90', '1:2', '30d', …) need no artwork — '5x' is the one
@@ -71,7 +86,7 @@ function stampInnerSvg(stampKey) {
 // gradients), so a fixed id is safe; still scoped with an ach- prefix so it
 // can never collide with the machine icon's own filter/gradient ids (#87's
 // bug class, per PLAN.md's traps list).
-export function stampSvg(stampKey) {
+export function stampSvg(stampKey: string): string {
   return '<svg class="ach-stamp" viewBox="0 0 54 54" aria-hidden="true">' +
     '<g filter="url(#ach-rough-ink)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
     '<circle cx="27" cy="27" r="23.4" stroke-width="2.6"/><circle cx="27" cy="27" r="19.8" stroke-width=".9"/>' +
@@ -81,7 +96,7 @@ export function stampSvg(stampKey) {
 // Deterministic per badge id — NOT Math.random(), which would re-jitter the
 // same stamp to a new angle on every re-render (see PLAN.md's traps list:
 // "jeder minimal schief" has to mean fixed-per-badge, not fixed-per-paint).
-export function askewDeg(id) {
+export function askewDeg(id: string): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (Math.imul(h, 31) + id.charCodeAt(i)) | 0;
   return (Math.abs(h) % 15) - 7; // -7..7 degrees
@@ -89,7 +104,7 @@ export function askewDeg(id) {
 
 // unlockedAt is Unix SECONDS (lib/db.js's achievements table), not
 // milliseconds — see AchievementService.getState()'s header comment.
-export function formatStampedOn(unlockedAtSeconds, lang) {
+export function formatStampedOn(unlockedAtSeconds: number, lang: string): string {
   const d = new Date(unlockedAtSeconds * 1000);
   const locale = localeFor(lang);
   const dateStr = d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -97,7 +112,7 @@ export function formatStampedOn(unlockedAtSeconds, lang) {
   return t('ach_stamped_on', dateStr, timeStr);
 }
 
-function formatFullDate(unlockedAtSeconds, lang) {
+function formatFullDate(unlockedAtSeconds: number, lang: string): string {
   return new Date(unlockedAtSeconds * 1000)
     .toLocaleDateString(localeFor(lang), { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
@@ -106,7 +121,7 @@ function formatFullDate(unlockedAtSeconds, lang) {
 // still-secret ones on the "secret" card — is unlocked. Per PLAN.md section
 // 5: the diagonal "Full" overprint is per category, not a global collection
 // state (that's a separate, out-of-scope "share the whole collection" idea).
-export function isCardFull(badges) {
+export function isCardFull(badges: Achievement[]): boolean {
   return badges.length > 0 && badges.every(b => b.unlocked);
 }
 
@@ -116,28 +131,28 @@ export function isCardFull(badges) {
 // badges carry neither field from the API until unlocked, so a locked
 // secret badge renders nothing here by construction, not by a client-side
 // guard that could be forgotten.
-function badgeName(b) {
-  if (b.secret) return b.unlocked ? b.name : null;
+function badgeName(b: Achievement): string | null {
+  if (b.secret) return b.unlocked ? (b.name ?? null) : null;
   return t(`ach_${b.id}_n`);
 }
-function badgeDesc(b) {
-  if (b.secret) return b.unlocked ? b.description : null;
+function badgeDesc(b: Achievement): string | null {
+  if (b.secret) return b.unlocked ? (b.description ?? null) : null;
   return t(`ach_${b.id}_d`);
 }
-function badgeMeta(b) {
-  if (b.unlocked) return formatStampedOn(b.unlockedAt, S.currentLang);
+function badgeMeta(b: Achievement): string {
+  if (b.unlocked) return formatStampedOn(b.unlockedAt as number, S.currentLang);
   if (b.secret) return t('ach_secret_locked_hint');
   if (b.progress) return t('ach_progress', b.progress.current, b.progress.target);
   return t('ach_not_yet');
 }
 
-const _state = { badges: [], page: 0 };
+const _state: { badges: Achievement[]; page: number } = { badges: [], page: 0 };
 
 // Exported for test/achievements-view.test.js: a locked secret badge must
 // emit neither its name nor its description, and that is the one property of
 // this view worth nailing down at the HTML level rather than trusting
 // badgeName()/badgeDesc() to keep returning null.
-export function fieldHtml(b) {
+export function fieldHtml(b: Achievement): string {
   const rot = askewDeg(b.id);
   const secretLocked = b.secret && !b.unlocked;
   const label = secretLocked ? t('ach_card_secret') : (badgeName(b) || '');
@@ -149,7 +164,7 @@ export function fieldHtml(b) {
   </button>`;
 }
 
-function pageHtml(cardBadges, idx) {
+function pageHtml(cardBadges: Achievement[], idx: number): string {
   const full = isCardFull(cardBadges);
   const overprint = full
     ? (() => {
@@ -163,7 +178,7 @@ function pageHtml(cardBadges, idx) {
   </div>`;
 }
 
-function updateFineline() {
+function updateFineline(): void {
   const key = CARD_KEYS[_state.page];
   const titleEl = document.getElementById('achTitle');
   if (titleEl) titleEl.textContent = t(CARD_NAME_KEYS[key]);
@@ -171,17 +186,17 @@ function updateFineline() {
   if (fineEl) fineEl.textContent = t('ach_card_of', _state.page + 1, CARD_KEYS.length);
 }
 
-function showPage(i) {
+function showPage(i: number): void {
   const total = CARD_KEYS.length;
   _state.page = (i + total) % total;
-  document.querySelectorAll('.ach-page').forEach((el, n) => {
+  document.querySelectorAll<HTMLElement>('.ach-page').forEach((el, n) => {
     if (n === _state.page) el.removeAttribute('hidden'); else el.setAttribute('hidden', '');
   });
-  document.querySelectorAll('.ach-pdot').forEach((el, n) => el.classList.toggle('ach-on', n === _state.page));
+  document.querySelectorAll<HTMLElement>('.ach-pdot').forEach((el, n) => el.classList.toggle('ach-on', n === _state.page));
   updateFineline();
 }
 
-function showDetail(id) {
+function showDetail(id: string | undefined): void {
   const badge = _state.badges.find(b => b.id === id);
   if (!badge) return;
   document.querySelectorAll('.ach-field').forEach(el => el.removeAttribute('aria-current'));
@@ -195,24 +210,27 @@ function showDetail(id) {
   detail.removeAttribute('data-empty');
   hint.style.display = 'none';
   body.style.display = '';
-  document.getElementById('achDetailName').textContent = secretLocked ? t('ach_card_secret') : (badgeName(badge) || '');
-  document.getElementById('achDetailDesc').textContent = secretLocked ? '' : (badgeDesc(badge) || '');
-  document.getElementById('achDetailMeta').textContent = badgeMeta(badge);
+  (document.getElementById('achDetailName') as HTMLElement).textContent = secretLocked ? t('ach_card_secret') : (badgeName(badge) || '');
+  (document.getElementById('achDetailDesc') as HTMLElement).textContent = secretLocked ? '' : (badgeDesc(badge) || '');
+  (document.getElementById('achDetailMeta') as HTMLElement).textContent = badgeMeta(badge);
 }
 
-function wireCardEvents() {
+function wireCardEvents(): void {
   document.getElementById('achPrev')?.addEventListener('click', () => showPage(_state.page - 1));
   document.getElementById('achNext')?.addEventListener('click', () => showPage(_state.page + 1));
-  document.querySelectorAll('.ach-pdot').forEach(d => d.addEventListener('click', () => showPage(+d.dataset.achGo)));
-  document.querySelectorAll('.ach-field').forEach(f => f.addEventListener('click', () => showDetail(f.dataset.achId)));
+  document.querySelectorAll<HTMLElement>('.ach-pdot').forEach(d => d.addEventListener('click', () => showPage(+(d.dataset.achGo as string))));
+  document.querySelectorAll<HTMLElement>('.ach-field').forEach(f => f.addEventListener('click', () => showDetail(f.dataset.achId)));
 }
 
-function renderCard() {
+function renderCard(): void {
   const container = document.getElementById('achievements-view');
   if (!container) return;
 
-  const byCard = new Map(CARD_KEYS.map(k => [k, []]));
-  for (const b of _state.badges) { if (byCard.has(b.card)) byCard.get(b.card).push(b); }
+  const byCard = new Map<string, Achievement[]>(CARD_KEYS.map(k => [k, []]));
+  for (const b of _state.badges) {
+    const list = byCard.get(b.card);
+    if (list) list.push(b);
+  }
   if (_state.page >= CARD_KEYS.length) _state.page = 0;
 
   const pagesHtml = CARD_KEYS.map((key, i) => pageHtml(byCard.get(key) || [], i)).join('');
@@ -257,13 +275,13 @@ function renderCard() {
   wireCardEvents();
 }
 
-export async function loadAchievementsView() {
+export async function loadAchievementsView(): Promise<void> {
   const container = document.getElementById('achievements-view');
   if (!container) return;
   container.innerHTML = `<div class="loading-state">${t('ach_loading')}</div>`;
   try {
     const r = await getAchievements(S.currentLang);
-    const data = await r.json();
+    const data = await r.json() as { badges?: Achievement[] };
     _state.badges = data.badges || [];
     _state.page = 0;
     renderCard();

@@ -144,7 +144,9 @@ describe('duplicateProfile', () => {
 
     expect(S.profileEditId).toBeNull(); // save must POST a new profile, not PUT over the source
     expect(fields.profileFormName.value).toBe('Turbo Shot (Copy)');
-    expect(fields.profileFormWaterTemp.value).toBe(93);
+    // '93' as a string: the .ts module stringifies input values (`String(profile?.waterTemperature)`),
+    // which is what a real <input type="number">.value holds anyway.
+    expect(fields.profileFormWaterTemp.value).toBe('93');
   });
 });
 

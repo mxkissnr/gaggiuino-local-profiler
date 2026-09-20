@@ -1,42 +1,53 @@
 import Chart from 'chart.js/auto';
+import type { ChartDataset } from 'chart.js';
 import { S }                                              from '../../state/index.js';
+import type { ShotMeta }                                  from '../../state/index.js';
 import * as chartRegistry                                 from '../../state/charts.js';
 import { t }                                              from '../../i18n.js';
 import { corsairPlugin, clearChartOnTouchEnd } from '../../constants.js';
 import { formatTimeLabel, chartColors, mapShotDatapoints } from '../../utils.js';
+import type { ShotDatapoints, ShotSeries } from '../../utils.js';
 import { getRawCurve, getCachedShotData }                 from '../../shot-curves.js';
+
+// state/index.ts types shot rows as metadata-only `ShotMeta`; charts read the
+// shot's own curve blob as the synthetic/demo fallback.
+interface ChartShot extends ShotMeta {
+  datapoints?: ShotDatapoints;
+}
+
+interface PQPoint { x: number; y: number }
 
 // #957: curves are lazy. updateView() (index.js) ensureCurves() for the
 // selected + comparand shots before switching to the P·Q / fullscreen chart,
 // so these synchronous cache reads hit; a synthetic/demo shot still carries
 // its own datapoints, used as the fallback.
-function _rawCurve(shot) {
+function _rawCurve(shot: ChartShot): ShotDatapoints {
   return getRawCurve(shot.id) || shot.datapoints || {};
 }
-function _xyCurve(shot) {
+function _xyCurve(shot: ChartShot): ShotSeries {
   return getCachedShotData(shot.id) || mapShotDatapoints(shot.datapoints);
 }
 
 // ── Chart tab switching ───────────────────────────────────────────────
 
-export function switchChartTab(tab) {
+export function switchChartTab(tab: string): void {
   S.currentChartTab = tab;
-  document.getElementById('tabZeit').classList.toggle('active', tab === 'zeit');
-  document.getElementById('tabPQ').classList.toggle('active',   tab === 'pq');
-  document.getElementById('zeitContainer').style.display = tab === 'zeit' ? '' : 'none';
-  document.getElementById('pqContainer').style.display   = tab === 'pq'   ? '' : 'none';
+  (document.getElementById('tabZeit') as HTMLElement).classList.toggle('active', tab === 'zeit');
+  (document.getElementById('tabPQ') as HTMLElement).classList.toggle('active',   tab === 'pq');
+  (document.getElementById('zeitContainer') as HTMLElement).style.display = tab === 'zeit' ? '' : 'none';
+  (document.getElementById('pqContainer') as HTMLElement).style.display   = tab === 'pq'   ? '' : 'none';
   if (tab === 'pq') updatePQChart();
 }
 
 // ── P·Q Chart ─────────────────────────────────────────────────────────
 
-function getPQData(shot) {
+function getPQData(shot: ChartShot): PQPoint[] {
   const d = _rawCurve(shot);
   const tm = d.timeInShot || [];
   const p  = d.pressure   || [];
   const f  = d.pumpFlow   || [];
   const n  = Math.min(tm.length, p.length, f.length);
-  const result = [];
+  const result: PQPoint[] = [];
   for (let i = 0; i < n; i++) {
     if (p[i] != null && f[i] != null && p[i] >= 30 && f[i] > 0)
       result.push({ x: f[i] / 10, y: p[i] / 10 });
@@ -44,14 +55,14 @@ function getPQData(shot) {
   return result;
 }
 
-export function updatePQChart() {
+export function updatePQChart(): void {
   // #814: resolved per render, never at module load — the value has to be
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
   const shotA = S.shots.find(s => s.id === S.primaryShotId);
   if (!shotA) return;
 
-  const canvas = document.getElementById('pqChart');
+  const canvas = document.getElementById('pqChart') as HTMLCanvasElement;
   chartRegistry.dispose('pqChart');
 
   const shotB = S.compareShotId ? S.shots.find(s => s.id === S.compareShotId) : null;
@@ -61,7 +72,7 @@ export function updatePQChart() {
   const allFlow = [...dataA, ...dataB].map(d => d.x);
   const xMax = allFlow.length ? Math.max(3, Math.ceil(Math.max(...allFlow) * 1.1 * 2) / 2) : 5;
 
-  const datasets = [
+  const datasets: ChartDataset<'scatter'>[] = [
     { label: `Shot ${shotA.id}`, data: dataA,
       showLine: true, tension: 0.2, fill: false,
       borderColor: '#3498db', backgroundColor: '#3498db',
@@ -74,14 +85,14 @@ export function updatePQChart() {
       borderDash: [4,3], borderWidth: 2, pointRadius: 1, pointHoverRadius: 3 }
   );
 
-  chartRegistry.set('pqChart', new Chart(canvas, {
+  const pqChart = new Chart(canvas, {
     type: 'scatter',
     data: { datasets },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       plugins: {
         legend: { labels: { color: C.text, font: { family: 'Figtree' } } },
-        tooltip: { callbacks: { label: c => `${c.parsed.y.toFixed(1)} bar @ ${c.parsed.x.toFixed(1)} ml/s` } }
+        tooltip: { callbacks: { label: c => `${(c.parsed.y as number).toFixed(1)} bar @ ${(c.parsed.x as number).toFixed(1)} ml/s` } }
       },
       scales: {
         x: { type: 'linear', min: 0, max: xMax,
@@ -92,36 +103,37 @@ export function updatePQChart() {
              ticks: { color: C.tick }, grid: { color: C.grid } }
       }
     }
-  }));
+  });
+  chartRegistry.set('pqChart', pqChart);
 }
 
 // ── Fullscreen chart ──────────────────────────────────────────────────
 
-export function openChartFullscreen() {
-  document.getElementById('chartFullscreen').classList.add('open');
+export function openChartFullscreen(): void {
+  (document.getElementById('chartFullscreen') as HTMLElement).classList.add('open');
   document.body.style.overflow = 'hidden';
   S.currentFsTab = S.currentChartTab;
-  document.getElementById('fsTabZeit').classList.toggle('active', S.currentFsTab === 'zeit');
-  document.getElementById('fsTabPQ').classList.toggle('active',   S.currentFsTab === 'pq');
-  screen.orientation?.lock?.('landscape').catch(() => {});
+  (document.getElementById('fsTabZeit') as HTMLElement).classList.toggle('active', S.currentFsTab === 'zeit');
+  (document.getElementById('fsTabPQ') as HTMLElement).classList.toggle('active',   S.currentFsTab === 'pq');
+  (screen.orientation as unknown as { lock?: (o: string) => Promise<void> } | undefined)?.lock?.('landscape').catch(() => {});
   renderFsChart();
 }
 
-export function closeChartFullscreen() {
-  document.getElementById('chartFullscreen').classList.remove('open');
+export function closeChartFullscreen(): void {
+  (document.getElementById('chartFullscreen') as HTMLElement).classList.remove('open');
   document.body.style.overflow = '';
   chartRegistry.dispose('fsChart');
-  screen.orientation?.unlock?.();
+  (screen.orientation as unknown as { unlock?: () => void } | undefined)?.unlock?.();
 }
 
-export function switchFsTab(tab) {
+export function switchFsTab(tab: string): void {
   S.currentFsTab = tab;
-  document.getElementById('fsTabZeit').classList.toggle('active', tab === 'zeit');
-  document.getElementById('fsTabPQ').classList.toggle('active',   tab === 'pq');
+  (document.getElementById('fsTabZeit') as HTMLElement).classList.toggle('active', tab === 'zeit');
+  (document.getElementById('fsTabPQ') as HTMLElement).classList.toggle('active',   tab === 'pq');
   renderFsChart();
 }
 
-function renderFsChart() {
+function renderFsChart(): void {
   // #814: resolved per render, never at module load — the value has to be
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
@@ -129,14 +141,14 @@ function renderFsChart() {
   if (!shotA) return;
   chartRegistry.dispose('fsChart');
 
-  const canvas = document.getElementById('espressoShotChartFs');
+  const canvas = document.getElementById('espressoShotChartFs') as HTMLCanvasElement;
 
   if (S.currentFsTab === 'pq') {
     const data = getPQData(shotA);
     const xMax = data.length
       ? Math.max(3, Math.ceil(Math.max(...data.map(d => d.x)) * 1.1 * 2) / 2)
       : 5;
-    chartRegistry.set('fsChart', new Chart(canvas, {
+    const fsChart = new Chart(canvas, {
       type: 'scatter',
       data: { datasets: [{ label: `Shot ${shotA.id}`, data,
           showLine: true, tension: 0.2, fill: false,
@@ -146,7 +158,7 @@ function renderFsChart() {
         responsive: true, maintainAspectRatio: false, animation: false,
         plugins: {
           legend: { labels: { color: C.text, font: { family: 'Figtree' } } },
-          tooltip: { callbacks: { label: c => `${c.parsed.y.toFixed(1)} bar @ ${c.parsed.x.toFixed(1)} ml/s` } }
+          tooltip: { callbacks: { label: c => `${(c.parsed.y as number).toFixed(1)} bar @ ${(c.parsed.x as number).toFixed(1)} ml/s` } }
         },
         scales: {
           x: { type: 'linear', min: 0, max: xMax,
@@ -157,12 +169,13 @@ function renderFsChart() {
                ticks: { color: C.tick }, grid: { color: C.grid } }
         }
       }
-    }));
-    clearChartOnTouchEnd(chartRegistry.get('fsChart'));
+    });
+    chartRegistry.set('fsChart', fsChart);
+    clearChartOnTouchEnd(fsChart);
     return;
   }
 
-  const shotChart = chartRegistry.get('chart');
+  const shotChart = chartRegistry.get('chart') as Chart<'line'> | null;
   if (!shotChart) return;
   const dA     = _xyCurve(shotA);
   const maxTempA = Math.max(...(_rawCurve(shotA).temperature || []).map(v => v / 10), 0);
@@ -170,7 +183,7 @@ function renderFsChart() {
   const maxTime = dA.rawTimes.length > 0 ? dA.rawTimes[dA.rawTimes.length - 1] : 60;
   const datasets = shotChart.data.datasets.map(ds => ({ ...ds, data: [...ds.data] }));
 
-  chartRegistry.set('fsChart', new Chart(canvas, {
+  const fsChart = new Chart(canvas, {
     type: 'line',
     plugins: [corsairPlugin],
     data: { datasets },
@@ -184,12 +197,13 @@ function renderFsChart() {
       },
       scales: {
         x:  { type:'linear', min:0, max:maxTime, clip:false,
-              ticks:{ color:C.tick, font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v) },
+              ticks:{ color:C.tick, font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v as number) },
               grid:{ color:C.grid } },
         y:  { type:'linear', position:'left',  min:0, max:12, ticks:{color:C.tick}, grid:{color:C.grid} },
         y1: { type:'linear', position:'right', min:0, max:tms, ticks:{color:C.tick}, grid:{drawOnChartArea:false} }
       }
     }
-  }));
-  clearChartOnTouchEnd(chartRegistry.get('fsChart'));
+  });
+  chartRegistry.set('fsChart', fsChart);
+  clearChartOnTouchEnd(fsChart);
 }

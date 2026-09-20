@@ -16,6 +16,7 @@
 // SSRF-guard error surfacing, id-rewrite-on-success and staleness guards
 // documented in machines-settings.js all apply here for free.
 import { S, subscribe } from '../state/index.js';
+import type { MachineRecord } from '../state/index.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
 import { openMachineForm } from '../components/machines-settings.js';
@@ -27,8 +28,8 @@ const INSTALL_ID_KEY = 'glp_install_id';
 // Captured once, the first time the wizard ever reaches the connect step —
 // #machineFormCard's original position in the Settings "Machines" card, so
 // _leaveConnectStep() can put it back exactly where it came from.
-let _formOrigParent = null;
-let _formOrigNextSibling = null;
+let _formOrigParent: Node | null = null;
+let _formOrigNextSibling: Node | null = null;
 
 // Pure trigger check (#744) — no DOM/localStorage side effects beyond the
 // read, so main.js's init sequence (and tests) can call it directly against
@@ -39,7 +40,7 @@ let _formOrigNextSibling = null;
 // seeds an empty-host default machine #1 on a fresh DB, called on every
 // GET /api/machines, so a real fresh install's S.machines is never actually
 // empty by the time the frontend checks it.
-export function shouldOpenSetupWizard(machines) {
+export function shouldOpenSetupWizard(machines: MachineRecord[] | null | undefined): boolean {
   return (machines || []).every(m => !m?.host) && !localStorage.getItem(COMPLETED_KEY);
 }
 
@@ -67,7 +68,7 @@ export function shouldOpenSetupWizard(machines) {
 // stays safe for an already-configured install because
 // shouldOpenSetupWizard()'s own host check keeps the wizard closed
 // regardless of the completed flag once a real host exists.
-export function syncInstallId(installId) {
+export function syncInstallId(installId?: string | null): void {
   if (!installId) return;
   const stored = localStorage.getItem(INSTALL_ID_KEY);
   if (stored !== installId) {
@@ -76,7 +77,7 @@ export function syncInstallId(installId) {
   try { localStorage.setItem(INSTALL_ID_KEY, installId); } catch { /* ignore */ }
 }
 
-export function openSetupWizard() {
+export function openSetupWizard(): void {
   S.setupWizardStep = 'welcome';
   S.setupWizardOpen = true;
   const modal = document.getElementById('setupWizardModal');
@@ -88,7 +89,7 @@ export function openSetupWizard() {
 // done step's own closing button — "Later" (and any close before reaching
 // done) must NOT set the completed flag, so the wizard reappears next
 // launch; only closing from the done step marks it complete.
-export function closeSetupWizard() {
+export function closeSetupWizard(): void {
   if (S.setupWizardStep === 'done') {
     try { localStorage.setItem(COMPLETED_KEY, '1'); } catch { /* ignore */ }
   }
@@ -98,7 +99,7 @@ export function closeSetupWizard() {
   if (modal) { modal.classList.remove('open'); modal.style.display = 'none'; }
 }
 
-export function setupWizardGetStarted() {
+export function setupWizardGetStarted(): void {
   S.setupWizardStep = 'connect';
   renderSetupWizard();
 }
@@ -106,7 +107,7 @@ export function setupWizardGetStarted() {
 // "I don't have a machine yet, show me demo data" — seeds demo data via the
 // existing onboarding.js helper and skips straight to the done step,
 // regardless of whether a real machine ever gets configured.
-export async function setupWizardSkipToDemo() {
+export async function setupWizardSkipToDemo(): Promise<void> {
   await loadDemoData();
   S.setupWizardStep = 'done';
   renderSetupWizard();
@@ -122,14 +123,18 @@ export async function setupWizardSkipToDemo() {
 // result. saveMachineForm() now setState()s this dedicated
 // 'machineExplicitSave' signal itself, which testMachineForm() never touches,
 // so only a real Save can complete this step.
-subscribe('machineExplicitSave', id => {
+//
+// The signal is deliberately absent from AppState (machines-settings.ts
+// writes it through the same Parameters<typeof setState>[0] escape hatch),
+// so the key is cast here to match.
+subscribe('machineExplicitSave' as Parameters<typeof subscribe>[0], id => {
   if (S.setupWizardOpen && S.setupWizardStep === 'connect' && id) {
     S.setupWizardStep = 'done';
     renderSetupWizard();
   }
 });
 
-export function renderSetupWizard() {
+export function renderSetupWizard(): void {
   const body = document.getElementById('swBody');
   if (!body) return;
   // Always leave the connect step's reused form node *before* touching
@@ -143,7 +148,7 @@ export function renderSetupWizard() {
   _enterConnectStep();
 }
 
-function _enterConnectStep() {
+function _enterConnectStep(): void {
   const slot = document.getElementById('swConnectFormSlot');
   const card = document.getElementById('machineFormCard');
   if (!slot || !card) return;
@@ -162,16 +167,17 @@ function _enterConnectStep() {
   if (cancelBtn) cancelBtn.style.display = 'none';
 }
 
-function _leaveConnectStep() {
+function _leaveConnectStep(): void {
   const card = document.getElementById('machineFormCard');
-  if (!card || !_formOrigParent || card.parentNode === _formOrigParent) return;
+  const origParent = _formOrigParent;
+  if (!card || !origParent || card.parentNode === origParent) return;
   card.style.display = 'none';
   const cancelBtn = document.getElementById('machineFormCancelBtn');
   if (cancelBtn) cancelBtn.style.display = '';
-  _formOrigParent.insertBefore(card, _formOrigNextSibling);
+  origParent.insertBefore(card, _formOrigNextSibling);
 }
 
-function _renderWelcome() {
+function _renderWelcome(): string {
   return `<div class="dw-summary">
     <div class="dw-summary-title">${esc(t('setup_wizard_welcome_title'))}</div>
     <div class="dw-summary-reason">${esc(t('setup_wizard_welcome_body'))}</div>
@@ -182,7 +188,7 @@ function _renderWelcome() {
   </div>`;
 }
 
-function _renderConnectShell() {
+function _renderConnectShell(): string {
   return `<div class="dw-setup">
     <div class="dw-summary-reason">${esc(t('setup_wizard_connect_body'))}</div>
     <div id="swConnectFormSlot"></div>
@@ -190,7 +196,7 @@ function _renderConnectShell() {
   </div>`;
 }
 
-function _renderDone() {
+function _renderDone(): string {
   return `<div class="dw-summary">
     <div class="dw-summary-title">${esc(t('setup_wizard_done_title'))}</div>
     <div class="dw-summary-reason">${esc(t('setup_wizard_done_body'))}</div>

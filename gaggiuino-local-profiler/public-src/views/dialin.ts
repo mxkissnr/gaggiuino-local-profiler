@@ -1,18 +1,35 @@
 import { S } from '../state/index.js';
+import type { ShotMeta } from '../state/index.js';
 import { t } from '../i18n.js';
 import { localeFor } from '../constants.js';
 import { esc, scoreColor } from '../utils.js';
 
-export async function renderDialin() {
-  const select = document.getElementById('dialinCount');
+interface DialinAnnotation {
+  dose?: string | number | null;
+  coffee?: string | null;
+}
+
+// state/index.ts types shot rows as metadata-only `ShotMeta`; the dial-in grid
+// reads the hydrated fields the metadata list still carries.
+interface DialinShot extends ShotMeta {
+  _trashed?: boolean;
+  duration?: number | null;
+  weight?: number | null;
+  profileName?: string | null;
+  profile?: { name?: string | null } | null;
+  annotation?: DialinAnnotation | null;
+}
+
+export async function renderDialin(): Promise<void> {
+  const select = document.getElementById('dialinCount') as HTMLSelectElement | null;
   const saved  = localStorage.getItem('glp_dialin_count');
   if (select && saved && select.value !== saved) select.value = saved;
 
-  const n    = parseInt(select?.value || 5);
+  const n    = parseInt((select?.value || 5) as string);
   const grid = document.getElementById('dialinGrid');
   if (!grid) return;
 
-  const recent = [...S.shots]
+  const recent = ([...S.shots] as DialinShot[])
     .filter(s => !s._trashed)
     .sort((a, b) => b.timestamp - a.timestamp)
     .slice(0, n);
@@ -43,7 +60,7 @@ export async function renderDialin() {
 
     const dose   = ann.dose  ? esc(String(ann.dose)) + ' g'  : null;
     const yield_ = s.weight  ? (s.weight / 10).toFixed(1) + ' g' : null;
-    const ratio  = (ann.dose && s.weight) ? '1:' + (s.weight / 10 / ann.dose).toFixed(1) : null;
+    const ratio  = (ann.dose && s.weight) ? '1:' + (s.weight / 10 / (ann.dose as number)).toFixed(1) : null;
     const date   = new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
     const profile = s.profile?.name || s.profileName || '–';
     const scorePill = score != null
@@ -60,7 +77,7 @@ export async function renderDialin() {
       dose   ? [t('dialin_dose'),  dose]   : null,
       ratio  ? [t('dialin_ratio'), ratio]  : null,
       yield_ ? [t('dialin_yield'), yield_] : null,
-    ].filter(Boolean).slice(0, 5);
+    ].filter((m): m is [string, string] => m !== null).slice(0, 5);
 
     return `<div class="dialin-card" data-action="goto-shot" data-id="${s.id}">
       <div class="dialin-card-head">

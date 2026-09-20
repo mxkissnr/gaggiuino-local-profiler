@@ -26,4 +26,10 @@ interface Window {
   renderDialin?: () => void;
   renderBeanList?: () => void;
   renderGrinderList?: () => void;
+  ensureCurves?: (ids: number[]) => Promise<void>;
+  getShotDataById?: (id: number) => { pressure?: { x: number; y: number }[] } | null;
+  getRawCurve?: (id: number | null | undefined) => unknown;
+  getShotCurve?: (id: number | null | undefined) => Promise<unknown>;
+  onAllShotMetaLoaded?: (() => void) | null;
+  goToShot?: (id: number) => void;
 }

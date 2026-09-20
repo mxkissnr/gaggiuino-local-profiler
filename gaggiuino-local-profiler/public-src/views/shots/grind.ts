@@ -1,8 +1,66 @@
 import { t }                               from '../../i18n.js';
 import { detectChanneling, calcBrewRatio } from '../../utils.js';
+import type { ShotSeries } from '../../utils.js';
 import { calcShotScore }                   from './utils.js';
+import type { ShotLike }                   from './utils.js';
 import { getRawCurve }                     from '../../shot-curves.js';
 import { LIGHTNING_ICON_SVG, SCALE_ICON_SVG, BAR_CHART_ICON_SVG } from '../../icons.js';
+
+interface GrindAnnotation {
+  coffee?: string | null;
+  beanId?: number | null;
+  grinder?: string | null;
+  dose?: string | number | null;
+  grindSetting?: string | number | null;
+}
+
+export interface GrindShot extends ShotLike {
+  id?: number;
+  duration?: number | null;
+  profile?: { name?: string | null } | null;
+  annotation?: GrindAnnotation | null;
+}
+
+interface XYPoint { x: number; y: number }
+
+export interface GrindAdvice {
+  type: string;
+  icon: string;
+  text: string;
+}
+
+interface ComparativeShot {
+  shot: GrindShot;
+  grind: number | null;
+  score: number;
+}
+
+interface ComparativeAdvice extends GrindAdvice {
+  shots: ComparativeShot[];
+}
+
+interface GrindCombo {
+  grinder: string;
+  grindSetting: number;
+  avgScore: number;
+  shotCount: number;
+}
+
+interface GrindBean {
+  id?: unknown;
+  name?: unknown;
+  knownGrindSettings?: { grinder: string; grindSetting: string }[];
+}
+
+interface GrindLibrary {
+  beans?: GrindBean[];
+}
+
+export interface GrindSuggestion {
+  grinder: string;
+  grindSetting: string | number;
+  dose: string | number;
+}
 
 // ── Mini chart thumbnail ───────────────────────────────────────────────────
 
@@ -10,7 +68,7 @@ import { LIGHTNING_ICON_SVG, SCALE_ICON_SVG, BAR_CHART_ICON_SVG } from '../../ic
 // every comparable shot before rendering the panel, so the cache read is
 // synchronous here; a still-missing curve falls back to the shot's own
 // datapoints (synthetic/demo) and finally to the no-data placeholder.
-export function _miniShotChart(shot) {
+export function _miniShotChart(shot: GrindShot): string {
   const d  = getRawCurve(shot.id) || shot.datapoints || {};
   const tm = d.timeInShot || [];
   const series = [
@@ -25,10 +83,10 @@ export function _miniShotChart(shot) {
   const xMin = Math.min(...allX), xMax = Math.max(...allX) || 1;
   const yMax = Math.max(...allY, 1);
 
-  const px = x => pad + ((x - xMin) / (xMax - xMin)) * (W - pad * 2);
-  const py = y => H - pad - (y / yMax) * (H - pad * 2);
+  const px = (x: number): number => pad + ((x - xMin) / (xMax - xMin)) * (W - pad * 2);
+  const py = (y: number): number => H - pad - (y / yMax) * (H - pad * 2);
 
-  const polyline = ({ vals, color }) => {
+  const polyline = ({ vals, color }: { vals: XYPoint[]; color: string }): string => {
     const pts = vals.map(p => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ');
     return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity=".9"/>`;
   };
@@ -37,7 +95,7 @@ export function _miniShotChart(shot) {
 
 // ── Grind setting parser ───────────────────────────────────────────────────
 
-export function _parseGrindNum(s) {
+export function _parseGrindNum(s: string | number | null | undefined): number | null {
   if (!s) return null;
   const m = String(s).match(/(\d+(?:[.,]\d+)?)/);
   return m ? parseFloat(m[1].replace(',', '.')) : null;
@@ -45,7 +103,7 @@ export function _parseGrindNum(s) {
 
 // ── Grind advice ──────────────────────────────────────────────────────────
 
-export function calcGrindAdvice(shot, data) {
+export function calcGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice | null {
   const secs = (shot.duration || 0) / 10;
   if (secs < 8) return null;
   const pTimes = data.pressure.map(p => p.x);
@@ -59,7 +117,7 @@ export function calcGrindAdvice(shot, data) {
   // Duration is fine — check the brew ratio against the classic espresso
   // window (1:1.8–1:2.2). Yield is machine-stopped, so this is dose/yield
   // guidance rather than a grind direction.
-  const ratio = calcBrewRatio(shot, data);
+  const ratio = calcBrewRatio(shot as unknown as Parameters<typeof calcBrewRatio>[0], data);
   if (ratio !== null && ratio > 2.3)
     return { type: 'warning', icon: SCALE_ICON_SVG, text: t('dialin_ratio_high', ratio.toFixed(1)) };
   if (ratio !== null && ratio < 1.7)
@@ -69,20 +127,20 @@ export function calcGrindAdvice(shot, data) {
   return { type: 'ok', icon: '✓', text: `${t('grind_ok')} – ${secs.toFixed(0)} s${avgP > 0 ? `, ${avgP.toFixed(1)} bar Ø` : ''}` };
 }
 
-export function calcComparativeGrindAdvice(shot, allShots) {
+export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[]): ComparativeAdvice | null {
   const ann          = shot.annotation || {};
   const coffee       = ann.coffee?.trim().toLowerCase();
   const beanId       = ann.beanId ?? null;
   const grinder      = ann.grinder?.trim().toLowerCase();
   const profile      = (shot.profile?.name || shot.profileName || '').trim().toLowerCase();
-  const dose         = parseFloat(ann.dose) || null;
+  const dose         = parseFloat(ann.dose as string) || null;
   const currentGrind = _parseGrindNum(ann.grindSetting);
   if (!coffee || !grinder) return null;
 
   // #456: beanId-first match when both sides have one — a row whose beanId
   // points at a different (or now-deleted) bean is NOT rescued by a name
   // match, same convention as computeBeanRemaining/resolveBeanForAnnotation.
-  const sameBean = a => beanId != null && a.beanId != null
+  const sameBean = (a: GrindAnnotation): boolean => beanId != null && a.beanId != null
     ? a.beanId === beanId
     : a.coffee?.trim().toLowerCase() === coffee;
 
@@ -93,7 +151,7 @@ export function calcComparativeGrindAdvice(shot, allShots) {
     if (a.grinder?.trim().toLowerCase() !== grinder) return false;
     if ((s.profile?.name || s.profileName || '').trim().toLowerCase() !== profile) return false;
     if (dose) {
-      const sd = parseFloat(a.dose) || null;
+      const sd = parseFloat(a.dose as string) || null;
       if (!sd || Math.abs(sd - dose) > 1) return false;
     }
     if (_parseGrindNum(a.grindSetting) === null) return false;
@@ -101,16 +159,16 @@ export function calcComparativeGrindAdvice(shot, allShots) {
   });
   if (comparable.length < 1) return null;
 
-  const byGrind = {};
+  const byGrind: Record<number, number[]> = {};
   comparable.forEach(s => {
-    const g   = _parseGrindNum(s.annotation.grindSetting);
-    const sc  = calcShotScore(s);
+    const g   = _parseGrindNum(s.annotation?.grindSetting) as number;
+    const sc  = calcShotScore(s) as number;
     const key = Math.round(g * 2) / 2;
     if (!byGrind[key]) byGrind[key] = [];
     byGrind[key].push(sc);
   });
 
-  let bestSetting = null, bestAvg = -1;
+  let bestSetting: number | null = null, bestAvg = -1;
   Object.entries(byGrind).forEach(([key, scores]) => {
     const a = scores.reduce((a, b) => a + b, 0) / scores.length;
     if (a > bestAvg) { bestAvg = a; bestSetting = parseFloat(key); }
@@ -119,8 +177,8 @@ export function calcComparativeGrindAdvice(shot, allShots) {
 
   const n         = comparable.length;
   const bestScore = Math.round(bestAvg);
-  const shots     = comparable
-    .map(s => ({ shot: s, grind: _parseGrindNum(s.annotation.grindSetting), score: calcShotScore(s) }))
+  const shots: ComparativeShot[] = comparable
+    .map(s => ({ shot: s, grind: _parseGrindNum(s.annotation?.grindSetting), score: calcShotScore(s) as number }))
     .sort((a, b) => b.score - a.score);
 
   if (currentGrind === null)
@@ -144,7 +202,11 @@ export function calcComparativeGrindAdvice(shot, allShots) {
 // look best, so 3 is the smallest sample that gives a believable average.
 const MIN_COMBO_SAMPLES = 3;
 
-export function calcBestGrindCombosForBean(beanName, allShots, beanId) {
+export function calcBestGrindCombosForBean(
+  beanName: string | null | undefined,
+  allShots: GrindShot[] | null | undefined,
+  beanId?: number | null,
+): GrindCombo[] | null {
   const name = beanName?.trim().toLowerCase();
   if (!name || !Array.isArray(allShots)) return null;
 
@@ -161,13 +223,13 @@ export function calcBestGrindCombosForBean(beanName, allShots, beanId) {
   });
   if (!scored.length) return null;
 
-  const byCombo = {};
+  const byCombo: Record<string, { grinder: string; grindSetting: number; scores: number[] }> = {};
   scored.forEach(s => {
-    const grinder = s.annotation.grinder.trim();
-    const grind    = Math.round(_parseGrindNum(s.annotation.grindSetting) * 2) / 2;
-    const key      = `${grinder.toLowerCase()} ${grind}`;
+    const grinder = (s.annotation?.grinder as string).trim();
+    const grind    = Math.round((_parseGrindNum(s.annotation?.grindSetting) as number) * 2) / 2;
+    const key      = `${grinder.toLowerCase()}${grind}`;
     if (!byCombo[key]) byCombo[key] = { grinder, grindSetting: grind, scores: [] };
-    byCombo[key].scores.push(calcShotScore(s));
+    byCombo[key].scores.push(calcShotScore(s) as number);
   });
 
   const combos = Object.values(byCombo)
@@ -196,14 +258,19 @@ export function calcBestGrindCombosForBean(beanName, allShots, beanId) {
 // this bean", not "the statistically best-scoring one". Every other caller
 // (e.g. the bean-select change handler, which wants the best-known setting
 // when picking a new bean) omits this flag and keeps the original priority.
-export function suggestGrindDoseForBean(beanName, coffeeLibrary, allShots, { preferMostRecent = false, beanId = null } = {}) {
+export function suggestGrindDoseForBean(
+  beanName: string | null | undefined,
+  coffeeLibrary: GrindLibrary | null | undefined,
+  allShots: GrindShot[] | null | undefined,
+  { preferMostRecent = false, beanId = null }: { preferMostRecent?: boolean; beanId?: number | null } = {},
+): GrindSuggestion {
   const name = beanName?.trim();
   if (!name) return { grinder: '', grindSetting: '', dose: '' };
 
   const bean = beanId != null
     ? coffeeLibrary?.beans?.find(b => b.id === beanId)
     : coffeeLibrary?.beans?.find(b => b.name === name);
-  let grinder = '', grindSetting = '';
+  let grinder = '', grindSetting: string | number = '';
 
   // #456: beanId-first, name fallback — see calcComparativeGrindAdvice.
   const lastForBean = [...(allShots || [])]
@@ -213,7 +280,7 @@ export function suggestGrindDoseForBean(beanName, coffeeLibrary, allShots, { pre
         ? a.beanId === beanId
         : (a.coffee || '').trim().toLowerCase() === name.toLowerCase();
     })
-    .sort((a, b) => b.timestamp - a.timestamp)[0];
+    .sort((a, b) => (b.timestamp as number) - (a.timestamp as number))[0];
 
   if (preferMostRecent && lastForBean?.annotation?.grindSetting) {
     grinder      = lastForBean.annotation.grinder      || '';

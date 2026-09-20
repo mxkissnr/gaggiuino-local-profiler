@@ -23,6 +23,60 @@ import { updateMachineBanner, updateOnboardingPanel }          from '../../compo
 import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.js';
 import { loadShotImageBlobUrl }                               from '../../bean-image.js';
 import { openLightbox }                                       from '../../components/lightbox.js';
+import type { ShotMeta } from '../../state/index.js';
+import type { ShotDatapoints, ShotSeries } from '../../utils.js';
+import type { ChartConfiguration } from 'chart.js';
+
+// state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
+// an index signature); this view reads the annotation/curve fields, so these
+// local aliases name them — same pattern as views/shots/utils.ts and
+// views/shots/annotation.ts.
+interface ShotAnnotationData {
+  rating?: number | null;
+  coffee?: string | null;
+  beanId?: number | null;
+  basketId?: number | null;
+  puckScreenId?: number | null;
+  grinder?: string | null;
+  grindSetting?: string | number | null;
+  dose?: number | null;
+  tds?: number | null;
+  notes?: string | null;
+  drinkType?: string | null;
+  milkType?: number | string | null;
+  recipeId?: number | null;
+  frozenPortionId?: number | null;
+  roastDate?: string | null;
+  beanAgeDays?: number | null;
+  orderedBy?: { customer?: string; item?: string; variant?: string; note?: string } | null;
+}
+
+interface ShotRow extends ShotMeta {
+  profileName?: string | null;
+  profile?: { name?: string | null; phases?: unknown[]; [key: string]: unknown } | null;
+  nativeId?: number | null;
+  duration?: number | null;
+  score?: number | null;
+  image?: string | null;
+  glpFirmwareVersion?: string | null;
+  trashedAt?: number;
+  hasChartData?: boolean;
+  usedBeanTarget?: boolean;
+  datapoints?: ShotDatapoints;
+  annotation?: ShotAnnotationData | null;
+}
+
+// fetchShotsPage()'s normalised page: either a page of rows, or a transport
+// error code the callers surface (#957's Node-backend 404 fallback included).
+interface ShotsPage { shots?: ShotRow[]; nextCursor?: string | null; hasMore?: boolean; error?: number }
+
+type GmPhaseRanges = ReturnType<typeof buildGmPhaseRanges>;
+
+interface GmPhasesOption {
+  preinfusion?: number;
+  extraction?: number;
+  gaggimatePhases?: GmPhaseRanges;
+}
 
 // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -37,9 +91,26 @@ let _loadDataReqToken = 0;
 
 // GaggiMate phase-name lookup cache, keyed by `${machineId}:${profileName}`.
 // Invalidated by invalidateGmPhaseCache() after a profile save.
-const _gmPhaseCache = new Map();
+const _gmPhaseCache = new Map<string, GmPhaseRanges>();
 
-export function invalidateGmPhaseCache(machineId) {
+// state/index.ts types shot rows as metadata-only ShotMeta; this view reads the
+// annotation/curve/profile fields, so the row arrays are re-typed once here
+// instead of at every read (same convention as views/shots/annotation.ts).
+function _shots(): ShotRow[] { return S.shots; }
+
+// getElementById() returns HTMLElement|null and every id in this view is a
+// static element from index.html, so it is asserted once here rather than at
+// each of the ~40 lookups (the genuinely optional elements — trash section,
+// shot photo, fw badge — still keep their own `if (el)` guards).
+const _el = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
+
+// CoffeeLibrary (state/index.ts) only declares beans/grinders; loadLibrary()
+// adds the basket/puck-screen collections this file reads for export labels.
+function _libCollection(name: string): Record<string, unknown>[] | undefined {
+  return (S.coffeeLibrary as unknown as Record<string, Record<string, unknown>[]>)[name];
+}
+
+export function invalidateGmPhaseCache(machineId: number): void {
   const prefix = `${machineId}:`;
   for (const key of _gmPhaseCache.keys()) {
     if (key.startsWith(prefix)) _gmPhaseCache.delete(key);
@@ -49,7 +120,7 @@ export function invalidateGmPhaseCache(machineId) {
 // GaggiMate only serves one WS request at a time — an overlapping call
 // (e.g. the live-status poll) can 503 even though the machine is fine.
 // Retries up to 3x; a real 4xx/other 5xx returns immediately.
-async function _fetchWithRetry(fetcher, signal) {
+async function _fetchWithRetry(fetcher: (signal: AbortSignal) => Promise<Response>, signal: AbortSignal) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const r = await fetcher(signal);
@@ -63,18 +134,18 @@ async function _fetchWithRetry(fetcher, signal) {
 
 // Resolves shotA's named GaggiMate profile phases, cache-first. Null on any
 // miss/failure — callers treat that as "no enhancement", not an error.
-async function _loadGmPhases(shotA, token) {
-  const mid = shotA.machineId;
+async function _loadGmPhases(shotA: ShotRow, token: number): Promise<GmPhaseRanges | null> {
+  const mid = shotA.machineId as number;
   const cacheKey = `${mid}:${shotA.profileName}`;
-  if (_gmPhaseCache.has(cacheKey)) return _gmPhaseCache.get(cacheKey);
+  if (_gmPhaseCache.has(cacheKey)) return _gmPhaseCache.get(cacheKey) ?? null;
 
   let gmPhases = null;
   try {
-    const r1 = await _fetchWithRetry(signal => fetchMachineProfilesResponse(mid, signal), AbortSignal.timeout(6000));
-    const { optionsRaw: profiles = [] } = r1.ok && token === _updateViewToken ? await r1.json() : {};
+    const r1 = (await _fetchWithRetry(signal => fetchMachineProfilesResponse(mid, signal), AbortSignal.timeout(6000)))!;
+    const { optionsRaw: profiles = [] } = (r1.ok && token === _updateViewToken ? await r1.json() : {}) as { optionsRaw?: { name?: string | null; id?: number }[] };
     const match = profiles.find(p => p.name === shotA.profileName || p.id === shotA.profileName);
-    const r2 = match && await _fetchWithRetry(signal => fetchMachineProfileResponse(match.id, mid, signal), AbortSignal.timeout(6000));
-    const prof = r2?.ok && await r2.json();
+    const r2 = match && (await _fetchWithRetry(signal => fetchMachineProfileResponse(match.id as number, mid, signal), AbortSignal.timeout(6000)))!;
+    const prof = (r2?.ok ? await r2.json() : null) as { phases?: Parameters<typeof buildGmPhaseRanges>[0] } | null;
     if (prof?.phases?.length) gmPhases = buildGmPhaseRanges(prof.phases);
   } catch (e) {
     console.warn('[GLP] GaggiMate phase-name lookup failed:', e);
@@ -89,9 +160,9 @@ async function _loadGmPhases(shotA, token) {
 // entry's name for display/export, the same way ann.coffee already carries
 // the bean's name directly (no lookup needed there since beans store the
 // name on the annotation itself).
-export function _equipmentName(list, id) {
+export function _equipmentName(list: Record<string, unknown>[] | null | undefined, id: number | null | undefined): string | null {
   if (id == null) return null;
-  return (list || []).find(e => e.id === id)?.name || null;
+  return ((list || []).find(e => e.id === id)?.name as string | undefined) || null;
 }
 
 // #957: GET /api/shots is keyset-paginated and metadata-only (no curve
@@ -115,13 +186,13 @@ const RENDER_THROTTLE_MS = 400;
 // so the lazy per-shot loader is a pure cache hit there. `trash` toggles the
 // trashed list on either backend. Returns a normalised page:
 // { shots: <newest-first, metadata-only>, nextCursor, hasMore }.
-async function fetchShotsPage({ cursor = null, trash = false } = {}) {
+async function fetchShotsPage({ cursor = null, trash = false }: { cursor?: string | null; trash?: boolean } = {}): Promise<ShotsPage> {
   const r = await listShots({ limit: SHOTS_PAGE_LIMIT, cursor, trash });
   if (r.status === 404) {
     const fb = await listShotsDump({ trash });
     if (!fb.ok) return { error: fb.status };
-    const dump = await fb.json();               // full ASC array, datapoints inline
-    const shots = Array.isArray(dump) ? dump : [];
+    const dump = await fb.json() as unknown;     // full ASC array, datapoints inline
+    const shots = (Array.isArray(dump) ? dump : []) as ShotRow[];
     for (const s of shots) {
       if (s && s.datapoints) {
         // Seed the curve cache so the lazy per-shot loader is a pure cache
@@ -135,13 +206,13 @@ async function fetchShotsPage({ cursor = null, trash = false } = {}) {
     return { shots, nextCursor: null, hasMore: false };
   }
   if (!r.ok) return { error: r.status };
-  const page = await r.json();
+  const page = await r.json() as { shots?: ShotRow[]; nextCursor?: string | null; hasMore?: boolean };
   return { shots: page.shots || [], nextCursor: page.nextCursor ?? null, hasMore: !!page.hasMore };
 }
 
-export async function loadData() {
+export async function loadData(): Promise<void> {
   const token = ++_loadDataReqToken;
-  const shotsEl = document.getElementById('shots');
+  const shotsEl = _el('shots');
   shotsEl.innerHTML = `<div class="loading-state">${t('loading')}</div>`;
 
   let fetched;
@@ -159,8 +230,8 @@ export async function loadData() {
         : `<div class="loading-state" style="color:#ef4444">HTTP ${page.error}</div>`;
       return;
     }
-    fetched = [...page.shots].reverse(); // page is newest-first; keep S.allShots oldest-first
-    S.shotsPageCursor = page.hasMore ? page.nextCursor : null;
+    fetched = [...(page.shots || [])].reverse(); // page is newest-first; keep S.allShots oldest-first
+    S.shotsPageCursor = page.hasMore ? (page.nextCursor ?? null) : null;
     S.shotsHasMore    = !!page.hasMore;
     S.allShotsLoaded  = !page.hasMore;
   } catch {
@@ -183,27 +254,27 @@ export async function loadData() {
   S.allShots = fetched;
   S.shots = filterShotsByMachine(fetched, S.activeMachineId);
   renderSidebar();
-  loadTrashData();
+  void loadTrashData();
 
-  const empty     = document.getElementById('empty-state');
-  const chartArea = document.getElementById('chart-area');
+  const empty     = _el('empty-state');
+  const chartArea = _el('chart-area');
   if (S.shots.length > 0) {
     empty.style.display     = 'none';
     chartArea.style.display = 'flex';
-    const savedCompare = parseInt(localStorage.getItem('glp_compareShotId'));
+    const savedCompare = parseInt(localStorage.getItem('glp_compareShotId') as string);
     // #431: the mobile Shots tab now opens straight to a shot's detail (no
     // list step in between), so the initial selection needs to actually
     // honor the last-selected shot (persisted on every selection, see
     // selectShot()/the sidebar row click handler) rather than always
     // resetting to the newest one.
-    const savedPrimary = parseInt(localStorage.getItem('glp_primaryShotId'));
+    const savedPrimary = parseInt(localStorage.getItem('glp_primaryShotId') as string);
     S.primaryShotId = (savedPrimary && S.shots.find(s => s.id === savedPrimary))
       ? savedPrimary
       : S.shots[S.shots.length - 1].id;
     if (savedCompare && S.shots.find(s => s.id === savedCompare) && savedCompare !== S.primaryShotId) {
       S.compareShotId = savedCompare;
     }
-    updateView();
+    void updateView();
   } else {
     empty.style.display     = 'flex';
     chartArea.style.display = 'none';
@@ -216,7 +287,7 @@ export async function loadData() {
   // Background: pull every remaining page of shot metadata so S.allShots
   // holds the full history for analytics / dial-in wizards / per-machine
   // counts / findPreviousShot, without blocking first paint.
-  loadAllShotMeta(token, S.shotsPageCursor);
+  void loadAllShotMeta(token, S.shotsPageCursor);
 }
 
 // loadAllShotMeta walks api/shots page by page (oldest direction) from
@@ -228,7 +299,7 @@ export async function loadData() {
 // there is no read-then-write race on S.
 let _metaWalkActive = false;
 
-export async function loadAllShotMeta(token, startCursor) {
+export async function loadAllShotMeta(token: number, startCursor: string | null): Promise<void> {
   if (_metaWalkActive) return;
   _metaWalkActive = true;
   let cursor = startCursor;
@@ -242,7 +313,7 @@ export async function loadAllShotMeta(token, startCursor) {
   let renderedSinceStart = false;
   try {
     while (cursor && token === _loadDataReqToken) {
-      let page;
+      let page: ShotsPage;
       try {
         page = await fetchShotsPage({ cursor });
       } catch { return; }
@@ -252,7 +323,7 @@ export async function loadAllShotMeta(token, startCursor) {
       // Each page is newest-first and older than everything already loaded —
       // reverse it to oldest-first and prepend.
       const merged = [...[...(page.shots || [])].reverse(), ...S.allShots];
-      cursor = page.hasMore ? page.nextCursor : null;
+      cursor = page.hasMore ? (page.nextCursor ?? null) : null;
       done = !page.hasMore;
       S.allShots        = merged;
       S.shots           = filterShotsByMachine(merged, S.activeMachineId);
@@ -273,7 +344,7 @@ export async function loadAllShotMeta(token, startCursor) {
       window.onAllShotMetaLoaded?.();
     }
   } finally {
-    // eslint-disable-next-line require-atomic-updates -- single-flight guard; last-writer-wins reset is correct once no walk is in flight (same pattern as status.js triggerSync)
+    // single-flight guard; last-writer-wins reset is correct once no walk is in flight (same pattern as status.js triggerSync)
     _metaWalkActive = false;
     // #969: a trailing render covers both the throttle window swallowing the
     // final page's paint, and the loop exiting early (superseded token or a
@@ -286,14 +357,14 @@ export async function loadAllShotMeta(token, startCursor) {
 
 // loadMoreShots pulls the next page on demand (sidebar infinite scroll). No-op
 // once the background walk has already loaded everything.
-export async function loadMoreShots() {
+export async function loadMoreShots(): Promise<void> {
   if (!S.shotsHasMore || !S.shotsPageCursor) return;
   await loadAllShotMeta(_loadDataReqToken, S.shotsPageCursor);
 }
 
 // ── Trash ─────────────────────────────────────────────────────────────────
 
-export async function loadTrashData() {
+export async function loadTrashData(): Promise<void> {
   try {
     // The trash TTL is 30 days, so a single page is plenty in practice. On
     // the Node backend this falls back to shots.json?trash=1 (#957).
@@ -304,19 +375,19 @@ export async function loadTrashData() {
   } catch { /* ignore */ }
 }
 
-export function renderTrash() {
-  const section = document.getElementById('trash-section');
-  const countEl = document.getElementById('trash-count');
-  const listEl  = document.getElementById('trash-list');
+export function renderTrash(): void {
+  const section = _el('trash-section');
+  const countEl = _el('trash-count');
+  const listEl  = _el('trash-list');
   const count   = S.trashedShots.length;
 
   section.style.display = count > 0 ? 'block' : 'none';
-  countEl.textContent   = count;
+  countEl.textContent   = String(count);
 
   listEl.innerHTML = '';
   const now = Date.now();
-  S.trashedShots.forEach(shot => {
-    const daysLeft = Math.max(0, 30 - Math.floor((now - shot.trashedAt) / 86400000));
+  (S.trashedShots as ShotRow[]).forEach(shot => {
+    const daysLeft = Math.max(0, 30 - Math.floor((now - (shot.trashedAt as number)) / 86400000));
     const name = shot.profile?.name || shot.profileName || `Shot ${shot.id}`;
     const row  = document.createElement('div');
     row.className = 'trash-item';
@@ -333,12 +404,12 @@ export function renderTrash() {
   });
 }
 
-export function toggleTrash() {
+export function toggleTrash(): void {
   S.trashOpen = !S.trashOpen;
-  document.getElementById('trash-list').style.display = S.trashOpen ? 'block' : 'none';
+  _el('trash-list').style.display = S.trashOpen ? 'block' : 'none';
 }
 
-export async function trashShot(id) {
+export async function trashShot(id: number): Promise<void> {
   try {
     const r = await sendShotToTrash(id);
     if (!r.ok) throw new Error(await r.text());
@@ -347,7 +418,7 @@ export async function trashShot(id) {
     S.allShots = (S.allShots || []).filter(s => s.id !== id);
     if (S.primaryShotId === id) {
       S.primaryShotId = S.shots[0]?.id || null;
-      if (S.primaryShotId) localStorage.setItem('glp_primaryShotId', S.primaryShotId);
+      if (S.primaryShotId) localStorage.setItem('glp_primaryShotId', String(S.primaryShotId));
       else localStorage.removeItem('glp_primaryShotId');
     }
     if (S.compareShotId === id) {
@@ -355,24 +426,24 @@ export async function trashShot(id) {
       localStorage.removeItem('glp_compareShotId');
     }
     renderSidebar();
-    updateView();
+    void updateView();
     await loadTrashData();
   } catch (e) {
-    alert(t('error_generic', e.message));
+    alert(t('error_generic', (e as Error).message));
   }
 }
 
-export async function restoreShot(id) {
+export async function restoreShot(id: number): Promise<void> {
   try {
     const r = await restoreShotFromTrash(id);
     if (!r.ok) throw new Error(await r.text());
     await loadData();
   } catch (e) {
-    alert(t('error_generic', e.message));
+    alert(t('error_generic', (e as Error).message));
   }
 }
 
-export async function permanentDeleteShot(id) {
+export async function permanentDeleteShot(id: number): Promise<void> {
   if (!confirm(t('confirm_perm_delete', id))) return;
   try {
     const r = await deleteShotPermanently(id);
@@ -381,7 +452,7 @@ export async function permanentDeleteShot(id) {
     S.trashedShots = S.trashedShots.filter(s => s.id !== id);
     renderTrash();
   } catch (e) {
-    alert(t('error_generic', e.message));
+    alert(t('error_generic', (e as Error).message));
   }
 }
 
@@ -390,8 +461,8 @@ export async function permanentDeleteShot(id) {
 // Shared setter for the #402 delta-chip spans (verdict score + process-zone
 // metrics): hides the chip entirely when there's nothing to compare against,
 // never shows an empty pill.
-function _setDeltaChip(id, delta, decimals = 0, unit = '', colorClass = null, title = '') {
-  const el = document.getElementById(id);
+function _setDeltaChip(id: string, delta: number | null, decimals = 0, unit = '', colorClass: string | null = null, title = ''): void {
+  const el = _el(id);
   if (!el) return;
   if (delta == null) { el.style.display = 'none'; return; }
   el.textContent = formatDelta(delta, decimals, unit);
@@ -404,20 +475,20 @@ let _updateViewToken = 0;
 
 // Set per updateView() call — lets the async GaggiMate-phases callback
 // rebuild the chart once gmPhases lands (see below for why rebuild, not mutate).
-let _buildShotChart = null;
+let _buildShotChart: ((phasesOpt: GmPhasesOption) => void) | null = null;
 
-export async function updateView() {
+export async function updateView(): Promise<void> {
   // #814: resolved per render, never at module load — the value has to be
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
-  const shotA = S.shots.find(s => s.id === S.primaryShotId);
-  const shotB = S.compareShotId ? S.shots.find(s => s.id === S.compareShotId) : null;
+  const shotA = _shots().find(s => s.id === S.primaryShotId);
+  const shotB = S.compareShotId ? _shots().find(s => s.id === S.compareShotId) : null;
   if (!shotA) return;
 
   // Same-profile auto-compare (#402): most recent earlier shot with the same
   // profile on the same machine. Only meaningful outside A/B compare mode —
   // that feature stays untouched and unrelated to this same-profile pairing.
-  const previousShot = !shotB ? findPreviousShot(S.shots, shotA) : null;
+  const previousShot = (!shotB ? findPreviousShot(_shots(), shotA) : null) as ShotRow | null;
 
   // #957: curve data is lazy per shot now. Fetch the ones this render needs
   // (A, the B comparand, the previous same-profile shot for the ghost curve)
@@ -444,9 +515,9 @@ export async function updateView() {
   // confusing to show ("Shot 20000003") when the machine name is already
   // in the subtitle. nativeId falls back to id for older cached shots.
   if (shotB) {
-    document.getElementById('topTitle').innerText = t('compare_title', shotA.nativeId ?? shotA.id, shotB.nativeId ?? shotB.id);
+    _el('topTitle').innerText = t('compare_title', shotA.nativeId ?? shotA.id, shotB.nativeId ?? shotB.id);
   } else {
-    document.getElementById('topTitle').innerText = `${nameA} – Shot ${shotA.nativeId ?? shotA.id}`;
+    _el('topTitle').innerText = `${nameA} – Shot ${shotA.nativeId ?? shotA.id}`;
   }
 
   // machineSubtitle (#344): make it reflect the machine that actually owns
@@ -456,43 +527,43 @@ export async function updateView() {
   // In compare mode there's no single "owning" machine worth naming, so it
   // shows the two profile names being compared instead (#398 dropped the
   // separate "Profil" meta row that used to carry this).
-  const subtitleEl = document.getElementById('machineSubtitle');
+  const subtitleEl = _el('machineSubtitle');
   if (subtitleEl) {
     if (shotB) {
       const nameB = shotB.profile?.name || shotB.profileName || t('profile_unknown');
       subtitleEl.textContent = `${nameA} vs. ${nameB}`;
     } else {
       const machine = S.machines?.find(m => m.id === (shotA.machineId ?? 1));
-      if (machine) subtitleEl.textContent = machine.host ? `${machine.name} · ${machine.host}` : machine.name;
+      if (machine) subtitleEl.textContent = machine.host ? `${machine.name as string} · ${machine.host as string}` : machine.name as string;
     }
   }
 
   const totalSecs = (shotA.duration || 0) / 10;
-  document.getElementById('duration').innerText = formatTimeLabel(totalSecs);
+  _el('duration').innerText = formatTimeLabel(totalSecs);
 
   const pressureVals  = dA.pressure.map(p => p.y);
   const pressureTimes = dA.pressure.map(p => p.x);
   const avgPressure   = avgActive(pressureVals, 1.5);
-  document.getElementById('pressure').innerText       = fmt(avgPressure, ' bar');
-  document.getElementById('targetPressure').innerText = ` / ${fmt(max(dA.targetPressure.map(p => p.y)), ' bar')}`;
+  _el('pressure').innerText       = fmt(avgPressure, ' bar');
+  _el('targetPressure').innerText = ` / ${fmt(max(dA.targetPressure.map(p => p.y)), ' bar')}`;
   const avgFlow = avgActive(dA.flow.map(p => p.y), 0.2);
-  document.getElementById('flow').innerText           = fmt(avgFlow, ' ml/s');
-  document.getElementById('targetFlow').innerText     = ` / ${fmt(avgActive(dA.targetFlow.map(p => p.y), 0.2), ' ml/s')}`;
+  _el('flow').innerText           = fmt(avgFlow, ' ml/s');
+  _el('targetFlow').innerText     = ` / ${fmt(avgActive(dA.targetFlow.map(p => p.y), 0.2), ' ml/s')}`;
 
   const tempVals = dA.temp.map(p => p.y);
   const sdTemp   = stddev(tempVals);
   const avgTemp  = avg(tempVals);
-  document.getElementById('temp').innerText             = fmt(avgTemp, ' °C');
-  document.getElementById('tempStability').textContent  = (sdTemp != null && sdTemp < 5) ? `±${sdTemp.toFixed(1)}` : '';
-  document.getElementById('targetTemp').innerText       = ` / ${fmt(avg(dA.targetTemp.map(p => p.y)), ' °C')}`;
+  _el('temp').innerText             = fmt(avgTemp, ' °C');
+  _el('tempStability').textContent  = (sdTemp != null && sdTemp < 5) ? `±${sdTemp.toFixed(1)}` : '';
+  _el('targetTemp').innerText       = ` / ${fmt(avg(dA.targetTemp.map(p => p.y)), ' °C')}`;
 
   // Process-zone delta chips (#402): signed vs. the previous same-profile
   // shot's own average — no quality judgment implied, so no score coloring.
-  if (dPrev) {
+  if (dPrev && previousShot) {
     const prevTitle = t('delta_vs_shot', previousShot.nativeId ?? previousShot.id);
-    _setDeltaChip('pressureDeltaChip', avgPressure != null ? avgPressure - avgActive(dPrev.pressure.map(p => p.y), 1.5) : null, 1, ' bar', null, prevTitle);
-    _setDeltaChip('flowDeltaChip',     avgFlow     != null ? avgFlow     - avgActive(dPrev.flow.map(p => p.y), 0.2)     : null, 1, ' ml/s', null, prevTitle);
-    _setDeltaChip('tempDeltaChip',     avgTemp     != null ? avgTemp     - avg(dPrev.temp.map(p => p.y))                : null, 1, ' °C', null, prevTitle);
+    _setDeltaChip('pressureDeltaChip', avgPressure != null ? avgPressure - (avgActive(dPrev.pressure.map(p => p.y), 1.5) ?? 0) : null, 1, ' bar', null, prevTitle);
+    _setDeltaChip('flowDeltaChip',     avgFlow     != null ? avgFlow     - (avgActive(dPrev.flow.map(p => p.y), 0.2) ?? 0)     : null, 1, ' ml/s', null, prevTitle);
+    _setDeltaChip('tempDeltaChip',     avgTemp     != null ? avgTemp     - (avg(dPrev.temp.map(p => p.y)) ?? 0)                : null, 1, ' °C', null, prevTitle);
   } else {
     _setDeltaChip('pressureDeltaChip', null);
     _setDeltaChip('flowDeltaChip', null);
@@ -505,15 +576,15 @@ export async function updateView() {
   // Recipe zone (#398): dose -> yield + ratio (with EY as a sub-value) —
   // both derived from the same dose/finalWeight pair, so they share one
   // visibility condition (matches the old ratioItem/eyItem gating).
-  const doseYieldCard = document.getElementById('doseYieldCard');
-  const ratioCard     = document.getElementById('ratioCard');
+  const doseYieldCard = _el('doseYieldCard');
+  const ratioCard     = _el('ratioCard');
   if (ann.dose && finalWeight && !shotB) {
-    document.getElementById('doseYieldVal').textContent = `${fmt(parseFloat(ann.dose), ' g')} → ${fmt(finalWeight, ' g')}`;
+    _el('doseYieldVal').textContent = `${fmt(parseFloat(String(ann.dose)), ' g')} → ${fmt(finalWeight, ' g')}`;
     doseYieldCard.style.display = '';
 
     const r = (finalWeight / ann.dose).toFixed(1);
-    document.getElementById('ratioVal').textContent = `1:${r}`;
-    const eySub = document.getElementById('eySub');
+    _el('ratioVal').textContent = `1:${r}`;
+    const eySub = _el('eySub');
     if (ann.tds) {
       const ey   = (finalWeight * ann.tds) / ann.dose;
       const eyOk = ey >= 18 && ey <= 22;
@@ -534,15 +605,15 @@ export async function updateView() {
   // its bean and a previous grind setting is on record, the baseline is
   // folded straight into this label ("Mahlgrad X (zuletzt Y)") instead of
   // a separate chip — one place to look instead of two.
-  const grinderLabel = buildGrinderGrindLabel(S.shots, shotA, !shotB, t);
-  document.getElementById('beanVal').textContent    = ann.coffee || '–';
-  document.getElementById('grinderVal').textContent = grinderLabel || '–';
+  const grinderLabel = buildGrinderGrindLabel(_shots(), shotA, !shotB, t);
+  _el('beanVal').textContent    = ann.coffee || '–';
+  _el('grinderVal').textContent = grinderLabel || '–';
 
   // Freshness badge
-  const freshEl   = document.getElementById('freshnessBadge');
+  const freshEl   = _el('freshnessBadge');
   const ageAtShot = ann.beanAgeDays != null ? ann.beanAgeDays
     : (!shotB && ann.roastDate && ann.coffee)
-      ? Math.round((Date.now() - new Date(ann.roastDate)) / 86400000)
+      ? Math.round((Date.now() - new Date(ann.roastDate).getTime()) / 86400000)
       : null;
   if (ageAtShot != null && ageAtShot >= 0 && ageAtShot <= 365) {
     const cls = ageAtShot <= 21 ? 'freshness-fresh' : ageAtShot <= 35 ? 'freshness-ok' : 'freshness-old';
@@ -553,7 +624,7 @@ export async function updateView() {
   } else { freshEl.style.display = 'none'; }
 
   // Firmware version badge
-  const fwEl = document.getElementById('firmwareVersionBadge');
+  const fwEl = _el('firmwareVersionBadge');
   if (fwEl) {
     const fw = !shotB && shotA.glpFirmwareVersion;
     fwEl.textContent = fw ? `· fw ${fw}` : '';
@@ -567,8 +638,8 @@ export async function updateView() {
   // fills the unused desktop space above the chart. Both show the same
   // photo, fetched once and shared; CSS (see .shot-hero-photo /
   // .shot-header-thumb) decides which one is visible per breakpoint.
-  const photoThumbEl = document.getElementById('shotHeaderThumb');
-  const heroPhotoEl  = document.getElementById('shotHeroPhoto');
+  const photoThumbEl = _el('shotHeaderThumb') as HTMLImageElement | null;
+  const heroPhotoEl  = _el('shotHeroPhoto') as HTMLImageElement | null;
   if (photoThumbEl || heroPhotoEl) {
     if (!shotB && shotA.image) {
       if (photoThumbEl) {
@@ -579,7 +650,7 @@ export async function updateView() {
         heroPhotoEl.classList.add('has-photo');
         heroPhotoEl.onclick = () => { if (heroPhotoEl.src) openLightbox(heroPhotoEl.src); };
       }
-      loadShotImageBlobUrl(shotA.id).then(url => {
+      void loadShotImageBlobUrl(shotA.id).then(url => {
         if (!url) return;
         if (photoThumbEl) photoThumbEl.src = url;
         if (heroPhotoEl)  heroPhotoEl.src  = url;
@@ -601,18 +672,18 @@ export async function updateView() {
   // Phases -> a compact sub-line on the Recipe zone's duration card (#398).
   // The GaggiMate named-phase lookup below upgrades this later if it lands.
   const phases    = !shotB ? detectPhases(pressureTimes, pressureVals) : null;
-  const phasesSub = document.getElementById('phasesSub');
+  const phasesSub = _el('phasesSub');
   phasesSub.textContent = phases
     ? `${t('phase_preinfusion')} ${formatTimeLabel(phases.preinfusion)} · ${t('phase_extraction')} ${formatTimeLabel(phases.extraction)}`
     : '';
 
   // Channeling
   const channeling = !shotB && detectChanneling(pressureTimes, pressureVals);
-  document.getElementById('channelingWarning').style.display = channeling ? '' : 'none';
+  _el('channelingWarning').style.display = channeling ? '' : 'none';
 
   // Verdict header (#398): score + the dial-in advice as one plain-language
   // line (#816: de-boxed — was a score badge beside a boxed advice line).
-  const verdictHeader = document.getElementById('verdictHeader');
+  const verdictHeader = _el('verdictHeader');
   if (!shotB) {
     const advice = calcGrindAdvice(shotA, dA);
     const sc     = calcShotScore(shotA, dA);
@@ -620,15 +691,15 @@ export async function updateView() {
     // shape the redesign removes on both surfaces (the shot card did the same
     // in glp-lovelace-card#120) — the number itself, at display size and in
     // the score colour, carries the same information with none of the chrome.
-    const ringVal  = document.getElementById('verdictRingVal');
+    const ringVal  = _el('verdictRingVal');
     ringVal.style.setProperty('--ring-color', scoreColor(sc));
-    ringVal.textContent = sc !== null ? sc : '–';
+    ringVal.textContent = sc !== null ? String(sc) : '–';
 
     // Score delta chip (#402): same-profile auto-compare, unified score
     // scale (#397) for the coloring — omitted entirely when there's no
     // previous same-profile shot or either score is unknown.
     const prevScore = previousShot ? previousShot.score : null;
-    const verdictDeltaChip = document.getElementById('verdictDeltaChip');
+    const verdictDeltaChip = _el('verdictDeltaChip');
     if (previousShot && sc != null && prevScore != null) {
       const scoreDelta = sc - prevScore;
       const cls = scoreDelta > 0 ? 'score-great' : scoreDelta < 0 ? 'score-bad' : 'score-ok';
@@ -645,7 +716,7 @@ export async function updateView() {
     // fallback band — native title tooltip, no new permanent header text.
     const beanTargetHint = shotUsedBeanTarget(shotA)
       ? `<span class="verdict-bean-target-hint" title="${esc(t('verdict_bean_target_hint'))}">${TARGET_ICON_SVG}</span>` : '';
-    document.getElementById('verdictHeadline').innerHTML = (advice ? `${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))) + beanTargetHint;
+    _el('verdictHeadline').innerHTML = (advice ? `${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))) + beanTargetHint;
     // #838: duration and avg pressure dropped — they're already shown once
     // each, in the Dauer recipe card (incl. phase breakdown) and the
     // Process-zone pressure card, so repeating them here was pure duplication.
@@ -658,14 +729,14 @@ export async function updateView() {
     verdictHeader.style.display = 'none';
   }
 
-  const compEl  = document.getElementById('grindAdviceComparative');
-  const compAdv = !shotB ? calcComparativeGrindAdvice(shotA, S.shots) : null;
+  const compEl  = _el('grindAdviceComparative');
+  const compAdv = !shotB ? calcComparativeGrindAdvice(shotA, _shots()) : null;
   if (compEl) {
     if (compAdv) {
       const wasOpen = compEl.classList.contains('expanded');
       compEl.className = `grind-advice grind-comparative grind-${compAdv.type}${wasOpen ? ' expanded' : ''}`;
-      document.getElementById('grindAdviceComparativeIcon').innerHTML = compAdv.icon;
-      document.getElementById('grindAdviceComparativeText').textContent = compAdv.text;
+      _el('grindAdviceComparativeIcon').innerHTML = compAdv.icon;
+      _el('grindAdviceComparativeText').textContent = compAdv.text;
 
       // #957: the comparative thumbnails each need their shot's curve — fetch
       // the handful (typically 1-8) before rendering; _miniShotChart falls
@@ -675,7 +746,7 @@ export async function updateView() {
 
       const locale   = localeFor(S.currentLang);
       const listHtml = compAdv.shots.map(({ shot: s, grind, score }) => {
-        const date  = new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+        const date  = new Date((s.timestamp as number) * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
         const dur   = s.duration ? `${(s.duration / 10).toFixed(0)}s` : '';
         const cls   = scoreClass(score);
         const chart = _miniShotChart(s);
@@ -713,9 +784,9 @@ export async function updateView() {
   }
 
   // Ordered-by info
-  const obEl = document.getElementById('orderedByInfo');
+  const obEl = _el('orderedByInfo');
   if (obEl) {
-    const ob = !shotB && (shotA.annotation?.orderedBy);
+    const ob = !shotB ? shotA.annotation?.orderedBy : null;
     if (ob?.customer) {
       const drink = ob.item ? (ob.variant ? `${ob.item} · ${ob.variant}` : ob.item) : null;
       obEl.innerHTML =
@@ -731,8 +802,8 @@ export async function updateView() {
 
   // Build main chart datasets
   const maxTimeA    = dA.rawTimes.length > 0 ? dA.rawTimes[dA.rawTimes.length - 1] : 0;
-  const maxTimeB    = dB?.rawTimes.length > 0 ? dB.rawTimes[dB.rawTimes.length - 1] : 0;
-  const maxTimePrev = dPrev?.rawTimes.length > 0 ? dPrev.rawTimes[dPrev.rawTimes.length - 1] : 0;
+  const maxTimeB    = dB && dB.rawTimes.length > 0 ? dB.rawTimes[dB.rawTimes.length - 1] : 0;
+  const maxTimePrev = dPrev && dPrev.rawTimes.length > 0 ? dPrev.rawTimes[dPrev.rawTimes.length - 1] : 0;
 
   const sfx = shotB ? ' (A)' : '';
   const datasets = [
@@ -763,7 +834,7 @@ export async function updateView() {
   // Ghost overlay (#402): previous same-profile shot's pressure/flow/weight
   // curves, dashed + low-opacity, feeding into the chart's existing legend
   // (dataset label carries the "(Shot N)" suffix so it's self-explanatory).
-  if (dPrev) {
+  if (dPrev && previousShot) {
     const ghostSfx = t('chart_prev_suffix', previousShot.nativeId ?? previousShot.id);
     datasets.push(
       { label:t('chart_pressure') + ghostSfx, data: dPrev.pressure, yAxisID:'y',  borderDash:[2,3], borderWidth:1.5, tension:.1, borderColor:'rgba(52,152,219,.35)', backgroundColor:'transparent', pointStyle:false },
@@ -775,7 +846,7 @@ export async function updateView() {
   chartRegistry.dispose('pqChart');
   if (S.currentChartTab === 'pq') updatePQChart();
 
-  const ctx = document.getElementById('espressoShotChart');
+  const ctx = _el('espressoShotChart') as HTMLCanvasElement;
 
   // Rebuild rather than mutate options.plugins.phases in place — Chart.js
   // doesn't reliably pick up in-place mutation on the next draw.
@@ -783,7 +854,7 @@ export async function updateView() {
     const existing = Chart.getChart(ctx);
     if (existing) existing.destroy();
     try {
-      chartRegistry.set('chart', new Chart(ctx, {
+      chartRegistry.set('chart', new Chart(ctx, ({
         type: 'line',
         plugins: [corsairPlugin, phasePlugin],
         data: { datasets },
@@ -801,7 +872,7 @@ export async function updateView() {
             },
             tooltip: {
               callbacks: {
-                title: ctx => {
+                title: (ctx: { parsed: { x: number } }[]) => {
                   const time = ctx[0].parsed.x;
                   const ph = phasesOpt.gaggimatePhases?.find(p => time >= p.t0 && time <= p.t1);
                   const timeLabel = t('chart_time', formatTimeLabel(time));
@@ -812,14 +883,15 @@ export async function updateView() {
           },
           scales: {
             x:  { type:'linear', min:0, max:Math.max(maxTimeA, maxTimeB, maxTimePrev), clip:false,
-                  ticks:{ color:C.tick, font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
+                  ticks:{ color:C.tick, font:{family:'Figtree'}, stepSize:5, callback:(v: number)=>formatTimeLabel(v), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
                   grid:{ color:C.grid } },
             y:  { type:'linear', position:'left',  min:0, max:12, ticks:{color:C.tick, maxTicksLimit:6}, grid:{color:C.grid} },
             y1: { type:'linear', position:'right', min:0, max:Number(tempMaxScale), ticks:{color:C.tick, maxTicksLimit:6}, grid:{drawOnChartArea:false} }
           }
         }
-      }));
-      clearChartOnTouchEnd(chartRegistry.get('chart'));
+      } as unknown as ChartConfiguration<'line'>)));
+      const builtChart = chartRegistry.get('chart');
+      if (builtChart) clearChartOnTouchEnd(builtChart);
     } catch (e) {
       console.error('Chart creation error:', e);
     }
@@ -831,12 +903,12 @@ export async function updateView() {
   // must stay after _buildShotChart exists (a cache hit can resolve before
   // it otherwise, since this fn has earlier awaits). Shots have no
   // machineType of their own, hence the S.machines lookup.
-  const shotMachine = !shotB && S.machines?.find(m => m.id === (shotA.machineId ?? 1));
+  const shotMachine = !shotB ? S.machines?.find(m => m.id === (shotA.machineId ?? 1)) : null;
   if (shotMachine?.type === 'gaggimate' && shotA.machineId) {
-    _loadGmPhases(shotA, token).then(gmPhases => {
+    void _loadGmPhases(shotA, token).then(gmPhases => {
       if (!gmPhases || token !== _updateViewToken) return;
       phasesSub.textContent = gmPhases.map(p => p.name).join(' · ');
-      _buildShotChart({ gaggimatePhases: gmPhases });
+      _buildShotChart!({ gaggimatePhases: gmPhases });
     });
   }
 }
@@ -846,7 +918,7 @@ export async function updateView() {
 // d is the mapped XY curve bundle for this shot (from the curve cache) — the
 // caller fetches it via getShotCurve() first, since list rows no longer carry
 // datapoints (#957).
-function shotToCSVRow(shot, d) {
+function shotToCSVRow(shot: ShotRow, d: ShotSeries): string {
   const ann    = shot.annotation || {};
   const avgP   = avgActive(d.pressure.map(p => p.y), 1.5);
   const finalW = max(d.weight.map(p => p.y));
@@ -864,13 +936,13 @@ function shotToCSVRow(shot, d) {
     avgT   != null ? avgT.toFixed(1)   : '',
     ann.rating || '', ann.coffee || '', ann.grinder || '',
     ann.grindSetting || '',
-    _equipmentName(S.coffeeLibrary?.baskets, ann.basketId) || '',
-    _equipmentName(S.coffeeLibrary?.puckScreens, ann.puckScreenId) || '',
+    _equipmentName(_libCollection('baskets'), ann.basketId) || '',
+    _equipmentName(_libCollection('puckScreens'), ann.puckScreenId) || '',
     (ann.notes || '').replace(/\n/g, ' ')
   ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
 }
 
-async function downloadCSV(rows, filename) {
+async function downloadCSV(rows: string[], filename: string): Promise<void> {
   const header = ['Shot ID','Date','Profile','Duration (s)','Avg Pressure (bar)','Max Weight (g)',
                   'Dose (g)','Ratio','Avg Temp (C)','Rating','Coffee','Grinder','Grind Setting',
                   'Basket','Puck Screen','Notes'];
@@ -879,8 +951,8 @@ async function downloadCSV(rows, filename) {
   await shareOrDownloadBlob(blob, filename, { title: t('export_csv_title') });
 }
 
-export async function exportCSV() {
-  const shot = S.shots.find(s => s.id === S.primaryShotId);
+export async function exportCSV(): Promise<void> {
+  const shot = _shots().find(s => s.id === S.primaryShotId);
   if (!shot) return;
   await getShotCurve(shot.id);
   const date    = new Date(shot.timestamp * 1000).toISOString().slice(0, 10);
@@ -888,30 +960,30 @@ export async function exportCSV() {
   await downloadCSV([shotToCSVRow(shot, getCachedShotData(shot.id) || mapShotDatapoints({}))], `glp_shot_${date}_${profile}.csv`);
 }
 
-export async function exportAllCSV() {
+export async function exportAllCSV(): Promise<void> {
   // Rare, explicit user action — pull every shot's curve (bounded concurrency
   // inside ensureCurves) before building the rows.
-  const list = S.shots;
+  const list = _shots();
   await ensureCurves(list.map(s => s.id));
   await downloadCSV(list.map(s => shotToCSVRow(s, getCachedShotData(s.id) || mapShotDatapoints({}))), 'glp_all_shots.csv');
 }
 
 // ── .shot export ──────────────────────────────────────────────────────────
 
-export async function exportShot() {
-  const shot = S.shots.find(s => s.id === S.primaryShotId);
+export async function exportShot(): Promise<void> {
+  const shot = _shots().find(s => s.id === S.primaryShotId);
   if (!shot) return;
   const d   = await getShotCurve(shot.id);
   const ann = shot.annotation || {};
   const timeArr = d.timeInShot || [];
 
-  const tcl = arr => arr?.length ? `{${arr.map(v => (v / 10).toFixed(2)).join(' ')}}` : '{}';
+  const tcl = (arr: unknown[] | null | undefined): string => arr?.length ? `{${arr.map(v => ((v as number) / 10).toFixed(2)).join(' ')}}` : '{}';
 
   const finalWeight = d.shotWeight || d.weight || [];
   const lastW = finalWeight.length ? (finalWeight[finalWeight.length - 1] / 10).toFixed(1) : '0.0';
   const date  = new Date(shot.timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19);
-  const basketName     = _equipmentName(S.coffeeLibrary?.baskets, ann.basketId);
-  const puckScreenName = _equipmentName(S.coffeeLibrary?.puckScreens, ann.puckScreenId);
+  const basketName     = _equipmentName(_libCollection('baskets'), ann.basketId);
+  const puckScreenName = _equipmentName(_libCollection('puckScreens'), ann.puckScreenId);
 
   const lines = [
     `clock ${shot.timestamp}`,
@@ -919,7 +991,7 @@ export async function exportShot() {
     `profile_title {${(shot.profile?.name || shot.profileName || 'Unknown').replace(/[{}]/g, '')}}`,
     ann.coffee       ? `bean_desc {${ann.coffee.replace(/[{}]/g, '')}}` : '',
     ann.grinder      ? `grinder_model {${ann.grinder.replace(/[{}]/g, '')}}` : '',
-    ann.grindSetting ? `grinder_setting {${ann.grindSetting.replace(/[{}]/g, '')}}` : '',
+    ann.grindSetting ? `grinder_setting {${(ann.grindSetting as string).replace(/[{}]/g, '')}}` : '',
     basketName       ? `basket {${basketName.replace(/[{}]/g, '')}}` : '',
     puckScreenName   ? `puck_screen {${puckScreenName.replace(/[{}]/g, '')}}` : '',
     ann.dose         ? `bean_weight ${ann.dose}` : '',
@@ -939,19 +1011,19 @@ export async function exportShot() {
 
 // ── Profile export ────────────────────────────────────────────────────────
 
-export async function exportProfile() {
-  const shot = S.shots.find(s => s.id === S.primaryShotId);
+export async function exportProfile(): Promise<void> {
+  const shot = _shots().find(s => s.id === S.primaryShotId);
   if (!shot) return;
 
   const profile = shot.profile;
   if (profile && Array.isArray(profile.phases) && profile.phases.length > 0) {
-    const out = JSON.parse(JSON.stringify(profile));
+    const out = JSON.parse(JSON.stringify(profile)) as { recipe?: Record<string, number>; name?: string } & Record<string, unknown>;
     const ann = shot.annotation || {};
     if (!out.recipe) out.recipe = {};
-    if (ann.dose) out.recipe.coffeeIn = parseFloat(ann.dose);
-    if (!out.recipe.coffeeOut && ann.dose) out.recipe.coffeeOut = parseFloat(ann.dose) * 2;
+    if (ann.dose) out.recipe.coffeeIn = parseFloat(String(ann.dose));
+    if (!out.recipe.coffeeOut && ann.dose) out.recipe.coffeeOut = parseFloat(String(ann.dose)) * 2;
     if (out.recipe.coffeeIn && out.recipe.coffeeOut)
-      out.recipe.ratio = Math.round(out.recipe.coffeeOut / out.recipe.coffeeIn * 100) / 100;
+      out.recipe.ratio = Math.round(Number(out.recipe.coffeeOut) / Number(out.recipe.coffeeIn) * 100) / 100;
     await _downloadJSON(out, (out.name || shot.profileName || `shot_${shot.id}`).replace(/[^a-z0-9_-]/gi, '_') + '.json');
     return;
   }
@@ -991,7 +1063,7 @@ export async function exportProfile() {
     ? Math.round(extractionSlice.reduce((a, b) => a + b, 0) / extractionSlice.length * 10) / 10
     : 9;
   const extractionMs = totalMs - preinfMs;
-  const yieldG = ann.dose ? parseFloat(ann.dose) * 2 : 36;
+  const yieldG = ann.dose ? parseFloat(String(ann.dose)) * 2 : 36;
 
   phases.push({
     type: 0,
@@ -1006,26 +1078,26 @@ export async function exportProfile() {
     phases,
     globalStopConditions: { time: 0, weight: yieldG, waterPumped: 0 },
     recipe: {
-      coffeeIn:  ann.dose ? parseFloat(ann.dose) : 18,
+      coffeeIn:  ann.dose ? parseFloat(String(ann.dose)) : 18,
       coffeeOut: yieldG,
-      ratio:     ann.dose ? Math.round(yieldG / parseFloat(ann.dose) * 100) / 100 : 2
+      ratio:     ann.dose ? Math.round(yieldG / parseFloat(String(ann.dose)) * 100) / 100 : 2
     }
   };
   await _downloadJSON(out, (out.name).replace(/[^a-z0-9_-]/gi, '_') + '.json');
 }
 
-async function _downloadJSON(obj, filename) {
+async function _downloadJSON(obj: unknown, filename: string): Promise<void> {
   await _downloadJSON_blob(JSON.stringify(obj, null, 2), filename, 'application/json');
 }
 
-async function _downloadJSON_blob(content, filename, mime) {
+async function _downloadJSON_blob(content: string, filename: string, mime: string): Promise<void> {
   const blob = new Blob([content], { type: mime });
   await shareOrDownloadBlob(blob, filename, { title: filename });
 }
 
 // ── Share card ────────────────────────────────────────────────────────────
 
-export async function shareCard(format = 'square') {
+export async function shareCard(format = 'square'): Promise<void> {
   const shotId = S.primaryShotId;
   if (!shotId) return;
   try {
@@ -1041,14 +1113,14 @@ export async function shareCard(format = 'square') {
     const theme  = document.documentElement.dataset.theme  || 'dark';
     const r = await getShotCard(shotId, { format, accent, theme });
     if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
+      const err = await r.json().catch(() => ({})) as { error?: string };
       throw new Error(err.error || r.statusText);
     }
     const blob     = await r.blob();
     const filename = `glp-shot-${shotId}-${format}.png`;
     await shareOrDownloadBlob(blob, filename, { title: t('share_card_title'), fallbackOnError: false });
   } catch (e) {
-    if (e.name !== 'AbortError') alert(t('error_generic', e.message));
+    if ((e as Error).name !== 'AbortError') alert(t('error_generic', (e as Error).message));
   }
 }
 

@@ -8,6 +8,10 @@ import {
   deleteOrderHistory, putMenuItem, deleteMenuItem, postOrdersMenu, getNotifyServices,
   getNotifyMapping, postNotifyMapping,
 } from '../api/orders.js';
+import type {
+  MenuItem, MilkStock, NotifyMappingView, NotifyService, Order, OrderStats,
+  OrdersSettings, OrdersSettingsUpdate, QueueEta,
+} from '../api/types.js';
 import { esc } from '../utils.js';
 import { localeFor } from '../constants.js';
 // #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
@@ -17,6 +21,30 @@ import { localeFor } from '../constants.js';
 // hint, #419 follow-up) — MILK_ICON_SVG stays local, single-use here.
 import { CLOCK_ICON_SVG, BELL_ICON_SVG, BEAN_ICON_SVG, CLOSE_ICON_SVG, CHECK_ICON_SVG } from '../icons.js';
 const MILK_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 4v13a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V7z"/><path d="M9 3 12 6 15 3"/><path d="M8 10h8"/></svg>';
+
+// Two orders-runtime fields that state/index.ts's OrdersSlice does not
+// declare: they are written and read only by this view, so they get a local
+// view of S rather than widening the shared state slice.
+type OrdersRuntimeState = typeof S & {
+  _knownPendingIds?: Set<string> | null;
+  _ordersQueueEta?: QueueEta | null;
+};
+const SO = S as OrdersRuntimeState;
+
+// Hand-built view of GET /api/switch as loadOrdersView reads it.
+interface SwitchState { configured?: boolean; state?: boolean }
+
+// S._ordersEtaSelected / S._ordersDeclineOpen are typed by numeric order id,
+// but the ids arrive as dataset strings — this keeps the runtime key (a
+// string either way) and the declared key type honest at the call sites.
+const _idKey = (id: string | undefined): number => id as unknown as number;
+
+// addEventListener's handler is typed void-returning; async click/change work
+// goes through this helper, which makes the fire-and-forget the .js already
+// did explicit.
+function _onAsync(el: Element | null | undefined, type: string, fn: () => Promise<void>): void {
+  el?.addEventListener(type, () => { void fn(); });
+}
 
 // #603: one mute switch per automatic notification type. Stored as
 // settings[key] === false (absent/true both mean "on") so pre-#603 installs
@@ -32,15 +60,40 @@ const NOTIFY_TYPE_KEYS = [
   { key: 'notify_order_status',  i18nKey: 'orders_type_order_status' },
 ];
 
-export function toggleOrdersMenu() {
-  S._ordersMenuOpen = !S._ordersMenuOpen;
-  document.getElementById('ordersMenuBody').style.display = S._ordersMenuOpen ? '' : 'none';
-  document.getElementById('ordersMenuToggle').textContent = S._ordersMenuOpen ? '▾' : '▸';
+// Typed "value or fallback" wrappers: the API helpers already fall back to
+// empty values at each call site, but a bare .catch(() => ({})) widens the
+// Promise.all result to {} and needs a cast to read again — these keep the
+// fallback explicit and the result typed.
+async function _getSwitchState(): Promise<SwitchState> {
+  try {
+    const raw: unknown = await getSwitch().then(r => r.json());
+    return raw as SwitchState;
+  } catch { return {}; }
 }
 
-function _playOrderChime() {
+async function _getSettingsOr(fallback: OrdersSettings): Promise<OrdersSettings> {
+  try { return await getOrdersSettings(); } catch { return fallback; }
+}
+
+async function _getNotifyMappingOrEmpty(): Promise<NotifyMappingView> {
+  try { return await getNotifyMapping(); } catch { return { mapping: {}, customers: {} }; }
+}
+
+async function _getNotifyServicesOrNull(): Promise<NotifyService[] | null> {
+  try { return await getNotifyServices(); } catch { return null; }
+}
+
+export function toggleOrdersMenu(): void {
+  S._ordersMenuOpen = !S._ordersMenuOpen;
+  (document.getElementById('ordersMenuBody') as HTMLElement).style.display = S._ordersMenuOpen ? '' : 'none';
+  (document.getElementById('ordersMenuToggle') as HTMLElement).textContent = S._ordersMenuOpen ? '▾' : '▸';
+}
+
+function _playOrderChime(): void {
   try {
-    const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+    const Ctor = (window.AudioContext
+      || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
+    const ctx  = new Ctor();
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
@@ -54,7 +107,7 @@ function _playOrderChime() {
   } catch { /* ignore */ }
 }
 
-function _notifyNewOrders(newOrders) {
+function _notifyNewOrders(newOrders: Order[]): void {
   _playOrderChime();
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const n = newOrders.length;
@@ -65,21 +118,21 @@ function _notifyNewOrders(newOrders) {
   });
 }
 
-export function startOrdersPolling() {
+export function startOrdersPolling(): void {
   stopOrdersPolling();
   if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
+    void Notification.requestPermission();
   }
-  S._knownPendingIds = null; // reset so first load doesn't trigger notify
-  loadOrdersView();
-  timerRegistry.set('_ordersPollTimer', setInterval(loadOrdersView, 10000));
+  SO._knownPendingIds = null; // reset so first load doesn't trigger notify
+  void loadOrdersView();
+  timerRegistry.set('_ordersPollTimer', setInterval(() => { void loadOrdersView(); }, 10000));
 }
 
-export function stopOrdersPolling() {
+export function stopOrdersPolling(): void {
   timerRegistry.dispose('_ordersPollTimer');
 }
 
-export async function setOrdersEnabled(enabled) {
+export async function setOrdersEnabled(enabled: boolean): Promise<void> {
   try {
     const res = await postOrdersSettings({ enabled });
     if (!res.ok) throw new Error('save failed');
@@ -88,13 +141,13 @@ export async function setOrdersEnabled(enabled) {
     // Save failed — reload actual state from server so toggle reflects reality
     try {
       const settings = await getOrdersSettings();
-      _updateOrdersToggleUI(settings.enabled);
+      _updateOrdersToggleUI(!!settings.enabled);
     } catch { /* ignore */ }
   }
 }
 
-export function _updateOrdersToggleUI(enabled) {
-  const toggle = document.getElementById('ordersEnabledToggle');
+export function _updateOrdersToggleUI(enabled: boolean): void {
+  const toggle = document.getElementById('ordersEnabledToggle') as HTMLInputElement | null;
   const label  = document.getElementById('ordersEnabledLabel');
   if (toggle) toggle.checked = enabled;
   if (label) {
@@ -103,23 +156,23 @@ export function _updateOrdersToggleUI(enabled) {
   }
 }
 
-export async function loadOrdersView() {
+export async function loadOrdersView(): Promise<void> {
   const [sw, settings] = await Promise.all([
-    getSwitch().then(r => r.json()).catch(() => ({})),
-    getOrdersSettings().catch(() => ({ enabled: true })),
+    _getSwitchState(),
+    _getSettingsOr({ enabled: true }),
   ]);
   const machineOff = sw.configured && sw.state === false;
   const banner = document.getElementById('orders-machine-off-banner');
   if (banner) { banner.style.display = machineOff ? '' : 'none'; banner.textContent = t('orders_machine_off'); }
-  _updateOrdersToggleUI(settings.enabled);
+  _updateOrdersToggleUI(!!settings.enabled);
 
   const [orders, menu, queueEta, milkStock] = await Promise.all([
-    listOrders().catch(() => []),
-    getOrdersMenu().catch(() => []),
+    listOrders().catch(() => [] as Order[]),
+    getOrdersMenu().catch(() => [] as MenuItem[]),
     getQueueEta().catch(() => null),
-    getMilkStock().catch(() => []),
+    getMilkStock().catch(() => [] as MilkStock[]),
   ]);
-  S._ordersQueueEta = queueEta;
+  SO._ordersQueueEta = queueEta;
 
   renderOrdersList(orders);
   renderOrdersMenuAdmin(menu);
@@ -133,17 +186,18 @@ export async function loadOrdersView() {
   if (badge) badge.style.display = pendingOrders.length > 0 ? '' : 'none';
 
   // Browser notification for new pending orders
-  if (S._knownPendingIds !== null && S._knownPendingIds !== undefined) {
-    const newOnes = pendingOrders.filter(o => !S._knownPendingIds.has(o.id));
+  const knownPendingIds = SO._knownPendingIds;
+  if (knownPendingIds !== null && knownPendingIds !== undefined) {
+    const newOnes = pendingOrders.filter(o => !knownPendingIds.has(o.id));
     if (newOnes.length > 0) _notifyNewOrders(newOnes);
   }
-  S._knownPendingIds = new Set(pendingOrders.map(o => o.id));
+  SO._knownPendingIds = new Set(pendingOrders.map(o => o.id));
 }
 
 // Tiered relative time (#320) — raw minutes was unreadable once an order
 // sat for hours/days (e.g. "Vor 3904 Min"): minutes under an hour, hours
 // under a day, days beyond that.
-export function _orderTimeAgo(ts) {
+export function _orderTimeAgo(ts: number): string {
   const min = Math.round((Date.now() - ts) / 60000);
   if (min < 1) return t('orders_just_now');
   if (min < 60) return t('orders_ago', min);
@@ -153,15 +207,15 @@ export function _orderTimeAgo(ts) {
   return t('orders_ago_days', days);
 }
 
-export function renderMilkStock(milks) {
+export function renderMilkStock(milks: MilkStock[]): void {
   const el = document.getElementById('orders-milk-stock');
   if (!el) return;
   if (!milks?.length) { el.style.display = 'none'; return; }
   el.style.display = '';
   el.innerHTML = `<p class="orders-milk-title">${MILK_ICON_SVG} ${t('orders_milk_title')}</p>` +
     milks.map(m => {
-      const cls = m.stockMl <= 0 ? 'empty' : m.remaining < 300 ? 'low' : 'ok';
-      const label = m.stockMl <= 0 ? t('lib_milk_empty')
+      const cls = (m.stockMl as number) <= 0 ? 'empty' : m.remaining < 300 ? 'low' : 'ok';
+      const label = (m.stockMl as number) <= 0 ? t('lib_milk_empty')
         : m.remaining < 300 ? `${m.remaining} ml`
         : `${m.remaining} ml`;
       return `<div class="orders-milk-row">
@@ -173,7 +227,7 @@ export function renderMilkStock(milks) {
     }).join('');
 }
 
-export function renderOrdersList(orders) {
+export function renderOrdersList(orders: Order[]): void {
   const pending  = orders.filter(o => o.status === 'pending');
   const accepted = orders.filter(o => o.status === 'accepted');
   const history  = orders.filter(o => ['done', 'declined'].includes(o.status)).slice(0, 20);
@@ -186,8 +240,8 @@ export function renderOrdersList(orders) {
 
   // Queue banner — only when 2+ orders active
   const totalActive = pending.length + accepted.length;
-  const totalEta = S._ordersQueueEta
-    ? Math.ceil((S._ordersQueueEta.acceptedRemaining || 0) + (S._ordersQueueEta.pendingCount || 0) * (S._ordersQueueEta.prepTime || 4))
+  const totalEta = SO._ordersQueueEta
+    ? Math.ceil((SO._ordersQueueEta.acceptedRemaining || 0) + (SO._ordersQueueEta.pendingCount || 0) * (SO._ordersQueueEta.prepTime || 4))
     : 0;
   const queueBanner = totalActive >= 2 && totalEta > 0
     ? `<div class="orders-queue-banner">${CLOCK_ICON_SVG} ${t('orders_queue_banner', totalActive, totalEta)}</div>`
@@ -198,68 +252,68 @@ export function renderOrdersList(orders) {
     `<div class="orders-empty">${t('orders_empty')}</div>`);
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  acceptedEl.innerHTML = accepted.length ? accepted.map(o => renderOrderCard(o, 'accepted')).join('') :
+  (acceptedEl as HTMLElement).innerHTML = accepted.length ? accepted.map(o => renderOrderCard(o, 'accepted')).join('') :
     `<div class="orders-empty">${t('orders_empty')}</div>`;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  historyEl.innerHTML = history.length ? history.map(o => renderOrderCard(o, 'history')).join('') : '';
+  (historyEl as HTMLElement).innerHTML = history.length ? history.map(o => renderOrderCard(o, 'history')).join('') : '';
   if (clearHistBtn) clearHistBtn.style.display = history.length ? '' : 'none';
 
   // Bind buttons after render
-  pendingEl.querySelectorAll('[data-order-accept]').forEach(btn => {
-    btn.addEventListener('click', () => acceptOrder(btn.dataset.orderAccept));
+  pendingEl.querySelectorAll<HTMLElement>('[data-order-accept]').forEach(btn => {
+    btn.addEventListener('click', () => { void acceptOrder(btn.dataset.orderAccept as string); });
   });
-  pendingEl.querySelectorAll('[data-order-decline-toggle]').forEach(btn => {
-    btn.addEventListener('click', () => toggleDeclineRow(btn.dataset.orderDeclineToggle));
+  pendingEl.querySelectorAll<HTMLElement>('[data-order-decline-toggle]').forEach(btn => {
+    btn.addEventListener('click', () => toggleDeclineRow(btn.dataset.orderDeclineToggle as string));
   });
-  pendingEl.querySelectorAll('[data-order-decline-submit]').forEach(btn => {
-    btn.addEventListener('click', () => submitDecline(btn.dataset.orderDeclineSubmit));
+  pendingEl.querySelectorAll<HTMLElement>('[data-order-decline-submit]').forEach(btn => {
+    btn.addEventListener('click', () => { void submitDecline(btn.dataset.orderDeclineSubmit as string); });
   });
-  pendingEl.querySelectorAll('[data-eta-btn]').forEach(btn => {
+  pendingEl.querySelectorAll<HTMLElement>('[data-eta-btn]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const id  = btn.dataset.orderId;
-      const val = parseInt(btn.dataset.etaBtn);
-      S._ordersEtaSelected[id] = val;
-      btn.closest('.order-eta-picker').querySelectorAll('.order-eta-btn').forEach(b => b.classList.remove('selected'));
+      const id  = btn.dataset.orderId as string;
+      const val = parseInt(btn.dataset.etaBtn as string);
+      S._ordersEtaSelected[_idKey(id)] = val;
+      btn.closest('.order-eta-picker')?.querySelectorAll('.order-eta-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
-      const inp = document.getElementById(`etaCustom_${id}`);
-      if (inp) inp.value = val;
+      const inp = document.getElementById(`etaCustom_${id}`) as HTMLInputElement | null;
+      if (inp) inp.value = String(val);
     });
   });
-  pendingEl.querySelectorAll('.order-eta-custom').forEach(inp => {
+  pendingEl.querySelectorAll<HTMLInputElement>('.order-eta-custom').forEach(inp => {
     inp.addEventListener('input', () => {
       const id = inp.id.replace('etaCustom_', '');
-      S._ordersEtaSelected[id] = parseInt(inp.value) || 5;
-      inp.closest('.order-eta-picker').querySelectorAll('.order-eta-btn').forEach(b => b.classList.remove('selected'));
+      S._ordersEtaSelected[_idKey(id)] = parseInt(inp.value) || 5;
+      inp.closest('.order-eta-picker')?.querySelectorAll('.order-eta-btn').forEach(b => b.classList.remove('selected'));
     });
   });
-  acceptedEl.querySelectorAll('[data-order-complete]').forEach(btn => {
-    btn.addEventListener('click', () => completeOrder(btn.dataset.orderComplete));
+  (acceptedEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-complete]').forEach(btn => {
+    btn.addEventListener('click', () => { void completeOrder(btn.dataset.orderComplete as string); });
   });
-  acceptedEl.querySelectorAll('[data-order-decline-toggle]').forEach(btn => {
-    btn.addEventListener('click', () => toggleDeclineRow(btn.dataset.orderDeclineToggle));
+  (acceptedEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-decline-toggle]').forEach(btn => {
+    btn.addEventListener('click', () => toggleDeclineRow(btn.dataset.orderDeclineToggle as string));
   });
-  acceptedEl.querySelectorAll('[data-order-decline-submit]').forEach(btn => {
-    btn.addEventListener('click', () => submitDecline(btn.dataset.orderDeclineSubmit));
+  (acceptedEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-decline-submit]').forEach(btn => {
+    btn.addEventListener('click', () => { void submitDecline(btn.dataset.orderDeclineSubmit as string); });
   });
-  historyEl.querySelectorAll('[data-order-delete]').forEach(btn => {
-    btn.addEventListener('click', () => deleteOrder(btn.dataset.orderDelete));
+  (historyEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-delete]').forEach(btn => {
+    btn.addEventListener('click', () => { void deleteOrder(btn.dataset.orderDelete as string); });
   });
   if (clearHistBtn) {
-    clearHistBtn.onclick = () => clearOrderHistory();
+    clearHistBtn.onclick = () => { void clearOrderHistory(); };
   }
 }
 
-export function renderOrderCard(o, ctx) {
+export function renderOrderCard(o: Order, ctx: string): string {
   const etaBtns    = [2, 5, 10, 15, 20];
   // Use queue-suggested ETA if barista hasn't manually overridden
-  const queuePos  = S._ordersQueueEta?.positions?.[o.id];
+  const queuePos  = SO._ordersQueueEta?.positions?.[String(o.id)];
   const suggested = queuePos?.suggestedEta ?? 5;
-  const selectedEta = S._ordersEtaSelected[o.id] ?? suggested;
+  const selectedEta = S._ordersEtaSelected[_idKey(String(o.id))] ?? suggested;
   const isNew = (Date.now() - o.createdAt) < 60000;
 
   if (ctx === 'pending') {
-    const declineOpen = S._ordersDeclineOpen[o.id];
+    const declineOpen = S._ordersDeclineOpen[_idKey(String(o.id))];
     const queueHint = queuePos
       ? `<span class="order-queue-hint">${t('orders_queue_pos', queuePos.position, queuePos.suggestedEta)}</span>`
       : '';
@@ -286,9 +340,9 @@ export function renderOrderCard(o, ctx) {
   }
 
   if (ctx === 'accepted') {
-    const etaDone  = o.acceptedAt + o.eta * 60000;
+    const etaDone  = (o.acceptedAt as number) + (o.eta as number) * 60000;
     const minsLeft = Math.max(0, Math.ceil((etaDone - Date.now()) / 60000));
-    const declineOpen = S._ordersDeclineOpen[o.id];
+    const declineOpen = S._ordersDeclineOpen[_idKey(String(o.id))];
     return `<div class="order-card status-accepted">
       <div class="order-card-top">
         <span class="order-item-name">${esc(o.item)}${o.variant ? ` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : ''}</span>
@@ -320,32 +374,32 @@ export function renderOrderCard(o, ctx) {
   </div>`;
 }
 
-export async function acceptOrder(id) {
-  const etaCustom = document.getElementById(`etaCustom_${id}`);
-  const eta = etaCustom ? (parseInt(etaCustom.value) || S._ordersEtaSelected[id] || 5) : (S._ordersEtaSelected[id] || 5);
+export async function acceptOrder(id: string): Promise<void> {
+  const etaCustom = document.getElementById(`etaCustom_${id}`) as HTMLInputElement | null;
+  const eta = etaCustom ? (parseInt(etaCustom.value) || S._ordersEtaSelected[_idKey(id)] || 5) : (S._ordersEtaSelected[_idKey(id)] || 5);
   await postOrderAccept(id, eta);
-  loadOrdersView();
+  void loadOrdersView();
 }
 
-export function toggleDeclineRow(id) {
-  S._ordersDeclineOpen[id] = !S._ordersDeclineOpen[id];
-  loadOrdersView();
+export function toggleDeclineRow(id: string): void {
+  S._ordersDeclineOpen[_idKey(id)] = !S._ordersDeclineOpen[_idKey(id)];
+  void loadOrdersView();
 }
 
-export async function submitDecline(id) {
-  const input  = document.getElementById(`declineReason_${id}`);
+export async function submitDecline(id: string): Promise<void> {
+  const input  = document.getElementById(`declineReason_${id}`) as HTMLInputElement | null;
   const reason = input ? input.value.trim() : '';
   await postOrderDecline(id, reason);
-  delete S._ordersDeclineOpen[id];
-  loadOrdersView();
+  delete S._ordersDeclineOpen[_idKey(id)];
+  void loadOrdersView();
 }
 
-export async function completeOrder(id) {
+export async function completeOrder(id: string): Promise<void> {
   await postOrderComplete(id);
-  loadOrdersView();
+  void loadOrdersView();
 }
 
-export async function renderOrdersMenuAdmin(menu) {
+export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
   const list = document.getElementById('ordersMenuList');
   if (!list) return;
   list.innerHTML = menu.map(item => {
@@ -379,80 +433,81 @@ export async function renderOrdersMenuAdmin(menu) {
       </div>
     </div>`;
   }).join('');
-  list.querySelectorAll('[data-menu-trend]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id   = btn.dataset.menuTrend;
+  list.querySelectorAll<HTMLElement>('[data-menu-trend]').forEach(btn => {
+    _onAsync(btn, 'click', async () => {
+      const id   = btn.dataset.menuTrend as string;
       const item = menu.find(m => m.id === id);
       if (!item) return;
       await putMenuItem(id, { trending: !item.trending });
-      loadOrdersView();
+      void loadOrdersView();
     });
   });
-  list.querySelectorAll('[data-menu-del]').forEach(btn => {
-    btn.addEventListener('click', async () => {
+  list.querySelectorAll<HTMLElement>('[data-menu-del]').forEach(btn => {
+    _onAsync(btn, 'click', async () => {
       if (!confirm(t('orders_confirm_delete_item'))) return;
-      await deleteMenuItem(btn.dataset.menuDel);
-      loadOrdersView();
+      await deleteMenuItem(btn.dataset.menuDel as string);
+      void loadOrdersView();
     });
   });
-  list.querySelectorAll('[data-milk-ml]').forEach(inp => {
-    inp.addEventListener('change', async () => {
-      const id = inp.dataset.milkMl;
+  list.querySelectorAll<HTMLInputElement>('[data-milk-ml]').forEach(inp => {
+    _onAsync(inp, 'change', async () => {
+      const id = inp.dataset.milkMl as string;
       await putMenuItem(id, { milkMl: parseFloat(inp.value) || null });
     });
   });
-  list.querySelectorAll('[data-menu-use-beans]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id   = btn.dataset.menuUseBeans;
+  list.querySelectorAll<HTMLElement>('[data-menu-use-beans]').forEach(btn => {
+    _onAsync(btn, 'click', async () => {
+      const id   = btn.dataset.menuUseBeans as string;
       const item = menu.find(m => m.id === id);
       if (!item) return;
       await putMenuItem(id, { useBeans: !item.useBeans });
-      loadOrdersView();
+      void loadOrdersView();
     });
   });
-  list.querySelectorAll('[data-menu-use-milks]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id   = btn.dataset.menuUseMilks;
+  list.querySelectorAll<HTMLElement>('[data-menu-use-milks]').forEach(btn => {
+    _onAsync(btn, 'click', async () => {
+      const id   = btn.dataset.menuUseMilks as string;
       const item = menu.find(m => m.id === id);
       if (!item) return;
       await putMenuItem(id, { useMilks: !item.useMilks });
-      loadOrdersView();
+      void loadOrdersView();
     });
   });
-  list.querySelectorAll('[data-variant-add]').forEach(btn => {
-    btn.addEventListener('click', async () => {
+  list.querySelectorAll<HTMLElement>('[data-variant-add]').forEach(btn => {
+    _onAsync(btn, 'click', async () => {
       const id    = btn.dataset.variantAdd;
-      const input = list.querySelector(`#variantInput_${id}`);
+      if (!id) return;
+      const input = list.querySelector<HTMLInputElement>(`#variantInput_${id}`);
       const val   = input?.value?.trim();
       if (!val) return;
       const item  = menu.find(m => m.id === id);
       if (!item) return;
       const variants = [...(item.variants || []), val];
       await putMenuItem(id, { variants });
-      loadOrdersView();
+      void loadOrdersView();
     });
   });
-  list.querySelectorAll('.orders-menu-variant-del').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id      = btn.dataset.menuId;
-      const variant = btn.dataset.variant;
+  list.querySelectorAll<HTMLElement>('.orders-menu-variant-del').forEach(btn => {
+    _onAsync(btn, 'click', async () => {
+      const id      = btn.dataset.menuId as string;
+      const variant = btn.dataset.variant as string;
       const item    = menu.find(m => m.id === id);
       if (!item) return;
       const variants = (item.variants || []).filter(v => v !== variant);
       await putMenuItem(id, { variants });
-      loadOrdersView();
+      void loadOrdersView();
     });
   });
 }
 
-export function toggleOrdersStats() {
+export function toggleOrdersStats(): void {
   S._ordersStatsOpen = !S._ordersStatsOpen;
-  document.getElementById('ordersStatsBody').style.display = S._ordersStatsOpen ? '' : 'none';
-  document.getElementById('ordersStatsToggle').textContent = S._ordersStatsOpen ? '▾' : '▸';
-  if (S._ordersStatsOpen) loadOrdersView();
+  (document.getElementById('ordersStatsBody') as HTMLElement).style.display = S._ordersStatsOpen ? '' : 'none';
+  (document.getElementById('ordersStatsToggle') as HTMLElement).textContent = S._ordersStatsOpen ? '▾' : '▸';
+  if (S._ordersStatsOpen) void loadOrdersView();
 }
 
-export function renderOrdersStats(stats) {
+export function renderOrdersStats(stats: OrderStats | null | undefined): void {
   const el = document.getElementById('ordersStatsContent');
   if (!el) return;
   if (!stats?.total) {
@@ -460,7 +515,7 @@ export function renderOrdersStats(stats) {
     return;
   }
 
-  const fmtDate = ts => ts ? new Date(ts).toLocaleDateString(localeFor(S.currentLang), { day: '2-digit', month: '2-digit', year: 'numeric' }) : '–';
+  const fmtDate = (ts: number | null | undefined): string => ts ? new Date(ts).toLocaleDateString(localeFor(S.currentLang), { day: '2-digit', month: '2-digit', year: 'numeric' }) : '–';
   const cards = (stats.customers || []).map(c => `<div class="orders-stats-card">
       <div class="orders-stats-name" title="${esc(c.name)}">${esc(c.name)}</div>
       <div class="orders-stats-row"><span>${t('orders_stats_total')}</span><span class="orders-stats-val">${c.count} ${t('orders_stats_orders')}</span></div>
@@ -481,25 +536,25 @@ export function renderOrdersStats(stats) {
     <div class="orders-stats-grid">${cards}</div>`;
 }
 
-export async function deleteOrder(id) {
+export async function deleteOrder(id: string): Promise<void> {
   await deleteOrderById(id);
-  loadOrdersView();
+  void loadOrdersView();
 }
 
-export async function clearOrderHistory() {
+export async function clearOrderHistory(): Promise<void> {
   if (!confirm(t('orders_confirm_clear_history'))) return;
   await deleteOrderHistory();
-  loadOrdersView();
+  void loadOrdersView();
 }
 
-export async function loadNotifyMappingView() {
+export async function loadNotifyMappingView(): Promise<void> {
   const section = document.getElementById('ordersNotifyBody');
   if (!section) return;
 
   const [{ mapping, customers }, services, settings] = await Promise.all([
-    getNotifyMapping().catch(() => ({ mapping: {}, customers: {} })),
-    getNotifyServices().catch(() => null),
-    getOrdersSettings().catch(() => ({})),
+    _getNotifyMappingOrEmpty(),
+    _getNotifyServicesOrNull(),
+    _getSettingsOr({}),
   ]);
 
   if (services === null) {
@@ -513,7 +568,7 @@ export async function loadNotifyMappingView() {
   // ── Notification types section ─────────────────────────────── (#603)
   const typesRows = NOTIFY_TYPE_KEYS.map(({ key, i18nKey }) => `
       <div class="orders-broadcast-row">
-        <input type="checkbox" id="nt_${key}" data-notify-key="${key}"${settings[key] !== false ? ' checked' : ''}>
+        <input type="checkbox" id="nt_${key}" data-notify-key="${key}"${(settings as unknown as Record<string, unknown>)[key] !== false ? ' checked' : ''}>
         <label for="nt_${key}">${t(i18nKey)}</label>
       </div>`).join('');
 
@@ -584,24 +639,24 @@ export async function loadNotifyMappingView() {
 
   section.innerHTML = typesHtml + broadcastHtml + baristaHtml + perCustomerHtml;
 
-  document.getElementById('ordersTypesSaveBtn')?.addEventListener('click', saveNotifyToggles);
-  document.getElementById('ordersBroadcastSaveBtn')?.addEventListener('click', saveBroadcastRecipients);
-  document.getElementById('ordersBaristaSaveBtn')?.addEventListener('click', saveBaristaNotify);
-  document.getElementById('ordersNotifySaveBtn')?.addEventListener('click', saveNotifyMapping);
+  document.getElementById('ordersTypesSaveBtn')?.addEventListener('click', () => { void saveNotifyToggles(); });
+  document.getElementById('ordersBroadcastSaveBtn')?.addEventListener('click', () => { void saveBroadcastRecipients(); });
+  document.getElementById('ordersBaristaSaveBtn')?.addEventListener('click', () => { void saveBaristaNotify(); });
+  document.getElementById('ordersNotifySaveBtn')?.addEventListener('click', () => { void saveNotifyMapping(); });
 
   // Apply saved per-customer mapping values
-  section.querySelectorAll('[data-uid]').forEach(sel => {
-    const saved = mapping[sel.dataset.uid];
+  section.querySelectorAll<HTMLSelectElement>('[data-uid]').forEach(sel => {
+    const saved = mapping[sel.dataset.uid as string];
     if (saved) sel.value = saved;
   });
 }
 
-export async function saveBroadcastRecipients() {
+export async function saveBroadcastRecipients(): Promise<void> {
   const list = document.getElementById('ordersBroadcastList');
   if (!list) return;
-  const recipients = [...list.querySelectorAll('input[type="checkbox"]:checked')]
-    .map(cb => cb.dataset.svc).filter(Boolean);
-  const settings = await getOrdersSettings().catch(() => ({}));
+  const recipients = [...list.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked')]
+    .map(cb => cb.dataset.svc).filter(Boolean) as string[];
+  const settings = await _getSettingsOr({});
   await postOrdersSettings({ enabled: settings.enabled ?? true, broadcastRecipients: recipients });
   const btn = document.getElementById('ordersBroadcastSaveBtn');
   if (btn) {
@@ -610,15 +665,15 @@ export async function saveBroadcastRecipients() {
   }
 }
 
-export async function saveNotifyToggles() {
+export async function saveNotifyToggles(): Promise<void> {
   const list = document.getElementById('ordersTypesList');
   if (!list) return;
-  const settings = await getOrdersSettings().catch(() => ({}));
-  const body = { enabled: settings.enabled ?? true };
-  list.querySelectorAll('[data-notify-key]').forEach(cb => {
-    body[cb.dataset.notifyKey] = cb.checked;
+  const settings = await _getSettingsOr({});
+  const body: Record<string, unknown> = { enabled: settings.enabled ?? true };
+  list.querySelectorAll<HTMLInputElement>('[data-notify-key]').forEach(cb => {
+    body[cb.dataset.notifyKey as string] = cb.checked;
   });
-  await postOrdersSettings(body);
+  await postOrdersSettings(body as OrdersSettingsUpdate);
   const btn = document.getElementById('ordersTypesSaveBtn');
   if (btn) {
     btn.innerHTML = `${CHECK_ICON_SVG} ${t('orders_types_saved')}`;
@@ -626,10 +681,10 @@ export async function saveNotifyToggles() {
   }
 }
 
-export async function saveBaristaNotify() {
-  const sel = document.getElementById('ordersBaristaSelect');
+export async function saveBaristaNotify(): Promise<void> {
+  const sel = document.getElementById('ordersBaristaSelect') as HTMLSelectElement | null;
   if (!sel) return;
-  const settings = await getOrdersSettings().catch(() => ({}));
+  const settings = await _getSettingsOr({});
   await postOrdersSettings({ enabled: settings.enabled ?? true, baristaNotifyService: sel.value || null });
   const btn = document.getElementById('ordersBaristaSaveBtn');
   if (btn) {
@@ -638,12 +693,12 @@ export async function saveBaristaNotify() {
   }
 }
 
-export async function saveNotifyMapping() {
+export async function saveNotifyMapping(): Promise<void> {
   const list = document.getElementById('ordersNotifyList');
   if (!list) return;
-  const updates = {};
-  list.querySelectorAll('[data-uid]').forEach(sel => {
-    updates[sel.dataset.uid] = sel.value;
+  const updates: Record<string, string> = {};
+  list.querySelectorAll<HTMLSelectElement>('[data-uid]').forEach(sel => {
+    updates[sel.dataset.uid as string] = sel.value;
   });
   await postNotifyMapping(updates);
   const btn = document.getElementById('ordersNotifySaveBtn');
@@ -653,24 +708,24 @@ export async function saveNotifyMapping() {
   }
 }
 
-export function toggleOrdersNotify() {
+export function toggleOrdersNotify(): void {
   const body = document.getElementById('ordersNotifyBody');
   const toggle = document.getElementById('ordersNotifyToggle');
   if (!body || !toggle) return;
   const open = body.style.display === 'none';
   body.style.display = open ? '' : 'none';
   toggle.textContent = open ? '▾' : '▸';
-  if (open) loadNotifyMappingView();
+  if (open) void loadNotifyMappingView();
 }
 
-export async function addOrderMenuItem() {
-  const nameEl  = document.getElementById('ordersMenuName');
-  const emojiEl = document.getElementById('ordersMenuEmoji');
+export async function addOrderMenuItem(): Promise<void> {
+  const nameEl  = document.getElementById('ordersMenuName') as HTMLInputElement | null;
+  const emojiEl = document.getElementById('ordersMenuEmoji') as HTMLInputElement | null;
   const name    = nameEl?.value.trim();
   const emoji   = emojiEl?.value.trim() || '☕';
   if (!name) return;
   await postOrdersMenu({ name, emoji });
   if (nameEl)  nameEl.value  = '';
   if (emojiEl) emojiEl.value = '';
-  loadOrdersView();
+  void loadOrdersView();
 }

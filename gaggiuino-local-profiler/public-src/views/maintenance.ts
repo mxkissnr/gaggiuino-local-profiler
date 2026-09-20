@@ -7,11 +7,59 @@ import {
 import { MAINT_META, GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
 import { esc } from '../utils.js';
 
+// One task's status block as GET /api/maintenance serves it (flat for a
+// single machine, nested under machines[]/global for the fleet view).
+interface MaintTaskData {
+  status: string;
+  pct: number;
+  daysSince?: number | null;
+  shotsSince: number;
+  threshold_shots?: number | null;
+  threshold_days?: number | null;
+  machineSyncedAt?: string | number | null;
+  grinderName?: string | null;
+}
+
+interface MaintMachineGroup {
+  machineId: number;
+  machineName: string | null;
+  tasks?: Record<string, MaintTaskData | null | undefined>;
+}
+
+// Either response shape (#392's grouped one, or the single-machine flat map).
+interface MaintResponse {
+  machines?: MaintMachineGroup[];
+  global?: Record<string, MaintTaskData | null | undefined>;
+  [task: string]: unknown;
+}
+
+interface MaintTile {
+  task: string;
+  d: MaintTaskData;
+  machineId: string | number;
+  machineName: string | null;
+  isGlobal: boolean;
+  showMachineTag: boolean;
+}
+
+interface MaintLogEntry {
+  id: number;
+  task: string;
+  ts: number;
+  machineId?: number | null;
+  machine?: string | null;
+  grinderName?: string | null;
+  shotCountAtTime?: number | null;
+  notes?: string | null;
+}
+
+type MaintScope = string | number;
+
 // ── Task icons (#393) — plain inline SVG line icons, no emoji, matching the
 // Dashboard mockup Max picked. Purely decorative; task identity always comes
 // from MAINT_META's translation key (or the grinder's own name), never the
 // icon alone, so a missing/unmapped icon never loses information.
-const TASK_ICON_PATHS = {
+const TASK_ICON_PATHS: Record<string, string> = {
   descaling:   '<path d="M3 6h8v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6zM11 7h1.5a1.5 1.5 0 0 1 0 3H11M5 3.5v1M8 3.5v1"/>',
   backflush:   '<path d="M8 2v6M4.5 5.5 8 8l3.5-2.5M3 11h10M4 11v2h8v-2"/>',
   grouphead:   '<circle cx="8" cy="8" r="5"/><path d="M8 5.5v.01M6.2 8h.01M9.8 8h.01M8 10.5v.01"/>',
@@ -19,7 +67,7 @@ const TASK_ICON_PATHS = {
   waterfilter: '<path d="M8 2.5S4 7 4 9.8a4 4 0 0 0 8 0C12 7 8 2.5 8 2.5z"/>',
   grinder:     '<circle cx="8" cy="8" r="2"/><path d="M8 2v2.5M8 11.5V14M2 8h2.5M11.5 8H14M4 4l1.8 1.8M10.2 10.2 12 12M12 4l-1.8 1.8M5.8 10.2 4 12"/>',
 };
-function taskIconSvg(task) {
+function taskIconSvg(task: string): string {
   const key  = task.startsWith('grinder_') ? 'grinder' : task;
   const path = TASK_ICON_PATHS[key] || '';
   return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">${path}</svg>`;
@@ -27,17 +75,19 @@ function taskIconSvg(task) {
 
 // Mirrors lib/constants.js's isGlobalMaintenanceTask() — waterfilter and
 // grinder_* tasks are shared equipment, never split per machine.
-function isGlobalTask(task) {
+function isGlobalTask(task: string): boolean {
   return task === 'waterfilter' || task.startsWith('grinder_');
 }
 
-function taskTitle(task, d) {
+function taskTitle(task: string, d: MaintTaskData): string {
   if (task.startsWith('grinder_')) return d.grinderName || task;
   return t(MAINT_META[task]?.key || task);
 }
 
-export function maintStatusLabel(status) {
-  return { ok: t('maint_ok'), soon: t('maint_soon'), due: t('maint_due'), never: t('maint_never') }[status] || '';
+export function maintStatusLabel(status: string): string {
+  const labels: Record<string, string> =
+    { ok: t('maint_ok'), soon: t('maint_soon'), due: t('maint_due'), never: t('maint_never') };
+  return labels[status] || '';
 }
 
 // ── Local view scope (#393) ────────────────────────────────────────────────
@@ -47,16 +97,16 @@ export function maintStatusLabel(status) {
 // full-fleet overview; the segment control (and this scope) only matters
 // once >1 machine is registered — single-machine installs always resolve to
 // the (only) active machine.
-let _maintScope = 'all';
+let _maintScope: MaintScope = 'all';
 
-function _effectiveScope() {
+function _effectiveScope(): MaintScope {
   if ((S.machines || []).length <= 1) return S.activeMachineId === 'all' ? 1 : (S.activeMachineId ?? 1);
   return _maintScope;
 }
 
-export function setMaintScope(scope) {
+export function setMaintScope(scope: string): void {
   _maintScope = scope === 'all' ? 'all' : parseInt(scope, 10);
-  loadMaintenanceView();
+  void loadMaintenanceView();
 }
 
 // Write routes (done/threshold) always need one concrete machine — 'all'
@@ -64,7 +114,7 @@ export function setMaintScope(scope) {
 // (irrelevant for global tasks anyway: the backend always redirects
 // waterfilter/grinder_* writes to the shared sentinel machine regardless of
 // which machineId is passed, see isGlobalMaintenanceTask() server-side).
-function _writeMachineId(explicit) {
+function _writeMachineId(explicit?: string | number | null): string | number {
   if (explicit !== undefined && explicit !== null && explicit !== '') return explicit;
   const scope = _effectiveScope();
   return scope === 'all' ? (S.machines?.[0]?.id ?? 1) : scope;
@@ -76,30 +126,30 @@ function _writeMachineId(explicit) {
 // the rest of this module never has to branch on scope. Each tile carries
 // the concrete machineId its own actions must target — never S.activeMachineId
 // or _maintScope directly, since those can be 'all'.
-export function _normalizeMaintTiles(data, scope) {
-  const tiles = [];
+export function _normalizeMaintTiles(data: MaintResponse | null | undefined, scope: MaintScope): MaintTile[] {
+  const tiles: MaintTile[] = [];
   if (scope === 'all') {
-    for (const m of data.machines || []) {
+    for (const m of data?.machines || []) {
       for (const [task, d] of Object.entries(m.tasks || {})) {
         if (!d) continue;
         tiles.push({ task, d, machineId: m.machineId, machineName: m.machineName, isGlobal: false, showMachineTag: true });
       }
     }
-    const writeMachineId = data.machines?.[0]?.machineId ?? 1;
-    for (const [task, d] of Object.entries(data.global || {})) {
+    const writeMachineId = data?.machines?.[0]?.machineId ?? 1;
+    for (const [task, d] of Object.entries(data?.global || {})) {
       if (!d) continue;
       tiles.push({ task, d, machineId: writeMachineId, machineName: null, isGlobal: true, showMachineTag: true });
     }
   } else {
     for (const [task, d] of Object.entries(data || {})) {
       if (!d || typeof d !== 'object') continue;
-      tiles.push({ task, d, machineId: scope, machineName: null, isGlobal: isGlobalTask(task), showMachineTag: false });
+      tiles.push({ task, d: d as MaintTaskData, machineId: scope, machineName: null, isGlobal: isGlobalTask(task), showMachineTag: false });
     }
   }
   return tiles;
 }
 
-function _summaryCounts(tiles) {
+function _summaryCounts(tiles: MaintTile[]): { due: number; soon: number; ok: number } {
   let due = 0, soon = 0, ok = 0;
   for (const { d } of tiles) {
     if (d.status === 'due' || d.status === 'never') due++;
@@ -111,7 +161,7 @@ function _summaryCounts(tiles) {
 
 // How overdue a tile is, in whichever unit its threshold uses — used only to
 // rank tiles for the "next up" banner, never shown to the user directly.
-function _urgency(d) {
+function _urgency(d: MaintTaskData): number {
   if (d.status !== 'due' && d.status !== 'never') return -Infinity;
   let overage = 0;
   if (d.threshold_shots) overage = Math.max(overage, d.shotsSince - d.threshold_shots);
@@ -120,8 +170,8 @@ function _urgency(d) {
   return overage;
 }
 
-export function _pickNextDueTile(tiles) {
-  let best = null, bestScore = -Infinity;
+export function _pickNextDueTile(tiles: MaintTile[]): MaintTile | null {
+  let best: MaintTile | null = null, bestScore = -Infinity;
   for (const tile of tiles) {
     const score = _urgency(tile.d);
     if (score > bestScore) { bestScore = score; best = tile; }
@@ -131,22 +181,22 @@ export function _pickNextDueTile(tiles) {
 
 // ── Rendering ───────────────────────────────────────────────────────────────
 
-export async function loadMaintenanceView() {
-  const container = document.getElementById('maint-cards');
+export async function loadMaintenanceView(): Promise<void> {
+  const container = document.getElementById('maint-cards') as HTMLElement;
   container.innerHTML = `<div class="loading-state">${t('loading')}</div>`;
   try {
     const scope = _effectiveScope();
     const r = await getMaintenance(scope);
-    const data = await r.json();
+    const data = await r.json() as MaintResponse;
     renderMaintenanceDashboard(data, scope);
   } catch {
     container.innerHTML = `<div class="loading-state" style="color:var(--err)">${t('error_load')}</div>`;
   }
-  loadMaintLog();
+  void loadMaintLog();
 }
 
-export function renderMaintenanceDashboard(data, scope) {
-  const container = document.getElementById('maint-cards');
+export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScope): void {
+  const container = document.getElementById('maint-cards') as HTMLElement;
   const tiles      = _normalizeMaintTiles(data, scope);
   const counts     = _summaryCounts(tiles);
   const nextTile   = _pickNextDueTile(tiles);
@@ -162,7 +212,7 @@ export function renderMaintenanceDashboard(data, scope) {
     <div class="maint-grid-compact" id="maintGrid"></div>
   `;
 
-  document.getElementById('maintSummary').innerHTML = `
+  (document.getElementById('maintSummary') as HTMLElement).innerHTML = `
     <div class="maint-tile due"><div class="k num">${counts.due}</div><div class="l">${t('maint_due')}</div></div>
     <div class="maint-tile soon"><div class="k num">${counts.soon}</div><div class="l">${t('maint_soon')}</div></div>
     <div class="maint-tile ok"><div class="k num">${counts.ok}</div><div class="l">${t('maint_ok')}</div></div>
@@ -172,17 +222,17 @@ export function renderMaintenanceDashboard(data, scope) {
   _renderNextBanner(document.getElementById('maintNextBanner'), nextTile);
 
   if (hasMachines) {
-    const seg = document.getElementById('maintScopeSeg');
+    const seg = document.getElementById('maintScopeSeg') as HTMLElement;
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
     seg.innerHTML = [
       `<button class="${scope === 'all' ? 'on' : ''}" data-action="set-maint-scope" data-scope="all">${esc(t('machine_switcher_all'))}</button>`,
-      ...S.machines.map(m => `<button class="${scope === m.id ? 'on' : ''}" data-action="set-maint-scope" data-scope="${m.id}">${esc(m.name)}</button>`),
+      ...S.machines.map(m => `<button class="${scope === m.id ? 'on' : ''}" data-action="set-maint-scope" data-scope="${m.id}">${esc(m.name as string)}</button>`),
     ].join('');
     const hint = document.getElementById('maintScopeHint');
     if (hint) hint.style.display = tiles.some(x => x.isGlobal) ? '' : 'none';
   }
 
-  const grid = document.getElementById('maintGrid');
+  const grid = document.getElementById('maintGrid') as HTMLElement;
   grid.innerHTML = '';
   for (const tile of tiles) grid.appendChild(_buildMaintMiniTile(tile));
 
@@ -190,7 +240,7 @@ export function renderMaintenanceDashboard(data, scope) {
   if (badge) badge.style.display = counts.due > 0 ? 'inline-block' : 'none';
 }
 
-function _renderNextBanner(container, tile) {
+function _renderNextBanner(container: HTMLElement | null, tile: MaintTile | null): void {
   if (!container) return;
   if (!tile) { container.style.display = 'none'; container.innerHTML = ''; return; }
   container.style.display = '';
@@ -200,7 +250,7 @@ function _renderNextBanner(container, tile) {
   let detail;
   if (tile.d.status === 'never') detail = t('maint_never_done');
   else if (tile.d.threshold_shots && tile.d.shotsSince > tile.d.threshold_shots) detail = t('maint_next_shots_over', tile.d.shotsSince - tile.d.threshold_shots);
-  else if (tile.d.threshold_days && tile.d.daysSince > tile.d.threshold_days) detail = t('maint_next_days_over', tile.d.daysSince - tile.d.threshold_days);
+  else if (tile.d.threshold_days && (tile.d.daysSince as number) > tile.d.threshold_days) detail = t('maint_next_days_over', (tile.d.daysSince as number) - tile.d.threshold_days);
   else detail = t('maint_next_due');
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
@@ -211,7 +261,7 @@ function _renderNextBanner(container, tile) {
   `;
 }
 
-function _buildMaintMiniTile(tile) {
+function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
   const { task, d, machineName, machineId, isGlobal, showMachineTag } = tile;
   const title = taskTitle(task, d);
 
@@ -265,42 +315,42 @@ function _buildMaintMiniTile(tile) {
 
 // ── Guided walkthrough ────────────────────────────────────────────────────
 
-let _guidedTask = null;
-let _guidedMachineId = null;
+let _guidedTask: string | null = null;
+let _guidedMachineId: string | number | null = null;
 
-export function openGuidedMaint(task, machineId) {
+export function openGuidedMaint(task: string, machineId: string | number): void {
   const steps = GUIDED_MAINT_STEPS[task];
   const modal = document.getElementById('guidedMaintModal');
   if (!steps || !modal) return;
   _guidedTask = task;
   _guidedMachineId = machineId;
-  document.getElementById('guidedMaintTitle').textContent = t(MAINT_META[task]?.key || task);
-  document.getElementById('guidedMaintSteps').innerHTML = steps.map((key, i) => `
+  (document.getElementById('guidedMaintTitle') as HTMLElement).textContent = t(MAINT_META[task]?.key || task);
+  (document.getElementById('guidedMaintSteps') as HTMLElement).innerHTML = steps.map((key, i) => `
     <label class="guided-maint-step">
       <input type="checkbox" class="guided-maint-check">
       <span class="guided-maint-step-num">${i + 1}</span>
       <span>${esc(t(key))}</span>
     </label>`).join('');
-  const doneBtn = document.getElementById('guidedMaintDoneBtn');
+  const doneBtn = document.getElementById('guidedMaintDoneBtn') as HTMLButtonElement;
   doneBtn.textContent = t('maint_done_btn');
   doneBtn.disabled = true;
   modal.style.display = 'flex';
 }
 
-export function updateGuidedMaintDoneState() {
-  const boxes = [...document.querySelectorAll('#guidedMaintSteps .guided-maint-check')];
-  const btn   = document.getElementById('guidedMaintDoneBtn');
+export function updateGuidedMaintDoneState(): void {
+  const boxes = [...document.querySelectorAll<HTMLInputElement>('#guidedMaintSteps .guided-maint-check')];
+  const btn   = document.getElementById('guidedMaintDoneBtn') as HTMLButtonElement | null;
   if (btn) btn.disabled = !boxes.length || !boxes.every(b => b.checked);
 }
 
-export function closeGuidedMaint() {
+export function closeGuidedMaint(): void {
   _guidedTask = null;
   _guidedMachineId = null;
   const modal = document.getElementById('guidedMaintModal');
   if (modal) modal.style.display = 'none';
 }
 
-export async function submitGuidedMaint() {
+export async function submitGuidedMaint(): Promise<void> {
   if (!_guidedTask) return;
   await markMaintDone(_guidedTask, _guidedMachineId);
   closeGuidedMaint();
@@ -312,20 +362,20 @@ export async function submitGuidedMaint() {
 // machine's tile, never silently writes to the wrong machine. Falls back to
 // _writeMachineId()'s resolution only when the caller omits it.
 
-export async function markMaintDone(task, machineId) {
+export async function markMaintDone(task: string, machineId?: string | number | null): Promise<void> {
   try {
     await markMaintenanceDone(task, _writeMachineId(machineId));
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
 
-export async function saveMaintThreshold(task, field, value, machineId) {
+export async function saveMaintThreshold(task: string, field: string, value: string, machineId?: string | number | null): Promise<void> {
   try {
     await saveMaintenanceThreshold(task, _writeMachineId(machineId), { [field]: parseInt(value) });
   } catch { /* ignore */ }
 }
 
-export async function setMaintMode(task, mode, machineId) {
+export async function setMaintMode(task: string, mode: string, machineId?: string | number | null): Promise<void> {
   const defaults = { shots: 200, days: 30 };
   const body = mode === 'shots'
     ? { threshold_shots: defaults.shots, threshold_days: null }
@@ -338,31 +388,31 @@ export async function setMaintMode(task, mode, machineId) {
 
 // ── Maintenance Log ───────────────────────────────────────────────────────
 
-export async function loadMaintLog() {
+export async function loadMaintLog(): Promise<void> {
   const el = document.getElementById('maintLog');
   if (!el) return;
   try {
     const scope = _effectiveScope();
-    const entries = await getMaintenanceLog(scope).then(r => r.json());
+    const entries = await getMaintenanceLog(scope).then(r => r.json()) as MaintLogEntry[];
     renderMaintLog(entries);
   } catch { el.innerHTML = ''; }
 }
 
-function taskLabel(entry) {
+function taskLabel(entry: MaintLogEntry): string {
   const task = entry.task;
   if (MAINT_META[task]) return t(MAINT_META[task].key);
   if (task.startsWith('grinder_')) return entry.grinderName || task.replace('grinder_', 'Grinder ');
   return task;
 }
 
-export function renderMaintLog(entries) {
+export function renderMaintLog(entries: MaintLogEntry[]): void {
   const el = document.getElementById('maintLog');
   if (!el) return;
 
   const yearEl = document.getElementById('maintLogYearCount');
   if (yearEl) {
     const thisYear = new Date().getFullYear();
-    yearEl.textContent = entries.filter(e => new Date(e.ts * 1000).getFullYear() === thisYear).length;
+    yearEl.textContent = String(entries.filter(e => new Date(e.ts * 1000).getFullYear() === thisYear).length);
   }
 
   if (!entries.length) {
@@ -380,7 +430,7 @@ export function renderMaintLog(entries) {
     return `<tr>
       <td>${dateStr}</td>
       <td>${esc(taskLabel(e))}${isManual ? `<span class="maint-log-manual-badge">${t('maint_log_manual_badge')}</span>` : ''}</td>
-      <td>${machineTag ? `<span class="shot-machine-badge">${esc(machineTag)}</span>` : ''}</td>
+      <td>${machineTag ? `<span class="shot-machine-badge">${esc(machineTag as string)}</span>` : ''}</td>
       <td class="num">${e.shotCountAtTime ?? '–'}</td>
       <td>${e.notes ? esc(e.notes) : ''}
         <button class="maint-log-del-btn" data-action="delete-maint-log" data-id="${e.id}" title="${t('maint_log_confirm_delete')}">${t('maint_log_delete')}</button>
@@ -397,11 +447,11 @@ export function renderMaintLog(entries) {
   </table></div>`;
 }
 
-export function openMaintLogForm() {
+export function openMaintLogForm(): void {
   const form = document.getElementById('maintLogForm');
   if (!form) return;
   // Populate task dropdown
-  const sel = document.getElementById('maintLogTask');
+  const sel = document.getElementById('maintLogTask') as HTMLSelectElement;
   sel.innerHTML = '';
   for (const [task, meta] of Object.entries(MAINT_META)) {
     const opt = document.createElement('option');
@@ -410,33 +460,33 @@ export function openMaintLogForm() {
   }
   // Set date to today
   const today = new Date().toISOString().split('T')[0];
-  document.getElementById('maintLogDate').value = today;
-  document.getElementById('maintLogDate').max   = today;
-  document.getElementById('maintLogNotes').value = '';
+  (document.getElementById('maintLogDate') as HTMLInputElement).value = today;
+  (document.getElementById('maintLogDate') as HTMLInputElement).max   = today;
+  (document.getElementById('maintLogNotes') as HTMLTextAreaElement).value = '';
   form.style.display = 'flex';
 }
 
-export function closeMaintLogForm() {
+export function closeMaintLogForm(): void {
   const form = document.getElementById('maintLogForm');
   if (form) form.style.display = 'none';
 }
 
-export async function submitMaintLogEntry() {
-  const task  = document.getElementById('maintLogTask').value;
-  const date  = document.getElementById('maintLogDate').value;
-  const notes = document.getElementById('maintLogNotes').value.trim();
+export async function submitMaintLogEntry(): Promise<void> {
+  const task  = (document.getElementById('maintLogTask') as HTMLSelectElement).value;
+  const date  = (document.getElementById('maintLogDate') as HTMLInputElement).value;
+  const notes = (document.getElementById('maintLogNotes') as HTMLTextAreaElement).value.trim();
   if (!task || !date) return;
   try {
     await addMaintenanceLogEntry(_writeMachineId(), { task, date, notes });
     closeMaintLogForm();
-    loadMaintLog();
+    void loadMaintLog();
   } catch { /* ignore */ }
 }
 
-export async function deleteMaintLogEntry(id) {
+export async function deleteMaintLogEntry(id: number | string): Promise<void> {
   if (!confirm(t('maint_log_confirm_delete'))) return;
   try {
     await deleteMaintenanceLogEntry(id);
-    loadMaintLog();
+    void loadMaintLog();
   } catch { /* ignore */ }
 }
