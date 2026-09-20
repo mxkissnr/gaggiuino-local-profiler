@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import fs from 'node:fs';
-import path from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
+const ROOT = resolve(import.meta.dirname, '..');
 
 // config.yaml's `version:` is the canonical GLP version (Home Assistant
 // Supervisor reads it directly). Every other place the version is hard-coded
@@ -10,7 +10,7 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 // (GET /api/version) and stamps into backup bundles. Bumped in exactly these
 // four spots at release time — see CLAUDE.md's Versioning section.
 function read(rel: string): string {
-    return fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    return readFileSync(join(ROOT, rel), 'utf8');
 }
 
 // package.json is foreign JSON here; only its `version` column is read.
