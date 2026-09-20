@@ -130,7 +130,7 @@ describe('index.html i18n wiring', () => {
 
 describe('shot detail view i18n wiring', () => {
     const __dirname = dirname(fileURLToPath(import.meta.url));
-    const src = readFileSync(join(__dirname, '../public-src/views/shots/index.js'), 'utf8');
+    const src = readFileSync(join(__dirname, '../public-src/views/shots/index.ts'), 'utf8');
 
     it('phase-tag chips use t() instead of hardcoded German labels', () => {
         expect(src).not.toMatch(/class="phase-tag">Preinfusion /);
