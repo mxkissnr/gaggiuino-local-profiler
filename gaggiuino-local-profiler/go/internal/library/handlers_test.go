@@ -294,10 +294,15 @@ func TestBean_BagFreezeThawAdjustLifecycle(t *testing.T) {
 	}
 	bean = decodeBody(t, rec.Body.Bytes())
 	bags, _ = bean["bags"].([]any)
-	lastBag, _ := bags[len(bags)-1].(map[string]any)
-	fps, _ := lastBag["frozenPortions"].([]any)
+	// Freeze attaches to the queue's CURRENT bag, not the array-last one:
+	// bag[1] was just zeroed to stock_g=0 above (empty/past), so bag[0]
+	// (still stock_g=300, lower sortOrder) is current per
+	// resolveCurrentBagSimple — this is the whole point of the sortOrder
+	// rework replacing the old "always the last-pushed bag" convention.
+	currentBag, _ := bags[0].(map[string]any)
+	fps, _ := currentBag["frozenPortions"].([]any)
 	if len(fps) != 1 {
-		t.Fatalf("expected one frozen-portion batch, got %+v", lastBag["frozenPortions"])
+		t.Fatalf("expected one frozen-portion batch, got %+v", currentBag["frozenPortions"])
 	}
 	portion, _ := fps[0].(map[string]any)
 	portionID := int64(portion["id"].(float64))
@@ -313,8 +318,8 @@ func TestBean_BagFreezeThawAdjustLifecycle(t *testing.T) {
 	}
 	bean = decodeBody(t, rec.Body.Bytes())
 	bags, _ = bean["bags"].([]any)
-	lastBag, _ = bags[len(bags)-1].(map[string]any)
-	fps, _ = lastBag["frozenPortions"].([]any)
+	currentBag, _ = bags[0].(map[string]any)
+	fps, _ = currentBag["frozenPortions"].([]any)
 	portion, _ = fps[0].(map[string]any)
 	if portion["remainingCount"] != float64(3) {
 		t.Errorf("remainingCount after thaw = %v, want 3", portion["remainingCount"])
@@ -331,8 +336,8 @@ func TestBean_BagFreezeThawAdjustLifecycle(t *testing.T) {
 	}
 	bean = decodeBody(t, rec.Body.Bytes())
 	bags, _ = bean["bags"].([]any)
-	lastBag, _ = bags[len(bags)-1].(map[string]any)
-	fps, _ = lastBag["frozenPortions"].([]any)
+	currentBag, _ = bags[0].(map[string]any)
+	fps, _ = currentBag["frozenPortions"].([]any)
 	portion, _ = fps[0].(map[string]any)
 	if _, thawed := portion["thawedAt"]; !thawed {
 		t.Errorf("expected thawedAt to be set once remainingCount reaches 0")
@@ -351,6 +356,273 @@ func TestBean_BagFreezeThawAdjustLifecycle(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 deleting the last bag, got %d; body=%s", rec.Code, rec.Body.String())
 	}
+}
+
+// TestBean_NewBagJoinsBackOfQueue_DoesNotBecomeCurrent verifies the core
+// behavior change of the sortOrder rework: adding a bag while the current
+// one still has stock must NOT make the new bag current (the old
+// "bags[len-1] is always active" convention did exactly that).
+func TestBean_NewBagJoinsBackOfQueue_DoesNotBecomeCurrent(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag",
+		mustMarshal(t, map[string]any{"roastDate": "2026-08-15", "stock_g": 250}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("new-bag status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	bean := decodeBody(t, rec.Body.Bytes())
+	bags, _ := bean["bags"].([]any)
+	first, _ := bags[0].(map[string]any)
+	second, _ := bags[1].(map[string]any)
+	if first["current"] != true {
+		t.Fatalf("first bag current = %v, want true (still has stock)", first["current"])
+	}
+	if second["current"] != false {
+		t.Fatalf("second (newly added) bag current = %v, want false", second["current"])
+	}
+	if second["sortOrder"] != float64(1) {
+		t.Fatalf("second bag sortOrder = %v, want 1 (appended after first bag's 0)", second["sortOrder"])
+	}
+	// The bean-level display fields must still reflect the bag actually
+	// being drawn from (first), not the new, not-yet-current second bag —
+	// see writeEnrichedBean/newBag's resolveCurrentBagSimple guard.
+	if bean["roastDate"] != "2026-08-01" {
+		t.Fatalf("bean roastDate = %v, want 2026-08-01 (the still-current first bag's), not the new bag's 2026-08-15", bean["roastDate"])
+	}
+	if bean["stock_g"] != float64(300) {
+		t.Fatalf("bean stock_g = %v, want 300 (the still-current first bag's), not the new bag's 250", bean["stock_g"])
+	}
+}
+
+// TestBean_NewBagBecomesCurrentWhenNoOtherBagHasStock is the flip side of
+// the test above: when every existing bag is already exhausted (or there
+// are none), the new bag IS immediately current, and the bean-level
+// display fields must sync to it.
+func TestBean_NewBagBecomesCurrentWhenNoOtherBagHasStock(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	// stock_g: 0 -> the initial bag has nothing left, so it's not "current".
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 0, "roastDate": "2026-08-01"})
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag",
+		mustMarshal(t, map[string]any{"roastDate": "2026-08-15", "stock_g": 250}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("new-bag status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	bean := decodeBody(t, rec.Body.Bytes())
+	bags, _ := bean["bags"].([]any)
+	second, _ := bags[1].(map[string]any)
+	if second["current"] != true {
+		t.Fatalf("second (newly added) bag current = %v, want true (first bag has no stock left)", second["current"])
+	}
+	if bean["roastDate"] != "2026-08-15" {
+		t.Fatalf("bean roastDate = %v, want 2026-08-15 (the new bag is now current)", bean["roastDate"])
+	}
+	if bean["stock_g"] != float64(250) {
+		t.Fatalf("bean stock_g = %v, want 250 (the new bag is now current)", bean["stock_g"])
+	}
+}
+
+// TestBean_UpdateBag_RouteIsRegistered guards a regression where updateBag
+// (handlers_beans.go) existed and was fully implemented but was never
+// registered on the mux — every PUT to /api/library/bean/{id}/bag/{bagId}
+// 404'd with Go's default "404 page not found" (not the app's own JSON
+// 404), silently breaking stock-adjust, mark-empty, and the bag-edit
+// pencil button all at once, discovered via the latter. Goes through the
+// real mux (newMux), not a direct handler call, specifically so a missing
+// route registration can't hide behind the test.
+func TestBean_UpdateBag_RouteIsRegistered(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, bean := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	bags, _ := bean["bags"].([]any)
+	firstBag, _ := bags[0].(map[string]any)
+	bagID := int64(firstBag["id"].(float64))
+
+	rec := doJSON(t, mux, http.MethodPut, "/api/library/bean/"+itoa(id)+"/bag/"+itoa(bagID),
+		mustMarshal(t, map[string]any{"roastDate": "2026-08-20", "stock_g": 280, "batchNumber": "B-42"}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT bag status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	updated := decodeBody(t, rec.Body.Bytes())
+	updatedBags, _ := updated["bags"].([]any)
+	updatedBag, _ := updatedBags[0].(map[string]any)
+	if updatedBag["roastDate"] != "2026-08-20" {
+		t.Errorf("roastDate = %v, want 2026-08-20", updatedBag["roastDate"])
+	}
+	if updatedBag["stock_g"] != float64(280) {
+		t.Errorf("stock_g = %v, want 280", updatedBag["stock_g"])
+	}
+	if updatedBag["batchNumber"] != "B-42" {
+		t.Errorf("batchNumber = %v, want B-42", updatedBag["batchNumber"])
+	}
+}
+
+// TestBean_UpdateBag_NullPriceClearsRatherThanRejects guards a regression
+// found live alongside the missing-route bug above: the bag-edit form
+// sends price_eur: null (not an omitted key) when the field is left blank
+// — validateBagFloatField's !present check alone doesn't catch a present-
+// but-null value, so it fell through to jsParseFloat(nil), which is
+// "not ok", and the whole PUT 400'd as "invalid price_eur" even though
+// clearing an optional price is exactly the same "nothing to see here"
+// case an omitted key already handles correctly.
+func TestBean_UpdateBag_NullPriceClearsRatherThanRejects(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, bean := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	bags, _ := bean["bags"].([]any)
+	firstBag, _ := bags[0].(map[string]any)
+	bagID := int64(firstBag["id"].(float64))
+
+	rec := doJSON(t, mux, http.MethodPut, "/api/library/bean/"+itoa(id)+"/bag/"+itoa(bagID),
+		mustMarshal(t, map[string]any{"roastDate": "", "stock_g": 298, "price_eur": nil, "batchNumber": "X"}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT bag with price_eur:null status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestBean_ReorderBags_ClientOrderWinsAndCurrentStaysProtected covers the
+// reorder-bags endpoint: two never-touched upcoming bags get reordered by
+// the client, and the still-current first bag's queue position must not be
+// disturbed by that reorder (see reorderBags' baseline-above-current logic).
+func TestBean_ReorderBags_ClientOrderWinsAndCurrentStaysProtected(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	for _, sg := range []int{200, 250} {
+		rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag",
+			mustMarshal(t, map[string]any{"stock_g": sg}))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("new-bag status = %d; body=%s", rec.Code, rec.Body.String())
+		}
+	}
+	rec := doJSON(t, mux, http.MethodGet, "/api/library", nil)
+	lib := decodeBody(t, rec.Body.Bytes())
+	libBeans, _ := lib["beans"].([]any)
+	var bean map[string]any
+	for _, raw := range libBeans {
+		b, _ := raw.(map[string]any)
+		if int64(b["id"].(float64)) == id {
+			bean = b
+			break
+		}
+	}
+	if bean == nil {
+		t.Fatalf("bean %d not found in GET /api/library response", id)
+	}
+	bags, _ := bean["bags"].([]any)
+	if len(bags) != 3 {
+		t.Fatalf("len(bags) = %d, want 3", len(bags))
+	}
+	b1, _ := bags[0].(map[string]any)
+	b2, _ := bags[1].(map[string]any)
+	b3, _ := bags[2].(map[string]any)
+	b1ID, b2ID, b3ID := int64(b1["id"].(float64)), int64(b2["id"].(float64)), int64(b3["id"].(float64))
+
+	// Reverse the upcoming pair's order: b3 before b2.
+	rec = doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/reorder-bags",
+		mustMarshal(t, map[string]any{"bagIds": []any{b3ID, b2ID}}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reorder-bags status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	bean = decodeBody(t, rec.Body.Bytes())
+	bags, _ = bean["bags"].([]any)
+	byID := make(map[int64]map[string]any, 3)
+	for _, raw := range bags {
+		bg, _ := raw.(map[string]any)
+		byID[int64(bg["id"].(float64))] = bg
+	}
+	if byID[b1ID]["current"] != true {
+		t.Fatalf("bag1 current = %v, want true (untouched by reorder)", byID[b1ID]["current"])
+	}
+	if byID[b3ID]["sortOrder"].(float64) >= byID[b2ID]["sortOrder"].(float64) {
+		t.Fatalf("sortOrder after reorder: b3=%v b2=%v; want b3 < b2", byID[b3ID]["sortOrder"], byID[b2ID]["sortOrder"])
+	}
+	if byID[b2ID]["sortOrder"].(float64) <= byID[b1ID]["sortOrder"].(float64) {
+		t.Fatalf("sortOrder after reorder: b1=%v b2=%v; want b1 < b2 (current stays ahead of queue)", byID[b1ID]["sortOrder"], byID[b2ID]["sortOrder"])
+	}
+}
+
+// TestBean_ReorderBags_RejectsDuplicateID verifies reorderBags 400s when
+// the same bagId appears twice in the request instead of silently
+// assigning it a sortOrder twice (discarding one of the assignments).
+func TestBean_ReorderBags_RejectsDuplicateID(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	for _, sg := range []int{200, 250} {
+		doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag", mustMarshal(t, map[string]any{"stock_g": sg}))
+	}
+	bags := getBeanBags(t, mux, id)
+	b2ID := int64(bags[1]["id"].(float64))
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/reorder-bags",
+		mustMarshal(t, map[string]any{"bagIds": []any{b2ID, b2ID}}))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestBean_ReorderBags_RejectsIncompleteList verifies reorderBags 400s
+// when the request omits an upcoming bag — leaving it at its old sortOrder
+// value, which the newly-assigned contiguous values can collide with.
+func TestBean_ReorderBags_RejectsIncompleteList(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	for _, sg := range []int{200, 250} {
+		doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag", mustMarshal(t, map[string]any{"stock_g": sg}))
+	}
+	bags := getBeanBags(t, mux, id)
+	b2ID := int64(bags[1]["id"].(float64))
+	// Omits bags[2] entirely — only 1 of the 2 upcoming bags.
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/reorder-bags",
+		mustMarshal(t, map[string]any{"bagIds": []any{b2ID}}))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestBean_ReorderBags_RejectsCurrentBagInList verifies reorderBags 400s
+// when the request includes the current (not "upcoming") bag — reorder is
+// scoped to the queue behind the current bag only.
+func TestBean_ReorderBags_RejectsCurrentBagInList(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag", mustMarshal(t, map[string]any{"stock_g": 200}))
+	bags := getBeanBags(t, mux, id)
+	b1ID := int64(bags[0]["id"].(float64)) // current (first, has stock)
+	b2ID := int64(bags[1]["id"].(float64))
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/reorder-bags",
+		mustMarshal(t, map[string]any{"bagIds": []any{b1ID, b2ID}}))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// getBeanBags fetches bean id's bags array via GET /api/library, in
+// declared order — shared by the reorderBags validation tests above.
+func getBeanBags(t *testing.T, mux *http.ServeMux, id int64) []map[string]any {
+	t.Helper()
+	rec := doJSON(t, mux, http.MethodGet, "/api/library", nil)
+	lib := decodeBody(t, rec.Body.Bytes())
+	libBeans, _ := lib["beans"].([]any)
+	for _, raw := range libBeans {
+		b, _ := raw.(map[string]any)
+		if int64(b["id"].(float64)) == id {
+			bags, _ := b["bags"].([]any)
+			out := make([]map[string]any, len(bags))
+			for i, raw := range bags {
+				out[i], _ = raw.(map[string]any)
+			}
+			return out
+		}
+	}
+	t.Fatalf("bean %d not found in GET /api/library response", id)
+	return nil
 }
 
 func TestBean_FreezePortionsNoActiveBag(t *testing.T) {

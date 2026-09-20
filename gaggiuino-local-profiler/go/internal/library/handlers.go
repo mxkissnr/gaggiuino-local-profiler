@@ -70,9 +70,11 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/library/bean", h.createBean)
 	mux.HandleFunc("PUT /api/library/bean/{id}", h.updateBean)
 	mux.HandleFunc("POST /api/library/bean/{id}/new-bag", h.newBag)
+	mux.HandleFunc("POST /api/library/bean/{id}/reorder-bags", h.reorderBags)
 	mux.HandleFunc("POST /api/library/bean/{id}/freeze-portions", h.freezePortions)
 	mux.HandleFunc("POST /api/library/bean/{id}/thaw-portion", h.thawPortion)
 	mux.HandleFunc("POST /api/library/bean/{id}/adjust-frozen-portion", h.adjustFrozenPortion)
+	mux.HandleFunc("PUT /api/library/bean/{id}/bag/{bagId}", h.updateBag)
 	mux.HandleFunc("DELETE /api/library/bean/{id}/bag/{bagId}", h.deleteBag)
 	mux.HandleFunc("POST /api/library/bean/{id}/delete", h.deleteBean)
 	mux.HandleFunc("POST /api/library/bean/{id}/toggle-active", h.toggleBeanActive)
@@ -196,6 +198,23 @@ func (h *Handlers) getLibrary(w http.ResponseWriter, r *http.Request) {
 		grinders[i] = withWearEntity(g, shotsSince, gramsSince)
 	}
 	lib.Grinders = grinders
+
+	// Bags get the same read-time, non-persisted enrichment as grinders'
+	// wear above — consumedG/remainingG/current per bag, computed by
+	// SimulateBagQueue, so the frontend never replays doseRows itself (see
+	// #sortOrder rework, decorateBeanStatus).
+	if len(lib.Beans) > 0 {
+		doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		beans := make([]Entity, len(lib.Beans))
+		for i, b := range lib.Beans {
+			beans[i] = decorateBeanStatus(b, doseRows, lib.Beans)
+		}
+		lib.Beans = beans
+	}
 	writeJSON(w, http.StatusOK, lib)
 }
 

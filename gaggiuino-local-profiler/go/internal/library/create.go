@@ -92,7 +92,7 @@ func CreateBean(repo *Repository, imageDir string, body Entity) (Entity, Library
 	if stockG != nil || roastDate != "" || batchNumber != "" {
 		bean["bags"] = []any{Entity{
 			"id": reserveID(id + 1), "roastDate": roastDate, "stock_g": stockG,
-			"openedAt": newID(), "batchNumber": batchNumber,
+			"openedAt": newID(), "batchNumber": batchNumber, "sortOrder": int64(0),
 		}}
 	} else {
 		bean["bags"] = []any{}

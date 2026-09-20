@@ -101,11 +101,13 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
-         openBeanForm, closeBeanForm, editBean, saveBean, deleteBean, toggleBeanActive, uploadBeanImage,
+         openBeanForm, closeBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage,
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage, resetGrinderBurrs,
          toggleBeanQR,
-         toggleBagHistory, openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
-         openBeanStockEdit, closeBeanStockEdit, saveBeanStock,
+         openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
+         openEditBag, closeEditBag, saveEditBag,
+         openBagStockEdit, closeBagStockEdit, saveBagStock, markBagEmpty, togglePastBags,
+         toggleBagCard, reorderBags,
          openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, filterShotsByBean,
          openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm,
          openRecipeForm, closeRecipeForm, editRecipe, saveRecipe, deleteRecipe, renderRecipeList,
@@ -407,6 +409,8 @@ Object.assign(window, {
   closeBeanForm,
   editBean,
   saveBean,
+  saveBeanNoBag,
+  saveBeanAddBag,
   deleteBean,
   openGrinderForm,
   closeGrinderForm,
@@ -415,14 +419,20 @@ Object.assign(window, {
   deleteGrinder,
   toggleBeanQR,
   generateBeanQR,
-  toggleBagHistory,
   openNewBagForm,
   closeNewBagForm,
   saveNewBag,
   deleteBag,
-  openBeanStockEdit,
-  closeBeanStockEdit,
-  saveBeanStock,
+  openEditBag,
+  closeEditBag,
+  saveEditBag,
+  openBagStockEdit,
+  closeBagStockEdit,
+  saveBagStock,
+  markBagEmpty,
+  togglePastBags,
+  toggleBagCard,
+  reorderBags,
   openFreezeForm,
   closeFreezeForm,
   saveFreezePortions,
@@ -780,6 +790,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('libTabProfiles').addEventListener('click', () => switchLibTab('profiles'));
   document.getElementById('closeBeanFormBtn').addEventListener('click', closeBeanForm);
   document.getElementById('saveBeanBtn').addEventListener('click', saveBean);
+  document.getElementById('saveBeanNoBagBtn').addEventListener('click', saveBeanNoBag);
+  document.getElementById('saveBeanAddBagBtn').addEventListener('click', saveBeanAddBag);
   document.getElementById('beanAddTrigger').addEventListener('click', openBeanForm);
   document.getElementById('openScanModalBtn').addEventListener('click', openScanModal);
   document.getElementById('toggleUrlImportBtn').addEventListener('click', toggleUrlImport);
@@ -912,12 +924,16 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'open-new-bag':       openNewBagForm(numId()); break;
       case 'close-new-bag':      closeNewBagForm(numId()); break;
       case 'save-new-bag':       saveNewBag(numId()); break;
-      case 'toggle-bag-history':   toggleBagHistory(numId()); break;
       case 'toggle-month-group':  toggleMonthGroup(strId()); break;
       case 'delete-bag':         deleteBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
-      case 'open-stock-edit':    openBeanStockEdit(numId()); break;
-      case 'close-stock-edit':   closeBeanStockEdit(); break;
-      case 'save-stock-edit':    saveBeanStock(numId()); break;
+      case 'open-edit-bag':        openEditBag(Number(el.dataset.bagId)); break;
+      case 'close-edit-bag':       closeEditBag(); break;
+      case 'save-edit-bag':        saveEditBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'open-bag-stock-edit':  openBagStockEdit(Number(el.dataset.bagId)); break;
+      case 'close-bag-stock-edit': closeBagStockEdit(); break;
+      case 'save-bag-stock-edit':  saveBagStock(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'mark-bag-empty':       markBagEmpty(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'toggle-bag-card':      toggleBagCard(Number(el.dataset.bagId)); break;
       case 'open-freeze-form':   openFreezeForm(numId()); break;
       case 'close-freeze-form':  closeFreezeForm(numId()); break;
       case 'save-freeze-form':   saveFreezePortions(numId()); break;

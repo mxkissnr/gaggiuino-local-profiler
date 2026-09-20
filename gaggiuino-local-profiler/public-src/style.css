@@ -1193,6 +1193,33 @@
         .lib-item-info { flex: 1; min-width: 0; }
         .lib-item-name { font-size: var(--fs-2); color: var(--gray-200); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-name .serif-display { font-size: var(--fs-3); font-weight: 600; }
+        /* Bean card header: name + meta-actions toolbar on one row, anchored
+           at the top of the card instead of the old .lib-item-actions,
+           which sat as a flex sibling of .lib-item-info and vertically
+           centered on the WHOLE card — floating in empty space next to
+           whatever content happened to be tallest (usually the bag list). */
+        .lib-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
+        .lib-item-header .lib-item-name { min-width: 0; flex: 1; }
+        .lib-item-toolbar { display: flex; align-items: center; gap: 1px; flex-shrink: 0; }
+        .lib-toolbar-sep { width: 1px; align-self: stretch; margin: 2px var(--sp-1); background: rgba(255,255,255,.08); }
+        @media (max-width: 640px) {
+          .lib-item-header { flex-wrap: wrap; }
+          .lib-item-toolbar { width: 100%; justify-content: flex-end; }
+        }
+        /* Bag-level quick actions (new bag / freeze), grouped with the
+           inventory display right above them instead of mixed into the
+           bean's own meta-actions toolbar — they act on the packaging,
+           not the bean record. */
+        .lib-bag-toolbar { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); }
+        /* Material 3 button hierarchy: "Neue Packung" is the primary action
+           on this row (filled tonal — accent-tinted fill, no border),
+           "Einfrieren" is secondary (outlined — border only, transparent
+           fill). Keyed off data-action so no new classes/markup are needed. */
+        .lib-bag-toolbar-btn { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 4px var(--sp-3); font-size: var(--fs-1); font-weight: 600; transition: background .15s, border-color .15s; }
+        .lib-bag-toolbar-btn[data-action="open-new-bag"] { background: color-mix(in srgb, var(--accent) 16%, var(--gray-800)); color: var(--accent-ink); border: 1px solid transparent; }
+        .lib-bag-toolbar-btn[data-action="open-new-bag"]:hover { background: color-mix(in srgb, var(--accent) 26%, var(--gray-800)); }
+        .lib-bag-toolbar-btn[data-action="open-freeze-form"] { background: transparent; border: 1px solid var(--gray-600); color: var(--gray-300); }
+        .lib-bag-toolbar-btn[data-action="open-freeze-form"]:hover { background: rgba(255,255,255,.06); border-color: var(--gray-500); }
         /* Machine-profile list (library-profile-editor.js renderProfileList):
            name + optional utility badge on one row — badge sits outside the
            name's own ellipsis-truncation so it never gets clipped away. */
@@ -1221,7 +1248,23 @@
         }
         .lib-grinder-wear { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; white-space: normal; }
         .lib-grinder-wear > span:first-child { display: inline-flex; align-items: center; gap: var(--sp-1); }
-        .lib-grinder-reset-burrs { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius:var(--radius); font-size: var(--fs-1); padding: 2px var(--sp-2); }
+        .lib-grinder-reset-burrs { background: var(--gray-800); border: 1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-300); font-size: var(--fs-1); padding: 2px var(--sp-2); cursor:pointer; transition:background .15s,color .15s,border-color .15s; }
+        .lib-grinder-reset-burrs:hover { background:var(--gray-700); color:var(--gray-100); border-color:var(--gray-600); }
+        /* ── Inventory block (Material 3 linear progress indicator) ─────────── */
+        .lib-inv-block { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-1); }
+        .lib-inv-bar-row { display: flex; align-items: center; gap: var(--sp-2); }
+        .lib-stock-bar-md { flex: 1; height: 6px; border-radius: 999px; background: var(--gray-700); overflow: hidden; }
+        .lib-stock-bar-fill-md { height: 100%; border-radius: 999px; background: var(--accent); transition: width .3s cubic-bezier(.4,0,.2,1); }
+        .lib-stock-bar-fill-md.low { background: var(--err); }
+        .lib-inv-pct { font-size: var(--fs-1); font-weight: 600; color: var(--gray-500); min-width: 3ch; text-align: right; }
+        .lib-inv-pct.low { color: var(--err); }
+        .lib-inv-nums { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--fs-1); }
+        .lib-inv-remaining { color: var(--gray-300); font-weight: 600; }
+        .lib-inv-remaining.low { color: var(--err); }
+        .lib-inv-consumed { color: var(--gray-500); }
+        .lib-inv-sep { color: var(--gray-700); }
+        .lib-inv-total { color: var(--gray-600); }
+        /* legacy compat */
         .lib-inv-stats { font-size: var(--fs-1); color: var(--gray-600); margin-top: var(--sp-1); display: flex; gap: var(--sp-2); flex-wrap: wrap; }
         .lib-inv-remaining { color: var(--gray-500); }
         .lib-inv-remaining.low { color: var(--err); }
@@ -1303,9 +1346,99 @@
         .lib-check-label input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--ok); cursor: pointer; }
         .lib-new-bag-form { margin-top: var(--sp-2); padding: var(--sp-3) var(--sp-3); background: rgba(255,255,255,.03); border: 1px solid var(--gray-800); border-radius:var(--radius); }
         .lib-new-bag-fields { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap; }
-        .lib-new-bag-input { background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline: none; flex: 1; min-width: 120px; }
-        .lib-new-bag-input:focus { border-color: var(--gray-600); }
-        .lib-bag-history { margin-top: var(--sp-2); font-size: var(--fs-1); }
+        /* Material 3 "filled text field": tinted fill + flat top corners +
+           an underline that thickens/accents on focus, instead of a plain
+           all-round outlined box. Used by both the new/edit-bag dialog and
+           the per-bag "Bestand anpassen" quick-edit row. */
+        .lib-new-bag-input { background: var(--gray-900); border: none; border-bottom: 2px solid var(--gray-700); border-radius: var(--radius-sm) var(--radius-sm) 0 0; color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); outline: none; flex: 1; min-width: 120px; transition: border-color .15s, background .15s; }
+        .lib-new-bag-input:hover { background: var(--gray-800); }
+        .lib-new-bag-input:focus { border-bottom-color: var(--accent); background: var(--gray-800); }
+        /* ── Bag history cards (Material Design) ──────────────────────────── */
+        .lib-bag-history { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2); }
+        .lib-bag-history-single { margin-top: var(--sp-2); }
+        /* Material 3 "elevated card": resting shadow instead of a flat
+           border, deepens slightly on expand — gives the collapsed/expanded
+           states a tactile sense of depth instead of just a color swap. */
+        .lib-bag-card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); border-radius: 12px; padding: var(--sp-2) var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-1); box-shadow: 0 1px 2px rgba(0,0,0,.28); transition: box-shadow .2s ease, background .2s ease, border-color .2s ease; }
+        .lib-bag-card.expanded { box-shadow: 0 3px 10px rgba(0,0,0,.32); }
+        /* was rgba(var(--accent-rgb,...)) — --accent-rgb was never defined
+           anywhere, so this always silently fell back to indigo (99,102,241)
+           regardless of theme/accent color. color-mix() reads the real
+           --accent custom property directly, no parallel RGB token needed. */
+        .lib-bag-card.active { border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent) 7%, var(--gray-800)); }
+        /* Dragged card (bagDragPointerDown, library.js) — pure visual
+           feedback, the actual reorder happens by swapping DOM position on
+           pointermove, no transform/translate involved. */
+        .lib-bag-card.dragging { opacity: .5; border-style: dashed; box-shadow: none; }
+        /* Collapsed by default (space-saving, especially on mobile) — header
+           row stays visible and clickable, body toggles via inline
+           display:none/'' (toggleBagCard). Header needs a real touch
+           target height since it's now the primary interaction surface. */
+        .lib-bag-card-header { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; min-height: 32px; }
+        .lib-bag-card-body { margin-top: var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-1); }
+        .lib-bag-date { font-size: var(--fs-1); font-weight: 600; color: var(--gray-300); }
+        .lib-bag-pct { margin-left: auto; font-size: var(--fs-1); font-weight: 600; color: var(--gray-400); }
+        .lib-bag-chevron { color: var(--gray-600); font-size: var(--fs-1); width: 1em; text-align: center; transition: color .15s; }
+        .lib-bag-card-header:hover .lib-bag-chevron { color: var(--gray-300); }
+        /* Drag handle: unified mouse+touch via Pointer Events (see
+           bagDragPointerDown) — touch-action:none stops the browser's own
+           scroll gesture from fighting the drag on mobile. Rounded hover
+           state layer gives it the same "this is a control" affordance as
+           the icon buttons below, not just a static glyph. */
+        .lib-bag-drag-handle { cursor: grab; color: var(--gray-600); font-size: 16px; line-height: 1; touch-action: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; transition: background .15s, color .15s; }
+        .lib-bag-drag-handle:hover { background: rgba(255,255,255,.06); color: var(--gray-400); }
+        .lib-bag-drag-handle:active { cursor: grabbing; }
+        .lib-bag-drag-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+        /* State badges as Material 3 assist chips: tonal fill, no border,
+           full pill shape — color-mix() keyed to each state's semantic
+           color (--accent for current, --ok for upcoming/"has stock",
+           neutral gray for past) instead of the old bordered-outline look
+           with hand-picked hex greens that ignored the active theme. */
+        .lib-bag-active-badge, .lib-bag-upcoming-badge, .lib-bag-past-badge { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px var(--sp-2); letter-spacing: .03em; text-transform: uppercase; border: none; }
+        .lib-bag-active-badge { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink); }
+        .lib-bag-upcoming-badge { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+        .lib-bag-past-badge { background: var(--gray-700); color: var(--gray-500); }
+        .lib-bag-card-actions-row { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); }
+        .lib-bag-card-actions { margin-left: auto; display: flex; gap: var(--sp-1); }
+        /* Icon buttons get a proper circular state layer on hover (Material
+           "standard icon button") instead of just a color change on the
+           glyph itself. */
+        .lib-bag-edit-btn, .lib-bag-del { background: none; border: none; color: var(--gray-600); cursor: pointer; width: 32px; height: 32px; border-radius: 999px; transition: background .15s, color .15s; display: flex; align-items: center; justify-content: center; }
+        .lib-bag-edit-btn:hover { background: rgba(255,255,255,.08); color: var(--gray-200); }
+        .lib-bag-del { font-size: var(--fs-1); }
+        .lib-bag-del:hover { background: color-mix(in srgb, var(--err) 14%, transparent); color: var(--err); }
+        .lib-bag-card-details { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--fs-1); }
+        .lib-bag-detail { display: flex; flex-direction: column; gap: 1px; }
+        .lib-bag-detail-label { font-size: 10px; color: var(--gray-600); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+        .lib-bag-detail-val { color: var(--gray-300); font-weight: 500; }
+        .lib-bag-empty-note { display: inline-flex; color: var(--gray-500); font-size: var(--fs-1); margin-top: var(--sp-1); }
+        /* Material 3 "expansion panel" trigger for the Vergangene section —
+           a proper chip-style row (chevron rotates via transform, count as
+           a tonal badge) instead of the old plain text-link button with a
+           hand-swapped ▸/▾ character. */
+        .lib-bag-history-toggle { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; padding: var(--sp-2) var(--sp-3); border-radius: 999px; margin-top: var(--sp-2); color: var(--gray-400); font-size: var(--fs-1); font-weight: 600; transition: background .15s, color .15s; }
+        .lib-bag-history-toggle:hover { background: rgba(255,255,255,.05); color: var(--gray-200); }
+        .lib-bag-history-toggle .lib-bag-chevron { transition: transform .2s ease; }
+        .lib-bag-history-toggle.expanded .lib-bag-chevron { transform: rotate(90deg); }
+        .lib-bag-past-count { margin-left: auto; background: var(--gray-700); color: var(--gray-400); border-radius: 999px; padding: 1px var(--sp-2); font-size: 10px; font-weight: 700; }
+        /* grid-template-rows 0fr -> 1fr is the standard modern trick for
+           animating to "auto" height — the inner element's own
+           overflow:hidden is what actually clips it mid-transition. */
+        .lib-bag-history-past-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .25s cubic-bezier(.4,0,.2,1); }
+        .lib-bag-history-past-wrap.expanded { grid-template-rows: 1fr; }
+        .lib-bag-history-past { overflow: hidden; display: flex; flex-direction: column; gap: var(--sp-2); }
+        .lib-bag-history-past-wrap.expanded .lib-bag-history-past { padding-top: var(--sp-2); }
+        /* ── Bean form bag section divider ────────────────────────────────── */
+        .lib-bag-section-divider { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-4) 0 var(--sp-2); }
+        .lib-bag-section-divider::before, .lib-bag-section-divider::after { content: ''; flex: 1; height: 1px; background: var(--gray-800); }
+        .lib-bag-section-label { font-size: var(--fs-1); font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+        /* ── Bag dialog overlay ────────────────────────────────────────────── */
+        .bag-dialog-modal { max-width: 380px; width: 100%; }
+        .bag-dialog-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2) var(--sp-3); align-items: start; }
+        .bag-dialog-label { font-size: var(--fs-1); color: var(--gray-500); font-weight: 600; margin-bottom: 2px; }
+        .bag-dialog-input { background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-200); font-size: var(--fs-2); padding: var(--sp-2) var(--sp-3); outline: none; width: 100%; box-sizing: border-box; }
+        .bag-dialog-input:focus { border-color: var(--accent); }
+        /* ── legacy bag row compat ─────────────────────────────────────────── */
         .lib-bag-history-title { color: var(--gray-500); font-weight: 600; margin-bottom: var(--sp-1); }
         .lib-bag-row { display: flex; gap: var(--sp-4); align-items: center; color: var(--gray-600); padding: 2px 0; }
         .lib-bag-row.active { color: var(--gray-400); }

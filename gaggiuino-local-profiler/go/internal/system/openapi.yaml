@@ -977,7 +977,8 @@ paths:
   /api/library/bean/{id}/new-bag:
     post:
       tags: [Library]
-      summary: Open a new bag for a bean (pushes bag history, resets roastDate/stock_g)
+      summary: Open a new bag for a bean (joins the back of the queue)
+      description: The new bag's roastDate/stock_g only become the bean's own display fields when it's also the bag SimulateBagQueue resolves as current (i.e. every other bag is already exhausted) — adding a bag while the current one still has stock does not disturb the bean-level fields.
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       requestBody:
@@ -992,6 +993,27 @@ paths:
       responses:
         "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
         "404": { description: Not found }
+
+  /api/library/bean/{id}/reorder-bags:
+    post:
+      tags: [Library]
+      summary: Bulk-reassign sortOrder for a bean's "upcoming" (non-current) bags
+      description: bagIds must list every upcoming bag exactly once (no duplicates, none omitted) — the server assigns sequential sortOrder values in that order, all strictly above the current bag's own position.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bagIds]
+              properties:
+                bagIds: { type: array, items: { type: integer }, description: "Every upcoming (non-current) bag id, in the desired order." }
+      responses:
+        "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
+        "400": { description: bagIds missing, containing a duplicate/unknown/current-bag id, or not covering every upcoming bag, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: Bean not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/library/bean/{id}/freeze-portions:
     post:
@@ -1059,6 +1081,29 @@ paths:
         "404": { description: Bean or frozen portion not found }
 
   /api/library/bean/{id}/bag/{bagId}:
+    put:
+      tags: [Library]
+      summary: Full-replace one bag's editable fields (roastDate/stock_g/price_eur/batchNumber; sortOrder optional)
+      description: roastDate/stock_g/price_eur/batchNumber are full-replaced — resend the bag's current value for any field not being changed, or it's cleared. sortOrder is the one exception, falling back to the bag's existing value when omitted (reorder-bags is the normal bulk way to change it).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: bagId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roastDate:   { type: string, format: date }
+                stock_g:     { type: number, nullable: true }
+                price_eur:   { type: number, nullable: true }
+                batchNumber: { type: string, maxLength: 50 }
+                sortOrder:   { type: integer }
+      responses:
+        "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
+        "400": { description: Invalid roastDate/stock_g/price_eur, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: Bean or bag not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     delete:
       tags: [Library]
       summary: Delete a bag from a bean's bag history (the last remaining bag cannot be deleted)

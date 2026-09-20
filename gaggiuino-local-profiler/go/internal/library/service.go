@@ -25,7 +25,7 @@ import (
 func GetBeansInfo(lib Library) []Entity {
 	out := make([]Entity, 0, len(lib.Beans))
 	for _, bean := range lib.Beans {
-		bag := activeBag(bean)
+		bag := resolveCurrentBagSimple(bean)
 		var roastDate any
 		if bag != nil {
 			if v, _ := bag["roastDate"].(string); v != "" {

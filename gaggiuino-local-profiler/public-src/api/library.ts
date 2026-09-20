@@ -56,6 +56,16 @@ export async function deleteBeanBag(beanId: number, bagId: number): Promise<Bean
   return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, { method: 'DELETE' }));
 }
 
+/** PUT /api/library/bean/{beanId}/bag/{bagId} — edit a bag's mutable fields (full-replace; sortOrder optional/partial). */
+export async function updateBeanBag(beanId: number, bagId: number, payload: unknown): Promise<Bean | null> {
+  return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, _json('PUT', payload)));
+}
+
+/** POST /api/library/bean/{id}/reorder-bags — bulk-reassign queue order for upcoming bags. */
+export async function reorderBeanBags(id: number, bagIds: number[]): Promise<Bean | null> {
+  return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/reorder-bags`, _json('POST', { bagIds })));
+}
+
 /** POST /api/library/bean/{id}/freeze-portions — split part of the active bag into dated frozen portions. */
 export async function freezeBeanPortions(id: number, payload: unknown): Promise<Bean | null> {
   return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/freeze-portions`, _json('POST', payload)));

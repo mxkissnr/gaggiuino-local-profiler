@@ -343,3 +343,22 @@ func activeBag(bean Entity) Entity {
 	last, _ := bags[len(bags)-1].(Entity)
 	return last
 }
+
+// effectiveSortOrder returns bg["sortOrder"] when present, falling back to
+// its openedAt (ms epoch, monotonically increasing at creation time) for
+// bags that predate the sortOrder field — old and new bags then compare
+// consistently in the queue without a data migration.
+func effectiveSortOrder(bg Entity) int64 {
+	if v, ok := idOf(bg, "sortOrder"); ok {
+		return v
+	}
+	v, _ := idOf(bg, "openedAt")
+	return v
+}
+
+func maxInt64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}

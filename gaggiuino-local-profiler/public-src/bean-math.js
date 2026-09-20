@@ -28,64 +28,64 @@ export function matchesBean(doseRow, bean, idExists) {
 // (bean/bag added to the library only after the shot was already pulled,
 // then assigned to it retroactively) still belongs to the oldest bag on
 // record — there was nothing else it could have come from, so it must not
-// be silently dropped from the sum. Shared by computeBeanRemaining and
-// sumConsumedDoses's bag-scoped total so the two can never resolve a dose's
-// bag differently again (#788).
-function resolveBagAtShotTime(bags, shotMs) {
+// be silently dropped from the sum. This single-bag LIFO resolution is only
+// used by computeBeanRemaining's bean-wide total now (attribution-
+// independent — see its own doc comment); per-bag consumption/current-bag
+// determination moved server-side to SimulateBagQueue's proper queue
+// replay (go/internal/library/orders_support.go, #sortOrder rework).
+export function resolveBagAtShotTime(bags, shotMs) {
   return bags
     .filter(b => (b.openedAt || 0) <= shotMs)
     .sort((a, b) => b.openedAt - a.openedAt)[0] || bags[0];
 }
 
-// Sums matching dose rows for `bean`. With `bags` omitted (or empty), every
-// matching dose counts — an unscoped lifetime total. With `bags` given, only
-// doses that resolveBagAtShotTime() attributes to the last bag in the array
-// (the active bag, same convention as computeBeanRemaining) count — a
-// bag-scoped total that resolves each dose's bag exactly like
-// computeBeanRemaining does, instead of a flat openedAt timestamp cutoff
-// that disagreed with it on doses predating the only recorded bag (#788).
-export function sumConsumedDoses(bean, doseRows, allBeans, bags = null) {
-  const idExists  = new Set((allBeans || []).map(b => b.id));
-  const bagList   = Array.isArray(bags) && bags.length ? bags : null;
-  const activeBag = bagList ? bagList[bagList.length - 1] : null;
-  return (doseRows || []).reduce((sum, r) => {
-    const d = parseFloat(r.dose);
-    if (!d) return sum;
-    if (!matchesBean(r, bean, idExists)) return sum;
-    if (activeBag && resolveBagAtShotTime(bagList, r.timestamp * 1000) !== activeBag) return sum;
-    return sum + d;
-  }, 0);
-}
-
-// Remaining grams for a stock-tracked bean — consumed = sum of annotated
-// doses of shots matching this bean and belonging to the active bag; without
-// bags, all matching shots count. Returns null when stock is untracked
-// (mirrors the backend's `bean.stock_g > 0` guard).
+// Remaining grams for a stock-tracked bean — FIFO model: totalStock minus
+// all doses consumed during tracked-bag periods, clamped at 0.
+//
+// "Tracked bags" are bags that carry a positive stock_g (either explicitly
+// on the bag object, or via the bean.stock_g fallback for the active bag
+// when it predates per-bag stock tracking). Doses attributed by
+// resolveBagAtShotTime to an *untracked* bag are excluded — they came from a
+// bag whose capacity we never recorded, so they must not reduce tracked stock.
+//
+// No per-bag clamping: overflow from one bag's period carries forward to the
+// next (true FIFO), so a recorded dose cannot exceed the total remaining even
+// if it individually exceeds one bag's stock_g.
+//
+// The active bag (last element) falls back to bean.stock_g when it has no
+// explicit stock_g (bags created before per-bag stock tracking was added).
+// With no bags at all, all matching doses count against bean.stock_g.
+// Returns null when no tracked bag has positive stock_g.
 export function computeBeanRemaining(bean, doseRows, allBeans) {
-  if (!(bean.stock_g > 0)) return null;
-  const bags      = Array.isArray(bean.bags) ? bean.bags : [];
-  const activeBag = bags.length ? bags[bags.length - 1] : null;
-  const idExists  = new Set((allBeans || []).map(b => b.id));
-  const consumed  = (doseRows || []).reduce((sum, r) => {
-    const d = parseFloat(r.dose);
-    if (!d) return sum;
-    if (!matchesBean(r, bean, idExists)) return sum;
-    if (activeBag && resolveBagAtShotTime(bags, r.timestamp * 1000) !== activeBag) return sum;
-    return sum + d;
-  }, 0);
-  return Math.round(bean.stock_g - Math.round(consumed));
-}
-
-// Inverse of computeBeanRemaining (#930): stock-editing UI (the bean edit form's "Stock
-// (g)" field and the "Adjust stock" button) lets a user type in how much coffee is
-// actually left, not the bag's original weight. Since stock_g is the source of truth and
-// remaining is always derived from it, that entered value has to be translated into the
-// stock_g that makes computeBeanRemaining() report it back — i.e. the desired remaining
-// plus whatever the active bag has already consumed. For a bag with nothing consumed yet
-// this is a no-op (desiredRemaining in, same value out), so it's also safe to use
-// unconditionally for the bean-creation form.
-export function remainingToStockG(bean, doseRows, allBeans, desiredRemaining) {
   const bags     = Array.isArray(bean.bags) ? bean.bags : [];
-  const consumed = sumConsumedDoses(bean, doseRows, allBeans, bags);
-  return Math.round(desiredRemaining + consumed);
+  const idExists = new Set((allBeans || []).map(b => b.id));
+
+  if (bags.length === 0) {
+    if (!(bean.stock_g > 0)) return null;
+    const consumed = (doseRows || []).reduce((sum, r) => {
+      const d = parseFloat(r.dose);
+      return d && matchesBean(r, bean, idExists) ? sum + d : sum;
+    }, 0);
+    return Math.round(bean.stock_g - Math.round(consumed));
+  }
+
+  // Build set of tracked bags (have stock) and sum their total stock.
+  let totalStock = 0;
+  const trackedBags = new Set();
+  for (let i = 0; i < bags.length; i++) {
+    const bg = bags[i];
+    const raw = bg.stock_g ?? (i === bags.length - 1 ? bean.stock_g : null);
+    const s = parseFloat(raw);
+    if (isFinite(s) && s > 0) { totalStock += s; trackedBags.add(bg); }
+  }
+  if (!(totalStock > 0)) return null;
+
+  // Sum doses resolved to tracked bags only (FIFO: no per-bag clamping).
+  const consumed = (doseRows || []).reduce((sum, r) => {
+    const d = parseFloat(r.dose);
+    if (!d || !matchesBean(r, bean, idExists)) return sum;
+    return trackedBags.has(resolveBagAtShotTime(bags, r.timestamp * 1000)) ? sum + d : sum;
+  }, 0);
+
+  return Math.round(Math.max(0, totalStock - Math.round(consumed)));
 }
