@@ -19,21 +19,38 @@
 // open and clickable.
 import { describe, it, expect, beforeEach } from 'vitest';
 
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator ??= { language: 'en-US' };
-globalThis.window ??= globalThis;
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge test/machine-accent-theme.test.ts uses)
+// so the minimal fakes below need not satisfy the full Storage/Navigator/Window
+// shapes.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
+g.window ??= globalThis;
 
-// Same minimal fake DOM shape as machines-settings-theme-form.test.js.
+// Same minimal fake DOM shape as machines-settings-theme-form.test.ts.
 class FakeEl {
+  value: string | number = '';
+  innerHTML = '';
+  textContent = '';
+  style: Record<string, string> = {};
+  disabled = false;
   constructor() { this.value = ''; this.innerHTML = ''; this.textContent = ''; this.style = {}; }
-  querySelectorAll() { return []; }
-  addEventListener() {}
+  querySelectorAll(): unknown[] { return []; }
+  addEventListener(): void {}
 }
 
-const elements = {};
-function fakeElement(id) { return (elements[id] ??= new FakeEl()); }
+const elements: Record<string, FakeEl> = {};
+function fakeElement(id: string): FakeEl { return (elements[id] ??= new FakeEl()); }
 
-globalThis.document = { getElementById: fakeElement };
+type FetchCall = { url: string; method: string | undefined };
+// The app awaits fetch(), so a resolved plain object stands in for a Response
+// here; `json: async () => ...` would additionally trip require-await.
+const okJson = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+const errorJson = (status: number, body: unknown) =>
+  Promise.resolve({ ok: false, status, json: () => Promise.resolve(body) });
+
+g.document = { getElementById: fakeElement };
 
 const { S } = await import('../public-src/state/index.js');
 // Node's own built-in `navigator` global (present since Node 21) reflects the
@@ -42,6 +59,10 @@ const { S } = await import('../public-src/state/index.js');
 // dependent unless forced here, which would make this file's t()-derived
 // assertions non-portable across machines.
 S.currentLang = 'en';
+
+// #748's machineExplicitSave flag is written through setState()'s untyped key
+// cast in machines-settings.ts, so it is deliberately absent from AppState.
+const machineState = S as unknown as { machineExplicitSave: number | null };
 
 const { saveMachineForm, testMachineForm } =
   await import('../public-src/components/machines-settings.js');
@@ -63,19 +84,19 @@ describe('testMachineForm (#729/#733)', () => {
 
   it('on save success, tests the newly-created machine id, shows the result inline, and leaves the form open', async () => {
     setFormFields({ id: '' }); // brand-new machine — no id yet, POST path
-    const calls = [];
-    globalThis.fetch = async (url, opts) => {
+    const calls: FetchCall[] = [];
+    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
       calls.push({ url: String(url), method: opts?.method });
       // #731: the implicit save behind "Test connection" carries ?sync=0 so
       // the server doesn't start an import for it -- see machines-settings.js.
       if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
-        return { ok: true, json: async () => ({ id: 42, name: 'Test Machine' }) };
+        return okJson({ id: 42, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/42/test' && opts?.method === 'POST') {
-        return { ok: true, json: async () => ({ ok: true, reachable: true }) };
+        return okJson({ ok: true, reachable: true });
       }
       // loadMachines() GET after the test call
-      if (String(url) === 'api/machines') return { ok: true, json: async () => [] };
+      if (String(url) === 'api/machines') return okJson([]);
       throw new Error(`unexpected fetch: ${opts?.method || 'GET'} ${url}`);
     };
 
@@ -93,16 +114,16 @@ describe('testMachineForm (#729/#733)', () => {
 
   it('on save success while editing an existing machine, tests against the existing id and leaves the form open', async () => {
     setFormFields({ id: '9' }); // editing — PUT path
-    const calls = [];
-    globalThis.fetch = async (url, opts) => {
+    const calls: FetchCall[] = [];
+    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
       calls.push({ url: String(url), method: opts?.method });
       if (String(url) === 'api/machines/9?sync=0' && opts?.method === 'PUT') {
-        return { ok: true, json: async () => ({ id: 9, name: 'Test Machine' }) };
+        return okJson({ id: 9, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/9/test' && opts?.method === 'POST') {
-        return { ok: true, json: async () => ({ ok: true, reachable: false }) };
+        return okJson({ ok: true, reachable: false });
       }
-      if (String(url) === 'api/machines') return { ok: true, json: async () => [] };
+      if (String(url) === 'api/machines') return okJson([]);
       throw new Error(`unexpected fetch: ${opts?.method || 'GET'} ${url}`);
     };
 
@@ -120,10 +141,10 @@ describe('testMachineForm (#729/#733)', () => {
 
   it('on save failure (server-rejected), shows the save error and never calls the test endpoint', async () => {
     setFormFields({ id: '' });
-    const calls = [];
-    globalThis.fetch = async (url, opts) => {
+    const calls: FetchCall[] = [];
+    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
       calls.push({ url: String(url), method: opts?.method });
-      return { ok: false, status: 400, json: async () => ({ error: 'host not allowed' }) };
+      return errorJson(400, { error: 'host not allowed' });
     };
 
     await testMachineForm();
@@ -135,7 +156,7 @@ describe('testMachineForm (#729/#733)', () => {
 
   it('refuses when save fails validation (empty name/host), never calls fetch', async () => {
     setFormFields({ id: '', name: '', host: '' });
-    globalThis.fetch = async () => { throw new Error('should not fetch'); };
+    g.fetch = () => { throw new Error('should not fetch'); };
 
     await testMachineForm();
 
@@ -151,19 +172,19 @@ describe('testMachineForm (#729/#733)', () => {
   // trigger, so this guard matters more now, not less.
   it('#730 regression guard: writes the new id back into the form on success, so a second call would PUT instead of POST again', async () => {
     setFormFields({ id: '' });
-    let calls = [];
-    globalThis.fetch = async (url, opts) => {
+    let calls: FetchCall[] = [];
+    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
       calls.push({ url: String(url), method: opts?.method });
       if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
-        return { ok: true, json: async () => ({ id: 42, name: 'Test Machine' }) };
+        return okJson({ id: 42, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/42?sync=0' && opts?.method === 'PUT') {
-        return { ok: true, json: async () => ({ id: 42, name: 'Test Machine' }) };
+        return okJson({ id: 42, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/42/test' && opts?.method === 'POST') {
-        return { ok: true, json: async () => ({ ok: true, reachable: true }) };
+        return okJson({ ok: true, reachable: true });
       }
-      if (String(url) === 'api/machines') return { ok: true, json: async () => [] };
+      if (String(url) === 'api/machines') return okJson([]);
       throw new Error(`unexpected fetch: ${opts?.method || 'GET'} ${url}`);
     };
 
@@ -183,14 +204,14 @@ describe('testMachineForm (#729/#733)', () => {
   // belt-and-suspenders alongside the id-rewrite above.
   it('#730 regression guard: disables the test button for the whole in-flight window, re-enabling once it settles', async () => {
     setFormFields({ id: '' });
-    globalThis.fetch = async (url, opts) => {
+    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
       if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
-        return { ok: true, json: async () => ({ id: 42, name: 'Test Machine' }) };
+        return okJson({ id: 42, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/42/test' && opts?.method === 'POST') {
-        return { ok: true, json: async () => ({ ok: true, reachable: true }) };
+        return okJson({ ok: true, reachable: true });
       }
-      if (String(url) === 'api/machines') return { ok: true, json: async () => [] };
+      if (String(url) === 'api/machines') return okJson([]);
       throw new Error(`unexpected fetch: ${opts?.method || 'GET'} ${url}`);
     };
     const btn = fakeElement('machineFormTestBtn');
@@ -211,14 +232,14 @@ describe('testMachineForm (#729/#733)', () => {
   // on to viewing/editing machine B's data.
   it('#734 regression guard: discards a test result if #machineFormId no longer matches the machine being tested', async () => {
     setFormFields({ id: '9' });
-    let resolveTest;
+    let resolveTest!: (value: unknown) => void;
     const pendingTest = new Promise(res => { resolveTest = res; });
-    globalThis.fetch = async (url, opts) => {
+    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
       if (String(url) === 'api/machines/9?sync=0' && opts?.method === 'PUT') {
-        return { ok: true, json: async () => ({ id: 9, name: 'Test Machine' }) };
+        return okJson({ id: 9, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/9/test' && opts?.method === 'POST') return pendingTest;
-      if (String(url) === 'api/machines') return { ok: true, json: async () => [] };
+      if (String(url) === 'api/machines') return okJson([]);
       throw new Error(`unexpected fetch: ${opts?.method || 'GET'} ${url}`);
     };
 
@@ -245,21 +266,21 @@ describe('testMachineForm (#729/#733)', () => {
   // anything downstream, or the setup wizard closes/advances prematurely.
   it('#748: does NOT set S.machineExplicitSave (implicit save-before-test stays distinct from an explicit save)', async () => {
     setFormFields({ id: '' });
-    globalThis.fetch = async (url, opts) => {
+    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
       if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
-        return { ok: true, json: async () => ({ id: 42, name: 'Test Machine' }) };
+        return okJson({ id: 42, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/42/test' && opts?.method === 'POST') {
-        return { ok: true, json: async () => ({ ok: true, reachable: true }) };
+        return okJson({ ok: true, reachable: true });
       }
-      if (String(url) === 'api/machines') return { ok: true, json: async () => [] };
+      if (String(url) === 'api/machines') return okJson([]);
       throw new Error(`unexpected fetch: ${opts?.method || 'GET'} ${url}`);
     };
 
-    S.machineExplicitSave = null;
+    machineState.machineExplicitSave = null;
     await testMachineForm();
 
-    expect(S.machineExplicitSave).toBe(null);
+    expect(machineState.machineExplicitSave).toBe(null);
   });
 });
 
@@ -270,12 +291,12 @@ describe('saveMachineForm (unchanged behavior)', () => {
 
   it('on success still closes the form and reloads the machines list', async () => {
     setFormFields({ id: '' });
-    globalThis.fetch = async (url, opts) => {
+    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
       if (String(url) === 'api/machines' && opts?.method === 'POST') {
-        return { ok: true, json: async () => ({ id: 5, name: 'Test Machine' }) };
+        return okJson({ id: 5, name: 'Test Machine' });
       }
-      if (String(url) === 'api/machines') return { ok: true, json: async () => [] }; // loadMachines() GET
-      return { ok: true, json: async () => ({}) };
+      if (String(url) === 'api/machines') return okJson([]); // loadMachines() GET
+      return okJson({});
     };
 
     await saveMachineForm();
@@ -289,23 +310,23 @@ describe('saveMachineForm (unchanged behavior)', () => {
   // distinguishable; testMachineForm() (above) deliberately never touches it.
   it('on success sets S.machineExplicitSave to the saved id (#748)', async () => {
     setFormFields({ id: '' });
-    globalThis.fetch = async (url, opts) => {
+    g.fetch = (url: RequestInfo | URL, opts?: RequestInit) => {
       if (String(url) === 'api/machines' && opts?.method === 'POST') {
-        return { ok: true, json: async () => ({ id: 5, name: 'Test Machine' }) };
+        return okJson({ id: 5, name: 'Test Machine' });
       }
-      if (String(url) === 'api/machines') return { ok: true, json: async () => [] };
-      return { ok: true, json: async () => ({}) };
+      if (String(url) === 'api/machines') return okJson([]);
+      return okJson({});
     };
 
-    S.machineExplicitSave = null;
+    machineState.machineExplicitSave = null;
     await saveMachineForm();
 
-    expect(S.machineExplicitSave).toBe(5);
+    expect(machineState.machineExplicitSave).toBe(5);
   });
 
   it('on failure shows the save error and does not close the form', async () => {
     setFormFields({ id: '' });
-    globalThis.fetch = async () => ({ ok: false, status: 400, json: async () => ({ error: 'bad host' }) });
+    g.fetch = () => errorJson(400, { error: 'bad host' });
 
     await saveMachineForm();
 
