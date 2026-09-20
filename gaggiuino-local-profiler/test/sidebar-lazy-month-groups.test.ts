@@ -10,9 +10,14 @@ const FIXED_NOW = new Date('2026-09-15T12:00:00Z');
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as test/sidebar-month-toggle.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
-globalThis.window       ??= {};
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge test/machine-accent-theme.test.ts uses)
+// so the minimal fakes below need not satisfy the full Storage/Navigator/
+// Window shapes.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator    ??= { language: 'en-US' };
+g.window       ??= {};
 
 const { S } = await import('../public-src/state/index.js');
 const { renderSidebar, toggleMonthGroup, filterShots } =
@@ -23,29 +28,54 @@ const { renderSidebar, toggleMonthGroup, filterShots } =
 // with classList/style/dataset/children plus sibling links (filterShots()
 // walks nextElementSibling), still no jsdom/happy-dom dependency. Only the
 // handful of selectors sidebar.js actually queries are implemented.
-let shotsEl;
+let shotsEl: FakeNode;
 
-function makeNode(tag) {
-  const node = {
+// The slice of HTMLElement the factory below builds: sidebar.js reads
+// classList/style/dataset/children plus the sibling links filterShots() walks.
+interface FakeNode {
+  tagName: string;
+  dataset: Record<string, string>;
+  style: Record<string, string>;
+  children: FakeNode[];
+  _cls: Set<string>;
+  _html: string;
+  textContent: string;
+  id: string;
+  title: string;
+  type: string;
+  onclick: (() => void) | null;
+  nextElementSibling: FakeNode | null;
+  className: string;
+  innerHTML: string;
+  classList: {
+    add: (...c: string[]) => void;
+    remove: (...c: string[]) => void;
+    contains: (c: string) => boolean;
+  };
+  appendChild: (c: FakeNode) => FakeNode;
+}
+
+function makeNode(tag: string): FakeNode {
+  const node: FakeNode = {
     tagName: tag,
     dataset: {},
     style: {},
     children: [],
-    _cls: new Set(),
+    _cls: new Set<string>(),
     _html: '',
     textContent: '',
     id: '', title: '', type: '', onclick: null,
     nextElementSibling: null,
     get className() { return [...this._cls].join(' '); },
-    set className(v) { this._cls = new Set(String(v).split(/\s+/).filter(Boolean)); },
+    set className(v: string) { this._cls = new Set(String(v).split(/\s+/).filter(Boolean)); },
     get innerHTML() { return this._html; },
-    set innerHTML(v) { this._html = String(v); if (v === '') this.children = []; },
+    set innerHTML(v: string) { this._html = String(v); if (v === '') this.children = []; },
     classList: {
-      add: (...c) => c.forEach(x => node._cls.add(x)),
-      remove: (...c) => c.forEach(x => node._cls.delete(x)),
-      contains: x => node._cls.has(x),
+      add: (...c: string[]) => c.forEach(x => node._cls.add(x)),
+      remove: (...c: string[]) => c.forEach(x => node._cls.delete(x)),
+      contains: (x: string) => node._cls.has(x),
     },
-    appendChild(c) {
+    appendChild(c: FakeNode) {
       const prev = this.children[this.children.length - 1];
       if (prev) prev.nextElementSibling = c;
       c.nextElementSibling = null;
@@ -56,7 +86,7 @@ function makeNode(tag) {
   return node;
 }
 
-function collect(root, pred, acc = []) {
+function collect(root: FakeNode, pred: (n: FakeNode) => boolean, acc: FakeNode[] = []): FakeNode[] {
   for (const ch of root.children) {
     if (pred(ch)) acc.push(ch);
     collect(ch, pred, acc);
@@ -64,20 +94,20 @@ function collect(root, pred, acc = []) {
   return acc;
 }
 
-function installDocument() {
+function installDocument(): void {
   shotsEl = makeNode('div');
   shotsEl.id = 'shots';
-  globalThis.document = {
+  g.document = {
     createElement: makeNode,
-    getElementById: id =>
+    getElementById: (id: string) =>
       (id === 'shots' ? shotsEl : collect(shotsEl, n => n.id === id)[0] || null),
-    querySelectorAll: sel => {
+    querySelectorAll: (sel: string) => {
       if (sel.includes('.shot-wrapper')) return collect(shotsEl, n => n.classList.contains('shot-wrapper'));
       if (sel.includes('.sidebar-month-body')) return collect(shotsEl, n => n.classList.contains('sidebar-month-body'));
       if (sel.includes('.day-sep')) return collect(shotsEl, n => n.classList.contains('day-sep'));
       return [];
     },
-    querySelector: sel => {
+    querySelector: (sel: string) => {
       const m = sel.match(/data-id="([^"]+)"/);
       if (!m) return null;
       return collect(shotsEl, n => n.dataset.action === 'toggle-month-group' && n.dataset.id === m[1])[0] || null;
@@ -88,11 +118,11 @@ function installDocument() {
 const DAY = 86400000;
 // Relative to FIXED_NOW, not the real clock — the month keys are derived the
 // same way the shots are seeded, so they can't drift apart as real time moves.
-const monthKeyOf = daysAgo => {
+const monthKeyOf = (daysAgo: number): string => {
   const d = new Date(FIXED_NOW.getTime() - daysAgo * DAY);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
-const mkShot = (id, daysAgo) => ({
+const mkShot = (id: number, daysAgo: number) => ({
   id,
   timestamp: Math.floor((Date.now() - daysAgo * DAY) / 1000),
   profile: { name: `Profile ${id}` },
@@ -100,7 +130,7 @@ const mkShot = (id, daysAgo) => ({
 });
 
 const countWrappers = () => collect(shotsEl, n => n.classList.contains('shot-wrapper')).length;
-const monthBody = key => collect(shotsEl, n => n.id === `monthGroup-${key}`)[0];
+const monthBody = (key: string): FakeNode => collect(shotsEl, n => n.id === `monthGroup-${key}`)[0];
 
 // Three fully-distinct older calendar months (well past the 14-day recent
 // window) plus three shots in the last few days. Offsets chosen so that,
