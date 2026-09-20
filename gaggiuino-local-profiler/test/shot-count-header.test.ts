@@ -4,8 +4,10 @@ import { describe, it, expect } from 'vitest';
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as test/sidebar-month-toggle.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
+// globalThis carries the full DOM type; stub only the sliver sidebar.js reads.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator    ??= { language: 'en-US' };
 
 const { updateFlapCounter } = await import('../public-src/components/sidebar.js');
 
@@ -19,7 +21,7 @@ const { updateFlapCounter } = await import('../public-src/components/sidebar.js'
 // use.
 function fakeFlapDigits() {
   const el = { textContent: '' };
-  globalThis.document = { getElementById: id => (id === 'flapDigits' ? el : undefined) };
+  g.document = { getElementById: (id: string) => (id === 'flapDigits' ? el : undefined) };
   return el;
 }
 
@@ -52,7 +54,7 @@ describe('updateFlapCounter (#823 flattened shot-count header)', () => {
   });
 
   it('is a defensive no-op when the container is missing from the DOM (mirrors the #333 race-condition scenario where the element may not exist yet on the very first call)', () => {
-    globalThis.document = { getElementById: () => undefined };
+    g.document = { getElementById: () => undefined };
     expect(() => updateFlapCounter(3)).not.toThrow();
   });
 });

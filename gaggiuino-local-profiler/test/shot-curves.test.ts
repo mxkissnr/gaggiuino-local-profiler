@@ -3,14 +3,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // state.js/i18n.js touch localStorage/navigator at module load — stub them
 // so the module graph imports under vitest's node environment (same pattern
 // as test/shots-load-data-race.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
+// globalThis carries the full DOM type; stub only the sliver state.js reads.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator    ??= { language: 'en-US' };
 
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
 const curves = await import('../public-src/shot-curves.js');
 
-const dp = id => ({ timeInShot: [0, 10, 20], pressure: [90, 90, 90], __id: id });
+const dp = (id: number) => ({ timeInShot: [0, 10, 20], pressure: [90, 90, 90], __id: id });
 
 beforeEach(() => {
   fetchSpy.mockReset();
@@ -21,7 +23,7 @@ describe('shot-curves cache (#957)', () => {
   it('memoises: one fetch per id no matter how many callers', async () => {
     fetchSpy.mockImplementation(url => {
       const id = Number(url.split('/').pop());
-      return Promise.resolve({ ok: true, json: async () => ({ id, datapoints: dp(id) }) });
+      return Promise.resolve({ ok: true, json: async () => ({ id, datapoints: dp(id) }) } as unknown as Response);
     });
 
     const [a, b, c] = await Promise.all([
@@ -29,7 +31,7 @@ describe('shot-curves cache (#957)', () => {
     ]);
     expect(a).toBe(b);
     expect(b).toBe(c);
-    expect(a.__id).toBe(7);
+    expect((a as unknown as { __id: number }).__id).toBe(7);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
     await curves.getShotCurve(7); // still cached
@@ -43,7 +45,7 @@ describe('shot-curves cache (#957)', () => {
       await new Promise(r => setTimeout(r, 5));
       inFlight--;
       const id = Number(url.split('/').pop());
-      return { ok: true, json: async () => ({ id, datapoints: dp(id) }) };
+      return { ok: true, json: async () => ({ id, datapoints: dp(id) }) } as unknown as Response;
     });
 
     await curves.ensureCurves([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
@@ -56,13 +58,13 @@ describe('shot-curves cache (#957)', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(await curves.getShotCurve(42)).toEqual(dp(42));
     expect(curves.getRawCurve(42)).toEqual(dp(42));
-    expect(curves.getCachedShotData(42).pressure.length).toBe(3);
+    expect(curves.getCachedShotData(42)!.pressure.length).toBe(3);
   });
 
   it('evictCurve drops the entry so the next get refetches', async () => {
     fetchSpy.mockImplementation(url => {
       const id = Number(url.split('/').pop());
-      return Promise.resolve({ ok: true, json: async () => ({ id, datapoints: dp(id) }) });
+      return Promise.resolve({ ok: true, json: async () => ({ id, datapoints: dp(id) }) } as unknown as Response);
     });
     await curves.getShotCurve(5);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -75,9 +77,9 @@ describe('shot-curves cache (#957)', () => {
   });
 
   it('a failed fetch is not cached (retries next call) and resolves to {}', async () => {
-    fetchSpy.mockResolvedValueOnce({ ok: false });
+    fetchSpy.mockResolvedValueOnce({ ok: false } as unknown as Response);
     expect(await curves.getShotCurve(9)).toEqual({});
-    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 9, datapoints: dp(9) }) });
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 9, datapoints: dp(9) }) } as unknown as Response);
     expect(await curves.getShotCurve(9)).toEqual(dp(9));
   });
 
@@ -85,7 +87,7 @@ describe('shot-curves cache (#957)', () => {
     fetchSpy.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ id: 20, datapoints: dp(20), previousShot: { id: 19, datapoints: dp(19) } }),
-    });
+    } as unknown as Response);
     await curves.getShotCurve(20);
     // 19 should now be cached without its own fetch
     expect(curves.getRawCurve(19)).toEqual(dp(19));
