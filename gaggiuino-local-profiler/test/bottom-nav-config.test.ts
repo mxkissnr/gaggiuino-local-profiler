@@ -6,14 +6,17 @@ import { describe, it, expect, beforeEach } from 'vitest';
 // pattern as test/milk-deduct-gate.test.js and test/sidebar-month-toggle.test.js.
 // Unlike those, we need a *real* backing store (not an always-null stub)
 // since this whole feature is localStorage-driven — a small in-memory
-// Map-backed implementation, reset per test in beforeEach.
-const _store = new Map();
-globalThis.localStorage = {
-  getItem: k => (_store.has(k) ? _store.get(k) : null),
-  setItem: (k, v) => { _store.set(k, String(v)); },
-  removeItem: k => { _store.delete(k); },
+// Map-backed implementation, reset per test in beforeEach. The browser
+// globals go through a loose view of globalThis (the same bridge
+// test/dev-banner.test.ts uses) rather than satisfying Storage/Navigator.
+const g = globalThis as unknown as Record<string, unknown>;
+const _store = new Map<string, string>();
+g.localStorage = {
+  getItem: (k: string) => _store.get(k) ?? null,
+  setItem: (k: string, v: string) => { _store.set(k, String(v)); },
+  removeItem: (k: string) => { _store.delete(k); },
 };
-globalThis.navigator ??= { language: 'en-US' };
+g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 const {
@@ -116,28 +119,28 @@ describe('computeSettingsRows — max-4 enforcement + reorder boundaries (#443)'
 
   it('shots\' own checkbox is always disabled (mandatory, always slot 1)', () => {
     const rows = computeSettingsRows(['shots']);
-    const shotsRow = rows.find(r => r.id === 'shots');
+    const shotsRow = rows.find(r => r.id === 'shots')!;
     expect(shotsRow.isSelected).toBe(true);
     expect(shotsRow.checkDisabled).toBe(true);
   });
 
   it('shots can never move up or down', () => {
     const rows = computeSettingsRows(['shots', 'live', 'library']);
-    const shotsRow = rows.find(r => r.id === 'shots');
+    const shotsRow = rows.find(r => r.id === 'shots')!;
     expect(shotsRow.canMoveUp).toBe(false);
     expect(shotsRow.canMoveDown).toBe(false);
   });
 
   it('the first selected item after shots cannot move up (would swap into the shots slot)', () => {
     const rows = computeSettingsRows(['shots', 'live', 'library']);
-    expect(rows.find(r => r.id === 'live').canMoveUp).toBe(false);
-    expect(rows.find(r => r.id === 'live').canMoveDown).toBe(true);
+    expect(rows.find(r => r.id === 'live')!.canMoveUp).toBe(false);
+    expect(rows.find(r => r.id === 'live')!.canMoveDown).toBe(true);
   });
 
   it('the last selected item cannot move down', () => {
     const rows = computeSettingsRows(['shots', 'live', 'library']);
-    expect(rows.find(r => r.id === 'library').canMoveDown).toBe(false);
-    expect(rows.find(r => r.id === 'library').canMoveUp).toBe(true);
+    expect(rows.find(r => r.id === 'library')!.canMoveDown).toBe(false);
+    expect(rows.find(r => r.id === 'library')!.canMoveUp).toBe(true);
   });
 });
 
@@ -148,33 +151,62 @@ describe('computeSettingsRows — max-4 enforcement + reorder boundaries (#443)'
 // renderBottomNav() and status.js's updatePowerButton() actually make,
 // mirroring the "fake minimal document" convention already used in
 // test/sidebar-month-toggle.test.js and test/library-profile-editor.test.js.
+interface FakeClassList {
+  _set: Set<string>;
+  toggle(cls: string, force?: boolean): boolean;
+  contains(cls: string): boolean;
+}
+
+interface FakeElement {
+  className: string;
+  style: Record<string, string>;
+  dataset: Record<string, string>;
+  _attrs: Record<string, string>;
+  _listeners: Record<string, ((evt: unknown) => void)[]>;
+  _children: FakeElement[];
+  _id: string;
+  _innerHTML: string;
+  id: string;
+  innerHTML: string;
+  appendChild(child: FakeElement): FakeElement;
+  contains(child: FakeElement): boolean;
+  setAttribute(k: string, v: string): void;
+  getAttribute(k: string): string;
+  addEventListener(evt: string, fn: (evt: unknown) => void): void;
+  click(): void;
+  classList: FakeClassList;
+}
+
 function makeFakeDocument() {
-  const registry = new Map();
-  function makeElement() {
-    const el = {
+  const registry = new Map<string, FakeElement>();
+  function makeElement(): FakeElement {
+    const el: FakeElement = {
       className: '',
       style: {},
       dataset: {},
       _attrs: {},
       _listeners: {},
-      set id(v) { this._id = v; registry.set(v, el); },
+      _children: [],
+      _id: '',
+      _innerHTML: '',
+      set id(v: string) { this._id = v; registry.set(v, el); },
       get id() { return this._id; },
-      set innerHTML(v) { this._innerHTML = v; },
+      set innerHTML(v: string) { this._innerHTML = v; },
       get innerHTML() { return this._innerHTML; },
-      appendChild(child) { (el._children ||= []).push(child); return child; },
-      contains(child) { return (el._children || []).includes(child); },
-      setAttribute(k, v) { el._attrs[k] = v; },
-      getAttribute(k) { return el._attrs[k]; },
-      addEventListener(evt, fn) { (el._listeners[evt] ||= []).push(fn); },
+      appendChild(child: FakeElement) { el._children.push(child); return child; },
+      contains(child: FakeElement) { return el._children.includes(child); },
+      setAttribute(k: string, v: string) { el._attrs[k] = v; },
+      getAttribute(k: string) { return el._attrs[k]; },
+      addEventListener(evt: string, fn: (evt: unknown) => void) { (el._listeners[evt] ||= []).push(fn); },
       click() { (el._listeners.click || []).forEach(fn => fn({})); },
       classList: {
-        _set: new Set(),
-        toggle(cls, force) {
+        _set: new Set<string>(),
+        toggle(cls: string, force?: boolean) {
           const on = force === undefined ? !this._set.has(cls) : !!force;
           if (on) this._set.add(cls); else this._set.delete(cls);
           return on;
         },
-        contains(cls) { return this._set.has(cls); },
+        contains(cls: string) { return this._set.has(cls); },
       },
     };
     return el;
@@ -182,8 +214,8 @@ function makeFakeDocument() {
   return {
     _registry: registry,
     createElement: makeElement,
-    getElementById: id => registry.get(id),
-    _preRegister(id) {
+    getElementById: (id: string): FakeElement => registry.get(id)!,
+    _preRegister(id: string) {
       const el = makeElement();
       el.id = id;
       return el;
@@ -192,13 +224,13 @@ function makeFakeDocument() {
 }
 
 describe('renderBottomNav — renders exactly the configured set (#443)', () => {
-  let doc;
+  let doc: ReturnType<typeof makeFakeDocument>;
 
   beforeEach(() => {
     doc = makeFakeDocument();
     doc._preRegister('bottom-nav');
     doc._preRegister('moreSheet');
-    globalThis.document = doc;
+    g.document = doc;
   });
 
   it('an unusual combination (shots, maintenance, orders, settings) puts exactly those in the bar and the rest in Mehr', () => {
@@ -225,13 +257,13 @@ describe('renderBottomNav — renders exactly the configured set (#443)', () => 
 });
 
 describe('applyBottomNavActiveState — bnMore highlights by DOM containment, not a static mode list (#443)', () => {
-  let doc;
+  let doc: ReturnType<typeof makeFakeDocument>;
 
   beforeEach(() => {
     doc = makeFakeDocument();
     doc._preRegister('bottom-nav');
     doc._preRegister('moreSheet');
-    globalThis.document = doc;
+    g.document = doc;
   });
 
   it('a mode whose id is placed in the main bar (not the sheet) gets its own .active pill, and bnMore stays inactive', () => {
@@ -267,7 +299,7 @@ describe('applyBottomNavActiveState — bnMore highlights by DOM containment, no
 });
 
 describe('capability gate stays authoritative over the user\'s selection (#443)', () => {
-  let doc;
+  let doc: ReturnType<typeof makeFakeDocument>;
 
   beforeEach(() => {
     doc = makeFakeDocument();
@@ -277,7 +309,7 @@ describe('capability gate stays authoritative over the user\'s selection (#443)'
     // unconditionally; unrelated to this test but must exist or it throws.
     doc._preRegister('btnLive');
     doc._preRegister('powerBtn');
-    globalThis.document = doc;
+    g.document = doc;
   });
 
   it('putting "live" in the main bar does not show it while the machine is off', () => {
