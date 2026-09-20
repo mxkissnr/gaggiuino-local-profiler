@@ -22,7 +22,6 @@ import { TARGET_ICON_SVG } from '../icons.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
-const ICON_COPY   = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M19,21H8V7H19V21Z"/></svg>`;
 
 const PHASE_TYPES = ['FLOW', 'PRESSURE', 'MANUAL'];
 const CURVES      = ['EASE_IN_OUT', 'EASE_IN', 'EASE_OUT', 'LINEAR', 'INSTANT'];
@@ -124,7 +123,6 @@ export function renderProfileList(): void {
       <div class="lib-item-actions">
         <button class="lib-btn-sm" data-action="start-profile-dialin" data-id="${esc(p.id as string | number)}" title="${t('profile_dialin_start')}">${TARGET_ICON_SVG}</button>
         <button class="lib-btn-sm lib-btn-icon" data-action="edit-profile" data-id="${esc(p.id as string | number)}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm lib-btn-icon" data-action="duplicate-profile" data-id="${esc(p.id as string | number)}" title="${t('profile_btn_duplicate')}">${ICON_COPY}</button>
         <button class="lib-btn-sm del lib-btn-icon" data-action="delete-profile" data-id="${esc(p.id as string | number)}" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
     </div>`).join('');
@@ -134,16 +132,6 @@ export async function editProfile(id: string): Promise<void> {
   const profile = await machinesApi.getMachineProfile(id, S.activeMachineId ?? '');
   if (!profile) { window.showToast?.(t('profile_load_error')); return; }
   openProfileForm(profile);
-}
-
-// Opens a fresh (unsaved) editor pre-filled with an existing profile's
-// values — id cleared so sendProfileToMachine() POSTs a new profile
-// instead of PUTting over the original, name suffixed so the duplicate
-// is never accidentally confused with its source in the list.
-export async function duplicateProfile(id: string): Promise<void> {
-  const profile = await machinesApi.getMachineProfile(id, S.activeMachineId ?? '');
-  if (!profile) { window.showToast?.(t('profile_load_error')); return; }
-  openProfileForm({ ...profile, id: undefined, name: `${profile.name}${t('profile_duplicate_suffix')}` });
 }
 
 export async function deleteMachineProfile(id: string): Promise<void> {
