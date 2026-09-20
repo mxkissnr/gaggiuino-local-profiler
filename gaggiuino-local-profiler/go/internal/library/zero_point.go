@@ -73,6 +73,12 @@ func zeroPointAtTime(grinder Entity, timestampMs int64) (float64, bool) {
 // sorted by since so zeroPointAtTime stays correct after retroactive inserts.
 // Idempotent: "now" inserts skip when the latest value is already equal;
 // retroactive inserts skip when the exact (since,value) pair already exists.
+// since is the entry's natural key — a retroactive insert whose since
+// collides with an existing entry replaces that entry's value rather than
+// appending a second one alongside it, so history never carries two
+// activations claiming the same instant (which DELETE .../since could not
+// otherwise tell apart, and which would make zeroPointAtTime's "latest
+// since <= timestamp" pick depend on slice order after an equal-key sort).
 func SetGrinderZeroPoint(repo *Repository, id int64, zeroPoint float64, since int64) (Entity, bool, error) {
 	retroactive := since != 0
 	if !retroactive {
@@ -109,6 +115,18 @@ func SetGrinderZeroPoint(repo *Repository, id int64, zeroPoint float64, since in
 	}
 	if !skip {
 		raw, _ := grinder["zeroPointHistory"].([]any)
+		if retroactive {
+			deduped := raw[:0:0]
+			for _, r := range raw {
+				if entry, ok := r.(Entity); ok {
+					if s, ok2 := idOf(entry, "since"); ok2 && s == since {
+						continue // replaced below
+					}
+				}
+				deduped = append(deduped, r)
+			}
+			raw = deduped
+		}
 		raw = append(raw, Entity{"zeroPoint": zeroPoint, "since": since})
 		// Keep sorted by since so zeroPointAtTime's linear scan stays correct.
 		sort.Slice(raw, func(i, j int) bool {

@@ -3,6 +3,7 @@ package library
 import (
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestZeroPointAtTime_PicksTheEntryActiveAtTheGivenMoment(t *testing.T) {
@@ -199,6 +200,65 @@ func TestSetGrinderZeroPoint_PastSince(t *testing.T) {
 	history, _ = updated["zeroPointHistory"].([]any)
 	if len(history) != 2 {
 		t.Fatalf("idempotent re-send must not grow history, got %d entries", len(history))
+	}
+}
+
+func TestSetGrinderZeroPoint_SinceValidation(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/grinder", mustMarshal(t, map[string]any{"name": "Ode 2"}))
+	grinder := decodeBody(t, rec.Body.Bytes())
+	id := int64(grinder["id"].(float64))
+
+	cases := []struct {
+		name  string
+		since any
+	}{
+		{"negative", -1},
+		{"future", time.Now().UnixMilli() + 60_000},
+		{"unparseable", "not-a-number"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec := doJSON(t, mux, http.MethodPut, "/api/library/grinder/"+itoa(id)+"/zero-point",
+				mustMarshal(t, map[string]any{"zeroPoint": 42.0, "since": c.since}))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+// TestSetGrinderZeroPoint_DuplicateSinceReplaces verifies that a retroactive
+// insert whose since collides with an existing entry replaces that entry's
+// value instead of appending a second entry at the same since.
+func TestSetGrinderZeroPoint_DuplicateSinceReplaces(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/grinder", mustMarshal(t, map[string]any{"name": "Ode 2"}))
+	grinder := decodeBody(t, rec.Body.Bytes())
+	id := int64(grinder["id"].(float64))
+
+	const since = int64(1_000_000)
+	doJSON(t, mux, http.MethodPut, "/api/library/grinder/"+itoa(id)+"/zero-point",
+		mustMarshal(t, map[string]any{"zeroPoint": 42.0, "since": since}))
+
+	rec = doJSON(t, mux, http.MethodPut, "/api/library/grinder/"+itoa(id)+"/zero-point",
+		mustMarshal(t, map[string]any{"zeroPoint": 43.5, "since": since}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	updated := decodeBody(t, rec.Body.Bytes())
+	history, _ := updated["zeroPointHistory"].([]any)
+	if len(history) != 1 {
+		t.Fatalf("expected 1 entry (replace, not append), got %d: %+v", len(history), history)
+	}
+	entry, _ := history[0].(map[string]any)
+	zp, _ := jsParseFloat(entry["zeroPoint"])
+	if zp != 43.5 {
+		t.Fatalf("entry zeroPoint = %v, want 43.5 (last write wins)", zp)
 	}
 }
 

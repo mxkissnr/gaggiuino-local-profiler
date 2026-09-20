@@ -87,9 +87,20 @@ func (h *Handlers) setGrinderZeroPoint(w http.ResponseWriter, r *http.Request) {
 	}
 	var since int64
 	if sv, ok2 := body["since"]; ok2 {
-		if sv64, ok3 := jsParseIntLoose(sv); ok3 {
-			since = sv64
+		sv64, ok3 := jsParseIntLoose(sv)
+		if !ok3 {
+			writeError(w, http.StatusBadRequest, "invalid since")
+			return
 		}
+		if sv64 < 0 {
+			writeError(w, http.StatusBadRequest, "since must not be negative")
+			return
+		}
+		if sv64 > time.Now().UnixMilli() {
+			writeError(w, http.StatusBadRequest, "since must not be in the future")
+			return
+		}
+		since = sv64
 	}
 	grinder, found, err := SetGrinderZeroPoint(h.repo, id, zeroPoint, since)
 	if err != nil {
