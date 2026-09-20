@@ -2105,7 +2105,7 @@
             /* #540: #shots is the scroll container for the shot list — its
                last row could sit underneath the fixed #bottom-nav (56px +
                safe-area-inset). Same fix/value as #main below. */
-            #shots             { padding-bottom: calc(var(--sp-6) + env(safe-area-inset-bottom, 0px)); }
+            #shots             { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px) + var(--sp-3)); }
             #collapseBtn       { display: none; }
             /* Safety net: the desktop collapse class can only be toggled via
                #collapseBtn, hidden above — but a browser window resized
@@ -2131,7 +2131,7 @@
                    on mobile (below), so whichever of #sidebar/#shots ends up
                    the actual scroller on a given device still clears
                    #bottom-nav at the bottom of its content. */
-                padding-bottom: calc(var(--sp-6) + env(safe-area-inset-bottom, 0px));
+                padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px) + var(--sp-3));
             }
             #sidebar.sidebar-drawer-mode.sidebar-drawer-open { transform: translateX(0); }
             /* Overrides the always-on #sidebar > * { min-width: 320px; }
@@ -2145,7 +2145,7 @@
                 background: rgba(0,0,0,.45);
             }
             #sidebar-drawer-backdrop.visible { display: block; }
-            #main              { position: fixed; inset: 0; z-index: 40; height: 100vh; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-bottom: var(--sp-6); }
+            #main              { position: fixed; inset: 0; z-index: 40; height: 100vh; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
             #chart-area, #live-view { padding: var(--sp-4); }
             #expandSidebarBtn  { display: none !important; }
 

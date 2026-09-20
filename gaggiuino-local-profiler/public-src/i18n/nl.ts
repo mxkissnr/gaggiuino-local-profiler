@@ -570,6 +570,7 @@ const nl: Partial<Translations> = {
     profile_confirm_send:'Dit profiel naar de machine sturen? Bestaande waarden op de machine worden overschreven.',
     profile_send_error:'Versturen naar de machine mislukt',
     profile_load_error:'Profiel kon niet worden geladen',
+    profile_btn_duplicate:'Dupliceren', profile_duplicate_suffix:' (Kopie)',
     profile_no_phases_error:'Minstens één fase is vereist',
     profile_editor_title:'Profielbewerker',
     profile_form_name:'Naam *', profile_form_water_temp:'Watertemperatuur (°C)',

@@ -570,6 +570,7 @@ const fr: Partial<Translations> = {
     profile_confirm_send:'Envoyer ce profil à la machine ? Les valeurs existantes sur la machine seront écrasées.',
     profile_send_error:'Échec de l\'envoi à la machine',
     profile_load_error:'Impossible de charger le profil',
+    profile_btn_duplicate:'Dupliquer', profile_duplicate_suffix:' (Copie)',
     profile_no_phases_error:'Au moins une phase est requise',
     profile_editor_title:'Éditeur de profil',
     profile_form_name:'Nom *', profile_form_water_temp:'Température de l\'eau (°C)',

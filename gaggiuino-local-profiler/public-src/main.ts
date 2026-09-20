@@ -119,11 +119,11 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
        } from './views/library.js';
 
 import { loadMachineProfileList, updateProfileDatalist, renderProfileList,
-         editProfile, deleteMachineProfile, openProfileForm, closeProfileForm, openNewProfileForm,
+         editProfile, duplicateProfile, deleteMachineProfile, openProfileForm, closeProfileForm, openNewProfileForm,
          createProfileFromBean, applyBeanSuggestion, addProfilePhase, removeProfilePhase,
          sendProfileToMachine, renderProfilePreviewChart } from './views/library-profile-editor.js';
 
-import { openGaggiMateProfileEditor, openNewGaggiMateProfile,
+import { openGaggiMateProfileEditor, duplicateGaggiMateProfile, openNewGaggiMateProfile,
          handleGmEditorAction } from './views/gaggimate-profile-editor.js';
 
 import { renderDialin } from './views/dialin.js';
@@ -471,6 +471,8 @@ Object.assign(window, {
   updateProfileDatalist,
   renderProfileList,
   editProfile,
+  duplicateProfile,
+  duplicateGaggiMateProfile,
   deleteMachineProfile,
   openProfileForm,
   closeProfileForm,
@@ -944,6 +946,10 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'edit-profile':
         if (_isActiveMachineGaggiMate()) openGaggiMateProfileEditor(strId());
         else editProfile(numId());
+        break;
+      case 'duplicate-profile':
+        if (_isActiveMachineGaggiMate()) duplicateGaggiMateProfile(strId());
+        else duplicateProfile(numId());
         break;
       case 'delete-profile':        deleteMachineProfile(strId()); break;
       case 'remove-profile-phase':  removeProfilePhase(Number(el.dataset.idx)); break;
