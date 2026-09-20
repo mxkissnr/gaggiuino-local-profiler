@@ -6,14 +6,17 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // test/bottom-nav-config.test.js. Backed by a real Map store (not an
 // always-null stub) so the migration-cleanup test below can pre-seed a
 // legacy token and assert it actually gets removed.
-const _store = new Map();
-const localStorageCalls = [];
-globalThis.localStorage = {
-  getItem: (k) => { localStorageCalls.push(['getItem', k]); return _store.has(k) ? _store.get(k) : null; },
-  setItem: (k, v) => { localStorageCalls.push(['setItem', k, v]); _store.set(k, String(v)); },
-  removeItem: (k) => { localStorageCalls.push(['removeItem', k]); _store.delete(k); },
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge test/helpers/fake-option-dom.ts uses).
+const g = globalThis as unknown as Record<string, unknown>;
+const _store = new Map<string, string>();
+const localStorageCalls: unknown[][] = [];
+g.localStorage = {
+  getItem: (k: string) => { localStorageCalls.push(['getItem', k]); return _store.has(k) ? _store.get(k) : null; },
+  setItem: (k: string, v: string) => { localStorageCalls.push(['setItem', k, v]); _store.set(k, String(v)); },
+  removeItem: (k: string) => { localStorageCalls.push(['removeItem', k]); _store.delete(k); },
 };
-globalThis.navigator ??= { language: 'en-US' };
+g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 const { initToken, apiFetch } = await import('../public-src/api/transport.js');
