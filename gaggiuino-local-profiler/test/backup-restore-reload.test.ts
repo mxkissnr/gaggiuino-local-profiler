@@ -8,9 +8,9 @@
 // or the restore-success block: location.reload() happens after the result
 // alert, and the old partial window.loadData() refresh is gone from that path.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '../public-src/components/backup-modal.ts'), 'utf8');

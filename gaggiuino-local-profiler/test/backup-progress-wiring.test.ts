@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 // Source-grep guards (same style as i18n.test.js's "shot detail view i18n
 // wiring") that the #960 progress plumbing stays wired end to end. Package
@@ -12,7 +12,7 @@ import { dirname, join } from 'path';
 // directly, so the URL/header/onProgress-forwarding assertions moved to
 // system.ts alongside them.
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const read = (p) => readFileSync(join(__dirname, '..', p), 'utf8');
+const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
 
 describe('backup-modal.ts progress wiring', () => {
   const src = read('public-src/components/backup-modal.ts');
