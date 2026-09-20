@@ -294,18 +294,28 @@ func (r *ProfilesRepository) MarkPendingDelete(machineID int64, id string) error
 // ReplaceRemoteID is called once a pending_create row's first push
 // succeeds: the machine's real assigned id becomes authoritative and the
 // row moves to synced.
-func (r *ProfilesRepository) ReplaceRemoteID(localID int64, remoteID, name string) error {
+//
+// expectedUpdatedAt guards against a lost-update race: it must be the
+// updated_at the caller's row had when it read the data it just pushed.
+// If the row was edited again (bumping updated_at) while the push was in
+// flight, this WHERE clause matches zero rows and the update is silently
+// skipped — leaving the row dirty so the next sweep pushes the newer edit,
+// instead of marking it synced based on stale data and losing the edit
+// that arrived mid-push.
+func (r *ProfilesRepository) ReplaceRemoteID(localID int64, expectedUpdatedAt int64, remoteID, name string) error {
 	_, err := r.db.Exec(`UPDATE machine_profiles SET remote_id = ?, name = ?, sync_status = ?, last_sync_error = NULL, updated_at = ?
-		WHERE local_id = ?`, remoteID, name, ProfileSyncSynced, time.Now().UnixMilli(), localID)
+		WHERE local_id = ? AND updated_at = ?`, remoteID, name, ProfileSyncSynced, time.Now().UnixMilli(), localID, expectedUpdatedAt)
 	if err != nil {
 		return fmt.Errorf("machines: assigning remote id to local profile %d: %w", localID, err)
 	}
 	return nil
 }
 
-func (r *ProfilesRepository) MarkSynced(localID int64) error {
-	_, err := r.db.Exec(`UPDATE machine_profiles SET sync_status = ?, last_sync_error = NULL, updated_at = ? WHERE local_id = ?`,
-		ProfileSyncSynced, time.Now().UnixMilli(), localID)
+// MarkSynced's expectedUpdatedAt has the same lost-update-guard rationale
+// as ReplaceRemoteID's — see that doc comment.
+func (r *ProfilesRepository) MarkSynced(localID int64, expectedUpdatedAt int64) error {
+	_, err := r.db.Exec(`UPDATE machine_profiles SET sync_status = ?, last_sync_error = NULL, updated_at = ? WHERE local_id = ? AND updated_at = ?`,
+		ProfileSyncSynced, time.Now().UnixMilli(), localID, expectedUpdatedAt)
 	if err != nil {
 		return fmt.Errorf("machines: marking local profile %d synced: %w", localID, err)
 	}

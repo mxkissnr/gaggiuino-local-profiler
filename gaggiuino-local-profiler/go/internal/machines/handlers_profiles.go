@@ -296,11 +296,13 @@ func (h *Handlers) createMachineProfile(w http.ResponseWriter, r *http.Request) 
 		created, err := adapter.CreateProfile(r.Context(), machine, ProfileInput{RawBody: rawBody})
 		if err != nil {
 			slog.Warn("creating machine profile failed, saved locally instead", "machineId", machine.ID, "err", err)
-			_ = h.profilesRepo.MarkSyncError(row.LocalID, err.Error())
+			if merr := h.profilesRepo.MarkSyncError(row.LocalID, err.Error()); merr != nil {
+				slog.Warn("recording profile sync error also failed", "localId", row.LocalID, "err", merr)
+			}
 			writeJSON(w, http.StatusOK, map[string]any{"id": row.PublicID(), "name": row.Name, "utility": false, "syncStatus": row.SyncStatus})
 			return
 		}
-		if err := h.profilesRepo.ReplaceRemoteID(row.LocalID, created.ID, created.Name); err != nil {
+		if err := h.profilesRepo.ReplaceRemoteID(row.LocalID, row.UpdatedAt, created.ID, created.Name); err != nil {
 			internalError(w, err)
 			return
 		}
@@ -325,11 +327,13 @@ func (h *Handlers) createMachineProfile(w http.ResponseWriter, r *http.Request) 
 	created, err := adapter.CreateProfile(r.Context(), machine, in)
 	if err != nil {
 		slog.Warn("creating machine profile failed, saved locally instead", "machineId", machine.ID, "err", err)
-		_ = h.profilesRepo.MarkSyncError(row.LocalID, err.Error())
+		if merr := h.profilesRepo.MarkSyncError(row.LocalID, err.Error()); merr != nil {
+			slog.Warn("recording profile sync error also failed", "localId", row.LocalID, "err", merr)
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"id": row.PublicID(), "name": row.Name, "utility": false, "syncStatus": row.SyncStatus})
 		return
 	}
-	if err := h.profilesRepo.ReplaceRemoteID(row.LocalID, created.ID, created.Name); err != nil {
+	if err := h.profilesRepo.ReplaceRemoteID(row.LocalID, row.UpdatedAt, created.ID, created.Name); err != nil {
 		internalError(w, err)
 		return
 	}
@@ -402,11 +406,13 @@ func (h *Handlers) updateMachineProfile(w http.ResponseWriter, r *http.Request) 
 		updated, err := adapter.UpdateProfile(r.Context(), machine, ProfileInput{RawBody: pushBody})
 		if err != nil {
 			slog.Warn("updating machine profile failed, saved locally instead", "machineId", machine.ID, "profileId", *row.RemoteID, "err", err)
-			_ = h.profilesRepo.MarkSyncError(row.LocalID, err.Error())
+			if merr := h.profilesRepo.MarkSyncError(row.LocalID, err.Error()); merr != nil {
+				slog.Warn("recording profile sync error also failed", "localId", row.LocalID, "err", merr)
+			}
 			writeJSON(w, http.StatusOK, map[string]any{"id": row.PublicID(), "name": row.Name, "utility": false, "syncStatus": row.SyncStatus})
 			return
 		}
-		if err := h.profilesRepo.MarkSynced(row.LocalID); err != nil {
+		if err := h.profilesRepo.MarkSynced(row.LocalID, row.UpdatedAt); err != nil {
 			internalError(w, err)
 			return
 		}
@@ -460,11 +466,13 @@ func (h *Handlers) updateMachineProfile(w http.ResponseWriter, r *http.Request) 
 	updated, err := adapter.UpdateProfile(r.Context(), machine, in)
 	if err != nil {
 		slog.Warn("updating machine profile failed, saved locally instead", "machineId", machine.ID, "profileId", numericID, "err", err)
-		_ = h.profilesRepo.MarkSyncError(row.LocalID, err.Error())
+		if merr := h.profilesRepo.MarkSyncError(row.LocalID, err.Error()); merr != nil {
+			slog.Warn("recording profile sync error also failed", "localId", row.LocalID, "err", merr)
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"id": row.PublicID(), "name": row.Name, "utility": false, "syncStatus": row.SyncStatus})
 		return
 	}
-	if err := h.profilesRepo.MarkSynced(row.LocalID); err != nil {
+	if err := h.profilesRepo.MarkSynced(row.LocalID, row.UpdatedAt); err != nil {
 		internalError(w, err)
 		return
 	}
