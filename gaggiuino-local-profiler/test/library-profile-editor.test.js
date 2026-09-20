@@ -10,7 +10,7 @@ globalThis.navigator    ??= { language: 'en-US' };
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
-const { _synthesizeSeries, _collectPhases, loadMachineProfileList } = await import('../public-src/views/library-profile-editor.js');
+const { _synthesizeSeries, _collectPhases, loadMachineProfileList, duplicateProfile } = await import('../public-src/views/library-profile-editor.js');
 
 // _collectPhases reads phase rows straight off `document` (DOM-as-state, no
 // separate JS array) — this vitest project runs in the 'node' environment
@@ -113,6 +113,40 @@ describe('_collectPhases', () => {
     const [phase] = _collectPhases();
     expect(phase.target.volume).toBeUndefined();
     expect(phase.waterTemperature).toBeUndefined();
+  });
+});
+
+describe('duplicateProfile', () => {
+  it('opens a fresh editor pre-filled from the source profile, with id cleared and name suffixed', async () => {
+    fetchSpy.mockReset();
+    S.profileEditId = 'stale'; // must be overwritten, not left over from a previous edit
+    const fields = {};
+    globalThis.document = {
+      getElementById: id => {
+        // renderProfilePreviewChart bails out on a falsy element — no real
+        // canvas/Chart.js needed for this test.
+        if (id === 'profilePreviewChart') return undefined;
+        return (fields[id] ??= { value: '', style: {}, classList: { add() {}, remove() {} }, focus() {} });
+      },
+      querySelectorAll: () => [],
+    };
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: 'p1', name: 'Turbo Shot', waterTemperature: 93,
+        recipe: { coffeeIn: 18, coffeeOut: 36, ratio: 2 },
+        globalStopConditions: { weight: 36 },
+        phases: [],
+      }),
+    });
+
+    await duplicateProfile('p1');
+
+    expect(S.profileEditId).toBeNull(); // save must POST a new profile, not PUT over the source
+    expect(fields.profileFormName.value).toBe('Turbo Shot (Copy)');
+    // '93' as a string: the .ts module stringifies input values (`String(profile?.waterTemperature)`),
+    // which is what a real <input type="number">.value holds anyway.
+    expect(fields.profileFormWaterTemp.value).toBe('93');
   });
 });
 
