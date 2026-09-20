@@ -22,14 +22,16 @@ import path from 'node:path';
 // module's own top-level IIFE reads localStorage on import (restoreActive
 // Machine()), so it needs the same minimal fake-DOM globals
 // test/machine-accent-theme.test.js already sets up, imported here first.
-const _localStorageStore = {};
-globalThis.localStorage ??= {
-  getItem: (k) => (k in _localStorageStore ? _localStorageStore[k] : null),
-  setItem: (k, v) => { _localStorageStore[k] = String(v); },
+const g = globalThis as unknown as Record<string, unknown>;
+
+const _localStorageStore: Record<string, string> = {};
+g.localStorage ??= {
+  getItem: (k: string) => (k in _localStorageStore ? _localStorageStore[k] : null),
+  setItem: (k: string, v: string) => { _localStorageStore[k] = String(v); },
 };
-globalThis.navigator ??= { language: 'en-US' };
-globalThis.window ??= globalThis;
-globalThis.document ??= { documentElement: {}, getElementById: () => undefined };
+g.navigator ??= { language: 'en-US' };
+g.window ??= globalThis;
+g.document ??= { documentElement: {}, getElementById: () => undefined };
 
 const { resolveAccentInk } = await import('../public-src/components/machines-settings.js');
 const { THEME_PRESETS } = await import('../public-src/shared/theme-presets.js');
@@ -39,7 +41,7 @@ const CSS = fs.readFileSync(
 
 // Pulls one selector block's custom properties out of the stylesheet. Later
 // declarations win, matching the cascade for identical specificity.
-function tokensOf(selector) {
+function tokensOf(selector: string): Record<string, string> {
   // Tolerant of the alignment whitespace between selector and brace — the
   // first version of this matched a single space and reported two perfectly
   // good accents as missing.
@@ -47,7 +49,7 @@ function tokensOf(selector) {
   const i = at;
   if (i === -1) throw new Error(`selector not found: ${selector}`);
   const body = CSS.slice(i, CSS.indexOf('}', i));
-  const out = {};
+  const out: Record<string, string> = {};
   // Three-digit hex counts: --on-fill is declared as #000/#fff, and a
   // six-digit-only pattern silently reported it as undefined.
   for (const m of body.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{3,6})\b/g)) out[m[1]] = expand(m[2]);
@@ -55,18 +57,18 @@ function tokensOf(selector) {
 }
 
 // #rgb -> #rrggbb so everything downstream can assume six digits.
-function expand(hex) {
+function expand(hex: string): string {
   return hex.length === 4
     ? '#' + [...hex.slice(1)].map(c => c + c).join('')
     : hex;
 }
 
-const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
-function luminance(hex) {
+const lin = (c: number): number => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+function luminance(hex: string): number {
   const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
-function contrast(a, b) {
+function contrast(a: string, b: string): number {
   const [x, y] = [luminance(a), luminance(b)];
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
@@ -178,7 +180,7 @@ describe('design token contrast (#811)', () => {
 
     it('leaves an already-compliant preset (ruby-ristretto, mulberry-mocha) unmodified in the light theme too', () => {
       for (const key of ['ruby-ristretto', 'mulberry-mocha']) {
-        const raw = THEME_PRESETS.find(p => p.key === key).a;
+        const raw = THEME_PRESETS.find(p => p.key === key)!.a;
         expect(resolveAccentInk(key, raw, true)).toBe(raw);
       }
     });

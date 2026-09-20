@@ -8,7 +8,7 @@ import { syncDevConfig } from '../scripts/sync-dev-config.mjs';
 // workflow now calls, using minimal stand-ins for the two real config.yaml
 // files rather than the full files, so each case stays readable.
 
-function source(optionsBody, schemaBody) {
+function source(optionsBody: string, schemaBody: string) {
     return [
         'name: "GLP — Gaggiuino Local Profiler"',
         'slug: "gaggiuino_local_profiler"',
@@ -19,7 +19,7 @@ function source(optionsBody, schemaBody) {
     ].join('\n');
 }
 
-function target(optionsBody, schemaBody) {
+function target(optionsBody: string, schemaBody: string) {
     return [
         'name: "GLP DEV — Gaggiuino Local Profiler (unstable)"',
         'slug: "gaggiuino_local_profiler_dev"',
