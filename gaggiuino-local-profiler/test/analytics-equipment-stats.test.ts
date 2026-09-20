@@ -31,7 +31,7 @@ beforeAll(async () => {
   });
   Object.defineProperty(globalThis, 'window', {
     value: {
-      calcShotScore: (shot) => shot.score ?? null,
+      calcShotScore: (shot: ShotRow) => shot.score ?? null,
       getShotData: () => ({}),
     },
     configurable: true, writable: true,
