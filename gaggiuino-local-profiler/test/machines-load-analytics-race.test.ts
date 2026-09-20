@@ -30,7 +30,7 @@ const { loadMachines } = await import('../public-src/components/machines-setting
 // cleanly instead of rejecting into an unhandled promise.
 interface MachineFixture { id: number; name: string; isDefault: boolean }
 function stubFetch(machines: MachineFixture[]): void {
-  g.fetch = (url: RequestInfo | URL) => {
+  g.fetch = (url: string) => {
     if (String(url).includes('api/machines')) return Promise.resolve({ ok: true, json: () => Promise.resolve(machines) });
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   };
