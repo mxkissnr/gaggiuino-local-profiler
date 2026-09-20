@@ -7,14 +7,18 @@
 // firmwareProgressLabel(); the codes (C_FW | F_FW | F_FS) are the firmware's
 // own REST API doc's field notes for GET /api/firmware/progress.
 import { describe, it, expect } from 'vitest';
+import type { TranslationValue } from '../public-src/i18n.js';
 
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.window ??= globalThis;
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge test/helpers/fake-option-dom.ts uses).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.window ??= globalThis;
 
 // machines-settings.js reaches for the DOM at import time (element lookups in
 // its module-level wiring); the same minimal fake the other machines-settings
 // tests use is enough here, since only the pure label helper is exercised.
-globalThis.document = { getElementById: () => undefined, querySelectorAll: () => [] };
+g.document = { getElementById: () => undefined, querySelectorAll: () => [] };
 
 const { S } = await import('../public-src/state/index.js');
 const { firmwareProgressLabel } = await import('../public-src/components/machines-settings.js');
@@ -31,6 +35,13 @@ const STAGE_KEYS = [
   'settings_machine_firmware_stage_f_fw',
   'settings_machine_firmware_stage_f_fs',
 ];
+
+// Dictionary entries are `string | formatter`; these tests only exercise the
+// parameterised formatter entries, so narrow them explicitly before calling.
+function formatter(value: TranslationValue | undefined): (...args: unknown[]) => string {
+  if (typeof value !== 'function') throw new TypeError('expected an i18n formatter');
+  return value;
+}
 
 describe('firmwareProgressLabel (#1085)', () => {
   S.currentLang = 'en';
@@ -51,7 +62,7 @@ describe('firmwareProgressLabel (#1085)', () => {
   it('falls back to the generic label for a type this build does not know or the firmware omits', () => {
     expect(firmwareProgressLabel({ type: 'SOME_FUTURE_CODE' }, 40)).toBe('Updating firmware… 40%');
     expect(firmwareProgressLabel({}, 40)).toBe('Updating firmware… 40%');
-    expect(firmwareProgressLabel({ type: null }, 40)).toBe('Updating firmware… 40%');
+    expect(firmwareProgressLabel({ type: null as unknown as string }, 40)).toBe('Updating firmware… 40%');
   });
 
   it('every language names all three documented stages', () => {
@@ -65,7 +76,7 @@ describe('firmwareProgressLabel (#1085)', () => {
   it('every language interpolates both the stage name and the percentage', () => {
     for (const [name, dict] of Object.entries(LANGS)) {
       const stage = dict.settings_machine_firmware_stage_c_fw;
-      const rendered = dict.settings_machine_firmware_progress_stage_label(stage, 76);
+      const rendered = formatter(dict.settings_machine_firmware_progress_stage_label)(stage, 76);
       expect(rendered, `${name}.js stage label`).toContain(stage);
       expect(rendered, `${name}.js stage label`).toContain('76');
     }
@@ -73,9 +84,9 @@ describe('firmwareProgressLabel (#1085)', () => {
 
   it('the stage label reads differently from the generic one in every language', () => {
     for (const [name, dict] of Object.entries(LANGS)) {
-      const staged = dict.settings_machine_firmware_progress_stage_label(
+      const staged = formatter(dict.settings_machine_firmware_progress_stage_label)(
         dict.settings_machine_firmware_stage_f_fw, 5);
-      expect(staged, `${name}.js stage label`).not.toBe(dict.settings_machine_firmware_progress_label(5));
+      expect(staged, `${name}.js stage label`).not.toBe(formatter(dict.settings_machine_firmware_progress_label)(5));
     }
   });
 });

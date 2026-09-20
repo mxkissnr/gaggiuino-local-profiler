@@ -4,25 +4,38 @@ import { describe, it, expect, beforeEach } from 'vitest';
 
 const { showDevBuildBanner, devBannerHeight } = await import('../public-src/components/dev-banner.js');
 
+// vitest's node environment has no browser globals; stub document through a
+// loose view of globalThis (the same bridge test/helpers/fake-option-dom.ts
+// uses), so the minimal fake below need not satisfy the full Document shape.
+const g = globalThis as unknown as Record<string, unknown>;
+
+interface FakeBannerElement {
+  id: string;
+  style: Record<string, string>;
+  textContent: string;
+  innerHTML: string;
+  offsetHeight: number;
+}
+
 function makeFakeDocument() {
-  const registry = new Map();
+  const registry = new Map<string, FakeBannerElement>();
   const body = {
-    style: {},
-    insertAdjacentElement: (_pos, el) => { registry.set(el.id, el); },
+    style: {} as Record<string, string>,
+    insertAdjacentElement: (_pos: string, el: FakeBannerElement) => { registry.set(el.id, el); },
   };
   return {
     body,
-    getElementById: id => registry.get(id),
-    createElement: () => ({ style: {}, textContent: '', innerHTML: '', offsetHeight: 34 }),
+    getElementById: (id: string): FakeBannerElement => registry.get(id)!,
+    createElement: (): FakeBannerElement => ({ id: '', style: {}, textContent: '', innerHTML: '', offsetHeight: 34 }),
   };
 }
 
 describe('dev-build banner (#683)', () => {
-  let doc;
+  let doc: ReturnType<typeof makeFakeDocument>;
 
   beforeEach(() => {
     doc = makeFakeDocument();
-    globalThis.document = doc;
+    g.document = doc;
   });
 
   it('creates a banner with the expected warning text', () => {
