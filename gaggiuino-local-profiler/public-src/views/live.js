@@ -5,6 +5,7 @@ import * as timerRegistry from '../state/timers.js';
 import { t } from '../i18n.js';
 import { isApiPortBlocked } from '../api/transport.js';
 import { getPreheat, getLiveData } from '../api/system.js';
+import { annotateShot } from '../api/shots.js';
 import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints } from '../utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
@@ -157,9 +158,7 @@ async function _applyLiveSetupToShot(shotId) {
     dose: draft.dose ?? null, recipeId: draft.recipeId ?? null,
   };
   try {
-    const r = await apiFetch(`api/shots/${shotId}/annotate`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-    });
+    const r = await annotateShot(shotId, payload);
     if (r.ok) {
       const idx = S.shots.findIndex(s => s.id === shotId);
       if (idx !== -1) S.shots[idx].annotation = { ...S.shots[idx].annotation, ...payload };
