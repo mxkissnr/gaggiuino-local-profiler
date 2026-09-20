@@ -384,6 +384,43 @@ func TestBean_NewBagJoinsBackOfQueue_DoesNotBecomeCurrent(t *testing.T) {
 	if second["sortOrder"] != float64(1) {
 		t.Fatalf("second bag sortOrder = %v, want 1 (appended after first bag's 0)", second["sortOrder"])
 	}
+	// The bean-level display fields must still reflect the bag actually
+	// being drawn from (first), not the new, not-yet-current second bag —
+	// see writeEnrichedBean/newBag's resolveCurrentBagSimple guard.
+	if bean["roastDate"] != "2026-08-01" {
+		t.Fatalf("bean roastDate = %v, want 2026-08-01 (the still-current first bag's), not the new bag's 2026-08-15", bean["roastDate"])
+	}
+	if bean["stock_g"] != float64(300) {
+		t.Fatalf("bean stock_g = %v, want 300 (the still-current first bag's), not the new bag's 250", bean["stock_g"])
+	}
+}
+
+// TestBean_NewBagBecomesCurrentWhenNoOtherBagHasStock is the flip side of
+// the test above: when every existing bag is already exhausted (or there
+// are none), the new bag IS immediately current, and the bean-level
+// display fields must sync to it.
+func TestBean_NewBagBecomesCurrentWhenNoOtherBagHasStock(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	// stock_g: 0 -> the initial bag has nothing left, so it's not "current".
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 0, "roastDate": "2026-08-01"})
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag",
+		mustMarshal(t, map[string]any{"roastDate": "2026-08-15", "stock_g": 250}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("new-bag status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	bean := decodeBody(t, rec.Body.Bytes())
+	bags, _ := bean["bags"].([]any)
+	second, _ := bags[1].(map[string]any)
+	if second["current"] != true {
+		t.Fatalf("second (newly added) bag current = %v, want true (first bag has no stock left)", second["current"])
+	}
+	if bean["roastDate"] != "2026-08-15" {
+		t.Fatalf("bean roastDate = %v, want 2026-08-15 (the new bag is now current)", bean["roastDate"])
+	}
+	if bean["stock_g"] != float64(250) {
+		t.Fatalf("bean stock_g = %v, want 250 (the new bag is now current)", bean["stock_g"])
+	}
 }
 
 // TestBean_UpdateBag_RouteIsRegistered guards a regression where updateBag
@@ -504,6 +541,88 @@ func TestBean_ReorderBags_ClientOrderWinsAndCurrentStaysProtected(t *testing.T) 
 	if byID[b2ID]["sortOrder"].(float64) <= byID[b1ID]["sortOrder"].(float64) {
 		t.Fatalf("sortOrder after reorder: b1=%v b2=%v; want b1 < b2 (current stays ahead of queue)", byID[b1ID]["sortOrder"], byID[b2ID]["sortOrder"])
 	}
+}
+
+// TestBean_ReorderBags_RejectsDuplicateID verifies reorderBags 400s when
+// the same bagId appears twice in the request instead of silently
+// assigning it a sortOrder twice (discarding one of the assignments).
+func TestBean_ReorderBags_RejectsDuplicateID(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	for _, sg := range []int{200, 250} {
+		doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag", mustMarshal(t, map[string]any{"stock_g": sg}))
+	}
+	bags := getBeanBags(t, mux, id)
+	b2ID := int64(bags[1]["id"].(float64))
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/reorder-bags",
+		mustMarshal(t, map[string]any{"bagIds": []any{b2ID, b2ID}}))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestBean_ReorderBags_RejectsIncompleteList verifies reorderBags 400s
+// when the request omits an upcoming bag — leaving it at its old sortOrder
+// value, which the newly-assigned contiguous values can collide with.
+func TestBean_ReorderBags_RejectsIncompleteList(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	for _, sg := range []int{200, 250} {
+		doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag", mustMarshal(t, map[string]any{"stock_g": sg}))
+	}
+	bags := getBeanBags(t, mux, id)
+	b2ID := int64(bags[1]["id"].(float64))
+	// Omits bags[2] entirely — only 1 of the 2 upcoming bags.
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/reorder-bags",
+		mustMarshal(t, map[string]any{"bagIds": []any{b2ID}}))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestBean_ReorderBags_RejectsCurrentBagInList verifies reorderBags 400s
+// when the request includes the current (not "upcoming") bag — reorder is
+// scoped to the queue behind the current bag only.
+func TestBean_ReorderBags_RejectsCurrentBagInList(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag", mustMarshal(t, map[string]any{"stock_g": 200}))
+	bags := getBeanBags(t, mux, id)
+	b1ID := int64(bags[0]["id"].(float64)) // current (first, has stock)
+	b2ID := int64(bags[1]["id"].(float64))
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/reorder-bags",
+		mustMarshal(t, map[string]any{"bagIds": []any{b1ID, b2ID}}))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// getBeanBags fetches bean id's bags array via GET /api/library, in
+// declared order — shared by the reorderBags validation tests above.
+func getBeanBags(t *testing.T, mux *http.ServeMux, id int64) []map[string]any {
+	t.Helper()
+	rec := doJSON(t, mux, http.MethodGet, "/api/library", nil)
+	lib := decodeBody(t, rec.Body.Bytes())
+	libBeans, _ := lib["beans"].([]any)
+	for _, raw := range libBeans {
+		b, _ := raw.(map[string]any)
+		if int64(b["id"].(float64)) == id {
+			bags, _ := b["bags"].([]any)
+			out := make([]map[string]any, len(bags))
+			for i, raw := range bags {
+				out[i], _ = raw.(map[string]any)
+			}
+			return out
+		}
+	}
+	t.Fatalf("bean %d not found in GET /api/library response", id)
+	return nil
 }
 
 func TestBean_FreezePortionsNoActiveBag(t *testing.T) {

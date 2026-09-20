@@ -238,7 +238,7 @@ function renderBagCard(b, entry, state, beans, canDelete) {
   const editRow = editingFull
     ? `<div class="lib-new-bag-form" style="display:flex">
          <div class="lib-new-bag-fields">
-           <input type="date" class="lib-new-bag-input" id="editBagRoastDate${bg.id}" title="${t('lib_bag_roast_date')}" value="${bg.roastDate || ''}" max="${todayIsoDate()}">
+           <input type="date" class="lib-new-bag-input" id="editBagRoastDate${bg.id}" title="${t('lib_bag_roast_date')}" value="${esc(bg.roastDate || '')}" max="${todayIsoDate()}">
            <input type="number" class="lib-new-bag-input" id="editBagStock${bg.id}" placeholder="${t('lib_bag_stock')}" min="0" step="1" value="${stockG ?? ''}">
            <input type="number" class="lib-new-bag-input" id="editBagPrice${bg.id}" placeholder="${t('lib_bag_price')}" min="0" step="0.01" value="${bg.price_eur ?? ''}">
            <input type="text" class="lib-new-bag-input" id="editBagBatchNumber${bg.id}" placeholder="${t('lib_bag_batch_number')}" maxlength="50" value="${esc(bg.batchNumber || '')}">

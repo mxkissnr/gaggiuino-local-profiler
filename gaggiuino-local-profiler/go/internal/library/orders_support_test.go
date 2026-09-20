@@ -43,6 +43,44 @@ func TestComputeBeanRemaining_DistinctBagsWithoutOpenedAt_NotMisattributed(t *te
 	}
 }
 
+// TestComputeBeanRemaining_SumsAllTrackedBagsNotJustTheLastOne guards the
+// #sortOrder-rework regression: the pre-rework version only ever summed
+// bean["stock_g"] and only counted doses against the LAST bag, silently
+// dropping stock_g on any other tracked (non-last) bag and every dose
+// attributed to it. This mirrors public-src/bean-math.js's
+// computeBeanRemaining test coverage — a bean with two independently
+// stock-tracked bags, doses against each, must sum both bags' stock and
+// deduct doses from whichever bag each one actually belongs to.
+func TestComputeBeanRemaining_SumsAllTrackedBagsNotJustTheLastOne(t *testing.T) {
+	bean := Entity{
+		"id": int64(1), "name": "Test Bean",
+		"bags": []any{
+			Entity{"id": int64(101), "openedAt": int64(1000), "stock_g": float64(200)},
+			Entity{"id": int64(102), "openedAt": int64(5000), "stock_g": float64(300)},
+		},
+	}
+	beanID := int64(1)
+	doseA, doseB := 30.0, 40.0
+	doseRows := []shots.AnnotatedDose{
+		{BeanID: &beanID, Dose: &doseA, Timestamp: 2}, // 2000ms -> resolves to bag 101 (opened at 1000)
+		{BeanID: &beanID, Dose: &doseB, Timestamp: 6}, // 6000ms -> resolves to bag 102 (opened at 5000)
+	}
+
+	remaining, ok := ComputeBeanRemaining(bean, doseRows, []Entity{bean})
+	if !ok {
+		t.Fatalf("ComputeBeanRemaining: ok = false, want true")
+	}
+	// totalStock = 200+300 = 500; consumed = 30+40 = 70 (both bags tracked,
+	// both doses correctly attributed) -> 430. The pre-fix version would
+	// have summed only bean["stock_g"] (unset here, so 0) and returned
+	// ok=false entirely, or — with a bean-level stock_g set instead of
+	// per-bag — ignored the bag-101 dose because only the last bag (102)
+	// was ever checked.
+	if remaining != 430 {
+		t.Fatalf("remaining = %d, want 430 (200+300 stock, minus 30+40 doses across both tracked bags)", remaining)
+	}
+}
+
 // TestSameBag_DistinctMapsWithEqualFieldsAreNotSame is a narrower,
 // function-level companion to the ComputeBeanRemaining test above: two
 // distinct Entity maps with identical (empty) openedAt must not compare
@@ -161,5 +199,55 @@ func TestSimulateBagQueue_OpenedAtFallbackForLegacyBags(t *testing.T) {
 	statuses := SimulateBagQueue(bean, nil, []Entity{bean})
 	if len(statuses) != 2 || !statuses[0].Current || statuses[1].Current {
 		t.Fatalf("statuses = %+v; want bag[0] (older openedAt) current", statuses)
+	}
+}
+
+// TestSimulateBagQueue_StockAdjustRoundTrip is the Go-side equivalent of
+// the deleted bean-math.js remainingToStockG/#930 regression test, ported
+// to the per-bag model: the frontend's "Bestand anpassen" flow
+// (library.js's saveBagStock) computes newStockG as
+// `desiredRemaining + bag.consumedG` using SimulateBagQueue's own
+// server-computed consumedG — this verifies that round-trip actually lands
+// on the desired remaining value when SimulateBagQueue is re-run against
+// the adjusted stock_g, for a bag with a non-zero consumedG (i.e. doses
+// already logged against it, the case #930 originally regressed on: naively
+// setting stock_g to the desired remaining value, ignoring what's already
+// been consumed, under-set the bag's stock and made it look emptier than
+// the user intended).
+func TestSimulateBagQueue_StockAdjustRoundTrip(t *testing.T) {
+	beanID := int64(1)
+	dose := 18.0
+	doseRows := []shots.AnnotatedDose{
+		{BeanID: &beanID, Dose: &dose, Timestamp: 1500},
+	}
+	bean := Entity{
+		"id": beanID, "name": "Brasil",
+		"bags": []any{
+			Entity{"id": int64(1), "stock_g": float64(200), "openedAt": int64(1000), "sortOrder": int64(0)},
+		},
+	}
+	before := SimulateBagQueue(bean, doseRows, []Entity{bean})
+	if len(before) != 1 {
+		t.Fatalf("len(before) = %d, want 1", len(before))
+	}
+	if before[0].ConsumedG != 18 {
+		t.Fatalf("before[0].ConsumedG = %d, want 18", before[0].ConsumedG)
+	}
+
+	const desiredRemaining = int64(50)
+	newStockG := desiredRemaining + before[0].ConsumedG // saveBagStock's own formula
+
+	adjusted := Entity{
+		"id": beanID, "name": "Brasil",
+		"bags": []any{
+			Entity{"id": int64(1), "stock_g": float64(newStockG), "openedAt": int64(1000), "sortOrder": int64(0)},
+		},
+	}
+	after := SimulateBagQueue(adjusted, doseRows, []Entity{adjusted})
+	if len(after) != 1 {
+		t.Fatalf("len(after) = %d, want 1", len(after))
+	}
+	if after[0].RemainingG != desiredRemaining {
+		t.Fatalf("after[0].RemainingG = %d, want %d (the round-trip must land exactly on the desired remaining value)", after[0].RemainingG, desiredRemaining)
 	}
 }

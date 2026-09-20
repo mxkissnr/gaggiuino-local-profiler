@@ -24,11 +24,22 @@ import (
 // matching for rows that predate it or whose beanId no longer resolves to
 // any existing bean. Returns (0, false) for a bean with no tracked stock
 // (bean.stock_g not set/positive), matching the Node original's `null`.
+// ComputeBeanRemaining mirrors public-src/bean-math.js's computeBeanRemaining
+// exactly (same signature, same beanId-first-with-name-fallback matching,
+// same FIFO-across-tracked-bags accumulation, same double-round) — the two
+// must never drift apart, since this is the SPA's own display value on one
+// side and the SSR/achievements/orders low-stock paths' value on the other.
+//
+// "Tracked bags" are every bag with a positive stock_g (falling back to
+// bean["stock_g"] for the last bag when it has none of its own, for bags
+// predating per-bag stock tracking) — not just the single last/active bag
+// the pre-#sortOrder-rework version assumed. A dose is attributed to
+// whichever bag was open at the shot's timestamp (bagAtTime) and only
+// counts against the total when that bag is itself tracked; there's no
+// per-bag clamp, so a dose recorded against one tracked bag's period can
+// still draw down a later tracked bag's stock in the running total (true
+// FIFO), matching the JS implementation's own doc comment.
 func ComputeBeanRemaining(bean Entity, doseRows []shots.AnnotatedDose, allBeans []Entity) (int64, bool) {
-	stockG, hasStock := jsParseFloat(bean["stock_g"])
-	if !hasStock || !(stockG > 0) {
-		return 0, false
-	}
 	bags := bagsOf(bean)
 	name := lowerOrEmpty(strOf(bean["name"]))
 	beanID, hasBeanID := idOf(bean, "id")
@@ -40,11 +51,59 @@ func ComputeBeanRemaining(bean Entity, doseRows []shots.AnnotatedDose, allBeans 
 		}
 	}
 
-	var activeBagEntity Entity
-	if len(bags) > 0 {
-		if m, ok := bags[len(bags)-1].(Entity); ok {
-			activeBagEntity = m
+	if len(bags) == 0 {
+		stockG, hasStock := jsParseFloat(bean["stock_g"])
+		if !hasStock || !(stockG > 0) {
+			return 0, false
 		}
+		var consumed float64
+		for _, row := range doseRows {
+			if row.Dose == nil || *row.Dose == 0 {
+				continue
+			}
+			var matches bool
+			if row.BeanID != nil && idExists[*row.BeanID] {
+				matches = hasBeanID && *row.BeanID == beanID
+			} else {
+				matches = lowerOrEmpty(row.Coffee) == name
+			}
+			if matches {
+				consumed += *row.Dose
+			}
+		}
+		return mathRoundInt(stockG - float64(mathRoundInt(consumed))), true
+	}
+
+	var totalStock float64
+	// Entity (map[string]any) isn't hashable, so "tracked-ness" is a slice
+	// checked via sameBag's pointer-identity comparison (matching bagAtTime's
+	// own convention) rather than a map keyed by the bag itself — bag counts
+	// are small (single digits in practice), so the linear scan below is fine.
+	var trackedBags []Entity
+	for i, raw := range bags {
+		bg, ok := raw.(Entity)
+		if !ok {
+			continue
+		}
+		s, hasStock := jsParseFloat(bg["stock_g"])
+		if !hasStock && i == len(bags)-1 {
+			s, hasStock = jsParseFloat(bean["stock_g"])
+		}
+		if hasStock && s > 0 {
+			totalStock += s
+			trackedBags = append(trackedBags, bg)
+		}
+	}
+	if !(totalStock > 0) {
+		return 0, false
+	}
+	isTracked := func(bg Entity) bool {
+		for _, tb := range trackedBags {
+			if sameBag(tb, bg) {
+				return true
+			}
+		}
+		return false
 	}
 
 	var consumed float64
@@ -61,18 +120,18 @@ func ComputeBeanRemaining(bean Entity, doseRows []shots.AnnotatedDose, allBeans 
 		if !matches {
 			continue
 		}
-		if activeBagEntity != nil {
-			shotMs := row.Timestamp * 1000
-			bagAtShotTime := bagAtTime(bags, shotMs)
-			if !sameBag(bagAtShotTime, activeBagEntity) {
-				continue
-			}
+		bagAtShotTime := bagAtTime(bags, row.Timestamp*1000)
+		if isTracked(bagAtShotTime) {
+			consumed += *row.Dose
 		}
-		consumed += *row.Dose
 	}
-	// Mirrors `Math.round(bean.stock_g - Math.round(consumed))` exactly —
-	// two separate rounds, not one round of the difference.
-	return mathRoundInt(stockG - float64(mathRoundInt(consumed))), true
+	// Mirrors `Math.round(Math.max(0, totalStock - Math.round(consumed)))`
+	// exactly — two separate rounds, not one round of the difference.
+	remaining := mathRoundInt(totalStock - float64(mathRoundInt(consumed)))
+	if remaining < 0 {
+		remaining = 0
+	}
+	return remaining, true
 }
 
 // mathRoundInt ports JS's Math.round as an int64 result: round-half-up
@@ -278,6 +337,15 @@ type BagStatus struct {
 // bags (no stock_g ever set) are omitted entirely: we don't know their
 // capacity, so we can't say anything about their consumption or make them
 // current.
+//
+// frozenPortions is deliberately NOT subtracted from a bag's available
+// stock here: saveFreezePortions' own doc comment (handlers_beans.go)
+// states freezing "doesn't consume anything, it just pauses that portion's
+// freshness clock" — stock_g stays the bag's total gram count regardless
+// of how much of it is currently frozen. A review pass flagged this
+// function as "ignoring frozenPortions"; after checking that comment, that
+// reads as the intended behavior, not a bug — changing it would contradict
+// the documented freeze/thaw design elsewhere in this package.
 func SimulateBagQueue(bean Entity, doseRows []shots.AnnotatedDose, allBeans []Entity) []BagStatus {
 	bags := bagsOf(bean)
 	if len(bags) == 0 {
