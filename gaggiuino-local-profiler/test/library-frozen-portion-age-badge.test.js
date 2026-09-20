@@ -9,6 +9,10 @@ globalThis.navigator    ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 const { renderBeanList } = await import('../public-src/views/library.js');
+// Roast dates below are built with todayIsoDate() (local YYYY-MM-DD, not
+// Date#toISOString()'s UTC date): roastAgeDays() reparses the stored date in
+// local time, so a UTC date string rolls a day early/late outside UTC.
+const { todayIsoDate } = await import('../public-src/utils.js');
 
 function fakeDocument() {
   const elements = { beanListUI: { innerHTML: '' } };
@@ -43,7 +47,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
         name: 'Test Bean',
         bags: [{
           id: 1,
-          roastDate: new Date(now - 10 * DAY).toISOString().slice(0, 10),
+          roastDate: todayIsoDate(now - 10 * DAY),
           stock_g: 250,
           frozenPortions: [
             { id: 1, frozenAt: now - 5 * DAY, portionCount: 4, remainingCount: 4, portionWeight_g: 18 },
@@ -73,7 +77,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
         name: 'Test Bean',
         bags: [{
           id: 1,
-          roastDate: new Date(now - 20 * DAY).toISOString().slice(0, 10),
+          roastDate: todayIsoDate(now - 20 * DAY),
           stock_g: 250,
           frozenPortions: [
             { id: 2, frozenAt: now - 15 * DAY, thawedAt: now - 2 * DAY, portionCount: 2, remainingCount: 0, portionWeight_g: 18 },
