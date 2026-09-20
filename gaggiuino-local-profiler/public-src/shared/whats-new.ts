@@ -14,7 +14,13 @@
 // Keep this list newest-first; getWhatsNewEntries() below re-sorts and
 // caps it defensively so an out-of-order manual edit can't silently show
 // entries in the wrong order or let the list grow unbounded.
-const WHATS_NEW_ENTRIES = [
+export interface WhatsNewEntry {
+    version: string;
+    date: string;
+    highlights: string[];
+}
+
+const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
     { version: '3.1.0', date: '2026-09-17', highlights: [
         'Machines can now check for, trigger, and track Gaggiuino firmware updates right from the web app — a status badge on the machine\'s row expands into a progress bar naming the component being flashed, plus a release-channel selector in the machine\'s edit form.',
         'Fixed: manual shot sync and the machine debug probe are now protected against a machine host that changes what it points to.',
@@ -57,7 +63,7 @@ const WHATS_NEW_ENTRIES = [
 
 const MAX_ENTRIES = 8;
 
-function compareVersionsDesc(a, b) {
+function compareVersionsDesc(a: WhatsNewEntry, b: WhatsNewEntry): number {
     const pa = a.version.split('.').map(Number);
     const pb = b.version.split('.').map(Number);
     for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
@@ -69,7 +75,7 @@ function compareVersionsDesc(a, b) {
 
 // Newest-first, capped at MAX_ENTRIES — callers never need to sort/slice
 // themselves.
-function getWhatsNewEntries() {
+function getWhatsNewEntries(): WhatsNewEntry[] {
     return [...WHATS_NEW_ENTRIES].sort(compareVersionsDesc).slice(0, MAX_ENTRIES);
 }
 

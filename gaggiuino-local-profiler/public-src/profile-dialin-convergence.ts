@@ -23,6 +23,67 @@
 // wizard, over rounds *including* the one just accepted (mirrors
 // dialin-convergence.js's isConverged(s.rounds) called right after push).
 
+// One round of the profile dial-in session, as stored in
+// S.profileDialinSession.rounds.
+export interface ProfileDialinRoundRow {
+  symptom?: string;
+  score?: number | null;
+  shotId?: number;
+  appliedAdjustment?: { phaseIndex: number | null; field: string | null; delta: number } | null;
+}
+
+// What suggestPhaseAdjustment() returns: either an actionable 'adjust', a
+// 'hold'/'at-limit'/'insufficient-data' no-op, or the raw values when the
+// caller only needs the reason key.
+export interface ProfileSuggestion {
+  type: string;
+  symptom?: string;
+  phaseIndex: number | null;
+  phaseName: string | null;
+  field: string | null;
+  unit: string;
+  oldValue: number | null;
+  newValue: number | null;
+  delta: number;
+  reason: string;
+}
+
+// The shape of one phase _locatePhase() matches on (name/type/target).
+interface PhaseRow {
+  name?: string | null;
+  type?: string | null;
+  target?: { start?: number | null; end?: number | null } | null;
+}
+
+interface CandidateDef {
+  phaseKind: string | null;
+  field?: string;
+  profileField?: string;
+  direction: number;
+  min: number;
+  max: number;
+  baseStep: number;
+  unit: string;
+}
+
+interface ResolvedCandidate {
+  phaseIndex: number | null;
+  phaseName: string | null;
+  field: string;
+  direction: number;
+  min: number;
+  max: number;
+  baseStep: number;
+  unit: string;
+  currentValue: number;
+}
+
+interface ComputedAdjustment extends ResolvedCandidate {
+  step: number;
+  newValue: number;
+  delta: number;
+}
+
 const MAX_ROUNDS  = 6;
 const HIGH_SCORE   = 80;
 
@@ -30,10 +91,10 @@ const HIGH_SCORE   = 80;
 // round, only the single highest-priority one drives the (single) adjustment.
 // Order per plan: channeling > bitter/sour (tied) > watery. balanced has no
 // priority — it only "wins" when it's the only thing selected.
-const SYMPTOM_PRIORITY = { channeling: 3, bitter: 2, sour: 2, watery: 1, balanced: 0 };
+const SYMPTOM_PRIORITY: Record<string, number> = { channeling: 3, bitter: 2, sour: 2, watery: 1, balanced: 0 };
 
-function _resolvePrimarySymptom(symptom) {
-  const list = (Array.isArray(symptom) ? symptom : [symptom]).filter(Boolean);
+function _resolvePrimarySymptom(symptom: unknown): string {
+  const list = (Array.isArray(symptom) ? symptom : [symptom]).filter(Boolean) as string[];
   if (!list.length) return 'balanced';
   if (list.length === 1) return list[0];
   // Multiple picks: balanced never outranks a real symptom.
@@ -47,42 +108,43 @@ function _resolvePrimarySymptom(symptom) {
 // community-derived skeleton) name phases 'Preinfusion' / 'Bloom' / 'Ramp' /
 // 'Decline Flow' — match on that first; fall back to phase shape/position
 // for hand-edited profiles that used different names.
-function _locatePhase(phases, kind) {
+function _locatePhase(phases: unknown, kind: string): number | null {
   if (!Array.isArray(phases) || !phases.length) return null;
+  const rows = phases as PhaseRow[];
   if (kind === 'preinfusion') {
-    const byName = phases.findIndex(p => /preinf/i.test(p?.name || ''));
+    const byName = rows.findIndex(p => /preinf/i.test(p?.name || ''));
     if (byName !== -1) return byName;
     return 0;
   }
   if (kind === 'ramp') {
-    const byName = phases.findIndex(p => /ramp/i.test(p?.name || ''));
+    const byName = rows.findIndex(p => /ramp/i.test(p?.name || ''));
     if (byName !== -1) return byName;
-    const rising = phases.findIndex(p => p?.type === 'PRESSURE' && (p?.target?.end ?? 0) > (p?.target?.start ?? 0));
+    const rising = rows.findIndex(p => p?.type === 'PRESSURE' && (p?.target?.end ?? 0) > (p?.target?.start ?? 0));
     if (rising !== -1) return rising;
-    return phases.length > 1 ? 1 : null;
+    return rows.length > 1 ? 1 : null;
   }
   if (kind === 'decline') {
-    const byName = phases.findIndex(p => /declin|taper|finish/i.test(p?.name || ''));
+    const byName = rows.findIndex(p => /declin|taper|finish/i.test(p?.name || ''));
     if (byName !== -1) return byName;
-    const declining = phases.findIndex(p => (p?.target?.end ?? 0) < (p?.target?.start ?? p?.target?.end ?? 0));
+    const declining = rows.findIndex(p => (p?.target?.end ?? 0) < (p?.target?.start ?? p?.target?.end ?? 0));
     if (declining !== -1) return declining;
-    return phases.length - 1;
+    return rows.length - 1;
   }
   return null;
 }
 
-function _getPath(obj, path) {
-  return path.split('.').reduce((v, k) => (v == null ? v : v[k]), obj);
+function _getPath(obj: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((v, k) => (v == null ? v : (v as Record<string, unknown>)[k]), obj);
 }
 
-function _setPath(obj, path, value) {
+function _setPath(obj: Record<string, unknown>, path: string, value: unknown): void {
   const keys = path.split('.');
   let cur = obj;
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
     if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
     if (cur[key] == null) cur[key] = {};
-    cur = cur[key];
+    cur = cur[key] as Record<string, unknown>;
   }
   const lastKey = keys[keys.length - 1];
   if (lastKey === '__proto__' || lastKey === 'constructor' || lastKey === 'prototype') return;
@@ -95,7 +157,7 @@ function _setPath(obj, path, value) {
 // coffee-expert skill's symptom table. Step sizes: "±0.5-1 bar for pressure,
 // ±1-2s for time" per plan (time fields are milliseconds on the wire — see
 // project_gaggiuino_protocol memory — so 1-2s = 1000-2000).
-function _candidateDefs(primary) {
+function _candidateDefs(primary: string): CandidateDef[] {
   switch (primary) {
     case 'sour':
       // Underdeveloped: puck didn't saturate long enough, or ramp pressure
@@ -133,16 +195,17 @@ function _candidateDefs(primary) {
   }
 }
 
-function _resolveCandidate(def, profile) {
-  const phaseIndex = def.phaseKind ? _locatePhase(profile?.phases, def.phaseKind) : null;
+function _resolveCandidate(def: CandidateDef, profile: unknown): ResolvedCandidate | null {
+  const phases = (profile as { phases?: PhaseRow[] } | null | undefined)?.phases;
+  const phaseIndex = def.phaseKind ? _locatePhase(phases, def.phaseKind) : null;
   if (def.phaseKind && phaseIndex == null) return null;
-  const field = def.field ?? def.profileField;
-  const target = def.phaseKind ? profile.phases[phaseIndex] : profile;
+  const field = (def.field ?? def.profileField) as string;
+  const target = def.phaseKind ? phases![phaseIndex!] : profile;
   const currentValue = _getPath(target, field);
   if (typeof currentValue !== 'number') return null;
   return {
     phaseIndex,
-    phaseName: def.phaseKind ? (profile.phases[phaseIndex]?.name || def.phaseKind) : null,
+    phaseName: def.phaseKind ? (phases![phaseIndex!]?.name || def.phaseKind) : null,
     field,
     direction: def.direction,
     min: def.min,
@@ -156,23 +219,24 @@ function _resolveCandidate(def, profile) {
 // Previous step size for this exact field (halve on direction reversal,
 // otherwise keep it — same binary-search philosophy as dialin-convergence.js,
 // just tracked per-field instead of for a single global grind number.
-function _stepFor(candidate, roundHistory) {
-  const prior = [...(roundHistory || [])].reverse().find(r =>
+function _stepFor(candidate: ResolvedCandidate, roundHistory: unknown): number {
+  const history = roundHistory as ProfileDialinRoundRow[] | null | undefined;
+  const prior = [...(history || [])].reverse().find(r =>
     r?.appliedAdjustment?.field === candidate.field && r.appliedAdjustment.phaseIndex === candidate.phaseIndex);
   if (!prior) return candidate.baseStep;
-  const prevDelta = prior.appliedAdjustment.delta;
+  const prevDelta = prior.appliedAdjustment!.delta;
   if (!prevDelta) return candidate.baseStep;
   const prevSign = Math.sign(prevDelta);
   const reversed = prevSign !== 0 && prevSign !== candidate.direction;
   return Math.abs(prevDelta) / (reversed ? 2 : 1);
 }
 
-function _round(value, unit) {
+function _round(value: number, unit: string): number {
   const precision = unit === 'ms' ? 100 : unit === 'ratio' ? 0.1 : 0.1;
   return Math.round(value / precision) * precision;
 }
 
-function _computeAdjustment(candidate, roundHistory) {
+function _computeAdjustment(candidate: ResolvedCandidate, roundHistory: unknown): ComputedAdjustment {
   const step = _stepFor(candidate, roundHistory);
   const raw = candidate.currentValue + candidate.direction * step;
   const clamped = Math.min(candidate.max, Math.max(candidate.min, raw));
@@ -181,7 +245,7 @@ function _computeAdjustment(candidate, roundHistory) {
   return { ...candidate, step, newValue, delta };
 }
 
-const REASON_KEY = {
+const REASON_KEY: Record<string, string> = {
   'sour|stopConditions.time':          'profile_dialin_reason_sour_preinf_time',
   'sour|target.end':                   'profile_dialin_reason_sour_ramp_pressure',
   'bitter|waterTemperature':           'profile_dialin_reason_bitter_temp',
@@ -193,7 +257,7 @@ const REASON_KEY = {
   'channeling|stopConditions.pressureAbove': 'profile_dialin_reason_channeling_preinf_pressure',
 };
 
-export function suggestPhaseAdjustment(symptom, currentProfile, roundHistory) {
+export function suggestPhaseAdjustment(symptom: unknown, currentProfile: unknown, roundHistory: unknown): ProfileSuggestion {
   const primary = _resolvePrimarySymptom(symptom);
 
   if (primary === 'balanced') {
@@ -204,7 +268,7 @@ export function suggestPhaseAdjustment(symptom, currentProfile, roundHistory) {
   }
 
   const defs = _candidateDefs(primary);
-  const candidates = defs.map(d => _resolveCandidate(d, currentProfile)).filter(Boolean);
+  const candidates = defs.map(d => _resolveCandidate(d, currentProfile)).filter(Boolean) as ResolvedCandidate[];
   if (!candidates.length) {
     return {
       type: 'insufficient-data', symptom: primary, phaseIndex: null, phaseName: null, field: null,
@@ -233,36 +297,37 @@ export function suggestPhaseAdjustment(symptom, currentProfile, roundHistory) {
 
 // Applies an accepted suggestion to a profile, returning a NEW profile
 // object (deep-cloned) — pure, no mutation of the input.
-export function applyPhaseAdjustment(profile, suggestion) {
-  const next = JSON.parse(JSON.stringify(profile || {}));
-  if (!suggestion || suggestion.field == null) return next;
-  const target = suggestion.phaseIndex != null ? next.phases?.[suggestion.phaseIndex] : next;
-  if (!target) return next;
+export function applyPhaseAdjustment<T>(profile: T, suggestion: ProfileSuggestion | null | undefined): T {
+  const next = JSON.parse(JSON.stringify(profile || {})) as Record<string, unknown>;
+  if (!suggestion || suggestion.field == null) return next as T;
+  const phases = next.phases as Record<string, unknown>[] | undefined;
+  const target = (suggestion.phaseIndex != null ? phases?.[suggestion.phaseIndex] : next) as Record<string, unknown> | null | undefined;
+  if (!target) return next as T;
   _setPath(target, suggestion.field, suggestion.newValue);
-  return next;
+  return next as T;
 }
 
-function _hasConsecutiveBalanced(rounds) {
+function _hasConsecutiveBalanced(rounds: ProfileDialinRoundRow[]): boolean {
   if (rounds.length < 2) return false;
   const a = rounds[rounds.length - 2], b = rounds[rounds.length - 1];
   return a?.symptom === 'balanced' && b?.symptom === 'balanced';
 }
 
-function _hasConsecutiveHighScores(rounds) {
+function _hasConsecutiveHighScores(rounds: ProfileDialinRoundRow[]): boolean {
   if (rounds.length < 2) return false;
   const a = rounds[rounds.length - 2], b = rounds[rounds.length - 1];
   return a?.score != null && b?.score != null && a.score >= HIGH_SCORE && b.score >= HIGH_SCORE;
 }
 
-export function isProfileDialinConverged(roundHistory) {
-  const rounds = Array.isArray(roundHistory) ? roundHistory : [];
+export function isProfileDialinConverged(roundHistory: unknown): boolean {
+  const rounds = (Array.isArray(roundHistory) ? roundHistory : []) as ProfileDialinRoundRow[];
   if (!rounds.length) return false;
   if (_hasConsecutiveBalanced(rounds) || _hasConsecutiveHighScores(rounds)) return true;
   return rounds.length >= MAX_ROUNDS;
 }
 
-export function profileDialinConvergenceReason(roundHistory) {
-  const rounds = Array.isArray(roundHistory) ? roundHistory : [];
+export function profileDialinConvergenceReason(roundHistory: unknown): string {
+  const rounds = (Array.isArray(roundHistory) ? roundHistory : []) as ProfileDialinRoundRow[];
   if (_hasConsecutiveBalanced(rounds)) return 'profile_dialin_converged_balanced';
   if (_hasConsecutiveHighScores(rounds)) return 'profile_dialin_converged_score';
   if (rounds.length >= MAX_ROUNDS) return 'profile_dialin_safety_valve';

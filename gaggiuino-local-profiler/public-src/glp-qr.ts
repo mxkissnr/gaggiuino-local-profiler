@@ -9,7 +9,23 @@
 // code stays reliably scannable rather than merely "technically encodable".
 export const QR_NOTES_MAX = 200;
 
-export function generateBeanQR(bean) {
+/** The bean fields generateBeanQR() encodes — the QR form's own string columns. */
+export interface GlpQrBean {
+  name?: string | null;
+  roaster?: string | null;
+  roastDate?: string | null;
+  notes?: string | null;
+}
+
+/** The four glp://coffee fields, always present ('' when the QR omitted them). */
+export interface GlpQrParams {
+  name: string;
+  roaster: string;
+  roastDate: string;
+  notes: string;
+}
+
+export function generateBeanQR(bean: GlpQrBean): string {
   const params = new URLSearchParams();
   if (bean.name)      params.set('name',      bean.name);
   if (bean.roaster)   params.set('roaster',   bean.roaster);
@@ -18,7 +34,7 @@ export function generateBeanQR(bean) {
   return `glp://coffee?${params.toString()}`;
 }
 
-export function parseGlpQrParams(raw) {
+export function parseGlpQrParams(raw: unknown): GlpQrParams | null {
   if (typeof raw !== 'string' || !raw.startsWith('glp://coffee')) return null;
   const params = new URLSearchParams(raw.replace('glp://coffee?', ''));
   return {

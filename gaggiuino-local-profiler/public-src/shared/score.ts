@@ -4,13 +4,32 @@
 // round-trip. Pure function — no DOM deps. Inputs are the raw shot object
 // (×10 integer curves).
 
-function _stddev(vals) {
+import type { ShotDatapoints } from '../utils.js';
+
+/**
+ * The raw shot fields this scorer reads. Callers hand it an untyped shot row
+ * (state ShotMeta / views' local row interfaces), hence the cast in
+ * calcShotScoreDetail() rather than a looser public parameter.
+ */
+interface ScorableShot {
+  datapoints?: ShotDatapoints;
+  duration?: number | null;
+  annotation?: { dose?: number | null; tds?: number | null } | null;
+}
+
+/** The bean fields (#450) the scorer reads — a CoffeeLibrary row, untyped. */
+interface ScorableBean {
+  brewTempC?: unknown;
+  brewRatio?: unknown;
+}
+
+function _stddev(vals: number[]): number {
   if (vals.length < 2) return 0;
   const m = vals.reduce((a, b) => a + b, 0) / vals.length;
   return Math.sqrt(vals.reduce((a, b) => a + (b - m) ** 2, 0) / vals.length);
 }
 
-function _detectChanneling(times, pressures) {
+function _detectChanneling(times: number[], pressures: number[]): boolean {
   if (!times || !times.length || pressures.length < 5) return false;
   for (let i = 1; i < pressures.length; i++) {
     if (pressures[i - 1] < 5) continue;
@@ -24,7 +43,7 @@ function _detectChanneling(times, pressures) {
 // "1:2.4" -> 2.4 — the bean form's own brewRatio convention (see
 // sanitize-bean.js). Anything that doesn't match (empty, freeform notes,
 // old data predating the field) yields null so callers fall back cleanly.
-function _parseBrewRatioTarget(brewRatio) {
+function _parseBrewRatioTarget(brewRatio: string | number | null | undefined): number | null {
   if (!brewRatio) return null;
   const m = String(brewRatio).match(/^\s*1\s*:\s*(\d+(?:\.\d+)?)\s*$/);
   return m ? parseFloat(m[1]) : null;
@@ -46,14 +65,16 @@ function _parseBrewRatioTarget(brewRatio) {
 // against this bean's target" hint. calcShotScore stays a thin wrapper
 // around it so every existing caller that only wants the number (there are
 // many, across both backend and frontend) is untouched.
-function calcShotScoreDetail(shot, bean) {
+function calcShotScoreDetail(shot: unknown, bean?: unknown): { score: number | null; usedBeanTarget: boolean } {
   if (!shot) return { score: null, usedBeanTarget: false };
-  const d = shot.datapoints || {};
+  const sh = shot as ScorableShot;
+  const beanRec = bean as ScorableBean | null | undefined;
+  const d = sh.datapoints || {};
   const p = (d.pressure || []).map(v => v / 10);
   const pVals = p.filter(v => v >= 5);
   if (pVals.length <= 3) return { score: null, usedBeanTarget: false };
 
-  const scores = [], weights = [];
+  const scores: number[] = [], weights: number[] = [];
   let usedBeanTarget = false;
 
   const avgP = pVals.reduce((a, b) => a + b, 0) / pVals.length;
@@ -71,13 +92,13 @@ function calcShotScoreDetail(shot, bean) {
     // bean's brewTempC recommendation (#450), or a fallback 90–96 °C band.
     const avgT = tVals.reduce((a, b) => a + b, 0) / tVals.length;
     const tgt  = (d.targetTemperature || []).map(v => v / 10).filter(v => v > 0);
-    let acc;
+    let acc: number;
     if (tgt.length) {
       const dev = Math.abs(avgT - tgt.reduce((a, b) => a + b, 0) / tgt.length);
       acc = dev <= 0.5 ? 100 : dev <= 1 ? 90 : dev <= 2 ? 75
           : dev <= 4 ? 50 : Math.max(15, 50 - (dev - 4) * 8);
-    } else if (bean && typeof bean.brewTempC === 'number' && bean.brewTempC > 0) {
-      const dev = Math.abs(avgT - bean.brewTempC);
+    } else if (beanRec && typeof beanRec.brewTempC === 'number' && beanRec.brewTempC > 0) {
+      const dev = Math.abs(avgT - beanRec.brewTempC);
       acc = dev <= 0.5 ? 100 : dev <= 1 ? 90 : dev <= 2 ? 75
           : dev <= 4 ? 50 : Math.max(15, 50 - (dev - 4) * 8);
       usedBeanTarget = true;
@@ -89,7 +110,7 @@ function calcShotScoreDetail(shot, bean) {
     scores.push(s); weights.push(20);
   }
 
-  const secs = (shot.duration || 0) / 10;
+  const secs = (sh.duration || 0) / 10;
   if (secs > 5) {
     s = secs >= 25 && secs <= 35 ? 100
       : (secs >= 20 && secs < 25) || (secs > 35 && secs <= 42) ? 82
@@ -99,14 +120,14 @@ function calcShotScoreDetail(shot, bean) {
     scores.push(Math.round(s)); weights.push(20);
   }
 
-  const ann    = shot.annotation || {};
+  const ann    = sh.annotation || {};
   const wArr   = d.shotWeight || d.weight || [];
   const finalW = wArr.length ? Math.max(...wArr.map(v => v / 10)) : 0;
   if (ann.dose && ann.dose > 0 && finalW) {
     const r = finalW / ann.dose;
     // Bean's own brewRatio recommendation (#450) replaces the generic
     // 1.8–2.5 band as the target when set.
-    const beanRatioTarget = bean ? _parseBrewRatioTarget(bean.brewRatio) : null;
+    const beanRatioTarget = beanRec ? _parseBrewRatioTarget(beanRec.brewRatio as string | number | undefined) : null;
     if (beanRatioTarget != null) {
       const dev = Math.abs(r - beanRatioTarget);
       s = dev <= 0.35 ? 100 : dev <= 0.75 ? 75 : Math.max(15, 75 - (dev - 0.75) * 30);
@@ -138,7 +159,7 @@ function calcShotScoreDetail(shot, bean) {
   return { score, usedBeanTarget: score !== null && usedBeanTarget };
 }
 
-function calcShotScore(shot, bean) {
+function calcShotScore(shot: unknown, bean?: unknown): number | null {
   return calcShotScoreDetail(shot, bean).score;
 }
 
