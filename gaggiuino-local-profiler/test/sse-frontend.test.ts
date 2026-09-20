@@ -6,46 +6,56 @@
 // state (source/everConnected/strikes/listeners) at module scope.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// Same fake-localStorage/navigator convention as test/sync-progress-toast.test.js
-// -- public-src/state.js reads both at module-eval time.
-const _store = new Map();
-globalThis.localStorage = {
-  getItem: k => (_store.has(k) ? _store.get(k) : null),
-  setItem: (k, v) => { _store.set(k, String(v)); },
-  removeItem: k => { _store.delete(k); },
+// Same fake-localStorage/navigator convention as
+// test/frozen-portion-shot-tracking.test.ts -- public-src/state/index.ts reads
+// both at module-eval time. vitest's node environment has no browser globals,
+// so the fakes go through a loose view of globalThis rather than satisfying
+// the full Storage/Navigator shapes.
+const g = globalThis as unknown as Record<string, unknown>;
+const _store = new Map<string, string>();
+g.localStorage = {
+  getItem: (k: string) => (_store.has(k) ? _store.get(k) : null),
+  setItem: (k: string, v: unknown) => { _store.set(k, String(v)); },
+  removeItem: (k: string) => { _store.delete(k); },
 };
-globalThis.navigator ??= { language: 'en-US' };
+g.navigator ??= { language: 'en-US' };
+
+type Listener = (ev: { data: string }) => void;
 
 class FakeEventSource {
-  constructor(url) {
+  static instances: FakeEventSource[] = [];
+  url: string;
+  listeners: Record<string, Listener[]> = {};
+  onopen: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  closed = false;
+  constructor(url: string) {
     this.url = url;
-    this.listeners = {};
-    this.onopen = null;
-    this.onerror = null;
-    this.closed = false;
     FakeEventSource.instances.push(this);
   }
-  addEventListener(type, cb) {
+  addEventListener(type: string, cb: Listener): void {
     (this.listeners[type] ??= []).push(cb);
   }
-  close() { this.closed = true; }
+  close(): void { this.closed = true; }
   // test-only helpers to drive the fake connection
-  _open() { this.onopen?.(); }
-  _error() { this.onerror?.(); }
-  _emit(type, data) {
+  _open(): void { this.onopen?.(); }
+  _error(): void { this.onerror?.(); }
+  _emit(type: string, data: unknown): void {
     for (const cb of this.listeners[type] || []) cb({ data: JSON.stringify(data) });
   }
 }
-FakeEventSource.instances = [];
 
 describe('public-src/sse.js', () => {
-  let S, connectEvents, disconnectEvents, onEvent;
+  let S: (typeof import('../public-src/state/index.js'))['S'];
+  let connectEvents: (typeof import('../public-src/sse.js'))['connectEvents'];
+  let disconnectEvents: (typeof import('../public-src/sse.js'))['disconnectEvents'];
+  let onEvent: (typeof import('../public-src/sse.js'))['onEvent'];
 
   beforeEach(async () => {
     vi.useFakeTimers();
     vi.resetModules();
     FakeEventSource.instances = [];
-    globalThis.EventSource = FakeEventSource;
+    g.EventSource = FakeEventSource;
 
     ({ S } = await import('../public-src/state/index.js'));
     ({ connectEvents, disconnectEvents, onEvent } = await import('../public-src/sse.js'));

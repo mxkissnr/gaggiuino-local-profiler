@@ -5,35 +5,43 @@
 // test/machine-accent-theme.test.js's FakeClassList pattern.
 import { describe, it, expect, beforeEach } from 'vitest';
 
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator ??= { language: 'en-US' };
-globalThis.window ??= globalThis;
-globalThis.requestAnimationFrame ??= cb => cb();
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge test/machine-accent-theme.test.ts uses)
+// so the minimal fakes below need not satisfy the full Storage/Navigator/
+// Window shapes.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
+g.window ??= globalThis;
+// sidebar.js only schedules a frame to add the drawer-mode class; run it
+// straight away so the class lands synchronously (the return value is unused).
+g.requestAnimationFrame ??= (cb: FrameRequestCallback) => { cb(0); };
 
 class FakeClassList {
-  constructor() { this._set = new Set(); }
-  add(c) { this._set.add(c); }
-  remove(c) { this._set.delete(c); }
-  contains(c) { return this._set.has(c); }
+  _set: Set<string> = new Set();
+  add(c: string): void { this._set.add(c); }
+  remove(c: string): void { this._set.delete(c); }
+  contains(c: string): boolean { return this._set.has(c); }
 }
 class FakeEl {
-  constructor() { this.style = {}; this.classList = new FakeClassList(); }
-  setAttribute() {}
+  style: Record<string, string> = {};
+  classList: FakeClassList = new FakeClassList();
+  setAttribute(): void {}
 }
 
 const { S } = await import('../public-src/state/index.js');
 const { handleEdgeSwipeStart, handleEdgeSwipeEnd } = await import('../public-src/components/sidebar.js');
 
-function touch(x) { return { touches: [{ clientX: x }] }; }
-function touchEnd(x) { return { changedTouches: [{ clientX: x }] }; }
+function touch(x: number): TouchEvent { return { touches: [{ clientX: x }] } as unknown as TouchEvent; }
+function touchEnd(x: number): TouchEvent { return { changedTouches: [{ clientX: x }] } as unknown as TouchEvent; }
 
 describe('edge-swipe-to-open the mobile drawer (#682)', () => {
-  let sidebarEl;
+  let sidebarEl: FakeEl;
 
   beforeEach(() => {
     sidebarEl = new FakeEl();
-    globalThis.document = {
-      getElementById: id => (id === 'sidebar' ? sidebarEl : new FakeEl()),
+    g.document = {
+      getElementById: (id: string) => (id === 'sidebar' ? sidebarEl : new FakeEl()),
     };
     globalThis.innerWidth = 400; // mobile width
     S.shots = [];
