@@ -3,7 +3,22 @@ import { describe, it, expect, beforeAll } from 'vitest';
 // Same window/localStorage/navigator stubbing as analytics-new-charts.test.js
 // — analytics.js calls window.calcShotScore/window.getShotData at runtime
 // (main.js's real window-exposure pattern) and pulls in echarts transitively.
-let _computeEquipmentStats;
+type Analytics = typeof import('../public-src/views/analytics.js');
+let _computeEquipmentStats: Analytics['_computeEquipmentStats'];
+
+// views/analytics.js's ShotRow interface isn't exported; derive it from the
+// helper under test so the fixtures stay shape-checked against it.
+type ShotRow = Parameters<Analytics['_computeEquipmentStats']>[0][number];
+
+interface ShotOverrides {
+  id?: number;
+  timestamp?: number;
+  duration?: number;
+  score?: number;
+  basketId?: number | null;
+  puckScreenId?: number | null;
+  grinder?: string | null;
+}
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -24,7 +39,7 @@ beforeAll(async () => {
   ({ _computeEquipmentStats } = await import('../public-src/views/analytics.js'));
 });
 
-const shot = (overrides = {}) => ({
+const shot = (overrides: ShotOverrides = {}): ShotRow => ({
   id: overrides.id ?? 1,
   timestamp: overrides.timestamp ?? 0,
   duration: overrides.duration ?? 280, // 28.0s
@@ -42,12 +57,12 @@ const duplicateNameBaskets = [{ id: 10, name: 'Standard' }, { id: 11, name: 'Sta
 // #674: helpers mirroring buildBasketStats()/buildPuckScreenStats()'s own
 // getKey/getName pair (views/analytics.js), so these tests exercise the
 // same shape real callers use rather than a bespoke test-only convention.
-const basketStats     = shots => _computeEquipmentStats(shots, s => s.annotation?.basketId, id => baskets.find(b => b.id === Number(id))?.name || null);
-const puckScreenStats = shots => _computeEquipmentStats(shots, s => s.annotation?.puckScreenId, id => puckScreens.find(p => p.id === Number(id))?.name || null);
-const duplicateBasketStats = shots => _computeEquipmentStats(shots, s => s.annotation?.basketId, id => duplicateNameBaskets.find(b => b.id === Number(id))?.name || null);
+const basketStats     = (shots: ShotRow[]) => _computeEquipmentStats(shots, s => s.annotation?.basketId, id => baskets.find(b => b.id === Number(id))?.name || null);
+const puckScreenStats = (shots: ShotRow[]) => _computeEquipmentStats(shots, s => s.annotation?.puckScreenId, id => puckScreens.find(p => p.id === Number(id))?.name || null);
+const duplicateBasketStats = (shots: ShotRow[]) => _computeEquipmentStats(shots, s => s.annotation?.basketId, id => duplicateNameBaskets.find(b => b.id === Number(id))?.name || null);
 // Grinder: the key already is the display name (getName is identity), same
 // as buildGrinderStats() itself.
-const grinderStats = shots => _computeEquipmentStats(shots, s => s.annotation?.grinder || null, key => key);
+const grinderStats = (shots: ShotRow[]) => _computeEquipmentStats(shots, s => s.annotation?.grinder || null, key => key);
 
 describe('_computeEquipmentStats (#668, generalized in #674 for grinder too)', () => {
   it('groups shots by basketId, resolving the name from the library', () => {

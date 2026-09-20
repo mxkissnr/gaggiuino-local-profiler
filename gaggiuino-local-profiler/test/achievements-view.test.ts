@@ -13,11 +13,15 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // runtime as a getter-only global, so state.js's navigator.language read
 // needs no stub.)
 vi.hoisted(() => {
-  const store = new Map();
-  globalThis.localStorage = {
-    getItem: (k) => (store.has(k) ? store.get(k) : null),
-    setItem: (k, v) => store.set(k, String(v)),
-    removeItem: (k) => store.delete(k),
+  // vitest's node environment has no browser globals; stub localStorage
+  // through a loose view of globalThis (the same bridge
+  // test/helpers/fake-option-dom.ts uses for the DOM).
+  const g = globalThis as unknown as Record<string, unknown>;
+  const store = new Map<string, string>();
+  g.localStorage = {
+    getItem: (k: string) => (store.has(k) ? store.get(k) : null),
+    setItem: (k: string, v: string) => store.set(k, String(v)),
+    removeItem: (k: string) => store.delete(k),
   };
 });
 
@@ -30,6 +34,10 @@ import nl from '../public-src/i18n/nl.js';
 
 import { S } from '../public-src/state/index.js';
 import { askewDeg, formatStampedOn, isCardFull, fieldHtml } from '../public-src/views/achievements.js';
+
+// views/achievements.js's Achievement interface isn't exported; derive it from
+// the functions under test so the fixtures stay shape-checked against it.
+type Achievement = Parameters<typeof fieldHtml>[0];
 
 const LANGS = { de, en, it: itLang, fr, es, nl };
 
@@ -72,7 +80,7 @@ describe('achievements view — a locked secret badge leaks nothing', () => {
     const html = fieldHtml({
       id: 'secret_night_owl', card: 'secret', secret: true, unlocked: false,
       name: 'Night Owl', description: 'Pulled a shot after 2 a.m.',
-    });
+    } as Achievement);
     expect(html).not.toContain('Night Owl');
     expect(html).not.toContain('2 a.m.');
     expect(html, 'a locked secret field should carry the "?" placeholder').toContain('ach-qm');
@@ -122,7 +130,8 @@ describe('achievements view — unlockedAt is Unix seconds', () => {
 });
 
 describe('achievements view — the "Full" overprint', () => {
-  const badge = (id, unlocked) => ({ id, card: 'basics', secret: false, unlocked });
+  const badge = (id: string, unlocked: boolean): Achievement =>
+    ({ id, card: 'basics', secret: false, unlocked } as Achievement);
 
   it('treats a card whose badges are all unlocked as full', () => {
     expect(isCardFull([badge('a', true), badge('b', true)])).toBe(true);
