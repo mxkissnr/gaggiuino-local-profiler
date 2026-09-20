@@ -364,7 +364,7 @@ const nl: Partial<Translations> = {
     nav_dialin:'Inregelen', dialin_title:'Inregelen',
     nav_maintenance:'Onderhoud',
     maint_descaling:'Ontkalken', maint_backflush:'Terugspuelen', maint_grouphead:'Groepskop Service',
-    maint_gaskets:'Pakkingen & Zeven', maint_waterfilter:'Waterfilter',
+    maint_gaskets:'Pakkingen & Zeven', maint_waterfilter:'Waterfilter', maint_firmware_update:'Firmware-update',
     maint_due:'Vervallen', maint_soon:'Bijna vervallen', maint_never:'Nooit gedaan',
     maint_never_done:'Nooit gedaan', maint_today:'Vandaag',
     maint_auto_synced:'Auto', maint_auto_synced_hint:'Automatisch gedetecteerd door de machine',

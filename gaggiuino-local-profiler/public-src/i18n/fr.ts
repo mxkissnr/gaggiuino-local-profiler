@@ -364,7 +364,7 @@ const fr: Partial<Translations> = {
     nav_dialin:'Réglage', dialin_title:'Réglage',
     nav_maintenance:'Entretien',
     maint_descaling:'Détartrage', maint_backflush:'Backflush', maint_grouphead:'Service groupe',
-    maint_gaskets:'Joints & Filtres', maint_waterfilter:'Filtre eau',
+    maint_gaskets:'Joints & Filtres', maint_waterfilter:'Filtre eau', maint_firmware_update:'Mise à jour du firmware',
     maint_due:'À faire', maint_soon:'Bientôt dû', maint_never:'Jamais fait',
     maint_never_done:'Jamais fait', maint_today:"Aujourd'hui",
     maint_auto_synced:'Auto', maint_auto_synced_hint:'Détecté automatiquement par la machine',

@@ -102,6 +102,10 @@ export const MAINT_META: Record<string, { key: string }> = {
   grouphead:   { key: 'maint_grouphead'   },
   gaskets:     { key: 'maint_gaskets'     },
   waterfilter: { key: 'maint_waterfilter' },
+  // #1136: the one task with no tile — an app-triggered machine firmware
+  // update writes it to the maintenance log, so it only ever needs a
+  // display title for the log row.
+  firmware_update: { key: 'maint_firmware_update' },
 };
 
 // Guided maintenance walkthroughs: i18n keys per step. Tasks without an entry
