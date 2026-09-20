@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import type { GrindShot } from '../public-src/views/shots/grind.js';
 
 // Same stubbing approach as best-grind-combo.test.js: grind.js pulls in
 // state.js/i18n.js which need localStorage/navigator at module load.
-let suggestGrindDoseForBean;
+let suggestGrindDoseForBean: (typeof import('../public-src/views/shots/grind.js'))['suggestGrindDoseForBean'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -16,7 +17,7 @@ beforeAll(async () => {
   ({ suggestGrindDoseForBean } = await import('../public-src/views/shots/grind.js'));
 });
 
-const shot = (coffee, grinder, grindSetting, dose, score, timestamp) => ({
+const shot = (coffee: string, grinder: string, grindSetting: string, dose: string, score: number | null, timestamp: number): GrindShot => ({
   timestamp,
   annotation: { coffee, grinder, grindSetting, dose },
   score,
