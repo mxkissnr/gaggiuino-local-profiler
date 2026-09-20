@@ -6867,6 +6867,10 @@ export interface components {
             notes?: string;
             shotCount?: number;
             machineId?: number;
+            /** @description Resolved display name for a grinder_* task, added on read */
+            grinderName?: string;
+            /** @description Resolved display label for a custom_* task, added on read */
+            label?: string;
         };
         MenuItem: {
             /** @example m_1716000000000 */

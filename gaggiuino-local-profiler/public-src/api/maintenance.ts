@@ -40,6 +40,19 @@ export function saveMaintenanceThreshold(
   return apiFetch(`api/maintenance/${task}/threshold?machineId=${machineId}`, _json(body));
 }
 
+/** POST /api/maintenance/custom?machineId=... — create a user-defined maintenance task. */
+export function addCustomMaintenanceTask(
+  machineId: string | number,
+  body: { label: string; threshold_shots: number | null; threshold_days: number | null },
+): Promise<Response> {
+  return apiFetch(`api/maintenance/custom?machineId=${machineId}`, _json(body));
+}
+
+/** DELETE /api/maintenance/custom/{task}?machineId=... — remove a user-defined maintenance task. */
+export function deleteCustomMaintenanceTask(task: string, machineId: string | number): Promise<Response> {
+  return apiFetch(`api/maintenance/custom/${task}?machineId=${machineId}`, { method: 'DELETE' });
+}
+
 /** GET /api/maintenance/log?machineId=... — the maintenance log rows. */
 export function getMaintenanceLog(machineId: string | number): Promise<Response> {
   return apiFetch(`api/maintenance/log?machineId=${machineId}`);
