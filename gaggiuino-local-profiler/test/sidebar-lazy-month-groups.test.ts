@@ -245,7 +245,7 @@ describe('sidebar lazy month groups (#969)', () => {
     S.shots = new Proxy(orig, {
       get(target, prop, recv) {
         if (prop === 'find') { findCalls++; return target.find.bind(target); }
-        return Reflect.get(target, prop, recv);
+        return Reflect.get(target, prop, recv) as unknown;
       },
     });
     filterShots('pro');

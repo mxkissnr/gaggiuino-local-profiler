@@ -31,7 +31,8 @@ function pageResponse(
   shots: ShotMeta[],
   { nextCursor, hasMore }: { nextCursor: string | null; hasMore: boolean },
 ): Response {
-  return { ok: true, json: async () => ({ shots, nextCursor, hasMore }) } as unknown as Response;
+  // `json: async () => ...` would trip @typescript-eslint/require-await.
+  return { ok: true, json: () => Promise.resolve({ shots, nextCursor, hasMore }) } as unknown as Response;
 }
 
 describe('loadAllShotMeta render throttle (#969)', () => {
