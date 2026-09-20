@@ -3,6 +3,7 @@ import { t } from '../i18n.js';
 import {
   getMaintenance, markMaintenanceDone, saveMaintenanceThreshold,
   getMaintenanceLog, addMaintenanceLogEntry, deleteMaintenanceLogEntry,
+  addCustomMaintenanceTask, deleteCustomMaintenanceTask,
 } from '../api/maintenance.js';
 import { MAINT_META, GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
 import { esc } from '../utils.js';
@@ -541,11 +542,7 @@ export async function addCustomMaintTask(machineId?: string | number | null): Pr
     threshold_days:  days  ? parseInt(days,  10) : null,
   };
   try {
-    await apiFetch(`api/maintenance/custom?machineId=${_writeMachineId(machineId)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    await addCustomMaintenanceTask(_writeMachineId(machineId), body);
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -553,7 +550,7 @@ export async function addCustomMaintTask(machineId?: string | number | null): Pr
 export async function deleteCustomMaintTask(task: string, machineId?: string | number | null): Promise<void> {
   if (!confirm(`Eigene Wartung "${task.replace('custom_', '')}" wirklich löschen?`)) return;
   try {
-    await apiFetch(`api/maintenance/custom/${task}?machineId=${_writeMachineId(machineId)}`, { method: 'DELETE' });
+    await deleteCustomMaintenanceTask(task, _writeMachineId(machineId));
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -563,11 +560,7 @@ export async function renameCustomMaintTask(task: string, newLabel: string, mach
   if (!label) return;
   const expandedTask = (document.querySelector('.maint-card.expanded .maint-detail-toggle') as HTMLElement | null)?.dataset?.task;
   try {
-    await apiFetch(`api/maintenance/${task}/threshold?machineId=${_writeMachineId(machineId)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label }),
-    });
+    await saveMaintenanceThreshold(task, _writeMachineId(machineId), { label });
     await loadMaintenanceView();
     if (expandedTask) {
       document.querySelector(`.maint-detail-toggle[data-task="${CSS.escape(expandedTask)}"]`)
