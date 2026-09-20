@@ -3,8 +3,12 @@ import { describe, it, expect, beforeEach } from 'vitest';
 // Same module-load stubbing as annotation-basket-puckscreen-save.test.js —
 // annotation.js imports state.js, which reads localStorage/navigator at
 // module load time.
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge test/annotation-basket-puckscreen-save.ts
+// uses) so the minimal fakes need not satisfy the full Storage/Navigator shapes.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator    ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 const { _applyShotDefaults } = await import('../public-src/views/shots/annotation.js');
