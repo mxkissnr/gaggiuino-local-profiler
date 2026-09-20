@@ -287,6 +287,7 @@ function _initChart() {
 
   // Dashed+dimmed where the point isn't the phase's controlled parameter.
   const dashed = (color) => (ctx) => (!ctx.p0.raw.target ? color : undefined);
+
   const datasets = [];
   if (isPro) {
     datasets.push({
