@@ -46,8 +46,9 @@ describe('loadData /shots.json fallback on 404 (Node backend, #957)', () => {
   it('falls back to the full dump, seeds the curve cache, keeps Node row shape', async () => {
     fetchSpy.mockImplementation((url: string) => {
       if (url.startsWith('api/shots?')) return Promise.resolve({ status: 404, ok: false } as Response);
-      if (url === 'shots.json') return Promise.resolve({ ok: true, json: async () => [dumpShot(1), dumpShot(2), dumpShot(3)] } as unknown as Response);
-      if (url === 'shots.json?trash=1') return Promise.resolve({ ok: true, json: async () => [] } as unknown as Response);
+      // `json: async () => ...` would trip @typescript-eslint/require-await.
+      if (url === 'shots.json') return Promise.resolve({ ok: true, json: () => Promise.resolve([dumpShot(1), dumpShot(2), dumpShot(3)]) } as unknown as Response);
+      if (url === 'shots.json?trash=1') return Promise.resolve({ ok: true, json: () => Promise.resolve([]) } as unknown as Response);
       throw new Error('unexpected url ' + url);
     });
 
