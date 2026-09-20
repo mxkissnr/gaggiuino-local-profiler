@@ -15,6 +15,23 @@
 // black) by design, so the icon stays legible on both the app's light and
 // dark backgrounds regardless of theme.
 import { resolveTheme } from './shared/theme-presets.js';
+import type { ThemeStops } from './shared/theme-presets.js';
+
+export type MachineIconKind = 'gaggiuino' | 'gaggimate';
+
+export type MachineIconMode =
+  | 'off'
+  | 'heating'
+  | 'hot'
+  | 'brewing'
+  | 'steaming'
+  | 'flushing'
+  | 'descaling';
+
+export interface MachineIconState {
+  mode: MachineIconMode;
+  heatFraction: number;
+}
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -23,7 +40,7 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 // shared id across instances would make every icon pick up whichever
 // gradient happened to be defined last. Give every call a fresh id.
 let _instanceCounter = 0;
-function nextGradientId() {
+function nextGradientId(): string {
     _instanceCounter += 1;
     return `glp-machine-icon-${_instanceCounter}`;
 }
@@ -31,7 +48,7 @@ function nextGradientId() {
 // Falls back to the app's own accent gradient (see style.css [data-accent]
 // vars) when the machine has no theme set — matches the app's existing
 // default look rather than an arbitrary hardcoded colour.
-function stopsFor(theme) {
+function stopsFor(theme: unknown): ThemeStops {
     const resolved = resolveTheme(theme);
     if (resolved && HEX_RE.test(resolved.a) && HEX_RE.test(resolved.b)) return resolved;
     return { a: 'var(--accent-from)', b: 'var(--accent-to)' };
@@ -78,7 +95,7 @@ const FOOT_PATH = 'M64.2 124 H83 L82.2 128.4 A1.8 1.8 0 0 1 80.4 130 H66.8 A1.8 
 // Rounds away binary-float noise (e.g. 41 - 9.9 === 31.099999999999998)
 // from the arc coordinates computed below, without padding whole numbers
 // with a trailing ".0".
-function r(n) {
+function r(n: number): number {
     return Math.round(n * 100) / 100;
 }
 
@@ -88,17 +105,17 @@ function r(n) {
 // static illustration, not bound to real telemetry; wiring the live shot
 // stream into it is future work for whichever view ends up hosting this
 // icon live (see the round's report for why that's out of scope here).
-function curveSeries(x0, x1, yb, yt, w = 1.4, live = true) {
-    const sx = t => x0 + (x1 - x0) * t;
-    const sy = v => yb - (yb - yt) * v;
-    const poly = (pts, c, sw) => {
+function curveSeries(x0: number, x1: number, yb: number, yt: number, w = 1.4, live = true): string {
+    const sx = (t: number): number => x0 + (x1 - x0) * t;
+    const sy = (v: number): number => yb - (yb - yt) * v;
+    const poly = (pts: [number, number][], c: string, sw: number): string => {
         const p = pts.map(([t, v]) => `${sx(t).toFixed(1)},${sy(v).toFixed(1)}`).join(' ');
         return `<polyline points="${p}" fill="none" stroke="${c}" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round"/>`;
     };
-    const pres = [[0, .02], [.08, .06], [.18, .62], [.3, .86], [.5, .88], [.75, .84], [1, .78]];
-    const flow = [[0, .1], [.18, .12], [.28, .42], [.45, .46], [.7, .44], [1, .43]];
-    const temp = [[0, .93], [.35, .95], [.7, .94], [1, .95]];
-    const wgt  = [[0, 0], [.2, .02], [.45, .3], [.72, .56], [1, .8]];
+    const pres: [number, number][] = [[0, .02], [.08, .06], [.18, .62], [.3, .86], [.5, .88], [.75, .84], [1, .78]];
+    const flow: [number, number][] = [[0, .1], [.18, .12], [.28, .42], [.45, .46], [.7, .44], [1, .43]];
+    const temp: [number, number][] = [[0, .93], [.35, .95], [.7, .94], [1, .95]];
+    const wgt: [number, number][]  = [[0, 0], [.2, .02], [.45, .3], [.72, .56], [1, .8]];
     const areaPts = pres.map(([t, v]) => `${sx(t).toFixed(1)},${sy(v).toFixed(1)}`).join(' ');
     const area = `<polygon points="${sx(0).toFixed(1)},${yb.toFixed(1)} ${areaPts} ${sx(1).toFixed(1)},${yb.toFixed(1)}" fill="${MINI_PRES}" opacity=".16"/>`;
     let out = area + poly(temp, MINI_TEMP, w * .8) + poly(pres, MINI_PRES, w) + poly(flow, MINI_FLOW, w * .85);
@@ -120,7 +137,7 @@ function curveSeries(x0, x1, yb, yt, w = 1.4, live = true) {
 // mini variant used to drop — for the static settings-screen icon at
 // <=24px; machineIconAnimatedSvg() never passes it, so the Live view's
 // icon keeps full detail unchanged.
-function animBody(gradId, steelId, mini = false) {
+function animBody(gradId: string, steelId: string, mini = false): string {
     return `
       <path d="M72.2 2.3 L100 11 L100 130 L88 153 L72.2 153 Z" fill="url(#${gradId})"/>
       <path d="M72.2 2.3 L100 11 L100 130 L88 153 L72.2 153 Z" fill="#000" opacity=".26"/>
@@ -178,7 +195,7 @@ function animBody(gradId, steelId, mini = false) {
 
 // Gaggiuino: rectangular display module bolted to the front, overhanging,
 // sitting low (nx 13.6..66.4, ny 38.6..64.2).
-function gaggiuinoPanelAndDisplay() {
+function gaggiuinoPanelAndDisplay(): { panel: string; disp: string } {
     const panel = `
       <path d="M14 63.5 H66 L64 68 H16 Z" fill="#000" opacity=".35"/>
       <rect x="13.6" y="38.6" width="52.8" height="25.6" rx="3" fill="#101012"/>
@@ -228,7 +245,7 @@ function gaggiuinoPanelAndDisplay() {
 // against a dark background (a dark puck on a dark body would vanish).
 // The housing extends above y=0, hence machineIconAnimatedSvg's taller
 // viewBox for this kind.
-function gaggimatePanelAndDisplay() {
+function gaggimatePanelAndDisplay(): { panel: string; disp: string } {
     const cx = 41.0;
     const cy = -7.0;
     const panel = `
@@ -289,7 +306,7 @@ function gaggimatePanelAndDisplay() {
 //     idle look
 //   - no lamps/cup/jug/steam/pour groups — Live-view-only extras that were
 //     never part of the pre-#811 static icon either
-function machineIconStaticMarkup(theme, kind, mini) {
+function machineIconStaticMarkup(theme: unknown, kind: unknown, mini: boolean): string {
     const mate = kind === 'gaggimate';
     const id = nextGradientId();
     const { a, b } = stopsFor(theme);
@@ -316,13 +333,13 @@ function machineIconStaticMarkup(theme, kind, mini) {
 // reasonable size (machine form, larger list rows). `kind` is
 // 'gaggiuino' (default) or 'gaggimate', same convention as
 // machineIconAnimatedSvg(theme, kind) below.
-export function machineIconSvg(theme, kind = 'gaggiuino') {
+export function machineIconSvg(theme: unknown, kind: unknown = 'gaggiuino'): string {
     return machineIconStaticMarkup(theme, kind, false);
 }
 
 // Mini variant — drops sub-2px detail (button highlights, drip tray ribs;
 // see animBody()'s `mini` param). Use at <=24px.
-export function machineIconMiniSvg(theme, kind = 'gaggiuino') {
+export function machineIconMiniSvg(theme: unknown, kind: unknown = 'gaggiuino'): string {
     return machineIconStaticMarkup(theme, kind, true);
 }
 
@@ -331,7 +348,7 @@ let _animInstanceCounter = 0;
 // namespace, so there's no chance of an animated-icon id colliding with a
 // static-icon id even if both render on the same page (e.g. a settings
 // preview open next to a live dashboard tile).
-function nextAnimId() {
+function nextAnimId(): string {
     _animInstanceCounter += 1;
     return `glp-mi-${_animInstanceCounter}`;
 }
@@ -341,13 +358,13 @@ function nextAnimId() {
 // `.is-hot` would otherwise be free to collide with an unrelated `.is-*`
 // state class anywhere else in the app (PLAN.md section 7's id/class
 // collision lesson).
-export const MACHINE_ICON_LIVE_CLASS = 'machine-icon-live';
+export const MACHINE_ICON_LIVE_CLASS: string = 'machine-icon-live';
 
 // The five states from the spec compose into four states a real machine
 // visits (an "on but neither heating nor hot" machine doesn't occur — it's
 // always heating right after power-on) plus fully off. Mirrors
 // build-prototype.py's interactive-demo MODES table.
-export const MACHINE_ICON_MODES = Object.freeze({
+export const MACHINE_ICON_MODES: Readonly<Record<MachineIconMode, readonly string[]>> = Object.freeze({
     off:      Object.freeze([]),
     heating:  Object.freeze(['is-on', 'is-heating']),
     hot:      Object.freeze(['is-on', 'is-hot']),
@@ -370,7 +387,7 @@ export const MACHINE_ICON_MODES = Object.freeze({
  *   el.innerHTML = machineIconAnimatedSvg(machine.theme, machine.type);
  *   setMachineIconMode(el, 'hot');
  */
-export function machineIconAnimatedSvg(theme, kind = 'gaggiuino') {
+export function machineIconAnimatedSvg(theme: unknown, kind: unknown = 'gaggiuino'): string {
     const mate = kind === 'gaggimate';
     const idBase = nextAnimId();
     const { a, b } = stopsFor(theme);
@@ -478,7 +495,7 @@ export function machineIconAnimatedSvg(theme, kind = 'gaggiuino') {
 // clip reads (style.css); the other modes have a fixed heat level — 0 when
 // off, 1 once hot/brewing/steaming (heating up is the only state where the
 // body fills gradually rather than snapping to full/empty).
-export function setMachineIconMode(rootEl, mode, heatFraction = 0) {
+export function setMachineIconMode(rootEl: Element, mode: MachineIconMode, heatFraction = 0): void {
     const classes = MACHINE_ICON_MODES[mode];
     if (!classes) throw new Error(`machine-icon: unknown mode "${mode}"`);
     // Only touch the classes this function owns. Assigning className wholesale
@@ -488,7 +505,7 @@ export function setMachineIconMode(rootEl, mode, heatFraction = 0) {
     rootEl.classList.add(MACHINE_ICON_LIVE_CLASS);
     for (const list of Object.values(MACHINE_ICON_MODES)) rootEl.classList.remove(...list);
     if (classes.length) rootEl.classList.add(...classes);
-    const svg = rootEl.querySelector('.m-svg');
+    const svg = rootEl.querySelector<SVGSVGElement>('.m-svg');
     if (!svg) return;
     const heat = mode === 'off' ? 0 : mode === 'heating' ? Math.max(0, Math.min(1, heatFraction)) : 1;
     svg.style.setProperty('--heat', String(heat));
@@ -513,19 +530,21 @@ export function setMachineIconMode(rootEl, mode, heatFraction = 0) {
 // machine states, checked in that priority order if somehow reported
 // alongside one another (mirrors poll.go's effectiveSteaming/
 // effectiveFlushing/effectiveDescaling priority guard).
-export function resolveMachineIconState(msg, preheat) {
-    if (msg?.machineReachable === false) return { mode: 'off', heatFraction: 0 };
-    if (msg?.isLive)                     return { mode: 'brewing', heatFraction: 1 };
-    if (msg?.isSteaming)                 return { mode: 'steaming', heatFraction: 1 };
-    if (msg?.isFlushing)                 return { mode: 'flushing', heatFraction: 1 };
-    if (msg?.isDescaling)                return { mode: 'descaling', heatFraction: 1 };
-    if (preheat && !preheat.ready && preheat.remaining > 0) {
-        return { mode: 'heating', heatFraction: Math.max(0, Math.min(1, preheat.pct || 0)) };
+export function resolveMachineIconState(msg: unknown, preheat: unknown): MachineIconState {
+    const m = msg as { machineReachable?: boolean; isLive?: boolean; isSteaming?: boolean; isFlushing?: boolean; isDescaling?: boolean } | null | undefined;
+    const p = preheat as { ready?: boolean; remaining?: number; pct?: number } | null | undefined;
+    if (m?.machineReachable === false) return { mode: 'off', heatFraction: 0 };
+    if (m?.isLive)                     return { mode: 'brewing', heatFraction: 1 };
+    if (m?.isSteaming)                 return { mode: 'steaming', heatFraction: 1 };
+    if (m?.isFlushing)                 return { mode: 'flushing', heatFraction: 1 };
+    if (m?.isDescaling)                return { mode: 'descaling', heatFraction: 1 };
+    if (p && !p.ready && (p.remaining ?? 0) > 0) {
+        return { mode: 'heating', heatFraction: Math.max(0, Math.min(1, p.pct || 0)) };
     }
     return { mode: 'hot', heatFraction: 1 };
 }
 
-function formatBrewTime(sec) {
+function formatBrewTime(sec: number): string {
     const whole = Math.max(0, Math.floor(sec));
     return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
@@ -535,7 +554,7 @@ function formatBrewTime(sec) {
 // real telemetry; there's no artificial "weight lags time" lag to
 // reproduce here the way the prototype's demo timer simulated one — that's
 // simply how the real weight sensor behaves against the real clock.
-export function updateMachineIconBrewReadout(rootEl, { weightG = 0, elapsedSec = 0, pressureBar = null } = {}) {
+export function updateMachineIconBrewReadout(rootEl: Element, { weightG = 0, elapsedSec = 0, pressureBar = null }: { weightG?: number; elapsedSec?: number; pressureBar?: number | null } = {}): void {
     const w = weightG.toFixed(1);
     const time = formatBrewTime(elapsedSec);
     rootEl.querySelectorAll('.sc-w').forEach(el => { el.textContent = w; });

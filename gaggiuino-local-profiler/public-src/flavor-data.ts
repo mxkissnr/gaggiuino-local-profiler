@@ -8,7 +8,20 @@
 // SCA (Specialty Coffee Association) / WCR (World Coffee Research)
 // Coffee Taster's Flavor Wheel, 2016.
 
-export const FLAVOR_WHEEL = [
+export interface FlavorNode {
+  id: string;
+  en: string;
+  de: string;
+  it: string;
+  fr: string;
+  es: string;
+  nl: string;
+  children?: FlavorNode[];
+  // Set by flavor-match.ts's markLit() while rendering the wheel.
+  _lit?: boolean;
+}
+
+export const FLAVOR_WHEEL: FlavorNode[] = [
   {
     id: 'fruity', en: 'Fruity', de: 'Fruchtig', it: 'Fruttato', fr: 'Fruité', es: 'Afrutado', nl: 'Fruitig',
     children: [
@@ -182,7 +195,7 @@ export const FLAVOR_WHEEL = [
 // it/fr/es/nl are backlog (the wheel's own labels in all 6 languages are
 // already indexed for exact/containment matching; only colloquial slang
 // needs an alias).
-export const FLAVOR_ALIASES = {
+export const FLAVOR_ALIASES: Record<string, string> = {
   'schwarze johannisbeere': 'blackberry',
   'johannisbeere': 'blackberry',
   'rote johannisbeere': 'raspberry',
