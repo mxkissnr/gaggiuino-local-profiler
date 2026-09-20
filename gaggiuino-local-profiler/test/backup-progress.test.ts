@@ -1,25 +1,31 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { ApiFetchToBlobResult } from '../public-src/api/transport.js';
 
 // api/transport.js -> state.js touches localStorage/navigator at module-load time —
 // stub the minimum browser globals so the module graph imports under
 // vitest's node environment (same pattern as api-token-client-storage.test.js).
-const _store = new Map();
-globalThis.localStorage = {
-  getItem: (k) => (_store.has(k) ? _store.get(k) : null),
-  setItem: (k, v) => _store.set(k, String(v)),
-  removeItem: (k) => _store.delete(k),
+const g = globalThis as unknown as Record<string, unknown>;
+const _store = new Map<string, string>();
+g.localStorage = {
+  getItem: (k: string) => (_store.has(k) ? _store.get(k) : null),
+  setItem: (k: string, v: string) => _store.set(k, String(v)),
+  removeItem: (k: string) => _store.delete(k),
 };
-globalThis.navigator ??= { language: 'en-US' };
+g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 const { apiFetchToBlob, apiUpload } = await import('../public-src/api/transport.js');
 
-function fakeHeaders(entries) {
+// apiFetchToBlob's result is a discriminated union; the tests below assert the
+// ok branch before reading .blob, so pin that member of the union for them.
+type OkBlobResult = Extract<ApiFetchToBlobResult, { ok: true }>;
+
+function fakeHeaders(entries: [string, string][]) {
   const m = new Map(entries);
-  return { get: (k) => (m.has(k) ? m.get(k) : null) };
+  return { get: (k: string) => (m.has(k) ? m.get(k) : null) };
 }
 
-function readerYielding(chunks) {
+function readerYielding(chunks: Uint8Array[]) {
   let i = 0;
   return {
     getReader: () => ({
@@ -45,8 +51,8 @@ describe('apiFetchToBlob', () => {
       body: readerYielding(chunks),
     })));
 
-    const seen = [];
-    const res = await apiFetchToBlob('api/backup', { onProgress: (r, t) => seen.push([r, t]) });
+    const seen: Array<[number, number | null]> = [];
+    const res = (await apiFetchToBlob('api/backup', { onProgress: (r, t) => seen.push([r, t]) })) as OkBlobResult;
 
     expect(res.ok).toBe(true);
     expect(res.blob).toBeInstanceOf(Blob);
@@ -62,7 +68,7 @@ describe('apiFetchToBlob', () => {
       body: readerYielding([new Uint8Array([1, 2])]),
     })));
 
-    const seen = [];
+    const seen: Array<[number, number | null]> = [];
     await apiFetchToBlob('api/backup', {
       estimateHeader: 'X-GLP-Backup-Estimate',
       onProgress: (r, t) => seen.push([r, t]),
@@ -78,7 +84,7 @@ describe('apiFetchToBlob', () => {
       body: readerYielding([new Uint8Array([9])]),
     })));
 
-    const seen = [];
+    const seen: Array<[number, number | null]> = [];
     await apiFetchToBlob('api/backup', {
       estimateHeader: 'X-GLP-Backup-Estimate',
       onProgress: (r, t) => seen.push([r, t]),
@@ -113,23 +119,30 @@ describe('apiFetchToBlob', () => {
 });
 
 describe('apiUpload', () => {
-  let lastXHR;
+  let lastXHR: FakeXHR | undefined;
 
   class FakeXHR {
+    upload: { onprogress?: (e: { lengthComputable: boolean; loaded: number; total: number }) => void } = {};
+    headers: Record<string, string> = {};
+    method?: string;
+    url?: string;
+    body?: unknown;
+    status?: number;
+    responseText?: string;
+    onload?: () => void;
+    onerror?: () => void;
     constructor() {
       lastXHR = this;
-      this.upload = {};
-      this.headers = {};
     }
-    open(method, url) { this.method = method; this.url = url; }
-    setRequestHeader(k, v) { this.headers[k] = v; }
-    send(body) {
+    open(method: string, url: string) { this.method = method; this.url = url; }
+    setRequestHeader(k: string, v: string) { this.headers[k] = v; }
+    send(body: unknown) {
       this.body = body;
       this.upload.onprogress?.({ lengthComputable: true, loaded: 5, total: 10 });
       this.upload.onprogress?.({ lengthComputable: true, loaded: 10, total: 10 });
       this.status = 200;
       this.responseText = '{"ok":true}';
-      this.onload();
+      this.onload?.();
     }
   }
 
@@ -144,22 +157,22 @@ describe('apiUpload', () => {
       headers: { 'Content-Type': 'application/octet-stream' },
       body: 'BYTES',
     });
-    expect(lastXHR.method).toBe('POST');
-    expect(lastXHR.url).toBe('api/debug/import-db');
-    expect(lastXHR.headers).toEqual({
+    expect(lastXHR!.method).toBe('POST');
+    expect(lastXHR!.url).toBe('api/debug/import-db');
+    expect(lastXHR!.headers).toEqual({
       'X-GLP-Token': 'tok-123',
       'Content-Type': 'application/octet-stream',
     });
-    expect(lastXHR.body).toBe('BYTES');
+    expect(lastXHR!.body).toBe('BYTES');
   });
 
   it('omits X-GLP-Token when there is no token', async () => {
     await apiUpload('api/x', { body: 'x' });
-    expect(lastXHR.headers).toEqual({});
+    expect(lastXHR!.headers).toEqual({});
   });
 
   it('drives onProgress from lengthComputable upload events', async () => {
-    const seen = [];
+    const seen: Array<[number, number | null]> = [];
     await apiUpload('api/x', { body: 'x', onProgress: (s, t) => seen.push([s, t]) });
     expect(seen).toEqual([[5, 10], [10, 10]]);
   });
@@ -171,7 +184,7 @@ describe('apiUpload', () => {
 
   it('rejects on a network error', async () => {
     class ErrXHR extends FakeXHR {
-      send() { this.onerror(); }
+      send() { this.onerror?.(); }
     }
     vi.stubGlobal('XMLHttpRequest', ErrXHR);
     await expect(apiUpload('api/x', { body: 'x' })).rejects.toThrow('network error');
