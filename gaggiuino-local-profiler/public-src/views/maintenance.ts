@@ -276,7 +276,7 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   _renderCustomSection(document.getElementById('maintCustomSection'), scope);
 
   const disabledSec = document.getElementById('maintDisabledSection');
-  if (disabled.length > 0) {
+  if (disabledSec && disabled.length > 0) {
     disabledSec.style.display = '';
     _renderDisabledSection(disabledSec, disabled);
   }
@@ -506,7 +506,7 @@ export async function setMaintMode(
   currentDays?: string,
   currentG?: string,
 ): Promise<void> {
-  const expandedTask = (document.querySelector('.maint-card.expanded .maint-detail-toggle') as HTMLElement | null)?.dataset?.task;
+  const expandedTask = document.querySelector<HTMLElement>('.maint-card.expanded .maint-detail-toggle')?.dataset?.task;
   const defShots = parseInt(currentShots ?? '', 10) || 200;
   const defDays  = parseInt(currentDays  ?? '', 10) || 30;
   const defG     = parseInt(currentG     ?? '', 10) || 10000;
@@ -558,7 +558,7 @@ export async function deleteCustomMaintTask(task: string, machineId?: string | n
 export async function renameCustomMaintTask(task: string, newLabel: string, machineId?: string | number | null): Promise<void> {
   const label = newLabel.trim();
   if (!label) return;
-  const expandedTask = (document.querySelector('.maint-card.expanded .maint-detail-toggle') as HTMLElement | null)?.dataset?.task;
+  const expandedTask = document.querySelector<HTMLElement>('.maint-card.expanded .maint-detail-toggle')?.dataset?.task;
   try {
     await saveMaintenanceThreshold(task, _writeMachineId(machineId), { label });
     await loadMaintenanceView();
