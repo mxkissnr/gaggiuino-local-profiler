@@ -335,6 +335,16 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// the chosen fix, not a shared-instance refactor.
 	ordersHandlers.Service().OnQueueChanged = webOrdersHandlers.PublishQueueUpdate
 
+	// GET /ui/kiosk: standalone tablet ordering kiosk, self-contained
+	// HTML/JS hitting the same JSON API as above — see internal/web/kiosk.go's
+	// own doc comment for why it's a separate page from GET /ui/menu.
+	// Registered on uiMux (not mux) for the same reason every other
+	// web.*Handlers page is: its relative "web/static/..." asset path only
+	// resolves correctly once StripPrefix("/ui", uiMux) below puts it one
+	// path segment deep, matching where that static handler is actually
+	// mounted (/ui/web/static/..., not /web/static/...).
+	web.RegisterKioskRoute(uiMux)
+
 	// Phase 1g (#901): the background polling loop that backs
 	// GET /api/machine/status, GET /api/live/data, GET/POST /api/preheat*,
 	// and the live-snapshot/preheat-update SSE events — see

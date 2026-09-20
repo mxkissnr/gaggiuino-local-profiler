@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Kaffeebar</title>
+<style>
+  /* E-ink optimised: pure black/white, no shadows, no transitions, max contrast */
+  :root {
+    --bg: #ffffff;
+    --raised: #f4f4f4;
+    --raised-2: #e8e8e8;
+    --border: #000000;
+    --text: #000000;
+    --text-dim: #444444;
+    --accent: #d97706;
+    --ok: #16a34a;
+    --err: #dc2626;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; transition: none !important; animation: none !important; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: Georgia, "Times New Roman", serif;
+    overflow: hidden; user-select: none;
+  }
+  #app { display: flex; height: 100dvh; }
+
+  /* ── Left: main flow ─────────────────────────────────────────── */
+  #main { flex: 1 1 auto; display: flex; flex-direction: column; padding: 28px 32px; min-width: 0; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 3px solid #000; padding-bottom: 12px; }
+  header h1 { font-size: 2rem; margin: 0; font-weight: 900; letter-spacing: -.5px; }
+  #closedBanner {
+    display: none; background: #000; color: #fff; padding: 10px 16px;
+    border-radius: var(--radius); font-weight: 700; margin-bottom: 16px;
+  }
+
+  #nameStep, #menuStep, #thanksStep { flex: 1; display: none; flex-direction: column; min-height: 0; }
+  #nameStep.active, #menuStep.active, #thanksStep.active { display: flex; }
+
+  #nameStep { align-items: center; justify-content: center; text-align: center; }
+  #nameStep p { color: var(--text-dim); font-size: 1.3rem; margin: 0 0 24px; }
+  #nameInput {
+    font-size: 2.4rem; text-align: center; padding: 20px 24px; width: min(90%, 560px);
+    border-radius: var(--radius); border: 3px solid #000; background: #fff;
+    color: #000; outline: none; font-family: inherit;
+  }
+  #nameInput:focus { border-width: 4px; }
+  #nameNext {
+    margin-top: 28px; font-size: 1.5rem; font-weight: 700; padding: 20px 56px;
+    border-radius: var(--radius); border: 3px solid #000; background: #fff; color: #000;
+    opacity: .25; pointer-events: none; font-family: inherit;
+  }
+  #nameNext.ready { opacity: 1; pointer-events: auto; background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  #menuHeader { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+  #menuHeader .greet { font-size: 1.4rem; }
+  #menuHeader .greet b { color: var(--accent); }
+  #changeName { background: none; border: none; color: var(--text-dim); font-size: 1rem; text-decoration: underline; padding: 8px; font-family: inherit; }
+
+  #drinkGrid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;
+    overflow-y: auto; padding-bottom: 8px; flex: 1;
+  }
+  button { color: var(--text); cursor: pointer; font-family: inherit; }
+  .drink {
+    background: #fff; border: 3px solid #000; border-radius: var(--radius);
+    padding: 20px 12px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+    font-size: 1.15rem; font-weight: 700; min-height: 150px; justify-content: center;
+    color: #000;
+  }
+  .drink .emoji { font-size: 2.4rem; }
+  .drink.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  #variantRow {
+    display: none; flex-wrap: wrap; gap: 8px; margin-top: 14px;
+  }
+  #variantRow.visible { display: flex; }
+  #variantRow label { font-size: .9rem; color: var(--text-dim); align-self: center; margin-right: 4px; font-weight: 700; }
+  .variant-chip {
+    padding: 8px 18px; border-radius: var(--radius); border: 2px solid #000;
+    background: #fff; color: #000; font-size: 1rem; font-weight: 600;
+  }
+  .variant-chip.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  #orderBar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    margin-top: 16px; padding-top: 16px; border-top: 2px solid #000;
+  }
+  #noteInput {
+    flex: 1; font-size: 1.1rem; padding: 14px 16px; border-radius: var(--radius);
+    border: 2px solid #000; background: #fff; color: #000; outline: none; font-family: inherit;
+  }
+  #placeOrder {
+    font-size: 1.4rem; font-weight: 700; padding: 18px 40px; border-radius: var(--radius);
+    border: 3px solid #000; background: #fff; color: #000; white-space: nowrap;
+    opacity: .25; pointer-events: none;
+  }
+  #placeOrder.ready { opacity: 1; pointer-events: auto; background: var(--accent); color: #fff; border-color: var(--accent); }
+  #orderError { color: #000; font-size: 1rem; margin-top: 8px; min-height: 1.4em; font-style: italic; }
+
+  #thanksStep { align-items: center; justify-content: center; text-align: center; }
+  #thanksStep .big { font-size: 4rem; margin-bottom: 8px; }
+  #thanksStep h2 { font-size: 2rem; margin: 0 0 12px; font-weight: 900; }
+  #thanksStep .eta { font-size: 1.4rem; font-weight: 700; color: var(--accent); }
+
+  /* ── Right: queue panel ──────────────────────────────────────── */
+  #queue {
+    flex: 0 0 300px; background: var(--raised); border-left: 3px solid #000;
+    padding: 24px 20px; display: flex; flex-direction: column; min-height: 0;
+  }
+  #queue h2 { font-size: 1.1rem; margin: 0 0 16px; color: #000; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; }
+  #queueList { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .qitem {
+    background: #fff; border: 2px solid #000; border-radius: var(--radius); padding: 10px 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .qitem.accepted { background: var(--ok); color: #fff; border-color: var(--ok); }
+  .qitem .qemoji { font-size: 1.4rem; }
+  .qitem .qmeta { flex: 1; min-width: 0; }
+  .qitem .qname { font-weight: 700; font-size: 1rem; }
+  .qitem .qitemname { font-size: .85rem; }
+  .qitem.accepted .qitemname { opacity: .8; }
+  .qitem .qeta { font-size: .9rem; font-weight: 700; white-space: nowrap; color: var(--accent); }
+  .qitem.accepted .qeta { color: #fff; }
+  #queueEmpty { color: var(--text-dim); font-size: 1rem; padding: 20px 4px; font-style: italic; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="main">
+    <header>
+      <h1>☕ Kaffeebar</h1>
+    </header>
+    <div id="closedBanner">Die Kaffeebar ist gerade geschlossen — frag die Person an der Maschine 🙂</div>
+
+    <div id="nameStep" class="active">
+      <p>Wie heißt du?</p>
+      <input id="nameInput" type="text" placeholder="Dein Name" maxlength="50" autocomplete="off">
+      <button id="nameNext">Weiter →</button>
+    </div>
+
+    <div id="menuStep">
+      <div id="menuHeader">
+        <div class="greet">Hallo <b id="greetName"></b>, was darf's sein?</div>
+        <button id="changeName">anderer Name</button>
+      </div>
+      <div id="drinkGrid"></div>
+      <div id="variantRow"><label>Variante:</label></div>
+      <div id="orderBar">
+        <input id="noteInput" type="text" placeholder="Anmerkung (optional, z.B. 'ohne Milch')" maxlength="200">
+        <button id="placeOrder">Bestellen</button>
+      </div>
+      <div id="orderError"></div>
+    </div>
+
+    <div id="thanksStep">
+      <div class="big">✅</div>
+      <h2>Danke, <span id="thanksName"></span>!</h2>
+      <div class="eta" id="thanksEta"></div>
+    </div>
+  </div>
+
+  <div id="queue">
+    <h2>☕ Was kommt als Nächstes</h2>
+    <div id="queueList"></div>
+    <div id="queueEmpty" style="display:none">Gerade keine Bestellungen unterwegs.</div>
+  </div>
+</div>
+
+<script src="web/static/kiosk.js" defer></script>
+</body>
+</html>
