@@ -3,7 +3,12 @@ import { describe, it, expect, beforeAll } from 'vitest';
 // maintenance.js pulls in state.js (localStorage/navigator at module load)
 // and i18n.js — neither is available in the plain Node test environment, so
 // stub the minimum before importing, same approach as best-grind-combo.test.js.
-let _normalizeMaintTiles, _pickNextDueTile, _partitionTiles, _maintLogTaskOptions;
+type MaintView = typeof import('../public-src/views/maintenance.js');
+type MaintTileFixture = Parameters<MaintView['_pickNextDueTile']>[0][number];
+let _normalizeMaintTiles: MaintView['_normalizeMaintTiles'];
+let _pickNextDueTile: MaintView['_pickNextDueTile'];
+let _partitionTiles: MaintView['_partitionTiles'];
+let _maintLogTaskOptions: MaintView['_maintLogTaskOptions'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -17,7 +22,27 @@ beforeAll(async () => {
   ({ _normalizeMaintTiles, _pickNextDueTile, _partitionTiles, _maintLogTaskOptions } = await import('../public-src/views/maintenance.js'));
 });
 
-const task = (status, overrides = {}) => ({
+interface MaintTaskFixture {
+  status: string;
+  pct: number;
+  daysSince: number | null;
+  shotsSince: number;
+  threshold_shots: number | null;
+  threshold_days: number | null;
+}
+interface MaintTaskOverrides {
+  daysSince?: number | null;
+  shotsSince?: number;
+  threshold_shots?: number | null;
+  threshold_days?: number | null;
+  threshold_g?: number | null;
+  gramsSince?: number | null;
+  machineSyncedAt?: string | number | null;
+  grinderName?: string | null;
+  disabled?: boolean;
+  label?: string | null;
+}
+const task = (status: string, overrides: MaintTaskOverrides = {}): MaintTaskFixture => ({
   status, pct: status === 'ok' ? 0.2 : status === 'soon' ? 0.85 : 1,
   daysSince: null, shotsSince: 0, threshold_shots: null, threshold_days: null,
   ...overrides,
@@ -34,9 +59,9 @@ describe('_normalizeMaintTiles (#393)', () => {
     const tiles = _normalizeMaintTiles(data, 1);
     expect(tiles).toHaveLength(4);
     expect(tiles.every(t => t.machineId === 1)).toBe(true);
-    expect(tiles.find(t => t.task === 'descaling').isGlobal).toBe(false);
-    expect(tiles.find(t => t.task === 'waterfilter').isGlobal).toBe(true);
-    expect(tiles.find(t => t.task === 'grinder_1').isGlobal).toBe(true);
+    expect(tiles.find(t => t.task === 'descaling')!.isGlobal).toBe(false);
+    expect(tiles.find(t => t.task === 'waterfilter')!.isGlobal).toBe(true);
+    expect(tiles.find(t => t.task === 'grinder_1')!.isGlobal).toBe(true);
     // Single-machine scope never shows a per-machine name tag (nothing to
     // disambiguate against) — only the "shared" tag on global tasks.
     expect(tiles.every(t => t.showMachineTag === false)).toBe(true);
@@ -70,7 +95,7 @@ describe('_pickNextDueTile (#393 — "Als Nächstes" banner target)', () => {
     const tiles = [
       { task: 'backflush', d: task('ok') },
       { task: 'waterfilter', d: task('soon') },
-    ];
+    ] as unknown as MaintTileFixture[];
     expect(_pickNextDueTile(tiles)).toBeNull();
   });
 
@@ -79,18 +104,18 @@ describe('_pickNextDueTile (#393 — "Als Nächstes" banner target)', () => {
       { task: 'backflush', d: task('due', { threshold_shots: 20, shotsSince: 23 }) }, // 3 over
       { task: 'descaling', d: task('due', { threshold_shots: 200, shotsSince: 178 }) }, // not actually over (pct<1 in reality, but status forced here)
       { task: 'grouphead', d: task('due', { threshold_days: 180, daysSince: 200 }) }, // 20 over
-    ];
+    ] as unknown as MaintTileFixture[];
     const picked = _pickNextDueTile(tiles);
-    expect(picked.task).toBe('grouphead');
+    expect(picked!.task).toBe('grouphead');
   });
 
   it('treats a never-done task\'s total shot count as its overage, so an established machine\'s never-cleaned task outranks a barely-overdue one', () => {
     const tiles = [
       { task: 'backflush', d: task('due', { threshold_shots: 20, shotsSince: 22 }) }, // 2 over
       { task: 'descaling', d: task('never', { shotsSince: 500 }) },
-    ];
+    ] as unknown as MaintTileFixture[];
     const picked = _pickNextDueTile(tiles);
-    expect(picked.task).toBe('descaling');
+    expect(picked!.task).toBe('descaling');
   });
 });
 
@@ -104,10 +129,10 @@ describe('_maintLogTaskOptions', () => {
       { task: 'descaling', d: task('due') },
       { task: 'grinder_1', d: task('never', { grinderName: 'Niche Zero' }) },
       { task: 'custom_ruckspulen', d: task('ok', { label: 'Rückspülen mit Reiniger' }) },
-    ];
+    ] as unknown as MaintTileFixture[];
     const options = _maintLogTaskOptions(tiles);
     expect(options).toEqual([
-      { task: 'descaling', label: expect.any(String) },
+      { task: 'descaling', label: expect.any(String) as string },
       { task: 'grinder_1', label: 'Niche Zero' },
       { task: 'custom_ruckspulen', label: 'Rückspülen mit Reiniger' },
     ]);
@@ -117,7 +142,7 @@ describe('_maintLogTaskOptions', () => {
     const allTiles = [
       { task: 'descaling', d: task('due') },
       { task: 'backflush', d: { ...task('ok'), disabled: true } },
-    ];
+    ] as unknown as MaintTileFixture[];
     const { active } = _partitionTiles(allTiles);
     const options = _maintLogTaskOptions(active);
     expect(options.map(o => o.task)).toEqual(['descaling']);
@@ -127,7 +152,7 @@ describe('_maintLogTaskOptions', () => {
     const tiles = [
       { task: 'descaling', machineId: 1, d: task('due') },
       { task: 'descaling', machineId: 2, d: task('ok') },
-    ];
+    ] as unknown as MaintTileFixture[];
     const options = _maintLogTaskOptions(tiles);
     expect(options).toHaveLength(1);
   });
