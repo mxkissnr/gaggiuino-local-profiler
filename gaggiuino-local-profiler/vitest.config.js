@@ -3,8 +3,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
     test: {
         environment: 'node',
-        include: ['test/**/*.test.js'],
-        setupFiles: ['test/setup.js'],
+        include: ['test/**/*.test.{js,ts}'],
+        setupFiles: ['test/setup.ts'],
         coverage: {
             provider: 'v8',
             reporter: ['text', 'json-summary', 'lcov'],

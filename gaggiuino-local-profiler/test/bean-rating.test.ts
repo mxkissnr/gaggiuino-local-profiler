@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { calcBeanRating } from '../public-src/utils.js';
 
-const shot = (coffee, rating) => ({ annotation: { coffee, rating } });
+// api/types.ts types a shot's rating as a number and calcBeanRating()
+// parseFloats it either way, but its parameter still declares string|null —
+// bridge the numeric fixtures to that older signature once here.
+type BeanShot = NonNullable<Parameters<typeof calcBeanRating>[1]>[number];
+const shot = (coffee: string | null | undefined, rating?: number | null): BeanShot =>
+    ({ annotation: { coffee, rating } } as BeanShot);
 
 describe('calcBeanRating', () => {
   it('averages ratings for shots matching the bean name case-insensitively', () => {

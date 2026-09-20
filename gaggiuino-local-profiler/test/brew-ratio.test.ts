@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { calcBrewRatio } from '../public-src/utils.js';
 
-const shotWith = (dose) => ({ annotation: { dose } });
-const dataWith = (finalWeight) => ({ weight: finalWeight == null ? [] : [{ x: 1, y: 10 }, { x: 25, y: finalWeight }] });
+// calcBrewRatio's parameter still declares dose as string|null, but shot
+// annotations carry numeric doses (api/types.ts) and the runtime parseFloats
+// either — bridge the fixture to that older signature once here.
+type BrewShot = NonNullable<Parameters<typeof calcBrewRatio>[0]>;
+const shotWith = (dose: string | number | null | undefined): BrewShot => ({ annotation: { dose } } as BrewShot);
+const dataWith = (finalWeight: number | null | undefined) => ({ weight: finalWeight == null ? [] : [{ x: 1, y: 10 }, { x: 25, y: finalWeight }] });
 
 describe('calcBrewRatio', () => {
     it('computes final weight / dose', () => {
