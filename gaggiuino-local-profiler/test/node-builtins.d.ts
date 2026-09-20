@@ -6,8 +6,22 @@
 // missing. Declare the members the tests actually use — add to this file when a
 // later test migration needs more of the API rather than reaching for a
 // file-level ts-expect-error.
+declare module 'node:child_process' {
+    export function execFileSync(
+        file: string,
+        args: readonly string[],
+        options: { cwd: string; encoding: string },
+    ): string;
+}
+
 declare module 'node:fs' {
     export function readFileSync(path: string, encoding: string): string;
+    export function mkdtempSync(prefix: string): string;
+    export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
+}
+
+declare module 'node:os' {
+    export function tmpdir(): string;
 }
 
 declare module 'node:path' {

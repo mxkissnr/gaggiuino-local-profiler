@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execFileSync } from 'child_process';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import path from 'path';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { historyScope } from '../scripts/dev-stats.mjs';
 
 // #527: dev-stats used to measure the checked-out HEAD, so a run from a
@@ -41,12 +41,12 @@ describe('dev-stats history scope (#527)', () => {
 // legitimate "no origin refs" case, so the scope silently degraded to HEAD and
 // #528 never took effect. These tests use the real git binary.
 describe('dev-stats history scope — real git (#529)', () => {
-    let repo;
+    let repo: string;
 
-    const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
+    const git = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
 
     beforeAll(() => {
-        repo = mkdtempSync(path.join(tmpdir(), 'glp-devstats-'));
+        repo = mkdtempSync(join(tmpdir(), 'glp-devstats-'));
         git('init', '--quiet', '-b', 'main');
         git('config', 'user.email', 'test@example.com');
         git('config', 'user.name', 'Test');
