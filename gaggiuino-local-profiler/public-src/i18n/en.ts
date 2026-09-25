@@ -364,7 +364,7 @@ const en: Translations = {
     nav_dialin:'Dial-In', dialin_title:'Dial-In',
     nav_maintenance:'Maintenance',
     maint_descaling:'Descaling', maint_backflush:'Backflush', maint_grouphead:'Group Head Service',
-    maint_gaskets:'Gaskets & Screens', maint_waterfilter:'Water Filter',
+    maint_gaskets:'Gaskets & Screens', maint_waterfilter:'Water Filter', maint_firmware_update:'Firmware Update',
     maint_due:'Due', maint_soon:'Due soon', maint_never:'Never done',
     maint_never_done:'Never done', maint_today:'Today',
     maint_auto_synced:'Auto', maint_auto_synced_hint:'Automatically detected from the machine',

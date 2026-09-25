@@ -354,7 +354,7 @@ const de: Partial<Translations> = {
     nav_dialin:'Bezugslog', dialin_title:'Bezugslog',
     nav_maintenance:'Wartung',
     maint_descaling:'Entkalken', maint_backflush:'Backflush', maint_grouphead:'Gruppenkopf Service',
-    maint_gaskets:'Dichtungen & Siebe', maint_waterfilter:'Wasserfilter',
+    maint_gaskets:'Dichtungen & Siebe', maint_waterfilter:'Wasserfilter', maint_firmware_update:'Firmware-Update',
     maint_due:'Fällig', maint_soon:'Bald fällig', maint_never:'Nie erledigt',
     maint_never_done:'Noch nie erledigt', maint_today:'Heute',
     maint_auto_synced:'Auto', maint_auto_synced_hint:'Automatisch von der Maschine erkannt',

@@ -364,7 +364,7 @@ const it: Partial<Translations> = {
     nav_dialin:'Calibrazione', dialin_title:'Calibrazione',
     nav_maintenance:'Manutenzione',
     maint_descaling:'Decalcificazione', maint_backflush:'Backflush', maint_grouphead:'Servizio Gruppo',
-    maint_gaskets:'Guarnizioni & Filtri', maint_waterfilter:'Filtro acqua',
+    maint_gaskets:'Guarnizioni & Filtri', maint_waterfilter:'Filtro acqua', maint_firmware_update:'Aggiornamento firmware',
     maint_due:'Scaduto', maint_soon:'In scadenza', maint_never:'Mai fatto',
     maint_never_done:'Mai fatto', maint_today:'Oggi',
     maint_auto_synced:'Auto', maint_auto_synced_hint:'Rilevato automaticamente dalla macchina',
