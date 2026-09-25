@@ -18,8 +18,8 @@ func countRows(t *testing.T, sqlDB *sql.DB, query string, args ...any) int {
 
 // TestPurgeExpiredTrash is the #1152 port test: a trash entry older than 30
 // days is dropped together with its shot, annotation and (Go-only) score
-// cache row; a 29-day-old entry and a live shot are untouched; the blocklist
-// stays empty (Node parity).
+// cache row; a 29-day-old entry and a live shot are untouched; the purged id
+// is blocklisted while the fresh trash entry's id is not (#1159).
 func TestPurgeExpiredTrash(t *testing.T) {
 	_, repo, sqlDB := newTestHandlers(t)
 	now := time.Now()
@@ -67,11 +67,19 @@ func TestPurgeExpiredTrash(t *testing.T) {
 		{"shot 3 row", `SELECT COUNT(*) FROM shots WHERE id = 3`, 1},
 		{"shot 3 annotation", `SELECT COUNT(*) FROM annotations WHERE shot_id = 3`, 1},
 		{"shot 3 trash", `SELECT COUNT(*) FROM trash WHERE shot_id = 3`, 0},
-		{"blocklist", `SELECT COUNT(*) FROM blocklist`, 0},
+		{"blocklist size", `SELECT COUNT(*) FROM blocklist`, 1},
 	} {
 		if got := countRows(t, sqlDB, q.query); got != q.want {
 			t.Fatalf("%s count = %d, want %d", q.name, got, q.want)
 		}
+	}
+
+	blocklist, err := repo.GetBlocklist()
+	if err != nil {
+		t.Fatalf("GetBlocklist: %v", err)
+	}
+	if len(blocklist) != 1 || blocklist[0] != "1" {
+		t.Fatalf("GetBlocklist after purge = %v, want [1]", blocklist)
 	}
 
 	again, err := repo.PurgeExpiredTrash(now)

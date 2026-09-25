@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -628,10 +629,11 @@ const trashTTL = 30 * 24 * time.Hour
 // milliseconds (MoveToTrash stamps time.Now().UnixMilli), so the cutoff is
 // a strict `<` against now's epoch-millis minus trashTTL.
 //
-// Node did not blocklist a purged id and did not delete image files; both
-// stay true here for parity. It also did not clear shot_score_cache
-// (Go-only, no Node equivalent) — DeleteByID does, and without the same
-// line here a purge would leave orphaned cache rows behind.
+// Unlike Node, Go deliberately blocklists each purged id (#1159) so the next
+// sync does not resume below it and re-import the shot from the machine;
+// image files are still not deleted, matching Node. Node also did not clear
+// shot_score_cache (Go-only, no Node equivalent) — DeleteByID does, and
+// without the same line here a purge would leave orphaned cache rows behind.
 func (r *Repository) PurgeExpiredTrash(now time.Time) ([]int64, error) {
 	cutoff := now.UnixMilli() - trashTTL.Milliseconds()
 	rows, err := r.db.Query(`SELECT shot_id FROM trash WHERE deleted_at < ?`, cutoff)
@@ -671,6 +673,13 @@ func (r *Repository) PurgeExpiredTrash(now time.Time) ([]int64, error) {
 				tx.Rollback()
 				return nil, fmt.Errorf("shots: purging shot %d (%s): %w", id, stmt, err)
 			}
+		}
+		// Blocklist the id so a later sync does not resume below it and
+		// re-import the shot (same statement as AppendToBlocklist;
+		// blocklist.value is UNIQUE).
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO blocklist (value) VALUES (?)`, strconv.FormatInt(id, 10)); err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("shots: blocklisting purged shot %d: %w", id, err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
