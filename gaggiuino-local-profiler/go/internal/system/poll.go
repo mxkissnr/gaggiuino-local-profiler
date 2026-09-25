@@ -753,7 +753,7 @@ func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
 
 	intField := func(key string) *int {
 		v, ok := jsNumberToInt64(m[key])
-		if !ok {
+		if !ok || v < math.MinInt32 || v > math.MaxInt32 {
 			return nil
 		}
 		n := int(v)
