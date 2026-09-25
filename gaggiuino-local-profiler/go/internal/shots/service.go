@@ -1,12 +1,18 @@
 package shots
 
-import "errors"
+import (
+	"context"
+	"errors"
+	"log"
+	"time"
+)
 
 // This file ports lib/services/ShotService.js — the subset routes/shots.js
-// actually calls. importShots/upsertShot/purgeExpiredTrash (sync/import/
-// maintenance-cron call sites) aren't ported: nothing in this phase's HTTP
-// surface reaches them; add them alongside the sync/import domain that
-// does.
+// actually calls. importShots/upsertShot (sync/import call sites) aren't
+// ported: nothing in this phase's HTTP surface reaches them; add them
+// alongside the sync/import domain that does. purgeExpiredTrash *is*
+// ported (#1152) — see PurgeExpiredTrash/StartTrashPurge below, wired into
+// cmd/server's startup.
 
 // ErrShotNotFound ports the `Object.assign(new Error('Shot not found'),
 // {status:404})` ShotService.js's trashShot throws — routes/shots.js's
@@ -184,6 +190,45 @@ func (s *Service) RestoreShot(id int64) error {
 // PermanentDelete ports ShotService.js's permanentDelete.
 func (s *Service) PermanentDelete(id int64) error {
 	return s.repo.DeleteByID(id)
+}
+
+// PurgeExpiredTrash ports ShotService.js's purgeExpiredTrash (#1152):
+// permanently deletes every shot whose trash entry is older than 30 days,
+// logging the count the way Node logged `Auto-purged N shot(s) from trash
+// (>30 days)` — only when N > 0.
+func (s *Service) PurgeExpiredTrash() error {
+	purged, err := s.repo.PurgeExpiredTrash(time.Now())
+	if err != nil {
+		return err
+	}
+	if len(purged) > 0 {
+		log.Printf("shots: auto-purged %d shot(s) from trash (>30 days)", len(purged))
+	}
+	return nil
+}
+
+// StartTrashPurge ports server.js's startup purge call plus its 24h
+// setInterval: it runs one purge immediately, then one per interval on a
+// background goroutine until ctx is cancelled. A purge failure is logged,
+// never fatal.
+func StartTrashPurge(ctx context.Context, svc *Service, interval time.Duration) {
+	if err := svc.PurgeExpiredTrash(); err != nil {
+		log.Printf("shots: trash purge failed: %v", err)
+	}
+	ticker := time.NewTicker(interval)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := svc.PurgeExpiredTrash(); err != nil {
+					log.Printf("shots: trash purge failed: %v", err)
+				}
+			}
+		}
+	}()
 }
 
 // GetBlocklist ports ShotService.js's getBlocklist.

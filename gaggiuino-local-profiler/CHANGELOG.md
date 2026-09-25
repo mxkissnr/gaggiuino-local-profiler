@@ -1,4 +1,7 @@
 ## [Unreleased]
+- **Restoring a shot from the trash no longer shows an empty rating and notes, and the trashed latest shot is no longer downloaded again on every sync.** Closes #1150
+- **One damaged shot on the machine no longer stops all newer shots from being imported.** Closes #1151
+- **Shots in the trash are now deleted automatically after 30 days again.** Closes #1152
 - **Water level and uptime now show correctly on current Gaggiuino firmware that reports its status as a list of text values.** Closes #1149
 - **Permanently deleting a demo shot or a second machine's shot no longer stops new shots from being imported.** Closes #1148
 - **Shot sync works again with firmware that reports shot IDs as text instead of numbers.** Closes #1142

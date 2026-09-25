@@ -373,6 +373,12 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	mqtt.NewHandlers(mqttRepo, mqttTransport, registry, machinesHandlers, haClient).RegisterRoutes(mux)
 
 	poller.Start(ctx)
+
+	// #1152: Node ran purgeExpiredTrash once at startup and then every 24h
+	// (server.js's startup call + its setInterval). StartTrashPurge mirrors
+	// both — the immediate purge plus a 24h ticker bound to ctx.
+	shots.StartTrashPurge(ctx, shots.NewService(shotsRepo), 24*time.Hour)
+
 	// Closes internal/orders' shop-broadcast deferral (see
 	// internal/orders/doc.go and internal/system/doc.go's "internal/orders'
 	// shop-broadcast" section for why this is a callback, not an import).
