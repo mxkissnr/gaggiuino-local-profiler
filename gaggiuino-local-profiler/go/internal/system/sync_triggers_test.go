@@ -2,7 +2,9 @@ package system
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -50,10 +52,11 @@ func waitFor(t *testing.T, d time.Duration, cond func() bool) {
 
 func withShortDelays(t *testing.T) {
 	t.Helper()
-	origBrew, origRetry := syncAfterBrewDelay, syncRetryDelays
+	origBrew, origRetry, origPowerOn := syncAfterBrewDelay, syncRetryDelays, syncAfterPowerOnDelay
 	syncAfterBrewDelay = 15 * time.Millisecond
 	syncRetryDelays = []time.Duration{10 * time.Millisecond, 10 * time.Millisecond, 10 * time.Millisecond}
-	t.Cleanup(func() { syncAfterBrewDelay, syncRetryDelays = origBrew, origRetry })
+	syncAfterPowerOnDelay = 15 * time.Millisecond
+	t.Cleanup(func() { syncAfterBrewDelay, syncRetryDelays, syncAfterPowerOnDelay = origBrew, origRetry, origPowerOn })
 }
 
 func TestScheduleSyncAfterBrew_FiresAfterDelay(t *testing.T) {
@@ -212,5 +215,86 @@ func TestMaybeCatchUpAfterRecovery(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestRunScheduledSync_SyncsImmediatelyOnStart is the #1153 regression test:
+// the scheduler must run one sync pass right away instead of waiting a full
+// interval for the first one.
+func TestRunScheduledSync_SyncsImmediatelyOnStart(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	p.SetShotsRepo(shots.NewRepository(sqlDB))
+	p.syncIntervalOverride = time.Hour // only the immediate pass can fire within this test
+	var c syncCounter
+	p.syncFn = c.fn
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() { p.runScheduledSync(ctx); close(done) }()
+
+	waitFor(t, time.Second, func() bool { return c.count() == 1 })
+	// The next pull is a full interval away, so nothing else may fire.
+	time.Sleep(50 * time.Millisecond)
+	if c.count() != 1 {
+		t.Fatalf("scheduled sync fired %d times, want exactly 1 (the immediate start pass)", c.count())
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("runScheduledSync did not exit after context cancel")
+	}
+}
+
+// TestCheckAndApplyMachinePower_SyncsAfterPowerOn is the #1153 regression
+// test: the off->on transition schedules exactly one default-machine sync
+// after the power-on delay, while on->on and on->off schedule none.
+func TestCheckAndApplyMachinePower_SyncsAfterPowerOn(t *testing.T) {
+	withShortDelays(t)
+	syncAfterPowerOnDelay = 100 * time.Millisecond // long enough to assert "not before"
+
+	var switchState atomic.Value
+	switchState.Store("off")
+	haClient := fakeHA(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/states/switch.machine" {
+			_ = json.NewEncoder(w).Encode(map[string]string{"state": switchState.Load().(string)})
+			return
+		}
+		t.Errorf("unexpected HA call: %s %s", r.Method, r.URL.Path)
+	})
+	fake := &fakeAdapter{}
+	sqlDB := newTestDB(t)
+	p := newTestPollerWithHA(t, fake, sqlDB, haClient, "switch.machine")
+	p.SetShotsRepo(shots.NewRepository(sqlDB))
+	var c syncCounter
+	p.syncFn = c.fn
+
+	// off -> on: exactly one sync, and only after the delay.
+	switchState.Store("on")
+	if err := p.checkAndApplyMachinePower(context.Background()); err != nil {
+		t.Fatalf("checkAndApplyMachinePower (off->on): %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if c.count() != 0 {
+		t.Fatalf("sync fired before the power-on delay: %d calls", c.count())
+	}
+	waitFor(t, time.Second, func() bool { return c.count() == 1 })
+
+	// on -> on: no further sync.
+	if err := p.checkAndApplyMachinePower(context.Background()); err != nil {
+		t.Fatalf("checkAndApplyMachinePower (on->on): %v", err)
+	}
+
+	// on -> off: no sync either.
+	switchState.Store("off")
+	if err := p.checkAndApplyMachinePower(context.Background()); err != nil {
+		t.Fatalf("checkAndApplyMachinePower (on->off): %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if c.count() != 1 {
+		t.Fatalf("sync fired %d times, want exactly 1 (only the off->on transition)", c.count())
 	}
 }

@@ -37,6 +37,13 @@ var (
 	// sequence tried after a failed scheduled sync before resuming the
 	// regular sync_interval cadence.
 	syncRetryDelays = []time.Duration{30 * time.Second, 60 * time.Second, 120 * time.Second}
+	// syncAfterPowerOnDelay mirrors lib/poll.js's #663
+	// syncSoonAfterPowerOn(): the first pull after a machine off->on edge
+	// waits 2s, because the physical machine can take a moment to bring
+	// its own HTTP API up (Node also runs a bounded 10s retry chain there,
+	// which is not ported -- the scheduled loop already retries a failed
+	// sync on its own backoff).
+	syncAfterPowerOnDelay = 2 * time.Second
 )
 
 // syncIntervalOverride, when non-zero, replaces loadSyncIntervalMinutes()
@@ -95,6 +102,29 @@ func (p *Poller) scheduleSyncAfterBrew() {
 	})
 }
 
+// scheduleSyncSoonAfterPowerOn ports lib/poll.js's #663
+// syncSoonAfterPowerOn(): fired on the machine off->on edge, it waits
+// Node's initial 2s before the first post-power-on pull (the machine can
+// still be bringing its API up), then syncs the default machine. Default
+// machine only, matching Node. Single-flight is handled inside
+// syncDefaultMachineShots (defaultSyncInFlight, #773).
+func (p *Poller) scheduleSyncSoonAfterPowerOn() {
+	if p.shots == nil {
+		return
+	}
+	ctx := p.syncCtx()
+	httputil.SafeGo("system: power-on sync", func() {
+		select {
+		case <-time.After(syncAfterPowerOnDelay):
+		case <-ctx.Done():
+			return
+		}
+		if err := p.syncOnce(ctx); err != nil {
+			log.Printf("system: power-on sync failed: %v", err)
+		}
+	})
+}
+
 // maybeCatchUpAfterRecovery ports lib/poll.js's #725 block: called from the
 // status-poll success path with the reachability value observed on the
 // PREVIOUS poll. A false->true transition, plus either a recorded sync
@@ -124,26 +154,34 @@ func (p *Poller) maybeCatchUpAfterRecovery(prevReachable *bool) {
 // a failure, retry on the syncRetryDelays sequence (30s / 60s / 120s),
 // capping at the last delay for a persistent outage exactly like Node's
 // `Math.min(retryCount + 1, SYNC_RETRY_DELAYS.length)`. A success resets to
-// the regular cadence. Started from Start(); exits on context cancel.
+// the regular cadence. Like Node's server.js boot call to syncAllMachines(),
+// the first pass runs immediately on start rather than after one interval
+// (#1153). Started from Start(); exits on context cancel.
 func (p *Poller) runScheduledSync(ctx context.Context) {
 	if p.shots == nil {
 		return
 	}
 	retry := 0
+	// #1153: sync once immediately on start instead of waiting a whole
+	// interval for the first one, then settle into the regular cadence.
+	immediate := true
 	for {
-		var delay time.Duration
-		if retry >= 1 && retry <= len(syncRetryDelays) {
-			delay = syncRetryDelays[retry-1]
-			log.Printf("system: sync retry %d/%d in %s", retry, len(syncRetryDelays), delay)
-		} else {
-			delay = p.regularSyncInterval()
-		}
+		if !immediate {
+			var delay time.Duration
+			if retry >= 1 && retry <= len(syncRetryDelays) {
+				delay = syncRetryDelays[retry-1]
+				log.Printf("system: sync retry %d/%d in %s", retry, len(syncRetryDelays), delay)
+			} else {
+				delay = p.regularSyncInterval()
+			}
 
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(delay):
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(delay):
+			}
 		}
+		immediate = false
 
 		err := p.syncOnce(ctx)
 		// #1146: the scheduler drives every enabled non-default machine too,
