@@ -369,6 +369,9 @@ func (p *Poller) checkAndApplyMachinePower(ctx context.Context) error {
 	if *isOn {
 		log.Printf("system: machine on -- live polling resumed")
 		p.startLivePolling()
+		// #1153: pull right after the machine comes on, matching Node's
+		// syncSoonAfterPowerOn(), instead of waiting for the next interval.
+		p.scheduleSyncSoonAfterPowerOn()
 	} else {
 		log.Printf("system: machine off -- live polling paused")
 		p.stopLivePolling()
