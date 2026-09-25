@@ -2,8 +2,10 @@ package system
 
 import (
 	"context"
+	"os"
 	"testing"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
@@ -199,5 +201,100 @@ func TestSyncDefaultGaggiuino_MachineOneOwnShotUntouched(t *testing.T) {
 		t.Fatalf("Count: %v", err)
 	} else if n != 4 {
 		t.Fatalf("shot count = %d, want 4 (machine-1 shot plus this machine's three)", n)
+	}
+}
+
+// withSyncImageDir points the #1162 moved-photo helper at a temp dir for one
+// test and restores the production image directory afterwards.
+func withSyncImageDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	orig := syncImageDir
+	syncImageDir = dir
+	t.Cleanup(func() { syncImageDir = orig })
+	return dir
+}
+
+// TestSyncDefaultGaggiuino_MovesPhotoFiles is the #1162 follow-up proof: when
+// a misfiled shot carrying a photo is moved to its global id, both its full
+// image and its thumbnail are renamed to the new id instead of being left
+// behind under the old one.
+func TestSyncDefaultGaggiuino_MovesPhotoFiles(t *testing.T) {
+	p, repo, m := newDefaultGaggiuinoSync(t)
+	dir := withSyncImageDir(t)
+
+	if err := repo.Upsert(shots.Shot{"id": int64(2), "timestamp": int64(2000), "datapoints": []any{}, "machineId": int64(1)}); err != nil {
+		t.Fatalf("seeding misfiled shot 2: %v", err)
+	}
+	if _, err := repo.SetImage(2, "jpg"); err != nil {
+		t.Fatalf("SetImage(2): %v", err)
+	}
+	fullOld := img.Path(dir, 2, "jpg", "shot-")
+	thumbOld := img.ThumbPath(dir, 2, "jpg", "shot-")
+	for _, f := range []string{fullOld, thumbOld} {
+		if err := os.WriteFile(f, []byte("photo"), 0o644); err != nil {
+			t.Fatalf("writing %s: %v", f, err)
+		}
+	}
+
+	shots123SyncServer(t, map[string]string{
+		"1": shotJSON(`1`, "1000"),
+		"2": shotJSON(`2`, "2000"),
+		"3": shotJSON(`3`, "3000"),
+	})
+	if err := p.syncDefaultMachineShots(context.Background()); err != nil {
+		t.Fatalf("syncDefaultMachineShots: %v", err)
+	}
+
+	globalID := shots.ToGlobalShotID(m.ID, 2)
+	if s, err := repo.FindByID(globalID); err != nil {
+		t.Fatalf("FindByID(%d): %v", globalID, err)
+	} else if s == nil {
+		t.Fatalf("shot %d missing after sync", globalID)
+	}
+	for _, f := range []string{fullOld, thumbOld} {
+		if _, err := os.Stat(f); !os.IsNotExist(err) {
+			t.Fatalf("old photo file %s still present after move (err = %v)", f, err)
+		}
+	}
+	for _, f := range []string{img.Path(dir, globalID, "jpg", "shot-"), img.ThumbPath(dir, globalID, "jpg", "shot-")} {
+		if _, err := os.Stat(f); err != nil {
+			t.Fatalf("moved photo file %s missing: %v", f, err)
+		}
+	}
+}
+
+// TestSyncDefaultGaggiuino_MoveWithoutPhotoFiles: a misfiled shot with no
+// stored image still moves, and the move creates no phantom files under the
+// new id.
+func TestSyncDefaultGaggiuino_MoveWithoutPhotoFiles(t *testing.T) {
+	p, repo, m := newDefaultGaggiuinoSync(t)
+	dir := withSyncImageDir(t)
+
+	if err := repo.Upsert(shots.Shot{"id": int64(2), "timestamp": int64(2000), "datapoints": []any{}, "machineId": int64(1)}); err != nil {
+		t.Fatalf("seeding misfiled shot 2: %v", err)
+	}
+
+	shots123SyncServer(t, map[string]string{
+		"1": shotJSON(`1`, "1000"),
+		"2": shotJSON(`2`, "2000"),
+		"3": shotJSON(`3`, "3000"),
+	})
+	if err := p.syncDefaultMachineShots(context.Background()); err != nil {
+		t.Fatalf("syncDefaultMachineShots: %v", err)
+	}
+
+	globalID := shots.ToGlobalShotID(m.ID, 2)
+	if s, err := repo.FindByID(globalID); err != nil {
+		t.Fatalf("FindByID(%d): %v", globalID, err)
+	} else if s == nil {
+		t.Fatalf("shot %d missing after sync", globalID)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir(%s): %v", dir, err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("image dir has %d entries, want 0: %v", len(entries), entries)
 	}
 }

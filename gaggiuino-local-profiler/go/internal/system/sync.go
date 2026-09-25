@@ -90,6 +90,11 @@ var syncBaseURLFor = machines.BaseURLFor
 var syncFetchGaggiMateIndex = machines.FetchGaggiMateIndex
 var syncFetchGaggiMateShot = machines.FetchGaggiMateShot
 
+// syncImageDir is where the shot photo files live. Another package-level var
+// so a test can point the #1162 misfiled-shot move at a t.TempDir();
+// production keeps the shared image directory.
+var syncImageDir = shots.DefaultImageDir
+
 // SetShotsRepo wires the shots Repository the manual-sync pull loop
 // persists into. Kept a setter (not a NewPoller parameter) so the three
 // existing NewPoller call sites — none of which exercise sync — stay
@@ -155,9 +160,8 @@ func (p *Poller) RunManualSync(ctx context.Context) {
 // The first return value reports whether the error is one the caller should
 // stamp via recordSyncError: true for a fetch transport error or an Upsert
 // failure (the machine/sync failed), false for a local DB error (GetBlocklist,
-// MaxNativeShotID, AppendToBlocklist, prepare), which must not flip a reachable
-// machine
-// offline.
+// MaxNativeShotID, AppendToBlocklist, prepare), which must not flip a
+// reachable machine offline.
 func (p *Poller) backfillShots(
 	ctx context.Context,
 	machineID, latestNative int64,
@@ -324,6 +328,15 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 						return false, merr
 					}
 					if moved {
+						globalID := shots.ToGlobalShotID(machine.ID, native)
+						// #1162 follow-up: the moved row keeps its image key, so carry
+						// its photo files to the new id too. Best-effort — a missing
+						// photo or a failed rename must not fail the sync.
+						if ext, eerr := p.shots.ImageExtFor(globalID); eerr != nil {
+							log.Printf("system: sync: reading image ext for moved shot %d: %v", globalID, eerr)
+						} else {
+							shots.MoveShotImageFiles(syncImageDir, native, globalID, ext)
+						}
 						log.Printf("system: sync: moved shot %d filed under machine 1 to machine %d (#1162)", native, machine.ID)
 						return false, nil
 					}

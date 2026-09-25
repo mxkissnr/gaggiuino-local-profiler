@@ -537,6 +537,18 @@ func (r *Repository) ClearImage(id int64) (Shot, error) {
 	return r.FindByID(id)
 }
 
+// ImageExtFor returns id's stored photo extension (data["image"]), or "" when
+// the shot has no photo or does not exist. #1162's sync reads the moved row's
+// extension back through this so it can carry the photo files over to the new
+// id with MoveShotImageFiles.
+func (r *Repository) ImageExtFor(id int64) (string, error) {
+	shot, err := r.FindByID(id)
+	if err != nil || shot == nil {
+		return "", err
+	}
+	return shot.imageExt(), nil
+}
+
 func (r *Repository) rawData(id int64) (map[string]any, error) {
 	var raw string
 	err := r.db.QueryRow(`SELECT data FROM shots WHERE id = ?`, id).Scan(&raw)
@@ -656,10 +668,10 @@ func (r *Repository) DeleteByID(shotID int64) error {
 // deleting the old row afterwards cascades to nothing.
 //
 // Deliberately out of scope for #1162: other stores that reference shot ids
-// inside JSON blobs (orders, achievements) and the on-disk shot image files
-// (shot-<id>.<ext> plus its thumbnail) are NOT re-keyed here — a moved shot
-// keeps the image key inside its data blob, but its photo file stays under
-// the old id.
+// inside JSON blobs (orders, achievements) are NOT re-keyed here. The shot's
+// photo files (shot-<id>.<ext> plus its thumbnail) are handled separately by
+// the caller: the moved row still carries its image key, and the sync path
+// reads it back with ImageExtFor and renames the files with MoveShotImageFiles.
 func (r *Repository) MoveMisfiledShot(nativeID, timestamp, toMachineID int64) (moved bool, err error) {
 	if toMachineID == 1 {
 		return false, nil
