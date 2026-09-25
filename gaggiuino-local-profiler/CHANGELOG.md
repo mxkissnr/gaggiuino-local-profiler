@@ -1,4 +1,6 @@
 ## [Unreleased]
+- **A shot moved over from the first machine now takes its photo with it.** Part of #1162
+- **A Gaggiuino set as the default machine other than the first one now stores its shots under itself, and shots it previously filed under the first machine are moved over.** Closes #1162
 - **New shots now appear right after the app starts or the machine is switched on, instead of after the next sync interval.** Closes #1153
 - **Orders created via the API keep their milk amount when it is sent as text.** Closes #1154
 - **One unusual GaggiMate profile no longer hides the whole profile list.** Closes #1155

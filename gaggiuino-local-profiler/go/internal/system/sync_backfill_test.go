@@ -36,10 +36,10 @@ func TestBackfillShots_Direct(t *testing.T) {
 			t.Fatalf("unexpected native id %d", native)
 			return nil, 0, nil
 		},
-		func(shot map[string]any, native int64) bool {
+		func(shot map[string]any, native int64) (bool, error) {
 			shot["id"] = shots.ToGlobalShotID(2, native)
 			shot["machineId"] = int64(2)
-			return true
+			return true, nil
 		},
 		backfillLogs{prefix: "system: sync", notFoundSuffix: " on machine", invalidReason: "has invalid data"})
 	if err != nil {

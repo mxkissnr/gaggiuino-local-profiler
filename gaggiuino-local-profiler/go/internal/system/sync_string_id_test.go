@@ -119,6 +119,12 @@ func assertSyncStoresShots123(t *testing.T, latest string, shotsByID map[string]
 		if got, ok := jsNumberToInt64(s["id"]); !ok || got != i {
 			t.Fatalf("shot %d stored with id %v (ok=%v)", i, s["id"], ok)
 		}
+		// #1162: machine 1 is the only machine whose native id is also its
+		// global id, so its default-path shots must stay stamped machineId 1
+		// and never be moved.
+		if mid, _ := s["machineId"].(int64); mid != 1 {
+			t.Fatalf("shot %d machineId = %#v, want 1", i, s["machineId"])
+		}
 	}
 	if max, err := repo.MaxNativeShotID(1); err != nil {
 		t.Fatalf("MaxNativeShotID: %v", err)
