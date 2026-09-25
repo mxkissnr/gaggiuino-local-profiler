@@ -1,4 +1,5 @@
 ## [Unreleased]
+- **Shot sync works again with firmware that reports shot IDs as text instead of numbers.** Closes #1142
 - **A machine firmware update triggered from the app is now recorded in the maintenance log.** Part of #1136
 - **Fixed the bottom navigation covering the end of page content.** Part of #1125
 - **Added a kiosk page for a tablet on the table: guests enter their name, pick a drink and place an order, and see the live queue with estimated times.** Part of #1125

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
@@ -57,6 +58,13 @@ const syncHTTPTimeout = 10 * time.Second
 // machine call in this app, and a bare client's http.DefaultTransport
 // would re-resolve that hostname unguarded at connect time.
 var syncClient = machines.NewGuardedHTTPClient(syncHTTPTimeout)
+
+// syncBaseURLFor resolves a machine's base URL for the pull loop. A
+// package-level var (rather than machines.BaseURLFor called inline) so a
+// test can point the loop at an httptest fake machine: BaseURLFor's SSRF
+// guard deliberately rejects loopback hosts, and machines' own
+// allowLoopbackMachineHost test seam is unexported and unreachable here.
+var syncBaseURLFor = machines.BaseURLFor
 
 // SetShotsRepo wires the shots Repository the manual-sync pull loop
 // persists into. Kept a setter (not a NewPoller parameter) so the three
@@ -149,7 +157,7 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 		return p.syncGaggiMateShots(ctx, machine)
 	}
 
-	base, err := machines.BaseURLFor(ctx, machine)
+	base, err := syncBaseURLFor(ctx, machine)
 	if err != nil {
 		return fmt.Errorf("resolving machine URL: %w", err)
 	}
@@ -205,6 +213,15 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 			log.Printf("system: sync: shot %d has invalid data — skipped", i)
 			continue
 		}
+		// Some firmware reports the shot id as a JSON string; normalize it to
+		// int64 so shotInsertArgs stores the real id instead of 0 (which would
+		// make every shot overwrite the previous one).
+		id, ok := jsNumberToInt64(shot["id"])
+		if !ok {
+			log.Printf("system: sync: shot %d has unparseable id %#v — skipped", i, shot["id"])
+			continue
+		}
+		shot["id"] = id
 		p.captureMachineVersionFromShot(shot)
 		p.state.mu.Lock()
 		ver := p.state.cachedMachineVersion
@@ -240,7 +257,7 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 		}
 	}
 
-	base, berr := machines.BaseURLFor(ctx, machine)
+	base, berr := syncBaseURLFor(ctx, machine)
 	if berr != nil {
 		log.Printf("system: gaggimate sync: machine URL unresolvable: %v", berr)
 		return nil
@@ -421,8 +438,9 @@ func (p *Poller) recordSyncError(err error) {
 }
 
 // jsNumberToInt64 accepts the float64 encoding/json produces for a JSON
-// number, or an int64, matching lib/sync.js tolerating whatever the
-// machine's firmware sends.
+// number, an int64, or a numeric JSON string (some firmware builds quote
+// the id), matching lib/sync.js tolerating whatever the machine's
+// firmware sends — JS coerced a string id, this port has to parse it.
 func jsNumberToInt64(v any) (int64, bool) {
 	switch t := v.(type) {
 	case float64:
@@ -431,6 +449,9 @@ func jsNumberToInt64(v any) (int64, bool) {
 		return t, true
 	case json.Number:
 		n, err := t.Int64()
+		return n, err == nil
+	case string:
+		n, err := strconv.ParseInt(strings.TrimSpace(t), 10, 64)
 		return n, err == nil
 	}
 	return 0, false
