@@ -182,12 +182,7 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	effectiveMax := maxLocalID
-	for _, b := range blocklist {
-		if n, perr := strconv.ParseInt(b, 10, 64); perr == nil && n > effectiveMax {
-			effectiveMax = n
-		}
-	}
+	effectiveMax := effectiveSyncMax(maxLocalID, blocklist)
 
 	if effectiveMax >= *latestMachineID {
 		log.Printf("system: sync: already up to date (shots: %d)", maxLocalID)
@@ -285,12 +280,7 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 	if err != nil {
 		return err
 	}
-	effectiveMax := maxLocalID
-	for _, b := range blocklist {
-		if n, perr := strconv.ParseInt(b, 10, 64); perr == nil && n > effectiveMax {
-			effectiveMax = n
-		}
-	}
+	effectiveMax := effectiveSyncMax(maxLocalID, blocklist)
 
 	if effectiveMax >= latestMachineID {
 		log.Printf("system: gaggimate sync: already up to date (shots: %d)", maxLocalID)
@@ -435,6 +425,26 @@ func (p *Poller) recordSyncError(err error) {
 	reachable := false
 	p.state.machineReachable = &reachable
 	p.state.lastMachineError = &msg
+}
+
+// nativeShotIDLimit mirrors shots.machineIDOffset (unexported there): a
+// blocklist id at or above it is a second-machine (>=10M) or demo (>=900M) id
+// and must not advance the default machine's sync (#1148).
+const nativeShotIDLimit = 10_000_000
+
+// effectiveSyncMax returns the shot id the sync should resume after: the
+// highest native id already stored locally, advanced only by blocklist entries
+// that are themselves native ids (0 < n < nativeShotIDLimit). Demo and
+// second-machine ids on the blocklist are ignored so they can't push the cursor
+// past the machine's own ids for good.
+func effectiveSyncMax(maxLocalID int64, blocklist []string) int64 {
+	effectiveMax := maxLocalID
+	for _, b := range blocklist {
+		if n, perr := strconv.ParseInt(b, 10, 64); perr == nil && n > 0 && n < nativeShotIDLimit && n > effectiveMax {
+			effectiveMax = n
+		}
+	}
+	return effectiveMax
 }
 
 // jsNumberToInt64 accepts the float64 encoding/json produces for a JSON
