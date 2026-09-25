@@ -19,20 +19,24 @@ import (
 // This file ports the part of lib/sync.js POST /api/sync actually needs
 // (Phase 2a, #901): a manual trigger of the default machine's shot-history
 // pull loop — syncShots()'s `${machineUrl}/latest` probe + `${machineUrl}/
-// {id}` backfill, including the #341 machine-1 scoping and #719
+// {id}` backfill, including the #341/#1147 machine scoping and #719
 // oversized-id guard on the local max-id it catches up from, the #721
 // 404 -> blocklist skip, and the state.lastSyncTime/lastSyncError/
-// machineReachable writes GET /api/status reports.
+// machineReachable writes GET /api/status reports. The GaggiMate default
+// machine path (syncGaggiMateShots) is scoped to that machine's own id
+// range too (#1147), so a GaggiMate set as the default imports its shots
+// under its own machine instead of the first machine's.
 //
 // Deliberately still NOT ported here (unchanged from doc.go's "Deliberately
 // not ported" — lib/sync.js as a whole is its own future phase):
 //
-//   - syncOtherMachines()/syncMachineShots() — the adapter-driven pull for
-//     non-default registered machines (#341). The Go machines.Adapter
-//     interface has no GetShot/GetLatestShotId methods yet; adding them is
-//     machines-domain work, out of this endpoint's scope. A manual sync
-//     here therefore covers the default machine only, same as every
-//     single-machine install (the overwhelming majority) already gets.
+//   - syncOtherMachines()/syncMachineShots() for Gaggiuino machines — the
+//     adapter-driven pull for non-default registered machines (#341, #1146).
+//     The Go machines.Adapter interface has no GetShot/GetLatestShotId
+//     methods yet; adding them is machines-domain work, out of this
+//     endpoint's scope. A manual sync here therefore covers the default
+//     machine only, same as every single-machine install (the overwhelming
+//     majority) already gets.
 //   - syncNativeMaintenance() (#578) — needs lib/maintenance-sync.js, a
 //     maintenance-domain port.
 //   - scheduleNextSync()'s retry/backoff timer and state.syncRetryCount —
@@ -76,6 +80,13 @@ var errMalformedShot = errors.New("malformed shot body")
 // guard deliberately rejects loopback hosts, and machines' own
 // allowLoopbackMachineHost test seam is unexported and unreachable here.
 var syncBaseURLFor = machines.BaseURLFor
+
+// syncFetchGaggiMateIndex/syncFetchGaggiMateShot are the GaggiMate history
+// seams, package-level vars for the same reason as syncBaseURLFor above: a
+// test backs the pull loop with in-process fakes instead of the real HTTP
+// fetchers.
+var syncFetchGaggiMateIndex = machines.FetchGaggiMateIndex
+var syncFetchGaggiMateShot = machines.FetchGaggiMateShot
 
 // SetShotsRepo wires the shots Repository the manual-sync pull loop
 // persists into. Kept a setter (not a NewPoller parameter) so the three
@@ -193,7 +204,7 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	effectiveMax := effectiveSyncMax(maxLocalID, blocklist)
+	effectiveMax := effectiveSyncMax(1, maxLocalID, blocklist)
 
 	if effectiveMax >= *latestMachineID {
 		log.Printf("system: sync: already up to date (shots: %d)", maxLocalID)
@@ -276,7 +287,7 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 		return nil
 	}
 
-	latestMachineID, err := machines.FetchGaggiMateIndex(ctx, base)
+	latestMachineID, err := syncFetchGaggiMateIndex(ctx, base)
 	if err != nil {
 		// HTTP unreachable — machine may still be live via WS (e.g. only HTTP
 		// is blocked). Not a hard error: return nil so the caller doesn't stamp
@@ -294,11 +305,11 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 	if err != nil {
 		return err
 	}
-	maxLocalID, err := p.shots.MaxNativeShotID(1)
+	maxLocalID, err := p.shots.MaxNativeShotID(machine.ID)
 	if err != nil {
 		return err
 	}
-	effectiveMax := effectiveSyncMax(maxLocalID, blocklist)
+	effectiveMax := effectiveSyncMax(machine.ID, maxLocalID, blocklist)
 
 	if effectiveMax >= latestMachineID {
 		log.Printf("system: gaggimate sync: already up to date (shots: %d)", maxLocalID)
@@ -307,11 +318,11 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 	}
 
 	for i := effectiveMax + 1; i <= latestMachineID; i++ {
-		shot, status, err := machines.FetchGaggiMateShot(ctx, base, i)
+		shot, status, err := syncFetchGaggiMateShot(ctx, base, i)
 		if err != nil {
 			if status == http.StatusNotFound {
 				log.Printf("system: gaggimate sync: shot %d not found (404) — marking permanently missing", i)
-				if aerr := p.shots.AppendToBlocklist(strconv.FormatInt(i, 10)); aerr != nil {
+				if aerr := p.shots.AppendToBlocklist(strconv.FormatInt(shots.ToGlobalShotID(machine.ID, i), 10)); aerr != nil {
 					return aerr
 				}
 				continue
@@ -323,6 +334,12 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 			log.Printf("system: gaggimate sync: shot %d has no id/datapoints — skipped", i)
 			continue
 		}
+		// #1147: index.bin reports the machine's own native ids, but shots are
+		// stored under globally-unique ids (global = machineID*offset+native).
+		// Re-key and stamp the machine so a GaggiMate set as the default lands
+		// under its own machine instead of machine 1.
+		shot["id"] = shots.ToGlobalShotID(machine.ID, i)
+		shot["machineId"] = machine.ID
 
 		if uerr := p.shots.Upsert(shots.Shot(shot)); uerr != nil {
 			p.recordSyncError(uerr)
@@ -457,21 +474,21 @@ func (p *Poller) recordSyncError(err error) {
 	p.state.lastMachineError = &msg
 }
 
-// nativeShotIDLimit mirrors shots.machineIDOffset (unexported there): a
-// blocklist id at or above it is a second-machine (>=10M) or demo (>=900M) id
-// and must not advance the default machine's sync (#1148).
-const nativeShotIDLimit = 10_000_000
-
-// effectiveSyncMax returns the shot id the sync should resume after: the
-// highest native id already stored locally, advanced only by blocklist entries
-// that are themselves native ids (0 < n < nativeShotIDLimit). Demo and
-// second-machine ids on the blocklist are ignored so they can't push the cursor
-// past the machine's own ids for good.
-func effectiveSyncMax(maxLocalID int64, blocklist []string) int64 {
-	effectiveMax := maxLocalID
+// effectiveSyncMax returns the shot id the sync should resume after for
+// machineID: the highest native id already stored locally for that machine,
+// advanced only by blocklist entries that belong to that machine's own native
+// id range. A blocklist entry is a *global* id
+// (machineID*shots.MachineIDOffset + nativeId), so another machine's or a
+// demo id must not advance the cursor — otherwise it would push effectiveMax
+// past every one of this machine's own ids for good (#1147, #1148). For
+// machine 1 this is exactly the old 0 < n < 10M check.
+func effectiveSyncMax(machineID, maxLocalNative int64, blocklist []string) int64 {
+	effectiveMax := maxLocalNative
 	for _, b := range blocklist {
-		if n, perr := strconv.ParseInt(b, 10, 64); perr == nil && n > 0 && n < nativeShotIDLimit && n > effectiveMax {
-			effectiveMax = n
+		if n, perr := strconv.ParseInt(b, 10, 64); perr == nil {
+			if native, ok := shots.NativeShotIDIfOwned(machineID, n); ok && native > effectiveMax {
+				effectiveMax = native
+			}
 		}
 	}
 	return effectiveMax

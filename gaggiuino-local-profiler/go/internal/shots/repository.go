@@ -237,10 +237,13 @@ func (r *Repository) GetLatestID(machineID int64) (id int64, ok bool, err error)
 // MaxNativeShotID ports lib/sync.js's maxDefaultMachineShotId(): the
 // highest shot id filed under the given machine that is still a real
 // native id. #341: scoped to one machine so another machine's synthetic
-// ids (10,000,000+) can't inflate it. #719: also excludes any id at or
-// above machineIDOffset even if it's (wrongly) filed under this machine —
+// ids (10,000,000+) can't inflate it. #719: also excludes any id outside
+// that machine's own window even if it's (wrongly) filed under this machine —
 // a corrupt/pre-existing row must never poison the max the sync loop
-// catches up from.
+// catches up from. Machine 1's native ids are 0..MachineIDOffset; every other
+// machine's are stored globally as machineID*MachineIDOffset+nativeID, so its
+// max is read from (base, base+MachineIDOffset) and returned as the native id
+// by subtracting the base (#1147).
 //
 // Trashed rows are deliberately INCLUDED here (#1150), unlike the Node
 // original's findAllExcludingTrash(1). A trashed id already exists
@@ -250,9 +253,23 @@ func (r *Repository) GetLatestID(machineID int64) (id int64, ok bool, err error)
 // qualifying shots yet, matching the Node reduce() seed.
 func (r *Repository) MaxNativeShotID(machineID int64) (int64, error) {
 	var maxID sql.NullInt64
+	if machineID == 1 {
+		err := r.db.QueryRow(
+			`SELECT MAX(id) FROM shots WHERE machine_id = ? AND id < ?`,
+			machineID, MachineIDOffset,
+		).Scan(&maxID)
+		if err != nil {
+			return 0, fmt.Errorf("shots: getting max native id: %w", err)
+		}
+		if !maxID.Valid {
+			return 0, nil
+		}
+		return maxID.Int64, nil
+	}
+	base := machineID * MachineIDOffset
 	err := r.db.QueryRow(
-		`SELECT MAX(id) FROM shots WHERE machine_id = ? AND id < ?`,
-		machineID, machineIDOffset,
+		`SELECT MAX(id) FROM shots WHERE machine_id = ? AND id > ? AND id < ?`,
+		machineID, base, base+MachineIDOffset,
 	).Scan(&maxID)
 	if err != nil {
 		return 0, fmt.Errorf("shots: getting max native id: %w", err)
@@ -260,7 +277,7 @@ func (r *Repository) MaxNativeShotID(machineID int64) (int64, error) {
 	if !maxID.Valid {
 		return 0, nil
 	}
-	return maxID.Int64, nil
+	return maxID.Int64 - base, nil
 }
 
 // Count ports ShotRepository.js's count(): a plain `SELECT COUNT(*) FROM

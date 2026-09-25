@@ -7,26 +7,33 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// TestEffectiveSyncMax covers #1148: only native ids (0 < n < 10M) on the
-// blocklist may advance the sync cursor. Demo ids (>=900M) and second-machine
-// ids (>=10M) must be ignored, or they push effectiveMax past every real id for
-// good and new shots stop importing.
+// TestEffectiveSyncMax covers #1148: only ids belonging to the machine being
+// synced may advance its cursor. For machine 1 that means native ids
+// (0 < n < 10M), ignoring demo (>=900M) and second-machine (>=10M) ids; for
+// machine != 1 the blocklist holds global ids
+// (machineID*MachineIDOffset+native), so a bare native id or another
+// machine's id must be ignored (#1147). Otherwise a stray entry pushes
+// effectiveMax past every real id for good and new shots stop importing.
 func TestEffectiveSyncMax(t *testing.T) {
 	cases := []struct {
 		name      string
+		machineID int64
 		maxLocal  int64
 		blocklist []string
 		want      int64
 	}{
-		{"high ids ignored", 3, []string{"900000001", "20000005"}, 3},
-		{"native id advances", 3, []string{"5"}, 5},
-		{"only valid native ids count", 3, []string{"0", "-1", "abc", "9999999"}, 9999999},
-		{"upper boundary excluded", 3, []string{"10000000"}, 3},
+		{"high ids ignored", 1, 3, []string{"900000001", "20000005"}, 3},
+		{"native id advances", 1, 3, []string{"5"}, 5},
+		{"only valid native ids count", 1, 3, []string{"0", "-1", "abc", "9999999"}, 9999999},
+		{"upper boundary excluded", 1, 3, []string{"10000000"}, 3},
+		{"machine 2 own id advances", 2, 3, []string{"20000009"}, 9},
+		{"machine 2 native-looking id ignored", 2, 3, []string{"9"}, 3},
+		{"machine 2 other machine's id ignored", 2, 3, []string{"30000001"}, 3},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := effectiveSyncMax(tc.maxLocal, tc.blocklist); got != tc.want {
-				t.Fatalf("effectiveSyncMax(%d, %v) = %d, want %d", tc.maxLocal, tc.blocklist, got, tc.want)
+			if got := effectiveSyncMax(tc.machineID, tc.maxLocal, tc.blocklist); got != tc.want {
+				t.Fatalf("effectiveSyncMax(%d, %d, %v) = %d, want %d", tc.machineID, tc.maxLocal, tc.blocklist, got, tc.want)
 			}
 		})
 	}

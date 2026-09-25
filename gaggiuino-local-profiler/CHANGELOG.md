@@ -1,4 +1,5 @@
 ## [Unreleased]
+- **GaggiMate machines set as the default no longer sync against the first machine's history, so their shots import again under their own machine.** Closes #1147
 - **Shots removed by the automatic 30-day trash cleanup no longer come back with the next sync.** Closes #1159
 - **Restoring a shot from the trash no longer shows an empty rating and notes, and the trashed latest shot is no longer downloaded again on every sync.** Closes #1150
 - **One damaged shot on the machine no longer stops all newer shots from being imported.** Closes #1151
