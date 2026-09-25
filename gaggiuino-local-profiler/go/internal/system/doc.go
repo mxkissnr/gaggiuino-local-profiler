@@ -113,10 +113,14 @@
 //     #953 (sync_triggers.go) added its three automatic drivers —
 //     syncAfterBrew()'s 3s post-brew pull, scheduleNextSync()'s periodic
 //     pull + retry-backoff, and lib/poll.js's #725 reachability-recovery
-//     catch-up. Still not ported are syncOtherMachines()/syncMachineShots()
-//     (needs adapter GetShot/GetLatestShotId methods — machines-domain
-//     work), syncNativeMaintenance() (#578), the SYNC_PROGRESS/SYNC_COMPLETE
-//     bus events (state.syncProgress), state.syncRetryCount (the backoff is
+//     catch-up. syncOtherMachines() (#341, #1146) now rides along with the
+//     manual and scheduled triggers — a non-default Gaggiuino machine is
+//     pulled over the same /api/shots REST surface as the default one, a
+//     GaggiMate through its history adapter — so the default machine's own
+//     retry/backoff stays the only thing driven by a sync result. Still not
+//     ported are syncNativeMaintenance() (#578), the SYNC_PROGRESS/
+//     SYNC_COMPLETE bus events (state.syncProgress), state.syncRetryCount
+//     (the backoff is
 //     tracked locally in runScheduledSync, not exposed), and
 //     fetchMachineVersion() — backgroundHaCheck's
 //     `if (!cachedMachineVersion) fetchMachineVersion()` fallback (this

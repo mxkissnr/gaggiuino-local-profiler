@@ -165,6 +165,11 @@ type pollGlobalState struct {
 	lastSyncTime        *string
 	lastSyncError       *string
 	defaultSyncInFlight bool
+	// otherSyncInFlight is syncMachineShots()'s #773 per-machine single-run
+	// guard for non-default machines (syncOtherMachines, #1146), keyed by
+	// machine id — one slot per machine, so a slow backfill on one machine
+	// never blocks another's. Lazy-initialized: nil until the first sync.
+	otherSyncInFlight map[int64]bool
 
 	readyByTargetAt   *int64
 	plannedSwitchOnAt *int64
