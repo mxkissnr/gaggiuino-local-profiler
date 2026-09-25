@@ -3,6 +3,7 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"strings"
 )
 
 // This file ports lib/machines/gaggimate/profiles.js: thin pass-throughs
@@ -16,26 +17,40 @@ import (
 // Used by both the live-client Request path (gaggimate_adapter.go) and the
 // fallback gaggimateRequest path below (live == nil / tests).
 
-// gaggimateListEntry is the per-profile shape inside the profiles:list response.
-// GaggiMate uses "label" (not "name") and string IDs (e.g. "lever", "adapt").
-type gaggimateListEntry struct {
-	ID      string `json:"id"`
-	Label   string `json:"label"`
-	Utility bool   `json:"utility"`
-}
-
+// gaggimateParseProfileList reads the profiles:list response entry by entry
+// (rather than unmarshalling the array into a typed slice) so a single entry
+// of an unexpected shape — a numeric id, say — is skipped instead of emptying
+// the whole list. GaggiMate uses "label" (not "name") and string ids (e.g.
+// "lever", "adapt"), but a numeric id is accepted the same way
+// ProfileSummary.UnmarshalJSON accepts one.
 func gaggimateParseProfileList(res map[string]any) ([]ProfileSummary, error) {
 	raw, err := json.Marshal(res["profiles"])
 	if err != nil {
 		return []ProfileSummary{}, nil
 	}
-	var entries []gaggimateListEntry
+	var entries []json.RawMessage
 	if err := json.Unmarshal(raw, &entries); err != nil {
 		return []ProfileSummary{}, nil
 	}
-	out := make([]ProfileSummary, len(entries))
-	for i, e := range entries {
-		out[i] = ProfileSummary{ID: e.ID, Name: e.Label, Utility: e.Utility}
+	out := make([]ProfileSummary, 0, len(entries))
+	for _, entry := range entries {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(entry, &fields); err != nil {
+			continue
+		}
+		idRaw, ok := fields["id"]
+		if !ok || string(idRaw) == "null" {
+			continue
+		}
+		id := strings.TrimSpace(jsonRawToProfileID(idRaw))
+		if id == "" {
+			continue
+		}
+		var label string
+		_ = json.Unmarshal(fields["label"], &label)
+		var utility bool
+		_ = json.Unmarshal(fields["utility"], &utility)
+		out = append(out, ProfileSummary{ID: id, Name: label, Utility: utility})
 	}
 	return out, nil
 }

@@ -1,5 +1,7 @@
 ## [Unreleased]
 - **New shots now appear right after the app starts or the machine is switched on, instead of after the next sync interval.** Closes #1153
+- **Orders created via the API keep their milk amount when it is sent as text.** Closes #1154
+- **One unusual GaggiMate profile no longer hides the whole profile list.** Closes #1155
 - **Shots from additional (non-default) machines are imported again by the scheduled and manual sync.** Closes #1146
 - **GaggiMate machines set as the default no longer sync against the first machine's history, so their shots import again under their own machine.** Closes #1147
 - **Shots removed by the automatic 30-day trash cleanup no longer come back with the next sync.** Closes #1159

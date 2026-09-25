@@ -60,6 +60,32 @@ func TestGaggiMateAdapter_ProfileListLoadSelect(t *testing.T) {
 	}
 }
 
+// TestGaggiMateParseProfileList_SkipsOnlyBadEntries pins #1155: an entry the
+// list parser cannot read (here a bare string) must not empty the whole list;
+// the remaining entries — including one with a numeric id, which the old
+// typed-slice decode rejected outright — are still returned.
+func TestGaggiMateParseProfileList_SkipsOnlyBadEntries(t *testing.T) {
+	res := map[string]any{"profiles": []any{
+		map[string]any{"id": float64(42), "label": "Numeric id"},
+		map[string]any{"id": "lever", "label": "Lever", "utility": true},
+		"not-a-profile",
+	}}
+
+	list, err := gaggimateParseProfileList(res)
+	if err != nil {
+		t.Fatalf("gaggimateParseProfileList: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("got %d summaries, want 2: %+v", len(list), list)
+	}
+	if list[0].ID != "42" || list[0].Name != "Numeric id" || list[0].Utility {
+		t.Errorf("numeric-id entry = %+v", list[0])
+	}
+	if list[1].ID != "lever" || list[1].Name != "Lever" || !list[1].Utility {
+		t.Errorf("string-id entry = %+v", list[1])
+	}
+}
+
 // GaggiMate's capabilities gate the settings/control proxy off entirely but
 // allow full profile editing (create/update/delete forward to the machine's
 // own req:profiles:save/delete over WS, see gaggimate_adapter.go's doc
