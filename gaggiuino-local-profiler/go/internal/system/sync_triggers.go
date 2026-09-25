@@ -23,9 +23,11 @@ import (
 //     unreachable->reachable again and a sync is known to be outstanding,
 //     catch up immediately instead of waiting for the next scheduled pull.
 //
-// syncOtherMachines / native-maintenance sync / SYNC_PROGRESS events stay
-// unported (see sync.go + doc.go) — this only adds triggers for the
-// default-machine loop that sync.go already implements.
+// syncOtherMachines (#1146) now rides along with the scheduled loop (and with
+// the manual trigger) — see sync.go; native-maintenance sync and the
+// SYNC_PROGRESS events stay unported (see sync.go + doc.go). The post-brew
+// and reachability-recovery catch-up paths deliberately stay default-only,
+// matching Node's syncAfterBrew()/poll.js, which call syncShots() alone.
 
 // Tunables, package-level so tests can shrink them (restore with defer).
 var (
@@ -143,7 +145,14 @@ func (p *Poller) runScheduledSync(ctx context.Context) {
 		case <-time.After(delay):
 		}
 
-		if err := p.syncOnce(ctx); err != nil {
+		err := p.syncOnce(ctx)
+		// #1146: the scheduler drives every enabled non-default machine too,
+		// like Node's syncAllMachines(). A test's syncFn seam replaces the
+		// default pull only, so it must bypass this.
+		if p.syncFn == nil {
+			p.syncOtherMachines(ctx)
+		}
+		if err != nil {
 			log.Printf("system: scheduled sync failed: %v", err)
 			if retry++; retry > len(syncRetryDelays) {
 				retry = len(syncRetryDelays)

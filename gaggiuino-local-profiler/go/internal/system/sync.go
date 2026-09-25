@@ -27,16 +27,18 @@ import (
 // range too (#1147), so a GaggiMate set as the default imports its shots
 // under its own machine instead of the first machine's.
 //
+// #1146 adds syncOtherMachines() on top: after the default machine, every
+// other enabled registered machine is pulled up from its own last-synced
+// native shot id — a GaggiMate through syncGaggiMateShots, a Gaggiuino
+// through syncGaggiuinoMachineShots (the same /api/shots REST surface as the
+// default path, re-keyed under the machine's own global id range, #341). One
+// machine failing never stops the others, and a non-default machine never
+// writes the default-only sync state (lastSyncTime/lastSyncError/
+// machineReachable/lastMachineError/cachedMachineVersion).
+//
 // Deliberately still NOT ported here (unchanged from doc.go's "Deliberately
 // not ported" — lib/sync.js as a whole is its own future phase):
 //
-//   - syncOtherMachines()/syncMachineShots() for Gaggiuino machines — the
-//     adapter-driven pull for non-default registered machines (#341, #1146).
-//     The Go machines.Adapter interface has no GetShot/GetLatestShotId
-//     methods yet; adding them is machines-domain work, out of this
-//     endpoint's scope. A manual sync here therefore covers the default
-//     machine only, same as every single-machine install (the overwhelming
-//     majority) already gets.
 //   - syncNativeMaintenance() (#578) — needs lib/maintenance-sync.js, a
 //     maintenance-domain port.
 //   - scheduleNextSync()'s retry/backoff timer and state.syncRetryCount —
@@ -125,9 +127,11 @@ func (p *Poller) tryStartManualSync() bool {
 	return true
 }
 
-// RunManualSync ports lib/sync.js's syncAllMachines() as far as this phase
-// ports it: the default machine's syncShots() pull loop. Safe to call in a
-// goroutine (routes/system.js fires it un-awaited after responding 200).
+// RunManualSync ports lib/sync.js's syncAllMachines(): the default machine's
+// syncShots() pull loop, then every other enabled registered machine
+// (#1146). Safe to call in a goroutine (routes/system.js fires it un-awaited
+// after responding 200). Retry/backoff is unaffected by other machines'
+// outcomes — they only log.
 func (p *Poller) RunManualSync(ctx context.Context) {
 	if p.shots == nil {
 		log.Printf("system: manual sync requested but no shots repo wired — skipping")
@@ -136,6 +140,88 @@ func (p *Poller) RunManualSync(ctx context.Context) {
 	if err := p.syncDefaultMachineShots(ctx); err != nil {
 		log.Printf("system: manual sync error: %v", err)
 	}
+	p.syncOtherMachines(ctx)
+}
+
+// backfillShots is the one catch-up loop both sync paths run: read the
+// blocklist, resume after the highest native id already stored locally for
+// machineID, then fetch every id up to latestNative, blocklisting 404s,
+// skipping malformed bodies and shots without id/datapoints, and passing each
+// fetched shot through prepare for that path's own re-keying before Upsert.
+// It deliberately writes no sync state — recordSyncSuccess/recordSyncError/
+// recordMachineReachable stay in the callers, so the default-only reachability
+// stamping is unchanged.
+//
+// The first return value reports whether the error is one the caller should
+// stamp via recordSyncError: true for a fetch transport error or an Upsert
+// failure (the machine/sync failed), false for a local DB error (GetBlocklist,
+// MaxNativeShotID, AppendToBlocklist), which must not flip a reachable machine
+// offline.
+func (p *Poller) backfillShots(
+	ctx context.Context,
+	machineID, latestNative int64,
+	fetch func(ctx context.Context, native int64) (map[string]any, int, error),
+	prepare func(shot map[string]any, native int64) bool,
+	logs backfillLogs,
+) (recordErr bool, err error) {
+	blocklist, err := p.shots.GetBlocklist()
+	if err != nil {
+		return false, err
+	}
+	maxLocalID, err := p.shots.MaxNativeShotID(machineID)
+	if err != nil {
+		return false, err
+	}
+	effectiveMax := effectiveSyncMax(machineID, maxLocalID, blocklist)
+
+	if effectiveMax >= latestNative {
+		log.Printf("%s: already up to date (shots: %d)", logs.prefix, maxLocalID)
+		return false, nil
+	}
+
+	for i := effectiveMax + 1; i <= latestNative; i++ {
+		shot, status, err := fetch(ctx, i)
+		if err != nil {
+			if status == http.StatusNotFound {
+				// #721: shot permanently gone — blocklist it and skip past.
+				log.Printf("%s: shot %d not found%s (404) — marking permanently missing", logs.prefix, i, logs.notFoundSuffix)
+				if aerr := p.shots.AppendToBlocklist(strconv.FormatInt(shots.ToGlobalShotID(machineID, i), 10)); aerr != nil {
+					return false, aerr
+				}
+				continue
+			}
+			if errors.Is(err, errMalformedShot) {
+				// #1151: one damaged shot must not stop the shots above it
+				// importing. No blocklist entry — that means "permanently
+				// missing on the machine", which we cannot know here.
+				log.Printf("%s: shot %d has malformed data (%v) — skipped", logs.prefix, i, err)
+				continue
+			}
+			return true, err
+		}
+		if shot["id"] == nil || shot["datapoints"] == nil {
+			log.Printf("%s: shot %d %s — skipped", logs.prefix, i, logs.invalidReason)
+			continue
+		}
+		if !prepare(shot, i) {
+			continue
+		}
+		if uerr := p.shots.Upsert(shots.Shot(shot)); uerr != nil {
+			return true, uerr
+		}
+	}
+
+	log.Printf("%s complete: caught up to shot %d", logs.prefix, latestNative)
+	return false, nil
+}
+
+// backfillLogs carries each sync path's existing log wording into the shared
+// loop: the prefix names the path, and the suffix/reason keep the 404 and
+// invalid-shot lines byte-for-byte as they read before the two loops merged.
+type backfillLogs struct {
+	prefix         string
+	notFoundSuffix string
+	invalidReason  string
 }
 
 // syncDefaultMachineShots ports syncShots(defaultRuntime) — the default
@@ -196,72 +282,145 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 		return nil
 	}
 
-	blocklist, err := p.shots.GetBlocklist()
+	recordErr, err := p.backfillShots(ctx, 1, *latestMachineID,
+		func(ctx context.Context, native int64) (map[string]any, int, error) {
+			return p.fetchShot(ctx, machineURL, native)
+		},
+		func(shot map[string]any, native int64) bool {
+			// Some firmware reports the shot id as a JSON string; normalize it to
+			// int64 so shotInsertArgs stores the real id instead of 0 (which would
+			// make every shot overwrite the previous one).
+			id, ok := jsNumberToInt64(shot["id"])
+			if !ok {
+				log.Printf("system: sync: shot %d has unparseable id %#v — skipped", native, shot["id"])
+				return false
+			}
+			shot["id"] = id
+			p.captureMachineVersionFromShot(shot)
+			p.state.mu.Lock()
+			ver := p.state.cachedMachineVersion
+			p.state.mu.Unlock()
+			if ver != nil {
+				shot["glpFirmwareVersion"] = *ver
+			}
+			return true
+		},
+		backfillLogs{prefix: "system: sync", notFoundSuffix: " on machine", invalidReason: "has invalid data"})
 	if err != nil {
+		if recordErr {
+			p.recordSyncError(err)
+		}
 		return err
 	}
-	maxLocalID, err := p.shots.MaxNativeShotID(1)
-	if err != nil {
-		return err
-	}
-	effectiveMax := effectiveSyncMax(1, maxLocalID, blocklist)
+	p.recordSyncSuccess()
+	return nil
+}
 
-	if effectiveMax >= *latestMachineID {
-		log.Printf("system: sync: already up to date (shots: %d)", maxLocalID)
-		p.recordSyncSuccess()
+// syncOtherMachines ports syncOtherMachines() (#341, #1146): after the
+// default machine's own pull, catch up every OTHER enabled registered machine
+// from its own last-synced native shot id. A GaggiMate goes through
+// syncGaggiMateShots, a Gaggiuino through syncGaggiuinoMachineShots. Each
+// machine's error is logged on its own and the loop moves on, so one machine
+// failing never stops the others — the caller's retry/backoff stays driven by
+// the default machine's result alone.
+func (p *Poller) syncOtherMachines(ctx context.Context) {
+	list, err := p.registry.ListMachines()
+	if err != nil {
+		log.Printf("system: sync: listing machines: %v", err)
+		return
+	}
+	for i := range list {
+		machine := &list[i]
+		// #718: an unconfigured machine has no host to dial.
+		if !machine.Enabled || machine.IsDefault || machine.Host == "" {
+			continue
+		}
+		// #773: one sync per machine at a time — a different machine's id is
+		// unaffected, matching Node's state.otherMachineSyncInFlight.
+		if !p.beginOtherMachineSync(machine.ID) {
+			continue
+		}
+		err := p.syncOneOtherMachine(ctx, machine)
+		p.endOtherMachineSync(machine.ID)
+		if err != nil {
+			log.Printf("system: sync (%s): %v", machine.Name, err)
+		}
+	}
+}
+
+// syncOneOtherMachine dispatches one non-default machine to its type's pull
+// loop.
+func (p *Poller) syncOneOtherMachine(ctx context.Context, machine *machines.Machine) error {
+	if machine.Type == "gaggimate" {
+		return p.syncGaggiMateShots(ctx, machine)
+	}
+	return p.syncGaggiuinoMachineShots(ctx, machine)
+}
+
+// beginOtherMachineSync/endOtherMachineSync are the #773 per-machine
+// single-run guard behind otherSyncInFlight — the same locking pattern as
+// defaultSyncInFlight, but keyed by machine id.
+func (p *Poller) beginOtherMachineSync(machineID int64) bool {
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	if p.state.otherSyncInFlight[machineID] {
+		return false
+	}
+	if p.state.otherSyncInFlight == nil {
+		p.state.otherSyncInFlight = map[int64]bool{}
+	}
+	p.state.otherSyncInFlight[machineID] = true
+	return true
+}
+
+func (p *Poller) endOtherMachineSync(machineID int64) {
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	delete(p.state.otherSyncInFlight, machineID)
+}
+
+// syncGaggiuinoMachineShots ports syncMachineShots() for a non-default
+// Gaggiuino machine: the same `${machineUrl}/latest` probe + `/api/shots/{id}`
+// backfill as syncDefaultMachineShots, except each fetched shot is re-keyed
+// under the machine's own global id range and stamped with its machine id
+// (#341). It deliberately writes no default-only sync state — lastSyncTime/
+// lastSyncError/machineReachable/lastMachineError and the firmware cache
+// belong to the default machine (the backfillShots helper writes none either).
+func (p *Poller) syncGaggiuinoMachineShots(ctx context.Context, machine *machines.Machine) error {
+	base, err := syncBaseURLFor(ctx, machine)
+	if err != nil {
+		return fmt.Errorf("resolving machine URL: %w", err)
+	}
+	machineURL := base + "/api/shots"
+
+	latestNativeID, err := p.fetchLatestShotID(ctx, machineURL)
+	if err != nil {
+		return err
+	}
+	if latestNativeID == nil {
+		log.Printf("system: sync (%s): machine /latest returned no lastShotId — skipped", machine.Name)
 		return nil
 	}
 
-	for i := effectiveMax + 1; i <= *latestMachineID; i++ {
-		shot, status, err := p.fetchShot(ctx, machineURL, i)
-		if err != nil {
-			if status == http.StatusNotFound {
-				// #721: shot permanently gone — blocklist it and skip past.
-				log.Printf("system: sync: shot %d not found on machine (404) — marking permanently missing", i)
-				if aerr := p.shots.AppendToBlocklist(strconv.FormatInt(i, 10)); aerr != nil {
-					return aerr
-				}
-				continue
+	_, err = p.backfillShots(ctx, machine.ID, *latestNativeID,
+		func(ctx context.Context, native int64) (map[string]any, int, error) {
+			return p.fetchShot(ctx, machineURL, native)
+		},
+		func(shot map[string]any, native int64) bool {
+			// #1142: some firmware reports the shot id as a JSON string. An
+			// unparseable one isn't a shot we can key, so skip it — and the
+			// stored id is always this machine's global id, never the
+			// reported value (a machine reports its own native ids).
+			if _, ok := jsNumberToInt64(shot["id"]); !ok {
+				log.Printf("system: sync (%s): shot %d has unparseable id %#v — skipped", machine.Name, native, shot["id"])
+				return false
 			}
-			if errors.Is(err, errMalformedShot) {
-				// #1151: one damaged shot must not stop the shots above it
-				// importing. No blocklist entry — that means "permanently
-				// missing on the machine", which we cannot know here.
-				log.Printf("system: sync: shot %d has malformed data (%v) — skipped", i, err)
-				continue
-			}
-			p.recordSyncError(err)
-			return err
-		}
-		if shot["id"] == nil || shot["datapoints"] == nil {
-			log.Printf("system: sync: shot %d has invalid data — skipped", i)
-			continue
-		}
-		// Some firmware reports the shot id as a JSON string; normalize it to
-		// int64 so shotInsertArgs stores the real id instead of 0 (which would
-		// make every shot overwrite the previous one).
-		id, ok := jsNumberToInt64(shot["id"])
-		if !ok {
-			log.Printf("system: sync: shot %d has unparseable id %#v — skipped", i, shot["id"])
-			continue
-		}
-		shot["id"] = id
-		p.captureMachineVersionFromShot(shot)
-		p.state.mu.Lock()
-		ver := p.state.cachedMachineVersion
-		p.state.mu.Unlock()
-		if ver != nil {
-			shot["glpFirmwareVersion"] = *ver
-		}
-		if uerr := p.shots.Upsert(shots.Shot(shot)); uerr != nil {
-			p.recordSyncError(uerr)
-			return uerr
-		}
-	}
-
-	log.Printf("system: sync complete: caught up to shot %d", *latestMachineID)
-	p.recordSyncSuccess()
-	return nil
+			shot["id"] = shots.ToGlobalShotID(machine.ID, native)
+			shot["machineId"] = machine.ID
+			return true
+		},
+		backfillLogs{prefix: "system: sync (" + machine.Name + ")", notFoundSuffix: " on machine", invalidReason: "has invalid data"})
+	return err
 }
 
 // syncGaggiMateShots ports syncMachineShots() for GaggiMate (#952 Part B):
@@ -276,7 +435,7 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 	// whether the HTTP history endpoint is up.
 	adapter, err := p.adapters.GetAdapter(machine)
 	if err == nil {
-		if _, serr := adapter.GetStatus(ctx, machine); serr == nil {
+		if _, serr := adapter.GetStatus(ctx, machine); serr == nil && machine.IsDefault {
 			p.recordMachineReachable()
 		}
 	}
@@ -297,58 +456,35 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 	}
 	if latestMachineID == 0 {
 		log.Printf("system: gaggimate sync: no shots on machine")
-		p.recordSyncSuccess()
+		if machine.IsDefault {
+			p.recordSyncSuccess()
+		}
 		return nil
 	}
 
-	blocklist, err := p.shots.GetBlocklist()
+	recordErr, err := p.backfillShots(ctx, machine.ID, latestMachineID,
+		func(ctx context.Context, native int64) (map[string]any, int, error) {
+			return syncFetchGaggiMateShot(ctx, base, native)
+		},
+		func(shot map[string]any, native int64) bool {
+			// #1147: index.bin reports the machine's own native ids, but shots are
+			// stored under globally-unique ids (global = machineID*offset+native).
+			// Re-key and stamp the machine so a GaggiMate set as the default lands
+			// under its own machine instead of machine 1.
+			shot["id"] = shots.ToGlobalShotID(machine.ID, native)
+			shot["machineId"] = machine.ID
+			return true
+		},
+		backfillLogs{prefix: "system: gaggimate sync", invalidReason: "has no id/datapoints"})
 	if err != nil {
-		return err
-	}
-	maxLocalID, err := p.shots.MaxNativeShotID(machine.ID)
-	if err != nil {
-		return err
-	}
-	effectiveMax := effectiveSyncMax(machine.ID, maxLocalID, blocklist)
-
-	if effectiveMax >= latestMachineID {
-		log.Printf("system: gaggimate sync: already up to date (shots: %d)", maxLocalID)
-		p.recordSyncSuccess()
-		return nil
-	}
-
-	for i := effectiveMax + 1; i <= latestMachineID; i++ {
-		shot, status, err := syncFetchGaggiMateShot(ctx, base, i)
-		if err != nil {
-			if status == http.StatusNotFound {
-				log.Printf("system: gaggimate sync: shot %d not found (404) — marking permanently missing", i)
-				if aerr := p.shots.AppendToBlocklist(strconv.FormatInt(shots.ToGlobalShotID(machine.ID, i), 10)); aerr != nil {
-					return aerr
-				}
-				continue
-			}
+		if recordErr && machine.IsDefault {
 			p.recordSyncError(err)
-			return err
 		}
-		if shot["id"] == nil || shot["datapoints"] == nil {
-			log.Printf("system: gaggimate sync: shot %d has no id/datapoints — skipped", i)
-			continue
-		}
-		// #1147: index.bin reports the machine's own native ids, but shots are
-		// stored under globally-unique ids (global = machineID*offset+native).
-		// Re-key and stamp the machine so a GaggiMate set as the default lands
-		// under its own machine instead of machine 1.
-		shot["id"] = shots.ToGlobalShotID(machine.ID, i)
-		shot["machineId"] = machine.ID
-
-		if uerr := p.shots.Upsert(shots.Shot(shot)); uerr != nil {
-			p.recordSyncError(uerr)
-			return uerr
-		}
+		return err
 	}
-
-	log.Printf("system: gaggimate sync complete: caught up to shot %d", latestMachineID)
-	p.recordSyncSuccess()
+	if machine.IsDefault {
+		p.recordSyncSuccess()
+	}
 	return nil
 }
 
