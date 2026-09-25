@@ -635,6 +635,98 @@ func (r *Repository) DeleteByID(shotID int64) error {
 	return nil
 }
 
+// MoveMisfiledShot (#1162) re-keys a shot the old default-machine sync
+// filed under machine 1 with its native id to toMachineID's global id.
+// Before #1162 the default path ran backfillShots(1, ...) and kept each
+// shot's reported native id as shot["id"], so a Gaggiuino set as the
+// default machine whose id is not 1 had its whole history stored as machine
+// 1's shots, mixing the two machines' histories and letting their ids
+// collide. syncDefaultMachineShots now scopes to the default machine's own
+// id range; when it re-imports a shot whose native id still exists locally
+// as a machine-1 row with the same timestamp, that row is the misfiled copy
+// and this method moves it to its correct global id instead of leaving a
+// duplicate behind.
+//
+// nativeID and timestamp identify the misfiled row: a machine-1 row with
+// id == nativeID but a different timestamp is one of machine 1's own shots
+// and is deliberately left untouched. The move runs in one transaction and
+// must insert the copy before re-keying the children: annotations.shot_id
+// REFERENCES shots(id) ON DELETE CASCADE with foreign_keys=ON, so updating
+// the annotation's shot_id while the copy exists satisfies the FK, and
+// deleting the old row afterwards cascades to nothing.
+//
+// Deliberately out of scope for #1162: other stores that reference shot ids
+// inside JSON blobs (orders, achievements) and the on-disk shot image files
+// (shot-<id>.<ext> plus its thumbnail) are NOT re-keyed here — a moved shot
+// keeps the image key inside its data blob, but its photo file stays under
+// the old id.
+func (r *Repository) MoveMisfiledShot(nativeID, timestamp, toMachineID int64) (moved bool, err error) {
+	if toMachineID == 1 {
+		return false, nil
+	}
+	newID := ToGlobalShotID(toMachineID, nativeID)
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return false, fmt.Errorf("shots: starting move tx for shot %d -> %d: %w", nativeID, newID, err)
+	}
+
+	var taken int
+	switch err := tx.QueryRow(`SELECT 1 FROM shots WHERE id = ?`, newID).Scan(&taken); err {
+	case nil:
+		// Target id already taken — never clobber it.
+		tx.Rollback()
+		return false, nil
+	case sql.ErrNoRows:
+		// Free to move onto it.
+	default:
+		tx.Rollback()
+		return false, fmt.Errorf("shots: checking target id %d: %w", newID, err)
+	}
+
+	res, err := tx.Exec(
+		`INSERT INTO shots (id, timestamp, duration, profile_name, data, machine_id) `+
+			`SELECT ?, timestamp, duration, profile_name, data, ? FROM shots WHERE id = ? AND machine_id = 1 AND timestamp = ?`,
+		newID, toMachineID, nativeID, timestamp,
+	)
+	if err != nil {
+		tx.Rollback()
+		return false, fmt.Errorf("shots: copying misfiled shot %d to %d: %w", nativeID, newID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return false, fmt.Errorf("shots: copying misfiled shot %d to %d: %w", nativeID, newID, err)
+	}
+	if n == 0 {
+		// No misfiled copy: the row is gone or its timestamp differs (one of
+		// machine 1's own shots), so there is nothing to move.
+		tx.Rollback()
+		return false, nil
+	}
+
+	if _, err := tx.Exec(`UPDATE annotations SET shot_id = ? WHERE shot_id = ?`, newID, nativeID); err != nil {
+		tx.Rollback()
+		return false, fmt.Errorf("shots: re-keying annotation for shot %d -> %d: %w", nativeID, newID, err)
+	}
+	if _, err := tx.Exec(`UPDATE trash SET shot_id = ? WHERE shot_id = ?`, newID, nativeID); err != nil {
+		tx.Rollback()
+		return false, fmt.Errorf("shots: re-keying trash entry for shot %d -> %d: %w", nativeID, newID, err)
+	}
+	if _, err := tx.Exec(`DELETE FROM shot_score_cache WHERE shot_id = ?`, nativeID); err != nil {
+		tx.Rollback()
+		return false, fmt.Errorf("shots: clearing score cache for shot %d: %w", nativeID, err)
+	}
+	if _, err := tx.Exec(`DELETE FROM shots WHERE id = ? AND machine_id = 1`, nativeID); err != nil {
+		tx.Rollback()
+		return false, fmt.Errorf("shots: deleting misfiled shot %d: %w", nativeID, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("shots: committing move of shot %d -> %d: %w", nativeID, newID, err)
+	}
+	return true, nil
+}
+
 // trashTTL is the 30-day trash retention Node's purgeExpiredTrash used
 // (ShotRepository.js: `deleted_at < now - 30d`). A named constant so the
 // cutoff arithmetic and its tests share one source of truth.

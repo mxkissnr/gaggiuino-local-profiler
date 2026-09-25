@@ -155,13 +155,14 @@ func (p *Poller) RunManualSync(ctx context.Context) {
 // The first return value reports whether the error is one the caller should
 // stamp via recordSyncError: true for a fetch transport error or an Upsert
 // failure (the machine/sync failed), false for a local DB error (GetBlocklist,
-// MaxNativeShotID, AppendToBlocklist), which must not flip a reachable machine
+// MaxNativeShotID, AppendToBlocklist, prepare), which must not flip a reachable
+// machine
 // offline.
 func (p *Poller) backfillShots(
 	ctx context.Context,
 	machineID, latestNative int64,
 	fetch func(ctx context.Context, native int64) (map[string]any, int, error),
-	prepare func(shot map[string]any, native int64) bool,
+	prepare func(shot map[string]any, native int64) (bool, error),
 	logs backfillLogs,
 ) (recordErr bool, err error) {
 	blocklist, err := p.shots.GetBlocklist()
@@ -203,7 +204,11 @@ func (p *Poller) backfillShots(
 			log.Printf("%s: shot %d %s — skipped", logs.prefix, i, logs.invalidReason)
 			continue
 		}
-		if !prepare(shot, i) {
+		keep, perr := prepare(shot, i)
+		if perr != nil {
+			return false, perr
+		}
+		if !keep {
 			continue
 		}
 		if uerr := p.shots.Upsert(shots.Shot(shot)); uerr != nil {
@@ -225,7 +230,10 @@ type backfillLogs struct {
 }
 
 // syncDefaultMachineShots ports syncShots(defaultRuntime) — the default
-// machine branch only.
+// machine branch only. Like the other two paths it is scoped to the default
+// machine's own id range (#1162): before that fix a Gaggiuino whose id is not
+// 1 but which is the default machine had its whole history filed under
+// machine 1.
 func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 	// #655: skip (without touching lastSyncTime/lastSyncError) when the
 	// machine is known off — checkAndApplyMachinePower already drove the
@@ -282,20 +290,22 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 		return nil
 	}
 
-	recordErr, err := p.backfillShots(ctx, 1, *latestMachineID,
+	recordErr, err := p.backfillShots(ctx, machine.ID, *latestMachineID,
 		func(ctx context.Context, native int64) (map[string]any, int, error) {
 			return p.fetchShot(ctx, machineURL, native)
 		},
-		func(shot map[string]any, native int64) bool {
+		func(shot map[string]any, native int64) (bool, error) {
 			// Some firmware reports the shot id as a JSON string; normalize it to
 			// int64 so shotInsertArgs stores the real id instead of 0 (which would
 			// make every shot overwrite the previous one).
-			id, ok := jsNumberToInt64(shot["id"])
-			if !ok {
+			if _, ok := jsNumberToInt64(shot["id"]); !ok {
 				log.Printf("system: sync: shot %d has unparseable id %#v — skipped", native, shot["id"])
-				return false
+				return false, nil
 			}
-			shot["id"] = id
+			// #1162: store the default machine's shots under its own global id range,
+			// like every other machine's, instead of machine 1's native ids.
+			shot["id"] = shots.ToGlobalShotID(machine.ID, native)
+			shot["machineId"] = machine.ID
 			p.captureMachineVersionFromShot(shot)
 			p.state.mu.Lock()
 			ver := p.state.cachedMachineVersion
@@ -303,7 +313,23 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 			if ver != nil {
 				shot["glpFirmwareVersion"] = *ver
 			}
-			return true
+			// A shot this machine already filed under machine 1 (same native id and
+			// timestamp) is moved to its new global id rather than upserted as a
+			// duplicate. The move preserves the row's stored data (image, firmware
+			// version), so skip the Upsert that would overwrite it.
+			if machine.ID != 1 {
+				if ts, ok := jsNumberToInt64(shot["timestamp"]); ok {
+					moved, merr := p.shots.MoveMisfiledShot(native, ts, machine.ID)
+					if merr != nil {
+						return false, merr
+					}
+					if moved {
+						log.Printf("system: sync: moved shot %d filed under machine 1 to machine %d (#1162)", native, machine.ID)
+						return false, nil
+					}
+				}
+			}
+			return true, nil
 		},
 		backfillLogs{prefix: "system: sync", notFoundSuffix: " on machine", invalidReason: "has invalid data"})
 	if err != nil {
@@ -406,18 +432,18 @@ func (p *Poller) syncGaggiuinoMachineShots(ctx context.Context, machine *machine
 		func(ctx context.Context, native int64) (map[string]any, int, error) {
 			return p.fetchShot(ctx, machineURL, native)
 		},
-		func(shot map[string]any, native int64) bool {
+		func(shot map[string]any, native int64) (bool, error) {
 			// #1142: some firmware reports the shot id as a JSON string. An
 			// unparseable one isn't a shot we can key, so skip it — and the
 			// stored id is always this machine's global id, never the
 			// reported value (a machine reports its own native ids).
 			if _, ok := jsNumberToInt64(shot["id"]); !ok {
 				log.Printf("system: sync (%s): shot %d has unparseable id %#v — skipped", machine.Name, native, shot["id"])
-				return false
+				return false, nil
 			}
 			shot["id"] = shots.ToGlobalShotID(machine.ID, native)
 			shot["machineId"] = machine.ID
-			return true
+			return true, nil
 		},
 		backfillLogs{prefix: "system: sync (" + machine.Name + ")", notFoundSuffix: " on machine", invalidReason: "has invalid data"})
 	return err
@@ -466,14 +492,14 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 		func(ctx context.Context, native int64) (map[string]any, int, error) {
 			return syncFetchGaggiMateShot(ctx, base, native)
 		},
-		func(shot map[string]any, native int64) bool {
+		func(shot map[string]any, native int64) (bool, error) {
 			// #1147: index.bin reports the machine's own native ids, but shots are
 			// stored under globally-unique ids (global = machineID*offset+native).
 			// Re-key and stamp the machine so a GaggiMate set as the default lands
 			// under its own machine instead of machine 1.
 			shot["id"] = shots.ToGlobalShotID(machine.ID, native)
 			shot["machineId"] = machine.ID
-			return true
+			return true, nil
 		},
 		backfillLogs{prefix: "system: gaggimate sync", invalidReason: "has no id/datapoints"})
 	if err != nil {
