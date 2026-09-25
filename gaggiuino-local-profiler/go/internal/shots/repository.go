@@ -239,13 +239,18 @@ func (r *Repository) GetLatestID(machineID int64) (id int64, ok bool, err error)
 // ids (10,000,000+) can't inflate it. #719: also excludes any id at or
 // above machineIDOffset even if it's (wrongly) filed under this machine —
 // a corrupt/pre-existing row must never poison the max the sync loop
-// catches up from. Trash is excluded, matching the Node original's
-// `shotService.getAll(1)` == findAllExcludingTrash(1). Returns 0 when the
-// machine has no qualifying shots yet, matching the Node reduce() seed.
+// catches up from.
+//
+// Trashed rows are deliberately INCLUDED here (#1150), unlike the Node
+// original's findAllExcludingTrash(1). A trashed id already exists
+// locally, so it must never count as "missing" and be re-fetched on every
+// sync; Node's exclusion left the starting point one too low whenever the
+// newest shot was in the trash. Returns 0 when the machine has no
+// qualifying shots yet, matching the Node reduce() seed.
 func (r *Repository) MaxNativeShotID(machineID int64) (int64, error) {
 	var maxID sql.NullInt64
 	err := r.db.QueryRow(
-		`SELECT MAX(id) FROM shots WHERE machine_id = ? AND id < ? AND id NOT IN (SELECT shot_id FROM trash)`,
+		`SELECT MAX(id) FROM shots WHERE machine_id = ? AND id < ?`,
 		machineID, machineIDOffset,
 	).Scan(&maxID)
 	if err != nil {
@@ -320,8 +325,9 @@ func (r *Repository) WipeAll() error {
 
 // Upsert ports ShotRepository.js's upsert(shot): writes the shots row (and,
 // if the shot object carries an `annotation` key, the annotations row too)
-// straight from a restored/imported shot object. Only used by the backup
-// domain's restore path in this phase — see internal/backup/doc.go.
+// straight from a sync-pulled or restored/imported shot object. Its
+// statement must never go back to INSERT OR REPLACE (#1150) — see the
+// inline comment on the Exec below.
 // ownerMachineID mirrors upsert()'s `shot.machineId ?? ownerOfShotId(id)`
 // fallback; #719's ownerOfShotId inference isn't ported (that needs
 // internal/machines' MACHINE_ID_OFFSET arithmetic, out of scope here), so a
@@ -334,8 +340,16 @@ func (r *Repository) Upsert(shot Shot) error {
 	if err != nil {
 		return err
 	}
+	// ON CONFLICT DO UPDATE, never INSERT OR REPLACE (#1150): a REPLACE
+	// deletes the conflicting row first, and with foreign_keys=ON that
+	// fires annotations' ON DELETE CASCADE, silently wiping the shot's
+	// annotation even when the incoming payload carries none. The sync
+	// loops re-upsert shots that may already be annotated, so REPLACE here
+	// was real, repeating data loss.
 	if _, err := r.db.Exec(
-		`INSERT OR REPLACE INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (?,?,?,?,?,?)`,
+		`INSERT INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (?,?,?,?,?,?)`+
+			` ON CONFLICT(id) DO UPDATE SET timestamp=excluded.timestamp, duration=excluded.duration,`+
+			` profile_name=excluded.profile_name, data=excluded.data, machine_id=excluded.machine_id`,
 		row.id, row.timestamp, row.duration, row.profileName, row.data, row.machineID,
 	); err != nil {
 		return fmt.Errorf("shots: upserting shot %d: %w", row.id, err)
@@ -601,6 +615,68 @@ func (r *Repository) DeleteByID(shotID int64) error {
 		return fmt.Errorf("shots: committing delete of shot %d: %w", shotID, err)
 	}
 	return nil
+}
+
+// trashTTL is the 30-day trash retention Node's purgeExpiredTrash used
+// (ShotRepository.js: `deleted_at < now - 30d`). A named constant so the
+// cutoff arithmetic and its tests share one source of truth.
+const trashTTL = 30 * 24 * time.Hour
+
+// PurgeExpiredTrash ports ShotRepository.js's purgeExpiredTrash (#1152):
+// permanently drops every trash entry older than trashTTL, together with
+// its shot row and annotation, in one transaction. deleted_at is in
+// milliseconds (MoveToTrash stamps time.Now().UnixMilli), so the cutoff is
+// a strict `<` against now's epoch-millis minus trashTTL.
+//
+// Node did not blocklist a purged id and did not delete image files; both
+// stay true here for parity. It also did not clear shot_score_cache
+// (Go-only, no Node equivalent) — DeleteByID does, and without the same
+// line here a purge would leave orphaned cache rows behind.
+func (r *Repository) PurgeExpiredTrash(now time.Time) ([]int64, error) {
+	cutoff := now.UnixMilli() - trashTTL.Milliseconds()
+	rows, err := r.db.Query(`SELECT shot_id FROM trash WHERE deleted_at < ?`, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("shots: listing expired trash: %w", err)
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("shots: scanning expired trash id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("shots: listing expired trash: %w", err)
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("shots: starting trash purge tx: %w", err)
+	}
+	for _, id := range ids {
+		// Same order as DeleteByID.
+		for _, stmt := range []string{
+			`DELETE FROM annotations WHERE shot_id = ?`,
+			`DELETE FROM trash WHERE shot_id = ?`,
+			`DELETE FROM shots WHERE id = ?`,
+			`DELETE FROM shot_score_cache WHERE shot_id = ?`,
+		} {
+			if _, err := tx.Exec(stmt, id); err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("shots: purging shot %d (%s): %w", id, stmt, err)
+			}
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("shots: committing trash purge: %w", err)
+	}
+	return ids, nil
 }
 
 // GetBlocklist ports ShotRepository.js's getBlocklist.
