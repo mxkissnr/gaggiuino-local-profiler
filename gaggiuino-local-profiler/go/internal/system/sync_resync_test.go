@@ -118,3 +118,62 @@ func TestSyncDefaultMachineShots_MalformedShotSkipped(t *testing.T) {
 		}
 	}
 }
+
+// TestSyncDefaultMachineShots_TruncatedBodyAbortsSync is the regression for
+// the reviewer's finding on #1151: a connection dropped mid-body (here a
+// Content-Length larger than the bytes sent, then a hijacked close) surfaces
+// as io.ErrUnexpectedEOF, not a net.Error. It must abort the sync and be
+// retried next run, NOT be tagged malformed and skipped — otherwise shot 2 is
+// never imported once shot 3 lands above it.
+func TestSyncDefaultMachineShots_TruncatedBodyAbortsSync(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/shots/latest":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `[{"lastShotId":3}]`)
+		case "/api/shots/1":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, shotJSON(`1`, "1000"))
+		case "/api/shots/2":
+			// Announce a longer body than we send, then drop the connection so
+			// the client's body read fails with an unexpected EOF.
+			hj, ok := w.(http.Hijacker)
+			if !ok {
+				t.Errorf("response writer does not support hijacking")
+				return
+			}
+			conn, buf, err := hj.Hijack()
+			if err != nil {
+				t.Errorf("hijack: %v", err)
+				return
+			}
+			defer conn.Close()
+			body := shotJSON(`2`, "2000")
+			fmt.Fprintf(buf, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n", len(body)+16)
+			buf.WriteString(body[:len(body)/2])
+			buf.Flush()
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	p, sqlDB := newTestPoller(t, &fakeAdapter{})
+	repo := shots.NewRepository(sqlDB)
+	p.SetShotsRepo(repo)
+	withSyncTestServer(t, srv.URL)
+
+	if err := p.syncDefaultMachineShots(context.Background()); err == nil {
+		t.Fatalf("syncDefaultMachineShots succeeded, want an error (a truncated body must abort the sync)")
+	}
+	if s, err := repo.FindByID(3); err != nil {
+		t.Fatalf("FindByID(3): %v", err)
+	} else if s != nil {
+		t.Fatalf("shot 3 imported despite the aborted sync")
+	}
+	if max, err := repo.MaxNativeShotID(1); err != nil {
+		t.Fatalf("MaxNativeShotID(1): %v", err)
+	} else if max != 1 {
+		t.Fatalf("MaxNativeShotID(1) = %d, want 1 (sync must stop at the broken shot)", max)
+	}
+}

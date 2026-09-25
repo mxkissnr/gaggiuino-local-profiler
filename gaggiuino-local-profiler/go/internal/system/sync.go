@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -61,13 +60,14 @@ const syncHTTPTimeout = 10 * time.Second
 // would re-resolve that hostname unguarded at connect time.
 var syncClient = machines.NewGuardedHTTPClient(syncHTTPTimeout)
 
-// errMalformedShot tags a 200 response whose body json.Decode could not
-// read (#1151). The sync loop catches it and skips that one shot — the Go
-// equivalent of Node's "invalid data" branch — instead of aborting the
-// whole sync and leaving every newer shot unimported forever. It is
-// deliberately NOT the same as a transport error: a dropped connection or
-// a cancelled ctx must keep aborting the sync so the next run retries,
-// otherwise a later shot landing above this one would hide it for good.
+// errMalformedShot tags a fully received 200 response whose body
+// json.Unmarshal could not read (#1151). The sync loop catches it and skips
+// that one shot — the Go equivalent of Node's "invalid data" branch —
+// instead of aborting the whole sync and leaving every newer shot
+// unimported forever. It is deliberately NOT the same as a transport error:
+// a dropped connection or a cancelled ctx aborts the sync instead, so the
+// next run retries — otherwise a later shot landing above this one would
+// hide it for good.
 var errMalformedShot = errors.New("malformed shot body")
 
 // syncBaseURLFor resolves a machine's base URL for the pull loop. A
@@ -387,20 +387,20 @@ func (p *Poller) fetchShot(ctx context.Context, machineURL string, id int64) (ma
 		debugLogf("GET %s/%d failed after %dms: HTTP %d", machineURL, id, time.Since(shotStartedAt).Milliseconds(), resp.StatusCode)
 		return nil, resp.StatusCode, fmt.Errorf("machine returned HTTP %d for shot %d", resp.StatusCode, id)
 	}
+	// Read the whole body before decoding. A read failure means the response
+	// was cut short — a dropped connection or a cancelled ctx, which surfaces
+	// as io.ErrUnexpectedEOF rather than a net.Error — and must abort the sync
+	// so the next run retries this shot. Tagging it as malformed would skip it
+	// for good once a later shot lands above it (#1151).
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
 	var shot map[string]any
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&shot); err != nil {
-		// #1151: an HTTP 200 whose body we can't decode is a hopeless
-		// response, not a transient one — tag it so the caller skips this
-		// shot and carries on. A cancelled ctx or a transport-level read
-		// error is NOT tagged: that must abort the sync so the next run
-		// retries, or a later shot above it would hide it for good.
-		if ctx.Err() != nil {
-			return nil, resp.StatusCode, err
-		}
-		var netErr net.Error
-		if errors.As(err, &netErr) {
-			return nil, resp.StatusCode, err
-		}
+	if err := json.Unmarshal(body, &shot); err != nil {
+		// #1151: a fully received 200 whose body we still can't decode is
+		// hopeless data, not a transient failure — tag it so the caller skips
+		// only this shot and carries on.
 		return nil, resp.StatusCode, fmt.Errorf("shot %d: %w: %v", id, errMalformedShot, err)
 	}
 	// ports lib/sync.js's debugLog(`GET ${machineUrl}/${i} -> ${ms}ms`)
