@@ -146,26 +146,32 @@ func (p *Poller) RunManualSync(ctx context.Context) {
 // It deliberately writes no sync state — recordSyncSuccess/recordSyncError/
 // recordMachineReachable stay in the callers, so the default-only reachability
 // stamping is unchanged.
+//
+// The first return value reports whether the error is one the caller should
+// stamp via recordSyncError: true for a fetch transport error or an Upsert
+// failure (the machine/sync failed), false for a local DB error (GetBlocklist,
+// MaxNativeShotID, AppendToBlocklist), which must not flip a reachable machine
+// offline.
 func (p *Poller) backfillShots(
 	ctx context.Context,
 	machineID, latestNative int64,
 	fetch func(ctx context.Context, native int64) (map[string]any, int, error),
 	prepare func(shot map[string]any, native int64) bool,
 	logs backfillLogs,
-) error {
+) (recordErr bool, err error) {
 	blocklist, err := p.shots.GetBlocklist()
 	if err != nil {
-		return err
+		return false, err
 	}
 	maxLocalID, err := p.shots.MaxNativeShotID(machineID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	effectiveMax := effectiveSyncMax(machineID, maxLocalID, blocklist)
 
 	if effectiveMax >= latestNative {
 		log.Printf("%s: already up to date (shots: %d)", logs.prefix, maxLocalID)
-		return nil
+		return false, nil
 	}
 
 	for i := effectiveMax + 1; i <= latestNative; i++ {
@@ -175,7 +181,7 @@ func (p *Poller) backfillShots(
 				// #721: shot permanently gone — blocklist it and skip past.
 				log.Printf("%s: shot %d not found%s (404) — marking permanently missing", logs.prefix, i, logs.notFoundSuffix)
 				if aerr := p.shots.AppendToBlocklist(strconv.FormatInt(shots.ToGlobalShotID(machineID, i), 10)); aerr != nil {
-					return aerr
+					return false, aerr
 				}
 				continue
 			}
@@ -186,7 +192,7 @@ func (p *Poller) backfillShots(
 				log.Printf("%s: shot %d has malformed data (%v) — skipped", logs.prefix, i, err)
 				continue
 			}
-			return err
+			return true, err
 		}
 		if shot["id"] == nil || shot["datapoints"] == nil {
 			log.Printf("%s: shot %d %s — skipped", logs.prefix, i, logs.invalidReason)
@@ -196,12 +202,12 @@ func (p *Poller) backfillShots(
 			continue
 		}
 		if uerr := p.shots.Upsert(shots.Shot(shot)); uerr != nil {
-			return uerr
+			return true, uerr
 		}
 	}
 
 	log.Printf("%s complete: caught up to shot %d", logs.prefix, latestNative)
-	return nil
+	return false, nil
 }
 
 // backfillLogs carries each sync path's existing log wording into the shared
@@ -271,7 +277,7 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 		return nil
 	}
 
-	err = p.backfillShots(ctx, 1, *latestMachineID,
+	recordErr, err := p.backfillShots(ctx, 1, *latestMachineID,
 		func(ctx context.Context, native int64) (map[string]any, int, error) {
 			return p.fetchShot(ctx, machineURL, native)
 		},
@@ -296,7 +302,9 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 		},
 		backfillLogs{prefix: "system: sync", notFoundSuffix: " on machine", invalidReason: "has invalid data"})
 	if err != nil {
-		p.recordSyncError(err)
+		if recordErr {
+			p.recordSyncError(err)
+		}
 		return err
 	}
 	p.recordSyncSuccess()
@@ -340,7 +348,7 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 		return nil
 	}
 
-	err = p.backfillShots(ctx, machine.ID, latestMachineID,
+	recordErr, err := p.backfillShots(ctx, machine.ID, latestMachineID,
 		func(ctx context.Context, native int64) (map[string]any, int, error) {
 			return syncFetchGaggiMateShot(ctx, base, native)
 		},
@@ -355,7 +363,9 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 		},
 		backfillLogs{prefix: "system: gaggimate sync", invalidReason: "has no id/datapoints"})
 	if err != nil {
-		p.recordSyncError(err)
+		if recordErr {
+			p.recordSyncError(err)
+		}
 		return err
 	}
 	p.recordSyncSuccess()

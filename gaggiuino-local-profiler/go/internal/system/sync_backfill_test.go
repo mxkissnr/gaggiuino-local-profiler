@@ -23,7 +23,7 @@ func TestBackfillShots_Direct(t *testing.T) {
 		t.Fatalf("seeding machine-2 shot 2: %v", err)
 	}
 
-	err := p.backfillShots(context.Background(), 2, 5,
+	_, err := p.backfillShots(context.Background(), 2, 5,
 		func(_ context.Context, native int64) (map[string]any, int, error) {
 			switch native {
 			case 3:
@@ -62,5 +62,35 @@ func TestBackfillShots_Direct(t *testing.T) {
 		t.Fatalf("Count: %v", err)
 	} else if n != 2 {
 		t.Fatalf("shot count = %d, want 2 (seeded shot plus shot 3)", n)
+	}
+}
+
+// TestSyncDefaultMachineShots_DBErrorDoesNotMarkMachineOffline is the reviewer
+// finding's regression: a local shots-DB failure (here the blocklist read
+// against a closed repo DB) must return its error without calling
+// recordSyncError. Before the fix both callers recorded every backfillShots
+// error, so a locked/busy SQLite blocklist read flipped machineReachable to
+// false and stamped lastSyncError — marking a reachable machine offline.
+func TestSyncDefaultMachineShots_DBErrorDoesNotMarkMachineOffline(t *testing.T) {
+	srv := newSyncFakeMachine(t, `[{"lastShotId":3}]`, map[string]string{
+		"1": shotJSON(`1`, "1000"),
+	})
+	p, _ := newTestPoller(t, &fakeAdapter{})
+	// A separate DB backs the shots repo so closing it only breaks the local
+	// shots calls, leaving the registry (default machine) readable.
+	shotsDB := newTestDB(t)
+	p.SetShotsRepo(shots.NewRepository(shotsDB))
+	withSyncTestServer(t, srv.URL)
+
+	shotsDB.Close()
+
+	if err := p.syncDefaultMachineShots(context.Background()); err == nil {
+		t.Fatalf("syncDefaultMachineShots with a closed shots DB returned nil, want an error")
+	}
+	if st := p.SyncState(); st.LastSyncError != nil {
+		t.Fatalf("lastSyncError = %q, want nil (a local DB error must not be a sync error)", *st.LastSyncError)
+	}
+	if info := p.StatusInfo(); info.MachineReachable == nil || !*info.MachineReachable {
+		t.Fatalf("machineReachable = %v, want true (the /latest probe succeeded; a DB error must not mark it offline)", info.MachineReachable)
 	}
 }
