@@ -1,4 +1,6 @@
 ## [Unreleased]
+- **Water level and uptime now show correctly on current Gaggiuino firmware that reports its status as a list of text values.** Closes #1149
+- **Permanently deleting a demo shot or a second machine's shot no longer stops new shots from being imported.** Closes #1148
 - **Shot sync works again with firmware that reports shot IDs as text instead of numbers.** Closes #1142
 - **A machine firmware update triggered from the app is now recorded in the maintenance log.** Part of #1136
 - **Fixed the bottom navigation covering the end of page content.** Part of #1125
