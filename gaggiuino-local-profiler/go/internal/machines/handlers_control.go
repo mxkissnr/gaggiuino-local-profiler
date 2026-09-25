@@ -270,6 +270,19 @@ func (h *Handlers) triggerFirmwareUpdate(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	// #1136: record the update in the machine's maintenance log. Only on
+	// success (the failure path above already returned), and never let the
+	// hook change this response -- its error is logged, and a panic inside
+	// it is contained by SafeCall.
+	if h.onFirmwareUpdate != nil {
+		var cbErr error
+		httputil.SafeCall("machines: firmware update maintenance log", func() {
+			cbErr = h.onFirmwareUpdate(machine)
+		})
+		if cbErr != nil {
+			slog.Warn("firmware update: maintenance log callback failed", "err", cbErr)
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(result)
