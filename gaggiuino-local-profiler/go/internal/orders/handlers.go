@@ -260,6 +260,31 @@ func toStringAny(v any) any {
 	}
 }
 
+// milkMlOrNil ports routes/orders.js's `parseFloat(req.body.milkMl) || null`
+// for the menu item's milk amount. External callers (Home Assistant
+// templates, for instance) often send the amount as a JSON string, which the
+// old float64-only type assertion dropped silently; an unparseable value —
+// and, mirroring JS's `||`, an explicit 0 — collapses to nil.
+func milkMlOrNil(v any) any {
+	var f float64
+	switch t := v.(type) {
+	case float64:
+		f = t
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(t), 64)
+		if err != nil {
+			return nil
+		}
+		f = parsed
+	default:
+		return nil
+	}
+	if f == 0 || f != f { // 0 / NaN -> null, per JS `parseFloat(v) || null`
+		return nil
+	}
+	return f
+}
+
 // ── Menu ─────────────────────────────────────────────────────────────────
 
 func (h *Handlers) getMenu(w http.ResponseWriter, r *http.Request) {
@@ -361,11 +386,7 @@ func (h *Handlers) putMenuItem(w http.ResponseWriter, r *http.Request) {
 		item["useMilks"] = v
 	}
 	if v, present := body["milkMl"]; present {
-		if f, ok := v.(float64); ok {
-			item["milkMl"] = f
-		} else {
-			item["milkMl"] = nil
-		}
+		item["milkMl"] = milkMlOrNil(v)
 	}
 	menu[idx] = item
 	if err := h.repo.SaveMenu(menu); err != nil {

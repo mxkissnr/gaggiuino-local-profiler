@@ -111,6 +111,49 @@ func TestMenu_CreateRequiresName_EmptyBody(t *testing.T) {
 	}
 }
 
+// TestMenu_Update_MilkMl pins #1154: the menu PUT's milkMl accepts a numeric
+// JSON string (external callers such as Home Assistant templates send one),
+// while an unparseable value — and, like Node's `parseFloat(v) || null`, an
+// explicit 0 — stores null.
+func TestMenu_Update_MilkMl(t *testing.T) {
+	cases := []struct {
+		name string
+		send any
+		want any
+	}{
+		{"number", 150, float64(150)},
+		{"numeric string", "150", float64(150)},
+		{"numeric string with surrounding space", " 150 ", float64(150)},
+		{"fractional string", "12.5", float64(12.5)},
+		{"empty string", "", nil},
+		{"garbage", "abc", nil},
+		{"zero", 0, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _, _ := newTestHandlers(t)
+			mux := newMux(h)
+
+			rec := doJSON(t, mux, http.MethodPost, "/api/orders/menu", mustMarshal(t, map[string]any{"name": "Latte"}))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("create status = %d; body=%s", rec.Code, rec.Body.String())
+			}
+			id, _ := decodeBody(t, rec.Body.Bytes())["id"].(string)
+			if id == "" {
+				t.Fatal("expected id in created item")
+			}
+
+			rec = doJSON(t, mux, http.MethodPut, "/api/orders/menu/"+id, mustMarshal(t, map[string]any{"milkMl": tc.send}))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("update status = %d; body=%s", rec.Code, rec.Body.String())
+			}
+			if got := decodeBody(t, rec.Body.Bytes())["milkMl"]; got != tc.want {
+				t.Errorf("milkMl after PUT %v = %v, want %v", tc.send, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestMenu_Update_NoBodyIsNotAnError guards the flip side: PUT
 // /api/orders/menu/{id} is a partial-update merge with no required fields,
 // so a genuinely empty body must tolerate as {} (a no-op update) rather
