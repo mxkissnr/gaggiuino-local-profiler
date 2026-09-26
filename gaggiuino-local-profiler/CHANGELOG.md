@@ -1,7 +1,4 @@
 ## [Unreleased]
-### Changed
-- **The Go backend README now describes only the current state; the Node → Go migration history is archived separately.** Closes #1177
-
 ### Fixed
 - **A firmware update recorded in the maintenance log now shows which version was replaced by which and the shot count at the time.** Closes #1172
 
