@@ -63,15 +63,31 @@ function xmlEsc(s) {
     return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+// Natural (content-driven) height of an n-row bar chart, before any minHeight
+// padding. Shared by barChartSVG() and renderCharts() so both charts in
+// README's "Development at a glance" can be sized to the taller of the two
+// (#1180) without duplicating the geometry constants.
+const BAR_CHART_BAR_H = 22;
+const BAR_CHART_GAP = 14;
+const BAR_CHART_TOP_PAD = 46;
+const BAR_CHART_BOTTOM_PAD = 16;
+function chartHeight(n) {
+    return BAR_CHART_TOP_PAD + n * (BAR_CHART_BAR_H + BAR_CHART_GAP) - BAR_CHART_GAP + BAR_CHART_BOTTOM_PAD;
+}
+
 // Horizontal bar chart as an SVG document string: thin marks (22px, under
 // the 24px cap), 4px rounded data-end at the bar's tip, square at the
 // baseline, value label at the tip, category label to the left — see
 // dataviz skill's marks-and-anatomy.md. Same geometry the @napi-rs/canvas
 // version used before #1028. Returns null for an empty series.
-function barChartSVG(title, items) {
+//
+// minHeight lets the caller pad a short chart to match a taller sibling
+// (#1180): rows stay top-aligned at their natural y positions and the extra
+// height is plain surface colour below the last bar.
+export function barChartSVG(title, items, minHeight = 0) {
     if (!items.length) return null;
-    const width = 640, barH = 22, gap = 14, topPad = 46, bottomPad = 16, leftPad = 190, rightPad = 60;
-    const height = topPad + items.length * (barH + gap) - gap + bottomPad;
+    const width = 640, barH = BAR_CHART_BAR_H, gap = BAR_CHART_GAP, topPad = BAR_CHART_TOP_PAD, bottomPad = BAR_CHART_BOTTOM_PAD, leftPad = 190, rightPad = 60;
+    const height = Math.max(topPad + items.length * (barH + gap) - gap + bottomPad, minHeight);
     const maxVal = Math.max(...items.map(i => i.value), 1);
     const chartW = width - leftPad - rightPad;
 
@@ -113,9 +129,12 @@ function renderCharts(results, combinedModelCounts) {
         .map(([label, value]) => ({ label, value }))
         .sort((a, b) => b.value - a.value);
 
-    const commitsSvg = barChartSVG('Commits per repo', repoItems);
+    // Both charts share the taller natural height so they render side by side
+    // in README without one floating above the other (#1180).
+    const minHeight = Math.max(chartHeight(repoItems.length), chartHeight(modelItems.length));
+    const commitsSvg = barChartSVG('Commits per repo', repoItems, minHeight);
     if (commitsSvg) writeFileSync(path.join(outDir, 'commits-per-repo.svg'), commitsSvg);
-    const modelSvg = barChartSVG('AI model breakdown (by commits)', modelItems);
+    const modelSvg = barChartSVG('AI model breakdown (by commits)', modelItems, minHeight);
     if (modelSvg) writeFileSync(path.join(outDir, 'model-breakdown.svg'), modelSvg);
     return !!(commitsSvg || modelSvg);
 }

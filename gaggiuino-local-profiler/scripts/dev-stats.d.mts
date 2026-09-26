@@ -9,3 +9,8 @@ export function historyScope(
 ): '--remotes=origin' | 'HEAD';
 export function monthsSinceStart(firstDateStr: string | null | undefined, today?: Date): number;
 export function clusterIntoSessions(timestampsMs: number[]): number;
+export function barChartSVG(
+  title: string,
+  items: { label: string; value: number }[],
+  minHeight?: number,
+): string | null;
