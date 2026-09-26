@@ -341,7 +341,7 @@ flowchart TB
   classDef store fill:#334155,stroke:#1e293b,color:#fff
   classDef ext fill:#4b5563,stroke:#1f2937,color:#fff
   class SPA fe
-  class API,SSE,POLL,SHOTS,LIB,IMP,ORD,MAINT,BACKUP app
+  class API,SSE,POLL,SHOTS,LIB,IMP,ORD,MAINT,BACKUP,NET app
   class MACH,MQTT machine
   class DB store
   class HA ha
