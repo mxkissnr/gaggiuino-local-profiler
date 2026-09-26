@@ -3,6 +3,8 @@ name: Close issues on dev merge
 # GitHub's own "Closes #N" auto-close only fires on a merge into the
 # repository's default branch (main). This repo does almost all of its work
 # on dev, so it reproduces the same behavior for dev merges — see #1087.
+# Issues opened by anyone other than the repo owner or a bot stay open with a
+# `fixed-in-dev` label until the release ships the fix (#1156).
 
 on:
   pull_request:
@@ -40,6 +42,37 @@ jobs:
 
               if (issue.state === 'closed') {
                 core.info(`#${issueNumber} is already closed, skipping.`);
+                continue;
+              }
+
+              // #1156: an external reporter only gets the fix with the next
+              // release, so their issue stays open (labelled) until then.
+              const internal = issue.user.login === context.repo.owner || issue.user.type === 'Bot';
+              if (!internal) {
+                try {
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: 'fixed-in-dev',
+                    color: '0e8a16',
+                    description: 'Fixed on dev, ships with the next release',
+                  });
+                } catch (e) {
+                  if (e.status !== 422) throw e; // 422 = label already exists
+                }
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  labels: ['fixed-in-dev'],
+                });
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `Fixed in \`dev\` by #${context.payload.pull_request.number}. The fix ships with the next release; this issue stays open until then.`,
+                });
+                core.info(`#${issueNumber} is external: labelled fixed-in-dev, left open.`);
                 continue;
               }
 

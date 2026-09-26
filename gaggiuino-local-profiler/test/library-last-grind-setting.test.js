@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator    ??= { language: 'en-US' };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { renderBeanList } = await import('../public-src/views/library.js');
 
 // #829: surface the last-used grind setting in the Library bean-list row.

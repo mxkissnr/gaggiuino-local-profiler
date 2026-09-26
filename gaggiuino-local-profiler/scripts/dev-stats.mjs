@@ -115,7 +115,7 @@ function renderCharts(results, combinedModelCounts) {
 
     const commitsSvg = barChartSVG('Commits per repo', repoItems);
     if (commitsSvg) writeFileSync(path.join(outDir, 'commits-per-repo.svg'), commitsSvg);
-    const modelSvg = barChartSVG('Claude model breakdown (by commits)', modelItems);
+    const modelSvg = barChartSVG('AI model breakdown (by commits)', modelItems);
     if (modelSvg) writeFileSync(path.join(outDir, 'model-breakdown.svg'), modelSvg);
     return !!(commitsSvg || modelSvg);
 }
@@ -130,6 +130,40 @@ const REPOS = [
 // Flat monthly Claude Pro subscription rate in USD. Change this if the plan
 // or its price changes — every cost figure in DEVELOPMENT.md derives from it.
 const CLAUDE_PRO_MONTHLY_USD = 20;
+
+// #1100: co-author trailers that name a human or a non-coding-assistant bot,
+// not an AI model — excluded from the AI model breakdown and from
+// aiCommits/aiLines. Everything else found in a Co-Authored-By trailer is
+// treated as an AI model and grouped by its literal string, same as the
+// Claude-only version of this script already did — this naturally covers
+// Claude *, DeepSeek *, bare `openhands`, and any future model string
+// without per-model hardcoding.
+const NON_AI_COAUTHOR_PATTERNS = [
+    /^mxkissnr$/i,                  // any email
+    /^Paul-Lukas Schäfer$/i,
+    /^dependabot\[bot\]$/i,
+    /^renovate\[bot\]$/i,
+];
+export function isAiCoAuthor(name) {
+    return !NON_AI_COAUTHOR_PATTERNS.some(re => re.test(name));
+}
+
+// #1100: billing-type classification for the cost section. Claude is Max's
+// flat-rate Claude Pro subscription (CLAUDE_PRO_MONTHLY_USD above); every
+// other model is billed by usage through its own API and has no flat
+// subscription cost derivable from git history. An unrecognized future
+// model defaults to 'api-billed' — a wrong "it's covered by the
+// subscription" assumption is worse than an honest "not tracked yet".
+const BILLING_TYPE_PATTERNS = [
+    { pattern: /Claude/i, type: 'subscription' },
+    { pattern: /DeepSeek/i, type: 'api-billed' },
+];
+export function billingTypeFor(model) {
+    for (const { pattern, type } of BILLING_TYPE_PATTERNS) {
+        if (pattern.test(model)) return type;
+    }
+    return 'api-billed';
+}
 
 // Commits within this many hours of each other are treated as part of the
 // same continuous working session. Raise it to merge more commits into fewer,
@@ -241,20 +275,37 @@ function statsForRepo(repo) {
     const chunks = raw.split('\x02').filter(Boolean);
 
     const modelCounts = {};
+    const modelCostUsd = {};
     let aiCommits = 0, totalLines = 0, aiLines = 0;
     for (const chunk of chunks) {
         const ins = parseInt((chunk.match(/(\d+) insertion/) || [])[1] || '0', 10);
         const del = parseInt((chunk.match(/(\d+) deletion/) || [])[1] || '0', 10);
         totalLines += ins + del;
-        const coAuthor = chunk.match(/Co-Authored-By:\s*(Claude[^<\n]*)</);
-        if (!coAuthor) continue;
+        // A commit can carry more than one Co-Authored-By trailer (e.g. a
+        // squash merge combining a human's and an AI's lines, or an
+        // AI-orchestrator plus the model it ran) — take the first one that
+        // classifies as an AI model, not just the first trailer line.
+        const coAuthors = [...chunk.matchAll(/Co-Authored-By:\s*([^<\n]+)</g)].map(m => m[1].trim());
+        const model = coAuthors.find(isAiCoAuthor);
+        if (!model) continue;
         aiCommits++;
         aiLines += ins + del;
-        const model = coAuthor[1].trim();
         modelCounts[model] = (modelCounts[model] || 0) + 1;
+
+        // TODO(#1100 follow-up, out of scope here): no commit sets this trailer
+        // today, so costUsd is always undefined — a future ppops/OpenHands
+        // instrumentation feature is expected to have the DeepSeek coder agent
+        // report each session's real API cost, plumbed into commits via this
+        // (or a similar) trailer. Once that data exists, this sums it per
+        // model instead of leaving api-billed costs untracked below.
+        const costMatch = chunk.match(/Co-Authored-Cost-Usd:\s*([0-9.]+)/);
+        const costUsd = costMatch ? parseFloat(costMatch[1]) : undefined;
+        if (costUsd !== undefined) {
+            modelCostUsd[model] = (modelCostUsd[model] || 0) + costUsd;
+        }
     }
 
-    return { ...repo, firstDate, lastDate, totalCommits, aiCommits, modelCounts, totalLines, aiLines, devHours };
+    return { ...repo, firstDate, lastDate, totalCommits, aiCommits, modelCounts, modelCostUsd, totalLines, aiLines, devHours };
 }
 
 function fmtDate(d) { return d || '?'; }
@@ -279,6 +330,10 @@ function main() {
     results.forEach(r => Object.entries(r.modelCounts).forEach(([m, c]) => {
         combinedModelCounts[m] = (combinedModelCounts[m] || 0) + c;
     }));
+    const combinedModelCostUsd = {};
+    results.forEach(r => Object.entries(r.modelCostUsd).forEach(([m, c]) => {
+        combinedModelCostUsd[m] = (combinedModelCostUsd[m] || 0) + c;
+    }));
 
     const days = combined.firstDate && combined.lastDate
         ? Math.round((new Date(combined.lastDate) - new Date(combined.firstDate)) / 86400000) + 1
@@ -298,7 +353,7 @@ function main() {
     lines.push('');
     lines.push(`The GLP ecosystem (this app + 3 companion repos) has been in development since **${fmtDate(combined.firstDate)}**` + (days ? ` — **${days} days** as of the last commit (${fmtDate(combined.lastDate)}).` : '.'));
     lines.push('');
-    lines.push('| Repo | First commit | Last commit | Commits | Claude co-authored |');
+    lines.push('| Repo | First commit | Last commit | Commits | AI co-authored |');
     lines.push('|---|---|---|---|---|');
     for (const r of results) {
         const pct = r.totalCommits ? Math.round(100 * r.aiCommits / r.totalCommits) : 0;
@@ -308,9 +363,9 @@ function main() {
     lines.push(`| **Combined** | **${fmtDate(combined.firstDate)}** | **${fmtDate(combined.lastDate)}** | **${combined.totalCommits}** | **${combined.aiCommits} (${combinedPct}%)** |`);
     lines.push('');
     if (chartsRendered) { lines.push('![Commits per repo](docs/dev-stats/commits-per-repo.svg)'); lines.push(''); }
-    lines.push(`Combined line changes (insertions + deletions across all commits): **${combined.totalLines.toLocaleString()}**, of which **${combined.aiLines.toLocaleString()}** landed in Claude-co-authored commits.`);
+    lines.push(`Combined line changes (insertions + deletions across all commits): **${combined.totalLines.toLocaleString()}**, of which **${combined.aiLines.toLocaleString()}** landed in AI-co-authored commits.`);
     lines.push('');
-    lines.push('Commits without a Claude co-author line are presumed human-only (manual fixes, merges, config tweaks) — not independently verified.');
+    lines.push('Commits without an AI co-author line are presumed human-only (manual fixes, merges, config tweaks) — not independently verified.');
     lines.push('');
     lines.push('## Hours of development (lower-bound estimate)');
     lines.push('');
@@ -325,7 +380,7 @@ function main() {
     lines.push('');
     lines.push('This is a **lower-bound estimate derived from git commit timestamps only**, not measured time — it undercounts real work because a long AI-agentic session (orchestration, agent dispatch, review between infrequent commits) can run for hours between commits.');
     lines.push('');
-    lines.push('## Claude model breakdown (by commit co-author line)');
+    lines.push('## AI model breakdown (by commit co-author line)');
     lines.push('');
     lines.push('| Model | Commits |');
     lines.push('|---|---|');
@@ -333,15 +388,30 @@ function main() {
         lines.push(`| ${model} | ${count} |`);
     }
     lines.push('');
-    if (chartsRendered) { lines.push('![Claude model breakdown by commits](docs/dev-stats/model-breakdown.svg)'); lines.push(''); }
+    if (chartsRendered) { lines.push('![AI model breakdown by commits](docs/dev-stats/model-breakdown.svg)'); lines.push(''); }
     lines.push('The exact co-author string varies by era as model names changed over the project\'s lifetime — this table groups by the literal string used in each commit, so the same underlying model released under a new name shows up as a separate row.');
     lines.push('');
-    lines.push('## Claude Pro subscription cost');
+    lines.push('## Cost');
     lines.push('');
-    lines.push(`Max pays a flat **$${CLAUDE_PRO_MONTHLY_USD}/month** for Claude Pro, regardless of usage volume — this is the actual subscription cost, not a token-usage estimate. ${monthsSinceStartCount} month${monthsSinceStartCount === 1 ? '' : 's'} since the first commit (${fmtDate(combined.firstDate)}) works out to **$${subscriptionCostUsd.toFixed(2)}**.`);
+    lines.push(`Max pays a flat **$${CLAUDE_PRO_MONTHLY_USD}/month** for Claude Pro, regardless of usage volume — this is the actual subscription cost, not a token-usage estimate. ${monthsSinceStartCount} month${monthsSinceStartCount === 1 ? '' : 's'} since the first commit (${fmtDate(combined.firstDate)}) works out to **$${subscriptionCostUsd.toFixed(2)}** for every Claude-model commit combined, regardless of which Claude model did the work.`);
     lines.push('');
     lines.push('This assumes a continuous subscription for the whole span — it does not account for any gaps where the subscription might have lapsed.');
     lines.push('');
+    const apiBilledModels = Object.keys(combinedModelCounts).filter(m => billingTypeFor(m) === 'api-billed');
+    if (apiBilledModels.length) {
+        const trackedCostUsd = apiBilledModels.reduce((s, m) => s + (combinedModelCostUsd[m] || 0), 0);
+        lines.push('| Model | Commits | Cost |');
+        lines.push('|---|---|---|');
+        for (const m of apiBilledModels.sort((a, b) => combinedModelCounts[b] - combinedModelCounts[a])) {
+            const cost = combinedModelCostUsd[m];
+            lines.push(`| ${m} | ${combinedModelCounts[m]} | ${cost !== undefined ? `$${cost.toFixed(2)}` : 'not tracked'} |`);
+        }
+        lines.push('');
+        lines.push(trackedCostUsd
+            ? `API-billed models cost **$${trackedCostUsd.toFixed(2)}** tracked so far — this is not a flat rate like Claude Pro, so it only covers commits that carried a \`Co-Authored-Cost-Usd\` trailer.`
+            : 'These models are billed per API usage, not a flat subscription, so no dollar figure is derivable from git history alone — no commit yet reports its own cost via a `Co-Authored-Cost-Usd` trailer.');
+        lines.push('');
+    }
     lines.push('---');
     lines.push('*This file is generated. Do not hand-edit — re-run `node scripts/dev-stats.mjs` instead.*');
 

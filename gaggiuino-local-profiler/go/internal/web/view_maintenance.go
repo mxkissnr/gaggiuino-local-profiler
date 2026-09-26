@@ -18,12 +18,16 @@ import (
 // numerically by grinder id.
 var maintTaskOrder = []string{"descaling", "backflush", "grouphead", "gaskets", "waterfilter"}
 
+// firmware_update is the one non-tile task: it is written to the
+// maintenance log (#1136) by an app-triggered machine firmware update, never
+// tracked as a due/soon/ok tile, so it only ever needs a display title.
 var maintTaskTitles = map[string]string{
-	"descaling":   "Descaling",
-	"backflush":   "Backflush",
-	"grouphead":   "Grouphead",
-	"gaskets":     "Gaskets",
-	"waterfilter": "Water filter",
+	"descaling":       "Descaling",
+	"backflush":       "Backflush",
+	"grouphead":       "Grouphead",
+	"gaskets":         "Gaskets",
+	"waterfilter":     "Water filter",
+	"firmware_update": "Firmware update",
 }
 
 // maintTiles builds every task in stats as a templates.MaintTile, in

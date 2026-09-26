@@ -33,13 +33,16 @@ const (
 	demoIDMax  = demoIDBase * 2
 )
 
-// machineIDOffset mirrors lib/machines/index.js's MACHINE_ID_OFFSET. That
-// file (lib/machines/index.js -> internal/machines, still a Phase 0
-// placeholder) isn't ported yet, so the small amount of arithmetic this
-// package needs from it (toNativeShotID/ownerOfShotID) is duplicated here
-// rather than imported. Move these two functions to internal/machines and
-// have this package call them once the machines domain lands.
-const machineIDOffset = 10_000_000
+// MachineIDOffset mirrors lib/machines/index.js's MACHINE_ID_OFFSET: the
+// stride between one machine's native shot ids and the globally-unique
+// synthetic ids stored internally (machine 1 keeps its native ids; any other
+// machine's shots live at machineID*MachineIDOffset+nativeID). Exported
+// because internal/system/sync.go uses it too, to scope a machine's blocklist
+// range to that machine's own ids (#1147); the machines domain has no home for
+// it yet (lib/machines/index.js -> internal/machines is still a Phase 0
+// placeholder), so the small amount of arithmetic this package needs from it
+// (toNativeShotID/ownerOfShotID) stays duplicated here rather than imported.
+const MachineIDOffset = 10_000_000
 
 // toNativeShotID ports lib/machines/index.js's toNativeShotId(machineId,
 // globalId): the machine's own shot number, as opposed to the
@@ -48,7 +51,33 @@ func toNativeShotID(machineID, globalID int64) int64 {
 	if machineID == 1 {
 		return globalID
 	}
-	return globalID - machineID*machineIDOffset
+	return globalID - machineID*MachineIDOffset
+}
+
+// ToGlobalShotID ports lib/machines/index.js's toGlobalShotId(machineId,
+// nativeId): the inverse of toNativeShotID. Machine 1's native ids are used
+// unchanged; every other machine's shots get a synthetic id prefixed by its own
+// offset, so two machines' ids can never collide.
+func ToGlobalShotID(machineID, nativeID int64) int64 {
+	if machineID == 1 {
+		return nativeID
+	}
+	return machineID*MachineIDOffset + nativeID
+}
+
+// NativeShotIDIfOwned converts a global shot id to machineID's own native id,
+// reporting ok only when the result really is in that machine's native range
+// (0 < native < MachineIDOffset). A blocklist entry is a *global* id, so the
+// sync cursor may advance on it only when it belongs to the machine being
+// synced (#1147, #1148) — otherwise another machine's or a demo id would push
+// the cursor past every one of this machine's own ids for good. For machine 1
+// this is exactly the old 0 < n < 10_000_000 check.
+func NativeShotIDIfOwned(machineID, globalID int64) (int64, bool) {
+	native := toNativeShotID(machineID, globalID)
+	if native > 0 && native < MachineIDOffset {
+		return native, true
+	}
+	return 0, false
 }
 
 // Shot is a hydrated shot record: the fixed shots-table columns plus the

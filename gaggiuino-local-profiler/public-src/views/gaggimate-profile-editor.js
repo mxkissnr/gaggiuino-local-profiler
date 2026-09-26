@@ -1,9 +1,9 @@
 // GaggiMate profile editor — Standard + Pro. _profile is the source of
 // truth; _render() rebuilds #gmEditorBody from it on every change.
 import Chart from 'chart.js/auto';
-import { S } from '../state.js';
+import { S } from '../state/index.js';
 import { t } from '../i18n.js';
-import { apiFetch } from '../api.js';
+import * as machinesApi from '../api/machines.js';
 import { esc } from '../utils.js';
 import { phasePlugin, buildGmPhaseRanges } from '../constants.js';
 import { loadMachineProfileList } from './library-profile-editor.js';
@@ -21,10 +21,20 @@ let _inputsBound = false; // guards against accumulating body change-listeners a
 
 export async function openGaggiMateProfileEditor(id) {
   const machineId = S.activeMachineId ?? '';
-  const r = await apiFetch(`api/machine/profile/${id}?machineId=${machineId}`);
-  if (!r.ok) { window.showToast?.(t('gm_toast_load_error')); return; }
-  const profile = await r.json();
+  const profile = await machinesApi.getMachineProfile(id, machineId);
+  if (!profile) { window.showToast?.(t('gm_toast_load_error')); return; }
   _openEditor(profile);
+}
+
+// Same "fresh unsaved copy" contract as library-profile-editor.js's
+// duplicateProfile: id cleared so saveGaggiMateProfile() POSTs instead of
+// PUTting over the original, label suffixed so it's never confused with
+// its source in the list.
+export async function duplicateGaggiMateProfile(id) {
+  const machineId = S.activeMachineId ?? '';
+  const profile = await machinesApi.getMachineProfile(id, machineId);
+  if (!profile) { window.showToast?.(t('gm_toast_load_error')); return; }
+  _openEditor({ ...profile, id: undefined, label: `${profile.label}${t('profile_duplicate_suffix')}` });
 }
 
 export function openNewGaggiMateProfile() {
@@ -56,16 +66,9 @@ export async function saveGaggiMateProfile() {
 
   const machineId = S.activeMachineId;
   const body = { ..._profile, machineId };
-  const isEdit = _profile.id != null;
-  const url = isEdit ? `api/machine/profile/${_profile.id}` : 'api/machine/profile';
-  const method = isEdit ? 'PUT' : 'POST';
 
   try {
-    const r = await apiFetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const r = await machinesApi.saveMachineProfile(_profile.id ?? null, body);
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       window.showToast?.(err.error || t('gm_toast_save_error'));

@@ -101,15 +101,55 @@ func (r *Repository) GetMaintenance(machineID int64) (map[string]Task, error) {
 		}
 		key := fmt.Sprintf("grinder_%d", gid)
 		s := saved[key]
+		thresholdShots := valueOrDefault(s, "threshold_shots", 200)
+		if _, ok := s["threshold_shots"]; ok {
+			thresholdShots = valueOrNil(s, "threshold_shots")
+		}
 		task := Task{
 			"lastDate":        valueOrNil(s, "lastDate"),
-			"threshold_shots": valueOrDefault(s, "threshold_shots", 200),
+			"threshold_shots": thresholdShots,
 			"threshold_days":  valueOrDefault(s, "threshold_days", nil),
+			"threshold_g":     valueOrDefault(s, "threshold_g", nil),
 			"grinderName":     g["name"],
+		}
+		if d, ok := s["disabled"]; ok {
+			task["disabled"] = d
 		}
 		result[key] = task
 	}
+
+	// Include any user-defined custom_* tasks stored in DB.
+	for key, task := range saved {
+		if isCustomTask(key) {
+			result[key] = task
+		}
+	}
 	return result, nil
+}
+
+// SaveCustomTask creates or updates a single custom maintenance task.
+func (r *Repository) SaveCustomTask(machineID int64, key string, task Task) error {
+	b, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("maintenance: encoding custom task %s: %w", key, err)
+	}
+	if _, err := r.db.Exec(
+		`INSERT OR REPLACE INTO maintenance (machine_id, key, data) VALUES (?,?,?)`,
+		machineID, key, string(b),
+	); err != nil {
+		return fmt.Errorf("maintenance: saving custom task %s: %w", key, err)
+	}
+	return nil
+}
+
+// DeleteCustomTask removes a custom_* task row from the maintenance table.
+func (r *Repository) DeleteCustomTask(machineID int64, key string) error {
+	if _, err := r.db.Exec(
+		`DELETE FROM maintenance WHERE machine_id = ? AND key = ?`, machineID, key,
+	); err != nil {
+		return fmt.Errorf("maintenance: deleting custom task %s: %w", key, err)
+	}
+	return nil
 }
 
 func valueOrNil(t Task, key string) any {
@@ -179,6 +219,7 @@ type LogEntry struct {
 	ShotCountAtTime int64  `json:"shotCountAtTime"`
 	Notes           string `json:"notes"`
 	GrinderName     string `json:"grinderName,omitempty"`
+	Label           string `json:"label,omitempty"`
 }
 
 // GetMaintenanceLog ports LibraryRepository.js's getMaintenanceLog
@@ -204,6 +245,29 @@ func (r *Repository) GetMaintenanceLog(machineID int64) ([]LogEntry, error) {
 			if name, _ := g["name"].(string); name != "" {
 				grinderNames[fmt.Sprintf("grinder_%d", gid)] = name
 			}
+		}
+	}
+
+	// Custom task labels — unlike grinder names (global equipment, keyed by
+	// task alone), a custom_ task is defined per machine (customCreate saves
+	// it under activeMachineID(r)), so two different machines' tasks can
+	// share the same slugified key with different labels — the lookup key
+	// must include machineID.
+	customLabels := map[string]string{}
+	rawTasks, err := r.GetAllMaintenanceRaw()
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rawTasks {
+		if !isCustomTask(row.Key) {
+			continue
+		}
+		var t Task
+		if err := json.Unmarshal(row.Data, &t); err != nil {
+			continue
+		}
+		if label, _ := t["label"].(string); label != "" {
+			customLabels[fmt.Sprintf("%d:%s", row.MachineID, row.Key)] = label
 		}
 	}
 
@@ -234,6 +298,9 @@ func (r *Repository) GetMaintenanceLog(machineID int64) ([]LogEntry, error) {
 		e.Notes = notes.String
 		if name, ok := grinderNames[e.Task]; ok {
 			e.GrinderName = name
+		}
+		if label, ok := customLabels[fmt.Sprintf("%d:%s", e.MachineID, e.Task)]; ok {
+			e.Label = label
 		}
 		out = append(out, e)
 	}

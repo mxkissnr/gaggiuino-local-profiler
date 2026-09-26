@@ -64,6 +64,78 @@ func (h *Handlers) updateGrinder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, grinder)
 }
 
+// setGrinderZeroPoint handles PUT /api/library/grinder/:id/zero-point: logs
+// a new zero-point activation (see zero_point.go) so grind-setting
+// suggestions/comparisons can correct for drift after a cleaning without
+// every past shot's recorded grindSetting needing to be rewritten.
+// Optional body field `since` (ms epoch int) enables retroactive entries;
+// omit or pass 0 to use the current time (existing behaviour).
+func (h *Handlers) setGrinderZeroPoint(w http.ResponseWriter, r *http.Request) {
+	id, noMatch := parseIDParam(r.PathValue("id"))
+	body, ok := decodeJSONBody(w, r)
+	if !ok {
+		return
+	}
+	if noMatch {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	zeroPoint, ok := jsParseFloat(body["zeroPoint"])
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid zeroPoint")
+		return
+	}
+	var since int64
+	if sv, ok2 := body["since"]; ok2 {
+		sv64, ok3 := jsParseIntLoose(sv)
+		if !ok3 {
+			writeError(w, http.StatusBadRequest, "invalid since")
+			return
+		}
+		if sv64 < 0 {
+			writeError(w, http.StatusBadRequest, "since must not be negative")
+			return
+		}
+		if sv64 > time.Now().UnixMilli() {
+			writeError(w, http.StatusBadRequest, "since must not be in the future")
+			return
+		}
+		since = sv64
+	}
+	grinder, found, err := SetGrinderZeroPoint(h.repo, id, zeroPoint, since)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, grinder)
+}
+
+// deleteGrinderZeroPoint handles DELETE /api/library/grinder/:id/zero-point/:since.
+// Removes the zero-point history entry with the given since value (ms epoch).
+// Silently succeeds when no such entry exists (idempotent).
+func (h *Handlers) deleteGrinderZeroPoint(w http.ResponseWriter, r *http.Request) {
+	id, noMatch := parseIDParam(r.PathValue("id"))
+	since, sinceNoMatch := parseIDParam(r.PathValue("since"))
+	if noMatch || sinceNoMatch {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	grinder, found, err := DeleteGrinderZeroPointEntry(h.repo, id, since)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, grinder)
+}
+
 // resetBurrs ports POST /api/library/grinder/:id/reset-burrs.
 func (h *Handlers) resetBurrs(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))

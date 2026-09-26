@@ -13,11 +13,11 @@ globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator ??= { language: 'en-US' };
 
 const apiFetchMock = vi.fn();
-vi.mock('../public-src/api.js', () => ({
+vi.mock('../public-src/api/transport.js', () => ({
   apiFetch: (...args) => apiFetchMock(...args),
 }));
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { fetchLiveData } = await import('../public-src/views/live.js');
 
 function makeFakeDocument() {

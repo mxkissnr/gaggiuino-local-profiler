@@ -15,7 +15,7 @@ import (
 func testSrcDir(t *testing.T) string {
 	t.Helper()
 	src := filepath.Join("..", "..", "..", "public-src")
-	if _, err := os.Stat(filepath.Join(src, "main.js")); err != nil {
+	if _, err := os.Stat(filepath.Join(src, "main.ts")); err != nil {
 		t.Skipf("public-src not available: %v", err)
 	}
 	return src
@@ -34,8 +34,8 @@ func TestRunBundlesRelativeHashedAssets(t *testing.T) {
 	page := string(html)
 
 	// The source <script> tag must be gone, replaced by a hashed entry script.
-	if strings.Contains(page, `src="./main.js"`) {
-		t.Error("index.html still references the source entry point ./main.js")
+	if strings.Contains(page, `src="./main.ts"`) {
+		t.Error("index.html still references the source entry point ./main.ts")
 	}
 	if !regexp.MustCompile(`<script type="module" crossorigin src="\./assets/main-[A-Z0-9]+\.js">`).MatchString(page) {
 		t.Errorf("index.html has no hashed relative entry script:\n%s", headOf(page))
@@ -68,7 +68,7 @@ func TestRunBundlesRelativeHashedAssets(t *testing.T) {
 		}
 	}
 
-	// CSS extracted from main.js's own `import './style.css'`.
+	// CSS extracted from main.ts's own `import './style.css'`.
 	if matches, _ := filepath.Glob(filepath.Join(out, "assets", "main-*.css")); len(matches) == 0 {
 		t.Error("no hashed stylesheet in assets/")
 	}
@@ -77,16 +77,16 @@ func TestRunBundlesRelativeHashedAssets(t *testing.T) {
 func TestRunRejectsMissingSources(t *testing.T) {
 	err := run(t.TempDir(), t.TempDir(), "")
 	if err == nil {
-		t.Fatal("expected an error for a source directory with no main.js")
+		t.Fatal("expected an error for a source directory with no main.ts")
 	}
-	if !strings.Contains(err.Error(), "main.js") {
+	if !strings.Contains(err.Error(), "main.ts") {
 		t.Errorf("error should name the missing entry point, got: %v", err)
 	}
 }
 
 func TestRunRejectsIndexWithoutScriptTag(t *testing.T) {
 	src := t.TempDir()
-	writeFile(t, filepath.Join(src, "main.js"), "console.log('x');\n")
+	writeFile(t, filepath.Join(src, "main.ts"), "console.log('x');\n")
 	writeFile(t, filepath.Join(src, "index.html"), "<html><head></head><body></body></html>\n")
 
 	// The source check runs before the node_modules one, so this stays
@@ -107,7 +107,7 @@ func TestRunRejectsIndexWithoutScriptTag(t *testing.T) {
 // with the fix in the message.
 func TestRunRejectsMissingNodeModules(t *testing.T) {
 	src := t.TempDir()
-	writeFile(t, filepath.Join(src, "main.js"), "console.log('x');\n")
+	writeFile(t, filepath.Join(src, "main.ts"), "console.log('x');\n")
 	writeFile(t, filepath.Join(src, "index.html"),
 		"<html><head>"+origScriptTag+"</head><body></body></html>\n")
 
@@ -170,24 +170,24 @@ func TestRelFromOutDir(t *testing.T) {
 func TestEntryOutputMatchesNormalizedEntryPoints(t *testing.T) {
 	base := t.TempDir()
 	m := &metafile{Outputs: map[string]metaOutput{
-		"public-src/main.js": {EntryPoint: "public-src/main.js", CSSBundle: "assets/main-ABC.css"},
-		"assets/main-ABC.js": {Imports: []metaImport{{Path: "public-src/main.js", Kind: "import-statement"}}},
+		"public-src/main.ts": {EntryPoint: "public-src/main.ts", CSSBundle: "assets/main-ABC.css"},
+		"assets/main-ABC.js": {Imports: []metaImport{{Path: "public-src/main.ts", Kind: "import-statement"}}},
 	}}
 
 	// esbuild echoes the entry point back relative to AbsWorkingDir; callers
 	// can hand in an absolute path, a base-relative one, or the "./"-prefixed
 	// shape that normalization has to absorb.
 	for _, entry := range []string{
-		filepath.Join(base, "public-src", "main.js"),
-		filepath.Join("public-src", "main.js"),
-		"./public-src/main.js",
+		filepath.Join(base, "public-src", "main.ts"),
+		filepath.Join("public-src", "main.ts"),
+		"./public-src/main.ts",
 	} {
 		p, out, ok := m.entryOutput(base, entry)
 		if !ok {
-			t.Errorf("entryOutput(%q) found no output, want the public-src/main.js entry", entry)
+			t.Errorf("entryOutput(%q) found no output, want the public-src/main.ts entry", entry)
 			continue
 		}
-		if p != "public-src/main.js" || out.CSSBundle != "assets/main-ABC.css" {
+		if p != "public-src/main.ts" || out.CSSBundle != "assets/main-ABC.css" {
 			t.Errorf("entryOutput(%q) = (%q, cssBundle %q), want the entry output with its CSS bundle", entry, p, out.CSSBundle)
 		}
 	}

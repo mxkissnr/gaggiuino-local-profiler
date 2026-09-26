@@ -1,5 +1,6 @@
 const js = require('@eslint/js');
 const globals = require('globals');
+const tseslint = require('typescript-eslint');
 
 const commonRules = {
   'no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
@@ -46,6 +47,44 @@ module.exports = [
     },
     rules: commonRules,
   },
+  // TypeScript sources migrate file-by-file (#1102): scoped to the .ts globs so
+  // the type-aware rules don't touch the .js files still in flight.
+  ...tseslint.config({
+    files: ['public-src/**/*.ts'],
+    // main.ts is the not-yet-converted entry point — see its own block below.
+    ignores: ['public-src/main.ts'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      globals: globals.browser,
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: __dirname,
+      },
+    },
+    rules: {
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
+    },
+  }),
+  // public-src/main.ts was only renamed from main.js (#1106), not converted: it
+  // still imports untyped .js modules, so recommendedTypeChecked's
+  // any-propagation rules would error on nearly every line. It carries a
+  // file-level @ts-nocheck for the same reason and is linted like its JavaScript
+  // siblings until a later package converts it, at which point this block folds
+  // into the one above.
+  ...tseslint.config({
+    files: ['public-src/main.ts'],
+    extends: [...tseslint.configs.recommended],
+    languageOptions: {
+      globals: globals.browser,
+    },
+    rules: {
+      ...commonRules,
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
+      '@typescript-eslint/ban-ts-comment': ['error', { 'ts-nocheck': 'allow-with-description' }],
+    },
+  }),
   {
     // go/internal/web/static/**: hand-written browser scripts embedded via
     // internal/web/assets.go and loaded by the no-JS /ui/ fallback pages —
@@ -63,6 +102,21 @@ module.exports = [
     },
     rules: commonRules,
   },
+  ...tseslint.config({
+    files: ['test/**/*.ts'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.vitest },
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: __dirname,
+      },
+    },
+    rules: {
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
+    },
+  }),
   {
     // test/e2e/*.mjs runs on node:test (Playwright), not vitest — see
     // test:e2e in package.json (#798) — so it gets node globals only, not

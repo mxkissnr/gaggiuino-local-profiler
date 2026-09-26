@@ -1,7 +1,10 @@
 import Chart from 'chart.js/auto';
-import { S } from '../state.js';
+import { S } from '../state/index.js';
+import * as chartRegistry from '../state/charts.js';
+import * as timerRegistry from '../state/timers.js';
 import { t } from '../i18n.js';
-import { apiFetch, isApiPortBlocked } from '../api.js';
+import { isApiPortBlocked } from '../api/transport.js';
+import { getPreheat, getLiveData } from '../api/system.js';
 import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints } from '../utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
@@ -28,11 +31,9 @@ export function initLiveChart() {
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
   const ctx = document.getElementById('liveChart');
-  const _existing = Chart.getChart(ctx);
-  if (_existing) _existing.destroy();
-  S.liveChart = null;
+  chartRegistry.dispose('liveChart');
 
-  S.liveChart = new Chart(ctx, {
+  chartRegistry.set('liveChart', new Chart(ctx, {
     type: 'line',
     data: {
       datasets: [
@@ -62,7 +63,7 @@ export function initLiveChart() {
         y1: { type: 'linear', position: 'right', min: 0, max: 100, ticks: { color: C.tick }, grid: { drawOnChartArea: false } }
       }
     }
-  });
+  }));
 
   // Re-apply reference shot after chart re-init
   if (S.refShotId) _applyRefShotById(S.refShotId);
@@ -77,12 +78,13 @@ async function _applyRefShotById(shotId) {
 }
 
 function _applyRefDatasets(d) {
-  if (!S.liveChart) return;
-  S.liveChart.data.datasets[4].data = d.pressure;
-  S.liveChart.data.datasets[5].data = d.flow;
-  S.liveChart.data.datasets[6].data = d.weight;
-  S.liveChart.data.datasets[7].data = d.temp;
-  S.liveChart.update('none');
+  const liveChart = chartRegistry.get('liveChart');
+  if (!liveChart) return;
+  liveChart.data.datasets[4].data = d.pressure;
+  liveChart.data.datasets[5].data = d.flow;
+  liveChart.data.datasets[6].data = d.weight;
+  liveChart.data.datasets[7].data = d.temp;
+  liveChart.update('none');
 }
 
 export function populateRefSelector() {
@@ -131,9 +133,10 @@ export function onRefShotChange(val) {
 
 export function clearReferenceShot() {
   S.refShotId = null;
-  if (S.liveChart) {
-    [4, 5, 6, 7].forEach(i => { S.liveChart.data.datasets[i].data = []; });
-    S.liveChart.update('none');
+  const liveChart = chartRegistry.get('liveChart');
+  if (liveChart) {
+    [4, 5, 6, 7].forEach(i => { liveChart.data.datasets[i].data = []; });
+    liveChart.update('none');
   }
   const sel = document.getElementById('refShotSelect');
   if (sel) sel.value = '';
@@ -172,13 +175,13 @@ export function connectLiveStream() {
   // every tick, same convention as status.js's updateStatus()/
   // pollSyncProgressFallback() (a 30s interval that always fires, gating its
   // own fallback-only work behind a fresh S.sseActive check each time).
-  S.livePollInterval    = setInterval(() => { if (!S.sseActive) fetchLiveData(); }, 1000);
-  S.preheatPollInterval = setInterval(() => { if (!S.sseActive) fetchPreheatData(); }, 10000);
+  timerRegistry.set('livePollInterval',    setInterval(() => { if (!S.sseActive) fetchLiveData(); }, 1000));
+  timerRegistry.set('preheatPollInterval', setInterval(() => { if (!S.sseActive) fetchPreheatData(); }, 10000));
 }
 
 export async function fetchPreheatData() {
   try {
-    const r = await apiFetch('api/preheat');
+    const r = await getPreheat();
     if (!r.ok) return;
     updatePreheatWidget(await r.json());
   } catch { /* ignore */ }
@@ -250,7 +253,7 @@ export function updatePreheatWidget(d) {
 
 export async function fetchLiveData() {
   try {
-    const r = await apiFetch('api/live/data');
+    const r = await getLiveData();
     if (!r.ok) {
       // #807: same reasoning as the Shots view -- a bare "HTTP 401" in the
       // Live badge says nothing about the deliberately-closed direct port.
@@ -261,7 +264,7 @@ export async function fetchLiveData() {
 
     // First successful response — mark as ready
     const statusEl = document.getElementById('live-status-text');
-    if (S.livePollInterval && statusEl && statusEl.textContent === t('live_connecting')) {
+    if (timerRegistry.get('livePollInterval') && statusEl && statusEl.textContent === t('live_connecting')) {
       setLiveBadge('ready');
     }
 
@@ -291,10 +294,10 @@ export async function fetchLiveData() {
 }
 
 export function disconnectLiveStream() {
-  if (S.livePollInterval)    { clearInterval(S.livePollInterval);    S.livePollInterval = null; }
-  if (S.preheatPollInterval) { clearInterval(S.preheatPollInterval); S.preheatPollInterval = null; }
-  if (S.liveTimerTick)       { clearInterval(S.liveTimerTick);       S.liveTimerTick = null; }
-  if (S.liveChart)           { S.liveChart.destroy(); S.liveChart = null; }
+  timerRegistry.dispose('livePollInterval');
+  timerRegistry.dispose('preheatPollInterval');
+  timerRegistry.dispose('liveTimerTick');
+  chartRegistry.dispose('liveChart');
   S.liveBrewStartWall = null;
 }
 
@@ -331,22 +334,22 @@ export function setLiveBadge(state, detail = '') {
 // currently running" branches in handleLiveData() below (brewing/steaming/
 // flushing) instead of each inlining its own setInterval -- the three modes
 // are mutually exclusive (one physical operation mode at a time), so one
-// shared S.liveBrewStartWall/S.liveTimerTick pair is enough; no per-mode
+// shared S.liveBrewStartWall/`liveTimerTick` timer pair is enough; no per-mode
 // state needed.
 function startElapsedTimer(startWall, elId) {
   S.liveBrewStartWall = startWall;
-  if (!S.liveTimerTick) {
-    S.liveTimerTick = setInterval(() => {
+  if (!timerRegistry.get('liveTimerTick')) {
+    timerRegistry.set('liveTimerTick', setInterval(() => {
       if (S.liveBrewStartWall) {
         const s = (Date.now() - S.liveBrewStartWall) / 1000;
         document.getElementById(elId).textContent = formatTimeLabel(s);
       }
-    }, 100);
+    }, 100));
   }
 }
 
 function stopElapsedTimer(elId, finalElapsedSec) {
-  if (S.liveTimerTick) { clearInterval(S.liveTimerTick); S.liveTimerTick = null; }
+  timerRegistry.dispose('liveTimerTick');
   S.liveBrewStartWall = null;
   if (elId != null && finalElapsedSec != null) {
     document.getElementById(elId).textContent = formatTimeLabel(finalElapsedSec);
@@ -519,18 +522,19 @@ export function handleLiveData(msg) {
     document.getElementById('liveTemp').textContent     = temp     != null ? temp.toFixed(1)     : '–';
   }
 
-  if (S.liveChart) {
+  const liveChart = chartRegistry.get('liveChart');
+  if (liveChart) {
     const maxTime = times.length > 0 ? times[times.length - 1] / 10 : 60;
-    S.liveChart.data.datasets[0].data = mapToXY(times, dp.pressure);
-    S.liveChart.data.datasets[1].data = mapToXY(times, dp.pumpFlow);
-    S.liveChart.data.datasets[2].data = mapToXY(times, dp.shotWeight || dp.weight);
-    S.liveChart.data.datasets[3].data = mapToXY(times, dp.temperature);
-    S.liveChart.options.scales.x.max  = Math.max(maxTime + 5, 30);
+    liveChart.data.datasets[0].data = mapToXY(times, dp.pressure);
+    liveChart.data.datasets[1].data = mapToXY(times, dp.pumpFlow);
+    liveChart.data.datasets[2].data = mapToXY(times, dp.shotWeight || dp.weight);
+    liveChart.data.datasets[3].data = mapToXY(times, dp.temperature);
+    liveChart.options.scales.x.max  = Math.max(maxTime + 5, 30);
 
     const maxTemp = dp.temperature?.length
       ? dp.temperature.reduce((m, v) => v > m ? v : m, 0) / 10 : 0;
-    S.liveChart.options.scales.y1.max = Math.ceil(maxTemp + 5) || 100;
+    liveChart.options.scales.y1.max = Math.ceil(maxTemp + 5) || 100;
 
-    S.liveChart.update('none');
+    liveChart.update('none');
   }
 }

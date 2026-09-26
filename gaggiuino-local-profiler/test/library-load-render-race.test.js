@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator    ??= { language: 'en-US' };
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { loadLibrary } = await import('../public-src/views/library.js');
 
 // #526: loadLibrary()'s fetch is fired unawaited from main.js's init

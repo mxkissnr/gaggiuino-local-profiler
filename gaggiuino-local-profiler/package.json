@@ -1,6 +1,6 @@
 {
   "name": "gaggiuino-local-profiler-frontend",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "scripts": {
     "build": "vite build",
     "dev": "vite",
@@ -8,6 +8,8 @@
     "test:watch": "vitest",
     "test:e2e": "node --test --test-force-exit test/e2e/*.test.mjs",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "types:api": "openapi-typescript go/internal/system/openapi.yaml -o public-src/api/schema.gen.ts",
     "release:check": "node scripts/release-check.mjs"
   },
   "dependencies": {
@@ -21,7 +23,10 @@
     "@vitest/coverage-v8": "^5.0.0",
     "eslint": "^10.8.1",
     "globals": "^17.11.0",
+    "openapi-typescript": "7.13.0",
     "playwright": "^1.62.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0",
     "vite": "8.3.0",
     "vitest": "5.0.1"
   },

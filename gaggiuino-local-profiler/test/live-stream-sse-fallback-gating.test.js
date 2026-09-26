@@ -21,7 +21,7 @@ globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
 globalThis.navigator ??= { language: 'en-US' };
 
 const apiFetchMock = vi.fn(() => Promise.resolve({ ok: false, status: 500 }));
-vi.mock('../public-src/api.js', () => ({
+vi.mock('../public-src/api/transport.js', () => ({
   apiFetch: (...args) => apiFetchMock(...args),
   // #913: fetchLiveData()'s !r.ok branch calls the real isApiPortBlocked() --
   // omitting it here made it undefined, which threw and (only visibly once
@@ -40,7 +40,7 @@ vi.mock('../public-src/components/machines-settings.js', () => ({
   getDefaultMachineId: () => null,
 }));
 
-const { S } = await import('../public-src/state.js');
+const { S } = await import('../public-src/state/index.js');
 const { connectLiveStream, disconnectLiveStream } = await import('../public-src/views/live.js');
 
 function makeFakeDocument() {

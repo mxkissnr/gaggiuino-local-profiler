@@ -59,7 +59,7 @@ func main() {
 	}
 }
 
-// run is the whole build: validate the inputs, bundle public-src/main.js with
+// run is the whole build: validate the inputs, bundle public-src/main.ts with
 // esbuild, copy public-src/public/ verbatim, then rewrite index.html's script
 // tag into the hashed entry script + modulepreload links + stylesheet link.
 func run(srcDir, outDir, nodeModulesFlag string) error {
@@ -67,7 +67,7 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 	if err != nil {
 		return fmt.Errorf("resolve source dir: %w", err)
 	}
-	entryAbs := filepath.Join(srcAbs, "main.js")
+	entryAbs := filepath.Join(srcAbs, "main.ts")
 	indexAbs := filepath.Join(srcAbs, "index.html")
 	for _, required := range []string{entryAbs, indexAbs} {
 		if _, err := os.Stat(required); err != nil {
@@ -337,9 +337,9 @@ func copyPublicDir(publicDir, outDir string) error {
 }
 
 // origScriptTag is the single module entry point in public-src/index.html
-// (public-src/main.js's own `import './style.css'` is what esbuild extracts
+// (public-src/main.ts's own `import './style.css'` is what esbuild extracts
 // into the cssBundle output instead).
-const origScriptTag = `<script type="module" src="./main.js"></script>`
+const origScriptTag = `<script type="module" src="./main.ts"></script>`
 
 // writeIndexHTML mirrors what Vite's HTML plugin does to public-src/index.html:
 // strip the source module <script> tag and inject, just before </head>, the

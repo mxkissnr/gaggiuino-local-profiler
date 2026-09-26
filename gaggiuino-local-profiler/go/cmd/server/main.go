@@ -335,6 +335,16 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// the chosen fix, not a shared-instance refactor.
 	ordersHandlers.Service().OnQueueChanged = webOrdersHandlers.PublishQueueUpdate
 
+	// GET /ui/kiosk: standalone tablet ordering kiosk, self-contained
+	// HTML/JS hitting the same JSON API as above — see internal/web/kiosk.go's
+	// own doc comment for why it's a separate page from GET /ui/menu.
+	// Registered on uiMux (not mux) for the same reason every other
+	// web.*Handlers page is: its relative "web/static/..." asset path only
+	// resolves correctly once StripPrefix("/ui", uiMux) below puts it one
+	// path segment deep, matching where that static handler is actually
+	// mounted (/ui/web/static/..., not /web/static/...).
+	web.RegisterKioskRoute(uiMux)
+
 	// Phase 1g (#901): the background polling loop that backs
 	// GET /api/machine/status, GET /api/live/data, GET/POST /api/preheat*,
 	// and the live-snapshot/preheat-update SSE events — see
@@ -363,6 +373,12 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	mqtt.NewHandlers(mqttRepo, mqttTransport, registry, machinesHandlers, haClient).RegisterRoutes(mux)
 
 	poller.Start(ctx)
+
+	// #1152: Node ran purgeExpiredTrash once at startup and then every 24h
+	// (server.js's startup call + its setInterval). StartTrashPurge mirrors
+	// both — the immediate purge plus a 24h ticker bound to ctx.
+	shots.StartTrashPurge(ctx, shots.NewService(shotsRepo), 24*time.Hour)
+
 	// Closes internal/orders' shop-broadcast deferral (see
 	// internal/orders/doc.go and internal/system/doc.go's "internal/orders'
 	// shop-broadcast" section for why this is a callback, not an import).
@@ -416,6 +432,15 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// `grinder_{id}` maintenance-table row, via a callback (not a direct
 	// import) since internal/maintenance already imports internal/library.
 	libraryHandlers.SetOnGrinderDeleted(maintenanceRepo.DeleteGrinderTask)
+
+	// #1136: a firmware update triggered from the app shows up in the
+	// machine's maintenance log. Wired as a callback (not a direct import)
+	// for the same import-cycle reason as the grinder-delete hook above --
+	// internal/maintenance already imports internal/machines.
+	machinesHandlers.SetOnFirmwareUpdate(func(m *machines.Machine) error {
+		_, err := maintenanceRepo.AddMaintenanceLogEntry("firmware_update", "", m.Host, 0, m.ID)
+		return err
+	})
 
 	// Phase 2b (#901): the achievements ("stamp card") domain —
 	// GET /api/achievements. A pure-logic port reading across shots,

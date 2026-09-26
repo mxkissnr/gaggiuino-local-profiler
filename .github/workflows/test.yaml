@@ -37,6 +37,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: API types drift check
+        run: npm run types:api && git diff --exit-code public-src/api/schema.gen.ts
+
       - name: docker-entrypoint.sh regression tests
         run: sh test/docker-entrypoint.test.sh
 

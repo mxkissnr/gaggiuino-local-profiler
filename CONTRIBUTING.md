@@ -51,7 +51,7 @@ Include:
 | Area | Details |
 |---|---|
 | Backend | Go — `gaggiuino-local-profiler/go/` (`cmd/server` entrypoint, one `internal/<domain>` package per concern; see `go/README.md`) |
-| Frontend | SPA source is `gaggiuino-local-profiler/public-src/` (views/, components/, i18n/, main.js, shared/); the production bundle is built from Go into `go/internal/webapp/dist/`, which the server embeds via `//go:embed`. See [Frontend build](#frontend-build) — `npm`/Vite is the local dev server only |
+| Frontend | SPA source is `gaggiuino-local-profiler/public-src/` (views/, components/, i18n/, main.ts, shared/); the production bundle is built from Go into `go/internal/webapp/dist/`, which the server embeds via `//go:embed`. See [Frontend build](#frontend-build) — `npm`/Vite is the local dev server only |
 | Routes | Each `internal/<domain>` package registers its own HTTP routes (`RegisterRoutes`), wired together in `go/cmd/server/main.go` |
 | Storage | SQLite (`go/internal/db`, `modernc.org/sqlite` — pure Go, no CGo) at `/data/glp.db` for shot data **and** machine config (the `machines` table is the source of truth — see [CLAUDE.md](CLAUDE.md#key-conventions)); `/data/*.json` for token, preheat state, profile cache, and `options.json` (a tracked *input* to the machine registry, adopted on start — not live config, see `go/internal/machines`) |
 | Translations | UI strings via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES/NL) — add all 6 languages for new keys |

@@ -735,6 +735,14 @@
                                     <button type="button" class="lib-open-btn" id="grinderFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
                                 </div>
                             </div>
+                            <div class="lib-form-field" id="grinderFormZeroPointField" style="display:none">
+                                <label data-i18n="lib_grinder_zero_point">Nullpunkt</label>
+                                <input type="number" step="0.1" id="grinderFormZeroPoint">
+                                <div class="lib-form-hint" data-i18n="lib_grinder_zero_point_hint">Nach dem Reinigen: Nullpunkt hier aktualisieren, statt jedes Rezept anzupassen. Vorschläge/Vergleiche rechnen automatisch um.</div>
+                                <label data-i18n="lib_grinder_zero_point_since" style="margin-top:0.5rem">Aktiv seit (leer = jetzt)</label>
+                                <input type="date" id="grinderFormZeroPointSince">
+                                <div id="grinderFormZeroPointHistory"></div>
+                            </div>
                         </div>
                         <div class="lib-form-actions">
                             <button class="lib-btn-sm" id="closeGrinderFormBtn" data-i18n="lib_cancel">Abbrechen</button>
@@ -1502,7 +1510,7 @@
         </div>
         <!-- Shown once the session holds a token (default: any caller that can
              reach the port, #533), OR when it doesn't because expose_api_port
-             is off and this session isn't Ingress (#803) -- see main.js's
+             is off and this session isn't Ingress (#803) -- see main.ts's
              renderApiTokenCard() for which of the two states is displayed. -->
         <div class="settings-card" id="apiTokenCard" style="display:none">
             <h3 class="settings-card-title" data-i18n="settings_api_token">API Token</h3>
@@ -1608,6 +1616,6 @@
     </div>
 </div>
 
-<script type="module" src="./main.js"></script>
+<script type="module" src="./main.ts"></script>
 </body>
 </html>

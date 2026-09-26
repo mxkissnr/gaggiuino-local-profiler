@@ -1,0 +1,1132 @@
+import Chart from 'chart.js/auto';
+import { S, filterShotsByMachine }                            from '../../state/index.js';
+import * as chartRegistry                                     from '../../state/charts.js';
+import { t }                                                  from '../../i18n.js';
+import { isApiPortBlocked }                                   from '../../api/transport.js';
+import { listShots, listShotsDump, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShotCard } from '../../api/shots.js';
+import { fetchMachineProfilesResponse, fetchMachineProfileResponse } from '../../api/machines.js';
+import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges } from '../../constants.js';
+import {
+  esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
+  stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob,
+  chartColors
+} from '../../utils.js';
+import { renderSidebar }                                      from '../../components/sidebar.js';
+import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
+import { calcShotScore, shotUsedBeanTarget, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
+import { mapShotDatapoints } from '../../utils.js';
+import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve, primeCurve } from '../../shot-curves.js';
+import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
+import { renderAnnotationPanel }                              from './annotation.js';
+import { updatePQChart }                                      from './charts.js';
+import { updateMachineBanner, updateOnboardingPanel }          from '../../components/onboarding.js';
+import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.js';
+import { loadShotImageBlobUrl }                               from '../../bean-image.js';
+import { openLightbox }                                       from '../../components/lightbox.js';
+import type { ShotMeta } from '../../state/index.js';
+import type { ShotDatapoints, ShotSeries } from '../../utils.js';
+import type { ChartConfiguration } from 'chart.js';
+
+// state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
+// an index signature); this view reads the annotation/curve fields, so these
+// local aliases name them — same pattern as views/shots/utils.ts and
+// views/shots/annotation.ts.
+interface ShotAnnotationData {
+  rating?: number | null;
+  coffee?: string | null;
+  beanId?: number | null;
+  basketId?: number | null;
+  puckScreenId?: number | null;
+  grinder?: string | null;
+  grindSetting?: string | number | null;
+  dose?: number | null;
+  tds?: number | null;
+  notes?: string | null;
+  drinkType?: string | null;
+  milkType?: number | string | null;
+  recipeId?: number | null;
+  frozenPortionId?: number | null;
+  roastDate?: string | null;
+  beanAgeDays?: number | null;
+  orderedBy?: { customer?: string; item?: string; variant?: string; note?: string } | null;
+}
+
+interface ShotRow extends ShotMeta {
+  profileName?: string | null;
+  profile?: { name?: string | null; phases?: unknown[]; [key: string]: unknown } | null;
+  nativeId?: number | null;
+  duration?: number | null;
+  score?: number | null;
+  image?: string | null;
+  glpFirmwareVersion?: string | null;
+  trashedAt?: number;
+  hasChartData?: boolean;
+  usedBeanTarget?: boolean;
+  datapoints?: ShotDatapoints;
+  annotation?: ShotAnnotationData | null;
+}
+
+// fetchShotsPage()'s normalised page: either a page of rows, or a transport
+// error code the callers surface (#957's Node-backend 404 fallback included).
+interface ShotsPage { shots?: ShotRow[]; nextCursor?: string | null; hasMore?: boolean; error?: number }
+
+type GmPhaseRanges = ReturnType<typeof buildGmPhaseRanges>;
+
+interface GmPhasesOption {
+  preinfusion?: number;
+  extraction?: number;
+  gaggimatePhases?: GmPhaseRanges;
+}
+
+// ── Data loading ──────────────────────────────────────────────────────────
+
+// Guards against overlapping calls (loadData() is fired unawaited from at
+// least 6 independent triggers — main.js init, the reload-data button, live.js's
+// post-brew setTimeout, status.js, sidebar.js, onboarding.js — with no
+// coordination between them): a monotonic token is captured before the fetch
+// and only the call that is still the latest one when its response lands is
+// allowed to write state, same pattern as loadMachineProfileList() in
+// library-profile-editor.js (#521, #644).
+let _loadDataReqToken = 0;
+
+// GaggiMate phase-name lookup cache, keyed by `${machineId}:${profileName}`.
+// Invalidated by invalidateGmPhaseCache() after a profile save.
+const _gmPhaseCache = new Map<string, GmPhaseRanges>();
+
+// state/index.ts types shot rows as metadata-only ShotMeta; this view reads the
+// annotation/curve/profile fields, so the row arrays are re-typed once here
+// instead of at every read (same convention as views/shots/annotation.ts).
+function _shots(): ShotRow[] { return S.shots; }
+
+// getElementById() returns HTMLElement|null and every id in this view is a
+// static element from index.html, so it is asserted once here rather than at
+// each of the ~40 lookups (the genuinely optional elements — trash section,
+// shot photo, fw badge — still keep their own `if (el)` guards).
+const _el = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
+
+// CoffeeLibrary (state/index.ts) only declares beans/grinders; loadLibrary()
+// adds the basket/puck-screen collections this file reads for export labels.
+function _libCollection(name: string): Record<string, unknown>[] | undefined {
+  return (S.coffeeLibrary as unknown as Record<string, Record<string, unknown>[]>)[name];
+}
+
+export function invalidateGmPhaseCache(machineId: number): void {
+  const prefix = `${machineId}:`;
+  for (const key of _gmPhaseCache.keys()) {
+    if (key.startsWith(prefix)) _gmPhaseCache.delete(key);
+  }
+}
+
+// GaggiMate only serves one WS request at a time — an overlapping call
+// (e.g. the live-status poll) can 503 even though the machine is fine.
+// Retries up to 3x; a real 4xx/other 5xx returns immediately.
+async function _fetchWithRetry(fetcher: (signal: AbortSignal) => Promise<Response>, signal: AbortSignal) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const r = await fetcher(signal);
+      if (r.ok || r.status < 500 || attempt === 3) return r;
+    } catch (e) {
+      if (attempt === 3 || signal?.aborted) throw e;
+    }
+    await new Promise(res => setTimeout(res, 400 * attempt));
+  }
+}
+
+// Resolves shotA's named GaggiMate profile phases, cache-first. Null on any
+// miss/failure — callers treat that as "no enhancement", not an error.
+async function _loadGmPhases(shotA: ShotRow, token: number): Promise<GmPhaseRanges | null> {
+  const mid = shotA.machineId as number;
+  const cacheKey = `${mid}:${shotA.profileName}`;
+  if (_gmPhaseCache.has(cacheKey)) return _gmPhaseCache.get(cacheKey) ?? null;
+
+  let gmPhases = null;
+  try {
+    const r1 = (await _fetchWithRetry(signal => fetchMachineProfilesResponse(mid, signal), AbortSignal.timeout(6000)))!;
+    const { optionsRaw: profiles = [] } = (r1.ok && token === _updateViewToken ? await r1.json() : {}) as { optionsRaw?: { name?: string | null; id?: number }[] };
+    const match = profiles.find(p => p.name === shotA.profileName || p.id === shotA.profileName);
+    const r2 = match && (await _fetchWithRetry(signal => fetchMachineProfileResponse(match.id as number, mid, signal), AbortSignal.timeout(6000)))!;
+    const prof = (r2?.ok ? await r2.json() : null) as { phases?: Parameters<typeof buildGmPhaseRanges>[0] } | null;
+    if (prof?.phases?.length) gmPhases = buildGmPhaseRanges(prof.phases);
+  } catch (e) {
+    console.warn('[GLP] GaggiMate phase-name lookup failed:', e);
+  }
+  if (gmPhases) _gmPhaseCache.set(cacheKey, gmPhases); // only cache a hit — don't stick a transient failure
+  return gmPhases;
+}
+
+// #635: baskets/puck screens are pure ID-based library selections (see
+// annotation.js's _renderBasketSelect/_renderPuckScreenSelect) — this
+// resolves an annotation's basketId/puckScreenId to the current library
+// entry's name for display/export, the same way ann.coffee already carries
+// the bean's name directly (no lookup needed there since beans store the
+// name on the annotation itself).
+export function _equipmentName(list: Record<string, unknown>[] | null | undefined, id: number | null | undefined): string | null {
+  if (id == null) return null;
+  return ((list || []).find(e => e.id === id)?.name as string | undefined) || null;
+}
+
+// #957: GET /api/shots is keyset-paginated and metadata-only (no curve
+// blobs). loadData() paints from page 1; loadAllShotMeta() then walks every
+// following page in the background so S.allShots ends up holding the full
+// shot-metadata history the non-visual consumers (analytics, dial-in
+// wizards, per-machine counts, findPreviousShot) still expect. Curve data is
+// fetched per shot on demand via shot-curves.js.
+const SHOTS_PAGE_LIMIT = 60;
+
+// #969: renderSidebar() rebuilds a DOM wrapper for every visible shot, so
+// calling it after every page of loadAllShotMeta()'s background walk made a
+// large history (e.g. 15k shots / 250 pages) effectively O(n^2) in render
+// work. Rebuild at most once per this interval during the walk instead.
+const RENDER_THROTTLE_MS = 400;
+
+// #957: GET /api/shots is Go-only. The shared frontend also runs against the
+// (frozen, bugfix-only) Node backend during the migration, which serves the
+// old full /shots.json dump and no paginated route — so on a 404 we fall
+// back to that dump, seeding the curve cache from the datapoints it carries
+// so the lazy per-shot loader is a pure cache hit there. `trash` toggles the
+// trashed list on either backend. Returns a normalised page:
+// { shots: <newest-first, metadata-only>, nextCursor, hasMore }.
+async function fetchShotsPage({ cursor = null, trash = false }: { cursor?: string | null; trash?: boolean } = {}): Promise<ShotsPage> {
+  const r = await listShots({ limit: SHOTS_PAGE_LIMIT, cursor, trash });
+  if (r.status === 404) {
+    const fb = await listShotsDump({ trash });
+    if (!fb.ok) return { error: fb.status };
+    const dump = await fb.json() as unknown;     // full ASC array, datapoints inline
+    const shots = (Array.isArray(dump) ? dump : []) as ShotRow[];
+    for (const s of shots) {
+      if (s && s.datapoints) {
+        // Seed the curve cache so the lazy per-shot loader is a pure cache
+        // hit on Node. The row keeps its datapoints (Node's existing shape),
+        // so the metadata-only readers just ignore the extra key.
+        primeCurve(s.id, s.datapoints);
+        s.hasChartData = (s.datapoints.timeInShot?.length || s.datapoints.pressure?.length || 0) > 0;
+      }
+    }
+    shots.reverse();                            // normalise to newest-first
+    return { shots, nextCursor: null, hasMore: false };
+  }
+  if (!r.ok) return { error: r.status };
+  const page = await r.json() as { shots?: ShotRow[]; nextCursor?: string | null; hasMore?: boolean };
+  return { shots: page.shots || [], nextCursor: page.nextCursor ?? null, hasMore: !!page.hasMore };
+}
+
+export async function loadData(): Promise<void> {
+  const token = ++_loadDataReqToken;
+  const shotsEl = _el('shots');
+  shotsEl.innerHTML = `<div class="loading-state">${t('loading')}</div>`;
+
+  let fetched;
+  try {
+    const page = await fetchShotsPage();
+    if (token !== _loadDataReqToken) return;
+    if (page.error != null) {
+      // #807: Shots is the landing view, so a session that arrived on the
+      // direct port with expose_api_port off sees this 401 before it ever
+      // sees the Settings card that explains it. Everything needed to
+      // explain it is already client-side (see isApiPortBlocked), so say it
+      // here instead of showing a bare status code.
+      shotsEl.innerHTML = isApiPortBlocked(page.error)
+        ? apiPortClosedHtml()
+        : `<div class="loading-state" style="color:#ef4444">HTTP ${page.error}</div>`;
+      return;
+    }
+    fetched = [...(page.shots || [])].reverse(); // page is newest-first; keep S.allShots oldest-first
+    S.shotsPageCursor = page.hasMore ? (page.nextCursor ?? null) : null;
+    S.shotsHasMore    = !!page.hasMore;
+    S.allShotsLoaded  = !page.hasMore;
+  } catch {
+    if (token !== _loadDataReqToken) return;
+    shotsEl.innerHTML =
+      // #814: was a hardcoded #ef4444 (the pre-redesign err value) and an
+      // untranslated German string in an otherwise six-language app.
+      `<div class="loading-state" style="color:var(--err)">${t('conn_error')}<br>` +
+      // #814: was inline dark-theme neutrals (rgba(63,63,70,.5) fill, #a1a1aa
+      // text, #3f3f46 border) that never inverted. .export-btn is the same
+      // "fill, no persistent border" button this was hand-rolling.
+      `<button data-action="reload-data" class="export-btn" style="margin-top:var(--sp-3)">${t('btn_reload')}</button></div>`;
+    return;
+  }
+
+  // Multi-machine filtering (#325): S.allShots is the true unfiltered
+  // fetch; S.shots (what every existing view already reads) becomes the
+  // machine-filtered projection, re-derived whenever the active machine
+  // changes (see applyActiveMachineChange() in components/machines-settings.js).
+  S.allShots = fetched;
+  S.shots = filterShotsByMachine(fetched, S.activeMachineId);
+  renderSidebar();
+  void loadTrashData();
+
+  const empty     = _el('empty-state');
+  const chartArea = _el('chart-area');
+  if (S.shots.length > 0) {
+    empty.style.display     = 'none';
+    chartArea.style.display = 'flex';
+    const savedCompare = parseInt(localStorage.getItem('glp_compareShotId') as string);
+    // #431: the mobile Shots tab now opens straight to a shot's detail (no
+    // list step in between), so the initial selection needs to actually
+    // honor the last-selected shot (persisted on every selection, see
+    // selectShot()/the sidebar row click handler) rather than always
+    // resetting to the newest one.
+    const savedPrimary = parseInt(localStorage.getItem('glp_primaryShotId') as string);
+    S.primaryShotId = (savedPrimary && S.shots.find(s => s.id === savedPrimary))
+      ? savedPrimary
+      : S.shots[S.shots.length - 1].id;
+    if (savedCompare && S.shots.find(s => s.id === savedCompare) && savedCompare !== S.primaryShotId) {
+      S.compareShotId = savedCompare;
+    }
+    void updateView();
+  } else {
+    empty.style.display     = 'flex';
+    chartArea.style.display = 'none';
+  }
+  updateOnboardingPanel();
+  // Re-evaluate the machine-unreachable banner as soon as shots finish loading,
+  // instead of waiting for the next 30s updateStatus() poll (#288).
+  updateMachineBanner();
+
+  // Background: pull every remaining page of shot metadata so S.allShots
+  // holds the full history for analytics / dial-in wizards / per-machine
+  // counts / findPreviousShot, without blocking first paint.
+  void loadAllShotMeta(token, S.shotsPageCursor);
+}
+
+// loadAllShotMeta walks api/shots page by page (oldest direction) from
+// startCursor until the server reports no more, concatenating each page into
+// S.allShots and re-deriving S.shots. Guarded by the same _loadDataReqToken
+// as loadData, so a newer loadData() abandons a superseded walk. The loop is
+// driven entirely by the local `cursor` (never re-read from S across an
+// await), and every S write takes its value from the just-fetched page, so
+// there is no read-then-write race on S.
+let _metaWalkActive = false;
+
+export async function loadAllShotMeta(token: number, startCursor: string | null): Promise<void> {
+  if (_metaWalkActive) return;
+  _metaWalkActive = true;
+  let cursor = startCursor;
+  let done = false;
+  // #969: per-page state (S.allShots/S.shots/S.shotsPageCursor/S.shotsHasMore)
+  // still updates every page — cheap. Only the DOM rebuild is throttled;
+  // renderedSinceStart tracks whether the trailing render below has anything
+  // new to paint at all (a superseded/errored walk that never got a page
+  // shouldn't render).
+  let lastRenderAt = 0;
+  let renderedSinceStart = false;
+  try {
+    while (cursor && token === _loadDataReqToken) {
+      let page: ShotsPage;
+      try {
+        page = await fetchShotsPage({ cursor });
+      } catch { return; }
+      if (token !== _loadDataReqToken) return;
+      if (page.error != null) break;
+
+      // Each page is newest-first and older than everything already loaded —
+      // reverse it to oldest-first and prepend.
+      const merged = [...[...(page.shots || [])].reverse(), ...S.allShots];
+      cursor = page.hasMore ? (page.nextCursor ?? null) : null;
+      done = !page.hasMore;
+      S.allShots        = merged;
+      S.shots           = filterShotsByMachine(merged, S.activeMachineId);
+      S.shotsPageCursor = cursor;
+      S.shotsHasMore    = !!page.hasMore;
+      renderedSinceStart = true;
+      const now = Date.now();
+      if (now - lastRenderAt >= RENDER_THROTTLE_MS) {
+        renderSidebar();
+        lastRenderAt = now;
+      }
+    }
+    if (token === _loadDataReqToken && done) {
+      S.shotsHasMore   = false;
+      S.allShotsLoaded = true;
+      // Analytics gates its builders on S.allShotsLoaded — let it re-run now
+      // that the full history is in memory.
+      window.onAllShotMetaLoaded?.();
+    }
+  } finally {
+    // single-flight guard; last-writer-wins reset is correct once no walk is in flight (same pattern as status.js triggerSync)
+    _metaWalkActive = false;
+    // #969: a trailing render covers both the throttle window swallowing the
+    // final page's paint, and the loop exiting early (superseded token or a
+    // fetch error) after it already mutated S.allShots/S.shots — but only
+    // when there's something new to show and this token is still current
+    // (a loadData() that superseded this walk owns the next render instead).
+    if (renderedSinceStart && token === _loadDataReqToken) renderSidebar();
+  }
+}
+
+// loadMoreShots pulls the next page on demand (sidebar infinite scroll). No-op
+// once the background walk has already loaded everything.
+export async function loadMoreShots(): Promise<void> {
+  if (!S.shotsHasMore || !S.shotsPageCursor) return;
+  await loadAllShotMeta(_loadDataReqToken, S.shotsPageCursor);
+}
+
+// ── Trash ─────────────────────────────────────────────────────────────────
+
+export async function loadTrashData(): Promise<void> {
+  try {
+    // The trash TTL is 30 days, so a single page is plenty in practice. On
+    // the Node backend this falls back to shots.json?trash=1 (#957).
+    const page = await fetchShotsPage({ trash: true });
+    if (page.error != null) return;
+    S.trashedShots = page.shots || [];
+    renderTrash();
+  } catch { /* ignore */ }
+}
+
+export function renderTrash(): void {
+  const section = _el('trash-section');
+  const countEl = _el('trash-count');
+  const listEl  = _el('trash-list');
+  const count   = S.trashedShots.length;
+
+  section.style.display = count > 0 ? 'block' : 'none';
+  countEl.textContent   = String(count);
+
+  listEl.innerHTML = '';
+  const now = Date.now();
+  (S.trashedShots as ShotRow[]).forEach(shot => {
+    const daysLeft = Math.max(0, 30 - Math.floor((now - (shot.trashedAt as number)) / 86400000));
+    const name = shot.profile?.name || shot.profileName || `Shot ${shot.id}`;
+    const row  = document.createElement('div');
+    row.className = 'trash-item';
+    // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
+    row.innerHTML = `
+      <div class="trash-item-info">
+        <div class="trash-item-name">${esc(name)}</div>
+        <div class="trash-item-days">Shot ${shot.id} · ${t('trash_days_left', daysLeft)}</div>
+      </div>
+      <button class="trash-restore-btn" data-action="restore-shot" data-id="${shot.id}">${t('trash_restore_label')}</button>
+      <button class="trash-delete-btn" title="${t('trash_delete_title')}" data-action="perm-delete-shot" data-id="${shot.id}"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
+    `;
+    listEl.appendChild(row);
+  });
+}
+
+export function toggleTrash(): void {
+  S.trashOpen = !S.trashOpen;
+  _el('trash-list').style.display = S.trashOpen ? 'block' : 'none';
+}
+
+export async function trashShot(id: number): Promise<void> {
+  try {
+    const r = await sendShotToTrash(id);
+    if (!r.ok) throw new Error(await r.text());
+    evictCurve(id);
+    S.shots = S.shots.filter(s => s.id !== id);
+    S.allShots = (S.allShots || []).filter(s => s.id !== id);
+    if (S.primaryShotId === id) {
+      S.primaryShotId = S.shots[0]?.id || null;
+      if (S.primaryShotId) localStorage.setItem('glp_primaryShotId', String(S.primaryShotId));
+      else localStorage.removeItem('glp_primaryShotId');
+    }
+    if (S.compareShotId === id) {
+      S.compareShotId = null;
+      localStorage.removeItem('glp_compareShotId');
+    }
+    renderSidebar();
+    void updateView();
+    await loadTrashData();
+  } catch (e) {
+    alert(t('error_generic', (e as Error).message));
+  }
+}
+
+export async function restoreShot(id: number): Promise<void> {
+  try {
+    const r = await restoreShotFromTrash(id);
+    if (!r.ok) throw new Error(await r.text());
+    await loadData();
+  } catch (e) {
+    alert(t('error_generic', (e as Error).message));
+  }
+}
+
+export async function permanentDeleteShot(id: number): Promise<void> {
+  if (!confirm(t('confirm_perm_delete', id))) return;
+  try {
+    const r = await deleteShotPermanently(id);
+    if (!r.ok) throw new Error(await r.text());
+    evictCurve(id);
+    S.trashedShots = S.trashedShots.filter(s => s.id !== id);
+    renderTrash();
+  } catch (e) {
+    alert(t('error_generic', (e as Error).message));
+  }
+}
+
+// ── Main view ─────────────────────────────────────────────────────────────
+
+// Shared setter for the #402 delta-chip spans (verdict score + process-zone
+// metrics): hides the chip entirely when there's nothing to compare against,
+// never shows an empty pill.
+function _setDeltaChip(id: string, delta: number | null, decimals = 0, unit = '', colorClass: string | null = null, title = ''): void {
+  const el = _el(id);
+  if (!el) return;
+  if (delta == null) { el.style.display = 'none'; return; }
+  el.textContent = formatDelta(delta, decimals, unit);
+  el.className   = 'delta-chip' + (colorClass ? ` ${colorClass}` : '');
+  el.title       = title;
+  el.style.display = '';
+}
+
+let _updateViewToken = 0;
+
+// Set per updateView() call — lets the async GaggiMate-phases callback
+// rebuild the chart once gmPhases lands (see below for why rebuild, not mutate).
+let _buildShotChart: ((phasesOpt: GmPhasesOption) => void) | null = null;
+
+export async function updateView(): Promise<void> {
+  // #814: resolved per render, never at module load — the value has to be
+  // whatever the ACTIVE theme resolves to right now.
+  const C = chartColors();
+  const shotA = _shots().find(s => s.id === S.primaryShotId);
+  const shotB = S.compareShotId ? _shots().find(s => s.id === S.compareShotId) : null;
+  if (!shotA) return;
+
+  // Same-profile auto-compare (#402): most recent earlier shot with the same
+  // profile on the same machine. Only meaningful outside A/B compare mode —
+  // that feature stays untouched and unrelated to this same-profile pairing.
+  const previousShot = (!shotB ? findPreviousShot(_shots(), shotA) : null) as ShotRow | null;
+
+  // #957: curve data is lazy per shot now. Fetch the ones this render needs
+  // (A, the B comparand, the previous same-profile shot for the ghost curve)
+  // before building anything that reads a sample series. A newer updateView()
+  // call supersedes this one via the token guard.
+  const token = ++_updateViewToken;
+  await ensureCurves([shotA.id, shotB && shotB.id, previousShot && previousShot.id].filter(Boolean));
+  if (token !== _updateViewToken) return;
+
+  const dA    = getCachedShotData(shotA.id) || mapShotDatapoints({});
+  const dB    = shotB ? (getCachedShotData(shotB.id) || mapShotDatapoints({})) : null;
+  const dPrev = previousShot ? (getCachedShotData(previousShot.id) || mapShotDatapoints({})) : null;
+  const rawA  = getRawCurve(shotA.id) || {};
+  const rawB  = shotB ? (getRawCurve(shotB.id) || {}) : {};
+
+  const maxTempA = max((rawA.temperature || []).map(v => v / 10)) || 0;
+  const maxTempB = shotB ? (max((rawB.temperature || []).map(v => v / 10)) || 0) : 0;
+  const tempMaxScale = Math.ceil(Math.max(maxTempA, maxTempB) + 5) || 100;
+
+  const nameA = shotA.profile?.name || shotA.profileName || t('profile_unknown');
+  // Shot N always shows the machine's own native shot number (#359), never
+  // the synthetic global id (machineId * 10,000,000 + nativeId) used
+  // internally so multi-machine shots never collide — that raw id would be
+  // confusing to show ("Shot 20000003") when the machine name is already
+  // in the subtitle. nativeId falls back to id for older cached shots.
+  if (shotB) {
+    _el('topTitle').innerText = t('compare_title', shotA.nativeId ?? shotA.id, shotB.nativeId ?? shotB.id);
+  } else {
+    _el('topTitle').innerText = `${nameA} – Shot ${shotA.nativeId ?? shotA.id}`;
+  }
+
+  // machineSubtitle (#344): make it reflect the machine that actually owns
+  // the shot being viewed, not the global default machine from status.js's
+  // periodic poll — see that file's updateStatus() for the corresponding
+  // guard (`!S.primaryShotId`) that keeps it from clobbering this back.
+  // In compare mode there's no single "owning" machine worth naming, so it
+  // shows the two profile names being compared instead (#398 dropped the
+  // separate "Profil" meta row that used to carry this).
+  const subtitleEl = _el('machineSubtitle');
+  if (subtitleEl) {
+    if (shotB) {
+      const nameB = shotB.profile?.name || shotB.profileName || t('profile_unknown');
+      subtitleEl.textContent = `${nameA} vs. ${nameB}`;
+    } else {
+      const machine = S.machines?.find(m => m.id === (shotA.machineId ?? 1));
+      if (machine) subtitleEl.textContent = machine.host ? `${machine.name as string} · ${machine.host as string}` : machine.name as string;
+    }
+  }
+
+  const totalSecs = (shotA.duration || 0) / 10;
+  _el('duration').innerText = formatTimeLabel(totalSecs);
+
+  const pressureVals  = dA.pressure.map(p => p.y);
+  const pressureTimes = dA.pressure.map(p => p.x);
+  const avgPressure   = avgActive(pressureVals, 1.5);
+  _el('pressure').innerText       = fmt(avgPressure, ' bar');
+  _el('targetPressure').innerText = ` / ${fmt(max(dA.targetPressure.map(p => p.y)), ' bar')}`;
+  const avgFlow = avgActive(dA.flow.map(p => p.y), 0.2);
+  _el('flow').innerText           = fmt(avgFlow, ' ml/s');
+  _el('targetFlow').innerText     = ` / ${fmt(avgActive(dA.targetFlow.map(p => p.y), 0.2), ' ml/s')}`;
+
+  const tempVals = dA.temp.map(p => p.y);
+  const sdTemp   = stddev(tempVals);
+  const avgTemp  = avg(tempVals);
+  _el('temp').innerText             = fmt(avgTemp, ' °C');
+  _el('tempStability').textContent  = (sdTemp != null && sdTemp < 5) ? `±${sdTemp.toFixed(1)}` : '';
+  _el('targetTemp').innerText       = ` / ${fmt(avg(dA.targetTemp.map(p => p.y)), ' °C')}`;
+
+  // Process-zone delta chips (#402): signed vs. the previous same-profile
+  // shot's own average — no quality judgment implied, so no score coloring.
+  if (dPrev && previousShot) {
+    const prevTitle = t('delta_vs_shot', previousShot.nativeId ?? previousShot.id);
+    _setDeltaChip('pressureDeltaChip', avgPressure != null ? avgPressure - (avgActive(dPrev.pressure.map(p => p.y), 1.5) ?? 0) : null, 1, ' bar', null, prevTitle);
+    _setDeltaChip('flowDeltaChip',     avgFlow     != null ? avgFlow     - (avgActive(dPrev.flow.map(p => p.y), 0.2) ?? 0)     : null, 1, ' ml/s', null, prevTitle);
+    _setDeltaChip('tempDeltaChip',     avgTemp     != null ? avgTemp     - (avg(dPrev.temp.map(p => p.y)) ?? 0)                : null, 1, ' °C', null, prevTitle);
+  } else {
+    _setDeltaChip('pressureDeltaChip', null);
+    _setDeltaChip('flowDeltaChip', null);
+    _setDeltaChip('tempDeltaChip', null);
+  }
+
+  const finalWeight = max(dA.weight.map(p => p.y));
+  const ann         = shotA.annotation || {};
+
+  // Recipe zone (#398): dose -> yield + ratio (with EY as a sub-value) —
+  // both derived from the same dose/finalWeight pair, so they share one
+  // visibility condition (matches the old ratioItem/eyItem gating).
+  const doseYieldCard = _el('doseYieldCard');
+  const ratioCard     = _el('ratioCard');
+  if (ann.dose && finalWeight && !shotB) {
+    _el('doseYieldVal').textContent = `${fmt(parseFloat(String(ann.dose)), ' g')} → ${fmt(finalWeight, ' g')}`;
+    doseYieldCard.style.display = '';
+
+    const r = (finalWeight / ann.dose).toFixed(1);
+    _el('ratioVal').textContent = `1:${r}`;
+    const eySub = _el('eySub');
+    if (ann.tds) {
+      const ey   = (finalWeight * ann.tds) / ann.dose;
+      const eyOk = ey >= 18 && ey <= 22;
+      eySub.textContent = `EY ${ey.toFixed(1)} %`;
+      eySub.className   = 'recipe-card-sub ' + (eyOk ? 'score-great' : ey >= 16 && ey <= 24 ? 'score-ok' : 'score-bad');
+    } else {
+      eySub.textContent = '';
+      eySub.className   = 'recipe-card-sub';
+    }
+    ratioCard.style.display = '';
+  } else {
+    doseYieldCard.style.display = 'none';
+    ratioCard.style.display     = 'none';
+  }
+
+  // Bean + grinder + grind setting (#429) — the shot's own annotation,
+  // shown regardless of compare mode. #838: when this is the newest shot for
+  // its bean and a previous grind setting is on record, the baseline is
+  // folded straight into this label ("Mahlgrad X (zuletzt Y)") instead of
+  // a separate chip — one place to look instead of two.
+  const grinderLabel = buildGrinderGrindLabel(_shots(), shotA, !shotB, t);
+  _el('beanVal').textContent    = ann.coffee || '–';
+  _el('grinderVal').textContent = grinderLabel || '–';
+
+  // Freshness badge
+  const freshEl   = _el('freshnessBadge');
+  const ageAtShot = ann.beanAgeDays != null ? ann.beanAgeDays
+    : (!shotB && ann.roastDate && ann.coffee)
+      ? Math.round((Date.now() - new Date(ann.roastDate).getTime()) / 86400000)
+      : null;
+  if (ageAtShot != null && ageAtShot >= 0 && ageAtShot <= 365) {
+    const cls = ageAtShot <= 21 ? 'freshness-fresh' : ageAtShot <= 35 ? 'freshness-ok' : 'freshness-old';
+    freshEl.className   = `freshness-badge ${cls}`;
+    freshEl.textContent = ann.beanAgeDays != null ? t('bean_age_badge', ageAtShot) : `${ageAtShot}d`;
+    freshEl.title       = ann.beanAgeDays != null ? t('bean_age_at_shot', ageAtShot) : t('freshness_title', ageAtShot);
+    freshEl.style.display = '';
+  } else { freshEl.style.display = 'none'; }
+
+  // Firmware version badge
+  const fwEl = _el('firmwareVersionBadge');
+  if (fwEl) {
+    const fw = !shotB && shotA.glpFirmwareVersion;
+    fwEl.textContent = fw ? `· fw ${fw}` : '';
+    fwEl.style.display = fw ? '' : 'none';
+  }
+
+  // Shot photo (#448, #850): reuses the same image the annotation panel
+  // uploads/shows (_renderShotPhoto() in annotation.js) — the small circular
+  // thumb fills the empty space next to the machine/freshness line on
+  // mobile, and the large hero panel (floated top-right of #chart-area)
+  // fills the unused desktop space above the chart. Both show the same
+  // photo, fetched once and shared; CSS (see .shot-hero-photo /
+  // .shot-header-thumb) decides which one is visible per breakpoint.
+  const photoThumbEl = _el('shotHeaderThumb') as HTMLImageElement | null;
+  const heroPhotoEl  = _el('shotHeroPhoto') as HTMLImageElement | null;
+  if (photoThumbEl || heroPhotoEl) {
+    if (!shotB && shotA.image) {
+      if (photoThumbEl) {
+        photoThumbEl.style.display = '';
+        photoThumbEl.onclick = () => { if (photoThumbEl.src) openLightbox(photoThumbEl.src); };
+      }
+      if (heroPhotoEl) {
+        heroPhotoEl.classList.add('has-photo');
+        heroPhotoEl.onclick = () => { if (heroPhotoEl.src) openLightbox(heroPhotoEl.src); };
+      }
+      void loadShotImageBlobUrl(shotA.id).then(url => {
+        if (!url) return;
+        if (photoThumbEl) photoThumbEl.src = url;
+        if (heroPhotoEl)  heroPhotoEl.src  = url;
+      });
+    } else {
+      if (photoThumbEl) {
+        photoThumbEl.style.display = 'none';
+        photoThumbEl.removeAttribute('src');
+        photoThumbEl.onclick = null;
+      }
+      if (heroPhotoEl) {
+        heroPhotoEl.classList.remove('has-photo');
+        heroPhotoEl.removeAttribute('src');
+        heroPhotoEl.onclick = null;
+      }
+    }
+  }
+
+  // Phases -> a compact sub-line on the Recipe zone's duration card (#398).
+  // The GaggiMate named-phase lookup below upgrades this later if it lands.
+  const phases    = !shotB ? detectPhases(pressureTimes, pressureVals) : null;
+  const phasesSub = _el('phasesSub');
+  phasesSub.textContent = phases
+    ? `${t('phase_preinfusion')} ${formatTimeLabel(phases.preinfusion)} · ${t('phase_extraction')} ${formatTimeLabel(phases.extraction)}`
+    : '';
+
+  // Channeling
+  const channeling = !shotB && detectChanneling(pressureTimes, pressureVals);
+  _el('channelingWarning').style.display = channeling ? '' : 'none';
+
+  // Verdict header (#398): score + the dial-in advice as one plain-language
+  // line (#816: de-boxed — was a score badge beside a boxed advice line).
+  const verdictHeader = _el('verdictHeader');
+  if (!shotB) {
+    const advice = calcGrindAdvice(shotA, dA);
+    const sc     = calcShotScore(shotA, dA);
+    // #813: the score ring is now type. A 58px conic-gradient ring is a badge
+    // shape the redesign removes on both surfaces (the shot card did the same
+    // in glp-lovelace-card#120) — the number itself, at display size and in
+    // the score colour, carries the same information with none of the chrome.
+    const ringVal  = _el('verdictRingVal');
+    ringVal.style.setProperty('--ring-color', scoreColor(sc));
+    ringVal.textContent = sc !== null ? String(sc) : '–';
+
+    // Score delta chip (#402): same-profile auto-compare, unified score
+    // scale (#397) for the coloring — omitted entirely when there's no
+    // previous same-profile shot or either score is unknown.
+    const prevScore = previousShot ? previousShot.score : null;
+    const verdictDeltaChip = _el('verdictDeltaChip');
+    if (previousShot && sc != null && prevScore != null) {
+      const scoreDelta = sc - prevScore;
+      const cls = scoreDelta > 0 ? 'score-great' : scoreDelta < 0 ? 'score-bad' : 'score-ok';
+      const vsShot = t('delta_vs_shot', previousShot.nativeId ?? previousShot.id);
+      verdictDeltaChip.textContent = `${formatDelta(scoreDelta)} ${vsShot}`;
+      verdictDeltaChip.className   = `delta-chip ${cls}`;
+      verdictDeltaChip.style.display = '';
+    } else {
+      verdictDeltaChip.style.display = 'none';
+    }
+
+    // #457: compact hint icon when the score was weighed against the bean's
+    // own brewTempC/brewRatio recommendation (#450) rather than the generic
+    // fallback band — native title tooltip, no new permanent header text.
+    const beanTargetHint = shotUsedBeanTarget(shotA)
+      ? `<span class="verdict-bean-target-hint" title="${esc(t('verdict_bean_target_hint'))}">${TARGET_ICON_SVG}</span>` : '';
+    _el('verdictHeadline').innerHTML = (advice ? `${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))) + beanTargetHint;
+    // #838: duration and avg pressure dropped — they're already shown once
+    // each, in the Dauer recipe card (incl. phase breakdown) and the
+    // Process-zone pressure card, so repeating them here was pure duplication.
+    // #841: profile name + shot number (topTitle, one element above) and the
+    // bean name (beanVal, in the recipe zone below) were the only
+    // things left in this subline — both already shown elsewhere, so the
+    // subline itself is retired (stays hidden, see index.html/style.css).
+    verdictHeader.style.display = '';
+  } else {
+    verdictHeader.style.display = 'none';
+  }
+
+  const compEl  = _el('grindAdviceComparative');
+  const compAdv = !shotB ? calcComparativeGrindAdvice(shotA, _shots()) : null;
+  if (compEl) {
+    if (compAdv) {
+      const wasOpen = compEl.classList.contains('expanded');
+      compEl.className = `grind-advice grind-comparative grind-${compAdv.type}${wasOpen ? ' expanded' : ''}`;
+      _el('grindAdviceComparativeIcon').innerHTML = compAdv.icon;
+      _el('grindAdviceComparativeText').textContent = compAdv.text;
+
+      // #957: the comparative thumbnails each need their shot's curve — fetch
+      // the handful (typically 1-8) before rendering; _miniShotChart falls
+      // back to a no-data placeholder for any that are still missing.
+      await ensureCurves(compAdv.shots.map(x => x.shot.id));
+      if (token !== _updateViewToken) return;
+
+      const locale   = localeFor(S.currentLang);
+      const listHtml = compAdv.shots.map(({ shot: s, grind, score }) => {
+        const date  = new Date((s.timestamp as number) * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+        const dur   = s.duration ? `${(s.duration / 10).toFixed(0)}s` : '';
+        const cls   = scoreClass(score);
+        const chart = _miniShotChart(s);
+        return `<div class="comp-thumb" data-action="goto-shot" data-id="${s.id}" title="Shot ${s.id} — ${date}">
+          <div class="comp-thumb-chart">${chart}</div>
+          <div class="comp-thumb-meta">
+            <span class="comp-shot-date">${date}</span>
+            <span class="comp-shot-grind">${GEAR_ICON_SVG} ${grind}</span>
+            <span class="comp-shot-score ${cls}">${score}</span>
+            ${dur ? `<span class="comp-shot-dur">${dur}</span>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+
+      let panel = compEl.querySelector('.comp-shots-panel');
+      if (!panel) {
+        panel = document.createElement('div');
+        panel.className = 'comp-shots-panel';
+        compEl.appendChild(panel);
+      }
+      panel.innerHTML = listHtml;
+
+      const toggle = compEl.querySelector('.comp-toggle');
+      if (!toggle) {
+        const btn = document.createElement('button');
+        btn.className = 'comp-toggle';
+        btn.textContent = '▸';
+        btn.dataset.action = 'toggle-comp-grind';
+        compEl.insertBefore(btn, compEl.querySelector('#grindAdviceComparativeIcon'));
+      }
+      compEl.style.display = '';
+    } else {
+      compEl.style.display = 'none';
+    }
+  }
+
+  // Ordered-by info
+  const obEl = _el('orderedByInfo');
+  if (obEl) {
+    const ob = !shotB ? shotA.annotation?.orderedBy : null;
+    if (ob?.customer) {
+      const drink = ob.item ? (ob.variant ? `${ob.item} · ${ob.variant}` : ob.item) : null;
+      obEl.innerHTML =
+        `<span class="ann-ordered-by-label">${COFFEE_ICON_SVG} ${t('ann_ordered_by')}</span>` +
+        `<span class="ann-ordered-by-val">${esc(ob.customer)}${drink ? ` · ${esc(drink)}` : ''}${ob.note ? ` · <em>${esc(ob.note)}</em>` : ''}</span>`;
+      obEl.style.display = '';
+    } else {
+      obEl.style.display = 'none';
+    }
+  }
+
+  renderAnnotationPanel(shotA);
+
+  // Build main chart datasets
+  const maxTimeA    = dA.rawTimes.length > 0 ? dA.rawTimes[dA.rawTimes.length - 1] : 0;
+  const maxTimeB    = dB && dB.rawTimes.length > 0 ? dB.rawTimes[dB.rawTimes.length - 1] : 0;
+  const maxTimePrev = dPrev && dPrev.rawTimes.length > 0 ? dPrev.rawTimes[dPrev.rawTimes.length - 1] : 0;
+
+  const sfx = shotB ? ' (A)' : '';
+  const datasets = [
+    { label:t('chart_pressure')   + sfx, data: dA.pressure,  yAxisID:'y',  borderWidth:2.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
+    { label:t('chart_flow')       + sfx, data: dA.flow,       yAxisID:'y',  borderWidth:2,   tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
+    { label:t('chart_weightflow') + sfx, data: dA.weightFlow, yAxisID:'y',  borderWidth:2,   tension:.1, borderColor:'#9b59b6', backgroundColor:'transparent', pointStyle:false },
+    { label:t(dA.weightIsReal ? 'chart_weight' : 'chart_weight_estimated') + sfx, data: dA.weight, yAxisID:'y1', borderWidth:2,   tension:.1, borderColor:'#2ecc71', backgroundColor:'transparent', pointStyle:false, ...(dA.weightIsReal ? {} : { borderDash:[5,5] }) },
+    { label:t('chart_temp')       + sfx, data: dA.temp,       yAxisID:'y1', borderWidth:2.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
+  ];
+
+  if (!shotB) {
+    datasets.push(
+      { label:t('chart_target_pressure'), data: dA.targetPressure, yAxisID:'y',  borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#3498db', backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_target_flow'),     data: dA.targetFlow,     yAxisID:'y',  borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#f39c12', backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_target_temp'),     data: dA.targetTemp,     yAxisID:'y1', borderDash:[5,5], borderWidth:1.5, tension:.1, borderColor:'#e74c3c', backgroundColor:'transparent', pointStyle:false }
+    );
+  }
+  if (shotB && dB) {
+    datasets.push(
+      { label:t('chart_pressure')   + ' (B)', data: dB.pressure,  yAxisID:'y',  borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(52,152,219,.65)',  backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_flow')       + ' (B)', data: dB.flow,       yAxisID:'y',  borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(243,156,18,.65)',  backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_weightflow') + ' (B)', data: dB.weightFlow, yAxisID:'y',  borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(155,89,182,.65)',  backgroundColor:'transparent', pointStyle:false },
+      { label:t(dB.weightIsReal ? 'chart_weight' : 'chart_weight_estimated') + ' (B)', data: dB.weight, yAxisID:'y1', borderDash:[3,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.65)',  backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_temp')       + ' (B)', data: dB.temp,       yAxisID:'y1', borderDash:[3,3], borderWidth:2,   tension:.1, borderColor:'rgba(231,76,60,.65)',   backgroundColor:'transparent', pointStyle:false }
+    );
+  }
+
+  // Ghost overlay (#402): previous same-profile shot's pressure/flow/weight
+  // curves, dashed + low-opacity, feeding into the chart's existing legend
+  // (dataset label carries the "(Shot N)" suffix so it's self-explanatory).
+  if (dPrev && previousShot) {
+    const ghostSfx = t('chart_prev_suffix', previousShot.nativeId ?? previousShot.id);
+    datasets.push(
+      { label:t('chart_pressure') + ghostSfx, data: dPrev.pressure, yAxisID:'y',  borderDash:[2,3], borderWidth:1.5, tension:.1, borderColor:'rgba(52,152,219,.35)', backgroundColor:'transparent', pointStyle:false },
+      { label:t('chart_flow')     + ghostSfx, data: dPrev.flow,     yAxisID:'y',  borderDash:[2,3], borderWidth:1.5, tension:.1, borderColor:'rgba(243,156,18,.35)', backgroundColor:'transparent', pointStyle:false },
+      { label:t(dPrev.weightIsReal ? 'chart_weight' : 'chart_weight_estimated') + ghostSfx, data: dPrev.weight, yAxisID:'y1', borderDash:[2,3], borderWidth:1.5, tension:.1, borderColor:'rgba(46,204,113,.35)', backgroundColor:'transparent', pointStyle:false }
+    );
+  }
+
+  chartRegistry.dispose('pqChart');
+  if (S.currentChartTab === 'pq') updatePQChart();
+
+  const ctx = _el('espressoShotChart') as HTMLCanvasElement;
+
+  // Rebuild rather than mutate options.plugins.phases in place — Chart.js
+  // doesn't reliably pick up in-place mutation on the next draw.
+  _buildShotChart = (phasesOpt) => {
+    const existing = Chart.getChart(ctx);
+    if (existing) existing.destroy();
+    try {
+      chartRegistry.set('chart', new Chart(ctx, ({
+        type: 'line',
+        plugins: [corsairPlugin, phasePlugin],
+        data: { datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { bottom: 20 } },
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            phases: phasesOpt,
+            legend:  {
+              display: true,
+              position: 'bottom',
+              labels: { color: C.text, font: { family: 'Figtree', size: window.innerWidth <= 600 ? 9 : 11 }, boxWidth: window.innerWidth <= 600 ? 8 : 12, padding: window.innerWidth <= 600 ? 4 : 8 }
+            },
+            tooltip: {
+              callbacks: {
+                title: (ctx: { parsed: { x: number } }[]) => {
+                  const time = ctx[0].parsed.x;
+                  const ph = phasesOpt.gaggimatePhases?.find(p => time >= p.t0 && time <= p.t1);
+                  const timeLabel = t('chart_time', formatTimeLabel(time));
+                  return ph?.name ? `${ph.name} — ${timeLabel}` : timeLabel;
+                },
+              },
+            }
+          },
+          scales: {
+            x:  { type:'linear', min:0, max:Math.max(maxTimeA, maxTimeB, maxTimePrev), clip:false,
+                  ticks:{ color:C.tick, font:{family:'Figtree'}, stepSize:5, callback:(v: number)=>formatTimeLabel(v), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
+                  grid:{ color:C.grid } },
+            y:  { type:'linear', position:'left',  min:0, max:12, ticks:{color:C.tick, maxTicksLimit:6}, grid:{color:C.grid} },
+            y1: { type:'linear', position:'right', min:0, max:Number(tempMaxScale), ticks:{color:C.tick, maxTicksLimit:6}, grid:{drawOnChartArea:false} }
+          }
+        }
+      } as unknown as ChartConfiguration<'line'>)));
+      const builtChart = chartRegistry.get('chart');
+      if (builtChart) clearChartOnTouchEnd(builtChart);
+    } catch (e) {
+      console.error('Chart creation error:', e);
+    }
+  };
+  chartRegistry.dispose('chart');
+  _buildShotChart(phases ? { preinfusion: phases.preinfusion, extraction: phases.extraction } : {});
+
+  // GaggiMate: upgrade sub-line + chart once named phases land. Not awaited;
+  // must stay after _buildShotChart exists (a cache hit can resolve before
+  // it otherwise, since this fn has earlier awaits). Shots have no
+  // machineType of their own, hence the S.machines lookup.
+  const shotMachine = !shotB ? S.machines?.find(m => m.id === (shotA.machineId ?? 1)) : null;
+  if (shotMachine?.type === 'gaggimate' && shotA.machineId) {
+    void _loadGmPhases(shotA, token).then(gmPhases => {
+      if (!gmPhases || token !== _updateViewToken) return;
+      phasesSub.textContent = gmPhases.map(p => p.name).join(' · ');
+      _buildShotChart!({ gaggimatePhases: gmPhases });
+    });
+  }
+}
+
+// ── CSV Export ────────────────────────────────────────────────────────────
+
+// d is the mapped XY curve bundle for this shot (from the curve cache) — the
+// caller fetches it via getShotCurve() first, since list rows no longer carry
+// datapoints (#957).
+function shotToCSVRow(shot: ShotRow, d: ShotSeries): string {
+  const ann    = shot.annotation || {};
+  const avgP   = avgActive(d.pressure.map(p => p.y), 1.5);
+  const finalW = max(d.weight.map(p => p.y));
+  const avgT   = avg(d.temp.map(p => p.y));
+  const secs   = ((shot.duration || 0) / 10).toFixed(1);
+  const ratio  = (ann.dose && finalW) ? `1:${(finalW / ann.dose).toFixed(1)}` : '';
+  const date   = new Date(shot.timestamp * 1000).toLocaleString(localeFor(S.currentLang));
+  return [
+    shot.id, date,
+    shot.profile?.name || shot.profileName || '',
+    secs,
+    avgP   != null ? avgP.toFixed(2)   : '',
+    finalW != null ? finalW.toFixed(1) : '',
+    ann.dose || '', ratio,
+    avgT   != null ? avgT.toFixed(1)   : '',
+    ann.rating || '', ann.coffee || '', ann.grinder || '',
+    ann.grindSetting || '',
+    _equipmentName(_libCollection('baskets'), ann.basketId) || '',
+    _equipmentName(_libCollection('puckScreens'), ann.puckScreenId) || '',
+    (ann.notes || '').replace(/\n/g, ' ')
+  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+}
+
+async function downloadCSV(rows: string[], filename: string): Promise<void> {
+  const header = ['Shot ID','Date','Profile','Duration (s)','Avg Pressure (bar)','Max Weight (g)',
+                  'Dose (g)','Ratio','Avg Temp (C)','Rating','Coffee','Grinder','Grind Setting',
+                  'Basket','Puck Screen','Notes'];
+  const csv  = [header.join(','), ...rows].join('\r\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  await shareOrDownloadBlob(blob, filename, { title: t('export_csv_title') });
+}
+
+export async function exportCSV(): Promise<void> {
+  const shot = _shots().find(s => s.id === S.primaryShotId);
+  if (!shot) return;
+  await getShotCurve(shot.id);
+  const date    = new Date(shot.timestamp * 1000).toISOString().slice(0, 10);
+  const profile = (shot.profile?.name || shot.profileName || 'shot').replace(/[^a-z0-9]/gi, '_');
+  await downloadCSV([shotToCSVRow(shot, getCachedShotData(shot.id) || mapShotDatapoints({}))], `glp_shot_${date}_${profile}.csv`);
+}
+
+export async function exportAllCSV(): Promise<void> {
+  // Rare, explicit user action — pull every shot's curve (bounded concurrency
+  // inside ensureCurves) before building the rows.
+  const list = _shots();
+  await ensureCurves(list.map(s => s.id));
+  await downloadCSV(list.map(s => shotToCSVRow(s, getCachedShotData(s.id) || mapShotDatapoints({}))), 'glp_all_shots.csv');
+}
+
+// ── .shot export ──────────────────────────────────────────────────────────
+
+export async function exportShot(): Promise<void> {
+  const shot = _shots().find(s => s.id === S.primaryShotId);
+  if (!shot) return;
+  const d   = await getShotCurve(shot.id);
+  const ann = shot.annotation || {};
+  const timeArr = d.timeInShot || [];
+
+  const tcl = (arr: unknown[] | null | undefined): string => arr?.length ? `{${arr.map(v => ((v as number) / 10).toFixed(2)).join(' ')}}` : '{}';
+
+  const finalWeight = d.shotWeight || d.weight || [];
+  const lastW = finalWeight.length ? (finalWeight[finalWeight.length - 1] / 10).toFixed(1) : '0.0';
+  const date  = new Date(shot.timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19);
+  const basketName     = _equipmentName(_libCollection('baskets'), ann.basketId);
+  const puckScreenName = _equipmentName(_libCollection('puckScreens'), ann.puckScreenId);
+
+  const lines = [
+    `clock ${shot.timestamp}`,
+    `date ${date}`,
+    `profile_title {${(shot.profile?.name || shot.profileName || 'Unknown').replace(/[{}]/g, '')}}`,
+    ann.coffee       ? `bean_desc {${ann.coffee.replace(/[{}]/g, '')}}` : '',
+    ann.grinder      ? `grinder_model {${ann.grinder.replace(/[{}]/g, '')}}` : '',
+    ann.grindSetting ? `grinder_setting {${(ann.grindSetting as string).replace(/[{}]/g, '')}}` : '',
+    basketName       ? `basket {${basketName.replace(/[{}]/g, '')}}` : '',
+    puckScreenName   ? `puck_screen {${puckScreenName.replace(/[{}]/g, '')}}` : '',
+    ann.dose         ? `bean_weight ${ann.dose}` : '',
+    ann.notes        ? `espresso_notes {${ann.notes.replace(/[{}]/g, '')}}` : '',
+    `espresso_elapsed ${tcl(timeArr)}`,
+    `espresso_pressure ${tcl(d.pressure)}`,
+    `espresso_flow ${tcl(d.pumpFlow)}`,
+    `espresso_weight ${tcl(d.shotWeight || d.weight)}`,
+    `espresso_flow_weight ${tcl(d.weightFlow)}`,
+    `espresso_temperature_goal ${tcl(d.targetTemperature)}`,
+    `espresso_temperature_mix ${tcl(d.temperature)}`,
+    `espresso_water_dispensed ${lastW}`,
+  ].filter(Boolean).join('\n');
+
+  await _downloadJSON_blob(lines, `shot_${shot.id}_${date.slice(0, 10)}.shot`, 'text/plain;charset=utf-8;');
+}
+
+// ── Profile export ────────────────────────────────────────────────────────
+
+export async function exportProfile(): Promise<void> {
+  const shot = _shots().find(s => s.id === S.primaryShotId);
+  if (!shot) return;
+
+  const profile = shot.profile;
+  if (profile && Array.isArray(profile.phases) && profile.phases.length > 0) {
+    const out = JSON.parse(JSON.stringify(profile)) as { recipe?: Record<string, number>; name?: string } & Record<string, unknown>;
+    const ann = shot.annotation || {};
+    if (!out.recipe) out.recipe = {};
+    if (ann.dose) out.recipe.coffeeIn = parseFloat(String(ann.dose));
+    if (!out.recipe.coffeeOut && ann.dose) out.recipe.coffeeOut = parseFloat(String(ann.dose)) * 2;
+    if (out.recipe.coffeeIn && out.recipe.coffeeOut)
+      out.recipe.ratio = Math.round(Number(out.recipe.coffeeOut) / Number(out.recipe.coffeeIn) * 100) / 100;
+    await _downloadJSON(out, (out.name || shot.profileName || `shot_${shot.id}`).replace(/[^a-z0-9_-]/gi, '_') + '.json');
+    return;
+  }
+
+  const d    = await getShotCurve(shot.id);
+  const rawT = d.timeInShot     || [];
+  const rawTP = d.targetPressure || [];
+
+  if (rawT.length === 0 || rawTP.length === 0) {
+    alert(t('profile_export_no_data'));
+    return;
+  }
+
+  const times  = rawT.map(v => v / 10);
+  const tPress = rawTP.map(v => v / 10);
+  const totalMs = Math.round(times[times.length - 1] * 1000);
+  const ann     = shot.annotation || {};
+
+  const PREINF_THRESHOLD = 6;
+  let preinfEndIdx = tPress.findIndex(p => p >= PREINF_THRESHOLD);
+  if (preinfEndIdx < 0) preinfEndIdx = 0;
+  const preinfMs = preinfEndIdx > 0 ? Math.round(times[preinfEndIdx] * 1000) : 0;
+
+  const phases = [];
+  if (preinfMs > 500) {
+    const preinfTarget = Math.round(Math.max(...tPress.slice(0, preinfEndIdx)) * 10) / 10 || 4;
+    phases.push({
+      type: 0,
+      target: { start: 0, end: preinfTarget, curve: 1, time: preinfMs },
+      restriction: 0,
+      stopConditions: { time: preinfMs, pressureAbove: 0, pressureBelow: 0, flowAbove: 0, flowBelow: 0, weight: 0 }
+    });
+  }
+
+  const extractionSlice = tPress.slice(preinfEndIdx || 0);
+  const avgExtraction   = extractionSlice.length
+    ? Math.round(extractionSlice.reduce((a, b) => a + b, 0) / extractionSlice.length * 10) / 10
+    : 9;
+  const extractionMs = totalMs - preinfMs;
+  const yieldG = ann.dose ? parseFloat(String(ann.dose)) * 2 : 36;
+
+  phases.push({
+    type: 0,
+    target: { start: avgExtraction, end: avgExtraction, curve: 0, time: extractionMs },
+    restriction: 0,
+    stopConditions: { time: extractionMs, pressureAbove: 0, pressureBelow: 0, flowAbove: 0, flowBelow: 0, weight: yieldG }
+  });
+
+  const out = {
+    id: shot.id,
+    name: shot.profileName || `Shot ${shot.id}`,
+    phases,
+    globalStopConditions: { time: 0, weight: yieldG, waterPumped: 0 },
+    recipe: {
+      coffeeIn:  ann.dose ? parseFloat(String(ann.dose)) : 18,
+      coffeeOut: yieldG,
+      ratio:     ann.dose ? Math.round(yieldG / parseFloat(String(ann.dose)) * 100) / 100 : 2
+    }
+  };
+  await _downloadJSON(out, (out.name).replace(/[^a-z0-9_-]/gi, '_') + '.json');
+}
+
+async function _downloadJSON(obj: unknown, filename: string): Promise<void> {
+  await _downloadJSON_blob(JSON.stringify(obj, null, 2), filename, 'application/json');
+}
+
+async function _downloadJSON_blob(content: string, filename: string, mime: string): Promise<void> {
+  const blob = new Blob([content], { type: mime });
+  await shareOrDownloadBlob(blob, filename, { title: filename });
+}
+
+// ── Share card ────────────────────────────────────────────────────────────
+
+export async function shareCard(format = 'square'): Promise<void> {
+  const shotId = S.primaryShotId;
+  if (!shotId) return;
+  try {
+    // #462: the card should visually match whatever accent/theme the user
+    // is actually looking at, not a hardcoded snapshot — same attributes
+    // main.js applies to <html> (dataset.accent/dataset.theme), same
+    // defaults ('amber-americano'/'dark', see applyTheme()/_savedAccent in
+    // main.js). #1019: dataset.accent no longer drives any CSS itself (the
+    // [data-accent] rules it used to key are retired), but is still set on
+    // every setAccentTheme() call purely so this stays in sync with the
+    // user's actual Farbschema pick.
+    const accent = document.documentElement.dataset.accent || 'amber-americano';
+    const theme  = document.documentElement.dataset.theme  || 'dark';
+    const r = await getShotCard(shotId, { format, accent, theme });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({})) as { error?: string };
+      throw new Error(err.error || r.statusText);
+    }
+    const blob     = await r.blob();
+    const filename = `glp-shot-${shotId}-${format}.png`;
+    await shareOrDownloadBlob(blob, filename, { title: t('share_card_title'), fallbackOnError: false });
+  } catch (e) {
+    if ((e as Error).name !== 'AbortError') alert(t('error_generic', (e as Error).message));
+  }
+}
+
+// ── Backup / Restore ──────────────────────────────────────────────────────
+
+// Backup export/restore is a modal flow (section picker, passphrase for the
+// encrypted API-token/MQTT block, a dry-run preview before anything is
+// written) — see public-src/components/backup-modal.js, wired directly from
+// main.js's event listeners rather than through this file.

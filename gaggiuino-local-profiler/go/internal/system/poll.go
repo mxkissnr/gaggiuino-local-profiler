@@ -165,6 +165,11 @@ type pollGlobalState struct {
 	lastSyncTime        *string
 	lastSyncError       *string
 	defaultSyncInFlight bool
+	// otherSyncInFlight is syncMachineShots()'s #773 per-machine single-run
+	// guard for non-default machines (syncOtherMachines, #1146), keyed by
+	// machine id — one slot per machine, so a slow backfill on one machine
+	// never blocks another's. Lazy-initialized: nil until the first sync.
+	otherSyncInFlight map[int64]bool
 
 	readyByTargetAt   *int64
 	plannedSwitchOnAt *int64
@@ -364,6 +369,9 @@ func (p *Poller) checkAndApplyMachinePower(ctx context.Context) error {
 	if *isOn {
 		log.Printf("system: machine on -- live polling resumed")
 		p.startLivePolling()
+		// #1153: pull right after the machine comes on, matching Node's
+		// syncSoonAfterPowerOn(), instead of waiting for the next interval.
+		p.scheduleSyncSoonAfterPowerOn()
 	} else {
 		log.Printf("system: machine off -- live polling paused")
 		p.stopLivePolling()
@@ -725,40 +733,52 @@ func zeroToNil(v float64) *float64 {
 	return &v
 }
 
+// statusObject returns the first element when the machine's status body is a
+// JSON array (current Gaggiuino firmware), else the body itself so GaggiMate's
+// object payload keeps working. An empty array falls through to the raw body,
+// which then decodes to no fields.
+func statusObject(raw json.RawMessage) json.RawMessage {
+	var arr []json.RawMessage
+	if err := json.Unmarshal(raw, &arr); err == nil && len(arr) > 0 {
+		return arr[0]
+	}
+	return raw
+}
+
 // rawStatusFrom decodes the two fields machines.Status doesn't already
 // carry (waterLevel/upTime) straight off its Raw JSON — the rest come from
-// Status's own already-parsed fields. hasWaterSensor gates the GaggiMate-
-// specific `wl` field: GaggiMate always sends wl=100 when no ALBA sensor is
-// present, so we only read it when the user has explicitly flagged the machine
-// as having one. Gaggiuino sends `waterLevel` (not `wl`) and has no such
-// ambiguity, so that field is read unconditionally as a fallback.
+// Status's own already-parsed fields. Current Gaggiuino firmware reports its
+// status as a one-element JSON array whose values are strings, so the body is
+// unwrapped before decoding and each field is read tolerantly (#1149).
+// hasWaterSensor gates the GaggiMate-specific `wl` field: GaggiMate always
+// sends wl=100 when no ALBA sensor is present, so we only read it when the user
+// has explicitly flagged the machine as having one. Gaggiuino sends
+// `waterLevel` (not `wl`) and has no such ambiguity, so that field is read
+// unconditionally as a fallback.
 func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
-	var extra struct {
-		WL         json.RawMessage `json:"wl"`
-		WaterLevel json.RawMessage `json:"waterLevel"`
-		UpTime     json.Number     `json:"upTime"`
-	}
-	_ = json.Unmarshal(s.Raw, &extra)
-	upTime, _ := extra.UpTime.Int64()
+	var m map[string]any
+	_ = json.Unmarshal(statusObject(s.Raw), &m)
 
-	parseRawInt := func(raw json.RawMessage) *int {
-		if len(raw) == 0 || string(raw) == "null" {
+	intField := func(key string) *int {
+		v, ok := jsNumberToInt64(m[key])
+		if !ok || v < math.MinInt32 || v > math.MaxInt32 {
 			return nil
 		}
-		var n int64
-		if json.Unmarshal(raw, &n) != nil {
-			return nil
-		}
-		v := int(n)
-		return &v
+		n := int(v)
+		return &n
 	}
 
 	var waterLevel *int
 	if hasWaterSensor {
-		waterLevel = parseRawInt(extra.WL)
+		waterLevel = intField("wl")
 	}
 	if waterLevel == nil {
-		waterLevel = parseRawInt(extra.WaterLevel)
+		waterLevel = intField("waterLevel")
+	}
+
+	upTime := 0
+	if v := intField("upTime"); v != nil {
+		upTime = *v
 	}
 
 	var steamOn bool
@@ -767,7 +787,7 @@ func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
 	}
 	return RawStatus{
 		WaterLevel:        waterLevel,
-		UpTime:            int(upTime),
+		UpTime:            upTime,
 		Brewing:           s.Brewing,
 		Temperature:       s.Temperature,
 		TargetTemperature: s.TargetTemperature,
@@ -799,7 +819,7 @@ func extractVersion(raw json.RawMessage) string {
 		FwVersion       any `json:"fw_version"`
 		BuildDate       any `json:"buildDate"`
 	}
-	if err := json.Unmarshal(raw, &obj); err != nil {
+	if err := json.Unmarshal(statusObject(raw), &obj); err != nil {
 		return ""
 	}
 	for _, v := range []any{obj.SoftwareVersion, obj.Version, obj.Firmware, obj.BuildNumber, obj.FwVersion, obj.BuildDate} {
