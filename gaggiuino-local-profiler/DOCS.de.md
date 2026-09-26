@@ -6,7 +6,7 @@ Lokales Shot-Profiling-Dashboard für [Gaggiuino](https://gaggiuino.github.io/)-
 
 ## Architektur — wie die Komponenten zusammenspielen
 
-Das GLP-Ökosystem (GLP = Gaggiuino Local Profiler) besteht aus vier unabhängigen Teilen, die aufeinander aufbauen:
+Das GLP-Ökosystem (GLP = Gaggiuino Local Profiler) besteht aus zwei installierbaren Teilen — der App und der Integration, die Shot Card und Order Card bündelt —, die aufeinander aufbauen:
 
 ```
   Gaggiuino-Maschine
@@ -31,16 +31,21 @@ Das GLP-Ökosystem (GLP = Gaggiuino Local Profiler) besteht aus vier unabhängig
            │  fragt ab          │  HA Ingress (Browser, authentifiziert)
            │  /api/status       │  Port 8099 direkt (Integration, Karten)
            │  /api/shots        │
-           │  /api/preheat      ├──────────────────────────┐
-           │  /api/maintenance  │                          │
-           │  /api/orders †     │                          │
-           ▼                    │                          │
-  ┌─────────────────────┐  ┌────┴─────────────────┐  ┌────┴─────────────────┐
-  │  GLP HA-Integration │  │  GLP Shot Card       │  │  GLP Order Card      │
-  │  (Custom Component) │─►│  Maschinenstatus,    │  │  Kundenbestellung,   │
-  │  erstellt Sensoren, │  │  letzter Shot,       │  │  Bestellstatus,      │
-  │  feuert HA-Events   │─►│  Aufwärm-Fortschritt │  │  Shot-Zusammenfassung│
-  └─────────────────────┘  └──────────────────────┘  └──────────────────────┘
+           │  /api/preheat      │
+           │  /api/maintenance  │
+           │  /api/orders †     │
+           ▼                    │
+  ┌─────────────────────────────────────────────────────────┐
+  │  GLP HA-Integration  (Custom Component)                 │
+  │  erstellt Sensoren, feuert HA-Events                    │
+  │  bündelt beide Karten, keine separate HACS-Listung      │
+  │  ┌───────────────────────┐   ┌───────────────────────┐  │
+  │  │ GLP Shot Card         │   │ GLP Order Card        │  │
+  │  │ Maschinenstatus,      │   │ Kundenbestellung,     │  │
+  │  │ letzter Shot,         │   │ Bestellstatus,        │  │
+  │  │ Aufwärm-Fortschritt   │   │ Shot-Zusammenfassung  │  │
+  │  └───────────────────────┘   └───────────────────────┘  │
+  └─────────────────────────────────────────────────────────┘
            │          Sensor-Attribute → beide Karten erkennen switch_entity
            ▼
     HA-Sensoren, Automationen, Energie-Monitoring, …
@@ -60,23 +65,21 @@ Ein Custom Component, das die App alle 60 Sekunden abfragt (konfigurierbar). Es 
 
 Installation via HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
 
-### GLP Shot Card
+**Die Integration bündelt die GLP Shot Card und die GLP Order Card** — keine eigene HACS-Listung, kein separater Karten-Download nötig. Beim Installieren/Aktualisieren der Integration über HACS werden beide automatisch als Dashboard-Ressourcen registriert; einfach eine Karte vom Typ `custom:glp-card` oder `custom:glp-order-card` zum Dashboard hinzufügen.
+
+#### Shot Card (gebündelt)
 
 Eine Custom Lovelace-Karte, die Maschinenstatus, letzten Shot, Aufwärm-Fortschritt, einen Power-Button und eine **Profil-Auswahl** anzeigt. Sie kommuniziert direkt mit Port 8099 und liest die `switch_entity` aus dem `machine_status`-Sensor-Attribut (automatisch von der Integration gesetzt) — keine manuelle Konfiguration erforderlich.
 
 Die Profil-Auswahl liest und schreibt `select.gaggiuino_profiler_profile`, bereitgestellt nativ durch die GLP Integration (v1.9.0+). Die Auswahl wird automatisch ausgeblendet wenn die Entität nicht vorhanden ist.
 
-**Ist bereits in [GLP Integration](https://github.com/mxkissnr/glp-integration) enthalten** — keine eigene HACS-Listung, kein separater Karten-Download nötig. Beim Installieren/Aktualisieren der Integration über HACS wird sie automatisch als Dashboard-Ressource registriert; einfach eine Karte vom Typ `custom:glp-card` zum Dashboard hinzufügen.
-
-### GLP Order Card
+#### Order Card (gebündelt)
 
 Eine kunden-seitige Lovelace-Karte für das Bestellsystem. Kunden wählen ein Getränk aus der Karte, geben eine optionale Notiz ein und verfolgen den Bestellstatus in Echtzeit. Wenn der Barista eine Bestellung als fertig markiert, zeigt die Karte eine Shot-Zusammenfassung mit Druckkurve. Erfordert `enable_orders: true` in der App-Konfiguration.
 
 Bohnen-Varianten kommen aus der Kaffee-Bibliothek über `/api/orders/active-beans`: Angeboten werden nur Bohnen, die tatsächlich noch vorrätig sind (Rest = Packungsvorrat minus der in Shot-Annotationen erfassten Dosen), und jede Bohne liefert ihre kundengerechte Beschreibung mit (Geschmacksnoten, Herkunft, Aufbereitung), damit die Karte zeigen kann, was den Kaffee ausmacht. Blend-Bohnen liefern ihre vollständigen Mehrfach-Herkunfts-Daten als `origins[]` (`{code, percent?}`) zusätzlich zur bisherigen einzelnen `origin`-Zeichenkette mit, sodass eine Card-Version, die das unterstützt, alle Länder eines Blends anzeigen kann. Eine Bohne kann auch manuell aus der Auswahl ausgeschlossen werden, ohne sie zu löschen oder den Bestand zu ändern — siehe der Auge/Auge-durchgestrichen-Umschalter in der Kaffee-Bibliothek weiter unten.
 
 **Stabile Bestellung-zu-Bohne-Zuordnung (Backend, ab v2.21.0):** `POST /api/orders` akzeptiert jetzt optional `beanId`, serverseitig gegen die tatsächlichen Bohnen der Bibliothek aufgelöst (eine veraltete oder unbekannte ID wird zu `null`, statt die Bestellung fehlschlagen zu lassen), und liefert sie fortan bei der Bestellung zurück (#563). ⚠ Das ist reine Backend-/Datenmodell-Korrektur — weder diese App noch die Order Card zeigen oder bearbeiten `beanId` aktuell in der Oberfläche; die Angabe existiert, damit Bestellungen eine stabile Bohnen-Referenz mitführen, sobald eine künftige Version sie nutzt.
-
-**Ist bereits in [GLP Integration](https://github.com/mxkissnr/glp-integration) enthalten** — keine eigene HACS-Listung, kein separater Karten-Download nötig. Beim Installieren/Aktualisieren der Integration über HACS wird sie automatisch als Dashboard-Ressource registriert; einfach eine Karte vom Typ `custom:glp-order-card` zum Dashboard hinzufügen.
 
 ### Kiosk-Modus
 
