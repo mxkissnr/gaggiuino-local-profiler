@@ -1,4 +1,5 @@
 ## [Unreleased]
+- **An unusually large machine uptime value no longer risks being read as a different, wrapped-around number.** Closes #1169
 - **A shot moved over from the first machine now takes its photo with it.** Part of #1162
 - **A Gaggiuino set as the default machine other than the first one now stores its shots under itself, and shots it previously filed under the first machine are moved over.** Closes #1162
 - **New shots now appear right after the app starts or the machine is switched on, instead of after the next sync interval.** Closes #1153

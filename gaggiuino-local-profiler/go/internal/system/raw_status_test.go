@@ -65,6 +65,16 @@ func TestRawStatusFrom_GaggiMateWL(t *testing.T) {
 	}
 }
 
+// TestRawStatusFrom_UpTimeOutOfRange covers #1169: an upTime outside int32
+// range must fall back to 0 instead of being truncated by a raw int64->int
+// conversion.
+func TestRawStatusFrom_UpTimeOutOfRange(t *testing.T) {
+	got := rawStatusFromBody(t, `{"upTime":1099511627776}`, false) // 1<<40
+	if got.UpTime != 0 {
+		t.Fatalf("UpTime = %d, want 0", got.UpTime)
+	}
+}
+
 // TestExtractVersion_ArrayAndObject covers #1149 for the firmware version
 // sniff: the array-shaped body must yield the version too.
 func TestExtractVersion_ArrayAndObject(t *testing.T) {

@@ -776,7 +776,10 @@ func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
 		waterLevel = intField("waterLevel")
 	}
 
-	upTime, _ := jsNumberToInt64(m["upTime"])
+	upTime := 0
+	if v := intField("upTime"); v != nil {
+		upTime = *v
+	}
 
 	var steamOn bool
 	if s.SteamOn != nil {
@@ -784,7 +787,7 @@ func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
 	}
 	return RawStatus{
 		WaterLevel:        waterLevel,
-		UpTime:            int(upTime),
+		UpTime:            upTime,
 		Brewing:           s.Brewing,
 		Temperature:       s.Temperature,
 		TargetTemperature: s.TargetTemperature,
