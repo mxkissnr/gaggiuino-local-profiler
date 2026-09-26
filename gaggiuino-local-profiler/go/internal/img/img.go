@@ -12,8 +12,21 @@ import (
 // directory every entity photo (bean/grinder/basket/puckScreen/shot) lives
 // in, distinguished by filename prefix (see Filename). Handlers take this as
 // an injectable field so tests can point uploads at a t.TempDir() instead
-// of the real /data mount.
-const DefaultImageDir = "/data/bean-images"
+// of the real /data mount. Resolved from GLP_IMAGE_DIR at startup (falling
+// back to /data/bean-images) so the throwaway E2E/screenshot harness keeps
+// the server's image reads and writes inside its tmp data dir — the same
+// way GLP_DB_PATH and GLP_TOKEN_FILE already work.
+var DefaultImageDir = resolveImageDir()
+
+// resolveImageDir returns the GLP_IMAGE_DIR override when set, otherwise the
+// production /data mount. A function rather than an inline expression so a
+// test can exercise the override with t.Setenv after package init has run.
+func resolveImageDir() string {
+	if dir := os.Getenv("GLP_IMAGE_DIR"); dir != "" {
+		return dir
+	}
+	return "/data/bean-images"
+}
 
 // MaxBytes mirrors lib/constants.js's BEAN_IMAGE_MAX_BYTES — the cap on a
 // raw uploaded / fetched / restored image body.
