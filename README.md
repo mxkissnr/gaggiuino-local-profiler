@@ -358,7 +358,6 @@ flowchart TB
   style COFFEE fill:#f8fafc10,stroke:#94a3b8
   style PLATFORM fill:#f8fafc10,stroke:#94a3b8
 ```
-```
 
 Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profiler/DOCS.md)) keeps an ASCII diagram, since Home Assistant cannot render Mermaid.
 
