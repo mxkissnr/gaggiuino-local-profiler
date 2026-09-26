@@ -121,6 +121,13 @@ restore that fails aborts the run. `gaggiuino-local-profiler/scripts/*.zip` is g
 the backup there or outside the repo — never commit it. Review the resulting PNGs for personal
 data before committing them.
 
+In backup mode every screenshot except `live.png` and `orders.png` comes from the restored backup:
+`shots.png`, `library.png`, `flavor-wheel.png`, `analytics.png`, `analytics-machines.png`,
+`maintenance.png`, `dialin.png` and `settings.png`. `live.png` and `orders.png` always come from the
+seeded demo instance — a real backup is normally all completed orders against a machine the
+throwaway instance cannot reach, so those two views would render empty, and backup mode leaves the
+seeded PNGs in place instead of regenerating them.
+
 ## Versioning
 
 `MAJOR.MINOR.PATCH` — patch for fixes, minor for new features. `gaggiuino-local-profiler/config.yaml`'s `version:` is canonical; three more spots must be bumped to match it in the same commit: `package.json`, `go/internal/system/version.go` (`glpVersion`) and `go/internal/backup/bundle.go` (`glpVersion`). `test/version-sync.test.js` and `scripts/release-check.mjs` enforce the match.
