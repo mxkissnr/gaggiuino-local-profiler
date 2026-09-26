@@ -94,6 +94,19 @@ async function waitForPaint(page, sel, { timeout = 20000, quietMs = 500 } = {}) 
     }
 }
 
+// Waits until every image matching `sel` has decoded. A thumb with no src yet
+// is not treated as ready: a blob fetch that 404'd never assigns a src, and an
+// image mid-load reports complete===true with naturalWidth===0 — both used to
+// count as ready and screenshot blank (#1184).
+async function waitForImages(page, sel, { timeout = 10000 } = {}) {
+    await page.waitForFunction((selector) => {
+        const imgs = [...document.querySelectorAll(selector)];
+        return imgs.every(i => i.hasAttribute('src') && i.complete && i.naturalWidth > 0);
+    }, sel, { timeout }).catch(() => {
+        console.warn(`waitForImages: ${sel} not decoded within ${timeout}ms — capturing anyway`);
+    });
+}
+
 // Scrolls `viewSel`'s own overflow:auto box so that `targetSel` (or the
 // .analytics-card wrapping it) sits flush at the top of the frame — exact,
 // unlike Element.scrollIntoView() which stops a scroll-padding short.
@@ -154,8 +167,29 @@ async function main() {
     }
 
     const browser = await chromium.launch();
-    const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    // #1184: browser.newPage() inherits the host OS locale, so every PNG came
+    // out in the desktop's language on a non-English machine. Pin an English
+    // locale for browser-level strings (Intl dates/numbers, navigator.language)
+    // and seed glp_lang before any page script runs, since the SPA reads
+    // navigator.language and a restored backup can carry its own preference. A
+    // fixed timezone keeps relative dates stable across machines.
+    const context = await browser.newContext({
+        viewport: { width: 1400, height: 900 },
+        locale: 'en-US',
+        timezoneId: 'Europe/Berlin',
+    });
+    await context.addInitScript(() => {
+        try { localStorage.setItem('glp_lang', 'en'); } catch { /* ignore */ }
+    });
+    const page = await context.newPage();
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
+    // Prove the SPA rendered English, not the German default the static HTML
+    // ships with: nav_analytics is 'Analytics' in English and 'Statistiken' in
+    // German (public-src/i18n/en.ts / de.ts).
+    await page.waitForFunction(() => {
+        const el = document.querySelector('[data-i18n="nav_analytics"]');
+        return localStorage.getItem('glp_lang') === 'en' && !!el && el.textContent === 'Analytics';
+    });
     // The update-check banner does a real GitHub API call and renders whenever
     // the checked-out version is ahead of the latest published release (the
     // normal case mid-release, before this version's own tag exists yet) —
@@ -176,6 +210,18 @@ async function main() {
     await page.waitForSelector('#chart-area', { state: 'visible' });
     await waitForPaint(page, '#espressoShotChart');
     await page.waitForTimeout(150); // let the phase-band overlay settle on top of the lines
+    // #1184: the shot photo's blob URL is assigned after an async fetch, and a
+    // 404'd image stays complete with naturalWidth 0, so wait for it to decode
+    // when the selected shot has one. Seed shots carry no photo, so only wait
+    // when the view indicates one — never hang on its absence.
+    await page.waitForFunction(() => {
+        const hero = document.getElementById('shotHeroPhoto');
+        const thumb = document.getElementById('shotHeaderThumb');
+        const indicated = !!(hero && hero.classList.contains('has-photo')) || !!(thumb && thumb.style.display !== 'none');
+        if (!indicated) return true;
+        const decoded = el => !!el && el.hasAttribute('src') && el.complete && el.naturalWidth > 0;
+        return decoded(hero) || decoded(thumb);
+    }, undefined, { timeout: 10000 }).catch(() => console.warn('shots: shot photo not decoded within 10000ms — capturing anyway'));
     await page.screenshot({ path: path.join(outDir, 'shots.png') });
 
     // Each remaining capture is scoped to its view container (#<tab>-view)
@@ -192,11 +238,10 @@ async function main() {
             : () => (document.getElementById('beanListUI')?.textContent || '').includes('Yirgacheffe'),
         undefined, { timeout: 15000 },
     );
-    // Any bean/roaster thumbnails must be decoded, or they screenshot blank.
-    await page.waitForFunction(() => {
-        const imgs = [...document.querySelectorAll('#library-view img')];
-        return imgs.every(i => i.complete && (i.naturalWidth > 0 || i.getAttribute('src') === null));
-    }, undefined, { timeout: 10000 }).catch(() => {});
+    // Any bean/roaster/product thumbnails must be decoded, or they screenshot
+    // blank. Only the thumbnails are waited on (the view also holds the hidden
+    // flavor-wheel image, whose src stays unset until that modal opens).
+    await waitForImages(page, '#library-view .lib-bean-thumb, #library-view .lib-grinder-thumb, #library-view .lib-basket-thumb, #library-view .lib-puckscreen-thumb');
     await shootView(page, '#library-view', path.join(outDir, 'library.png'));
 
     // ── Flavor wheel ───────────────────────────────────────────────────
@@ -282,6 +327,7 @@ async function main() {
     );
     await shootView(page, '#settings-view', path.join(outDir, 'settings.png'));
 
+    await context.close();
     await browser.close();
     console.log(`Screenshots written to ${outDir}`);
 
@@ -295,8 +341,8 @@ async function main() {
 
 }
 
-/* eslint-enable no-undef */
-
 main()
     .then(() => { stopServer(); process.exit(0); })
     .catch(err => { console.error(err); stopServer(); process.exit(1); });
+
+/* eslint-enable no-undef */
