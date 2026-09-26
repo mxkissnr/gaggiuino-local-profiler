@@ -331,6 +331,7 @@ flowchart TB
   BACKUP --> LIB
   BACKUP --> ORD
   BACKUP --> MAINT
+  BACKUP --> MACH
   HA --> EX_HA
 
   classDef app fill:#b45309,stroke:#78350f,color:#fff
