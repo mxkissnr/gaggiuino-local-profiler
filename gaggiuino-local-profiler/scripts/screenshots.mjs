@@ -22,6 +22,19 @@
 // (#957) and the dynamic-import ECharts bundle (#797) both resolve well
 // after the old fixed 400ms, so the pre-#1032 images caught half-rendered
 // views (empty shot chart, mid-render sunburst).
+//
+// Data source of each PNG (#1185). "backup" means the instance restored from
+// GLP_SCREENSHOT_BACKUP in backup mode, or the built-in demo seed when the
+// env var is unset:
+//
+//   shots.png, library.png, flavor-wheel.png, analytics.png,
+//   analytics-machines.png, maintenance.png, dialin.png, settings.png
+//       -> backup/seed (captured from whichever instance was loaded).
+//   live.png, orders.png
+//       -> ALWAYS the seeded instance. A real backup typically has only
+//          completed orders and an unreachable machine, which renders those
+//          two views empty, so in backup mode they are left unchanged rather
+//          than regenerated from misleading data.
 
 import { mkdirSync, cpSync, existsSync } from 'fs';
 import path from 'path';
@@ -105,6 +118,26 @@ async function waitForImages(page, sel, { timeout = 10000 } = {}) {
     }, sel, { timeout }).catch(() => {
         console.warn(`waitForImages: ${sel} not decoded within ${timeout}ms — capturing anyway`);
     });
+}
+
+// #1185: after the library wait, name every thumbnail that is still blank — an
+// <img> whose blob fetch never resolved has no src (or resolved to
+// naturalWidth 0), which screenshots as an empty dark square with no warning.
+// Reports each entity id so a backed-up-but-unserved photo is visible in the
+// run log instead of silently shipping a blank screenshot.
+async function reportUnhydratedThumbs(page) {
+    const missing = await page.evaluate(() => {
+        const sels = '.lib-bean-thumb, .lib-grinder-thumb, .lib-basket-thumb, .lib-puckscreen-thumb';
+        return [...document.querySelectorAll(sels)]
+            .filter(img => !img.hasAttribute('src') || img.naturalWidth === 0)
+            .map(img => ({
+                kind: img.className,
+                id: img.dataset.beanId || img.dataset.grinderId || img.dataset.basketId || img.dataset.puckscreenId || '?',
+            }));
+    });
+    if (missing.length) {
+        console.warn(`library: ${missing.length} thumbnail(s) not hydrated (photo missing/unserved) — capturing anyway: ${JSON.stringify(missing)}`);
+    }
 }
 
 // Scrolls `viewSel`'s own overflow:auto box so that `targetSel` (or the
@@ -242,6 +275,8 @@ async function main() {
     // blank. Only the thumbnails are waited on (the view also holds the hidden
     // flavor-wheel image, whose src stays unset until that modal opens).
     await waitForImages(page, '#library-view .lib-bean-thumb, #library-view .lib-grinder-thumb, #library-view .lib-basket-thumb, #library-view .lib-puckscreen-thumb');
+    // A restored backup's photos must all be served; name any that are not.
+    if (fromBackup) await reportUnhydratedThumbs(page);
     await shootView(page, '#library-view', path.join(outDir, 'library.png'));
 
     // ── Flavor wheel ───────────────────────────────────────────────────
@@ -305,19 +340,27 @@ async function main() {
     await shootView(page, '#dialin-view', path.join(outDir, 'dialin.png'));
 
     // ── Live / Orders / Settings (previously undocumented tabs) ─────────
-    await page.click('#btnLive');
-    await page.waitForFunction(() => {
-        const badge = document.getElementById('live-status-badge');
-        return !!badge && !badge.classList.contains('connecting');
-    }, undefined, { timeout: 15000 });
-    await shootView(page, '#live-view', path.join(outDir, 'live.png'));
+    // #1185: Live and Orders are kept from the seeded run in backup mode. A
+    // real backup is all completed orders against a machine the throwaway
+    // instance cannot reach (no HA/machine connection), so those two captures
+    // would show an empty view and overwrite the useful seeded PNGs.
+    if (fromBackup) {
+        console.log('live.png/orders.png left unchanged (seeded data; backup mode skips them)');
+    } else {
+        await page.click('#btnLive');
+        await page.waitForFunction(() => {
+            const badge = document.getElementById('live-status-badge');
+            return !!badge && !badge.classList.contains('connecting');
+        }, undefined, { timeout: 15000 });
+        await shootView(page, '#live-view', path.join(outDir, 'live.png'));
 
-    await page.click('#btnOrders');
-    await page.waitForFunction(
-        () => !!document.getElementById('ordersEnabledLabel')?.textContent,
-        undefined, { timeout: 15000 },
-    );
-    await shootView(page, '#orders-view', path.join(outDir, 'orders.png'));
+        await page.click('#btnOrders');
+        await page.waitForFunction(
+            () => !!document.getElementById('ordersEnabledLabel')?.textContent,
+            undefined, { timeout: 15000 },
+        );
+        await shootView(page, '#orders-view', path.join(outDir, 'orders.png'));
+    }
 
     await page.click('#btnSettings');
     // seed() adds a second machine; a real backup may hold just one.

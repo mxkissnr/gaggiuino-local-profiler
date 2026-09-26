@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -230,6 +231,10 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "shots": shotCount * boolToInt(wantsShots),
+		// images mirrors preview()'s `images` count so a caller (the E2E /
+		// screenshot harness in particular) can verify the queued images were
+		// actually written instead of silently screenshotting 404s (#1185).
+		"images":         len(plan.pending),
 		"secretsPresent": plan.secretsPresent, "secretsRestored": plan.secretsRestored,
 	})
 }
@@ -710,9 +715,11 @@ func (h *Handlers) writePendingImages(imgs restoreImages, pending []pendingImage
 	for _, w := range pending {
 		buf, ok := imgs.getForWrite(w.srcName)
 		if !ok || len(buf) == 0 || len(buf) > imageMaxBytes {
+			log.Printf("backup: restore skipped image %s (source %q unreadable/empty/oversized)", w.path, w.srcName)
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(w.path), 0o755); err != nil {
+			log.Printf("backup: restore skipped image %s (mkdir: %v)", w.path, err)
 			continue
 		}
 		srcExt := strings.TrimPrefix(filepath.Ext(w.path), ".")

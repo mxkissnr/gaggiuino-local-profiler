@@ -13,9 +13,20 @@ function _load(key: string, url: string): Promise<string | null> {
   const p = (async () => {
     try {
       const r = await apiFetch(url);
-      if (!r.ok) return null;
+      if (!r.ok) {
+        // #1185: a restore can write an entity's photo a moment after the list
+        // first renders, and a transient failure (token not ready, a 404 while
+        // the file is still landing) used to cache `null` for the whole page's
+        // life — the thumbnail then stayed blank on every later render with no
+        // retry. Drop the failed entry so the next render re-fetches.
+        _cache.delete(key);
+        return null;
+      }
       return URL.createObjectURL(await r.blob());
-    } catch { return null; }
+    } catch {
+      _cache.delete(key);
+      return null;
+    }
   })();
   _cache.set(key, p);
   return p;
