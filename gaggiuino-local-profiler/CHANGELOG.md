@@ -1,4 +1,22 @@
-## [Unreleased]
+## [3.2.0] – 2026-09-26
+### Added
+- **Added a kiosk page for a tablet on the table: guests enter their name, pick a drink and place an order, and see the live queue with estimated times.** Part of #1125
+- **Machine profiles can now be duplicated.** Part of #1125
+- **Grinders can now log a zero-point history, so re-zeroing a grinder after cleaning no longer means rewriting past shots' grind settings — grind-setting suggestions and comparisons correct for the drift automatically.** Part of #1125
+- **Added custom maintenance tasks** — track your own reminders (a name plus an optional shots and/or days interval) next to the five built-in ones, rename or delete them, and disable any task without deleting it. Part of #1125
+- **A machine firmware update triggered from the app is now recorded in the maintenance log.** Part of #1136
+- **Added the TypeScript toolchain and a blocking type-check gate in CI, the first step of migrating the frontend to TypeScript.** Closes #1106
+
+### Changed
+- **Converted most of the frontend's test suite to TypeScript**, typing fixtures and mocks under the strict compiler settings; the tests for the three largest views follow with those views. Part of #1133
+- **Converted the frontend's remaining standalone helper modules (image URLs, flavor data and matching, dial-in suggestions, machine icons, score and theme helpers) to TypeScript**, replacing their temporary type stubs with real types. Part of #1126
+- **Converted most of the frontend's page-level view modules to TypeScript**, adding types for their DOM handling, state, and chart configuration; the three largest views follow once the open contributor changes to them have landed. Part of #1115
+- **Converted most of the frontend's UI component modules to TypeScript**, adding types for their props, state, and DOM handling. Part of #1113
+- **Replaced the frontend's 136 scattered, untyped API call sites with a typed, generated-from-OpenAPI client**, consolidating URL-building and machine-ID handling that used to be duplicated per call site into one module per backend area. Closes #1110
+- **Converted the frontend's core utility, config, translation, and state modules to TypeScript**, including a typed application-state object and dedicated chart/timer-lifecycle registries. Closes #1108
+- **`DEVELOPMENT.md`'s AI model breakdown now recognizes every AI co-author, not just Claude**, and separates Max's flat-rate Claude Pro subscription cost from usage-billed models like DeepSeek instead of implying a single subscription covers all of them. Closes #1100
+
+### Fixed
 - **A shot moved over from the first machine now takes its photo with it.** Part of #1162
 - **A Gaggiuino set as the default machine other than the first one now stores its shots under itself, and shots it previously filed under the first machine are moved over.** Closes #1162
 - **New shots now appear right after the app starts or the machine is switched on, instead of after the next sync interval.** Closes #1153
@@ -13,20 +31,7 @@
 - **Water level and uptime now show correctly on current Gaggiuino firmware that reports its status as a list of text values.** Closes #1149
 - **Permanently deleting a demo shot or a second machine's shot no longer stops new shots from being imported.** Closes #1148
 - **Shot sync works again with firmware that reports shot IDs as text instead of numbers.** Closes #1142
-- **A machine firmware update triggered from the app is now recorded in the maintenance log.** Part of #1136
 - **Fixed the bottom navigation covering the end of page content.** Part of #1125
-- **Added a kiosk page for a tablet on the table: guests enter their name, pick a drink and place an order, and see the live queue with estimated times.** Part of #1125
-- **Machine profiles can now be duplicated.** Part of #1125
-- **Converted most of the frontend's test suite to TypeScript**, typing fixtures and mocks under the strict compiler settings; the tests for the three largest views follow with those views. Part of #1133
-- **Grinders can now log a zero-point history, so re-zeroing a grinder after cleaning no longer means rewriting past shots' grind settings — grind-setting suggestions and comparisons correct for the drift automatically.** Part of #1125
-- **Added custom maintenance tasks** — track your own reminders (a name plus an optional shots and/or days interval) next to the five built-in ones, rename or delete them, and disable any task without deleting it. Part of #1125
-- **Converted the frontend's remaining standalone helper modules (image URLs, flavor data and matching, dial-in suggestions, machine icons, score and theme helpers) to TypeScript**, replacing their temporary type stubs with real types. Part of #1126
-- **Converted most of the frontend's page-level view modules to TypeScript**, adding types for their DOM handling, state, and chart configuration; the three largest views follow once the open contributor changes to them have landed. Part of #1115
-- **Converted most of the frontend's UI component modules to TypeScript**, adding types for their props, state, and DOM handling. Part of #1113
-- **Replaced the frontend's 136 scattered, untyped API call sites with a typed, generated-from-OpenAPI client**, consolidating URL-building and machine-ID handling that used to be duplicated per call site into one module per backend area. Closes #1110
-- **Converted the frontend's core utility, config, translation, and state modules to TypeScript**, including a typed application-state object and dedicated chart/timer-lifecycle registries. Closes #1108
-- **Added the TypeScript toolchain and a blocking type-check gate in CI, the first step of migrating the frontend to TypeScript.** Closes #1106
-- **`DEVELOPMENT.md`'s AI model breakdown now recognizes every AI co-author, not just Claude**, and separates Max's flat-rate Claude Pro subscription cost from usage-billed models like DeepSeek instead of implying a single subscription covers all of them. Closes #1100
 
 ## [3.1.0] – 2026-09-17
 ### Added
