@@ -4,6 +4,7 @@
 
 ### Changed
 - **The README now shows the GLP ecosystem and the app's internals as diagrams, and GaggiMate is documented as fully supported.** Closes #1176
+- **The app architecture diagram now shows the importer and backup/restore paths through the REST API.** Part of #1176
 
 ## [3.2.0] – 2026-09-26
 ### Added
