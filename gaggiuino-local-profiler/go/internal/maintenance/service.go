@@ -50,7 +50,7 @@ func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *librar
 	if err := repo.SaveMaintenance(maint, machineID); err != nil {
 		return nil, err
 	}
-	if _, err := repo.AddMaintenanceLogEntry(task, notes, machineHostname(registry), shotCountFor(shotsRepo, task, machineID), machineID); err != nil {
+	if _, err := repo.AddMaintenanceLogEntry(task, notes, machineHostname(registry), ShotCountFor(shotsRepo, task, machineID), machineID); err != nil {
 		return nil, err
 	}
 	return ComputeMaintenanceStats(shotsRepo, maint, machineID)

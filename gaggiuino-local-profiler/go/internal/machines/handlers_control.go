@@ -1,6 +1,7 @@
 package machines
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -265,6 +266,18 @@ func (h *Handlers) triggerFirmwareUpdate(w http.ResponseWriter, r *http.Request)
 	if !requireSettingsProxySupport(w, adapter, machine) {
 		return
 	}
+	// #1136 follow-up: resolve the installed/target version BEFORE triggering
+	// the update -- a successful trigger reboots the machine, so after that
+	// call neither `versions` nor `system` can be read reliably. Only done
+	// when a maintenance-log hook is wired, and entirely best-effort: any
+	// error or panic inside the lookup degrades to an empty string for that
+	// side and never touches the update or this response.
+	var from, to string
+	if h.onFirmwareUpdate != nil {
+		httputil.SafeCall("machines: firmware update version lookup", func() {
+			from, to = h.firmwareFromTo(r.Context(), machine, adapter)
+		})
+	}
 	result, err := adapter.TriggerFirmwareUpdate(r.Context(), machine)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
@@ -277,7 +290,7 @@ func (h *Handlers) triggerFirmwareUpdate(w http.ResponseWriter, r *http.Request)
 	if h.onFirmwareUpdate != nil {
 		var cbErr error
 		httputil.SafeCall("machines: firmware update maintenance log", func() {
-			cbErr = h.onFirmwareUpdate(machine)
+			cbErr = h.onFirmwareUpdate(machine, from, to)
 		})
 		if cbErr != nil {
 			slog.Warn("firmware update: maintenance log callback failed", "err", cbErr)
@@ -286,6 +299,46 @@ func (h *Handlers) triggerFirmwareUpdate(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(result)
+}
+
+// firmwareFromTo best-effort resolves the version being replaced (from: the
+// machine's installed `versions`.coreVersion) and the version it is updating
+// to (to: the latest release on the machine's `system`.releaseChannel),
+// mirroring the reads firmwareVersion above already does. Both reads are
+// wrapped in SafeCall and swallow every error/panic, so a missing or
+// unreachable machine simply yields an empty side rather than affecting the
+// update; to stays empty when the release lookup fails or reports nothing.
+func (h *Handlers) firmwareFromTo(ctx context.Context, machine *Machine, adapter Adapter) (from, to string) {
+	var versionsRaw json.RawMessage
+	httputil.SafeCall("machines: firmware update from-version fetch", func() {
+		versionsRaw, _ = adapter.GetSettings(ctx, machine, "versions")
+	})
+	var versions struct {
+		CoreVersion *string `json:"coreVersion"`
+	}
+	if len(versionsRaw) > 0 {
+		_ = json.Unmarshal(versionsRaw, &versions)
+	}
+	if versions.CoreVersion != nil {
+		from = *versions.CoreVersion
+	}
+
+	var systemRaw json.RawMessage
+	httputil.SafeCall("machines: firmware update system-settings fetch", func() {
+		systemRaw, _ = adapter.GetSettings(ctx, machine, "system")
+	})
+	var system map[string]any
+	if len(systemRaw) > 0 {
+		_ = json.Unmarshal(systemRaw, &system)
+	}
+	channel := ParseReleaseChannel(system["releaseChannel"])
+	httputil.SafeCall("machines: firmware update latest-release lookup", func() {
+		latest, err := h.firmware.GetLatestFirmwareRelease(ctx, channel)
+		if err == nil && latest != nil {
+			to = latest.Hash
+		}
+	})
+	return from, to
 }
 
 // firmwareVersion ports GET /api/machine/firmware/version (#620 Phase 1).

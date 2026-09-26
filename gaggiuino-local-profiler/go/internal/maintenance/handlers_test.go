@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
 func TestGetMaintenance_DefaultMachine(t *testing.T) {
@@ -433,5 +434,55 @@ func TestFirmwareUpdate_LogEntryRecordedWithoutDisturbingStats(t *testing.T) {
 	}
 	if _, ok := stats["descaling"]; !ok {
 		t.Errorf("descaling missing from stats: %+v", stats)
+	}
+}
+
+// FirmwareUpdateNote must render every from/to combination, including the
+// one-sided and both-unknown cases an offline machine or a failed release
+// lookup produce.
+func TestFirmwareUpdateNote(t *testing.T) {
+	tests := []struct {
+		name     string
+		from, to string
+		want     string
+	}{
+		{"both known", "aaa1111", "bbb2222", "aaa1111 → bbb2222"},
+		{"only from", "aaa1111", "", "aaa1111 →"},
+		{"only to", "", "bbb2222", "→ bbb2222"},
+		{"neither", "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FirmwareUpdateNote(tt.from, tt.to); got != tt.want {
+				t.Fatalf("FirmwareUpdateNote(%q, %q) = %q, want %q", tt.from, tt.to, got, tt.want)
+			}
+		})
+	}
+}
+
+// ShotCountFor (exported for cmd/server's firmware-update hook) scopes a
+// non-global task like firmware_update to the machine, while a global task
+// still counts every machine's shots.
+func TestShotCountFor_ScopesToMachine(t *testing.T) {
+	_, _, _, sqlDB := newTestHandlers(t)
+	shotsRepo := shots.NewRepository(sqlDB)
+	for _, s := range []shots.Shot{
+		{"id": int64(1), "timestamp": int64(1), "machineId": int64(7)},
+		{"id": int64(2), "timestamp": int64(2), "machineId": int64(7)},
+		{"id": int64(3), "timestamp": int64(3), "machineId": int64(8)},
+	} {
+		if err := shotsRepo.Upsert(s); err != nil {
+			t.Fatalf("Upsert: %v", err)
+		}
+	}
+
+	if got := ShotCountFor(shotsRepo, "firmware_update", 7); got != 2 {
+		t.Fatalf("ShotCountFor(firmware_update, 7) = %d, want 2 (machine-scoped)", got)
+	}
+	if got := ShotCountFor(shotsRepo, "firmware_update", 8); got != 1 {
+		t.Fatalf("ShotCountFor(firmware_update, 8) = %d, want 1 (machine-scoped)", got)
+	}
+	if got := ShotCountFor(shotsRepo, "waterfilter", 7); got != 3 {
+		t.Fatalf("ShotCountFor(waterfilter, 7) = %d, want 3 (global)", got)
 	}
 }

@@ -436,9 +436,14 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// #1136: a firmware update triggered from the app shows up in the
 	// machine's maintenance log. Wired as a callback (not a direct import)
 	// for the same import-cycle reason as the grinder-delete hook above --
-	// internal/maintenance already imports internal/machines.
-	machinesHandlers.SetOnFirmwareUpdate(func(m *machines.Machine) error {
-		_, err := maintenanceRepo.AddMaintenanceLogEntry("firmware_update", "", m.Host, 0, m.ID)
+	// internal/maintenance already imports internal/machines. The note records
+	// the from/to firmware versions (best-effort: either may be blank) and the
+	// shot count is scoped to the machine like every other non-global task,
+	// reusing maintenance.ShotCountFor rather than duplicating the logic.
+	machinesHandlers.SetOnFirmwareUpdate(func(m *machines.Machine, from, to string) error {
+		notes := maintenance.FirmwareUpdateNote(from, to)
+		shotCount := maintenance.ShotCountFor(shotsRepo, "firmware_update", m.ID)
+		_, err := maintenanceRepo.AddMaintenanceLogEntry("firmware_update", notes, m.Host, shotCount, m.ID)
 		return err
 	})
 
