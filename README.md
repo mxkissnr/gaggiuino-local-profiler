@@ -35,11 +35,9 @@ You love your Gaggiuino or GaggiMate machine, but your shot data disappears into
 | Component | Version | Requires |
 |---|---|---|
 | **GLP App** (this repo) | ![Version](https://img.shields.io/github/v/tag/mxkissnr/gaggiuino-local-profiler?label=&color=22c55e) | Gaggiuino or GaggiMate machine + HA OS/Supervised |
-| [**GLP Integration**](https://github.com/mxkissnr/glp-integration) | ![Version](https://img.shields.io/github/v/release/mxkissnr/glp-integration?label=&color=22c55e) | App v1.82.7+ · [HACS](https://hacs.xyz) |
-| [**GLP Shot Card**](https://github.com/mxkissnr/glp-lovelace-card) | ![Version](https://img.shields.io/github/v/release/mxkissnr/glp-lovelace-card?label=&color=22c55e) | Integration v1.9.0+ |
-| [**GLP Order Card**](https://github.com/mxkissnr/glp-order-card) | ![Version](https://img.shields.io/github/v/release/mxkissnr/glp-order-card?label=&color=22c55e) | Integration v1.7.0+ |
+| [**GLP Integration**](https://github.com/mxkissnr/glp-integration)<br/><sub>includes Shot Card + Order Card</sub> | ![Version](https://img.shields.io/github/v/release/mxkissnr/glp-integration?label=&color=22c55e) | App v1.82.7+ · [HACS](https://hacs.xyz) |
 
-All four components are optional and independently installable — only install what you need.
+Both components are optional — the integration adds HA sensors plus the bundled Shot Card and Order Card.
 
 > **No longer requires ALERTua/hass-gaggiuino** — as of GLP Integration v1.9.0 all machine sensors (temperature, pressure, water level, weight, profiles, switch states) are provided natively.
 
@@ -126,7 +124,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-
 | 🌙 | **Light / Dark / Auto theme** | Built-in theme toggle (Settings) with a third Auto option that follows the browser/OS colour-scheme preference and switches live if it changes; choice persisted in localStorage; matching `glp-ha-theme.yaml` for the full HA interface |
 | 🆕 | **What's New** | Always-visible "What's New" card at the top of Settings, listing the last 8 releases newest-first with short highlight bullets — source-of-truth history stays in `CHANGELOG.md`, this is a curated in-app subset (`public-src/shared/whats-new.js`), so you don't have to leave the app to see what changed |
 | 🎛️ | **Profile Selector** | Lovelace card shows a dropdown to switch the active brew profile via `select.gaggiuino_profiler_profile` (provided by GLP Integration v1.9.0+) |
-| 📋 | **Order Management** | Barista backend tab to manage espresso orders — queue, accept with ETA, complete or decline with reason; configurable menu (emoji + drink name); bean and milk variants offered only while actually in stock (milk is deducted automatically on order completion) and while manually enabled — a bean can be temporarily excluded from ordering without deleting it or touching its stock, with customer-facing bean descriptions (taste notes, origin, processing); companion Lovelace card for customers (`glp-order-card`) |
+| 📋 | **Order Management** | Barista backend tab to manage espresso orders — queue, accept with ETA, complete or decline with reason; configurable menu (emoji + drink name); bean and milk variants offered only while actually in stock (milk is deducted automatically on order completion) and while manually enabled — a bean can be temporarily excluded from ordering without deleting it or touching its stock, with customer-facing bean descriptions (taste notes, origin, processing); companion Lovelace card for customers (bundled in the integration) |
 | 🧾 | **Kiosk Mode** | Self-contained ordering page at `/ui/kiosk` for a tablet that stays on a table — a guest enters a name, picks a drink plus optional variants and a note, places the order and sees the confirmation with the estimated time, then the page resets itself to the name step after 6 seconds; a queue panel lists the active orders (waiting / being prepared) with their estimated times and refreshes every 8 seconds; requires `enable_orders: true` and no separate login |
 | 🧭 | **First-Run Onboarding & Demo Mode** | Dismissible banner when the machine isn't reachable; first-run panel with setup steps plus a "Load demo data" button that seeds a sample dataset (shots, beans, a blend, a recipe) so the app can be evaluated before connecting hardware; "End demo" removes exactly the seeded rows |
 | 🧙 | **Guided Setup Wizard** | A first-time install with zero machines configured opens a 3-step modal automatically — welcome, connect your first machine (reusing the same add-machine/test-connect form as Settings), then done; "I don't have a machine yet" jumps straight to demo data; "Later" reopens it on the next launch until it's either completed or a machine exists; "Restart setup tour" in Settings → Machines reopens it anytime |
@@ -237,10 +235,12 @@ flowchart LR
   GM["GaggiMate controller"]
   APP["GLP App<br/>Go, port 8099<br/>SQLite /data/glp.db"]
   BR["Browser"]
-  INT["GLP HA Integration"]
-  SC["GLP Shot Card"]
-  OC["GLP Order Card"]
   HA["HA sensors & automations"]
+  subgraph INTG["GLP HA Integration"]
+    INT["Integration core"]
+    SC["GLP Shot Card"]
+    OC["GLP Order Card"]
+  end
   GGU -->|"REST /api/shots, /api/system/status, WebSocket or MQTT"| APP
   GM -->|"WebSocket ws://host/ws, /api/history/*.slog"| APP
   BR -->|"HA Ingress"| APP

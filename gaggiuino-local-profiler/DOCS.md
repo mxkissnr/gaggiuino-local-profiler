@@ -6,7 +6,7 @@ Local shot profiling dashboard for [Gaggiuino](https://gaggiuino.github.io/)-bas
 
 ## Architecture — how the components work together
 
-The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces that build on each other:
+The GLP (Gaggiuino Local Profiler) ecosystem consists of two installable pieces — the app and the integration, which bundles the Shot Card and Order Card — that build on each other:
 
 ```
   Gaggiuino Machine
@@ -31,16 +31,21 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces
            │  polls             │  HA Ingress (browser, authenticated)
            │  /api/status       │  direct port 8099 (integration, cards)
            │  /api/shots        │
-           │  /api/preheat      ├──────────────────────────┐
-           │  /api/maintenance  │                          │
-           │  /api/orders †     │                          │
-           ▼                    │                          │
-  ┌─────────────────────┐  ┌────┴─────────────────┐  ┌────┴─────────────────┐
-  │  GLP HA Integration │  │  GLP Shot Card       │  │  GLP Order Card      │
-  │  (custom component) │─►│  machine status,     │  │  customer ordering,  │
-  │  creates sensors,   │  │  last shot summary,  │  │  order status,       │
-  │  fires HA events    │─►│  preheat progress    │  │  shot summary on done│
-  └─────────────────────┘  └──────────────────────┘  └──────────────────────┘
+           │  /api/preheat      │
+           │  /api/maintenance  │
+           │  /api/orders †     │
+           ▼                    │
+  ┌─────────────────────────────────────────────────────────┐
+  │  GLP HA Integration  (custom component)                 │
+  │  creates sensors, fires HA events                       │
+  │  bundles both cards — no separate HACS install          │
+  │  ┌───────────────────────┐   ┌───────────────────────┐  │
+  │  │ GLP Shot Card         │   │ GLP Order Card        │  │
+  │  │ machine status,       │   │ customer ordering,    │  │
+  │  │ last shot summary,    │   │ order status,         │  │
+  │  │ preheat progress      │   │ shot summary on done  │  │
+  │  └───────────────────────┘   └───────────────────────┘  │
+  └─────────────────────────────────────────────────────────┘
            │          sensor attrs → both cards auto-detect switch_entity
            ▼
     HA sensors, automations, energy monitoring, …
@@ -60,23 +65,21 @@ A custom component that polls the app every 60 s (configurable). It exposes all 
 
 Install via HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
 
-### GLP Shot Card
+**The integration bundles the GLP Shot Card and GLP Order Card** — no separate HACS listing or card download. Installing/updating the integration via HACS registers both automatically as dashboard resources; add a `type: custom:glp-card` or `type: custom:glp-order-card` card to your dashboard.
+
+#### Shot Card (bundled)
 
 A custom Lovelace card that displays machine status, last shot summary, preheat progress, a power button and a **profile selector**. It talks to port 8099 directly and reads the `switch_entity` from the `machine_status` sensor attribute (set automatically by the integration) — no manual card configuration needed.
 
 The profile selector reads and writes `select.gaggiuino_profiler_profile`, provided natively by the GLP Integration (v1.9.0+). The selector is automatically hidden when the entity is not present.
 
-**Ships bundled inside [GLP Integration](https://github.com/mxkissnr/glp-integration)** — no separate HACS listing or card download. Installing/updating the integration via HACS registers it automatically as a dashboard resource; just add a `type: custom:glp-card` card to your dashboard.
-
-### GLP Order Card
+#### Order Card (bundled)
 
 A customer-facing Lovelace card for the order system. Customers browse the drink menu, place an order and track its status in real time. When the barista marks an order as done, the card shows the shot summary with a pressure sparkline. Requires `enable_orders: true` in the app configuration.
 
 Bean variants come from the coffee library via `/api/orders/active-beans`: only beans that are actually still in stock are offered (remaining = bag stock minus the doses logged in shot annotations), and each bean carries its customer-facing description (taste notes, origin, processing) so the card can show what characterizes the coffee. Blend beans carry their full multi-origin data as `origins[]` (`{code, percent?}`) alongside the legacy single-string `origin`, so a Card version that supports it can render all of a blend's countries. A bean can also be manually excluded from the picker without deleting it or touching its stock — see the eye/eye-off toggle in the Coffee Library below.
 
 **Stable order-to-bean attribution (backend, v2.21.0+):** `POST /api/orders` accepts an optional `beanId`, resolved server-side against the library's actual beans (a stale or unknown id becomes `null` rather than failing the order), and returns it on the order going forward (#563). ⚠ This is a backend/data-model fix only — no UI in this app or the Order Card currently displays or edits `beanId`; it exists so orders carry a stable bean reference for whichever release starts using it.
-
-**Ships bundled inside [GLP Integration](https://github.com/mxkissnr/glp-integration)** — no separate HACS listing or card download. Installing/updating the integration via HACS registers it automatically as a dashboard resource; just add a `type: custom:glp-order-card` card to your dashboard.
 
 ### Kiosk mode
 
