@@ -139,3 +139,43 @@ export async function seed(baseUrl) {
 
     return { machine2 };
 }
+
+// Restores a GLP backup zip into the throwaway instance through the app's own
+// POST /api/restore endpoint (#1181), in place of seed(). screenshots.mjs
+// calls this only when GLP_SCREENSHOT_BACKUP is set. The zip is sent raw with
+// Content-Type: application/zip; GLP_SCREENSHOT_BACKUP_PASSPHRASE supplies the
+// passphrase for an encrypted backup. Real backups sit well under the
+// endpoint's 50 MB body cap. Any non-2xx, non-JSON or `ok !== true` response
+// throws, so a failed restore aborts the caller instead of screenshotting an
+// un-restored instance. The restored token is written to disk but the running
+// process keeps the one it started with (see go/internal/backup/doc.go), so
+// fetching the token before the restore is fine.
+export async function restoreBackup(baseUrl, zipPath) {
+    let zip;
+    try {
+        zip = readFileSync(zipPath);
+    } catch (err) {
+        throw new Error(`Cannot read GLP_SCREENSHOT_BACKUP file ${zipPath}: ${err.message}`);
+    }
+
+    // Same auth the SPA and seed() use: the token from the already-public
+    // GET /api/token, sent back as the x-glp-token header.
+    const { apiToken } = await fetch(`${baseUrl}/api/token`).then(r => r.json());
+    const headers = { 'Content-Type': 'application/zip', 'x-glp-token': apiToken };
+    if (process.env.GLP_SCREENSHOT_BACKUP_PASSPHRASE) {
+        headers['X-GLP-Passphrase'] = process.env.GLP_SCREENSHOT_BACKUP_PASSPHRASE;
+    }
+
+    const r = await fetch(`${baseUrl}/api/restore`, { method: 'POST', headers, body: zip });
+    const text = await r.text();
+    if (!r.ok) throw new Error(`POST /api/restore -> ${r.status}: ${text}`);
+
+    let parsed;
+    try {
+        parsed = text ? JSON.parse(text) : {};
+    } catch {
+        throw new Error(`POST /api/restore -> ${r.status}: invalid JSON: ${text}`);
+    }
+    if (parsed.ok !== true) throw new Error(`POST /api/restore -> ${r.status}: ${text}`);
+    return parsed;
+}
