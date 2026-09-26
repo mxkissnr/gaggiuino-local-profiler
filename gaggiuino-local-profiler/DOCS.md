@@ -13,12 +13,16 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces
   └─ /api/shots          (shot history)
   └─ /api/system/status  (live brew data)
   └─ /api/system/info    (firmware version)
+
+  GaggiMate Machine
+  └─ ws://<host>/ws              (live status, profiles)
+  └─ /api/history/*.slog         (shot history)
          │
          │  sync every N min + live polling during brew
          │  (WebSocket by default, or MQTT — see below)
          ▼
   ┌──────────────────────────────────┐
-  │         GLP App               │  ← this app
+  │         GLP App                  │  ← this app
   │  Go server, port 8099            │
   │  stores data in /data/glp.db     │
   │  REST API + web UI               │
@@ -26,7 +30,7 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces
            │                    ▲
            │  polls             │  HA Ingress (browser, authenticated)
            │  /api/status       │  direct port 8099 (integration, cards)
-           │  /shots.json       │
+           │  /api/shots        │
            │  /api/preheat      ├──────────────────────────┐
            │  /api/maintenance  │                          │
            │  /api/orders †     │                          │
@@ -46,7 +50,7 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces
 
 ### GLP App (this repo)
 
-The central piece. It syncs shot history from the Gaggiuino machine, stores it in a local SQLite database (`/data/glp.db`), and serves:
+The central piece. It syncs shot history from Gaggiuino and GaggiMate machines, stores it in a local SQLite database (`/data/glp.db`), and serves:
 - A web UI accessible via HA Ingress (the ☕ panel icon in the HA sidebar)
 - A REST API on port 8099 consumed by the integration and the Lovelace cards
 
@@ -226,7 +230,7 @@ options](#configuration-options) above.
 
 | Feature | HA OS / Supervisor app | Docker standalone |
 |---|---|---|
-| Ingress sidebar panel | ✅ native | ❌ — use a Lovelace iframe/Webpage card pointed at `http://<docker-host>:8099` instead (see [Embed in HA Dashboard](../README.md#-embed-in-ha-dashboard)) |
+| Ingress sidebar panel | ✅ native | ❌ — use a Lovelace iframe/Webpage card pointed at `http://<docker-host>:8099` instead (see [Embed in HA Dashboard](../README.md#embed-in-ha-dashboard)) |
 | Update notification | ✅ (Home Assistant app store) | ✅ — the app checks GitHub releases itself either way |
 | HA auto-sync / switch-entity power control / push notifications | ✅ automatic | ✅ with `GLP_HA_URL` + `GLP_HA_TOKEN` |
 | MQTT auto-discovery | ✅ | ❌ — enter the broker host/port/user/password manually under Settings → MQTT (already the fallback path on HA OS too when no MQTT service is registered) |
@@ -242,7 +246,7 @@ GLP can manage more than one espresso machine from a single app instance — no 
 > The `type` you pick when adding a machine (Settings → Machines) selects the **firmware adapter** GLP talks to — it is not a physical-brand setting. There is no Gaggia-specific (or any other brand-specific) logic anywhere in GLP. Any single-boiler machine running a Gaggiuino or GaggiMate controller board — Gaggia Classic, Rancilio Silvia, Lelit, and others — works identically once you pick the matching `type`.
 
 - **Gaggiuino** — the original REST + protobuf-WebSocket machine type this app was built for. Full support: shot sync, live status, profile create/read/update/delete, profile select.
-- **GaggiMate** ([jniebuhr/gaggimate](https://github.com/jniebuhr/gaggimate)) — a different ESP32 controller with a JSON WebSocket API and binary shot-history files. GLP's GaggiMate adapter is **experimental**: live status and shot history sync are supported and have been verified against real GaggiMate hardware as of v2.2.1–v2.2.3 (a WebSocket request-id correlation bug, a `.slog` URL zero-padding bug, and shot duration/profile-name mapping bugs were all found and fixed via live testing); Standard and Pro (Extended) profiles can be created, edited, and deleted from GLP — saved straight to the machine over the same WebSocket connection, since GaggiMate keeps no local profile copy of its own; the preview chart mirrors GaggiMate's own profile visualization (continuous pressure/flow curves, solid where a phase actively controls that parameter and dashed where it's just a held value, named phase regions); brew cannot be started from GLP (GaggiMate's own API has no start/stop command — only a Gaggiuino machine, and only via its physical brew switch, can be triggered from GLP, and even then GLP itself never sends a start command, only detects it). **Water level:** GaggiMate firmware always reports `wl=100` when no ALBA sensor is installed, so the water level field is opt-in — enable "Water level sensor installed (ALBA)" in the machine's settings form once the sensor is present; the idle Live view then shows the current tank level. **Weight in shot chart:** when a BLE scale was connected during a shot the curve is labelled "Gewicht"; when only a volumetric estimate was available it is labelled "Gewicht (geschätzt)" and drawn as a dashed line.
+- **GaggiMate** ([jniebuhr/gaggimate](https://github.com/jniebuhr/gaggimate)) — a different ESP32 controller with a JSON WebSocket API and binary shot-history files. Live status and shot history sync are supported and have been verified against real GaggiMate hardware; Standard and Pro (Extended) profiles can be created, edited, and deleted from GLP — saved straight to the machine over the same WebSocket connection, since GaggiMate keeps no local profile copy of its own; the preview chart mirrors GaggiMate's own profile visualization (continuous pressure/flow curves, solid where a phase actively controls that parameter and dashed where it's just a held value, named phase regions); brew cannot be started from GLP (GaggiMate's own API has no start/stop command — only a Gaggiuino machine, and only via its physical brew switch, can be triggered from GLP, and even then GLP itself never sends a start command, only detects it). **Water level:** GaggiMate firmware always reports `wl=100` when no ALBA sensor is installed, so the water level field is opt-in — enable "Water level sensor installed (ALBA)" in the machine's settings form once the sensor is present; the idle Live view then shows the current tank level. **Weight in shot chart:** when a BLE scale was connected during a shot the curve is labelled "Gewicht"; when only a volumetric estimate was available it is labelled "Gewicht (geschätzt)" and drawn as a dashed line.
 
 | | Gaggiuino | GaggiMate |
 |---|---|---|
