@@ -5,7 +5,7 @@
 ### Changed
 - **The README now shows the GLP ecosystem and the app's internals as diagrams, and GaggiMate is documented as fully supported.** Closes #1176
 - **The app architecture diagram now shows the importer and backup/restore paths through the REST API.** Part of #1176
-- **The README's architecture diagrams are now coloured and readable, the two dev-stats charts render at the same height, and the AI note credits DeepSeek alongside Claude.** Closes #1180
+- **The two dev-stats charts in the README now render at the same height, and the README's AI note credits DeepSeek alongside Claude.** Closes #1180
 
 ## [3.2.0] – 2026-09-26
 ### Added
