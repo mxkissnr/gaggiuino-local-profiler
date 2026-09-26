@@ -229,20 +229,118 @@ aspect_ratio: "16:9"
 
 ## Architecture
 
+The GLP ecosystem (top) and the app's internals (below), as diagrams:
+
+```mermaid
+flowchart LR
+  GGU["Gaggiuino controller"]
+  GM["GaggiMate controller"]
+  APP["GLP App<br/>Go, port 8099<br/>SQLite /data/glp.db"]
+  BR["Browser"]
+  INT["GLP HA Integration"]
+  SC["GLP Shot Card"]
+  OC["GLP Order Card"]
+  HA["HA sensors & automations"]
+  GGU -->|"REST /api/shots, /api/system/status, WebSocket or MQTT"| APP
+  GM -->|"WebSocket ws://host/ws, /api/history/*.slog"| APP
+  BR -->|"HA Ingress"| APP
+  INT -->|"port 8099"| APP
+  INT -->|"sensors / attributes"| SC
+  INT -->|"sensors / attributes"| OC
+  SC -->|"port 8099"| APP
+  OC -->|"port 8099"| APP
+  INT -->|"sensors / automations"| HA
 ```
-Home Assistant Host
-├── GLP App  (Go, Port 8099)
-│   ├── /data/glp.db              ← SQLite database (shots, annotations, library, …)
-│   └── Supervisor API            ← HA switch control & sensor polling
-│
-├── Gaggiuino Controller
-│   ├── GET /api/shots             ← Shot list & profiles
-│   └── GET /api/system/status     ← Live data (1 s polling)
-│
-└── GaggiMate Controller (experimental)
-    ├── ws://<host>/ws             ← JSON WebSocket (live status, profiles)
-    └── GET /api/history/*.slog    ← Binary shot history
+
+```mermaid
+flowchart TD
+  subgraph dash["Dashboard (public-src/)"]
+    MAIN["main.ts"]
+    TRANSPORT["api/transport.ts"]
+    VSHOTS["views/shots"]
+    SSETS["sse.ts"]
+  end
+  subgraph mconn["Machine Connectivity"]
+    M_HANDLERS["machines/handlers.go"]
+    M_REGISTRY["machines/registry.go"]
+    M_ADAPTER["machines/adapter.go"]
+    M_GGU["gaggiuino_adapter.go"]
+    M_GMT["gaggimate_adapter.go"]
+    POLL["system/poll.go"]
+    SYNC["system/sync.go"]
+    MQTT["mqtt/client.go"]
+  end
+  subgraph sdata["Shot Data"]
+    S_HANDLERS["shots/handlers.go"]
+    S_REPO["shots/repository.go"]
+  end
+  subgraph coffee["Coffee Operations"]
+    LIB["library"]
+    IMP["importer"]
+    ORD["orders"]
+    MAINT["maintenance"]
+    ACH["achievements"]
+  end
+  subgraph appsvc["Application Services"]
+    SERVER["cmd/server/main.go"]
+    BACKUP["backup"]
+    DB["db<br/>SQLite /data/glp.db"]
+    SSE["internal/sse"]
+    HA["internal/ha"]
+    NETGUARD["internal/netguard"]
+    FB["cmd/frontend-build"]
+    WEBAPP["internal/webapp<br/>embedded static assets"]
+  end
+  EX_GGU["Gaggiuino"]
+  EX_GMT["GaggiMate"]
+  EX_HA["Home Assistant"]
+  EX_ROAST["roaster web pages"]
+  M_ADAPTER --> M_GGU
+  M_ADAPTER --> M_GMT
+  M_GGU --> EX_GGU
+  M_GMT --> EX_GMT
+  POLL --> SYNC
+  SYNC --> M_ADAPTER
+  SYNC --> S_REPO
+  S_REPO --> DB
+  MQTT --> POLL
+  MQTT -->|"MQTT broker"| EX_GGU
+  M_HANDLERS --> M_REGISTRY
+  M_REGISTRY --> DB
+  M_REGISTRY --> M_ADAPTER
+  IMP --> NETGUARD
+  NETGUARD --> EX_ROAST
+  ORD --> HA
+  POLL --> HA
+  HA -->|"Supervisor API"| EX_HA
+  POLL --> SSE
+  SSE --> SSETS
+  SSETS --> MAIN
+  FB --> WEBAPP
+  WEBAPP --> MAIN
+  MAIN --> TRANSPORT
+  VSHOTS --> TRANSPORT
+  TRANSPORT --> M_HANDLERS
+  TRANSPORT --> S_HANDLERS
+  TRANSPORT --> LIB
+  TRANSPORT --> ORD
+  TRANSPORT --> MAINT
+  TRANSPORT --> ACH
+  S_HANDLERS --> S_REPO
+  SERVER --> POLL
+  SERVER --> WEBAPP
+  SERVER --> SSE
+  SERVER --> BACKUP
+  SERVER --> DB
+  ORD --> DB
+  ORD --> S_REPO
+  LIB --> DB
+  MAINT --> DB
+  ACH --> DB
+  BACKUP --> DB
 ```
+
+Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profiler/DOCS.md)) keeps an ASCII diagram, since Home Assistant cannot render Mermaid.
 
 ---
 
