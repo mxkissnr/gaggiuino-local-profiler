@@ -18,6 +18,9 @@ gaggiuino-local-profiler/go/internal/webapp/dist/*
 *.db-shm
 api_token.txt
 preheat_state.json
+# #1181: GLP_SCREENSHOT_BACKUP input — personal data, never committed
+gaggiuino-local-profiler/scripts/*.zip
+gaggiuino-local-profiler/scripts/**/*.zip
 
 # defence-in-depth: secrets that must never land in git regardless of location
 .env

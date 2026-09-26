@@ -97,6 +97,30 @@ git checkout -- gaggiuino-local-profiler/go/internal/webapp/dist
 `scripts/e2e-harness.mjs` does both halves on its own (builds the bundle, boots the real server,
 restores the placeholder), which is why the E2E job asserts against the real bundle.
 
+## Screenshots
+
+`gaggiuino-local-profiler/scripts/screenshots.mjs` regenerates `docs/screenshots/*.png` for the
+README and wiki from the built-in demo seed; run it from `gaggiuino-local-profiler/`:
+
+```sh
+node scripts/screenshots.mjs [path/to/wiki-repo]
+```
+
+It needs `npx playwright install chromium` once beforehand. With the optional wiki-repo argument
+it also copies the PNGs into that repo's `images/`.
+
+To build the screenshots from real data instead of the synthetic seed, point the script at a GLP
+backup zip (created via Settings → Backup in the app):
+
+```sh
+GLP_SCREENSHOT_BACKUP=/path/to/backup.zip node scripts/screenshots.mjs
+```
+
+The zip is restored into the throwaway instance through the app's own `POST /api/restore`; a
+restore that fails aborts the run. `gaggiuino-local-profiler/scripts/*.zip` is git-ignored, so keep
+the backup there or outside the repo — never commit it. Review the resulting PNGs for personal
+data before committing them.
+
 ## Versioning
 
 `MAJOR.MINOR.PATCH` — patch for fixes, minor for new features. `gaggiuino-local-profiler/config.yaml`'s `version:` is canonical; three more spots must be bumped to match it in the same commit: `package.json`, `go/internal/system/version.go` (`glpVersion`) and `go/internal/backup/bundle.go` (`glpVersion`). `test/version-sync.test.js` and `scripts/release-check.mjs` enforce the match.

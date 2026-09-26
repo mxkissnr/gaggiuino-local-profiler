@@ -6,19 +6,23 @@ Local shot profiling dashboard for [Gaggiuino](https://gaggiuino.github.io/)-bas
 
 ## Architecture — how the components work together
 
-The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces that build on each other:
+The GLP (Gaggiuino Local Profiler) ecosystem consists of two installable pieces — the app and the integration, which bundles the Shot Card and Order Card — that build on each other:
 
 ```
   Gaggiuino Machine
   └─ /api/shots          (shot history)
   └─ /api/system/status  (live brew data)
   └─ /api/system/info    (firmware version)
+
+  GaggiMate Machine
+  └─ ws://<host>/ws              (live status, profiles)
+  └─ /api/history/*.slog         (shot history)
          │
          │  sync every N min + live polling during brew
          │  (WebSocket by default, or MQTT — see below)
          ▼
   ┌──────────────────────────────────┐
-  │         GLP App               │  ← this app
+  │         GLP App                  │  ← this app
   │  Go server, port 8099            │
   │  stores data in /data/glp.db     │
   │  REST API + web UI               │
@@ -26,17 +30,22 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces
            │                    ▲
            │  polls             │  HA Ingress (browser, authenticated)
            │  /api/status       │  direct port 8099 (integration, cards)
-           │  /shots.json       │
-           │  /api/preheat      ├──────────────────────────┐
-           │  /api/maintenance  │                          │
-           │  /api/orders †     │                          │
-           ▼                    │                          │
-  ┌─────────────────────┐  ┌────┴─────────────────┐  ┌────┴─────────────────┐
-  │  GLP HA Integration │  │  GLP Shot Card       │  │  GLP Order Card      │
-  │  (custom component) │─►│  machine status,     │  │  customer ordering,  │
-  │  creates sensors,   │  │  last shot summary,  │  │  order status,       │
-  │  fires HA events    │─►│  preheat progress    │  │  shot summary on done│
-  └─────────────────────┘  └──────────────────────┘  └──────────────────────┘
+           │  /api/shots        │
+           │  /api/preheat      │
+           │  /api/maintenance  │
+           │  /api/orders †     │
+           ▼                    │
+  ┌─────────────────────────────────────────────────────────┐
+  │  GLP HA Integration  (custom component)                 │
+  │  creates sensors, fires HA events                       │
+  │  bundles both cards — no separate HACS install          │
+  │  ┌───────────────────────┐   ┌───────────────────────┐  │
+  │  │ GLP Shot Card         │   │ GLP Order Card        │  │
+  │  │ machine status,       │   │ customer ordering,    │  │
+  │  │ last shot summary,    │   │ order status,         │  │
+  │  │ preheat progress      │   │ shot summary on done  │  │
+  │  └───────────────────────┘   └───────────────────────┘  │
+  └─────────────────────────────────────────────────────────┘
            │          sensor attrs → both cards auto-detect switch_entity
            ▼
     HA sensors, automations, energy monitoring, …
@@ -46,7 +55,7 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of four independent pieces
 
 ### GLP App (this repo)
 
-The central piece. It syncs shot history from the Gaggiuino machine, stores it in a local SQLite database (`/data/glp.db`), and serves:
+The central piece. It syncs shot history from Gaggiuino and GaggiMate machines, stores it in a local SQLite database (`/data/glp.db`), and serves:
 - A web UI accessible via HA Ingress (the ☕ panel icon in the HA sidebar)
 - A REST API on port 8099 consumed by the integration and the Lovelace cards
 
@@ -56,23 +65,21 @@ A custom component that polls the app every 60 s (configurable). It exposes all 
 
 Install via HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
 
-### GLP Shot Card
+**The integration bundles the GLP Shot Card and GLP Order Card** — no separate HACS listing or card download. Installing/updating the integration via HACS registers both automatically as dashboard resources; add a `type: custom:glp-card` or `type: custom:glp-order-card` card to your dashboard.
+
+#### Shot Card (bundled)
 
 A custom Lovelace card that displays machine status, last shot summary, preheat progress, a power button and a **profile selector**. It talks to port 8099 directly and reads the `switch_entity` from the `machine_status` sensor attribute (set automatically by the integration) — no manual card configuration needed.
 
 The profile selector reads and writes `select.gaggiuino_profiler_profile`, provided natively by the GLP Integration (v1.9.0+). The selector is automatically hidden when the entity is not present.
 
-**Ships bundled inside [GLP Integration](https://github.com/mxkissnr/glp-integration)** — no separate HACS listing or card download. Installing/updating the integration via HACS registers it automatically as a dashboard resource; just add a `type: custom:glp-card` card to your dashboard.
-
-### GLP Order Card
+#### Order Card (bundled)
 
 A customer-facing Lovelace card for the order system. Customers browse the drink menu, place an order and track its status in real time. When the barista marks an order as done, the card shows the shot summary with a pressure sparkline. Requires `enable_orders: true` in the app configuration.
 
 Bean variants come from the coffee library via `/api/orders/active-beans`: only beans that are actually still in stock are offered (remaining = bag stock minus the doses logged in shot annotations), and each bean carries its customer-facing description (taste notes, origin, processing) so the card can show what characterizes the coffee. Blend beans carry their full multi-origin data as `origins[]` (`{code, percent?}`) alongside the legacy single-string `origin`, so a Card version that supports it can render all of a blend's countries. A bean can also be manually excluded from the picker without deleting it or touching its stock — see the eye/eye-off toggle in the Coffee Library below.
 
 **Stable order-to-bean attribution (backend, v2.21.0+):** `POST /api/orders` accepts an optional `beanId`, resolved server-side against the library's actual beans (a stale or unknown id becomes `null` rather than failing the order), and returns it on the order going forward (#563). ⚠ This is a backend/data-model fix only — no UI in this app or the Order Card currently displays or edits `beanId`; it exists so orders carry a stable bean reference for whichever release starts using it.
-
-**Ships bundled inside [GLP Integration](https://github.com/mxkissnr/glp-integration)** — no separate HACS listing or card download. Installing/updating the integration via HACS registers it automatically as a dashboard resource; just add a `type: custom:glp-order-card` card to your dashboard.
 
 ### Kiosk mode
 
@@ -226,7 +233,7 @@ options](#configuration-options) above.
 
 | Feature | HA OS / Supervisor app | Docker standalone |
 |---|---|---|
-| Ingress sidebar panel | ✅ native | ❌ — use a Lovelace iframe/Webpage card pointed at `http://<docker-host>:8099` instead (see [Embed in HA Dashboard](../README.md#-embed-in-ha-dashboard)) |
+| Ingress sidebar panel | ✅ native | ❌ — use a Lovelace iframe/Webpage card pointed at `http://<docker-host>:8099` instead (see [Embed in HA Dashboard](../README.md#embed-in-ha-dashboard)) |
 | Update notification | ✅ (Home Assistant app store) | ✅ — the app checks GitHub releases itself either way |
 | HA auto-sync / switch-entity power control / push notifications | ✅ automatic | ✅ with `GLP_HA_URL` + `GLP_HA_TOKEN` |
 | MQTT auto-discovery | ✅ | ❌ — enter the broker host/port/user/password manually under Settings → MQTT (already the fallback path on HA OS too when no MQTT service is registered) |
@@ -242,7 +249,7 @@ GLP can manage more than one espresso machine from a single app instance — no 
 > The `type` you pick when adding a machine (Settings → Machines) selects the **firmware adapter** GLP talks to — it is not a physical-brand setting. There is no Gaggia-specific (or any other brand-specific) logic anywhere in GLP. Any single-boiler machine running a Gaggiuino or GaggiMate controller board — Gaggia Classic, Rancilio Silvia, Lelit, and others — works identically once you pick the matching `type`.
 
 - **Gaggiuino** — the original REST + protobuf-WebSocket machine type this app was built for. Full support: shot sync, live status, profile create/read/update/delete, profile select.
-- **GaggiMate** ([jniebuhr/gaggimate](https://github.com/jniebuhr/gaggimate)) — a different ESP32 controller with a JSON WebSocket API and binary shot-history files. GLP's GaggiMate adapter is **experimental**: live status and shot history sync are supported and have been verified against real GaggiMate hardware as of v2.2.1–v2.2.3 (a WebSocket request-id correlation bug, a `.slog` URL zero-padding bug, and shot duration/profile-name mapping bugs were all found and fixed via live testing); Standard and Pro (Extended) profiles can be created, edited, and deleted from GLP — saved straight to the machine over the same WebSocket connection, since GaggiMate keeps no local profile copy of its own; the preview chart mirrors GaggiMate's own profile visualization (continuous pressure/flow curves, solid where a phase actively controls that parameter and dashed where it's just a held value, named phase regions); brew cannot be started from GLP (GaggiMate's own API has no start/stop command — only a Gaggiuino machine, and only via its physical brew switch, can be triggered from GLP, and even then GLP itself never sends a start command, only detects it). **Water level:** GaggiMate firmware always reports `wl=100` when no ALBA sensor is installed, so the water level field is opt-in — enable "Water level sensor installed (ALBA)" in the machine's settings form once the sensor is present; the idle Live view then shows the current tank level. **Weight in shot chart:** when a BLE scale was connected during a shot the curve is labelled "Gewicht"; when only a volumetric estimate was available it is labelled "Gewicht (geschätzt)" and drawn as a dashed line.
+- **GaggiMate** ([jniebuhr/gaggimate](https://github.com/jniebuhr/gaggimate)) — a different ESP32 controller with a JSON WebSocket API and binary shot-history files. Live status and shot history sync are supported and have been verified against real GaggiMate hardware; Standard and Pro (Extended) profiles can be created, edited, and deleted from GLP — saved straight to the machine over the same WebSocket connection, since GaggiMate keeps no local profile copy of its own; the preview chart mirrors GaggiMate's own profile visualization (continuous pressure/flow curves, solid where a phase actively controls that parameter and dashed where it's just a held value, named phase regions); brew cannot be started from GLP (GaggiMate's own API has no start/stop command — only a Gaggiuino machine, and only via its physical brew switch, can be triggered from GLP, and even then GLP itself never sends a start command, only detects it). **Water level:** GaggiMate firmware always reports `wl=100` when no ALBA sensor is installed, so the water level field is opt-in — enable "Water level sensor installed (ALBA)" in the machine's settings form once the sensor is present; the idle Live view then shows the current tank level. **Weight in shot chart:** when a BLE scale was connected during a shot the curve is labelled "Gewicht"; when only a volumetric estimate was available it is labelled "Gewicht (geschätzt)" and drawn as a dashed line.
 
 | | Gaggiuino | GaggiMate |
 |---|---|---|
