@@ -10,7 +10,6 @@
   <img src="https://img.shields.io/badge/arch-amd64%20%7C%20armv7%20%7C%20aarch64-6b7280?style=flat-square" alt="Architectures"/>
   <img src="https://img.shields.io/badge/Backend-Go-00ADD8?logo=go&style=flat-square" alt="Go backend"/>
   <img src="https://img.shields.io/badge/Built%20with-Claude%20by%20Anthropic-D97706?style=flat-square" alt="Built with Claude"/>
-  <img src="https://img.shields.io/badge/status-Work%20In%20Progress-orange?style=flat-square" alt="Work In Progress"/>
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square" alt="License GPL-3.0"/>
 </p>
 
@@ -25,13 +24,13 @@
 
 > **armv7 (32-bit ARM) is supported** alongside amd64 and aarch64. The armv7 image is not regularly tested on real hardware.
 
-> **Heads-up — this requires a machine running [Gaggiuino](https://gaggiuino.github.io/) or [GaggiMate](https://github.com/jniebuhr/gaggimate) firmware.** GLP does not work with stock espresso machines. Both are hardware mods (custom controller, pressure/temperature sensors) — Gaggiuino has full support, GaggiMate is experimental as of v2.0.0 (see the Multi-Machine row below). These mods aren't limited to one machine brand: **the "type" GLP asks for when you add a machine selects the firmware adapter it talks to, not the physical machine.** Any single-boiler machine with a Gaggiuino or GaggiMate board installed — Gaggia Classic, Rancilio Silvia, Lelit, and others — works identically from GLP's side. If your machine doesn't run either firmware yet, start there first.
+> **Heads-up — this requires a machine running [Gaggiuino](https://gaggiuino.github.io/) or [GaggiMate](https://github.com/jniebuhr/gaggimate) firmware.** GLP does not work with stock espresso machines. Both are hardware mods (custom controller, pressure/temperature sensors) — Gaggiuino and GaggiMate are both fully supported (see the Multi-Machine row below). These mods aren't limited to one machine brand: **the "type" GLP asks for when you add a machine selects the firmware adapter it talks to, not the physical machine.** Any single-boiler machine with a Gaggiuino or GaggiMate board installed — Gaggia Classic, Rancilio Silvia, Lelit, and others — works identically from GLP's side. If your machine doesn't run either firmware yet, start there first.
 
 ## Why GLP?
 
 You love your Gaggiuino or GaggiMate machine, but your shot data disappears into the void? GLP brings live extraction charts, a searchable coffee library and full analytics straight into Home Assistant — completely local, no cloud, no account. From *"what was that bean from last week again?"* to a real shot archive with automatic scoring, compare view and flavor wheel: everything runs on your HA server, and your data stays yours.
 
-## 🔗 The GLP Ecosystem
+## The GLP Ecosystem
 
 | Component | Version | Requires |
 |---|---|---|
@@ -46,7 +45,7 @@ All four components are optional and independently installable — only install 
 
 ---
 
-## ⚡ Quick Install
+## Quick Install
 
 <p>
   <a href="https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fmxkissnr%2Fgaggiuino-local-profiler">
@@ -58,7 +57,7 @@ Click the button above to add this repository directly to your Home Assistant �
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 <table>
   <tr>
@@ -79,11 +78,11 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-
 
 ---
 
-## ✨ Features
+## Features
 
 | | Feature | Description |
 |---|---|---|
-| 🔀 | **Multi-Machine** | Manage more than one espresso machine from a single app instance — Gaggiuino (full support) or [GaggiMate](https://github.com/jniebuhr/gaggimate) (experimental: sync + live status, full profile editing (Standard + Pro/Extended, create/edit/delete, saved straight to the machine) with a phase-accurate preview chart matching GaggiMate's own; water level with optional ALBA sensor; BLE-scale vs. estimated weight distinction in shot chart). Shot sync now runs for every registered machine, not just the default one; live view stays default-machine-only for now. Maintenance (descaling/backflush/group head/gaskets) is tracked per machine; shared equipment (water filter, grinder) stays global. Existing single-machine installs upgrade automatically, no manual steps. Gaggiuino machines show installed/available firmware right on their row in the machines list, with a one-click update trigger and progress bar; a stable/test/debug release-channel selector stays in the edit form. |
+| 🔀 | **Multi-Machine** | Manage more than one espresso machine from a single app instance — Gaggiuino (full support) or [GaggiMate](https://github.com/jniebuhr/gaggimate) (sync + live status, full profile editing (Standard + Pro/Extended, create/edit/delete, saved straight to the machine) with a phase-accurate preview chart matching GaggiMate's own; water level with optional ALBA sensor; BLE-scale vs. estimated weight distinction in shot chart). Shot sync now runs for every registered machine, not just the default one; live view stays default-machine-only for now. Maintenance (descaling/backflush/group head/gaskets) is tracked per machine; shared equipment (water filter, grinder) stays global. Existing single-machine installs upgrade automatically, no manual steps. Gaggiuino machines show installed/available firmware right on their row in the machines list, with a one-click update trigger and progress bar; a stable/test/debug release-channel selector stays in the edit form. |
 | 📈 | **Shot Archive** | All shots with pressure, flow, weight and temperature curves |
 | 🔴 | **Live Mode** | Real-time display directly from the controller (`/api/system/status`); the Live tab, preheat/ready badge and the sidebar's shot counter push updates instantly over a live connection, falling back automatically to polling if one can't be established. While idle, the Live tab shows current temperature/target, pressure and water level instead of a bare "Ready to brew"; steam and flush mode get the same live treatment (timer, readouts, badge, animated machine icon) as brewing. Stale readings are cleared automatically if the machine drops off the network. |
 | 📡 | **MQTT Live-Data Transport** | Alternative to the WebSocket connection for live sensor/system data — subscribes to the Gaggiuino's own MQTT-published topics instead, toggled in Settings ("Live connection: WebSocket / MQTT"). Broker connection is auto-discovered via the HA Supervisor's MQTT service when available, with manual entry as a fallback, plus a one-click "Apply to machine" that points the machine's own MQTT client at the same broker. Feeds the exact same live-state cache the WebSocket transport does — `glp-integration` needs zero changes either way. Applies to the default machine only. |
@@ -139,7 +138,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Step 1 — Add this repository to Home Assistant
 
@@ -180,7 +179,7 @@ Set your controller's IP/hostname — and, optionally, an HA switch entity to po
 
 ---
 
-## 🐳 Standalone Docker Install (Unraid, TrueNAS, HA Container, …)
+## Standalone Docker Install (Unraid, TrueNAS, HA Container, …)
 
 No HA Supervisor, no Home Assistant app store — this is for HA Container/HA Core installs (Unraid, TrueNAS SCALE and similar). GLP already ships as a plain multi-arch image, so it runs like any other Docker app:
 
@@ -193,13 +192,13 @@ docker run -d --name glp --restart unless-stopped \
 Or use the ready-made [`docker-compose.standalone.yml`](gaggiuino-local-profiler/docker-compose.standalone.yml) (`docker compose -f docker-compose.standalone.yml up -d`) — it also documents the optional env vars that replace Supervisor-only app config and HA integration for this install path. Then:
 
 - **GLP Integration** ([Step 2](#step-2--install-the-glp-integration-recommended) above) — auto-discovery needs a Supervisor, so on the config step just enter `http://<docker-host>:8099` manually.
-- **Dashboard panel** — no Ingress, so embed it as a normal iframe/Webpage card pointed at `http://<docker-host>:8099` (see [Embed in HA Dashboard](#-embed-in-ha-dashboard) below) instead of a sidebar panel.
+- **Dashboard panel** — no Ingress, so embed it as a normal iframe/Webpage card pointed at `http://<docker-host>:8099` (see [Embed in HA Dashboard](#embed-in-ha-dashboard) below) instead of a sidebar panel.
 
 Full walkthrough, env-var reference and a feature-parity table against the Supervisor-managed app: see [DOCS.md](gaggiuino-local-profiler/DOCS.md#standalone-docker-installation) / [DOCS.de.md](gaggiuino-local-profiler/DOCS.de.md#standalone-docker-installation).
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 | Option | Default | Description |
 |---|---|---|
@@ -211,7 +210,7 @@ Updates run through the Home Assistant app store — the app itself only checks 
 
 ---
 
-## 🏠 Embed in HA Dashboard
+## Embed in HA Dashboard
 
 Add the profiler as a card in any Lovelace dashboard:
 
@@ -228,7 +227,7 @@ aspect_ratio: "16:9"
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 Home Assistant Host
