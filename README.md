@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Home%20Assistant-App-41bdf5?logo=home-assistant&style=flat-square" alt="HA App"/>
   <img src="https://img.shields.io/badge/arch-amd64%20%7C%20armv7%20%7C%20aarch64-6b7280?style=flat-square" alt="Architectures"/>
   <img src="https://img.shields.io/badge/Backend-Go-00ADD8?logo=go&style=flat-square" alt="Go backend"/>
-  <img src="https://img.shields.io/badge/Built%20with-Claude%20by%20Anthropic-D97706?style=flat-square" alt="Built with Claude"/>
+  <img src="https://img.shields.io/badge/Built%20with%20AI-Claude%20%2B%20DeepSeek-D97706?style=flat-square" alt="Built with AI: Claude + DeepSeek"/>
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square" alt="License GPL-3.0"/>
 </p>
 
@@ -20,7 +20,7 @@
 
 ---
 
-> **AI-generated project.** All code, tests, and documentation in this repo are written by Claude (Anthropic). Scope, hardware testing (Gaggia Classic + Gaggiuino), and release decisions are done by a human maintainer. Keep that in mind before installing this on your machine.
+> **AI-built project.** Almost all code, tests and documentation are written by AI models — mainly Claude (Anthropic), with DeepSeek in the automated agent pipeline — plus community contributions. A human maintainer sets the scope, reviews every change, tests on real hardware (Gaggia Classic + Gaggiuino) and makes all release decisions. Keep that in mind before installing this on your machine.
 
 > **armv7 (32-bit ARM) is supported** alongside amd64 and aarch64. The armv7 image is not regularly tested on real hardware.
 
@@ -250,96 +250,101 @@ flowchart LR
   SC -->|"port 8099"| APP
   OC -->|"port 8099"| APP
   INT -->|"sensors / automations"| HA
+
+  classDef app fill:#b45309,stroke:#78350f,color:#fff
+  classDef machine fill:#0f766e,stroke:#134e4a,color:#fff
+  classDef ha fill:#1d4ed8,stroke:#1e3a8a,color:#fff
+  classDef fe fill:#6d28d9,stroke:#4c1d95,color:#fff
+  classDef store fill:#334155,stroke:#1e293b,color:#fff
+  classDef ext fill:#4b5563,stroke:#1f2937,color:#fff
+  class APP app
+  class GGU,GM machine
+  class INT,SC,OC,HA ha
+  class BR fe
+  style INTG fill:none,stroke:#1d4ed8
 ```
 
 ```mermaid
-flowchart TD
-  subgraph dash["Dashboard (public-src/)"]
-    MAIN["main.ts"]
-    TRANSPORT["api/transport.ts"]
-    VSHOTS["views/shots"]
-    SSETS["sse.ts"]
-  end
-  subgraph mconn["Machine Connectivity"]
-    M_HANDLERS["machines/handlers.go"]
-    M_REGISTRY["machines/registry.go"]
-    M_ADAPTER["machines/adapter.go"]
-    M_GGU["gaggiuino_adapter.go"]
-    M_GMT["gaggimate_adapter.go"]
-    POLL["system/poll.go"]
-    SYNC["system/sync.go"]
-    MQTT["mqtt/client.go"]
-  end
-  subgraph sdata["Shot Data"]
-    S_HANDLERS["shots/handlers.go"]
-    S_REPO["shots/repository.go"]
-  end
-  subgraph coffee["Coffee Operations"]
-    LIB["library"]
-    IMP["importer"]
-    ORD["orders"]
-    MAINT["maintenance"]
-    ACH["achievements"]
-  end
-  subgraph appsvc["Application Services"]
-    SERVER["cmd/server/main.go"]
-    BACKUP["backup"]
-    DB["db<br/>SQLite /data/glp.db"]
-    SSE["internal/sse"]
-    HA["internal/ha"]
-    NETGUARD["internal/netguard"]
-    FB["cmd/frontend-build"]
-    WEBAPP["internal/webapp<br/>embedded static assets"]
-  end
-  EX_GGU["Gaggiuino"]
-  EX_GMT["GaggiMate"]
-  EX_HA["Home Assistant"]
-  EX_ROAST["roaster web pages"]
-  M_ADAPTER --> M_GGU
-  M_ADAPTER --> M_GMT
-  M_GGU --> EX_GGU
-  M_GMT --> EX_GMT
-  POLL --> SYNC
-  SYNC --> M_ADAPTER
-  SYNC --> S_REPO
-  S_REPO --> DB
-  MQTT --> POLL
-  MQTT -->|"MQTT broker"| EX_GGU
-  M_HANDLERS --> M_REGISTRY
-  M_REGISTRY --> DB
-  M_REGISTRY --> M_ADAPTER
-  IMP --> NETGUARD
-  NETGUARD --> EX_ROAST
-  ORD --> HA
-  POLL --> HA
-  HA -->|"Supervisor API"| EX_HA
+flowchart TB
+  SPA["Browser SPA<br/>(public-src, TypeScript)"]
+
+  API["REST API /api/*<br/>(per-domain handlers; internal/web is the fallback /ui/ pages)"]
+  SSE["SSE /api/events<br/>(internal/sse)"]
+
+  POLL["poller + shot sync<br/>(internal/system)"]
+  MQTT["MQTT<br/>(internal/mqtt)"]
+  MACH["machines: registry + adapters<br/>(internal/machines)"]
+  SHOTS["shots<br/>(internal/shots)"]
+  LIB["library<br/>(internal/library)"]
+  IMP["importer<br/>(internal/importer)"]
+  ORD["orders<br/>(internal/orders)"]
+  MAINT["maintenance + achievements<br/>(internal/maintenance, internal/achievements)"]
+  BACKUP["backup / restore<br/>(internal/backup)"]
+  NET["netguard<br/>(internal/netguard)"]
+
+  DB["SQLite /data/glp.db<br/>(internal/db)"]
+  HA["HA Supervisor client<br/>(internal/ha)"]
+
+  EX_MACH["Gaggiuino / GaggiMate<br/>(external)"]
+  EX_HA["Home Assistant<br/>(external)"]
+  EX_ROAST["roaster sites<br/>(external)"]
+  EX_MQTT["MQTT broker<br/>(external)"]
+
+  SPA --> API
+  SPA --> SSE
+  API --> POLL
+  API --> MQTT
+  API --> MACH
+  API --> SHOTS
+  API --> LIB
+  API --> IMP
+  API --> ORD
+  API --> MAINT
+  API --> BACKUP
+  POLL --> MACH
+  POLL --> SHOTS
+  POLL --> LIB
   POLL --> SSE
-  SSE --> SSETS
-  SSETS --> MAIN
-  FB --> WEBAPP
-  WEBAPP --> MAIN
-  MAIN --> TRANSPORT
-  VSHOTS --> TRANSPORT
-  TRANSPORT --> M_HANDLERS
-  TRANSPORT --> S_HANDLERS
-  TRANSPORT --> LIB
-  TRANSPORT --> ORD
-  TRANSPORT --> MAINT
-  TRANSPORT --> ACH
-  TRANSPORT --> IMP
-  TRANSPORT --> BACKUP
-  S_HANDLERS --> S_REPO
-  SERVER --> POLL
-  SERVER --> WEBAPP
-  SERVER --> SSE
-  SERVER --> BACKUP
-  SERVER --> DB
-  ORD --> DB
-  ORD --> S_REPO
+  POLL --> HA
+  POLL --> MQTT
+  MQTT --> MACH
+  MQTT --> HA
+  MQTT --> EX_MQTT
+  MACH --> EX_MACH
+  MACH --> SSE
+  IMP --> NET
+  NET --> EX_ROAST
+  MACH --> DB
+  SHOTS --> DB
   LIB --> DB
+  IMP --> DB
+  ORD --> DB
   MAINT --> DB
-  ACH --> DB
   BACKUP --> DB
+  MQTT --> DB
+  ORD --> SHOTS
+  ORD --> LIB
+  ORD --> HA
+  MAINT --> SHOTS
+  MAINT --> LIB
+  BACKUP --> SHOTS
+  BACKUP --> LIB
+  BACKUP --> ORD
+  BACKUP --> MAINT
+  HA --> EX_HA
+
+  classDef app fill:#b45309,stroke:#78350f,color:#fff
+  classDef machine fill:#0f766e,stroke:#134e4a,color:#fff
+  classDef ha fill:#1d4ed8,stroke:#1e3a8a,color:#fff
+  classDef fe fill:#6d28d9,stroke:#4c1d95,color:#fff
+  classDef store fill:#334155,stroke:#1e293b,color:#fff
+  classDef ext fill:#4b5563,stroke:#1f2937,color:#fff
+  class SPA fe
+  class API,SSE,POLL,SHOTS,LIB,IMP,ORD,MAINT,BACKUP app
+  class MACH,MQTT machine
+  class DB store
+  class HA ha
+  class EX_MACH,EX_HA,EX_ROAST,EX_MQTT ext
 ```
 
 Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profiler/DOCS.md)) keeps an ASCII diagram, since Home Assistant cannot render Mermaid.
@@ -350,7 +355,7 @@ Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profil
 
 <p align="center">
   <img src="docs/dev-stats/commits-per-repo.svg" alt="Commits per repo" width="49%"/>
-  <img src="docs/dev-stats/model-breakdown.svg" alt="Claude model breakdown by commits" width="49%"/>
+  <img src="docs/dev-stats/model-breakdown.svg" alt="AI model breakdown by commits" width="49%"/>
 </p>
 
 Full numbers (timeline, per-model breakdown, cost estimate) generated live from git history: see [DEVELOPMENT.md](DEVELOPMENT.md).
@@ -388,5 +393,5 @@ GLP is an independent, community-built companion project. It is not officially a
 ---
 
 <p align="center">
-  <sub>Built with AI assistance — designed and developed together with <a href="https://claude.ai">Claude</a> by Anthropic</sub>
+  <sub>Built with AI — developed with <a href="https://claude.ai">Claude</a> (Anthropic) and <a href="https://www.deepseek.com">DeepSeek</a>, maintained by a human</sub>
 </p>
