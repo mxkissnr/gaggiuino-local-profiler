@@ -230,6 +230,7 @@ aspect_ratio: "16:9"
 The GLP ecosystem (top) and the app's internals (below), as diagrams:
 
 ```mermaid
+%%{init: {"flowchart": {"curve": "step", "nodeSpacing": 40, "rankSpacing": 60}}}%%
 flowchart LR
   GGU["Gaggiuino controller"]
   GM["GaggiMate controller"]
@@ -251,101 +252,112 @@ flowchart LR
   OC -->|"port 8099"| APP
   INT -->|"sensors / automations"| HA
 
-  classDef app fill:#b45309,stroke:#78350f,color:#fff
-  classDef machine fill:#0f766e,stroke:#134e4a,color:#fff
-  classDef ha fill:#1d4ed8,stroke:#1e3a8a,color:#fff
-  classDef fe fill:#6d28d9,stroke:#4c1d95,color:#fff
-  classDef store fill:#334155,stroke:#1e293b,color:#fff
-  classDef ext fill:#4b5563,stroke:#1f2937,color:#fff
-  class APP app
-  class GGU,GM machine
-  class INT,SC,OC,HA ha
-  class BR fe
-  style INTG fill:none,stroke:#1d4ed8
+  classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+  classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+  classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+  classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+  classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+  classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+  classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+  class APP toneIndigo
+  class GGU,GM toneAmber
+  class INT,SC,OC,HA toneTeal
+  class BR toneBlue
+  style INTG fill:#f8fafc10,stroke:#94a3b8
 ```
 
 ```mermaid
+%%{init: {"flowchart": {"curve": "step", "nodeSpacing": 40, "rankSpacing": 60}}}%%
 flowchart TB
-  SPA["Browser SPA<br/>(public-src, TypeScript)"]
+  USER(("Home Assistant user"))
+  MACHINE(("Gaggiuino / GaggiMate"))
+  HASVC(("Home Assistant"))
+  ROAST(("Roaster web shops"))
+  BROKER(("MQTT broker"))
 
-  API["REST API /api/*<br/>(per-domain handlers; internal/web is the fallback /ui/ pages)"]
-  SSE["SSE /api/events<br/>(internal/sse)"]
+  subgraph DASH["Dashboard"]
+    SPA["SPA<br/>[public-src]"]
+    LIVE["Live updates<br/>[sse.ts]"]
+  end
 
-  POLL["poller + shot sync<br/>(internal/system)"]
-  MQTT["MQTT<br/>(internal/mqtt)"]
-  MACH["machines: registry + adapters<br/>(internal/machines)"]
-  SHOTS["shots<br/>(internal/shots)"]
-  LIB["library<br/>(internal/library)"]
-  IMP["importer<br/>(internal/importer)"]
-  ORD["orders<br/>(internal/orders)"]
-  MAINT["maintenance + achievements<br/>(internal/maintenance, internal/achievements)"]
-  BACKUP["backup / restore<br/>(internal/backup)"]
-  NET["netguard<br/>(internal/netguard)"]
+  subgraph APP["Application"]
+    API["REST API<br/>[cmd/server + handlers]"]
+    SSE["Event stream<br/>[internal/sse]"]
+    BACKUP["Backup & Restore<br/>[internal/backup]"]
+    DB[("SQLite<br/>[internal/db]")]
+  end
 
-  DB["SQLite /data/glp.db<br/>(internal/db)"]
-  HA["HA Supervisor client<br/>(internal/ha)"]
+  subgraph CONN["Machine Connectivity"]
+    POLL["Poller & Shot Sync<br/>[internal/system]"]
+    MACH["Machine Registry & Adapters<br/>[internal/machines]"]
+    MQTT["MQTT Transport<br/>[internal/mqtt]"]
+  end
 
-  EX_MACH["Gaggiuino / GaggiMate<br/>(external)"]
-  EX_HA["Home Assistant<br/>(external)"]
-  EX_ROAST["roaster sites<br/>(external)"]
-  EX_MQTT["MQTT broker<br/>(external)"]
+  subgraph SHOTDATA["Shot Data"]
+    SHOTS["Shots<br/>[internal/shots]"]
+  end
 
-  SPA --> API
-  SPA --> SSE
-  API --> POLL
-  API --> MQTT
-  API --> MACH
-  API --> SHOTS
-  API --> LIB
-  API --> IMP
-  API --> ORD
-  API --> MAINT
-  API --> BACKUP
-  POLL --> MACH
-  POLL --> SHOTS
-  POLL --> LIB
-  POLL --> SSE
-  POLL --> HA
-  POLL --> MQTT
-  MQTT --> MACH
-  MQTT --> HA
-  MQTT --> EX_MQTT
-  MACH --> EX_MACH
-  MACH --> SSE
-  IMP --> NET
-  NET --> EX_ROAST
-  MACH --> DB
-  SHOTS --> DB
+  subgraph COFFEE["Coffee Operations"]
+    LIB["Coffee Library<br/>[internal/library]"]
+    IMP["Bean Import<br/>[internal/importer]"]
+    ORD["Orders<br/>[internal/orders]"]
+    MAINT["Maintenance & Achievements<br/>[internal/maintenance, internal/achievements]"]
+  end
+
+  subgraph PLATFORM["Platform"]
+    HA["HA Supervisor client<br/>[internal/ha]"]
+    NET["Outbound guard<br/>[internal/netguard]"]
+  end
+
+  USER -->|"opens via HA Ingress"| SPA
+  SPA -->|"HTTP"| API
+  SSE -->|"push"| LIVE
+  LIVE --> SPA
+  API -->|"routes"| SHOTS
+  API -->|"routes"| LIB
+  API -->|"routes"| ORD
+  API -->|"routes"| MAINT
+  API -->|"routes"| BACKUP
+  API -->|"routes"| MACH
+  POLL -->|"polls"| MACH
+  MACH -->|"HTTP / WebSocket"| MACHINE
+  MQTT -.->|"subscribes"| BROKER
+  BROKER -.->|"publishes"| MACHINE
+  POLL -->|"syncs shots"| SHOTS
+  POLL -->|"live state"| SSE
+  MQTT -->|"live data"| POLL
+  IMP -->|"fetch"| NET
+  NET -.->|"HTTPS"| ROAST
+  ORD -->|"notify"| HA
+  POLL -->|"switch / sensors"| HA
+  HA -.->|"Supervisor API"| HASVC
+  SHOTS -->|"read / write"| DB
   LIB --> DB
-  IMP --> DB
   ORD --> DB
   MAINT --> DB
   BACKUP --> DB
-  MQTT --> DB
-  ORD --> SHOTS
-  ORD --> LIB
-  ORD --> HA
-  MAINT --> SHOTS
-  MAINT --> LIB
-  BACKUP --> SHOTS
-  BACKUP --> LIB
-  BACKUP --> ORD
-  BACKUP --> MAINT
-  BACKUP --> MACH
-  HA --> EX_HA
+  MACH --> DB
 
-  classDef app fill:#b45309,stroke:#78350f,color:#fff
-  classDef machine fill:#0f766e,stroke:#134e4a,color:#fff
-  classDef ha fill:#1d4ed8,stroke:#1e3a8a,color:#fff
-  classDef fe fill:#6d28d9,stroke:#4c1d95,color:#fff
-  classDef store fill:#334155,stroke:#1e293b,color:#fff
-  classDef ext fill:#4b5563,stroke:#1f2937,color:#fff
-  class SPA fe
-  class API,SSE,POLL,SHOTS,LIB,IMP,ORD,MAINT,BACKUP,NET app
-  class MACH,MQTT machine
-  class DB store
-  class HA ha
-  class EX_MACH,EX_HA,EX_ROAST,EX_MQTT ext
+  classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+  classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+  classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+  classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+  classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+  classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+  classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+  class USER,SPA,LIVE toneBlue
+  class API,SSE,BACKUP,DB toneIndigo
+  class POLL,MACH,MQTT,MACHINE,BROKER toneAmber
+  class SHOTS toneMint
+  class LIB,IMP,ORD,MAINT,ROAST toneRose
+  class HA,NET,HASVC toneTeal
+  style DASH fill:#f8fafc10,stroke:#94a3b8
+  style APP fill:#f8fafc10,stroke:#94a3b8
+  style CONN fill:#f8fafc10,stroke:#94a3b8
+  style SHOTDATA fill:#f8fafc10,stroke:#94a3b8
+  style COFFEE fill:#f8fafc10,stroke:#94a3b8
+  style PLATFORM fill:#f8fafc10,stroke:#94a3b8
+```
 ```
 
 Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profiler/DOCS.md)) keeps an ASCII diagram, since Home Assistant cannot render Mermaid.
