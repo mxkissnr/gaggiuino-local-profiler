@@ -129,7 +129,7 @@ Docs and code always in the same commit — never deliver CHANGELOG/DOCS/README 
 
 Every commit that ships a feature or fix needs:
 1. Code change
-2. `CHANGELOG.md` entry added under `## [Unreleased]` at the top — **keep it short: one bold lead-in sentence per bullet, optionally one short trailing clause, plus `Closes #N`.** No multi-sentence technical paragraphs, no file/function names, no "Review follow-up"/"Live-testing follow-up" sub-narratives, and no version number of its own — the entry stays under `## [Unreleased]` until the release step retitles that whole section. Home Assistant Supervisor renders this file verbatim in the add-on's own Update dialog (screenshot-verified 2026-08-11) — a long entry there is a real UX problem, not just a cosmetic one. The deep technical writeup (root cause, file paths, edge cases) belongs in the commit message and PR description, which stay the actual detailed record; don't duplicate it into `CHANGELOG.md`.
+2. `CHANGELOG.md` entry added under `## [Unreleased]` at the top — **keep it short: one bold lead-in sentence per bullet, optionally one short trailing clause, plus `Closes #N`.** No multi-sentence technical paragraphs, no file/function names, no "Review follow-up"/"Live-testing follow-up" sub-narratives, and no version number of its own — the entry stays under `## [Unreleased]` until the release step retitles that whole section. Home Assistant Supervisor renders this file verbatim in the app's own Update dialog (screenshot-verified 2026-08-11) — a long entry there is a real UX problem, not just a cosmetic one. The deep technical writeup (root cause, file paths, edge cases) belongs in the commit message and PR description, which stay the actual detailed record; don't duplicate it into `CHANGELOG.md`.
 3. `DOCS.md` **and** `DOCS.de.md` update if the feature is user-facing — both languages always in sync
 4. `README.md` features table update if it's a new feature
 
@@ -148,7 +148,7 @@ gh release create v<version> --title "v<version>" --notes "..."
 
 ## Release & documentation rules (since 2026-07-05)
 
-- **A release ends at the GitHub release.** Do NOT deploy to Home Assistant — Max installs add-on/HACS updates himself. This is an internal workflow note for you, not something users need to know — **never** put a "no HA deploy included" / "install the update yourself" disclaimer in the public release notes body. Release notes are for end users and describe the software, not this project's internal release process.
+- **A release ends at the GitHub release.** Do NOT deploy to Home Assistant — Max installs app/HACS updates himself. This is an internal workflow note for you, not something users need to know — **never** put a "no HA deploy included" / "install the update yourself" disclaimer in the public release notes body. Release notes are for end users and describe the software, not this project's internal release process.
 - **GLP documentation lives ONLY in the GLP repos.** Never write GLP release notes into mkab-infra/CHANGELOG.md.
 - **Update the GitHub wiki every feature round** (`git clone git@github.com:mxkissnr/gaggiuino-local-profiler.wiki.git`): pages are bilingual (`Page.md` + `Page-de.md`, always both). Minimum when touched by features: Coffee-Library, Analytics, Features, Home.
 - **Keep README screenshots current** when the UI changes: `node scripts/screenshots.mjs` regenerates `docs/screenshots/*.png`.
@@ -186,8 +186,8 @@ README.md                     ← Repo root README (English)
 - **Machine config source of truth**: the `machines` SQLite table
   (`go/internal/machines`, the registry) is the only source of truth for a
   machine's host and switch entity — never `options.json`. `options.json`
-  (the HA add-on configuration) is a *tracked input*: the registry adopts a
-  changed add-on option once, at startup; after that the registry's own
+  (the HA app configuration) is a *tracked input*: the registry adopts a
+  changed app option once, at startup; after that the registry's own
   value (including one intentionally cleared via Settings → Machines) always
   wins. Read machine config only through the registry's resolver methods
   (`machineId = nil`/`0` means the default machine) — never off a raw
