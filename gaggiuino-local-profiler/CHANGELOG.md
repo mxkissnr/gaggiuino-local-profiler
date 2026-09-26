@@ -3,7 +3,6 @@
 - **A firmware update recorded in the maintenance log now shows which version was replaced by which and the shot count at the time.** Closes #1172
 
 ### Changed
-- **The Shot Card and Order Card are now documented as part of the GLP Integration rather than as separate installable components, in the README and both DOCS languages.** Closes #1179
 - **The README now shows the GLP ecosystem and the app's internals as diagrams, and GaggiMate is documented as fully supported.** Closes #1176
 - **The app architecture diagram now shows the importer and backup/restore paths through the REST API.** Part of #1176
 
