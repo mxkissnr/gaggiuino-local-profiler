@@ -18,8 +18,9 @@ import (
 // never needed.
 
 // DefaultImageDir is re-exported from internal/img because many call sites
-// (and internal/backup + internal/web) reference library.DefaultImageDir.
-const DefaultImageDir = img.DefaultImageDir
+// (and internal/backup + internal/web) reference library.DefaultImageDir. A
+// var so it picks up img's GLP_IMAGE_DIR override (see internal/img/img.go).
+var DefaultImageDir = img.DefaultImageDir
 
 // allowedImageHosts mirrors lib/constants.js's ALLOWED_IMAGE_HOSTS
 // (ALLOWED_IMPORT_HOSTS plus cdn.shopify.com): bean images are only ever
