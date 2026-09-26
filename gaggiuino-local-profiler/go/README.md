@@ -25,8 +25,8 @@ cross-compile → Alpine runtime) for amd64, armv7 and aarch64.
   `mqtt`, `img`, `achievements`, `netguard`, `webapp` (SPA embed + serve),
   `web` (frozen no-JS templ fallback under `/ui/`).
 - Each package has a `doc.go` that is the authoritative description of what
-  it does and why. The narrative below is the migration history and is
-  kept as background — the `doc.go` files are current.
+  it does and why. The Node → Go migration history lives in
+  [`docs/history/go-migration.md`](../../docs/history/go-migration.md).
 
 ## Config
 
@@ -35,7 +35,7 @@ Runtime configuration is env vars (all optional, sensible defaults):
 (`/data/api_token.txt`), `GLP_ENABLE_ORDERS`, `GLP_SYNC_INTERVAL`,
 `GLP_PREHEAT_TIME`, `GLP_DEBUG_LOGGING`, `GLP_HA_URL` + `GLP_HA_TOKEN`
 (standalone HA integration), `MACHINE_URL`, `GLP_RATE_LIMIT_*`. Inside the
-HA add-on the Supervisor writes `/data/options.json` and those take
+HA app the Supervisor writes `/data/options.json` and those take
 precedence over the env fallbacks.
 
 The version string served from `GET /api/version` lives in
@@ -51,7 +51,8 @@ Replace Node/Express + better-sqlite3 with a single static Go binary
 resource footprint, and remove the npm supply-chain surface.
 
 The rollout ran in phases on a `go-migration` branch, then a dev-channel
-beta, then the #977 cutover that made this the shipping image. Two
+beta, then the #977 cutover that made this the shipping image — see
+[`docs/history/go-migration.md`](../../docs/history/go-migration.md). Two
 compatibility bars anchored it and still hold:
 
 - The API contract: every endpoint keeps the paths, methods, status codes
@@ -63,7 +64,7 @@ compatibility bars anchored it and still hold:
 
 Security parity with the Node app's ingress-trust model (HA Ingress vs.
 direct-port trust boundary, `X-GLP-Token` auth, SSRF guards on machine
-hosts, rate limiting) is non-negotiable and must be replicated 1:1, not
+hosts, rate limiting) is non-negotiable and is kept 1:1, not
 approximated — see `internal/auth/doc.go`.
 
 ## Layout
@@ -72,34 +73,40 @@ approximated — see `internal/auth/doc.go`.
 go/
   go.mod
   README.md              — this file
-  RESEARCH.md             — Phase 0 research spikes (protobuf sources, image/QR libs)
+  RESEARCH.md            — Phase 0 research spikes (historical: protobuf sources, image/QR libs)
+  Makefile               `make generate`/`build`/`vet`/`test`/`fmt-check`; `make frontend` bundles the SPA into `internal/webapp/dist` via `cmd/frontend-build`
   cmd/
-    server/                main.go — HTTP bootstrap: db + auth + sse + shots + library + machines + orders + maintenance + backup + system wiring
-    gaggiuino-ws-probe/     manual protobuf-decoder verification tool (not part of the server binary)
+    server/                main() — opens the DB, wires every `internal/<domain>` package together, and serves the REST/SSE API
+    frontend-build/        bundles `../public-src` into `internal/webapp/dist` (esbuild's Go API, #1033)
+    gaggiuino-ws-probe/    manual protobuf-decoder verification tool (not part of the server binary)
   internal/
-    db/                    lib/db.js — schema + migrations
-    auth/                  server.js's ingress-trust + token-auth
-    ratelimit/              lib/middleware/rateLimit.js — app-level rate limiter
-    sse/                   routes/sse.js — /api/events (implemented, Phase 1b)
-    shots/                 routes/shots.js + ShotService/ShotRepository (implemented, Phase 1c)
-    library/               routes/library/*.js + LibraryService (implemented, Phase 1d)
-    machines/              routes/machines.js + machine-control.js + lib/machines/* (implemented, Phase 1e)
-    machines/proto/         Gaggiuino's binary protobuf schema (implemented, Phase 1e)
-    orders/                routes/orders.js + OrderService (implemented, Phase 1f, extended Phase 1g)
-    maintenance/           routes/maintenance.js + LibraryService/LibraryRepository's maintenance-table methods (implemented, Phase 1f)
-    backup/                routes/backup.js + lib/backup-crypto.js (implemented, Phase 1f)
-    ha/                    lib/ha.js — SendNotify/GetNotifyServices/GetPersons/GetSwitchState/CallHaService/GetHaLanguage (implemented, Phase 1f, extended Phase 1g)
-    debug/                 routes/debug.js's export-db/import-db + /api/debug/machine + the Go-only /api/debug/ingress self-check (implemented, Phase 2e, ingress in Phase 3)
-    system/                routes/system.js's token/status/live/preheat/version/demo endpoints + lib/poll.js + lib/preheat.js (implemented, Phase 1g; token/status added Phase 3b)
-    web/                   templ+htmx+Alpine pages, now the frozen no-JS fallback view mounted under /ui/ (Phase 1 parity round, #901): GET /ui/shots (Phase 2a) + Library (2b) + Machines/Live (2c) + Orders/Menu (2d) + Maintenance/Settings/Backup (2e)
-      templates/             .templ sources (own package — see internal/web/doc.go)
-      static/                vendored htmx/Alpine/Chart.js + style.css + live.js, embedded via embed.FS
-    webapp/                 the production frontend: the SPA from gaggiuino-local-profiler/public-src, bundled by cmd/frontend-build (esbuild's Go API, #1033) and embedded via //go:embed, served at / (Phase 1 parity round, #901 — see internal/webapp/doc.go)
-  Makefile                 `make generate`/`build`/`vet`/`test`/`fmt-check` — templ codegen first, every target (Phase 2a); `make frontend` bundles the SPA into internal/webapp/dist via cmd/frontend-build (#1033)
-  Dockerfile               build-only multi-arch image, native Go cross-compile (implemented, Phase 4, see "Docker")
-  docker-entrypoint.sh     chown /data + drop to unprivileged `glp` user, mirrors the repo-root Node entrypoint (Phase 4)
+    achievements/  achievements ("stamp card") domain
+    auth/          ingress-trust checks + API-token auth
+    backup/        backup/restore (JSON export + zip)
+    config/        shared, dependency-free `options.json` helpers
+    db/            SQLite schema init + migrations
+    debug/         export-db/import-db + the Go-only ingress self-check
+    ha/            Home Assistant REST client (notify/persons/switch)
+    httputil/      shared JSON-response helpers
+    img/           shared entity-image helpers + optimize
+    importer/      bean import from shop/roaster URLs
+    library/       coffee library (beans, grinders, baskets, milks, recipes)
+    machines/      machine registry + control proxy + per-type adapters
+      proto/         Gaggiuino's binary WS codec
+    maintenance/   maintenance tasks + log
+    mqtt/          MQTT live-data transport
+    netguard/      SSRF/host guards
+    orders/        barista-orders queue
+    ratelimit/     app-level rate limiter
+    shots/         shot history + scoring
+    sse/           `/api/events` Server-Sent Events hub
+    system/        status/preheat/version/demo + background polling
+    web/           frozen no-JS templ fallback, mounted under `/ui/`
+      templates/     `.templ` sources (own package — see `internal/web/doc.go`)
+      static/        vendored htmx/Alpine/Chart.js + `style.css` + `live.js`, embedded via `embed.FS`
+    webapp/        the SPA from `../public-src`, embedded via `//go:embed` and served at `/`
   scripts/
-    smoke-test.sh            native-binary + (GLP_SMOKE_DOCKER_IMAGE mode) Docker-image smoke test (Phase 3a, extended Phase 4)
+    smoke-test.sh            native-binary + Docker-image smoke test
 ```
 
 This package's CI is `.github/workflows/test.yaml`'s `go-test` job (gofmt/
@@ -107,40 +114,39 @@ vet/build/`go test -race`/govulncheck/route-parity) plus that same file's
 `docker-smoke` job (`needs: go-test`; multi-arch matrix build of the
 repo-root Dockerfile — amd64/arm64/armv7 — plus `go/scripts/smoke-test.sh`
 against the amd64 image) — both added at the #977 cutover, replacing the
-now-deleted `go-build.yaml`; see "Docker" below for that history.
+now-deleted `go-build.yaml`; see
+[`docs/history/go-migration.md`](../../docs/history/go-migration.md) for that
+history.
 
 Every backend package under `internal/` is implemented — see
-`go/internal/system/doc.go` for the small, deliberate set of
-`routes/system.js` routes it doesn't route. `internal/web` now covers every
-frontend domain the migration plan named: Shots, the Library domain's six
-pages, Machines, the live shot chart, the Orders domain's barista queue +
-customer ordering form, and (Phase 2e) Maintenance's per-machine task
-tracking, Settings' machine-settings categories, and a Backup download
-page — see "Frontend" below for what's deliberately still read-only or
-deferred within each (per-task threshold editing and the maintenance log,
-and backup restore's own upload UI all stay JSON-API-only pending a
-follow-up phase; all five settings categories, including boiler/system,
-are now editable — see the "Status" section's "Design pass 4 follow-up"
-paragraph for how that closed the safety-scoped revert instead of just
-undoing it).
+`internal/system/doc.go` for the small, deliberate set of
+`routes/system.js` routes that were not ported.
 
 ## Frontend
 
-The Go rewrite's frontend stack, per the Migrationsplan's Phase 2/frontend
-decision: [`templ`](https://templ.guide) (typesafe, compiled server
-templates) + [htmx](https://htmx.org) (server-driven fragment swaps for
+The shipping UI is the Vite SPA in `../public-src/`. `cmd/frontend-build`
+bundles it (esbuild's Go API, #1033) into `internal/webapp/dist`, which
+`internal/webapp` embeds with `//go:embed` and serves at `/`. Only a
+placeholder `internal/webapp/dist/index.html` is committed, so a plain
+`go build` resolves the embed with no npm step; the Docker image and
+`make frontend` supply the real bundle.
+
+`internal/web` is a frozen, no-JS fallback built with
+[`templ`](https://templ.guide) (typesafe, compiled server templates) +
+[htmx](https://htmx.org) (server-driven fragment swaps for
 CRUD/navigation/forms, including the htmx SSE extension for non-high-
 frequency live updates) + [Alpine.js](https://alpinejs.dev) (declarative
 local UI interactivity — dropdowns, modals, filters — no bespoke JS for
-that). The one deliberate exception, now built (Phase 2c): the live shot
+that). `cmd/server` mounts it under `/ui/`. Its one page that needs a live
 chart (pressure/flow during a pull, several updates a second over SSE)
-keeps a thin vanilla-JS canvas component (`static/live.js`, Chart.js under
-the hood) consuming SSE directly, because server-round-tripping every
-animation frame is the wrong tool for that one job — see the
-Migrationsplan's frontend-stack rationale. Goal: no Node/npm anywhere in
-the Docker image (build or runtime); the only external browser runtime is
-htmx (~50 KB) plus Alpine (~54 KB) plus, on the one page that needs it,
-Chart.js (~200 KB), all vendored locally, never loaded from a CDN.
+keeps a thin vanilla-JS canvas component, `static/live.js` (Chart.js under
+the hood), consuming SSE directly. All vendored assets — htmx, Alpine,
+Chart.js — are served locally, never loaded from a CDN.
+
+One known gap remains: `machines.ValidateSettingsPayload` in
+`internal/machines/validation.go` still only checks that the REST settings
+payload is valid JSON, while the web UI uses field-level validation
+(`internal/machines/settings_validation.go`).
 
 **Codegen:** `.templ` sources live under `internal/web/templates/` and are
 NOT valid Go until `templ generate` runs, which writes a `_templ.go` next
@@ -190,7 +196,7 @@ doesn't grant — see that NOTICE.md for the full reasoning.
 **Auth model:** `GET /shots` (and `/web/static/*`) are registered outside
 `/api/`, so they fall through `internal/auth.RequireToken`'s bypass for
 non-API GET/HEAD requests — the same trust boundary `public-src/`'s static
-HTML/JS/CSS already relies on today (HA Ingress's own auth, or LAN/port
+HTML/JS/CSS already relies on (HA Ingress's own auth, or LAN/port
 access in standalone mode), not a new session/cookie scheme. The two htmx
 write actions (`POST /shots/{id}/trash`, `POST /shots/{id}/restore`) do
 NOT get that bypass — `RequireToken` scopes it to GET/HEAD specifically (a
@@ -201,8 +207,8 @@ require the same `X-GLP-Token`/Ingress trust the JSON API does.
 
 That header is wired into htmx structurally, not per button:
 `templates/layout.templ` loads `static/glp-token.js` once, globally, for
-every current and future Phase-2 page. It fetches the token from the
-already-public `GET /api/token` (mirroring `public-src/api.js`'s
+every templ page. It fetches the token from the already-public
+`GET /api/token` (mirroring `public-src/api.js`'s
 `initToken()` for the existing SPA) and attaches it as `X-GLP-Token` to
 every htmx request via htmx's `htmx:configRequest` event — no per-page
 wiring, no SSR-embedded token in `GET /shots`' own (deliberately
@@ -211,7 +217,7 @@ unauthenticated) HTML. See `internal/web/doc.go`'s "Auth model" section and
 fetch-and-attach was chosen over an SSR meta tag. The fetch itself is
 relative (`api/token`, not `/api/token`) — a #901 code-review fix, mirroring
 `public-src/api.js`'s `initToken()` — so it resolves correctly against the
-HA Ingress-prefixed page URL and reaches the add-on's own handler on the
+HA Ingress-prefixed page URL and reaches the app's own handler on the
 primary access path; a root-absolute fetch would resolve against the
 origin root instead and miss it. Standalone mode with `expose_api_port`
 explicitly set to `false` still 401s a non-Ingress Trash/Restore click —
