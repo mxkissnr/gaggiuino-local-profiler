@@ -155,7 +155,7 @@ export async function restoreBackup(baseUrl, zipPath) {
     try {
         zip = readFileSync(zipPath);
     } catch (err) {
-        throw new Error(`Cannot read GLP_SCREENSHOT_BACKUP file ${zipPath}: ${err.message}`);
+        throw new Error(`Cannot read GLP_SCREENSHOT_BACKUP file ${zipPath}: ${err.message}`, { cause: err });
     }
 
     // Same auth the SPA and seed() use: the token from the already-public
