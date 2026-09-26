@@ -1,3 +1,7 @@
+## [Unreleased]
+### Fixed
+- **A firmware update recorded in the maintenance log now shows which version was replaced by which and the shot count at the time.** Closes #1172
+
 ## [3.2.0] – 2026-09-26
 ### Added
 - **Added a kiosk page for a tablet on the table: guests enter their name, pick a drink and place an order, and see the live queue with estimated times.** Part of #1125

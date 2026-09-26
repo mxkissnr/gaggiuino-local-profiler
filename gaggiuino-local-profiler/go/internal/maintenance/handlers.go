@@ -172,12 +172,14 @@ func (h *Handlers) taskDone(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stats)
 }
 
-// shotCountFor ports LibraryService.js's addMaintenanceLogEntry's shotCount
+// ShotCountFor ports LibraryService.js's addMaintenanceLogEntry's shotCount
 // computation: waterfilter/grinder_* (shared equipment) count shots across
 // every machine, everything else scopes to the active machine. A standalone
 // function (not a *Handlers method) for the same reason machineHostname is
-// above — MarkTaskDone (service.go) needs it without a *Handlers instance.
-func shotCountFor(shotsRepo *shots.Repository, task string, machineID int64) int64 {
+// above — MarkTaskDone (service.go) needs it without a *Handlers instance,
+// and cmd/server's firmware-update hook (a task outside this package) reuses
+// the exact same scoping rather than duplicating it.
+func ShotCountFor(shotsRepo *shots.Repository, task string, machineID int64) int64 {
 	var list []shots.Shot
 	var err error
 	if isGlobalMaintenanceTask(task) {
@@ -189,6 +191,24 @@ func shotCountFor(shotsRepo *shots.Repository, task string, machineID int64) int
 		return 0
 	}
 	return int64(len(list))
+}
+
+// FirmwareUpdateNote formats the maintenance-log note for a `firmware_update`
+// entry as "from → to". Either version may be unknown (an offline machine, a
+// failed release lookup), in which case the known side is still shown (e.g.
+// "aaa1111 →" or "→ bbb2222"); when neither is known the note is empty, the
+// same neutral state #1136 shipped with.
+func FirmwareUpdateNote(from, to string) string {
+	switch {
+	case from != "" && to != "":
+		return from + " → " + to
+	case from != "":
+		return from + " →"
+	case to != "":
+		return "→ " + to
+	default:
+		return ""
+	}
 }
 
 // findAllByMachine ports ShotRepository.js's findAll(machineId) (with
@@ -356,7 +376,7 @@ func (h *Handlers) postLog(w http.ResponseWriter, r *http.Request) {
 	if runes := []rune(notes); len(runes) > 500 {
 		notes = string(runes[:500])
 	}
-	entry, err := h.repo.AddMaintenanceLogEntry(task, notes, machineHostname(h.registry), shotCountFor(h.shotsRepo, task, machineID), machineID)
+	entry, err := h.repo.AddMaintenanceLogEntry(task, notes, machineHostname(h.registry), ShotCountFor(h.shotsRepo, task, machineID), machineID)
 	if err != nil {
 		internalError(w, err)
 		return

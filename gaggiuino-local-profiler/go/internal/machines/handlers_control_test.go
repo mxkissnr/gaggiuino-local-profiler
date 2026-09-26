@@ -1,12 +1,24 @@
 package machines
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
 )
+
+// stubReleasesAPINoMatch points the GitHub-releases API at a local server that
+// answers with an empty release list, keeping the best-effort from/to lookup in
+// triggerFirmwareUpdate hermetic (no real network call) when a test only cares
+// about other behavior.
+func stubReleasesAPINoMatch(t *testing.T) {
+	t.Helper()
+	overrideReleasesAPI(t, fakeGitHubReleases(t, []githubRelease{}).URL)
+}
 
 // TestFirmwareVersion_ParallelSettingsFetch is the #901 code-review
 // regression test for firmwareVersion (routes/machine-control.js's
@@ -251,7 +263,8 @@ func TestTriggerFirmwareUpdate_CallbackRunsOnceOnSuccess(t *testing.T) {
 	}
 
 	var seen []int64
-	h.SetOnFirmwareUpdate(func(m *Machine) error {
+	stubReleasesAPINoMatch(t)
+	h.SetOnFirmwareUpdate(func(m *Machine, _, _ string) error {
 		seen = append(seen, m.ID)
 		return nil
 	})
@@ -285,13 +298,14 @@ func TestTriggerFirmwareUpdate_CallbackFailureDoesNotAffectResponse(t *testing.T
 
 	body := `{"machineId":` + strconv.FormatInt(machine.ID, 10) + `}`
 
-	h.SetOnFirmwareUpdate(func(*Machine) error { return callbackError{} })
+	stubReleasesAPINoMatch(t)
+	h.SetOnFirmwareUpdate(func(*Machine, string, string) error { return callbackError{} })
 	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/firmware/update", strings.NewReader(body)))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("returned-error callback: status = %d, want 200, body = %s", rec.Code, rec.Body)
 	}
 
-	h.SetOnFirmwareUpdate(func(*Machine) error { panic("callback boom") })
+	h.SetOnFirmwareUpdate(func(*Machine, string, string) error { panic("callback boom") })
 	rec = doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/firmware/update", strings.NewReader(body)))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("panicking callback: status = %d, want 200, body = %s", rec.Code, rec.Body)
@@ -309,7 +323,8 @@ func TestTriggerFirmwareUpdate_CallbackSkippedOnAdapterErrorAndNil(t *testing.T)
 	doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machines", nil)) // seed default (gaggiuino, unreachable)
 
 	called := false
-	h.SetOnFirmwareUpdate(func(*Machine) error {
+	stubReleasesAPINoMatch(t)
+	h.SetOnFirmwareUpdate(func(*Machine, string, string) error {
 		called = true
 		return nil
 	})
@@ -326,5 +341,106 @@ func TestTriggerFirmwareUpdate_CallbackSkippedOnAdapterErrorAndNil(t *testing.T)
 	rec = doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/firmware/update", strings.NewReader(`{}`)))
 	if rec.Code != http.StatusBadGateway {
 		t.Fatalf("firmware/update with nil hook: status = %d, want 502, body = %s", rec.Code, rec.Body)
+	}
+}
+
+// #1136 follow-up: with a reachable machine and a matching release on the
+// machine's channel, the hook receives the installed version as `from` and the
+// channel's latest release hash as `to`.
+func TestTriggerFirmwareUpdate_CallbackReceivesFromToVersions(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+	// The fake machine returns the same body for every settings category, so
+	// this single payload satisfies both the `versions` (coreVersion) and
+	// `system` (releaseChannel) reads firmwareFromTo performs.
+	fake.settingsBody = []byte(`{"coreVersion":"aaa1111","releaseChannel":0}`)
+
+	releases := fakeGitHubReleases(t, []githubRelease{
+		{TagName: "main-bbb2222", PublishedAt: "2026-02-01T00:00:00Z", HTMLURL: "https://example.com/main"},
+	})
+	overrideReleasesAPI(t, releases.URL)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr(fake.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+
+	type fromTo struct{ from, to string }
+	var calls []fromTo
+	h.SetOnFirmwareUpdate(func(_ *Machine, from, to string) error {
+		calls = append(calls, fromTo{from: from, to: to})
+		return nil
+	})
+
+	body := `{"machineId":` + strconv.FormatInt(machine.ID, 10) + `}`
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/firmware/update", strings.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST firmware/update status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if len(calls) != 1 {
+		t.Fatalf("callback calls = %d, want exactly 1", len(calls))
+	}
+	if calls[0].from != "aaa1111" || calls[0].to != "bbb2222" {
+		t.Fatalf("callback from/to = %q/%q, want %q/%q", calls[0].from, calls[0].to, "aaa1111", "bbb2222")
+	}
+}
+
+// firmwareFromToErrorAdapter is a machines.Adapter whose settings reads always
+// fail, while the firmware update itself succeeds -- the fixture for proving
+// the from/to lookup is best-effort.
+type firmwareFromToErrorAdapter struct{ fakePanicAdapter }
+
+func (firmwareFromToErrorAdapter) GetSettings(context.Context, *Machine, string) (json.RawMessage, error) {
+	return nil, errors.New("settings unavailable")
+}
+
+func (firmwareFromToErrorAdapter) TriggerFirmwareUpdate(context.Context, *Machine) (json.RawMessage, error) {
+	return json.RawMessage(`{"success":true}`), nil
+}
+
+// #1136 follow-up: when the version lookups fail, the update still succeeds
+// with an unchanged 200/body, and the hook runs once with empty from/to rather
+// than being skipped or surfacing the failure.
+func TestTriggerFirmwareUpdate_VersionsFetchFailureStillSucceedsWithEmptyVersions(t *testing.T) {
+	registry, _ := newTestRegistry(t)
+	h := &Handlers{registry: registry, gaggiuino: firmwareFromToErrorAdapter{}, firmware: NewFirmwareChecker()}
+	mux := newMux(h)
+
+	// Releases also fail, so `to` is unknown too.
+	github := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer github.Close()
+	overrideReleasesAPI(t, github.URL)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr("http://192.0.2.1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+
+	var calls []string
+	h.SetOnFirmwareUpdate(func(_ *Machine, from, to string) error {
+		calls = append(calls, from+"|"+to)
+		return nil
+	})
+
+	body := `{"machineId":` + strconv.FormatInt(machine.ID, 10) + `}`
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/firmware/update", strings.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST firmware/update status = %d, want 200, body = %s", rec.Code, rec.Body)
+	}
+	if len(calls) != 1 || calls[0] != "|" {
+		t.Fatalf("callback from/to calls = %v, want exactly one empty/empty call", calls)
+	}
+	if !jsonContains(rec.Body.String(), `"success":true`) {
+		t.Fatalf("unexpected firmware update result: %s", rec.Body.String())
 	}
 }
