@@ -23,7 +23,7 @@ type Route =
     | { kind: 'token' }
     | { kind: 'sse' }
     | { kind: 'fixture'; entry: FixtureEntry }
-    | { kind: 'readonly' }
+    | { kind: 'write' }
     | { kind: 'missing'; key: string };
 
 interface GlpDemo {
@@ -103,9 +103,10 @@ describe('sw-core route (#1193)', () => {
         });
     });
 
-    it('refuses writes under api/', () => {
-        expect(glp.route('POST', `${SCOPE}api/backup/restore`, SCOPE, MANIFEST)).toEqual({ kind: 'readonly' });
-        expect(glp.route('DELETE', `${SCOPE}api/shots/5`, SCOPE, MANIFEST)).toEqual({ kind: 'readonly' });
+    it('classifies writes under api/', () => {
+        expect(glp.route('POST', `${SCOPE}api/backup/restore`, SCOPE, MANIFEST)).toEqual({ kind: 'write' });
+        expect(glp.route('PUT', `${SCOPE}api/shots/5`, SCOPE, MANIFEST)).toEqual({ kind: 'write' });
+        expect(glp.route('DELETE', `${SCOPE}api/shots/5`, SCOPE, MANIFEST)).toEqual({ kind: 'write' });
     });
 
     it('treats HEAD as a read against the recorded GET fixture', () => {

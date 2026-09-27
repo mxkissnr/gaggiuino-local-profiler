@@ -44,7 +44,7 @@ self.GLPDemo = (() => {
      *   { kind: 'token' }                 GET api/token
      *   { kind: 'sse' }                   GET api/events
      *   { kind: 'fixture', entry }        GET with a recorded response
-     *   { kind: 'readonly' }              any non-GET/HEAD under api/
+     *   { kind: 'write' }                 any non-GET/HEAD under api/
      *   { kind: 'missing', key }          GET with no recorded response
      */
     function route(method, requestUrl, scopeUrl, manifest) {
@@ -62,8 +62,9 @@ self.GLPDemo = (() => {
         if (upper === 'GET' && relative === 'api/token') return { kind: 'token' };
         if (upper === 'GET' && relative === 'api/events') return { kind: 'sse' };
         if (upper !== 'GET' && upper !== 'HEAD') {
-            // Writes are refused under api/; anything else is not ours to touch.
-            return isApi ? { kind: 'readonly' } : { kind: 'passthrough' };
+            // Writes under api/ are accepted and discarded a little further
+            // down, in demo-sw.js; anything else is not ours to touch.
+            return isApi ? { kind: 'write' } : { kind: 'passthrough' };
         }
 
         // Reads are only ever recorded as GET, so a HEAD request probes the

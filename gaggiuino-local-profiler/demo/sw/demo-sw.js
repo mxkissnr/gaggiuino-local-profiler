@@ -4,7 +4,8 @@
 // API request from the fixtures recorded by scripts/demo-fixtures.mjs. It is a
 // classic script (importScripts, not import) because it is copied verbatim
 // into demo-dist/ rather than bundled. Reads replay fixtures; writes are
-// refused for now (in-memory writes land in a later slice).
+// accepted and thrown away, and the page is told so it can say nothing was
+// saved.
 importScripts('sw-core.js');
 
 const DEMO_TOKEN = { apiToken: 'demo' };
@@ -64,7 +65,18 @@ async function fixtureResponse(entry) {
     });
 }
 
-async function handle(request) {
+/**
+ * Tells the requesting client that a write was accepted but not saved, so the
+ * page's banner can say so. Best-effort: a request with no client id, or a
+ * tab that has since closed, is simply skipped.
+ */
+async function notifyWriteDiscarded(event) {
+    if (!event.clientId) return;
+    const client = await self.clients.get(event.clientId);
+    if (client) client.postMessage({ type: 'glp-demo-write' });
+}
+
+async function handle(request, event) {
     const manifest = await loadManifest();
     const route = self.GLPDemo.route(request.method, request.url, self.registration.scope, manifest);
     switch (route.kind) {
@@ -74,8 +86,9 @@ async function handle(request) {
             return sseResponse();
         case 'fixture':
             return fixtureResponse(route.entry);
-        case 'readonly':
-            return jsonResponse({ error: 'demo_readonly' }, 403);
+        case 'write':
+            await notifyWriteDiscarded(event);
+            return jsonResponse({ ok: true, demo: true });
         case 'missing':
             console.warn('[glp-demo] no fixture for', route.key);
             return jsonResponse({ error: 'demo_missing' }, 404);
@@ -94,5 +107,5 @@ self.addEventListener('fetch', event => {
     // empty manifest is enough to decide whether to intercept at all.
     const route = self.GLPDemo.route(request.method, request.url, self.registration.scope, { entries: {} });
     if (route.kind === 'passthrough') return;
-    event.respondWith(handle(request));
+    event.respondWith(handle(request, event));
 });
