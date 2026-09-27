@@ -25,6 +25,7 @@
 
 import { mkdirSync, rmSync, writeFileSync, readFileSync } from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
 import { appRoot, bootServer, restoreBackup, stopServer } from './e2e-harness.mjs';
 
@@ -579,9 +580,17 @@ async function main() {
     }
 }
 
-main()
-    .then(() => process.exit(0))
-    .catch(err => {
-        console.error(err);
-        process.exit(1);
-    });
+// Only boot the server and write fixtures when invoked as a script. Without
+// this guard, importing the pure helpers in a unit test runs the whole
+// recorder — and its process.exit() — as an import side effect, the same
+// failure dev-stats.mjs's guard prevents (#527).
+const invokedDirectly = process.argv[1] &&
+    fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (invokedDirectly) {
+    main()
+        .then(() => process.exit(0))
+        .catch(err => {
+            console.error(err);
+            process.exit(1);
+        });
+}
