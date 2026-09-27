@@ -61,12 +61,12 @@ func ClampPageLimit(limit int) int {
 // cache-resolved score. machineID == 0 lists every machine. limit is
 // clamped by ClampPageLimit.
 func (s *Service) GetPage(cur Cursor, limit int, machineID int64) (Page, error) {
-	return s.repo.FindPageExcludingTrash(cur, ClampPageLimit(limit), machineID)
+	return s.repo.findPage(cur, ClampPageLimit(limit), machineID, loadBeanLookup())
 }
 
 // GetTrashPage is GetPage against the trash list.
 func (s *Service) GetTrashPage(cur Cursor, limit int, machineID int64) (Page, error) {
-	return s.repo.FindTrashedPage(cur, ClampPageLimit(limit), machineID)
+	return s.repo.findTrashedPage(cur, ClampPageLimit(limit), machineID, loadBeanLookup())
 }
 
 // GetRecent returns the newest n non-trashed shots (metadata + curves,
@@ -74,7 +74,7 @@ func (s *Service) GetTrashPage(cur Cursor, limit int, machineID int64) (Page, er
 // which scans the whole history (#957 decision 7). Order is newest first,
 // so callers no longer reverse the slice.
 func (s *Service) GetRecent(n int) ([]Shot, error) {
-	page, err := s.repo.FindPageExcludingTrash(Cursor{}, n, 0)
+	page, err := s.repo.findPage(Cursor{}, n, 0, loadBeanLookup())
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (s *Service) GetRecent(n int) ([]Shot, error) {
 
 // GetRecentTrash is GetRecent against the trash list.
 func (s *Service) GetRecentTrash(n int) ([]Shot, error) {
-	page, err := s.repo.FindTrashedPage(Cursor{}, n, 0)
+	page, err := s.repo.findTrashedPage(Cursor{}, n, 0, loadBeanLookup())
 	if err != nil {
 		return nil, err
 	}
@@ -248,20 +248,16 @@ func (s *Service) AppendToBlocklist(value string) error {
 	return s.repo.AppendToBlocklist(value)
 }
 
-// ComputeScoreDetail ports ShotService.js's computeScoreDetail (#457).
-//
-// #450's bean-target resolution (libraryService.resolveBeanForAnnotation)
-// is not wired in yet: internal/library is still a Phase 0 placeholder, so
-// this always scores against the generic fixed bands, never a bean's own
-// brewTempC/brewRatio recommendation — see score.go's CalcShotScoreDetail
-// doc comment for exactly what that does and doesn't change. Wire a real
-// bean lookup in here once the Library phase lands.
+// ComputeScoreDetail ports ShotService.js's computeScoreDetail (#457): score
+// shot against its own library bean's brewTempC/brewRatio target when one is
+// installed (see SetBeanSource), falling back to the generic fixed bands when
+// no bean resolves or no source is set.
 func (s *Service) ComputeScoreDetail(shot Shot) ScoreDetail {
-	return CalcShotScoreDetail(shot, nil)
+	return s.DetailScorer()(shot)
 }
 
-// ComputeScore ports ShotService.js's computeScore — see
-// ComputeScoreDetail's doc comment for the same bean-resolution caveat.
+// ComputeScore ports ShotService.js's computeScore — the score-only
+// counterpart of ComputeScoreDetail.
 func (s *Service) ComputeScore(shot Shot) *int {
-	return CalcShotScore(shot, nil)
+	return s.Scorer()(shot)
 }

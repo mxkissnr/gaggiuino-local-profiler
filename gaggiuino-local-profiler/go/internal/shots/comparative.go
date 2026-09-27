@@ -78,7 +78,10 @@ func comparativeSameBean(annA, annB map[string]any) bool {
 // allShots) — allShots should be every other shot on shot's own machine
 // (internal/shots.Repository.FindAllExcludingTrashByMachine), matching
 // Node's own S.shots (already machine-filtered upstream by
-// filterShotsByMachine before ever reaching this function).
+// filterShotsByMachine before ever reaching this function). Each comparable
+// shot is scored against its own bean target (one loadBeanLookup snapshot
+// for the whole pass), so the ranking matches the bean-aware list and detail
+// scores rather than the generic bands.
 func ComputeComparativeGrindAdvice(shot Shot, allShots []Shot) *ComparativeGrindAdvice {
 	ann := toMap(shot["annotation"])
 	coffee := strings.ToLower(strings.TrimSpace(annotationStr(ann, "coffee")))
@@ -95,6 +98,7 @@ func ComputeComparativeGrindAdvice(shot Shot, allShots []Shot) *ComparativeGrind
 		grind float64
 		score int
 	}
+	lookup := loadBeanLookup()
 	var comparable []comparableShot
 	for _, s := range allShots {
 		if s.id() == shotID {
@@ -120,7 +124,7 @@ func ComputeComparativeGrindAdvice(shot Shot, allShots []Shot) *ComparativeGrind
 		if !ok {
 			continue
 		}
-		score := CalcShotScore(s, nil)
+		score := CalcShotScore(s, lookup(s))
 		if score == nil {
 			continue
 		}

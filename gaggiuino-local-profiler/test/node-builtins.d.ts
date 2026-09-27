@@ -40,6 +40,10 @@ declare module 'node:url' {
     export function fileURLToPath(url: string | URL): string;
 }
 
+declare module 'node:vm' {
+    export function runInNewContext(code: string, contextObject?: object): unknown;
+}
+
 // Node globals the tests read directly (vitest runs them on Node, where both
 // exist; only their declarations are missing from this browser-oriented lib).
 declare const process: { env: Record<string, string | undefined> };
