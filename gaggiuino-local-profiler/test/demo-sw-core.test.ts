@@ -29,6 +29,8 @@ type Route =
 interface GlpDemo {
     fixtureKey(method: string, urlString: string): string;
     route(method: string, requestUrl: string, scopeUrl: string, manifest: Manifest): Route;
+    shiftTimestamps(value: unknown, deltaMs: number): unknown;
+    markMachineOnline(pathname: string, body: unknown): unknown;
 }
 
 function loadGlpDemo(): GlpDemo {
@@ -146,5 +148,132 @@ describe('sw-core route (#1193)', () => {
             kind: 'fixture',
             entry: MANIFEST.entries['GET /api/shots?limit=60'],
         });
+    });
+});
+
+const DAY_MS = 86_400_000;
+
+describe('sw-core shiftTimestamps (#1193)', () => {
+    const glp = loadGlpDemo();
+
+    it('shifts epoch-millisecond values under timestamp-shaped keys', () => {
+        const input = {
+            createdAt: 1_700_000_000_000,
+            trashedAt: 1_700_000_000_000,
+            machines: [{ updatedAt: 1_700_000_000_000 }],
+        };
+        const out = glp.shiftTimestamps(input, DAY_MS) as typeof input;
+        expect(out.createdAt).toBe(1_700_000_000_000 + DAY_MS);
+        expect(out.trashedAt).toBe(1_700_000_000_000 + DAY_MS);
+        expect(out.machines[0].updatedAt).toBe(1_700_000_000_000 + DAY_MS);
+    });
+
+    it('shifts epoch-second values as whole seconds', () => {
+        const out = glp.shiftTimestamps({ timestamp: 1_700_000_000 }, 4_000) as { timestamp: number };
+        expect(out.timestamp).toBe(1_700_000_000 + 4);
+    });
+
+    it('shifts the maintenance log ts field', () => {
+        const out = glp.shiftTimestamps({ ts: 1_700_000_000_000 }, 1_000) as { ts: number };
+        expect(out.ts).toBe(1_700_000_000_000 + 1_000);
+    });
+
+    it('shifts full ISO date-time strings, re-serialised as ISO', () => {
+        const out = glp.shiftTimestamps({ createdAt: '2024-01-15T10:00:00.000Z' }, DAY_MS) as { createdAt: string };
+        expect(out.createdAt).toBe('2024-01-16T10:00:00.000Z');
+    });
+
+    it('shifts plain YYYY-MM-DD dates by whole days', () => {
+        const out = glp.shiftTimestamps({ date: '2024-01-15' }, 3 * DAY_MS) as { date: string };
+        expect(out.date).toBe('2024-01-18');
+    });
+
+    it('leaves measurement and id keys alone even when the value looks like an epoch', () => {
+        const input = { id: 1_700_000_000_000, duration: 250, weight: 18.5, score: 85, shotCount: 42 };
+        const out = glp.shiftTimestamps(input, DAY_MS) as typeof input;
+        expect(out).toEqual(input);
+    });
+
+    it('leaves numbers outside the epoch ranges alone', () => {
+        const out = glp.shiftTimestamps({ createdAt: 1000, timestamp: 500_000_000 }, DAY_MS) as {
+            createdAt: number;
+            timestamp: number;
+        };
+        expect(out.createdAt).toBe(1000);
+        expect(out.timestamp).toBe(500_000_000);
+    });
+
+    it('leaves strings that are not ISO dates alone', () => {
+        const out = glp.shiftTimestamps({ time: '08:30', date: 'yesterday', note: '2024-01-15' }, DAY_MS) as {
+            time: string;
+            date: string;
+            note: string;
+        };
+        expect(out.time).toBe('08:30');
+        expect(out.date).toBe('yesterday');
+        expect(out.note).toBe('2024-01-15');
+    });
+
+    it('recurses through nested arrays and objects without mutating the input', () => {
+        const input = { shots: [{ timestamp: 1_700_000_000, annotation: { roastDate: '2024-01-15' } }] };
+        const out = glp.shiftTimestamps(input, DAY_MS) as typeof input;
+        expect(out.shots[0].timestamp).toBe(1_700_000_000 + 86_400);
+        expect(out.shots[0].annotation.roastDate).toBe('2024-01-16');
+        expect(input.shots[0].timestamp).toBe(1_700_000_000);
+        expect(input.shots[0].annotation.roastDate).toBe('2024-01-15');
+        expect(out).not.toBe(input);
+    });
+
+    it('is a no-op for a missing or non-finite delta', () => {
+        const input = { createdAt: 1_700_000_000_000 };
+        expect(glp.shiftTimestamps(input, Number.NaN)).toEqual(input);
+    });
+});
+
+interface StatusFixture {
+    machineReachable: boolean | null;
+    machineOn: boolean | null;
+    machineOnSince: number | null;
+    lastMachineError: string | null;
+    machines: Array<Record<string, unknown>>;
+    shotCount: number;
+}
+
+describe('sw-core markMachineOnline (#1193)', () => {
+    const glp = loadGlpDemo();
+    const status: StatusFixture = {
+        machineReachable: false,
+        machineOn: true,
+        machineOnSince: 1_700_000_000_000,
+        lastMachineError: 'dial tcp 10.0.0.2: connect: connection refused',
+        machines: [
+            { id: 1, isDefault: true, reachable: false, on: true },
+            { id: 2, isDefault: false, reachable: null, on: null },
+        ],
+        shotCount: 42,
+    };
+
+    it('reports the default machine reachable and idle', () => {
+        const out = glp.markMachineOnline('/gaggiuino-local-profiler/api/status', status) as StatusFixture;
+        expect(out.machineReachable).toBe(true);
+        expect(out.machineOn).toBe(false);
+        expect(out.machineOnSince).toBeNull();
+        expect(out.lastMachineError).toBeNull();
+        expect(out.machines[0]).toEqual({ id: 1, isDefault: true, reachable: true, on: false });
+        expect(out.machines[1]).toEqual({ id: 2, isDefault: false, reachable: null, on: null });
+        expect(out.shotCount).toBe(42);
+    });
+
+    it('nulls the authenticated-only lastSyncError when present', () => {
+        const out = glp.markMachineOnline('/api/status', { machineReachable: false, lastSyncError: 'boom' }) as {
+            lastSyncError: string | null;
+        };
+        expect(out.lastSyncError).toBeNull();
+    });
+
+    it('leaves other paths and non-object bodies unchanged', () => {
+        expect(glp.markMachineOnline('/api/shots', status)).toBe(status);
+        expect(glp.markMachineOnline('/api/machines', status)).toBe(status);
+        expect(glp.markMachineOnline('/api/status', null)).toBeNull();
     });
 });

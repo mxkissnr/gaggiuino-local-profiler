@@ -35,6 +35,98 @@ self.GLPDemo = (() => {
         return scope;
     }
 
+    // #1193: keys whose values are wall-clock timestamps rather than
+    // measurements. `timestamp`/`date`/`time` are exact field names; the
+    // suffix alternatives cover camelCase fields (createdAt, roastDate,
+    // trashedAt, plannedSwitchOnAt...). `ts` is MaintenanceLogEntry's own
+    // Unix-ms field, which the capitalised `Ts` suffix alone would miss, so
+    // it is matched explicitly.
+    const TIMESTAMP_KEY = /^(timestamp|date|time|ts)$|(At|Time|Date|Ts)$/;
+
+    // Fixtures are recorded in this window (2017-07-14 .. 2096-10-02), which
+    // is what lets a bare number be told apart from a duration/weight/count.
+    const EPOCH_MS = [1_500_000_000_000, 4_000_000_000_000];
+    const EPOCH_SECONDS = [1_500_000_000, 4_000_000_000];
+    const MS_PER_DAY = 86_400_000;
+    const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+    const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
+    function shiftDateString(value, deltaMs) {
+        if (DATE_ONLY.test(value)) {
+            const parsed = Date.parse(`${value}T00:00:00.000Z`);
+            if (Number.isNaN(parsed)) return value;
+            const days = Math.round(deltaMs / MS_PER_DAY);
+            return new Date(parsed + days * MS_PER_DAY).toISOString().slice(0, 10);
+        }
+        if (ISO_DATE_TIME.test(value)) {
+            const parsed = Date.parse(value);
+            if (Number.isNaN(parsed)) return value;
+            return new Date(parsed + deltaMs).toISOString();
+        }
+        return value;
+    }
+
+    /** Shifts one scalar found under a timestamp-shaped key. */
+    function shiftTimestampValue(value, deltaMs) {
+        if (typeof value === 'number') {
+            if (value >= EPOCH_MS[0] && value <= EPOCH_MS[1]) return value + deltaMs;
+            if (value >= EPOCH_SECONDS[0] && value <= EPOCH_SECONDS[1]) return value + Math.round(deltaMs / 1000);
+            return value;
+        }
+        if (typeof value === 'string') return shiftDateString(value, deltaMs);
+        if (value && typeof value === 'object') return shiftNode(value, deltaMs);
+        return value;
+    }
+
+    function shiftNode(value, deltaMs) {
+        if (Array.isArray(value)) return value.map(item => shiftNode(item, deltaMs));
+        if (value && typeof value === 'object') {
+            const out = {};
+            for (const [key, child] of Object.entries(value)) {
+                out[key] = TIMESTAMP_KEY.test(key) ? shiftTimestampValue(child, deltaMs) : shiftNode(child, deltaMs);
+            }
+            return out;
+        }
+        return value;
+    }
+
+    /**
+     * Returns a copy of parsed JSON with every wall-clock timestamp moved by
+     * deltaMs, so a recording made weeks ago reads as if it were made now.
+     * Only values under TIMESTAMP_KEY names are touched — ids, durations,
+     * weights, scores and every other number pass through untouched. A
+     * non-finite delta (a manifest with no usable `generated`) is a no-op.
+     */
+    function shiftTimestamps(value, deltaMs) {
+        const delta = typeof deltaMs === 'number' && Number.isFinite(deltaMs) ? deltaMs : 0;
+        return shiftNode(value, delta);
+    }
+
+    // The app-wide poll that reports machine reachability is GET /api/status;
+    // the site is served from a sub-path, so match the pathname suffix.
+    const STATUS_PATH = /(^|\/)api\/status$/;
+
+    /**
+     * Rewrites one GET /api/status body into the "online but idle" shape the
+     * app expects: the default machine is reachable and switched off, with no
+     * recorded probe/sync error. Any other pathname (or a non-object body) is
+     * returned untouched.
+     */
+    function markMachineOnline(pathname, body) {
+        if (!STATUS_PATH.test(String(pathname)) || !body || typeof body !== 'object' || Array.isArray(body)) return body;
+        const next = { ...body, machineReachable: true, machineOn: false, machineOnSince: null };
+        if ('lastMachineError' in next) next.lastMachineError = null;
+        if ('lastSyncError' in next) next.lastSyncError = null;
+        if (Array.isArray(next.machines)) {
+            next.machines = next.machines.map(machine => (
+                machine && typeof machine === 'object' && machine.isDefault
+                    ? { ...machine, reachable: true, on: false }
+                    : machine
+            ));
+        }
+        return next;
+    }
+
     /**
      * Classifies one request. The site is served from a sub-path, so paths are
      * taken relative to the scope before being rebuilt into a manifest key.
@@ -74,5 +166,5 @@ self.GLPDemo = (() => {
         return entry ? { kind: 'fixture', entry } : { kind: 'missing', key };
     }
 
-    return { fixtureKey, route };
+    return { fixtureKey, route, shiftTimestamps, markMachineOnline };
 })();

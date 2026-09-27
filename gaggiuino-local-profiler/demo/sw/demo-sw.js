@@ -51,18 +51,30 @@ function sseResponse() {
     });
 }
 
-async function fixtureResponse(entry) {
+async function fixtureResponse(entry, pathname, deltaMs) {
     const response = await fetch(new URL(`fixtures/${entry.file}`, self.registration.scope));
     if (!response.ok) {
         console.warn('[glp-demo] missing fixture file:', entry.file);
         return jsonResponse({ error: 'demo_missing' }, 404);
     }
     const status = entry.status || 200;
-    const body = status === 204 || status === 205 || status === 304 ? null : await response.arrayBuffer();
-    return new Response(body, {
-        status,
-        headers: entry.contentType ? { 'Content-Type': entry.contentType } : {},
-    });
+    const headers = entry.contentType ? { 'Content-Type': entry.contentType } : {};
+    if (status === 204 || status === 205 || status === 304) return new Response(null, { status, headers });
+    // JSON fixtures get their recorded wall-clock timestamps moved to the
+    // present (and the machine reported online); anything else — photos,
+    // downloads, plain text — is replayed byte-for-byte.
+    const isJson = String(entry.contentType || '').split(';')[0].trim().toLowerCase() === 'application/json';
+    if (isJson) {
+        const text = await response.text();
+        try {
+            const shifted = self.GLPDemo.shiftTimestamps(JSON.parse(text), deltaMs);
+            return new Response(JSON.stringify(self.GLPDemo.markMachineOnline(pathname, shifted)), { status, headers });
+        } catch {
+            return new Response(text, { status, headers });
+        }
+    }
+    const body = await response.arrayBuffer();
+    return new Response(body, { status, headers });
 }
 
 /**
@@ -84,8 +96,14 @@ async function handle(request, event) {
             return jsonResponse(DEMO_TOKEN);
         case 'sse':
             return sseResponse();
-        case 'fixture':
-            return fixtureResponse(route.entry);
+        case 'fixture': {
+            // Elapsed time since the fixtures were recorded: every wall-clock
+            // timestamp in a JSON fixture is moved forward by this much, so a
+            // snapshot taken weeks ago reads as if it were taken now.
+            const generated = manifest.generated ? Date.parse(manifest.generated) : NaN;
+            const deltaMs = Number.isFinite(generated) ? Date.now() - generated : 0;
+            return fixtureResponse(route.entry, new URL(request.url).pathname, deltaMs);
+        }
         case 'write':
             await notifyWriteDiscarded(event);
             return jsonResponse({ ok: true, demo: true });
