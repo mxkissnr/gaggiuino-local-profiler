@@ -171,7 +171,9 @@ self.GLPDemo = (() => {
 
         if (PREHEAT_PATH.test(path)) {
             const preheatTime = typeof body.preheatTime === 'number' ? body.preheatTime : 0;
-            return { ...body, ready: true, remaining: 0, pct: 100, elapsed: preheatTime * 60, temp: 93, targetTemp: 93 };
+            // pct is a 0..1 fraction (go/internal/system/preheat.go caps it at 1;
+            // the frontend multiplies by 100 where it renders a percentage).
+            return { ...body, ready: true, remaining: 0, pct: 1, elapsed: preheatTime * 60, temp: 93, targetTemp: 93 };
         }
 
         return body;

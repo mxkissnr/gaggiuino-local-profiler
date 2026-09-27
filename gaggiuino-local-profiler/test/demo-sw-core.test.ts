@@ -314,7 +314,7 @@ describe('sw-core patchMachineOnline (#1193)', () => {
         const out = glp.patchMachineOnline('/api/preheat', body, NOW_MS) as typeof body & { elapsed: number };
         expect(out.ready).toBe(true);
         expect(out.remaining).toBe(0);
-        expect(out.pct).toBe(100);
+        expect(out.pct).toBe(1);
         expect(out.elapsed).toBe(1200);
         expect(out.temp).toBe(93);
         expect(out.targetTemp).toBe(93);
