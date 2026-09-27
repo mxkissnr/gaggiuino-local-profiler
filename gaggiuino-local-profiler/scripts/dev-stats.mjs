@@ -63,14 +63,19 @@ function xmlEsc(s) {
     return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+const BAR_CHART_BAR_H = 22;
+const BAR_CHART_GAP = 14;
+const BAR_CHART_TOP_PAD = 46;
+const BAR_CHART_BOTTOM_PAD = 16;
+
 // Horizontal bar chart as an SVG document string: thin marks (22px, under
 // the 24px cap), 4px rounded data-end at the bar's tip, square at the
 // baseline, value label at the tip, category label to the left — see
 // dataviz skill's marks-and-anatomy.md. Same geometry the @napi-rs/canvas
 // version used before #1028. Returns null for an empty series.
-function barChartSVG(title, items) {
+export function barChartSVG(title, items) {
     if (!items.length) return null;
-    const width = 640, barH = 22, gap = 14, topPad = 46, bottomPad = 16, leftPad = 190, rightPad = 60;
+    const width = 640, barH = BAR_CHART_BAR_H, gap = BAR_CHART_GAP, topPad = BAR_CHART_TOP_PAD, bottomPad = BAR_CHART_BOTTOM_PAD, leftPad = 190, rightPad = 60;
     const height = topPad + items.length * (barH + gap) - gap + bottomPad;
     const maxVal = Math.max(...items.map(i => i.value), 1);
     const chartW = width - leftPad - rightPad;
