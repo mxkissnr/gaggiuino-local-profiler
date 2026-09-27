@@ -1,4 +1,6 @@
 ## [Unreleased]
+### Added
+- **The static demo build accepts form submissions without saving them and shows a banner telling visitors it is a demo.** Part of #1193
 ### Fixed
 - **The static demo build now boots when it is served under a sub-path, loading every view from its recorded fixtures.** Part of #1193
 - **A firmware update recorded in the maintenance log now shows which version was replaced by which and the shot count at the time.** Closes #1172
