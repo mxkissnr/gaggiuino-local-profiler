@@ -568,6 +568,10 @@ const nl: Partial<Translations> = {
     demo_mode_badge:'Demomodus',
     demo_mode_end:'Demo beëindigen',
     demo_mode_end_confirm:'Demomodus beëindigen en alle demo-data verwijderen?',
+    'demo.banner':'Demo — voorbeeldgegevens, niets wordt opgeslagen',
+    'demo.notSaved':'Demo: wijziging niet opgeslagen',
+    'demo.simulate':'Shot simuleren',
+    'demo.getApp':'App installeren',
     photo_pick_btn:'Foto kiezen', photo_change_btn:'Foto wijzigen',
     crop_editor_title:'Foto bijsnijden', crop_editor_apply:'Toepassen', crop_editor_zoom:'Zoom',
 

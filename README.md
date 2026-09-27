@@ -57,6 +57,8 @@ Click the button above to add this repository directly to your Home Assistant â€
 
 ## Screenshots
 
+**Try the demo in your browser: <https://mxkissnr.github.io/gaggiuino-local-profiler/> â€” sample data, nothing is saved.**
+
 <table>
   <tr>
     <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/shots.png" alt="Shots view with pressure/flow/weight/temperature chart" width="100%"/></td>

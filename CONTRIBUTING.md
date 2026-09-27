@@ -128,6 +128,27 @@ seeded demo instance — a real backup is normally all completed orders against 
 throwaway instance cannot reach, so those two views would render empty, and backup mode leaves the
 seeded PNGs in place instead of regenerating them.
 
+## Demo fixtures
+
+`gaggiuino-local-profiler/scripts/demo-fixtures.mjs` records a static snapshot of every API
+response the SPA needs, so the demo can later be served from GitHub Pages with a service worker
+instead of the Go backend (#1193). Run it from `gaggiuino-local-profiler/`:
+
+```sh
+npm run demo:fixtures
+```
+
+It boots the same throwaway server as the screenshots, restores the sanitized
+`demo/glp-demo-backup.zip` (override with `GLP_DEMO_BACKUP=/path/to/backup.zip`), places a few
+pending orders so the Orders view is not empty, and then drives headless Chromium through every
+view at desktop and phone width. Anything the SPA did not request is filled in from the GET
+operations in `go/internal/system/openapi.yaml`. The result goes to `demo/fixtures/`: a
+`manifest.json` plus one file per response. That directory is git-ignored — it is a regenerated
+artifact, not source. Before writing anything the script scans every text response for leaked
+personal data (IP literals, e-mail addresses, long hex blobs) and aborts on a hit, so a run that
+passes is safe to serve but never committed. Like `screenshots.mjs` it needs
+`npx playwright install chromium` once.
+
 ## Versioning
 
 `MAJOR.MINOR.PATCH` — patch for fixes, minor for new features. `gaggiuino-local-profiler/config.yaml`'s `version:` is canonical; three more spots must be bumped to match it in the same commit: `package.json`, `go/internal/system/version.go` (`glpVersion`) and `go/internal/backup/bundle.go` (`glpVersion`). `test/version-sync.test.js` and `scripts/release-check.mjs` enforce the match.

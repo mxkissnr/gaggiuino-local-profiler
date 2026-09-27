@@ -47,6 +47,30 @@ module.exports = [
     },
     rules: commonRules,
   },
+  {
+    // Demo service worker sources (#1193): classic scripts copied verbatim
+    // into demo-dist/ rather than bundled, so they run in the serviceworker
+    // global scope instead of a module or a window.
+    files: ['demo/sw/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.serviceworker,
+        self: 'readonly',
+        clients: 'readonly',
+        importScripts: 'readonly',
+        caches: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
+        Response: 'readonly',
+        ReadableStream: 'readonly',
+        TextEncoder: 'readonly',
+        TextDecoder: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+      },
+    },
+    rules: commonRules,
+  },
   // TypeScript sources migrate file-by-file (#1102): scoped to the .ts globs so
   // the type-aware rules don't touch the .js files still in flight.
   ...tseslint.config({
