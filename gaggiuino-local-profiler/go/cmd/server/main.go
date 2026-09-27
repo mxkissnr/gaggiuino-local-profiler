@@ -197,18 +197,6 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	shotsHandlers := shots.NewHandlers(shotsRepo)
 	shotsHandlers.RegisterRoutes(mux)
 
-	// MCP (#1196): the Model Context Protocol server is off by default; when
-	// enabled, mount its streamable-HTTP endpoint under /api/ so auth.RequireToken
-	// guards it with X-GLP-Token like every other API route.
-	if mcp.Enabled() {
-		mux.Handle(mcp.Path, mcp.NewHandler(mcp.Deps{
-			Shots:           shots.NewService(shotsRepo),
-			Version:         system.Version(),
-			RateLimitWindow: rateLimitWindow,
-			RateLimitMax:    rateLimitMax,
-		}))
-	}
-
 	// Phase 2a (#901): the Go frontend foundation — GET /shots plus its two
 	// htmx trash/restore actions, built on the same shots.Service the JSON
 	// API above uses. Not yet reachable in production (this binary isn't
@@ -459,6 +447,25 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		_, err := maintenanceRepo.AddMaintenanceLogEntry("firmware_update", notes, m.Host, shotCount, m.ID)
 		return err
 	})
+
+	// MCP (#1196): the Model Context Protocol server is off by default; when
+	// enabled, mount its streamable-HTTP endpoint under /api/ so auth.RequireToken
+	// guards it with X-GLP-Token like every other API route. Registered here —
+	// after the library, registry, poller and maintenance wiring — so the
+	// read-only library/status/analytics tools get their dependencies.
+	if mcp.Enabled() {
+		mux.Handle(mcp.Path, mcp.NewHandler(mcp.Deps{
+			Shots:           shots.NewService(shotsRepo),
+			ShotsRepo:       shotsRepo,
+			Library:         libRepo,
+			Maintenance:     maintenanceRepo,
+			Registry:        registry,
+			Poller:          poller,
+			Version:         system.Version(),
+			RateLimitWindow: rateLimitWindow,
+			RateLimitMax:    rateLimitMax,
+		}))
+	}
 
 	// Phase 2b (#901): the achievements ("stamp card") domain —
 	// GET /api/achievements. A pure-logic port reading across shots,

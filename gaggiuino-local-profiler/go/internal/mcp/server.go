@@ -8,6 +8,9 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
@@ -23,10 +26,22 @@ const (
 	serverTitle = "Gaggiuino Local Profiler"
 )
 
-// Deps is what the MCP server needs from its host application. Later slices
-// add the library/analytics services here.
+// Deps is what the MCP server needs from its host application: the shots
+// service (shot tools and analytics), the shots repository (annotated doses
+// for bean stock and the maintenance shot counts), the library and
+// maintenance repositories, the machines registry, and the poller's
+// read-only status snapshot.
 type Deps struct {
 	Shots *shots.Service
+	// ShotsRepo backs the maintenance shot counts and bean stock maths; the
+	// service above bundles the same repository but does not expose it.
+	ShotsRepo   *shots.Repository
+	Library     *library.Repository
+	Maintenance *maintenance.Repository
+	Registry    *machines.Registry
+	// Poller is a narrow interface over internal/system.Poller so tests can
+	// fake the machine status/preheat snapshot without a live poller.
+	Poller MachineStatus
 	// Version is the app version reported as the MCP server identity; mirrors
 	// GET /api/version (internal/system.Version). Empty falls back to "dev".
 	Version string
@@ -70,11 +85,17 @@ func newServer(deps Deps) *mcpsdk.Server {
 		Title:   serverTitle,
 		Version: version,
 	}, &mcpsdk.ServerOptions{
-		Instructions: "Read-only access to the user's Gaggiuino Local Profiler espresso shot history. " +
+		Instructions: "Read-only access to the user's Gaggiuino Local Profiler data. " +
 			"Call list_shots to discover shot ids, get_shot for one shot's metrics and optional curve, " +
-			"and compare_shots to compare two to five shots side by side.",
+			"and compare_shots to compare two to five shots side by side. " +
+			"list_beans and get_library describe the coffee/equipment library, " +
+			"get_maintenance_status and get_machine_status report upkeep and machine reachability, " +
+			"and get_analytics_summary aggregates shots over a period.",
 	})
 	registerShotTools(srv, deps.Shots)
+	registerLibraryTools(srv, deps)
+	registerStatusTools(srv, deps)
+	registerAnalyticsTools(srv, deps.Shots)
 	return srv
 }
 

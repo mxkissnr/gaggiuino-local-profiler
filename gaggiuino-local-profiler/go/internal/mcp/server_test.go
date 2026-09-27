@@ -155,7 +155,7 @@ func TestListTools(t *testing.T) {
 			t.Fatalf("tool %s has no output schema", tool.Name)
 		}
 	}
-	want := []string{"compare_shots", "get_shot", "list_shots"}
+	want := []string{"compare_shots", "get_analytics_summary", "get_library", "get_machine_status", "get_maintenance_status", "get_shot", "list_beans", "list_shots"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Fatalf("tool order = %v, want %v", names, want)
 	}
