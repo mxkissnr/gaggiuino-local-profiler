@@ -42,12 +42,17 @@ const REQUEST_TIMEOUT_MS = 15000;
 // rate-limited to 30/min (#999) and the list is unbounded.
 const MAX_IDS_PER_PATH = 20;
 
+// Path templates exempt from that cap: the JSON shot detail is small and the
+// demo needs every shot, while the ~220 KB binary card/image endpoints stay capped.
+const UNCAPPED_PARAM_PATHS = new Set(['/api/shots/{id}']);
+
 // OpenAPI GET operations deliberately not fetched in phase B, each with the
 // reason it cannot or must not be replayed as a static fixture.
 const OPENAPI_GET_SKIP = new Map([
     ['/api/token',                   'secret — the static demo must never ship a real token'],
     ['/api/events',                  'SSE stream — the response never completes'],
     ['/api/backup',                  'downloads a full backup zip'],
+    ['/api/debug/machine',           'diagnostic — raw machine status, not demo content'],
     ['/api/debug/export-db',         'downloads the SQLite database'],
     ['/api/import/url',              'requires an external product URL (fetches a third-party page)'],
     ['/api/library/scan/{barcode}',  'external barcode lookup; no barcode to expand from'],
@@ -462,9 +467,9 @@ async function recordPhaseB(baseUrl, apiToken, getPaths) {
 function expandParamPaths(template) {
     const source = PARAM_PATH_SOURCES.find(candidate => candidate.match.test(template));
     if (!source) return [];
-    return expandIds(source.kind)
-        .slice(0, MAX_IDS_PER_PATH)
-        .map(id => template.replace(/\{[^}]+\}/, String(id)));
+    const ids = expandIds(source.kind);
+    const selected = UNCAPPED_PARAM_PATHS.has(template) ? ids : ids.slice(0, MAX_IDS_PER_PATH);
+    return selected.map(id => template.replace(/\{[^}]+\}/, String(id)));
 }
 
 // ── Phase B bookkeeping + output ─────────────────────────────────────────
@@ -531,18 +536,47 @@ function writeFixtures(outDir) {
 
 // ── Orchestration ────────────────────────────────────────────────────────
 
+// Authenticated JSON round-trip for the setup calls below. Unlike the
+// best-effort phase B fetches, any non-2xx throws so a broken setup fails
+// the run instead of silently producing empty views.
+async function apiJson(baseUrl, apiToken, pathname, init = {}) {
+    const response = await fetch(baseUrl + pathname, {
+        ...init,
+        headers: { 'x-glp-token': apiToken, ...(init.headers || {}) },
+    });
+    if (!response.ok) {
+        throw new Error(`demo-fixtures: ${init.method || 'GET'} ${pathname} -> ${response.status}`);
+    }
+    return response.json();
+}
+
 // Places a few pending orders through the same public API the kiosk order
 // form uses, so the Orders view is not empty. Returns the API token for the
 // later authenticated fetches.
 async function createPendingOrders(baseUrl) {
     const { apiToken } = await fetch(`${baseUrl}/api/token`).then(response => response.json());
+
+    // A restored backup ships orders disabled, so placeOrder() answers 503
+    // until the DB setting is switched on through the settings API.
+    const settings = await apiJson(baseUrl, apiToken, '/api/orders/settings');
+    await apiJson(baseUrl, apiToken, '/api/orders/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...settings, enabled: true }),
+    });
+
+    // placeOrder() only accepts an item name that exists in the menu, so take
+    // one from the restored menu rather than a hard-coded drink.
+    const menu = await apiJson(baseUrl, apiToken, '/api/orders/menu');
+    const item = (Array.isArray(menu) ? menu[0]?.name : '') || '';
+    if (!item) throw new Error('demo-fixtures: the restored menu has no items to order');
+
     for (const customer of ['Ada Demo', 'Ben Demo', 'Cora Demo']) {
-        const response = await fetch(`${baseUrl}/api/orders`, {
+        await apiJson(baseUrl, apiToken, '/api/orders', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-glp-token': apiToken },
-            body: JSON.stringify({ item: 'Espresso', customer }),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item, customer }),
         });
-        if (!response.ok) console.warn(`demo-fixtures: creating order for ${customer} -> ${response.status}`);
     }
     return apiToken;
 }
