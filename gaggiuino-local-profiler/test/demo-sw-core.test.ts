@@ -30,7 +30,7 @@ interface GlpDemo {
     fixtureKey(method: string, urlString: string): string;
     route(method: string, requestUrl: string, scopeUrl: string, manifest: Manifest): Route;
     shiftTimestamps(value: unknown, deltaMs: number): unknown;
-    markMachineOnline(pathname: string, body: unknown): unknown;
+    patchMachineOnline(pathname: string, body: unknown, nowMs: number): unknown;
 }
 
 function loadGlpDemo(): GlpDemo {
@@ -230,22 +230,30 @@ describe('sw-core shiftTimestamps (#1193)', () => {
     });
 });
 
+const NOW_MS = Date.UTC(2026, 0, 15, 10, 30, 0);
+
 interface StatusFixture {
     machineReachable: boolean | null;
     machineOn: boolean | null;
     machineOnSince: number | null;
     lastMachineError: string | null;
+    lastMachineSuccess: number | null;
+    lastSync: string | null;
+    machineVersion: string | null;
     machines: Array<Record<string, unknown>>;
     shotCount: number;
 }
 
-describe('sw-core markMachineOnline (#1193)', () => {
+describe('sw-core patchMachineOnline (#1193)', () => {
     const glp = loadGlpDemo();
     const status: StatusFixture = {
         machineReachable: false,
         machineOn: true,
         machineOnSince: 1_700_000_000_000,
         lastMachineError: 'dial tcp 10.0.0.2: connect: connection refused',
+        lastMachineSuccess: null,
+        lastSync: null,
+        machineVersion: null,
         machines: [
             { id: 1, isDefault: true, reachable: false, on: true },
             { id: 2, isDefault: false, reachable: null, on: null },
@@ -253,27 +261,73 @@ describe('sw-core markMachineOnline (#1193)', () => {
         shotCount: 42,
     };
 
-    it('reports the default machine reachable and idle', () => {
-        const out = glp.markMachineOnline('/gaggiuino-local-profiler/api/status', status) as StatusFixture;
+    it('rewrites /api/status to the default machine reachable and idle', () => {
+        const out = glp.patchMachineOnline('/gaggiuino-local-profiler/api/status', status, NOW_MS) as StatusFixture;
         expect(out.machineReachable).toBe(true);
         expect(out.machineOn).toBe(false);
         expect(out.machineOnSince).toBeNull();
         expect(out.lastMachineError).toBeNull();
+        expect(out.lastSync).toBe(new Date(NOW_MS).toISOString());
+        expect(out.lastMachineSuccess).toBe(NOW_MS);
+        expect(out.machineVersion).toBe('v1.0.0');
         expect(out.machines[0]).toEqual({ id: 1, isDefault: true, reachable: true, on: false });
         expect(out.machines[1]).toEqual({ id: 2, isDefault: false, reachable: null, on: null });
         expect(out.shotCount).toBe(42);
     });
 
+    it('keeps a recorded machineVersion instead of inventing one', () => {
+        const out = glp.patchMachineOnline('/api/status', { machineVersion: 'v9.9.9' }, NOW_MS) as {
+            machineVersion: string;
+        };
+        expect(out.machineVersion).toBe('v9.9.9');
+    });
+
     it('nulls the authenticated-only lastSyncError when present', () => {
-        const out = glp.markMachineOnline('/api/status', { machineReachable: false, lastSyncError: 'boom' }) as {
+        const out = glp.patchMachineOnline('/api/status', { machineReachable: false, lastSyncError: 'boom' }, NOW_MS) as {
             lastSyncError: string | null;
         };
         expect(out.lastSyncError).toBeNull();
     });
 
+    it('rewrites /api/live/data to a reachable but idle machine', () => {
+        const body = {
+            machineReachable: false,
+            isLive: false,
+            temperature: null,
+            targetTemperature: null,
+            pressure: null,
+            datapoints: { timeInShot: [1, 2, 3] },
+            seq: 7,
+        };
+        const out = glp.patchMachineOnline('/api/live/data', body, NOW_MS) as typeof body;
+        expect(out.machineReachable).toBe(true);
+        expect(out.isLive).toBe(false);
+        expect(out.temperature).toBe(93);
+        expect(out.targetTemperature).toBe(93);
+        expect(out.pressure).toBe(0);
+        expect(out.datapoints).toEqual({ timeInShot: [1, 2, 3] });
+        expect(out.seq).toBe(7);
+    });
+
+    it('rewrites /api/preheat to finished, leaving the other fields alone', () => {
+        const body = { ready: false, remaining: 1200, pct: 0, temp: null, targetTemp: null, preheatTime: 20, plannedSwitchOnAt: null };
+        const out = glp.patchMachineOnline('/api/preheat', body, NOW_MS) as typeof body & { elapsed: number };
+        expect(out.ready).toBe(true);
+        expect(out.remaining).toBe(0);
+        expect(out.pct).toBe(100);
+        expect(out.elapsed).toBe(1200);
+        expect(out.temp).toBe(93);
+        expect(out.targetTemp).toBe(93);
+        expect(out.preheatTime).toBe(20);
+        expect(out.plannedSwitchOnAt).toBeNull();
+    });
+
     it('leaves other paths and non-object bodies unchanged', () => {
-        expect(glp.markMachineOnline('/api/shots', status)).toBe(status);
-        expect(glp.markMachineOnline('/api/machines', status)).toBe(status);
-        expect(glp.markMachineOnline('/api/status', null)).toBeNull();
+        expect(glp.patchMachineOnline('/api/shots', status, NOW_MS)).toBe(status);
+        expect(glp.patchMachineOnline('/api/machines', status, NOW_MS)).toBe(status);
+        expect(glp.patchMachineOnline('/api/machine/live', status, NOW_MS)).toBe(status);
+        expect(glp.patchMachineOnline('/api/status', null, NOW_MS)).toBeNull();
+        const arrayBody: unknown[] = [];
+        expect(glp.patchMachineOnline('/api/live/data', arrayBody, NOW_MS)).toBe(arrayBody);
     });
 });

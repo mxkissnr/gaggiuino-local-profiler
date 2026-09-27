@@ -102,29 +102,79 @@ self.GLPDemo = (() => {
         return shiftNode(value, delta);
     }
 
-    // The app-wide poll that reports machine reachability is GET /api/status;
-    // the site is served from a sub-path, so match the pathname suffix.
+    // The endpoints the app polls for machine state. The site is served from a
+    // sub-path, so each matches on the pathname suffix.
     const STATUS_PATH = /(^|\/)api\/status$/;
+    const LIVE_DATA_PATH = /(^|\/)api\/live\/data$/;
+    const PREHEAT_PATH = /(^|\/)api\/preheat$/;
+
+    // Stand-in firmware version for the reachable demo machine; only filled in
+    // where the recorded status left it null (components/status.ts renders it
+    // only once a machine hostname is known).
+    const MACHINE_VERSION = 'v1.0.0';
 
     /**
-     * Rewrites one GET /api/status body into the "online but idle" shape the
-     * app expects: the default machine is reachable and switched off, with no
-     * recorded probe/sync error. Any other pathname (or a non-object body) is
-     * returned untouched.
+     * Rewrites one recorded JSON body into the "online but idle" shape the app
+     * expects, so the demo shows a reachable machine that is merely idle rather
+     * than the unreachable one the recording captured. `nowMs` is the wall-clock
+     * the response is being replayed at, used for the sync stamps below.
+     *
+     *   GET /api/status    — default machine reachable and switched off, last
+     *                        sync/success moved to now, recorded probe/sync
+     *                        errors cleared.
+     *   GET /api/live/data — reachable-but-idle (#655) boiler numbers; the
+     *                        recorded datapoints are left untouched.
+     *   GET /api/preheat   — preheat finished, so the Live view shows "ready"
+     *                        instead of a countdown the machine never ran.
+     *
+     * Any other pathname (or a non-object body) is returned untouched.
      */
-    function markMachineOnline(pathname, body) {
-        if (!STATUS_PATH.test(String(pathname)) || !body || typeof body !== 'object' || Array.isArray(body)) return body;
-        const next = { ...body, machineReachable: true, machineOn: false, machineOnSince: null };
-        if ('lastMachineError' in next) next.lastMachineError = null;
-        if ('lastSyncError' in next) next.lastSyncError = null;
-        if (Array.isArray(next.machines)) {
-            next.machines = next.machines.map(machine => (
-                machine && typeof machine === 'object' && machine.isDefault
-                    ? { ...machine, reachable: true, on: false }
-                    : machine
-            ));
+    function patchMachineOnline(pathname, body, nowMs) {
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
+        const path = String(pathname);
+
+        if (STATUS_PATH.test(path)) {
+            const next = {
+                ...body,
+                machineReachable: true,
+                machineOn: false,
+                machineOnSince: null,
+                // The backend stamps lastSync as an ISO date-time string and
+                // lastMachineSuccess as Unix ms; mirror both so the demo matches
+                // the real response (components/status.ts accepts either form).
+                lastSync: new Date(nowMs).toISOString(),
+                lastMachineSuccess: nowMs,
+            };
+            if ('machineVersion' in next && !next.machineVersion) next.machineVersion = MACHINE_VERSION;
+            if ('lastMachineError' in next) next.lastMachineError = null;
+            if ('lastSyncError' in next) next.lastSyncError = null;
+            if (Array.isArray(next.machines)) {
+                next.machines = next.machines.map(machine => (
+                    machine && typeof machine === 'object' && machine.isDefault
+                        ? { ...machine, reachable: true, on: false }
+                        : machine
+                ));
+            }
+            return next;
         }
-        return next;
+
+        if (LIVE_DATA_PATH.test(path)) {
+            return {
+                ...body,
+                machineReachable: true,
+                isLive: false,
+                temperature: 93,
+                targetTemperature: 93,
+                pressure: 0,
+            };
+        }
+
+        if (PREHEAT_PATH.test(path)) {
+            const preheatTime = typeof body.preheatTime === 'number' ? body.preheatTime : 0;
+            return { ...body, ready: true, remaining: 0, pct: 100, elapsed: preheatTime * 60, temp: 93, targetTemp: 93 };
+        }
+
+        return body;
     }
 
     /**
@@ -166,5 +216,5 @@ self.GLPDemo = (() => {
         return entry ? { kind: 'fixture', entry } : { kind: 'missing', key };
     }
 
-    return { fixtureKey, route, shiftTimestamps, markMachineOnline };
+    return { fixtureKey, route, shiftTimestamps, patchMachineOnline };
 })();

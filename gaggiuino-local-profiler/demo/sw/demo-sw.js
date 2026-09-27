@@ -68,7 +68,7 @@ async function fixtureResponse(entry, pathname, deltaMs) {
         const text = await response.text();
         try {
             const shifted = self.GLPDemo.shiftTimestamps(JSON.parse(text), deltaMs);
-            return new Response(JSON.stringify(self.GLPDemo.markMachineOnline(pathname, shifted)), { status, headers });
+            return new Response(JSON.stringify(self.GLPDemo.patchMachineOnline(pathname, shifted, Date.now())), { status, headers });
         } catch {
             return new Response(text, { status, headers });
         }
