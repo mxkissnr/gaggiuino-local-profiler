@@ -29,14 +29,14 @@ function waitForController(): Promise<void> {
  * Ensures the worker controls this page before the app starts loading data.
  * Returns false when the page is about to reload (caller must stop).
  */
-async function ensureController(registration: ServiceWorkerRegistration): Promise<boolean> {
+async function ensureController(): Promise<boolean> {
     if (navigator.serviceWorker.controller) return true;
 
     // First load: the worker is installing/activating. It claims the page in
     // its activate handler, which fires controllerchange — but if the worker
     // was already active and this page loaded from cache, that event may never
-    // come, so `ready` is the fallback.
-    await Promise.race([waitForController(), registration.ready]);
+    // come, so the container's `ready` is the fallback.
+    await Promise.race([waitForController(), navigator.serviceWorker.ready]);
     if (navigator.serviceWorker.controller) return true;
 
     // Still uncontrolled: reload once so the worker sits in front of every
@@ -52,8 +52,8 @@ async function start(): Promise<void> {
         showUnsupported();
         return;
     }
-    const registration = await navigator.serviceWorker.register(SW_URL, { scope: './' });
-    if (!await ensureController(registration)) return;
+    await navigator.serviceWorker.register(SW_URL, { scope: './' });
+    if (!await ensureController()) return;
     await import('../main.ts');
 }
 
