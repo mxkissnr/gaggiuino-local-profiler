@@ -5,6 +5,7 @@
 - **The Orders and Live screenshots now keep the seeded demo data when the screenshot tool restores a real backup, and a restore reports how many photos it wrote.** Closes #1185
 
 ### Changed
+- **Added a demo-fixture recorder that snapshots the API responses the app needs, the first step toward serving the demo from GitHub Pages.** Part of #1193
 - **The screenshot tool can restore a real GLP backup instead of the demo seed, so the README/wiki views can be captured from actual data.** Closes #1181
 - **The README now shows the GLP ecosystem and the app's internals as diagrams, and GaggiMate is documented as fully supported.** Closes #1176
 - **The app architecture diagram now shows the importer and backup/restore paths through the REST API.** Part of #1176

@@ -22,6 +22,11 @@ preheat_state.json
 gaggiuino-local-profiler/scripts/*.zip
 gaggiuino-local-profiler/scripts/**/*.zip
 
+# #1193: recorded demo fixtures are a regenerated build artifact (npm run
+# demo:fixtures), not source — and must be re-checked for personal data on
+# every run rather than reviewed once in a PR.
+gaggiuino-local-profiler/demo/fixtures/
+
 # defence-in-depth: secrets that must never land in git regardless of location
 .env
 .env.*
