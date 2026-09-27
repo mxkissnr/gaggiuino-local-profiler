@@ -369,8 +369,10 @@ Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profil
 ## Development at a glance
 
 <p align="center">
-  <img src="docs/dev-stats/commits-per-repo.svg" alt="Commits per repo" width="49%"/>
-  <img src="docs/dev-stats/model-breakdown.svg" alt="AI model breakdown by commits" width="49%"/>
+  <img src="docs/dev-stats/commits-per-repo.svg" alt="Commits per repo"/>
+</p>
+<p align="center">
+  <img src="docs/dev-stats/model-breakdown.svg" alt="AI model breakdown by commits"/>
 </p>
 
 Full numbers (timeline, per-model breakdown, cost estimate) generated live from git history: see [DEVELOPMENT.md](DEVELOPMENT.md).
