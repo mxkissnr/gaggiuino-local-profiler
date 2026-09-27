@@ -570,6 +570,7 @@ const it: Partial<Translations> = {
     demo_mode_end_confirm:'Terminare la modalità demo ed eliminare tutti i dati demo?',
     'demo.banner':'Demo — dati di esempio, nulla viene salvato',
     'demo.notSaved':'Demo: modifica non salvata',
+    'demo.simulate':'Simula uno shot',
     'demo.getApp':"Installa l'app",
     photo_pick_btn:'Scegli foto', photo_change_btn:'Cambia foto',
     crop_editor_title:'Ritaglia foto', crop_editor_apply:'Applica', crop_editor_zoom:'Zoom',

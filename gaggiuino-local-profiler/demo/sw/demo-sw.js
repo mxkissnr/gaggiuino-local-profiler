@@ -165,41 +165,50 @@ async function loadNewestShot(manifest) {
 }
 
 /**
- * Replays the newest recorded shot as a live brew: one live-snapshot every
- * 500 ms until the shot's last timeInShot, then one idle frame whose
- * incremented seq triggers the app's post-brew shot-list reload. A second
- * request while one is already running is ignored.
+ * Starts a replay unless one is already running. Synchronous, so the guard
+ * check and set are atomic; the async body clears the flag when it settles.
  */
-async function simulateShot() {
+function startSimulation() {
     if (simulateRunning) return;
     simulateRunning = true;
-    try {
-        const shot = await loadNewestShot(await loadManifest());
-        if (!shot) {
-            console.warn('[glp-demo] simulate: no shot fixture to replay');
-            return;
-        }
-        const times = (shot.datapoints && shot.datapoints.timeInShot) || [];
-        const endTenths = times.length ? times[times.length - 1] : 0;
-        const seq = liveSeq;
-        await new Promise(resolve => {
-            let elapsed = 0;
-            const timer = setInterval(() => {
-                elapsed += SIM_STEP_TENTHS;
-                if (elapsed < endTenths) {
-                    broadcast(LIVE_SNAPSHOT_EVENT, self.GLPDemo.liveFrame(shot, elapsed, seq));
-                    return;
-                }
-                clearInterval(timer);
-                broadcast(LIVE_SNAPSHOT_EVENT, self.GLPDemo.liveFrame(shot, endTenths, seq));
-                liveSeq = seq + 1;
-                broadcast(LIVE_SNAPSHOT_EVENT, self.GLPDemo.idleFrame(liveSeq));
-                resolve();
-            }, SIM_INTERVAL_MS);
-        });
-    } finally {
-        simulateRunning = false;
+    const done = () => { simulateRunning = false; };
+    // Promise chain rather than async/await + finally: require-atomic-updates
+    // can't see that nothing else writes the flag while a run is active.
+    replayShot().then(done, error => {
+        console.warn('[glp-demo] simulate failed:', error);
+        done();
+    });
+}
+
+/**
+ * Replays the newest recorded shot as a live brew: one live-snapshot every
+ * 500 ms until the shot's last timeInShot, then one idle frame whose
+ * incremented seq triggers the app's post-brew shot-list reload.
+ */
+async function replayShot() {
+    const shot = await loadNewestShot(await loadManifest());
+    if (!shot) {
+        console.warn('[glp-demo] simulate: no shot fixture to replay');
+        return;
     }
+    const times = (shot.datapoints && shot.datapoints.timeInShot) || [];
+    const endTenths = times.length ? times[times.length - 1] : 0;
+    const seq = liveSeq;
+    await new Promise(resolve => {
+        let elapsed = 0;
+        const timer = setInterval(() => {
+            elapsed += SIM_STEP_TENTHS;
+            if (elapsed < endTenths) {
+                broadcast(LIVE_SNAPSHOT_EVENT, self.GLPDemo.liveFrame(shot, elapsed, seq));
+                return;
+            }
+            clearInterval(timer);
+            broadcast(LIVE_SNAPSHOT_EVENT, self.GLPDemo.liveFrame(shot, endTenths, seq));
+            liveSeq = seq + 1;
+            broadcast(LIVE_SNAPSHOT_EVENT, self.GLPDemo.idleFrame(liveSeq));
+            resolve();
+        }, SIM_INTERVAL_MS);
+    });
 }
 
 /**
@@ -251,4 +260,11 @@ self.addEventListener('fetch', event => {
     const route = self.GLPDemo.route(request.method, request.url, self.registration.scope, { entries: {} });
     if (route.kind === 'passthrough') return;
     event.respondWith(handle(request, event));
+});
+
+// The demo banner's "Simulate a shot" button asks the worker to replay a
+// recorded shot down every open api/events stream.
+self.addEventListener('message', event => {
+    const data = event.data;
+    if (data && data.type === SIMULATE_MESSAGE) startSimulation();
 });

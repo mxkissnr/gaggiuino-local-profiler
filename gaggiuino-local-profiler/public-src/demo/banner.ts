@@ -19,6 +19,9 @@ const WRITE_MESSAGE = 'glp-demo-write';
 const NOT_SAVED_MS = 3000;
 const README_URL = 'https://github.com/mxkissnr/gaggiuino-local-profiler#readme';
 const FIXED_PANES = ['main', 'sidebar'];
+// Values-must-match contract with the service worker (demo/sw/demo-sw.js):
+// posting this asks it to replay the newest recorded shot as a live brew.
+const SIMULATE_MESSAGE = { type: 'glp-demo-simulate' };
 
 function buildBanner(): HTMLElement {
     const bar = document.createElement('div');
@@ -46,7 +49,25 @@ function buildBanner(): HTMLElement {
     link.style.fontWeight = '600';
     link.style.whiteSpace = 'nowrap';
 
-    bar.append(label, link);
+    // Same text-link treatment as demo.getApp next to it, but a real button
+    // (no href) so it can carry the click; the wrapping flex bar keeps it on
+    // its own line at 360 px.
+    const simulate = document.createElement('button');
+    simulate.type = 'button';
+    simulate.dataset.i18n = 'demo.simulate';
+    simulate.textContent = t('demo.simulate');
+    Object.assign(simulate.style, {
+        background: 'none', border: 'none', padding: '0', margin: '0',
+        color: 'var(--accent-ink)', font: 'inherit', fontWeight: '600',
+        whiteSpace: 'nowrap', cursor: 'pointer',
+    });
+    simulate.addEventListener('click', () => {
+        // The worker replays a recorded shot; the Live tab is where it shows.
+        navigator.serviceWorker.controller?.postMessage(SIMULATE_MESSAGE);
+        window.switchMode?.('live');
+    });
+
+    bar.append(label, simulate, link);
     return bar;
 }
 

@@ -570,6 +570,7 @@ const en: Translations = {
     demo_mode_end_confirm:'End demo mode and delete all demo data?',
     'demo.banner':'Demo — sample data, nothing is saved',
     'demo.notSaved':'Demo: change not saved',
+    'demo.simulate':'Simulate a shot',
     'demo.getApp':'Get the app',
     photo_pick_btn:'Choose photo', photo_change_btn:'Change photo',
     crop_editor_title:'Crop photo', crop_editor_apply:'Apply', crop_editor_zoom:'Zoom',

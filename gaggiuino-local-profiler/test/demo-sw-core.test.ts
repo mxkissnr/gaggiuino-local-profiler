@@ -26,11 +26,25 @@ type Route =
     | { kind: 'write' }
     | { kind: 'missing'; key: string };
 
+interface LiveFrame {
+    isLive: boolean;
+    machineReachable: boolean;
+    profileName: string;
+    datapoints: Record<string, unknown> | null;
+    seq: number;
+    temperature: number | null;
+    targetTemperature: number | null;
+    pressure: number | null;
+}
+
 interface GlpDemo {
     fixtureKey(method: string, urlString: string): string;
     route(method: string, requestUrl: string, scopeUrl: string, manifest: Manifest): Route;
     shiftTimestamps(value: unknown, deltaMs: number): unknown;
     patchMachineOnline(pathname: string, body: unknown, nowMs: number): unknown;
+    liveFrame(shot: unknown, elapsedTenths: number, seq: number): LiveFrame;
+    idleFrame(seq: number): LiveFrame;
+    shotsListKey(manifest: Manifest): string | null;
 }
 
 function loadGlpDemo(): GlpDemo {
@@ -329,5 +343,103 @@ describe('sw-core patchMachineOnline (#1193)', () => {
         expect(glp.patchMachineOnline('/api/status', null, NOW_MS)).toBeNull();
         const arrayBody: unknown[] = [];
         expect(glp.patchMachineOnline('/api/live/data', arrayBody, NOW_MS)).toBe(arrayBody);
+    });
+});
+
+// Part of #1193 (S3c): the shot-replay payload builders the service worker
+// pushes over api/events. Datapoint series are in 1/10 units like a stored
+// shot's; the idle-stat fields carry the newest sample in real units.
+const SIM_SHOT = {
+    profileName: 'Turbo Bloom',
+    datapoints: {
+        timeInShot: [0, 10, 20, 30],
+        pressure: [10, 85, 90, 20],
+        temperature: [930, 932, 931, 930],
+        shotWeight: [0, 50, 150, 360],
+        pumpFlow: [0, 20, 25, 10],
+        targetTemperature: [930, 930, 930, 930],
+    },
+};
+
+describe('sw-core liveFrame (#1193 S3c)', () => {
+    const glp = loadGlpDemo();
+
+    it('keeps only the samples reached at 0 and mid-shot', () => {
+        const atZero = glp.liveFrame(SIM_SHOT, 0, 0);
+        expect(atZero.datapoints).toMatchObject({
+            timeInShot: [0], pressure: [10], temperature: [930], shotWeight: [0], pumpFlow: [0],
+        });
+        expect(atZero.isLive).toBe(true);
+        expect(atZero.machineReachable).toBe(true);
+        expect(atZero.profileName).toBe('Turbo Bloom');
+
+        const mid = glp.liveFrame(SIM_SHOT, 15, 0);
+        expect(mid.datapoints).toMatchObject({
+            timeInShot: [0, 10], pressure: [10, 85], temperature: [930, 932],
+        });
+    });
+
+    it('carries the whole shot once elapsed reaches the end', () => {
+        const done = glp.liveFrame(SIM_SHOT, 999, 0);
+        expect(done.datapoints?.['timeInShot']).toEqual([0, 10, 20, 30]);
+    });
+
+    it('reports the newest sample as idle-stat fields in real units', () => {
+        const mid = glp.liveFrame(SIM_SHOT, 15, 0);
+        expect(mid.temperature).toBe(93.2);
+        expect(mid.pressure).toBe(8.5);
+        expect(mid.targetTemperature).toBe(93);
+    });
+
+    it('passes seq through untouched and does not mutate the shot', () => {
+        const frame = glp.liveFrame(SIM_SHOT, 25, 12);
+        expect(frame.seq).toBe(12);
+        expect(SIM_SHOT.datapoints.timeInShot).toEqual([0, 10, 20, 30]);
+        expect(frame.datapoints?.['timeInShot']).not.toBe(SIM_SHOT.datapoints.timeInShot);
+    });
+
+    it('is an empty live frame for a shot with no datapoints', () => {
+        const frame = glp.liveFrame({ profileName: 'X' }, 50, 3);
+        expect(frame.datapoints).toEqual({});
+        expect(frame.temperature).toBeNull();
+        expect(frame.pressure).toBeNull();
+    });
+});
+
+describe('sw-core idleFrame (#1193 S3c)', () => {
+    const glp = loadGlpDemo();
+
+    it('is the reachable idle frame carrying the incremented seq', () => {
+        expect(glp.idleFrame(4)).toEqual({
+            isLive: false,
+            machineReachable: true,
+            profileName: '',
+            datapoints: null,
+            seq: 4,
+            temperature: 93,
+            targetTemperature: 93,
+            pressure: 0,
+        });
+    });
+});
+
+describe('sw-core shotsListKey (#1193 S3c)', () => {
+    const glp = loadGlpDemo();
+
+    it('picks the live newest-first page, skipping detail/trash/paged keys', () => {
+        const manifest: Manifest = {
+            entries: {
+                'GET /api/shots/5': { status: 200, contentType: 'application/json', file: 'a.json' },
+                'GET /api/shots?limit=60&trash=1': { status: 200, contentType: 'application/json', file: 'b.json' },
+                'GET /api/shots?limit=60&cursor=abc': { status: 200, contentType: 'application/json', file: 'c.json' },
+                'GET /api/shots?limit=60': { status: 200, contentType: 'application/json', file: 'd.json' },
+                'GET /api/status': { status: 200, contentType: 'application/json', file: 'e.json' },
+            },
+        };
+        expect(glp.shotsListKey(manifest)).toBe('GET /api/shots?limit=60');
+    });
+
+    it('returns null when no list fixture is recorded', () => {
+        expect(glp.shotsListKey({ entries: {} })).toBeNull();
     });
 });
