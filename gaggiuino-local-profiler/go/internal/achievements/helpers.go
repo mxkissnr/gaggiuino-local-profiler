@@ -172,10 +172,6 @@ func beanID(bean library.Entity) (int64, bool) {
 	return asInt64(bean["id"])
 }
 
-// resolveBeanForShot used to live here (helpers.js's resolveBeanForShot);
-// it moved to internal/library as ResolveBeanForShot so the achievement
-// checks and the server-side shot scorer share one implementation.
-
 // bagAtShotTime ports helpers.js's bagAtShotTime: which bag of `bean` was
 // open at shotTimestampSec.
 func bagAtShotTime(bean library.Entity, shotTimestampSec int64) library.Entity {

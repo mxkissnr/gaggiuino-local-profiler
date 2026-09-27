@@ -209,6 +209,46 @@ func TestScoreCache_BackfilledOnReadThenReused(t *testing.T) {
 	}
 }
 
+func TestScoreCache_RecentAndPageShareTheBeanAwareEntry(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	seedShots(t, repo, 1)
+
+	temp := 90.0
+	SetBeanSource(func() (func(Shot) *Bean, error) {
+		bean := &Bean{BrewTempC: &temp}
+		return func(Shot) *Bean { return bean }, nil
+	})
+	t.Cleanup(func() { SetBeanSource(nil) })
+
+	svc := NewService(repo)
+	if _, err := svc.GetPage(Cursor{}, 60, 0); err != nil {
+		t.Fatalf("GetPage: %v", err)
+	}
+	if _, ok := cachedScoreRow(t, repo, 1); !ok {
+		t.Fatal("expected a cache row after the first GetPage")
+	}
+
+	// Poison the cached score: a cache miss recomputes and overwrites it.
+	if _, err := sqlDB.Exec(`UPDATE shot_score_cache SET score = 999 WHERE shot_id = 1`); err != nil {
+		t.Fatalf("poisoning the cached score: %v", err)
+	}
+
+	// The no-JS recent list must reuse the same bean-aware entry. If it
+	// scored against the generic bands its different key would evict this
+	// row, forcing the next GetPage to recompute.
+	if _, err := svc.GetRecent(10); err != nil {
+		t.Fatalf("GetRecent: %v", err)
+	}
+
+	page, err := svc.GetPage(Cursor{}, 60, 0)
+	if err != nil {
+		t.Fatalf("GetPage: %v", err)
+	}
+	if len(page.Rows) != 1 || page.Rows[0].Score == nil || *page.Rows[0].Score != 999 {
+		t.Fatalf("second GetPage score = %v, want the cached sentinel 999 (a rewrite means GetRecent used the generic-band key)", page.Rows[0].Score)
+	}
+}
+
 func TestScoreCache_InvalidatedByAnnotation(t *testing.T) {
 	_, repo, _ := newTestHandlers(t)
 	seedShots(t, repo, 1)

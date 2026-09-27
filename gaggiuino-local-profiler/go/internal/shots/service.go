@@ -74,7 +74,7 @@ func (s *Service) GetTrashPage(cur Cursor, limit int, machineID int64) (Page, er
 // which scans the whole history (#957 decision 7). Order is newest first,
 // so callers no longer reverse the slice.
 func (s *Service) GetRecent(n int) ([]Shot, error) {
-	page, err := s.repo.FindPageExcludingTrash(Cursor{}, n, 0)
+	page, err := s.repo.findPage(Cursor{}, n, 0, loadBeanLookup())
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (s *Service) GetRecent(n int) ([]Shot, error) {
 
 // GetRecentTrash is GetRecent against the trash list.
 func (s *Service) GetRecentTrash(n int) ([]Shot, error) {
-	page, err := s.repo.FindTrashedPage(Cursor{}, n, 0)
+	page, err := s.repo.findTrashedPage(Cursor{}, n, 0, loadBeanLookup())
 	if err != nil {
 		return nil, err
 	}
