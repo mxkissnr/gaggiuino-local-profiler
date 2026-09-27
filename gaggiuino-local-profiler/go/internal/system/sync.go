@@ -188,6 +188,16 @@ func (p *Poller) backfillShots(
 		shot, status, err := fetch(ctx, i)
 		if err != nil {
 			if status == http.StatusNotFound {
+				if i == latestNative {
+					// #1197: the machine reports its newest id a moment before
+					// that shot is readable. Blocklisting it here would skip it
+					// for good, so retry next cycle instead. Safe without extra
+					// state: the next run starts again at effectiveMax+1, and
+					// once a newer shot exists this id is no longer latestNative,
+					// so a genuinely missing shot still gets blocklisted then.
+					log.Printf("%s: newest shot %d not readable yet (404) — retrying next cycle", logs.prefix, i)
+					continue
+				}
 				// #721: shot permanently gone — blocklist it and skip past.
 				log.Printf("%s: shot %d not found%s (404) — marking permanently missing", logs.prefix, i, logs.notFoundSuffix)
 				if aerr := p.shots.AppendToBlocklist(strconv.FormatInt(shots.ToGlobalShotID(machineID, i), 10)); aerr != nil {

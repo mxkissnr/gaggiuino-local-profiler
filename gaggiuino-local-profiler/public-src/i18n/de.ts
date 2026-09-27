@@ -105,7 +105,7 @@ const de: Partial<Translations> = {
     grind_finer_urgent:'Feiner mahlen', grind_finer:'Leicht feiner mahlen',
     grind_ok:'Mahlgrad passt', grind_coarser:'Leicht gröber mahlen',
     grind_coarser_urgent:'Gröber mahlen', grind_channeling:'Puck-Vorbereitung prüfen',
-    live_title:'Live Shot', live_connecting:'Verbinde …', live_brewing:'Brewing …',
+    live_title:'Live Shot', live_connecting:'Verbinde …', live_brewing:'Brüht …',
     live_machine_unavailable:'Live-Ansicht ist für diese Maschine noch nicht verfügbar.',
     machine_unreachable_title:'Maschine nicht erreichbar',
     live_unreachable_text:'Die Maschine antwortet nicht. Prüfe, ob sie eingeschaltet und im Netzwerk erreichbar ist.',

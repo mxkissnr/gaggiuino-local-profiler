@@ -436,6 +436,13 @@ func (s *Service) AcceptOrder(id string, rawEta any) (Order, error) {
 	return order, nil
 }
 
+// orderShotToleranceSec is how far a shot may predate an order's reference
+// time and still count as "its" shot: the barista may pull the shot just
+// before tapping accept, so the shot's Unix-seconds timestamp can sit
+// slightly before acceptedAt. #1197 — without a floor here, completing an
+// order with no shot of its own attached an unrelated older shot instead.
+const orderShotToleranceSec = 120
+
 // CompleteOrder ports OrderService.js's completeOrder(id): status, milk
 // stock deduction, matching the latest shot on the order's own target
 // machine (#326), and writing an orderedBy annotation back onto that shot.
@@ -470,7 +477,17 @@ func (s *Service) CompleteOrder(id string) (Order, error) {
 		}
 	}
 
-	if shotID, ok, err := s.shotsRepo.GetLatestID(orderMachineID(order)); err == nil && ok {
+	// #1197: only a shot at/after (acceptedAt − tolerance) counts as this
+	// order's; completing straight from pending has no acceptedAt, so fall
+	// back to createdAt. Integers are Unix milliseconds on the order but
+	// Unix seconds on the shot, hence the /1000.
+	var sinceSec int64
+	if refMs, ok := jsNumber(order["acceptedAt"]); ok {
+		sinceSec = int64(refMs)/1000 - orderShotToleranceSec
+	} else if refMs, ok := jsNumber(order["createdAt"]); ok {
+		sinceSec = int64(refMs)/1000 - orderShotToleranceSec
+	}
+	if shotID, ok, err := s.shotsRepo.GetLatestID(orderMachineID(order), sinceSec); err == nil && ok {
 		order["shotId"] = shotID
 		if ann, err := s.shotsRepo.GetAnnotation(shotID); err == nil {
 			ann["orderedBy"] = map[string]any{
