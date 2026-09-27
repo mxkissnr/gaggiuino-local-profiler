@@ -1,6 +1,7 @@
 ## [Unreleased]
 ### Added
 - **A browser demo with sample data now runs on GitHub Pages, including a simulated live shot.** Closes #1193
+- **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, with separate opt-ins for write and developer tools.** Closes #1196
 ### Fixed
 - **Shot scores in the list, share card and API now use the bean's own target temperature and ratio, like the badges already did.** Closes #1198
 - **A firmware update recorded in the maintenance log now shows which version was replaced by which and the shot count at the time.** Closes #1172
