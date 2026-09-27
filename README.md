@@ -248,8 +248,9 @@ flowchart LR
   INT -->|"port 8099"| APP
   INT -->|"sensors / attributes"| SC
   INT -->|"sensors / attributes"| OC
-  SC -->|"port 8099"| APP
-  OC -->|"port 8099"| APP
+  SC -->|"/api/glp/* proxy"| INT
+  OC -->|"/api/glp/* proxy (default)"| INT
+  OC -.->|"port 8099 (only with glp_url)"| APP
   INT -->|"sensors / automations"| HA
 
   classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
