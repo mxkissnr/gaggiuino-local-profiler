@@ -51,6 +51,11 @@ type Deps struct {
 	// /api/mcp, so this only matters when the operator has raised the limit.
 	RateLimitWindow time.Duration
 	RateLimitMax    int
+	// AllowWrite turns on the write tools (annotate_shot, set_known_grind,
+	// mark_maintenance_done). Off by default and a second opt-in on top of
+	// Enabled: when false the tools are never registered, so a client cannot
+	// list or call them. cmd/server sets it from mcp.WriteEnabled().
+	AllowWrite bool
 }
 
 // NewHandler builds the stateless Streamable-HTTP MCP endpoint: the SDK
@@ -80,22 +85,32 @@ func newServer(deps Deps) *mcpsdk.Server {
 	if version == "" {
 		version = "dev"
 	}
+	instructions := "Read-only access to the user's Gaggiuino Local Profiler data. " +
+		"Call list_shots to discover shot ids, get_shot for one shot's metrics and optional curve, " +
+		"and compare_shots to compare two to five shots side by side. " +
+		"list_beans and get_library describe the coffee/equipment library, " +
+		"get_maintenance_status and get_machine_status report upkeep and machine reachability, " +
+		"and get_analytics_summary aggregates shots over a period."
+	if deps.AllowWrite {
+		instructions += " This server can also change a few things on the user's behalf: " +
+			"annotate_shot merges rating, notes and grind setting into one shot, " +
+			"set_known_grind remembers a bean's winning grind setting, " +
+			"and mark_maintenance_done records that a maintenance task was completed."
+	}
 	srv := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    serverName,
 		Title:   serverTitle,
 		Version: version,
 	}, &mcpsdk.ServerOptions{
-		Instructions: "Read-only access to the user's Gaggiuino Local Profiler data. " +
-			"Call list_shots to discover shot ids, get_shot for one shot's metrics and optional curve, " +
-			"and compare_shots to compare two to five shots side by side. " +
-			"list_beans and get_library describe the coffee/equipment library, " +
-			"get_maintenance_status and get_machine_status report upkeep and machine reachability, " +
-			"and get_analytics_summary aggregates shots over a period.",
+		Instructions: instructions,
 	})
 	registerShotTools(srv, deps.Shots)
 	registerLibraryTools(srv, deps)
 	registerStatusTools(srv, deps)
 	registerAnalyticsTools(srv, deps.Shots)
+	if deps.AllowWrite {
+		registerWriteTools(srv, deps)
+	}
 	return srv
 }
 

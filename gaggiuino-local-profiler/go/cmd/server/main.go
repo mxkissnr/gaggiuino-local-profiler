@@ -464,6 +464,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 			Version:         system.Version(),
 			RateLimitWindow: rateLimitWindow,
 			RateLimitMax:    rateLimitMax,
+			AllowWrite:      mcp.WriteEnabled(),
 		}))
 	}
 

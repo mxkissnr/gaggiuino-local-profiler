@@ -10,6 +10,11 @@
 // foreign Origin header are rejected (DNS-rebinding protection, MCP spec
 // MUST), and tool calls share internal/ratelimit's defaults.
 //
+// A second, independent opt-in — options.json's enable_mcp_write, or
+// GLP_ENABLE_MCP_WRITE=true — adds three write tools (annotate_shot,
+// set_known_grind, mark_maintenance_done) on top of the read-only set. While
+// it is off they are not registered at all, so a client never sees them.
+//
 // Tools return structuredContent plus the SDK's text fallback, summarise by
 // default (curves only on explicit request, downsampled), and report bad
 // input or unknown ids as tool execution errors.

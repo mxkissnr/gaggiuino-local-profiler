@@ -9,28 +9,42 @@ import (
 // internal/orders/options.go reads.
 const optionsFile = "/data/options.json"
 
-// isMCPEnabled ports the options.json feature-toggle pattern
-// internal/orders/options.go established: read enable_mcp from
-// /data/options.json (written by the Supervisor), falling back to the
-// GLP_ENABLE_MCP env var for standalone Docker runs where that file is
-// absent. A narrow, single-field read on purpose — the rest of options.json
-// belongs to the not-yet-ported system domain.
-func isMCPEnabled() bool {
+// boolOption ports the options.json feature-toggle pattern
+// internal/orders/options.go established: read one boolean field from
+// /data/options.json (written by the Supervisor), falling back to the GLP_*
+// env var for standalone Docker runs where that file is absent. A narrow,
+// single-field read on purpose — the rest of options.json belongs to the
+// not-yet-ported system domain.
+func boolOption(jsonField, envVar string) bool {
 	data, err := os.ReadFile(optionsFile)
 	if err != nil {
-		return os.Getenv("GLP_ENABLE_MCP") == "true"
+		return os.Getenv(envVar) == "true"
 	}
-	var opts struct {
-		EnableMCP bool `json:"enable_mcp"`
-	}
+	var opts map[string]json.RawMessage
 	if err := json.Unmarshal(data, &opts); err != nil {
-		return os.Getenv("GLP_ENABLE_MCP") == "true"
+		return os.Getenv(envVar) == "true"
 	}
-	return opts.EnableMCP
+	raw, ok := opts[jsonField]
+	if !ok {
+		return false
+	}
+	var enabled bool
+	if err := json.Unmarshal(raw, &enabled); err != nil {
+		return os.Getenv(envVar) == "true"
+	}
+	return enabled
 }
 
 // Enabled reports whether cmd/server should mount the MCP endpoint. Off by
 // default; the whole feature is undocumented until the docs slice (#1196).
 func Enabled() bool {
-	return isMCPEnabled()
+	return boolOption("enable_mcp", "GLP_ENABLE_MCP")
+}
+
+// WriteEnabled reports whether the MCP server should register its write
+// tools. A second, independent opt-in on top of Enabled: without it the
+// write tools are never registered, so a client cannot list or call them.
+// Off by default and undocumented until the docs slice (#1196).
+func WriteEnabled() bool {
+	return boolOption("enable_mcp_write", "GLP_ENABLE_MCP_WRITE")
 }
