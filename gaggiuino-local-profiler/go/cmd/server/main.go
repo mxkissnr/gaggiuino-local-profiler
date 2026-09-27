@@ -50,6 +50,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mcp"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mqtt"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/orders"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
@@ -195,6 +196,13 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	shotsRepo := shots.NewRepository(sqlDB)
 	shotsHandlers := shots.NewHandlers(shotsRepo)
 	shotsHandlers.RegisterRoutes(mux)
+
+	// MCP (#1196): the Model Context Protocol server is off by default; when
+	// enabled, mount its streamable-HTTP endpoint under /api/ so auth.RequireToken
+	// guards it with X-GLP-Token like every other API route.
+	if mcp.Enabled() {
+		mux.Handle(mcp.Path, mcp.NewHandler(mcp.Deps{Shots: shots.NewService(shotsRepo), Version: system.Version()}))
+	}
 
 	// Phase 2a (#901): the Go frontend foundation — GET /shots plus its two
 	// htmx trash/restore actions, built on the same shots.Service the JSON
