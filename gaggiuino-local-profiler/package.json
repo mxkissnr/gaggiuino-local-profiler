@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "types:api": "openapi-typescript go/internal/system/openapi.yaml -o public-src/api/schema.gen.ts",
     "release:check": "node scripts/release-check.mjs",
-    "demo:fixtures": "node scripts/demo-fixtures.mjs"
+    "demo:fixtures": "node scripts/demo-fixtures.mjs",
+    "demo:smoke": "node scripts/demo-smoke.mjs"
   },
   "dependencies": {
     "chart.js": "4.5.1",
