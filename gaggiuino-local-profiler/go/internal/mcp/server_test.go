@@ -189,7 +189,10 @@ func TestGetShotCurveDownsampling(t *testing.T) {
 		times = append(times, float64(i*4))
 		pressures = append(pressures, float64(90))
 	}
-	insertShot(t, sqlDB, 7, 1000, map[string]any{"timeInShot": times, "pressure": pressures}, map[string]any{"coffee": "Alpha"})
+	insertShot(t, sqlDB, 7, 1000, map[string]any{"datapoints": map[string]any{
+		"timeInShot": times,
+		"pressure":   pressures,
+	}}, map[string]any{"coffee": "Alpha"})
 	session := connect(t, ts.URL+Path)
 	out := structured[getOut](t, call(t, session, "get_shot", map[string]any{"id": 7, "include_curve": true, "curve_points": 50}))
 	if out.Curve == nil {
@@ -210,7 +213,12 @@ func TestGetShotCurveDownsampling(t *testing.T) {
 
 func TestCompareShotsDeltas(t *testing.T) {
 	ts, sqlDB := newTestServer(t)
-	data := map[string]any{"timeInShot": []any{float64(0), float64(40)}, "shotWeight": []any{float64(350), float64(360)}}
+	// Series live under the shot data blob's nested "datapoints" object —
+	// that is the shape hydrateRow keeps as raw JSON and shots.DatapointsMap reads.
+	data := map[string]any{"datapoints": map[string]any{
+		"timeInShot": []any{float64(0), float64(40)},
+		"shotWeight": []any{float64(350), float64(360)},
+	}}
 	insertShot(t, sqlDB, 11, 1000, data, map[string]any{"coffee": "Alpha", "dose": float64(18), "rating": float64(4)})
 	insertShot(t, sqlDB, 12, 1001, data, map[string]any{"coffee": "Alpha", "dose": float64(19), "rating": float64(3)})
 	session := connect(t, ts.URL+Path)
