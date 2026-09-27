@@ -9,11 +9,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
 
 // The developer tools are a third, opt-in slice (Deps.AllowDeveloperTools):
@@ -102,6 +104,18 @@ func registerDeveloperTools(srv *mcpsdk.Server, deps Deps) {
 		OutputSchema: mustSchema[getDiagnosticsOutput](),
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in getDiagnosticsInput) (*mcpsdk.CallToolResult, getDiagnosticsOutput, error) {
 		out, err := getDiagnostics(deps, in)
+		return nil, out, err
+	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:         "get_preheat_history",
+		Title:        "Get preheat history",
+		Description:  "Return the past preheat runs of the default machine: when it was switched on, the configured preheat window, when GLP predicted it ready versus when the temperature actually stabilised, the ready-by targets, and optionally the warm-up temperature curve, to analyse and tune the preheat and ready-by logic. At most the last 30 runs are kept.",
+		Annotations:  readOnlyAnnotations("Get preheat history"),
+		InputSchema:  getPreheatHistorySchema(),
+		OutputSchema: mustSchema[getPreheatHistoryOutput](),
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in getPreheatHistoryInput) (*mcpsdk.CallToolResult, getPreheatHistoryOutput, error) {
+		out, err := getPreheatHistory(deps, in)
 		return nil, out, err
 	})
 }
@@ -499,4 +513,123 @@ func annotationFloat(shot shots.Shot, key string) *float64 {
 	default:
 		return nil
 	}
+}
+
+// get_preheat_history bounds: how many of the retained runs one call returns.
+// The store itself keeps the newest preheatHistoryMaxRuns (30).
+const (
+	defaultPreheatLimit = 10
+	maxPreheatLimit     = 30
+)
+
+type getPreheatHistoryInput struct {
+	Limit          int  `json:"limit,omitempty" jsonschema:"how many of the most recent runs to return, 1..30 (default 10)"`
+	IncludeSamples bool `json:"include_samples,omitempty" jsonschema:"include each run's warm-up temperature curve (t_s, temp_c, target_c); off by default because it is bulky"`
+}
+
+type preheatSampleOutput struct {
+	TimeS   float64 `json:"t_s" jsonschema:"seconds since the run's switch-on"`
+	TempC   float64 `json:"temp_c" jsonschema:"the measured temperature in Celsius"`
+	TargetC float64 `json:"target_c" jsonschema:"the target temperature in Celsius"`
+}
+
+// preheatRunOutput is one recorded preheat run with its millisecond timeline
+// resolved to RFC 3339 UTC and the derived comparisons the preheat/ready-by
+// tuning needs.
+type preheatRunOutput struct {
+	SwitchOnAt           string                `json:"switch_on_at" jsonschema:"when the machine was switched on, RFC 3339 UTC"`
+	SwitchOffAt          string                `json:"switch_off_at,omitempty" jsonschema:"when the machine was switched off, RFC 3339 UTC; omitted while the run is in progress"`
+	InProgress           bool                  `json:"in_progress" jsonschema:"true when the run is still open (no switch-off recorded yet)"`
+	PreheatMinutes       int                   `json:"preheat_minutes" jsonschema:"the configured preheat window, minutes"`
+	PredictedReadyAt     string                `json:"predicted_ready_at" jsonschema:"when the preheat window predicted the machine ready, RFC 3339 UTC"`
+	StableAt             string                `json:"stable_at,omitempty" jsonschema:"when the temperature actually stabilised, RFC 3339 UTC; omitted if it never did"`
+	ReadyAt              string                `json:"ready_at" jsonschema:"the earlier of stable_at and predicted_ready_at, RFC 3339 UTC"`
+	StableVsPredictedMin *float64              `json:"stable_vs_predicted_min,omitempty" jsonschema:"stable_at minus predicted_ready_at in minutes; negative means it stabilised earlier; omitted without a stable time"`
+	ReadyByTargetAt      string                `json:"ready_by_target_at,omitempty" jsonschema:"the ready-by target time, RFC 3339 UTC; omitted unless the run was started for a ready-by target"`
+	PlannedSwitchOnAt    string                `json:"planned_switch_on_at,omitempty" jsonschema:"the switch-on time planned to hit the ready-by target, RFC 3339 UTC; omitted unless the run was started for a ready-by target"`
+	ReadyBeforeTargetMin *float64              `json:"ready_before_target_min,omitempty" jsonschema:"ready_by_target_at minus ready_at in minutes; positive means it was ready before the target; omitted for non-ready-by runs"`
+	SampleCount          int                   `json:"sample_count" jsonschema:"number of warm-up temperature samples stored for the run"`
+	Samples              []preheatSampleOutput `json:"samples,omitempty" jsonschema:"the warm-up temperature curve, oldest first; only present when include_samples is set"`
+}
+
+type getPreheatHistoryOutput struct {
+	Runs []preheatRunOutput `json:"runs" jsonschema:"the recorded preheat runs, newest first; the in-progress run, if any, is first"`
+}
+
+func getPreheatHistorySchema() *jsonschema.Schema {
+	s := mustSchema[getPreheatHistoryInput]()
+	if p := schemaProp(s, "limit"); p != nil {
+		p.Minimum = jsonschema.Ptr(1.0)
+		p.Maximum = jsonschema.Ptr(float64(maxPreheatLimit))
+		p.Default = json.RawMessage(strconv.Itoa(defaultPreheatLimit))
+	}
+	return s
+}
+
+func getPreheatHistory(deps Deps, in getPreheatHistoryInput) (getPreheatHistoryOutput, error) {
+	if deps.Preheat == nil {
+		return getPreheatHistoryOutput{}, fmt.Errorf("preheat history is not available")
+	}
+	limit := in.Limit
+	if limit <= 0 {
+		limit = defaultPreheatLimit
+	}
+	if limit > maxPreheatLimit {
+		limit = maxPreheatLimit
+	}
+	out := getPreheatHistoryOutput{Runs: []preheatRunOutput{}}
+	for _, run := range deps.Preheat.PreheatHistory() {
+		if len(out.Runs) >= limit {
+			break
+		}
+		out.Runs = append(out.Runs, toPreheatRunOutput(run, in.IncludeSamples))
+	}
+	return out, nil
+}
+
+// toPreheatRunOutput resolves one run's millisecond timestamps to RFC 3339 and
+// derives ready_at (the earlier of the predicted and stable times),
+// stable_vs_predicted_min and, for a ready-by run, ready_before_target_min.
+func toPreheatRunOutput(run system.PreheatRun, includeSamples bool) preheatRunOutput {
+	out := preheatRunOutput{
+		SwitchOnAt:       formatMillis(run.SwitchOnAt),
+		InProgress:       run.SwitchOffAt == nil,
+		PreheatMinutes:   run.PreheatMinutes,
+		PredictedReadyAt: formatMillis(run.PredictedReadyAt),
+		SampleCount:      len(run.Samples),
+	}
+	if run.SwitchOffAt != nil {
+		out.SwitchOffAt = formatMillis(*run.SwitchOffAt)
+	}
+	readyAt := run.PredictedReadyAt
+	if run.StableAt != nil {
+		out.StableAt = formatMillis(*run.StableAt)
+		diff := float64(*run.StableAt-run.PredictedReadyAt) / 60000
+		out.StableVsPredictedMin = &diff
+		if *run.StableAt < readyAt {
+			readyAt = *run.StableAt
+		}
+	}
+	out.ReadyAt = formatMillis(readyAt)
+	if run.ReadyByTargetAt != nil {
+		out.ReadyByTargetAt = formatMillis(*run.ReadyByTargetAt)
+		before := float64(*run.ReadyByTargetAt-readyAt) / 60000
+		out.ReadyBeforeTargetMin = &before
+	}
+	if run.PlannedSwitchOnAt != nil {
+		out.PlannedSwitchOnAt = formatMillis(*run.PlannedSwitchOnAt)
+	}
+	if includeSamples {
+		out.Samples = make([]preheatSampleOutput, 0, len(run.Samples))
+		for _, s := range run.Samples {
+			out.Samples = append(out.Samples, preheatSampleOutput{TimeS: s.TS, TempC: s.TempC, TargetC: s.TargetC})
+		}
+	}
+	return out
+}
+
+// formatMillis renders an epoch-milliseconds timestamp as RFC 3339 UTC, the
+// same format get_machine_status uses for LastMachineSuccess.
+func formatMillis(ms int64) string {
+	return time.UnixMilli(ms).UTC().Format(time.RFC3339)
 }

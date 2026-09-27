@@ -490,6 +490,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 			Poller:              poller,
 			Logs:                cfg.logs,
 			Sync:                poller,
+			Preheat:             poller,
 			Version:             system.Version(),
 			RateLimitWindow:     rateLimitWindow,
 			RateLimitMax:        rateLimitMax,

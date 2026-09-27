@@ -52,6 +52,11 @@ type Deps struct {
 	// separate, nil-safe interface rather than a wider MachineStatus so tests
 	// can fake sync state without touching the existing poller fake.
 	Sync SyncSource
+	// Preheat is the poller's recorded preheat-run history for the
+	// get_preheat_history developer tool. A separate, nil-safe interface rather
+	// than a wider MachineStatus so tests can fake history without a live
+	// poller; nil reports that the history is unavailable.
+	Preheat PreheatHistorySource
 	// Version is the app version reported as the MCP server identity; mirrors
 	// GET /api/version (internal/system.Version). Empty falls back to "dev".
 	Version string
@@ -84,6 +89,14 @@ type LogSource interface {
 // reads for sync progress.
 type SyncSource interface {
 	SyncState() system.SyncState
+}
+
+// PreheatHistorySource is the narrow slice of internal/system.Poller the
+// get_preheat_history developer tool reads: the recorded runs, newest first
+// with the open run first. Nil-safe: without it the tool reports that the
+// history is unavailable.
+type PreheatHistorySource interface {
+	PreheatHistory() []system.PreheatRun
 }
 
 // NewHandler builds the stateless Streamable-HTTP MCP endpoint: the SDK
@@ -132,7 +145,8 @@ func newServer(deps Deps) *mcpsdk.Server {
 			"get_shot_raw returns a shot's full-resolution brew data for detailed analysis, " +
 			"explain_score breaks a shot's score into its weighted parts and the targets used, " +
 			"export_shots_dataset returns a filtered batch of shots as one flat dataset for comparing a scoring idea against the user's ratings, " +
-			"and get_diagnostics returns the app's own recent log lines plus sync and machine-reachability state for bug triage."
+			"get_diagnostics returns the app's own recent log lines plus sync and machine-reachability state for bug triage, " +
+			"and get_preheat_history returns the machine's recent preheat runs with their predicted and actual ready times for tuning the preheat and ready-by logic."
 	}
 	srv := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    serverName,

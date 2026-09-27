@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -24,13 +25,14 @@ import (
 // newDeveloperServer mirrors newWriteServer but also wires the developer-tools
 // opt-in, so a test can flip either flag independently.
 func newDeveloperServer(t *testing.T, allowDeveloper, allowWrite bool) (*httptest.Server, *sql.DB) {
-	return newDeveloperServerFull(t, allowDeveloper, allowWrite, fakePoller{}, nil, nil)
+	return newDeveloperServerFull(t, allowDeveloper, allowWrite, fakePoller{}, nil, nil, nil)
 }
 
-// newDeveloperServerFull is newDeveloperServer with the poller, log and sync
-// sources made explicit, so the get_diagnostics tests can supply a log buffer,
-// a sync fake and a populated machine-status fake.
-func newDeveloperServerFull(t *testing.T, allowDeveloper, allowWrite bool, poller MachineStatus, logs LogSource, sync SyncSource) (*httptest.Server, *sql.DB) {
+// newDeveloperServerFull is newDeveloperServer with the poller, log, sync and
+// preheat sources made explicit, so the get_diagnostics and get_preheat_history
+// tests can supply a log buffer, a sync fake, a populated machine-status fake
+// and a preheat-history fake.
+func newDeveloperServerFull(t *testing.T, allowDeveloper, allowWrite bool, poller MachineStatus, logs LogSource, sync SyncSource, preheat PreheatHistorySource) (*httptest.Server, *sql.DB) {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "glp.db")
 	sqlDB, err := db.Open(dbPath)
@@ -52,6 +54,7 @@ func newDeveloperServerFull(t *testing.T, allowDeveloper, allowWrite bool, polle
 		Poller:              poller,
 		Logs:                logs,
 		Sync:                sync,
+		Preheat:             preheat,
 		Version:             "test",
 		AllowWrite:          allowWrite,
 		AllowDeveloperTools: allowDeveloper,
@@ -99,7 +102,7 @@ func TestDeveloperToolsHiddenWithoutOptIn(t *testing.T) {
 	session := connect(t, ts.URL+Path)
 	names := toolNames(t, session)
 	listed := "," + strings.Join(names, ",") + ","
-	for _, name := range []string{"get_shot_raw", "explain_score", "export_shots_dataset", "get_diagnostics"} {
+	for _, name := range []string{"get_shot_raw", "explain_score", "export_shots_dataset", "get_diagnostics", "get_preheat_history"} {
 		if strings.Contains(listed, ","+name+",") {
 			t.Fatalf("%s is listed without the developer-tools opt-in: %v", name, names)
 		}
@@ -144,7 +147,7 @@ func TestDeveloperToolsKeepWriteTools(t *testing.T) {
 	// than trail; the invariant is that adding the developer tool leaves every
 	// read and write tool registered.
 	names := toolNames(t, session)
-	want := "annotate_shot,compare_shots,explain_score,export_shots_dataset,get_analytics_summary,get_diagnostics,get_library,get_machine_status,get_maintenance_status,get_shot,get_shot_raw,list_beans,list_shots,mark_maintenance_done,set_known_grind"
+	want := "annotate_shot,compare_shots,explain_score,export_shots_dataset,get_analytics_summary,get_diagnostics,get_library,get_machine_status,get_maintenance_status,get_preheat_history,get_shot,get_shot_raw,list_beans,list_shots,mark_maintenance_done,set_known_grind"
 	if got := strings.Join(names, ","); got != want {
 		t.Fatalf("tool list = %v, want %v", names, want)
 	}
@@ -593,6 +596,7 @@ func TestGetDiagnosticsReturnsLogsAndState(t *testing.T) {
 		fakePoller{reachable: &reachable, lastErr: &machineErr},
 		buf,
 		fakeSync{last: &lastSync, lastErr: &syncErr},
+		nil,
 	)
 	session := connect(t, ts.URL+Path)
 	out := structured(t, call(t, session, "get_diagnostics", map[string]any{"lines": 2}))
@@ -615,7 +619,7 @@ func TestGetDiagnosticsReturnsLogsAndState(t *testing.T) {
 }
 
 func TestGetDiagnosticsOmitsAbsentState(t *testing.T) {
-	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, nil, nil)
+	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, nil, nil, nil)
 	session := connect(t, ts.URL+Path)
 	out := structured(t, call(t, session, "get_diagnostics", map[string]any{}))
 
@@ -631,7 +635,7 @@ func TestGetDiagnosticsOmitsAbsentState(t *testing.T) {
 
 func TestGetDiagnosticsContainsFilter(t *testing.T) {
 	buf := newLogBuffer(t, 20, "startup ok", "ERROR: pressure probe", "another line", "error: retry")
-	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, buf, nil)
+	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, buf, nil, nil)
 	session := connect(t, ts.URL+Path)
 
 	out := structured(t, call(t, session, "get_diagnostics", map[string]any{"contains": "error", "lines": 10}))
@@ -653,7 +657,7 @@ func TestGetDiagnosticsMasksSecrets(t *testing.T) {
 		"Authorization: Bearer eyJhbGciOiJIUzI1",
 		"dialing https://alice:hunter2@example.test/api",
 	)
-	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, buf, nil)
+	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, buf, nil, nil)
 	session := connect(t, ts.URL+Path)
 	out := structured(t, call(t, session, "get_diagnostics", map[string]any{}))
 	joined := strings.Join(stringList(out, "log_lines"), "\n")
@@ -667,5 +671,293 @@ func TestGetDiagnosticsMasksSecrets(t *testing.T) {
 		if !strings.Contains(joined, masked) {
 			t.Fatalf("expected %q in masked output %q", masked, joined)
 		}
+	}
+}
+
+type fakePreheatHistory struct {
+	runs []system.PreheatRun
+}
+
+func (f fakePreheatHistory) PreheatHistory() []system.PreheatRun { return f.runs }
+
+func newPreheatServer(t *testing.T, runs []system.PreheatRun) *httptest.Server {
+	t.Helper()
+	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, nil, nil, fakePreheatHistory{runs: runs})
+	return ts
+}
+
+func ptrI64(v int64) *int64 { return &v }
+
+func preheatTime(ms int64) string { return time.UnixMilli(ms).UTC().Format(time.RFC3339) }
+
+func TestGetPreheatHistoryListedWithOptIn(t *testing.T) {
+	ts, _ := newDeveloperServer(t, true, false)
+	session := connect(t, ts.URL+Path)
+	tool := listToolsByName(t, session)["get_preheat_history"]
+	if tool == nil {
+		t.Fatalf("get_preheat_history is missing from tools/list with the opt-in")
+	}
+	a := tool.Annotations
+	if a == nil || !a.ReadOnlyHint || !a.IdempotentHint {
+		t.Fatalf("get_preheat_history should be read-only and idempotent")
+	}
+	if a.OpenWorldHint == nil || *a.OpenWorldHint {
+		t.Fatalf("get_preheat_history should be closed-world")
+	}
+	if tool.OutputSchema == nil {
+		t.Fatalf("get_preheat_history has no output schema")
+	}
+	limit := schemaProperty(t, tool.InputSchema, "limit")
+	if got := numberField(t, limit, "minimum"); got != 1 {
+		t.Fatalf("limit minimum = %v, want 1", got)
+	}
+	if got := numberField(t, limit, "maximum"); got != maxPreheatLimit {
+		t.Fatalf("limit maximum = %v, want %d", got, maxPreheatLimit)
+	}
+	if got := numberField(t, limit, "default"); got != defaultPreheatLimit {
+		t.Fatalf("limit default = %v, want %d", got, defaultPreheatLimit)
+	}
+	// include_samples is optional and defaults to false.
+	if p := schemaProperty(t, tool.InputSchema, "include_samples"); p["type"] != "boolean" {
+		t.Fatalf("include_samples type = %v, want boolean", p["type"])
+	}
+}
+
+func TestGetPreheatHistoryDerivedFields(t *testing.T) {
+	const min = int64(60_000)
+	base := int64(1_700_000_000_000)
+	stableRun := system.PreheatRun{
+		SwitchOnAt:       base,
+		SwitchOffAt:      ptrI64(base + 20*min),
+		PreheatMinutes:   10,
+		PredictedReadyAt: base + 10*min,
+		StableAt:         ptrI64(base + 8*min),
+		Samples: []system.PreheatSample{
+			{TS: 0, TempC: 20, TargetC: 93},
+			{TS: 30, TempC: 80, TargetC: 93},
+		},
+	}
+	windowRun := system.PreheatRun{
+		SwitchOnAt:       base + 100*min,
+		SwitchOffAt:      ptrI64(base + 115*min),
+		PreheatMinutes:   6,
+		PredictedReadyAt: base + 106*min,
+	}
+	readyByRun := system.PreheatRun{
+		SwitchOnAt:        base + 200*min,
+		SwitchOffAt:       ptrI64(base + 212*min),
+		PreheatMinutes:    5,
+		PredictedReadyAt:  base + 205*min,
+		StableAt:          ptrI64(base + 206*min),
+		ReadyByTargetAt:   ptrI64(base + 209*min),
+		PlannedSwitchOnAt: ptrI64(base + 200*min),
+	}
+	// Newest first, as the poller serves history.
+	ts := newPreheatServer(t, []system.PreheatRun{readyByRun, windowRun, stableRun})
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "get_preheat_history", map[string]any{}))
+
+	runs := objects(out, "runs")
+	if len(runs) != 3 {
+		t.Fatalf("runs = %d, want 3", len(runs))
+	}
+	byOn := map[string]map[string]any{}
+	for _, raw := range runs {
+		r, _ := raw.(map[string]any)
+		on, _ := r["switch_on_at"].(string)
+		byOn[on] = r
+	}
+
+	stable := byOn[preheatTime(base)]
+	if stable == nil {
+		t.Fatalf("stable run not found: %v", byOn)
+	}
+	if got, _ := stable["switch_off_at"].(string); got != preheatTime(base+20*min) {
+		t.Fatalf("stable switch_off_at = %q, want %q", got, preheatTime(base+20*min))
+	}
+	if inProg, _ := stable["in_progress"].(bool); inProg {
+		t.Fatalf("stable run marked in_progress")
+	}
+	if got := numberField(t, stable, "preheat_minutes"); got != 10 {
+		t.Fatalf("stable preheat_minutes = %v, want 10", got)
+	}
+	if got, _ := stable["predicted_ready_at"].(string); got != preheatTime(base+10*min) {
+		t.Fatalf("stable predicted_ready_at = %q, want %q", got, preheatTime(base+10*min))
+	}
+	if got, _ := stable["stable_at"].(string); got != preheatTime(base+8*min) {
+		t.Fatalf("stable_at = %q, want %q", got, preheatTime(base+8*min))
+	}
+	if got, _ := stable["ready_at"].(string); got != preheatTime(base+8*min) {
+		t.Fatalf("ready_at = %q, want the earlier stable time %q", got, preheatTime(base+8*min))
+	}
+	if got := numberField(t, stable, "stable_vs_predicted_min"); got != -2 {
+		t.Fatalf("stable_vs_predicted_min = %v, want -2 (stabilised two minutes early)", got)
+	}
+	if got := numberField(t, stable, "sample_count"); got != 2 {
+		t.Fatalf("stable sample_count = %v, want 2", got)
+	}
+	for _, key := range []string{"ready_by_target_at", "planned_switch_on_at", "ready_before_target_min", "samples"} {
+		if _, ok := stable[key]; ok {
+			t.Fatalf("stable run has %s without a ready-by target or a samples request", key)
+		}
+	}
+
+	window := byOn[preheatTime(base+100*min)]
+	if window == nil {
+		t.Fatalf("window-only run not found: %v", byOn)
+	}
+	if _, ok := window["stable_at"]; ok {
+		t.Fatalf("window-only run has stable_at: %v", window["stable_at"])
+	}
+	if _, ok := window["stable_vs_predicted_min"]; ok {
+		t.Fatalf("window-only run has stable_vs_predicted_min without a stable time")
+	}
+	if got, _ := window["ready_at"].(string); got != preheatTime(base+106*min) {
+		t.Fatalf("window-only ready_at = %q, want the predicted time %q", got, preheatTime(base+106*min))
+	}
+	if got := numberField(t, window, "sample_count"); got != 0 {
+		t.Fatalf("window-only sample_count = %v, want 0", got)
+	}
+
+	readyBy := byOn[preheatTime(base+200*min)]
+	if readyBy == nil {
+		t.Fatalf("ready-by run not found: %v", byOn)
+	}
+	// ready_at is the earlier predicted time, not the later stable time.
+	if got, _ := readyBy["ready_at"].(string); got != preheatTime(base+205*min) {
+		t.Fatalf("ready-by ready_at = %q, want the earlier predicted time %q", got, preheatTime(base+205*min))
+	}
+	if got := numberField(t, readyBy, "stable_vs_predicted_min"); got != 1 {
+		t.Fatalf("ready-by stable_vs_predicted_min = %v, want 1", got)
+	}
+	if got, _ := readyBy["ready_by_target_at"].(string); got != preheatTime(base+209*min) {
+		t.Fatalf("ready_by_target_at = %q, want %q", got, preheatTime(base+209*min))
+	}
+	if got, _ := readyBy["planned_switch_on_at"].(string); got != preheatTime(base+200*min) {
+		t.Fatalf("planned_switch_on_at = %q, want %q", got, preheatTime(base+200*min))
+	}
+	if got := numberField(t, readyBy, "ready_before_target_min"); got != 4 {
+		t.Fatalf("ready_before_target_min = %v, want 4", got)
+	}
+}
+
+func TestGetPreheatHistoryInProgressRun(t *testing.T) {
+	const min = int64(60_000)
+	base := int64(1_700_000_000_000)
+	run := system.PreheatRun{
+		SwitchOnAt:       base,
+		PreheatMinutes:   5,
+		PredictedReadyAt: base + 5*min,
+	}
+	ts := newPreheatServer(t, []system.PreheatRun{run})
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "get_preheat_history", map[string]any{}))
+
+	runs := objects(out, "runs")
+	if len(runs) != 1 {
+		t.Fatalf("runs = %d, want 1", len(runs))
+	}
+	row, _ := runs[0].(map[string]any)
+	if inProg, _ := row["in_progress"].(bool); !inProg {
+		t.Fatalf("open run not marked in_progress: %v", row)
+	}
+	if _, ok := row["switch_off_at"]; ok {
+		t.Fatalf("open run has switch_off_at: %v", row["switch_off_at"])
+	}
+	if got, _ := row["ready_at"].(string); got != preheatTime(base+5*min) {
+		t.Fatalf("open run ready_at = %q, want the predicted time", got)
+	}
+}
+
+func TestGetPreheatHistorySamplesOnlyOnRequest(t *testing.T) {
+	const min = int64(60_000)
+	base := int64(1_700_000_000_000)
+	run := system.PreheatRun{
+		SwitchOnAt:       base,
+		SwitchOffAt:      ptrI64(base + 10*min),
+		PreheatMinutes:   5,
+		PredictedReadyAt: base + 5*min,
+		StableAt:         ptrI64(base + 6*min),
+		Samples: []system.PreheatSample{
+			{TS: 0, TempC: 21.5, TargetC: 93},
+			{TS: 30, TempC: 91.25, TargetC: 93},
+		},
+	}
+	ts := newPreheatServer(t, []system.PreheatRun{run})
+	session := connect(t, ts.URL+Path)
+
+	off := structured(t, call(t, session, "get_preheat_history", map[string]any{}))
+	offRow, _ := objects(off, "runs")[0].(map[string]any)
+	if _, ok := offRow["samples"]; ok {
+		t.Fatalf("samples present without include_samples")
+	}
+
+	on := structured(t, call(t, session, "get_preheat_history", map[string]any{"include_samples": true}))
+	onRow, _ := objects(on, "runs")[0].(map[string]any)
+	samples := objects(onRow, "samples")
+	if len(samples) != 2 {
+		t.Fatalf("samples = %d, want 2", len(samples))
+	}
+	first, _ := samples[0].(map[string]any)
+	if got := numberField(t, first, "t_s"); got != 0 {
+		t.Fatalf("first sample t_s = %v, want 0", got)
+	}
+	if got := numberField(t, first, "temp_c"); got != 21.5 {
+		t.Fatalf("first sample temp_c = %v, want 21.5", got)
+	}
+	if got := numberField(t, first, "target_c"); got != 93 {
+		t.Fatalf("first sample target_c = %v, want 93", got)
+	}
+	second, _ := samples[1].(map[string]any)
+	if got := numberField(t, second, "t_s"); got != 30 {
+		t.Fatalf("second sample t_s = %v, want 30", got)
+	}
+}
+
+func TestGetPreheatHistoryLimit(t *testing.T) {
+	const min = int64(60_000)
+	base := int64(1_700_000_000_000)
+	makeRun := func(i int64) system.PreheatRun {
+		return system.PreheatRun{
+			SwitchOnAt:       base + i*min,
+			SwitchOffAt:      ptrI64(base + i*min + 10*min),
+			PreheatMinutes:   5,
+			PredictedReadyAt: base + i*min + 5*min,
+		}
+	}
+	// Newest first, as the poller serves history.
+	ts := newPreheatServer(t, []system.PreheatRun{makeRun(3), makeRun(2), makeRun(1), makeRun(0)})
+	session := connect(t, ts.URL+Path)
+
+	limited := structured(t, call(t, session, "get_preheat_history", map[string]any{"limit": 2}))
+	got := objects(limited, "runs")
+	if len(got) != 2 {
+		t.Fatalf("limit 2 returned %d runs, want 2", len(got))
+	}
+	first, _ := got[0].(map[string]any)
+	if on, _ := first["switch_on_at"].(string); on != preheatTime(base+3*min) {
+		t.Fatalf("first run switch_on_at = %q, want the newest %q", on, preheatTime(base+3*min))
+	}
+	second, _ := got[1].(map[string]any)
+	if on, _ := second["switch_on_at"].(string); on != preheatTime(base+2*min) {
+		t.Fatalf("second run switch_on_at = %q, want %q", on, preheatTime(base+2*min))
+	}
+
+	// The default limit (10) is above the four retained runs, so all come back.
+	def := structured(t, call(t, session, "get_preheat_history", map[string]any{}))
+	if n := len(objects(def, "runs")); n != 4 {
+		t.Fatalf("default limit returned %d runs, want 4", n)
+	}
+}
+
+func TestGetPreheatHistoryUnavailable(t *testing.T) {
+	ts, _ := newDeveloperServer(t, true, false) // Preheat source left nil.
+	session := connect(t, ts.URL+Path)
+	res := call(t, session, "get_preheat_history", map[string]any{})
+	if !res.IsError {
+		t.Fatalf("expected isError when the preheat source is nil")
+	}
+	if msg := errorText(t, res); !strings.Contains(msg, "preheat history is not available") {
+		t.Fatalf("nil-source error = %q, want it to say the history is not available", msg)
 	}
 }
