@@ -6,6 +6,8 @@
 // main.ts is intentionally left alone: it only unregisters/registers a worker
 // named exactly sw.js, so the demo worker (demo-sw.js) never collides with it.
 
+import { mountDemoBanner } from './banner.js';
+
 const SW_URL = './demo-sw.js';
 const RELOAD_FLAG = 'glp-demo-reloaded';
 
@@ -58,6 +60,8 @@ async function start(): Promise<void> {
     // main.ts initialises on DOMContentLoaded, which has already fired by the
     // time the worker controls the page — replay it once for the late import.
     if (document.readyState !== 'loading') document.dispatchEvent(new Event('DOMContentLoaded'));
+    // After main.ts, so its toast helper is on window when a write is refused.
+    mountDemoBanner();
 }
 
 void start().catch(error => {
