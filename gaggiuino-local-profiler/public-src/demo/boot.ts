@@ -14,7 +14,7 @@ function showUnsupported(): void {
 }
 
 function waitForController(): Promise<void> {
-    return new Promise(resolve => {
+    return new Promise<void>(resolve => {
         const onChange = (): void => {
             if (navigator.serviceWorker.controller) {
                 navigator.serviceWorker.removeEventListener('controllerchange', onChange);
