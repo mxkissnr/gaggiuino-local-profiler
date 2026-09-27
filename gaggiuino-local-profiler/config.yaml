@@ -52,6 +52,19 @@ options:
   preheat_time: 20
   enable_orders: false
   debug_logging: false
+  # #1196: serve a Model Context Protocol endpoint at /api/mcp so AI
+  # assistants can read shot history, curves, the bean library, maintenance
+  # and analytics; off by default, and it never controls the machine.
+  enable_mcp: false
+  # #1196: additionally register the MCP write tools (annotate_shot,
+  # set_known_grind, mark_maintenance_done), which change your data; only
+  # takes effect together with enable_mcp.
+  enable_mcp_write: false
+  # #1196: additionally register the MCP developer tools (get_shot_raw,
+  # explain_score, export_shots_dataset, get_diagnostics,
+  # get_preheat_history), which return larger outputs; only takes effect
+  # together with enable_mcp.
+  enable_mcp_developer_tools: false
   # #803: default true (open) so no existing install's behaviour changes on
   # upgrade -- see go/internal/system/options.go's isApiPortExposed and
   # go/internal/system/handlers.go's GET /api/token. Turning this off
@@ -71,4 +84,7 @@ schema:
   preheat_time: int(1,120)?
   enable_orders: bool?
   debug_logging: bool?
+  enable_mcp: bool?
+  enable_mcp_write: bool?
+  enable_mcp_developer_tools: bool?
   expose_api_port: bool?
