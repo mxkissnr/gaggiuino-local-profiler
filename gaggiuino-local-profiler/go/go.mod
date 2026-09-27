@@ -11,6 +11,7 @@ toolchain go1.27.1
 
 require (
 	github.com/PuerkitoBio/goquery v1.13.0
+	github.com/a-h/templ v0.3.1020
 	github.com/coder/websocket v1.8.15
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/evanw/esbuild v0.28.2
