@@ -13,6 +13,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
 
 // Path is where cmd/server mounts this handler. Living under /api/ is load
@@ -42,6 +43,15 @@ type Deps struct {
 	// Poller is a narrow interface over internal/system.Poller so tests can
 	// fake the machine status/preheat snapshot without a live poller.
 	Poller MachineStatus
+	// Logs is the app's in-memory ring of its own recent log lines
+	// (internal/logbuf), read by the get_diagnostics developer tool. Nil-safe:
+	// when unset (every test that does not set it) the tool returns an empty
+	// log_lines list.
+	Logs LogSource
+	// Sync is the poller's sync-progress snapshot for get_diagnostics. A
+	// separate, nil-safe interface rather than a wider MachineStatus so tests
+	// can fake sync state without touching the existing poller fake.
+	Sync SyncSource
 	// Version is the app version reported as the MCP server identity; mirrors
 	// GET /api/version (internal/system.Version). Empty falls back to "dev".
 	Version string
@@ -62,6 +72,18 @@ type Deps struct {
 	// false the tools are never registered, so a client cannot list or call
 	// them. cmd/server sets it from mcp.DeveloperToolsEnabled().
 	AllowDeveloperTools bool
+}
+
+// LogSource is the narrow slice of internal/logbuf.Buffer the get_diagnostics
+// tool reads: the most recent lines, oldest first.
+type LogSource interface {
+	Lines(n int) []string
+}
+
+// SyncSource is the narrow slice of internal/system.Poller get_diagnostics
+// reads for sync progress.
+type SyncSource interface {
+	SyncState() system.SyncState
 }
 
 // NewHandler builds the stateless Streamable-HTTP MCP endpoint: the SDK
@@ -109,7 +131,8 @@ func newServer(deps Deps) *mcpsdk.Server {
 		instructions += " Developer tools are enabled: " +
 			"get_shot_raw returns a shot's full-resolution brew data for detailed analysis, " +
 			"explain_score breaks a shot's score into its weighted parts and the targets used, " +
-			"and export_shots_dataset returns a filtered batch of shots as one flat dataset for comparing a scoring idea against the user's ratings."
+			"export_shots_dataset returns a filtered batch of shots as one flat dataset for comparing a scoring idea against the user's ratings, " +
+			"and get_diagnostics returns the app's own recent log lines plus sync and machine-reachability state for bug triage."
 	}
 	srv := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    serverName,

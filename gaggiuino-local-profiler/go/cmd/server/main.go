@@ -28,6 +28,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -48,6 +49,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/importer"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/logbuf"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mcp"
@@ -82,6 +84,10 @@ type appConfig struct {
 	port            string
 	rateLimitWindow time.Duration
 	rateLimitMax    int
+	// logs is the in-memory ring of the app's own recent log output that
+	// main() tees stderr into, handed to the MCP get_diagnostics tool. Nil in
+	// tests that build appConfig directly, which the tool tolerates.
+	logs mcp.LogSource
 }
 
 func configFromEnv() appConfig {
@@ -95,7 +101,13 @@ func configFromEnv() appConfig {
 }
 
 func main() {
+	// Keep the app's own recent output in memory for the get_diagnostics MCP
+	// developer tool while writing every line to stderr exactly as before.
+	logs := logbuf.New(500)
+	log.SetOutput(io.MultiWriter(os.Stderr, logs))
+
 	cfg := configFromEnv()
+	cfg.logs = logs
 
 	handler, sqlDB, err := buildApp(context.Background(), cfg)
 	if err != nil {
@@ -476,6 +488,8 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 			Maintenance:         maintenanceRepo,
 			Registry:            registry,
 			Poller:              poller,
+			Logs:                cfg.logs,
+			Sync:                poller,
 			Version:             system.Version(),
 			RateLimitWindow:     rateLimitWindow,
 			RateLimitMax:        rateLimitMax,
