@@ -22,8 +22,11 @@ const LIVE_SNAPSHOT_EVENT = 'live-snapshot';
 // frame — so the recorded shot plays back at real speed.
 const SIM_INTERVAL_MS = 500;
 const SIM_STEP_TENTHS = 5;
-// sse.ts marks a silent stream stale after 40 s; a comment well inside that
-// window keeps the demo connection looking alive between frames.
+// sse.ts marks a silent stream stale after 40 s, but only re-arms that timer
+// on a dispatched named event — an SSE comment line does not fire one. The
+// keepalive below therefore sends an idle live-snapshot (a real event the app
+// already routes) well inside the 40 s window, so S.sseActive stays true
+// between replays.
 const SSE_KEEPALIVE_MS = 20000;
 
 // Open `api/events` streams (their ReadableStream controllers), so a
@@ -69,13 +72,20 @@ function dropStream(entry) {
     sseStreams.delete(entry);
 }
 
+/** Encodes one named SSE event (its `event:`/`data:` lines). */
+function encodeEvent(type, data) {
+    return SSE_ENCODER.encode(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
 /**
- * A text/event-stream body that emits one comment and then stays open with a
- * periodic comment. Letting it close immediately would make EventSource
- * reconnect in a tight loop, and the keepalive keeps sse.ts from marking the
- * stream stale between frames. Its controller is held in sseStreams so a
- * simulation can push live-snapshot events onto it; both the stream's cancel
- * callback and a failed enqueue drop it.
+ * A text/event-stream body that emits one comment and then stays open. Letting
+ * it close immediately would make EventSource reconnect in a tight loop. Its
+ * controller is held in sseStreams so a simulation can push live-snapshot
+ * events onto it; both the stream's cancel callback and a failed enqueue drop
+ * it. Every SSE_KEEPALIVE_MS it also emits an idle live-snapshot so the page's
+ * own stale watchdog (sse.ts) keeps seeing a dispatched event; while a replay
+ * is running its frames already do that, so the idle one is skipped to avoid
+ * clobbering the live view mid-brew.
  */
 function sseResponse() {
     let entry = null;
@@ -86,7 +96,9 @@ function sseResponse() {
                 controller,
                 timer: setInterval(() => {
                     try {
-                        controller.enqueue(SSE_ENCODER.encode(': keepalive\n\n'));
+                        if (!simulateRunning) {
+                            controller.enqueue(encodeEvent(LIVE_SNAPSHOT_EVENT, self.GLPDemo.idleFrame(liveSeq)));
+                        }
                     } catch {
                         dropStream(entry);
                     }
@@ -106,7 +118,7 @@ function sseResponse() {
 
 /** Enqueues one named SSE event to every open stream, dropping dead ones. */
 function broadcast(type, data) {
-    const bytes = SSE_ENCODER.encode(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+    const bytes = encodeEvent(type, data);
     for (const entry of [...sseStreams]) {
         try {
             entry.controller.enqueue(bytes);
@@ -166,15 +178,18 @@ async function loadNewestShot(manifest) {
 
 /**
  * Starts a replay unless one is already running. Synchronous, so the guard
- * check and set are atomic; the async body clears the flag when it settles.
+ * check and set are atomic. Returns a promise that resolves when the replay
+ * settles — the caller hands it to event.waitUntil() so the browser keeps the
+ * worker alive for the whole 25–40 s shot — or null when a replay is already
+ * active. The async body clears the flag when it settles.
  */
 function startSimulation() {
-    if (simulateRunning) return;
+    if (simulateRunning) return null;
     simulateRunning = true;
     const done = () => { simulateRunning = false; };
     // Promise chain rather than async/await + finally: require-atomic-updates
     // can't see that nothing else writes the flag while a run is active.
-    replayShot().then(done, error => {
+    return replayShot().then(done, error => {
         console.warn('[glp-demo] simulate failed:', error);
         done();
     });
@@ -263,8 +278,12 @@ self.addEventListener('fetch', event => {
 });
 
 // The demo banner's "Simulate a shot" button asks the worker to replay a
-// recorded shot down every open api/events stream.
+// recorded shot down every open api/events stream. waitUntil holds the worker
+// open for the replay — pending timers alone do not stop the browser from
+// terminating an idle worker, which would freeze the shot partway through.
 self.addEventListener('message', event => {
     const data = event.data;
-    if (data && data.type === SIMULATE_MESSAGE) startSimulation();
+    if (!data || data.type !== SIMULATE_MESSAGE) return;
+    const replay = startSimulation();
+    if (replay) event.waitUntil(replay);
 });
