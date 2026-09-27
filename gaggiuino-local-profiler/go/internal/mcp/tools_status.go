@@ -223,7 +223,7 @@ func getMachineStatus(deps Deps, in machineStatusInput) (machineStatusOutput, er
 	}
 	var (
 		list []machines.Machine
-		err      error
+		err  error
 	)
 	if in.MachineID == 0 {
 		if err = deps.Registry.EnsureDefaultMachine(); err != nil {

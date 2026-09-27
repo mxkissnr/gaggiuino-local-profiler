@@ -169,13 +169,13 @@ func aggregateAnalytics(samples []analyticsSample, sinceSec, untilSec int64) ana
 		Weekly:   []analyticsWeekStat{},
 	}
 	var (
-		scores                           []int
-		ratingSum, ratioSum, durSum      float64
-		ratingN, ratioN, durN            int
-		beanShots                        = map[string]int{}
-		beanScoreSum, beanScoreN         = map[string]int{}, map[string]int{}
-		weekShots                        = map[int64]int{}
-		weekScoreSum, weekScoreN         = map[int64]int{}, map[int64]int{}
+		scores                      []int
+		ratingSum, ratioSum, durSum float64
+		ratingN, ratioN, durN       int
+		beanShots                   = map[string]int{}
+		beanScoreSum, beanScoreN    = map[string]int{}, map[string]int{}
+		weekShots                   = map[int64]int{}
+		weekScoreSum, weekScoreN    = map[int64]int{}, map[int64]int{}
 	)
 	for _, s := range samples {
 		if s.Timestamp < sinceSec || s.Timestamp >= untilSec {

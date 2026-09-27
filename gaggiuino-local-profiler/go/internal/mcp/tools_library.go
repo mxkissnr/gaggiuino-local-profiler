@@ -221,10 +221,10 @@ func listBeans(deps Deps, in listBeansInput) (listBeansOutput, error) {
 	// Annotated doses back computeBeanRemaining's stock maths; load them once,
 	// lazily, only when a bean on this page actually tracks stock.
 	var (
-		doseRows     []shots.AnnotatedDose
-		dosesLoaded  bool
-		dosesFailed  bool
-		now          = time.Now()
+		doseRows    []shots.AnnotatedDose
+		dosesLoaded bool
+		dosesFailed bool
+		now         = time.Now()
 	)
 	for _, bean := range beans[offset:end] {
 		if !dosesLoaded && !dosesFailed && deps.ShotsRepo != nil && tracksStock(bean) {
