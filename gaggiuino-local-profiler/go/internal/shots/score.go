@@ -37,6 +37,24 @@ type Bean struct {
 type ScoreDetail struct {
 	Score          *int
 	UsedBeanTarget bool
+	// Components is the per-part breakdown behind Score, in the same order
+	// the parts are combined. It is nil whenever Score is nil.
+	Components []ScoreComponent
+}
+
+// ScoreComponent is one weighted part of CalcShotScoreDetail's score.
+type ScoreComponent struct {
+	// Name identifies the part: "pressure", "temperature", "duration",
+	// "ratio", "extraction_yield" or "channeling".
+	Name string
+	// Score is 0..100, exactly the value appended to scores.
+	Score int
+	// Weight is exactly the value appended to weights.
+	Weight int
+	// Inputs holds the measured values and targets this part was scored on.
+	Inputs map[string]float64
+	// Target is "profile", "bean" or "generic" — which target band was used.
+	Target string
 }
 
 // jsRound matches JS's Math.round: round-half-up (towards +Infinity), not
@@ -395,6 +413,7 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 
 	var scores []int
 	var weights []int
+	var components []ScoreComponent
 	usedBeanTarget := false
 
 	avgP := avg(pVals)
@@ -407,8 +426,16 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 	default:
 		sPressure = math.Max(20, 100-(avgP-9.5)*28)
 	}
-	scores = append(scores, jsRound(sPressure))
+	pressureScore := jsRound(sPressure)
+	scores = append(scores, pressureScore)
 	weights = append(weights, 25)
+	components = append(components, ScoreComponent{
+		Name:   "pressure",
+		Score:  pressureScore,
+		Weight: 25,
+		Inputs: map[string]float64{"avg_pressure_bar": avgP},
+		Target: "generic",
+	})
 
 	tVals := divAll(ss.temperature, 10)
 	if len(tVals) > 5 {
@@ -449,11 +476,20 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 				return math.Max(15, 50-(dev-4)*8)
 			}
 		}
+		targetTemp := 0.0
+		hasTargetTemp := false
+		tempTarget := "generic"
 		switch {
 		case len(tgt) > 0:
-			acc = accBand(math.Abs(avgT - avg(tgt)))
+			targetTemp = avg(tgt)
+			hasTargetTemp = true
+			tempTarget = "profile"
+			acc = accBand(math.Abs(avgT - targetTemp))
 		case bean != nil && bean.BrewTempC != nil && *bean.BrewTempC > 0:
-			acc = accBand(math.Abs(avgT - *bean.BrewTempC))
+			targetTemp = *bean.BrewTempC
+			hasTargetTemp = true
+			tempTarget = "bean"
+			acc = accBand(math.Abs(avgT - targetTemp))
 			usedBeanTarget = true
 		default:
 			var off float64
@@ -471,8 +507,25 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 				acc = math.Max(15, 100-off*10)
 			}
 		}
-		scores = append(scores, jsRound((stab+acc)/2))
+		temperatureScore := jsRound((stab + acc) / 2)
+		scores = append(scores, temperatureScore)
 		weights = append(weights, 20)
+		tempInputs := map[string]float64{
+			"stddev_c":        sd,
+			"avg_temp_c":      avgT,
+			"stability_score": stab,
+			"accuracy_score":  acc,
+		}
+		if hasTargetTemp {
+			tempInputs["target_temp_c"] = targetTemp
+		}
+		components = append(components, ScoreComponent{
+			Name:   "temperature",
+			Score:  temperatureScore,
+			Weight: 20,
+			Inputs: tempInputs,
+			Target: tempTarget,
+		})
 	}
 
 	durationRaw, _ := toFloat(shot["duration"])
@@ -491,8 +544,16 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 		default:
 			sDur = math.Max(15, 62-(secs-55)*3)
 		}
-		scores = append(scores, jsRound(sDur))
+		durationScore := jsRound(sDur)
+		scores = append(scores, durationScore)
 		weights = append(weights, 20)
+		components = append(components, ScoreComponent{
+			Name:   "duration",
+			Score:  durationScore,
+			Weight: 20,
+			Inputs: map[string]float64{"seconds": secs},
+			Target: "generic",
+		})
 	}
 
 	ann := toMap(shot["annotation"])
@@ -513,7 +574,9 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 		if bean != nil {
 			beanTarget, hasBeanTarget = parseBrewRatioTarget(bean.BrewRatio)
 		}
+		ratioTarget := "generic"
 		if hasBeanTarget {
+			ratioTarget = "bean"
 			dev := math.Abs(r - beanTarget)
 			switch {
 			case dev <= 0.35:
@@ -536,8 +599,24 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 				sRatio = math.Max(15, 60-(r-3.2)*22)
 			}
 		}
-		scores = append(scores, jsRound(sRatio))
+		ratioScore := jsRound(sRatio)
+		scores = append(scores, ratioScore)
 		weights = append(weights, 20)
+		ratioInputs := map[string]float64{
+			"ratio":   r,
+			"dose_g":  dose,
+			"yield_g": finalW,
+		}
+		if hasBeanTarget {
+			ratioInputs["target_ratio"] = beanTarget
+		}
+		components = append(components, ScoreComponent{
+			Name:   "ratio",
+			Score:  ratioScore,
+			Weight: 20,
+			Inputs: ratioInputs,
+			Target: ratioTarget,
+		})
 	}
 
 	tds, hasTDS := toFloat(ann["tds"])
@@ -554,17 +633,37 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 		default:
 			sEY = math.Max(15, 60-(ey-24)*10)
 		}
-		scores = append(scores, jsRound(sEY))
+		eyScore := jsRound(sEY)
+		scores = append(scores, eyScore)
 		weights = append(weights, 20)
+		components = append(components, ScoreComponent{
+			Name:   "extraction_yield",
+			Score:  eyScore,
+			Weight: 20,
+			Inputs: map[string]float64{
+				"extraction_yield_pct": ey,
+				"tds_pct":              tds,
+			},
+			Target: "generic",
+		})
 	}
 
 	times := divAll(ss.timeInShot, 10)
+	channelingScore := 100
+	detectedValue := 0.0
 	if detectChanneling(times, p) {
-		scores = append(scores, 20)
-	} else {
-		scores = append(scores, 100)
+		channelingScore = 20
+		detectedValue = 1
 	}
+	scores = append(scores, channelingScore)
 	weights = append(weights, 15)
+	components = append(components, ScoreComponent{
+		Name:   "channeling",
+		Score:  channelingScore,
+		Weight: 15,
+		Inputs: map[string]float64{"detected": detectedValue},
+		Target: "generic",
+	})
 
 	totalWeight := 0
 	for _, w := range weights {
@@ -578,7 +677,7 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 		weighted += float64(s * weights[i])
 	}
 	score := jsRound(weighted / float64(totalWeight))
-	return ScoreDetail{Score: &score, UsedBeanTarget: usedBeanTarget}
+	return ScoreDetail{Score: &score, UsedBeanTarget: usedBeanTarget, Components: components}
 }
 
 // CalcShotScore ports lib/score.js's calcShotScore: the score-only wrapper

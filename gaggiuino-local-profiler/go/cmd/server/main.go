@@ -28,6 +28,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -48,8 +49,10 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/importer"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/logbuf"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mcp"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mqtt"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/orders"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
@@ -81,6 +84,10 @@ type appConfig struct {
 	port            string
 	rateLimitWindow time.Duration
 	rateLimitMax    int
+	// logs is the in-memory ring of the app's own recent log output that
+	// main() tees stderr into, handed to the MCP get_diagnostics tool. Nil in
+	// tests that build appConfig directly, which the tool tolerates.
+	logs mcp.LogSource
 }
 
 func configFromEnv() appConfig {
@@ -94,7 +101,13 @@ func configFromEnv() appConfig {
 }
 
 func main() {
+	// Keep the app's own recent output in memory for the get_diagnostics MCP
+	// developer tool while writing every line to stderr exactly as before.
+	logs := logbuf.New(500)
+	log.SetOutput(io.MultiWriter(os.Stderr, logs))
+
 	cfg := configFromEnv()
+	cfg.logs = logs
 
 	handler, sqlDB, err := buildApp(context.Background(), cfg)
 	if err != nil {
@@ -461,6 +474,30 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		_, err := maintenanceRepo.AddMaintenanceLogEntry("firmware_update", notes, m.Host, shotCount, m.ID)
 		return err
 	})
+
+	// MCP (#1196): the Model Context Protocol server is off by default; when
+	// enabled, mount its streamable-HTTP endpoint under /api/ so auth.RequireToken
+	// guards it with X-GLP-Token like every other API route. Registered here —
+	// after the library, registry, poller and maintenance wiring — so the
+	// read-only library/status/analytics tools get their dependencies.
+	if mcp.Enabled() {
+		mux.Handle(mcp.Path, mcp.NewHandler(mcp.Deps{
+			Shots:               shots.NewService(shotsRepo),
+			ShotsRepo:           shotsRepo,
+			Library:             libRepo,
+			Maintenance:         maintenanceRepo,
+			Registry:            registry,
+			Poller:              poller,
+			Logs:                cfg.logs,
+			Sync:                poller,
+			Preheat:             poller,
+			Version:             system.Version(),
+			RateLimitWindow:     rateLimitWindow,
+			RateLimitMax:        rateLimitMax,
+			AllowWrite:          mcp.WriteEnabled(),
+			AllowDeveloperTools: mcp.DeveloperToolsEnabled(),
+		}))
+	}
 
 	// Phase 2b (#901): the achievements ("stamp card") domain —
 	// GET /api/achievements. A pure-logic port reading across shots,

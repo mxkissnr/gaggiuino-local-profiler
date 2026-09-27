@@ -30,6 +30,12 @@ const versionCacheTTL = time.Hour
 // defines its own, see internal/db's schema version handling.
 const glpVersion = "3.2.0"
 
+// Version returns the GLP version this binary reports from GET /api/version,
+// for callers that need the same value (the MCP server identity, #1196).
+func Version() string {
+	return glpVersion
+}
+
 const releaseURL = "https://github.com/mxkissnr/gaggiuino-local-profiler/releases/latest"
 
 // VersionInfo mirrors GET /api/version's response shape exactly —

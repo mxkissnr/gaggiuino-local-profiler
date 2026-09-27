@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -20,6 +21,19 @@ type Task = map[string]any
 // STATIC_MAINTENANCE_TASKS.
 var staticMaintenanceTasks = map[string]bool{
 	"descaling": true, "backflush": true, "grouphead": true, "gaskets": true, "waterfilter": true,
+}
+
+// StaticTaskKeys returns the program-owned static maintenance task keys in a
+// stable (sorted) order. These are the tasks canonicalTask accepts by name;
+// grinder_<id> and custom_* keys are dynamic (they depend on the current
+// library/machine state) and so cannot be enumerated here.
+func StaticTaskKeys() []string {
+	keys := make([]string, 0, len(staticMaintenanceTasks))
+	for key := range staticMaintenanceTasks {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // maintenanceDefaults mirrors lib/constants.js's MAINTENANCE_DEFAULTS — the

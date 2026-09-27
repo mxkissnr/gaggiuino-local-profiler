@@ -188,3 +188,93 @@ func TestCalcShotScore_WrapsDetail(t *testing.T) {
 		t.Errorf("CalcShotScore = %v, want 100", score)
 	}
 }
+
+func componentByName(t *testing.T, components []ScoreComponent, name string) *ScoreComponent {
+	t.Helper()
+	for i := range components {
+		if components[i].Name == name {
+			return &components[i]
+		}
+	}
+	t.Fatalf("no %q component in %+v", name, components)
+	return nil
+}
+
+func TestCalcShotScoreDetail_Components(t *testing.T) {
+	detail := CalcShotScoreDetail(fullScoreShot(300), nil)
+	if detail.Score == nil {
+		t.Fatal("expected a non-nil score")
+	}
+	wantNames := []string{"pressure", "temperature", "duration", "ratio", "channeling"}
+	wantWeights := []int{25, 20, 20, 20, 15}
+	if len(detail.Components) != len(wantNames) {
+		t.Fatalf("components = %d, want %d: %+v", len(detail.Components), len(wantNames), detail.Components)
+	}
+	var sumScoreWeight, sumWeight int
+	for i, c := range detail.Components {
+		if c.Name != wantNames[i] {
+			t.Errorf("component %d name = %q, want %q", i, c.Name, wantNames[i])
+		}
+		if c.Weight != wantWeights[i] {
+			t.Errorf("component %d weight = %d, want %d", i, c.Weight, wantWeights[i])
+		}
+		if c.Target != "generic" {
+			t.Errorf("component %d target = %q, want generic", i, c.Target)
+		}
+		sumScoreWeight += c.Score * c.Weight
+		sumWeight += c.Weight
+	}
+	if got := jsRound(float64(sumScoreWeight) / float64(sumWeight)); got != *detail.Score {
+		t.Errorf("weighted component average = %d, want score %d", got, *detail.Score)
+	}
+	if got := componentByName(t, detail.Components, "pressure").Inputs["avg_pressure_bar"]; got != 8 {
+		t.Errorf("avg_pressure_bar = %v, want 8", got)
+	}
+	if got := componentByName(t, detail.Components, "duration").Inputs["seconds"]; got != 30 {
+		t.Errorf("seconds = %v, want 30", got)
+	}
+	if got := componentByName(t, detail.Components, "channeling").Inputs["detected"]; got != 0 {
+		t.Errorf("detected = %v, want 0", got)
+	}
+}
+
+func TestCalcShotScoreDetail_ComponentsBeanRatioTarget(t *testing.T) {
+	shot := fullScoreShot(300)
+	bean := &Bean{BrewRatio: "1:2.5"}
+	detail := CalcShotScoreDetail(shot, bean)
+	ratio := componentByName(t, detail.Components, "ratio")
+	if ratio.Target != "bean" {
+		t.Errorf("ratio target = %q, want bean", ratio.Target)
+	}
+	if got := ratio.Inputs["target_ratio"]; got != 2.5 {
+		t.Errorf("target_ratio = %v, want 2.5", got)
+	}
+}
+
+func TestCalcShotScoreDetail_ComponentsProfileTempTarget(t *testing.T) {
+	shot := fullScoreShot(300)
+	shot["datapoints"].(map[string]any)["targetTemperature"] = mkPoints(900, 900, 900, 900, 900, 900)
+	detail := CalcShotScoreDetail(shot, nil)
+	temp := componentByName(t, detail.Components, "temperature")
+	if temp.Target != "profile" {
+		t.Errorf("temperature target = %q, want profile", temp.Target)
+	}
+	if got := temp.Inputs["target_temp_c"]; got != 90 {
+		t.Errorf("target_temp_c = %v, want 90", got)
+	}
+}
+
+func TestCalcShotScoreDetail_NilScoreHasNilComponents(t *testing.T) {
+	if got := CalcShotScoreDetail(nil, nil).Components; got != nil {
+		t.Errorf("nil-shot components = %v, want nil", got)
+	}
+	shot := Shot{
+		"duration": 300.0,
+		"datapoints": map[string]any{
+			"pressure": mkPoints(80, 80, 80), // only 3 samples >= 5 bar
+		},
+	}
+	if got := CalcShotScoreDetail(shot, nil).Components; got != nil {
+		t.Errorf("insufficient-pressure components = %v, want nil", got)
+	}
+}

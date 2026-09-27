@@ -171,6 +171,10 @@ func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 			log.Printf("system: ready-by preheat: switch %s -> turn_on", entity)
 		}
 	}
+	// Remember the pair right before clearing it, so the run this turn-on is
+	// about to start can attribute the ready-by target to itself
+	// (preheat_history.go's lastReadyBy).
+	p.rememberLastReadyBy(readyByTargetAt, plannedSwitchOnAt)
 	p.state.mu.Lock()
 	p.state.readyByTargetAt = nil
 	p.state.plannedSwitchOnAt = nil
