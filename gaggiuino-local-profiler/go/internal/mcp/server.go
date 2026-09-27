@@ -90,7 +90,9 @@ func newServer(deps Deps) *mcpsdk.Server {
 		"and compare_shots to compare two to five shots side by side. " +
 		"list_beans and get_library describe the coffee/equipment library, " +
 		"get_maintenance_status and get_machine_status report upkeep and machine reachability, " +
-		"and get_analytics_summary aggregates shots over a period."
+		"and get_analytics_summary aggregates shots over a period. " +
+		"The dial_in_bean and analyse_shot prompts hand you a ready-made plan for " +
+		"dialling in a bean or reviewing a shot."
 	if deps.AllowWrite {
 		instructions += " This server can also change a few things on the user's behalf: " +
 			"annotate_shot merges rating, notes and grind setting into one shot, " +
@@ -108,6 +110,7 @@ func newServer(deps Deps) *mcpsdk.Server {
 	registerLibraryTools(srv, deps)
 	registerStatusTools(srv, deps)
 	registerAnalyticsTools(srv, deps.Shots)
+	registerPrompts(srv, deps.AllowWrite)
 	if deps.AllowWrite {
 		registerWriteTools(srv, deps)
 	}
