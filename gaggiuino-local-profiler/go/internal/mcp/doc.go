@@ -17,8 +17,9 @@
 //
 // A third, independent opt-in — options.json's enable_mcp_developer_tools, or
 // GLP_ENABLE_MCP_DEVELOPER_TOOLS=true — adds the developer tools
-// (get_shot_raw: a shot's full-resolution, undownsampled brew series). Like
-// the write tools, they are not registered while the opt-in is off.
+// (get_shot_raw: a shot's full-resolution, undownsampled brew series;
+// explain_score: one shot's score broken into its weighted parts). Like the
+// write tools, they are not registered while the opt-in is off.
 //
 // Tools return structuredContent plus the SDK's text fallback, summarise by
 // default (curves only on explicit request, downsampled), and report bad

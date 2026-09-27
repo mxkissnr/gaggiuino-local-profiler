@@ -64,6 +64,119 @@ func registerDeveloperTools(srv *mcpsdk.Server, deps Deps) {
 		out, err := getShotRaw(deps.Shots, in)
 		return nil, out, err
 	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:         "explain_score",
+		Title:        "Explain shot score",
+		Description:  "Break one shot's GLP score (0-100) into its weighted parts with the measured inputs and the targets used, and list the parts that were skipped and why. Use it to understand or debug a score.",
+		Annotations:  readOnlyAnnotations("Explain shot score"),
+		InputSchema:  explainScoreInputSchema(),
+		OutputSchema: mustSchema[explainScoreOutput](),
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in explainScoreInput) (*mcpsdk.CallToolResult, explainScoreOutput, error) {
+		out, err := explainScore(deps.Shots, in)
+		return nil, out, err
+	})
+}
+
+type explainScoreInput struct {
+	ID int64 `json:"id" jsonschema:"the shot id to explain; use list_shots to find ids"`
+}
+
+type scoreComponentOutput struct {
+	Name        string             `json:"name" jsonschema:"the weighted part: pressure, temperature, duration, ratio, extraction_yield or channeling"`
+	Score       int                `json:"score" jsonschema:"this part's 0-100 score"`
+	Weight      int                `json:"weight" jsonschema:"the part's weight in the total"`
+	WeightShare float64            `json:"weight_share" jsonschema:"the part's weight divided by the total weight, 0..1"`
+	Target      string             `json:"target" jsonschema:"which target band was used: profile, bean or generic"`
+	Inputs      map[string]float64 `json:"inputs" jsonschema:"the measured values and targets this part was scored on"`
+}
+
+type skippedScoreComponent struct {
+	Name   string `json:"name" jsonschema:"the part that could not be scored"`
+	Reason string `json:"reason" jsonschema:"why the part was skipped"`
+}
+
+type explainScoreOutput struct {
+	ShotID         int64                   `json:"shot_id" jsonschema:"the shot's stable id"`
+	Score          *int                    `json:"score,omitempty" jsonschema:"the overall 0-100 score; omitted when there is too little data to score"`
+	UsedBeanTarget bool                    `json:"used_bean_target" jsonschema:"true when the score used a bean-specific target"`
+	Components     []scoreComponentOutput  `json:"components" jsonschema:"the weighted parts, in scoring order"`
+	Skipped        []skippedScoreComponent `json:"skipped" jsonschema:"parts that could not be scored, with the reason"`
+}
+
+// skippedScoreParts are the optional parts, in scoring order, with the fixed
+// reason each reports when it is absent. pressure and channeling always score
+// once the shot clears the pressure-samples guard, so they are never listed.
+var skippedScoreParts = []skippedScoreComponent{
+	{Name: "temperature", Reason: "fewer than 6 temperature samples"},
+	{Name: "duration", Reason: "shot shorter than 5 s"},
+	{Name: "ratio", Reason: "no dose annotated or no weight recorded"},
+	{Name: "extraction_yield", Reason: "no TDS annotated (needs dose and weight too)"},
+}
+
+func explainScoreInputSchema() *jsonschema.Schema {
+	s := mustSchema[explainScoreInput]()
+	if p := schemaProp(s, "id"); p != nil {
+		p.Minimum = jsonschema.Ptr(1.0)
+	}
+	return s
+}
+
+func explainScore(svc *shots.Service, in explainScoreInput) (explainScoreOutput, error) {
+	out := explainScoreOutput{
+		ShotID:     in.ID,
+		Components: []scoreComponentOutput{},
+		Skipped:    []skippedScoreComponent{},
+	}
+	if svc == nil {
+		return explainScoreOutput{}, fmt.Errorf("shot history is not available")
+	}
+	shot, err := svc.GetByID(in.ID)
+	if err != nil {
+		log.Printf("mcp: explain_score %d: %v", in.ID, err)
+		return explainScoreOutput{}, fmt.Errorf("could not read shot %d; try again", in.ID)
+	}
+	if shot == nil {
+		return explainScoreOutput{}, fmt.Errorf("shot %d not found; use list_shots to find ids", in.ID)
+	}
+
+	detail := svc.ComputeScoreDetail(shot)
+	out.Score = detail.Score
+	out.UsedBeanTarget = detail.UsedBeanTarget
+	if detail.Score == nil {
+		out.Skipped = append(out.Skipped, skippedScoreComponent{
+			Name:   "all",
+			Reason: "fewer than 4 pressure samples at or above 5 bar",
+		})
+		return out, nil
+	}
+
+	present := make(map[string]bool, len(detail.Components))
+	totalWeight := 0
+	for _, c := range detail.Components {
+		present[c.Name] = true
+		totalWeight += c.Weight
+	}
+	for _, c := range detail.Components {
+		var share float64
+		if totalWeight > 0 {
+			share = float64(c.Weight) / float64(totalWeight)
+		}
+		out.Components = append(out.Components, scoreComponentOutput{
+			Name:        c.Name,
+			Score:       c.Score,
+			Weight:      c.Weight,
+			WeightShare: share,
+			Target:      c.Target,
+			Inputs:      c.Inputs,
+		})
+	}
+	for _, part := range skippedScoreParts {
+		if !present[part.Name] {
+			out.Skipped = append(out.Skipped, part)
+		}
+	}
+	return out, nil
 }
 
 func getShotRawInputSchema() *jsonschema.Schema {
