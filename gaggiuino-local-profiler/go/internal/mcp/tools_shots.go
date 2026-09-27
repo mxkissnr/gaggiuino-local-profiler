@@ -174,10 +174,10 @@ func registerShotTools(srv *mcpsdk.Server, svc *shots.Service) {
 	})
 
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
-		Name:        "get_shot",
-		Title:       "Get shot",
-		Description: "Fetch one shot by id: its key recipe metrics in grams and seconds, score, annotation and, on request, the brew curve downsampled to a fixed number of samples per series (time s, pressure bar, flow ml/s, weight g, temperature C and any targets). Set include_curve only when the chart is actually needed.",
-		Annotations: readOnlyAnnotations("Get shot"),
+		Name:         "get_shot",
+		Title:        "Get shot",
+		Description:  "Fetch one shot by id: its key recipe metrics in grams and seconds, score, annotation and, on request, the brew curve downsampled to a fixed number of samples per series (time s, pressure bar, flow ml/s, weight g, temperature C and any targets). Set include_curve only when the chart is actually needed.",
+		Annotations:  readOnlyAnnotations("Get shot"),
 		InputSchema:  getShotInputSchema(),
 		OutputSchema: getShotOutputSchema(),
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in getShotInput) (*mcpsdk.CallToolResult, getShotOutput, error) {
