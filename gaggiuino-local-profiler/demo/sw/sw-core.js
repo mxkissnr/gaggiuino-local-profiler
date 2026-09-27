@@ -179,6 +179,90 @@ self.GLPDemo = (() => {
         return body;
     }
 
+    // ── Shot simulation (#1193 S3c) ──────────────────────────────────────────
+    //
+    // A recorded shot's detail fixture stores the finished shot's cumulative
+    // datapoint arrays: timeInShot in tenths of a second, every other series in
+    // the 0.1 units the charts divide by 10. Replaying one through the SSE
+    // stream is exactly what a real brew looks like on GET /api/live/data / the
+    // live-snapshot event (go/internal/system/poll.go LiveData): isLive true,
+    // the datapoints accumulated SO FAR, an unchanged seq until the brew ends,
+    // plus the idle-stat sensor fields.
+
+    /**
+     * One live-snapshot payload for a shot replayed up to `elapsedTenths`.
+     * Every datapoint array is truncated to the samples whose timeInShot has
+     * been reached — the arrays are parallel, so one cut applies to all.
+     * temperature/targetTemperature/pressure carry the newest sample in real
+     * units (the /10 the frontend charts apply), matching the idle-stat fields
+     * the online patch (S3b2) sets; `seq` is passed through untouched.
+     */
+    function liveFrame(shot, elapsedTenths, seq) {
+        const source = (shot && shot.datapoints) || {};
+        const times = Array.isArray(source.timeInShot) ? source.timeInShot : [];
+        let count = 0;
+        while (count < times.length && times[count] <= elapsedTenths) count += 1;
+
+        const datapoints = {};
+        for (const [key, value] of Object.entries(source)) {
+            datapoints[key] = Array.isArray(value) ? value.slice(0, count) : value;
+        }
+
+        const last = count - 1;
+        const lastTenth = key => {
+            const series = datapoints[key];
+            if (last < 0 || !Array.isArray(series)) return null;
+            return typeof series[last] === 'number' ? series[last] / 10 : null;
+        };
+        return {
+            isLive: true,
+            machineReachable: true,
+            profileName: (shot && shot.profileName) || '',
+            datapoints,
+            seq,
+            temperature: lastTenth('temperature'),
+            targetTemperature: lastTenth('targetTemperature'),
+            pressure: lastTenth('pressure'),
+        };
+    }
+
+    /**
+     * The idle live-snapshot that ends a replay: the brew finished, so isLive
+     * is false and the datapoints are gone — the same reachable-but-idle state
+     * the online patch (S3b2) reports. `seq` is the incremented value the app
+     * keys its post-brew shot reload off; 93 °C / 0 bar is what that patch also
+     * reports for a reachable idle machine.
+     */
+    function idleFrame(seq) {
+        return {
+            isLive: false,
+            machineReachable: true,
+            profileName: '',
+            datapoints: null,
+            seq,
+            temperature: 93,
+            targetTemperature: 93,
+            pressure: 0,
+        };
+    }
+
+    /**
+     * Manifest key of the recorded `GET /api/shots` first page — the live,
+     * newest-first list the simulation takes the newest shot id from. Detail
+     * reads (`GET /api/shots/{id}`, no `?`) and the trash/paged variants are
+     * skipped so the plain newest-first page wins.
+     */
+    function shotsListKey(manifest) {
+        const entries = (manifest && manifest.entries) || {};
+        for (const key of Object.keys(entries)) {
+            if (!key.startsWith('GET /api/shots?')) continue;
+            const query = key.slice('GET /api/shots?'.length);
+            if (query.includes('trash=1') || query.includes('cursor=')) continue;
+            return key;
+        }
+        return null;
+    }
+
     /**
      * Classifies one request. The site is served from a sub-path, so paths are
      * taken relative to the scope before being rebuilt into a manifest key.
@@ -218,5 +302,5 @@ self.GLPDemo = (() => {
         return entry ? { kind: 'fixture', entry } : { kind: 'missing', key };
     }
 
-    return { fixtureKey, route, shiftTimestamps, patchMachineOnline };
+    return { fixtureKey, route, shiftTimestamps, patchMachineOnline, liveFrame, idleFrame, shotsListKey };
 })();
