@@ -3,6 +3,7 @@ package backup
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
 // fakePNG returns a byte slice that passes matchesImageMagicBytes for
@@ -270,5 +272,135 @@ func TestRestore_LegacyBackupZip_StillImportable(t *testing.T) {
 	}
 	if lg, _ := deps.MaintenanceRepo.GetMaintenanceLog(0); len(lg) != 1 || lg[0].Notes != "legacy note" {
 		t.Errorf("legacy maintenance log = %+v", lg)
+	}
+}
+
+// tinyJPEG encodes a small, real JPEG so the restore pipeline can decode it
+// (an image that only carries magic bytes still survives as a raw write, but a
+// genuine JPEG exercises the full Optimize path the app uses for photos).
+func tinyJPEG(t *testing.T, w, h int) []byte {
+	t.Helper()
+	im := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			im.Set(x, y, color.RGBA{uint8(x * 5), uint8(y * 5), 128, 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, im, &jpeg.Options{Quality: 80}); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// TestRestore_ServesLibraryImagesThroughHTTP (#1185) reproduces the reported
+// "bean/grinder/puck-screen photos blank after backup restore" bug end to end:
+// a source instance carries real bean/grinder/puck-screen/shot photos with
+// 13-digit millisecond ids (the shape CreateBean produces), the backup zip is
+// restored into a fresh instance, and each image is then fetched over HTTP
+// through a REAL library.Handlers mux pointed at the same image directory. The
+// old TestRestore_OptimizesImagesThroughPipeline only checked that 1.jpg
+// landed on disk; it never exercised the serving route, never mixed library
+// images with a shot image, and never used a CreateBean-shaped id.
+func TestRestore_ServesLibraryImagesThroughHTTP(t *testing.T) {
+	imgDir := useImageDir(t)
+	// The library package resolves its image dir once from
+	// library.DefaultImageDir; point it at the same throwaway dir so the real
+	// GET .../image handlers serve exactly what the restore wrote.
+	prevLibDir := library.DefaultImageDir
+	library.DefaultImageDir = imgDir
+	t.Cleanup(func() { library.DefaultImageDir = prevLibDir })
+
+	const (
+		beanID    int64 = 1783373357122
+		grinderID int64 = 1783373357200
+		puckID    int64 = 1783373357300
+		shotID    int64 = 42
+	)
+
+	jpg := tinyJPEG(t, 48, 36)
+	png := fakePNG()
+	write := func(name string, b []byte) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(imgDir, name), b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(fmt.Sprintf("%d.jpg", beanID), jpg)
+	write(fmt.Sprintf("grinder-%d.png", grinderID), png)
+	write(fmt.Sprintf("puckscreen-%d.jpg", puckID), jpg)
+	write(fmt.Sprintf("shot-%d.jpg", shotID), jpg)
+
+	h1, deps1, _ := newTestHandlers(t)
+	if err := deps1.LibRepo.SaveLibrary(library.Library{
+		Beans: []library.Entity{{
+			"id": beanID, "name": "Photo Bean", "stock_g": float64(250), "image": "jpg",
+			"bags": []any{library.Entity{"id": beanID + 1, "openedAt": beanID, "stock_g": float64(250)}},
+		}},
+		Grinders:    []library.Entity{{"id": grinderID, "name": "Photo Grinder", "image": "png"}},
+		PuckScreens: []library.Entity{{"id": puckID, "name": "Photo Puck", "image": "jpg"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := deps1.ShotsRepo.Upsert(shots.Shot{
+		"id": shotID, "timestamp": int64(1700000000), "duration": int64(30000),
+		"profileName": "Photo Shot", "machineId": int64(1), "image": "jpg",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	recExp := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", nil)
+	if recExp.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", recExp.Code, recExp.Body.String())
+	}
+	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
+
+	h2, deps2, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+
+	// The real (non-dry-run) response must report how many images it queued, so
+	// the E2E/screenshot harness can tell a silent drop from a real restore.
+	result := decodeBody(t, rr.Body.Bytes())
+	queued, _ := result["images"].(float64)
+	if queued < 4 {
+		t.Fatalf("restore reported images = %v; want >= 4 (bean+grinder+puck+shot)", result["images"])
+	}
+
+	// The restored DB rows must still claim a photo.
+	lib, err := deps2.LibRepo.GetLibrary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lib.Beans) != 1 || lib.Beans[0]["image"] != "jpg" {
+		t.Errorf("restored bean image cleared: %+v", lib.Beans)
+	}
+	if len(lib.Grinders) != 1 || lib.Grinders[0]["image"] != "png" {
+		t.Errorf("restored grinder image cleared: %+v", lib.Grinders)
+	}
+	if len(lib.PuckScreens) != 1 || lib.PuckScreens[0]["image"] != "jpg" {
+		t.Errorf("restored puck-screen image cleared: %+v", lib.PuckScreens)
+	}
+	if ext, err := deps2.ShotsRepo.ImageExtFor(shotID); err != nil || ext != "jpg" {
+		t.Errorf("restored shot image = %q (err=%v); want jpg", ext, err)
+	}
+
+	// And each photo must actually be served (200) through the real handler.
+	libMux := http.NewServeMux()
+	library.NewHandlers(deps2.LibRepo, deps2.ShotsRepo).RegisterRoutes(libMux)
+	for _, tc := range []struct {
+		name string
+		path string
+	}{
+		{"bean", fmt.Sprintf("/api/library/bean/%d/image", beanID)},
+		{"grinder", fmt.Sprintf("/api/library/grinder/%d/image", grinderID)},
+		{"puckscreen", fmt.Sprintf("/api/library/puckscreen/%d/image", puckID)},
+	} {
+		rec := doJSON(t, libMux, http.MethodGet, tc.path, nil)
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s image: GET %s = %d; want 200 (body=%s)", tc.name, tc.path, rec.Code, rec.Body.String())
+		}
 	}
 }

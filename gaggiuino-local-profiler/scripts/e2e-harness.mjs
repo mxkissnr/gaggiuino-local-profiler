@@ -192,8 +192,9 @@ export async function restoreBackup(baseUrl, zipPath) {
     // loudly instead.
     if (parsed.images > 0) {
         const files = readdirSync(tmpImageDir);
-        if (!files.some(f => !f.includes('.thumb.'))) {
-            throw new Error(`POST /api/restore reported ${parsed.images} image(s) but none were written to ${tmpImageDir}`);
+        const written = files.filter(f => !f.includes('.thumb.')).length;
+        if (written < parsed.images) {
+            throw new Error(`POST /api/restore reported ${parsed.images} image(s) but only ${written} were written to ${tmpImageDir}`);
         }
     }
     return parsed;
