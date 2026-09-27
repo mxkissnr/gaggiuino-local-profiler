@@ -4,13 +4,14 @@
 // in a demo, and it repeats that a write was not saved when the service worker
 // says one happened.
 //
-// The offset mirrors components/dev-banner.ts: body is `height: 100vh;
+// The offset follows components/dev-banner.ts: body is `height: 100vh;
 // overflow: hidden` with global `box-sizing: border-box`, so a body padding-top
 // shrinks the flex layout by the banner's own height. On mobile #main and
 // #sidebar are `position: fixed; inset: 0` against the viewport, where that
-// padding has no effect, so they get an inline `top` too (an inline top wins
-// over the media query's inset shorthand, and is a no-op on desktop where they
-// are static).
+// padding has no effect, so they get an inline `top` (an inline top wins over
+// the media query's inset shorthand) and are shrunk by the banner's height too
+// so their own `height: 100vh` cannot run past the viewport bottom; on desktop
+// they are static and those inline styles are cleared.
 import { t } from '../i18n.js';
 
 const BANNER_ID = 'glpDemoBanner';
@@ -55,7 +56,18 @@ function offsetApp(bar: HTMLElement): void {
     document.body.style.paddingTop = `${height}px`;
     for (const id of FIXED_PANES) {
         const pane = document.getElementById(id);
-        if (pane) pane.style.top = `${height}px`;
+        if (!pane) continue;
+        // Desktop keeps these in flow and full-height; only the fixed mobile
+        // panes need the inline offset, and they must shrink by the banner's
+        // height too or their own `height: 100vh` would push the bottom of
+        // their scroll area off-screen.
+        if (getComputedStyle(pane).position === 'fixed') {
+            pane.style.top = `${height}px`;
+            pane.style.height = `calc(100vh - ${height}px)`;
+        } else {
+            pane.style.top = '';
+            pane.style.height = '';
+        }
     }
 }
 
