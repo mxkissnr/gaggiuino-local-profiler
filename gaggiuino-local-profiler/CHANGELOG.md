@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Fixed
+- **The static demo build now boots when it is served under a sub-path, loading every view from its recorded fixtures.** Part of #1193
 - **A firmware update recorded in the maintenance log now shows which version was replaced by which and the shot count at the time.** Closes #1172
 - **The screenshot tool now renders in English regardless of the host locale, and a backup restored into its throwaway instance keeps its photos instead of serving blank ones.** Closes #1184
 - **The Orders and Live screenshots now keep the seeded demo data when the screenshot tool restores a real backup, and a restore reports how many photos it wrote.** Closes #1185
