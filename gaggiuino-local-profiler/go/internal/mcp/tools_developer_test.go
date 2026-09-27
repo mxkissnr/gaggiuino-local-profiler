@@ -14,14 +14,23 @@ import (
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/logbuf"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
 
 // newDeveloperServer mirrors newWriteServer but also wires the developer-tools
 // opt-in, so a test can flip either flag independently.
 func newDeveloperServer(t *testing.T, allowDeveloper, allowWrite bool) (*httptest.Server, *sql.DB) {
+	return newDeveloperServerFull(t, allowDeveloper, allowWrite, fakePoller{}, nil, nil)
+}
+
+// newDeveloperServerFull is newDeveloperServer with the poller, log and sync
+// sources made explicit, so the get_diagnostics tests can supply a log buffer,
+// a sync fake and a populated machine-status fake.
+func newDeveloperServerFull(t *testing.T, allowDeveloper, allowWrite bool, poller MachineStatus, logs LogSource, sync SyncSource) (*httptest.Server, *sql.DB) {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "glp.db")
 	sqlDB, err := db.Open(dbPath)
@@ -40,7 +49,9 @@ func newDeveloperServer(t *testing.T, allowDeveloper, allowWrite bool) (*httptes
 		Library:             libRepo,
 		Maintenance:         maintRepo,
 		Registry:            registry,
-		Poller:              fakePoller{},
+		Poller:              poller,
+		Logs:                logs,
+		Sync:                sync,
 		Version:             "test",
 		AllowWrite:          allowWrite,
 		AllowDeveloperTools: allowDeveloper,
@@ -88,7 +99,7 @@ func TestDeveloperToolsHiddenWithoutOptIn(t *testing.T) {
 	session := connect(t, ts.URL+Path)
 	names := toolNames(t, session)
 	listed := "," + strings.Join(names, ",") + ","
-	for _, name := range []string{"get_shot_raw", "explain_score", "export_shots_dataset"} {
+	for _, name := range []string{"get_shot_raw", "explain_score", "export_shots_dataset", "get_diagnostics"} {
 		if strings.Contains(listed, ","+name+",") {
 			t.Fatalf("%s is listed without the developer-tools opt-in: %v", name, names)
 		}
@@ -133,7 +144,7 @@ func TestDeveloperToolsKeepWriteTools(t *testing.T) {
 	// than trail; the invariant is that adding the developer tool leaves every
 	// read and write tool registered.
 	names := toolNames(t, session)
-	want := "annotate_shot,compare_shots,explain_score,export_shots_dataset,get_analytics_summary,get_library,get_machine_status,get_maintenance_status,get_shot,get_shot_raw,list_beans,list_shots,mark_maintenance_done,set_known_grind"
+	want := "annotate_shot,compare_shots,explain_score,export_shots_dataset,get_analytics_summary,get_diagnostics,get_library,get_machine_status,get_maintenance_status,get_shot,get_shot_raw,list_beans,list_shots,mark_maintenance_done,set_known_grind"
 	if got := strings.Join(names, ","); got != want {
 		t.Fatalf("tool list = %v, want %v", names, want)
 	}
@@ -516,5 +527,145 @@ func TestDeveloperToolsKeepListShotsPaging(t *testing.T) {
 	filtered := structured(t, call(t, session, "list_shots", map[string]any{"bean": "alpha"}))
 	if got := len(objects(filtered, "shots")); got != 2 {
 		t.Fatalf("bean filter = %d shots, want 2", got)
+	}
+}
+
+type fakeSync struct {
+	last    *string
+	lastErr *string
+}
+
+func (f fakeSync) SyncState() system.SyncState {
+	return system.SyncState{LastSync: f.last, LastSyncError: f.lastErr}
+}
+
+func newLogBuffer(t *testing.T, capacity int, lines ...string) *logbuf.Buffer {
+	t.Helper()
+	b := logbuf.New(capacity)
+	for _, line := range lines {
+		if _, err := b.Write([]byte(line + "\n")); err != nil {
+			t.Fatalf("logbuf write %q: %v", line, err)
+		}
+	}
+	return b
+}
+
+func TestGetDiagnosticsListedWithOptIn(t *testing.T) {
+	ts, _ := newDeveloperServer(t, true, false)
+	session := connect(t, ts.URL+Path)
+	tool := listToolsByName(t, session)["get_diagnostics"]
+	if tool == nil {
+		t.Fatalf("get_diagnostics is missing from tools/list with the opt-in")
+	}
+	a := tool.Annotations
+	if a == nil || !a.ReadOnlyHint || !a.IdempotentHint {
+		t.Fatalf("get_diagnostics should be read-only and idempotent")
+	}
+	if a.OpenWorldHint == nil || *a.OpenWorldHint {
+		t.Fatalf("get_diagnostics should be closed-world")
+	}
+	if tool.OutputSchema == nil {
+		t.Fatalf("get_diagnostics has no output schema")
+	}
+	lines := schemaProperty(t, tool.InputSchema, "lines")
+	if got := numberField(t, lines, "minimum"); got != 1 {
+		t.Fatalf("lines minimum = %v, want 1", got)
+	}
+	if got := numberField(t, lines, "maximum"); got != maxDiagnosticLines {
+		t.Fatalf("lines maximum = %v, want %d", got, maxDiagnosticLines)
+	}
+	if got := numberField(t, lines, "default"); got != defaultDiagnosticLines {
+		t.Fatalf("lines default = %v, want %d", got, defaultDiagnosticLines)
+	}
+	contains := schemaProperty(t, tool.InputSchema, "contains")
+	if got := numberField(t, contains, "maxLength"); got != maxDiagnosticContains {
+		t.Fatalf("contains maxLength = %v, want %d", got, maxDiagnosticContains)
+	}
+}
+
+func TestGetDiagnosticsReturnsLogsAndState(t *testing.T) {
+	buf := newLogBuffer(t, 10, "one", "two", "three", "four")
+	lastSync := "2026-09-27T10:00:00Z"
+	syncErr := "history fetch failed"
+	reachable := true
+	machineErr := "connection refused"
+	ts, _ := newDeveloperServerFull(t, true, false,
+		fakePoller{reachable: &reachable, lastErr: &machineErr},
+		buf,
+		fakeSync{last: &lastSync, lastErr: &syncErr},
+	)
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "get_diagnostics", map[string]any{"lines": 2}))
+
+	if lines := stringList(out, "log_lines"); strings.Join(lines, ",") != "three,four" {
+		t.Fatalf("log_lines = %v, want [three four]", lines)
+	}
+	if got, _ := out["last_sync"].(string); got != lastSync {
+		t.Fatalf("last_sync = %v, want %q", out["last_sync"], lastSync)
+	}
+	if got, _ := out["last_sync_error"].(string); got != syncErr {
+		t.Fatalf("last_sync_error = %v, want %q", out["last_sync_error"], syncErr)
+	}
+	if got, ok := out["polled_machine_reachable"].(bool); !ok || !got {
+		t.Fatalf("polled_machine_reachable = %v, want true", out["polled_machine_reachable"])
+	}
+	if got, _ := out["last_machine_error"].(string); got != machineErr {
+		t.Fatalf("last_machine_error = %v, want %q", out["last_machine_error"], machineErr)
+	}
+}
+
+func TestGetDiagnosticsOmitsAbsentState(t *testing.T) {
+	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, nil, nil)
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "get_diagnostics", map[string]any{}))
+
+	if raw, ok := out["log_lines"].([]any); !ok || len(raw) != 0 {
+		t.Fatalf("log_lines = %#v, want an empty array without a log source", out["log_lines"])
+	}
+	for _, key := range []string{"last_sync", "last_sync_error", "last_machine_error", "polled_machine_reachable"} {
+		if _, ok := out[key]; ok {
+			t.Fatalf("%s present without a source: %v", key, out[key])
+		}
+	}
+}
+
+func TestGetDiagnosticsContainsFilter(t *testing.T) {
+	buf := newLogBuffer(t, 20, "startup ok", "ERROR: pressure probe", "another line", "error: retry")
+	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, buf, nil)
+	session := connect(t, ts.URL+Path)
+
+	out := structured(t, call(t, session, "get_diagnostics", map[string]any{"contains": "error", "lines": 10}))
+	if got := strings.Join(stringList(out, "log_lines"), "|"); got != "ERROR: pressure probe|error: retry" {
+		t.Fatalf("filtered log_lines = %q", got)
+	}
+	// The filter scans the whole kept buffer, so an older matching line is
+	// still found even when the returned window is smaller.
+	out = structured(t, call(t, session, "get_diagnostics", map[string]any{"contains": "startup", "lines": 1}))
+	if got := strings.Join(stringList(out, "log_lines"), "|"); got != "startup ok" {
+		t.Fatalf("filtered log_lines with a small window = %q", got)
+	}
+}
+
+func TestGetDiagnosticsMasksSecrets(t *testing.T) {
+	buf := newLogBuffer(t, 10,
+		"request X-GLP-Token: supersecretvalue",
+		"GET /api/shots?token=abc123&limit=5",
+		"Authorization: Bearer eyJhbGciOiJIUzI1",
+		"dialing https://alice:hunter2@example.test/api",
+	)
+	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, buf, nil)
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "get_diagnostics", map[string]any{}))
+	joined := strings.Join(stringList(out, "log_lines"), "\n")
+
+	for _, secret := range []string{"supersecretvalue", "abc123", "eyJhbGciOiJIUzI1", "hunter2"} {
+		if strings.Contains(joined, secret) {
+			t.Fatalf("secret %q leaked in %q", secret, joined)
+		}
+	}
+	for _, masked := range []string{"X-GLP-Token: ***", "token=***&limit=5", "Bearer ***", "https://alice:***@example.test/api"} {
+		if !strings.Contains(joined, masked) {
+			t.Fatalf("expected %q in masked output %q", masked, joined)
+		}
 	}
 }

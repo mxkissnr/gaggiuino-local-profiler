@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -90,6 +92,125 @@ func registerDeveloperTools(srv *mcpsdk.Server, deps Deps) {
 		out, err := exportShotsDataset(deps.Shots, in)
 		return nil, out, err
 	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:         "get_diagnostics",
+		Title:        "Get diagnostics",
+		Description:  "Return the app's own recent log output since start (at most 500 lines are kept in memory) plus its sync and machine-reachability state, for bug triage. Optionally filter the log to lines containing a case-insensitive substring. Obvious secrets in the lines are masked. Read-only.",
+		Annotations:  readOnlyAnnotations("Get diagnostics"),
+		InputSchema:  getDiagnosticsSchema(),
+		OutputSchema: mustSchema[getDiagnosticsOutput](),
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in getDiagnosticsInput) (*mcpsdk.CallToolResult, getDiagnosticsOutput, error) {
+		out, err := getDiagnostics(deps, in)
+		return nil, out, err
+	})
+}
+
+// get_diagnostics bounds: the log window and the substring filter length.
+const (
+	defaultDiagnosticLines = 100
+	maxDiagnosticLines     = 500
+	maxDiagnosticContains  = 100
+)
+
+type getDiagnosticsInput struct {
+	Lines    int    `json:"lines,omitempty" jsonschema:"how many of the most recent log lines to return, 1..500 (default 100)"`
+	Contains string `json:"contains,omitempty" jsonschema:"only return log lines containing this case-insensitive substring (longer values are truncated to 100 characters)"`
+}
+
+type getDiagnosticsOutput struct {
+	LogLines               []string `json:"log_lines" jsonschema:"the app's recent log lines, oldest first, secrets masked"`
+	LastSync               string   `json:"last_sync,omitempty" jsonschema:"RFC 3339 time of the last shot-history sync, when one has run"`
+	LastSyncError          string   `json:"last_sync_error,omitempty" jsonschema:"the last sync error, when the last sync failed"`
+	PolledMachineReachable *bool    `json:"polled_machine_reachable,omitempty" jsonschema:"whether the last poll reached the default machine"`
+	LastMachineError       string   `json:"last_machine_error,omitempty" jsonschema:"the last polling error, when the default machine was unreachable"`
+}
+
+func getDiagnosticsSchema() *jsonschema.Schema {
+	s := mustSchema[getDiagnosticsInput]()
+	if p := schemaProp(s, "lines"); p != nil {
+		p.Minimum = jsonschema.Ptr(1.0)
+		p.Maximum = jsonschema.Ptr(float64(maxDiagnosticLines))
+		p.Default = json.RawMessage(strconv.Itoa(defaultDiagnosticLines))
+	}
+	if p := schemaProp(s, "contains"); p != nil {
+		p.MaxLength = jsonschema.Ptr(maxDiagnosticContains)
+	}
+	return s
+}
+
+func getDiagnostics(deps Deps, in getDiagnosticsInput) (getDiagnosticsOutput, error) {
+	out := getDiagnosticsOutput{LogLines: recentLogLines(deps.Logs, in)}
+	if deps.Sync != nil {
+		st := deps.Sync.SyncState()
+		if st.LastSync != nil {
+			out.LastSync = *st.LastSync
+		}
+		if st.LastSyncError != nil {
+			out.LastSyncError = *st.LastSyncError
+		}
+	}
+	if deps.Poller != nil {
+		info := deps.Poller.StatusInfo()
+		out.PolledMachineReachable = info.MachineReachable
+		if info.LastMachineError != nil {
+			out.LastMachineError = *info.LastMachineError
+		}
+	}
+	return out, nil
+}
+
+// recentLogLines returns up to in.Lines of the buffer's most recent lines,
+// oldest first, filtered by in.Contains and with secrets masked. It reads the
+// whole kept buffer before applying the limit so a filter matches older lines
+// too, and returns an empty (never nil) slice so JSON gets [] rather than null.
+func recentLogLines(src LogSource, in getDiagnosticsInput) []string {
+	out := []string{}
+	if src == nil {
+		return out
+	}
+	n := in.Lines
+	if n <= 0 {
+		n = defaultDiagnosticLines
+	}
+	if n > maxDiagnosticLines {
+		n = maxDiagnosticLines
+	}
+	contains := in.Contains
+	if len(contains) > maxDiagnosticContains {
+		contains = contains[:maxDiagnosticContains]
+	}
+	lines := src.Lines(maxDiagnosticLines)
+	if contains != "" {
+		needle := strings.ToLower(contains)
+		filtered := make([]string, 0, len(lines))
+		for _, line := range lines {
+			if strings.Contains(strings.ToLower(line), needle) {
+				filtered = append(filtered, line)
+			}
+		}
+		lines = filtered
+	}
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	for _, line := range lines {
+		out = append(out, maskSecrets(line))
+	}
+	return out
+}
+
+// The two shapes of credential the app might log: an X-GLP-Token header or
+// token= query value, a Bearer token, or user:pass credentials in a URL. The
+// URL pattern requires a trailing "@" so a bare host:port is left alone.
+var (
+	secretTokenPattern = regexp.MustCompile(`(?i)(X-GLP-Token\s*[:=]\s*|token=|Bearer\s+)([^/\s@&]+)`)
+	secretURLPattern   = regexp.MustCompile(`(://[^/\s:@]+:)([^/\s@]+)(@)`)
+)
+
+func maskSecrets(line string) string {
+	line = secretTokenPattern.ReplaceAllString(line, "${1}***")
+	return secretURLPattern.ReplaceAllString(line, "${1}***${3}")
 }
 
 type explainScoreInput struct {
