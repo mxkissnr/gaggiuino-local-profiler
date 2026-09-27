@@ -174,23 +174,12 @@ func buildContext(deps Deps, event *Event) (*Context, error) {
 
 // scoreForShot ports context.js's `score: shotService.computeScoreDetail(s)
 // .score` — resolve the shot's library bean (beanId-first, coffee-name
-// fallback — the same resolution helpers.js's resolveBeanForShot does, and
-// what LibraryService.resolveBeanForAnnotation does in Node) and score
-// against its own brewTempC/brewRatio target when it has one. Returns *int
-// (nil for JS's null — not enough datapoints to score).
+// fallback — library.ScoreBean, the one implementation shared with the
+// server-side scorer) and score against its own brewTempC/brewRatio target
+// when it has one. Returns *int (nil for JS's null — not enough datapoints
+// to score).
 func scoreForShot(shot shots.Shot, beans []library.Entity) *int {
-	var bean *shots.Bean
-	if resolved := resolveBeanForShot(shot, beans); resolved != nil {
-		b := shots.Bean{}
-		if t, ok := asFloat64(resolved["brewTempC"]); ok && t > 0 {
-			b.BrewTempC = &t
-		}
-		if r, _ := resolved["brewRatio"].(string); r != "" {
-			b.BrewRatio = r
-		}
-		bean = &b
-	}
-	return shots.CalcShotScoreDetail(shot, bean).Score
+	return shots.CalcShotScoreDetail(shot, library.ScoreBean(shot, beans)).Score
 }
 
 // shotScore reads the injected ["score"] as *int.

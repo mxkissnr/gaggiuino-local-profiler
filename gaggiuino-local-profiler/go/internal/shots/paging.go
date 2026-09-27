@@ -103,7 +103,16 @@ const pageColumns = `s.id, s.timestamp, s.duration, s.profile_name, s.data, s.ma
 // through shot_score_cache (backfilling misses). machineID == 0 means "all
 // machines". limit is the page size; the method fetches limit+1 rows to
 // report HasMore without a second COUNT query.
+//
+// It scores against the generic bands (lookup nil) and is now only a test
+// helper — production callers go through Service.GetPage/GetRecent, which
+// use findPage with a loadBeanLookup source so the cache key includes the
+// resolved bean target.
 func (r *Repository) FindPageExcludingTrash(cur Cursor, limit int, machineID int64) (Page, error) {
+	return r.findPage(cur, limit, machineID, nil)
+}
+
+func (r *Repository) findPage(cur Cursor, limit int, machineID int64, lookup beanLookup) (Page, error) {
 	var sb strings.Builder
 	sb.WriteString(`SELECT `)
 	sb.WriteString(pageColumns)
@@ -125,12 +134,19 @@ func (r *Repository) FindPageExcludingTrash(cur Cursor, limit int, machineID int
 	sb.WriteString(" ORDER BY s.timestamp DESC, s.id DESC LIMIT ?")
 	args = append(args, limit+1)
 
-	return r.runPageQuery(sb.String(), args, limit)
+	return r.runPageQuery(sb.String(), args, limit, lookup)
 }
 
 // FindTrashedPage mirrors FindPageExcludingTrash but drives the join FROM
 // trash (like FindTrashed), so it lists only trashed shots, newest first.
+// Like FindPageExcludingTrash it scores against the generic bands and is
+// only a test helper; production callers use Service.GetTrashPage/
+// GetRecentTrash → findTrashedPage with a bean lookup.
 func (r *Repository) FindTrashedPage(cur Cursor, limit int, machineID int64) (Page, error) {
+	return r.findTrashedPage(cur, limit, machineID, nil)
+}
+
+func (r *Repository) findTrashedPage(cur Cursor, limit int, machineID int64, lookup beanLookup) (Page, error) {
 	var sb strings.Builder
 	sb.WriteString(`SELECT `)
 	sb.WriteString(pageColumns)
@@ -153,10 +169,10 @@ func (r *Repository) FindTrashedPage(cur Cursor, limit int, machineID int64) (Pa
 	sb.WriteString(" ORDER BY s.timestamp DESC, s.id DESC LIMIT ?")
 	args = append(args, limit+1)
 
-	return r.runPageQuery(sb.String(), args, limit)
+	return r.runPageQuery(sb.String(), args, limit, lookup)
 }
 
-func (r *Repository) runPageQuery(query string, args []any, limit int) (Page, error) {
+func (r *Repository) runPageQuery(query string, args []any, limit int, lookup beanLookup) (Page, error) {
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
 		return Page{}, fmt.Errorf("shots: listing shot page: %w", err)
@@ -168,7 +184,7 @@ func (r *Repository) runPageQuery(query string, args []any, limit int) (Page, er
 		backfill []scoreCacheRow
 	)
 	for rows.Next() {
-		row, bf, err := r.scanPageRow(rows)
+		row, bf, err := r.scanPageRow(rows, lookup)
 		if err != nil {
 			return Page{}, err
 		}
@@ -213,8 +229,11 @@ type scoreCacheRow struct {
 // hydrates the shot, and resolves its score: a fingerprint hit uses the
 // cached score, a miss (or an absent cache row) computes it via
 // CalcShotScoreDetail and returns a *scoreCacheRow for the caller to
-// backfill.
-func (r *Repository) scanPageRow(sc rowScanner) (PageRow, *scoreCacheRow, error) {
+// backfill. lookup (nil = generic bands) resolves each shot's bean target;
+// that target is folded into the fingerprint, so editing a bean's
+// brewTempC/brewRatio misses the cache and recomputes instead of serving the
+// old score forever.
+func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup) (PageRow, *scoreCacheRow, error) {
 	var (
 		id, timestamp, machineID int64
 		duration                 sql.NullInt64
@@ -236,6 +255,12 @@ func (r *Repository) scanPageRow(sc rowScanner) (PageRow, *scoreCacheRow, error)
 		return PageRow{}, nil, err
 	}
 
+	var bean *Bean
+	if lookup != nil {
+		bean = lookup(shot)
+	}
+	fp := fingerprint + "|" + beanTargetSignature(bean)
+
 	row := PageRow{Shot: shot}
 	// hasChartData / tempStabilityDev are derived from the raw datapoints
 	// bytes on every row (cache hit or miss) — one shallow tokenize each,
@@ -243,7 +268,7 @@ func (r *Repository) scanPageRow(sc rowScanner) (PageRow, *scoreCacheRow, error)
 	row.HasChartData = hasChartSeries(shot["datapoints"])
 	row.TempStabilityDev = tempStabilityDev(shot["datapoints"])
 
-	if cachedFingerprint.Valid && cachedFingerprint.String == fingerprint {
+	if cachedFingerprint.Valid && cachedFingerprint.String == fp {
 		if cachedScore.Valid {
 			v := int(cachedScore.Int64)
 			row.Score = &v
@@ -252,15 +277,29 @@ func (r *Repository) scanPageRow(sc rowScanner) (PageRow, *scoreCacheRow, error)
 		return row, nil, nil
 	}
 
-	detail := CalcShotScoreDetail(shot, nil)
+	detail := CalcShotScoreDetail(shot, bean)
 	row.Score = detail.Score
 	row.UsedBeanTarget = detail.UsedBeanTarget
 	return row, &scoreCacheRow{
 		shotID:         id,
 		score:          detail.Score,
 		usedBeanTarget: detail.UsedBeanTarget,
-		fingerprint:    fingerprint,
+		fingerprint:    fp,
 	}, nil
+}
+
+// beanTargetSignature renders a resolved *Bean into a stable string appended
+// to the shot fingerprint, so a changed bean target invalidates the cached
+// score. Empty for a nil bean (no bean resolved → generic bands).
+func beanTargetSignature(bean *Bean) string {
+	if bean == nil {
+		return ""
+	}
+	temp := ""
+	if bean.BrewTempC != nil {
+		temp = strconv.FormatFloat(*bean.BrewTempC, 'g', -1, 64)
+	}
+	return "t=" + temp + ";r=" + bean.BrewRatio
 }
 
 // backfillScoreCache writes recomputed score rows in one transaction. A

@@ -172,36 +172,6 @@ func beanID(bean library.Entity) (int64, bool) {
 	return asInt64(bean["id"])
 }
 
-// resolveBeanForShot ports helpers.js's resolveBeanForShot: beanId-first,
-// coffee-name fallback.
-func resolveBeanForShot(shot shots.Shot, beans []library.Entity) library.Entity {
-	ann, _ := shot["annotation"].(map[string]any)
-	if ann == nil {
-		return nil
-	}
-	if raw, present := ann["beanId"]; present && raw != nil {
-		if id, ok := asInt64(raw); ok {
-			for _, b := range beans {
-				if bid, ok := beanID(b); ok && bid == id {
-					return b
-				}
-			}
-		}
-	}
-	coffee, _ := ann["coffee"].(string)
-	if coffee == "" {
-		return nil
-	}
-	key := strings.ToLower(coffee)
-	for _, b := range beans {
-		name, _ := b["name"].(string)
-		if strings.ToLower(name) == key {
-			return b
-		}
-	}
-	return nil
-}
-
 // bagAtShotTime ports helpers.js's bagAtShotTime: which bag of `bean` was
 // open at shotTimestampSec.
 func bagAtShotTime(bean library.Entity, shotTimestampSec int64) library.Entity {
@@ -360,7 +330,7 @@ func bagFirstUseAgesDays(shotList []shots.Shot, beans []library.Entity) []float6
 	byBean := map[int64][]shots.Shot{}
 	order := []int64{}
 	for _, shot := range shotList {
-		bean := resolveBeanForShot(shot, beans)
+		bean := library.ResolveBeanForShot(shot, beans)
 		if bean == nil {
 			continue
 		}

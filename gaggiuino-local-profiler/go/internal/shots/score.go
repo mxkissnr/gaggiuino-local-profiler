@@ -17,10 +17,10 @@ import (
 
 // Bean is the subset of a library bean's fields score.js reads
 // (brewTempC/brewRatio) to replace the generic fixed-band targets with the
-// bean's own recommendation (#450). internal/library (Phase 0 placeholder,
-// not ported yet) is what will actually resolve a shot's annotation to a
-// Bean — see ComputeScoreDetail's doc comment. A nil *Bean reproduces
-// score.js's behavior when no bean is passed at all: generic bands only.
+// bean's own recommendation (#450). library.ScoreBean resolves a shot's
+// annotation to a Bean — see ComputeScoreDetail's doc comment. A nil *Bean
+// reproduces score.js's behavior when no bean is passed at all: generic
+// bands only.
 type Bean struct {
 	// BrewTempC is nil when the bean has no target temperature set —
 	// mirrors the `typeof bean.brewTempC === 'number' && bean.brewTempC > 0`
@@ -370,15 +370,12 @@ func toFloat(v any) (float64, bool) {
 // "datapoints"/"duration"/"annotation" fields, addressed exactly the way
 // the JS original reads shot.datapoints/shot.duration/shot.annotation).
 //
-// bean is always nil in this phase: resolving a shot's annotation to its
-// library bean (#450) is LibraryService.resolveBeanForAnnotation's job,
-// and internal/library isn't ported yet (still a Phase 0 placeholder) — see
-// service.go's ComputeScoreDetail. Scoring with bean == nil is
-// byte-identical to what score.js itself does whenever no bean is resolved
-// (no beanId/coffee match, or an install with an empty library), so every
-// shot without a bean-specific target scores exactly like Node today; shots
-// that would use a bean's own brewTempC/brewRatio target instead fall back
-// to the generic band until the Library phase wires bean resolution in.
+// bean is the shot's resolved library bean target (#450), or nil when none
+// resolves — see service.go's ComputeScoreDetail and library.ScoreBean.
+// Scoring with bean == nil is byte-identical to what score.js itself does
+// whenever no bean is resolved (no beanId/coffee match, or an install with
+// an empty library): the generic bands. A non-nil bean replaces the generic
+// temperature/ratio targets with its own brewTempC/brewRatio recommendations.
 func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 	if shot == nil {
 		return ScoreDetail{}
