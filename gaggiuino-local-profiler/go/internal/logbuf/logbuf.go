@@ -89,10 +89,9 @@ func (b *Buffer) Lines(n int) []string {
 	if n == 0 {
 		return nil
 	}
-	start := 0
-	if b.full {
-		start = b.next
-	}
+	// The newest line sits at next-1 (mod capacity); walk back n from there so
+	// the most recent n lines are returned, oldest first.
+	start := ((b.next-n)%b.capacity + b.capacity) % b.capacity
 	out := make([]string, 0, n)
 	for i := 0; i < n; i++ {
 		out = append(out, b.lines[(start+i)%b.capacity])
