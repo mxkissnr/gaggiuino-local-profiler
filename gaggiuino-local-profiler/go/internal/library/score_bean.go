@@ -1,6 +1,7 @@
 package library
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -25,7 +26,7 @@ func ResolveBeanForShot(shot shots.Shot, beans []Entity) Entity {
 	if raw, present := ann["beanId"]; present && raw != nil {
 		if id, ok := beanRefID(raw); ok {
 			for _, b := range beans {
-				if bid, ok := idOf(b, "id"); ok && bid == id {
+				if bid, ok := beanRefID(b["id"]); ok && bid == id {
 					return b
 				}
 			}
@@ -57,7 +58,7 @@ func ScoreBean(shot shots.Shot, beans []Entity) *shots.Bean {
 		return nil
 	}
 	b := shots.Bean{}
-	if t, ok := jsParseFloat(resolved["brewTempC"]); ok && t > 0 {
+	if t, ok := scoreBeanFloat(resolved["brewTempC"]); ok && t > 0 {
 		b.BrewTempC = &t
 	}
 	if r, _ := resolved["brewRatio"].(string); r != "" {
@@ -68,8 +69,10 @@ func ScoreBean(shot shots.Shot, beans []Entity) *shots.Bean {
 
 // beanRefID coerces a shot annotation's beanId to int64, accepting every
 // numeric shape an annotation carries depending on how far it has traveled
-// (an in-memory int64, or the float64 encoding/json produces) — the same
-// tolerance idOf gives entity fields.
+// (an in-memory int64, the float64 encoding/json produces, or a json.Number
+// when a decoder is configured with UseNumber) — the same tolerance the
+// achievements asInt64 gave this field before the move. Strings are
+// deliberately NOT parsed: the old helper rejected them too.
 func beanRefID(v any) (int64, bool) {
 	switch n := v.(type) {
 	case int64:
@@ -78,6 +81,28 @@ func beanRefID(v any) (int64, bool) {
 		return int64(n), true
 	case float64:
 		return int64(n), true
+	case json.Number:
+		i, err := n.Int64()
+		return i, err == nil
+	}
+	return 0, false
+}
+
+// scoreBeanFloat ports the achievements asFloat64 the bean-target conversion
+// used before the move: any JSON numeric type, but never a string (a numeric
+// string such as "93" is not a temperature here — that would silently change
+// which beans get a target).
+func scoreBeanFloat(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case int64:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	case json.Number:
+		f, err := n.Float64()
+		return f, err == nil
 	}
 	return 0, false
 }

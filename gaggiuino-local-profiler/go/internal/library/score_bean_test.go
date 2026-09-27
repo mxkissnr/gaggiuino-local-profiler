@@ -1,6 +1,7 @@
 package library
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -84,5 +85,38 @@ func TestResolveBeanForShot_IntBeanID(t *testing.T) {
 	beans := []Entity{{"id": int64(5), "name": "Int ID"}}
 	if got := ResolveBeanForShot(scoreBeanShot(map[string]any{"beanId": int64(5)}), beans); got == nil {
 		t.Error("expected an in-memory int64 beanId to match")
+	}
+}
+
+// The move from achievements must not change which beans resolve or which
+// temperatures they carry: the old asInt64/asFloat64 accepted every numeric
+// JSON type but never a string.
+func TestScoreBean_NumericStringTempRejected(t *testing.T) {
+	beans := []Entity{{"id": 6.0, "brewTempC": "93"}}
+	bean := ScoreBean(scoreBeanShot(map[string]any{"beanId": 6.0}), beans)
+	if bean == nil {
+		t.Fatal("expected a non-nil bean")
+	}
+	if bean.BrewTempC != nil {
+		t.Errorf("BrewTempC = %v, want nil — a numeric string is not a temperature", bean.BrewTempC)
+	}
+}
+
+func TestScoreBean_IntTempAccepted(t *testing.T) {
+	beans := []Entity{{"id": 7.0, "brewTempC": 91}}
+	bean := ScoreBean(scoreBeanShot(map[string]any{"beanId": 7.0}), beans)
+	if bean == nil || bean.BrewTempC == nil || *bean.BrewTempC != 91.0 {
+		t.Errorf("BrewTempC = %v, want 91.0 from an int target", bean)
+	}
+}
+
+func TestScoreBean_JSONNumberAccepted(t *testing.T) {
+	beans := []Entity{{"id": json.Number("8"), "brewTempC": json.Number("92.5")}}
+	bean := ScoreBean(scoreBeanShot(map[string]any{"beanId": json.Number("8")}), beans)
+	if bean == nil {
+		t.Fatal("expected a json.Number beanId to resolve")
+	}
+	if bean.BrewTempC == nil || *bean.BrewTempC != 92.5 {
+		t.Errorf("BrewTempC = %v, want 92.5 from a json.Number target", bean.BrewTempC)
 	}
 }

@@ -61,12 +61,12 @@ func ClampPageLimit(limit int) int {
 // cache-resolved score. machineID == 0 lists every machine. limit is
 // clamped by ClampPageLimit.
 func (s *Service) GetPage(cur Cursor, limit int, machineID int64) (Page, error) {
-	return s.repo.FindPageExcludingTrash(cur, ClampPageLimit(limit), machineID)
+	return s.repo.findPage(cur, ClampPageLimit(limit), machineID, loadBeanLookup())
 }
 
 // GetTrashPage is GetPage against the trash list.
 func (s *Service) GetTrashPage(cur Cursor, limit int, machineID int64) (Page, error) {
-	return s.repo.FindTrashedPage(cur, ClampPageLimit(limit), machineID)
+	return s.repo.findTrashedPage(cur, ClampPageLimit(limit), machineID, loadBeanLookup())
 }
 
 // GetRecent returns the newest n non-trashed shots (metadata + curves,
