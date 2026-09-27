@@ -138,7 +138,10 @@ func TestListTools(t *testing.T) {
 			t.Fatalf("tool %s has no output schema", tool.Name)
 		}
 	}
-	want := []string{"list_shots", "get_shot", "compare_shots"}
+	// The SDK registry lists tools sorted by name (featureSet.all in the
+	// SDK's features.go), not in registration order; that ordering is still
+	// deterministic.
+	want := []string{"compare_shots", "get_shot", "list_shots"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Fatalf("tool order = %v, want %v", names, want)
 	}
