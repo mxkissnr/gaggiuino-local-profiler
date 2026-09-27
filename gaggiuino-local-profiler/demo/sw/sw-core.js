@@ -66,7 +66,9 @@ self.GLPDemo = (() => {
             return isApi ? { kind: 'readonly' } : { kind: 'passthrough' };
         }
 
-        const key = fixtureKey(upper, `/${relative}${url.search}`);
+        // Reads are only ever recorded as GET, so a HEAD request probes the
+        // GET fixture rather than a "HEAD /..." key that cannot exist.
+        const key = fixtureKey(upper === 'HEAD' ? 'GET' : upper, `/${relative}${url.search}`);
         const entry = manifest && manifest.entries ? manifest.entries[key] : undefined;
         return entry ? { kind: 'fixture', entry } : { kind: 'missing', key };
     }

@@ -108,6 +108,17 @@ describe('sw-core route (#1193)', () => {
         expect(glp.route('DELETE', `${SCOPE}api/shots/5`, SCOPE, MANIFEST)).toEqual({ kind: 'readonly' });
     });
 
+    it('treats HEAD as a read against the recorded GET fixture', () => {
+        expect(glp.route('HEAD', `${SCOPE}api/shots?limit=60`, SCOPE, MANIFEST)).toEqual({
+            kind: 'fixture',
+            entry: MANIFEST.entries['GET /api/shots?limit=60'],
+        });
+        expect(glp.route('HEAD', `${SCOPE}api/shots?limit=61`, SCOPE, MANIFEST)).toEqual({
+            kind: 'missing',
+            key: 'GET /api/shots?limit=61',
+        });
+    });
+
     it('passes through requests outside the scope', () => {
         expect(glp.route('GET', 'https://demo.example/other/api/shots', SCOPE, MANIFEST)).toEqual({ kind: 'passthrough' });
     });

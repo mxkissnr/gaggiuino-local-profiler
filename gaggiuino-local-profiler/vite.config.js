@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import { cpSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 // Demo mode (#1193) builds the SPA for GitHub Pages: static output in
 // ../demo-dist, the entry point swapped for the service-worker bootstrap, and
@@ -12,8 +12,11 @@ function demoServiceWorker() {
   return {
     name: 'glp-demo-service-worker',
     configResolved(config) {
-      projectRoot = dirname(config.root);
-      outDir = config.build.outDir;
+      // build.outDir stays the raw root-relative string in the resolved config,
+      // so resolve it the same way Vite does — against the (absolute) root.
+      const root = resolve(config.root);
+      projectRoot = dirname(root);
+      outDir = resolve(root, config.build.outDir);
     },
     transformIndexHtml(html) {
       return html.replace('src="./main.ts"', 'src="./demo/boot.ts"');
