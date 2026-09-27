@@ -88,7 +88,7 @@ func TestDeveloperToolsHiddenWithoutOptIn(t *testing.T) {
 	session := connect(t, ts.URL+Path)
 	names := toolNames(t, session)
 	listed := "," + strings.Join(names, ",") + ","
-	for _, name := range []string{"get_shot_raw", "explain_score"} {
+	for _, name := range []string{"get_shot_raw", "explain_score", "export_shots_dataset"} {
 		if strings.Contains(listed, ","+name+",") {
 			t.Fatalf("%s is listed without the developer-tools opt-in: %v", name, names)
 		}
@@ -133,7 +133,7 @@ func TestDeveloperToolsKeepWriteTools(t *testing.T) {
 	// than trail; the invariant is that adding the developer tool leaves every
 	// read and write tool registered.
 	names := toolNames(t, session)
-	want := "annotate_shot,compare_shots,explain_score,get_analytics_summary,get_library,get_machine_status,get_maintenance_status,get_shot,get_shot_raw,list_beans,list_shots,mark_maintenance_done,set_known_grind"
+	want := "annotate_shot,compare_shots,explain_score,export_shots_dataset,get_analytics_summary,get_library,get_machine_status,get_maintenance_status,get_shot,get_shot_raw,list_beans,list_shots,mark_maintenance_done,set_known_grind"
 	if got := strings.Join(names, ","); got != want {
 		t.Fatalf("tool list = %v, want %v", names, want)
 	}
@@ -362,5 +362,159 @@ func TestExplainScoreUnknownID(t *testing.T) {
 	}
 	if msg := errorText(t, res); !strings.Contains(msg, "not found; use list_shots") {
 		t.Fatalf("unknown-shot error = %q, want it to mention list_shots", msg)
+	}
+}
+
+func TestExportShotsDatasetListedWithOptIn(t *testing.T) {
+	ts, _ := newDeveloperServer(t, true, false)
+	session := connect(t, ts.URL+Path)
+	tool := listToolsByName(t, session)["export_shots_dataset"]
+	if tool == nil {
+		t.Fatalf("export_shots_dataset is missing from tools/list with the opt-in")
+	}
+	a := tool.Annotations
+	if a == nil || !a.ReadOnlyHint || !a.IdempotentHint {
+		t.Fatalf("export_shots_dataset should be read-only and idempotent")
+	}
+	if a.OpenWorldHint == nil || *a.OpenWorldHint {
+		t.Fatalf("export_shots_dataset should be closed-world")
+	}
+	if tool.OutputSchema == nil {
+		t.Fatalf("export_shots_dataset has no output schema")
+	}
+	limit := schemaProperty(t, tool.InputSchema, "limit")
+	if got := numberField(t, limit, "minimum"); got != 1 {
+		t.Fatalf("limit minimum = %v, want 1", got)
+	}
+	if got := numberField(t, limit, "maximum"); got != maxDatasetLimit {
+		t.Fatalf("limit maximum = %v, want %d", got, maxDatasetLimit)
+	}
+	if got := numberField(t, limit, "default"); got != defaultDatasetLimit {
+		t.Fatalf("limit default = %v, want %d", got, defaultDatasetLimit)
+	}
+	// The export takes the same filter fields as list_shots.
+	for _, name := range []string{"bean", "machine_id", "min_rating", "since", "until", "cursor"} {
+		schemaProperty(t, tool.InputSchema, name)
+	}
+}
+
+func datasetRowByID(t *testing.T, rows []any, id float64) map[string]any {
+	t.Helper()
+	for _, raw := range rows {
+		row, _ := raw.(map[string]any)
+		if v, _ := row["id"].(float64); v == id {
+			return row
+		}
+	}
+	t.Fatalf("dataset row id %v not found", id)
+	return nil
+}
+
+func TestExportShotsDatasetFiltersPagingAndFields(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	data := map[string]any{"datapoints": map[string]any{
+		"timeInShot": []any{0.0, 10.0, 20.0, 30.0, 40.0},
+		"pressure":   []any{80.0, 81.0, 82.0, 80.0, 81.0},
+		"shotWeight": []any{0.0, 100.0, 200.0, 300.0, 360.0},
+	}}
+	insertShot(t, sqlDB, 1, 1000, data, map[string]any{"coffee": "Alpha Blend", "dose": 18.0, "tds": 9.5, "rating": 4.0, "grindSetting": "3.2", "notes": "bright"})
+	insertShot(t, sqlDB, 2, 1001, data, map[string]any{"coffee": "Beta Roast", "dose": 18.0, "rating": 2.0})
+	insertShot(t, sqlDB, 3, 1002, data, map[string]any{"coffee": "Alpha Reserve", "dose": 19.0, "rating": 5.0})
+	session := connect(t, ts.URL+Path)
+
+	first := structured(t, call(t, session, "export_shots_dataset", map[string]any{"limit": 2}))
+	if got := numberField(t, first, "count"); got != 2 {
+		t.Fatalf("count = %v, want 2", got)
+	}
+	rows := objects(first, "shots")
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+	if got := numberField(t, rows[0].(map[string]any), "id"); got != 3 {
+		t.Fatalf("first row id = %v, want 3 (newest first)", got)
+	}
+	cursor, _ := first["next_cursor"].(string)
+	if cursor == "" {
+		t.Fatalf("expected a next_cursor when the limit was hit")
+	}
+
+	second := structured(t, call(t, session, "export_shots_dataset", map[string]any{"limit": 2, "cursor": cursor}))
+	if got := numberField(t, second, "count"); got != 1 {
+		t.Fatalf("second count = %v, want 1", got)
+	}
+	if _, ok := second["next_cursor"]; ok {
+		t.Fatalf("next_cursor present on the last page")
+	}
+	if got := numberField(t, objects(second, "shots")[0].(map[string]any), "id"); got != 1 {
+		t.Fatalf("last row id = %v, want 1", got)
+	}
+
+	alpha := structured(t, call(t, session, "export_shots_dataset", map[string]any{"bean": "alpha"}))
+	if got := numberField(t, alpha, "count"); got != 2 {
+		t.Fatalf("bean filter count = %v, want 2", got)
+	}
+	rated := structured(t, call(t, session, "export_shots_dataset", map[string]any{"min_rating": 4}))
+	if got := numberField(t, rated, "count"); got != 2 {
+		t.Fatalf("min_rating filter count = %v, want 2", got)
+	}
+
+	row := datasetRowByID(t, objects(alpha, "shots"), 1)
+	if got, _ := row["bean"].(string); got != "Alpha Blend" {
+		t.Fatalf("bean = %v, want Alpha Blend", got)
+	}
+	if got, _ := row["grind_setting"].(string); got != "3.2" {
+		t.Fatalf("grind_setting = %v, want 3.2", got)
+	}
+	if got, _ := row["notes"].(string); got != "bright" {
+		t.Fatalf("notes = %v, want bright", got)
+	}
+	if got, ok := row["rating"].(float64); !ok || got != 4 {
+		t.Fatalf("rating = %v, want 4", row["rating"])
+	}
+	if got, ok := row["tds_pct"].(float64); !ok || got != 9.5 {
+		t.Fatalf("tds_pct = %v, want 9.5", row["tds_pct"])
+	}
+	if got, ok := row["dose_in_g"].(float64); !ok || got != 18 {
+		t.Fatalf("dose_in_g = %v, want 18", row["dose_in_g"])
+	}
+	if _, ok := row["duration_s"]; !ok {
+		t.Fatalf("duration_s missing from a dataset row")
+	}
+	if _, ok := row["channeling"]; !ok {
+		t.Fatalf("channeling missing from a dataset row")
+	}
+	if b, _ := row["used_bean_target"].(bool); b {
+		t.Fatalf("used_bean_target = true without a bean source")
+	}
+}
+
+// TestDeveloperToolsKeepListShotsPaging pins that extracting scanShots left
+// list_shots' paging handoff untouched, now with the developer tools also
+// registered on the server.
+func TestDeveloperToolsKeepListShotsPaging(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 1, 1000, nil, map[string]any{"coffee": "Alpha Blend"})
+	insertShot(t, sqlDB, 2, 1001, nil, map[string]any{"coffee": "Beta Roast"})
+	insertShot(t, sqlDB, 3, 1002, nil, map[string]any{"coffee": "Alpha Reserve"})
+	session := connect(t, ts.URL+Path)
+
+	first := structured(t, call(t, session, "list_shots", map[string]any{"limit": 2}))
+	if got := len(objects(first, "shots")); got != 2 {
+		t.Fatalf("first page = %d shots, want 2", got)
+	}
+	cursor, _ := first["next_cursor"].(string)
+	if cursor == "" {
+		t.Fatalf("expected a next_cursor")
+	}
+	second := structured(t, call(t, session, "list_shots", map[string]any{"limit": 2, "cursor": cursor}))
+	if got := len(objects(second, "shots")); got != 1 {
+		t.Fatalf("second page = %d shots, want 1", got)
+	}
+	if _, ok := second["next_cursor"]; ok {
+		t.Fatalf("next_cursor present after the last page")
+	}
+	filtered := structured(t, call(t, session, "list_shots", map[string]any{"bean": "alpha"}))
+	if got := len(objects(filtered, "shots")); got != 2 {
+		t.Fatalf("bean filter = %d shots, want 2", got)
 	}
 }
