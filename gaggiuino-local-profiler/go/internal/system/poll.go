@@ -201,6 +201,9 @@ type Poller struct {
 
 	runtime *RuntimeState
 	state   pollGlobalState
+	// preheatHist records finished preheat runs (preheat_history.go) — its own
+	// lock, see preheatHistoryStore's doc comment.
+	preheatHist preheatHistoryStore
 
 	// shots is the sync-target Repository, wired via SetShotsRepo (sync.go)
 	// rather than NewPoller so the existing NewPoller call sites stay
@@ -399,6 +402,7 @@ func (p *Poller) startLivePolling() {
 	snap := p.runtime.Get()
 	if snap.SwitchOnAt == nil || !p.runtime.IsStillWarm(now) {
 		p.runtime.SetSwitchOnAt(&now)
+		p.openPreheatRun(now)
 		p.savePreheatState()
 	}
 	p.runtime.ClearTempHistory()
@@ -449,6 +453,7 @@ func (p *Poller) stopLivePolling() {
 		p.state.mu.Unlock()
 		now := time.Now().UnixMilli()
 		p.runtime.SetSwitchOffAt(&now)
+		p.closePreheatRun(now)
 		p.runtime.SetStabilityReady(false)
 		p.runtime.ClearTempHistory()
 		p.savePreheatState()
@@ -592,10 +597,14 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	snap := p.runtime.Get()
 	if ms.Temperature > 0 && !result.IsBrewing {
 		p.runtime.PushTempHistory(ms.Temperature)
+		p.recordPreheatSample(now, ms.Temperature, ms.TargetTemperature)
 		if snap.SwitchOnAt != nil && ms.TargetTemperature > 0 &&
 			ms.Temperature >= ms.TargetTemperature-2 && p.runtime.IsTempStable() {
 			preheatMs := int64(loadPreheatMinutes()) * 60_000
 			if now-*snap.SwitchOnAt < preheatMs {
+				// Record the real stabilisation time before backdating the
+				// runtime's SwitchOnAt to "preheat complete".
+				p.markPreheatStable(now)
 				newOnAt := now - preheatMs
 				p.runtime.SetSwitchOnAt(&newOnAt)
 				p.runtime.SetStabilityReady(true)
