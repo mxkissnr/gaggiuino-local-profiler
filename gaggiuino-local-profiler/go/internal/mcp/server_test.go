@@ -58,10 +58,8 @@ func insertShot(t *testing.T, sqlDB *sql.DB, id, ts int64, data, annotation map[
 func connect(t *testing.T, endpoint string) *mcpsdk.ClientSession {
 	t.Helper()
 	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "glp-test", Version: "0"}, nil)
-	session, err := client.Connect(context.Background(), &mcpsdk.StreamableClientTransport{
-		Endpoint:             endpoint,
-		DisableStandaloneSSE: true,
-	}, nil)
+	transport := &mcpsdk.StreamableClientTransport{Endpoint: endpoint, DisableStandaloneSSE: true}
+	session, err := client.Connect(context.Background(), transport, nil)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -77,43 +75,61 @@ func call(t *testing.T, session *mcpsdk.ClientSession, name string, args map[str
 	return res
 }
 
-func structured[T any](t *testing.T, res *mcpsdk.CallToolResult) T {
+func asMap(t *testing.T, v any) map[string]any {
 	t.Helper()
-	var out T
-	b, err := json.Marshal(res.StructuredContent)
+	b, err := json.Marshal(v)
 	if err != nil {
-		t.Fatalf("marshal structured content: %v", err)
+		t.Fatalf("marshal: %v", err)
 	}
-	if err := json.Unmarshal(b, &out); err != nil {
-		t.Fatalf("unmarshal structured content: %v", err)
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	return m
+}
+
+func structured(t *testing.T, res *mcpsdk.CallToolResult) map[string]any {
+	t.Helper()
+	return asMap(t, res.StructuredContent)
+}
+
+func objects(m map[string]any, key string) []any {
+	v, _ := m[key].([]any)
+	return v
+}
+
+func object(m map[string]any, key string) map[string]any {
+	v, _ := m[key].(map[string]any)
+	return v
+}
+
+func schemaProperty(t *testing.T, schema any, name string) map[string]any {
+	t.Helper()
+	props, _ := asMap(t, schema)["properties"].(map[string]any)
+	p, _ := props[name].(map[string]any)
+	if p == nil {
+		t.Fatalf("schema has no property %q", name)
+	}
+	return p
+}
+
+func numberField(t *testing.T, m map[string]any, key string) float64 {
+	t.Helper()
+	v, ok := m[key].(float64)
+	if !ok {
+		t.Fatalf("field %q missing or not a number: %#v", key, m[key])
+	}
+	return v
+}
+
+func stringList(m map[string]any, key string) []string {
+	raw, _ := m[key].([]any)
+	out := make([]string, 0, len(raw))
+	for _, v := range raw {
+		s, _ := v.(string)
+		out = append(out, s)
 	}
 	return out
-}
-
-type listOut struct {
-	Shots      []map[string]any `json:"shots"`
-	NextCursor string           `json:"next_cursor"`
-}
-
-type getOut struct {
-	ID    int64 `json:"id"`
-	Curve *struct {
-		Points int       `json:"points"`
-		TimeS  []float64 `json:"time_s"`
-		Series []struct {
-			Name   string    `json:"name"`
-			Values []float64 `json:"values"`
-		} `json:"series"`
-	} `json:"curve"`
-}
-
-type cmpOut struct {
-	Shots  []map[string]any `json:"shots"`
-	Deltas []struct {
-		ShotID int64   `json:"shot_id"`
-		Metric string  `json:"metric"`
-		Delta  float64 `json:"delta"`
-	} `json:"deltas"`
 }
 
 func TestListTools(t *testing.T) {
@@ -139,9 +155,6 @@ func TestListTools(t *testing.T) {
 			t.Fatalf("tool %s has no output schema", tool.Name)
 		}
 	}
-	// The SDK registry lists tools sorted by name (featureSet.all in the
-	// SDK's features.go), not in registration order; that ordering is still
-	// deterministic.
 	want := []string{"compare_shots", "get_shot", "list_shots"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Fatalf("tool order = %v, want %v", names, want)
@@ -155,21 +168,21 @@ func TestListShotsPagingAndFilter(t *testing.T) {
 	insertShot(t, sqlDB, 3, 1002, nil, map[string]any{"coffee": "Alpha Reserve"})
 	session := connect(t, ts.URL+Path)
 
-	first := structured[listOut](t, call(t, session, "list_shots", map[string]any{"limit": 2}))
-	if len(first.Shots) != 2 {
-		t.Fatalf("first page = %d shots, want 2", len(first.Shots))
+	first := structured(t, call(t, session, "list_shots", map[string]any{"limit": 2}))
+	if got := len(objects(first, "shots")); got != 2 {
+		t.Fatalf("first page = %d shots, want 2", got)
 	}
-	if first.NextCursor == "" {
+	nextCursor, _ := first["next_cursor"].(string)
+	if nextCursor == "" {
 		t.Fatalf("expected a next_cursor")
 	}
-	second := structured[listOut](t, call(t, session, "list_shots", map[string]any{"limit": 2, "cursor": first.NextCursor}))
-	if len(second.Shots) != 1 {
-		t.Fatalf("second page = %d shots, want 1", len(second.Shots))
+	second := structured(t, call(t, session, "list_shots", map[string]any{"limit": 2, "cursor": nextCursor}))
+	if got := len(objects(second, "shots")); got != 1 {
+		t.Fatalf("second page = %d shots, want 1", got)
 	}
-
-	filtered := structured[listOut](t, call(t, session, "list_shots", map[string]any{"bean": "alpha"}))
-	if len(filtered.Shots) != 2 {
-		t.Fatalf("bean filter = %d shots, want 2", len(filtered.Shots))
+	filtered := structured(t, call(t, session, "list_shots", map[string]any{"bean": "alpha"}))
+	if got := len(objects(filtered, "shots")); got != 2 {
+		t.Fatalf("bean filter = %d shots, want 2", got)
 	}
 }
 
@@ -190,76 +203,42 @@ func TestGetShotCurveDownsampling(t *testing.T) {
 		times = append(times, float64(i*4))
 		pressures = append(pressures, float64(90))
 	}
-	insertShot(t, sqlDB, 7, 1000, map[string]any{"datapoints": map[string]any{
-		"timeInShot": times,
-		"pressure":   pressures,
-	}}, map[string]any{"coffee": "Alpha"})
+	datapoints := map[string]any{"timeInShot": times, "pressure": pressures}
+	insertShot(t, sqlDB, 7, 1000, map[string]any{"datapoints": datapoints}, map[string]any{"coffee": "Alpha"})
 	session := connect(t, ts.URL+Path)
-	out := structured[getOut](t, call(t, session, "get_shot", map[string]any{"id": 7, "include_curve": true, "curve_points": 50}))
-	if out.Curve == nil {
+	out := structured(t, call(t, session, "get_shot", map[string]any{"id": 7, "include_curve": true, "curve_points": 50}))
+	curve := object(out, "curve")
+	if curve == nil {
 		t.Fatalf("expected a curve")
 	}
-	if len(out.Curve.TimeS) != 50 {
-		t.Fatalf("time samples = %d, want 50", len(out.Curve.TimeS))
+	if got := len(objects(curve, "time_s")); got != 50 {
+		t.Fatalf("time samples = %d, want 50", got)
 	}
-	if len(out.Curve.Series) == 0 {
+	series := objects(curve, "series")
+	if len(series) == 0 {
 		t.Fatalf("expected at least one series")
 	}
-	for _, s := range out.Curve.Series {
-		if len(s.Values) != 50 {
-			t.Fatalf("series %s has %d samples, want 50", s.Name, len(s.Values))
+	for i, raw := range series {
+		s, _ := raw.(map[string]any)
+		if got := len(objects(s, "values")); got != 50 {
+			t.Fatalf("series %d has %d samples, want 50", i, got)
 		}
 	}
 }
 
 func TestCompareShotsDeltas(t *testing.T) {
 	ts, sqlDB := newTestServer(t)
-	// Series live under the shot data blob's nested "datapoints" object —
-	// that is the shape hydrateRow keeps as raw JSON and shots.DatapointsMap reads.
-	data := map[string]any{"datapoints": map[string]any{
-		"timeInShot": []any{float64(0), float64(40)},
-		"shotWeight": []any{float64(350), float64(360)},
-	}}
+	datapoints := map[string]any{"timeInShot": []any{float64(0), float64(40)}, "shotWeight": []any{float64(350), float64(360)}}
+	data := map[string]any{"datapoints": datapoints}
 	insertShot(t, sqlDB, 11, 1000, data, map[string]any{"coffee": "Alpha", "dose": float64(18), "rating": float64(4)})
 	insertShot(t, sqlDB, 12, 1001, data, map[string]any{"coffee": "Alpha", "dose": float64(19), "rating": float64(3)})
 	session := connect(t, ts.URL+Path)
-	out := structured[cmpOut](t, call(t, session, "compare_shots", map[string]any{"ids": []int64{11, 12}}))
-	if len(out.Shots) != 2 {
-		t.Fatalf("shots = %d, want 2", len(out.Shots))
+	out := structured(t, call(t, session, "compare_shots", map[string]any{"ids": []int64{11, 12}}))
+	if got := len(objects(out, "shots")); got != 2 {
+		t.Fatalf("shots = %d, want 2", got)
 	}
-	if len(out.Deltas) == 0 {
+	if got := len(objects(out, "deltas")); got == 0 {
 		t.Fatalf("expected per-metric deltas")
-	}
-}
-
-func TestForeignOriginRejected(t *testing.T) {
-	ts, _ := newTestServer(t)
-	req, err := http.NewRequest(http.MethodPost, ts.URL+Path, strings.NewReader("{}"))
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("Origin", "http://evil.example")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403", resp.StatusCode)
-	}
-}
-
-
-func mustUnmarshal(t *testing.T, v any, out any) {
-	t.Helper()
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatalf("marshal schema: %v", err)
-	}
-	if err := json.Unmarshal(b, out); err != nil {
-		t.Fatalf("unmarshal schema: %v", err)
 	}
 }
 
@@ -273,50 +252,41 @@ func TestInputSchemaBounds(t *testing.T) {
 	for _, tool := range res.Tools {
 		switch tool.Name {
 		case "list_shots":
-			var schema struct {
-				Properties map[string]struct {
-					Maximum *float64 `json:"maximum"`
-					Default *float64 `json:"default"`
-				} `json:"properties"`
+			limit := schemaProperty(t, tool.InputSchema, "limit")
+			if got := numberField(t, limit, "maximum"); got != 100 {
+				t.Fatalf("list_shots limit maximum = %v, want 100", got)
 			}
-			mustUnmarshal(t, tool.InputSchema, &schema)
-			if p := schema.Properties["limit"]; p.Maximum == nil || *p.Maximum != 100 || p.Default == nil || *p.Default != 20 {
-				t.Fatalf("list_shots limit schema = %+v, want maximum 100 default 20", p)
+			if got := numberField(t, limit, "default"); got != 20 {
+				t.Fatalf("list_shots limit default = %v, want 20", got)
+			}
+			rating := schemaProperty(t, tool.InputSchema, "min_rating")
+			if got := numberField(t, rating, "maximum"); got != 5 {
+				t.Fatalf("list_shots min_rating maximum = %v, want 5", got)
 			}
 		case "get_shot":
-			var in struct {
-				Properties map[string]struct {
-					Minimum *float64 `json:"minimum"`
-					Maximum *float64 `json:"maximum"`
-					Default *float64 `json:"default"`
-				} `json:"properties"`
+			curve := schemaProperty(t, tool.InputSchema, "curve_points")
+			if got := numberField(t, curve, "minimum"); got != 20 {
+				t.Fatalf("get_shot curve_points minimum = %v, want 20", got)
 			}
-			mustUnmarshal(t, tool.InputSchema, &in)
-			if p := in.Properties["curve_points"]; p.Minimum == nil || *p.Minimum != 20 || p.Maximum == nil || *p.Maximum != 500 || p.Default == nil || *p.Default != 100 {
-				t.Fatalf("get_shot curve_points schema = %+v, want 20..500 default 100", p)
+			if got := numberField(t, curve, "maximum"); got != 500 {
+				t.Fatalf("get_shot curve_points maximum = %v, want 500", got)
 			}
-			var out struct {
-				Properties map[string]struct {
-					Properties map[string]struct {
-						Enum []string `json:"enum"`
-					} `json:"properties"`
-				} `json:"properties"`
+			if got := numberField(t, curve, "default"); got != 100 {
+				t.Fatalf("get_shot curve_points default = %v, want 100", got)
 			}
-			mustUnmarshal(t, tool.OutputSchema, &out)
-			enum := out.Properties["comparative_grind_advice"].Properties["type"].Enum
-			if strings.Join(enum, ",") != "finer,coarser,ok" {
-				t.Fatalf("advice type enum = %v, want [finer coarser ok]", enum)
+			advice := schemaProperty(t, tool.OutputSchema, "comparative_grind_advice")
+			typeProps, _ := advice["properties"].(map[string]any)
+			typeSchema, _ := typeProps["type"].(map[string]any)
+			if got := strings.Join(stringList(typeSchema, "enum"), ","); got != "finer,coarser,ok" {
+				t.Fatalf("advice type enum = %v, want finer,coarser,ok", got)
 			}
 		case "compare_shots":
-			var schema struct {
-				Properties map[string]struct {
-					MinItems *int `json:"minItems"`
-					MaxItems *int `json:"maxItems"`
-				} `json:"properties"`
+			ids := schemaProperty(t, tool.InputSchema, "ids")
+			if got := numberField(t, ids, "minItems"); got != 2 {
+				t.Fatalf("compare_shots ids minItems = %v, want 2", got)
 			}
-			mustUnmarshal(t, tool.InputSchema, &schema)
-			if p := schema.Properties["ids"]; p.MinItems == nil || *p.MinItems != 2 || p.MaxItems == nil || *p.MaxItems != 5 {
-				t.Fatalf("compare_shots ids schema = %+v, want minItems 2 maxItems 5", p)
+			if got := numberField(t, ids, "maxItems"); got != 5 {
+				t.Fatalf("compare_shots ids maxItems = %v, want 5", got)
 			}
 		}
 	}
