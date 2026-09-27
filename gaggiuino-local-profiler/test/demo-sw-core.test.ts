@@ -238,7 +238,7 @@ interface StatusFixture {
     machineOnSince: number | null;
     lastMachineError: string | null;
     lastMachineSuccess: number | null;
-    lastSync: string | null;
+    lastSync: number | null;
     machineVersion: string | null;
     machines: Array<Record<string, unknown>>;
     shotCount: number;
@@ -267,7 +267,7 @@ describe('sw-core patchMachineOnline (#1193)', () => {
         expect(out.machineOn).toBe(false);
         expect(out.machineOnSince).toBeNull();
         expect(out.lastMachineError).toBeNull();
-        expect(out.lastSync).toBe(new Date(NOW_MS).toISOString());
+        expect(out.lastSync).toBe(NOW_MS);
         expect(out.lastMachineSuccess).toBe(NOW_MS);
         expect(out.machineVersion).toBe('v1.0.0');
         expect(out.machines[0]).toEqual({ id: 1, isDefault: true, reachable: true, on: false });

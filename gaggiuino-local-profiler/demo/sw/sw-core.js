@@ -139,10 +139,10 @@ self.GLPDemo = (() => {
                 machineReachable: true,
                 machineOn: false,
                 machineOnSince: null,
-                // The backend stamps lastSync as an ISO date-time string and
-                // lastMachineSuccess as Unix ms; mirror both so the demo matches
-                // the real response (components/status.ts accepts either form).
-                lastSync: new Date(nowMs).toISOString(),
+                // Both sync stamps are epoch ms: lastMachineSuccess is documented
+                // as Unix ms, and components/status.ts reads lastSync through
+                // new Date(...), which takes the same epoch-ms number.
+                lastSync: nowMs,
                 lastMachineSuccess: nowMs,
             };
             if ('machineVersion' in next && !next.machineVersion) next.machineVersion = MACHINE_VERSION;
