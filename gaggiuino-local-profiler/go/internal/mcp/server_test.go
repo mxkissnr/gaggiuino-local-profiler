@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -247,5 +248,98 @@ func TestForeignOriginRejected(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	}
+}
+
+
+func mustUnmarshal(t *testing.T, v any, out any) {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal schema: %v", err)
+	}
+	if err := json.Unmarshal(b, out); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+}
+
+func TestInputSchemaBounds(t *testing.T) {
+	ts, _ := newTestServer(t)
+	session := connect(t, ts.URL+Path)
+	res, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	for _, tool := range res.Tools {
+		switch tool.Name {
+		case "list_shots":
+			var schema struct {
+				Properties map[string]struct {
+					Maximum *float64 `json:"maximum"`
+					Default *float64 `json:"default"`
+				} `json:"properties"`
+			}
+			mustUnmarshal(t, tool.InputSchema, &schema)
+			if p := schema.Properties["limit"]; p.Maximum == nil || *p.Maximum != 100 || p.Default == nil || *p.Default != 20 {
+				t.Fatalf("list_shots limit schema = %+v, want maximum 100 default 20", p)
+			}
+		case "get_shot":
+			var in struct {
+				Properties map[string]struct {
+					Minimum *float64 `json:"minimum"`
+					Maximum *float64 `json:"maximum"`
+					Default *float64 `json:"default"`
+				} `json:"properties"`
+			}
+			mustUnmarshal(t, tool.InputSchema, &in)
+			if p := in.Properties["curve_points"]; p.Minimum == nil || *p.Minimum != 20 || p.Maximum == nil || *p.Maximum != 500 || p.Default == nil || *p.Default != 100 {
+				t.Fatalf("get_shot curve_points schema = %+v, want 20..500 default 100", p)
+			}
+			var out struct {
+				Properties map[string]struct {
+					Properties map[string]struct {
+						Enum []string `json:"enum"`
+					} `json:"properties"`
+				} `json:"properties"`
+			}
+			mustUnmarshal(t, tool.OutputSchema, &out)
+			enum := out.Properties["comparative_grind_advice"].Properties["type"].Enum
+			if strings.Join(enum, ",") != "finer,coarser,ok" {
+				t.Fatalf("advice type enum = %v, want [finer coarser ok]", enum)
+			}
+		case "compare_shots":
+			var schema struct {
+				Properties map[string]struct {
+					MinItems *int `json:"minItems"`
+					MaxItems *int `json:"maxItems"`
+				} `json:"properties"`
+			}
+			mustUnmarshal(t, tool.InputSchema, &schema)
+			if p := schema.Properties["ids"]; p.MinItems == nil || *p.MinItems != 2 || p.MaxItems == nil || *p.MaxItems != 5 {
+				t.Fatalf("compare_shots ids schema = %+v, want minItems 2 maxItems 5", p)
+			}
+		}
+	}
+}
+
+func TestOutOfRangeInputIsError(t *testing.T) {
+	ts, _ := newTestServer(t)
+	session := connect(t, ts.URL+Path)
+	if res := call(t, session, "list_shots", map[string]any{"limit": 500}); !res.IsError {
+		t.Fatalf("expected isError for limit above the schema maximum")
+	}
+	if res := call(t, session, "get_shot", map[string]any{"id": 1, "curve_points": 5}); !res.IsError {
+		t.Fatalf("expected isError for curve_points below the schema minimum")
+	}
+}
+
+func TestTruncateKeepsValidUTF8(t *testing.T) {
+	s := strings.Repeat("ä", 10)
+	got := truncate(s, 5)
+	if !utf8.ValidString(got) {
+		t.Fatalf("truncate produced invalid UTF-8: %q", got)
+	}
+	if len(got) >= len(s) {
+		t.Fatalf("expected truncation, got %q (len %d) from len %d", got, len(got), len(s))
 	}
 }

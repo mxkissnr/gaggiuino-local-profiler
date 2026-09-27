@@ -2,11 +2,16 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"math"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -162,6 +167,7 @@ func registerShotTools(srv *mcpsdk.Server, svc *shots.Service) {
 		Title:       "List shots",
 		Description: "List espresso shots from the user's history, newest first, as compact summaries without brew curves. Filter by bean name substring, machine id, minimum 1-5 star rating and an RFC 3339 date range. Page with cursor/limit. Use this to discover shot ids before calling get_shot or compare_shots.",
 		Annotations: readOnlyAnnotations("List shots"),
+		InputSchema: listShotsSchema(),
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in listShotsInput) (*mcpsdk.CallToolResult, listShotsOutput, error) {
 		out, err := listShots(svc, in)
 		return nil, out, err
@@ -172,6 +178,8 @@ func registerShotTools(srv *mcpsdk.Server, svc *shots.Service) {
 		Title:       "Get shot",
 		Description: "Fetch one shot by id: its key recipe metrics in grams and seconds, score, annotation and, on request, the brew curve downsampled to a fixed number of samples per series (time s, pressure bar, flow ml/s, weight g, temperature C and any targets). Set include_curve only when the chart is actually needed.",
 		Annotations: readOnlyAnnotations("Get shot"),
+		InputSchema:  getShotInputSchema(),
+		OutputSchema: getShotOutputSchema(),
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in getShotInput) (*mcpsdk.CallToolResult, getShotOutput, error) {
 		out, err := getShot(svc, in)
 		return nil, out, err
@@ -182,26 +190,88 @@ func registerShotTools(srv *mcpsdk.Server, svc *shots.Service) {
 		Title:       "Compare shots",
 		Description: "Compare two to five shots side by side: key metrics for each, plus per-metric deltas of every shot against the first (baseline) shot. No curves.",
 		Annotations: readOnlyAnnotations("Compare shots"),
+		InputSchema: compareShotsSchema(),
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in compareShotsInput) (*mcpsdk.CallToolResult, compareShotsOutput, error) {
 		out, err := compareShots(svc, in)
 		return nil, out, err
 	})
 }
 
+// mustSchema infers the JSON schema for T. AddTool would infer the same
+// schema on its own; building it here lets each tool advertise the explicit
+// bounds, defaults and enums the plan requires — things a jsonschema struct
+// tag (a plain description) cannot express — which the SDK then enforces
+// before the handler runs.
+func mustSchema[T any]() *jsonschema.Schema {
+	s, err := jsonschema.For[T](&jsonschema.ForOptions{})
+	if err != nil {
+		panic(fmt.Sprintf("mcp: inferring schema: %v", err))
+	}
+	return s
+}
+
+func schemaProp(s *jsonschema.Schema, name string) *jsonschema.Schema {
+	if s == nil || s.Properties == nil {
+		return nil
+	}
+	return s.Properties[name]
+}
+
+func listShotsSchema() *jsonschema.Schema {
+	s := mustSchema[listShotsInput]()
+	if p := schemaProp(s, "limit"); p != nil {
+		p.Minimum = jsonschema.Ptr(1.0)
+		p.Maximum = jsonschema.Ptr(float64(maxListLimit))
+		p.Default = json.RawMessage(strconv.Itoa(defaultListLimit))
+	}
+	if p := schemaProp(s, "min_rating"); p != nil {
+		p.Minimum = jsonschema.Ptr(1.0)
+		p.Maximum = jsonschema.Ptr(5.0)
+	}
+	return s
+}
+
+func getShotInputSchema() *jsonschema.Schema {
+	s := mustSchema[getShotInput]()
+	if p := schemaProp(s, "curve_points"); p != nil {
+		p.Minimum = jsonschema.Ptr(float64(minCurvePoints))
+		p.Maximum = jsonschema.Ptr(float64(maxCurvePoints))
+		p.Default = json.RawMessage(strconv.Itoa(defaultCurvePoints))
+	}
+	return s
+}
+
+func compareShotsSchema() *jsonschema.Schema {
+	s := mustSchema[compareShotsInput]()
+	if p := schemaProp(s, "ids"); p != nil {
+		p.MinItems = jsonschema.Ptr(minCompareIDs)
+		p.MaxItems = jsonschema.Ptr(maxCompareIDs)
+	}
+	return s
+}
+
+func getShotOutputSchema() *jsonschema.Schema {
+	s := mustSchema[getShotOutput]()
+	if p := schemaProp(schemaProp(s, "comparative_grind_advice"), "type"); p != nil {
+		p.Enum = []any{"finer", "coarser", "ok"}
+	}
+	return s
+}
+
 func listShots(svc *shots.Service, in listShotsInput) (listShotsOutput, error) {
 	if svc == nil {
 		return listShotsOutput{}, fmt.Errorf("shot history is not available")
 	}
+	// The input schema enforces limit 1..100 and defaults it to 20; this
+	// fallback only matters for a directly-constructed In value.
 	limit := in.Limit
 	if limit <= 0 {
 		limit = defaultListLimit
 	}
-	if limit > maxListLimit {
-		limit = maxListLimit
-	}
 	cur, err := shots.DecodeCursor(in.Cursor)
 	if err != nil {
-		return listShotsOutput{}, fmt.Errorf("invalid cursor: %w", err)
+		// Client-supplied input, not an internal failure: safe to describe.
+		return listShotsOutput{}, fmt.Errorf("invalid cursor; omit it to start from the first page")
 	}
 	lo, hi, err := parseRange(in.Since, in.Until)
 	if err != nil {
@@ -219,7 +289,8 @@ func listShots(svc *shots.Service, in listShotsInput) (listShotsOutput, error) {
 	for {
 		page, err := svc.GetPage(pageCursor, chunk, in.MachineID)
 		if err != nil {
-			return listShotsOutput{}, fmt.Errorf("reading shot history: %w", err)
+			log.Printf("mcp: list_shots: reading shot history: %v", err)
+			return listShotsOutput{}, fmt.Errorf("could not read shot history; try again")
 		}
 		for _, row := range page.Rows {
 			if !matchesFilters(row.Shot, bean, in.MinRating, lo, hi) {
@@ -253,7 +324,8 @@ func getShot(svc *shots.Service, in getShotInput) (getShotOutput, error) {
 	}
 	shot, err := svc.GetByID(in.ID)
 	if err != nil {
-		return getShotOutput{}, fmt.Errorf("reading shot %d: %w", in.ID, err)
+		log.Printf("mcp: get_shot %d: %v", in.ID, err)
+		return getShotOutput{}, fmt.Errorf("could not read shot %d; try again", in.ID)
 	}
 	if shot == nil {
 		return getShotOutput{}, fmt.Errorf("shot %d not found; use list_shots to find ids", in.ID)
@@ -295,15 +367,11 @@ func getShot(svc *shots.Service, in getShotInput) (getShotOutput, error) {
 		}
 	}
 	if in.IncludeCurve {
+		// The input schema enforces curve_points 20..500 and defaults it to
+		// 100; this fallback only matters for a directly-constructed In value.
 		points := in.CurvePoints
 		if points <= 0 {
 			points = defaultCurvePoints
-		}
-		if points < minCurvePoints {
-			points = minCurvePoints
-		}
-		if points > maxCurvePoints {
-			points = maxCurvePoints
 		}
 		out.Curve = buildCurve(shot, points)
 	}
@@ -321,7 +389,8 @@ func compareShots(svc *shots.Service, in compareShotsInput) (compareShotsOutput,
 	for _, id := range in.IDs {
 		s, err := svc.GetByID(id)
 		if err != nil {
-			return compareShotsOutput{}, fmt.Errorf("reading shot %d: %w", id, err)
+			log.Printf("mcp: compare_shots %d: %v", id, err)
+			return compareShotsOutput{}, fmt.Errorf("could not read shot %d; try again", id)
 		}
 		if s == nil {
 			return compareShotsOutput{}, fmt.Errorf("shot %d not found; use list_shots to find ids", id)
@@ -573,12 +642,14 @@ func annotationString(shot shots.Shot, key string) string {
 func ratingOf(shot shots.Shot) (int, bool) {
 	switch v := annotationMap(shot)["rating"].(type) {
 	case float64:
-		if v <= 0 {
+		// NaN fails both comparisons, so it is rejected as well; bounding the
+		// value first keeps the int conversion safe (and CodeQL happy).
+		if !(v >= 1 && v <= 5) {
 			return 0, false
 		}
 		return int(v), true
 	case int64:
-		if v <= 0 {
+		if v < 1 || v > 5 {
 			return 0, false
 		}
 		return int(v), true
@@ -599,7 +670,13 @@ func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "..."
+	// Cut on a rune boundary so a multi-byte character (umlaut, accent) is
+	// never split into invalid UTF-8.
+	i := n
+	for i > 0 && !utf8.RuneStart(s[i]) {
+		i--
+	}
+	return s[:i] + "..."
 }
 
 func toFloats(v any) []float64 {

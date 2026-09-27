@@ -201,7 +201,12 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// enabled, mount its streamable-HTTP endpoint under /api/ so auth.RequireToken
 	// guards it with X-GLP-Token like every other API route.
 	if mcp.Enabled() {
-		mux.Handle(mcp.Path, mcp.NewHandler(mcp.Deps{Shots: shots.NewService(shotsRepo), Version: system.Version()}))
+		mux.Handle(mcp.Path, mcp.NewHandler(mcp.Deps{
+			Shots:           shots.NewService(shotsRepo),
+			Version:         system.Version(),
+			RateLimitWindow: rateLimitWindow,
+			RateLimitMax:    rateLimitMax,
+		}))
 	}
 
 	// Phase 2a (#901): the Go frontend foundation — GET /shots plus its two

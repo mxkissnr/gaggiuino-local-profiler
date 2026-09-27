@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -29,6 +30,12 @@ type Deps struct {
 	// Version is the app version reported as the MCP server identity; mirrors
 	// GET /api/version (internal/system.Version). Empty falls back to "dev".
 	Version string
+	// RateLimitWindow and RateLimitMax mirror the app-level limiter's
+	// configuration (GLP_RATE_LIMIT_WINDOW_MS/_MAX); zero falls back to
+	// internal/ratelimit's defaults. The mux-wide limiter already covers
+	// /api/mcp, so this only matters when the operator has raised the limit.
+	RateLimitWindow time.Duration
+	RateLimitMax    int
 }
 
 // NewHandler builds the stateless Streamable-HTTP MCP endpoint: the SDK
@@ -41,7 +48,15 @@ func NewHandler(deps Deps) http.Handler {
 		JSONResponse: true,
 	}
 	handler := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server { return srv }, opts)
-	limiter := ratelimit.New(ratelimit.DefaultWindow, ratelimit.DefaultMax)
+	window := deps.RateLimitWindow
+	if window <= 0 {
+		window = ratelimit.DefaultWindow
+	}
+	max := deps.RateLimitMax
+	if max <= 0 {
+		max = ratelimit.DefaultMax
+	}
+	limiter := ratelimit.New(window, max)
 	return sameOrigin(limiter.Middleware(handler))
 }
 

@@ -16,6 +16,7 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/evanw/esbuild v0.28.2
 	github.com/goccy/go-json v0.10.6
+	github.com/google/jsonschema-go v0.4.3
 	github.com/kanrichan/resvg-go v0.0.1
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	golang.org/x/crypto v0.57.0
@@ -29,7 +30,6 @@ require (
 require (
 	github.com/andybalholm/cascadia v1.3.4 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
