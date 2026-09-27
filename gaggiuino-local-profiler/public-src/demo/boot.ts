@@ -55,6 +55,9 @@ async function start(): Promise<void> {
     await navigator.serviceWorker.register(SW_URL, { scope: './' });
     if (!await ensureController()) return;
     await import('../main.ts');
+    // main.ts initialises on DOMContentLoaded, which has already fired by the
+    // time the worker controls the page — replay it once for the late import.
+    if (document.readyState !== 'loading') document.dispatchEvent(new Event('DOMContentLoaded'));
 }
 
 void start().catch(error => {

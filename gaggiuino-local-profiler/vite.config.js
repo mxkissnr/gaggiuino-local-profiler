@@ -18,8 +18,9 @@ function demoServiceWorker() {
       projectRoot = dirname(root);
       outDir = resolve(root, config.build.outDir);
     },
-    transformIndexHtml(html) {
-      return html.replace('src="./main.ts"', 'src="./demo/boot.ts"');
+    transformIndexHtml: {
+      order: 'pre',
+      handler: html => html.replace('src="./main.ts"', 'src="./demo/boot.ts"'),
     },
     closeBundle() {
       const fixtures = join(projectRoot, 'demo', 'fixtures');
