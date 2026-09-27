@@ -209,6 +209,21 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	webHandlers.RegisterRoutes(uiMux)
 
 	libRepo := library.NewRepository(sqlDB)
+	// #1198: server-side scoring resolves each shot's own library bean
+	// (beanId-first, coffee-name fallback) so the list, share card and API
+	// agree with what the achievement badges assume. internal/shots can't
+	// import internal/library (library imports shots), so the lookup is
+	// injected here; without it scoring keeps the generic fixed bands.
+	shots.SetBeanSource(func() (func(shots.Shot) *shots.Bean, error) {
+		lib, err := libRepo.GetLibrary()
+		if err != nil {
+			return nil, err
+		}
+		beans := lib.Beans
+		return func(s shots.Shot) *shots.Bean {
+			return library.ScoreBean(s, beans)
+		}, nil
+	})
 	libraryHandlers := library.NewHandlers(libRepo, shotsRepo)
 	libraryHandlers.RegisterRoutes(mux)
 

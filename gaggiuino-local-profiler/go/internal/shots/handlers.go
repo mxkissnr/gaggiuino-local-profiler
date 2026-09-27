@@ -212,9 +212,10 @@ func (h *Handlers) listShots(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
+	detail := h.service.DetailScorer()
 	out := make([]Shot, len(list))
 	for i, shot := range list {
-		out[i] = withScore(shot, h.service.ComputeScoreDetail(shot))
+		out[i] = withScore(shot, detail(shot))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -388,10 +389,11 @@ func (h *Handlers) getShot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := withScore(shot, h.service.ComputeScoreDetail(shot))
+	detail := h.service.DetailScorer()
+	resp := withScore(shot, detail(shot))
 	if previous != nil {
 		resp["previousShotId"] = previous["id"]
-		resp["previousShot"] = withScore(previous, h.service.ComputeScoreDetail(previous))
+		resp["previousShot"] = withScore(previous, detail(previous))
 	} else {
 		resp["previousShotId"] = nil
 		resp["previousShot"] = nil

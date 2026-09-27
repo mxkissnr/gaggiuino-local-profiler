@@ -248,20 +248,16 @@ func (s *Service) AppendToBlocklist(value string) error {
 	return s.repo.AppendToBlocklist(value)
 }
 
-// ComputeScoreDetail ports ShotService.js's computeScoreDetail (#457).
-//
-// #450's bean-target resolution (libraryService.resolveBeanForAnnotation)
-// is not wired in yet: internal/library is still a Phase 0 placeholder, so
-// this always scores against the generic fixed bands, never a bean's own
-// brewTempC/brewRatio recommendation — see score.go's CalcShotScoreDetail
-// doc comment for exactly what that does and doesn't change. Wire a real
-// bean lookup in here once the Library phase lands.
+// ComputeScoreDetail ports ShotService.js's computeScoreDetail (#457): score
+// shot against its own library bean's brewTempC/brewRatio target when one is
+// installed (see SetBeanSource), falling back to the generic fixed bands when
+// no bean resolves or no source is set.
 func (s *Service) ComputeScoreDetail(shot Shot) ScoreDetail {
-	return CalcShotScoreDetail(shot, nil)
+	return s.DetailScorer()(shot)
 }
 
-// ComputeScore ports ShotService.js's computeScore — see
-// ComputeScoreDetail's doc comment for the same bean-resolution caveat.
+// ComputeScore ports ShotService.js's computeScore — the score-only
+// counterpart of ComputeScoreDetail.
 func (s *Service) ComputeScore(shot Shot) *int {
-	return CalcShotScore(shot, nil)
+	return s.Scorer()(shot)
 }
