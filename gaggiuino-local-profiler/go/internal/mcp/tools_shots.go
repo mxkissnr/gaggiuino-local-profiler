@@ -268,54 +268,96 @@ func listShots(svc *shots.Service, in listShotsInput) (listShotsOutput, error) {
 	if limit <= 0 {
 		limit = defaultListLimit
 	}
-	cur, err := shots.DecodeCursor(in.Cursor)
-	if err != nil {
-		// Client-supplied input, not an internal failure: safe to describe.
-		return listShotsOutput{}, fmt.Errorf("invalid cursor; omit it to start from the first page")
-	}
-	lo, hi, err := parseRange(in.Since, in.Until)
+	filters, err := buildShotFilters(in.Bean, in.MachineID, in.MinRating, in.Since, in.Until, in.Cursor)
 	if err != nil {
 		return listShotsOutput{}, err
 	}
-	bean := strings.ToLower(strings.TrimSpace(in.Bean))
+	out := []shotSummary{}
+	nextCur, err := scanShots(svc, filters, limit, func(row shots.PageRow) {
+		out = append(out, toShotSummary(row.Shot, row.Score))
+	})
+	if err != nil {
+		return listShotsOutput{}, err
+	}
+	res := listShotsOutput{Shots: out}
+	if nextCur.Set {
+		res.NextCursor = shots.EncodeCursor(nextCur)
+	}
+	return res, nil
+}
 
+// shotFilters is the filter and paging state list_shots and
+// export_shots_dataset share: the predicate matchesFilters applies plus the
+// keyset cursor to start from.
+type shotFilters struct {
+	Bean      string
+	MachineID int64
+	MinRating int
+	Lo        int64
+	Hi        int64
+	Cursor    shots.Cursor
+}
+
+// buildShotFilters decodes and normalises the filter fields both shot-listing
+// tools take.
+func buildShotFilters(bean string, machineID int64, minRating int, since, until, cursor string) (shotFilters, error) {
+	cur, err := shots.DecodeCursor(cursor)
+	if err != nil {
+		// Client-supplied input, not an internal failure: safe to describe.
+		return shotFilters{}, fmt.Errorf("invalid cursor; omit it to start from the first page")
+	}
+	lo, hi, err := parseRange(since, until)
+	if err != nil {
+		return shotFilters{}, err
+	}
+	return shotFilters{
+		Bean:      strings.ToLower(strings.TrimSpace(bean)),
+		MachineID: machineID,
+		MinRating: minRating,
+		Lo:        lo,
+		Hi:        hi,
+		Cursor:    cur,
+	}, nil
+}
+
+// scanShots walks keyset pages of shot history, calling visit for every row
+// that passes filters, and stops after limit matches. It returns the cursor of
+// the last visited row when the limit was reached (zero Cursor otherwise) so
+// the caller can offer the next page.
+func scanShots(svc *shots.Service, filters shotFilters, limit int, visit func(shots.PageRow)) (shots.Cursor, error) {
 	chunk := limit
 	if chunk < minListChunk {
 		chunk = minListChunk
 	}
-	var out []shotSummary
+	count := 0
 	var nextCur shots.Cursor
-	pageCursor := cur
+	pageCursor := filters.Cursor
 	for {
-		page, err := svc.GetPage(pageCursor, chunk, in.MachineID)
+		page, err := svc.GetPage(pageCursor, chunk, filters.MachineID)
 		if err != nil {
-			log.Printf("mcp: list_shots: reading shot history: %v", err)
-			return listShotsOutput{}, fmt.Errorf("could not read shot history; try again")
+			log.Printf("mcp: reading shot history: %v", err)
+			return shots.Cursor{}, fmt.Errorf("could not read shot history; try again")
 		}
 		for _, row := range page.Rows {
-			if !matchesFilters(row.Shot, bean, in.MinRating, lo, hi) {
+			if !matchesFilters(row.Shot, filters.Bean, filters.MinRating, filters.Lo, filters.Hi) {
 				continue
 			}
-			out = append(out, toShotSummary(row.Shot, row.Score))
+			visit(row)
 			nextCur = cursorOf(row)
-			if len(out) == limit {
+			count++
+			if count == limit {
 				break
 			}
 		}
-		if len(out) == limit || !page.HasMore {
+		if count == limit || !page.HasMore {
 			break
 		}
 		pageCursor = page.NextCursor
 	}
-
-	res := listShotsOutput{Shots: []shotSummary{}}
-	if len(out) > 0 {
-		res.Shots = out
+	if count < limit {
+		return shots.Cursor{}, nil
 	}
-	if len(out) == limit {
-		res.NextCursor = shots.EncodeCursor(nextCur)
-	}
-	return res, nil
+	return nextCur, nil
 }
 
 func getShot(svc *shots.Service, in getShotInput) (getShotOutput, error) {

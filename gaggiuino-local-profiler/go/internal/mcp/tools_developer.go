@@ -2,9 +2,11 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"sort"
+	"strconv"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -74,6 +76,18 @@ func registerDeveloperTools(srv *mcpsdk.Server, deps Deps) {
 		OutputSchema: mustSchema[explainScoreOutput](),
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in explainScoreInput) (*mcpsdk.CallToolResult, explainScoreOutput, error) {
 		out, err := explainScore(deps.Shots, in)
+		return nil, out, err
+	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:         "export_shots_dataset",
+		Title:        "Export shots dataset",
+		Description:  "Export a filtered batch of shots as one flat dataset: per shot its derived metrics, GLP score, used-bean-target flag and the user's own annotation (bean, rating, grind setting, TDS, notes), with no brew curves. Use it to compare a scoring idea against the user's ratings. Page with cursor/limit.",
+		Annotations:  readOnlyAnnotations("Export shots dataset"),
+		InputSchema:  exportShotsDatasetSchema(),
+		OutputSchema: mustSchema[exportShotsDatasetOutput](),
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in exportShotsDatasetInput) (*mcpsdk.CallToolResult, exportShotsDatasetOutput, error) {
+		out, err := exportShotsDataset(deps.Shots, in)
 		return nil, out, err
 	})
 }
@@ -236,4 +250,132 @@ func getShotRaw(svc *shots.Service, in getShotRawInput) (getShotRawOutput, error
 		Series:      series,
 		Truncated:   truncated,
 	}, nil
+}
+
+// export_shots_dataset bounds: a batch large enough to analyse in one go, but
+// capped so a single response stays manageable, plus the notes cap that keeps
+// one long annotation from dominating the dataset.
+const (
+	defaultDatasetLimit = 100
+	maxDatasetLimit     = 500
+	maxDatasetNotes     = 2000
+)
+
+type exportShotsDatasetInput struct {
+	Bean      string `json:"bean,omitempty" jsonschema:"case-insensitive substring of the shot's bean (coffee) name annotation"`
+	MachineID int64  `json:"machine_id,omitempty" jsonschema:"only shots pulled on this machine id; omit or 0 for all machines"`
+	MinRating int    `json:"min_rating,omitempty" jsonschema:"only shots whose 1-5 star rating is at least this value"`
+	Since     string `json:"since,omitempty" jsonschema:"only shots at or after this date-time, RFC 3339 e.g. 2026-01-31T00:00:00Z"`
+	Until     string `json:"until,omitempty" jsonschema:"only shots strictly before this date-time, RFC 3339"`
+	Cursor    string `json:"cursor,omitempty" jsonschema:"opaque paging cursor from a previous export_shots_dataset response's next_cursor; omit for the first page"`
+	Limit     int    `json:"limit,omitempty" jsonschema:"maximum rows to return, 1..500 (default 100)"`
+}
+
+// datasetRow is one flat row of the exported dataset: the identifying fields,
+// the score and the user's annotation, plus the same shotMetrics buildMetrics
+// derives for get_shot (embedded, so those fields sit at the top level rather
+// than in a nested object). No curve data.
+type datasetRow struct {
+	ID             int64    `json:"id" jsonschema:"the shot's stable id"`
+	Timestamp      string   `json:"timestamp" jsonschema:"shot start time, RFC 3339 UTC"`
+	MachineID      int64    `json:"machine_id" jsonschema:"machine that pulled the shot"`
+	ProfileName    string   `json:"profile_name,omitempty" jsonschema:"brewing profile name"`
+	Bean           string   `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation"`
+	Score          *int     `json:"score,omitempty" jsonschema:"GLP score 0-100; omitted when there is too little data to score"`
+	UsedBeanTarget bool     `json:"used_bean_target" jsonschema:"whether the score used a bean-specific target"`
+	Rating         *int     `json:"rating,omitempty" jsonschema:"the user's 1-5 star rating"`
+	GrindSetting   string   `json:"grind_setting,omitempty" jsonschema:"free-text grinder setting"`
+	TDSPct         *float64 `json:"tds_pct,omitempty" jsonschema:"TDS annotation, percent"`
+	Notes          string   `json:"notes,omitempty" jsonschema:"the user's full notes, truncated to 2000 characters"`
+	shotMetrics
+}
+
+type exportShotsDatasetOutput struct {
+	Shots      []datasetRow `json:"shots" jsonschema:"one batch of shots as flat rows, newest first"`
+	NextCursor string       `json:"next_cursor,omitempty" jsonschema:"pass back as cursor to fetch the next page; empty when there are no more"`
+	Count      int          `json:"count" jsonschema:"number of rows in shots"`
+}
+
+func exportShotsDatasetSchema() *jsonschema.Schema {
+	s := mustSchema[exportShotsDatasetInput]()
+	if p := schemaProp(s, "limit"); p != nil {
+		p.Minimum = jsonschema.Ptr(1.0)
+		p.Maximum = jsonschema.Ptr(float64(maxDatasetLimit))
+		p.Default = json.RawMessage(strconv.Itoa(defaultDatasetLimit))
+	}
+	if p := schemaProp(s, "min_rating"); p != nil {
+		p.Minimum = jsonschema.Ptr(1.0)
+		p.Maximum = jsonschema.Ptr(5.0)
+	}
+	return s
+}
+
+func exportShotsDataset(svc *shots.Service, in exportShotsDatasetInput) (exportShotsDatasetOutput, error) {
+	if svc == nil {
+		return exportShotsDatasetOutput{}, fmt.Errorf("shot history is not available")
+	}
+	limit := in.Limit
+	if limit <= 0 {
+		limit = defaultDatasetLimit
+	}
+	filters, err := buildShotFilters(in.Bean, in.MachineID, in.MinRating, in.Since, in.Until, in.Cursor)
+	if err != nil {
+		return exportShotsDatasetOutput{}, err
+	}
+	out := exportShotsDatasetOutput{Shots: []datasetRow{}}
+	nextCur, err := scanShots(svc, filters, limit, func(row shots.PageRow) {
+		out.Shots = append(out.Shots, toDatasetRow(row))
+	})
+	if err != nil {
+		return exportShotsDatasetOutput{}, err
+	}
+	out.Count = len(out.Shots)
+	if nextCur.Set {
+		out.NextCursor = shots.EncodeCursor(nextCur)
+	}
+	return out, nil
+}
+
+// toDatasetRow flattens one page row into a dataset row. The score and the
+// bean-target flag come straight from the row — the paginated score already
+// resolved the bean target once per page, so there is no per-shot re-scoring —
+// and the metrics reuse buildMetrics so the numbers match get_shot's.
+func toDatasetRow(row shots.PageRow) datasetRow {
+	shot := row.Shot
+	out := datasetRow{
+		ID:             intField(shot, "id"),
+		Timestamp:      formatTimestamp(shot),
+		MachineID:      machineIDOf(shot),
+		ProfileName:    profileNameOf(shot),
+		Bean:           annotationString(shot, "coffee"),
+		UsedBeanTarget: row.UsedBeanTarget,
+		GrindSetting:   annotationString(shot, "grindSetting"),
+		Notes:          truncate(annotationString(shot, "notes"), maxDatasetNotes),
+		shotMetrics:    *buildMetrics(shot),
+	}
+	if row.Score != nil {
+		s := *row.Score
+		out.Score = &s
+	}
+	if r, ok := ratingOf(shot); ok {
+		out.Rating = &r
+	}
+	out.TDSPct = annotationFloat(shot, "tds")
+	return out
+}
+
+// annotationFloat reads a numeric annotation value or reports it absent. TDS
+// is stored as a JSON number (float64 after unmarshal), but an integer is
+// accepted too.
+func annotationFloat(shot shots.Shot, key string) *float64 {
+	switch v := annotationMap(shot)[key].(type) {
+	case float64:
+		out := v
+		return &out
+	case int64:
+		out := float64(v)
+		return &out
+	default:
+		return nil
+	}
 }

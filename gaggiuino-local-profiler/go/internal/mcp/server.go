@@ -108,7 +108,8 @@ func newServer(deps Deps) *mcpsdk.Server {
 	if deps.AllowDeveloperTools {
 		instructions += " Developer tools are enabled: " +
 			"get_shot_raw returns a shot's full-resolution brew data for detailed analysis, " +
-			"and explain_score breaks a shot's score into its weighted parts and the targets used."
+			"explain_score breaks a shot's score into its weighted parts and the targets used, " +
+			"and export_shots_dataset returns a filtered batch of shots as one flat dataset for comparing a scoring idea against the user's ratings."
 	}
 	srv := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    serverName,
