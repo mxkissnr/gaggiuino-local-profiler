@@ -49,3 +49,12 @@ func Enabled() bool {
 func WriteEnabled() bool {
 	return boolOption("enable_mcp_write", "GLP_ENABLE_MCP_WRITE")
 }
+
+// DeveloperToolsEnabled reports whether the MCP server should register its
+// developer tools (full-resolution / bulk data, currently get_shot_raw). A
+// third, independent opt-in on top of Enabled: without it the tools are never
+// registered, so a client cannot list or call them. Off by default and
+// undocumented until the docs slice (#1196).
+func DeveloperToolsEnabled() bool {
+	return boolOption("enable_mcp_developer_tools", "GLP_ENABLE_MCP_DEVELOPER_TOOLS")
+}

@@ -56,6 +56,12 @@ type Deps struct {
 	// Enabled: when false the tools are never registered, so a client cannot
 	// list or call them. cmd/server sets it from mcp.WriteEnabled().
 	AllowWrite bool
+	// AllowDeveloperTools turns on the read-only analysis tools that return
+	// full-resolution or bulk data (currently get_shot_raw). A third,
+	// independent opt-in on top of Enabled and independent of AllowWrite: when
+	// false the tools are never registered, so a client cannot list or call
+	// them. cmd/server sets it from mcp.DeveloperToolsEnabled().
+	AllowDeveloperTools bool
 }
 
 // NewHandler builds the stateless Streamable-HTTP MCP endpoint: the SDK
@@ -99,6 +105,10 @@ func newServer(deps Deps) *mcpsdk.Server {
 			"set_known_grind remembers a bean's winning grind setting, " +
 			"and mark_maintenance_done records that a maintenance task was completed."
 	}
+	if deps.AllowDeveloperTools {
+		instructions += " Developer tools are enabled: " +
+			"get_shot_raw returns a shot's full-resolution brew data for detailed analysis."
+	}
 	srv := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    serverName,
 		Title:   serverTitle,
@@ -111,6 +121,9 @@ func newServer(deps Deps) *mcpsdk.Server {
 	registerStatusTools(srv, deps)
 	registerAnalyticsTools(srv, deps.Shots)
 	registerPrompts(srv, deps.AllowWrite)
+	if deps.AllowDeveloperTools {
+		registerDeveloperTools(srv, deps)
+	}
 	if deps.AllowWrite {
 		registerWriteTools(srv, deps)
 	}

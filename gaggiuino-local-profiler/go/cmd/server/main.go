@@ -455,16 +455,17 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// read-only library/status/analytics tools get their dependencies.
 	if mcp.Enabled() {
 		mux.Handle(mcp.Path, mcp.NewHandler(mcp.Deps{
-			Shots:           shots.NewService(shotsRepo),
-			ShotsRepo:       shotsRepo,
-			Library:         libRepo,
-			Maintenance:     maintenanceRepo,
-			Registry:        registry,
-			Poller:          poller,
-			Version:         system.Version(),
-			RateLimitWindow: rateLimitWindow,
-			RateLimitMax:    rateLimitMax,
-			AllowWrite:      mcp.WriteEnabled(),
+			Shots:               shots.NewService(shotsRepo),
+			ShotsRepo:           shotsRepo,
+			Library:             libRepo,
+			Maintenance:         maintenanceRepo,
+			Registry:            registry,
+			Poller:              poller,
+			Version:             system.Version(),
+			RateLimitWindow:     rateLimitWindow,
+			RateLimitMax:        rateLimitMax,
+			AllowWrite:          mcp.WriteEnabled(),
+			AllowDeveloperTools: mcp.DeveloperToolsEnabled(),
 		}))
 	}
 
