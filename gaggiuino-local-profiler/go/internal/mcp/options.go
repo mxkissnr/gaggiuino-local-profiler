@@ -6,8 +6,9 @@ import (
 )
 
 // optionsFile mirrors lib/constants.js's OPTIONS_FILE — the same path
-// internal/orders/options.go reads.
-const optionsFile = "/data/options.json"
+// internal/orders/options.go reads. A var (not a const) so tests can point
+// the option reader at a temp file; production never reassigns it.
+var optionsFile = "/data/options.json"
 
 // boolOption ports the options.json feature-toggle pattern
 // internal/orders/options.go established: read one boolean field from
