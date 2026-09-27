@@ -14,11 +14,12 @@ import (
 // beanLookup resolves one shot to its library bean's target fields, or nil.
 type beanLookup func(Shot) *Bean
 
-// beanSourceFn loads whatever a lookup needs (the bean list) once and returns
-// a per-shot lookup over that snapshot.
-type beanSourceFn func() (beanLookup, error)
-
-var beanSource atomic.Pointer[beanSourceFn]
+// beanSourceFn is the shape cmd/server installs: it loads whatever a lookup
+// needs (the bean list) once and returns a per-shot lookup over that
+// snapshot. Kept as a plain func type (not a named one) so SetBeanSource's
+// exported signature and the stored pointer share the exact type — a named
+// result type would not be convertible from the caller's literal.
+var beanSource atomic.Pointer[func() (func(Shot) *Bean, error)]
 
 // beanSourceErrOnce logs a failing source only once — a DB read error would
 // otherwise print on every request without ever being actionable.
@@ -32,8 +33,7 @@ func SetBeanSource(fn func() (func(Shot) *Bean, error)) {
 		beanSource.Store(nil)
 		return
 	}
-	src := beanSourceFn(fn)
-	beanSource.Store(&src)
+	beanSource.Store(&fn)
 }
 
 // loadBeanLookup calls the installed source once, returning a per-shot

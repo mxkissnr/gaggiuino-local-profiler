@@ -105,7 +105,7 @@ func badges() []badge {
 			byBean := map[int64][]shots.Shot{}
 			var order []int64
 			for _, shot := range c.Shots {
-				bean := resolveBeanForShot(shot, c.Beans)
+				bean := library.ResolveBeanForShot(shot, c.Beans)
 				if bean == nil {
 					continue
 				}
@@ -331,7 +331,7 @@ func badges() []badge {
 		}},
 		{ID: "price_low", Card: "house", Stamp: "scale", Check: func(c *Context) bool {
 			for _, s := range c.Shots {
-				bean := resolveBeanForShot(s, c.Beans)
+				bean := library.ResolveBeanForShot(s, c.Beans)
 				if bean == nil {
 					continue
 				}
@@ -478,7 +478,7 @@ func shotDaySet(shotList []shots.Shot) map[string]bool {
 func flavoredShots(c *Context) []shots.Shot {
 	var out []shots.Shot
 	for _, s := range c.Shots {
-		bean := resolveBeanForShot(s, c.Beans)
+		bean := library.ResolveBeanForShot(s, c.Beans)
 		if bean == nil {
 			continue
 		}
