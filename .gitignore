@@ -27,6 +27,10 @@ gaggiuino-local-profiler/scripts/**/*.zip
 # every run rather than reviewed once in a PR.
 gaggiuino-local-profiler/demo/fixtures/
 
+# #1193: the static demo build output (npm run build:demo) is a generated
+# artifact published to GitHub Pages, never committed.
+gaggiuino-local-profiler/demo-dist/
+
 # defence-in-depth: secrets that must never land in git regardless of location
 .env
 .env.*
