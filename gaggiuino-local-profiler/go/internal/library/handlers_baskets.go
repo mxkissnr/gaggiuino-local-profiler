@@ -145,6 +145,18 @@ func (h *Handlers) postBasketImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, noMatch := parseIDParam(r.PathValue("id"))
+	// Existence is decided before the upload is read/validated or any file is
+	// written: an unknown id 404s even when the image is also invalid, and no
+	// orphan file is ever written (matching dev's ordering).
+	exists, err := h.entityExists(id, noMatch, findBasketIndex)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if !exists {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
 	data, contentType, ok := readUploadedImage(w, r)
 	if !ok {
 		return
@@ -156,7 +168,7 @@ func (h *Handlers) postBasketImage(w http.ResponseWriter, r *http.Request) {
 	}
 	var basket Entity
 	var oldExt string
-	err := h.repo.Update(func(lib *Library) error {
+	err = h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
 			idx = findBasketIndex(*lib, id)
@@ -171,9 +183,8 @@ func (h *Handlers) postBasketImage(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		// The image file was written before the entity lookup; nothing
-		// references it if the write failed, so drop it (the pre-Update code
-		// never wrote it at all).
+		// The entity was deleted between the existence check and the write;
+		// the just-saved file has no owner, so drop it.
 		img.Delete(h.imageDir, id, ext, "basket-")
 		writeUpdateError(w, err)
 		return

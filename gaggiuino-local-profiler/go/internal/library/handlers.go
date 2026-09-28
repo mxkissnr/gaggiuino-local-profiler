@@ -165,6 +165,24 @@ func writeUpdateError(w http.ResponseWriter, err error) {
 	internalError(w, err)
 }
 
+// entityExists reports whether id names an existing entity of one library
+// kind. The *...Image handlers run this read-only check BEFORE reading or
+// writing the uploaded file, so an unknown id still 404s — and no file is
+// written — before any image validation, matching dev's original ordering.
+// GetLibrary is always called first (even for an unparseable id), so a
+// broken DB outranks the not-found response exactly as before; find is the
+// kind's findXIndex.
+func (h *Handlers) entityExists(id int64, noMatch bool, find func(Library, int64) int) (bool, error) {
+	lib, err := h.repo.GetLibrary()
+	if err != nil {
+		return false, err
+	}
+	if noMatch {
+		return false, nil
+	}
+	return find(lib, id) != -1, nil
+}
+
 func decodeJSONBody(w http.ResponseWriter, r *http.Request) (Entity, bool) {
 	body, ok := httputil.DecodeJSONBody[Entity](w, r, jsonBodyLimit)
 	if !ok {
