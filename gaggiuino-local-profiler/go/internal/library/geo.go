@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -133,29 +134,31 @@ func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) {
 		return
 	}
 
-	fresh, err := g.repo.GetLibrary()
+	var name string
+	err = g.repo.Update(func(fresh *Library) error {
+		fi := findBeanIndex(*fresh, beanID)
+		if fi == -1 {
+			return ErrSkipSave
+		}
+		if cur, _ := fresh.Beans[fi]["region"].(string); cur != region {
+			return ErrSkipSave // region changed under us — a newer geocode call owns it now
+		}
+		if loc != nil {
+			fresh.Beans[fi]["location"] = loc
+		} else {
+			fresh.Beans[fi]["location"] = nil
+		}
+		name, _ = fresh.Beans[fi]["name"].(string)
+		return nil
+	})
+	if errors.Is(err, ErrSkipSave) {
+		return
+	}
 	if err != nil {
-		log.Printf("library: geocodeBean: reloading library for bean %d: %v", beanID, err)
-		return
-	}
-	fi := findBeanIndex(fresh, beanID)
-	if fi == -1 {
-		return
-	}
-	if cur, _ := fresh.Beans[fi]["region"].(string); cur != region {
-		return // region changed under us — a newer geocode call owns it now
-	}
-	if loc != nil {
-		fresh.Beans[fi]["location"] = loc
-	} else {
-		fresh.Beans[fi]["location"] = nil
-	}
-	if err := g.repo.SaveLibrary(fresh); err != nil {
-		log.Printf("library: geocodeBean: saving library for bean %d: %v", beanID, err)
+		log.Printf("library: geocodeBean: updating library for bean %d: %v", beanID, err)
 		return
 	}
 	if loc != nil {
-		name, _ := fresh.Beans[fi]["name"].(string)
 		log.Printf("library: geocoded bean %q region %q -> %g,%g", name, region, loc.Lat, loc.Lon)
 	}
 }

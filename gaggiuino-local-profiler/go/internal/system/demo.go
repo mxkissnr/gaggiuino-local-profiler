@@ -104,13 +104,11 @@ func (d *DemoService) SeedDemoData() error {
 		}
 	}
 
-	lib, err := d.library.GetLibrary()
-	if err != nil {
-		return err
-	}
-	lib.Beans = append(lib.Beans, beans...)
-	lib.Recipes = append(lib.Recipes, recipes...)
-	if err := d.library.SaveLibrary(lib); err != nil {
+	if err := d.library.Update(func(lib *library.Library) error {
+		lib.Beans = append(lib.Beans, beans...)
+		lib.Recipes = append(lib.Recipes, recipes...)
+		return nil
+	}); err != nil {
 		return err
 	}
 
@@ -140,15 +138,13 @@ func (d *DemoService) EndDemo() error {
 		}
 	}
 
-	lib, err := d.library.GetLibrary()
-	if err != nil {
-		return err
-	}
 	beanIDs := toIDSet(rec.BeanIDs)
 	recipeIDs := toIDSet(rec.RecipeIDs)
-	lib.Beans = filterOutIDs(lib.Beans, beanIDs)
-	lib.Recipes = filterOutIDs(lib.Recipes, recipeIDs)
-	if err := d.library.SaveLibrary(lib); err != nil {
+	if err := d.library.Update(func(lib *library.Library) error {
+		lib.Beans = filterOutIDs(lib.Beans, beanIDs)
+		lib.Recipes = filterOutIDs(lib.Recipes, recipeIDs)
+		return nil
+	}); err != nil {
 		return err
 	}
 
