@@ -656,16 +656,16 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		SensorSnap: sensorSnap,
 		SysState:   sysState,
 	})
-	ms := result.MachineStatus
-	p.runtime.SetMachineStatus(&ms)
-	p.runtime.SetCurrentTemps(zeroToNil(ms.Temperature), zeroToNil(ms.TargetTemperature))
+	derived := result.MachineStatus
+	p.runtime.SetMachineStatus(&derived)
+	p.runtime.SetCurrentTemps(zeroToNil(derived.Temperature), zeroToNil(derived.TargetTemperature))
 
 	snap := p.runtime.Get()
-	if ms.Temperature > 0 && !result.IsBrewing {
-		p.runtime.PushTempHistory(ms.Temperature)
-		p.recordPreheatSample(now, ms.Temperature, ms.TargetTemperature)
-		if snap.SwitchOnAt != nil && ms.TargetTemperature > 0 &&
-			ms.Temperature >= ms.TargetTemperature-2 && p.runtime.IsTempStable() {
+	if derived.Temperature > 0 && !result.IsBrewing {
+		p.runtime.PushTempHistory(derived.Temperature)
+		p.recordPreheatSample(now, derived.Temperature, derived.TargetTemperature)
+		if snap.SwitchOnAt != nil && derived.TargetTemperature > 0 &&
+			derived.Temperature >= derived.TargetTemperature-2 && p.runtime.IsTempStable() {
 			preheatMs := int64(loadPreheatMinutes()) * 60_000
 			if now-*snap.SwitchOnAt < preheatMs {
 				// Record the real stabilisation time before backdating the
@@ -685,7 +685,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 
 	p.state.mu.Lock()
 	if result.IsBrewing && p.state.liveAccum == nil {
-		p.state.liveAccum = &liveAccumState{startTime: now, profileName: result.ProfileName, prevWeight: ms.Weight}
+		p.state.liveAccum = &liveAccumState{startTime: now, profileName: result.ProfileName, prevWeight: derived.Weight}
 		log.Printf("system: brew started: profile %s", result.ProfileName)
 		// ports lib/poll.js's debugLog(`Brew started detail: brewSwitchState=... sensorBrewActive=... upTime=...`)
 		debugLogf("Brew started detail: brewSwitchState=%v sensorBrewActive=%v upTime=%d",
@@ -704,18 +704,18 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	if result.IsBrewing && p.state.liveAccum != nil {
 		acc := p.state.liveAccum
 		elapsed := elapsedTenths(now, acc.startTime)
-		weightFlow := ms.Weight - acc.prevWeight
+		weightFlow := derived.Weight - acc.prevWeight
 		if weightFlow < 0 {
 			weightFlow = 0
 		}
-		acc.prevWeight = ms.Weight
+		acc.prevWeight = derived.Weight
 		acc.datapoints.TimeInShot = append(acc.datapoints.TimeInShot, elapsed)
-		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(ms.Pressure))
-		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(ms.Temperature))
-		acc.datapoints.ShotWeight = append(acc.datapoints.ShotWeight, round10(ms.Weight))
+		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
+		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(derived.Temperature))
+		acc.datapoints.ShotWeight = append(acc.datapoints.ShotWeight, round10(derived.Weight))
 		acc.datapoints.WeightFlow = append(acc.datapoints.WeightFlow, round10(weightFlow))
-		acc.datapoints.PumpFlow = append(acc.datapoints.PumpFlow, round10(derefFloat(ms.PumpFlow)))
-		acc.datapoints.TargetTemperature = append(acc.datapoints.TargetTemperature, round10(ms.TargetTemperature))
+		acc.datapoints.PumpFlow = append(acc.datapoints.PumpFlow, round10(derefFloat(derived.PumpFlow)))
+		acc.datapoints.TargetTemperature = append(acc.datapoints.TargetTemperature, round10(derived.TargetTemperature))
 	}
 
 	// #902: steam/flush live sessions -- same start/stop/accumulate shape
@@ -744,8 +744,8 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	if effectiveSteaming && p.state.steamAccum != nil {
 		acc := p.state.steamAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
-		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(ms.Pressure))
-		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(ms.Temperature))
+		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
+		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(derived.Temperature))
 	}
 
 	if effectiveFlushing && p.state.flushAccum == nil {
@@ -760,8 +760,8 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	if effectiveFlushing && p.state.flushAccum != nil {
 		acc := p.state.flushAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
-		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(ms.Pressure))
-		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(ms.Temperature))
+		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
+		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(derived.Temperature))
 	}
 
 	if effectiveDescaling && p.state.descaleAccum == nil {
@@ -776,8 +776,8 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	if effectiveDescaling && p.state.descaleAccum != nil {
 		acc := p.state.descaleAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
-		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(ms.Pressure))
-		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(ms.Temperature))
+		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
+		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(derived.Temperature))
 	}
 	p.state.mu.Unlock()
 
