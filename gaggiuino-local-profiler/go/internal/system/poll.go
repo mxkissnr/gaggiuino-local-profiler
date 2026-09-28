@@ -200,7 +200,8 @@ func (s *pollGlobalState) machine(id int64) *machinePollState {
 // version (#1197 point 3, #1201) so a version that changed while it was away
 // is re-sniffed from the next status poll or shot. Caller holds p.state.mu.
 func markReachableLocked(m *machinePollState, now int64) {
-	if m.reachable != nil && !*m.reachable {
+	wasDown := (m.reachable != nil && !*m.reachable) || (m.wasReachable != nil && !*m.wasReachable)
+	if wasDown {
 		m.version = nil
 	}
 	reachable := true
