@@ -14,7 +14,7 @@ var backupSections = map[string]bool{
 // sectionBundleKeys mirrors SECTION_BUNDLE_KEYS: which top-level bundle
 // keys a section pulls in on export.
 var sectionBundleKeys = map[string][]string{
-	"shots":       {"shots", "annotations", "coffee_library", "blocklist", "trash", "images"},
+	"shots":       {"shots", "annotations", "coffee_library", "blocklist", "trash", "achievements", "images"},
 	"maintenance": {"maintenance", "maintenance_log"},
 	"orders":      {"orders"},
 	"machines":    {"machines"},
@@ -26,7 +26,7 @@ var sectionBundleKeys = map[string][]string{
 // narrower set of keys that prove a section is actually *present* in a
 // file being restored (dry-run preview's `sectionsPresent`).
 var sectionPresenceBundleKeys = map[string][]string{
-	"shots":       {"shots"},
+	"shots":       {"shots", "achievements"},
 	"maintenance": {"maintenance", "maintenance_log"},
 	"orders":      {"orders"},
 	"machines":    {"machines"},

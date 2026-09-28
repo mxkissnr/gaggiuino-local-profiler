@@ -530,12 +530,13 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	webMaintenanceHandlers.RegisterRoutes(uiMux)
 
 	backupHandlers := backup.NewHandlers(backup.Dependencies{
-		DB:              sqlDB,
-		ShotsRepo:       shotsRepo,
-		LibRepo:         libRepo,
-		OrdersRepo:      ordersRepo,
-		MaintenanceRepo: maintenanceRepo,
-		Registry:        registry,
+		DB:               sqlDB,
+		ShotsRepo:        shotsRepo,
+		LibRepo:          libRepo,
+		OrdersRepo:       ordersRepo,
+		MaintenanceRepo:  maintenanceRepo,
+		Registry:         registry,
+		AchievementsRepo: achievementsRepo,
 		// Token/TokenFile: a restored API token is persisted to
 		// tokenPath but does NOT take effect in this already-running
 		// process — see backup.Dependencies.Token's doc comment.
