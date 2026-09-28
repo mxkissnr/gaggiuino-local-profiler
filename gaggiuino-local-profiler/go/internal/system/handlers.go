@@ -367,7 +367,7 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 		"machineOnSince":              snap.SwitchOnAt,
 		"legacyMachineOptionsPending": hasUnconfirmedLegacyMachineOptions(),
 		"installId":                   installID,
-		"machines":                    buildStatusMachines(machinesList, machineReachable, snap.MachineOn),
+		"machines":                    buildStatusMachines(machinesList, machineReachable, snap.MachineOn, h.poller.MachineStatus),
 	}
 	if devBuild := os.Getenv("GLP_DEV_BUILD"); devBuild != "" {
 		resp["devBuild"] = devBuild

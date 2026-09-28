@@ -7100,8 +7100,12 @@ export interface components {
                 type?: "gaggiuino" | "gaggimate";
                 isDefault?: boolean;
                 enabled?: boolean;
-                /** @description Only populated for the default machine */
+                /** @description Per-machine reachability (#1201) */
                 reachable?: boolean | null;
+                /** @description Last poll/sync error for this machine (#1201) */
+                lastError?: string | null;
+                /** @description Cached firmware version for this machine (#1201) */
+                firmwareVersion?: string | null;
                 on?: boolean | null;
                 /** @description #701 accent color, synced from Settings → Machines */
                 theme?: string | null;
