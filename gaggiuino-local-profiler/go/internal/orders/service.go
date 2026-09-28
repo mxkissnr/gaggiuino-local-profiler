@@ -408,9 +408,6 @@ func (s *Service) AcceptOrder(id string, rawEta any) (Order, error) {
 	if order == nil {
 		return nil, newOrderError(404, "not found")
 	}
-	if status, _ := order["status"].(string); status != "pending" {
-		return nil, newOrderError(400, "not pending")
-	}
 	// Mirrors JS's `parseInt(rawEta) || 5`: 0 is falsy in JS too, so an
 	// explicit `eta: 0` must also default to 5, not merely an
 	// unparseable/absent value (#901 code review).
@@ -424,9 +421,19 @@ func (s *Service) AcceptOrder(id string, rawEta any) (Order, error) {
 	if eta > 60 {
 		eta = 60
 	}
+	// #1199: claim pending -> accepted atomically; the losing side of a
+	// race (or an already-accepted order) gets the same 400 it always did.
+	acceptedAt := time.Now().UnixMilli()
+	claimed, err := s.repo.ClaimTransition(id, []string{"pending"}, "accepted", acceptedAt, "acceptedAt")
+	if err != nil {
+		return nil, err
+	}
+	if !claimed {
+		return nil, newOrderError(400, "not pending")
+	}
 	order["status"] = "accepted"
 	order["eta"] = eta
-	order["acceptedAt"] = time.Now().UnixMilli()
+	order["acceptedAt"] = acceptedAt
 	if err := s.repo.Save(order); err != nil {
 		return nil, err
 	}
@@ -457,8 +464,20 @@ func (s *Service) CompleteOrder(id string) (Order, error) {
 	if order == nil {
 		return nil, newOrderError(404, "not found")
 	}
+	// #1199: claim the transition atomically before any side effect. A second
+	// complete of the same order — a double tap, or an automation and the
+	// dashboard at the same moment — loses the claim and must not deduct the
+	// milk again.
+	completedAt := time.Now().UnixMilli()
+	claimed, err := s.repo.ClaimTransition(id, []string{"pending", "accepted"}, "done", completedAt, "completedAt")
+	if err != nil {
+		return nil, err
+	}
+	if !claimed {
+		return nil, newOrderError(400, "cannot complete")
+	}
 	order["status"] = "done"
-	order["completedAt"] = time.Now().UnixMilli()
+	order["completedAt"] = completedAt
 
 	if variant, _ := order["variant"].(string); variant != "" {
 		item, _ := order["item"].(string)
@@ -518,13 +537,19 @@ func (s *Service) DeclineOrder(id string, rawReason string) (Order, error) {
 	if order == nil {
 		return nil, newOrderError(404, "not found")
 	}
-	status, _ := order["status"].(string)
-	if status != "pending" && status != "accepted" {
+	// #1199: claim pending|accepted -> declined atomically; only the winner
+	// writes the decline reason.
+	completedAt := time.Now().UnixMilli()
+	claimed, err := s.repo.ClaimTransition(id, []string{"pending", "accepted"}, "declined", completedAt, "completedAt")
+	if err != nil {
+		return nil, err
+	}
+	if !claimed {
 		return nil, newOrderError(400, "cannot decline")
 	}
 	order["status"] = "declined"
 	order["declineReason"] = truncate(rawReason, 200)
-	order["completedAt"] = time.Now().UnixMilli()
+	order["completedAt"] = completedAt
 	if err := s.repo.Save(order); err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -93,6 +94,38 @@ func (r *Repository) FindActiveByID(id string) (Order, error) {
 		return nil, nil
 	}
 	return o, nil
+}
+
+// ClaimTransition atomically moves one order from any status in from to
+// to, stamping atField with atMs, in a single UPDATE ... WHERE. Two
+// concurrent callers can therefore never both win the same check-then-write
+// (the #1199 double-completion race): SQLite serialises the writes, so the
+// second caller's WHERE re-evaluates the already-updated status and matches
+// nothing. Reports true only for the caller whose UPDATE changed the row.
+//
+// json_set/json_extract are SQLite's built-in JSON functions, always
+// available in modernc.org/sqlite (this repo already relies on json_extract
+// in internal/shots). atField is an internal constant ("completedAt"/
+// "acceptedAt"), never request input, and is bound as a parameter rather
+// than concatenated into the statement.
+func (r *Repository) ClaimTransition(id string, from []string, to string, atMs int64, atField string) (bool, error) {
+	placeholders := make([]string, len(from))
+	args := make([]any, 0, len(from)+4)
+	args = append(args, to, atField, atMs, id)
+	for i, s := range from {
+		placeholders[i] = "?"
+		args = append(args, s)
+	}
+	query := `UPDATE orders SET data = json_set(data, '$.status', ?, '$.'||?, ?) WHERE id = ? AND json_extract(data, '$.status') IN (` + strings.Join(placeholders, ",") + `)`
+	res, err := r.db.Exec(query, args...)
+	if err != nil {
+		return false, fmt.Errorf("orders: claiming %s: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("orders: claiming %s: %w", id, err)
+	}
+	return n == 1, nil
 }
 
 func jsNumber(v any) (float64, bool) {
