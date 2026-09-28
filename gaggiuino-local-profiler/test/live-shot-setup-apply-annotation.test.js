@@ -157,4 +157,52 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
 
     expect(annotateShotMock).not.toHaveBeenCalled();
   });
+
+  // #1120 review: the draft only applies to a finished BREW. A steam/flush
+  // session shares the "was live, now idle" shape but is a different mode
+  // (isSteaming/isFlushing, not isLive), so its finish must never annotate.
+  it('does not send an annotation when a steam session — not a brew — finishes', async () => {
+    draftStore[draftKey(1)] = JSON.stringify({ grinder: 'Niche Zero' });
+
+    // Steam session live: msg.isLive (brew) stays false, msg.isSteaming set.
+    getLiveDataMock.mockReturnValue(liveDataResponse({ isLive: false, isSteaming: true, steamSeq: 0, seq: 0 }));
+    await fetchLiveData();
+
+    // It finishes: the brew seq advances and a session was on screen, but the
+    // brew-only gate must keep the draft from being applied.
+    S.liveWasLive = true;
+    globalThis.window.loadData = () => {
+      S.shots = [
+        { id: 10, machineId: 1, annotation: {} },
+        { id: 12, machineId: 1, annotation: {} },
+      ];
+      return Promise.resolve();
+    };
+    getLiveDataMock.mockReturnValue(liveDataResponse({ isLive: false, isSteaming: false, steamSeq: 1, seq: 1 }));
+    await fetchLiveData();
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(annotateShotMock).not.toHaveBeenCalled();
+  });
+
+  it('does not send an annotation when a flush session — not a brew — finishes', async () => {
+    draftStore[draftKey(1)] = JSON.stringify({ grinder: 'Niche Zero' });
+
+    getLiveDataMock.mockReturnValue(liveDataResponse({ isLive: false, isFlushing: true, flushSeq: 0, seq: 0 }));
+    await fetchLiveData();
+
+    S.liveWasLive = true;
+    globalThis.window.loadData = () => {
+      S.shots = [
+        { id: 10, machineId: 1, annotation: {} },
+        { id: 12, machineId: 1, annotation: {} },
+      ];
+      return Promise.resolve();
+    };
+    getLiveDataMock.mockReturnValue(liveDataResponse({ isLive: false, isFlushing: false, flushSeq: 1, seq: 1 }));
+    await fetchLiveData();
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(annotateShotMock).not.toHaveBeenCalled();
+  });
 });

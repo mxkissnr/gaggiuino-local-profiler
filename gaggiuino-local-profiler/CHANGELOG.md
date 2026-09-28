@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Added
+- **The live view has a shot setup panel: pick bean, grinder, grind setting and basket before you pull, and they are saved to the shot automatically.** Part of #1125 Thanks @Paul-Lukas.
 - **A browser demo with sample data now runs on GitHub Pages, including a simulated live shot.** Closes #1193
 - **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, with separate opt-ins for write and developer tools.** Closes #1196
 ### Fixed

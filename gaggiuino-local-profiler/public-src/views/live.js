@@ -28,6 +28,16 @@ function _isActiveMachineLiveCapable() {
   return defaultId == null || active === defaultId;
 }
 
+// #1120 review: whether the live session last observed was a brew. The live
+// payload reports a brew via msg.isLive (poll.go's liveAccum, brew-only) and
+// steam/flush/descale sessions via msg.isSteaming/isFlushing/isDescaling with
+// their own *Seq counters. Tracking it here lets the post-brew draft apply
+// below gate explicitly on "a brew finished" instead of trusting the comment
+// that steam/flush sessions never create Shot rows. null = no live session
+// observed yet (treated as brew, so a synthetic live→idle transition with no
+// recorded mode isn't blocked).
+let _liveSessionIsBrew = null;
+
 // ── Pre-shot setup (bean/dose/grinder/grind/basket/puckscreen/recipe) ──────
 // Lets the user pick the upcoming shot's setup right on the Live/idle screen
 // instead of only after the fact on the Shots detail view. The draft is
@@ -326,6 +336,7 @@ export function connectLiveStream() {
   setLiveBadge('connecting');
   S.liveLastSeq = -1;
   S.liveWasLive = false;
+  _liveSessionIsBrew = null;
   fetchLiveData();
   fetchPreheatData();
   // #736 review: SSE push (handleLiveSnapshotEvent/handlePreheatUpdateEvent,
@@ -433,6 +444,14 @@ export async function fetchLiveData() {
       setLiveBadge('ready');
     }
 
+    // #1120 review: record whether this live session is a brew, so the
+    // draft-apply branch below only ever fires for a finished brew. A brew is
+    // msg.isLive; steam/flush/descale sessions (msg.isSteaming/isFlushing/
+    // isDescaling) are a different mode and must never seed the draft.
+    const liveMode = msg.isLive ? 'brew'
+      : (msg.isSteaming || msg.isFlushing || msg.isDescaling) ? 'other'
+      : null;
+    if (liveMode) _liveSessionIsBrew = liveMode === 'brew';
     // Brew just started → auto-select last same-profile shot as reference
     if (!S.liveWasLive && msg.isLive && msg.profileName) {
       autoApplyRefShot(msg.profileName);
@@ -456,7 +475,10 @@ export async function fetchLiveData() {
     // an older shot the sync happened to reorder and never a steam/flush
     // session (those never create shots.Shot rows at all, so they can't
     // satisfy `id > priorNewestId` regardless of timing).
-    if (S.liveWasLive && !msg.isLive && msg.seq !== S.liveLastSeq) {
+    // Explicit brew-only gate: `_liveSessionIsBrew !== false` is false after a
+    // steam/flush/descale session, so its finish can never apply the draft
+    // even if S.liveWasLive was somehow set.
+    if (S.liveWasLive && !msg.isLive && _liveSessionIsBrew !== false && msg.seq !== S.liveLastSeq) {
       S.liveLastSeq = msg.seq;
       const machineId = S.activeMachineId;
       const priorNewestId = S.shots.reduce((max, s) => (s.machineId === machineId && s.id > max ? s.id : max), 0);
