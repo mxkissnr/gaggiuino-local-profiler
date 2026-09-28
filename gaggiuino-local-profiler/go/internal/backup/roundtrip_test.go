@@ -570,4 +570,3 @@ func TestRestore_AchievementsSkipsBadEntries(t *testing.T) {
 		}
 	}
 }
-
