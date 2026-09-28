@@ -276,6 +276,12 @@ func (h *Handlers) getToken(w http.ResponseWriter, r *http.Request) {
 // loop in this Go port for it to hang off; it's present in the response
 // (matching openapi.yaml's Status schema) so a client parsing it doesn't
 // break.
+//
+// #1201: GET /api/status's `machines[]` array now reports each machine's
+// own reachable/lastError/firmwareVersion (buildStatusMachines, fed by
+// Poller.MachineStatus). The flat top-level fields above stay default-
+// machine aliases for backward compatibility, and `on` remains populated
+// only for the default machine.
 func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 	registry := h.poller.registry
 
