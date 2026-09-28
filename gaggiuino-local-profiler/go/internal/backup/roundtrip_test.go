@@ -12,7 +12,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
@@ -404,3 +406,168 @@ func TestRestore_ServesLibraryImagesThroughHTTP(t *testing.T) {
 		}
 	}
 }
+
+// TestStreamRoundTrip_WaterSensorDefaultsAchievements (#1197 part B): a backup
+// carries the machine water-sensor flag, the shot defaults and the
+// achievements table; restoring into a fresh install brings all three back
+// with their original values.
+func TestStreamRoundTrip_WaterSensorDefaultsAchievements(t *testing.T) {
+	useImageDir(t)
+	h1, deps1, _ := newTestHandlers(t)
+	mux1 := newMux(h1)
+	seedShot(t, deps1, 42)
+
+	name, typ, host := "Water", "gaggiuino", "water.local"
+	sensor := true
+	machine, err := deps1.Registry.CreateMachine(machines.MachineInput{
+		Name: &name, Type: &typ, Host: &host, HasWaterSensor: &sensor,
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if err := deps1.ShotsRepo.SaveShotDefaults(map[string]any{
+		"drinkType": "espresso", "coffee": "Round Trip", "grinder": "Niche", "dose": float64(18),
+	}); err != nil {
+		t.Fatalf("SaveShotDefaults: %v", err)
+	}
+	unlockedAt := int64(1_700_000_000)
+	if err := deps1.AchievementsRepo.ReplaceAll([]achievements.Row{
+		{ID: "first_shot", UnlockedAt: &unlockedAt, Progress: nil},
+	}); err != nil {
+		t.Fatalf("seeding achievement: %v", err)
+	}
+
+	rec := doJSON(t, mux1, http.MethodPost, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	zipBytes := append([]byte(nil), rec.Body.Bytes()...)
+
+	h2, deps2, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+
+	list, err := deps2.Registry.ListMachines()
+	if err != nil {
+		t.Fatalf("ListMachines: %v", err)
+	}
+	foundWater := false
+	for _, m := range list {
+		if m.ID == machine.ID {
+			foundWater = m.HasWaterSensor
+		}
+	}
+	if !foundWater {
+		t.Errorf("water-sensor flag not restored: %+v", list)
+	}
+
+	defaults, err := deps2.ShotsRepo.GetShotDefaults()
+	if err != nil {
+		t.Fatalf("GetShotDefaults: %v", err)
+	}
+	if defaults["coffee"] != "Round Trip" || defaults["grinder"] != "Niche" {
+		t.Errorf("shot defaults not restored: %+v", defaults)
+	}
+
+	ach, err := deps2.AchievementsRepo.GetAll()
+	if err != nil {
+		t.Fatalf("achievements GetAll: %v", err)
+	}
+	if row, ok := ach["first_shot"]; !ok || row.UnlockedAt == nil || *row.UnlockedAt != unlockedAt {
+		t.Errorf("achievement not restored: %+v", ach)
+	}
+}
+
+// TestRestore_LegacyBackup_LeavesDefaultsAndAchievementsUntouched (#1197 part
+// B): an old bundle has neither the `shot_defaults` kv key nor an
+// `achievements` array, so the backward-compatible reader must leave the
+// target's own values alone.
+func TestRestore_LegacyBackup_LeavesDefaultsAndAchievementsUntouched(t *testing.T) {
+	useImageDir(t)
+	zipBytes, err := os.ReadFile(filepath.Join("testdata", "legacy-backup.zip"))
+	if err != nil {
+		t.Fatalf("reading fixture: %v", err)
+	}
+
+	h, deps, _ := newTestHandlersInDir(t)
+	if err := deps.ShotsRepo.SaveShotDefaults(map[string]any{"coffee": "Local Only", "grinder": "Local Grinder"}); err != nil {
+		t.Fatalf("seeding defaults: %v", err)
+	}
+	unlockedAt := int64(1_600_000_000)
+	if err := deps.AchievementsRepo.ReplaceAll([]achievements.Row{
+		{ID: "local_badge", UnlockedAt: &unlockedAt, Progress: nil},
+	}); err != nil {
+		t.Fatalf("seeding achievement: %v", err)
+	}
+
+	rr := doZip(t, newMux(h), "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+
+	defaults, err := deps.ShotsRepo.GetShotDefaults()
+	if err != nil {
+		t.Fatalf("GetShotDefaults: %v", err)
+	}
+	if defaults["coffee"] != "Local Only" {
+		t.Errorf("legacy restore clobbered shot defaults: %+v", defaults)
+	}
+	ach, err := deps.AchievementsRepo.GetAll()
+	if err != nil {
+		t.Fatalf("achievements GetAll: %v", err)
+	}
+	if row, ok := ach["local_badge"]; !ok || row.UnlockedAt == nil || *row.UnlockedAt != unlockedAt {
+		t.Errorf("legacy restore clobbered achievements: %+v", ach)
+	}
+}
+
+// TestRestore_AchievementsSkipsBadEntries (#1197 part B): unusable entries in
+// a restored `achievements` array are skipped individually, the valid ones
+// still land, and a NULL field stays NULL.
+func TestRestore_AchievementsSkipsBadEntries(t *testing.T) {
+	useImageDir(t)
+	h1, deps1, _ := newTestHandlers(t)
+	seedShot(t, deps1, 1)
+	rec := doJSON(t, newMux(h1), http.MethodGet, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d", rec.Code)
+	}
+	var bundle map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &bundle); err != nil {
+		t.Fatalf("parsing export: %v", err)
+	}
+	bundle["achievements"] = []any{
+		map[string]any{"id": "good_one", "unlockedAt": 1700000000, "progress": nil},
+		map[string]any{"id": "good_nil_fields"},
+		map[string]any{"id": "", "unlockedAt": 1700000000},
+		map[string]any{"id": "bad_negative", "progress": -1},
+		map[string]any{"id": "bad_float", "unlockedAt": 1.5},
+		map[string]any{"id": "bad_type", "progress": "x"},
+	}
+	body := mustMarshal(t, bundle)
+
+	h2, deps2, _ := newTestHandlersInDir(t)
+	rr := doJSON(t, newMux(h2), http.MethodPost, "/api/restore", body)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+
+	ach, err := deps2.AchievementsRepo.GetAll()
+	if err != nil {
+		t.Fatalf("achievements GetAll: %v", err)
+	}
+	if row, ok := ach["good_one"]; !ok || row.UnlockedAt == nil || *row.UnlockedAt != 1700000000 {
+		t.Errorf("good achievement lost: %+v", ach)
+	}
+	if row, ok := ach["good_nil_fields"]; !ok || row.UnlockedAt != nil || row.Progress != nil {
+		t.Errorf("nil-field achievement not restored as NULL: %+v", ach)
+	}
+	for _, bad := range []string{"", "bad_negative", "bad_float", "bad_type"} {
+		if _, ok := ach[bad]; ok {
+			t.Errorf("bad achievement %q was restored: %+v", bad, ach)
+		}
+	}
+}
+
