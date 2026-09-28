@@ -233,134 +233,140 @@ aspect_ratio: "16:9"
 The GLP ecosystem (top) and the app's internals (below), as diagrams:
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "step", "nodeSpacing": 40, "rankSpacing": 60}}}%%
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 30, "rankSpacing": 70}}}%%
 flowchart LR
-  GGU["Gaggiuino controller"]
-  GM["GaggiMate controller"]
-  APP["GLP App<br/>Go, port 8099<br/>SQLite /data/glp.db"]
-  BR["Browser"]
-  HA["HA sensors & automations"]
-  subgraph INTG["GLP HA Integration"]
-    INT["Integration core"]
-    SC["GLP Shot Card"]
-    OC["GLP Order Card"]
+  subgraph MACHINES["Espresso machines"]
+    direction TB
+    GGU["Gaggiuino"]
+    GM["GaggiMate"]
   end
-  GGU -->|"REST /api/shots, /api/system/status, WebSocket or MQTT"| APP
-  GM -->|"WebSocket ws://host/ws, /api/history/*.slog"| APP
-  BR -->|"HA Ingress"| APP
-  INT -->|"port 8099"| APP
-  INT -->|"sensors / attributes"| SC
-  INT -->|"sensors / attributes"| OC
-  SC -->|"/api/glp/* proxy"| INT
-  OC -->|"/api/glp/* proxy (default)"| INT
-  OC -.->|"port 8099 (only with glp_url)"| APP
-  INT -->|"sensors / automations"| HA
 
-  classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
-  classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
-  classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
-  classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
-  classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
-  classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
-  classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
-  class APP toneIndigo
-  class GGU,GM toneAmber
-  class INT,SC,OC,HA toneTeal
-  class BR toneBlue
-  style INTG fill:#f8fafc10,stroke:#94a3b8
+  subgraph CLIENTS["Clients"]
+    direction TB
+    BR["Browser<br/>via HA Ingress"]
+    AI["AI assistant<br/>MCP client"]
+  end
+
+  APP["<b>GLP App</b><br/>Go · port 8099<br/>SQLite"]
+
+  subgraph HA["Home Assistant"]
+    direction TB
+    INT["GLP Integration"]
+    SC["Shot Card"]
+    OC["Order Card"]
+    AUTO["Sensors &amp; automations"]
+  end
+
+  GGU -->|"REST · WebSocket · MQTT"| APP
+  GM -->|"WebSocket"| APP
+  BR --> APP
+  AI -.->|"/api/mcp (opt-in)"| APP
+  APP -->|"polled on :8099"| INT
+  INT -->|"entities"| AUTO
+  INT -->|"entities · API proxy"| SC
+  INT -->|"entities · API proxy"| OC
+  OC -.->|"direct with glp_url"| APP
+
+  classDef machine fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+  classDef client fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+  classDef app fill:#e0e7ff,stroke:#4f46e5,stroke-width:2px,color:#312e81
+  classDef ha fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+  class GGU,GM machine
+  class BR,AI client
+  class APP app
+  class INT,SC,OC,AUTO ha
+  style MACHINES fill:#f8fafc10,stroke:#94a3b8
+  style CLIENTS fill:#f8fafc10,stroke:#94a3b8
+  style HA fill:#f8fafc10,stroke:#94a3b8
 ```
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "step", "nodeSpacing": 40, "rankSpacing": 60}}}%%
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 26, "rankSpacing": 50}}}%%
 flowchart TB
-  USER(("Home Assistant user"))
-  MACHINE(("Gaggiuino / GaggiMate"))
-  HASVC(("Home Assistant"))
-  ROAST(("Roaster web shops"))
-  BROKER(("MQTT broker"))
-
-  subgraph DASH["Dashboard"]
-    SPA["SPA<br/>[public-src]"]
-    LIVE["Live updates<br/>[sse.ts]"]
+  subgraph DEVICES["Machine side"]
+    MACHINE(("Gaggiuino /<br/>GaggiMate"))
+    BROKER(("MQTT broker"))
   end
 
-  subgraph APP["Application"]
-    API["REST API<br/>[cmd/server + handlers]"]
+  subgraph CLIENTS["Clients"]
+    SPA["Dashboard SPA<br/>[public-src]"]
+    AIC["AI assistant<br/>MCP client"]
+    KIOSK["Kiosk display"]
+  end
+
+  subgraph CONN["Machine connectivity"]
+    MACH["Machine registry &amp; adapters<br/>[internal/machines]"]
+    MQTT["MQTT transport<br/>[internal/mqtt]"]
+    POLL["Poller &amp; shot sync<br/>[internal/system]"]
+  end
+
+  subgraph IFACE["Interfaces"]
+    API["REST API<br/>[cmd/server]"]
+    MCP["MCP server<br/>[internal/mcp]"]
+    WEB["Kiosk view<br/>[internal/web]"]
     SSE["Event stream<br/>[internal/sse]"]
-    BACKUP["Backup & Restore<br/>[internal/backup]"]
-    DB[("SQLite<br/>[internal/db]")]
   end
 
-  subgraph CONN["Machine Connectivity"]
-    POLL["Poller & Shot Sync<br/>[internal/system]"]
-    MACH["Machine Registry & Adapters<br/>[internal/machines]"]
-    MQTT["MQTT Transport<br/>[internal/mqtt]"]
-  end
-
-  subgraph SHOTDATA["Shot Data"]
+  subgraph DOMAIN["Domain"]
     SHOTS["Shots<br/>[internal/shots]"]
-  end
-
-  subgraph COFFEE["Coffee Operations"]
-    LIB["Coffee Library<br/>[internal/library]"]
-    IMP["Bean Import<br/>[internal/importer]"]
+    LIB["Coffee library<br/>[internal/library]"]
     ORD["Orders<br/>[internal/orders]"]
-    MAINT["Maintenance & Achievements<br/>[internal/maintenance, internal/achievements]"]
+    MAINT["Maintenance &amp; badges<br/>[internal/maintenance]<br/>[internal/achievements]"]
+    BACKUP["Backup &amp; restore<br/>[internal/backup]"]
+    IMP["Bean import<br/>[internal/importer]"]
   end
 
-  subgraph PLATFORM["Platform"]
-    HA["HA Supervisor client<br/>[internal/ha]"]
+  DB[("SQLite<br/>[internal/db]")]
+
+  subgraph OUT["Outbound"]
+    HAC["HA client<br/>[internal/ha]"]
     NET["Outbound guard<br/>[internal/netguard]"]
   end
 
-  USER -->|"opens via HA Ingress"| SPA
-  SPA -->|"HTTP"| API
-  SSE -->|"push"| LIVE
-  LIVE --> SPA
-  API -->|"routes"| SHOTS
-  API -->|"routes"| LIB
-  API -->|"routes"| ORD
-  API -->|"routes"| MAINT
-  API -->|"routes"| BACKUP
-  API -->|"routes"| MACH
-  POLL -->|"polls"| MACH
-  MACH -->|"HTTP / WebSocket"| MACHINE
-  MQTT -.->|"subscribes"| BROKER
-  BROKER -.->|"publishes"| MACHINE
-  POLL -->|"syncs shots"| SHOTS
-  POLL -->|"live state"| SSE
-  MQTT -->|"live data"| POLL
-  IMP -->|"fetch"| NET
-  NET -.->|"HTTPS"| ROAST
-  ORD -->|"notify"| HA
-  POLL -->|"switch / sensors"| HA
-  HA -.->|"Supervisor API"| HASVC
-  SHOTS -->|"read / write"| DB
-  LIB --> DB
-  ORD --> DB
-  MAINT --> DB
-  BACKUP --> DB
-  MACH --> DB
+  subgraph SERVICES["External services"]
+    HASVC(("Home Assistant"))
+    ROAST(("Roaster shops"))
+  end
 
-  classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
-  classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
-  classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
-  classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
-  classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
-  classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
-  classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
-  class USER,SPA,LIVE toneBlue
-  class API,SSE,BACKUP,DB toneIndigo
-  class POLL,MACH,MQTT,MACHINE,BROKER toneAmber
-  class SHOTS toneMint
-  class LIB,IMP,ORD,MAINT,ROAST toneRose
-  class HA,NET,HASVC toneTeal
-  style DASH fill:#f8fafc10,stroke:#94a3b8
-  style APP fill:#f8fafc10,stroke:#94a3b8
+  MACHINE -->|"HTTP · WebSocket"| MACH
+  MACHINE -.-> BROKER
+  BROKER -.-> MQTT
+  MACH --> POLL
+  MQTT --> POLL
+
+  SPA -->|"HTTP"| API
+  AIC -.->|"opt-in"| MCP
+  KIOSK --> WEB
+  SPA -.->|"live updates"| SSE
+
+  POLL -->|"new shots"| SHOTS
+  POLL -->|"live state"| SSE
+  IFACE ==> DOMAIN
+  DOMAIN ==> DB
+
+  ORD -->|"notify"| HAC
+  POLL -->|"switch · sensors"| HAC
+  IMP --> NET
+  HAC -.->|"Supervisor API"| HASVC
+  NET -.->|"HTTPS"| ROAST
+
+  classDef client fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+  classDef iface fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+  classDef domain fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+  classDef infra fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+  classDef ext fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#0f172a
+  class SPA,AIC,KIOSK client
+  class API,SSE,MCP,WEB iface
+  class SHOTS,LIB,ORD,MAINT,BACKUP,IMP domain
+  class POLL,MACH,MQTT,HAC,NET,DB infra
+  class MACHINE,BROKER,HASVC,ROAST ext
+  style DEVICES fill:#f8fafc10,stroke:#94a3b8
+  style CLIENTS fill:#f8fafc10,stroke:#94a3b8
   style CONN fill:#f8fafc10,stroke:#94a3b8
-  style SHOTDATA fill:#f8fafc10,stroke:#94a3b8
-  style COFFEE fill:#f8fafc10,stroke:#94a3b8
-  style PLATFORM fill:#f8fafc10,stroke:#94a3b8
+  style IFACE fill:#f8fafc10,stroke:#94a3b8
+  style DOMAIN fill:#f8fafc10,stroke:#94a3b8
+  style OUT fill:#f8fafc10,stroke:#94a3b8
+  style SERVICES fill:#f8fafc10,stroke:#94a3b8
 ```
 
 Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profiler/DOCS.md)) keeps an ASCII diagram, since Home Assistant cannot render Mermaid.
@@ -369,12 +375,15 @@ Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profil
 
 ## Development at a glance
 
-<p align="center">
-  <img src="docs/dev-stats/commits-per-repo.svg" alt="Commits per repo"/>
-</p>
-<p align="center">
-  <img src="docs/dev-stats/model-breakdown.svg" alt="AI model breakdown by commits"/>
-</p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/dev-stats/commits-per-repo-dark.svg">
+  <img src="docs/dev-stats/commits-per-repo-light.svg" alt="Commits per repo" width="100%">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/dev-stats/model-breakdown-dark.svg">
+  <img src="docs/dev-stats/model-breakdown-light.svg" alt="AI model breakdown by commits" width="100%">
+</picture>
 
 Full numbers (timeline, per-model breakdown, cost estimate) generated live from git history: see [DEVELOPMENT.md](DEVELOPMENT.md).
 

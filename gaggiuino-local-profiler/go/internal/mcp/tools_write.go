@@ -246,18 +246,21 @@ func setKnownGrind(deps Deps, in setKnownGrindInput) (setKnownGrindOutput, error
 	if grindSetting == "" {
 		return setKnownGrindOutput{}, fmt.Errorf("grind_setting is required")
 	}
-	lib, err := deps.Library.GetLibrary()
-	if err != nil {
-		log.Printf("mcp: set_known_grind: reading library: %v", err)
-		return setKnownGrindOutput{}, fmt.Errorf("could not read the coffee library; try again")
-	}
-	bean, found := library.UpsertKnownGrindSetting(&lib, in.BeanID, grinder, grindSetting)
-	if !found {
+	var bean library.Entity
+	err := deps.Library.Update(func(lib *library.Library) error {
+		var found bool
+		bean, found = library.UpsertKnownGrindSetting(lib, in.BeanID, grinder, grindSetting)
+		if !found {
+			return library.ErrSkipSave
+		}
+		return nil
+	})
+	if errors.Is(err, library.ErrSkipSave) {
 		return setKnownGrindOutput{}, fmt.Errorf("bean %d not found; use list_beans to find ids", in.BeanID)
 	}
-	if err := deps.Library.SaveLibrary(lib); err != nil {
-		log.Printf("mcp: set_known_grind: saving library: %v", err)
-		return setKnownGrindOutput{}, fmt.Errorf("could not save the coffee library; try again")
+	if err != nil {
+		log.Printf("mcp: set_known_grind: updating library: %v", err)
+		return setKnownGrindOutput{}, fmt.Errorf("could not update the coffee library; try again")
 	}
 	return setKnownGrindOutput{
 		BeanID:             in.BeanID,
