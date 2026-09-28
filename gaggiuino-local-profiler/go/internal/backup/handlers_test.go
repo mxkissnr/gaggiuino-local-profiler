@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
@@ -404,14 +405,15 @@ func newTestHandlersInDir(t *testing.T) (*Handlers, Dependencies, *sql.DB) {
 	t.Cleanup(func() { sqlDB.Close() })
 	libRepo := library.NewRepository(sqlDB)
 	deps := Dependencies{
-		DB:              sqlDB,
-		ShotsRepo:       shots.NewRepository(sqlDB),
-		LibRepo:         libRepo,
-		OrdersRepo:      orders.NewRepository(sqlDB),
-		MaintenanceRepo: maintenance.NewRepository(sqlDB, libRepo),
-		Registry:        machines.NewRegistry(sqlDB),
-		Token:           "second-install-token",
-		TokenFile:       filepath.Join(t.TempDir(), "api_token.txt"),
+		DB:               sqlDB,
+		ShotsRepo:        shots.NewRepository(sqlDB),
+		LibRepo:          libRepo,
+		OrdersRepo:       orders.NewRepository(sqlDB),
+		MaintenanceRepo:  maintenance.NewRepository(sqlDB, libRepo),
+		Registry:         machines.NewRegistry(sqlDB),
+		AchievementsRepo: achievements.NewRepository(sqlDB),
+		Token:            "second-install-token",
+		TokenFile:        filepath.Join(t.TempDir(), "api_token.txt"),
 	}
 	return NewHandlers(deps), deps, sqlDB
 }

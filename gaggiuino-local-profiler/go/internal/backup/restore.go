@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -277,6 +278,12 @@ type restorePlan struct {
 	validTrash       map[string]int64
 	blocklist        []string // non-nil (possibly empty) = wipe+rewrite the blocklist
 
+	// achievements belong to the shots section; ReplaceAll runs in its own tx
+	// after RestoreShots. restoreAchievements is false when the key is absent
+	// (old backup) or present-but-entirely-unusable.
+	restoreAchievements bool
+	validAchievements   []achievements.Row
+
 	validMaintenance    []maintenance.RawRow
 	maintenanceTotal    int
 	validMaintenanceLog []maintenance.RawLogRow
@@ -368,6 +375,25 @@ func buildRestorePlan(b map[string]any, images restoreImages, shotCount int) res
 			}
 			plan.blocklist = list
 		}
+		if arr, ok := b["achievements"].([]any); ok {
+			valid := make([]achievements.Row, 0, len(arr))
+			for _, v := range arr {
+				m, ok := v.(map[string]any)
+				if !ok {
+					continue
+				}
+				if row, ok := sanitizeAchievementRow(m); ok {
+					valid = append(valid, row)
+				}
+			}
+			// Skip, don't destroy: a present-but-entirely-unusable array must
+			// not wipe the target's achievements (an empty array is a real
+			// "no badges" source and does clear them).
+			if len(arr) == 0 || len(valid) > 0 {
+				plan.restoreAchievements = true
+				plan.validAchievements = valid
+			}
+		}
 	}
 
 	if sec.has("maintenance") {
@@ -440,6 +466,45 @@ func sanitizeToken(s string) string {
 	}
 	trimmed := trimString(string(out))
 	return truncateRunes(trimmed, 200)
+}
+
+// maxAchievementIDLen bounds a restored badge id, matching the id lengths the
+// achievements registry uses.
+const maxAchievementIDLen = 64
+
+// sanitizeAchievementRow validates one entry of a restored backup's
+// `achievements` array, returning ok=false so the caller can skip it. The id
+// must be a non-empty string of at most 64 bytes; unlockedAt and progress must
+// each be absent/null or a finite, non-negative integer — a restored bundle is
+// untrusted input.
+func sanitizeAchievementRow(m map[string]any) (achievements.Row, bool) {
+	id, _ := m["id"].(string)
+	if id == "" || len(id) > maxAchievementIDLen {
+		return achievements.Row{}, false
+	}
+	unlockedAt, ok := optionalNonNegativeInt(m["unlockedAt"])
+	if !ok {
+		return achievements.Row{}, false
+	}
+	progress, ok := optionalNonNegativeInt(m["progress"])
+	if !ok {
+		return achievements.Row{}, false
+	}
+	return achievements.Row{ID: id, UnlockedAt: unlockedAt, Progress: progress}, true
+}
+
+// optionalNonNegativeInt decodes an optional JSON number that must be absent
+// or null, or a finite non-negative integer — the shape of an achievement's
+// unlockedAt/progress. A present-but-invalid value returns ok=false.
+func optionalNonNegativeInt(v any) (*int64, bool) {
+	if v == nil {
+		return nil, true
+	}
+	n, ok := jsIntStrict(v)
+	if !ok || n < 0 {
+		return nil, false
+	}
+	return &n, true
 }
 
 func toRawRow(m map[string]any) maintenance.RawRow {
@@ -540,6 +605,11 @@ func (h *Handlers) applyRestore(p restorePlan, shotIter func(yield func(shots.Sh
 		}); err != nil {
 			return err
 		}
+		if p.restoreAchievements {
+			if err := d.AchievementsRepo.ReplaceAll(p.validAchievements); err != nil {
+				return err
+			}
+		}
 	}
 
 	if p.sec.has("maintenance") {
@@ -624,6 +694,13 @@ func (h *Handlers) applyKVSettings(kv map[string]any) error {
 		}
 		if err := d.OrdersRepo.SaveNotifyMapping(mapping); err != nil {
 			return err
+		}
+	}
+	if s, ok := kv["shot_defaults"].(map[string]any); ok {
+		if defaults, ok := shots.SanitizeShotDefaultsForRestore(s); ok {
+			if err := d.ShotsRepo.SaveShotDefaults(defaults); err != nil {
+				return err
+			}
 		}
 	}
 	if s, ok := kv["import_settings"].(map[string]any); ok {

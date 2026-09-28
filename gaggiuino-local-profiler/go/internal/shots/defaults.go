@@ -58,3 +58,17 @@ func (r *Repository) SaveShotDefaults(defaults map[string]any) error {
 	}
 	return nil
 }
+
+// SanitizeShotDefaultsForRestore validates an untrusted shot_defaults blob
+// (e.g. one carried in a restored backup bundle) and field-picks the known
+// keys exactly the way POST /api/shots/defaults does, returning ok=false
+// when it fails shotDefaultsSchema's checks so the caller can leave the
+// stored defaults untouched. SaveShotDefaults itself does no validation, and
+// a restored bundle is untrusted input, so the restore path must go through
+// here rather than calling SaveShotDefaults directly.
+func SanitizeShotDefaultsForRestore(body map[string]any) (map[string]any, bool) {
+	if issues := ValidateShotDefaults(body); len(issues) > 0 {
+		return nil, false
+	}
+	return shotDefaultsFromBody(body), true
+}

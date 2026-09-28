@@ -376,6 +376,7 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 		name, typ, host string
 		switchEntity    *string
 		theme           *string
+		hasWaterSensor  bool
 		isDefault       bool
 		enabled         bool
 		createdAt       int64
@@ -402,7 +403,8 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 		}
 		valid = append(valid, validated{
 			id: m.ID, name: name, typ: typ, host: host, switchEntity: m.SwitchEntity,
-			theme: themeStr, isDefault: m.IsDefault, enabled: m.Enabled, createdAt: createdAt,
+			theme: themeStr, hasWaterSensor: m.HasWaterSensor, isDefault: m.IsDefault,
+			enabled: m.Enabled, createdAt: createdAt,
 		})
 	}
 
@@ -425,7 +427,7 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 		return 0, fmt.Errorf("machines: clearing table: %w", err)
 	}
 	stmt, err := tx.Prepare(
-		`INSERT INTO machines (id, name, type, host, switch_entity, theme, is_default, enabled, created_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+		`INSERT INTO machines (id, name, type, host, switch_entity, theme, has_water_sensor, is_default, enabled, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
 	)
 	if err != nil {
 		tx.Rollback()
@@ -434,7 +436,7 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 	for _, v := range valid {
 		if _, err := stmt.Exec(
 			v.id, v.name, v.typ, v.host, nullableString(v.switchEntity), nullableString(v.theme),
-			boolToInt(v.isDefault), boolToInt(v.enabled), v.createdAt,
+			boolToInt(v.hasWaterSensor), boolToInt(v.isDefault), boolToInt(v.enabled), v.createdAt,
 		); err != nil {
 			stmt.Close()
 			tx.Rollback()

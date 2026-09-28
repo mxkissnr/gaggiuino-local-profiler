@@ -357,3 +357,24 @@ func TestRestoreMachines_ValidEntries_ReplacesRegistry(t *testing.T) {
 		t.Fatalf("registry after restore = %+v, want only the restored machine", after)
 	}
 }
+
+// TestRestoreMachines_PreservesWaterSensorFlag (#1197 part B): the backup
+// carries hasWaterSensor on Machine, but RestoreMachines used to drop it (its
+// INSERT omitted the column), so a water-sensor machine came back disabled.
+func TestRestoreMachines_PreservesWaterSensorFlag(t *testing.T) {
+	reg, _ := newTestRegistry(t)
+	incoming := []Machine{
+		{ID: 1, Name: "Water", Type: "gaggiuino", Host: "water.local", HasWaterSensor: true, IsDefault: true, Enabled: true},
+	}
+	if _, err := reg.RestoreMachines(incoming); err != nil {
+		t.Fatalf("RestoreMachines: %v", err)
+	}
+
+	list, err := reg.ListMachines()
+	if err != nil {
+		t.Fatalf("ListMachines: %v", err)
+	}
+	if len(list) != 1 || !list[0].HasWaterSensor {
+		t.Fatalf("hasWaterSensor not restored: %+v", list)
+	}
+}

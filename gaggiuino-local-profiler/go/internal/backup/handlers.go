@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -78,6 +79,10 @@ type Dependencies struct {
 	OrdersRepo      *orders.Repository
 	MaintenanceRepo *maintenance.Repository
 	Registry        *machines.Registry
+	// AchievementsRepo carries the achievements table through the shots
+	// section's `achievements` bundle key. Restore writes via
+	// achievements.Repository.ReplaceAll.
+	AchievementsRepo *achievements.Repository
 	// Token is the API token this server process is currently enforcing
 	// (see cmd/server/main.go's auth.LoadOrCreateToken call). Included,
 	// passphrase-encrypted, in a backup's `secrets` block when requested.

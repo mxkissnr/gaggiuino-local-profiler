@@ -153,3 +153,49 @@ func (r *Repository) SetProgress(id string, progress int64) error {
 	}
 	return nil
 }
+
+// ReplaceAll wipes the achievements table and inserts the given rows in one
+// transaction — the restore path's bulk write, as opposed to the single-row
+// Unlock/SetProgress the live evaluator uses. A nil UnlockedAt/Progress is
+// stored as SQL NULL. An empty rows slice still clears the table (a restored
+// backup with no unlocked badges must clear the target's).
+//
+// Achievements are excluded from ChangeFingerprint on purpose (it digests
+// only buildContext's inputs, and TestGetState_SkipsFullEvaluateWhenNothingChanged
+// pins that a bare row deletion must not trigger re-evaluation); GetState
+// re-reads via GetAll on every call, so restored rows are never served from
+// a stale cached evaluation.
+func (r *Repository) ReplaceAll(rows []Row) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("achievements: starting replace tx: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM achievements`); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("achievements: clearing table: %w", err)
+	}
+	stmt, err := tx.Prepare(`INSERT INTO achievements (id, unlocked_at, progress) VALUES (?,?,?)`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("achievements: preparing replace: %w", err)
+	}
+	for _, row := range rows {
+		var unlockedAt, progress any
+		if row.UnlockedAt != nil {
+			unlockedAt = *row.UnlockedAt
+		}
+		if row.Progress != nil {
+			progress = *row.Progress
+		}
+		if _, err := stmt.Exec(row.ID, unlockedAt, progress); err != nil {
+			stmt.Close()
+			tx.Rollback()
+			return fmt.Errorf("achievements: restoring %q: %w", row.ID, err)
+		}
+	}
+	stmt.Close()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("achievements: committing replace: %w", err)
+	}
+	return nil
+}
