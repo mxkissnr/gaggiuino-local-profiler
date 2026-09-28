@@ -44,20 +44,62 @@ function resolveCompanionDir(relativeDir, canonicalDir) {
 // #1028 dropped @napi-rs/canvas from the dependency set, so these charts
 // are hand-rolled as SVG string templates instead — no native module, no
 // system-font probing, nothing to install. GitHub renders inline SVG in
-// markdown, and each chart carries its own opaque dark background rect with
-// every mark/label given an explicit contrasting fill (never currentColor),
-// so it reads the same in GitHub's light and dark markdown themes.
+// markdown, and every mark/label carries an explicit contrasting fill (never
+// currentColor). #1210 dropped the old opaque dark background rect: the SVG
+// background is now transparent, and each chart ships as a light and a dark
+// variant selected with <picture> + prefers-color-scheme (GitHub's supported
+// way — CSS media queries inside an SVG are unreliable in Safari). See the
+// dataviz skill's color-formula.md for the reference palette this follows.
 
-// Dark-surface chart palette (matches the app's own dark UI / docs/screenshots).
-// Categorical hues used in fixed order — see dataviz skill's color-formula.md.
-const CHART = {
-    surface: '#1a1a19',
-    ink: '#ffffff',
-    inkSecondary: '#c3c2b7',
-    baseline: '#383835',
-    colors: ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'],
-    fontStack: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+const CHART_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+
+// Two surface themes (#1210). Each carries only the ink used against that
+// surface; the series colours are the light/dark steps of the dataviz
+// reference palette, validated for colour-blind separation and contrast on
+// both surfaces. `single` colours a one-series chart (commits per repo);
+// `claude`/`deepseek`/`other` colour the model breakdown by vendor, so colour
+// encodes the vendor instead of the bar's rank.
+const CHART_THEMES = {
+    light: {
+        ink: '#0b0b0b',
+        inkSecondary: '#52514e',
+        baseline: '#d6d5cf',
+        series: { single: '#2a78d6', claude: '#2a78d6', deepseek: '#eb6834', other: '#8a8983' },
+    },
+    dark: {
+        ink: '#ffffff',
+        inkSecondary: '#c3c2b7',
+        baseline: '#383835',
+        series: { single: '#3987e5', claude: '#3987e5', deepseek: '#d95926', other: '#8a8983' },
+    },
 };
+
+// Legend layout: where the swatch row starts (right of the title), its
+// baseline, the 10×10 swatch size, the gap to its label and between entries.
+const LEGEND_X = 300;
+const LEGEND_BASELINE_Y = 28;
+const LEGEND_SWATCH = 10;
+const LEGEND_LABEL_GAP = 6;
+const LEGEND_ENTRY_GAP = 18;
+
+const VENDOR_ORDER = ['claude', 'deepseek', 'other'];
+const VENDOR_LABELS = { claude: 'Claude', deepseek: 'DeepSeek', other: 'Other' };
+
+// Vendor a model co-author string belongs to (#1210). The two named vendors
+// get their own palette colour; anything else is neutral grey.
+export function modelVendor(model) {
+    if (/^Claude/i.test(model)) return 'claude';
+    if (/^DeepSeek/i.test(model)) return 'deepseek';
+    return 'other';
+}
+
+// #1210: a co-author line with no model version records only the bare
+// `Claude` key — display it as "Claude (version not recorded)" so the chart
+// and the table don't imply a specific Claude model. The counting key is
+// unchanged; only the display string differs.
+export function modelDisplayLabel(model) {
+    return model === 'Claude' ? 'Claude (version not recorded)' : model;
+}
 
 function xmlEsc(s) {
     return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -72,39 +114,87 @@ const BAR_CHART_BOTTOM_PAD = 16;
 // the 24px cap), 4px rounded data-end at the bar's tip, square at the
 // baseline, value label at the tip, category label to the left — see
 // dataviz skill's marks-and-anatomy.md. Same geometry the @napi-rs/canvas
-// version used before #1028. Returns null for an empty series.
-export function barChartSVG(title, items) {
+// version used before #1028, except leftPad, which grew from 190 to 220 so
+// the longest category label this chart now emits — "Claude (version not
+// recorded)", ~189px at 13px — fits in the label gutter instead of clipping.
+//
+// #1210: no fixed pixel width and no background. The root <svg> carries only
+// a viewBox (880 ≈ GitHub's markdown content width, so text renders ~1:1 on
+// desktop and scales down on mobile) plus role="img" and a <title> for
+// assistive tech; the transparent background lets the page theme show
+// through. `theme` picks the light/dark ink, each item may carry its own
+// `color` (defaulting to the theme's single-series blue), and `legend`
+// renders a swatch row right of the title. Returns null for an empty series.
+export function barChartSVG(title, items, { theme = 'light', legend = null } = {}) {
     if (!items.length) return null;
-    const width = 640, barH = BAR_CHART_BAR_H, gap = BAR_CHART_GAP, topPad = BAR_CHART_TOP_PAD, bottomPad = BAR_CHART_BOTTOM_PAD, leftPad = 190, rightPad = 60;
+    const palette = CHART_THEMES[theme] || CHART_THEMES.light;
+    const width = 880, barH = BAR_CHART_BAR_H, gap = BAR_CHART_GAP, topPad = BAR_CHART_TOP_PAD, bottomPad = BAR_CHART_BOTTOM_PAD, leftPad = 220, rightPad = 60;
     const height = topPad + items.length * (barH + gap) - gap + bottomPad;
     const maxVal = Math.max(...items.map(i => i.value), 1);
     const chartW = width - leftPad - rightPad;
 
     const parts = [
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family="${CHART.fontStack}">`,
-        `<rect width="${width}" height="${height}" fill="${CHART.surface}"/>`,
-        `<text x="20" y="28" fill="${CHART.ink}" font-size="15" font-weight="600">${xmlEsc(title)}</text>`,
-        `<line x1="${leftPad}" y1="${topPad - 8}" x2="${leftPad}" y2="${topPad + items.length * (barH + gap) - gap}" stroke="${CHART.baseline}" stroke-width="1"/>`,
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" font-family="${CHART_FONT_STACK}" role="img">`,
+        `<title>${xmlEsc(title)}</title>`,
+        `<text x="20" y="28" fill="${palette.ink}" font-size="15" font-weight="600">${xmlEsc(title)}</text>`,
+        `<line x1="${leftPad}" y1="${topPad - 8}" x2="${leftPad}" y2="${topPad + items.length * (barH + gap) - gap}" stroke="${palette.baseline}" stroke-width="1"/>`,
     ];
+
+    if (legend && legend.length) {
+        let lx = LEGEND_X;
+        for (const entry of legend) {
+            parts.push(
+                `<rect x="${lx}" y="${LEGEND_BASELINE_Y - LEGEND_SWATCH}" width="${LEGEND_SWATCH}" height="${LEGEND_SWATCH}" rx="2" fill="${entry.color}"/>`,
+                `<text x="${lx + LEGEND_SWATCH + LEGEND_LABEL_GAP}" y="${LEGEND_BASELINE_Y}" fill="${palette.inkSecondary}" font-size="13">${xmlEsc(entry.label)}</text>`,
+            );
+            lx += LEGEND_SWATCH + LEGEND_LABEL_GAP + entry.label.length * 7 + LEGEND_ENTRY_GAP;
+        }
+    }
 
     items.forEach((item, i) => {
         const y = topPad + i * (barH + gap);
         const barW = Math.max(2, Math.round((item.value / maxVal) * chartW));
         const r = Math.min(4, barW / 2, barH / 2);
-        const color = CHART.colors[i % CHART.colors.length];
+        const color = item.color || palette.series.single;
         const mid = y + barH / 2 + 4;
         // Square left edge, 4px-rounded right edge — matches the old canvas path.
         const bar = `M${leftPad},${y} H${leftPad + barW - r} Q${leftPad + barW},${y} ${leftPad + barW},${y + r}`
             + ` V${y + barH - r} Q${leftPad + barW},${y + barH} ${leftPad + barW - r},${y + barH} H${leftPad} Z`;
         parts.push(
-            `<text x="${leftPad - 12}" y="${mid}" fill="${CHART.inkSecondary}" font-size="13" text-anchor="end">${xmlEsc(item.label)}</text>`,
+            `<text x="${leftPad - 12}" y="${mid}" fill="${palette.inkSecondary}" font-size="13" text-anchor="end">${xmlEsc(item.label)}</text>`,
             `<path d="${bar}" fill="${color}"/>`,
-            `<text x="${leftPad + barW + 10}" y="${mid}" fill="${CHART.ink}" font-size="13" font-weight="600">${item.value}</text>`,
+            `<text x="${leftPad + barW + 10}" y="${mid}" fill="${palette.ink}" font-size="13" font-weight="600">${item.value}</text>`,
         );
     });
 
     parts.push('</svg>');
     return parts.join('\n') + '\n';
+}
+
+// Vendor colours for the model breakdown plus a legend listing only the
+// vendors actually present, in a fixed order so the legend doesn't reshuffle
+// with the value sort (#1210).
+export function modelBreakdownData(counts, theme = 'light') {
+    const palette = CHART_THEMES[theme] || CHART_THEMES.light;
+    const items = Object.entries(counts)
+        .map(([model, value]) => ({ label: modelDisplayLabel(model), value, color: palette.series[modelVendor(model)] }))
+        .sort((a, b) => b.value - a.value);
+    const legend = VENDOR_ORDER
+        .filter(vendor => Object.keys(counts).some(model => modelVendor(model) === vendor))
+        .map(vendor => ({ label: VENDOR_LABELS[vendor], color: palette.series[vendor] }));
+    return { items, legend };
+}
+
+// <picture> markup that swaps the light chart for the dark one under GitHub's
+// dark theme (#1210). Paths are relative to the repo root, where both the
+// generated DEVELOPMENT.md and the README sit.
+export function chartPictureHTML(base, alt) {
+    return [
+        '<picture>',
+        `  <source media="(prefers-color-scheme: dark)" srcset="docs/dev-stats/${base}-dark.svg">`,
+        `  <img src="docs/dev-stats/${base}-light.svg" alt="${xmlEsc(alt)}" width="100%">`,
+        '</picture>',
+    ].join('\n');
 }
 
 function renderCharts(results, combinedModelCounts) {
@@ -114,15 +204,24 @@ function renderCharts(results, combinedModelCounts) {
     const repoItems = results
         .map(r => ({ label: r.name, value: r.totalCommits }))
         .sort((a, b) => b.value - a.value);
-    const modelItems = Object.entries(combinedModelCounts)
-        .map(([label, value]) => ({ label, value }))
-        .sort((a, b) => b.value - a.value);
 
-    const commitsSvg = barChartSVG('Commits per repo', repoItems);
-    if (commitsSvg) writeFileSync(path.join(outDir, 'commits-per-repo.svg'), commitsSvg);
-    const modelSvg = barChartSVG('AI model breakdown (by commits)', modelItems);
-    if (modelSvg) writeFileSync(path.join(outDir, 'model-breakdown.svg'), modelSvg);
-    return !!(commitsSvg || modelSvg);
+    // #1210: one light and one dark variant per chart; the old single
+    // commits-per-repo.svg / model-breakdown.svg are no longer written.
+    let rendered = false;
+    for (const theme of ['light', 'dark']) {
+        const commitsSvg = barChartSVG('Commits per repo', repoItems, { theme });
+        if (commitsSvg) {
+            writeFileSync(path.join(outDir, `commits-per-repo-${theme}.svg`), commitsSvg);
+            rendered = true;
+        }
+        const { items: modelItems, legend } = modelBreakdownData(combinedModelCounts, theme);
+        const modelSvg = barChartSVG('AI model breakdown (by commits)', modelItems, { theme, legend });
+        if (modelSvg) {
+            writeFileSync(path.join(outDir, `model-breakdown-${theme}.svg`), modelSvg);
+            rendered = true;
+        }
+    }
+    return rendered;
 }
 
 const REPOS = [
@@ -367,7 +466,7 @@ function main() {
     const combinedPct = combined.totalCommits ? Math.round(100 * combined.aiCommits / combined.totalCommits) : 0;
     lines.push(`| **Combined** | **${fmtDate(combined.firstDate)}** | **${fmtDate(combined.lastDate)}** | **${combined.totalCommits}** | **${combined.aiCommits} (${combinedPct}%)** |`);
     lines.push('');
-    if (chartsRendered) { lines.push('![Commits per repo](docs/dev-stats/commits-per-repo.svg)'); lines.push(''); }
+    if (chartsRendered) { lines.push(chartPictureHTML('commits-per-repo', 'Commits per repo')); lines.push(''); }
     lines.push(`Combined line changes (insertions + deletions across all commits): **${combined.totalLines.toLocaleString()}**, of which **${combined.aiLines.toLocaleString()}** landed in AI-co-authored commits.`);
     lines.push('');
     lines.push('Commits without an AI co-author line are presumed human-only (manual fixes, merges, config tweaks) — not independently verified.');
@@ -390,10 +489,10 @@ function main() {
     lines.push('| Model | Commits |');
     lines.push('|---|---|');
     for (const [model, count] of Object.entries(combinedModelCounts).sort((a, b) => b[1] - a[1])) {
-        lines.push(`| ${model} | ${count} |`);
+        lines.push(`| ${modelDisplayLabel(model)} | ${count} |`);
     }
     lines.push('');
-    if (chartsRendered) { lines.push('![AI model breakdown by commits](docs/dev-stats/model-breakdown.svg)'); lines.push(''); }
+    if (chartsRendered) { lines.push(chartPictureHTML('model-breakdown', 'AI model breakdown by commits')); lines.push(''); }
     lines.push('The exact co-author string varies by era as model names changed over the project\'s lifetime — this table groups by the literal string used in each commit, so the same underlying model released under a new name shows up as a separate row.');
     lines.push('');
     lines.push('## Cost');
