@@ -140,7 +140,7 @@ func TestGetStatus_PerMachineFieldsAndDefaultAliases(t *testing.T) {
 	p.pollViaGaggiuinoStatus(context.Background())
 	p.recordMachineError(m2.ID, errors.New("machine 2 down"))
 
-	h := NewHandlers(p, NewDemoService(sqlDB, nil, nil), testAPIToken)
+	h := NewHandlers(p, NewDemoService(sqlDB, shots.NewRepository(sqlDB), nil), testAPIToken)
 	body := decodeMap(t, doGet(newSystemMux(h), "/api/status").Body.Bytes())
 
 	if body["machineReachable"] != true {
