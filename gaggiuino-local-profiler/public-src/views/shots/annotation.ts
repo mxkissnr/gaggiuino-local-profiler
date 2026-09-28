@@ -419,12 +419,61 @@ function _updateMilkFieldVisibility(): void {
   field.style.display = (S.milkTypes?.length && drinkId) ? '' : 'none';
 }
 
+// Ported from PR #1120 (contributor branch origin/ppops-src/live-shot-setup)
+// onto this TypeScript module by the ppops/port-1120-live-shot-setup branch:
+// dev no longer has the contributor's public-src/views/shots/annotation.js,
+// so the three grinder-field helpers below and the selectId/fieldId arguments
+// on the render helpers further down live here instead.
+//
+// Same select-with-"other"-fallback grinder field as dialin-wizard.js's
+// _renderGrinderField/dialinGrinderChange, but DOM-mutating (fills an
+// existing <select>/<input> pair by id) instead of returning an HTML
+// string, since live.js's pre-shot setup panel's markup is static in
+// index.html rather than re-rendered from a template each time.
+export function renderGrinderField(selectId: string, otherId: string, currentValue: string): void {
+  const select = document.getElementById(selectId) as HTMLSelectElement | null;
+  const other  = document.getElementById(otherId) as HTMLInputElement | null;
+  if (!select) return;
+  const grinders    = S.coffeeLibrary?.grinders || [];
+  const knownNames  = new Set(grinders.map(g => g.name));
+  const isOther     = !!currentValue && !knownNames.has(currentValue);
+  select.innerHTML = grinders.map(g =>
+    `<option value="${esc(g.name as string)}"${!isOther && currentValue === g.name ? ' selected' : ''}>${esc(g.name as string)}</option>`
+  ).join('') + `<option value="__other__"${isOther ? ' selected' : ''}>${t('dialin_wizard_grinder_other')}</option>`;
+  if (other) {
+    other.style.display = isOther ? '' : 'none';
+    other.value = isOther ? currentValue : '';
+  }
+}
+
+// Resolves the field's effective value: the select's own value, or the
+// free-text fallback input's value when "other…" is selected.
+export function getGrinderFieldValue(selectId: string, otherId: string): string {
+  const select = document.getElementById(selectId) as HTMLSelectElement | null;
+  const other  = document.getElementById(otherId) as HTMLInputElement | null;
+  if (!select) return '';
+  if (select.value === '__other__') return other?.value.trim() || '';
+  return select.value;
+}
+
+// Toggles the free-text fallback input's visibility on select change —
+// mirrors dialin-wizard.js's dialinGrinderChange.
+export function handleGrinderFieldChange(selectId: string, otherId: string): void {
+  const select = document.getElementById(selectId) as HTMLSelectElement | null;
+  const other  = document.getElementById(otherId) as HTMLInputElement | null;
+  if (!select || !other) return;
+  other.style.display = select.value === '__other__' ? '' : 'none';
+}
+
 // selectedBeanId, when given, takes priority over selectedName: id survives
 // a bean rename, name does not. Without it (or when it no longer resolves
 // in the current library — e.g. a deleted bean), falls back to matching by
 // name, same as before this second parameter existed.
-export function _renderBeanSelect(selectedName: string | null, selectedBeanId: number | null): void {
-  const select = document.getElementById('annCoffee') as HTMLSelectElement | null;
+// selectId defaults to the annotation panel's own #annCoffee — views/live.js's
+// pre-shot setup panel passes '#lsBean' to reuse this same in-stock/exhausted
+// bean-listing logic instead of duplicating it.
+export function _renderBeanSelect(selectedName: string | null, selectedBeanId: number | null, selectId = 'annCoffee'): void {
+  const select = document.getElementById(selectId) as HTMLSelectElement | null;
   if (!select) return;
   const allBeans = (S.coffeeLibrary?.beans || []);
   // #933 (was #915): exhausted (zero-stock) beans used to be dropped from
@@ -495,23 +544,27 @@ function _fillIdSelect(select: HTMLSelectElement, noneLabel: string, items: Libr
 // beans, there's no free-text legacy value to preserve) — value and
 // data-basket-id/data-puckscreen-id both carry the id, mirroring
 // _renderBeanSelect's data-attribute pattern for _buildAnnotationPayload.
-export function _renderBasketSelect(selectedId: number | null): void {
-  const select = document.getElementById('annBasket') as HTMLSelectElement | null;
+// selectId/fieldId default to the annotation panel's own elements —
+// views/live.js's pre-shot setup panel (#lsBasket/#lsPuckScreen/#lsRecipe)
+// passes its own ids to reuse this same library-backed population logic
+// instead of duplicating it.
+export function _renderBasketSelect(selectedId: number | null, selectId = 'annBasket'): void {
+  const select = document.getElementById(selectId) as HTMLSelectElement | null;
   if (!select) return;
   const lib = (S.coffeeLibrary || {}) as unknown as CatalogLibrary;
   _fillIdSelect(select, t('ann_basket_none'), lib.baskets || [], selectedId, 'basketId');
 }
 
-export function _renderPuckScreenSelect(selectedId: number | null): void {
-  const select = document.getElementById('annPuckScreen') as HTMLSelectElement | null;
+export function _renderPuckScreenSelect(selectedId: number | null, selectId = 'annPuckScreen'): void {
+  const select = document.getElementById(selectId) as HTMLSelectElement | null;
   if (!select) return;
   const lib = (S.coffeeLibrary || {}) as unknown as CatalogLibrary;
   _fillIdSelect(select, t('ann_puckscreen_none'), lib.puckScreens || [], selectedId, 'puckscreenId');
 }
 
-export function _renderRecipeSelect(selectedId: number | null): void {
-  const field  = document.getElementById('recipeField');
-  const select = document.getElementById('annRecipe') as HTMLSelectElement | null;
+export function _renderRecipeSelect(selectedId: number | null, fieldId = 'recipeField', selectId = 'annRecipe'): void {
+  const field  = document.getElementById(fieldId);
+  const select = document.getElementById(selectId) as HTMLSelectElement | null;
   if (!field || !select) return;
   const lib = (S.coffeeLibrary || {}) as unknown as CatalogLibrary;
   const recipes = lib.recipes || [];
