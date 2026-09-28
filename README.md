@@ -281,93 +281,92 @@ flowchart LR
 ```
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 26, "rankSpacing": 50}}}%%
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 18, "rankSpacing": 45, "padding": 10}}}%%
 flowchart TB
-  subgraph DEVICES["Machine side"]
-    MACHINE(("Gaggiuino /<br/>GaggiMate"))
-    BROKER(("MQTT broker"))
+  subgraph L1["1 · Machines"]
+    direction LR
+    GGU["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Gaggiuino&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    GM["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GaggiMate&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    BRK["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MQTT broker&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;optional&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+  end
+  subgraph L2["2 · Connectivity"]
+    direction LR
+    ADP["&nbsp;&nbsp;&nbsp;Machine adapters&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/machines&nbsp;&nbsp;&nbsp;"]
+    MQ["&nbsp;&nbsp;&nbsp;&nbsp;MQTT transport&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;internal/mqtt&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    POLL["&nbsp;&nbsp;Poller &amp; shot sync&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/system&nbsp;&nbsp;&nbsp;&nbsp;"]
+  end
+  subgraph L3["3 · Domain & storage"]
+    direction LR
+    SHOTS["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Shots&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;internal/shots&nbsp;&nbsp;&nbsp;&nbsp;"]
+    LIB["&nbsp;&nbsp;&nbsp;&nbsp;Coffee library&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/library&nbsp;&nbsp;&nbsp;"]
+    BK["&nbsp;&nbsp;&nbsp;Backup &amp; restore&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/backup&nbsp;&nbsp;&nbsp;&nbsp;"]
+    MNT["&nbsp;Maintenance, badges&nbsp;&nbsp;<br/>&nbsp;internal/maintenance&nbsp;"]
+    ORD["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Orders&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/orders&nbsp;&nbsp;&nbsp;&nbsp;"]
+    IMP["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Bean import&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/importer&nbsp;&nbsp;&nbsp;"]
+    DB[("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SQLite&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/db&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;")]
+  end
+  subgraph L4["4 · Interfaces"]
+    direction LR
+    API["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;REST API&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmd/server&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    SSE["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Event stream&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/sse&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    MCP["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MCP server&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/mcp&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    WEB["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Kiosk view&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/web&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    HAC["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HA client&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/ha&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    NET["&nbsp;&nbsp;&nbsp;&nbsp;Outbound guard&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/netguard&nbsp;&nbsp;&nbsp;"]
+  end
+  subgraph L5["5 · Consumers"]
+    direction LR
+    SPA["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Dashboard&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;browser&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    AI["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AI assistant&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MCP client&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    KIO["&nbsp;&nbsp;&nbsp;&nbsp;Kiosk display&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wall tablet&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    HA["&nbsp;&nbsp;&nbsp;&nbsp;Home Assistant&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Supervisor&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    RS["&nbsp;&nbsp;&nbsp;&nbsp;Roaster shops&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;web&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
   end
 
-  subgraph CLIENTS["Clients"]
-    SPA["Dashboard SPA<br/>[public-src]"]
-    AIC["AI assistant<br/>MCP client"]
-    KIOSK["Kiosk display"]
-  end
-
-  subgraph CONN["Machine connectivity"]
-    MACH["Machine registry &amp; adapters<br/>[internal/machines]"]
-    MQTT["MQTT transport<br/>[internal/mqtt]"]
-    POLL["Poller &amp; shot sync<br/>[internal/system]"]
-  end
-
-  subgraph IFACE["Interfaces"]
-    API["REST API<br/>[cmd/server]"]
-    MCP["MCP server<br/>[internal/mcp]"]
-    WEB["Kiosk view<br/>[internal/web]"]
-    SSE["Event stream<br/>[internal/sse]"]
-  end
-
-  subgraph DOMAIN["Domain"]
-    SHOTS["Shots<br/>[internal/shots]"]
-    LIB["Coffee library<br/>[internal/library]"]
-    ORD["Orders<br/>[internal/orders]"]
-    MAINT["Maintenance &amp; badges<br/>[internal/maintenance]<br/>[internal/achievements]"]
-    BACKUP["Backup &amp; restore<br/>[internal/backup]"]
-    IMP["Bean import<br/>[internal/importer]"]
-  end
-
-  DB[("SQLite<br/>[internal/db]")]
-
-  subgraph OUT["Outbound"]
-    HAC["HA client<br/>[internal/ha]"]
-    NET["Outbound guard<br/>[internal/netguard]"]
-  end
-
-  subgraph SERVICES["External services"]
-    HASVC(("Home Assistant"))
-    ROAST(("Roaster shops"))
-  end
-
-  MACHINE -->|"HTTP · WebSocket"| MACH
-  MACHINE -.-> BROKER
-  BROKER -.-> MQTT
-  MACH --> POLL
-  MQTT --> POLL
-
-  SPA -->|"HTTP"| API
-  AIC -.->|"opt-in"| MCP
-  KIOSK --> WEB
-  SPA -.->|"live updates"| SSE
-
+  GGU -->|"HTTP · WS"| ADP
+  GM -->|"WebSocket"| ADP
+  BRK -.->|"MQTT"| MQ
+  ADP --> POLL
+  MQ --> POLL
   POLL -->|"new shots"| SHOTS
   POLL -->|"live state"| SSE
-  IFACE ==> DOMAIN
-  DOMAIN ==> DB
-
+  SHOTS --> DB
+  LIB --> DB
+  BK --> DB
+  MNT --> DB
+  ORD --> DB
+  IMP --> DB
+  DB --> API
+  DB --> MCP
+  DB --> WEB
   ORD -->|"notify"| HAC
-  POLL -->|"switch · sensors"| HAC
   IMP --> NET
-  HAC -.->|"Supervisor API"| HASVC
-  NET -.->|"HTTPS"| ROAST
-
-  classDef client fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
-  classDef iface fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+  API -->|"HTTP"| SPA
+  SSE -->|"push"| SPA
+  MCP -.->|"opt-in"| AI
+  WEB --> KIO
+  HAC -->|"Supervisor API"| HA
+  NET -->|"HTTPS"| RS
+  classDef machine fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+  classDef conn fill:#ffedd5,stroke:#ea580c,stroke-width:1.5px,color:#7c2d12
   classDef domain fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
-  classDef infra fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
-  classDef ext fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#0f172a
-  class SPA,AIC,KIOSK client
-  class API,SSE,MCP,WEB iface
-  class SHOTS,LIB,ORD,MAINT,BACKUP,IMP domain
-  class POLL,MACH,MQTT,HAC,NET,DB infra
-  class MACHINE,BROKER,HASVC,ROAST ext
-  style DEVICES fill:#f8fafc10,stroke:#94a3b8
-  style CLIENTS fill:#f8fafc10,stroke:#94a3b8
-  style CONN fill:#f8fafc10,stroke:#94a3b8
-  style IFACE fill:#f8fafc10,stroke:#94a3b8
-  style DOMAIN fill:#f8fafc10,stroke:#94a3b8
-  style OUT fill:#f8fafc10,stroke:#94a3b8
-  style SERVICES fill:#f8fafc10,stroke:#94a3b8
+  classDef store fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#0f172a
+  classDef iface fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+  classDef consumer fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+  class GGU,GM,BRK machine
+  class ADP,MQ,POLL conn
+  class SHOTS,LIB,ORD,MNT,BK,IMP domain
+  class DB store
+  class API,SSE,MCP,WEB,HAC,NET iface
+  class SPA,AI,KIO,HA,RS consumer
+  style L1 fill:#f8fafc10,stroke:#94a3b8
+  style L2 fill:#f8fafc10,stroke:#94a3b8
+  style L3 fill:#f8fafc10,stroke:#94a3b8
+  style L4 fill:#f8fafc10,stroke:#94a3b8
+  style L5 fill:#f8fafc10,stroke:#94a3b8
 ```
+
+Read the app diagram top to bottom, from the machine to the people and systems using the data: the connectivity layer turns what the machines send into shots and live state, the domain layer applies the rules and keeps everything in SQLite, and the interfaces serve it to the dashboard, AI assistants, the kiosk display, Home Assistant and roaster shops.
 
 Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profiler/DOCS.md)) keeps an ASCII diagram, since Home Assistant cannot render Mermaid.
 

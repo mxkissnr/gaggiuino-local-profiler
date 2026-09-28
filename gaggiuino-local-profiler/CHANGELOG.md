@@ -6,6 +6,7 @@
 - **Backups now also keep the water-sensor setting, the default shot values and your unlocked badges with their original dates.** Closes #1197
 - **Library changes made at the same moment (for example a milk deduction from a completed order while you edit a bean) no longer overwrite each other.** Part of #1199
 - **The same no-lost-updates fix now covers every library endpoint — bags, frozen portions, milk stock, grinder resets and image uploads can no longer overwrite a concurrent change.** Part of #1199
+- **Adding a new bean, grinder, basket, puck screen, milk or recipe at the same moment as another library change no longer discards either one.** Part of #1199
 - **Completing an order no longer attaches it to an older, unrelated shot when no new shot was pulled for it.** Part of #1197
 - **The newest shot is no longer skipped for good when the machine reports it a moment before it can be read.** Part of #1197
 - **Shot scores in the list, share card and API now use the bean's own target temperature and ratio, like the badges already did.** Closes #1198
