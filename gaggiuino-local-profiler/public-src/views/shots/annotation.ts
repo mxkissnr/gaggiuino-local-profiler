@@ -424,15 +424,15 @@ function _updateMilkFieldVisibility(): void {
 // existing <select>/<input> pair by id) instead of returning an HTML
 // string, since live.js's pre-shot setup panel's markup is static in
 // index.html rather than re-rendered from a template each time.
-export function renderGrinderField(selectId, otherId, currentValue) {
-  const select = document.getElementById(selectId);
-  const other  = document.getElementById(otherId);
+export function renderGrinderField(selectId: string, otherId: string, currentValue: string): void {
+  const select = document.getElementById(selectId) as HTMLSelectElement | null;
+  const other  = document.getElementById(otherId) as HTMLInputElement | null;
   if (!select) return;
   const grinders    = S.coffeeLibrary?.grinders || [];
   const knownNames  = new Set(grinders.map(g => g.name));
   const isOther     = !!currentValue && !knownNames.has(currentValue);
   select.innerHTML = grinders.map(g =>
-    `<option value="${esc(g.name)}"${!isOther && currentValue === g.name ? ' selected' : ''}>${esc(g.name)}</option>`
+    `<option value="${esc(g.name as string)}"${!isOther && currentValue === g.name ? ' selected' : ''}>${esc(g.name as string)}</option>`
   ).join('') + `<option value="__other__"${isOther ? ' selected' : ''}>${t('dialin_wizard_grinder_other')}</option>`;
   if (other) {
     other.style.display = isOther ? '' : 'none';
@@ -442,9 +442,9 @@ export function renderGrinderField(selectId, otherId, currentValue) {
 
 // Resolves the field's effective value: the select's own value, or the
 // free-text fallback input's value when "other…" is selected.
-export function getGrinderFieldValue(selectId, otherId) {
-  const select = document.getElementById(selectId);
-  const other  = document.getElementById(otherId);
+export function getGrinderFieldValue(selectId: string, otherId: string): string {
+  const select = document.getElementById(selectId) as HTMLSelectElement | null;
+  const other  = document.getElementById(otherId) as HTMLInputElement | null;
   if (!select) return '';
   if (select.value === '__other__') return other?.value.trim() || '';
   return select.value;
@@ -452,9 +452,9 @@ export function getGrinderFieldValue(selectId, otherId) {
 
 // Toggles the free-text fallback input's visibility on select change —
 // mirrors dialin-wizard.js's dialinGrinderChange.
-export function handleGrinderFieldChange(selectId, otherId) {
-  const select = document.getElementById(selectId);
-  const other  = document.getElementById(otherId);
+export function handleGrinderFieldChange(selectId: string, otherId: string): void {
+  const select = document.getElementById(selectId) as HTMLSelectElement | null;
+  const other  = document.getElementById(otherId) as HTMLInputElement | null;
   if (!select || !other) return;
   other.style.display = select.value === '__other__' ? '' : 'none';
 }
