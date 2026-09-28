@@ -299,9 +299,9 @@ flowchart TB
     direction LR
     SHOTS["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Shots&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;internal/shots&nbsp;&nbsp;&nbsp;&nbsp;"]
     LIB["&nbsp;&nbsp;&nbsp;&nbsp;Coffee library&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/library&nbsp;&nbsp;&nbsp;"]
-    ORD["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Orders&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/orders&nbsp;&nbsp;&nbsp;&nbsp;"]
-    MNT["&nbsp;Maintenance, badges&nbsp;&nbsp;<br/>&nbsp;internal/maintenance&nbsp;"]
     BK["&nbsp;&nbsp;&nbsp;Backup &amp; restore&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/backup&nbsp;&nbsp;&nbsp;&nbsp;"]
+    MNT["&nbsp;Maintenance, badges&nbsp;&nbsp;<br/>&nbsp;internal/maintenance&nbsp;"]
+    ORD["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Orders&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/orders&nbsp;&nbsp;&nbsp;&nbsp;"]
     IMP["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Bean import&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/importer&nbsp;&nbsp;&nbsp;"]
     DB[("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SQLite&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/db&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;")]
   end
@@ -332,9 +332,9 @@ flowchart TB
   POLL -->|"live state"| SSE
   SHOTS --> DB
   LIB --> DB
-  ORD --> DB
-  MNT --> DB
   BK --> DB
+  MNT --> DB
+  ORD --> DB
   IMP --> DB
   DB --> API
   DB --> MCP
