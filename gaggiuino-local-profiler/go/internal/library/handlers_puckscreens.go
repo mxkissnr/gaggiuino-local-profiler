@@ -83,30 +83,40 @@ func (h *Handlers) updatePuckScreen(w http.ResponseWriter, r *http.Request) {
 // deletePuckScreen ports DELETE /api/library/puckscreen/:id.
 func (h *Handlers) deletePuckScreen(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	if !noMatch {
-		if idx := findPuckScreenIndex(lib, id); idx != -1 {
-			if ext, _ := lib.PuckScreens[idx]["image"].(string); ext != "" {
-				img.Delete(h.imageDir, id, ext, "puckscreen-")
+	var imgExt string
+	// The image file removal below is filesystem I/O: it must not run while
+	// Update holds the library write lock, so the closure only records the
+	// extension and the handler deletes the file once Update returns.
+	err := h.repo.Update(func(lib *Library) error {
+		if !noMatch {
+			if idx := findPuckScreenIndex(*lib, id); idx != -1 {
+				if ext, _ := lib.PuckScreens[idx]["image"].(string); ext != "" {
+					imgExt = ext
+				}
 			}
 		}
-	}
-	filtered := make([]Entity, 0, len(lib.PuckScreens))
-	for _, p := range lib.PuckScreens {
-		pid, ok := idOf(p, "id")
-		if !noMatch && ok && pid == id {
-			continue
+		filtered := make([]Entity, 0, len(lib.PuckScreens))
+		removed := false
+		for _, p := range lib.PuckScreens {
+			pid, ok := idOf(p, "id")
+			if !noMatch && ok && pid == id {
+				removed = true
+				continue
+			}
+			filtered = append(filtered, p)
 		}
-		filtered = append(filtered, p)
-	}
-	lib.PuckScreens = filtered
-	if err := h.repo.SaveLibrary(lib); err != nil {
+		if !removed {
+			return ErrSkipSave
+		}
+		lib.PuckScreens = filtered
+		return nil
+	})
+	if err != nil && !errors.Is(err, ErrSkipSave) {
 		internalError(w, err)
 		return
+	}
+	if imgExt != "" {
+		img.Delete(h.imageDir, id, imgExt, "puckscreen-")
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -134,19 +144,6 @@ func (h *Handlers) postPuckScreenImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	idx := -1
-	if !noMatch {
-		idx = findPuckScreenIndex(lib, id)
-	}
-	if idx == -1 {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
 	data, contentType, ok := readUploadedImage(w, r)
 	if !ok {
 		return
@@ -156,15 +153,32 @@ func (h *Handlers) postPuckScreenImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported image")
 		return
 	}
-	puckScreen := lib.PuckScreens[idx]
-	if oldExt, _ := puckScreen["image"].(string); oldExt != "" && oldExt != ext {
-		img.Delete(h.imageDir, id, oldExt, "puckscreen-")
-	}
-	puckScreen["image"] = ext
-	lib.PuckScreens[idx] = puckScreen
-	if err := h.repo.SaveLibrary(lib); err != nil {
-		internalError(w, err)
+	var puckScreen Entity
+	var oldExt string
+	err := h.repo.Update(func(lib *Library) error {
+		idx := -1
+		if !noMatch {
+			idx = findPuckScreenIndex(*lib, id)
+		}
+		if idx == -1 {
+			return errNotFound
+		}
+		puckScreen = lib.PuckScreens[idx]
+		oldExt, _ = puckScreen["image"].(string)
+		puckScreen["image"] = ext
+		lib.PuckScreens[idx] = puckScreen
+		return nil
+	})
+	if err != nil {
+		// The image file was written before the entity lookup; nothing
+		// references it if the write failed, so drop it (the pre-Update code
+		// never wrote it at all).
+		img.Delete(h.imageDir, id, ext, "puckscreen-")
+		writeUpdateError(w, err)
 		return
+	}
+	if oldExt != "" && oldExt != ext {
+		img.Delete(h.imageDir, id, oldExt, "puckscreen-")
 	}
 	writeJSON(w, http.StatusOK, puckScreen)
 }
