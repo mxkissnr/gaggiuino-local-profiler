@@ -72,7 +72,8 @@ func TestMachinePollState_SyncErrorIsolatedPerMachine(t *testing.T) {
 // #1201 firmware proof: machine 2's shot carries machine 2's own cached
 // version, not the default machine's.
 func TestMachinePollState_FirmwareStampedPerMachine(t *testing.T) {
-	p, registry, fake, repo := newMultiMachinePoller(t)
+	p, registry, fake, sqlDB := newMultiMachinePoller(t)
+	repo := shots.NewRepository(sqlDB)
 	m2 := addOtherMachine(t, registry, "Second", "gaggiuino", "machine2.test", true)
 
 	fake.setStatus(okStatus(t, `{"softwareVersion":"1.0.0"}`, 93, 94, 1, 0, false, "Espresso", 1), nil)
