@@ -83,6 +83,10 @@ func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, er
 	if err != nil {
 		return nil, err
 	}
+	shotDefaults, err := d.ShotsRepo.GetShotDefaults()
+	if err != nil {
+		return nil, err
+	}
 	allAchievements, err := d.AchievementsRepo.GetAll()
 	if err != nil {
 		return nil, err
@@ -100,6 +104,7 @@ func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, er
 		"kv": map[string]any{
 			"menu": menu, "orders_settings": ordersSettings, "notify_mapping": notifyMapping,
 			"import_settings": importSettings, "mqtt_settings": safeMqtt,
+			"shot_defaults": shotDefaults,
 		},
 	}
 
