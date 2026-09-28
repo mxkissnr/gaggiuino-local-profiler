@@ -4,6 +4,8 @@
 - **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, with separate opt-ins for write and developer tools.** Closes #1196
 ### Fixed
 - **Library changes made at the same moment (for example a milk deduction from a completed order while you edit a bean) no longer overwrite each other.** Part of #1199
+- **Completing an order no longer attaches it to an older, unrelated shot when no new shot was pulled for it.** Part of #1197
+- **The newest shot is no longer skipped for good when the machine reports it a moment before it can be read.** Part of #1197
 - **Shot scores in the list, share card and API now use the bean's own target temperature and ratio, like the badges already did.** Closes #1198
 - **A firmware update recorded in the maintenance log now shows which version was replaced by which and the shot count at the time.** Closes #1172
 - **The screenshot tool now renders in English regardless of the host locale, and a backup restored into its throwaway instance keeps its photos instead of serving blank ones.** Closes #1184
