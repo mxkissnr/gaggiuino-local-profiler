@@ -498,7 +498,9 @@ components:
               type:      { type: string, enum: [gaggiuino, gaggimate] }
               isDefault: { type: boolean }
               enabled:   { type: boolean }
-              reachable: { type: boolean, nullable: true, description: "Only populated for the default machine" }
+              reachable: { type: boolean, nullable: true, description: "Per-machine reachability (#1201)" }
+              lastError: { type: string, nullable: true, description: "Last poll/sync error for this machine (#1201); authenticated callers only (valid X-GLP-Token), like lastMachineError" }
+              firmwareVersion: { type: string, nullable: true, description: "Cached firmware version for this machine (#1201)" }
               on:        { type: boolean, nullable: true }
               theme:     { type: string, nullable: true, description: "#701 accent color, synced from Settings → Machines" }
         # ── authenticated only (H1) ──────────────────────────────────────

@@ -276,6 +276,13 @@ func (h *Handlers) getToken(w http.ResponseWriter, r *http.Request) {
 // loop in this Go port for it to hang off; it's present in the response
 // (matching openapi.yaml's Status schema) so a client parsing it doesn't
 // break.
+//
+// #1201, follow-up on PR #1221: GET /api/status's `machines[]` array now
+// reports each machine's own reachable/firmwareVersion (buildStatusMachines,
+// fed by Poller.MachineStatus), plus its own lastError for authenticated
+// callers only (H1 -- the error string can embed the machine's host). The
+// flat top-level fields above stay default-machine aliases for backward
+// compatibility, and `on` remains populated only for the default machine.
 func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 	registry := h.poller.registry
 
@@ -351,6 +358,11 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 		machinesList = nil
 	}
 
+	// machines[].lastError can embed a machine host, so it is gated the same
+	// way the top-level sensitive block below is: computed once here so
+	// both use the same authentication decision.
+	authenticated := auth.IsTokenValid(h.token, r.Header.Get("X-GLP-Token"))
+
 	resp := map[string]any{
 		"shotCount":                   shotCount,
 		"lastSync":                    nullableStr(syncInfo.LastSync),
@@ -367,14 +379,14 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 		"machineOnSince":              snap.SwitchOnAt,
 		"legacyMachineOptionsPending": hasUnconfirmedLegacyMachineOptions(),
 		"installId":                   installID,
-		"machines":                    buildStatusMachines(machinesList, machineReachable, snap.MachineOn),
+		"machines":                    buildStatusMachines(machinesList, machineReachable, snap.MachineOn, authenticated, h.poller.MachineStatus),
 	}
 	if devBuild := os.Getenv("GLP_DEV_BUILD"); devBuild != "" {
 		resp["devBuild"] = devBuild
 	}
 
 	// Sensitive fields only exposed to authenticated callers (H1).
-	if auth.IsTokenValid(h.token, r.Header.Get("X-GLP-Token")) {
+	if authenticated {
 		resp["machineUrl"] = machineURL
 		resp["machineHostname"] = machineHostname
 		resp["lastSyncError"] = nullableStr(syncInfo.LastSyncError)

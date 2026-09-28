@@ -127,17 +127,13 @@ type LiveData struct {
 type pollGlobalState struct {
 	mu sync.Mutex
 
-	machineReachable *bool // nil = never checked (#274)
-	// lastMachineError/lastMachineSuccess mirror lib/state.js's fields of
-	// the same name — openapi.yaml documents them as GET /api/status's
-	// `lastMachineError`/`lastMachineSuccess` fields, read via StatusInfo()
-	// (Phase 3b, #901) since that endpoint's own Go port.
-	lastMachineError     *string
-	lastMachineSuccess   *int64
-	cachedMachineVersion *string
-	isPollRunning        bool
-	liveAccum            *liveAccumState
-	liveSeq              int
+	// machines holds the former default-only poll scalars (#1201) keyed by
+	// machine id, so every machine reports its own reachability, last error
+	// and cached firmware version. Lazily populated by machine().
+	machines      map[int64]*machinePollState
+	isPollRunning bool
+	liveAccum     *liveAccumState
+	liveSeq       int
 	// #902: steam/flush live sessions, same hard-single-machine slot
 	// pattern as liveAccum/liveSeq above.
 	steamAccum *modeAccumState
@@ -147,14 +143,6 @@ type pollGlobalState struct {
 	// #983: descale live sessions, same hard-single-machine slot pattern.
 	descaleAccum *modeAccumState
 	descaleSeq   int
-	// wasReachable is #725's tri-state: nil = never polled (the very first
-	// successful poll after a host is configured is NOT a "recovery" —
-	// that path belongs to routes/machines.js's own save-triggered sync,
-	// not ported here either, see doc.go). Unread until the reachability-
-	// recovery catch-up sync itself (lib/sync.js, doc.go's "Deliberately
-	// not ported" — "the shot-history sync engine is its own future
-	// phase") exists to consume the false->true transition this captures.
-	wasReachable *bool
 
 	// Phase 2a (#901): manual-sync (POST /api/sync) progress. lastManualSync
 	// backs the 30s cooldown; lastSyncTime/lastSyncError mirror
@@ -179,6 +167,47 @@ type pollGlobalState struct {
 	// ported," tracked as a follow-up) is itself ported — nothing sets it
 	// true yet, so this reset is currently a no-op every time.
 	preheatNotifySent bool
+}
+
+// machinePollState is one machine's slice of the former default-only poll
+// scalars (#1201): its reachability, last error/success and cached firmware
+// version. Guarded by pollGlobalState.mu, the same lock ordering documented
+// on RuntimeState.
+type machinePollState struct {
+	reachable    *bool   // nil = never checked (#274)
+	wasReachable *bool   // #725's tri-state: nil = never polled
+	lastError    *string // last poll/sync error, redacted
+	lastSuccess  *int64
+	version      *string // cached firmware version, nil = not sniffed yet
+}
+
+// machine returns id's poll state, creating it on demand. Caller holds
+// p.state.mu.
+func (s *pollGlobalState) machine(id int64) *machinePollState {
+	if s.machines == nil {
+		s.machines = map[int64]*machinePollState{}
+	}
+	m := s.machines[id]
+	if m == nil {
+		m = &machinePollState{}
+		s.machines[id] = m
+	}
+	return m
+}
+
+// markReachableLocked records a successful contact with one machine. An
+// unreachable->reachable transition clears the machine's cached firmware
+// version (#1197 point 3, #1201) so a version that changed while it was away
+// is re-sniffed from the next status poll or shot. Caller holds p.state.mu.
+func markReachableLocked(m *machinePollState, now int64) {
+	wasDown := (m.reachable != nil && !*m.reachable) || (m.wasReachable != nil && !*m.wasReachable)
+	if wasDown {
+		m.version = nil
+	}
+	reachable := true
+	m.reachable = &reachable
+	m.lastError = nil
+	m.lastSuccess = &now
 }
 
 // AdapterProvider is the subset of *machines.Handlers this package
@@ -253,9 +282,9 @@ func (p *Poller) Runtime() *RuntimeState { return p.runtime }
 // pattern as SetShotsRepo. nil-safe: never set in tests.
 func (p *Poller) SetLiveTransport(lt LiveTransport) { p.liveTransport = lt }
 
-// StatusInfo is the subset of pollGlobalState GET /api/status reports —
-// see that struct's own field comments (lastMachineError/lastMachineSuccess
-// were kept, unread, specifically for this endpoint back in Phase 1g).
+// StatusInfo is the subset of the default machine's poll state GET
+// /api/status reports. Its top-level fields stay default-machine aliases
+// (#1201) — glp-integration and the machine cards read them.
 type StatusInfo struct {
 	MachineReachable     *bool
 	LastMachineError     *string
@@ -263,16 +292,51 @@ type StatusInfo struct {
 	CachedMachineVersion *string
 }
 
-// StatusInfo snapshots pollGlobalState's fields GET /api/status needs.
+// MachinePollStatus is one machine's poll state, reported per entry in GET
+// /api/status's machines[] array (#1201).
+type MachinePollStatus struct {
+	Reachable       *bool
+	LastError       *string
+	FirmwareVersion *string
+}
+
+// defaultMachineID resolves the configured default machine's id, or 0 when
+// none exists.
+func (p *Poller) defaultMachineID() (int64, bool) {
+	m, err := p.registry.GetDefaultMachine()
+	if err != nil || m == nil {
+		return 0, false
+	}
+	return m.ID, true
+}
+
+// StatusInfo snapshots the default machine's poll state.
 func (p *Poller) StatusInfo() StatusInfo {
+	id, _ := p.defaultMachineID()
 	p.state.mu.Lock()
 	defer p.state.mu.Unlock()
-	return StatusInfo{
-		MachineReachable:     p.state.machineReachable,
-		LastMachineError:     p.state.lastMachineError,
-		LastMachineSuccess:   p.state.lastMachineSuccess,
-		CachedMachineVersion: p.state.cachedMachineVersion,
+	ms := p.state.machines[id]
+	if ms == nil {
+		return StatusInfo{}
 	}
+	return StatusInfo{
+		MachineReachable:     ms.reachable,
+		LastMachineError:     ms.lastError,
+		LastMachineSuccess:   ms.lastSuccess,
+		CachedMachineVersion: ms.version,
+	}
+}
+
+// MachineStatus returns machine id's own poll state (#1201), with zero-value
+// fields when nothing has been observed for it yet.
+func (p *Poller) MachineStatus(id int64) MachinePollStatus {
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	ms := p.state.machines[id]
+	if ms == nil {
+		return MachinePollStatus{}
+	}
+	return MachinePollStatus{Reachable: ms.reachable, LastError: ms.lastError, FirmwareVersion: ms.version}
 }
 
 // Start ports server.js's startup sequence for this domain: load any
@@ -433,10 +497,12 @@ func (p *Poller) startLivePolling() {
 // — nothing else can ever flip this back to false on its own once a
 // runtime never reaches startLivePolling.
 func (p *Poller) stopLivePolling() {
-	reachable := false
-	p.state.mu.Lock()
-	p.state.machineReachable = &reachable
-	p.state.mu.Unlock()
+	if id, ok := p.defaultMachineID(); ok {
+		reachable := false
+		p.state.mu.Lock()
+		p.state.machine(id).reachable = &reachable
+		p.state.mu.Unlock()
+	}
 
 	p.liveMu.Lock()
 	if p.liveTicker != nil {
@@ -529,11 +595,12 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	status, err := adapter.GetStatus(ctx, machine)
 	if err != nil {
 		p.state.mu.Lock()
+		ms := p.state.machine(machine.ID)
 		reachable := false
-		p.state.machineReachable = &reachable
-		p.state.wasReachable = &reachable
+		ms.reachable = &reachable
+		ms.wasReachable = &reachable
 		msg := redactURLs(err.Error())
-		p.state.lastMachineError = &msg
+		ms.lastError = &msg
 		p.state.mu.Unlock()
 		log.Printf("system: live poll error: %v", err)
 		p.emitLiveSnapshot()
@@ -541,16 +608,15 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	}
 
 	p.state.mu.Lock()
-	prevReachable := p.state.wasReachable
-	reachable := true
-	p.state.machineReachable = &reachable
-	p.state.lastMachineError = nil
+	ms := p.state.machine(machine.ID)
+	prevReachable := ms.wasReachable
 	now := time.Now().UnixMilli()
-	p.state.lastMachineSuccess = &now
-	p.state.wasReachable = &reachable
-	if p.state.cachedMachineVersion == nil {
+	markReachableLocked(ms, now)
+	reachable := true
+	ms.wasReachable = &reachable
+	if ms.version == nil {
 		if ver := extractVersion(status.Raw); ver != "" {
-			p.state.cachedMachineVersion = &ver
+			ms.version = &ver
 			log.Printf("system: Gaggiuino firmware (from status): %s", ver)
 		}
 	}
@@ -590,16 +656,16 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		SensorSnap: sensorSnap,
 		SysState:   sysState,
 	})
-	ms := result.MachineStatus
-	p.runtime.SetMachineStatus(&ms)
-	p.runtime.SetCurrentTemps(zeroToNil(ms.Temperature), zeroToNil(ms.TargetTemperature))
+	derived := result.MachineStatus
+	p.runtime.SetMachineStatus(&derived)
+	p.runtime.SetCurrentTemps(zeroToNil(derived.Temperature), zeroToNil(derived.TargetTemperature))
 
 	snap := p.runtime.Get()
-	if ms.Temperature > 0 && !result.IsBrewing {
-		p.runtime.PushTempHistory(ms.Temperature)
-		p.recordPreheatSample(now, ms.Temperature, ms.TargetTemperature)
-		if snap.SwitchOnAt != nil && ms.TargetTemperature > 0 &&
-			ms.Temperature >= ms.TargetTemperature-2 && p.runtime.IsTempStable() {
+	if derived.Temperature > 0 && !result.IsBrewing {
+		p.runtime.PushTempHistory(derived.Temperature)
+		p.recordPreheatSample(now, derived.Temperature, derived.TargetTemperature)
+		if snap.SwitchOnAt != nil && derived.TargetTemperature > 0 &&
+			derived.Temperature >= derived.TargetTemperature-2 && p.runtime.IsTempStable() {
 			preheatMs := int64(loadPreheatMinutes()) * 60_000
 			if now-*snap.SwitchOnAt < preheatMs {
 				// Record the real stabilisation time before backdating the
@@ -619,7 +685,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 
 	p.state.mu.Lock()
 	if result.IsBrewing && p.state.liveAccum == nil {
-		p.state.liveAccum = &liveAccumState{startTime: now, profileName: result.ProfileName, prevWeight: ms.Weight}
+		p.state.liveAccum = &liveAccumState{startTime: now, profileName: result.ProfileName, prevWeight: derived.Weight}
 		log.Printf("system: brew started: profile %s", result.ProfileName)
 		// ports lib/poll.js's debugLog(`Brew started detail: brewSwitchState=... sensorBrewActive=... upTime=...`)
 		debugLogf("Brew started detail: brewSwitchState=%v sensorBrewActive=%v upTime=%d",
@@ -638,18 +704,18 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	if result.IsBrewing && p.state.liveAccum != nil {
 		acc := p.state.liveAccum
 		elapsed := elapsedTenths(now, acc.startTime)
-		weightFlow := ms.Weight - acc.prevWeight
+		weightFlow := derived.Weight - acc.prevWeight
 		if weightFlow < 0 {
 			weightFlow = 0
 		}
-		acc.prevWeight = ms.Weight
+		acc.prevWeight = derived.Weight
 		acc.datapoints.TimeInShot = append(acc.datapoints.TimeInShot, elapsed)
-		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(ms.Pressure))
-		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(ms.Temperature))
-		acc.datapoints.ShotWeight = append(acc.datapoints.ShotWeight, round10(ms.Weight))
+		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
+		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(derived.Temperature))
+		acc.datapoints.ShotWeight = append(acc.datapoints.ShotWeight, round10(derived.Weight))
 		acc.datapoints.WeightFlow = append(acc.datapoints.WeightFlow, round10(weightFlow))
-		acc.datapoints.PumpFlow = append(acc.datapoints.PumpFlow, round10(derefFloat(ms.PumpFlow)))
-		acc.datapoints.TargetTemperature = append(acc.datapoints.TargetTemperature, round10(ms.TargetTemperature))
+		acc.datapoints.PumpFlow = append(acc.datapoints.PumpFlow, round10(derefFloat(derived.PumpFlow)))
+		acc.datapoints.TargetTemperature = append(acc.datapoints.TargetTemperature, round10(derived.TargetTemperature))
 	}
 
 	// #902: steam/flush live sessions -- same start/stop/accumulate shape
@@ -678,8 +744,8 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	if effectiveSteaming && p.state.steamAccum != nil {
 		acc := p.state.steamAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
-		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(ms.Pressure))
-		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(ms.Temperature))
+		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
+		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(derived.Temperature))
 	}
 
 	if effectiveFlushing && p.state.flushAccum == nil {
@@ -694,8 +760,8 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	if effectiveFlushing && p.state.flushAccum != nil {
 		acc := p.state.flushAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
-		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(ms.Pressure))
-		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(ms.Temperature))
+		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
+		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(derived.Temperature))
 	}
 
 	if effectiveDescaling && p.state.descaleAccum == nil {
@@ -710,8 +776,8 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	if effectiveDescaling && p.state.descaleAccum != nil {
 		acc := p.state.descaleAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
-		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(ms.Pressure))
-		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(ms.Temperature))
+		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
+		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(derived.Temperature))
 	}
 	p.state.mu.Unlock()
 
@@ -889,6 +955,7 @@ func redactURLs(msg string) string {
 // package's own RuntimeState.SetMachineStatus relies on the same
 // never-mutated-after-set invariant, see its doc comment).
 func (p *Poller) buildLiveDataResponse() LiveData {
+	defaultID, _ := p.defaultMachineID()
 	// #902 idle stats: read the per-tick machineStatus (RuntimeState.mu
 	// first, then p.state.mu — the fixed lock ordering, see RuntimeState's
 	// doc comment). Get() releases before p.state.mu is taken below.
@@ -922,12 +989,16 @@ func (p *Poller) buildLiveDataResponse() LiveData {
 	if p.state.descaleAccum != nil {
 		descaleDP = copyModeDatapoints(&p.state.descaleAccum.datapoints)
 	}
+	var machineReachable *bool
+	if ms := p.state.machines[defaultID]; ms != nil {
+		machineReachable = ms.reachable
+	}
 	return LiveData{
 		IsLive:           isLive,
 		ProfileName:      profileName,
 		Datapoints:       dp,
 		Seq:              p.state.liveSeq,
-		MachineReachable: p.state.machineReachable,
+		MachineReachable: machineReachable,
 
 		IsSteaming:      p.state.steamAccum != nil,
 		SteamSeq:        p.state.steamSeq,
