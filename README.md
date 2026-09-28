@@ -281,93 +281,38 @@ flowchart LR
 ```
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 26, "rankSpacing": 50}}}%%
-flowchart TB
-  subgraph DEVICES["Machine side"]
-    MACHINE(("Gaggiuino /<br/>GaggiMate"))
-    BROKER(("MQTT broker"))
-  end
+block-beta
+  columns 7
+  L1["1 · Machines"]:1
+  GGU("Gaggiuino"):2 GM("GaggiMate"):2 BRK("MQTT broker"):2
+  L2["2 · Connectivity"]:1
+  ADP["Machine adapters<br/>internal/machines"]:2 MQ["MQTT transport<br/>internal/mqtt"]:2 POLL["Poller &amp; shot sync<br/>internal/system"]:2
+  L3["3 · Domain"]:1
+  SH["Shots<br/>internal/shots"] LIB["Coffee library<br/>internal/library"] ORD["Orders<br/>internal/orders"] MNT["Maintenance &amp; badges<br/>maintenance · achievements"] BK["Backup &amp; restore<br/>internal/backup"] IMP["Bean import<br/>internal/importer"]
+  L4["4 · Storage"]:1
+  DB["SQLite<br/>internal/db"]:6
+  L5["5 · Interfaces"]:1
+  API["REST API<br/>cmd/server"] SSE["Event stream<br/>internal/sse"] MCP["MCP server<br/>internal/mcp"] WEB["Kiosk view<br/>internal/web"] HAC["HA client<br/>internal/ha"] NET["Outbound guard<br/>internal/netguard"]
+  L6["6 · Consumers"]:1
+  SPA("Dashboard") AI("AI assistant") KIOSK("Kiosk display") space HA("Home Assistant") RS("Roaster shops")
 
-  subgraph CLIENTS["Clients"]
-    SPA["Dashboard SPA<br/>[public-src]"]
-    AIC["AI assistant<br/>MCP client"]
-    KIOSK["Kiosk display"]
-  end
-
-  subgraph CONN["Machine connectivity"]
-    MACH["Machine registry &amp; adapters<br/>[internal/machines]"]
-    MQTT["MQTT transport<br/>[internal/mqtt]"]
-    POLL["Poller &amp; shot sync<br/>[internal/system]"]
-  end
-
-  subgraph IFACE["Interfaces"]
-    API["REST API<br/>[cmd/server]"]
-    MCP["MCP server<br/>[internal/mcp]"]
-    WEB["Kiosk view<br/>[internal/web]"]
-    SSE["Event stream<br/>[internal/sse]"]
-  end
-
-  subgraph DOMAIN["Domain"]
-    SHOTS["Shots<br/>[internal/shots]"]
-    LIB["Coffee library<br/>[internal/library]"]
-    ORD["Orders<br/>[internal/orders]"]
-    MAINT["Maintenance &amp; badges<br/>[internal/maintenance]<br/>[internal/achievements]"]
-    BACKUP["Backup &amp; restore<br/>[internal/backup]"]
-    IMP["Bean import<br/>[internal/importer]"]
-  end
-
-  DB[("SQLite<br/>[internal/db]")]
-
-  subgraph OUT["Outbound"]
-    HAC["HA client<br/>[internal/ha]"]
-    NET["Outbound guard<br/>[internal/netguard]"]
-  end
-
-  subgraph SERVICES["External services"]
-    HASVC(("Home Assistant"))
-    ROAST(("Roaster shops"))
-  end
-
-  MACHINE -->|"HTTP · WebSocket"| MACH
-  MACHINE -.-> BROKER
-  BROKER -.-> MQTT
-  MACH --> POLL
-  MQTT --> POLL
-
-  SPA -->|"HTTP"| API
-  AIC -.->|"opt-in"| MCP
-  KIOSK --> WEB
-  SPA -.->|"live updates"| SSE
-
-  POLL -->|"new shots"| SHOTS
-  POLL -->|"live state"| SSE
-  IFACE ==> DOMAIN
-  DOMAIN ==> DB
-
-  ORD -->|"notify"| HAC
-  POLL -->|"switch · sensors"| HAC
-  IMP --> NET
-  HAC -.->|"Supervisor API"| HASVC
-  NET -.->|"HTTPS"| ROAST
-
-  classDef client fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
-  classDef iface fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
-  classDef domain fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
-  classDef infra fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
-  classDef ext fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#0f172a
-  class SPA,AIC,KIOSK client
-  class API,SSE,MCP,WEB iface
-  class SHOTS,LIB,ORD,MAINT,BACKUP,IMP domain
-  class POLL,MACH,MQTT,HAC,NET,DB infra
-  class MACHINE,BROKER,HASVC,ROAST ext
-  style DEVICES fill:#f8fafc10,stroke:#94a3b8
-  style CLIENTS fill:#f8fafc10,stroke:#94a3b8
-  style CONN fill:#f8fafc10,stroke:#94a3b8
-  style IFACE fill:#f8fafc10,stroke:#94a3b8
-  style DOMAIN fill:#f8fafc10,stroke:#94a3b8
-  style OUT fill:#f8fafc10,stroke:#94a3b8
-  style SERVICES fill:#f8fafc10,stroke:#94a3b8
+  classDef layer fill:none,stroke:none,color:#94a3b8,font-weight:bold
+  classDef machine fill:#fef3c7,stroke:#d97706,color:#78350f
+  classDef conn fill:#ffedd5,stroke:#ea580c,color:#7c2d12
+  classDef domain fill:#dcfce7,stroke:#16a34a,color:#14532d
+  classDef store fill:#f1f5f9,stroke:#475569,color:#0f172a
+  classDef iface fill:#e0e7ff,stroke:#4f46e5,color:#312e81
+  classDef consumer fill:#dbeafe,stroke:#2563eb,color:#172554
+  class L1,L2,L3,L4,L5,L6 layer
+  class GGU,GM,BRK machine
+  class ADP,MQ,POLL conn
+  class SH,LIB,ORD,MNT,BK,IMP domain
+  class DB store
+  class API,SSE,MCP,WEB,HAC,NET iface
+  class SPA,AI,KIOSK,HA,RS consumer
 ```
+
+Read the app diagram top to bottom: data comes in from the machines, the connectivity layer turns it into shots and live state, the domain layer applies the rules and keeps everything in SQLite, and the interfaces serve it to the dashboard, AI assistants, the kiosk display and Home Assistant. Who talks to whom over which protocol is shown in the ecosystem diagram above.
 
 Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profiler/DOCS.md)) keeps an ASCII diagram, since Home Assistant cannot render Mermaid.
 
