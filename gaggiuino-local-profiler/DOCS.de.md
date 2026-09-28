@@ -53,6 +53,8 @@ Das GLP-Ökosystem (GLP = Gaggiuino Local Profiler) besteht aus zwei installierb
 † erfordert enable_orders: true in der App-Konfiguration
 ```
 
+Optional kann sich ein KI-Assistent als MCP-Client mit dem `/api/mcp`-Endpunkt der App verbinden (Opt-in), um Shot-Verlauf, Kaffee-Bibliothek und Analysen abzufragen.
+
 ### GLP App (dieses Repo)
 
 Das zentrale Stück. Es synchronisiert den Shot-Verlauf von Gaggiuino- und GaggiMate-Maschinen, speichert ihn in einer lokalen SQLite-Datenbank (`/data/glp.db`) und stellt Folgendes bereit:
