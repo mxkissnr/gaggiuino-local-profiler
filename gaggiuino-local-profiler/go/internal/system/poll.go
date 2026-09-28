@@ -130,10 +130,10 @@ type pollGlobalState struct {
 	// machines holds the former default-only poll scalars (#1201) keyed by
 	// machine id, so every machine reports its own reachability, last error
 	// and cached firmware version. Lazily populated by machine().
-	machines        map[int64]*machinePollState
-	isPollRunning   bool
-	liveAccum       *liveAccumState
-	liveSeq         int
+	machines      map[int64]*machinePollState
+	isPollRunning bool
+	liveAccum     *liveAccumState
+	liveSeq       int
 	// #902: steam/flush live sessions, same hard-single-machine slot
 	// pattern as liveAccum/liveSeq above.
 	steamAccum *modeAccumState
