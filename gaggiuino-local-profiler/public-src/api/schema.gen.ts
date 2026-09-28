@@ -7102,7 +7102,7 @@ export interface components {
                 enabled?: boolean;
                 /** @description Per-machine reachability (#1201) */
                 reachable?: boolean | null;
-                /** @description Last poll/sync error for this machine (#1201) */
+                /** @description Last poll/sync error for this machine (#1201); authenticated callers only (valid X-GLP-Token), like lastMachineError */
                 lastError?: string | null;
                 /** @description Cached firmware version for this machine (#1201) */
                 firmwareVersion?: string | null;

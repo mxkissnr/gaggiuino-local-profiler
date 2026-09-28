@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
@@ -130,8 +132,10 @@ func TestMachinePollState_VersionClearedOnRecovery(t *testing.T) {
 
 // TestGetStatus_PerMachineFieldsAndDefaultAliases pins the /api/status
 // contract: the top-level fields stay default-machine aliases while every
-// machines[] entry carries its own reachable/lastError/firmwareVersion
-// (with `on` still default-only).
+// machines[] entry carries its own reachable/firmwareVersion (with `on` still
+// default-only). lastError is deliberately omitted from that public contract:
+// it can embed the machine's host, so it is authenticated-only (see the
+// RequiresToken test below).
 func TestGetStatus_PerMachineFieldsAndDefaultAliases(t *testing.T) {
 	p, registry, fake, sqlDB := newMultiMachinePoller(t)
 	m2 := addOtherMachine(t, registry, "Second", "gaggiuino", "machine2.test", true)
@@ -185,10 +189,68 @@ func TestGetStatus_PerMachineFieldsAndDefaultAliases(t *testing.T) {
 	if second["reachable"] != false {
 		t.Errorf("machine 2 reachable = %v, want false", second["reachable"])
 	}
-	if second["lastError"] != "machine 2 down" {
-		t.Errorf("machine 2 lastError = %v, want %q", second["lastError"], "machine 2 down")
+	if _, present := second["lastError"]; present {
+		t.Errorf("unauthenticated machine 2 lastError = %v, want omitted", second["lastError"])
 	}
 	if v, present := second["on"]; !present || v != nil {
 		t.Errorf("machine 2 on = %v (present %v), want null (on stays default-only)", v, present)
 	}
+}
+
+// TestGetStatus_PerMachineLastErrorRequiresToken proves the #1201 follow-up:
+// machines[].lastError is only exposed to a caller presenting a valid
+// X-GLP-Token, matching the top-level lastMachineError (H1).
+func TestGetStatus_PerMachineLastErrorRequiresToken(t *testing.T) {
+	p, registry, fake, sqlDB := newMultiMachinePoller(t)
+	m2 := addOtherMachine(t, registry, "Second", "gaggiuino", "machine2.test", true)
+
+	fake.setStatus(okStatus(t, `{"softwareVersion":"1.0.0"}`, 93, 94, 1, 0, false, "Espresso", 1), nil)
+	p.pollViaGaggiuinoStatus(context.Background())
+	p.recordMachineError(m2.ID, errors.New("machine 2 down"))
+
+	h := NewHandlers(p, NewDemoService(sqlDB, shots.NewRepository(sqlDB), nil), testAPIToken)
+	mux := newSystemMux(h)
+
+	unauth := decodeMap(t, doGet(mux, "/api/status").Body.Bytes())
+	if mm := statusMachineByID(t, unauth, m2.ID); mm == nil {
+		t.Fatalf("unauthenticated machines[] missing machine %d", m2.ID)
+	} else if _, present := mm["lastError"]; present {
+		t.Errorf("unauthenticated machine 2 lastError = %v, want omitted", mm["lastError"])
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	req.Header.Set("X-GLP-Token", testAPIToken)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	authBody := decodeMap(t, rec.Body.Bytes())
+	authSecond := statusMachineByID(t, authBody, m2.ID)
+	if authSecond == nil {
+		t.Fatalf("authenticated machines[] missing machine %d", m2.ID)
+	}
+	if authSecond["lastError"] != "machine 2 down" {
+		t.Errorf("authenticated machine 2 lastError = %v, want %q", authSecond["lastError"], "machine 2 down")
+	}
+	if authDef := statusMachineByID(t, authBody, 1); authDef != nil {
+		if _, present := authDef["lastError"]; present {
+			t.Errorf("authenticated default lastError = %v, want omitted (no recorded error)", authDef["lastError"])
+		}
+	}
+}
+
+// statusMachineByID returns the machines[] entry with the given id, failing
+// the test if the machines field itself is malformed. It returns nil when the
+// id is absent so callers can assert on presence.
+func statusMachineByID(t *testing.T, body map[string]any, id int64) map[string]any {
+	t.Helper()
+	arr, ok := body["machines"].([]any)
+	if !ok {
+		t.Fatalf("machines = %+v, want array", body["machines"])
+	}
+	for _, raw := range arr {
+		mm, _ := raw.(map[string]any)
+		if got, _ := mm["id"].(float64); got == float64(id) {
+			return mm
+		}
+	}
+	return nil
 }

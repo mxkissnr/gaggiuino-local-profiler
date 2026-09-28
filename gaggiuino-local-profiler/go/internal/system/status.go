@@ -39,7 +39,12 @@ type statusMachine struct {
 // the flat legacy fields above (machineReachable/machineOn/...) and `on`
 // stay default-only. defaultReachable is the fallback for the default
 // machine's entry when statusFor has nothing recorded for it yet.
-func buildStatusMachines(list []machines.Machine, defaultReachable *bool, defaultOn bool, statusFor func(int64) MachinePollStatus) []statusMachine {
+//
+// authenticated gates lastError exactly like the top-level lastMachineError
+// (H1): the error string can embed the machine's host, so it is only set for
+// a caller presenting a valid X-GLP-Token. reachable/firmwareVersion stay
+// public (the equivalent top-level machineVersion already is).
+func buildStatusMachines(list []machines.Machine, defaultReachable *bool, defaultOn bool, authenticated bool, statusFor func(int64) MachinePollStatus) []statusMachine {
 	out := make([]statusMachine, 0, len(list))
 	for _, m := range list {
 		sm := statusMachine{
@@ -48,7 +53,9 @@ func buildStatusMachines(list []machines.Machine, defaultReachable *bool, defaul
 		}
 		st := statusFor(m.ID)
 		sm.Reachable = st.Reachable
-		sm.LastError = st.LastError
+		if authenticated {
+			sm.LastError = st.LastError
+		}
 		sm.FirmwareVersion = st.FirmwareVersion
 		if m.IsDefault {
 			if sm.Reachable == nil {
