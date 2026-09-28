@@ -271,3 +271,51 @@ func TestAcceptDeclineOrder_ConcurrentNeverDoubles(t *testing.T) {
 		t.Fatalf("successful declines = %d, want exactly 1", declineWins)
 	}
 }
+
+// TestCompleteOrder_ConcurrentAcceptKeepsAcceptedFields pins the review
+// scenario: when AcceptOrder and CompleteOrder race on one pending order and
+// both win their claims, CompleteOrder must not replay a pre-accept snapshot,
+// so the acceptedAt/eta the accept wrote survive. A full-row Save here used to
+// erase them (and could mis-derive the shot tolerance from a missing acceptedAt).
+func TestCompleteOrder_ConcurrentAcceptKeepsAcceptedFields(t *testing.T) {
+	svc, repo, _ := newAtomicService(t)
+	for i := 0; i < 50; i++ {
+		id := placeLatte(t, svc)
+		var acceptErr, completeErr error
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			_, acceptErr = svc.AcceptOrder(id, 7)
+		}()
+		go func() {
+			defer wg.Done()
+			_, completeErr = svc.CompleteOrder(id)
+		}()
+		wg.Wait()
+
+		if acceptErr != nil {
+			requireOrderError(t, acceptErr, 400)
+		}
+		if completeErr != nil {
+			requireOrderError(t, completeErr, 400)
+		}
+		if acceptErr != nil || completeErr != nil {
+			continue
+		}
+
+		row, err := repo.FindByID(id)
+		if err != nil {
+			t.Fatalf("FindByID: %v", err)
+		}
+		if row["status"] != "done" {
+			t.Fatalf("iteration %d: status = %v, want done", i, row["status"])
+		}
+		if _, ok := jsNumber(row["acceptedAt"]); !ok {
+			t.Fatalf("iteration %d: acceptedAt lost after concurrent accept+complete: %v", i, row)
+		}
+		if eta, ok := jsNumber(row["eta"]); !ok || eta != 7 {
+			t.Fatalf("iteration %d: eta lost after concurrent accept+complete: %v", i, row["eta"])
+		}
+	}
+}

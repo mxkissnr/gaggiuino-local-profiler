@@ -479,6 +479,13 @@ func (s *Service) CompleteOrder(id string) (Order, error) {
 	if !claimed {
 		return nil, newOrderError(400, "cannot complete")
 	}
+	// Re-read after the claim: a concurrent AcceptOrder may have won the
+	// pending->accepted claim and written acceptedAt between our lookup and
+	// our claim. The shot-tolerance window below must use the acceptedAt
+	// that actually landed in the row, not the pre-claim snapshot.
+	if fresh, ferr := s.repo.FindByID(id); ferr == nil && fresh != nil {
+		order = fresh
+	}
 	order["status"] = "done"
 	order["completedAt"] = completedAt
 
@@ -522,7 +529,10 @@ func (s *Service) CompleteOrder(id string) (Order, error) {
 		order["shotId"] = nil
 	}
 
-	if err := s.repo.Save(order); err != nil {
+	// Write back only the shotId: status/completedAt were set atomically by
+	// the claim, and a full-row Save would replay the pre-claim snapshot,
+	// erasing an accept that won the race (see Repository.UpdateFields).
+	if err := s.repo.UpdateFields(id, map[string]any{"shotId": order["shotId"]}); err != nil {
 		return nil, err
 	}
 	item, _ := order["item"].(string)
