@@ -84,30 +84,40 @@ func (h *Handlers) updateBasket(w http.ResponseWriter, r *http.Request) {
 // deleteBasket ports DELETE /api/library/basket/:id.
 func (h *Handlers) deleteBasket(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	if !noMatch {
-		if idx := findBasketIndex(lib, id); idx != -1 {
-			if ext, _ := lib.Baskets[idx]["image"].(string); ext != "" {
-				img.Delete(h.imageDir, id, ext, "basket-")
+	var imgExt string
+	// The image file removal below is filesystem I/O: it must not run while
+	// Update holds the library write lock, so the closure only records the
+	// extension and the handler deletes the file once Update returns.
+	err := h.repo.Update(func(lib *Library) error {
+		if !noMatch {
+			if idx := findBasketIndex(*lib, id); idx != -1 {
+				if ext, _ := lib.Baskets[idx]["image"].(string); ext != "" {
+					imgExt = ext
+				}
 			}
 		}
-	}
-	filtered := make([]Entity, 0, len(lib.Baskets))
-	for _, b := range lib.Baskets {
-		bid, ok := idOf(b, "id")
-		if !noMatch && ok && bid == id {
-			continue
+		filtered := make([]Entity, 0, len(lib.Baskets))
+		removed := false
+		for _, b := range lib.Baskets {
+			bid, ok := idOf(b, "id")
+			if !noMatch && ok && bid == id {
+				removed = true
+				continue
+			}
+			filtered = append(filtered, b)
 		}
-		filtered = append(filtered, b)
-	}
-	lib.Baskets = filtered
-	if err := h.repo.SaveLibrary(lib); err != nil {
+		if !removed {
+			return ErrSkipSave
+		}
+		lib.Baskets = filtered
+		return nil
+	})
+	if err != nil && !errors.Is(err, ErrSkipSave) {
 		internalError(w, err)
 		return
+	}
+	if imgExt != "" {
+		img.Delete(h.imageDir, id, imgExt, "basket-")
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -135,16 +145,15 @@ func (h *Handlers) postBasketImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
+	// Existence is decided before the upload is read/validated or any file is
+	// written: an unknown id 404s even when the image is also invalid, and no
+	// orphan file is ever written (matching dev's ordering).
+	exists, err := h.entityExists(id, noMatch, findBasketIndex)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	idx := -1
-	if !noMatch {
-		idx = findBasketIndex(lib, id)
-	}
-	if idx == -1 {
+	if !exists {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -157,15 +166,31 @@ func (h *Handlers) postBasketImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported image")
 		return
 	}
-	basket := lib.Baskets[idx]
-	if oldExt, _ := basket["image"].(string); oldExt != "" && oldExt != ext {
-		img.Delete(h.imageDir, id, oldExt, "basket-")
-	}
-	basket["image"] = ext
-	lib.Baskets[idx] = basket
-	if err := h.repo.SaveLibrary(lib); err != nil {
-		internalError(w, err)
+	var basket Entity
+	var oldExt string
+	err = h.repo.Update(func(lib *Library) error {
+		idx := -1
+		if !noMatch {
+			idx = findBasketIndex(*lib, id)
+		}
+		if idx == -1 {
+			return errNotFound
+		}
+		basket = lib.Baskets[idx]
+		oldExt, _ = basket["image"].(string)
+		basket["image"] = ext
+		lib.Baskets[idx] = basket
+		return nil
+	})
+	if err != nil {
+		// The entity was deleted between the existence check and the write;
+		// the just-saved file has no owner, so drop it.
+		img.Delete(h.imageDir, id, ext, "basket-")
+		writeUpdateError(w, err)
 		return
+	}
+	if oldExt != "" && oldExt != ext {
+		img.Delete(h.imageDir, id, oldExt, "basket-")
 	}
 	writeJSON(w, http.StatusOK, basket)
 }

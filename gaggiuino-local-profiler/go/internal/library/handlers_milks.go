@@ -84,21 +84,24 @@ func (h *Handlers) updateMilk(w http.ResponseWriter, r *http.Request) {
 // deleteMilk ports DELETE /api/library/milk/:id.
 func (h *Handlers) deleteMilk(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	filtered := make([]Entity, 0, len(lib.Milks))
-	for _, m := range lib.Milks {
-		mid, ok := idOf(m, "id")
-		if !noMatch && ok && mid == id {
-			continue
+	err := h.repo.Update(func(lib *Library) error {
+		filtered := make([]Entity, 0, len(lib.Milks))
+		removed := false
+		for _, m := range lib.Milks {
+			mid, ok := idOf(m, "id")
+			if !noMatch && ok && mid == id {
+				removed = true
+				continue
+			}
+			filtered = append(filtered, m)
 		}
-		filtered = append(filtered, m)
-	}
-	lib.Milks = filtered
-	if err := h.repo.SaveLibrary(lib); err != nil {
+		if !removed {
+			return ErrSkipSave
+		}
+		lib.Milks = filtered
+		return nil
+	})
+	if err != nil && !errors.Is(err, ErrSkipSave) {
 		internalError(w, err)
 		return
 	}
@@ -117,30 +120,28 @@ func (h *Handlers) deductMilk(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "ml must be positive")
 		return
 	}
-	lib, err := h.repo.GetLibrary()
+	var milk Entity
+	err := h.repo.Update(func(lib *Library) error {
+		idx := -1
+		if !noMatch {
+			idx = findMilkIndex(*lib, id)
+		}
+		if idx == -1 {
+			return errNotFound
+		}
+		milk = lib.Milks[idx]
+		current := floatOrZero(milk["stockMl"])
+		remaining := current - ml
+		if remaining < 0 {
+			remaining = 0
+		}
+		milk["stockMl"] = remaining
+		milk["updatedAt"] = newID()
+		lib.Milks[idx] = milk
+		return nil
+	})
 	if err != nil {
-		internalError(w, err)
-		return
-	}
-	idx := -1
-	if !noMatch {
-		idx = findMilkIndex(lib, id)
-	}
-	if idx == -1 {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	milk := lib.Milks[idx]
-	current := floatOrZero(milk["stockMl"])
-	remaining := current - ml
-	if remaining < 0 {
-		remaining = 0
-	}
-	milk["stockMl"] = remaining
-	milk["updatedAt"] = newID()
-	lib.Milks[idx] = milk
-	if err := h.repo.SaveLibrary(lib); err != nil {
-		internalError(w, err)
+		writeUpdateError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, milk)
@@ -162,25 +163,23 @@ func (h *Handlers) restockMilk(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "ml must be positive")
 		return
 	}
-	lib, err := h.repo.GetLibrary()
+	var milk Entity
+	err := h.repo.Update(func(lib *Library) error {
+		idx := -1
+		if !noMatch {
+			idx = findMilkIndex(*lib, id)
+		}
+		if idx == -1 {
+			return errNotFound
+		}
+		milk = lib.Milks[idx]
+		milk["stockMl"] = floatOrZero(milk["stockMl"]) + ml
+		milk["updatedAt"] = newID()
+		lib.Milks[idx] = milk
+		return nil
+	})
 	if err != nil {
-		internalError(w, err)
-		return
-	}
-	idx := -1
-	if !noMatch {
-		idx = findMilkIndex(lib, id)
-	}
-	if idx == -1 {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	milk := lib.Milks[idx]
-	milk["stockMl"] = floatOrZero(milk["stockMl"]) + ml
-	milk["updatedAt"] = newID()
-	lib.Milks[idx] = milk
-	if err := h.repo.SaveLibrary(lib); err != nil {
-		internalError(w, err)
+		writeUpdateError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, milk)

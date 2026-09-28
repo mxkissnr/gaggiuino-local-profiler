@@ -87,11 +87,13 @@ func (r *Repository) GetLibrary() (Library, error) {
 
 // SaveLibrary ports LibraryRepository.js's saveLibrary(lib): an
 // INSERT-OR-REPLACE upsert of the whole blob under key='main', same
-// whole-document-rewrite semantics as the Node original (no per-field
-// diffing/locking — every handler in this package does its own
-// read-mutate-save round trip per request, matching routes/library/*.js's
-// loadLibrary()/mutate/saveLibrary() pattern exactly, including its
-// same-caveats-as-Node lack of cross-request atomicity).
+// whole-document-rewrite semantics as the Node original.
+//
+// Production writes must NOT call this directly: a bare
+// read-mutate-save round trip on the shared blob races every other writer,
+// so every read-modify-write goes through Update (below), which takes the
+// package write lock first. SaveLibrary remains exported only for tests and
+// for seeding a whole Library blob from other packages.
 func (r *Repository) SaveLibrary(lib Library) error {
 	b, err := json.Marshal(lib)
 	if err != nil {

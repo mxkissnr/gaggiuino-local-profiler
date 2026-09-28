@@ -99,21 +99,24 @@ func (h *Handlers) updateRecipe(w http.ResponseWriter, r *http.Request) {
 // deleteRecipe ports POST /api/library/recipe/:id/delete.
 func (h *Handlers) deleteRecipe(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	filtered := make([]Entity, 0, len(lib.Recipes))
-	for _, rc := range lib.Recipes {
-		rid, ok := idOf(rc, "id")
-		if !noMatch && ok && rid == id {
-			continue
+	err := h.repo.Update(func(lib *Library) error {
+		filtered := make([]Entity, 0, len(lib.Recipes))
+		removed := false
+		for _, rc := range lib.Recipes {
+			rid, ok := idOf(rc, "id")
+			if !noMatch && ok && rid == id {
+				removed = true
+				continue
+			}
+			filtered = append(filtered, rc)
 		}
-		filtered = append(filtered, rc)
-	}
-	lib.Recipes = filtered
-	if err := h.repo.SaveLibrary(lib); err != nil {
+		if !removed {
+			return ErrSkipSave
+		}
+		lib.Recipes = filtered
+		return nil
+	})
+	if err != nil && !errors.Is(err, ErrSkipSave) {
 		internalError(w, err)
 		return
 	}

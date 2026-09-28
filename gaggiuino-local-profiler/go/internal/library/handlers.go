@@ -1,6 +1,7 @@
 package library
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -126,6 +127,60 @@ var (
 
 func internalError(w http.ResponseWriter, err error) {
 	httputil.InternalError(w, "library", err)
+}
+
+// apiError carries one of this handler layer's existing 4xx outcomes out of a
+// Repository.Update callback. Update runs its callback while holding the
+// library write lock and an HTTP response must not be written under it, so a
+// callback returns one of these instead and the handler writes the response
+// once Update has returned: writeUpdateError maps it back onto the exact
+// status/message the pre-Update code wrote directly.
+type apiError struct {
+	status  int
+	message string
+}
+
+func (e *apiError) Error() string { return e.message }
+
+var (
+	errNotFound              = &apiError{http.StatusNotFound, "not found"}
+	errNoActiveBag           = &apiError{http.StatusBadRequest, "no active bag"}
+	errPortionFieldsRequired = &apiError{http.StatusBadRequest, "portionCount and portionWeight_g required"}
+	errCannotDeleteLastBag   = &apiError{http.StatusBadRequest, "cannot delete last bag"}
+	errFrozenPortionNotFound = &apiError{http.StatusNotFound, "frozen portion not found"}
+	errInvalidPortionWeight  = &apiError{http.StatusBadRequest, "invalid portionWeight_g"}
+	errInvalidFrozenAt       = &apiError{http.StatusBadRequest, "invalid frozenAt"}
+	errInvalidRemainingCount = &apiError{http.StatusBadRequest, "invalid remainingCount"}
+)
+
+// writeUpdateError writes the response for an error returned by
+// Repository.Update: a callback-classified *apiError becomes its recorded
+// status/message, anything else the usual internalError.
+func writeUpdateError(w http.ResponseWriter, err error) {
+	var ae *apiError
+	if errors.As(err, &ae) {
+		writeError(w, ae.status, ae.message)
+		return
+	}
+	internalError(w, err)
+}
+
+// entityExists reports whether id names an existing entity of one library
+// kind. The *...Image handlers run this read-only check BEFORE reading or
+// writing the uploaded file, so an unknown id still 404s — and no file is
+// written — before any image validation, matching dev's original ordering.
+// GetLibrary is always called first (even for an unparseable id), so a
+// broken DB outranks the not-found response exactly as before; find is the
+// kind's findXIndex.
+func (h *Handlers) entityExists(id int64, noMatch bool, find func(Library, int64) int) (bool, error) {
+	lib, err := h.repo.GetLibrary()
+	if err != nil {
+		return false, err
+	}
+	if noMatch {
+		return false, nil
+	}
+	return find(lib, id) != -1, nil
 }
 
 func decodeJSONBody(w http.ResponseWriter, r *http.Request) (Entity, bool) {
