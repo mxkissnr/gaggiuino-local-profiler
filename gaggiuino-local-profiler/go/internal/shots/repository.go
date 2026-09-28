@@ -209,17 +209,33 @@ func (r *Repository) GetAnnotation(shotID int64) (map[string]any, error) {
 	return ann, nil
 }
 
-// GetLatestID ports ShotRepository.js's getLatestId(machineId). machineID
-// == 0 mirrors the Node original's `machineId` falsy branch (global
-// latest, across every machine); a positive machineID scopes to that one
-// machine. ok is false when there is no matching shot (Node's `row?.id ??
-// null`).
-func (r *Repository) GetLatestID(machineID int64) (id int64, ok bool, err error) {
+// GetLatestID ports ShotRepository.js's getLatestId(machineId), extended
+// with a sinceSec lower bound (#1197). machineID == 0 mirrors the Node
+// original's `machineId` falsy branch (global latest, across every
+// machine); a positive machineID scopes to that one machine. When
+// sinceSec > 0 only shots whose Unix-seconds timestamp is at or after it
+// are considered — order fulfillment uses this so a completed order is not
+// matched to an unrelated older shot. sinceSec == 0 means no time filter,
+// the original behaviour. ok is false when there is no matching shot
+// (Node's `row?.id ?? null`).
+func (r *Repository) GetLatestID(machineID, sinceSec int64) (id int64, ok bool, err error) {
 	var row *sql.Row
 	if machineID != 0 {
+		if sinceSec > 0 {
+			row = r.db.QueryRow(
+				`SELECT id FROM shots WHERE machine_id = ? AND timestamp >= ? AND id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1`,
+				machineID, sinceSec,
+			)
+		} else {
+			row = r.db.QueryRow(
+				`SELECT id FROM shots WHERE machine_id = ? AND id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1`,
+				machineID,
+			)
+		}
+	} else if sinceSec > 0 {
 		row = r.db.QueryRow(
-			`SELECT id FROM shots WHERE machine_id = ? AND id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1`,
-			machineID,
+			`SELECT id FROM shots WHERE timestamp >= ? AND id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1`,
+			sinceSec,
 		)
 	} else {
 		row = r.db.QueryRow(
