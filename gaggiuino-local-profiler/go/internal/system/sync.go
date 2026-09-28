@@ -21,8 +21,8 @@ import (
 // pull loop — syncShots()'s `${machineUrl}/latest` probe + `${machineUrl}/
 // {id}` backfill, including the #341/#1147 machine scoping and #719
 // oversized-id guard on the local max-id it catches up from, the #721
-// 404 -> blocklist skip, and the state.lastSyncTime/lastSyncError/
-// machineReachable writes GET /api/status reports. The GaggiMate default
+// 404 -> blocklist skip, and the state.lastSyncTime/lastSyncError writes
+// GET /api/status reports. The GaggiMate default
 // machine path (syncGaggiMateShots) is scoped to that machine's own id
 // range too (#1147), so a GaggiMate set as the default imports its shots
 // under its own machine instead of the first machine's.

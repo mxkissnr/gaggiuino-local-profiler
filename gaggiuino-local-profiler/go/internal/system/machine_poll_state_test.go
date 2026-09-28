@@ -106,7 +106,10 @@ func TestMachinePollState_FirmwareStampedPerMachine(t *testing.T) {
 // TestMachinePollState_VersionClearedOnRecovery proves the stale firmware
 // cache is dropped on an unreachable->reachable transition and re-sniffed.
 func TestMachinePollState_VersionClearedOnRecovery(t *testing.T) {
-	p, _, fake, _ := newMultiMachinePoller(t)
+	// newTestPoller wires no shots repo, so the unreachable->reachable
+	// transition cannot kick off the #725 catch-up sync goroutine.
+	fake := &fakeAdapter{}
+	p, _ := newTestPoller(t, fake)
 
 	fake.setStatus(okStatus(t, `{"softwareVersion":"1.0.0"}`, 93, 94, 1, 0, false, "Espresso", 1), nil)
 	p.pollViaGaggiuinoStatus(context.Background())
@@ -184,7 +187,7 @@ func TestGetStatus_PerMachineFieldsAndDefaultAliases(t *testing.T) {
 	if second["lastError"] != "machine 2 down" {
 		t.Errorf("machine 2 lastError = %v, want %q", second["lastError"], "machine 2 down")
 	}
-	if _, present := second["on"]; present {
-		t.Errorf("machine 2 on = %v, want omitted (on stays default-only)", second["on"])
+	if v, present := second["on"]; !present || v != nil {
+		t.Errorf("machine 2 on = %v (present %v), want null (on stays default-only)", v, present)
 	}
 }
