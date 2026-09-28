@@ -408,9 +408,6 @@ func (s *Service) AcceptOrder(id string, rawEta any) (Order, error) {
 	if order == nil {
 		return nil, newOrderError(404, "not found")
 	}
-	if status, _ := order["status"].(string); status != "pending" {
-		return nil, newOrderError(400, "not pending")
-	}
 	// Mirrors JS's `parseInt(rawEta) || 5`: 0 is falsy in JS too, so an
 	// explicit `eta: 0` must also default to 5, not merely an
 	// unparseable/absent value (#901 code review).
@@ -424,10 +421,23 @@ func (s *Service) AcceptOrder(id string, rawEta any) (Order, error) {
 	if eta > 60 {
 		eta = 60
 	}
+	// #1199: claim pending -> accepted atomically; the losing side of a
+	// race (or an already-accepted order) gets the same 400 it always did.
+	acceptedAt := time.Now().UnixMilli()
+	claimed, err := s.repo.ClaimTransition(id, []string{"pending"}, "accepted", acceptedAt, "acceptedAt")
+	if err != nil {
+		return nil, err
+	}
+	if !claimed {
+		return nil, newOrderError(400, "not pending")
+	}
 	order["status"] = "accepted"
 	order["eta"] = eta
-	order["acceptedAt"] = time.Now().UnixMilli()
-	if err := s.repo.Save(order); err != nil {
+	order["acceptedAt"] = acceptedAt
+	// Write back only the eta: a full-row Save would replay the pre-claim
+	// snapshot and could undo a status another transition just claimed (see
+	// Repository.UpdateFields).
+	if err := s.repo.UpdateFields(id, map[string]any{"eta": eta}); err != nil {
 		return nil, err
 	}
 	item, _ := order["item"].(string)
@@ -457,8 +467,27 @@ func (s *Service) CompleteOrder(id string) (Order, error) {
 	if order == nil {
 		return nil, newOrderError(404, "not found")
 	}
+	// #1199: claim the transition atomically before any side effect. A second
+	// complete of the same order — a double tap, or an automation and the
+	// dashboard at the same moment — loses the claim and must not deduct the
+	// milk again.
+	completedAt := time.Now().UnixMilli()
+	claimed, err := s.repo.ClaimTransition(id, []string{"pending", "accepted"}, "done", completedAt, "completedAt")
+	if err != nil {
+		return nil, err
+	}
+	if !claimed {
+		return nil, newOrderError(400, "cannot complete")
+	}
+	// Re-read after the claim: a concurrent AcceptOrder may have won the
+	// pending->accepted claim and written acceptedAt between our lookup and
+	// our claim. The shot-tolerance window below must use the acceptedAt
+	// that actually landed in the row, not the pre-claim snapshot.
+	if fresh, ferr := s.repo.FindByID(id); ferr == nil && fresh != nil {
+		order = fresh
+	}
 	order["status"] = "done"
-	order["completedAt"] = time.Now().UnixMilli()
+	order["completedAt"] = completedAt
 
 	if variant, _ := order["variant"].(string); variant != "" {
 		item, _ := order["item"].(string)
@@ -500,7 +529,10 @@ func (s *Service) CompleteOrder(id string) (Order, error) {
 		order["shotId"] = nil
 	}
 
-	if err := s.repo.Save(order); err != nil {
+	// Write back only the shotId: status/completedAt were set atomically by
+	// the claim, and a full-row Save would replay the pre-claim snapshot,
+	// erasing an accept that won the race (see Repository.UpdateFields).
+	if err := s.repo.UpdateFields(id, map[string]any{"shotId": order["shotId"]}); err != nil {
 		return nil, err
 	}
 	item, _ := order["item"].(string)
@@ -518,14 +550,22 @@ func (s *Service) DeclineOrder(id string, rawReason string) (Order, error) {
 	if order == nil {
 		return nil, newOrderError(404, "not found")
 	}
-	status, _ := order["status"].(string)
-	if status != "pending" && status != "accepted" {
+	// #1199: claim pending|accepted -> declined atomically; only the winner
+	// writes the decline reason.
+	completedAt := time.Now().UnixMilli()
+	claimed, err := s.repo.ClaimTransition(id, []string{"pending", "accepted"}, "declined", completedAt, "completedAt")
+	if err != nil {
+		return nil, err
+	}
+	if !claimed {
 		return nil, newOrderError(400, "cannot decline")
 	}
+	reason := truncate(rawReason, 200)
 	order["status"] = "declined"
-	order["declineReason"] = truncate(rawReason, 200)
-	order["completedAt"] = time.Now().UnixMilli()
-	if err := s.repo.Save(order); err != nil {
+	order["declineReason"] = reason
+	order["completedAt"] = completedAt
+	// Only the reason is written back — see AcceptOrder's note above.
+	if err := s.repo.UpdateFields(id, map[string]any{"declineReason": reason}); err != nil {
 		return nil, err
 	}
 	item, _ := order["item"].(string)

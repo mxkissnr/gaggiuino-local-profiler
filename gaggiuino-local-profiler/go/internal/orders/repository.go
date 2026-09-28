@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -93,6 +95,72 @@ func (r *Repository) FindActiveByID(id string) (Order, error) {
 		return nil, nil
 	}
 	return o, nil
+}
+
+// ClaimTransition atomically moves one order from any status in from to
+// to, stamping atField with atMs, in a single UPDATE ... WHERE. Two
+// concurrent callers can therefore never both win the same check-then-write
+// (the #1199 double-completion race): SQLite serialises the writes, so the
+// second caller's WHERE re-evaluates the already-updated status and matches
+// nothing. Reports true only for the caller whose UPDATE changed the row.
+//
+// json_set/json_extract are SQLite's built-in JSON functions, always
+// available in modernc.org/sqlite (this repo already relies on json_extract
+// in internal/shots). atField is an internal constant ("completedAt"/
+// "acceptedAt"), never request input, and is bound as a parameter rather
+// than concatenated into the statement.
+func (r *Repository) ClaimTransition(id string, from []string, to string, atMs int64, atField string) (bool, error) {
+	placeholders := make([]string, len(from))
+	args := make([]any, 0, len(from)+4)
+	args = append(args, to, atField, atMs, id)
+	for i, s := range from {
+		placeholders[i] = "?"
+		args = append(args, s)
+	}
+	query := `UPDATE orders SET data = json_set(data, '$.status', ?, '$.'||?, ?) WHERE id = ? AND json_extract(data, '$.status') IN (` + strings.Join(placeholders, ",") + `)`
+	res, err := r.db.Exec(query, args...)
+	if err != nil {
+		return false, fmt.Errorf("orders: claiming %s: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("orders: claiming %s: %w", id, err)
+	}
+	return n == 1, nil
+}
+
+// UpdateFields atomically sets the given JSON fields on one order without
+// touching its status. It is the follow-up write AcceptOrder/DeclineOrder
+// makes after a successful ClaimTransition (eta, declineReason); using
+// Save's whole-row overwrite instead would replay the pre-claim snapshot
+// and could resurrect a status a concurrent transition had just claimed.
+// Values are json.Marshal'd and bound through json(?) so a text value like
+// "123" is stored as a string, not mis-typed as a JSON number by json_set.
+func (r *Repository) UpdateFields(id string, fields map[string]any) error {
+	if len(fields) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(fields))
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	set := "json_set(data"
+	args := make([]any, 0, 2*len(keys)+1)
+	for _, k := range keys {
+		encoded, err := json.Marshal(fields[k])
+		if err != nil {
+			return fmt.Errorf("orders: encoding %s: %w", k, err)
+		}
+		set += ", '$.'||?, json(?)"
+		args = append(args, k, string(encoded))
+	}
+	set += ")"
+	args = append(args, id)
+	if _, err := r.db.Exec("UPDATE orders SET data = "+set+" WHERE id = ?", args...); err != nil {
+		return fmt.Errorf("orders: updating %s: %w", id, err)
+	}
+	return nil
 }
 
 func jsNumber(v any) (float64, bool) {

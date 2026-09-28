@@ -3,6 +3,7 @@
 - **A browser demo with sample data now runs on GitHub Pages, including a simulated live shot.** Closes #1193
 - **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, with separate opt-ins for write and developer tools.** Closes #1196
 ### Fixed
+- **Tapping complete twice on an order (or an automation and the dashboard at the same moment) no longer deducts the milk twice.** Closes #1199
 - **Backups now also keep the water-sensor setting, the default shot values and your unlocked badges with their original dates.** Closes #1197
 - **Library changes made at the same moment (for example a milk deduction from a completed order while you edit a bean) no longer overwrite each other.** Part of #1199
 - **The same no-lost-updates fix now covers every library endpoint — bags, frozen portions, milk stock, grinder resets and image uploads can no longer overwrite a concurrent change.** Part of #1199
