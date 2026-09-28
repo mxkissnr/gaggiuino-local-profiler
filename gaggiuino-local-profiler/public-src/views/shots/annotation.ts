@@ -419,6 +419,12 @@ function _updateMilkFieldVisibility(): void {
   field.style.display = (S.milkTypes?.length && drinkId) ? '' : 'none';
 }
 
+// Ported from PR #1120 (contributor branch origin/ppops-src/live-shot-setup)
+// onto this TypeScript module by the ppops/port-1120-live-shot-setup branch:
+// dev no longer has the contributor's public-src/views/shots/annotation.js,
+// so the three grinder-field helpers below and the selectId/fieldId arguments
+// on the render helpers further down live here instead.
+//
 // Same select-with-"other"-fallback grinder field as dialin-wizard.js's
 // _renderGrinderField/dialinGrinderChange, but DOM-mutating (fills an
 // existing <select>/<input> pair by id) instead of returning an HTML
