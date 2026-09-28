@@ -132,9 +132,16 @@ func LoadOrCreateToken(path string) (string, error) {
 
 // writeTokenFile ports lib/helpers.js's writeFileSafe (write-to-.tmp then
 // rename, so a reader can never observe a partially-written token file).
+// The token is a secret, so the file is 0600 (owner read/write only). The
+// explicit Chmod is load-bearing: os.WriteFile's mode is masked by the
+// process umask, and it leaves an already-existing .tmp at whatever mode it
+// had, so neither path alone guarantees 0600 before the rename.
 func writeTokenFile(path, content string) error {
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(tmp, []byte(content), 0o600); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)
