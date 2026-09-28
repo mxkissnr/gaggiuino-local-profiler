@@ -1,6 +1,7 @@
 package library
 
 import (
+	"errors"
 	"log"
 	"strings"
 	"time"
@@ -205,22 +206,27 @@ func UpsertKnownGrindSetting(lib *Library, beanID int64, grinder, grindSetting s
 // toggleBeanActiveAction, which re-renders a row from lib.Beans) reuse it
 // instead of issuing their own extra GetLibrary call.
 func ToggleBeanActive(repo *Repository, id int64) (bean Entity, lib Library, found bool, err error) {
-	lib, err = repo.GetLibrary()
-	if err != nil {
-		return nil, Library{}, false, err
-	}
-	idx := findBeanIndex(lib, id)
-	if idx == -1 {
+	err = repo.Update(func(l *Library) error {
+		idx := findBeanIndex(*l, id)
+		if idx == -1 {
+			return ErrSkipSave
+		}
+		b := l.Beans[idx]
+		if v, isBool := b["enabled"].(bool); isBool && !v {
+			b["enabled"] = true
+		} else {
+			b["enabled"] = false
+		}
+		l.Beans[idx] = b
+		bean = b
+		lib = *l
+		found = true
+		return nil
+	})
+	if errors.Is(err, ErrSkipSave) {
 		return nil, Library{}, false, nil
 	}
-	bean = lib.Beans[idx]
-	if b, isBool := bean["enabled"].(bool); isBool && !b {
-		bean["enabled"] = true
-	} else {
-		bean["enabled"] = false
-	}
-	lib.Beans[idx] = bean
-	if err := repo.SaveLibrary(lib); err != nil {
+	if err != nil {
 		return nil, Library{}, false, err
 	}
 	return bean, lib, true, nil
@@ -238,26 +244,27 @@ func SetBeanImage(repo *Repository, imageDir string, beanID int64, imageURL stri
 	if ext == "" {
 		return
 	}
-	lib, err := repo.GetLibrary()
+	err := repo.Update(func(lib *Library) error {
+		for i, bean := range lib.Beans {
+			id, ok := idOf(bean, "id")
+			if !ok || id != beanID {
+				continue
+			}
+			if oldExt, _ := bean["image"].(string); oldExt != "" && oldExt != ext {
+				img.Delete(imageDir, beanID, oldExt, "")
+			}
+			bean["image"] = ext
+			lib.Beans[i] = bean
+			return nil
+		}
+		return ErrSkipSave
+	})
+	if errors.Is(err, ErrSkipSave) {
+		// Bean was deleted before the download finished — clean up the orphaned file.
+		img.Delete(imageDir, beanID, ext, "")
+		return
+	}
 	if err != nil {
-		log.Printf("library: setBeanImage: reloading library for bean %d: %v", beanID, err)
-		return
+		log.Printf("library: setBeanImage: updating library for bean %d: %v", beanID, err)
 	}
-	for i, bean := range lib.Beans {
-		id, ok := idOf(bean, "id")
-		if !ok || id != beanID {
-			continue
-		}
-		if oldExt, _ := bean["image"].(string); oldExt != "" && oldExt != ext {
-			img.Delete(imageDir, beanID, oldExt, "")
-		}
-		bean["image"] = ext
-		lib.Beans[i] = bean
-		if err := repo.SaveLibrary(lib); err != nil {
-			log.Printf("library: setBeanImage: saving library for bean %d: %v", beanID, err)
-		}
-		return
-	}
-	// Bean was deleted before the download finished — clean up the orphaned file.
-	img.Delete(imageDir, beanID, ext, "")
 }

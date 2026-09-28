@@ -1,6 +1,7 @@
 package library
 
 import (
+	"errors"
 	"reflect"
 	"time"
 
@@ -220,31 +221,34 @@ func DeductMilkByName(repo *Repository, name string, ml float64) (Entity, bool, 
 	if name == "" || !(ml > 0) {
 		return nil, false, nil
 	}
-	lib, err := repo.GetLibrary()
-	if err != nil {
-		return nil, false, err
-	}
 	key := lowerOrEmpty(name)
-	idx := -1
-	for i, m := range lib.Milks {
-		if lowerOrEmptyAny(m["name"]) == key {
-			idx = i
-			break
+	var milk Entity
+	err := repo.Update(func(lib *Library) error {
+		idx := -1
+		for i, m := range lib.Milks {
+			if lowerOrEmptyAny(m["name"]) == key {
+				idx = i
+				break
+			}
 		}
-	}
-	if idx == -1 {
+		if idx == -1 {
+			return ErrSkipSave
+		}
+		milk = lib.Milks[idx]
+		stockMl, _ := jsParseFloat(milk["stockMl"])
+		newStock := stockMl - ml
+		if newStock < 0 {
+			newStock = 0
+		}
+		milk["stockMl"] = newStock
+		milk["updatedAt"] = time.Now().UnixMilli()
+		lib.Milks[idx] = milk
+		return nil
+	})
+	if errors.Is(err, ErrSkipSave) {
 		return nil, false, nil
 	}
-	milk := lib.Milks[idx]
-	stockMl, _ := jsParseFloat(milk["stockMl"])
-	newStock := stockMl - ml
-	if newStock < 0 {
-		newStock = 0
-	}
-	milk["stockMl"] = newStock
-	milk["updatedAt"] = time.Now().UnixMilli()
-	lib.Milks[idx] = milk
-	if err := repo.SaveLibrary(lib); err != nil {
+	if err != nil {
 		return nil, false, err
 	}
 	return milk, true, nil
