@@ -434,7 +434,10 @@ func (s *Service) AcceptOrder(id string, rawEta any) (Order, error) {
 	order["status"] = "accepted"
 	order["eta"] = eta
 	order["acceptedAt"] = acceptedAt
-	if err := s.repo.Save(order); err != nil {
+	// Write back only the eta: a full-row Save would replay the pre-claim
+	// snapshot and could undo a status another transition just claimed (see
+	// Repository.UpdateFields).
+	if err := s.repo.UpdateFields(id, map[string]any{"eta": eta}); err != nil {
 		return nil, err
 	}
 	item, _ := order["item"].(string)
@@ -547,10 +550,12 @@ func (s *Service) DeclineOrder(id string, rawReason string) (Order, error) {
 	if !claimed {
 		return nil, newOrderError(400, "cannot decline")
 	}
+	reason := truncate(rawReason, 200)
 	order["status"] = "declined"
-	order["declineReason"] = truncate(rawReason, 200)
+	order["declineReason"] = reason
 	order["completedAt"] = completedAt
-	if err := s.repo.Save(order); err != nil {
+	// Only the reason is written back — see AcceptOrder's note above.
+	if err := s.repo.UpdateFields(id, map[string]any{"declineReason": reason}); err != nil {
 		return nil, err
 	}
 	item, _ := order["item"].(string)

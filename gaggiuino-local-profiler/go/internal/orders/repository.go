@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -126,6 +127,40 @@ func (r *Repository) ClaimTransition(id string, from []string, to string, atMs i
 		return false, fmt.Errorf("orders: claiming %s: %w", id, err)
 	}
 	return n == 1, nil
+}
+
+// UpdateFields atomically sets the given JSON fields on one order without
+// touching its status. It is the follow-up write AcceptOrder/DeclineOrder
+// makes after a successful ClaimTransition (eta, declineReason); using
+// Save's whole-row overwrite instead would replay the pre-claim snapshot
+// and could resurrect a status a concurrent transition had just claimed.
+// Values are json.Marshal'd and bound through json(?) so a text value like
+// "123" is stored as a string, not mis-typed as a JSON number by json_set.
+func (r *Repository) UpdateFields(id string, fields map[string]any) error {
+	if len(fields) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(fields))
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	set := "json_set(data"
+	args := make([]any, 0, 2*len(keys)+1)
+	for _, k := range keys {
+		encoded, err := json.Marshal(fields[k])
+		if err != nil {
+			return fmt.Errorf("orders: encoding %s: %w", k, err)
+		}
+		set += ", '$.'||?, json(?)"
+		args = append(args, k, string(encoded))
+	}
+	set += ")"
+	args = append(args, id)
+	if _, err := r.db.Exec("UPDATE orders SET data = "+set+" WHERE id = ?", args...); err != nil {
+		return fmt.Errorf("orders: updating %s: %w", id, err)
+	}
+	return nil
 }
 
 func jsNumber(v any) (float64, bool) {
