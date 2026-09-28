@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -342,6 +343,53 @@ func TestLoadOrCreateToken(t *testing.T) {
 
 	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
 		t.Errorf("expected the .tmp file to be renamed away, stat err = %v", err)
+	}
+}
+
+// #1057: the generated token is a secret, so the file it lands in must be
+// readable only by its owner. Skipped on Windows, where POSIX perm bits are
+// not meaningful.
+func TestLoadOrCreateToken_SecureFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX file modes are not meaningful on Windows")
+	}
+	path := filepath.Join(t.TempDir(), "api_token.txt")
+	if _, err := LoadOrCreateToken(path); err != nil {
+		t.Fatalf("LoadOrCreateToken: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat token file: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("token file mode = %o, want 600", perm)
+	}
+}
+
+// A stale .tmp left behind by a crash, or one created under a permissive
+// umask, keeps its old mode through os.WriteFile; the explicit Chmod must
+// still narrow it to 0600 before the rename. The temp file is chmodded
+// explicitly so the assertion cannot pass merely because of the umask.
+func TestWriteTokenFile_NarrowsExistingTempMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX file modes are not meaningful on Windows")
+	}
+	path := filepath.Join(t.TempDir(), "api_token.txt")
+	if err := os.WriteFile(path+".tmp", []byte("stale"), 0o644); err != nil {
+		t.Fatalf("seeding temp file: %v", err)
+	}
+	if err := os.Chmod(path+".tmp", 0o644); err != nil {
+		t.Fatalf("chmod temp file: %v", err)
+	}
+	if err := writeTokenFile(path, "token"); err != nil {
+		t.Fatalf("writeTokenFile: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat token file: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("token file mode = %o, want 600", perm)
 	}
 }
 
