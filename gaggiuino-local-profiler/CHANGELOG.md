@@ -15,6 +15,9 @@
 - **The screenshot tool now renders in English regardless of the host locale, and a backup restored into its throwaway instance keeps its photos instead of serving blank ones.** Closes #1184
 - **The Orders and Live screenshots now keep the seeded demo data when the screenshot tool restores a real backup, and a restore reports how many photos it wrote.** Closes #1185
 
+### Security
+- **The generated API token file is now readable only by the app itself.** Closes #1057
+
 ### Changed
 - **The screenshot tool can restore a real GLP backup instead of the demo seed, so the README/wiki views can be captured from actual data.** Closes #1181
 - **The README now shows the GLP ecosystem and the app's internals as diagrams, and GaggiMate is documented as fully supported.** Closes #1176
