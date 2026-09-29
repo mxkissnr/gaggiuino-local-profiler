@@ -836,7 +836,7 @@ export function handleGmEditorAction(action: string, el: HTMLElement): void {
     case 'gm-type': {
       const val = el.dataset.val;
       // Converting to pro: give every phase a transition field if it lacks one.
-      const phases = (_profile!.phases || []).map(p => {
+      const phases = (_profile.phases || []).map(p => {
         if (val === 'pro' && !p.transition) {
           return { ...p, temperature: p.temperature ?? 0, transition: { type: 'instant', duration: 0, adaptive: true, target: 'time' } };
         }
@@ -850,7 +850,7 @@ export function handleGmEditorAction(action: string, el: HTMLElement): void {
     case 'gm-add-phase':     _addPhase(); break;
     case 'gm-remove-phase':  _removePhase(idx); break;
     case 'gm-phase-prev':    _currentPhaseIdx = Math.max(0, _currentPhaseIdx - 1); _render(); break;
-    case 'gm-phase-next':    _currentPhaseIdx = Math.min((_profile!.phases?.length ?? 1) - 1, _currentPhaseIdx + 1); _render(); break;
+    case 'gm-phase-next':    _currentPhaseIdx = Math.min((_profile.phases?.length ?? 1) - 1, _currentPhaseIdx + 1); _render(); break;
 
     // Shared between Standard and Pro — identical body either way.
     case 'gm-std-phase-type':
