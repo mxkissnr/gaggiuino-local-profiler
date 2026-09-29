@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared bean-remaining fixture (#1122): one definition of 'remaining' for the SPA (public-src/bean-math.js computeBeanRemaining) and Go (go/internal/library/orders_support.go ComputeBeanRemaining). Loaded by TestComputeBeanRemaining_SharedFixture in orders_support_test.go and by test/bean-math.test.js. expected is null for an untracked (unlimited-stock) bean. allBeans defaults to [bean] when omitted.",
+  "_comment": "Shared bean-remaining fixture (#1122): the definition of 'remaining' for Go's go/internal/library/orders_support.go ComputeBeanRemaining, whose result the server exposes as the bean-level remainingG the SPA reads. Loaded by TestComputeBeanRemaining_SharedFixture in orders_support_test.go. expected is null for an untracked (unlimited-stock) bean. allBeans defaults to [bean] when omitted.",
   "cases": [
     {
       "name": "single bag with per-bag stock",
