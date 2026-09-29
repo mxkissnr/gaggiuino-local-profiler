@@ -13,7 +13,6 @@ interface LibraryModule {
   renderBeanList: () => void;
   togglePastBags: (beanId: number) => void;
 }
-// @ts-expect-error -- library.js is still untyped JS (#1133 split); drop this once it is TS
 const { renderBeanList, togglePastBags } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #1122: the bean card renders a "Past bags" chip (data-action=
