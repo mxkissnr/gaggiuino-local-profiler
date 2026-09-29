@@ -30,6 +30,7 @@
 - **The app architecture diagram now shows the importer and backup/restore paths through the REST API.** Part of #1176
 - **The README's architecture diagrams are now coloured and readable, and the README's AI note credits DeepSeek alongside Claude.** Closes #1180
 - **The README's architecture diagrams are now grouped into named areas and toned for readability in both GitHub themes.** Part of #1180
+- **The library view's recipes, milk, baskets and puck screens are now type-checked.** Part of #1115
 
 ## [3.2.0] – 2026-09-26
 ### Added
