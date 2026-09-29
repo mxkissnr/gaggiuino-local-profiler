@@ -17,12 +17,15 @@
 // attachAutocomplete().
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator ??= { language: 'en-US' };
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge the sibling live tests use).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
 
-const apiFetchMock = vi.fn(() => Promise.resolve({ ok: false, status: 500 }));
+const apiFetchMock = vi.fn((..._args: unknown[]) => Promise.resolve({ ok: false, status: 500 }));
 vi.mock('../public-src/api/transport.js', () => ({
-  apiFetch: (...args) => apiFetchMock(...args),
+  apiFetch: (...args: unknown[]) => apiFetchMock(...args) as unknown,
   // #913: fetchLiveData()'s !r.ok branch calls the real isApiPortBlocked() --
   // omitting it here made it undefined, which threw and (only visibly once
   // handleLiveData()'s catch-block fallback started calling
@@ -62,9 +65,23 @@ vi.mock('../public-src/views/shots/grind.js', () => ({
 const { S } = await import('../public-src/state/index.js');
 const { connectLiveStream, disconnectLiveStream } = await import('../public-src/views/live.js');
 
+// The DOM stand-in these tests touch: only the members the live view reads
+// off each element.
+interface FakeElement {
+  className: string;
+  textContent: string;
+  style: Record<string, string>;
+  value: string;
+  classList: { add: () => void; remove: () => void; contains: () => boolean; toggle: () => void };
+  querySelector: () => null;
+  addEventListener: () => void;
+  removeEventListener: () => void;
+  selectedOptions: { dataset: Record<string, string> }[];
+}
+
 function makeFakeDocument() {
-  const registry = new Map();
-  function makeElement() {
+  const registry = new Map<string, FakeElement>();
+  function makeElement(): FakeElement {
     return {
       className: '', textContent: '', style: {}, value: '',
       classList: { add() {}, remove() {}, contains: () => false, toggle() {} },
@@ -75,9 +92,9 @@ function makeFakeDocument() {
     };
   }
   return {
-    getElementById: id => {
+    getElementById: (id: string): FakeElement => {
       if (!registry.has(id)) registry.set(id, makeElement());
-      return registry.get(id);
+      return registry.get(id)!;
     },
   };
 }
@@ -86,7 +103,7 @@ describe('connectLiveStream() REST-polling fallback self-corrects on S.sseActive
   beforeEach(() => {
     vi.useFakeTimers();
     apiFetchMock.mockClear();
-    globalThis.document = makeFakeDocument();
+    g.document = makeFakeDocument();
     S.activeMachineId = null;
     S.currentLang = 'en';
     S.refShotId = null;
