@@ -7359,7 +7359,7 @@ export interface components {
         ThawPortionInput: {
             portionId: number;
             /** @default 1 */
-            count?: number;
+            count: number;
         };
         AdjustFrozenPortionInput: {
             portionId: number;
