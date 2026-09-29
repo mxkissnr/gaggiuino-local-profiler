@@ -21,7 +21,6 @@ const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" hei
 // consumedG/remainingG/current (SimulateBagQueue). This names what the
 // runtime actually sends.
 export type BagRow = NonNullable<Bean['bags']>[number] & {
-  id: number;
   price_eur?: number | null | undefined;
   sortOrder?: number | undefined;
   consumedG?: number | undefined;
@@ -101,7 +100,7 @@ export function classifyBeanBags(b: BeanRow): ClassifiedBags {
 // Bag cards are collapsed by default (space-saving on mobile) — this Set
 // tracks which bag ids are expanded, mirroring the _pendingBeanActiveToggles
 // module-state pattern already used in views/library.js.
-const _expandedBagCards = new Set<number>();
+const _expandedBagCards = new Set<number | undefined>();
 // Same pattern for the "Vergangene" (past bags) section per bean id — see
 // renderBeanList's pastSection comment for why this can't live as
 // DOM-only classList/dataset state anymore.
