@@ -1552,7 +1552,6 @@ function _applyUrlImport(data, variant) {
   if (data.brewNotes)         document.getElementById('beanFormBrewNotes').value = data.brewNotes;
   if (variant) {
     document.getElementById('beanFormPrice').value = (variant.price / 100).toFixed(2);
-    document.getElementById('beanFormStock').value = variant.weight;
   } else if (data.price_eur) {
     document.getElementById('beanFormPrice').value = data.price_eur;
   }

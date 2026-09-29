@@ -18,14 +18,9 @@ import (
 // for the same reason ComputeGrinderWearStats lives in service.go: only
 // this package has direct Repository access to the `library` table.
 
-// ComputeBeanRemaining ports LibraryService.js's computeBeanRemaining:
-// remaining grams for a stock-tracked bean, matching doseRows against the
-// bean by stable beanId first (#456), falling back to case-insensitive name
-// matching for rows that predate it or whose beanId no longer resolves to
-// any existing bean. Returns (0, false) for a bean with no tracked stock
-// (bean.stock_g not set/positive), matching the Node original's `null`.
-// ComputeBeanRemaining mirrors public-src/bean-math.js's computeBeanRemaining
-// exactly (same signature, same beanId-first-with-name-fallback matching,
+// ComputeBeanRemaining ports LibraryService.js's computeBeanRemaining and
+// mirrors public-src/bean-math.js's implementation exactly (same signature,
+// same beanId-first-with-name-fallback matching,
 // same FIFO-across-tracked-bags accumulation, same double-round) — the two
 // must never drift apart, since this is the SPA's own display value on one
 // side and the SSR/achievements/orders low-stock paths' value on the other.
