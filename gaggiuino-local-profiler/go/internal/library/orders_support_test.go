@@ -1,6 +1,8 @@
 package library
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -249,5 +251,106 @@ func TestSimulateBagQueue_StockAdjustRoundTrip(t *testing.T) {
 	}
 	if after[0].RemainingG != desiredRemaining {
 		t.Fatalf("after[0].RemainingG = %d, want %d (the round-trip must land exactly on the desired remaining value)", after[0].RemainingG, desiredRemaining)
+	}
+}
+
+// beanRemainingFixtureDose mirrors shots.AnnotatedDose's JSON shape for the
+// shared remaining fixture (testdata/bean_remaining_cases.json). Pointer
+// fields keep JSON null (rather than 0) meaningful, so a case can exercise a
+// dose row that never had a beanId/dose recorded.
+type beanRemainingFixtureDose struct {
+	Coffee    string   `json:"coffee"`
+	BeanID    *int64   `json:"beanId"`
+	Dose      *float64 `json:"dose"`
+	Timestamp int64    `json:"timestamp"`
+}
+
+// beanRemainingFixtureCase is one entry of the shared fixture file.
+type beanRemainingFixtureCase struct {
+	Name     string                     `json:"name"`
+	Bean     Entity                     `json:"bean"`
+	AllBeans []Entity                   `json:"allBeans"`
+	DoseRows []beanRemainingFixtureDose `json:"doseRows"`
+	Expected *int64                     `json:"expected"`
+}
+
+// TestComputeBeanRemaining_SharedFixture pins Go's ComputeBeanRemaining to
+// the exact same expected values the SPA's computeBeanRemaining is asserted
+// against in test/bean-math.test.js — both read
+// testdata/bean_remaining_cases.json (#1122, maintainer review point 1). A
+// disagreement here means the SPA, SSR and Orders low-stock paths would show
+// different "remaining" numbers for the same bean.
+func TestComputeBeanRemaining_SharedFixture(t *testing.T) {
+	raw, err := os.ReadFile("testdata/bean_remaining_cases.json")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	var fixture struct {
+		Cases []beanRemainingFixtureCase `json:"cases"`
+	}
+	if err := json.Unmarshal(raw, &fixture); err != nil {
+		t.Fatalf("parse fixture: %v", err)
+	}
+	if len(fixture.Cases) == 0 {
+		t.Fatal("fixture has no cases")
+	}
+	for _, tc := range fixture.Cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			allBeans := tc.AllBeans
+			if len(allBeans) == 0 {
+				allBeans = []Entity{tc.Bean}
+			}
+			rows := make([]shots.AnnotatedDose, len(tc.DoseRows))
+			for i, d := range tc.DoseRows {
+				rows[i] = shots.AnnotatedDose{Coffee: d.Coffee, BeanID: d.BeanID, Dose: d.Dose, Timestamp: d.Timestamp}
+			}
+			got, ok := ComputeBeanRemaining(tc.Bean, rows, allBeans)
+			if tc.Expected == nil {
+				if ok {
+					t.Fatalf("ComputeBeanRemaining ok = true, want false (untracked bean, expected null)")
+				}
+				return
+			}
+			if !ok {
+				t.Fatalf("ComputeBeanRemaining ok = false, want true (expected %d)", *tc.Expected)
+			}
+			if got != *tc.Expected {
+				t.Fatalf("remaining = %d, want %d", got, *tc.Expected)
+			}
+		})
+	}
+}
+
+// TestSimulateBagQueue_FrozenPortionsDoNotConsumeStock pins the documented
+// freeze/thaw contract for the queue replay (#1122, maintainer review point
+// 5). saveFreezePortions (handlers_beans.go) documents freezing as pausing a
+// portion's freshness clock only — it removes no grams from the bag, so a
+// bag with frozen portions must still count its whole stock_g and a matching
+// dose in full. This is the queue-level counterpart of the shared fixture's
+// "frozen portions do not reduce the bag's tracked stock" case, which fixes
+// the same expectation for ComputeBeanRemaining on both sides.
+func TestSimulateBagQueue_FrozenPortionsDoNotConsumeStock(t *testing.T) {
+	beanID := int64(1)
+	bean := Entity{
+		"id": beanID, "name": "Frozen",
+		"bags": []any{
+			Entity{
+				"id": int64(1), "stock_g": float64(250), "openedAt": int64(1000), "sortOrder": int64(0),
+				"frozenPortions": []any{
+					Entity{"id": int64(1), "frozenAt": int64(500), "portionCount": int64(2), "portionWeight_g": float64(18), "remainingCount": int64(2)},
+				},
+			},
+		},
+	}
+	dose := 18.0
+	statuses := SimulateBagQueue(bean, []shots.AnnotatedDose{{BeanID: &beanID, Dose: &dose, Timestamp: 1500}}, []Entity{bean})
+	if len(statuses) != 1 {
+		t.Fatalf("len(statuses) = %d, want 1", len(statuses))
+	}
+	if statuses[0].ConsumedG != 18 || statuses[0].RemainingG != 232 {
+		t.Fatalf("status = %+v, want consumed=18 remaining=232 — frozen portions must not be subtracted from or double-counted against the bag's stock", statuses[0])
+	}
+	if !statuses[0].Current {
+		t.Fatalf("status = %+v, want current=true", statuses[0])
 	}
 }

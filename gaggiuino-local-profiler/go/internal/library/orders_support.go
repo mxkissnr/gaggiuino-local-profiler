@@ -34,6 +34,10 @@ import (
 // per-bag clamp, so a dose recorded against one tracked bag's period can
 // still draw down a later tracked bag's stock in the running total (true
 // FIFO), matching the JS implementation's own doc comment.
+//
+// The canonical agreement cases live in testdata/bean_remaining_cases.json,
+// loaded by both TestComputeBeanRemaining_SharedFixture here and
+// test/bean-math.test.js — add new behaviour there first (#1122).
 func ComputeBeanRemaining(bean Entity, doseRows []shots.AnnotatedDose, allBeans []Entity) (int64, bool) {
 	bags := bagsOf(bean)
 	name := lowerOrEmpty(strOf(bean["name"]))

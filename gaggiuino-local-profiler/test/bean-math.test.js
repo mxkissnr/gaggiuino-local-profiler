@@ -4,7 +4,16 @@
 // rows instead of a DB round trip, since public-src/bean-math.js is a pure
 // ESM module with no DB dependency.
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { matchesBean, computeBeanRemaining } from '../public-src/bean-math.js';
+
+// The same case file Go's TestComputeBeanRemaining_SharedFixture reads
+// (go/internal/library/testdata/bean_remaining_cases.json) — one definition
+// of "remaining" for the SPA and the backend (#1122, maintainer review point
+// 1). Any case the two implementations disagree on fails one side or the other.
+const remainingFixture = JSON.parse(
+  readFileSync(new URL('../go/internal/library/testdata/bean_remaining_cases.json', import.meta.url), 'utf8'),
+);
 
 describe('computeBeanRemaining (#551, ported from #456 regression)', () => {
     it('a bean deleted and reimported under the same name recovers the old shots\' consumption via name fallback', () => {
@@ -60,4 +69,17 @@ describe('computeBeanRemaining (#551, ported from #456 regression)', () => {
         expect(matchesBean({ coffee: 'Different Name', beanId: 1 }, bean, idExists)).toBe(true);
     });
 
+});
+
+// #1122: the SPA and Go must return the same remaining for a multi-bag bean.
+// This reads the exact JSON fixture the Go table test loads, so the two
+// implementations are pinned to one another rather than to two hand-written
+// copies that can silently drift.
+describe('computeBeanRemaining matches the shared Go/JS fixture (#1122)', () => {
+    for (const c of remainingFixture.cases) {
+        it(c.name, () => {
+            const allBeans = c.allBeans && c.allBeans.length ? c.allBeans : [c.bean];
+            expect(computeBeanRemaining(c.bean, c.doseRows, allBeans)).toBe(c.expected);
+        });
+    }
 });
