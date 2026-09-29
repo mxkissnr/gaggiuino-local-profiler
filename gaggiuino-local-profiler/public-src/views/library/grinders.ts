@@ -11,7 +11,6 @@ import { openLightbox } from '../../components/lightbox.js';
 import { loadGrinderImageBlobUrl, invalidateGrinderImage } from '../../bean-image.js';
 import { currentGrinderZeroPoint } from '../../grind-zero.js';
 import type { Grinder } from '../../api/types.js';
-// @ts-expect-error -- library.js is still untyped JS (#1115); drop this once it is TS
 import * as libraryView from '../library.js';
 
 // Circular with library.js (it re-exports this module): only ever touched at

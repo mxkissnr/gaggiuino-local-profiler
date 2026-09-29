@@ -12,7 +12,6 @@ const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
   renderBeanList: () => void;
 }
-// @ts-expect-error -- library.js is still untyped JS (#1133 split); drop this once it is TS
 const { renderBeanList } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 // Roast dates below are built with todayIsoDate() (local YYYY-MM-DD, not
 // Date#toISOString()'s UTC date): roastAgeDays() reparses the stored date in

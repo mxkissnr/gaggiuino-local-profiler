@@ -10,7 +10,6 @@ import * as libraryApi from '../../api/library.js';
 import { esc, toIsoDateInput } from '../../utils.js';
 import { WARNING_ICON_SVG } from '../../icons.js';
 import { parseGlpQrParams } from '../../glp-qr.js';
-// @ts-expect-error -- library.js is still untyped JS (#1115); drop this once it is TS
 import * as libraryView from '../library.js';
 
 // Circular with library.js (it re-exports this module): the bean-form helpers

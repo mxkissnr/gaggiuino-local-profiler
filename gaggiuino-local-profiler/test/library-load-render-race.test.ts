@@ -13,7 +13,6 @@ const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
   loadLibrary: () => Promise<void>;
 }
-// @ts-expect-error -- library.js is still untyped JS (#1133 split); drop this once it is TS
 const { loadLibrary } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #526: loadLibrary()'s fetch is fired unawaited from main.js's init

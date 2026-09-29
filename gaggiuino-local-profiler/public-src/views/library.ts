@@ -1,3 +1,5 @@
+import type { Bean, Basket, Milk, PuckScreen, Recipe, NewBagInput } from '../api/types.js';
+import type { BeanRow } from './library/bags.js';
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import * as libraryApi from '../api/library.js';
@@ -27,9 +29,77 @@ const ICON_EYE_OFF = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" he
 const ICON_QR      = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H19V11H21V13H19V15H21V19H19V21H17V19H13V21H11V17H15V15H17V13H15V11M19,19V15H17V19H19M15,3H21V9H15V3M17,5V7H19V5H17M3,3H9V9H3V3M5,5V7H7V5H5M3,15H9V21H3V15M5,17V19H7V17H5Z"/></svg>`;
 const ICON_PLUS    = `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/></svg>`;
 
+// ── Typed views of S ──────────────────────────────────────────────────────
+// state/index.ts types library rows as opaque LibraryRow records and its
+// coffeeLibrary only declares beans/grinders; this view owns the bean shape
+// plus the bag-level fields the backend attaches on read, reached through one
+// typed view of the same array/state (same pattern as views/library/bags.ts).
+type BeanListRow = BeanRow & {
+  consumedG?: number | undefined;
+  remainingG?: number | null | undefined;
+};
+
+function _beanList(): BeanListRow[] {
+  return S.coffeeLibrary.beans as unknown as BeanListRow[];
+}
+
+// The generated Bean.bags item lags the backend: frozenPortion fields are all
+// optional in the schema but always present at runtime — name what is read.
+interface FrozenPortion {
+  id: number;
+  frozenAt: number;
+  portionCount: number;
+  portionWeight_g: number;
+  remainingCount?: number;
+  thawedAt?: number;
+}
+
+// A bean origin chip (blend-capable) — mirrors the flavor chips. The schema
+// documents the weight as `pct`; the runtime payload carries `percent`.
+interface OriginChip { code?: string | undefined; percent?: number | undefined }
+interface OriginBean { origins?: OriginChip[] | undefined; origin?: string | undefined }
+
+type BeanFormExtraRecipe = Record<string, unknown>;
+
+interface LibraryState {
+  coffeeLibrary: {
+    recipes?: Recipe[] | undefined;
+    milks?: Milk[] | undefined;
+    baskets?: Basket[] | undefined;
+    puckScreens?: PuckScreen[] | undefined;
+  };
+  _urlImportImageUrl?: string | null;
+  _urlImportExtraRecipes?: BeanFormExtraRecipe[] | null;
+}
+function _state(): LibraryState { return S as unknown as LibraryState; }
+
+// Shot rows are metadata-only (ShotMeta); the bean list reads the annotation's
+// coffee/rating fields and the timestamp — named here, same convention as
+// views/library/recipes.ts's RecipeShotRow.
+interface BeanShotRow {
+  timestamp: number;
+  annotation: {
+    grinder: string;
+    grindSetting: string;
+    beanId?: number | null;
+    coffee?: string | null;
+    rating?: string | null;
+  };
+}
+function _shots(): BeanShotRow[] { return S.shots as unknown as BeanShotRow[]; }
+
+// Every form field read/written here is an <input>/<select>; the shared
+// .value/.checked API is all that is used (same helper as grinders.ts).
+function _field(id: string): HTMLInputElement {
+  return document.getElementById(id) as HTMLInputElement;
+}
+function _el(id: string): HTMLElement {
+  return document.getElementById(id) as HTMLElement;
+}
+
 // Bean origin display — beans predating the blend feature (or ones without an
 // origins[] array yet) fall back to the legacy singular `origin` field.
-function originDisplay(bean) {
+function originDisplay(bean: OriginBean): string {
   const origins = Array.isArray(bean.origins) && bean.origins.length
     ? bean.origins
     : (bean.origin ? [{ code: bean.origin }] : []);
@@ -50,7 +120,7 @@ function originDisplay(bean) {
 // (#456), and the same "most recent shot for this bean" concept as that
 // function's lastForBean — just without its dose/priority-fallback logic,
 // since this only ever wants the plain last annotated grind.
-function lastUsedGrindForBean(bean, shots) {
+function lastUsedGrindForBean(bean: BeanListRow, shots: BeanShotRow[]): { grinder: string; grindSetting: string; timestamp: number } | null {
   const name = bean.name?.trim().toLowerCase();
   const match = (shots || [])
     .filter(s => {
@@ -67,15 +137,16 @@ function lastUsedGrindForBean(bean, shots) {
 }
 
 // ── Library load ──────────────────────────────────────────────────────────
-export async function loadLibrary() {
+export async function loadLibrary(): Promise<void> {
   try {
     const library = await libraryApi.getLibrary();
     if (!library) return;
-    S.coffeeLibrary = library;
-    if (!S.coffeeLibrary.recipes)     S.coffeeLibrary.recipes     = [];
-    if (!S.coffeeLibrary.milks)       S.coffeeLibrary.milks       = [];
-    if (!S.coffeeLibrary.baskets)     S.coffeeLibrary.baskets     = [];
-    if (!S.coffeeLibrary.puckScreens) S.coffeeLibrary.puckScreens = [];
+    S.coffeeLibrary = library as unknown as typeof S.coffeeLibrary;
+    const lib = _state().coffeeLibrary;
+    if (!lib.recipes)     lib.recipes     = [];
+    if (!lib.milks)       lib.milks       = [];
+    if (!lib.baskets)     lib.baskets     = [];
+    if (!lib.puckScreens) lib.puckScreens = [];
     updateLibraryDatalist();
     renderRecipeList();
     renderMilkList();
@@ -104,42 +175,42 @@ export async function loadLibrary() {
 // live, so nothing needs to be "populated" ahead of time. This just
 // re-renders whichever of those is currently open, so a save/delete
 // elsewhere in the library shows up immediately if the user has one open.
-export function updateLibraryDatalist() {
-  document.getElementById('annGrinder')?._autocomplete?.refresh();
-  document.getElementById('recipeFormBean')?._autocomplete?.refresh();
+export function updateLibraryDatalist(): void {
+  (document.getElementById('annGrinder') as HTMLInputElement | null)?._autocomplete?.refresh();
+  (document.getElementById('recipeFormBean') as HTMLInputElement | null)?._autocomplete?.refresh();
 }
 
-export function switchLibTab(tab) {
-  document.getElementById('libTabBeans').classList.toggle('active',       tab === 'beans');
-  document.getElementById('libTabGrinders').classList.toggle('active',    tab === 'grinders');
-  document.getElementById('libTabRecipes').classList.toggle('active',     tab === 'recipes');
-  document.getElementById('libTabMilk')?.classList.toggle('active',      tab === 'milk');
-  document.getElementById('libTabBaskets')?.classList.toggle('active',   tab === 'baskets');
-  document.getElementById('libTabPuckScreens')?.classList.toggle('active', tab === 'puckscreens');
-  document.getElementById('libTabProfiles')?.classList.toggle('active',  tab === 'profiles');
-  document.getElementById('libSectionBeans').classList.toggle('active',   tab === 'beans');
-  document.getElementById('libSectionGrinders').classList.toggle('active', tab === 'grinders');
-  document.getElementById('libSectionRecipes').classList.toggle('active', tab === 'recipes');
-  document.getElementById('libSectionMilk')?.classList.toggle('active',  tab === 'milk');
-  document.getElementById('libSectionBaskets')?.classList.toggle('active', tab === 'baskets');
-  document.getElementById('libSectionPuckScreens')?.classList.toggle('active', tab === 'puckscreens');
-  document.getElementById('libSectionProfiles')?.classList.toggle('active', tab === 'profiles');
+export function switchLibTab(tab: string): void {
+  _el('libTabBeans').classList.toggle('active',       tab === 'beans');
+  _el('libTabGrinders').classList.toggle('active',    tab === 'grinders');
+  _el('libTabRecipes').classList.toggle('active',     tab === 'recipes');
+  _el('libTabMilk')?.classList.toggle('active',      tab === 'milk');
+  _el('libTabBaskets')?.classList.toggle('active',   tab === 'baskets');
+  _el('libTabPuckScreens')?.classList.toggle('active', tab === 'puckscreens');
+  _el('libTabProfiles')?.classList.toggle('active',  tab === 'profiles');
+  _el('libSectionBeans').classList.toggle('active',   tab === 'beans');
+  _el('libSectionGrinders').classList.toggle('active', tab === 'grinders');
+  _el('libSectionRecipes').classList.toggle('active', tab === 'recipes');
+  _el('libSectionMilk')?.classList.toggle('active',  tab === 'milk');
+  _el('libSectionBaskets')?.classList.toggle('active', tab === 'baskets');
+  _el('libSectionPuckScreens')?.classList.toggle('active', tab === 'puckscreens');
+  _el('libSectionProfiles')?.classList.toggle('active', tab === 'profiles');
 }
 
 // Bean ids with an in-flight toggle-active request — disables the eye icon
 // button for that bean so a slow connection can't double-fire the toggle
 // before the first request's re-render lands.
-const _pendingBeanActiveToggles = new Set();
+const _pendingBeanActiveToggles = new Set<number>();
 
 // ── Bean list ─────────────────────────────────────────────────────────────
-export function renderBeanList() {
+export function renderBeanList(): void {
   const el = document.getElementById('beanListUI');
   if (!el) return;
   // Beans are a shared consumable, not scoped to the active machine — always
   // render the full library regardless of S.activeMachineId. This reverts
   // the display-filtering part of #334; see #339 for why that filter was
   // wrong (it hid nearly the whole library once a second machine existed).
-  const beans = S.coffeeLibrary.beans;
+  const beans = _beanList();
   if (!beans.length) {
     el.innerHTML = `<div class="lib-empty">${t('lib_empty_beans')}</div>`;
     return;
@@ -164,7 +235,7 @@ export function renderBeanList() {
       const isLow = remaining != null && remaining < 100;
       const rem = Math.max(0, remaining ?? 0);
       const stockPct = current && current.stockG > 0
-        ? Math.max(0, Math.min(100, Math.round((current.remaining / current.stockG) * 100)))
+        ? Math.max(0, Math.min(100, Math.round(((current.remaining ?? 0) / current.stockG) * 100)))
         : 0;
       invHtml = `<div class="lib-inv-block">
         ${remaining != null ? `<div class="lib-inv-bar-row">
@@ -236,7 +307,7 @@ export function renderBeanList() {
       : '';
 
     const locale = localeFor(S.currentLang);
-    const frozenPortions = Array.isArray(activeBag?.frozenPortions) ? activeBag.frozenPortions : [];
+    const frozenPortions = (activeBag && Array.isArray(activeBag.frozenPortions) ? activeBag.frozenPortions : []) as FrozenPortion[];
     // #472: date badges include the year (a portion can stay frozen well
     // past 12 months) and, while still frozen, show remaining/total so a
     // single "auftauen" click reads as "pull one portion out", not "close
@@ -279,7 +350,7 @@ export function renderBeanList() {
         <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${fp.id}" title="${t('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
     }).join('')}</div>` : '';
 
-    const rating = calcBeanRating(b.name, S.shots);
+    const rating = calcBeanRating(b.name, _shots());
     const ratingHtml = rating ? `<div class="lib-rating-row" title="${esc(t('bean_rating_tooltip', rating.count))}">
       ${Array.from({ length: 5 }, (_, i) => `<span class="lib-star${i < Math.round(rating.avg) ? ' on' : ''}">${STAR_ICON_SVG}</span>`).join('')}
       <span class="lib-rating-num">${rating.avg.toFixed(1)}</span>
@@ -288,7 +359,7 @@ export function renderBeanList() {
     // Only the single best combo is shown — with several grinders/grind
     // settings tested per bean this can get noisy fast, and "the one thing
     // to try next" is more useful at a glance than a ranked list.
-    const bestCombos = calcBestGrindCombosForBean(b.name, S.shots, b.id);
+    const bestCombos = calcBestGrindCombosForBean(b.name, _shots(), b.id);
     const bestComboHtml = bestCombos ? `<div class="lib-best-combo-row" title="${esc(t('bean_best_combo_tooltip', bestCombos[0].shotCount))}">
       <span class="lib-best-combo-label">${t('bean_best_combo_label')}</span>
       <span class="lib-best-combo-value">${esc(t('bean_best_combo_value', bestCombos[0].grinder, bestCombos[0].grindSetting))}</span>
@@ -299,7 +370,7 @@ export function renderBeanList() {
     // that's the highest-*scoring* combo across history, this is simply
     // whatever was dialed in most recently, which is what "what did I have
     // this on last time" actually means when picking up a bean again.
-    const lastGrind = lastUsedGrindForBean(b, S.shots);
+    const lastGrind = lastUsedGrindForBean(b, _shots());
     const lastGrindHtml = lastGrind ? (() => {
       const usedAtMs = lastGrind.timestamp * 1000;
       const ageDays = Math.floor((Date.now() - usedAtMs) / 86400000);
@@ -415,7 +486,7 @@ export function renderBeanList() {
 // photos (sidebar.js) — stopPropagation mirrors that pattern in case a
 // parent click handler is ever added to .lib-item.
 function loadBeanThumbnails() {
-  document.querySelectorAll('.lib-bean-thumb[data-bean-id]').forEach(img => {
+  document.querySelectorAll<HTMLImageElement>('.lib-bean-thumb[data-bean-id]').forEach(img => {
     const id = Number(img.dataset.beanId);
     loadBeanImageBlobUrl(id).then(url => {
       if (!url) return;
@@ -425,55 +496,56 @@ function loadBeanThumbnails() {
   });
 }
 
-export function openNewBagForm(id) {
-  document.getElementById(`newBagForm${id}`).style.display = '';
+export function openNewBagForm(id: number): void {
+  _el(`newBagForm${id}`).style.display = '';
 }
 
-export function closeNewBagForm(id) {
-  document.getElementById(`newBagForm${id}`).style.display = 'none';
+export function closeNewBagForm(id: number): void {
+  _el(`newBagForm${id}`).style.display = 'none';
 }
 
-export async function deleteBag(beanId, bagId) {
-  const bean = S.coffeeLibrary.beans.find(b => b.id === beanId);
-  const bags = Array.isArray(bean?.bags) ? bean.bags : [];
+export async function deleteBag(beanId: number, bagId: number): Promise<void> {
+  const bean = _beanList().find(b => b.id === beanId);
+  const bags = Array.isArray(bean?.bags) ? bean?.bags : [];
   if (!bean || bags.length <= 1) return;
   const { current } = classifyBeanBags(bean);
   if (current?.bg.id === bagId) return;
   if (!confirm(t('lib_bag_delete_confirm'))) return;
   const saved = await libraryApi.deleteBeanBag(beanId, bagId);
   if (!saved) return;
-  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
-  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  const idx = _beanList().findIndex(b => b.id === beanId);
+  if (idx !== -1) _beanList()[idx] = saved;
   renderBeanList();
 }
 
-export async function saveNewBag(id) {
-  const roastDate   = document.getElementById(`newBagRoastDate${id}`)?.value.trim() || '';
-  const stock_g     = parseFloat(document.getElementById(`newBagStock${id}`)?.value) || null;
-  const batchNumber = document.getElementById(`newBagBatchNumber${id}`)?.value.trim() || '';
-  const saved = await libraryApi.addBeanBag(id, { roastDate, stock_g, batchNumber });
+export async function saveNewBag(id: number): Promise<void> {
+  const roastDate   = _field(`newBagRoastDate${id}`)?.value.trim() || '';
+  const stock_g     = parseFloat(_field(`newBagStock${id}`)?.value) || null;
+  const batchNumber = _field(`newBagBatchNumber${id}`)?.value.trim() || '';
+  // stock_g is nullable server-side; NewBagInput under-documents that.
+  const saved = await libraryApi.addBeanBag(id, { roastDate, stock_g, batchNumber } as unknown as NewBagInput);
   if (!saved) return;
-  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
-  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  const idx = _beanList().findIndex(b => b.id === id);
+  if (idx !== -1) _beanList()[idx] = saved;
   renderBeanList();
 }
 
 // Clicking a bean's name in the Library sets the sidebar's structured bean
 // filter (state.js S.beanFilter / sidebar.js setBeanFilter()) and jumps to
 // the Shots tab so the filtered history is immediately visible.
-export function filterShotsByBean(id) {
-  const bean = S.coffeeLibrary.beans.find(b => b.id === id);
+export function filterShotsByBean(id: number): void {
+  const bean = _beanList().find(b => b.id === id);
   if (!bean) return;
   setBeanFilter(bean.id, bean.name);
   switchMode('shots');
 }
 
-export function openFreezeForm(id) {
-  document.getElementById(`freezeForm${id}`).style.display = '';
+export function openFreezeForm(id: number): void {
+  _el(`freezeForm${id}`).style.display = '';
 }
 
-export function closeFreezeForm(id) {
-  document.getElementById(`freezeForm${id}`).style.display = 'none';
+export function closeFreezeForm(id: number): void {
+  _el(`freezeForm${id}`).style.display = 'none';
 }
 
 // Freezes a portion of the active bag: grams move into a dated frozen pool
@@ -484,15 +556,15 @@ export function closeFreezeForm(id) {
 // frozenAt (#472) comes from the form's date picker (defaults to today, but
 // editable for logging a portion frozen in the past) rather than always
 // being "now".
-export async function saveFreezePortions(id) {
-  const portionCount    = parseInt(document.getElementById(`freezePortionCount${id}`)?.value, 10);
-  const portionWeight_g = parseFloat(document.getElementById(`freezePortionWeight${id}`)?.value);
-  const frozenAt = isoDateInputToMs(document.getElementById(`freezeDate${id}`)?.value) ?? Date.now();
+export async function saveFreezePortions(id: number): Promise<void> {
+  const portionCount    = parseInt(_field(`freezePortionCount${id}`)?.value, 10);
+  const portionWeight_g = parseFloat(_field(`freezePortionWeight${id}`)?.value);
+  const frozenAt = isoDateInputToMs(_field(`freezeDate${id}`)?.value) ?? Date.now();
   if (!(portionCount > 0) || !(portionWeight_g > 0)) return;
   const saved = await libraryApi.freezeBeanPortions(id, { portionCount, portionWeight_g, frozenAt });
   if (!saved) return;
-  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
-  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  const idx = _beanList().findIndex(b => b.id === id);
+  if (idx !== -1) _beanList()[idx] = saved;
   renderBeanList();
 }
 
@@ -501,20 +573,20 @@ export async function saveFreezePortions(id) {
 // leaving the rest still frozen. The batch only stamps thawedAt (and its
 // badge switches to the closed-out "thawed" style) once remainingCount
 // reaches 0 server-side.
-export async function thawPortion(beanId, portionId) {
+export async function thawPortion(beanId: number, portionId: number): Promise<void> {
   const saved = await libraryApi.thawBeanPortion(beanId, { portionId, count: 1 });
   if (!saved) return;
-  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
-  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  const idx = _beanList().findIndex(b => b.id === beanId);
+  if (idx !== -1) _beanList()[idx] = saved;
   renderBeanList();
 }
 
-export function openEditFrozenForm(portionId) {
+export function openEditFrozenForm(portionId: number): void {
   const el = document.getElementById(`editFrozenForm${portionId}`);
   if (el) el.style.display = '';
 }
 
-export function closeEditFrozenForm(portionId) {
+export function closeEditFrozenForm(portionId: number): void {
   const el = document.getElementById(`editFrozenForm${portionId}`);
   if (el) el.style.display = 'none';
 }
@@ -523,29 +595,29 @@ export function closeEditFrozenForm(portionId) {
 // weight, or freeze date entered when it was first frozen. Raising
 // remainingCount back above 0 on an already-thawed batch re-opens it
 // (server clears thawedAt); this is the only place that can happen from.
-export async function saveEditFrozenForm(beanId, portionId) {
-  const remainingCount  = parseInt(document.getElementById(`editFrozenRemaining${portionId}`)?.value, 10);
-  const portionWeight_g = parseFloat(document.getElementById(`editFrozenWeight${portionId}`)?.value);
-  const frozenAt = isoDateInputToMs(document.getElementById(`editFrozenDate${portionId}`)?.value);
-  const body = {};
+export async function saveEditFrozenForm(beanId: number, portionId: number): Promise<void> {
+  const remainingCount  = parseInt(_field(`editFrozenRemaining${portionId}`)?.value, 10);
+  const portionWeight_g = parseFloat(_field(`editFrozenWeight${portionId}`)?.value);
+  const frozenAt = isoDateInputToMs(_field(`editFrozenDate${portionId}`)?.value);
+  const body: Record<string, number> = {};
   if (Number.isFinite(remainingCount)) body.remainingCount = remainingCount;
   if (portionWeight_g > 0) body.portionWeight_g = portionWeight_g;
   if (frozenAt != null) body.frozenAt = frozenAt;
   const saved = await libraryApi.adjustFrozenPortion(beanId, { portionId, ...body });
   if (!saved) return;
-  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === beanId);
-  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  const idx = _beanList().findIndex(b => b.id === beanId);
+  if (idx !== -1) _beanList()[idx] = saved;
   renderBeanList();
 }
 
-export function toggleBeanQR(id) {
-  const wrap = document.getElementById(`beanQR${id}`);
+export function toggleBeanQR(id: number): void {
+  const wrap = _el(`beanQR${id}`);
   if (!wrap) return;
   if (wrap.style.display !== 'none') { wrap.style.display = 'none'; return; }
-  const bean = S.coffeeLibrary.beans.find(b => b.id === id);
+  const bean = _beanList().find(b => b.id === id);
   if (!bean) return;
   wrap.style.display = 'flex';
-  const canvas = document.getElementById(`beanQRCanvas${id}`);
+  const canvas = _el(`beanQRCanvas${id}`) as HTMLCanvasElement;
   const label = wrap.querySelector('.bean-qr-label');
   // qrcode is a dynamic import now (#797) — the label doubles as a loading
   // indicator while its chunk downloads, restored once the canvas is drawn
@@ -555,6 +627,7 @@ export function toggleBeanQR(id) {
   // a rejection (e.g. QR data-capacity exceeded by a long notes field) was
   // an unhandled rejection: the canvas stayed silently blank, no error ever
   // reached the user.
+  // @ts-expect-error -- qrcode ships no type declarations
   import('qrcode').then(({ default: QRCode }) =>
     // #814: this was drawn INVERTED — dark: '#e4e4e7' on light: '#18181b' means
     // light modules on a dark ground, to match the dark theme. The QR spec
@@ -575,14 +648,14 @@ export function toggleBeanQR(id) {
 // ── Flavor chips input ────────────────────────────────────────────────────
 // Module-level working array; rendered into #beanFormFlavorChips before the
 // text input. Enter/comma commits the typed value, × removes a chip.
-let _formFlavors = [];
+let _formFlavors: string[] = [];
 let _flavorInputBound = false;
 
-function renderFlavorChips() {
-  const wrap = document.getElementById('beanFormFlavorChips');
+function renderFlavorChips(): void {
+  const wrap = _el('beanFormFlavorChips');
   if (!wrap) return;
   wrap.querySelectorAll('.flavor-chip').forEach(el => el.remove());
-  const input = document.getElementById('beanFormFlavorInput');
+  const input = _field('beanFormFlavorInput');
   for (const [i, f] of _formFlavors.entries()) {
     const chip = document.createElement('span');
     chip.className = 'flavor-chip';
@@ -591,8 +664,8 @@ function renderFlavorChips() {
   }
 }
 
-function commitFlavorInput() {
-  const input = document.getElementById('beanFormFlavorInput');
+function commitFlavorInput(): void {
+  const input = _field('beanFormFlavorInput');
   if (!input) return;
   const val = input.value.trim().replace(/,+$/, '').trim();
   input.value = '';
@@ -602,15 +675,15 @@ function commitFlavorInput() {
   renderFlavorChips();
 }
 
-export function setFormFlavors(flavors) {
+export function setFormFlavors(flavors?: string[] | null): void {
   _formFlavors = Array.isArray(flavors) ? [...flavors] : [];
   renderFlavorChips();
 }
 
-function bindFlavorInput() {
+function bindFlavorInput(): void {
   if (_flavorInputBound) return;
-  const input = document.getElementById('beanFormFlavorInput');
-  const wrap  = document.getElementById('beanFormFlavorChips');
+  const input = _field('beanFormFlavorInput');
+  const wrap  = _el('beanFormFlavorChips');
   if (!input || !wrap) return;
   _flavorInputBound = true;
   input.addEventListener('keydown', e => {
@@ -622,7 +695,7 @@ function bindFlavorInput() {
   });
   input.addEventListener('blur', commitFlavorInput);
   wrap.addEventListener('click', e => {
-    const btn = e.target.closest('.flavor-chip-x');
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('.flavor-chip-x');
     if (!btn) return;
     _formFlavors.splice(Number(btn.dataset.flavorIdx), 1);
     renderFlavorChips();
@@ -632,11 +705,11 @@ function bindFlavorInput() {
 // ── Bean form: origin (blend-capable chips, mirrors the flavor chips) ──────
 // Each chip is a country code with an optional weighting percent, used by
 // the world map to split a blend's shots across its origin countries.
-let _formOrigins = [];
+let _formOrigins: OriginChip[] = [];
 let _originInputBound = false;
 
-function populateOriginSelect() {
-  const sel = document.getElementById('beanFormOrigin');
+function populateOriginSelect(): void {
+  const sel = _field('beanFormOrigin');
   if (!sel) return;
   const options = COFFEE_COUNTRIES
     .map(c => ({ code: c.code, label: countryName(c.code, S.currentLang) }))
@@ -646,8 +719,8 @@ function populateOriginSelect() {
   sel.value = '';
 }
 
-function renderOriginChips() {
-  const wrap = document.getElementById('beanFormOriginChips');
+function renderOriginChips(): void {
+  const wrap = _el('beanFormOriginChips');
   if (!wrap) return;
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   wrap.innerHTML = _formOrigins.map((o, i) => `
@@ -657,7 +730,7 @@ function renderOriginChips() {
     </span>`).join('');
 }
 
-export function setFormOrigins(bean) {
+export function setFormOrigins(bean?: OriginBean | null): void {
   const origins = Array.isArray(bean?.origins) && bean.origins.length
     ? bean.origins
     : (bean?.origin ? [{ code: bean.origin }] : []);
@@ -665,10 +738,10 @@ export function setFormOrigins(bean) {
   renderOriginChips();
 }
 
-function bindOriginInput() {
+function bindOriginInput(): void {
   if (_originInputBound) return;
-  const sel  = document.getElementById('beanFormOrigin');
-  const wrap = document.getElementById('beanFormOriginChips');
+  const sel  = _field('beanFormOrigin');
+  const wrap = _el('beanFormOriginChips');
   if (!sel || !wrap) return;
   _originInputBound = true;
   sel.addEventListener('change', () => {
@@ -679,13 +752,13 @@ function bindOriginInput() {
     renderOriginChips();
   });
   wrap.addEventListener('click', e => {
-    const btn = e.target.closest('[data-origin-idx-remove]');
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-origin-idx-remove]');
     if (!btn) return;
     _formOrigins.splice(Number(btn.dataset.originIdxRemove), 1);
     renderOriginChips();
   });
   wrap.addEventListener('change', e => {
-    const input = e.target.closest('.origin-chip-percent');
+    const input = (e.target as HTMLElement).closest<HTMLInputElement>('.origin-chip-percent');
     if (!input) return;
     const i = Number(input.dataset.originIdx);
     const n = parseFloat(input.value);
@@ -693,12 +766,12 @@ function bindOriginInput() {
   });
 }
 
-function populateSuggestionDatalists() {
-  attachAutocomplete(document.getElementById('beanFormVariety'), () => VARIETY_SUGGESTIONS);
-  attachAutocomplete(document.getElementById('beanFormProcess'), () => PROCESS_SUGGESTIONS);
+function populateSuggestionDatalists(): void {
+  attachAutocomplete(_field('beanFormVariety'), () => VARIETY_SUGGESTIONS);
+  attachAutocomplete(_field('beanFormProcess'), () => PROCESS_SUGGESTIONS);
 }
 
-export function openBeanForm(bean) {
+export function openBeanForm(bean?: Bean | null): void {
   S.beanEditId = bean ? bean.id : null;
   const importNotice = document.getElementById('beanFormImportNotice');
   if (importNotice) { importNotice.style.display = 'none'; importNotice.innerHTML = ''; }
@@ -706,40 +779,40 @@ export function openBeanForm(bean) {
   if (dupWarning) { dupWarning.style.display = 'none'; dupWarning.innerHTML = ''; }
   const extraRecipes = document.getElementById('beanFormExtraRecipes');
   if (extraRecipes) { extraRecipes.style.display = 'none'; extraRecipes.innerHTML = ''; }
-  S._urlImportExtraRecipes = null;
-  document.getElementById('beanFormName').value      = bean?.name      || '';
-  document.getElementById('beanFormRoaster').value   = bean?.roaster   || '';
-  document.getElementById('beanFormRoastDate').value = toIsoDateInput(bean?.roastDate);
-  document.getElementById('beanFormNotes').value     = bean?.notes     || '';
+  _state()._urlImportExtraRecipes = null;
+  _field('beanFormName').value      = bean?.name      || '';
+  _field('beanFormRoaster').value   = bean?.roaster   || '';
+  _field('beanFormRoastDate').value = toIsoDateInput(bean?.roastDate);
+  _field('beanFormNotes').value     = bean?.notes     || '';
   // Stock and batch number are bag-only now (see classifyBeanBags/
   // renderBagCard's own "Bestand anpassen"/bag-dialog fields) — neither
   // field exists on the bean form at all.
   const activeEditBag = bean ? classifyBeanBags(bean).current?.bg : null;
-  document.getElementById('beanFormDecaf').checked   = !!bean?.decaf;
+  _field('beanFormDecaf').checked   = !!bean?.decaf;
   populateOriginSelect();
   bindOriginInput();
   setFormOrigins(bean);
   populateSuggestionDatalists();
-  document.getElementById('beanFormVariety').value   = bean?.variety || '';
-  document.getElementById('beanFormSpecies').value   = bean?.species || '';
-  document.getElementById('beanFormCategory').value  = bean?.category || 'normal';
-  document.getElementById('beanFormProcess').value   = bean?.process || '';
+  _field('beanFormVariety').value   = bean?.variety || '';
+  _field('beanFormSpecies').value   = bean?.species || '';
+  _field('beanFormCategory').value  = bean?.category || 'normal';
+  _field('beanFormProcess').value   = bean?.process || '';
   bindFlavorInput();
   setFormFlavors(bean?.flavors);
-  document.getElementById('beanFormFlavorInput').value = '';
-  document.getElementById('beanFormRoastType').value = bean?.roastType || '';
-  document.getElementById('beanFormRegion').value    = bean?.region || '';
-  document.getElementById('beanFormAltitude').value      = bean?.altitude_m ?? '';
-  document.getElementById('beanFormImporter').value      = bean?.importer || '';
-  document.getElementById('beanFormHarvest').value       = bean?.harvest || '';
-  document.getElementById('beanFormPrice').value = activeEditBag?.price_eur ?? bean?.price_eur ?? '';
-  document.getElementById('beanFormProducer').value      = bean?.producer || '';
-  document.getElementById('beanFormCertification').value = bean?.certification || '';
-  document.getElementById('beanFormBrewTemp').value  = bean?.brewTempC ?? '';
-  document.getElementById('beanFormBrewRatio').value = bean?.brewRatio || '';
-  document.getElementById('beanFormBrewTime').value  = bean?.brewTimeS ?? '';
-  document.getElementById('beanFormBrewNotes').value = bean?.brewNotes || '';
-  document.getElementById('beanFormImageField').style.display = bean ? '' : 'none';
+  _field('beanFormFlavorInput').value = '';
+  _field('beanFormRoastType').value = bean?.roastType || '';
+  _field('beanFormRegion').value    = bean?.region || '';
+  _field('beanFormAltitude').value      = String(bean?.altitude_m ?? '');
+  _field('beanFormImporter').value      = bean?.importer || '';
+  _field('beanFormHarvest').value       = bean?.harvest || '';
+  _field('beanFormPrice').value = String(activeEditBag?.price_eur ?? bean?.price_eur ?? '');
+  _field('beanFormProducer').value      = bean?.producer || '';
+  _field('beanFormCertification').value = bean?.certification || '';
+  _field('beanFormBrewTemp').value  = String(bean?.brewTempC ?? '');
+  _field('beanFormBrewRatio').value = bean?.brewRatio || '';
+  _field('beanFormBrewTime').value  = String(bean?.brewTimeS ?? '');
+  _field('beanFormBrewNotes').value = bean?.brewNotes || '';
+  _el('beanFormImageField').style.display = bean ? '' : 'none';
   // Edit mode keeps a single Speichern; creating a new bean instead offers
   // "Speichern und Packung hinzufügen" / "Speichern ohne Packung" — there's
   // nothing to combine-with-a-bag-dialog once the bean already exists.
@@ -753,61 +826,61 @@ export function openBeanForm(bean) {
   if (saveBtn)       saveBtn.style.display       = isEdit ? '' : 'none';
   if (saveNoBagBtn)  saveNoBagBtn.style.display  = isEdit ? 'none' : '';
   if (saveAddBagBtn) saveAddBagBtn.style.display = isEdit ? 'none' : '';
-  document.getElementById('beanAddForm').classList.add('open');
-  document.getElementById('beanAddTrigger').style.display = 'none';
-  document.getElementById('beanFormName').focus();
+  _el('beanAddForm').classList.add('open');
+  _el('beanAddTrigger').style.display = 'none';
+  _field('beanFormName').focus();
 }
 
-export function closeBeanForm() {
+export function closeBeanForm(): void {
   S.beanEditId        = null;
   S._urlImportSource   = null;
   S._urlImportedAt     = null;
-  S._urlImportImageUrl = null;
+  _state()._urlImportImageUrl = null;
   S._urlImportSourceUrl = null;
-  S._urlImportExtraRecipes = null;
+  _state()._urlImportExtraRecipes = null;
   const extraEl = document.getElementById('beanFormExtraRecipes');
   if (extraEl) { extraEl.style.display = 'none'; extraEl.innerHTML = ''; }
-  document.getElementById('beanAddForm').classList.remove('open');
-  document.getElementById('beanAddTrigger').style.display = '';
+  _el('beanAddForm').classList.remove('open');
+  _el('beanAddTrigger').style.display = '';
 }
 
-export function editBean(id) {
-  const bean = S.coffeeLibrary.beans.find(b => b.id === id);
+export function editBean(id: number): void {
+  const bean = _beanList().find(b => b.id === id);
   if (bean) openBeanForm(bean);
 }
 
-export async function saveBean() { return saveBeanInternal(false); }
+export async function saveBean(): Promise<void> { return saveBeanInternal(false); }
 // Create-only entry points (see openBeanForm's mode-conditional buttons) —
 // both save the bean identically, they only differ in what happens right
 // after: opening the existing new-bag dialog, or not.
-export async function saveBeanNoBag() { return saveBeanInternal(false); }
-export async function saveBeanAddBag() { return saveBeanInternal(true); }
+export async function saveBeanNoBag(): Promise<void> { return saveBeanInternal(false); }
+export async function saveBeanAddBag(): Promise<void> { return saveBeanInternal(true); }
 
-async function saveBeanInternal(openBagDialogAfter) {
-  const name      = document.getElementById('beanFormName').value.trim();
-  const roaster   = document.getElementById('beanFormRoaster').value.trim();
-  const roastDate = document.getElementById('beanFormRoastDate').value.trim();
-  const notes     = document.getElementById('beanFormNotes').value.trim();
-  const decaf     = document.getElementById('beanFormDecaf').checked;
-  const variety   = document.getElementById('beanFormVariety').value.trim();
-  const species   = document.getElementById('beanFormSpecies').value;
-  const category  = document.getElementById('beanFormCategory').value;
-  const process   = document.getElementById('beanFormProcess').value.trim();
-  const roastType = document.getElementById('beanFormRoastType').value;
-  const region    = document.getElementById('beanFormRegion').value.trim();
-  const altitude_m    = document.getElementById('beanFormAltitude').value;
-  const importer      = document.getElementById('beanFormImporter').value.trim();
-  const harvest       = document.getElementById('beanFormHarvest').value.trim();
-  const price_eur     = document.getElementById('beanFormPrice').value;
-  const producer      = document.getElementById('beanFormProducer').value.trim();
-  const certification = document.getElementById('beanFormCertification').value.trim();
-  const brewTempC  = document.getElementById('beanFormBrewTemp').value;
-  const brewRatio  = document.getElementById('beanFormBrewRatio').value.trim();
-  const brewTimeS  = document.getElementById('beanFormBrewTime').value;
-  const brewNotes  = document.getElementById('beanFormBrewNotes').value.trim();
+async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
+  const name      = _field('beanFormName').value.trim();
+  const roaster   = _field('beanFormRoaster').value.trim();
+  const roastDate = _field('beanFormRoastDate').value.trim();
+  const notes     = _field('beanFormNotes').value.trim();
+  const decaf     = _field('beanFormDecaf').checked;
+  const variety   = _field('beanFormVariety').value.trim();
+  const species   = _field('beanFormSpecies').value;
+  const category  = _field('beanFormCategory').value;
+  const process   = _field('beanFormProcess').value.trim();
+  const roastType = _field('beanFormRoastType').value;
+  const region    = _field('beanFormRegion').value.trim();
+  const altitude_m    = _field('beanFormAltitude').value;
+  const importer      = _field('beanFormImporter').value.trim();
+  const harvest       = _field('beanFormHarvest').value.trim();
+  const price_eur     = _field('beanFormPrice').value;
+  const producer      = _field('beanFormProducer').value.trim();
+  const certification = _field('beanFormCertification').value.trim();
+  const brewTempC  = _field('beanFormBrewTemp').value;
+  const brewRatio  = _field('beanFormBrewRatio').value.trim();
+  const brewTimeS  = _field('beanFormBrewTime').value;
+  const brewNotes  = _field('beanFormBrewNotes').value.trim();
   commitFlavorInput(); // take a still-typed flavor along
-  if (!name) { document.getElementById('beanFormName').focus(); return; }
-  const payload = {
+  if (!name) { _field('beanFormName').focus(); return; }
+  const payload: Record<string, unknown> = {
     name, roaster, roastDate, notes, decaf, origins: _formOrigins, variety, species, category, process, flavors: _formFlavors, roastType, region,
     altitude_m, importer, harvest, price_eur, producer, certification,
     brewTempC, brewRatio, brewTimeS, brewNotes,
@@ -815,39 +888,40 @@ async function saveBeanInternal(openBagDialogAfter) {
   if (!S.beanEditId && S._urlImportSource) {
     payload.source     = S._urlImportSource;
     payload.importedAt = S._urlImportedAt;
-    if (S._urlImportImageUrl) payload.imageUrl = S._urlImportImageUrl;
+    if (_state()._urlImportImageUrl) payload.imageUrl = _state()._urlImportImageUrl;
     if (S._urlImportSourceUrl) payload.sourceUrl = S._urlImportSourceUrl;
   }
   // #451: capture which opt-in Brew Guide recipe candidates are still
   // checked before closeBeanForm() clears both the DOM and this state.
-  const extraRecipesToImport = (S._urlImportExtraRecipes || []).filter((_, i) =>
-    document.querySelector(`[data-extra-recipe-idx="${i}"]`)?.checked);
+  const extraRecipesToImport = (_state()._urlImportExtraRecipes || []).filter((_, i) =>
+    document.querySelector<HTMLInputElement>(`[data-extra-recipe-idx="${i}"]`)?.checked);
   const saved = await libraryApi.saveBean(S.beanEditId, payload);
   if (!saved) return;
   if (S.beanEditId) {
-    const idx = S.coffeeLibrary.beans.findIndex(b => b.id === S.beanEditId);
-    if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+    const idx = _beanList().findIndex(b => b.id === S.beanEditId);
+    if (idx !== -1) _beanList()[idx] = saved;
   } else {
-    S.coffeeLibrary.beans.push(saved);
+    _beanList().push(saved);
   }
   for (const recipe of extraRecipesToImport) {
     const importedRecipe = await libraryApi.saveRecipe(null, { ...recipe, brewMethod: 'espresso', beanName: saved.name });
     if (importedRecipe) {
-      if (!S.coffeeLibrary.recipes) S.coffeeLibrary.recipes = [];
-      S.coffeeLibrary.recipes.push(importedRecipe);
+      const lib = _state().coffeeLibrary;
+      if (!lib.recipes) lib.recipes = [];
+      lib.recipes.push(importedRecipe);
     }
   }
   // Also persist price_eur to the current bag so per-bag price stays in sync
   if (S.beanEditId && price_eur) {
     const activeBagForSave = classifyBeanBags(saved).current?.bg || null;
     if (activeBagForSave) {
-      const savedWithBag = await libraryApi.updateBeanBag(S.beanEditId, activeBagForSave.id, {
+      const savedWithBag = await libraryApi.updateBeanBag(S.beanEditId, activeBagForSave.id as number, {
         roastDate: activeBagForSave.roastDate || '', stock_g: activeBagForSave.stock_g ?? null,
         batchNumber: activeBagForSave.batchNumber || '', price_eur: parseFloat(price_eur) || null,
       });
       if (savedWithBag) {
-        const idx2 = S.coffeeLibrary.beans.findIndex(b => b.id === S.beanEditId);
-        if (idx2 !== -1) S.coffeeLibrary.beans[idx2] = savedWithBag;
+        const idx2 = _beanList().findIndex(b => b.id === S.beanEditId);
+        if (idx2 !== -1) _beanList()[idx2] = savedWithBag;
       }
     }
   }
@@ -864,7 +938,7 @@ async function saveBeanInternal(openBagDialogAfter) {
   if (wasCreate && openBagDialogAfter) openNewBagForm(saved.id);
 }
 
-export async function deleteBean(id) {
+export async function deleteBean(id: number): Promise<void> {
   if (!confirm(t('lib_confirm_delete_bean'))) return;
   const r = await libraryApi.deleteBeanPermanently(id);
   if (!r.ok) return;
@@ -876,23 +950,23 @@ export async function deleteBean(id) {
 // Manual override for the order card's bean picker — independent of stock.
 // The bean stays fully visible/editable in the library either way; only its
 // presence in /api/orders/active-beans changes.
-export async function toggleBeanActive(id) {
+export async function toggleBeanActive(id: number): Promise<void> {
   if (_pendingBeanActiveToggles.has(id)) return;
   _pendingBeanActiveToggles.add(id);
   renderBeanList();
   try {
     const saved = await libraryApi.toggleBeanActive(id);
     if (!saved) return;
-    const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
-    if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+    const idx = _beanList().findIndex(b => b.id === id);
+    if (idx !== -1) _beanList()[idx] = saved;
   } finally {
     _pendingBeanActiveToggles.delete(id);
     renderBeanList();
   }
 }
 
-export async function uploadBeanImage(id, input) {
-  const file = input.files[0];
+export async function uploadBeanImage(id: number, input: HTMLInputElement): Promise<void> {
+  const file = input.files?.[0];
   if (!file) return;
   const blob = await openImageCropEditor(file, { shape: 'square' });
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
@@ -901,8 +975,8 @@ export async function uploadBeanImage(id, input) {
   const r = await libraryApi.uploadBeanImage(id, blob);
   if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
   const saved = await r.json();
-  const idx = S.coffeeLibrary.beans.findIndex(b => b.id === id);
-  if (idx !== -1) S.coffeeLibrary.beans[idx] = saved;
+  const idx = _beanList().findIndex(b => b.id === id);
+  if (idx !== -1) _beanList()[idx] = saved;
   invalidateBeanImage(id);
   renderBeanList();
 }

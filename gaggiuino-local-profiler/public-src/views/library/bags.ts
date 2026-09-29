@@ -6,7 +6,6 @@ import { t } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, todayIsoDate } from '../../utils.js';
 import type { Bean } from '../../api/types.js';
-// @ts-expect-error -- library.js is still untyped JS (#1115); drop this once it is TS
 import * as libraryView from '../library.js';
 
 // Circular with library.js (it re-exports this module): only ever touched at
