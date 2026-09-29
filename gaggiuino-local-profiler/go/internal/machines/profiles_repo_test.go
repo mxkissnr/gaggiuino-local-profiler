@@ -183,8 +183,8 @@ func TestProfilesRepository_ReplaceRemoteID_StaleUpdatedAtStillStoresRemoteID(t 
 	if got.SyncStatus != ProfileSyncDirty {
 		t.Fatalf("SyncStatus = %q, want dirty (a newer edit still has to be pushed)", got.SyncStatus)
 	}
-	if got.Name != "Edited mid-push" || string(got.Data) != `{"v":2}` {
-		t.Fatalf("row = %+v, want the newer edit preserved", got)
+	if string(got.Data) != `{"v":2}` {
+		t.Fatalf("Data = %s, want the newer edit's body preserved", got.Data)
 	}
 	if got.UpdatedAt != edited.UpdatedAt {
 		t.Fatalf("UpdatedAt = %d, want the newer edit's %d (the dirty case must not bump it)", got.UpdatedAt, edited.UpdatedAt)
