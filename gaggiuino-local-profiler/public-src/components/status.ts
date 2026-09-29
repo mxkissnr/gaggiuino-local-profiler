@@ -20,7 +20,7 @@ interface SyncProgressEntry { machineId: number; current: number; total: number 
 interface SyncProgressEvent { machineId: number; current: number; total: number }
 interface SyncCompleteEvent { machineId: number; total: number; success: boolean }
 interface ProgressButton { textContent: string | null; disabled: boolean }
-interface SwitchPayload { configured?: boolean; state?: boolean | null }
+interface SwitchPayload { configured?: boolean | undefined; state?: boolean | null | undefined }
 
 // Shape of the /api/status body this module reads (Response.json() is `any`,
 // so naming it here keeps the untyped boundary in one place).

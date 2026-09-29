@@ -17,37 +17,39 @@ import { invalidateGmPhaseCache } from './shots/index.js';
 // GaggiMate phase fields here — the same "local interface for the fields the
 // view reads" pattern as views/shots/annotation.ts.
 interface GmPump {
-  target?: string;
-  pressure?: number;
-  flow?: number;
+  target?: string | undefined;
+  pressure?: number | undefined;
+  flow?: number | undefined;
 }
 
 interface GmTarget {
-  type?: string;
-  operator?: string;
-  value?: number;
+  type?: string | undefined;
+  operator?: string | undefined;
+  value?: number | undefined;
 }
 
 interface GmTransition {
-  type?: string;
-  duration?: number;
-  adaptive?: boolean;
-  target?: string;
+  type?: string | undefined;
+  duration?: number | undefined;
+  adaptive?: boolean | undefined;
+  target?: string | undefined;
 }
 
 interface GmPhase {
-  name?: string;
-  phase?: string;
-  valve?: number;
-  pump?: number | GmPump;
-  duration?: number;
-  temperature?: number;
-  targets?: GmTarget[];
-  transition?: GmTransition;
+  name?: string | undefined;
+  phase?: string | undefined;
+  valve?: number | undefined;
+  pump?: number | GmPump | undefined;
+  duration?: number | undefined;
+  temperature?: number | undefined;
+  targets?: GmTarget[] | undefined;
+  transition?: GmTransition | undefined;
 }
 
-interface GmProfile extends Pick<MachineProfile, 'id' | 'label' | 'description' | 'temperature' | 'type' | 'utility' | 'favorite'> {
-  phases?: GmPhase[];
+type Loose<T> = { [K in keyof T]?: T[K] | undefined };
+
+interface GmProfile extends Loose<Pick<MachineProfile, 'id' | 'label' | 'description' | 'temperature' | 'type' | 'utility' | 'favorite'>> {
+  phases?: GmPhase[] | undefined;
 }
 
 // ── State ─────────────────────────────────────────────────────────────────

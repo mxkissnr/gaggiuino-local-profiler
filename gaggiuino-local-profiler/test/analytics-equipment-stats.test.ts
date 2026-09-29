@@ -11,13 +11,13 @@ let _computeEquipmentStats: Analytics['_computeEquipmentStats'];
 type ShotRow = Parameters<Analytics['_computeEquipmentStats']>[0][number];
 
 interface ShotOverrides {
-  id?: number;
-  timestamp?: number;
-  duration?: number;
-  score?: number;
-  basketId?: number | null;
-  puckScreenId?: number | null;
-  grinder?: string | null;
+  id?: number | undefined;
+  timestamp?: number | undefined;
+  duration?: number | undefined;
+  score?: number | undefined;
+  basketId?: number | null | undefined;
+  puckScreenId?: number | null | undefined;
+  grinder?: string | null | undefined;
 }
 
 beforeAll(async () => {

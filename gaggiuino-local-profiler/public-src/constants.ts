@@ -118,9 +118,9 @@ export const GUIDED_MAINT_STEPS: Record<string, string[]> = {
 // phases[] -> {name, phaseType, t0, t1} ranges for phasePlugin's
 // gaggimatePhases option. Shared by the profile editor and shot chart.
 export interface GmPhaseInput {
-  duration?: number;
-  name?: string;
-  phase?: string;
+  duration?: number | undefined;
+  name?: string | undefined;
+  phase?: string | undefined;
 }
 
 export interface GmPhaseRange {
