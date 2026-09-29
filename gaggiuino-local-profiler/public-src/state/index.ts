@@ -86,7 +86,8 @@ export interface LibrarySlice {
   milkTypes: LibraryRow[];
   shotDefaults: Record<string, unknown> | null;
   beanEditId: number | null;
-  _beanStockEditId: number | null;
+  _bagStockEditId: number | null;
+  _bagFullEditId: number | null;
   grinderEditId: number | null;
   basketEditId: number | null;
   puckScreenEditId: number | null;
@@ -215,7 +216,8 @@ export const S: AppState = {
   milkTypes: [],
   shotDefaults: null,
   beanEditId: null,
-  _beanStockEditId: null,
+  _bagStockEditId: null,
+  _bagFullEditId: null,
   grinderEditId: null,
   basketEditId: null,
   puckScreenEditId: null,
