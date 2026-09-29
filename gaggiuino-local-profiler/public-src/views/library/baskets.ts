@@ -61,7 +61,7 @@ export function renderBasketList(): void {
 function loadBasketThumbnails(): void {
   document.querySelectorAll<HTMLImageElement>('.lib-basket-thumb[data-basket-id]').forEach(img => {
     const id = Number(img.dataset.basketId);
-    loadBasketImageBlobUrl(id).then(url => {
+    void loadBasketImageBlobUrl(id).then(url => {
       if (!url) return;
       img.src = url;
       img.onclick = e => { e.stopPropagation(); openLightbox(img.src); };

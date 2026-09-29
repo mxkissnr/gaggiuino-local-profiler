@@ -54,7 +54,7 @@ export function renderPuckScreenList(): void {
 function loadPuckScreenThumbnails(): void {
   document.querySelectorAll<HTMLImageElement>('.lib-puckscreen-thumb[data-puckscreen-id]').forEach(img => {
     const id = Number(img.dataset.puckscreenId);
-    loadPuckScreenImageBlobUrl(id).then(url => {
+    void loadPuckScreenImageBlobUrl(id).then(url => {
       if (!url) return;
       img.src = url;
       img.onclick = e => { e.stopPropagation(); openLightbox(img.src); };
