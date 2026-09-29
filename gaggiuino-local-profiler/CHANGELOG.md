@@ -25,6 +25,7 @@
 - **A machine's last error in the status API is now only sent to authenticated callers, like the existing machine error field, so an anonymous request can no longer see a machine's address.** Part of #1201
 
 ### Changed
+- **The live view is now type-checked.**
 - **The screenshot tool can restore a real GLP backup instead of the demo seed, so the README/wiki views can be captured from actual data.** Closes #1181
 - **The README now shows the GLP ecosystem and the app's internals as diagrams, and GaggiMate is documented as fully supported.** Closes #1176
 - **The app architecture diagram now shows the importer and backup/restore paths through the REST API.** Part of #1176
