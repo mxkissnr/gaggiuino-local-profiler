@@ -7,22 +7,26 @@
 // clobbered. Driven end-to-end through the exported fetchLiveData(), the
 // only path that reaches the private _applyLiveSetupToShot — same
 // apiFetch-mocking/fake-document harness as
-// test/live-stream-sse-fallback-gating.test.js.
+// test/live-stream-sse-fallback-gating.test.ts.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { ShotMeta } from '../public-src/state/index.js';
 
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator ??= { language: 'en-US' };
-globalThis.window ??= globalThis;
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge the sibling live tests use).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
+g.window ??= globalThis;
 
 const getLiveDataMock = vi.fn();
 vi.mock('../public-src/api/system.js', () => ({
-  getLiveData: (...args) => getLiveDataMock(...args),
+  getLiveData: (...args: unknown[]) => getLiveDataMock(...args) as unknown,
   getPreheat: () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) }),
 }));
 
 const annotateShotMock = vi.fn(() => Promise.resolve({ ok: true }));
 vi.mock('../public-src/api/shots.js', () => ({
-  annotateShot: (...args) => annotateShotMock(...args),
+  annotateShot: (...args: unknown[]) => annotateShotMock(...args) as unknown,
 }));
 
 vi.mock('../public-src/views/shots/annotation.js', () => ({
@@ -38,9 +42,23 @@ vi.mock('../public-src/views/shots/annotation.js', () => ({
 const { S } = await import('../public-src/state/index.js');
 const { fetchLiveData } = await import('../public-src/views/live.js');
 
+// The DOM stand-in these tests touch: only the members the live view reads
+// off each element.
+interface FakeElement {
+  className: string;
+  textContent: string;
+  style: Record<string, string>;
+  value: string;
+  classList: { add: () => void; remove: () => void; contains: () => boolean; toggle: () => void };
+  querySelector: () => null;
+  addEventListener: () => void;
+  removeEventListener: () => void;
+  selectedOptions: { dataset: Record<string, string> }[];
+}
+
 function makeFakeDocument() {
-  const registry = new Map();
-  function makeElement() {
+  const registry = new Map<string, FakeElement>();
+  function makeElement(): FakeElement {
     return {
       className: '', textContent: '', style: {}, value: '',
       classList: { add() {}, remove() {}, contains: () => false, toggle() {} },
@@ -51,35 +69,45 @@ function makeFakeDocument() {
     };
   }
   return {
-    getElementById: id => {
+    getElementById: (id: string): FakeElement => {
       if (!registry.has(id)) registry.set(id, makeElement());
-      return registry.get(id);
+      return registry.get(id)!;
     },
   };
 }
 
-function liveDataResponse(body) {
+interface LiveBody {
+  isLive?: boolean;
+  seq?: number;
+  profileName?: string | null;
+  isSteaming?: boolean;
+  steamSeq?: number;
+  isFlushing?: boolean;
+  flushSeq?: number;
+}
+
+function liveDataResponse(body: LiveBody) {
   return Promise.resolve({ ok: true, json: async () => body });
 }
 
-function draftKey(machineId) {
+function draftKey(machineId: number | null): string {
   return `glp_live_shot_setup_${machineId ?? 'default'}`;
 }
 
 describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => {
-  let draftStore;
+  let draftStore: Record<string, string>;
 
   beforeEach(() => {
     vi.useFakeTimers();
     getLiveDataMock.mockReset();
     annotateShotMock.mockClear();
-    globalThis.document = makeFakeDocument();
+    g.document = makeFakeDocument();
 
     draftStore = {};
-    globalThis.localStorage = {
-      getItem: key => (key in draftStore ? draftStore[key] : null),
-      setItem: (key, value) => { draftStore[key] = value; },
-      removeItem: key => { delete draftStore[key]; },
+    g.localStorage = {
+      getItem: (key: string) => (key in draftStore ? draftStore[key] : null),
+      setItem: (key: string, value: string) => { draftStore[key] = value; },
+      removeItem: (key: string) => { delete draftStore[key]; },
     };
 
     S.activeMachineId = 1;
@@ -87,13 +115,13 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
     S.liveWasLive = true; // simulate a brew already in progress
     S.liveLastSeq = 0;
     S.shots = [
-      { id: 10, machineId: 1, annotation: {} },
-      { id: 11, machineId: 2, annotation: {} }, // other machine, higher id — must never be picked for machine 1
+      { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+      { id: 11, machineId: 2, timestamp: 0, annotation: {} }, // other machine, higher id — must never be picked for machine 1
     ];
   });
 
-  async function triggerBrewEnd({ newShotsAfterSync }) {
-    globalThis.window.loadData = () => { S.shots = newShotsAfterSync; return Promise.resolve(); };
+  async function triggerBrewEnd({ newShotsAfterSync }: { newShotsAfterSync: ShotMeta[] }) {
+    window.loadData = () => { S.shots = newShotsAfterSync; return Promise.resolve(); };
     getLiveDataMock.mockReturnValue(liveDataResponse({ isLive: false, seq: 1, profileName: null }));
     await fetchLiveData();
     await vi.advanceTimersByTimeAsync(4000);
@@ -104,10 +132,10 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
 
     await triggerBrewEnd({
       newShotsAfterSync: [
-        { id: 10, machineId: 1, annotation: {} },
-        { id: 11, machineId: 2, annotation: {} },
-        { id: 12, machineId: 1, annotation: {} }, // the real new brew shot, machine 1
-        { id: 13, machineId: 2, annotation: {} }, // synced after it, but a different machine — must be ignored
+        { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+        { id: 11, machineId: 2, timestamp: 0, annotation: {} },
+        { id: 12, machineId: 1, timestamp: 0, annotation: {} }, // the real new brew shot, machine 1
+        { id: 13, machineId: 2, timestamp: 0, annotation: {} }, // synced after it, but a different machine — must be ignored
       ],
     });
 
@@ -120,13 +148,13 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
 
     await triggerBrewEnd({
       newShotsAfterSync: [
-        { id: 10, machineId: 1, annotation: {} },
-        { id: 12, machineId: 1, annotation: {} },
+        { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+        { id: 12, machineId: 1, timestamp: 0, annotation: {} },
       ],
     });
 
     expect(annotateShotMock).toHaveBeenCalledTimes(1);
-    const payload = annotateShotMock.mock.calls[0][1];
+    const payload = annotateShotMock.mock.calls[0][1] as Record<string, unknown>;
     expect(payload).toEqual({ grinder: 'Niche Zero', grindSetting: '4.2' });
     expect(payload).not.toHaveProperty('coffee');
     expect(payload).not.toHaveProperty('dose');
@@ -138,8 +166,8 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
 
     await triggerBrewEnd({
       newShotsAfterSync: [
-        { id: 10, machineId: 1, annotation: {} },
-        { id: 12, machineId: 1, annotation: { coffee: 'Already set by shot defaults' } },
+        { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+        { id: 12, machineId: 1, timestamp: 0, annotation: { coffee: 'Already set by shot defaults' } },
       ],
     });
 
@@ -150,8 +178,8 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
     // No draft written to draftStore at all for this machine.
     await triggerBrewEnd({
       newShotsAfterSync: [
-        { id: 10, machineId: 1, annotation: {} },
-        { id: 12, machineId: 1, annotation: {} },
+        { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+        { id: 12, machineId: 1, timestamp: 0, annotation: {} },
       ],
     });
 
@@ -171,10 +199,10 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
     // It finishes: the brew seq advances and a session was on screen, but the
     // brew-only gate must keep the draft from being applied.
     S.liveWasLive = true;
-    globalThis.window.loadData = () => {
+    window.loadData = () => {
       S.shots = [
-        { id: 10, machineId: 1, annotation: {} },
-        { id: 12, machineId: 1, annotation: {} },
+        { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+        { id: 12, machineId: 1, timestamp: 0, annotation: {} },
       ];
       return Promise.resolve();
     };
@@ -192,10 +220,10 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
     await fetchLiveData();
 
     S.liveWasLive = true;
-    globalThis.window.loadData = () => {
+    window.loadData = () => {
       S.shots = [
-        { id: 10, machineId: 1, annotation: {} },
-        { id: 12, machineId: 1, annotation: {} },
+        { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+        { id: 12, machineId: 1, timestamp: 0, annotation: {} },
       ];
       return Promise.resolve();
     };

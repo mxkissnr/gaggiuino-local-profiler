@@ -1,4 +1,5 @@
 import Chart from 'chart.js/auto';
+import type { ChartConfiguration } from 'chart.js';
 import { S } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import * as timerRegistry from '../state/timers.js';
@@ -6,7 +7,9 @@ import { t } from '../i18n.js';
 import { isApiPortBlocked } from '../api/transport.js';
 import { getPreheat, getLiveData } from '../api/system.js';
 import { annotateShot } from '../api/shots.js';
+import type { ShotAnnotation } from '../api/types.js';
 import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints } from '../utils.js';
+import type { ShotSeries } from '../utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
          resolveMachineIconState, MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
@@ -15,13 +18,86 @@ import { localeFor } from '../constants.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange,
          _renderBeanSelect, _renderBasketSelect, _renderPuckScreenSelect, _renderRecipeSelect } from './shots/annotation.js';
 
+// GET /api/live/data (and the SSE live-snapshot passthrough) — the fields this
+// view reads off the poll payload. Named locally rather than reusing
+// openapi.yaml's generated LiveData, which types `datapoints` as an array of
+// empty records and doesn't model the machine's cross-repo curve shape at all.
+interface LiveModeDatapoints {
+  timeInMode?: number[];
+  pressure?: number[];
+  temperature?: number[];
+}
+
+interface LiveDatapoints {
+  timeInShot?: number[];
+  pressure?: number[];
+  pumpFlow?: number[];
+  shotWeight?: number[];
+  weight?: number[];
+  temperature?: number[];
+}
+
+interface LiveMessage {
+  isLive?: boolean;
+  profileName?: string;
+  seq?: number;
+  machineReachable?: boolean | null;
+  isSteaming?: boolean;
+  isFlushing?: boolean;
+  isDescaling?: boolean;
+  steamDatapoints?: LiveModeDatapoints | null;
+  flushDatapoints?: LiveModeDatapoints | null;
+  descaleDatapoints?: LiveModeDatapoints | null;
+  datapoints?: LiveDatapoints | null;
+  temperature?: number | null;
+  targetTemperature?: number | null;
+  pressure?: number | null;
+  waterLevel?: number | null;
+}
+
+// GET /api/preheat — the fields updatePreheatWidget() reads. `ready`/`remaining`
+// are always present in the payload (buildPreheatResponse()), hence required.
+interface PreheatData {
+  ready: boolean;
+  remaining: number;
+  pct?: number;
+  preheatTime?: number;
+}
+
+// The sticky, per-machine pre-shot setup draft persisted to localStorage.
+interface LiveSetupDraft {
+  coffee?: string;
+  beanId?: number | null;
+  basketId?: number | null;
+  puckScreenId?: number | null;
+  recipeId?: number | null;
+  grinder?: string;
+  grindSetting?: string;
+  dose?: number | null;
+}
+
+// state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
+// an index signature); this alias names the annotation fields this view reads,
+// same pattern as views/shots/annotation.ts.
+interface LiveShotAnnotation {
+  coffee?: string | null;
+  beanId?: number | null;
+  grinder?: string | null;
+  grindSetting?: string | null;
+  dose?: number | null;
+  basketId?: number | null;
+  puckScreenId?: number | null;
+  recipeId?: number | null;
+  score?: number | null;
+}
+
 // Multi-machine live gating (#325, #341) — shot sync now covers every
 // registered machine (lib/sync.js's syncOtherMachines()), but real-time
 // live status/brew-detection (lib/poll.js's pollViaGaggiuinoStatus()) is
 // still hardcoded to the default machine only — deferred, not built yet.
 // 'all' and a not-yet-loaded activeMachineId both count as "assume default
 // machine" so single-machine installs (the vast majority) are unaffected.
-function _isActiveMachineLiveCapable() {
+function _isActiveMachineLiveCapable(): boolean {
   const active = S.activeMachineId;
   if (active == null || active === 'all') return true;
   const defaultId = getDefaultMachineId();
@@ -36,7 +112,7 @@ function _isActiveMachineLiveCapable() {
 // that steam/flush sessions never create Shot rows. null = no live session
 // observed yet (treated as brew, so a synthetic live→idle transition with no
 // recorded mode isn't blocked).
-let _liveSessionIsBrew = null;
+let _liveSessionIsBrew: boolean | null = null;
 
 // ── Pre-shot setup (bean/dose/grinder/grind/basket/puckscreen/recipe) ──────
 // Lets the user pick the upcoming shot's setup right on the Live/idle screen
@@ -47,21 +123,21 @@ let _liveSessionIsBrew = null;
 // just ended" branch below) — same POST api/shots/{id}/annotate endpoint and
 // field shape shots/annotation.js's own auto-save uses, just triggered from
 // here instead of from the annotation panel's own fields.
-function _liveSetupStorageKey() {
+function _liveSetupStorageKey(): string {
   return `glp_live_shot_setup_${S.activeMachineId ?? 'default'}`;
 }
 
-function _loadLiveSetupDraft() {
+function _loadLiveSetupDraft(): LiveSetupDraft {
   try {
-    return JSON.parse(localStorage.getItem(_liveSetupStorageKey())) || {};
+    return (JSON.parse(localStorage.getItem(_liveSetupStorageKey()) ?? 'null') || {}) as LiveSetupDraft;
   } catch {
     return {};
   }
 }
 
-function _saveLiveSetupDraft(draft) {
+function _saveLiveSetupDraft(draft: LiveSetupDraft): void {
   try {
-    localStorage.setItem(_liveSetupStorageKey(), JSON.stringify(draft));
+    localStorage.setItem(_liveSetupStorageKey(), JSON.stringify(draft) as string);
   } catch (e) {
     // Quota exceeded / private-browsing storage restrictions — the draft
     // just doesn't persist across reloads this time; every field is still
@@ -73,15 +149,18 @@ function _saveLiveSetupDraft(draft) {
 
 let _lsWired = false;
 
-export function renderLiveShotSetupPanel() {
+export function renderLiveShotSetupPanel(): void {
   const draft = _loadLiveSetupDraft();
   _renderBeanSelect(draft.coffee || '', draft.beanId ?? null, 'lsBean');
   _renderBasketSelect(draft.basketId ?? null, 'lsBasket');
   _renderPuckScreenSelect(draft.puckScreenId ?? null, 'lsPuckScreen');
   _renderRecipeSelect(draft.recipeId ?? null, 'lsRecipeField', 'lsRecipe');
   renderGrinderField('lsGrinder', 'lsGrinderOther', draft.grinder || '');
-  const doseEl = document.getElementById('lsDose');
-  const grindEl = document.getElementById('lsGrindSetting');
+  // The tests' fake DOM records the raw assigned value (no <input> string
+  // coercion), so these two fields stay number-or-string exactly as the .js
+  // assigned them; a real input stringifies on assignment.
+  const doseEl = document.getElementById('lsDose') as unknown as { value: number | string } | null;
+  const grindEl = document.getElementById('lsGrindSetting') as unknown as { value: number | string } | null;
   if (doseEl)  doseEl.value  = draft.dose ?? '';
   if (grindEl) grindEl.value = draft.grindSetting || '';
 
@@ -92,18 +171,19 @@ export function renderLiveShotSetupPanel() {
     document.getElementById('live-shot-setup')?.classList.toggle('open');
   });
 
-  const beanSelect = document.getElementById('lsBean');
+  const beanSelect = document.getElementById('lsBean') as HTMLSelectElement | null;
   beanSelect?.addEventListener('change', () => {
     const d = _loadLiveSetupDraft();
-    d.coffee = beanSelect.value;
-    d.beanId = beanSelect.selectedOptions[0]?.dataset.beanId
-      ? parseInt(beanSelect.selectedOptions[0].dataset.beanId, 10) : null;
+    d.coffee = beanSelect!.value;
+    d.beanId = beanSelect!.selectedOptions[0]?.dataset.beanId
+      ? parseInt(beanSelect!.selectedOptions[0].dataset.beanId!, 10) : null;
     // Prefill grinder/grind setting from the bean's known-grind-setting
     // record (dial-in-wizard's own prefill source, see library.js) — only
     // when the user hasn't already typed something into those fields, so
     // this never clobbers a manual override.
     if (!d.grinder && !d.grindSetting && d.beanId != null) {
-      const bean = (S.coffeeLibrary?.beans || []).find(b => b.id === d.beanId);
+      const bean = (S.coffeeLibrary?.beans || []).find(b => b.id === d.beanId) as unknown as
+        { knownGrindSettings?: { grinder?: string; grindSetting?: string }[] } | undefined;
       const known = bean?.knownGrindSettings?.[0];
       if (known) { d.grinder = known.grinder || ''; d.grindSetting = known.grindSetting || ''; }
     }
@@ -124,29 +204,29 @@ export function renderLiveShotSetupPanel() {
   });
   document.getElementById('lsGrindSetting')?.addEventListener('input', () => {
     const d = _loadLiveSetupDraft();
-    d.grindSetting = document.getElementById('lsGrindSetting').value.trim();
+    d.grindSetting = (document.getElementById('lsGrindSetting') as HTMLInputElement).value.trim();
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsDose')?.addEventListener('input', () => {
     const d = _loadLiveSetupDraft();
-    d.dose = parseFloat(document.getElementById('lsDose').value) || null;
+    d.dose = parseFloat((document.getElementById('lsDose') as HTMLInputElement).value) || null;
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsBasket')?.addEventListener('change', () => {
     const d = _loadLiveSetupDraft();
-    const sel = document.getElementById('lsBasket');
-    d.basketId = sel.selectedOptions[0]?.dataset.basketId ? parseInt(sel.selectedOptions[0].dataset.basketId, 10) : null;
+    const sel = document.getElementById('lsBasket') as HTMLSelectElement;
+    d.basketId = sel.selectedOptions[0]?.dataset.basketId ? parseInt(sel.selectedOptions[0].dataset.basketId!, 10) : null;
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsPuckScreen')?.addEventListener('change', () => {
     const d = _loadLiveSetupDraft();
-    const sel = document.getElementById('lsPuckScreen');
-    d.puckScreenId = sel.selectedOptions[0]?.dataset.puckscreenId ? parseInt(sel.selectedOptions[0].dataset.puckscreenId, 10) : null;
+    const sel = document.getElementById('lsPuckScreen') as HTMLSelectElement;
+    d.puckScreenId = sel.selectedOptions[0]?.dataset.puckscreenId ? parseInt(sel.selectedOptions[0].dataset.puckscreenId!, 10) : null;
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsRecipe')?.addEventListener('change', () => {
     const d = _loadLiveSetupDraft();
-    d.recipeId = parseInt(document.getElementById('lsRecipe').value, 10) || null;
+    d.recipeId = parseInt((document.getElementById('lsRecipe') as HTMLSelectElement).value, 10) || null;
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsReset')?.addEventListener('click', () => {
@@ -165,17 +245,17 @@ export function renderLiveShotSetupPanel() {
 // overwriting here would silently clobber that instead of merging with it
 // — this feature only ever fills a shot that would otherwise stay
 // unannotated, same as #654 itself.
-async function _applyLiveSetupToShot(shotId) {
+async function _applyLiveSetupToShot(shotId: number): Promise<void> {
   const draft = _loadLiveSetupDraft();
   if (!Object.keys(draft).length) return;
   const shot = S.shots.find(s => s.id === shotId);
-  const existing = shot?.annotation || {};
+  const existing: LiveShotAnnotation = (shot?.annotation as LiveShotAnnotation | undefined) || {};
   const alreadyAnnotated = !!(existing.coffee || existing.beanId != null || existing.grinder ||
     existing.grindSetting || existing.dose != null || existing.basketId != null ||
     existing.puckScreenId != null || existing.recipeId != null);
   if (alreadyAnnotated) return;
 
-  const payload = {};
+  const payload: ShotAnnotation = {};
   if (draft.coffee) { payload.coffee = draft.coffee; payload.beanId = draft.beanId ?? null; }
   if (draft.grinder) payload.grinder = draft.grinder;
   if (draft.grindSetting) payload.grindSetting = draft.grindSetting;
@@ -189,7 +269,7 @@ async function _applyLiveSetupToShot(shotId) {
     const r = await annotateShot(shotId, payload);
     if (r.ok) {
       const idx = S.shots.findIndex(s => s.id === shotId);
-      if (idx !== -1) S.shots[idx].annotation = { ...S.shots[idx].annotation, ...payload };
+      if (idx !== -1) S.shots[idx].annotation = { ...(S.shots[idx].annotation as Record<string, unknown>), ...payload };
     }
   } catch (e) {
     // Best-effort — the shot still exists, just unannotated — but log it
@@ -200,13 +280,16 @@ async function _applyLiveSetupToShot(shotId) {
 }
 
 // ── Live chart init ───────────────────────────────────────────────────────
-export function initLiveChart() {
+export function initLiveChart(): void {
   // #814: resolved per render, never at module load — the value has to be
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
-  const ctx = document.getElementById('liveChart');
+  const ctx = document.getElementById('liveChart') as HTMLCanvasElement;
   chartRegistry.dispose('liveChart');
 
+  // Chart.js infers the dataset data type from the (empty) arrays below as
+  // never[], so the config is asserted to the line shape once, same convention
+  // as views/shots/index.ts's full chart config.
   chartRegistry.set('liveChart', new Chart(ctx, {
     type: 'line',
     data: {
@@ -232,27 +315,27 @@ export function initLiveChart() {
         tooltip: { callbacks: { title: ctx => t('chart_time', formatTimeLabel(ctx[0].parsed.x)) } }
       },
       scales: {
-        x:  { type: 'linear', min: 0, max: 60, ticks: { color: C.tick, callback: v => formatTimeLabel(v), stepSize: 5 }, grid: { color: C.grid } },
+        x:  { type: 'linear', min: 0, max: 60, ticks: { color: C.tick, callback: v => formatTimeLabel(v as number), stepSize: 5 }, grid: { color: C.grid } },
         y:  { type: 'linear', position: 'left',  min: 0, max: 12, ticks: { color: C.tick }, grid: { color: C.grid } },
         y1: { type: 'linear', position: 'right', min: 0, max: 100, ticks: { color: C.tick }, grid: { drawOnChartArea: false } }
       }
     }
-  }));
+  } as unknown as ChartConfiguration<'line'>));
 
   // Re-apply reference shot after chart re-init
-  if (S.refShotId) _applyRefShotById(S.refShotId);
+  if (S.refShotId) void _applyRefShotById(S.refShotId);
 }
 
 // #957: reference-overlay curves are lazy per shot now — fetch through the
 // curve cache, then feed _applyRefDatasets the mapped XY form.
-async function _applyRefShotById(shotId) {
+async function _applyRefShotById(shotId: number): Promise<void> {
   const dp = await getShotCurve(shotId);
   if (S.refShotId !== shotId) return; // ref changed while we were fetching
   _applyRefDatasets(mapShotDatapoints(dp));
 }
 
-function _applyRefDatasets(d) {
-  const liveChart = chartRegistry.get('liveChart');
+function _applyRefDatasets(d: ShotSeries): void {
+  const liveChart = chartRegistry.get('liveChart') as Chart<'line'> | null;
   if (!liveChart) return;
   liveChart.data.datasets[4].data = d.pressure;
   liveChart.data.datasets[5].data = d.flow;
@@ -261,8 +344,8 @@ function _applyRefDatasets(d) {
   liveChart.update('none');
 }
 
-export function populateRefSelector() {
-  const sel = document.getElementById('refShotSelect');
+export function populateRefSelector(): void {
+  const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
   if (!sel) return;
   const prev = sel.value;
   sel.innerHTML = `<option value="">${t('ref_none')}</option>`;
@@ -270,55 +353,55 @@ export function populateRefSelector() {
     .slice().reverse().slice(0, 40)
     .forEach(s => {
       const date    = new Date(s.timestamp * 1000).toLocaleDateString(localeFor(S.currentLang), { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const profile = s.profile?.name || s.profileName || '?';
-      const ann     = s.annotation || {};
+      const profile = (s.profile as { name?: string } | undefined)?.name || (s.profileName as string | undefined) || '?';
+      const ann     = (s.annotation as LiveShotAnnotation | undefined) || {};
       const score   = ann.score != null ? ` · ${ann.score}` : '';
       const coffee  = ann.coffee ? ` — ${ann.coffee}` : '';
       const opt = document.createElement('option');
-      opt.value       = s.id;
+      opt.value       = String(s.id);
       opt.textContent = `${date} · ${profile}${coffee}${score}`;
       if (String(s.id) === String(prev)) opt.selected = true;
       sel.appendChild(opt);
     });
 }
 
-export function autoApplyRefShot(profileName) {
+export function autoApplyRefShot(profileName: string): void {
   const match = S.shots
-    .filter(s => (s.profile?.name || s.profileName || '') === profileName && s.hasChartData)
+    .filter(s => ((s.profile as { name?: string } | undefined)?.name || (s.profileName as string | undefined) || '') === profileName && s.hasChartData)
     .sort((a, b) => b.timestamp - a.timestamp)[0];
   if (!match) return;
   S.refShotId = match.id;
-  _applyRefShotById(match.id);
-  const sel = document.getElementById('refShotSelect');
+  void _applyRefShotById(match.id);
+  const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
   if (sel) sel.value = String(match.id);
   const btn = document.getElementById('refClearBtn');
   if (btn) btn.style.display = '';
 }
 
-export function onRefShotChange(val) {
+export function onRefShotChange(val: string): void {
   if (!val) { clearReferenceShot(); return; }
   S.refShotId = parseInt(val);
   const shot = S.shots.find(s => s.id === S.refShotId);
   if (!shot) return;
-  _applyRefShotById(shot.id);
+  void _applyRefShotById(shot.id);
   const btn = document.getElementById('refClearBtn');
   if (btn) btn.style.display = '';
 }
 
-export function clearReferenceShot() {
+export function clearReferenceShot(): void {
   S.refShotId = null;
-  const liveChart = chartRegistry.get('liveChart');
+  const liveChart = chartRegistry.get('liveChart') as Chart<'line'> | null;
   if (liveChart) {
     [4, 5, 6, 7].forEach(i => { liveChart.data.datasets[i].data = []; });
     liveChart.update('none');
   }
-  const sel = document.getElementById('refShotSelect');
+  const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
   if (sel) sel.value = '';
   const btn = document.getElementById('refClearBtn');
   if (btn) btn.style.display = 'none';
 }
 
-export function connectLiveStream() {
+export function connectLiveStream(): void {
   const banner  = document.getElementById('liveMachineUnavailableBanner');
   const content = document.getElementById('live-content');
   if (!_isActiveMachineLiveCapable()) {
@@ -337,8 +420,8 @@ export function connectLiveStream() {
   S.liveLastSeq = -1;
   S.liveWasLive = false;
   _liveSessionIsBrew = null;
-  fetchLiveData();
-  fetchPreheatData();
+  void fetchLiveData();
+  void fetchPreheatData();
   // #736 review: SSE push (handleLiveSnapshotEvent/handlePreheatUpdateEvent,
   // wired once in main.js's bootstrap) covers both once connected -- these
   // polling intervals are only needed as the fallback for whenever SSE
@@ -351,15 +434,15 @@ export function connectLiveStream() {
   // every tick, same convention as status.js's updateStatus()/
   // pollSyncProgressFallback() (a 30s interval that always fires, gating its
   // own fallback-only work behind a fresh S.sseActive check each time).
-  timerRegistry.set('livePollInterval',    setInterval(() => { if (!S.sseActive) fetchLiveData(); }, 1000));
-  timerRegistry.set('preheatPollInterval', setInterval(() => { if (!S.sseActive) fetchPreheatData(); }, 10000));
+  timerRegistry.set('livePollInterval',    setInterval(() => { if (!S.sseActive) void fetchLiveData(); }, 1000));
+  timerRegistry.set('preheatPollInterval', setInterval(() => { if (!S.sseActive) void fetchPreheatData(); }, 10000));
 }
 
-export async function fetchPreheatData() {
+export async function fetchPreheatData(): Promise<void> {
   try {
     const r = await getPreheat();
     if (!r.ok) return;
-    updatePreheatWidget(await r.json());
+    updatePreheatWidget(await r.json() as PreheatData);
   } catch { /* ignore */ }
 }
 
@@ -367,9 +450,9 @@ export async function fetchPreheatData() {
 // and then only switched between states — rebuilding the SVG on every poll
 // tick (once a second) would restart every animation mid-cycle, so the
 // element is only re-created when the machine itself changes.
-let _machineIconFor = null;   // machine id the current SVG was built for
+let _machineIconFor: number | null = null;   // machine id the current SVG was built for
 
-function machineIconEl() {
+function machineIconEl(): HTMLElement | null {
   const host = document.getElementById('liveMachineIcon');
   if (!host) return null;
   const machine = (S.machines || []).find(m => m.id === S.activeMachineId)
@@ -384,25 +467,25 @@ function machineIconEl() {
   return host;
 }
 
-let _lastPreheat = null;
+let _lastPreheat: PreheatData | null = null;
 
 // #837: raw-data-to-icon-state translation itself now lives in
 // resolveMachineIconState() (machine-icon.js) — shared with the topbar's
 // own ambient icon instance (components/topbar-machine-icon.js) — this stays
 // the Live view's own wiring: which element to drive and which preheat
 // snapshot to translate against.
-export function syncMachineIcon(msg) {
+export function syncMachineIcon(msg: LiveMessage | null): void {
   const el = machineIconEl();
   if (!el) return;
   const { mode, heatFraction } = resolveMachineIconState(msg, _lastPreheat);
   setMachineIconMode(el, mode, heatFraction);
 }
 
-export function updatePreheatWidget(d) {
-  const readyBadge  = document.getElementById('preheat-ready-badge');
-  const warmingWrap = document.getElementById('preheat-warming-wrap');
-  const barFill     = document.getElementById('preheat-bar-fill');
-  const countdown   = document.getElementById('preheat-countdown');
+export function updatePreheatWidget(d: PreheatData): void {
+  const readyBadge  = document.getElementById('preheat-ready-badge') as HTMLElement | null;
+  const warmingWrap = document.getElementById('preheat-warming-wrap') as HTMLElement;
+  const barFill     = document.getElementById('preheat-bar-fill') as HTMLElement;
+  const countdown   = document.getElementById('preheat-countdown') as HTMLElement;
   if (!readyBadge) return;
   // #811: remembered so the icon can show heat progress on poll ticks that
   // carry live data but no preheat payload.
@@ -427,7 +510,7 @@ export function updatePreheatWidget(d) {
   }
 }
 
-export async function fetchLiveData() {
+export async function fetchLiveData(): Promise<void> {
   try {
     const r = await getLiveData();
     if (!r.ok) {
@@ -436,7 +519,7 @@ export async function fetchLiveData() {
       setLiveBadge('error', isApiPortBlocked(r.status) ? t('api_port_closed_badge') : `HTTP ${r.status}`);
       return;
     }
-    const msg = await r.json();
+    const msg = await r.json() as LiveMessage;
 
     // First successful response — mark as ready
     const statusEl = document.getElementById('live-status-text');
@@ -479,7 +562,7 @@ export async function fetchLiveData() {
     // steam/flush/descale session, so its finish can never apply the draft
     // even if S.liveWasLive was somehow set.
     if (S.liveWasLive && !msg.isLive && _liveSessionIsBrew !== false && msg.seq !== S.liveLastSeq) {
-      S.liveLastSeq = msg.seq;
+      S.liveLastSeq = msg.seq!;
       const machineId = S.activeMachineId;
       const priorNewestId = S.shots.reduce((max, s) => (s.machineId === machineId && s.id > max ? s.id : max), 0);
       setTimeout(async () => {
@@ -487,10 +570,10 @@ export async function fetchLiveData() {
         const newest = S.shots
           .filter(s => s.machineId === machineId && s.id > priorNewestId)
           .sort((a, b) => b.id - a.id)[0];
-        if (newest) _applyLiveSetupToShot(newest.id);
+        if (newest) void _applyLiveSetupToShot(newest.id);
       }, 4000);
     }
-    S.liveWasLive = msg.isLive;
+    S.liveWasLive = msg.isLive!;
 
     handleLiveData(msg);
   } catch {
@@ -505,7 +588,7 @@ export async function fetchLiveData() {
   }
 }
 
-export function disconnectLiveStream() {
+export function disconnectLiveStream(): void {
   timerRegistry.dispose('livePollInterval');
   timerRegistry.dispose('preheatPollInterval');
   timerRegistry.dispose('liveTimerTick');
@@ -513,15 +596,15 @@ export function disconnectLiveStream() {
   S.liveBrewStartWall = null;
 }
 
-export function setLiveBadge(state, detail = '') {
-  const badge   = document.getElementById('live-status-badge');
-  const textEl  = document.getElementById('live-status-text');
-  const liveBtn = document.getElementById('btnLive');
+export function setLiveBadge(state: string, detail = ''): void {
+  const badge   = document.getElementById('live-status-badge') as HTMLElement;
+  const textEl  = document.getElementById('live-status-text') as HTMLElement;
+  const liveBtn = document.getElementById('btnLive') as HTMLElement;
 
   badge.className = `live-status-badge ${state}`;
   liveBtn.classList.remove('live-brewing', 'live-ready');
 
-  const labels = {
+  const labels: Record<string, string> = {
     connecting:  t('live_connecting'),
     ready:       t('live_ready_status'),
     brewing:     t('live_brewing'),
@@ -548,23 +631,23 @@ export function setLiveBadge(state, detail = '') {
 // are mutually exclusive (one physical operation mode at a time), so one
 // shared S.liveBrewStartWall/`liveTimerTick` timer pair is enough; no per-mode
 // state needed.
-function startElapsedTimer(startWall, elId) {
+function startElapsedTimer(startWall: number, elId: string): void {
   S.liveBrewStartWall = startWall;
   if (!timerRegistry.get('liveTimerTick')) {
     timerRegistry.set('liveTimerTick', setInterval(() => {
       if (S.liveBrewStartWall) {
         const s = (Date.now() - S.liveBrewStartWall) / 1000;
-        document.getElementById(elId).textContent = formatTimeLabel(s);
+        document.getElementById(elId)!.textContent = formatTimeLabel(s);
       }
     }, 100));
   }
 }
 
-function stopElapsedTimer(elId, finalElapsedSec) {
+function stopElapsedTimer(elId: string | null, finalElapsedSec: number | null): void {
   timerRegistry.dispose('liveTimerTick');
   S.liveBrewStartWall = null;
   if (elId != null && finalElapsedSec != null) {
-    document.getElementById(elId).textContent = formatTimeLabel(finalElapsedSec);
+    document.getElementById(elId)!.textContent = formatTimeLabel(finalElapsedSec);
   }
 }
 
@@ -574,24 +657,24 @@ function stopElapsedTimer(elId, finalElapsedSec) {
 // counterparts (GET /api/live/data, GET /api/preheat) return -- see
 // lib/poll.js's buildLiveDataResponse()/lib/preheat.js's
 // buildPreheatResponse() -- so these are thin passthroughs, not adapters.
-export function handleLiveSnapshotEvent(payload) {
+export function handleLiveSnapshotEvent(payload: LiveMessage): void {
   handleLiveData(payload);
 }
 
-export function handlePreheatUpdateEvent(payload) {
+export function handlePreheatUpdateEvent(payload: PreheatData): void {
   updatePreheatWidget(payload);
 }
 
-export function handleLiveData(msg) {
-  const dp      = msg.datapoints || {};
+export function handleLiveData(msg: LiveMessage): void {
+  const dp: LiveDatapoints = msg.datapoints || {};
   const times   = dp.timeInShot  || [];
   const lastIdx = times.length - 1;
 
-  const metaEl      = document.getElementById('live-meta');
-  const contentEl   = document.getElementById('live-content');
-  const idleEl      = document.getElementById('live-idle');
-  const idleTitleEl = document.getElementById('liveIdleTitle');
-  const idleTextEl  = document.getElementById('liveIdleText');
+  const metaEl      = document.getElementById('live-meta') as HTMLElement;
+  const contentEl   = document.getElementById('live-content') as HTMLElement;
+  const idleEl      = document.getElementById('live-idle') as HTMLElement;
+  const idleTitleEl = document.getElementById('liveIdleTitle') as HTMLElement | null;
+  const idleTextEl  = document.getElementById('liveIdleText') as HTMLElement | null;
 
   // #655: machineReachable === false is the authoritative "machine is off/
   // unreachable" signal (lib/poll.js's 1s backend poll) and must win over
@@ -663,7 +746,7 @@ export function handleLiveData(msg) {
   // state.
   if (msg.isSteaming || msg.isFlushing || msg.isDescaling) {
     const badgeState  = msg.isSteaming ? 'steaming' : msg.isFlushing ? 'flushing' : 'descaling';
-    const modeDp       = msg.isSteaming ? (msg.steamDatapoints || {})
+    const modeDp: LiveModeDatapoints = msg.isSteaming ? (msg.steamDatapoints || {})
       : msg.isFlushing  ? (msg.flushDatapoints || {})
       : (msg.descaleDatapoints || {});
     const modeTimes    = modeDp.timeInMode || [];
@@ -681,10 +764,10 @@ export function handleLiveData(msg) {
 
       startElapsedTimer(Date.now() - elapsed * 1000, 'liveTime');
 
-      document.getElementById('livePressure').textContent = pressure != null ? pressure.toFixed(1) : '–';
-      document.getElementById('liveFlow').textContent     = '–';
-      document.getElementById('liveWeight').textContent   = '–';
-      document.getElementById('liveTemp').textContent     = temp != null ? temp.toFixed(1) : '–';
+      document.getElementById('livePressure')!.textContent = pressure != null ? pressure.toFixed(1) : '–';
+      document.getElementById('liveFlow')!.textContent     = '–';
+      document.getElementById('liveWeight')!.textContent   = '–';
+      document.getElementById('liveTemp')!.textContent     = temp != null ? temp.toFixed(1) : '–';
     }
     return;
   }
@@ -712,8 +795,8 @@ export function handleLiveData(msg) {
     const elapsed  = times[lastIdx] / 10;
     const pressure = dp.pressure?.[lastIdx]    != null ? dp.pressure[lastIdx] / 10    : null;
     const flow     = dp.pumpFlow?.[lastIdx]     != null ? dp.pumpFlow[lastIdx] / 10    : null;
-    const weight   = (dp.shotWeight || dp.weight)?.[lastIdx] != null
-                   ? (dp.shotWeight || dp.weight)[lastIdx] / 10 : null;
+    const weightSrc = dp.shotWeight || dp.weight;
+    const weight   = weightSrc?.[lastIdx] != null ? weightSrc[lastIdx] / 10 : null;
     const temp     = dp.temperature?.[lastIdx]  != null ? dp.temperature[lastIdx] / 10 : null;
 
     if (msg.isLive) {
@@ -728,24 +811,27 @@ export function handleLiveData(msg) {
       stopElapsedTimer('liveTime', elapsed);
     }
 
-    document.getElementById('livePressure').textContent = pressure != null ? pressure.toFixed(1) : '–';
-    document.getElementById('liveFlow').textContent     = flow     != null ? flow.toFixed(1)     : '–';
-    document.getElementById('liveWeight').textContent   = weight   != null ? weight.toFixed(1)   : '–';
-    document.getElementById('liveTemp').textContent     = temp     != null ? temp.toFixed(1)     : '–';
+    document.getElementById('livePressure')!.textContent = pressure != null ? pressure.toFixed(1) : '–';
+    document.getElementById('liveFlow')!.textContent     = flow     != null ? flow.toFixed(1)     : '–';
+    document.getElementById('liveWeight')!.textContent   = weight   != null ? weight.toFixed(1)   : '–';
+    document.getElementById('liveTemp')!.textContent     = temp     != null ? temp.toFixed(1)     : '–';
   }
 
-  const liveChart = chartRegistry.get('liveChart');
+  const liveChart = chartRegistry.get('liveChart') as Chart<'line'> | null;
   if (liveChart) {
     const maxTime = times.length > 0 ? times[times.length - 1] / 10 : 60;
     liveChart.data.datasets[0].data = mapToXY(times, dp.pressure);
     liveChart.data.datasets[1].data = mapToXY(times, dp.pumpFlow);
     liveChart.data.datasets[2].data = mapToXY(times, dp.shotWeight || dp.weight);
     liveChart.data.datasets[3].data = mapToXY(times, dp.temperature);
-    liveChart.options.scales.x.max  = Math.max(maxTime + 5, 30);
+    const scales = liveChart.options.scales;
+    if (scales) {
+      scales.x.max  = Math.max(maxTime + 5, 30);
 
-    const maxTemp = dp.temperature?.length
-      ? dp.temperature.reduce((m, v) => v > m ? v : m, 0) / 10 : 0;
-    liveChart.options.scales.y1.max = Math.ceil(maxTemp + 5) || 100;
+      const maxTemp = dp.temperature?.length
+        ? dp.temperature.reduce((m, v) => v > m ? v : m, 0) / 10 : 0;
+      scales.y1.max = Math.ceil(maxTemp + 5) || 100;
+    }
 
     liveChart.update('none');
   }

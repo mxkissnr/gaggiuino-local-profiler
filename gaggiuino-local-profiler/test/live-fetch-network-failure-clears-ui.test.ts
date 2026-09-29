@@ -6,23 +6,36 @@
 // "unreachable" UI state handleLiveData()'s explicit
 // msg.machineReachable === false branch already produces. Same
 // apiFetch-mocking/fake-document harness as
-// test/live-stream-sse-fallback-gating.test.js.
+// test/live-stream-sse-fallback-gating.test.ts.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator ??= { language: 'en-US' };
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge the sibling live tests use).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
 
 const apiFetchMock = vi.fn();
 vi.mock('../public-src/api/transport.js', () => ({
-  apiFetch: (...args) => apiFetchMock(...args),
+  apiFetch: (...args: unknown[]) => apiFetchMock(...args) as unknown,
 }));
 
 const { S } = await import('../public-src/state/index.js');
 const { fetchLiveData } = await import('../public-src/views/live.js');
 
+// The DOM stand-in these tests touch: only the members the live view reads
+// off each element.
+interface FakeElement {
+  className: string;
+  textContent: string;
+  style: Record<string, string>;
+  classList: { add: () => void; remove: () => void; contains: () => boolean };
+  querySelector: () => null;
+}
+
 function makeFakeDocument() {
-  const registry = new Map();
-  function makeElement() {
+  const registry = new Map<string, FakeElement>();
+  function makeElement(): FakeElement {
     return {
       className: '', textContent: '', style: {},
       classList: { add() {}, remove() {}, contains: () => false },
@@ -30,20 +43,20 @@ function makeFakeDocument() {
     };
   }
   return {
-    getElementById: id => {
+    getElementById: (id: string): FakeElement => {
       if (!registry.has(id)) registry.set(id, makeElement());
-      return registry.get(id);
+      return registry.get(id)!;
     },
   };
 }
 
 describe('fetchLiveData() catch block on a network-level failure (#913)', () => {
-  let doc;
+  let doc: ReturnType<typeof makeFakeDocument>;
 
   beforeEach(() => {
     apiFetchMock.mockReset();
     doc = makeFakeDocument();
-    globalThis.document = doc;
+    g.document = doc;
     S.activeMachineId = null;
     S.machines = [];
     S.currentLang = 'en';
