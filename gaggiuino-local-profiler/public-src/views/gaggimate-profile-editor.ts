@@ -626,7 +626,7 @@ function _renderProPhase(ph: GmPhase, i: number): string {
   const flow = pumpIsNumber ? 0 : ((ph.pump as GmPump | undefined)?.flow ?? 0);
   if (mode === 'pressure' && pressure === -1) mode = 'hold-pressure';
   if (mode === 'flow' && flow === -1) mode = 'hold-flow';
-  const trans = ph.transition || {};
+  const trans: GmTransition = ph.transition || {};
   const rampType = trans.type || 'instant';
   const rampTarget = trans.target || 'time';
   const rampUnit = rampTarget === 'volumetric' ? 'g' : rampTarget === 'pumped' ? 'ml' : 's';
