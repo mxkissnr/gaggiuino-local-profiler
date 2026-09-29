@@ -529,7 +529,6 @@ export function renderBeanList() {
           b.sourceUrl ? `<a href="${esc(b.sourceUrl)}" target="_blank" rel="noopener">${esc(b.source)}</a>` : esc(b.source),
           esc(b.importedAt || ''))}</div>` : ''}
       </div>
-      </div>
       <div id="newBagForm${b.id}" class="lib-new-bag-form" style="display:none">
         <div class="lib-new-bag-fields">
           <input type="date" class="lib-new-bag-input" id="newBagRoastDate${b.id}" title="${t('lib_bag_roast_date')}" max="${todayIsoDate()}">

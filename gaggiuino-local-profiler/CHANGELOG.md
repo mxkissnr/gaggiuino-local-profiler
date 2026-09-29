@@ -1,6 +1,5 @@
 ## [Unreleased]
 ### Added
-- **Beans can now hold a queue of bags — add a bag with its roast date, weight, batch number and price, reorder or edit the queued bags, and the active bag advances on its own as each one empties.** Part of #1125 Thanks @Paul-Lukas.
 - **The live view has a shot setup panel: pick bean, dose, grinder, grind setting, basket, puck screen and recipe before you pull, and they are saved to the shot automatically.** Part of #1125 Thanks @Paul-Lukas.
 - **A browser demo with sample data now runs on GitHub Pages, including a simulated live shot.** Closes #1193
 - **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, with separate opt-ins for write and developer tools.** Closes #1196
