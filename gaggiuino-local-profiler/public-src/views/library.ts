@@ -88,6 +88,14 @@ interface BeanShotRow {
 }
 function _shots(): BeanShotRow[] { return S.shots as unknown as BeanShotRow[]; }
 
+// qrcode ships no type declarations; name the one call this view makes.
+interface QrCodeModule {
+  toCanvas(canvas: HTMLCanvasElement, text: string, options: {
+    width: number; margin: number; errorCorrectionLevel: string;
+    color: { dark: string; light: string };
+  }): Promise<unknown>;
+}
+
 // Every form field read/written here is an <input>/<select>; the shared
 // .value/.checked API is all that is used (same helper as grinders.ts).
 function _field(id: string): HTMLInputElement {
@@ -488,7 +496,7 @@ export function renderBeanList(): void {
 function loadBeanThumbnails() {
   document.querySelectorAll<HTMLImageElement>('.lib-bean-thumb[data-bean-id]').forEach(img => {
     const id = Number(img.dataset.beanId);
-    loadBeanImageBlobUrl(id).then(url => {
+    void loadBeanImageBlobUrl(id).then(url => {
       if (!url) return;
       img.src = url;
       img.onclick = e => { e.stopPropagation(); openLightbox(img.src); };
@@ -628,7 +636,8 @@ export function toggleBeanQR(id: number): void {
   // an unhandled rejection: the canvas stayed silently blank, no error ever
   // reached the user.
   // @ts-expect-error -- qrcode ships no type declarations
-  import('qrcode').then(({ default: QRCode }) =>
+  const qrModule = import('qrcode') as unknown as Promise<{ default: QrCodeModule }>;
+  qrModule.then(({ default: QRCode }) =>
     // #814: this was drawn INVERTED — dark: '#e4e4e7' on light: '#18181b' means
     // light modules on a dark ground, to match the dark theme. The QR spec
     // assumes dark-on-light, and while many scanners cope with inversion,
@@ -973,8 +982,12 @@ export async function uploadBeanImage(id: number, input: HTMLInputElement): Prom
   input.value = '';
   if (!blob) return;
   const r = await libraryApi.uploadBeanImage(id, blob);
-  if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
-  const saved = await r.json();
+  if (!r.ok) {
+    const err = (await r.json().catch(() => ({}))) as { error?: string };
+    alert(t('error_generic', err.error || r.statusText));
+    return;
+  }
+  const saved = (await r.json()) as BeanListRow;
   const idx = _beanList().findIndex(b => b.id === id);
   if (idx !== -1) _beanList()[idx] = saved;
   invalidateBeanImage(id);
