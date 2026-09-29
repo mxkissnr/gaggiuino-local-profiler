@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -63,10 +64,27 @@ func (row ProfileRow) PublicID() string {
 
 type ProfilesRepository struct {
 	db *sql.DB
+
+	// machineLocks serializes every write+push for one machine — see
+	// MachineLock's own doc comment for why the HTTP handlers and the
+	// background sweep have to share one lock. Keyed by machine id.
+	machineLocks sync.Map // map[int64]*sync.Mutex
 }
 
 func NewProfilesRepository(db *sql.DB) *ProfilesRepository {
 	return &ProfilesRepository{db: db}
+}
+
+// MachineLock returns the mutex serializing one machine's profile writes and
+// pushes. It lives on the repository (not on system.Poller, where the sweep's
+// own lock originally sat) because the create/update/delete handlers in
+// handlers_profiles.go also write the row and talk to the machine directly:
+// they need the very same lock, or a handler and the sweep can both push the
+// same pending_create row and leave a duplicate on the machine. The sweep
+// TryLocks and skips (fire-and-forget design), the handlers Lock and wait.
+func (r *ProfilesRepository) MachineLock(machineID int64) *sync.Mutex {
+	muAny, _ := r.machineLocks.LoadOrStore(machineID, &sync.Mutex{})
+	return muAny.(*sync.Mutex)
 }
 
 func scanProfileRow(scan func(dest ...any) error) (ProfileRow, error) {
@@ -293,18 +311,28 @@ func (r *ProfilesRepository) MarkPendingDelete(machineID int64, id string) error
 
 // ReplaceRemoteID is called once a pending_create row's first push
 // succeeds: the machine's real assigned id becomes authoritative and the
-// row moves to synced.
+// row normally moves to synced.
 //
-// expectedUpdatedAt guards against a lost-update race: it must be the
-// updated_at the caller's row had when it read the data it just pushed.
-// If the row was edited again (bumping updated_at) while the push was in
-// flight, this WHERE clause matches zero rows and the update is silently
-// skipped — leaving the row dirty so the next sweep pushes the newer edit,
-// instead of marking it synced based on stale data and losing the edit
-// that arrived mid-push.
+// expectedUpdatedAt is the updated_at the caller's row had when it read the
+// data it just pushed. The remote id is always persisted (the profile now
+// exists on the machine, so forgetting it would make the next sweep create a
+// second copy) and, when updated_at still equals expectedUpdatedAt, the row
+// is marked synced. If the row was edited again (bumping updated_at) while
+// the push was in flight, it instead stays dirty — without bumping
+// updated_at — so the next sweep pushes that newer edit as an UPDATE of this
+// same remote id rather than losing it. All three outcomes are one statement,
+// so no edit can slip between the remote-id write and the status decision.
 func (r *ProfilesRepository) ReplaceRemoteID(localID int64, expectedUpdatedAt int64, remoteID, name string) error {
-	_, err := r.db.Exec(`UPDATE machine_profiles SET remote_id = ?, name = ?, sync_status = ?, last_sync_error = NULL, updated_at = ?
-		WHERE local_id = ? AND updated_at = ?`, remoteID, name, ProfileSyncSynced, time.Now().UnixMilli(), localID, expectedUpdatedAt)
+	_, err := r.db.Exec(`UPDATE machine_profiles
+			SET remote_id = ?, name = ?,
+				sync_status = CASE WHEN updated_at = ? THEN ? ELSE ? END,
+				last_sync_error = NULL,
+				updated_at = CASE WHEN updated_at = ? THEN ? ELSE updated_at END
+			WHERE local_id = ?`,
+		remoteID, name,
+		expectedUpdatedAt, ProfileSyncSynced, ProfileSyncDirty,
+		expectedUpdatedAt, time.Now().UnixMilli(),
+		localID)
 	if err != nil {
 		return fmt.Errorf("machines: assigning remote id to local profile %d: %w", localID, err)
 	}

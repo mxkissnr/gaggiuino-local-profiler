@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
@@ -56,8 +55,7 @@ func (p *Poller) PushDirtyProfiles(ctx context.Context, machineID int64) error {
 	if p.profilesRepo == nil {
 		return nil
 	}
-	muAny, _ := p.profileSyncLocks.LoadOrStore(machineID, &sync.Mutex{})
-	mu := muAny.(*sync.Mutex)
+	mu := p.profilesRepo.MachineLock(machineID)
 	if !mu.TryLock() {
 		return nil
 	}

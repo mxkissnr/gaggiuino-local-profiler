@@ -136,6 +136,61 @@ func TestProfilesRepository_ReplaceRemoteID_MarksSyncedAndGettableByRemoteID(t *
 	}
 }
 
+// TestProfilesRepository_ReplaceRemoteID_StaleUpdatedAtStillStoresRemoteID
+// covers the create-path lost update the old WHERE guard alone got wrong: the
+// pending_create row's push reached the machine and got a real id, but the
+// row was edited again before that push returned. ReplaceRemoteID must still
+// persist the remote id — dropping it would make the next sweep treat the row
+// as never-synced and create a *second* copy on the machine — while leaving
+// the row dirty (without bumping updated_at) so the newer edit is pushed as
+// an UPDATE of that same remote id.
+func TestProfilesRepository_ReplaceRemoteID_StaleUpdatedAtStillStoresRemoteID(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	row, err := repo.UpsertDirty(1, nil, nil, "Original", json.RawMessage(`{"v":1}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	staleUpdatedAt := row.UpdatedAt
+
+	// updated_at has millisecond resolution — force the clock forward so the
+	// concurrent edit is reliably distinguishable from the push's snapshot.
+	time.Sleep(2 * time.Millisecond)
+	edited, err := repo.UpsertDirty(1, &row.LocalID, nil, "Edited mid-push", json.RawMessage(`{"v":2}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty (concurrent edit): %v", err)
+	}
+	if edited.UpdatedAt == staleUpdatedAt {
+		t.Fatalf("UpdatedAt did not advance: %d == %d", edited.UpdatedAt, staleUpdatedAt)
+	}
+
+	// The create push got id "gm-1" but was based on the stale updated_at.
+	if err := repo.ReplaceRemoteID(row.LocalID, staleUpdatedAt, "gm-1", "Original"); err != nil {
+		t.Fatalf("ReplaceRemoteID (stale): %v", err)
+	}
+
+	got, err := repo.Get(1, "local:"+strconv.FormatInt(row.LocalID, 10))
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got == nil {
+		t.Fatal("Get: row not found")
+	}
+	if got.RemoteID == nil || *got.RemoteID != "gm-1" {
+		t.Fatalf("RemoteID = %v, want \"gm-1\" persisted despite the stale updated_at", got.RemoteID)
+	}
+	if got.SyncStatus != ProfileSyncDirty {
+		t.Fatalf("SyncStatus = %q, want dirty (a newer edit still has to be pushed)", got.SyncStatus)
+	}
+	if got.Name != "Edited mid-push" || string(got.Data) != `{"v":2}` {
+		t.Fatalf("row = %+v, want the newer edit preserved", got)
+	}
+	if got.UpdatedAt != edited.UpdatedAt {
+		t.Fatalf("UpdatedAt = %d, want the newer edit's %d (the dirty case must not bump it)", got.UpdatedAt, edited.UpdatedAt)
+	}
+}
+
 func TestProfilesRepository_MarkPendingDelete_HidesFromListButKeepsRow(t *testing.T) {
 	_, sqlDB := newTestRegistry(t)
 	repo := NewProfilesRepository(sqlDB)
