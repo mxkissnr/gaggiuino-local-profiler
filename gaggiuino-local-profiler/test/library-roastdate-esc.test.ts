@@ -4,23 +4,36 @@ import { describe, it, expect, beforeEach } from 'vitest';
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as test/library-load-render-race.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const { renderBeanList } = await import('../public-src/views/library.js');
+interface LibraryModule {
+  renderBeanList: () => void;
+}
+// @ts-expect-error -- library.js is still untyped JS (#1133 split); drop this once it is TS
+const { renderBeanList } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #648: bg.roastDate was rendered into the bag-history block's innerHTML
 // without esc(), unlike every sibling field there (batchNumber etc.). Not
 // reachable via the UI (the input is type="date", browser-constrained), but
 // reachable via a crafted direct API call or a compromised import/backup-
 // restore path — defense-in-depth fix, same esc() wrap batchNumber already gets.
-function fakeDocument() {
-  const elements = { beanListUI: { innerHTML: '' } };
+interface FakeDocument {
+  elements: Record<string, { innerHTML: string }>;
+  document: {
+    getElementById: (id: string) => { innerHTML: string } | undefined;
+    querySelectorAll: () => never[];
+  };
+}
+
+function fakeDocument(): FakeDocument {
+  const elements: Record<string, { innerHTML: string }> = { beanListUI: { innerHTML: '' } };
   return {
     elements,
     document: {
-      getElementById: id => elements[id],
+      getElementById: (id: string) => elements[id],
       querySelectorAll: () => [],
     },
   };
@@ -33,7 +46,7 @@ describe('renderBeanList (#648 bag-history roastDate escaping)', () => {
 
   it('escapes a malicious bag roastDate instead of injecting it raw into innerHTML', () => {
     const { elements, document } = fakeDocument();
-    globalThis.document = document;
+    g.document = document;
 
     S.coffeeLibrary = {
       beans: [{

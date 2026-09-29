@@ -5,11 +5,16 @@ import { describe, it, expect, beforeEach } from 'vitest';
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as test/library-load-render-race.test.js and
 // test/library-roastdate-esc.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const { renderBeanList } = await import('../public-src/views/library.js');
+interface LibraryModule {
+  renderBeanList: () => void;
+}
+// @ts-expect-error -- library.js is still untyped JS (#1133 split); drop this once it is TS
+const { renderBeanList } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #829: surface the last-used grind setting in the Library bean-list row.
 // Deliberately sourced from S.shots' own annotations, not
@@ -20,12 +25,20 @@ const { renderBeanList } = await import('../public-src/views/library.js');
 // (#638/#641/#643/#648), a test that only proves the value got *saved*
 // isn't enough — it must prove the row re-renders the *new* value after a
 // setting change, not just that the initial value shows up once.
-function fakeDocument() {
-  const elements = { beanListUI: { innerHTML: '' } };
+interface FakeDocument {
+  elements: Record<string, { innerHTML: string }>;
+  document: {
+    getElementById: (id: string) => { innerHTML: string } | undefined;
+    querySelectorAll: () => never[];
+  };
+}
+
+function fakeDocument(): FakeDocument {
+  const elements: Record<string, { innerHTML: string }> = { beanListUI: { innerHTML: '' } };
   return {
     elements,
     document: {
-      getElementById: id => elements[id],
+      getElementById: (id: string) => elements[id],
       querySelectorAll: () => [],
     },
   };
@@ -38,7 +51,7 @@ describe('renderBeanList last-used grind setting (#829)', () => {
 
   it('shows the most recent shot\'s grind setting, then the new one after a grind-setting change', () => {
     const { elements, document } = fakeDocument();
-    globalThis.document = document;
+    g.document = document;
 
     S.shots = [
       { id: 1, timestamp: 1000, annotation: { beanId: 1, coffee: 'Yirgacheffe Chelelektu', grinder: 'Niche Zero', grindSetting: '4.2' } },
@@ -59,7 +72,7 @@ describe('renderBeanList last-used grind setting (#829)', () => {
 
   it('picks the most recent shot by timestamp, not array order', () => {
     const { elements, document } = fakeDocument();
-    globalThis.document = document;
+    g.document = document;
 
     // Later shot appears earlier in the array — must still win on timestamp.
     S.shots = [
@@ -74,7 +87,7 @@ describe('renderBeanList last-used grind setting (#829)', () => {
 
   it('matches by beanId first, not falling back to a stale name match once beanId is present (#456 convention)', () => {
     const { elements, document } = fakeDocument();
-    globalThis.document = document;
+    g.document = document;
 
     S.shots = [
       // Same bean name, but a different beanId — must NOT count as a match.
@@ -89,7 +102,7 @@ describe('renderBeanList last-used grind setting (#829)', () => {
 
   it('renders no last-grind row when the bean has no annotated shots with a grind setting yet', () => {
     const { elements, document } = fakeDocument();
-    globalThis.document = document;
+    g.document = document;
 
     S.shots = [];
 
