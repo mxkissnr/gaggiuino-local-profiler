@@ -32,7 +32,7 @@ interface RecipeShotRow extends ShotMeta {
   score?: number | null;
 }
 function _shots(): RecipeShotRow[] {
-  return S.shots as unknown as RecipeShotRow[];
+  return S.shots;
 }
 
 const BREW_METHOD_LABELS: Record<string, string> = {
@@ -135,8 +135,8 @@ export function removeRecipeStep(i: number): void {
 
 function _collectSteps(): { text: string; duration_s: number | null }[] {
   return [...document.querySelectorAll('#recipeStepsList .lib-step-row')].map(row => ({
-    text:       (row.querySelector('.lib-step-text') as HTMLInputElement | null)?.value.trim() || '',
-    duration_s: parseFloat((row.querySelector('.lib-step-dur') as HTMLInputElement | null)?.value ?? '') || null,
+    text:       row.querySelector<HTMLInputElement>('.lib-step-text')?.value.trim() || '',
+    duration_s: parseFloat(row.querySelector<HTMLInputElement>('.lib-step-dur')?.value ?? '') || null,
   })).filter(s => s.text);
 }
 
