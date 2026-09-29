@@ -24,7 +24,7 @@ vi.mock('../public-src/api/system.js', () => ({
   getPreheat: () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) }),
 }));
 
-const annotateShotMock = vi.fn(() => Promise.resolve({ ok: true }));
+const annotateShotMock = vi.fn((..._args: unknown[]) => Promise.resolve({ ok: true }));
 vi.mock('../public-src/api/shots.js', () => ({
   annotateShot: (...args: unknown[]) => annotateShotMock(...args) as unknown,
 }));

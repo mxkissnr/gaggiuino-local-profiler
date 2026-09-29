@@ -23,7 +23,7 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
 
-const apiFetchMock = vi.fn(() => Promise.resolve({ ok: false, status: 500 }));
+const apiFetchMock = vi.fn((..._args: unknown[]) => Promise.resolve({ ok: false, status: 500 }));
 vi.mock('../public-src/api/transport.js', () => ({
   apiFetch: (...args: unknown[]) => apiFetchMock(...args) as unknown,
   // #913: fetchLiveData()'s !r.ok branch calls the real isApiPortBlocked() --

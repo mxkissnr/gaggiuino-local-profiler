@@ -312,10 +312,10 @@ export function initLiveChart(): void {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { labels: { color: C.text, font: { family: 'Figtree' } } },
-        tooltip: { callbacks: { title: ctx => t('chart_time', formatTimeLabel(ctx[0].parsed.x)) } }
+        tooltip: { callbacks: { title: (ctx: { parsed: { x: number } }[]) => t('chart_time', formatTimeLabel(ctx[0].parsed.x)) } }
       },
       scales: {
-        x:  { type: 'linear', min: 0, max: 60, ticks: { color: C.tick, callback: v => formatTimeLabel(v as number), stepSize: 5 }, grid: { color: C.grid } },
+        x:  { type: 'linear', min: 0, max: 60, ticks: { color: C.tick, callback: (v: number) => formatTimeLabel(v), stepSize: 5 }, grid: { color: C.grid } },
         y:  { type: 'linear', position: 'left',  min: 0, max: 12, ticks: { color: C.tick }, grid: { color: C.grid } },
         y1: { type: 'linear', position: 'right', min: 0, max: 100, ticks: { color: C.tick }, grid: { drawOnChartArea: false } }
       }
@@ -826,11 +826,11 @@ export function handleLiveData(msg: LiveMessage): void {
     liveChart.data.datasets[3].data = mapToXY(times, dp.temperature);
     const scales = liveChart.options.scales;
     if (scales) {
-      scales.x.max  = Math.max(maxTime + 5, 30);
+      scales.x!.max  = Math.max(maxTime + 5, 30);
 
       const maxTemp = dp.temperature?.length
         ? dp.temperature.reduce((m, v) => v > m ? v : m, 0) / 10 : 0;
-      scales.y1.max = Math.ceil(maxTemp + 5) || 100;
+      scales.y1!.max = Math.ceil(maxTemp + 5) || 100;
     }
 
     liveChart.update('none');
