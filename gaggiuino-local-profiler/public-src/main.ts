@@ -938,6 +938,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'save-bag-stock-edit':  saveBagStock(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'mark-bag-empty':       markBagEmpty(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'toggle-bag-card':      toggleBagCard(Number(el.dataset.bagId)); break;
+      case 'toggle-past-bags':     togglePastBags(numId()); break;
       case 'open-freeze-form':   openFreezeForm(numId()); break;
       case 'close-freeze-form':  closeFreezeForm(numId()); break;
       case 'save-freeze-form':   saveFreezePortions(numId()); break;
