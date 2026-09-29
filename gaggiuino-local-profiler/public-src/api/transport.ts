@@ -34,9 +34,9 @@ export async function apiFetch(url: string, opts: RequestInit = {}): Promise<Res
 }
 
 export interface ApiFetchToBlobOptions {
-  opts?: RequestInit;
-  onProgress?: (received: number, total: number | null) => void;
-  estimateHeader?: string;
+  opts?: RequestInit | undefined;
+  onProgress?: ((received: number, total: number | null) => void) | undefined;
+  estimateHeader?: string | undefined;
 }
 
 export type ApiFetchToBlobResult =

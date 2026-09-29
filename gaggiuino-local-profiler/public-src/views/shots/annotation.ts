@@ -48,7 +48,7 @@ interface AnnotationShot {
   id: number;
   timestamp?: number;
   image?: string | null;
-  annotation?: AnnotationData | null;
+  annotation?: AnnotationData | null | undefined;
 }
 
 // What _buildAnnotationPayload() posts. Matches api/types.ts's ShotAnnotation

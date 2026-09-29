@@ -16,13 +16,13 @@ import type { ChartConfiguration } from 'chart.js';
 // machine fields, so this local alias names them — same pattern as
 // views/shots/index.ts.
 interface ShotAnnotation {
-  coffee?: string | null;
-  beanId?: number | null;
-  basketId?: number | null;
-  puckScreenId?: number | null;
-  grinder?: string | null;
-  grindSetting?: string | number | null;
-  dose?: number | null;
+  coffee?: string | null | undefined;
+  beanId?: number | null | undefined;
+  basketId?: number | null | undefined;
+  puckScreenId?: number | null | undefined;
+  grinder?: string | null | undefined;
+  grindSetting?: string | number | null | undefined;
+  dose?: number | null | undefined;
 }
 
 interface ShotRow extends ShotMeta {
@@ -31,7 +31,7 @@ interface ShotRow extends ShotMeta {
   duration?: number | null;
   weight?: number | null;
   tempStabilityDev?: number | null;
-  datapoints?: { temperature?: (number | null)[]; targetTemperature?: (number | null)[] } | null;
+  datapoints?: { temperature?: (number | null)[]; targetTemperature?: (number | null)[] } | null | undefined;
   annotation?: ShotAnnotation | null;
 }
 

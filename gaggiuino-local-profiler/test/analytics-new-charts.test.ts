@@ -21,14 +21,14 @@ let _computeMachineComparison: Analytics['_computeMachineComparison'];
 type ShotRow = Parameters<Analytics['_computeBeanRanking']>[0][number];
 
 interface ShotOverrides {
-  id?: number;
-  timestamp?: number;
-  duration?: number;
-  machineId?: number | null;
-  score?: number;
-  coffee?: string | null;
-  grindSetting?: string | number | null;
-  datapoints?: { temperature?: (number | null)[]; targetTemperature?: (number | null)[] } | null;
+  id?: number | undefined;
+  timestamp?: number | undefined;
+  duration?: number | undefined;
+  machineId?: number | null | undefined;
+  score?: number | undefined;
+  coffee?: string | null | undefined;
+  grindSetting?: string | number | null | undefined;
+  datapoints?: { temperature?: (number | null)[]; targetTemperature?: (number | null)[] } | null | undefined;
 }
 
 beforeAll(async () => {
@@ -54,7 +54,7 @@ const shot = (overrides: ShotOverrides = {}): ShotRow => ({
   id: overrides.id ?? 1,
   timestamp: overrides.timestamp ?? 0,
   duration: overrides.duration ?? 280, // 28.0s
-  machineId: overrides.machineId,
+  ...(overrides.machineId !== undefined && { machineId: overrides.machineId }),
   score: overrides.score,
   annotation: { coffee: overrides.coffee, grindSetting: overrides.grindSetting },
   datapoints: overrides.datapoints,
