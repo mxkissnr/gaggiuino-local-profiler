@@ -1,4 +1,4 @@
-import type { Bean, Basket, Milk, PuckScreen, Recipe, NewBagInput } from '../api/types.js';
+import type { Basket, Milk, PuckScreen, Recipe, NewBagInput } from '../api/types.js';
 import type { BeanRow } from './library/bags.js';
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
@@ -234,7 +234,7 @@ export function renderBeanList(): void {
     if (remaining != null || totalConsumed > 0) {
       const isLow = remaining != null && remaining < 100;
       const rem = Math.max(0, remaining ?? 0);
-      const stockPct = current && current.stockG > 0
+      const stockPct = current && current.stockG != null && current.stockG > 0
         ? Math.max(0, Math.min(100, Math.round(((current.remaining ?? 0) / current.stockG) * 100)))
         : 0;
       invHtml = `<div class="lib-inv-block">
@@ -771,7 +771,7 @@ function populateSuggestionDatalists(): void {
   attachAutocomplete(_field('beanFormProcess'), () => PROCESS_SUGGESTIONS);
 }
 
-export function openBeanForm(bean?: Bean | null): void {
+export function openBeanForm(bean?: BeanRow | null): void {
   S.beanEditId = bean ? bean.id : null;
   const importNotice = document.getElementById('beanFormImportNotice');
   if (importNotice) { importNotice.style.display = 'none'; importNotice.innerHTML = ''; }
