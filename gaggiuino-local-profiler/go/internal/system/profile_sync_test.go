@@ -65,6 +65,47 @@ func TestPushDirtyProfiles_ConcurrentCallsForSameMachineAreSerialized(t *testing
 	}
 }
 
+// TestPushDirtyProfiles_SharesTheHandlerMachineLock proves the sweep and the
+// HTTP handlers (machines/handlers_profiles.go) contend on the very same
+// mutex: holding machines.ProfilesRepository.MachineLock externally, exactly
+// as an in-flight create/update/delete handler does, must make
+// PushDirtyProfiles skip rather than push — without that sharing, a handler's
+// local write + adapter call could still race the sweep for the same pending
+// row.
+func TestPushDirtyProfiles_SharesTheHandlerMachineLock(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	if _, err := repo.UpsertDirty(1, nil, nil, "Held", json.RawMessage(`{}`)); err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	var calls int32
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		atomic.AddInt32(&calls, 1)
+		return machines.ProfileSummary{ID: "gm-1", Name: "Held"}, nil
+	}
+
+	mu := repo.MachineLock(1)
+	mu.Lock()
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles with the machine lock held: %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 0 {
+		t.Fatalf("adapter.CreateProfile calls while the handler lock was held = %d, want 0 (the sweep must share that lock)", got)
+	}
+	mu.Unlock()
+
+	// Releasing it lets the next sweep push the row normally.
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles after unlock: %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("adapter.CreateProfile calls after unlock = %d, want 1", got)
+	}
+}
+
 func TestPushDirtyProfiles_PendingCreate_SucceedsAndReplacesRemoteID(t *testing.T) {
 	fake := &fakeAdapter{}
 	p, sqlDB := newTestPoller(t, fake)

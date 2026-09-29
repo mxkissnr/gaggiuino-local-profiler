@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Added
+- **Machine profiles can now be created, edited and deleted while the machine is unreachable, and are pushed to it automatically once it is reachable again.** Part of #1125 Thanks @Paul-Lukas (#1119).
 - **The live view has a shot setup panel: pick bean, dose, grinder, grind setting, basket, puck screen and recipe before you pull, and they are saved to the shot automatically.** Part of #1125 Thanks @Paul-Lukas.
 - **A browser demo with sample data now runs on GitHub Pages, including a simulated live shot.** Closes #1193
 - **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, with separate opt-ins for write and developer tools.** Closes #1196

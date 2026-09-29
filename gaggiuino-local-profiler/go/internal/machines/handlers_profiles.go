@@ -282,6 +282,14 @@ func (h *Handlers) createMachineProfile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Serialize the local write + live push against the background sweep
+	// (system.Poller.PushDirtyProfiles): both take the same per-machine lock
+	// from the repository, so a sweep can't push this same pending row (and
+	// leave a duplicate on the machine) while this handler is mid-flight.
+	mu := h.profilesRepo.MachineLock(machine.ID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	if machine.Type == "gaggimate" {
 		if err := validateGaggiMateProfileBody(rawBody); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid profile: "+err.Error())
@@ -356,6 +364,12 @@ func (h *Handlers) updateMachineProfile(w http.ResponseWriter, r *http.Request) 
 	if !requireProfileEditSupport(w, adapter, machine) {
 		return
 	}
+
+	// Same per-machine lock as createMachineProfile (and the sweep) — see its
+	// comment for why the handlers and PushDirtyProfiles must share it.
+	mu := h.profilesRepo.MachineLock(machine.ID)
+	mu.Lock()
+	defer mu.Unlock()
 
 	pathID := pathIDStr(r)
 	existing, err := h.profilesRepo.Get(machine.ID, pathID)
@@ -504,6 +518,12 @@ func (h *Handlers) deleteMachineProfile(w http.ResponseWriter, r *http.Request) 
 	if !requireProfileEditSupport(w, adapter, machine) {
 		return
 	}
+
+	// Same per-machine lock as createMachineProfile (and the sweep) — see its
+	// comment for why the handlers and PushDirtyProfiles must share it.
+	mu := h.profilesRepo.MachineLock(machine.ID)
+	mu.Lock()
+	defer mu.Unlock()
 
 	row, err := h.profilesRepo.Get(machine.ID, id)
 	if err != nil {
