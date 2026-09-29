@@ -113,8 +113,8 @@ export function endDemoData(): Promise<Response> {
 
 export interface BackupRequestOptions {
   sections?: unknown;
-  passphrase?: string;
-  onProgress?: (received: number, total: number | null) => void;
+  passphrase?: string | undefined;
+  onProgress?: ((received: number, total: number | null) => void) | undefined;
 }
 
 /**
@@ -148,12 +148,12 @@ export type RestoreResponse = {
 
 export interface RestoreRequestOptions {
   /** Full restore bundle (non-zip path). */
-  bundle?: Record<string, unknown>;
+  bundle?: Record<string, unknown> | undefined;
   zipBytes?: ArrayBuffer | null;
   sections?: unknown;
-  passphrase?: string;
-  dryRun?: boolean;
-  onProgress?: (loaded: number, total: number) => void;
+  passphrase?: string | undefined;
+  dryRun?: boolean | undefined;
+  onProgress?: ((loaded: number, total: number) => void) | undefined;
 }
 
 /**

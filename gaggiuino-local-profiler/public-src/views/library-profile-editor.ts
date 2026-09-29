@@ -299,6 +299,10 @@ function _num(row: Element, selector: string): number {
   return parseFloat(row.querySelector<HTMLInputElement>(selector)?.value as string) || 0;
 }
 
+function optionalKey<K extends string>(key: K, v: number | undefined): { [P in K]?: number } {
+  return v === undefined ? {} : { [key]: v } as { [P in K]?: number };
+}
+
 // Exported for testing — reads phase rows from the DOM (module-level
 // document global), no separate JS state kept in sync.
 export function _collectPhases(): Phase[] {
@@ -310,10 +314,10 @@ export function _collectPhases(): Phase[] {
       end:    _num(row, '.pp-target-end'),
       curve:  row.querySelector<HTMLSelectElement>('.pp-target-curve')?.value || 'LINEAR',
       time:   _num(row, '.pp-target-time'),
-      volume: _optionalNumber(row, '.pp-target-volume'),
+      ...optionalKey('volume', _optionalNumber(row, '.pp-target-volume')),
     },
     restriction: _num(row, '.pp-restriction'),
-    waterTemperature: _optionalNumber(row, '.pp-water-temp'),
+    ...optionalKey('waterTemperature', _optionalNumber(row, '.pp-water-temp')),
     stopConditions: {
       time:               _num(row, '.pp-stop-time'),
       pressureAbove:      _num(row, '.pp-stop-pressure-above'),

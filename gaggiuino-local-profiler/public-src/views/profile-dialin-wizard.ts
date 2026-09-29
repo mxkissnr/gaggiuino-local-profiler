@@ -33,7 +33,7 @@ interface ProfileDialinShotRow extends ShotLike {
 }
 
 interface ProfileDialinRound {
-  symptom?: string;
+  symptom?: string | undefined;
   score: number | null;
   shotId: number;
   appliedAdjustment: { phaseIndex: number | null; field: string | null; delta: number } | null;
@@ -48,8 +48,8 @@ interface ProfileDialinReviewRound {
 // The full profile object as returned by GET /api/machine/profile/:id (must
 // include a real `id` — dial-in PUTs updates back to that id).
 interface DialinProfile {
-  id?: string | number | null;
-  name?: string | null;
+  id?: string | number | null | undefined;
+  name?: string | null | undefined;
   [key: string]: unknown;
 }
 

@@ -5,6 +5,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
+    "exactOptionalPropertyTypes": true,
     "noEmit": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,

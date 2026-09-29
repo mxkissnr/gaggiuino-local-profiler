@@ -178,12 +178,12 @@ export function calcBeanRating(
 export async function shareOrDownloadBlob(
   blob: Blob,
   filename: string,
-  { title, fallbackOnError = true }: { title?: string; fallbackOnError?: boolean } = {},
+  { title, fallbackOnError = true }: { title?: string | undefined; fallbackOnError?: boolean } = {},
 ): Promise<void> {
   const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title });
+      await navigator.share({ files: [file], ...(title !== undefined && { title }) });
       return;
     } catch (e) {
       if ((e as { name?: string } | null)?.name === 'AbortError') return; // user cancelled — respect it, no fallback

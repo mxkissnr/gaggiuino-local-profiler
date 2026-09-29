@@ -22,7 +22,7 @@ import type { FirmwareVersion, MachineSaveInput } from '../api/types.js';
 // The edit form's theme selection (a preset key, or custom {a,b} stops), the
 // theme preset shape resolveTheme()/getThemePreset() hand back, and the
 // machine fields this card reads off S.machines.
-interface ThemeSelection { preset?: string; a?: string; b?: string }
+interface ThemeSelection { preset?: string | undefined; a?: string | undefined; b?: string | undefined }
 interface ThemePreset { key?: string; a: string; b: string }
 interface MachineView extends MachineRecord {
   name?: string;

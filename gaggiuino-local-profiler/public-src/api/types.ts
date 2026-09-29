@@ -229,7 +229,7 @@ type MachineProfileInput = components['schemas']['MachineProfileInput'];
  * gaggimate-profile-editor.js uses (label/description/temperature/phases).
  */
 export interface MachineProfile {
-  id?: string | number;
+  id?: string | number | undefined;
   name?: string;
   label?: string;
   description?: string;
