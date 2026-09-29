@@ -362,10 +362,11 @@ export async function sendProfileToMachine(): Promise<void> {
   // saveGaggiMateProfile: the backend saved locally first, this 200 might
   // just mean "queued, machine unreachable right now" — surface that
   // distinctly from a silent success.
-  const saved = await r.json().catch(() => ({}));
+  const saved: unknown = await r.json().catch(() => null);
   closeProfileForm();
   await loadMachineProfileList();
-  if (saved.syncStatus && saved.syncStatus !== 'synced') {
+  const syncStatus = (saved as { syncStatus?: string } | null)?.syncStatus;
+  if (syncStatus && syncStatus !== 'synced') {
     window.showToast?.(t('gm_toast_saved_offline'));
   }
 }
