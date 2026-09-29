@@ -49,10 +49,10 @@ func TestComputeBeanRemaining_DistinctBagsWithoutOpenedAt_NotMisattributed(t *te
 // #sortOrder-rework regression: the pre-rework version only ever summed
 // bean["stock_g"] and only counted doses against the LAST bag, silently
 // dropping stock_g on any other tracked (non-last) bag and every dose
-// attributed to it. This mirrors public-src/bean-math.js's
-// computeBeanRemaining test coverage — a bean with two independently
-// stock-tracked bags, doses against each, must sum both bags' stock and
-// deduct doses from whichever bag each one actually belongs to.
+// attributed to it. This extends the computeBeanRemaining test coverage — a
+// bean with two independently stock-tracked bags, doses against each, must
+// sum both bags' stock and deduct doses from whichever bag each one actually
+// belongs to.
 func TestComputeBeanRemaining_SumsAllTrackedBagsNotJustTheLastOne(t *testing.T) {
 	bean := Entity{
 		"id": int64(1), "name": "Test Bean",
@@ -204,9 +204,9 @@ func TestSimulateBagQueue_OpenedAtFallbackForLegacyBags(t *testing.T) {
 	}
 }
 
-// TestSimulateBagQueue_StockAdjustRoundTrip is the Go-side equivalent of
-// the deleted bean-math.js remainingToStockG/#930 regression test, ported
-// to the per-bag model: the frontend's "Bestand anpassen" flow
+// TestSimulateBagQueue_StockAdjustRoundTrip is the Go-side replacement for
+// the old client-side remainingToStockG/#930 regression test, ported to the
+// per-bag model: the frontend's "Bestand anpassen" flow
 // (library.js's saveBagStock) computes newStockG as
 // `desiredRemaining + bag.consumedG` using SimulateBagQueue's own
 // server-computed consumedG — this verifies that round-trip actually lands
@@ -275,11 +275,11 @@ type beanRemainingFixtureCase struct {
 }
 
 // TestComputeBeanRemaining_SharedFixture pins Go's ComputeBeanRemaining to
-// the exact same expected values the SPA's computeBeanRemaining is asserted
-// against in test/bean-math.test.js — both read
-// testdata/bean_remaining_cases.json (#1122, maintainer review point 1). A
-// disagreement here means the SPA, SSR and Orders low-stock paths would show
-// different "remaining" numbers for the same bean.
+// the expected values in testdata/bean_remaining_cases.json, the single
+// definition of "remaining" the SPA (via the server's remainingG), SSR and
+// Orders low-stock paths all share (#1122, maintainer review point 1). A
+// regression here would show a different "remaining" number for the same
+// bean.
 func TestComputeBeanRemaining_SharedFixture(t *testing.T) {
 	raw, err := os.ReadFile("testdata/bean_remaining_cases.json")
 	if err != nil {

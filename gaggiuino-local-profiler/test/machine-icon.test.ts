@@ -1,6 +1,5 @@
 // #594: machine icon rendering (public-src/machine-icon.js). Pure ESM string
-// builder, no DOM dependency, so it's tested directly the same way
-// public-src/bean-math.js is (see test/bean-math.test.js).
+// builder, no DOM dependency, so it's tested directly.
 import { describe, it, expect } from 'vitest';
 import { machineIconSvg, machineIconMiniSvg, machineIconAnimatedSvg,
          MACHINE_ICON_MODES, resolveMachineIconState } from '../public-src/machine-icon.js';

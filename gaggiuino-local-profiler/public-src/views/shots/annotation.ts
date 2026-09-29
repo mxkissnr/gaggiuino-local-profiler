@@ -14,7 +14,6 @@ import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { COFFEE_ICON_SVG, CHECK_ICON_SVG } from '../../icons.js';
 import { localeFor } from '../../constants.js';
-import { computeBeanRemaining } from '../../bean-math.js';
 
 // state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
 // an index signature) and the library rows as Record<string, unknown>; these
@@ -89,6 +88,11 @@ interface FrozenPortion { id: number; frozenAt: number; portionCount: number; re
 // _renderBeanSelect's candidate list: a real bean (id set) or a stale/renamed
 // selection carried over as a name-only entry.
 interface BeanOption { name: string; id: number | null; empty: boolean }
+
+// A library bean row plus the server-computed remainingG stock total
+// (GET /api/library, see #1223); null/undefined when the bean isn't
+// stock-tracked.
+type BeanRow = LibraryRow & { remainingG?: number | null };
 
 // ── Auto-save ─────────────────────────────────────────────────────────────
 
@@ -475,23 +479,21 @@ export function handleGrinderFieldChange(selectId: string, otherId: string): voi
 export function _renderBeanSelect(selectedName: string | null, selectedBeanId: number | null, selectId = 'annCoffee'): void {
   const select = document.getElementById(selectId) as HTMLSelectElement | null;
   if (!select) return;
-  const allBeans = (S.coffeeLibrary?.beans || []);
+  const allBeans = (S.coffeeLibrary?.beans || []) as BeanRow[];
   // #933 (was #915): exhausted (zero-stock) beans used to be dropped from
   // the candidate list entirely -- but that also blocked logging the very
   // last shot against a bean that's genuinely down to 0 g. They now stay
   // selectable, just sorted after every in-stock bean and labelled "Empty"
   // so the common case (picking an in-stock bean) still reads cleanly.
-  // null means untracked/unlimited stock and always sorts as in-stock.
-  // doseRows mirrors library.js's own adapter from S.shots' { annotation,
-  // timestamp } shape.
-  const doseRows = (S.shots as unknown as AnnotationShot[])
-    .filter(s => s.annotation?.coffee != null)
-    .map(s => ({ coffee: s.annotation?.coffee, beanId: s.annotation?.beanId, dose: s.annotation?.dose, timestamp: s.timestamp }));
+  // null/undefined means untracked/unlimited stock and always sorts as
+  // in-stock. #1225: remainingG is the server-computed total (SimulateBagQueue,
+  // go/internal/library) returned by GET /api/library, so the "Empty" marker no
+  // longer depends on which shots happen to be loaded in the browser.
   const inStock: LibraryRow[] = [];
   const exhausted: LibraryRow[] = [];
   for (const b of allBeans) {
-    const remaining = computeBeanRemaining(b, doseRows, allBeans);
-    (remaining === null || remaining > 0 ? inStock : exhausted).push(b);
+    const remainingG = b.remainingG;
+    (remainingG == null || remainingG > 0 ? inStock : exhausted).push(b);
   }
   // #456: data-bean-id lets _buildAnnotationPayload read off the currently
   // selected bean's stable id — only real library beans get one; a stale
