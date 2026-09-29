@@ -754,6 +754,10 @@ async function bagDragPointerUp(e) {
   document.removeEventListener('pointermove', bagDragPointerMove);
   document.removeEventListener('pointerup', bagDragPointerUp);
   _dragState = null;
+  // data-bag-drag-list holds exactly this bean's upcoming (non-current) bags
+  // (renderBeanList only puts those in it), so this is the complete ordered
+  // list reorderBags/the server require: every upcoming bag, once, in DOM
+  // order — not just the ones the pointer happened to cross.
   const bagIds = [...list.querySelectorAll('[data-bag-card]')].map(c => Number(c.dataset.bagId));
   await reorderBags(beanId, bagIds);
 }

@@ -197,7 +197,7 @@ func (h *Handlers) reorderBags(w http.ResponseWriter, r *http.Request) {
 				return &apiError{http.StatusBadRequest, "invalid bagId in bagIds"}
 			}
 			if _, found := byID[bagID]; !found {
-				return &apiError{http.StatusNotFound, "bag not found"}
+				return &apiError{http.StatusBadRequest, "unknown bagId in bagIds"}
 			}
 			if bagID == currentBagID {
 				return &apiError{http.StatusBadRequest, "bagIds must not include the current bag"}

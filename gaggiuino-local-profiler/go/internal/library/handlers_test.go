@@ -603,6 +603,76 @@ func TestBean_ReorderBags_RejectsCurrentBagInList(t *testing.T) {
 	}
 }
 
+// TestBean_ReorderBags_RejectsUnknownBagID verifies reorderBags 400s when
+// the request names a bag id that is not part of the bean at all — the same
+// shape as the duplicate/current rejections, so the client gets a single
+// "your bagIds are wrong" status class instead of a 404 that reads like a
+// missing route.
+func TestBean_ReorderBags_RejectsUnknownBagID(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag", mustMarshal(t, map[string]any{"stock_g": 200}))
+	bags := getBeanBags(t, mux, id)
+	b2ID := int64(bags[1]["id"].(float64))
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/reorder-bags",
+		mustMarshal(t, map[string]any{"bagIds": []any{b2ID, b2ID + 999999}}))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestBean_ReorderBags_AssignsUniqueContiguousSortOrder verifies the success
+// path assigns every upcoming bag a distinct, contiguous sortOrder in the
+// requested order (baseline+1, baseline+2, ...), so a later reorder or the
+// SimulateBagQueue replay can never see two bags sharing a position.
+func TestBean_ReorderBags_AssignsUniqueContiguousSortOrder(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 300, "roastDate": "2026-08-01"})
+	for _, sg := range []int{200, 250, 275} {
+		doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag", mustMarshal(t, map[string]any{"stock_g": sg}))
+	}
+	bags := getBeanBags(t, mux, id)
+	// bags[0] is current; bags[1..3] are the upcoming queue.
+	currentID := int64(bags[0]["id"].(float64))
+	b2ID := int64(bags[1]["id"].(float64))
+	b3ID := int64(bags[2]["id"].(float64))
+	b4ID := int64(bags[3]["id"].(float64))
+
+	// Reverse the upcoming order: b4, b3, b2.
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/reorder-bags",
+		mustMarshal(t, map[string]any{"bagIds": []any{b4ID, b3ID, b2ID}}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reorder-bags status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	bean := decodeBody(t, rec.Body.Bytes())
+	outBags, _ := bean["bags"].([]any)
+	byID := make(map[int64]map[string]any, len(outBags))
+	for _, raw := range outBags {
+		bg, _ := raw.(map[string]any)
+		byID[int64(bg["id"].(float64))] = bg
+	}
+	base := int64(byID[currentID]["sortOrder"].(float64))
+	want := []int64{base + 1, base + 2, base + 3}
+	got := []int64{
+		int64(byID[b4ID]["sortOrder"].(float64)),
+		int64(byID[b3ID]["sortOrder"].(float64)),
+		int64(byID[b2ID]["sortOrder"].(float64)),
+	}
+	seen := make(map[int64]bool, len(got))
+	for i, s := range got {
+		if s != want[i] {
+			t.Fatalf("sortOrder[%d] = %d, want %d — reordered bags must be contiguous and in requested order", i, s, want[i])
+		}
+		if seen[s] {
+			t.Fatalf("duplicate sortOrder %d across reordered bags", s)
+		}
+		seen[s] = true
+	}
+}
+
 // getBeanBags fetches bean id's bags array via GET /api/library, in
 // declared order — shared by the reorderBags validation tests above.
 func getBeanBags(t *testing.T, mux *http.ServeMux, id int64) []map[string]any {
