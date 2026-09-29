@@ -1,25 +1,23 @@
 import { S } from '../state/index.js';
-import * as timerRegistry from '../state/timers.js';
 import { t } from '../i18n.js';
-import { importFromUrl as apiImportFromUrl, getImportSettings, saveImportSettings } from '../api/system.js';
 import * as libraryApi from '../api/library.js';
 import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, toIsoDateInput, todayIsoDate, isoDateInputToMs } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, localeFor, countryName } from '../constants.js';
 import { setBeanFilter } from '../components/sidebar.js';
 import { attachAutocomplete } from '../components/autocomplete.js';
 import { switchMode } from '../components/mode.js';
-import { loadBeanImageBlobUrl, loadGrinderImageBlobUrl, invalidateGrinderImage, invalidateBeanImage } from '../bean-image.js';
+import { loadBeanImageBlobUrl, invalidateBeanImage } from '../bean-image.js';
 import { openImageCropEditor } from '../components/image-crop.js';
 import { openLightbox } from '../components/lightbox.js';
-import { generateBeanQR, parseGlpQrParams } from '../glp-qr.js';
+import { generateBeanQR } from '../glp-qr.js';
 import { calcBestGrindCombosForBean } from './shots/grind.js';
-import { currentGrinderZeroPoint } from '../grind-zero.js';
 import { renderShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
-import { TARGET_ICON_SVG, SLIDERS_ICON_SVG, FLAVOR_WHEEL_ICON_SVG, COFFEE_ICON_SVG, SNOWFLAKE_ICON_SVG, WRENCH_ICON_SVG, STAR_ICON_SVG, WARNING_ICON_SVG, CLOSE_ICON_SVG, EDIT_ICON_SVG } from '../icons.js';
+import { TARGET_ICON_SVG, SLIDERS_ICON_SVG, FLAVOR_WHEEL_ICON_SVG, COFFEE_ICON_SVG, SNOWFLAKE_ICON_SVG, STAR_ICON_SVG, CLOSE_ICON_SVG, EDIT_ICON_SVG } from '../icons.js';
 import { renderRecipeList } from './library/recipes.js';
 import { renderMilkList } from './library/milk.js';
 import { renderBasketList } from './library/baskets.js';
 import { renderPuckScreenList } from './library/puck-screens.js';
+import { renderGrinderList } from './library/grinders.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
@@ -27,10 +25,6 @@ const ICON_EYE     = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" he
 const ICON_EYE_OFF = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z"/></svg>`;
 const ICON_QR      = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H19V11H21V13H19V15H21V19H19V21H17V19H13V21H11V17H15V15H17V13H15V11M19,19V15H17V19H19M15,3H21V9H15V3M17,5V7H19V5H17M3,3H9V9H3V3M5,5V7H7V5H5M3,15H9V21H3V15M5,17V19H7V17H5Z"/></svg>`;
 const ICON_PLUS    = `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/></svg>`;
-
-// Static burr-type suggestions for the grinder form (moved out of the old
-// <datalist> markup in index.html).
-const BURR_TYPE_SUGGESTIONS = ['Konisch Stahl', 'Konisch Keramik', 'Flach Stahl', 'Flach Keramik'];
 
 // Bean origin display — beans predating the blend feature (or ones without an
 // origins[] array yet) fall back to the legacy singular `origin` field.
@@ -894,64 +888,6 @@ export function toggleBeanQR(id) {
   });
 }
 
-// ── Grinder list ──────────────────────────────────────────────────────────
-export function renderGrinderList() {
-  const el = document.getElementById('grinderListUI');
-  if (!el) return;
-  // Grinders are shared equipment, not scoped to the active machine — always
-  // render the full library regardless of S.activeMachineId. This reverts
-  // the display-filtering part of #334; see #339 for why that filter was
-  // wrong (it hid nearly the whole library once a second machine existed).
-  const grinders = S.coffeeLibrary.grinders;
-  if (!grinders.length) {
-    el.innerHTML = `<div class="lib-empty">${t('lib_empty_grinders')}</div>`;
-    return;
-  }
-  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  el.innerHTML = grinders.map(g => {
-    const extra = [g.burrType, g.purchaseDate].filter(Boolean).join(' · ');
-    const zeroPoint = currentGrinderZeroPoint(g);
-    return `
-    <div class="lib-item">
-      ${g.image ? `<img class="lib-grinder-thumb" data-grinder-id="${g.id}" alt="">` : ''}
-      <div class="lib-item-info">
-        <div class="lib-item-name">${esc(g.name)}</div>
-        ${extra ? `<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : ''}
-        ${g.notes ? `<div class="lib-item-sub">${esc(g.notes)}</div>` : ''}
-        ${zeroPoint != null ? `<div class="lib-item-sub">${t('lib_grinder_zero_point')}: ${esc(String(zeroPoint))}</div>` : ''}
-        ${g.wear ? `<div class="lib-item-sub lib-grinder-wear">
-          <span>${WRENCH_ICON_SVG} ${t('lib_grinder_wear', g.wear.shotsSinceBurrs, formatWearGrams(g.wear.gramsSinceBurrs))}</span>
-          <button class="lib-btn-sm lib-grinder-reset-burrs" data-action="reset-grinder-burrs" data-id="${g.id}">${t('lib_grinder_reset_burrs')}</button>
-        </div>` : ''}
-      </div>
-      <div class="lib-item-actions">
-        <button class="lib-btn-sm lib-btn-icon" data-action="edit-grinder" data-id="${g.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder" data-id="${g.id}" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
-      </div>
-    </div>`;
-  }).join('');
-  loadGrinderThumbnails();
-}
-
-// Mirrors the g/kg formatting used by the analytics "Total Coffee" tile.
-function formatWearGrams(g) {
-  return g >= 1000 ? (g / 1000).toFixed(1) + ' kg' : Math.round(g) + ' g';
-}
-
-// Grinder images need the auth token, so <img src> can't point at the API
-// directly (see bean-image.js) — set the blob-url src async after render.
-// #441: click opens the fullscreen lightbox, same as bean photos (#440).
-function loadGrinderThumbnails() {
-  document.querySelectorAll('.lib-grinder-thumb[data-grinder-id]').forEach(img => {
-    const id = Number(img.dataset.grinderId);
-    loadGrinderImageBlobUrl(id).then(url => {
-      if (!url) return;
-      img.src = url;
-      img.onclick = e => { e.stopPropagation(); openLightbox(img.src); };
-    });
-  });
-}
-
 // ── Flavor chips input ────────────────────────────────────────────────────
 // Module-level working array; rendered into #beanFormFlavorChips before the
 // text input. Enter/comma commits the typed value, × removes a chip.
@@ -982,7 +918,7 @@ function commitFlavorInput() {
   renderFlavorChips();
 }
 
-function setFormFlavors(flavors) {
+export function setFormFlavors(flavors) {
   _formFlavors = Array.isArray(flavors) ? [...flavors] : [];
   renderFlavorChips();
 }
@@ -1037,7 +973,7 @@ function renderOriginChips() {
     </span>`).join('');
 }
 
-function setFormOrigins(bean) {
+export function setFormOrigins(bean) {
   const origins = Array.isArray(bean?.origins) && bean.origins.length
     ? bean.origins
     : (bean?.origin ? [{ code: bean.origin }] : []);
@@ -1271,114 +1207,6 @@ export async function toggleBeanActive(id) {
   }
 }
 
-// ── Grinder form ──────────────────────────────────────────────────────────
-export function openGrinderForm(grinder) {
-  S.grinderEditId = grinder ? grinder.id : null;
-  document.getElementById('grinderFormName').value  = grinder?.name  || '';
-  document.getElementById('grinderFormNotes').value = grinder?.notes || '';
-  document.getElementById('grinderFormBurrType').value     = grinder?.burrType || '';
-  attachAutocomplete(document.getElementById('grinderFormBurrType'), () => BURR_TYPE_SUGGESTIONS);
-  document.getElementById('grinderFormPurchaseDate').value = toIsoDateInput(grinder?.purchaseDate);
-  document.getElementById('grinderFormImageField').style.display = grinder ? '' : 'none';
-  // Zero-point tracking only makes sense once a grinder already has shot
-  // history to correct — hidden for a brand-new grinder, same as the photo
-  // field above.
-  document.getElementById('grinderFormZeroPointField').style.display = grinder ? '' : 'none';
-  document.getElementById('grinderFormZeroPoint').value = currentGrinderZeroPoint(grinder) ?? '';
-  document.getElementById('grinderFormZeroPointSince').value = '';
-  renderGrinderZeroPointHistory(grinder);
-  document.getElementById('grinderAddForm').classList.add('open');
-  document.getElementById('grinderAddTrigger').style.display = 'none';
-  document.getElementById('grinderFormName').focus();
-}
-
-export function closeGrinderForm() {
-  S.grinderEditId = null;
-  document.getElementById('grinderAddForm').classList.remove('open');
-  document.getElementById('grinderAddTrigger').style.display = '';
-}
-
-export function editGrinder(id) {
-  const g = S.coffeeLibrary.grinders.find(g => g.id === id);
-  if (g) openGrinderForm(g);
-}
-
-function renderGrinderZeroPointHistory(grinder) {
-  const el = document.getElementById('grinderFormZeroPointHistory');
-  if (!el) return;
-  const history = grinder?.zeroPointHistory;
-  if (!Array.isArray(history) || !history.length) { el.innerHTML = ''; return; }
-  const sorted = [...history].sort((a, b) => a.since - b.since);
-  el.innerHTML = `<div class="zp-history">${sorted.map(e => {
-    const date = new Date(e.since).toLocaleDateString();
-    return `<div class="zp-history-entry">
-      <span>${esc(String(e.zeroPoint))} &mdash; ${esc(date)}</span>
-      <button type="button" class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder-zero-point" data-id="${esc(grinder.id)}" data-since="${esc(e.since)}" title="${t('lib_grinder_zero_point_delete')}">&#x2715;</button>
-    </div>`;
-  }).join('')}</div>`;
-}
-
-export async function deleteGrinderZeroPointEntry(grinderId, since) {
-  const updated = await libraryApi.deleteGrinderZeroPoint(grinderId, since);
-  if (!updated) return;
-  const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === grinderId);
-  if (idx !== -1) S.coffeeLibrary.grinders[idx] = { ...updated, wear: S.coffeeLibrary.grinders[idx].wear };
-  renderGrinderList();
-  // Refresh history in open form if editing the same grinder.
-  if (S.grinderEditId === grinderId) {
-    document.getElementById('grinderFormZeroPoint').value = currentGrinderZeroPoint(updated) ?? '';
-    renderGrinderZeroPointHistory(updated);
-  }
-}
-
-export async function saveGrinder() {
-  const name         = document.getElementById('grinderFormName').value.trim();
-  const notes        = document.getElementById('grinderFormNotes').value.trim();
-  const burrType     = document.getElementById('grinderFormBurrType').value.trim();
-  const purchaseDate = document.getElementById('grinderFormPurchaseDate').value.trim();
-  if (!name) { document.getElementById('grinderFormName').focus(); return; }
-  let saved = await libraryApi.saveGrinder(S.grinderEditId, { name, notes, burrType, purchaseDate });
-  if (!saved) return;
-
-  if (S.grinderEditId) {
-    const zpRaw    = document.getElementById('grinderFormZeroPoint').value.trim();
-    const sinceRaw = document.getElementById('grinderFormZeroPointSince').value.trim();
-    if (zpRaw !== '') {
-      const zeroPoint = parseFloat(zpRaw);
-      const sinceMs   = sinceRaw ? new Date(sinceRaw).getTime() : 0;
-      // For "now" inserts (sinceMs=0) the backend deduplicates on value;
-      // for retroactive inserts we always send (dedup is on exact since+value pair).
-      const isRetroactive = sinceMs > 0;
-      if (!Number.isNaN(zeroPoint) && (isRetroactive || zeroPoint !== currentGrinderZeroPoint(saved))) {
-        const updated = await libraryApi.setGrinderZeroPoint(S.grinderEditId, zeroPoint, isRetroactive ? sinceMs : undefined);
-        if (updated) saved = updated;
-      }
-    }
-  }
-
-
-  if (S.grinderEditId) {
-    const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === S.grinderEditId);
-    // The PUT response doesn't recompute wear stats — keep the existing ones
-    // until the next full library load rather than dropping the card.
-    if (idx !== -1) S.coffeeLibrary.grinders[idx] = { ...saved, wear: S.coffeeLibrary.grinders[idx].wear };
-  } else {
-    S.coffeeLibrary.grinders.push(saved);
-  }
-  updateLibraryDatalist();
-  closeGrinderForm();
-  renderGrinderList();
-}
-
-export async function resetGrinderBurrs(id) {
-  if (!confirm(t('lib_grinder_confirm_reset_burrs'))) return;
-  const saved = await libraryApi.resetGrinderBurrs(id);
-  if (!saved) return;
-  const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === id);
-  if (idx !== -1) S.coffeeLibrary.grinders[idx] = saved;
-  renderGrinderList();
-}
-
 export async function uploadBeanImage(id, input) {
   const file = input.files[0];
   if (!file) return;
@@ -1395,366 +1223,6 @@ export async function uploadBeanImage(id, input) {
   renderBeanList();
 }
 
-export async function uploadGrinderImage(id, input) {
-  const file = input.files[0];
-  if (!file) return;
-  const blob = await openImageCropEditor(file, { shape: 'square' });
-  // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
-  input.value = '';
-  if (!blob) return;
-  const r = await libraryApi.uploadGrinderImage(id, blob);
-  if (!r.ok) { alert(t('error_generic', (await r.json().catch(() => ({}))).error || r.statusText)); return; }
-  const saved = await r.json();
-  const idx = S.coffeeLibrary.grinders.findIndex(g => g.id === id);
-  if (idx !== -1) S.coffeeLibrary.grinders[idx] = saved;
-  invalidateGrinderImage(id);
-  renderGrinderList();
-}
-
-export async function deleteGrinder(id) {
-  if (!confirm(t('lib_confirm_delete_grinder'))) return;
-  const r = await libraryApi.deleteGrinderPermanently(id);
-  if (!r.ok) return;
-  S.coffeeLibrary.grinders = S.coffeeLibrary.grinders.filter(g => g.id !== id);
-  updateLibraryDatalist();
-  renderGrinderList();
-}
-
-// ── URL import ────────────────────────────────────────────────────────────
-export function toggleUrlImport() {
-  const row = document.getElementById('urlImportRow');
-  const visible = row.style.display !== 'none';
-  row.style.display = visible ? 'none' : 'flex';
-  if (!visible) document.getElementById('urlImportInput').focus();
-}
-
-export async function importFromUrl() {
-  const input = document.getElementById('urlImportInput');
-  const btn   = document.querySelector('#urlImportRow .lib-url-btn');
-  const url   = input.value.trim();
-  if (!url) return;
-  btn.textContent = t('lib_url_importing');
-  btn.disabled = true;
-  try {
-    const r = await apiImportFromUrl(url);
-    if (r.status === 400) {
-      alert(t('lib_url_unsupported'));
-      return;
-    }
-    if (!r.ok) throw new Error();
-    const data = await r.json();
-    const finish = variant => {
-      _applyUrlImport(data, variant);
-      input.value = '';
-      document.getElementById('urlImportRow').style.display = 'none';
-    };
-    if (Array.isArray(data.variants) && data.variants.length > 1) openVariantPicker(data.variants, finish);
-    else finish(null);
-  } catch {
-    alert(t('lib_url_error'));
-  } finally {
-    btn.textContent = t('lib_url_btn');
-    btn.disabled = false;
-  }
-}
-
-// Shops commonly offer several sizes at different prices — a chosen variant's
-// price/weight override the parser's own best-guess price_eur (based on
-// Shopify's arbitrary "default" variant) so the price actually matches what
-// the user is recording as stock_g.
-const BUILTIN_IMPORT_METHODS = new Set(['builtin:kaffeebraun', 'builtin:hoppenworth-ploch', 'builtin:elbgold']);
-
-// Labels the method that produced the pre-filled data so the user knows how
-// much to trust it — a built-in shop parser is well-tested, while the
-// generic fallbacks (custom Shopify domain, guessed Shopify endpoint,
-// JSON-LD, bare OpenGraph tags) are best-effort and worth double-checking.
-function _importMethodLabel(method, host) {
-  if (!method) return null;
-  if (BUILTIN_IMPORT_METHODS.has(method)) return t('lib_import_method_builtin', host || '');
-  if (method === 'custom-shopify')  return t('lib_import_method_custom_shopify', host || '');
-  if (method === 'generic-shopify') return t('lib_import_method_generic_shopify', host || '');
-  if (method === 'jsonld')          return t('lib_import_method_jsonld', host || '');
-  if (method === 'opengraph')       return t('lib_import_method_opengraph', host || '');
-  return null;
-}
-
-function _renderImportNotice(method, host) {
-  const el = document.getElementById('beanFormImportNotice');
-  if (!el) return;
-  const label = _importMethodLabel(method, host);
-  if (!label) { el.style.display = 'none'; el.innerHTML = ''; return; }
-  const unverified = !BUILTIN_IMPORT_METHODS.has(method);
-  el.innerHTML = `<div>${esc(label)}</div>${unverified ? `<div class="lib-import-notice-hint">${esc(t('lib_import_unverified_hint'))}</div>` : ''}`;
-  el.style.display = '';
-}
-
-// Non-blocking hint that the parsed bean looks like one already in the
-// library (same source URL previously imported, or same name+roaster) — the
-// user decides whether to still import (e.g. a fresh bag of the same bean).
-function _renderDuplicateWarning(duplicateWarning) {
-  const el = document.getElementById('beanFormDuplicateWarning');
-  if (!el) return;
-  if (!duplicateWarning) { el.style.display = 'none'; el.innerHTML = ''; return; }
-  // #811: icon rendered here rather than baked into the translated string.
-  // duplicateWarning.name is user/import data — escaped, since this is now innerHTML.
-  el.innerHTML = `${WARNING_ICON_SVG} ${esc(t('lib_import_duplicate_warning', duplicateWarning.name))}`;
-  el.style.display = '';
-}
-
-// #451: opt-in Brew Guide recipe candidates (e.g. "Milky Espresso") the
-// backend surfaced alongside the bean's own brewTempC/brewRatio block —
-// rendered as checkboxes, actually created in saveBean() only for whichever
-// ones stay checked at save time.
-function _renderExtraRecipeCandidates(extraRecipes) {
-  const el = document.getElementById('beanFormExtraRecipes');
-  if (!el) return;
-  if (!Array.isArray(extraRecipes) || !extraRecipes.length) {
-    el.style.display = 'none'; el.innerHTML = '';
-    return;
-  }
-  const sub = r => [
-    r.targetDose_g != null && r.targetYield_g != null ? `${r.targetDose_g}g → ${r.targetYield_g}g` : null,
-    r.targetTime_s != null ? `${r.targetTime_s}s` : null,
-    r.waterTemp_c != null ? `${r.waterTemp_c}°C` : null,
-  ].filter(Boolean).join(' · ');
-  el.innerHTML = `<div class="lib-import-extra-recipes-title">${esc(t('lib_import_extra_recipes_title'))}</div>` +
-    extraRecipes.map((r, i) => `
-      <label class="lib-import-extra-recipe-row">
-        <input type="checkbox" data-extra-recipe-idx="${i}" checked>
-        <span>${esc(r.name)} <span class="lib-import-extra-recipe-sub">${esc(sub(r))}</span></span>
-      </label>`).join('');
-  el.style.display = '';
-}
-
-function _applyUrlImport(data, variant) {
-  S._urlImportSource    = data.source    || null;
-  S._urlImportedAt      = data.importedAt || null;
-  S._urlImportImageUrl  = data.imageUrl  || null;
-  S._urlImportSourceUrl = data.sourceUrl || null;
-  openBeanForm();
-  S._urlImportExtraRecipes = Array.isArray(data.extraBrewRecipes) ? data.extraBrewRecipes : null;
-  _renderImportNotice(data.importMethod, data.source);
-  _renderDuplicateWarning(data.duplicateWarning);
-  _renderExtraRecipeCandidates(data.extraBrewRecipes);
-  if (data.name)    document.getElementById('beanFormName').value    = data.name;
-  if (data.roaster) document.getElementById('beanFormRoaster').value = data.roaster;
-  if (data.notes)   document.getElementById('beanFormNotes').value   = data.notes;
-  if (Array.isArray(data.origins) && data.origins.length) setFormOrigins({ origins: data.origins });
-  else if (data.origin) setFormOrigins({ origin: data.origin });
-  if (data.variety) document.getElementById('beanFormVariety').value = data.variety;
-  if (data.process) document.getElementById('beanFormProcess').value = data.process;
-  if (data.decaf)   document.getElementById('beanFormDecaf').checked = true;
-  if (Array.isArray(data.flavors) && data.flavors.length) setFormFlavors(data.flavors);
-  if (data.roastType) document.getElementById('beanFormRoastType').value = data.roastType;
-  if (data.region)    document.getElementById('beanFormRegion').value    = data.region;
-  if (data.altitude_m) document.getElementById('beanFormAltitude').value = data.altitude_m;
-  if (data.importer)   document.getElementById('beanFormImporter').value = data.importer;
-  if (data.harvest)    document.getElementById('beanFormHarvest').value  = data.harvest;
-  // #433: the backend has parsed producer/brew-guide fields for a while —
-  // this function just never copied them into the form.
-  if (data.producer)   document.getElementById('beanFormProducer').value   = data.producer;
-  if (data.brewTempC != null) document.getElementById('beanFormBrewTemp').value  = data.brewTempC;
-  if (data.brewRatio)         document.getElementById('beanFormBrewRatio').value = data.brewRatio;
-  if (data.brewTimeS != null) document.getElementById('beanFormBrewTime').value  = data.brewTimeS;
-  if (data.brewNotes)         document.getElementById('beanFormBrewNotes').value = data.brewNotes;
-  if (variant) {
-    document.getElementById('beanFormPrice').value = (variant.price / 100).toFixed(2);
-  } else if (data.price_eur) {
-    document.getElementById('beanFormPrice').value = data.price_eur;
-  }
-}
-
-function openVariantPicker(variants, onPick) {
-  const row  = document.getElementById('variantPickerRow');
-  const list = document.getElementById('variantPickerList');
-  const confirmBtn = document.getElementById('variantPickerConfirm');
-  if (!row || !list || !confirmBtn) { onPick(variants[0]); return; }
-  list.innerHTML = variants.map((v, i) => `
-    <label class="lib-variant-picker-option">
-      <input type="radio" name="variantPick" value="${i}" ${i === 0 ? 'checked' : ''}>
-      ${esc(v.title || '?')} — ${(v.price / 100).toFixed(2)} €
-    </label>`).join('');
-  row.style.display = '';
-  const handler = () => {
-    const idx = Number(list.querySelector('input[name="variantPick"]:checked')?.value || 0);
-    row.style.display = 'none';
-    confirmBtn.removeEventListener('click', handler);
-    onPick(variants[idx]);
-  };
-  confirmBtn.addEventListener('click', handler);
-}
-
-// ── Import provider settings ────────────────────────────────────────────────
-export async function toggleImportSettings() {
-  const row = document.getElementById('importSettingsRow');
-  const visible = row.style.display !== 'none';
-  row.style.display = visible ? 'none' : 'flex';
-  if (!visible) await _loadAndRenderImportSettings();
-}
-
-async function _loadAndRenderImportSettings() {
-  const r = await getImportSettings();
-  if (!r.ok) return;
-  const data = await r.json();
-  S._importSettings = data;
-  _renderImportSettingsPanel(data);
-}
-
-function _renderImportSettingsPanel(data) {
-  const providersEl = document.getElementById('importSettingsProviders');
-  const customEl    = document.getElementById('importSettingsCustomList');
-  providersEl.innerHTML = data.providers.map(p => `
-    <label class="lib-import-settings-provider">
-      <input type="checkbox" data-provider-id="${esc(p.id)}" ${p.enabled ? 'checked' : ''}>
-      ${esc(p.label)} <span class="lib-import-settings-host">(${esc(p.hostSuffix)})</span>
-    </label>`).join('');
-  providersEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-    cb.addEventListener('change', () => _saveProviderToggle(cb.dataset.providerId, cb.checked));
-  });
-  customEl.innerHTML = data.customShopifyDomains.length
-    ? data.customShopifyDomains.map(d => `
-        <div class="lib-import-settings-domain">
-          <span>${esc(d)}</span>
-          <button class="lib-import-settings-remove" data-domain="${esc(d)}" aria-label="${esc(t('lib_import_settings_remove'))}">×</button>
-        </div>`).join('')
-    : `<div class="lib-form-hint">${esc(t('lib_import_settings_none'))}</div>`;
-  customEl.querySelectorAll('.lib-import-settings-remove').forEach(btn => {
-    btn.addEventListener('click', () => _removeCustomShopifyDomain(btn.dataset.domain));
-  });
-}
-
-async function _saveProviderToggle(providerId, enabled) {
-  const current = S._importSettings || { providers: [], customShopifyDomains: [] };
-  const disabledProviders = current.providers
-    .map(p => p.id === providerId ? { ...p, enabled } : p)
-    .filter(p => !p.enabled)
-    .map(p => p.id);
-  const r = await saveImportSettings({ disabledProviders, customShopifyDomains: current.customShopifyDomains });
-  if (r.ok) await _loadAndRenderImportSettings();
-}
-
-export async function addCustomShopifyDomain() {
-  const input = document.getElementById('importSettingsDomainInput');
-  const domain = input.value.trim();
-  if (!domain) return;
-  const current = S._importSettings || { providers: [], customShopifyDomains: [] };
-  const domains = [...new Set([...current.customShopifyDomains, domain])];
-  const r = await saveImportSettings({ customShopifyDomains: domains });
-  if (r.ok) {
-    input.value = '';
-    await _loadAndRenderImportSettings();
-  } else {
-    alert(t('lib_import_settings_invalid_domain'));
-  }
-}
-
-async function _removeCustomShopifyDomain(domain) {
-  const current = S._importSettings || { providers: [], customShopifyDomains: [] };
-  const domains = current.customShopifyDomains.filter(d => d !== domain);
-  const r = await saveImportSettings({ customShopifyDomains: domains });
-  if (r.ok) await _loadAndRenderImportSettings();
-}
-
-// ── Barcode / QR scanner ──────────────────────────────────────────────────
-export async function openScanModal() {
-  if (!('BarcodeDetector' in window)) {
-    alert(t('scan_not_supported'));
-    return;
-  }
-  const modal  = document.getElementById('scanModal');
-  const video  = document.getElementById('scanVideo');
-  const status = document.getElementById('scanStatus');
-  status.textContent = t('scan_searching');
-  status.className = '';
-  modal.classList.add('open');
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    timerRegistry.set('_scanStream', stream);
-    video.srcObject = stream;
-  } catch {
-    status.textContent = t('scan_error');
-    status.className = 'error';
-    return;
-  }
-  S._scanActive   = true;
-  timerRegistry.set('_scanDetector', new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code', 'data_matrix'] }));
-  _runScanLoop();
-}
-
-export function closeScanModal() {
-  S._scanActive = false;
-  timerRegistry.dispose('_scanStream');
-  document.getElementById('scanModal').classList.remove('open');
-  document.getElementById('scanVideo').srcObject = null;
-}
-
-export async function _runScanLoop() {
-  const video  = document.getElementById('scanVideo');
-  const status = document.getElementById('scanStatus');
-  while (S._scanActive) {
-    await new Promise(r => setTimeout(r, 300));
-    if (!S._scanActive) break;
-    try {
-      const codes = await timerRegistry.get('_scanDetector').detect(video);
-      if (!codes.length) continue;
-      const raw = codes[0].rawValue;
-      // eslint-disable-next-line require-atomic-updates -- this loop-exit flag is idempotent; closeScanModal() setting it concurrently to the same false value is harmless
-      S._scanActive = false;
-      await _handleScanResult(raw, status);
-    } catch { /* frame not ready yet */ }
-  }
-}
-
-export async function _handleScanResult(raw, status) {
-  const glp = parseGlpQrParams(raw);
-  if (glp) {
-    closeScanModal();
-    openBeanForm();
-    if (glp.name)      document.getElementById('beanFormName').value      = glp.name;
-    if (glp.roaster)   document.getElementById('beanFormRoaster').value   = glp.roaster;
-    if (glp.roastDate) document.getElementById('beanFormRoastDate').value = toIsoDateInput(glp.roastDate);
-    if (glp.notes)     document.getElementById('beanFormNotes').value     = glp.notes;
-    status.textContent = t('scan_glp_imported');
-    status.className = 'found';
-    return;
-  }
-  // EAN/UPC → Open Food Facts, via the backend proxy: the CSP's connect-src
-  // is locked to 'self' (deliberate hardening, see go/internal/auth's CSP), so a direct
-  // browser fetch to world.openfoodfacts.org is always blocked. The proxy
-  // (go/internal/library (barcode scan)) distinguishes "not found" (404) from any other
-  // failure so this can show a specific message instead of one silent
-  // catch-all error.
-  status.textContent = t('scan_searching');
-  try {
-    const r = await libraryApi.scanBarcode(raw);
-    if (r.status === 404) {
-      status.textContent = t('scan_not_found');
-      status.className = 'error';
-      await new Promise(res => setTimeout(res, 1800));
-      closeScanModal();
-      openBeanForm();
-      return;
-    }
-    if (!r.ok) throw new Error(`scan lookup failed: ${r.status}`);
-    const { name, roaster, notes } = await r.json();
-    status.textContent = t('scan_found', name || raw);
-    status.className = 'found';
-    await new Promise(res => setTimeout(res, 1000));
-    closeScanModal();
-    openBeanForm();
-    if (name)    document.getElementById('beanFormName').value    = name;
-    if (roaster) document.getElementById('beanFormRoaster').value = roaster;
-    if (notes)   document.getElementById('beanFormNotes').value   = notes;
-  } catch (e) {
-    console.error('Barcode scan lookup failed:', e);
-    status.textContent = t('scan_error');
-    status.className = 'error';
-    await new Promise(res => setTimeout(res, 1800));
-    closeScanModal();
-    openBeanForm();
-  }
-}
-
 // Section symbols moved to ./library/* — re-exported so existing importers
 // of views/library.js (main.ts et al.) keep working.
 export {
@@ -1764,3 +1232,11 @@ export {
 export { renderMilkList, openMilkForm, closeMilkForm, saveMilk, restockMilk, deleteMilk } from './library/milk.js';
 export { renderBasketList, openBasketForm, closeBasketForm, editBasket, saveBasket, uploadBasketImage, deleteBasket } from './library/baskets.js';
 export { renderPuckScreenList, openPuckScreenForm, closePuckScreenForm, editPuckScreen, savePuckScreen, uploadPuckScreenImage, deletePuckScreen } from './library/puck-screens.js';
+export {
+  renderGrinderList, openGrinderForm, closeGrinderForm, editGrinder, deleteGrinderZeroPointEntry,
+  saveGrinder, resetGrinderBurrs, uploadGrinderImage, deleteGrinder,
+} from './library/grinders.js';
+export {
+  toggleUrlImport, importFromUrl, toggleImportSettings, addCustomShopifyDomain,
+  openScanModal, closeScanModal, _runScanLoop, _handleScanResult,
+} from './library/import.js';
