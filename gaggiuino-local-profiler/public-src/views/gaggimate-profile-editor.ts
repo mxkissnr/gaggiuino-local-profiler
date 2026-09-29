@@ -1,25 +1,64 @@
 // GaggiMate profile editor — Standard + Pro. _profile is the source of
 // truth; _render() rebuilds #gmEditorBody from it on every change.
 import Chart from 'chart.js/auto';
+import type { ChartConfiguration } from 'chart.js';
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import * as machinesApi from '../api/machines.js';
+import type { MachineProfile } from '../api/types.js';
 import { esc } from '../utils.js';
 import { phasePlugin, buildGmPhaseRanges } from '../constants.js';
 import { loadMachineProfileList } from './library-profile-editor.js';
 import { invalidateGmPhaseCache } from './shots/index.js';
 
+// The GaggiMate phase shape this editor reads and writes. api/types.ts's
+// MachineProfile documents this variant (label/description/temperature/phases)
+// but types `phases` as the Gaggiuino MachineProfileInput shape, so name the
+// GaggiMate phase fields here — the same "local interface for the fields the
+// view reads" pattern as views/shots/annotation.ts.
+interface GmPump {
+  target?: string;
+  pressure?: number;
+  flow?: number;
+}
+
+interface GmTarget {
+  type?: string;
+  operator?: string;
+  value?: number;
+}
+
+interface GmTransition {
+  type?: string;
+  duration?: number;
+  adaptive?: boolean;
+  target?: string;
+}
+
+interface GmPhase {
+  name?: string;
+  phase?: string;
+  valve?: number;
+  pump?: number | GmPump;
+  duration?: number;
+  temperature?: number;
+  targets?: GmTarget[];
+  transition?: GmTransition;
+}
+
+type GmProfile = MachineProfile & { phases?: GmPhase[] };
+
 // ── State ─────────────────────────────────────────────────────────────────
 
-let _profile = null;
+let _profile: GmProfile | null = null;
 let _currentPhaseIdx = 0; // active phase for pro editor
 let _saving = false;
-let _chart = null;
+let _chart: Chart | null = null;
 let _inputsBound = false; // guards against accumulating body change-listeners across renders
 
 // ── Entry points ──────────────────────────────────────────────────────────
 
-export async function openGaggiMateProfileEditor(id) {
+export async function openGaggiMateProfileEditor(id: string): Promise<void> {
   const machineId = S.activeMachineId ?? '';
   const profile = await machinesApi.getMachineProfile(id, machineId);
   if (!profile) { window.showToast?.(t('gm_toast_load_error')); return; }
@@ -30,14 +69,14 @@ export async function openGaggiMateProfileEditor(id) {
 // duplicateProfile: id cleared so saveGaggiMateProfile() POSTs instead of
 // PUTting over the original, label suffixed so it's never confused with
 // its source in the list.
-export async function duplicateGaggiMateProfile(id) {
+export async function duplicateGaggiMateProfile(id: string): Promise<void> {
   const machineId = S.activeMachineId ?? '';
   const profile = await machinesApi.getMachineProfile(id, machineId);
   if (!profile) { window.showToast?.(t('gm_toast_load_error')); return; }
-  _openEditor({ ...profile, id: undefined, label: `${profile.label}${t('profile_duplicate_suffix')}` });
+  _openEditor({ ...profile, id: undefined, label: `${profile.label ?? ''}${t('profile_duplicate_suffix')}` });
 }
 
-export function openNewGaggiMateProfile() {
+export function openNewGaggiMateProfile(): void {
   _openEditor({
     label: t('gm_new_profile_label'),
     description: '',
@@ -49,15 +88,15 @@ export function openNewGaggiMateProfile() {
   });
 }
 
-export function closeGaggiMateEditor() {
-  document.getElementById('gmProfileEditorModal').style.display = 'none';
+export function closeGaggiMateEditor(): void {
+  (document.getElementById('gmProfileEditorModal') as HTMLElement).style.display = 'none';
   _profile = null;
   _saving = false;
   _inputsBound = false;
   if (_chart) { _chart.destroy(); _chart = null; }
 }
 
-export async function saveGaggiMateProfile() {
+export async function saveGaggiMateProfile(): Promise<void> {
   if (!_profile || _saving) return;
   if (!_profile.label?.trim()) { window.showToast?.(t('gm_toast_name_required')); return; }
   if (!_profile.phases?.length) { window.showToast?.(t('gm_toast_phase_required')); return; }
@@ -70,8 +109,9 @@ export async function saveGaggiMateProfile() {
   try {
     const r = await machinesApi.saveMachineProfile(_profile.id ?? null, body);
     if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      window.showToast?.(err.error || t('gm_toast_save_error'));
+      const errBody: unknown = await r.json().catch(() => null);
+      const err = (errBody as { error?: string } | null)?.error;
+      window.showToast?.(err || t('gm_toast_save_error'));
       return;
     }
     // The backend now saves locally first and only degrades to
@@ -79,11 +119,12 @@ export async function saveGaggiMateProfile() {
     // still a 200, not an error (see handlers_profiles.go's offline-editor
     // rework). Only a real validation/unsupported error (400/501, handled
     // above) is still a hard failure here.
-    const saved = await r.json().catch(() => ({}));
-    invalidateGmPhaseCache(machineId);
+    const savedBody: unknown = await r.json().catch(() => null);
+    invalidateGmPhaseCache(machineId as number);
     closeGaggiMateEditor();
     await loadMachineProfileList();
-    if (saved.syncStatus && saved.syncStatus !== 'synced') {
+    const syncStatus = (savedBody as { syncStatus?: string } | null)?.syncStatus;
+    if (syncStatus && syncStatus !== 'synced') {
       window.showToast?.(t('gm_toast_saved_offline'));
     }
   } finally {
@@ -95,51 +136,51 @@ export async function saveGaggiMateProfile() {
 
 // ── Internal ──────────────────────────────────────────────────────────────
 
-function _openEditor(profile) {
+function _openEditor(profile: GmProfile): void {
   _profile = profile;
   _currentPhaseIdx = 0;
   _saving = false;
   _inputsBound = false;
-  const modal = document.getElementById('gmProfileEditorModal');
+  const modal = document.getElementById('gmProfileEditorModal') as HTMLElement;
   modal.style.display = 'flex';
-  document.getElementById('gmEditorTitle').textContent =
+  (document.getElementById('gmEditorTitle') as HTMLElement).textContent =
     profile.id != null ? t('gm_editor_title_edit', profile.label) : t('gm_editor_title_new');
   _render();
 }
 
-function _set(updates) {
+function _set(updates: Partial<GmProfile>): void {
   _profile = { ..._profile, ...updates };
   _render();
 }
 
-function _setPhase(idx, updates) {
-  const phases = [...(_profile.phases || [])];
+function _setPhase(idx: number, updates: Partial<GmPhase>): void {
+  const phases = [...(_profile!.phases || [])];
   phases[idx] = { ...phases[idx], ...updates };
   _profile = { ..._profile, phases };
   _render();
 }
 
-function _addPhase() {
-  const isPro = _profile.type === 'pro';
+function _addPhase(): void {
+  const isPro = _profile!.type === 'pro';
   const phase = isPro ? _newProPhase(t('gm_new_phase_label'), 'brew') : _newStandardPhase(t('gm_new_phase_label'), 'brew');
-  const phases = [...(_profile.phases || []), phase];
+  const phases = [...(_profile!.phases || []), phase];
   _profile = { ..._profile, phases };
   _currentPhaseIdx = phases.length - 1;
   _render();
 }
 
-function _removePhase(idx) {
-  const phases = (_profile.phases || []).filter((_, i) => i !== idx);
+function _removePhase(idx: number): void {
+  const phases = (_profile!.phases || []).filter((_, i) => i !== idx);
   _profile = { ..._profile, phases };
   _currentPhaseIdx = Math.min(_currentPhaseIdx, Math.max(0, phases.length - 1));
   _render();
 }
 
-function _newStandardPhase(name, phase) {
+function _newStandardPhase(name: string, phase: string): GmPhase {
   return { name, phase, valve: 1, pump: 100, duration: 5, targets: [] };
 }
 
-function _newProPhase(name, phase) {
+function _newProPhase(name: string, phase: string): GmPhase {
   return {
     name, phase, valve: 1, pump: 100, duration: 5, temperature: 0,
     targets: [],
@@ -149,7 +190,7 @@ function _newProPhase(name, phase) {
 
 // ── Render ────────────────────────────────────────────────────────────────
 
-function _render() {
+function _render(): void {
   const body = document.getElementById('gmEditorBody');
   if (!body || !_profile) return;
   const isPro = _profile.type === 'pro';
@@ -158,13 +199,13 @@ function _render() {
     _initChart();
   } catch (e) {
     console.error('[GLP] GaggiMate editor render error:', e);
-    body.innerHTML = `<div style="padding:1rem;color:var(--red-400)">Render-Fehler: ${e.message}</div>`;
+    body.innerHTML = `<div style="padding:1rem;color:var(--red-400)">Render-Fehler: ${e instanceof Error ? e.message : String(e)}</div>`;
   }
   _bindInputs();
 }
 
-function _renderBody(isPro) {
-  const phases = _profile.phases || [];
+function _renderBody(isPro: boolean): string {
+  const phases = _profile!.phases || [];
   return `
     ${_renderInfo()}
     ${_renderChart()}
@@ -176,13 +217,13 @@ function _renderBody(isPro) {
 // ── Profile chart (Chart.js) ───────────────────────────────────────────────
 
 const MAX_PHASE_DUR = 300; // s — chart preview cap; prevents multi-million-point arrays on typos
-function _phaseDur(ph) { return Math.min(ph.duration || 5, MAX_PHASE_DUR); }
+function _phaseDur(ph: GmPhase): number { return Math.min(ph.duration || 5, MAX_PHASE_DUR); }
 
-function _easeLinear(x) { return x; }
-function _easeIn(x) { return x * x; }
-function _easeOut(x) { return 1 - (1 - x) * (1 - x); }
-function _easeInOut(x) { return x < 0.5 ? 2 * x * x : 1 - 2 * (1 - x) * (1 - x); }
-function _applyEasing(x, type) {
+function _easeLinear(x: number): number { return x; }
+function _easeIn(x: number): number { return x * x; }
+function _easeOut(x: number): number { return 1 - (1 - x) * (1 - x); }
+function _easeInOut(x: number): number { return x < 0.5 ? 2 * x * x : 1 - 2 * (1 - x) * (1 - x); }
+function _applyEasing(x: number, type: string | undefined): number {
   if (x <= 0) return 0;
   if (x >= 1) return 1;
   switch (type) {
@@ -200,33 +241,33 @@ const CHART_POINT_INTERVAL = 0.1; // s — matches GaggiMate's ExtendedProfileCh
 // Port of GaggiMate's ExtendedProfileChart.jsx prepareData(). `target` on
 // each point marks whether it's the phase's actively controlled parameter
 // (drawn solid) vs a held/incidental value (drawn dashed).
-function _preparePumpSeries(phases, target) {
+function _preparePumpSeries(phases: GmPhase[], target: string): { x: number; y: number; target: boolean }[] {
   if (!phases.length) return [];
-  const data = [];
+  const data: { x: number; y: number; target: boolean }[] = [];
   let time = 0, phaseTime = 0, phaseIndex = 0;
   let currentPhase = phases[phaseIndex];
-  let currentPressure, currentFlow;
+  let currentPressure: number, currentFlow: number;
   let phaseStartFlow = 0, phaseStartPressure = 0;
-  let effectiveFlow = currentPhase.pump?.flow || 0;
-  let effectivePressure = currentPhase.pump?.pressure || 0;
+  let effectiveFlow = (currentPhase.pump as GmPump | undefined)?.flow || 0;
+  let effectivePressure = (currentPhase.pump as GmPump | undefined)?.pressure || 0;
 
   do {
     currentPhase = phases[phaseIndex];
     const dur = _phaseDur(currentPhase);
     const alpha = _applyEasing(
       phaseTime / (currentPhase.transition?.duration || dur),
-      currentPhase?.transition?.type || 'linear',
+      currentPhase.transition?.type || 'linear',
     );
-    currentFlow = currentPhase.pump?.target === 'flow'
+    currentFlow = (currentPhase.pump as GmPump | undefined)?.target === 'flow'
       ? phaseStartFlow + (effectiveFlow - phaseStartFlow) * alpha
-      : (currentPhase.pump?.flow || 0);
-    currentPressure = currentPhase.pump?.target === 'pressure'
+      : ((currentPhase.pump as GmPump | undefined)?.flow || 0);
+    currentPressure = (currentPhase.pump as GmPump | undefined)?.target === 'pressure'
       ? phaseStartPressure + (effectivePressure - phaseStartPressure) * alpha
-      : (currentPhase.pump?.pressure || 0);
+      : ((currentPhase.pump as GmPump | undefined)?.pressure || 0);
     data.push({
       x: time,
       y: target === 'pressure' ? currentPressure : currentFlow,
-      target: currentPhase.pump?.target === target,
+      target: (currentPhase.pump as GmPump | undefined)?.target === target,
     });
     time += CHART_POINT_INTERVAL;
     phaseTime += CHART_POINT_INTERVAL;
@@ -237,8 +278,9 @@ function _preparePumpSeries(phases, target) {
         phaseStartFlow = currentFlow;
         phaseStartPressure = currentPressure;
         const nextPhase = phases[phaseIndex];
-        effectiveFlow = nextPhase.pump?.flow === -1 ? currentFlow : (nextPhase.pump?.flow || 0);
-        effectivePressure = nextPhase.pump?.pressure === -1 ? currentPressure : (nextPhase.pump?.pressure || 0);
+        const nextPump = nextPhase.pump as GmPump | undefined;
+        effectiveFlow = nextPump?.flow === -1 ? currentFlow : (nextPump?.flow || 0);
+        effectivePressure = nextPump?.pressure === -1 ? currentPressure : (nextPump?.pressure || 0);
       }
     }
   } while (phaseIndex < phases.length);
