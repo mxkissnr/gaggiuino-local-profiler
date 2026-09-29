@@ -21,6 +21,7 @@
 ### Security
 - **The generated API token file is now readable only by the app itself.** Closes #1057
 - **A machine's last error in the status API is now only sent to authenticated callers, like the existing machine error field, so an anonymous request can no longer see a machine's address.** Part of #1201
+- **Values read from a GaggiMate machine are now escaped in the profile editor.** Part of #1115
 
 ### Changed
 - **The screenshot tool can restore a real GLP backup instead of the demo seed, so the README/wiki views can be captured from actual data.** Closes #1181
