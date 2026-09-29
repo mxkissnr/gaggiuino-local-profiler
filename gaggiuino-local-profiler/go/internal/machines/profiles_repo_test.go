@@ -1,0 +1,311 @@
+package machines
+
+import (
+	"encoding/json"
+	"strconv"
+	"testing"
+	"time"
+)
+
+func TestProfilesRepository_UpsertDirty_CreateThenUpdateStaysPendingCreate(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	row, err := repo.UpsertDirty(1, nil, nil, "My Profile", json.RawMessage(`{"label":"My Profile"}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty (create): %v", err)
+	}
+	if row.SyncStatus != ProfileSyncPendingCreate {
+		t.Fatalf("SyncStatus = %q, want pending_create", row.SyncStatus)
+	}
+	if row.RemoteID != nil {
+		t.Fatalf("RemoteID = %v, want nil (never synced)", row.RemoteID)
+	}
+	if row.PublicID() != "local:"+strconv.FormatInt(row.LocalID, 10) {
+		t.Fatalf("PublicID = %q, want local:%d", row.PublicID(), row.LocalID)
+	}
+
+	// A second edit before the first sync ever happens must stay
+	// pending_create, not regress to plain "dirty" (which would imply a
+	// remote id already exists).
+	updated, err := repo.UpsertDirty(1, &row.LocalID, nil, "Renamed", json.RawMessage(`{"label":"Renamed"}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty (edit before sync): %v", err)
+	}
+	if updated.SyncStatus != ProfileSyncPendingCreate {
+		t.Fatalf("SyncStatus after edit = %q, want pending_create", updated.SyncStatus)
+	}
+	if updated.Name != "Renamed" {
+		t.Fatalf("Name = %q, want Renamed", updated.Name)
+	}
+}
+
+// TestProfilesRepository_MarkSynced_StaleUpdatedAtIsANoOp guards the
+// lost-update race a concurrent push and a fresh edit can hit: a sync
+// worker reads a dirty row, starts pushing it, and while that push is in
+// flight the same row is edited again (bumping updated_at). If MarkSynced
+// used only local_id, it would mark the row synced based on the stale
+// push, silently dropping the newer edit (it's no longer "dirty", so no
+// future sweep would ever send it). The expectedUpdatedAt guard must make
+// this call a no-op instead, leaving the row exactly as UpsertDirty left it.
+func TestProfilesRepository_MarkSynced_StaleUpdatedAtIsANoOp(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	remote := "r1"
+	row, err := repo.UpsertDirty(1, nil, &remote, "Original", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	staleUpdatedAt := row.UpdatedAt
+
+	// Simulate a concurrent edit landing after the sync worker read `row`
+	// but before its MarkSynced call. updated_at has millisecond
+	// resolution, so force the clock forward at least 1ms to make the two
+	// writes reliably distinguishable.
+	time.Sleep(2 * time.Millisecond)
+	edited, err := repo.UpsertDirty(1, &row.LocalID, &remote, "Edited mid-push", json.RawMessage(`{"v":2}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty (concurrent edit): %v", err)
+	}
+	if edited.UpdatedAt == staleUpdatedAt {
+		t.Fatalf("UpdatedAt did not advance: %d == %d", edited.UpdatedAt, staleUpdatedAt)
+	}
+
+	if err := repo.MarkSynced(row.LocalID, staleUpdatedAt); err != nil {
+		t.Fatalf("MarkSynced (stale): %v", err)
+	}
+
+	got, err := repo.Get(1, "r1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.SyncStatus == ProfileSyncSynced {
+		t.Fatalf("SyncStatus = synced, want the row to stay dirty — the stale MarkSynced must not have applied")
+	}
+	if got.Name != "Edited mid-push" {
+		t.Fatalf("Name = %q, want the concurrent edit to survive: %q", got.Name, "Edited mid-push")
+	}
+
+	// The real (non-stale) MarkSynced call must still work.
+	if err := repo.MarkSynced(row.LocalID, edited.UpdatedAt); err != nil {
+		t.Fatalf("MarkSynced (current): %v", err)
+	}
+	got, err = repo.Get(1, "r1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.SyncStatus != ProfileSyncSynced {
+		t.Fatalf("SyncStatus = %q, want synced after the matching-updated_at call", got.SyncStatus)
+	}
+}
+
+func TestProfilesRepository_ReplaceRemoteID_MarksSyncedAndGettableByRemoteID(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	row, err := repo.UpsertDirty(1, nil, nil, "Offline Profile", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	if err := repo.ReplaceRemoteID(row.LocalID, row.UpdatedAt, "lever", "Offline Profile"); err != nil {
+		t.Fatalf("ReplaceRemoteID: %v", err)
+	}
+
+	got, err := repo.Get(1, "lever")
+	if err != nil {
+		t.Fatalf("Get by remote id: %v", err)
+	}
+	if got == nil {
+		t.Fatal("Get by remote id: not found")
+	}
+	if got.SyncStatus != ProfileSyncSynced {
+		t.Errorf("SyncStatus = %q, want synced", got.SyncStatus)
+	}
+	if got.RemoteID == nil || *got.RemoteID != "lever" {
+		t.Errorf("RemoteID = %v, want \"lever\"", got.RemoteID)
+	}
+
+	// Old local: placeholder id must still resolve to the same row.
+	byLocal, err := repo.Get(1, "local:"+strconv.FormatInt(row.LocalID, 10))
+	if err != nil {
+		t.Fatalf("Get by local placeholder: %v", err)
+	}
+	if byLocal == nil || byLocal.LocalID != row.LocalID {
+		t.Fatalf("Get by local placeholder = %+v, want local_id %d", byLocal, row.LocalID)
+	}
+}
+
+// TestProfilesRepository_ReplaceRemoteID_StaleUpdatedAtStillStoresRemoteID
+// covers the create-path lost update the old WHERE guard alone got wrong: the
+// pending_create row's push reached the machine and got a real id, but the
+// row was edited again before that push returned. ReplaceRemoteID must still
+// persist the remote id — dropping it would make the next sweep treat the row
+// as never-synced and create a *second* copy on the machine — while leaving
+// the row dirty (without bumping updated_at) so the newer edit is pushed as
+// an UPDATE of that same remote id.
+func TestProfilesRepository_ReplaceRemoteID_StaleUpdatedAtStillStoresRemoteID(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	row, err := repo.UpsertDirty(1, nil, nil, "Original", json.RawMessage(`{"v":1}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	staleUpdatedAt := row.UpdatedAt
+
+	// updated_at has millisecond resolution — force the clock forward so the
+	// concurrent edit is reliably distinguishable from the push's snapshot.
+	time.Sleep(2 * time.Millisecond)
+	edited, err := repo.UpsertDirty(1, &row.LocalID, nil, "Edited mid-push", json.RawMessage(`{"v":2}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty (concurrent edit): %v", err)
+	}
+	if edited.UpdatedAt == staleUpdatedAt {
+		t.Fatalf("UpdatedAt did not advance: %d == %d", edited.UpdatedAt, staleUpdatedAt)
+	}
+
+	// The create push got id "gm-1" but was based on the stale updated_at.
+	if err := repo.ReplaceRemoteID(row.LocalID, staleUpdatedAt, "gm-1", "Original"); err != nil {
+		t.Fatalf("ReplaceRemoteID (stale): %v", err)
+	}
+
+	got, err := repo.Get(1, "local:"+strconv.FormatInt(row.LocalID, 10))
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got == nil {
+		t.Fatal("Get: row not found")
+	}
+	if got.RemoteID == nil || *got.RemoteID != "gm-1" {
+		t.Fatalf("RemoteID = %v, want \"gm-1\" persisted despite the stale updated_at", got.RemoteID)
+	}
+	if got.SyncStatus != ProfileSyncDirty {
+		t.Fatalf("SyncStatus = %q, want dirty (a newer edit still has to be pushed)", got.SyncStatus)
+	}
+	if string(got.Data) != `{"v":2}` {
+		t.Fatalf("Data = %s, want the newer edit's body preserved", got.Data)
+	}
+	if got.UpdatedAt != edited.UpdatedAt {
+		t.Fatalf("UpdatedAt = %d, want the newer edit's %d (the dirty case must not bump it)", got.UpdatedAt, edited.UpdatedAt)
+	}
+}
+
+func TestProfilesRepository_MarkPendingDelete_HidesFromListButKeepsRow(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	if err := repo.UpsertSynced(1, "remote-1", "Kept", json.RawMessage(`{}`), false); err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+	if err := repo.MarkPendingDelete(1, "remote-1"); err != nil {
+		t.Fatalf("MarkPendingDelete: %v", err)
+	}
+
+	list, err := repo.ListByMachine(1)
+	if err != nil {
+		t.Fatalf("ListByMachine: %v", err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("ListByMachine = %+v, want empty (pending_delete filtered)", list)
+	}
+
+	dirty, err := repo.DirtyRows(1)
+	if err != nil {
+		t.Fatalf("DirtyRows: %v", err)
+	}
+	if len(dirty) != 1 || dirty[0].SyncStatus != ProfileSyncPendingDelete {
+		t.Fatalf("DirtyRows = %+v, want one pending_delete row", dirty)
+	}
+}
+
+func TestProfilesRepository_MarkPendingDelete_NeverSyncedRowHardDeletesImmediately(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	row, err := repo.UpsertDirty(1, nil, nil, "Never Synced", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	if err := repo.MarkPendingDelete(1, row.PublicID()); err != nil {
+		t.Fatalf("MarkPendingDelete: %v", err)
+	}
+
+	dirty, err := repo.DirtyRows(1)
+	if err != nil {
+		t.Fatalf("DirtyRows: %v", err)
+	}
+	if len(dirty) != 0 {
+		t.Fatalf("DirtyRows = %+v, want empty — a pending_create profile deleted before its first sync has nothing to push", dirty)
+	}
+}
+
+func TestProfilesRepository_PruneStaleSynced_RemovesMissingSyncedButKeepsDirty(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	if err := repo.UpsertSynced(1, "gone", "Deleted On Machine", json.RawMessage(`{}`), false); err != nil {
+		t.Fatalf("UpsertSynced (gone): %v", err)
+	}
+	if err := repo.UpsertSynced(1, "still-here", "Kept", json.RawMessage(`{}`), false); err != nil {
+		t.Fatalf("UpsertSynced (still-here): %v", err)
+	}
+	dirtyRemote := "dirty-remote"
+	dirtyRow, err := repo.UpsertDirty(1, nil, nil, "Local Edit", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	if err := repo.ReplaceRemoteID(dirtyRow.LocalID, dirtyRow.UpdatedAt, dirtyRemote, "Local Edit"); err != nil {
+		t.Fatalf("ReplaceRemoteID: %v", err)
+	}
+	if _, err := repo.UpsertDirty(1, &dirtyRow.LocalID, &dirtyRemote, "Local Edit Changed", json.RawMessage(`{"v":2}`)); err != nil {
+		t.Fatalf("UpsertDirty (make dirty): %v", err)
+	}
+
+	// "gone" is missing from the live list, "still-here" and the dirty row's
+	// remote id are still present — the dirty row must survive pruning
+	// regardless of whether it's in the live list at all.
+	if err := repo.PruneStaleSynced(1, []string{"still-here"}); err != nil {
+		t.Fatalf("PruneStaleSynced: %v", err)
+	}
+
+	if got, err := repo.Get(1, "gone"); err != nil || got != nil {
+		t.Fatalf("Get(gone) = %+v, %v, want nil, nil (pruned)", got, err)
+	}
+	if got, err := repo.Get(1, "still-here"); err != nil || got == nil {
+		t.Fatalf("Get(still-here) = %+v, %v, want a row", got, err)
+	}
+	if got, err := repo.Get(1, dirtyRemote); err != nil || got == nil || got.SyncStatus != ProfileSyncDirty {
+		t.Fatalf("Get(dirtyRemote) = %+v, %v, want surviving dirty row", got, err)
+	}
+}
+
+func TestProfilesRepository_UpsertSynced_DoesNotClobberDirtyRow(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	remoteID := "remote-1"
+	if err := repo.UpsertSynced(1, remoteID, "Original", json.RawMessage(`{"v":1}`), false); err != nil {
+		t.Fatalf("UpsertSynced (seed): %v", err)
+	}
+	synced, err := repo.Get(1, remoteID)
+	if err != nil || synced == nil {
+		t.Fatalf("Get after seed: %v", err)
+	}
+	if _, err := repo.UpsertDirty(1, &synced.LocalID, &remoteID, "Locally Edited", json.RawMessage(`{"v":2}`)); err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+
+	// A live list reconcile call must not overwrite the not-yet-pushed
+	// local edit with the machine's still-old copy.
+	if err := repo.UpsertSynced(1, remoteID, "Original", json.RawMessage(`{"v":1}`), false); err != nil {
+		t.Fatalf("UpsertSynced (reconcile while dirty): %v", err)
+	}
+	got, err := repo.Get(1, remoteID)
+	if err != nil || got == nil {
+		t.Fatalf("Get after reconcile: %v", err)
+	}
+	if got.Name != "Locally Edited" || got.SyncStatus != ProfileSyncDirty {
+		t.Fatalf("got = %+v, want the dirty local edit preserved", got)
+	}
+}

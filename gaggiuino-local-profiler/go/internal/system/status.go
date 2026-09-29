@@ -16,36 +16,51 @@ import (
 // statusMachine ports GET /api/status's `machines` array item shape
 // (routes/system.js's `registry.listMachines().map(m => ({...}))`, #317):
 // a narrower projection than the full /api/machines response (machines.
-// Machine) — reachable/on are only ever populated for the default machine
-// (nil for every other one), matching the "flat legacy fields always
-// describe the default machine" convention the rest of this endpoint's
-// top-level fields also follow.
+// Machine). reachable/lastError/firmwareVersion are per machine (#1201);
+// on stays populated only for the default machine, matching the "flat
+// legacy fields always describe the default machine" convention the rest
+// of this endpoint's top-level fields also follow.
 type statusMachine struct {
-	ID        int64           `json:"id"`
-	Name      string          `json:"name"`
-	Type      string          `json:"type"`
-	IsDefault bool            `json:"isDefault"`
-	Enabled   bool            `json:"enabled"`
-	Reachable *bool           `json:"reachable"`
-	On        *bool           `json:"on"`
-	Theme     *machines.Theme `json:"theme"`
+	ID              int64           `json:"id"`
+	Name            string          `json:"name"`
+	Type            string          `json:"type"`
+	IsDefault       bool            `json:"isDefault"`
+	Enabled         bool            `json:"enabled"`
+	Reachable       *bool           `json:"reachable"`
+	LastError       *string         `json:"lastError,omitempty"`
+	FirmwareVersion *string         `json:"firmwareVersion,omitempty"`
+	On              *bool           `json:"on"`
+	Theme           *machines.Theme `json:"theme"`
 }
 
 // buildStatusMachines ports GET /api/status's `machines` array
-// construction (registry.listMachines().map(...), #317): the flat legacy
-// fields above (machineReachable/machineOn/...) always describe the
-// default machine, so reachable/on are only populated for it — nil for
-// every other configured machine, matching openapi.yaml's Machine array
-// item schema ("Only populated for the default machine").
-func buildStatusMachines(list []machines.Machine, defaultReachable *bool, defaultOn bool) []statusMachine {
+// construction (registry.listMachines().map(...), #317): every entry reports
+// its own reachable/lastError/firmwareVersion (#1201) via statusFor, while
+// the flat legacy fields above (machineReachable/machineOn/...) and `on`
+// stay default-only. defaultReachable is the fallback for the default
+// machine's entry when statusFor has nothing recorded for it yet.
+//
+// authenticated gates lastError exactly like the top-level lastMachineError
+// (H1): the error string can embed the machine's host, so it is only set for
+// a caller presenting a valid X-GLP-Token. reachable/firmwareVersion stay
+// public (the equivalent top-level machineVersion already is).
+func buildStatusMachines(list []machines.Machine, defaultReachable *bool, defaultOn bool, authenticated bool, statusFor func(int64) MachinePollStatus) []statusMachine {
 	out := make([]statusMachine, 0, len(list))
 	for _, m := range list {
 		sm := statusMachine{
 			ID: m.ID, Name: m.Name, Type: m.Type,
 			IsDefault: m.IsDefault, Enabled: m.Enabled, Theme: m.Theme,
 		}
+		st := statusFor(m.ID)
+		sm.Reachable = st.Reachable
+		if authenticated {
+			sm.LastError = st.LastError
+		}
+		sm.FirmwareVersion = st.FirmwareVersion
 		if m.IsDefault {
-			sm.Reachable = defaultReachable
+			if sm.Reachable == nil {
+				sm.Reachable = defaultReachable
+			}
 			on := defaultOn
 			sm.On = &on
 		}

@@ -373,7 +373,7 @@ The editor covers a profile's name, water temperature, recipe (dose/yield/ratio)
 
 **Bean-based suggestions** reuse a fixed 4-phase skeleton (adaptive preinfusion → bloom rest → linear pressure ramp → declining-flow finish) rather than inventing a different structure per bean — only the parameters vary: decaf and natural-process beans (more porous, easier to channel) get a longer, gentler preinfusion, a lower ramp pressure and a lower brew temperature; washed beans get a shorter preinfusion and standard espresso pressure.
 
-"Send to machine" asks for confirmation, then creates or updates the profile directly on the Gaggiuino controller — new profiles are created over REST on firmware that supports it (falling back to the WebSocket API on older firmware), while updates and deletes always go over the WebSocket API (the machine has no REST endpoint for either) — a failed send surfaces an error toast rather than failing silently.
+"Send to machine" asks for confirmation, then creates or updates the profile directly on the Gaggiuino controller — new profiles are created over REST on firmware that supports it (falling back to the WebSocket API on older firmware), while updates and deletes always go over the WebSocket API (the machine has no REST endpoint for either) — a failed send surfaces an error toast rather than failing silently. Profiles are saved locally first, so creating, editing or deleting one works even while the machine is unreachable, and the change is pushed to the machine automatically once it is reachable again.
 
 ### Guided Dial-In wizard
 
@@ -475,7 +475,7 @@ The **Profiles** tab in the Coffee Library lists your Gaggiuino machine's profil
 
 Every bean card has a **🎛 Create profile** button that opens the editor pre-filled with a profile suggestion built from that bean's attributes. The suggestion always reuses the same fixed 4-phase skeleton — adaptive preinfusion (stops on time, pressure or volume, whichever comes first), a bloom pause, a linear pressure ramp, and a declining-flow finish — only the parameters vary: decaf beans and natural-processed beans (both leave a more porous, uneven puck) get a longer, gentler preinfusion, a lower target ramp pressure and a lower brew temperature; the recipe's dose/yield/ratio come from the bean's manual brew ratio if one is set, otherwise a default 18 g → 36 g (1:2) recipe is used. The suggestion can also be applied from inside the editor via the "Apply bean suggestion" button when it was opened from a bean.
 
-"Send to machine" asks for confirmation (existing values on the machine are overwritten) and then creates or updates the profile over the machine's WebSocket API; a failed request shows an error toast instead of failing silently.
+"Send to machine" asks for confirmation (existing values on the machine are overwritten) and then creates or updates the profile over the machine's WebSocket API; a failed request shows an error toast instead of failing silently. Profiles are saved locally first, so creating, editing or deleting one works even while the machine is unreachable, and the change is pushed to the machine automatically once it is reachable again.
 
 ### Barcode and QR scanner
 

@@ -47,9 +47,10 @@
 //	             pure functions, unit-tested without any I/O.
 //	poll.go      Poller — lib/poll.js's polling loop + checkAndApplyMachinePower/
 //	             backgroundHaCheck, plus lib/state.js's module-level
-//	             fields this package needs (pollGlobalState), plus
-//	             StatusInfo() (Phase 3b) snapshotting the subset GET
-//	             /api/status reads.
+//	             fields this package needs (pollGlobalState; per-machine
+//	             reachability/error/firmware state keyed by machine id since
+//	             #1201), plus StatusInfo()/MachineStatus() (Phase 3b)
+//	             snapshotting what GET /api/status reads.
 //	preheat.go   lib/preheat.js: buildPreheatResponse, SetReadyByTarget,
 //	             checkReadyByPreheat, save/load preheat_state.json.
 //	options.go   loadPreheatMinutes() — a narrow options.json read, same
@@ -125,8 +126,10 @@
 //     fetchMachineVersion() — backgroundHaCheck's
 //     `if (!cachedMachineVersion) fetchMachineVersion()` fallback (this
 //     package's own pollViaGaggiuinoStatus already opportunistically
-//     captures cachedMachineVersion from every successful status poll, the
-//     same field Node's inline capture in lib/poll.js also fills — Node's
+//     captures each machine's cached version from its successful status
+//     polls and shot syncs, the same field Node's inline capture in
+//     lib/poll.js also fills, and drops it again on an
+//     unreachable->reachable transition (#1197/#1201) — Node's
 //     fetchMachineVersion is a *fallback path* for when polling itself
 //     isn't running, e.g. switch off).
 //     GET /api/status's syncRetryCount field (Phase 3b, #901) is
