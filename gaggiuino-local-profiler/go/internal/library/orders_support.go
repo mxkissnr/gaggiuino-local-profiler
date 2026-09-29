@@ -18,12 +18,12 @@ import (
 // for the same reason ComputeGrinderWearStats lives in service.go: only
 // this package has direct Repository access to the `library` table.
 
-// ComputeBeanRemaining ports LibraryService.js's computeBeanRemaining and
-// mirrors public-src/bean-math.js's implementation exactly (same signature,
-// same beanId-first-with-name-fallback matching,
-// same FIFO-across-tracked-bags accumulation, same double-round) — the two
-// must never drift apart, since this is the SPA's own display value on one
-// side and the SSR/achievements/orders low-stock paths' value on the other.
+// ComputeBeanRemaining ports LibraryService.js's computeBeanRemaining with
+// the same signature, beanId-first-with-name-fallback matching,
+// FIFO-across-tracked-bags accumulation and double-round. It is the single
+// source of the "remaining" value: the bean-returning endpoints attach its
+// result as remainingG, which the SPA reads directly, and the
+// SSR/achievements/orders low-stock paths call it too.
 //
 // "Tracked bags" are every bag with a positive stock_g (falling back to
 // bean["stock_g"] for the last bag when it has none of its own, for bags
@@ -33,11 +33,11 @@ import (
 // counts against the total when that bag is itself tracked; there's no
 // per-bag clamp, so a dose recorded against one tracked bag's period can
 // still draw down a later tracked bag's stock in the running total (true
-// FIFO), matching the JS implementation's own doc comment.
+// FIFO).
 //
-// The canonical agreement cases live in testdata/bean_remaining_cases.json,
-// loaded by both TestComputeBeanRemaining_SharedFixture here and
-// test/bean-math.test.js — add new behaviour there first (#1122).
+// The canonical cases live in testdata/bean_remaining_cases.json, loaded by
+// TestComputeBeanRemaining_SharedFixture here — add new behaviour there
+// first (#1122).
 func ComputeBeanRemaining(bean Entity, doseRows []shots.AnnotatedDose, allBeans []Entity) (int64, bool) {
 	bags := bagsOf(bean)
 	name := lowerOrEmpty(strOf(bean["name"]))
