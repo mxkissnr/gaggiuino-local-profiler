@@ -350,7 +350,12 @@ function bagDragPointerMove(e: PointerEvent): void {
   else list.appendChild(card);
 }
 
-async function bagDragPointerUp(e: PointerEvent): Promise<void> {
+// Sync listener wrapper: add/removeEventListener need a void-returning function.
+function bagDragPointerUp(e: PointerEvent): void {
+  void finishBagDrag(e);
+}
+
+async function finishBagDrag(e: PointerEvent): Promise<void> {
   if (!_dragState || e.pointerId !== _dragState.pointerId) return;
   const { card, list, beanId } = _dragState;
   card.classList.remove('dragging');
