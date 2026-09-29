@@ -1,6 +1,7 @@
 import { apiFetch } from './fetch.js';
 import type {
-  Basket, Bean, CoffeeLibrary, Grinder, Milk, PuckScreen, Recipe,
+  AdjustFrozenPortionInput, BagUpdateInput, Basket, Bean, CoffeeLibrary, FreezePortionsInput,
+  Grinder, Milk, NewBagInput, PuckScreen, Recipe, ReorderBagsInput, ThawPortionInput,
 } from './types.js';
 
 // Typed client for the `library` domain (go/internal/library — every route
@@ -47,7 +48,7 @@ export async function saveBean(id: number | null, payload: unknown): Promise<Bea
 }
 
 /** POST /api/library/bean/{id}/new-bag — append a bag to the bean. */
-export async function addBeanBag(id: number, payload: unknown): Promise<Bean | null> {
+export async function addBeanBag(id: number, payload: NewBagInput): Promise<Bean | null> {
   return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/new-bag`, _json('POST', payload)));
 }
 
@@ -57,27 +58,27 @@ export async function deleteBeanBag(beanId: number, bagId: number): Promise<Bean
 }
 
 /** PUT /api/library/bean/{beanId}/bag/{bagId} — edit a bag's mutable fields (full-replace; sortOrder optional/partial). */
-export async function updateBeanBag(beanId: number, bagId: number, payload: unknown): Promise<Bean | null> {
+export async function updateBeanBag(beanId: number, bagId: number, payload: BagUpdateInput): Promise<Bean | null> {
   return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, _json('PUT', payload)));
 }
 
 /** POST /api/library/bean/{id}/reorder-bags — bulk-reassign queue order for upcoming bags. */
-export async function reorderBeanBags(id: number, bagIds: number[]): Promise<Bean | null> {
+export async function reorderBeanBags(id: number, bagIds: ReorderBagsInput['bagIds']): Promise<Bean | null> {
   return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/reorder-bags`, _json('POST', { bagIds })));
 }
 
 /** POST /api/library/bean/{id}/freeze-portions — split part of the active bag into dated frozen portions. */
-export async function freezeBeanPortions(id: number, payload: unknown): Promise<Bean | null> {
+export async function freezeBeanPortions(id: number, payload: FreezePortionsInput): Promise<Bean | null> {
   return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/freeze-portions`, _json('POST', payload)));
 }
 
 /** POST /api/library/bean/{beanId}/thaw-portion — thaw one portion of a frozen batch. */
-export async function thawBeanPortion(beanId: number, payload: unknown): Promise<Bean | null> {
+export async function thawBeanPortion(beanId: number, payload: ThawPortionInput): Promise<Bean | null> {
   return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/thaw-portion`, _json('POST', payload)));
 }
 
 /** POST /api/library/bean/{beanId}/adjust-frozen-portion — correct a frozen-portion entry after the fact. */
-export async function adjustFrozenPortion(beanId: number, payload: unknown): Promise<Bean | null> {
+export async function adjustFrozenPortion(beanId: number, payload: AdjustFrozenPortionInput): Promise<Bean | null> {
   return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/adjust-frozen-portion`, _json('POST', payload)));
 }
 

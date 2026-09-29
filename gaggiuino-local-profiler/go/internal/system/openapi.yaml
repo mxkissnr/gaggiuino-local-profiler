@@ -640,6 +640,55 @@ components:
         authTag:    { type: string, description: base64 }
         ciphertext: { type: string, description: base64 }
 
+    NewBagInput:
+      type: object
+      properties:
+        roastDate:   { type: string, format: date }
+        stock_g:     { type: number }
+        batchNumber: { type: string, maxLength: 50 }
+
+    BagUpdateInput:
+      type: object
+      properties:
+        roastDate:   { type: string, format: date }
+        stock_g:     { type: number, nullable: true }
+        price_eur:   { type: number, nullable: true }
+        batchNumber: { type: string, maxLength: 50 }
+        sortOrder:   { type: integer }
+
+    ReorderBagsInput:
+      type: object
+      required: [bagIds]
+      properties:
+        bagIds:
+          type: array
+          description: Every upcoming (non-current) bag id, in the desired order.
+          items: { type: integer }
+
+    FreezePortionsInput:
+      type: object
+      required: [portionCount, portionWeight_g]
+      properties:
+        frozenAt:        { type: integer, description: "Epoch ms, default now" }
+        portionCount:    { type: integer }
+        portionWeight_g: { type: number }
+
+    ThawPortionInput:
+      type: object
+      required: [portionId]
+      properties:
+        portionId: { type: integer }
+        count:     { type: integer, default: 1 }
+
+    AdjustFrozenPortionInput:
+      type: object
+      required: [portionId]
+      properties:
+        portionId:       { type: integer }
+        portionWeight_g: { type: number, minimum: 0.1, maximum: 2000 }
+        frozenAt:        { type: integer, description: Epoch ms }
+        remainingCount:  { type: integer, minimum: 0, description: "Set absolutely, re-clamped to [0, portionCount]" }
+
 paths:
 
   # ── Shots ───────────────────────────────────────────────────────────────
@@ -995,11 +1044,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                roastDate:   { type: string, format: date }
-                stock_g:     { type: number }
-                batchNumber: { type: string, maxLength: 50 }
+              $ref: '#/components/schemas/NewBagInput'
       responses:
         "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
         "404": { description: Not found }
@@ -1016,10 +1061,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [bagIds]
-              properties:
-                bagIds: { type: array, items: { type: integer }, description: "Every upcoming (non-current) bag id, in the desired order." }
+              $ref: '#/components/schemas/ReorderBagsInput'
       responses:
         "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
         "400": { description: bagIds missing, containing a duplicate/unknown/current-bag id, or not covering every upcoming bag, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
@@ -1036,12 +1078,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [portionCount, portionWeight_g]
-              properties:
-                frozenAt:        { type: integer, description: "Epoch ms, default now" }
-                portionCount:    { type: integer }
-                portionWeight_g: { type: number }
+              $ref: '#/components/schemas/FreezePortionsInput'
       responses:
         "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
         "400": { description: No active bag, or portionCount/portionWeight_g missing/invalid }
@@ -1058,11 +1095,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [portionId]
-              properties:
-                portionId: { type: integer }
-                count:     { type: integer, default: 1 }
+              $ref: '#/components/schemas/ThawPortionInput'
       responses:
         "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
         "404": { description: Bean or frozen portion not found }
@@ -1078,13 +1111,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [portionId]
-              properties:
-                portionId:       { type: integer }
-                portionWeight_g: { type: number, minimum: 0.1, maximum: 2000 }
-                frozenAt:        { type: integer, description: Epoch ms }
-                remainingCount:  { type: integer, minimum: 0, description: "Set absolutely, re-clamped to [0, portionCount]" }
+              $ref: '#/components/schemas/AdjustFrozenPortionInput'
       responses:
         "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
         "400": { description: Invalid portionWeight_g/frozenAt/remainingCount }
@@ -1103,13 +1130,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                roastDate:   { type: string, format: date }
-                stock_g:     { type: number, nullable: true }
-                price_eur:   { type: number, nullable: true }
-                batchNumber: { type: string, maxLength: 50 }
-                sortOrder:   { type: integer }
+              $ref: '#/components/schemas/BagUpdateInput'
       responses:
         "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
         "400": { description: Invalid roastDate/stock_g/price_eur, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }

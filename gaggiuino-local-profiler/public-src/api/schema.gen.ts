@@ -876,12 +876,7 @@ export interface paths {
             };
             requestBody?: {
                 content: {
-                    "application/json": {
-                        /** Format: date */
-                        roastDate?: string;
-                        stock_g?: number;
-                        batchNumber?: string;
-                    };
+                    "application/json": components["schemas"]["NewBagInput"];
                 };
             };
             responses: {
@@ -933,10 +928,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /** @description Every upcoming (non-current) bag id, in the desired order. */
-                        bagIds: number[];
-                    };
+                    "application/json": components["schemas"]["ReorderBagsInput"];
                 };
             };
             responses: {
@@ -996,12 +988,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /** @description Epoch ms, default now */
-                        frozenAt?: number;
-                        portionCount: number;
-                        portionWeight_g: number;
-                    };
+                    "application/json": components["schemas"]["FreezePortionsInput"];
                 };
             };
             responses: {
@@ -1057,11 +1044,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        portionId: number;
-                        /** @default 1 */
-                        count?: number;
-                    };
+                    "application/json": components["schemas"]["ThawPortionInput"];
                 };
             };
             responses: {
@@ -1110,14 +1093,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        portionId: number;
-                        portionWeight_g?: number;
-                        /** @description Epoch ms */
-                        frozenAt?: number;
-                        /** @description Set absolutely, re-clamped to [0, portionCount] */
-                        remainingCount?: number;
-                    };
+                    "application/json": components["schemas"]["AdjustFrozenPortionInput"];
                 };
             };
             responses: {
@@ -1176,14 +1152,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /** Format: date */
-                        roastDate?: string;
-                        stock_g?: number | null;
-                        price_eur?: number | null;
-                        batchNumber?: string;
-                        sortOrder?: number;
-                    };
+                    "application/json": components["schemas"]["BagUpdateInput"];
                 };
             };
             responses: {
@@ -7358,6 +7327,43 @@ export interface components {
             authTag?: string;
             /** @description base64 */
             ciphertext?: string;
+        };
+        NewBagInput: {
+            /** Format: date */
+            roastDate?: string;
+            stock_g?: number;
+            batchNumber?: string;
+        };
+        BagUpdateInput: {
+            /** Format: date */
+            roastDate?: string;
+            stock_g?: number | null;
+            price_eur?: number | null;
+            batchNumber?: string;
+            sortOrder?: number;
+        };
+        ReorderBagsInput: {
+            /** @description Every upcoming (non-current) bag id, in the desired order. */
+            bagIds: number[];
+        };
+        FreezePortionsInput: {
+            /** @description Epoch ms, default now */
+            frozenAt?: number;
+            portionCount: number;
+            portionWeight_g: number;
+        };
+        ThawPortionInput: {
+            portionId: number;
+            /** @default 1 */
+            count?: number;
+        };
+        AdjustFrozenPortionInput: {
+            portionId: number;
+            portionWeight_g?: number;
+            /** @description Epoch ms */
+            frozenAt?: number;
+            /** @description Set absolutely, re-clamped to [0, portionCount] */
+            remainingCount?: number;
         };
     };
     responses: never;
