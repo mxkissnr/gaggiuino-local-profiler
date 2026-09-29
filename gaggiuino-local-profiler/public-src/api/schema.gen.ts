@@ -861,7 +861,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Open a new bag for a bean (pushes bag history, resets roastDate/stock_g) */
+        /**
+         * Open a new bag for a bean (joins the back of the queue)
+         * @description The new bag's roastDate/stock_g only become the bean's own display fields when it's also the bag SimulateBagQueue resolves as current (i.e. every other bag is already exhausted) — adding a bag while the current one still has stock does not disturb the bean-level fields.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -873,12 +876,7 @@ export interface paths {
             };
             requestBody?: {
                 content: {
-                    "application/json": {
-                        /** Format: date */
-                        roastDate?: string;
-                        stock_g?: number;
-                        batchNumber?: string;
-                    };
+                    "application/json": components["schemas"]["NewBagInput"];
                 };
             };
             responses: {
@@ -897,6 +895,69 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/library/bean/{id}/reorder-bags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk-reassign sortOrder for a bean's "upcoming" (non-current) bags
+         * @description bagIds must list every upcoming bag exactly once (no duplicates, none omitted) — the server assigns sequential sortOrder values in that order, all strictly above the current bag's own position.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReorderBagsInput"];
+                };
+            };
+            responses: {
+                /** @description Updated bean */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Bean"];
+                    };
+                };
+                /** @description bagIds missing */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Bean not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
                 };
             };
         };
@@ -927,12 +988,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /** @description Epoch ms, default now */
-                        frozenAt?: number;
-                        portionCount: number;
-                        portionWeight_g: number;
-                    };
+                    "application/json": components["schemas"]["FreezePortionsInput"];
                 };
             };
             responses: {
@@ -988,11 +1044,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        portionId: number;
-                        /** @default 1 */
-                        count?: number;
-                    };
+                    "application/json": components["schemas"]["ThawPortionInput"];
                 };
             };
             responses: {
@@ -1041,14 +1093,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        portionId: number;
-                        portionWeight_g?: number;
-                        /** @description Epoch ms */
-                        frozenAt?: number;
-                        /** @description Set absolutely, re-clamped to [0, portionCount] */
-                        remainingCount?: number;
-                    };
+                    "application/json": components["schemas"]["AdjustFrozenPortionInput"];
                 };
             };
             responses: {
@@ -1091,7 +1136,55 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /**
+         * Full-replace one bag's editable fields (roastDate/stock_g/price_eur/batchNumber; sortOrder optional)
+         * @description roastDate/stock_g/price_eur/batchNumber are full-replaced — resend the bag's current value for any field not being changed, or it's cleared. sortOrder is the one exception, falling back to the bag's existing value when omitted (reorder-bags is the normal bulk way to change it).
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                    bagId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BagUpdateInput"];
+                };
+            };
+            responses: {
+                /** @description Updated bean */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Bean"];
+                    };
+                };
+                /** @description Invalid roastDate/stock_g/price_eur */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Bean or bag not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
         post?: never;
         /** Delete a bag from a bean's bag history (the last remaining bag cannot be deleted) */
         delete: {
@@ -7238,6 +7331,43 @@ export interface components {
             authTag?: string;
             /** @description base64 */
             ciphertext?: string;
+        };
+        NewBagInput: {
+            /** Format: date */
+            roastDate?: string;
+            stock_g?: number;
+            batchNumber?: string;
+        };
+        BagUpdateInput: {
+            /** Format: date */
+            roastDate?: string;
+            stock_g?: number | null;
+            price_eur?: number | null;
+            batchNumber?: string;
+            sortOrder?: number;
+        };
+        ReorderBagsInput: {
+            /** @description Every upcoming (non-current) bag id, in the desired order. */
+            bagIds: number[];
+        };
+        FreezePortionsInput: {
+            /** @description Epoch ms, default now */
+            frozenAt?: number;
+            portionCount: number;
+            portionWeight_g: number;
+        };
+        ThawPortionInput: {
+            portionId: number;
+            /** @default 1 */
+            count: number;
+        };
+        AdjustFrozenPortionInput: {
+            portionId: number;
+            portionWeight_g?: number;
+            /** @description Epoch ms */
+            frozenAt?: number;
+            /** @description Set absolutely, re-clamped to [0, portionCount] */
+            remainingCount?: number;
         };
     };
     responses: never;

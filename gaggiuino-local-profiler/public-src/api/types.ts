@@ -202,6 +202,16 @@ export type PuckScreen = components['schemas']['PuckScreen'];
 export type Recipe = components['schemas']['Recipe'];
 export type Milk = components['schemas']['Milk'];
 
+// Request bodies for the bag-queue endpoints (#1122) — generated from
+// go/internal/system/openapi.yaml so api/library.ts never hand-maintains
+// these shapes (maintainer review point 6).
+export type NewBagInput = components['schemas']['NewBagInput'];
+export type BagUpdateInput = components['schemas']['BagUpdateInput'];
+export type ReorderBagsInput = components['schemas']['ReorderBagsInput'];
+export type FreezePortionsInput = components['schemas']['FreezePortionsInput'];
+export type ThawPortionInput = components['schemas']['ThawPortionInput'];
+export type AdjustFrozenPortionInput = components['schemas']['AdjustFrozenPortionInput'];
+
 /** GET /api/library — the whole snapshot the Library tab renders from. */
 export type CoffeeLibrary = components['schemas']['Library'];
 

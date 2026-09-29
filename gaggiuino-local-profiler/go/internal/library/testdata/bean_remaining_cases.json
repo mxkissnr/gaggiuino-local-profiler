@@ -1,0 +1,85 @@
+{
+  "_comment": "Shared bean-remaining fixture (#1122): one definition of 'remaining' for the SPA (public-src/bean-math.js computeBeanRemaining) and Go (go/internal/library/orders_support.go ComputeBeanRemaining). Loaded by TestComputeBeanRemaining_SharedFixture in orders_support_test.go and by test/bean-math.test.js. expected is null for an untracked (unlimited-stock) bean. allBeans defaults to [bean] when omitted.",
+  "cases": [
+    {
+      "name": "single bag with per-bag stock",
+      "bean": { "id": 1, "name": "Single", "bags": [{ "id": 11, "openedAt": 0, "stock_g": 250 }] },
+      "doseRows": [{ "coffee": "Single", "beanId": 1, "dose": 18, "timestamp": 1000 }],
+      "expected": 232
+    },
+    {
+      "name": "single bag predating per-bag stock falls back to bean.stock_g",
+      "bean": { "id": 1, "name": "Fallback", "stock_g": 250, "bags": [{ "id": 11, "openedAt": 0 }] },
+      "doseRows": [{ "coffee": "Fallback", "beanId": 1, "dose": 18, "timestamp": 1000 }],
+      "expected": 232
+    },
+    {
+      "name": "multi-bag queue with one emptied bag",
+      "bean": {
+        "id": 1,
+        "name": "Queue",
+        "bags": [
+          { "id": 11, "openedAt": 1000, "stock_g": 100 },
+          { "id": 12, "openedAt": 2000, "stock_g": 200 }
+        ]
+      },
+      "doseRows": [{ "coffee": "Queue", "beanId": 1, "dose": 100, "timestamp": 1500 }],
+      "expected": 200
+    },
+    {
+      "name": "frozen portions do not reduce the bag's tracked stock",
+      "bean": {
+        "id": 1,
+        "name": "Frozen",
+        "bags": [
+          {
+            "id": 11,
+            "openedAt": 0,
+            "stock_g": 250,
+            "frozenPortions": [
+              { "id": 1, "frozenAt": 500, "portionCount": 2, "portionWeight_g": 18, "remainingCount": 2 }
+            ]
+          }
+        ]
+      },
+      "doseRows": [{ "coffee": "Frozen", "beanId": 1, "dose": 18, "timestamp": 1000 }],
+      "expected": 232
+    },
+    {
+      "name": "a bag added after the shots still contributes its stock",
+      "bean": {
+        "id": 1,
+        "name": "LateBag",
+        "bags": [
+          { "id": 11, "openedAt": 1000, "stock_g": 200 },
+          { "id": 12, "openedAt": 9000, "stock_g": 300 }
+        ]
+      },
+      "doseRows": [{ "coffee": "LateBag", "beanId": 1, "dose": 18, "timestamp": 1500 }],
+      "expected": 482
+    },
+    {
+      "name": "#930 stock-adjust regression: stock_g set to desired remaining + already consumed",
+      "bean": { "id": 1, "name": "Adjust", "bags": [{ "id": 11, "openedAt": 1000, "stock_g": 68 }] },
+      "doseRows": [{ "coffee": "Adjust", "beanId": 1, "dose": 18, "timestamp": 1500 }],
+      "expected": 50
+    },
+    {
+      "name": "#901 distinct openedAt-less bags are not misattributed by identity",
+      "bean": {
+        "id": 1,
+        "name": "NoOpenedAt",
+        "stock_g": 200,
+        "bags": [{ "id": 11 }, { "id": 12 }]
+      },
+      "doseRows": [{ "coffee": "NoOpenedAt", "beanId": 1, "dose": 20, "timestamp": 1000 }],
+      "expected": 200
+    },
+    {
+      "name": "untracked bean returns null",
+      "bean": { "id": 1, "name": "Untracked" },
+      "doseRows": [],
+      "expected": null
+    }
+  ]
+}

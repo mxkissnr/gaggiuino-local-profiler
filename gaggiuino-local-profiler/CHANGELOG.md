@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Added
+- **Beans can now hold several bags at once as a queue, with a drag-reorderable upcoming list and per-bag stock.** (thanks @Paul-Lukas, #1122)
 - **Machine profiles can now be created, edited and deleted while the machine is unreachable, and are pushed to it automatically once it is reachable again.** Part of #1125 Thanks @Paul-Lukas (#1119).
 - **The live view has a shot setup panel: pick bean, dose, grinder, grind setting, basket, puck screen and recipe before you pull, and they are saved to the shot automatically.** Part of #1125 Thanks @Paul-Lukas.
 - **A browser demo with sample data now runs on GitHub Pages, including a simulated live shot.** Closes #1193
@@ -24,6 +25,7 @@
 - **Values read from a GaggiMate machine are now escaped in the profile editor.** Part of #1115
 
 ### Changed
+- **The live view is now type-checked.**
 - **The screenshot tool can restore a real GLP backup instead of the demo seed, so the README/wiki views can be captured from actual data.** Closes #1181
 - **The README now shows the GLP ecosystem and the app's internals as diagrams, and GaggiMate is documented as fully supported.** Closes #1176
 - **The app architecture diagram now shows the importer and backup/restore paths through the REST API.** Part of #1176

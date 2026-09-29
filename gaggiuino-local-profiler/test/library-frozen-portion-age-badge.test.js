@@ -45,10 +45,16 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
       beans: [{
         id: 1,
         name: 'Test Bean',
+        // consumedG/remainingG/current are backend-computed (SimulateBagQueue)
+        // and attached to every bag on load — this bag must be "current" for
+        // activeBag (frozenPortions' source) to resolve to it at all.
         bags: [{
           id: 1,
           roastDate: todayIsoDate(now - 10 * DAY),
           stock_g: 250,
+          consumedG: 0,
+          remainingG: 250,
+          current: true,
           frozenPortions: [
             { id: 1, frozenAt: now - 5 * DAY, portionCount: 4, remainingCount: 4, portionWeight_g: 18 },
           ],
@@ -79,6 +85,9 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
           id: 1,
           roastDate: todayIsoDate(now - 20 * DAY),
           stock_g: 250,
+          consumedG: 0,
+          remainingG: 250,
+          current: true,
           frozenPortions: [
             { id: 2, frozenAt: now - 15 * DAY, thawedAt: now - 2 * DAY, portionCount: 2, remainingCount: 0, portionWeight_g: 18 },
           ],

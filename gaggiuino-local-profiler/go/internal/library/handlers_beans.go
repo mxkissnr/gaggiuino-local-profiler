@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
@@ -42,7 +43,7 @@ func (h *Handlers) createBean(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, bean)
+	h.writeEnrichedBean(w, bean)
 }
 
 // updateBean ports PUT /api/library/bean/:id — a thin wrapper around
@@ -64,7 +65,7 @@ func (h *Handlers) updateBean(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, bean)
+	h.writeEnrichedBean(w, bean)
 }
 
 // newBag ports POST /api/library/bean/:id/new-bag.
@@ -87,12 +88,34 @@ func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 		roastDate := trimMax(body["roastDate"], 10)
 		stockG := floatOrNilFalsy(body["stock_g"])
 		batchNumber := trimMax(body["batchNumber"], 50)
-
-		bag := Entity{"id": newID(), "roastDate": roastDate, "stock_g": stockG, "openedAt": newID(), "batchNumber": batchNumber}
+		priceEur, ok := validateBagFloatField(body, "price_eur")
+		if !ok {
+			return &apiError{http.StatusBadRequest, "invalid price_eur"}
+		}
 		bags := bagsOf(bean)
+		// New bag always joins the back of the queue (highest sortOrder + 1) —
+		// it does NOT become current just by existing; SimulateBagQueue only
+		// promotes it once every bag ahead of it in the queue is exhausted.
+		var nextSort int64
+		for _, raw := range bags {
+			if bg, ok := raw.(Entity); ok {
+				nextSort = maxInt64(nextSort, effectiveSortOrder(bg)+1)
+			}
+		}
+		bagID := newID()
+		bag := Entity{"id": bagID, "roastDate": roastDate, "stock_g": stockG, "openedAt": newID(), "batchNumber": batchNumber, "price_eur": priceEur, "sortOrder": nextSort}
 		bean["bags"] = append(bags, bag)
-		bean["roastDate"] = roastDate
-		bean["stock_g"] = stockG
+		// Sync bean-level fields only when this new bag is the one
+		// SimulateBagQueue actually considers current (i.e. every other bag
+		// was already exhausted, so this one is drawn from immediately) — not
+		// unconditionally, which would overwrite the bean's displayed roast
+		// date/stock with a bag still queued behind the real current one.
+		if cur := resolveCurrentBagSimple(bean); cur != nil {
+			if cid, ok := idOf(cur, "id"); ok && cid == bagID {
+				bean["roastDate"] = bag["roastDate"]
+				bean["stock_g"] = bag["stock_g"]
+			}
+		}
 		lib.Beans[idx] = bean
 		return nil
 	})
@@ -100,7 +123,105 @@ func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 		writeUpdateError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, bean)
+	h.writeEnrichedBean(w, bean)
+}
+
+// reorderBags ports POST /api/library/bean/:id/reorder-bags: the client
+// sends the desired bag ID order for its "upcoming" queue (never including
+// the current or past bags — see library.js's swapless drag reorder), and
+// this assigns sequential sortOrder values in one atomic write, replacing
+// what would otherwise be N sequential PUTs from the client.
+func (h *Handlers) reorderBags(w http.ResponseWriter, r *http.Request) {
+	id, noMatch := parseIDParam(r.PathValue("id"))
+	body, ok := decodeJSONBody(w, r)
+	if !ok {
+		return
+	}
+	rawIDs, _ := body["bagIds"].([]any)
+	if len(rawIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "bagIds required")
+		return
+	}
+	var bean Entity
+	err := h.repo.Update(func(lib *Library) error {
+		idx := -1
+		if !noMatch {
+			idx = findBeanIndex(*lib, id)
+		}
+		if idx == -1 {
+			return errNotFound
+		}
+		bean = lib.Beans[idx]
+		bags := bagsOf(bean)
+		byID := make(map[int64]Entity, len(bags))
+		for _, raw := range bags {
+			if bg, ok := raw.(Entity); ok {
+				if bid, ok := idOf(bg, "id"); ok {
+					byID[bid] = bg
+				}
+			}
+		}
+		// Reassigned sortOrder values must stay strictly above the current
+		// bag's — otherwise reordering the upcoming queue could accidentally
+		// sort one of them ahead of the bag actually being drawn from right
+		// now (see SimulateBagQueue: queue order is global, not scoped to
+		// "upcoming"). Past/exhausted bags are unaffected either way since a
+		// bag with 0 capacity left never advances the queue regardless of its
+		// position.
+		baseline := int64(0)
+		currentBagID := int64(-1)
+		if cur := resolveCurrentBagSimple(bean); cur != nil {
+			baseline = effectiveSortOrder(cur)
+			if cid, ok := idOf(cur, "id"); ok {
+				currentBagID = cid
+			}
+		}
+		// bagIds must be exactly the set of "upcoming" (non-current) bags —
+		// no duplicates, none missing. Assigning sortOrder to only a subset
+		// would leave the omitted bags' old values unchanged, which can now
+		// collide with or fall between the freshly-assigned ones (the new
+		// values are baseline+1, baseline+2, ... contiguous integers, so any
+		// stale value in that range is no longer guaranteed unique); a
+		// duplicate id in the request would just assign it a sortOrder twice,
+		// silently discarding whichever assignment came first.
+		upcoming := make(map[int64]bool, len(bags))
+		for bid := range byID {
+			if bid != currentBagID {
+				upcoming[bid] = true
+			}
+		}
+		seen := make(map[int64]bool, len(rawIDs))
+		for _, rawID := range rawIDs {
+			bagID, ok := jsParseIntLoose(rawID)
+			if !ok {
+				return &apiError{http.StatusBadRequest, "invalid bagId in bagIds"}
+			}
+			if _, found := byID[bagID]; !found {
+				return &apiError{http.StatusBadRequest, "unknown bagId in bagIds"}
+			}
+			if bagID == currentBagID {
+				return &apiError{http.StatusBadRequest, "bagIds must not include the current bag"}
+			}
+			if seen[bagID] {
+				return &apiError{http.StatusBadRequest, "duplicate bagId in bagIds"}
+			}
+			seen[bagID] = true
+		}
+		if len(seen) != len(upcoming) {
+			return &apiError{http.StatusBadRequest, "bagIds must list every upcoming bag exactly once"}
+		}
+		for i, rawID := range rawIDs {
+			bagID, _ := jsParseIntLoose(rawID)
+			byID[bagID]["sortOrder"] = baseline + int64(i+1)
+		}
+		lib.Beans[idx] = bean
+		return nil
+	})
+	if err != nil {
+		writeUpdateError(w, err)
+		return
+	}
+	h.writeEnrichedBean(w, bean)
 }
 
 // freezePortions ports POST /api/library/bean/:id/freeze-portions (#472).
@@ -137,9 +258,15 @@ func (h *Handlers) freezePortions(w http.ResponseWriter, r *http.Request) {
 		}
 		newPortion := portions[0]
 
-		last, _ := bags[len(bags)-1].(Entity)
-		fp, _ := last["frozenPortions"].([]any)
-		last["frozenPortions"] = append(fp, newPortion)
+		// Attach to the queue's current bag — the one actually being drawn
+		// from — not the array-last bag (see #sortOrder rework; those can now
+		// differ once bags are manually reordered).
+		target := resolveCurrentBagSimple(bean)
+		if target == nil {
+			target, _ = bags[len(bags)-1].(Entity)
+		}
+		fp, _ := target["frozenPortions"].([]any)
+		target["frozenPortions"] = append(fp, newPortion)
 		lib.Beans[idx] = bean
 		return nil
 	})
@@ -147,7 +274,7 @@ func (h *Handlers) freezePortions(w http.ResponseWriter, r *http.Request) {
 		writeUpdateError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, bean)
+	h.writeEnrichedBean(w, bean)
 }
 
 // findFrozenPortion locates a frozen portion by id across every bag,
@@ -225,7 +352,7 @@ func (h *Handlers) thawPortion(w http.ResponseWriter, r *http.Request) {
 		writeUpdateError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, bean)
+	h.writeEnrichedBean(w, bean)
 }
 
 // adjustFrozenPortion ports POST /api/library/bean/:id/adjust-frozen-portion (#472).
@@ -291,7 +418,7 @@ func (h *Handlers) adjustFrozenPortion(w http.ResponseWriter, r *http.Request) {
 		writeUpdateError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, bean)
+	h.writeEnrichedBean(w, bean)
 }
 
 // deleteBag ports DELETE /api/library/bean/:id/bag/:bagId.
@@ -332,7 +459,132 @@ func (h *Handlers) deleteBag(w http.ResponseWriter, r *http.Request) {
 		writeUpdateError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, bean)
+	h.writeEnrichedBean(w, bean)
+}
+
+// validateBagFloatField parses body[key] with the same parseFloat-or-null
+// idiom as floatOrNilFalsy, but — unlike bean-level price_eur's
+// sanitizePrice, which silently clamps an out-of-range/unparseable value to
+// nil — treats a present-but-non-numeric or negative value as a hard 400.
+// Bag stock_g/price_eur are only ever set by the app's own numeric inputs,
+// so a value that fails to parse here means a client bug, not a legitimate
+// free-text omission the way a roaster-entered bean price can be.
+func validateBagFloatField(body Entity, key string) (any, bool) {
+	v, present := body[key]
+	if !present || v == nil {
+		return nil, true
+	}
+	f, ok := jsParseFloat(v)
+	if !ok || f < 0 {
+		return nil, false
+	}
+	return f, true
+}
+
+// validateBagRoastDate ports updateBag's roastDate gate: a date parseable
+// as YYYY-MM-DD that's more than a day in the future almost certainly means
+// a client clock/timezone bug rather than an intentional future roast date,
+// so it's rejected outright — unlike bean-level roastDate (trimMax), which
+// never validates the string's content, just its length.
+func validateBagRoastDate(body Entity) (string, bool) {
+	roastDate := trimMax(body["roastDate"], 10)
+	if roastDate == "" {
+		return roastDate, true
+	}
+	parsed, err := time.Parse("2006-01-02", roastDate)
+	if err != nil {
+		return roastDate, true
+	}
+	if parsed.After(time.Now().AddDate(0, 0, 1)) {
+		return roastDate, false
+	}
+	return roastDate, true
+}
+
+// updateBag handles PUT /api/library/bean/{id}/bag/{bagId}: edit any bag's
+// mutable fields (roastDate, stock_g, batchNumber, price_eur). If the updated
+// bag is the active (last) bag, bean-level roastDate and stock_g are synced.
+func (h *Handlers) updateBag(w http.ResponseWriter, r *http.Request) {
+	id, idNoMatch := parseIDParam(r.PathValue("id"))
+	bagID, bagNoMatch := parseIDParam(r.PathValue("bagId"))
+	body, ok := decodeJSONBody(w, r)
+	if !ok {
+		return
+	}
+	var bean Entity
+	err := h.repo.Update(func(lib *Library) error {
+		idx := -1
+		if !idNoMatch {
+			idx = findBeanIndex(*lib, id)
+		}
+		if idx == -1 {
+			return errNotFound
+		}
+		bean = lib.Beans[idx]
+		bags := bagsOf(bean)
+		bagIdx := -1
+		if !bagNoMatch {
+			for i, raw := range bags {
+				bag, ok := raw.(Entity)
+				if !ok {
+					continue
+				}
+				if bid, ok := idOf(bag, "id"); ok && bid == bagID {
+					bagIdx = i
+					break
+				}
+			}
+		}
+		if bagIdx == -1 {
+			return &apiError{http.StatusNotFound, "bag not found"}
+		}
+		roastDate, ok := validateBagRoastDate(body)
+		if !ok {
+			return &apiError{http.StatusBadRequest, "roastDate cannot be in the future"}
+		}
+		stockG, ok := validateBagFloatField(body, "stock_g")
+		if !ok {
+			return &apiError{http.StatusBadRequest, "invalid stock_g"}
+		}
+		priceEur, ok := validateBagFloatField(body, "price_eur")
+		if !ok {
+			return &apiError{http.StatusBadRequest, "invalid price_eur"}
+		}
+		bag := bags[bagIdx].(Entity)
+		// sortOrder, unlike every other field here, is genuinely optional per
+		// request (the reorder-bags endpoint is the normal way to change it in
+		// bulk; most PUTs here — stock-adjust, mark-empty, the edit dialog —
+		// never touch it) — falling back to the bag's current value instead of
+		// full-replacing it like roastDate/stock_g/price_eur do keeps a plain
+		// "resend everything but sortOrder" caller from silently resetting the
+		// bag's queue position.
+		sortOrder, sortOK := jsParseIntLoose(body["sortOrder"])
+		if !sortOK {
+			sortOrder = effectiveSortOrder(bag)
+		}
+		bag["roastDate"] = roastDate
+		bag["stock_g"] = stockG
+		bag["batchNumber"] = trimMax(body["batchNumber"], 50)
+		bag["price_eur"] = priceEur
+		bag["sortOrder"] = sortOrder
+		bags[bagIdx] = bag
+		bean["bags"] = bags
+		// Sync bean-level fields only when the edited bag is the one SimulateBagQueue
+		// considers current — not the array-last bag, which differs after reorderBags.
+		if cur := resolveCurrentBagSimple(bean); cur != nil {
+			if cid, ok := idOf(cur, "id"); ok && cid == bagID {
+				bean["roastDate"] = bag["roastDate"]
+				bean["stock_g"] = bag["stock_g"]
+			}
+		}
+		lib.Beans[idx] = bean
+		return nil
+	})
+	if err != nil {
+		writeUpdateError(w, err)
+		return
+	}
+	h.writeEnrichedBean(w, bean)
 }
 
 // deleteBean ports POST /api/library/bean/:id/delete.
@@ -396,7 +648,7 @@ func (h *Handlers) toggleBeanActive(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, bean)
+	h.writeEnrichedBean(w, bean)
 }
 
 // knownGrind ports POST /api/library/bean/:id/known-grind (#310).
@@ -434,7 +686,7 @@ func (h *Handlers) knownGrind(w http.ResponseWriter, r *http.Request) {
 		writeUpdateError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, bean)
+	h.writeEnrichedBean(w, bean)
 }
 
 // grindSettingString ports `String(grindSetting).trim().slice(0, 50)` —
@@ -533,5 +785,27 @@ func (h *Handlers) postBeanImage(w http.ResponseWriter, r *http.Request) {
 	if oldExt != "" && oldExt != ext {
 		img.Delete(h.imageDir, id, oldExt, "")
 	}
-	writeJSON(w, http.StatusOK, bean)
+	h.writeEnrichedBean(w, bean)
+}
+
+// writeEnrichedBean attaches computed bag-queue status (consumedG/
+// remainingG/current per bag, remainingG/consumedG on the bean itself —
+// see decorateBeanStatus) before responding, so every bean-returning
+// endpoint gives the frontend a self-consistent view without it having to
+// replay doseRows client-side. allBeans is needed for the same
+// beanId-first/name-fallback dose matching ComputeBeanRemaining already
+// uses. Falls back to the undecorated bean on a shots-lookup error rather
+// than failing the whole request — the mutation itself already succeeded.
+func (h *Handlers) writeEnrichedBean(w http.ResponseWriter, bean Entity) {
+	lib, err := h.repo.GetLibrary()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, decorateBeanStatus(bean, doseRows, lib.Beans))
 }

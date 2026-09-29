@@ -3,27 +3,45 @@
 // selects on every call, and (2) wire each field's change/input listener
 // exactly once (the _lsWired guard) so re-renders don't pile up duplicate
 // listeners that would each independently write the same draft key. Same
-// fake-document harness as the sibling live.js test files.
+// fake-document harness as the sibling live.ts test files.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator ??= { language: 'en-US' };
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge the sibling live tests use).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
 
 const renderBeanSelectMock = vi.fn();
 vi.mock('../public-src/views/shots/annotation.js', () => ({
   renderGrinderField: vi.fn(),
   getGrinderFieldValue: () => '',
   handleGrinderFieldChange: () => {},
-  _renderBeanSelect: (...args) => renderBeanSelectMock(...args),
+  _renderBeanSelect: (...args: unknown[]) => renderBeanSelectMock(...args) as unknown,
   _renderBasketSelect: () => {},
   _renderPuckScreenSelect: () => {},
   _renderRecipeSelect: () => {},
 }));
 
+// The DOM stand-in these tests touch, including the listener capture the
+// _lsWired guard assertion needs.
+interface FakeElement {
+  className: string;
+  textContent: string;
+  style: Record<string, string>;
+  value: string;
+  classList: { add: () => void; remove: () => void; contains: () => boolean; toggle: () => void };
+  querySelector: () => null;
+  selectedOptions: { dataset: Record<string, string> }[];
+  addEventListener: (type: string, cb: () => void) => void;
+  removeEventListener: () => void;
+  _fire: (type: string) => void;
+}
+
 function makeFakeDocument() {
-  const registry = new Map();
-  function makeElement() {
-    const listeners = {};
+  const registry = new Map<string, FakeElement>();
+  function makeElement(): FakeElement {
+    const listeners: Record<string, () => void> = {};
     return {
       className: '', textContent: '', style: {}, value: '',
       classList: { add() {}, remove() {}, contains: () => false, toggle() {} },
@@ -35,18 +53,18 @@ function makeFakeDocument() {
     };
   }
   return {
-    getElementById: id => {
+    getElementById: (id: string): FakeElement => {
       if (!registry.has(id)) registry.set(id, makeElement());
-      return registry.get(id);
+      return registry.get(id)!;
     },
   };
 }
 
 describe('renderLiveShotSetupPanel()', () => {
-  let doc;
-  let draftStore;
-  let S;
-  let renderLiveShotSetupPanel;
+  let doc: ReturnType<typeof makeFakeDocument>;
+  let draftStore: Record<string, string>;
+  let S: (typeof import('../public-src/state/index.js'))['S'];
+  let renderLiveShotSetupPanel: (typeof import('../public-src/views/live.js'))['renderLiveShotSetupPanel'];
 
   // renderLiveShotSetupPanel wires its DOM listeners exactly once per
   // module instance (the _lsWired module-level guard). vi.resetModules()
@@ -57,13 +75,13 @@ describe('renderLiveShotSetupPanel()', () => {
   beforeEach(async () => {
     renderBeanSelectMock.mockClear();
     draftStore = {};
-    globalThis.localStorage = {
-      getItem: key => (key in draftStore ? draftStore[key] : null),
-      setItem: (key, value) => { draftStore[key] = value; },
-      removeItem: key => { delete draftStore[key]; },
+    g.localStorage = {
+      getItem: (key: string) => (key in draftStore ? draftStore[key] : null),
+      setItem: (key: string, value: string) => { draftStore[key] = value; },
+      removeItem: (key: string) => { delete draftStore[key]; },
     };
     doc = makeFakeDocument();
-    globalThis.document = doc;
+    g.document = doc;
 
     vi.resetModules();
     ({ S } = await import('../public-src/state/index.js'));
@@ -100,7 +118,7 @@ describe('renderLiveShotSetupPanel()', () => {
     grindEl.value = '5.0';
     grindEl._fire('input');
 
-    const saved = JSON.parse(draftStore['glp_live_shot_setup_1']);
+    const saved = JSON.parse(draftStore['glp_live_shot_setup_1']) as { grindSetting?: string };
     expect(saved.grindSetting).toBe('5.0');
   });
 
