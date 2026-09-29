@@ -4,11 +4,17 @@ import { describe, it, expect, beforeEach } from 'vitest';
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as test/library-roastdate-esc.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const { renderBeanList, togglePastBags } = await import('../public-src/views/library.js');
+interface LibraryModule {
+  renderBeanList: () => void;
+  togglePastBags: (beanId: number) => void;
+}
+// @ts-expect-error -- library.js is still untyped JS (#1133 split); drop this once it is TS
+const { renderBeanList, togglePastBags } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #1122: the bean card renders a "Past bags" chip (data-action=
 // "toggle-past-bags") but the click dispatcher in main.ts had no case for
@@ -16,12 +22,20 @@ const { renderBeanList, togglePastBags } = await import('../public-src/views/lib
 // per-bean expansion state and re-renders; this pins that state transition
 // (the open/closed state lives in library.js, which is what main.ts's new
 // case calls into).
-function fakeDocument() {
-  const elements = { beanListUI: { innerHTML: '' } };
+interface FakeDocument {
+  elements: Record<string, { innerHTML: string }>;
+  document: {
+    getElementById: (id: string) => { innerHTML: string } | undefined;
+    querySelectorAll: () => never[];
+  };
+}
+
+function fakeDocument(): FakeDocument {
+  const elements: Record<string, { innerHTML: string }> = { beanListUI: { innerHTML: '' } };
   return {
     elements,
     document: {
-      getElementById: id => elements[id],
+      getElementById: (id: string) => elements[id],
       querySelectorAll: () => [],
     },
   };
@@ -34,7 +48,7 @@ describe('togglePastBags (#1122 bag queue)', () => {
 
   it('renders past bags only after the toggle is flipped, and hides them again on the next flip', () => {
     const { elements, document } = fakeDocument();
-    globalThis.document = document;
+    g.document = document;
 
     S.coffeeLibrary = {
       beans: [{

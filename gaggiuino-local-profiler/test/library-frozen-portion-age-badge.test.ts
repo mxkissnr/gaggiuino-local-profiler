@@ -4,22 +4,35 @@ import { describe, it, expect, beforeEach } from 'vitest';
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as test/library-roastdate-esc.test.js).
-globalThis.localStorage ??= { getItem: () => null, setItem: () => {} };
-globalThis.navigator    ??= { language: 'en-US' };
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const { renderBeanList } = await import('../public-src/views/library.js');
+interface LibraryModule {
+  renderBeanList: () => void;
+}
+// @ts-expect-error -- library.js is still untyped JS (#1133 split); drop this once it is TS
+const { renderBeanList } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 // Roast dates below are built with todayIsoDate() (local YYYY-MM-DD, not
 // Date#toISOString()'s UTC date): roastAgeDays() reparses the stored date in
 // local time, so a UTC date string rolls a day early/late outside UTC.
 const { todayIsoDate } = await import('../public-src/utils.js');
 
-function fakeDocument() {
-  const elements = { beanListUI: { innerHTML: '' } };
+interface FakeDocument {
+  elements: Record<string, { innerHTML: string }>;
+  document: {
+    getElementById: (id: string) => { innerHTML: string } | undefined;
+    querySelectorAll: () => never[];
+  };
+}
+
+function fakeDocument(): FakeDocument {
+  const elements: Record<string, { innerHTML: string }> = { beanListUI: { innerHTML: '' } };
   return {
     elements,
     document: {
-      getElementById: id => elements[id],
+      getElementById: (id: string) => elements[id],
       querySelectorAll: () => [],
     },
   };
@@ -38,7 +51,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
 
   it('renders a fresh-badge with the paused age for a still-frozen portion', () => {
     const { elements, document } = fakeDocument();
-    globalThis.document = document;
+    g.document = document;
 
     const now = Date.now();
     S.coffeeLibrary = {
@@ -74,7 +87,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
 
   it('renders the age badge for an already-thawed portion too', () => {
     const { elements, document } = fakeDocument();
-    globalThis.document = document;
+    g.document = document;
 
     const now = Date.now();
     S.coffeeLibrary = {
