@@ -21,7 +21,7 @@ g.window ??= globalThis;
 const getLiveDataMock = vi.fn();
 vi.mock('../public-src/api/system.js', () => ({
   getLiveData: (...args: unknown[]) => getLiveDataMock(...args) as unknown,
-  getPreheat: () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) }),
+  getPreheat: () => Promise.resolve({ ok: false, status: 500, json: () => ({}) }),
 }));
 
 const annotateShotMock = vi.fn((..._args: unknown[]) => Promise.resolve({ ok: true }));
@@ -87,7 +87,7 @@ interface LiveBody {
 }
 
 function liveDataResponse(body: LiveBody) {
-  return Promise.resolve({ ok: true, json: async () => body });
+  return Promise.resolve({ ok: true, json: () => body });
 }
 
 function draftKey(machineId: number | null): string {

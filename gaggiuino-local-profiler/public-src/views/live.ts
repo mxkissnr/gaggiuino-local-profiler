@@ -137,7 +137,7 @@ function _loadLiveSetupDraft(): LiveSetupDraft {
 
 function _saveLiveSetupDraft(draft: LiveSetupDraft): void {
   try {
-    localStorage.setItem(_liveSetupStorageKey(), JSON.stringify(draft) as string);
+    localStorage.setItem(_liveSetupStorageKey(), JSON.stringify(draft));
   } catch (e) {
     // Quota exceeded / private-browsing storage restrictions — the draft
     // just doesn't persist across reloads this time; every field is still
@@ -174,9 +174,9 @@ export function renderLiveShotSetupPanel(): void {
   const beanSelect = document.getElementById('lsBean') as HTMLSelectElement | null;
   beanSelect?.addEventListener('change', () => {
     const d = _loadLiveSetupDraft();
-    d.coffee = beanSelect!.value;
-    d.beanId = beanSelect!.selectedOptions[0]?.dataset.beanId
-      ? parseInt(beanSelect!.selectedOptions[0].dataset.beanId!, 10) : null;
+    d.coffee = beanSelect.value;
+    d.beanId = beanSelect.selectedOptions[0]?.dataset.beanId
+      ? parseInt(beanSelect.selectedOptions[0].dataset.beanId, 10) : null;
     // Prefill grinder/grind setting from the bean's known-grind-setting
     // record (dial-in-wizard's own prefill source, see library.js) — only
     // when the user hasn't already typed something into those fields, so
@@ -215,13 +215,13 @@ export function renderLiveShotSetupPanel(): void {
   document.getElementById('lsBasket')?.addEventListener('change', () => {
     const d = _loadLiveSetupDraft();
     const sel = document.getElementById('lsBasket') as HTMLSelectElement;
-    d.basketId = sel.selectedOptions[0]?.dataset.basketId ? parseInt(sel.selectedOptions[0].dataset.basketId!, 10) : null;
+    d.basketId = sel.selectedOptions[0]?.dataset.basketId ? parseInt(sel.selectedOptions[0].dataset.basketId, 10) : null;
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsPuckScreen')?.addEventListener('change', () => {
     const d = _loadLiveSetupDraft();
     const sel = document.getElementById('lsPuckScreen') as HTMLSelectElement;
-    d.puckScreenId = sel.selectedOptions[0]?.dataset.puckscreenId ? parseInt(sel.selectedOptions[0].dataset.puckscreenId!, 10) : null;
+    d.puckScreenId = sel.selectedOptions[0]?.dataset.puckscreenId ? parseInt(sel.selectedOptions[0].dataset.puckscreenId, 10) : null;
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsRecipe')?.addEventListener('change', () => {
@@ -482,7 +482,7 @@ export function syncMachineIcon(msg: LiveMessage | null): void {
 }
 
 export function updatePreheatWidget(d: PreheatData): void {
-  const readyBadge  = document.getElementById('preheat-ready-badge') as HTMLElement | null;
+  const readyBadge  = document.getElementById('preheat-ready-badge');
   const warmingWrap = document.getElementById('preheat-warming-wrap') as HTMLElement;
   const barFill     = document.getElementById('preheat-bar-fill') as HTMLElement;
   const countdown   = document.getElementById('preheat-countdown') as HTMLElement;
@@ -673,8 +673,8 @@ export function handleLiveData(msg: LiveMessage): void {
   const metaEl      = document.getElementById('live-meta') as HTMLElement;
   const contentEl   = document.getElementById('live-content') as HTMLElement;
   const idleEl      = document.getElementById('live-idle') as HTMLElement;
-  const idleTitleEl = document.getElementById('liveIdleTitle') as HTMLElement | null;
-  const idleTextEl  = document.getElementById('liveIdleText') as HTMLElement | null;
+  const idleTitleEl = document.getElementById('liveIdleTitle');
+  const idleTextEl  = document.getElementById('liveIdleText');
 
   // #655: machineReachable === false is the authoritative "machine is off/
   // unreachable" signal (lib/poll.js's 1s backend poll) and must win over
