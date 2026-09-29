@@ -26,9 +26,11 @@ export function renderMilkList(): void {
   if (!milks.length) { el.innerHTML = ''; return; }
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   el.innerHTML = milks.map(m => {
-    const stock = m.stockMl ?? 0;
-    const pct = stock > 0 ? Math.min(100, stock / 20) : 0; // 2000ml = 100%
-    const cls = stock <= 0 ? 'empty' : stock < 300 ? 'low' : 'ok';
+    // The `!` only silences the optional type; it is erased at run time, so a
+    // missing stockMl compares false in every branch exactly as the untyped
+    // original did (only the displayed number falls back to 0).
+    const pct = m.stockMl! > 0 ? Math.min(100, m.stockMl! / 20) : 0; // 2000ml = 100%
+    const cls = m.stockMl! <= 0 ? 'empty' : m.stockMl! < 300 ? 'low' : 'ok';
     return `<div class="lib-milk-item">
       <div class="lib-milk-top">
         <span style="font-size:1.3rem">${esc(m.emoji || '🥛')}</span>
@@ -39,8 +41,8 @@ export function renderMilkList(): void {
         <div class="lib-milk-stock-bar ${cls}" style="width:${pct}%"></div>
       </div>
       <div class="lib-milk-meta">
-        <span><b>${stock} ml</b> ${t('lib_milk_stock').replace(' (ml)','')}</span>
-        ${stock < 300 ? `<span style="color:${stock <= 0 ? '#ef4444' : '#f59e0b'}">${stock <= 0 ? t('lib_milk_empty') : t('lib_milk_low')}</span>` : ''}
+        <span><b>${m.stockMl ?? 0} ml</b> ${t('lib_milk_stock').replace(' (ml)','')}</span>
+        ${m.stockMl! < 300 ? `<span style="color:${m.stockMl! <= 0 ? '#ef4444' : '#f59e0b'}">${m.stockMl! <= 0 ? t('lib_milk_empty') : t('lib_milk_low')}</span>` : ''}
       </div>
       <div class="lib-milk-restock-row">
         <input class="lib-milk-restock-input" type="number" id="milkRestock_${m.id}" placeholder="ml" min="0" step="50">

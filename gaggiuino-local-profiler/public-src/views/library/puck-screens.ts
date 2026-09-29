@@ -107,7 +107,7 @@ export async function savePuckScreen(): Promise<void> {
 }
 
 export async function uploadPuckScreenImage(id: number, input: HTMLInputElement): Promise<void> {
-  const file = input.files?.[0];
+  const file = input.files![0];
   if (!file) return;
   const blob = await openImageCropEditor(file, { shape: 'square' });
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
