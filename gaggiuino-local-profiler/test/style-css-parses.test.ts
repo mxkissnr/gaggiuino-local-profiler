@@ -22,21 +22,26 @@ describe('public-src/style.css', () => {
   it('has no comment that closes itself early', () => {
     // Independent of the parser, and it points straight at the offending
     // line instead of at the far-away place where parsing finally gave up.
+    // The scan touches every character, so the first stray is recorded and
+    // asserted once: calling expect() per character is slow enough on this
+    // ~220 kB stylesheet to blow the default test timeout.
     const lines = readFileSync(CSS_PATH, 'utf-8').split('\n');
     let open = false;
+    let strayLine = 0;
     lines.forEach((line, n) => {
       let i = 0;
       while (i < line.length - 1) {
         const two = line.slice(i, i + 2);
         if (!open && two === '/*') { open = true; i += 2; continue; }
         if (open && two === '*/') { open = false; i += 2; continue; }
-        expect(
-          !(!open && two === '*/'),
-          `stray "*/" at style.css:${n + 1} — a comment closed earlier than intended`,
-        ).toBe(true);
+        if (!open && two === '*/' && strayLine === 0) strayLine = n + 1;
         i += 1;
       }
     });
+    expect(
+      strayLine,
+      `stray "*/" at style.css:${strayLine} — a comment closed earlier than intended`,
+    ).toBe(0);
     expect(open, 'style.css ends inside an unclosed comment').toBe(false);
   });
 });
