@@ -245,10 +245,12 @@ function _applyUrlImport(data: UrlImportData, variant: ImportVariant | null): vo
 }
 
 function openVariantPicker(variants: ImportVariant[], onPick: (variant: ImportVariant) => void): void {
+  const [firstVariant] = variants;
+  if (!firstVariant) return;
   const row  = document.getElementById('variantPickerRow');
   const list = document.getElementById('variantPickerList');
   const confirmBtn = document.getElementById('variantPickerConfirm');
-  if (!row || !list || !confirmBtn) { onPick(variants[0]); return; }
+  if (!row || !list || !confirmBtn) { onPick(firstVariant); return; }
   list.innerHTML = joinHtml(variants.map((v, i) => html`
     <label class="lib-variant-picker-option">
       <input type="radio" name="variantPick" value="${esc(i)}" ${i === 0 ? html`checked` : html``}>
@@ -259,7 +261,7 @@ function openVariantPicker(variants: ImportVariant[], onPick: (variant: ImportVa
     const idx = Number(list.querySelector<HTMLInputElement>('input[name="variantPick"]:checked')?.value || 0);
     row.style.display = 'none';
     confirmBtn.removeEventListener('click', handler);
-    onPick(variants[idx]);
+    onPick(variants[idx] ?? firstVariant);
   };
   confirmBtn.addEventListener('click', handler);
 }
@@ -376,8 +378,9 @@ export async function _runScanLoop(): Promise<void> {
     if (!S._scanActive) break;
     try {
       const codes = await timerRegistry.get('_scanDetector')!.detect(video);
-      if (!codes.length) continue;
-      const raw = codes[0].rawValue;
+      const [firstCode] = codes;
+      if (!firstCode) continue;
+      const raw = firstCode.rawValue;
       // eslint-disable-next-line require-atomic-updates -- this loop-exit flag is idempotent; closeScanModal() setting it concurrently to the same false value is harmless
       S._scanActive = false;
       await _handleScanResult(raw, status);

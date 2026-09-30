@@ -25,7 +25,7 @@ export const TRANSLATIONS: Record<string, unknown> = { de, en, it, fr, es, nl };
 // not just German ones. Falls back to English instead, matching the same
 // fallback fix applied to S.currentLang itself (state.js) and t() (i18n.js).
 export function localeFor(lang: string): string {
-  return LOCALE_MAP[lang] || LOCALE_MAP.en;
+  return LOCALE_MAP[lang] || LOCALE_MAP.en || 'en-US';
 }
 
 // ── Coffee origin countries (ISO 3166-1 alpha-2 + numeric for topojson) ───
@@ -246,8 +246,7 @@ export const phasePlugin: Plugin<ChartType, PhasePluginOptions> = {
     ctx.save();
     ctx.font = '600 10px Figtree, sans-serif';
 
-    for (let i = 0; i < gmPhases.length; i++) {
-      const ph  = gmPhases[i];
+    for (const [i, ph] of gmPhases.entries()) {
       const px0 = Math.min(Math.max(x.getPixelForValue(ph.t0), left), right);
       const px1 = Math.min(Math.max(x.getPixelForValue(ph.t1), left), right);
       const w   = px1 - px0;
