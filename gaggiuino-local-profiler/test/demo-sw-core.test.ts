@@ -4,6 +4,12 @@ import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { fixtureKey as recorderFixtureKey } from '../scripts/demo-fixtures.mjs';
 
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`missing element at index ${i}`);
+  return v;
+}
+
 // Part of #1193 (S2b): the pure routing surface of demo/sw/sw-core.js. The
 // script is a classic service-worker script, so it is loaded in a fresh
 // context with the globals it actually uses rather than imported.
@@ -179,7 +185,7 @@ describe('sw-core shiftTimestamps (#1193)', () => {
         const out = glp.shiftTimestamps(input, DAY_MS) as typeof input;
         expect(out.createdAt).toBe(1_700_000_000_000 + DAY_MS);
         expect(out.trashedAt).toBe(1_700_000_000_000 + DAY_MS);
-        expect(out.machines[0].updatedAt).toBe(1_700_000_000_000 + DAY_MS);
+        expect(at(out.machines, 0).updatedAt).toBe(1_700_000_000_000 + DAY_MS);
     });
 
     it('shifts epoch-second values as whole seconds', () => {
@@ -231,10 +237,10 @@ describe('sw-core shiftTimestamps (#1193)', () => {
     it('recurses through nested arrays and objects without mutating the input', () => {
         const input = { shots: [{ timestamp: 1_700_000_000, annotation: { roastDate: '2024-01-15' } }] };
         const out = glp.shiftTimestamps(input, DAY_MS) as typeof input;
-        expect(out.shots[0].timestamp).toBe(1_700_000_000 + 86_400);
-        expect(out.shots[0].annotation.roastDate).toBe('2024-01-16');
-        expect(input.shots[0].timestamp).toBe(1_700_000_000);
-        expect(input.shots[0].annotation.roastDate).toBe('2024-01-15');
+        expect(at(out.shots, 0).timestamp).toBe(1_700_000_000 + 86_400);
+        expect(at(out.shots, 0).annotation.roastDate).toBe('2024-01-16');
+        expect(at(input.shots, 0).timestamp).toBe(1_700_000_000);
+        expect(at(input.shots, 0).annotation.roastDate).toBe('2024-01-15');
         expect(out).not.toBe(input);
     });
 

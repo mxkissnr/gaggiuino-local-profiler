@@ -22,7 +22,7 @@ const { renderBeanList, togglePastBags } = (await import('../public-src/views/li
 // (the open/closed state lives in library.js, which is what main.ts's new
 // case calls into).
 interface FakeDocument {
-  elements: Record<string, { innerHTML: string }>;
+  elements: { beanListUI: { innerHTML: string } };
   document: {
     getElementById: (id: string) => { innerHTML: string } | undefined;
     querySelectorAll: () => never[];
@@ -30,11 +30,12 @@ interface FakeDocument {
 }
 
 function fakeDocument(): FakeDocument {
-  const elements: Record<string, { innerHTML: string }> = { beanListUI: { innerHTML: '' } };
+  const elements = { beanListUI: { innerHTML: '' } };
+  const registry = new Map<string, { innerHTML: string }>([['beanListUI', elements.beanListUI]]);
   return {
     elements,
     document: {
-      getElementById: (id: string) => elements[id],
+      getElementById: (id: string) => registry.get(id),
       querySelectorAll: () => [],
     },
   };
