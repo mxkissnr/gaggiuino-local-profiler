@@ -183,6 +183,7 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', resolve
     pinchStartDist = null;
     if (pointers.size === 1) {
       const [p] = pointers.values();
+      if (p === undefined) return;
       panLast = { x: p.x, y: p.y };
     } else {
       panLast = null;
