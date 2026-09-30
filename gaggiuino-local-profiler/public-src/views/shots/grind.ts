@@ -74,8 +74,8 @@ export function _miniShotChart(shot: GrindShot): Html {
   const d  = getRawCurve(shot.id) || shot.datapoints || {};
   const tm = d.timeInShot || [];
   const series = [
-    { vals: (d.pressure  || []).map((v, i) => ({ x: tm[i] / 10, y: v / 10 })).filter(p => p.y > 0), color: '#60a5fa' },
-    { vals: (d.pumpFlow  || []).map((v, i) => ({ x: tm[i] / 10, y: v / 10 })).filter(p => p.y >= 0), color: '#fb923c' },
+    { vals: (d.pressure  || []).map((v, i) => ({ x: (tm[i] ?? NaN) / 10, y: v / 10 })).filter(p => p.y > 0), color: '#60a5fa' },
+    { vals: (d.pumpFlow  || []).map((v, i) => ({ x: (tm[i] ?? NaN) / 10, y: v / 10 })).filter(p => p.y >= 0), color: '#fb923c' },
   ].filter(s => s.vals.length >= 3);
   if (!series.length) return html`<div class="comp-thumb-no-data">–</div>`;
 
@@ -100,7 +100,8 @@ export function _miniShotChart(shot: GrindShot): Html {
 export function _parseGrindNum(s: string | number | null | undefined): number | null {
   if (!s) return null;
   const m = String(s).match(/(\d+(?:[.,]\d+)?)/);
-  return m ? parseFloat(m[1].replace(',', '.')) : null;
+  const captured = m?.[1];
+  return captured !== undefined ? parseFloat(captured.replace(',', '.')) : null;
 }
 
 // ── Grind advice ──────────────────────────────────────────────────────────
@@ -177,8 +178,8 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
     const g   = _currentGrindNum(s.annotation?.grinder, s.annotation?.grindSetting, s.timestamp) as number;
     const sc  = calcShotScore(s) as number;
     const key = Math.round(g * 2) / 2;
-    if (!byGrind[key]) byGrind[key] = [];
-    byGrind[key].push(sc);
+    const bucket = (byGrind[key] ??= []);
+    bucket.push(sc);
   });
 
   let bestSetting: number | null = null, bestAvg = -1;
@@ -241,8 +242,8 @@ export function calcBestGrindCombosForBean(
     const grinder = (s.annotation?.grinder as string).trim();
     const grind    = Math.round((_currentGrindNum(grinder, s.annotation?.grindSetting, s.timestamp) as number) * 2) / 2;
     const key      = `${grinder.toLowerCase()}${grind}`;
-    if (!byCombo[key]) byCombo[key] = { grinder, grindSetting: grind, scores: [] };
-    byCombo[key].scores.push(calcShotScore(s) as number);
+    const combo    = (byCombo[key] ??= { grinder, grindSetting: grind, scores: [] });
+    combo.scores.push(calcShotScore(s) as number);
   });
 
   const combos = Object.values(byCombo)
@@ -302,12 +303,16 @@ export function suggestGrindDoseForBean(
 
   if (!grindSetting) {
     const combos = calcBestGrindCombosForBean(name, allShots, beanId);
-    if (combos?.length) {
-      grinder = combos[0].grinder;
-      grindSetting = String(combos[0].grindSetting);
-    } else if (bean?.knownGrindSettings?.length) {
-      grinder = bean.knownGrindSettings[0].grinder;
-      grindSetting = bean.knownGrindSettings[0].grindSetting;
+    const bestCombo = combos?.[0];
+    if (bestCombo) {
+      grinder = bestCombo.grinder;
+      grindSetting = String(bestCombo.grindSetting);
+    } else {
+      const known = bean?.knownGrindSettings?.[0];
+      if (known) {
+        grinder = known.grinder;
+        grindSetting = known.grindSetting;
+      }
     }
   }
 

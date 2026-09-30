@@ -147,8 +147,9 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', resolve
     if (pointers.size === 1) {
       panLast = { x: e.clientX, y: e.clientY };
     } else if (pointers.size === 2) {
-      const pts = [...pointers.values()];
-      pinchStartDist = dist(pts[0], pts[1]);
+      const [a, b] = [...pointers.values()];
+      if (a === undefined || b === undefined) return;
+      pinchStartDist = dist(a, b);
       pinchStartZoom = zoom;
       panLast = null;
     }
@@ -168,11 +169,12 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', resolve
       applyClamp();
       draw();
     } else if (pointers.size === 2 && pinchStartDist) {
-      const pts = [...pointers.values()];
-      const d = dist(pts[0], pts[1]);
-      const midClient = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      const [a, b] = [...pointers.values()];
+      if (a === undefined || b === undefined) return;
+      const d = dist(a, b);
+      const midClient = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       const focus = toCanvasPoint(midClient.x, midClient.y);
-        setZoom((pinchStartZoom ?? zoom) * (d / pinchStartDist), focus.x, focus.y);
+      setZoom((pinchStartZoom ?? zoom) * (d / pinchStartDist), focus.x, focus.y);
     }
   });
 

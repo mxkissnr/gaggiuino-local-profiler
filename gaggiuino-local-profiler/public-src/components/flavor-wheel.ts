@@ -40,11 +40,17 @@ const WHEEL_ROOT_ID = '__flavor_wheel_root__'; // virtual root name (see Sunburs
 // Modal background the muted/unmatched fills blend toward — read once per
 // render from the actual modal box so it tracks the active dark/light theme
 // instead of a hardcoded guess.
+function _rgbChannels(m: RegExpExecArray | null): [string, string, string] | null {
+  if (!m) return null;
+  const [, r, g, b] = m;
+  return r !== undefined && g !== undefined && b !== undefined ? [r, g, b] : null;
+}
+
 function rgbStringToHex(rgbStr: string | null | undefined, fallback: string): string {
-  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgbStr || '');
-  if (!m) return fallback;
+  const ch = _rgbChannels(/rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgbStr || ''));
+  if (!ch) return fallback;
   const hex = (n: string): string => Number(n).toString(16).padStart(2, '0');
-  return `#${hex(m[1])}${hex(m[2])}${hex(m[3])}`;
+  return `#${hex(ch[0])}${hex(ch[1])}${hex(ch[2])}`;
 }
 
 function resolveModalBgHex(container: Element | null | undefined): string {
@@ -56,13 +62,11 @@ function resolveModalBgHex(container: Element | null | undefined): string {
 // Alpha-blends `hex` toward `bgHex` by `amount` (0 = unchanged, 1 = fully bg).
 function muteHex(hex: string, bgHex: string, amount: number): string {
   const c = (h: string): RegExpExecArray | null => /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h || '');
-  const m1 = c(hex);
-  const m2 = c(bgHex);
-  if (!m1 || !m2) return hex;
-  const [, r1, g1, b1] = m1;
-  const [, r2, g2, b2] = m2;
+  const ch1 = _rgbChannels(c(hex));
+  const ch2 = _rgbChannels(c(bgHex));
+  if (!ch1 || !ch2) return hex;
   const mix = (a: string, b: string): string => Math.round(parseInt(a, 16) * (1 - amount) + parseInt(b, 16) * amount).toString(16).padStart(2, '0');
-  return `#${mix(r1, r2)}${mix(g1, g2)}${mix(b1, b2)}`;
+  return `#${mix(ch1[0], ch2[0])}${mix(ch1[1], ch2[1])}${mix(ch1[2], ch2[2])}`;
 }
 
 function toSunburstData(node: FlavorNode, depth: number, lang: FlavorLang, bgHex: string): SunburstEntry {

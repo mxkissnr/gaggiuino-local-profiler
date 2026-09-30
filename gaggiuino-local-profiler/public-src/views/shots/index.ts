@@ -271,7 +271,7 @@ export async function loadData(): Promise<void> {
     const savedPrimary = parseInt(localStorage.getItem('glp_primaryShotId') as string);
     S.primaryShotId = (savedPrimary && S.shots.find(s => s.id === savedPrimary))
       ? savedPrimary
-      : S.shots[S.shots.length - 1].id;
+      : (S.shots.at(-1)?.id ?? null);
     if (savedCompare && S.shots.find(s => s.id === savedCompare) && savedCompare !== S.primaryShotId) {
       S.compareShotId = savedCompare;
     }
@@ -800,9 +800,9 @@ export async function updateView(): Promise<void> {
   renderAnnotationPanel(shotA);
 
   // Build main chart datasets
-  const maxTimeA    = dA.rawTimes.length > 0 ? dA.rawTimes[dA.rawTimes.length - 1] : 0;
-  const maxTimeB    = dB && dB.rawTimes.length > 0 ? dB.rawTimes[dB.rawTimes.length - 1] : 0;
-  const maxTimePrev = dPrev && dPrev.rawTimes.length > 0 ? dPrev.rawTimes[dPrev.rawTimes.length - 1] : 0;
+  const maxTimeA    = dA.rawTimes.at(-1) ?? 0;
+  const maxTimeB    = dB ? (dB.rawTimes.at(-1) ?? 0) : 0;
+  const maxTimePrev = dPrev ? (dPrev.rawTimes.at(-1) ?? 0) : 0;
 
   const sfx = shotB ? ' (A)' : '';
   const datasets = [
@@ -872,7 +872,7 @@ export async function updateView(): Promise<void> {
             tooltip: {
               callbacks: {
                 title: (ctx: { parsed: { x: number } }[]) => {
-                  const time = ctx[0].parsed.x;
+                  const time = ctx[0]?.parsed.x ?? 0;
                   const ph = phasesOpt.gaggimatePhases?.find(p => time >= p.t0 && time <= p.t1);
                   const timeLabel = t('chart_time', formatTimeLabel(time));
                   return ph?.name ? `${ph.name} — ${timeLabel}` : timeLabel;
@@ -979,7 +979,7 @@ export async function exportShot(): Promise<void> {
   const tcl = (arr: unknown[] | null | undefined): string => arr?.length ? `{${arr.map(v => ((v as number) / 10).toFixed(2)).join(' ')}}` : '{}';
 
   const finalWeight = d.shotWeight || d.weight || [];
-  const lastW = finalWeight.length ? (finalWeight[finalWeight.length - 1] / 10).toFixed(1) : '0.0';
+  const lastW = finalWeight.length ? ((finalWeight.at(-1) ?? 0) / 10).toFixed(1) : '0.0';
   const date  = new Date(shot.timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19);
   const basketName     = _equipmentName(_libCollection('baskets'), ann.basketId);
   const puckScreenName = _equipmentName(_libCollection('puckScreens'), ann.puckScreenId);
@@ -1038,13 +1038,13 @@ export async function exportProfile(): Promise<void> {
 
   const times  = rawT.map(v => v / 10);
   const tPress = rawTP.map(v => v / 10);
-  const totalMs = Math.round(times[times.length - 1] * 1000);
+  const totalMs = Math.round((times.at(-1) ?? NaN) * 1000);
   const ann     = shot.annotation || {};
 
   const PREINF_THRESHOLD = 6;
   let preinfEndIdx = tPress.findIndex(p => p >= PREINF_THRESHOLD);
   if (preinfEndIdx < 0) preinfEndIdx = 0;
-  const preinfMs = preinfEndIdx > 0 ? Math.round(times[preinfEndIdx] * 1000) : 0;
+  const preinfMs = preinfEndIdx > 0 ? Math.round((times[preinfEndIdx] ?? NaN) * 1000) : 0;
 
   const phases = [];
   if (preinfMs > 500) {
