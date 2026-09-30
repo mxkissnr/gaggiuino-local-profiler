@@ -163,15 +163,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            drinkType?: string | null;
-                            coffee?: string | null;
-                            beanId?: number | null;
-                            basketId?: number | null;
-                            puckScreenId?: number | null;
-                            grinder?: string;
-                            dose?: number | null;
-                        };
+                        "application/json": components["schemas"]["ShotDefaults"];
                     };
                 };
             };
@@ -187,15 +179,7 @@ export interface paths {
             };
             requestBody?: {
                 content: {
-                    "application/json": {
-                        drinkType?: string | null;
-                        coffee?: string | null;
-                        beanId?: number | null;
-                        basketId?: number | null;
-                        puckScreenId?: number | null;
-                        grinder?: string;
-                        dose?: number | null;
-                    };
+                    "application/json": components["schemas"]["ShotDefaults"];
                 };
             };
             responses: {
@@ -3829,12 +3813,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": (components["schemas"]["Milk"] & {
-                            /** @description ml requested by pending/accepted orders for this milk */
-                            demand?: number;
-                            /** @description max(0, stockMl - demand) */
-                            remaining?: number;
-                        })[];
+                        "application/json": components["schemas"]["MilkStock"][];
                     };
                 };
             };
@@ -3872,7 +3851,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["QueueEta"];
+                    };
                 };
             };
         };
@@ -3913,26 +3894,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            total?: number;
-                            customers?: {
-                                name?: string;
-                                count?: number;
-                                favItem?: string | null;
-                                /** @description Unix ms */
-                                lastAt?: number;
-                            }[];
-                            mostPopular?: {
-                                item?: string;
-                                count?: number;
-                            } | null;
-                            /** @description Only present once orders reference more than one machine. */
-                            byMachine?: {
-                                machineId?: number;
-                                machineName?: string | null;
-                                count?: number;
-                            }[] | null;
-                        };
+                        "application/json": components["schemas"]["OrderStats"];
                     };
                 };
             };
@@ -4198,7 +4160,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": string[];
+                        "application/json": components["schemas"]["NotifyService"][];
                     };
                 };
             };
@@ -4234,13 +4196,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            mapping?: components["schemas"]["NotifyMapping"];
-                            /** @description Map of haUserId → customer display name (derived from order history) */
-                            customers?: {
-                                [key: string]: string;
-                            };
-                        };
+                        "application/json": components["schemas"]["NotifyMappingView"];
                     };
                 };
             };
@@ -7235,7 +7191,7 @@ export interface components {
             haUserId?: string;
             /** @description Menu item name */
             item: string;
-            /** @description Selected variant, if the menu item has any */
+            /** @description Selected variant */
             variant: string | null;
             note: string;
             notifyService: string | null;
@@ -7253,7 +7209,7 @@ export interface components {
             /** @description Optional machine name/slug target as supplied by the client (#317/glp-order-card #29) */
             machine: string | null;
             /** @description machine's registry id, resolved server-side from `machine` (#326) — always set on orders placed since #326, falls back to the default machine when `machine` is unset/unmatched */
-            machineId: number;
+            machineId: number | null;
             /** @description Library bean id for stable order-to-bean attribution (#563, glp-order-card #35). Resolved server-side against the library's actual beans — a stale/unknown id becomes null. */
             beanId: number | null;
         };
@@ -7490,7 +7446,7 @@ export interface components {
         NewBagInput: {
             /** Format: date */
             roastDate?: string;
-            stock_g?: number;
+            stock_g?: number | null;
             batchNumber?: string;
         };
         BagUpdateInput: {
@@ -7523,6 +7479,75 @@ export interface components {
             frozenAt?: number;
             /** @description Set absolutely, re-clamped to [0, portionCount] */
             remainingCount?: number;
+        };
+        /** @description GET/POST /api/shots/defaults (#654) — per-install values pre-filled into a new shot's annotation panel. Mirrors go/internal/shots/defaults.go's DEFAULTS-merged blob: all seven keys are always present, nil values stay null and grinder stays a string. */
+        ShotDefaults: {
+            drinkType: string | null;
+            coffee: string | null;
+            beanId: number | null;
+            basketId: number | null;
+            puckScreenId: number | null;
+            grinder: string;
+            dose: number | null;
+        };
+        /** @description One entry of GET /api/orders/queue-eta's `positions` map. */
+        QueuePosition: {
+            position: number;
+            /** @description Minutes, clamped to 1..60 */
+            suggestedEta: number;
+        };
+        /** @description GET /api/orders/queue-eta — rolling prep-time estimate plus a queue position for every pending order (go/internal/orders ComputeQueueEta). */
+        QueueEta: {
+            acceptedRemaining: number;
+            pendingCount: number;
+            prepTime: number;
+            positions: {
+                [key: string]: components["schemas"]["QueuePosition"];
+            };
+        };
+        /** @description One row of GET /api/orders/milk-stock: a library milk entity plus the two order-derived fields the go/internal/orders handler adds. */
+        MilkStock: components["schemas"]["Milk"] & {
+            /** @description ml requested by pending/accepted orders for this milk */
+            demand: number;
+            /** @description max(0, stockMl - demand) */
+            remaining: number;
+        };
+        /** @description One row of GET /api/orders/stats's `customers`. */
+        OrderCustomerStat: {
+            name: string;
+            count: number;
+            favItem: string | null;
+            /** @description Unix ms */
+            lastAt: number;
+        };
+        /** @description GET /api/orders/stats — lifetime completed-order rollups (go/internal/orders' stats handler). */
+        OrderStats: {
+            total: number;
+            customers: components["schemas"]["OrderCustomerStat"][];
+            mostPopular: {
+                item?: string;
+                count?: number;
+            } | null;
+            /** @description Only present once orders reference more than one machine. */
+            byMachine: {
+                machineId?: number;
+                machineName?: string | null;
+                count?: number;
+            }[] | null;
+        };
+        /** @description One HA notify service (go/internal/ha's NotifyService). */
+        NotifyService: {
+            /** @example notify.mobile_app_phone */
+            id: string;
+            name: string;
+        };
+        /** @description GET /api/orders/notify-mapping — per-HA-user mapping plus the known customer names. */
+        NotifyMappingView: {
+            mapping: components["schemas"]["NotifyMapping"];
+            /** @description Map of haUserId → customer display name (derived from order history) */
+            customers: {
+                [key: string]: string;
+            };
         };
     };
     responses: never;

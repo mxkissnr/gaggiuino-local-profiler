@@ -1,4 +1,4 @@
-import type { Basket, Milk, PuckScreen, Recipe, NewBagInput } from '../api/types.js';
+import type { Basket, Milk, PuckScreen, Recipe } from '../api/types.js';
 import type { BeanRow } from './library/bags.js';
 import { S } from '../state/index.js';
 import type { ShotMeta } from '../state/index.js';
@@ -530,8 +530,7 @@ export async function saveNewBag(id: number): Promise<void> {
   const roastDate   = _field(`newBagRoastDate${id}`)?.value.trim() || '';
   const stock_g     = parseFloat(_field(`newBagStock${id}`)?.value) || null;
   const batchNumber = _field(`newBagBatchNumber${id}`)?.value.trim() || '';
-  // stock_g is nullable server-side; NewBagInput under-documents that. TODO(#1103)
-  const saved = await libraryApi.addBeanBag(id, { roastDate, stock_g, batchNumber } as NewBagInput);
+  const saved = await libraryApi.addBeanBag(id, { roastDate, stock_g, batchNumber });
   if (!saved) return;
   const idx = _beanList().findIndex(b => b.id === id);
   if (idx !== -1) _beanList()[idx] = saved;

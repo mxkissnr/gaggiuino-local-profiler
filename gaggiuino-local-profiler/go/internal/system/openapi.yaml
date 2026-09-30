@@ -746,7 +746,7 @@ components:
       type: object
       properties:
         roastDate:   { type: string, format: date }
-        stock_g:     { type: number }
+        stock_g:     { type: number, nullable: true }
         batchNumber: { type: string, maxLength: 50 }
 
     BagUpdateInput:
@@ -790,6 +790,117 @@ components:
         portionWeight_g: { type: number, minimum: 0.1, maximum: 2000 }
         frozenAt:        { type: integer, description: Epoch ms }
         remainingCount:  { type: integer, minimum: 0, description: "Set absolutely, re-clamped to [0, portionCount]" }
+
+
+    # ── Shots (defaults) ───────────────────────────────────────────────────
+
+    ShotDefaults:
+      type: object
+      required: [drinkType, coffee, beanId, basketId, puckScreenId, grinder, dose]
+      description: >
+        GET/POST /api/shots/defaults (#654) — per-install values pre-filled
+        into a new shot's annotation panel. Mirrors
+        go/internal/shots/defaults.go's DEFAULTS-merged blob: all seven keys
+        are always present, nil values stay null and grinder stays a string.
+      properties:
+        drinkType:    { type: string, nullable: true }
+        coffee:       { type: string, nullable: true }
+        beanId:       { type: integer, nullable: true }
+        basketId:     { type: integer, nullable: true }
+        puckScreenId: { type: integer, nullable: true }
+        grinder:      { type: string }
+        dose:         { type: number, nullable: true }
+
+    # ── Orders (derived, request/response) ─────────────────────────────────
+
+    QueuePosition:
+      type: object
+      required: [position, suggestedEta]
+      description: One entry of GET /api/orders/queue-eta's `positions` map.
+      properties:
+        position:     { type: integer }
+        suggestedEta: { type: integer, description: "Minutes, clamped to 1..60" }
+
+    QueueEta:
+      type: object
+      required: [acceptedRemaining, pendingCount, prepTime, positions]
+      description: >
+        GET /api/orders/queue-eta — rolling prep-time estimate plus a queue
+        position for every pending order (go/internal/orders ComputeQueueEta).
+      properties:
+        acceptedRemaining: { type: number }
+        pendingCount:      { type: integer }
+        prepTime:          { type: number }
+        positions:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/QueuePosition' }
+
+    MilkStock:
+      description: >
+        One row of GET /api/orders/milk-stock: a library milk entity plus the
+        two order-derived fields the go/internal/orders handler adds.
+      allOf:
+        - $ref: '#/components/schemas/Milk'
+        - type: object
+          required: [demand, remaining]
+          properties:
+            demand:    { type: number, description: "ml requested by pending/accepted orders for this milk" }
+            remaining: { type: number, description: "max(0, stockMl - demand)" }
+
+    OrderCustomerStat:
+      type: object
+      required: [name, count, favItem, lastAt]
+      description: One row of GET /api/orders/stats's `customers`.
+      properties:
+        name:    { type: string }
+        count:   { type: integer }
+        favItem: { type: string, nullable: true }
+        lastAt:  { type: integer, description: Unix ms }
+
+    OrderStats:
+      type: object
+      required: [total, customers, mostPopular, byMachine]
+      description: GET /api/orders/stats — lifetime completed-order rollups (go/internal/orders' stats handler).
+      properties:
+        total: { type: integer }
+        customers:
+          type: array
+          items: { $ref: '#/components/schemas/OrderCustomerStat' }
+        mostPopular:
+          type: object
+          nullable: true
+          properties:
+            item:  { type: string }
+            count: { type: integer }
+        byMachine:
+          type: array
+          nullable: true
+          description: Only present once orders reference more than one machine.
+          items:
+            type: object
+            properties:
+              machineId:   { type: integer }
+              machineName: { type: string, nullable: true }
+              count:       { type: integer }
+
+    NotifyService:
+      type: object
+      required: [id, name]
+      description: One HA notify service (go/internal/ha's NotifyService).
+      properties:
+        id:   { type: string, example: "notify.mobile_app_phone" }
+        name: { type: string }
+
+    NotifyMappingView:
+      type: object
+      required: [mapping, customers]
+      description: GET /api/orders/notify-mapping — per-HA-user mapping plus the known customer names.
+      properties:
+        mapping: { $ref: '#/components/schemas/NotifyMapping' }
+        customers:
+          type: object
+          description: Map of haUserId → customer display name (derived from order history)
+          additionalProperties: { type: string }
 
 paths:
 
@@ -888,32 +999,14 @@ paths:
           description: Defaults object
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  drinkType:    { type: string, nullable: true }
-                  coffee:       { type: string, nullable: true }
-                  beanId:       { type: integer, nullable: true }
-                  basketId:     { type: integer, nullable: true }
-                  puckScreenId: { type: integer, nullable: true }
-                  grinder:      { type: string }
-                  dose:         { type: number, nullable: true }
+              schema: { $ref: '#/components/schemas/ShotDefaults' }
     post:
       tags: [Shots]
       summary: Save per-install shot defaults
       requestBody:
         content:
           application/json:
-            schema:
-              type: object
-              properties:
-                drinkType:    { type: string, nullable: true }
-                coffee:       { type: string, nullable: true }
-                beanId:       { type: integer, nullable: true }
-                basketId:     { type: integer, nullable: true }
-                puckScreenId: { type: integer, nullable: true }
-                grinder:      { type: string }
-                dose:         { type: number, nullable: true }
+            schema: { $ref: '#/components/schemas/ShotDefaults' }
       responses:
         "200": { description: Saved defaults }
         "400": { description: Validation error }
@@ -2101,15 +2194,7 @@ paths:
           description: Array of milks with demand/remaining
           content:
             application/json:
-              schema:
-                type: array
-                items:
-                  allOf:
-                    - $ref: '#/components/schemas/Milk'
-                    - type: object
-                      properties:
-                        demand:    { type: number, description: "ml requested by pending/accepted orders for this milk" }
-                        remaining: { type: number, description: "max(0, stockMl - demand)" }
+              schema: { type: array, items: { $ref: '#/components/schemas/MilkStock' } }
 
   /api/orders/queue-eta:
     get:
@@ -2118,7 +2203,11 @@ paths:
       parameters:
         - { name: machine, in: query, schema: { type: integer }, description: "Scope to one machine's queue by registry id (#326)" }
       responses:
-        "200": { description: Queue ETA object (shape defined by OrderService.computeQueueEta) }
+        "200":
+          description: Queue ETA object (shape defined by OrderService.computeQueueEta)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueEta' }
 
   /api/orders/stats:
     get:
@@ -2134,35 +2223,7 @@ paths:
           description: Stats object
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  total: { type: integer }
-                  customers:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:    { type: string }
-                        count:   { type: integer }
-                        favItem: { type: string, nullable: true }
-                        lastAt:  { type: integer, description: Unix ms }
-                  mostPopular:
-                    type: object
-                    nullable: true
-                    properties:
-                      item:  { type: string }
-                      count: { type: integer }
-                  byMachine:
-                    type: array
-                    nullable: true
-                    description: Only present once orders reference more than one machine.
-                    items:
-                      type: object
-                      properties:
-                        machineId:   { type: integer }
-                        machineName: { type: string, nullable: true }
-                        count:       { type: integer }
+              schema: { $ref: '#/components/schemas/OrderStats' }
 
   /api/orders/menu:
     get:
@@ -2271,7 +2332,7 @@ paths:
           description: Array of service names
           content:
             application/json:
-              schema: { type: array, items: { type: string }, example: ["notify.mobile_app_phone"] }
+              schema: { type: array, items: { $ref: '#/components/schemas/NotifyService' } }
 
   /api/orders/notify-mapping:
     get:
@@ -2282,15 +2343,7 @@ paths:
           description: Mapping + known customers
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  mapping:
-                    $ref: '#/components/schemas/NotifyMapping'
-                  customers:
-                    type: object
-                    description: Map of haUserId → customer display name (derived from order history)
-                    additionalProperties: { type: string }
+              schema: { $ref: '#/components/schemas/NotifyMappingView' }
     post:
       tags: [Orders]
       summary: Update the haUserId → notify service mapping
