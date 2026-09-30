@@ -1,5 +1,5 @@
 import { S }                              from '../../state/index.js';
-import type { LibraryRow }                from '../../state/index.js';
+import type { LibraryRow, ShotMeta } from '../../state/index.js';
 import { t, tHtml }                       from '../../i18n.js';
 import { getMenu }                        from '../../api/system.js';
 import { deductMilk, adjustFrozenPortion, listMilks } from '../../api/library.js';
@@ -53,7 +53,11 @@ interface AnnotationShot {
 
 // S.shots is typed metadata-only (ShotMeta); this view reads the annotation
 // fields through this alias, same pattern as analytics.ts's _shots().
-function _shots(): AnnotationShot[] { return S.shots; }
+interface AnnotationShotRow extends ShotMeta {
+  image?: string | null;
+  annotation?: AnnotationData | null | undefined;
+}
+function _shots(): AnnotationShotRow[] { return S.shots; }
 
 // What _buildAnnotationPayload() posts. Matches api/types.ts's ShotAnnotation
 // except for the nullable fields the hand-maintained type (see its header) and
