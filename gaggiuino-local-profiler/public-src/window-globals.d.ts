@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 // Ambient declarations for the cross-module entry points main.js wires onto
 // `window` (kept off direct imports to avoid circular deps). i18n.ts declares
 // the translation/view entry points in its own `declare global` block; these
