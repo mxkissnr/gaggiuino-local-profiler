@@ -790,7 +790,11 @@ export function closeMachineForm(): void {
 // colour-input handlers assign straight from possibly-absent DOM values). Drop
 // the absent keys so the form value satisfies the request schema without a
 // cast; JSON.stringify already omitted undefined values, so the body is
-// unchanged.
+// unchanged. openapi.yaml and the generated schema.gen.ts are intentionally
+// left as-is: their theme object already matches the Go Theme's omitempty shape
+// (three plain-optional strings) and openapi-typescript emits optional
+// properties without an explicit `| undefined`, so the spec cannot express the
+// form's values; the mismatch is resolved here, at the request boundary.
 function themeForSave(theme: ThemeSelection | null): NonNullable<MachineSaveInput['theme']> | null {
   if (!theme) return null;
   const out: NonNullable<MachineSaveInput['theme']> = {};
