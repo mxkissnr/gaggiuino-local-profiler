@@ -627,7 +627,7 @@ export function updateDegassing(val: string | null | undefined): void {
 
 // ── Shot photo ────────────────────────────────────────────────────────────
 
-function _renderShotPhoto(shot: { id: number; image?: string | null }): void {
+function _renderShotPhoto(shot: { id: number; image?: string | null | undefined }): void {
   const thumb  = document.getElementById('annPhotoThumb') as HTMLImageElement;
   const remove = document.getElementById('annPhotoRemoveBtn') as HTMLElement;
   if (!thumb || !remove) return;

@@ -2,7 +2,7 @@
 // the Library view, split out of views/library.js. Pure move + type port
 // (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
-import { t, tHtml } from '../../i18n.js';
+import { tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, todayIsoDate, html, joinHtml } from '../../utils.js';
 import type { Html } from '../../utils.js';
