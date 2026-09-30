@@ -211,6 +211,49 @@ export async function shareOrDownloadBlob(
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ── Install-id sync / setup-wizard completed flag (#750) ──────────────────
+// glp_setup_wizard_completed lives in the browser, not the app's DB — an HA
+// Supervisor-level "uninstall + delete add-on data" wipes /data/glp.db
+// server-side but leaves the browser's localStorage untouched, so a user who
+// completed the wizard once and later wipes the add-on's data for a genuine
+// fresh start never sees it again; the stale flag silently suppresses it
+// forever. installId (lib/db.js's ensureInstallId(), served on every
+// GET /api/status) is a random id generated once per DB file — a mismatch
+// against the locally-remembered one means "this isn't the DB this browser
+// last saw", so the stale completed flag gets cleared before
+// shouldOpenSetupWizard() runs. A normal user whose DB file is untouched
+// keeps a stable installId, so this is a no-op for them on every call.
+//
+// #757: comparison must be unconditional (`stored !== installId`, not
+// `stored && stored !== installId`) -- glp_install_id never existed in any
+// browser before this feature shipped, so `stored` is always null on the
+// very first status poll after deploying it. The old guard treated that as
+// "nothing to compare, skip" and just recorded the current installId as the
+// new baseline -- a no-op for exactly the case this was built for (a browser
+// with an already-stale completed flag from before this fix existed, hitting
+// a genuine data wipe). A missing stored value is never equal to a real
+// installId string, so the unconditional comparison clears it here too; this
+// stays safe for an already-configured install because
+// shouldOpenSetupWizard()'s own host check keeps the wizard closed
+// regardless of the completed flag once a real host exists.
+//
+// Lives here rather than in views/setup-wizard.js so components/status.js can
+// call it from updateStatus() without importing the wizard back: the wizard
+// already imports components/machines-settings.js, which imports
+// components/status.js, so that edge closed an import cycle (#1102).
+// views/setup-wizard.js re-exports it for its existing importers.
+export const COMPLETED_KEY = 'glp_setup_wizard_completed';
+export const INSTALL_ID_KEY = 'glp_install_id';
+
+export function syncInstallId(installId?: string | null): void {
+  if (!installId) return;
+  const stored = localStorage.getItem(INSTALL_ID_KEY);
+  if (stored !== installId) {
+    try { localStorage.removeItem(COMPLETED_KEY); } catch { /* ignore */ }
+  }
+  try { localStorage.setItem(INSTALL_ID_KEY, installId); } catch { /* ignore */ }
+}
+
 // ── Math helpers ──────────────────────────────────────────────────────────
 export function avg(arr: number[] | null | undefined): number | null {
   if (!arr?.length) return null;

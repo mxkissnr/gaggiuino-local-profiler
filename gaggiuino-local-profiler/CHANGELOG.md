@@ -36,6 +36,7 @@
 - **The API description now documents every response the app uses, checked by tests against the real server.**
 - **The API description now distinguishes the MQTT settings request body from its redacted response, and marks the machine and order fields that are actually optional.** Part of #1103
 - **The analytics screens now build their markup through the type-checked HTML builder, so every bean, grinder, profile and machine name they display is escaped.** Part of #1104
+- **The machine settings, status and setup-wizard modules no longer import each other in a circle, with no behavior change.** Part of #1102
 
 ### Changed
 - **The whole frontend, including the remaining views and the whole test suite, is now type-checked with the stricter indexed-access rule enabled project-wide.** Part of #1105
