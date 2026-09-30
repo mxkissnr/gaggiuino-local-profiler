@@ -16,6 +16,7 @@
 // dark backgrounds regardless of theme.
 import { resolveTheme } from './shared/theme-presets.js';
 import type { ThemeStops } from './shared/theme-presets.js';
+import type { Html } from './utils.js';
 
 export type MachineIconKind = 'gaggiuino' | 'gaggimate';
 
@@ -387,7 +388,7 @@ export const MACHINE_ICON_MODES: Readonly<Record<MachineIconMode, readonly strin
  *   el.innerHTML = machineIconAnimatedSvg(machine.theme, machine.type);
  *   setMachineIconMode(el, 'hot');
  */
-export function machineIconAnimatedSvg(theme: unknown, kind: unknown = 'gaggiuino'): string {
+export function machineIconAnimatedSvg(theme: unknown, kind: unknown = 'gaggiuino'): Html {
     const mate = kind === 'gaggimate';
     const idBase = nextAnimId();
     const { a, b } = stopsFor(theme);
@@ -486,7 +487,7 @@ export function machineIconAnimatedSvg(theme: unknown, kind: unknown = 'gaggiuin
         <path d="M50 94.4 C50 99 50.2 104 50.1 111" stroke="#7a4a22" stroke-width="1.7" stroke-linecap="round" fill="none"/>
         <path d="M50 94.4 C50 99 50.2 104 50.1 111" stroke="#a9713f" stroke-width=".7" stroke-linecap="round" fill="none" opacity=".8"/>
       </g>
-    </svg>`;
+    </svg>` as Html; // interpolations: module-internal ids/paths, theme colours pre-validated by stopsFor() (HEX_RE or CSS var)
 }
 
 // Applies one of MACHINE_ICON_MODES to the wrapper element (see

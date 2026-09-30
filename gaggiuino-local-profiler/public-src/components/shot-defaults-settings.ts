@@ -7,6 +7,7 @@
 // loadShotDefaults()) in sync after a save.
 import { saveShotDefaults } from '../api/shots.js';
 import { S } from '../state/index.js';
+import type { LibraryRow } from '../state/index.js';
 import { t } from '../i18n.js';
 import { esc } from '../utils.js';
 import { loadShotDefaults, loadDrinkMenu } from '../views/shots/annotation.js';
@@ -17,17 +18,18 @@ import type { ShotDefaults } from '../api/types.js';
 // state/index.ts types these rows loosely as Record<string, unknown>; the
 // lookups below read the same menu/bean/basket/puck-screen entries
 // views/shots/annotation.js and views/library.js populate.
-interface DrinkRow { id: string; name: string; emoji?: string }
-interface CatalogRow { id: number; name: string }
-interface CatalogLibrary { beans?: CatalogRow[]; baskets?: CatalogRow[]; puckScreens?: CatalogRow[] }
+type DrinkRow = LibraryRow & { id: string; name: string; emoji?: string };
+type CatalogRow = LibraryRow & { id: number; name: string };
+interface CatalogLibrary { beans?: LibraryRow[]; baskets?: LibraryRow[]; puckScreens?: LibraryRow[] }
+function _catalog(rows: LibraryRow[] | undefined): CatalogRow[] { return (rows || []) as CatalogRow[]; }
 
 export function renderShotDefaultsSettingsCard(): void {
   const d = (S.shotDefaults || {}) as Partial<ShotDefaults>;
-  const lib = (S.coffeeLibrary || {}) as unknown as CatalogLibrary;
+  const lib: CatalogLibrary = S.coffeeLibrary || {};
 
   const drinkSelect = document.getElementById('sdDrinkType');
   if (drinkSelect) {
-    const options = (S.drinkMenu || []) as unknown as DrinkRow[];
+    const options = (S.drinkMenu || []) as DrinkRow[];
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
     drinkSelect.innerHTML = `<option value="">${esc(t('sd_none'))}</option>` +
       options.map(m => `<option value="${esc(m.id)}"${d.drinkType === m.id ? ' selected' : ''}>${esc(m.emoji)} ${esc(m.name)}</option>`).join('');
@@ -35,7 +37,7 @@ export function renderShotDefaultsSettingsCard(): void {
 
   const coffeeSelect = document.getElementById('sdCoffee');
   if (coffeeSelect) {
-    const beans = lib.beans || [];
+    const beans = _catalog(lib.beans);
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
     coffeeSelect.innerHTML = `<option value="">${esc(t('sd_none'))}</option>` +
       beans.map(b => `<option value="${esc(b.name)}" data-bean-id="${b.id}"${d.coffee === b.name ? ' selected' : ''}>${esc(b.name)}</option>`).join('');
@@ -43,7 +45,7 @@ export function renderShotDefaultsSettingsCard(): void {
 
   const basketSelect = document.getElementById('sdBasket');
   if (basketSelect) {
-    const baskets = lib.baskets || [];
+    const baskets = _catalog(lib.baskets);
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
     basketSelect.innerHTML = `<option value="">${esc(t('ann_basket_none'))}</option>` +
       baskets.map(b => `<option value="${b.id}"${d.basketId === b.id ? ' selected' : ''}>${esc(b.name)}</option>`).join('');
@@ -51,7 +53,7 @@ export function renderShotDefaultsSettingsCard(): void {
 
   const puckSelect = document.getElementById('sdPuckScreen');
   if (puckSelect) {
-    const puckScreens = lib.puckScreens || [];
+    const puckScreens = _catalog(lib.puckScreens);
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
     puckSelect.innerHTML = `<option value="">${esc(t('ann_puckscreen_none'))}</option>` +
       puckScreens.map(p => `<option value="${p.id}"${d.puckScreenId === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('');
@@ -98,7 +100,7 @@ export async function saveShotDefaultsSettings(): Promise<void> {
   };
 
   const saved = await saveShotDefaults(body).catch(() => null);
-  if (saved) S.shotDefaults = saved as unknown as Record<string, unknown>;
+  if (saved) S.shotDefaults = { ...saved };
 
   const btn = document.getElementById('shotDefaultsSaveBtn');
   if (btn) {

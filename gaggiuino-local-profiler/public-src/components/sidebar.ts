@@ -1,7 +1,8 @@
 import { S } from '../state/index.js';
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
 import { localeFor } from '../constants.js';
-import { esc, scoreClass, formatTimeLabel, groupShotsByDay } from '../utils.js';
+import { esc, html, joinHtml, scoreClass, formatTimeLabel, groupShotsByDay } from '../utils.js';
+import type { Html } from '../utils.js';
 import { STAR_ICON_SVG , SNOWFLAKE_ICON_SVG, CLOSE_ICON_SVG} from '../icons.js';
 import { resolveBeanForAnnotation } from '../views/shots/utils.js';
 import type { ShotMeta } from '../state/index.js';
@@ -36,9 +37,13 @@ interface SidebarShot extends ShotMeta {
 // node because a dataset can't hold objects.
 const _pendingMonthShots = new Map<string, SidebarShot[]>();
 
+function starRepeat(n: number): Html {
+  return joinHtml(Array.from({ length: n }, () => STAR_ICON_SVG));
+}
+
 export function renderSidebar(): void {
   const el = document.getElementById('shots') as HTMLElement;
-  el.innerHTML = '';
+  el.innerHTML = html``;
   _pendingMonthShots.clear(); // #969: repopulated below for whatever stays collapsed this render
   updateFlapCounter(S.shots.length);
 
@@ -119,28 +124,28 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
     // metadata row — no curve fetch, list rows never carry datapoints.
     const sc   = window.calcShotScore ? window.calcShotScore(shot) : null;
     const scoreHtml = sc !== null && sc !== undefined
-      ? `<span class="sidebar-score ${scoreClass(sc)}">${sc}</span>`
-      : '';
+      ? html`<span class="sidebar-score ${esc(scoreClass(sc))}">${esc(sc)}</span>`
+      : html``;
 
       const dose = parseFloat(String(ann.dose ?? ''));
     const durLabel = shot.duration ? formatTimeLabel(shot.duration / 10) : null;
     const line2 = [ann.coffee || null, dose ? `${dose.toFixed(1)} g` : null].filter(Boolean).join(' · ') || durLabel || '';
     // #502: which frozen-portion batch (if any) this shot's dose came from —
     // an explicit annotation-panel choice, shown at a glance in the list too.
-    const frozenBadge = ann.frozenPortionId ? `<span class="shot-frozen-badge" title="${esc(t('ann_frozen_portion'))}">${SNOWFLAKE_ICON_SVG}</span>` : '';
+    const frozenBadge = ann.frozenPortionId ? html`<span class="shot-frozen-badge" title="${esc(t('ann_frozen_portion'))}">${SNOWFLAKE_ICON_SVG}</span>` : html``;
 
       const rating = parseInt(String(ann.rating ?? '')) || 0;
     const starsHtml = rating > 0
-      ? `<span class="stars">${STAR_ICON_SVG.repeat(rating)}<span class="off">${STAR_ICON_SVG.repeat(5 - rating)}</span></span>`
-      : '';
+      ? html`<span class="stars">${starRepeat(rating)}<span class="off">${starRepeat(5 - rating)}</span></span>`
+      : html``;
     const timeLabel = date.toLocaleTimeString(localeFor(S.currentLang), { hour: '2-digit', minute: '2-digit' });
     // #838: grind setting moves into its own compact badge next to the score
     // (line 1) so it's visible at a glance without opening the shot — the
     // grinder name itself is relegated to the badge's title tooltip, since
     // it changes far less often than the grind setting does.
     const grindBadgeHtml = ann.grindSetting
-      ? `<span class="sidebar-grind-badge"${ann.grinder ? ` title="${esc(ann.grinder)}"` : ''}>${esc(ann.grindSetting)}</span>`
-      : '';
+      ? html`<span class="sidebar-grind-badge"${ann.grinder ? html` title="${esc(ann.grinder)}"` : html``}>${esc(ann.grindSetting)}</span>`
+      : html``;
 
     // Multi-machine badge (#325): only shown in "all machines" mode with
     // more than one machine registered — a machine-scoped list already
@@ -148,13 +153,13 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
     // be redundant noise there.
     const machineRec = S.machines.find(m => m.id === shot.machineId) as { name?: string } | undefined;
     const machineBadge = ((S.machines?.length ?? 0) > 1 && S.activeMachineId === 'all' && shot.machineId != null)
-      ? `<span class="shot-machine-badge">${esc(machineRec?.name || '?')}</span>` : '';
+      ? html`<span class="shot-machine-badge">${esc(machineRec?.name || '?')}</span>` : html``;
     // #816: the bean-photo/avatar circle (.shot-thumb) is gone — the
     // prototype's rail-item mockup is text-only, no image or colored circle
     // (Border-Diät extends to photos, not just boxes). The photo itself is
     // still viewable from the annotation panel (shots/annotation.js), which
     // is a separate, unrelated element.
-    divShot.innerHTML = `
+    divShot.innerHTML = html`
       <div class="shot-row">
         <div class="shot-text">
           <div class="shot-line1">
@@ -192,13 +197,13 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
 
     const btnCmp = document.createElement('button');
     btnCmp.className = 'compare-btn';
-    btnCmp.innerHTML = '⇄';
+    btnCmp.innerHTML = html`⇄`;
     btnCmp.title = t('btn_compare_tooltip');
     btnCmp.onclick = e => { e.stopPropagation(); toggleCompare(shot.id); };
 
     const btnDel = document.createElement('button');
     btnDel.className = 'delete-btn';
-    btnDel.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>';
+    btnDel.innerHTML = html`<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
     btnDel.title = t('btn_delete_tooltip');
     btnDel.onclick = e => { e.stopPropagation(); if (window.trashShot) window.trashShot(shot.id); };
 
@@ -268,10 +273,9 @@ export function clearBeanFilter(): void {
 function updateBeanFilterIndicator(): void {
   const el = document.getElementById('beanFilterIndicator');
   if (!el) return;
-  if (!S.beanFilter) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  if (!S.beanFilter) { el.style.display = 'none'; el.innerHTML = html``; return; }
   el.style.display = '';
-  el.innerHTML = `<span class="bean-filter-label">${t('bean_filter_active', esc(S.beanFilter.name))}</span>` +
-    `<button type="button" class="bean-filter-clear" data-action="clear-bean-filter" title="${t('bean_filter_clear')}">${CLOSE_ICON_SVG}</button>`;
+  el.innerHTML = html`<span class="bean-filter-label">${tHtml('bean_filter_active', esc(S.beanFilter.name))}</span><button type="button" class="bean-filter-clear" data-action="clear-bean-filter" title="${tHtml('bean_filter_clear')}">${CLOSE_ICON_SVG}</button>`;
 }
 
 function shotMatchesBeanFilter(shot: SidebarShot): boolean {
@@ -361,13 +365,13 @@ export function setSortMode(mode: string): void {
     S.sortAsc = false;
   }
   const arrow = S.sortAsc ? ' ↑' : ' ↓';
-  const labels: Record<string, string> = { newest: t('sort_newest'), score: t('sort_score'), rating: `${STAR_ICON_SVG} ${t('sort_rating')}`, duration: t('sort_duration') };
+  const labels: Record<string, Html> = { newest: tHtml('sort_newest'), score: tHtml('sort_score'), rating: html`${STAR_ICON_SVG} ${tHtml('sort_rating')}`, duration: tHtml('sort_duration') };
   document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
   const map: Record<string, string> = { newest: 'sortNewest', score: 'sortScore', rating: 'sortRating', duration: 'sortDur' };
   const activeBtn = document.getElementById(map[mode]);
   if (activeBtn) {
     activeBtn.classList.add('active');
-    activeBtn.innerHTML = (labels[mode] || mode) + arrow;
+    activeBtn.innerHTML = html`${labels[mode] || esc(mode)}${esc(arrow)}`;
   }
   renderSidebar();
 }
