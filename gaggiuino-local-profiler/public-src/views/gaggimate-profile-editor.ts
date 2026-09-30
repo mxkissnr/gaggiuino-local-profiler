@@ -160,7 +160,8 @@ function _set(updates: Partial<GmProfile>): void {
 
 function _setPhase(idx: number, updates: Partial<GmPhase>): void {
   const phases = [...(_profile!.phases || [])];
-  phases[idx] = { ...phases[idx], ...updates };
+  const prev = phases[idx] ?? {};
+  phases[idx] = { ...prev, ...updates };
   _profile = { ..._profile, phases };
   _render();
 }
@@ -250,14 +251,16 @@ function _preparePumpSeries(phases: GmPhase[], target: string): { x: number; y: 
   if (!phases.length) return [];
   const data: { x: number; y: number; target: boolean }[] = [];
   let time = 0, phaseTime = 0, phaseIndex = 0;
-  let currentPhase = phases[phaseIndex];
+  const firstPhase = phases[phaseIndex];
+  if (!firstPhase) return [];
   let currentPressure: number, currentFlow: number;
   let phaseStartFlow = 0, phaseStartPressure = 0;
-  let effectiveFlow = (currentPhase.pump as GmPump | undefined)?.flow || 0;
-  let effectivePressure = (currentPhase.pump as GmPump | undefined)?.pressure || 0;
+  let effectiveFlow = (firstPhase.pump as GmPump | undefined)?.flow || 0;
+  let effectivePressure = (firstPhase.pump as GmPump | undefined)?.pressure || 0;
 
   do {
-    currentPhase = phases[phaseIndex];
+    const currentPhase = phases[phaseIndex];
+    if (!currentPhase) break;
     const dur = _phaseDur(currentPhase);
     const alpha = _applyEasing(
       phaseTime / (currentPhase.transition?.duration || dur),
@@ -283,9 +286,11 @@ function _preparePumpSeries(phases: GmPhase[], target: string): { x: number; y: 
         phaseStartFlow = currentFlow;
         phaseStartPressure = currentPressure;
         const nextPhase = phases[phaseIndex];
-        const nextPump = nextPhase.pump as GmPump | undefined;
-        effectiveFlow = nextPump?.flow === -1 ? currentFlow : (nextPump?.flow || 0);
-        effectivePressure = nextPump?.pressure === -1 ? currentPressure : (nextPump?.pressure || 0);
+        if (nextPhase) {
+          const nextPump = nextPhase.pump as GmPump | undefined;
+          effectiveFlow = nextPump?.flow === -1 ? currentFlow : (nextPump?.flow || 0);
+          effectivePressure = nextPump?.pressure === -1 ? currentPressure : (nextPump?.pressure || 0);
+        }
       }
     }
   } while (phaseIndex < phases.length);
@@ -299,7 +304,8 @@ function _buildChartData() {
   const isPro = _profile!.type === 'pro';
 
   const gmPhases = buildGmPhaseRanges(phases);
-  const totalTime = gmPhases.length ? gmPhases[gmPhases.length - 1].t1 : 0;
+  const lastGmPhase = gmPhases.at(-1);
+  const totalTime = lastGmPhase ? lastGmPhase.t1 : 0;
 
   if (isPro) {
     const pressureData = _preparePumpSeries(phases, 'pressure');
@@ -427,7 +433,7 @@ function _initChart(): void {
           tooltip: {
             callbacks: {
               title: (ctx: { parsed: { x: number } }[]) => {
-                const time = ctx[0].parsed.x;
+                const time = ctx[0]?.parsed.x ?? 0;
                 const ph = gmPhases.find(p => time >= p.t0 && time <= p.t1);
                 return ph?.name ? `${ph.name} — ${time.toFixed(1)}s` : `${time.toFixed(1)}s`;
               },
@@ -738,7 +744,8 @@ function _renderProPhase(ph: GmPhase, i: number): Html {
 
 function _renderProTarget(tg: GmTarget, phaseIdx: number, targetIdx: number): Html {
   const types = _targetTypes();
-  const tt = types.find(o => o.type === tg.type && o.operator === (tg.operator || 'gte')) || types[0];
+  const tt = types.find(o => o.type === tg.type && o.operator === (tg.operator || 'gte')) ?? types[0];
+  if (!tt) return html``;
   return html`
     <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem">
       <span style="flex:1;font-size:.9em">${esc(tt.label)}</span>
@@ -783,7 +790,7 @@ function _bindInputs(): void {
     const action = el.dataset.action;
     if (!action) return;
     const idx = Number(el.dataset.idx);
-    const ph = () => (_profile!.phases || [])[idx];
+    const ph = (): GmPhase => (_profile!.phases || [])[idx] ?? {};
     const num = () => parseFloat(el.value) || 0;
 
     switch (action) {
@@ -807,7 +814,8 @@ function _bindInputs(): void {
       case 'gm-pro-target-value': {
         const tidx = Number(el.dataset.tidx);
         const targets = [...(ph().targets || [])];
-        targets[tidx] = { ...targets[tidx], value: num() };
+        const prevTarget = targets[tidx] ?? {};
+        targets[tidx] = { ...prevTarget, value: num() };
         _setPhase(idx, { targets });
         break;
       }
@@ -825,7 +833,7 @@ function _bind(id: string, evt: string, fn: (e: Event) => void): void {
 export function handleGmEditorAction(action: string, el: HTMLElement): void {
   if (!_profile) return;
   const idx = Number(el.dataset.idx ?? 0);
-  const ph = () => (_profile!.phases || [])[idx];
+  const ph = (): GmPhase => (_profile!.phases || [])[idx] ?? {};
   const existingPower = (): number => {
     const pump = ph().pump;
     return typeof pump === 'number' && pump > 0 ? pump : 100;
