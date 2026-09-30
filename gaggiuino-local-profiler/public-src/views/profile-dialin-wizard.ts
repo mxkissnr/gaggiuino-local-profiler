@@ -54,7 +54,7 @@ interface DialinProfile {
   [key: string]: unknown;
 }
 
-interface ProfileDialinSession {
+interface ProfileDialinSession extends Record<string, unknown> {
   id: number;
   startedAt: number;
   profileId: string | number;
@@ -74,7 +74,7 @@ const POLL_MS = 3000;
 let _pollTimer: ReturnType<typeof setInterval> | null = null;
 
 function _session(): ProfileDialinSession | null {
-  return S.profileDialinSession as unknown as ProfileDialinSession | null;
+  return S.profileDialinSession as ProfileDialinSession | null;
 }
 
 function _shots(): ProfileDialinShotRow[] {

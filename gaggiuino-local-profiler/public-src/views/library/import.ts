@@ -2,7 +2,7 @@
 // Library view, split out of views/library.js. Pure move + type port
 // (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
-import type { BarcodeDetectorLike } from '../../state/index.js';
+import type { AppState, BarcodeDetectorLike } from '../../state/index.js';
 import * as timerRegistry from '../../state/timers.js';
 import { t } from '../../i18n.js';
 import { importFromUrl as apiImportFromUrl, getImportSettings, saveImportSettings } from '../../api/system.js';
@@ -14,11 +14,7 @@ import * as libraryView from '../library.js';
 
 // Circular with library.js (it re-exports this module): the bean-form helpers
 // are only ever called at run time, never read at module load.
-const library = libraryView as unknown as {
-  openBeanForm: () => void;
-  setFormOrigins: (bean: { origins?: { code: string; percent?: number }[]; origin?: string }) => void;
-  setFormFlavors: (flavors: string[]) => void;
-};
+const library = libraryView;
 
 // BarcodeDetector is not in TypeScript's DOM lib yet (see BarcodeDetectorLike
 // in state/index.ts); this only types the constructor GLP calls.
@@ -83,16 +79,17 @@ interface ImportSettings {
   customShopifyDomains: string[];
 }
 
-// state/index.ts's AppState doesn't declare these three scratch fields (the
-// bean form's save path reads them back off S); this section owns them,
-// reached through one typed view of S (same pattern as views/library/baskets.ts).
-interface ImportState {
+// state/index.ts's AppState carries the url-import source fields but not the
+// three scratch fields the bean form's save path reads back off S; this
+// section owns those, reached through one typed view of S (same pattern as
+// views/library/baskets.ts).
+type ImportState = Pick<AppState, '_urlImportSource' | '_urlImportedAt' | '_urlImportSourceUrl'> & {
   _urlImportImageUrl?: string | null;
   _urlImportExtraRecipes?: ExtraRecipe[] | null;
   _importSettings?: ImportSettings;
-}
+};
 function _state(): ImportState {
-  return S as unknown as ImportState;
+  return S;
 }
 
 // Bean-form fields are <input>/<select>/<textarea>; only the shared .value

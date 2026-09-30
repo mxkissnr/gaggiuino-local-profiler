@@ -148,10 +148,10 @@ export function shouldShowFreshBadge(stock_g: number | null | undefined, remaini
 // ── Brew ratio ────────────────────────────────────────────────────────────
 // Final weight / annotated dose; null when either side is missing or absurd.
 export function calcBrewRatio(
-  shot: { annotation?: { dose?: string | null } | null } | null | undefined,
+  shot: { annotation?: { dose?: string | number | null } | null } | null | undefined,
   data: { weight?: { y: number }[] } | null | undefined,
 ): number | null {
-  const dose = parseFloat(shot?.annotation?.dose ?? '');
+  const dose = parseFloat(String(shot?.annotation?.dose ?? ''));
   if (!dose || dose < 5 || dose > 30) return null;
   const w = data?.weight;
   const yieldG = w?.length ? w.at(-1)?.y ?? null : null;

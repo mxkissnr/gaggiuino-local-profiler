@@ -1,5 +1,5 @@
 import { apiFetch } from './fetch.js';
-import type { HydratedShot, ShotAnnotation, ShotDefaults } from './types.js';
+import type { HydratedShot, ShotAnnotationInput, ShotDefaults } from './types.js';
 
 // Typed client for the `shots` domain (go/internal/shots — every route that
 // package registers: /shots.json plus /api/shots*). Package A3b of the TS
@@ -66,7 +66,7 @@ export function shotImageUrl(id: number): string {
 }
 
 /** POST /api/shots/{id}/annotate — upsert the shot's annotation. */
-export function annotateShot(id: number, annotation: ShotAnnotation): Promise<Response> {
+export function annotateShot(id: number, annotation: ShotAnnotationInput): Promise<Response> {
   return apiFetch(`api/shots/${id}/annotate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
