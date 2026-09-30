@@ -171,7 +171,10 @@ export async function deleteGrinderZeroPointEntry(grinderId: number, since: numb
   const updated = _asRow(result);
   const grinders = _grinders();
   const idx = grinders.findIndex(g => g.id === grinderId);
-  if (idx !== -1) grinders[idx] = { ...updated, wear: grinders[idx].wear };
+  if (idx !== -1) {
+    const existing = grinders[idx];
+    if (existing) grinders[idx] = { ...updated, wear: existing.wear };
+  }
   renderGrinderList();
   // Refresh history in open form if editing the same grinder.
   if (S.grinderEditId === grinderId) {
@@ -212,7 +215,10 @@ export async function saveGrinder(): Promise<void> {
     const idx = grinders.findIndex(g => g.id === S.grinderEditId);
     // The PUT response doesn't recompute wear stats — keep the existing ones
     // until the next full library load rather than dropping the card.
-    if (idx !== -1) grinders[idx] = { ...saved, wear: grinders[idx].wear };
+    if (idx !== -1) {
+      const existing = grinders[idx];
+      if (existing) grinders[idx] = { ...saved, wear: existing.wear };
+    }
   } else {
     grinders.push(saved);
   }

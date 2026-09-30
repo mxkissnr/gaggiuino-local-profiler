@@ -175,8 +175,8 @@ export function renderLiveShotSetupPanel(): void {
   beanSelect?.addEventListener('change', () => {
     const d = _loadLiveSetupDraft();
     d.coffee = beanSelect.value;
-    d.beanId = beanSelect.selectedOptions[0]?.dataset.beanId
-      ? parseInt(beanSelect.selectedOptions[0].dataset.beanId, 10) : null;
+    const opt = beanSelect.selectedOptions[0];
+    d.beanId = opt?.dataset.beanId ? parseInt(opt.dataset.beanId, 10) : null;
     // Prefill grinder/grind setting from the bean's known-grind-setting
     // record (dial-in-wizard's own prefill source, see library.js) — only
     // when the user hasn't already typed something into those fields, so
@@ -215,13 +215,15 @@ export function renderLiveShotSetupPanel(): void {
   document.getElementById('lsBasket')?.addEventListener('change', () => {
     const d = _loadLiveSetupDraft();
     const sel = document.getElementById('lsBasket') as HTMLSelectElement;
-    d.basketId = sel.selectedOptions[0]?.dataset.basketId ? parseInt(sel.selectedOptions[0].dataset.basketId, 10) : null;
+    const opt = sel.selectedOptions[0];
+    d.basketId = opt?.dataset.basketId ? parseInt(opt.dataset.basketId, 10) : null;
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsPuckScreen')?.addEventListener('change', () => {
     const d = _loadLiveSetupDraft();
     const sel = document.getElementById('lsPuckScreen') as HTMLSelectElement;
-    d.puckScreenId = sel.selectedOptions[0]?.dataset.puckscreenId ? parseInt(sel.selectedOptions[0].dataset.puckscreenId, 10) : null;
+    const opt = sel.selectedOptions[0];
+    d.puckScreenId = opt?.dataset.puckscreenId ? parseInt(opt.dataset.puckscreenId, 10) : null;
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsRecipe')?.addEventListener('change', () => {
@@ -269,7 +271,8 @@ async function _applyLiveSetupToShot(shotId: number): Promise<void> {
     const r = await annotateShot(shotId, payload);
     if (r.ok) {
       const idx = S.shots.findIndex(s => s.id === shotId);
-      if (idx !== -1) S.shots[idx].annotation = { ...(S.shots[idx].annotation as Record<string, unknown>), ...payload };
+      const shotRow = idx !== -1 ? S.shots[idx] : undefined;
+      if (shotRow) shotRow.annotation = { ...(shotRow.annotation as Record<string, unknown>), ...payload };
     }
   } catch (e) {
     // Best-effort — the shot still exists, just unannotated — but log it
@@ -312,7 +315,7 @@ export function initLiveChart(): void {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { labels: { color: C.text, font: { family: 'Figtree' } } },
-        tooltip: { callbacks: { title: (ctx: { parsed: { x: number } }[]) => t('chart_time', formatTimeLabel(ctx[0].parsed.x)) } }
+        tooltip: { callbacks: { title: (ctx: { parsed: { x: number } }[]) => t('chart_time', formatTimeLabel(ctx[0]?.parsed.x ?? 0)) } }
       },
       scales: {
         x:  { type: 'linear', min: 0, max: 60, ticks: { color: C.tick, callback: (v: number) => formatTimeLabel(v), stepSize: 5 }, grid: { color: C.grid } },
@@ -337,10 +340,12 @@ async function _applyRefShotById(shotId: number): Promise<void> {
 function _applyRefDatasets(d: ShotSeries): void {
   const liveChart = chartRegistry.get('liveChart') as Chart<'line'> | null;
   if (!liveChart) return;
-  liveChart.data.datasets[4].data = d.pressure;
-  liveChart.data.datasets[5].data = d.flow;
-  liveChart.data.datasets[6].data = d.weight;
-  liveChart.data.datasets[7].data = d.temp;
+  const datasets = liveChart.data.datasets;
+  const ds4 = datasets[4], ds5 = datasets[5], ds6 = datasets[6], ds7 = datasets[7];
+  if (ds4) ds4.data = d.pressure;
+  if (ds5) ds5.data = d.flow;
+  if (ds6) ds6.data = d.weight;
+  if (ds7) ds7.data = d.temp;
   liveChart.update('none');
 }
 
@@ -392,7 +397,10 @@ export function clearReferenceShot(): void {
   S.refShotId = null;
   const liveChart = chartRegistry.get('liveChart') as Chart<'line'> | null;
   if (liveChart) {
-    [4, 5, 6, 7].forEach(i => { liveChart.data.datasets[i].data = []; });
+    [4, 5, 6, 7].forEach(i => {
+      const ds = liveChart.data.datasets[i];
+      if (ds) ds.data = [];
+    });
     liveChart.update('none');
   }
   const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
@@ -758,9 +766,11 @@ export function handleLiveData(msg: LiveMessage): void {
     idleEl.style.display     = 'none';
 
     if (modeLastIdx >= 0) {
-      const elapsed  = modeTimes[modeLastIdx] / 10;
-      const pressure = modeDp.pressure?.[modeLastIdx]    != null ? modeDp.pressure[modeLastIdx] / 10    : null;
-      const temp     = modeDp.temperature?.[modeLastIdx] != null ? modeDp.temperature[modeLastIdx] / 10 : null;
+      const elapsed = (modeTimes[modeLastIdx] ?? 0) / 10;
+      const modePressure = modeDp.pressure?.[modeLastIdx];
+      const modeTemp     = modeDp.temperature?.[modeLastIdx];
+      const pressure = modePressure != null ? modePressure / 10 : null;
+      const temp     = modeTemp     != null ? modeTemp / 10     : null;
 
       startElapsedTimer(Date.now() - elapsed * 1000, 'liveTime');
 
@@ -792,12 +802,16 @@ export function handleLiveData(msg: LiveMessage): void {
   }
 
   if (lastIdx >= 0) {
-    const elapsed  = times[lastIdx] / 10;
-    const pressure = dp.pressure?.[lastIdx]    != null ? dp.pressure[lastIdx] / 10    : null;
-    const flow     = dp.pumpFlow?.[lastIdx]     != null ? dp.pumpFlow[lastIdx] / 10    : null;
-    const weightSrc = dp.shotWeight || dp.weight;
-    const weight   = weightSrc?.[lastIdx] != null ? weightSrc[lastIdx] / 10 : null;
-    const temp     = dp.temperature?.[lastIdx]  != null ? dp.temperature[lastIdx] / 10 : null;
+    const elapsed = (times[lastIdx] ?? 0) / 10;
+    const rawPressure = dp.pressure?.[lastIdx];
+    const rawFlow     = dp.pumpFlow?.[lastIdx];
+    const weightSrc   = dp.shotWeight || dp.weight;
+    const rawWeight   = weightSrc?.[lastIdx];
+    const rawTemp     = dp.temperature?.[lastIdx];
+    const pressure = rawPressure != null ? rawPressure / 10 : null;
+    const flow     = rawFlow     != null ? rawFlow / 10     : null;
+    const weight   = rawWeight   != null ? rawWeight / 10   : null;
+    const temp     = rawTemp     != null ? rawTemp / 10     : null;
 
     if (msg.isLive) {
       // #811: the icon's on-device readout mirrors the real shot.
@@ -819,11 +833,13 @@ export function handleLiveData(msg: LiveMessage): void {
 
   const liveChart = chartRegistry.get('liveChart') as Chart<'line'> | null;
   if (liveChart) {
-    const maxTime = times.length > 0 ? times[times.length - 1] / 10 : 60;
-    liveChart.data.datasets[0].data = mapToXY(times, dp.pressure);
-    liveChart.data.datasets[1].data = mapToXY(times, dp.pumpFlow);
-    liveChart.data.datasets[2].data = mapToXY(times, dp.shotWeight || dp.weight);
-    liveChart.data.datasets[3].data = mapToXY(times, dp.temperature);
+    const maxTime = times.length > 0 ? (times[times.length - 1] ?? 0) / 10 : 60;
+    const datasets = liveChart.data.datasets;
+    const ds0 = datasets[0], ds1 = datasets[1], ds2 = datasets[2], ds3 = datasets[3];
+    if (ds0) ds0.data = mapToXY(times, dp.pressure);
+    if (ds1) ds1.data = mapToXY(times, dp.pumpFlow);
+    if (ds2) ds2.data = mapToXY(times, dp.shotWeight || dp.weight);
+    if (ds3) ds3.data = mapToXY(times, dp.temperature);
     const scales = liveChart.options.scales;
     if (scales) {
       scales.x!.max  = Math.max(maxTime + 5, 30);
