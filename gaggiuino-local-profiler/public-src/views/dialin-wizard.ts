@@ -170,7 +170,7 @@ export function closeDialinWizard(): void {
 
 function _parseRatio(brewRatio: string | number | null | undefined): number {
   const m = String(brewRatio || '').trim().match(/^1\s*:\s*([\d.]+)$/);
-  const n = m ? parseFloat(m[1]) : NaN;
+  const n = m ? parseFloat(m[1] ?? '') : NaN;
   return Number.isFinite(n) && n > 0 ? n : 2;
 }
 
@@ -181,9 +181,11 @@ function _suggestStartGrind(beanName: string | undefined, grinderName: string | 
   if (beanName) {
     const combos = calcBestGrindCombosForBean(beanName, _shots(), beanId);
     if (combos?.length) {
-      const combo = grinderName
-        ? combos.find(c => c.grinder.toLowerCase() === grinderName.toLowerCase()) || combos[0]
-        : combos[0];
+      const matched = grinderName
+        ? combos.find(c => c.grinder.toLowerCase() === grinderName.toLowerCase())
+        : undefined;
+      const [firstCombo] = combos;
+      const combo = matched || firstCombo;
       if (combo) return combo.grindSetting;
     }
     const bean = beanId != null
@@ -333,7 +335,10 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
     if (r.ok) {
       const rows = _shots();
       const idx = rows.findIndex(sh => sh.id === shotId);
-      if (idx !== -1) rows[idx].annotation = { ...rows[idx].annotation, ...payload };
+      if (idx !== -1) {
+        const row = rows[idx];
+        if (row) row.annotation = { ...row.annotation, ...payload };
+      }
       renderSidebar();
       updateSidebarHighlighting();
     }

@@ -52,8 +52,9 @@ export function renderRecipeList(): void {
   }
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   el.innerHTML = joinHtml(recipes.map(r => {
-    const brewLabel = r.brewMethod && BREW_METHOD_LABELS[r.brewMethod]
-      ? html`<span class="lib-brew-badge">${tHtml(BREW_METHOD_LABELS[r.brewMethod])}</span>`
+    const brewMethodLabel = r.brewMethod ? BREW_METHOD_LABELS[r.brewMethod] : undefined;
+    const brewLabel = brewMethodLabel
+      ? html`<span class="lib-brew-badge">${tHtml(brewMethodLabel)}</span>`
       : html``;
     const metaParts = [r.drinkType, r.beanName, r.profileName].filter(Boolean).map(esc);
     const meta = metaParts.length ? joinHtml(metaParts.map((p, i) => (i ? html` · ${p}` : p))) : null;

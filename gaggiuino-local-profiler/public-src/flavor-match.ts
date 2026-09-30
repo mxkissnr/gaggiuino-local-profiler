@@ -129,13 +129,17 @@ export function pathToNode(nodeId: string): string[] {
 export function findAutoZoomTarget(categories: FlavorNode[]): string | null {
   const litTop = categories.filter(c => c._lit);
   if (litTop.length !== 1) return null;
-  let current = litTop[0];
+  const [firstTop] = litTop;
+  if (!firstTop) return null;
+  let current = firstTop;
   let target: string | null = null;
   while (true) {
     if (current.children?.length) target = current.id;
     const litChildren = (current.children || []).filter(c => c._lit);
     if (litChildren.length !== 1) break;
-    current = litChildren[0];
+    const [next] = litChildren;
+    if (!next) break;
+    current = next;
   }
   return target;
 }

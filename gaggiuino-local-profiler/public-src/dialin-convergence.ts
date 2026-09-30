@@ -57,6 +57,7 @@ function _hasConsecutiveHolds(classified: ClassifiedRound[]): boolean {
   if (classified.length < 2) return false;
   const a = classified[classified.length - 2];
   const b = classified[classified.length - 1];
+  if (!a || !b) return false;
   return a.direction === 'hold' && b.direction === 'hold';
 }
 
@@ -64,7 +65,8 @@ function _hasConsecutiveHighScores(rounds: DialinRound[]): boolean {
   if (rounds.length < 2) return false;
   const a = rounds[rounds.length - 2];
   const b = rounds[rounds.length - 1];
-  if (a?.score == null || b?.score == null) return false;
+  if (!a || !b) return false;
+  if (a.score == null || b.score == null) return false;
   if (a.score < HIGH_SCORE || b.score < HIGH_SCORE) return false;
   const ga = a.grindSetting, gb = b.grindSetting;
   if (typeof ga !== 'number' || typeof gb !== 'number') return false;
@@ -76,8 +78,7 @@ function _hasConsecutiveHighScores(rounds: DialinRound[]): boolean {
 function _computeStepSize(rounds: DialinRound[], classified: ClassifiedRound[]): number {
   let step: number | null = null;
   let prevDirection: string | null = null;
-  for (let i = 0; i < classified.length; i++) {
-    const cls = classified[i];
+  for (const cls of classified) {
     if (cls.direction === 'channeling') continue;
     if (step === null) {
       step = Math.min(2.0, Math.max(0.5, Math.abs(cls.error) / 6));
@@ -93,7 +94,8 @@ export function isConverged(rounds: DialinRound[] | null | undefined): boolean {
   if (!Array.isArray(rounds) || rounds.length === 0) return false;
   const classified = rounds.map(_classify);
   if (_hasConsecutiveHolds(classified) || _hasConsecutiveHighScores(rounds)) return true;
-  const last = classified[classified.length - 1];
+  const last = classified.at(-1);
+  if (!last) return false;
   if (last.direction !== 'channeling') {
     const step = _computeStepSize(rounds, classified);
     if (step < STEP_FLOOR) return true;
@@ -107,8 +109,9 @@ export function calcNextGrindSuggestion(rounds: DialinRound[] | null | undefined
   }
 
   const classified = rounds.map(_classify);
-  const lastRound  = rounds[rounds.length - 1];
-  const last       = classified[classified.length - 1];
+  const lastRound  = rounds.at(-1);
+  const last       = classified.at(-1);
+  if (!lastRound || !last) return { type: 'insufficient-data', nextGrind: null, delta: 0, reason: 'dialin_no_rounds', band: BAND };
   // Rounds the wizard writes always carry a numeric grindSetting; DialinRound
   // marks it optional only because it also types the persisted session shape.
   const lastGrind  = lastRound.grindSetting as number;
