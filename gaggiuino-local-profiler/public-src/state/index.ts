@@ -106,8 +106,10 @@ export interface LibrarySlice {
 export interface OrdersSlice {
   _ordersMenuOpen: boolean;
   _ordersPollTimer: number | null;
-  _ordersEtaSelected: Record<number, number>;
-  _ordersDeclineOpen: Record<number, boolean>;
+  // Keyed by order id as a string (the ids arrive as dataset strings); object
+  // keys are strings at runtime anyway, so Record<string, …> is the honest type.
+  _ordersEtaSelected: Record<string, number>;
+  _ordersDeclineOpen: Record<string, boolean>;
   _ordersStatsOpen: boolean;
 }
 

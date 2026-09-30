@@ -1094,6 +1094,7 @@ export async function buildWorldMap() {
     for (const f of geo.features) f.geometry = _splitGeometryAtAntimeridian(f.geometry);
     const numToCode = new Map(COFFEE_COUNTRIES.map(c => [c.num, c.code]));
     for (const f of geo.features) f.properties = { ...f.properties, code: numToCode.get(String(f.id)) || null };
+    // topojson-client ships no types, so its GeoJSON output can't be matched to ECharts' map input.
     echarts.registerMap('world', geo as unknown as Parameters<typeof echarts.registerMap>[1]);
     _worldMapRegistered = true;
   }
