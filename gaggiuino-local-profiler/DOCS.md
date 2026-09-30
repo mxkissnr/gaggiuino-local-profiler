@@ -516,7 +516,7 @@ A dedicated **Achievements** view shows a printed-cardboard "stamp card": 54 bad
 
 ### What's New (in-app changelog, v2.28.0)
 
-⚙ Settings → **What's New** shows the last 8 GLP releases, newest first, each with a short list of highlights — so you can see what changed without leaving the app or digging through GitHub. This card is a curated, hand-maintained subset (`public-src/shared/whats-new.js`) rather than a rendered copy of the full history: **`CHANGELOG.md` stays the source of truth** for every change ever shipped; the in-app card only ever shows a short highlight per release, capped at the last 8. Highlight text is English-only regardless of your UI language — only the card's own title and description are translated, the same approach taken for shot annotations and tasting notes.
+⚙ Settings → **What's New** shows the last 8 GLP releases, newest first, each with a short list of highlights — so you can see what changed without leaving the app or digging through GitHub. This card is a curated, hand-maintained subset (`public-src/shared/whats-new.ts`) rather than a rendered copy of the full history: **`CHANGELOG.md` stays the source of truth** for every change ever shipped; the in-app card only ever shows a short highlight per release, capped at the last 8. Highlight text is English-only regardless of your UI language — only the card's own title and description are translated, the same approach taken for shot annotations and tasting notes.
 
 ### Shot logging defaults
 

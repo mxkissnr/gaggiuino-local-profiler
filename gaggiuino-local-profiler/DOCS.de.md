@@ -519,7 +519,7 @@ Eine eigene **Erfolge**-Ansicht zeigt eine Pappkarte im Stempelkarten-Look: 54 A
 
 ### Neuigkeiten (In-App-Changelog, v2.28.0)
 
-⚙ Einstellungen → **Neuigkeiten** zeigt die letzten 8 GLP-Releases, neueste zuerst, jeweils mit einer kurzen Liste der wichtigsten Änderungen — so siehst du auf einen Blick, was sich geändert hat, ohne die App zu verlassen oder in GitHub zu suchen. Diese Karte ist eine kuratierte, von Hand gepflegte Teilmenge (`public-src/shared/whats-new.js`) und keine gerenderte Kopie der vollständigen Historie: **`CHANGELOG.md` bleibt die maßgebliche Quelle** für jede jemals ausgelieferte Änderung; die In-App-Karte zeigt pro Release nur einen kurzen Auszug, begrenzt auf die letzten 8. Der Text der Neuigkeiten bleibt unabhängig von der UI-Sprache auf Englisch — nur Titel und Beschreibung der Karte selbst sind übersetzt, derselbe Ansatz wie bei Shot-Anmerkungen und Verkostungsnotizen.
+⚙ Einstellungen → **Neuigkeiten** zeigt die letzten 8 GLP-Releases, neueste zuerst, jeweils mit einer kurzen Liste der wichtigsten Änderungen — so siehst du auf einen Blick, was sich geändert hat, ohne die App zu verlassen oder in GitHub zu suchen. Diese Karte ist eine kuratierte, von Hand gepflegte Teilmenge (`public-src/shared/whats-new.ts`) und keine gerenderte Kopie der vollständigen Historie: **`CHANGELOG.md` bleibt die maßgebliche Quelle** für jede jemals ausgelieferte Änderung; die In-App-Karte zeigt pro Release nur einen kurzen Auszug, begrenzt auf die letzten 8. Der Text der Neuigkeiten bleibt unabhängig von der UI-Sprache auf Englisch — nur Titel und Beschreibung der Karte selbst sind übersetzt, derselbe Ansatz wie bei Shot-Anmerkungen und Verkostungsnotizen.
 
 ### Standardwerte für Shot-Notizen
 

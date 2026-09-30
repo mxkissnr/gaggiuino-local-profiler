@@ -119,7 +119,7 @@ together, in one commit:
 - `gaggiuino-local-profiler/go/internal/system/version.go` → `const glpVersion = "..."`
 - `gaggiuino-local-profiler/go/internal/backup/bundle.go` → `const glpVersion = "..."`
 
-`test/version-sync.test.js` fails if any of the latter three drift from
+`test/version-sync.test.ts` fails if any of the latter three drift from
 `config.yaml`; `scripts/release-check.mjs` check 1 does the same.
 (`go/internal/library/geo.go`'s `geoUserAgent` carries the version too — cosmetic, bump it along but it isn't gated.)
 
@@ -134,7 +134,7 @@ Every commit that ships a feature or fix needs:
 4. `README.md` features table update if it's a new feature
 
 Do **not** bump the version (`config.yaml`/`package.json`/the two Go
-consts) or touch `public-src/shared/whats-new.js` in a feature/fix commit —
+consts) or touch `public-src/shared/whats-new.ts` in a feature/fix commit —
 both happen once, together, at release time (see Versioning above and the
 `glp-release-checklist` skill).
 
@@ -171,7 +171,7 @@ gaggiuino-local-profiler/     ← HA app (main deliverable)
     internal/machines/        ← machine registry (source of truth for machine
                                  config, see Key conventions below) + per-type adapters
     internal/webapp/          ← embeds public/ and serves the SPA at /
-  public-src/                 ← Vite frontend source (views/, components/, i18n/, shared/, main.js)
+  public-src/                 ← Vite frontend source, TypeScript (views/, components/, i18n/, shared/, main.ts)
   public/                     ← Vite build output (generated via `npm run build`, not edited directly)
   config.yaml                 ← HA app manifest + canonical version
   Dockerfile                  ← multi-arch image: Vite build → Go cross-compile → Alpine runtime
@@ -203,7 +203,8 @@ README.md                     ← Repo root README (English)
 - All fetch calls use relative URLs (no leading `/`) for HA ingress compatibility
 - Chart.js is loaded from CDN; reuse existing chart instances (destroy before re-creating)
 - `/data/` is the persistent storage directory inside the app container
-- i18n: translations live in `public-src/i18n/{de,en,it,fr,es,nl}.js` — each exports a default object; `public-src/constants.js` re-exports them as `TRANSLATIONS`; add new keys to **all 6 files**
+- i18n: translations live in `public-src/i18n/{de,en,it,fr,es,nl}.ts` — each exports a default object; `public-src/constants.ts` re-exports them as `TRANSLATIONS`; add new keys to **all 6 files**
+- **Frontend is TypeScript**: the SPA under `public-src/` is `.ts`; the only JS kept on purpose is the service worker `public-src/public/sw.js` (the `public/sw.js` under `public-src/`, which `go/cmd/frontend-build` copies verbatim into the bundle root). `tsconfig.json` turns on `strict`, `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`; every `innerHTML` assignment must take an `Html` value, never a raw string — enforced by the local ESLint rule `html-sink`.
 - **PR AI disclosure** — every PR fills the PR template's "AI assistance disclosure" section
   (`none`/`assisted`/`substantial`/`generated` + tool/model); every AI-assisted commit carries
   a `Co-Authored-By:` trailer. CI enforces it. See CONTRIBUTING.md.

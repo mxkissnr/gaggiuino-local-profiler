@@ -41,7 +41,7 @@ precedence over the env fallbacks.
 The version string served from `GET /api/version` lives in
 `internal/system/version.go` (`glpVersion`); it and
 `internal/backup/bundle.go`'s copy must match `../config.yaml`'s canonical
-`version:` — enforced by `../test/version-sync.test.js`.
+`version:` — enforced by `../test/version-sync.test.ts`.
 
 ## Why
 
@@ -208,7 +208,7 @@ require the same `X-GLP-Token`/Ingress trust the JSON API does.
 That header is wired into htmx structurally, not per button:
 `templates/layout.templ` loads `static/glp-token.js` once, globally, for
 every templ page. It fetches the token from the already-public
-`GET /api/token` (mirroring `public-src/api.js`'s
+`GET /api/token` (mirroring `public-src/api/transport.ts`'s
 `initToken()` for the existing SPA) and attaches it as `X-GLP-Token` to
 every htmx request via htmx's `htmx:configRequest` event — no per-page
 wiring, no SSR-embedded token in `GET /shots`' own (deliberately
@@ -216,7 +216,7 @@ unauthenticated) HTML. See `internal/web/doc.go`'s "Auth model" section and
 `glp-token.js`'s own doc comment for the full reasoning, including why
 fetch-and-attach was chosen over an SSR meta tag. The fetch itself is
 relative (`api/token`, not `/api/token`) — a #901 code-review fix, mirroring
-`public-src/api.js`'s `initToken()` — so it resolves correctly against the
+`public-src/api/transport.ts`'s `initToken()` — so it resolves correctly against the
 HA Ingress-prefixed page URL and reaches the app's own handler on the
 primary access path; a root-absolute fetch would resolve against the
 origin root instead and miss it. Standalone mode with `expose_api_port`
