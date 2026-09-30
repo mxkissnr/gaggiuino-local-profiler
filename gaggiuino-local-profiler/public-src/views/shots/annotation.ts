@@ -4,7 +4,7 @@ import { t, tHtml }                       from '../../i18n.js';
 import { getMenu }                        from '../../api/system.js';
 import { deductMilk, adjustFrozenPortion, listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, postShotImage, deleteShotImage } from '../../api/shots.js';
-import type { ShotAnnotation, ShotDefaults } from '../../api/types.js';
+import type { ShotDefaults } from '../../api/types.js';
 import { esc, germanToIso, html, joinHtml } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { calcBeanAgeAtShot, _roastDateFromLibrary } from './utils.js';
@@ -244,10 +244,7 @@ async function _performAnnotationSave(): Promise<void> {
   const shot = _shots().find(s => s.id === id);
   const payload = _buildAnnotationPayload(shot);
   try {
-    // TODO(#1103): the generated Annotation schema types roastDate/coffee/
-    // grinder/notes as non-null while AnnotationPayload allows null (see its
-    // header), so this forced cast stays until the spec makes them nullable.
-    const r = await annotateShot(id, payload as unknown as ShotAnnotation);
+    const r = await annotateShot(id, payload);
     if (r.ok) {
       _maybeDeductMilk(shot, payload);
       _maybeAdjustFrozenPortion(shot, payload);

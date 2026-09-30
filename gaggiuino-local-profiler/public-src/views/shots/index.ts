@@ -106,8 +106,8 @@ const _el = (id: string): HTMLElement => document.getElementById(id) as HTMLElem
 
 // CoffeeLibrary (state/index.ts) only declares beans/grinders; loadLibrary()
 // adds the basket/puck-screen collections this file reads for export labels.
-function _libCollection(name: string): Record<string, unknown>[] | undefined {
-  return (S.coffeeLibrary as unknown as Record<string, Record<string, unknown>[]>)[name];
+function _libCollection(name: 'baskets' | 'puckScreens'): Record<string, unknown>[] | undefined {
+  return S.coffeeLibrary[name];
 }
 
 export function invalidateGmPhaseCache(machineId: number): void {

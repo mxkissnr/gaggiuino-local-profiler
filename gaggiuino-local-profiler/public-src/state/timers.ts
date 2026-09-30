@@ -40,7 +40,10 @@ export function dispose(name: TimerName): void {
       // the release.
       break;
   }
-  (S as unknown as Record<TimerName, unknown>)[name] = null;
+  // Widening S to a plain record makes the write target unknown, so the
+  // union key needs no assertion (every timer slot accepts null anyway).
+  const timerSlots: Record<TimerName, unknown> = S;
+  timerSlots[name] = null;
 }
 
 export function set<K extends TimerName>(name: K, value: AppState[K]): void {
