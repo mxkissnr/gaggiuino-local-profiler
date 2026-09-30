@@ -130,7 +130,11 @@ const mkShot = (id: number, daysAgo: number) => ({
 });
 
 const countWrappers = () => collect(shotsEl, n => n.classList.contains('shot-wrapper')).length;
-const monthBody = (key: string): FakeNode => collect(shotsEl, n => n.id === `monthGroup-${key}`)[0];
+const monthBody = (key: string): FakeNode => {
+  const body = collect(shotsEl, n => n.id === `monthGroup-${key}`)[0];
+  if (body === undefined) throw new Error(`missing month group ${key}`);
+  return body;
+};
 
 // Three fully-distinct older calendar months (well past the 14-day recent
 // window) plus three shots in the last few days. Offsets chosen so that,
