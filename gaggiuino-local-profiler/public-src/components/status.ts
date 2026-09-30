@@ -155,9 +155,7 @@ function pollSyncProgressFallback(list: SyncProgressEntry[], machineId: string |
   // There's only one bar to show even with multiple machines active --
   // prefer whichever machine this poll was scoped to, falling back to
   // the first active entry otherwise.
-  const entry = list.length
-    ? (list.find(p => p.machineId === Number(machineId)) || list[0])
-    : null;
+  const entry = list.find(p => p.machineId === Number(machineId)) ?? list[0] ?? null;
   renderSyncProgressBar(entry);
 }
 

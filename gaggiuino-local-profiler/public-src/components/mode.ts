@@ -75,7 +75,8 @@ export function switchMode(mode: string): void {
     dialin: 'btnDialin', library: 'btnLibrary', maintenance: 'btnMaintenance',
     achievements: 'btnAchievements', orders: 'btnOrders', settings: 'btnSettings'
   };
-  const activeBtn = document.getElementById(modeMap[mode]);
+  const btnId = modeMap[mode];
+  const activeBtn = btnId ? document.getElementById(btnId) : null;
   if (activeBtn) activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
 
   // #410/#461: mobile shows #shots-view full screen only while
