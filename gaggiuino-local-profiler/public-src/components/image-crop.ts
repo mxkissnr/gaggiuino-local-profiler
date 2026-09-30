@@ -3,7 +3,7 @@
 // and pan (drag/touch) an image against a fixed crop guide, then exports a
 // square JPEG blob that feeds into the existing upload flow unchanged.
 import { t } from '../i18n.js';
-import { esc } from '../utils.js';
+import { esc, html } from '../utils.js';
 
 const PREVIEW_SIZE = 320; // on-screen canvas, CSS px == canvas px (no DPR scaling needed for a preview)
 const EXPORT_SIZE   = 480; // exported square buffer, reasonable thumbnail size
@@ -66,14 +66,14 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', resolve
 
   const overlay = document.createElement('div');
   overlay.className = 'crop-editor-overlay';
-  overlay.innerHTML = `
+  overlay.innerHTML = html`
     <div class="crop-editor-modal">
       <h3 class="crop-editor-title">${esc(t('crop_editor_title'))}</h3>
-      <canvas class="crop-editor-canvas crop-editor-canvas-${shape === 'square' ? 'square' : 'circle'}"
-              width="${PREVIEW_SIZE}" height="${PREVIEW_SIZE}"></canvas>
+      <canvas class="crop-editor-canvas crop-editor-canvas-${esc(shape === 'square' ? 'square' : 'circle')}"
+              width="${esc(PREVIEW_SIZE)}" height="${esc(PREVIEW_SIZE)}"></canvas>
       <div class="crop-editor-zoom-row">
         <span class="crop-editor-zoom-icon">−</span>
-        <input type="range" class="crop-editor-zoom-slider" min="${MIN_ZOOM}" max="${MAX_ZOOM}" step="0.01" value="${MIN_ZOOM}" aria-label="${esc(t('crop_editor_zoom'))}">
+        <input type="range" class="crop-editor-zoom-slider" min="${esc(MIN_ZOOM)}" max="${esc(MAX_ZOOM)}" step="0.01" value="${esc(MIN_ZOOM)}" aria-label="${esc(t('crop_editor_zoom'))}">
         <span class="crop-editor-zoom-icon">+</span>
       </div>
       <div class="crop-editor-actions">

@@ -16,7 +16,7 @@
 // heating and from each other, not just inferred from temperature.
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
-import { esc } from '../utils.js';
+import { esc, html, joinHtml } from '../utils.js';
 import { machineIconAnimatedSvg, setMachineIconMode, resolveMachineIconState,
          MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
 
@@ -255,7 +255,7 @@ function renderPanelStats(): void {
     [t('machine_switcher_title'), machineLabel()],
   ];
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  el.innerHTML = rows.map(([label, value]) => `<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`).join('');
+  el.innerHTML = joinHtml(rows.map(([label, value]) => html`<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`));
 }
 
 export function openEasterEggPanel(): void {

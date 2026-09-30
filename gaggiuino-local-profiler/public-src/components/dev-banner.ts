@@ -13,8 +13,8 @@
 // otherwise only possible by digging into the version badge or the
 // container tag.
 import { WARNING_ICON_SVG } from '../icons.js';
+import { esc, html } from '../utils.js';
 
-const HTML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 
 export function showDevBuildBanner(devBuild?: string | null): void {
   if (document.getElementById('glpDevBanner')) return;
@@ -30,8 +30,7 @@ export function showDevBuildBanner(devBuild?: string | null): void {
   });
   // #811: the ⚠ glyph becomes the drawn warning icon. innerHTML is safe here
   // -- devBuild comes from the build metadata, and is escaped anyway.
-  banner.innerHTML = `${WARNING_ICON_SVG} UNSTABLE DEV BUILD` +
-    (devBuild ? ` (${String(devBuild).replace(/[&<>"]/g, c => HTML_ESCAPES[c])})` : '');
+  banner.innerHTML = html`${WARNING_ICON_SVG} UNSTABLE DEV BUILD${devBuild ? html` (${esc(String(devBuild))})` : html``}`;
   document.body.insertAdjacentElement('afterbegin', banner);
   // #683 follow-up: body is `height: 100vh; overflow: hidden` with global
   // `box-sizing: border-box` (style.css), so padding-top here shrinks the
