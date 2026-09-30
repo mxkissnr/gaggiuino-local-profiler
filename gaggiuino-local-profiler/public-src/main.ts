@@ -752,7 +752,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const opt = (e.target as HTMLElement).closest<HTMLElement>('.card-fmt-opt');
     if (!opt) return;
     document.getElementById('cardFmtMenu')!.style.display = 'none';
-    void shareCard(opt.dataset.format!);
+    void shareCard(opt.dataset.format);
   });
   document.addEventListener('click', e => {
     if (!document.getElementById('cardFmtWrap')!.contains(e.target as Node))
