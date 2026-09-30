@@ -36,10 +36,10 @@ if ('serviceWorker' in navigator && document.querySelector('link[rel="manifest"]
 
 import { S } from './state/index.js';
 import { initToken, apiFetch } from './api/transport.js';
-import { t, setLang, applyTranslations } from './i18n.js';
+import { t, tHtml, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
 import { generateBeanQR } from './glp-qr.js';
-import { themeColor, THEME_CHANGE_EVENT, onThemeChange, applyChartTheme } from './utils.js';
+import { themeColor, THEME_CHANGE_EVENT, onThemeChange, applyChartTheme, html } from './utils.js';
 import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme, migrateLegacyAccent } from './theme.js';
 import { openBackupExportModal, openBackupRestoreModal } from './components/backup-modal.js';
 
@@ -614,7 +614,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Show bean age hint
       const ageDays = calcBeanAgeAtShot(name, shot?.timestamp, bean.id);
       if (hintEl && ageDays != null) {
-        hintEl.innerHTML = `${BEAN_ICON_SVG} ${t('bean_age_at_shot', ageDays)}`;
+        hintEl.innerHTML = html`${BEAN_ICON_SVG} ${tHtml('bean_age_at_shot', ageDays)}`;
         hintEl.style.display = '';
       } else if (hintEl) {
         hintEl.style.display = 'none';
