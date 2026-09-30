@@ -5,10 +5,11 @@
 // section list and its labels from drifting apart between export and
 // restore, the same reasoning `lib/machines/options-adoption.js` documents
 // for tracked options.
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
 import { initToken } from '../api/transport.js';
 import { requestBackup, postRestore } from '../api/system.js';
-import { shareOrDownloadBlob } from '../utils.js';
+import { esc, html, joinHtml, shareOrDownloadBlob } from '../utils.js';
+import type { Html } from '../utils.js';
 
 const SECTION_KEYS = ['shots', 'maintenance', 'orders', 'machines', 'settings', 'secrets'];
 
@@ -197,15 +198,13 @@ function closeBackupModal(): void {
 
 function renderSectionCheckboxes(presentSections: Set<string> | null): void {
     const { sectionsBox } = els();
-    sectionsBox.innerHTML = '';
+    sectionsBox.innerHTML = html``;
     for (const key of SECTION_KEYS) {
         if (key === 'secrets') continue; // rendered separately below, it needs the passphrase row next to it
         const present = !presentSections || presentSections.has(key);
         const label = document.createElement('label');
         label.className = 'backup-section-row';
-        label.innerHTML = `<input type="checkbox" class="backup-section-cb" value="${key}" ${present ? 'checked' : 'disabled'}>`
-            + `<span>${t(`backup_section_${key}`)}</span>`
-            + (present ? '' : `<span class="backup-section-empty">${t('backup_section_empty')}</span>`);
+        label.innerHTML = html`<input type="checkbox" class="backup-section-cb" value="${esc(key)}" ${present ? html`checked` : html`disabled`}><span>${tHtml(`backup_section_${key}`)}</span>${present ? html`` : html`<span class="backup-section-empty">${tHtml('backup_section_empty')}</span>`}`;
         sectionsBox.appendChild(label);
     }
 }
@@ -229,19 +228,19 @@ async function refreshRestorePreview(): Promise<void> {
         const body = await r.json() as { preview?: BackupPreview };
         if (!r.ok || !body.preview) { preview.textContent = ''; return; }
         const p = body.preview;
-        const lines: string[] = [];
-        if (sections.includes('shots'))       lines.push(t('backup_preview_shots', p.shots) + (p.library ? ` · ${t('backup_preview_library')}` : ''));
-        if (sections.includes('maintenance')) lines.push(t('backup_preview_maintenance', p.maintenance, p.maintenanceTotal) + ', ' + t('backup_preview_maintenance_log', p.maintenanceLog, p.maintenanceLogTotal));
-        if (sections.includes('orders'))      lines.push(t('backup_preview_orders', p.orders, p.ordersTotal));
-        if (sections.includes('machines'))    lines.push(t('backup_preview_machines', p.machines));
-        if (sections.includes('settings') && p.settings) lines.push(t('backup_preview_settings'));
-        if (p.images) lines.push(t('backup_preview_images', p.images));
+        const lines: Html[] = [];
+        if (sections.includes('shots'))       lines.push(html`${tHtml('backup_preview_shots', p.shots)}${p.library ? html` · ${tHtml('backup_preview_library')}` : html``}`);
+        if (sections.includes('maintenance')) lines.push(html`${tHtml('backup_preview_maintenance', p.maintenance, p.maintenanceTotal)}, ${tHtml('backup_preview_maintenance_log', p.maintenanceLog, p.maintenanceLogTotal)}`);
+        if (sections.includes('orders'))      lines.push(tHtml('backup_preview_orders', p.orders, p.ordersTotal));
+        if (sections.includes('machines'))    lines.push(tHtml('backup_preview_machines', p.machines));
+        if (sections.includes('settings') && p.settings) lines.push(tHtml('backup_preview_settings'));
+        if (p.images) lines.push(tHtml('backup_preview_images', p.images));
         if (els().secretsCb.checked) {
             lines.push(p.secretsPresent
-                ? (p.secretsRestored ? t('backup_preview_secrets_ok') : t('backup_preview_secrets_wrong'))
-                : t('backup_preview_secrets_none'));
+                ? (p.secretsRestored ? tHtml('backup_preview_secrets_ok') : tHtml('backup_preview_secrets_wrong'))
+                : tHtml('backup_preview_secrets_none'));
         }
-        preview.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
+        preview.innerHTML = joinHtml(lines.map(l => html`<div>${l}</div>`));
     } catch { preview.textContent = ''; }
 }
 
@@ -261,7 +260,7 @@ export function openBackupExportModal(): void {
     passRow.style.display = 'none';
     passConfirmRow.style.display = 'none';
     preview.style.display = 'none';
-    preview.innerHTML = '';
+    preview.innerHTML = html``;
     setError('');
     confirmBtn.textContent = t('backup_modal_export_confirm');
     modal.classList.add('open');
@@ -385,7 +384,7 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
     passRow.style.display = hasSecrets ? '' : 'none';
     passConfirmRow.style.display = 'none'; // restore only needs the passphrase once, no confirm field
     preview.style.display = '';
-    preview.innerHTML = '';
+    preview.innerHTML = html``;
     setError('');
     confirmBtn.textContent = t('backup_modal_restore_confirm');
     modal.classList.add('open');

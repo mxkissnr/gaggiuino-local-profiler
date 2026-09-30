@@ -2,8 +2,9 @@ import { FLAVOR_WHEEL } from '../flavor-data.js';
 import type { FlavorNode } from '../flavor-data.js';
 import { matchFlavors, markLit, colorForNode, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../flavor-match.js';
 import { S } from '../state/index.js';
-import { t } from '../i18n.js';
-import { esc } from '../utils.js';
+import { t, tHtml } from '../i18n.js';
+import { esc, html, joinHtml } from '../utils.js';
+import type { Html } from '../utils.js';
 import { loadBeanImageBlobUrl } from '../bean-image.js';
 
 export { matchFlavors, normalizeFlavor } from '../flavor-match.js';
@@ -136,14 +137,14 @@ let _renderReqToken = 0;
 function renderBreadcrumb(): void {
   if (!_breadcrumbEl) return;
   const ids = _rootId ? pathToNode(_rootId) : [];
-  const crumbs = [`<button type="button" class="fw-crumb" data-action="zoom-flavor-wheel" data-zoom-id="">${esc(t('flavor_wheel_overview'))}</button>`];
+  const crumbs: Html[] = [html`<button type="button" class="fw-crumb" data-action="zoom-flavor-wheel" data-zoom-id="">${esc(t('flavor_wheel_overview'))}</button>`];
   for (const id of ids) {
     const node = nodeById(id);
     if (!node) continue;
     const label = node[_lang] || node.en;
-    crumbs.push(`<span class="fw-crumb-sep">›</span><button type="button" class="fw-crumb" data-action="zoom-flavor-wheel" data-zoom-id="${esc(id)}">${esc(label)}</button>`);
+    crumbs.push(html`<span class="fw-crumb-sep">›</span><button type="button" class="fw-crumb" data-action="zoom-flavor-wheel" data-zoom-id="${esc(id)}">${esc(label)}</button>`);
   }
-  _breadcrumbEl.innerHTML = crumbs.join('');
+  _breadcrumbEl.innerHTML = joinHtml(crumbs);
 }
 
 function zoomTo(id: string | null): void {
@@ -183,7 +184,7 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
   // that no longer belongs to this call.
   if (token !== _renderReqToken) return true;
 
-  container.innerHTML = ''; // clear the loading message before echarts takes over this node
+  container.innerHTML = html``; // clear the loading message before echarts takes over this node
   _chart = echarts.init(container) as unknown as FlavorChart;
   _chart.setOption({
     backgroundColor: 'transparent',
@@ -285,9 +286,9 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   const { unmatched } = matchFlavors(bean.flavors);
   const unmatchedWrap = document.getElementById('flavorWheelUnmatched') as HTMLElement;
   unmatchedWrap.innerHTML = unmatched.length
-    ? `<div class="fw-unmatched-label">${t('flavor_wheel_unmatched')}</div>
-       <div class="fw-unmatched-chips">${unmatched.map(f => `<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`).join('')}</div>`
-    : '';
+    ? html`<div class="fw-unmatched-label">${tHtml('flavor_wheel_unmatched')}</div>
+       <div class="fw-unmatched-chips">${joinHtml(unmatched.map(f => html`<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`))}</div>`
+    : html``;
 
   modal.style.display = 'flex';
   const container = document.getElementById('flavorWheelCanvas') as HTMLElement;
@@ -295,11 +296,11 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   const lang: FlavorLang = (['de', 'en', 'it', 'fr', 'es', 'nl'] as FlavorLang[]).includes(S.currentLang as FlavorLang) ? S.currentLang as FlavorLang : 'en';
   // echarts is a dynamic import now (#797) — show a loading state while its
   // chunk downloads instead of leaving the canvas blank.
-  container.innerHTML = `<p class="empty-note" style="text-align:center">${t('flavor_wheel_loading')}</p>`;
-  if (breadcrumbEl) breadcrumbEl.innerHTML = '';
+  container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_loading')}</p>`;
+  if (breadcrumbEl) breadcrumbEl.innerHTML = html``;
   if (!await renderFlavorWheel(container, bean.flavors, lang, breadcrumbEl)) {
-    container.innerHTML = `<p class="empty-note" style="text-align:center">${t('flavor_wheel_unavailable')}</p>`;
-    if (breadcrumbEl) breadcrumbEl.innerHTML = '';
+    container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_unavailable')}</p>`;
+    if (breadcrumbEl) breadcrumbEl.innerHTML = html``;
   }
 }
 

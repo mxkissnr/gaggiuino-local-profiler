@@ -10,7 +10,8 @@ import {
   saveMqttSettings as saveMqttSettingsRequest,
   applyMqttToMachine as applyMqttToMachineRequest,
 } from '../api/mqtt.js';
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
+import { html } from '../utils.js';
 import { CHECK_ICON_SVG } from '../icons.js';
 import { S } from '../state/index.js';
 import type { MqttSettings } from '../api/types.js';
@@ -61,7 +62,7 @@ export async function loadMqttSettings(): Promise<void> {
     (document.getElementById('mqttPrefix') as HTMLInputElement).value    = settings.prefix || 'gaggiuino';
 
     const hint = document.getElementById('mqttDiscoveryHint');
-    if (hint) hint.innerHTML = _discovery.available ? `${CHECK_ICON_SVG} ${t('settings_mqtt_discovered')}` : t('settings_mqtt_not_discovered');
+    if (hint) hint.innerHTML = _discovery.available ? html`${CHECK_ICON_SVG} ${tHtml('settings_mqtt_discovered')}` : tHtml('settings_mqtt_not_discovered');
 
     renderMqttSettingsCard();
   } catch { /* offline/first-run — card just stays at its default state */ }
@@ -110,7 +111,7 @@ export async function saveMqttSettings(): Promise<void> {
   }
   try {
     const r = await saveMqttSettingsRequest(payload);
-    if (r.ok) { if (resultEl) resultEl.innerHTML = `${CHECK_ICON_SVG} ${t('settings_mqtt_saved')}`; return; }
+    if (r.ok) { if (resultEl) resultEl.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('settings_mqtt_saved')}`; return; }
     const data = await r.json().catch(() => ({})) as { error?: string };
     if (resultEl) resultEl.textContent = t('settings_mqtt_save_error', data.error || r.status);
   } catch {
@@ -123,7 +124,7 @@ export async function applyMqttToMachine(): Promise<void> {
   if (resultEl) resultEl.textContent = t('settings_mqtt_applying');
   try {
     const r = await applyMqttToMachineRequest();
-    if (r.ok) { if (resultEl) resultEl.innerHTML = `${CHECK_ICON_SVG} ${t('settings_mqtt_applied')}`; return; }
+    if (r.ok) { if (resultEl) resultEl.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('settings_mqtt_applied')}`; return; }
     const data = await r.json().catch(() => ({})) as { error?: string };
     if (resultEl) resultEl.textContent = t('settings_mqtt_apply_error', data.error || r.status);
   } catch {
