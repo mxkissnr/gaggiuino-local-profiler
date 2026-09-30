@@ -368,7 +368,8 @@ export function setSortMode(mode: string): void {
   const labels: Record<string, Html> = { newest: tHtml('sort_newest'), score: tHtml('sort_score'), rating: html`${STAR_ICON_SVG} ${tHtml('sort_rating')}`, duration: tHtml('sort_duration') };
   document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
   const map: Record<string, string> = { newest: 'sortNewest', score: 'sortScore', rating: 'sortRating', duration: 'sortDur' };
-  const activeBtn = document.getElementById(map[mode]);
+  const domId = map[mode];
+  const activeBtn = domId ? document.getElementById(domId) : null;
   if (activeBtn) {
     activeBtn.classList.add('active');
     activeBtn.innerHTML = html`${labels[mode] || esc(mode)}${esc(arrow)}`;
@@ -499,12 +500,16 @@ export function closeShotDrawer(): void {
 export function handleDrawerTouchStart(e: TouchEvent): void {
   const sidebar = document.getElementById('sidebar');
   if (!sidebar?.classList.contains('sidebar-drawer-open')) return;
-  _drawerTouchStartX = e.touches[0].clientX;
+  const touch = e.touches[0];
+  if (!touch) return;
+  _drawerTouchStartX = touch.clientX;
 }
 
 export function handleDrawerTouchEnd(e: TouchEvent): void {
   if (_drawerTouchStartX == null) return;
-  const deltaX = e.changedTouches[0].clientX - _drawerTouchStartX;
+  const touch = e.changedTouches[0];
+  if (!touch) return;
+  const deltaX = touch.clientX - _drawerTouchStartX;
   _drawerTouchStartX = null;
   if (deltaX < -60) closeShotDrawer(); // swipe left closes (drawer opens from the left edge)
 }
@@ -525,13 +530,17 @@ export function handleEdgeSwipeStart(e: TouchEvent): void {
   if (window.innerWidth > 768) return;
   const sidebar = document.getElementById('sidebar');
   if (sidebar?.classList.contains('sidebar-drawer-open')) return;
-  const x = e.touches[0].clientX;
+  const touch = e.touches[0];
+  if (!touch) return;
+  const x = touch.clientX;
   _edgeSwipeStartX = x <= EDGE_SWIPE_ZONE_PX ? x : null;
 }
 
 export function handleEdgeSwipeEnd(e: TouchEvent): void {
   if (_edgeSwipeStartX == null) return;
-  const deltaX = e.changedTouches[0].clientX - _edgeSwipeStartX;
+  const touch = e.changedTouches[0];
+  if (!touch) return;
+  const deltaX = touch.clientX - _edgeSwipeStartX;
   _edgeSwipeStartX = null;
   if (deltaX > 60) openShotDrawer();
 }
