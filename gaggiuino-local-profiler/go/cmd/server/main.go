@@ -147,6 +147,9 @@ func main() {
 	}
 }
 
+// onMux lets tests inspect the fully-registered mux (openapi_routes_test.go).
+var onMux func(*http.ServeMux)
+
 // buildApp wires every internal/* domain into the full net/http handler
 // chain server.js registers, exactly as main() did inline before Phase 3
 // (#901) split it out so cmd/server's HA-ingress smoke test can exercise
@@ -575,6 +578,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// falls through auth.RequireToken's static-asset bypass, exactly as the
 	// Node app's own express.static frontend does. See internal/webapp/doc.go.
 	webapp.NewHandlers().RegisterRoutes(mux)
+
+	if onMux != nil {
+		onMux(mux)
+	}
 
 	limiter := ratelimit.New(rateLimitWindow, rateLimitMax)
 
