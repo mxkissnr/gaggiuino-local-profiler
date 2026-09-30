@@ -167,10 +167,9 @@ func TestContract_ErrorShape(t *testing.T) {
 	}
 }
 
-// TestContract_ShotShape pins openapi.yaml's Shot schema's core fields
-// (id, timestamp, duration, profileName, annotation — all present per the
-// schema, even though several are `nullable` there) on GET /shots.json's
-// entries.
+// TestContract_ShotShape pins openapi.yaml's Shot schema's required keys on
+// GET /shots.json's entries — the full dump, unlike the metadata-only
+// GET /api/shots list, so it also carries datapoints.
 func TestContract_ShotShape(t *testing.T) {
 	h, _, sqlDB := newTestHandlers(t)
 	mux := newMux(h)
