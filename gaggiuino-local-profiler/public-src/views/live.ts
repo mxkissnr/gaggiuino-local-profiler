@@ -159,8 +159,8 @@ export function renderLiveShotSetupPanel(): void {
   // The tests' fake DOM records the raw assigned value (no <input> string
   // coercion), so these two fields stay number-or-string exactly as the .js
   // assigned them; a real input stringifies on assignment.
-  const doseEl = document.getElementById('lsDose') as unknown as { value: number | string } | null;
-  const grindEl = document.getElementById('lsGrindSetting') as unknown as { value: number | string } | null;
+  const doseEl = document.getElementById('lsDose') as (HTMLElement & { value: number | string }) | null;
+  const grindEl = document.getElementById('lsGrindSetting') as (HTMLElement & { value: number | string }) | null;
   if (doseEl)  doseEl.value  = draft.dose ?? '';
   if (grindEl) grindEl.value = draft.grindSetting || '';
 
@@ -320,7 +320,7 @@ export function initLiveChart(): void {
         y1: { type: 'linear', position: 'right', min: 0, max: 100, ticks: { color: C.tick }, grid: { drawOnChartArea: false } }
       }
     }
-  } as unknown as ChartConfiguration<'line'>));
+  } as ChartConfiguration<'line'>));
 
   // Re-apply reference shot after chart re-init
   if (S.refShotId) void _applyRefShotById(S.refShotId);

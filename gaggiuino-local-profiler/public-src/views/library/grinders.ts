@@ -15,7 +15,7 @@ import * as libraryView from '../library.js';
 
 // Circular with library.js (it re-exports this module): only ever touched at
 // call time, never read at module load.
-const library = libraryView as unknown as { updateLibraryDatalist: () => void };
+const library = libraryView;
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
@@ -36,12 +36,12 @@ export type GrinderRow = Omit<Grinder, 'wear' | 'zeroPointHistory'> & {
 // state/index.ts types library rows as opaque LibraryRow records; this section
 // owns the grinder shape, reached through one typed view of the same array.
 function _grinders(): GrinderRow[] {
-  return S.coffeeLibrary.grinders as unknown as GrinderRow[];
+  return S.coffeeLibrary.grinders as GrinderRow[];
 }
 
 // Same reason as GrinderRow: the API client returns the lagging generated type.
 function _asRow(grinder: Grinder): GrinderRow {
-  return grinder as unknown as GrinderRow;
+  return grinder as GrinderRow;
 }
 
 // Every form field read/written here is an <input>; the shared .value API is

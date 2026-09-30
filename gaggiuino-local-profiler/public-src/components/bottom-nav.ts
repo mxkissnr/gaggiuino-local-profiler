@@ -8,7 +8,9 @@
 // status.js's Live/Orders capability gating both keep reading these ids via
 // getElementById() exactly as before and need no changes.
 import { S } from '../state/index.js';
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
+import { esc, html } from '../utils.js';
+import type { Html } from '../utils.js';
 import { switchMode } from './mode.js';
 
 export const STORAGE_KEY = 'glp_bottom_nav_config';
@@ -18,7 +20,7 @@ export interface NavItem {
   id: string;
   i18nKey: string;
   label: string;
-  iconPaths: string;
+  iconPaths: Html;
   hasLiveDot?: boolean;
   hiddenByDefault?: boolean;
 }
@@ -31,17 +33,17 @@ export interface NavItem {
 // duplicating the vector data.
 export const NAV_ITEMS: NavItem[] = [
   { id: 'shots', i18nKey: 'nav_shots', label: 'Shots',
-    iconPaths: '<path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/>' },
+    iconPaths: html`<path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/>` },
   { id: 'live', i18nKey: 'nav_live', label: 'Live', hasLiveDot: true, hiddenByDefault: true,
-    iconPaths: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
+    iconPaths: html`<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>` },
   { id: 'library', i18nKey: 'nav_library', label: 'Bibliothek',
-    iconPaths: '<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>' },
+    iconPaths: html`<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>` },
   { id: 'analytics', i18nKey: 'nav_analytics', label: 'Statistiken',
-    iconPaths: '<path d="M6 20v-5M12 20V9M18 20V4"/>' },
+    iconPaths: html`<path d="M6 20v-5M12 20V9M18 20V4"/>` },
   { id: 'dialin', i18nKey: 'nav_dialin', label: 'Bezugslog',
-    iconPaths: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>' },
+    iconPaths: html`<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>` },
   { id: 'maintenance', i18nKey: 'nav_maintenance', label: 'Wartung',
-    iconPaths: '<path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-3 3-2.7-2.7z"/>' },
+    iconPaths: html`<path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-3 3-2.7-2.7z"/>` },
   // #812: no hiddenByDefault here on purpose — that flag is for a capability
   // that gets revealed later by other code (status.js un-hides Live/Orders
   // once the machine/orders capability is known). Achievements has no such
@@ -53,11 +55,11 @@ export const NAV_ITEMS: NavItem[] = [
   // lands in the "Mehr" sheet by construction, so existing users' main-bar
   // layout can't shift under them regardless of this flag.
   { id: 'achievements', i18nKey: 'nav_achievements', label: 'Achievements',
-    iconPaths: '<path d="M12 3 14.6 8.3 20.4 9.2 16.2 13.3 17.2 19 12 16.3 6.8 19 7.8 13.3 3.6 9.2 9.4 8.3z"/>' },
+    iconPaths: html`<path d="M12 3 14.6 8.3 20.4 9.2 16.2 13.3 17.2 19 12 16.3 6.8 19 7.8 13.3 3.6 9.2 9.4 8.3z"/>` },
   { id: 'orders', i18nKey: 'nav_orders', label: 'Bestellungen', hiddenByDefault: true,
-    iconPaths: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>' },
+    iconPaths: html`<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>` },
   { id: 'settings', i18nKey: 'nav_settings', label: 'Einstellungen',
-    iconPaths: '<path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/>' },
+    iconPaths: html`<path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/>` },
 ];
 
 const NAV_ITEM_MAP: Record<string, NavItem> = Object.fromEntries(NAV_ITEMS.map(i => [i.id, i]));
@@ -111,9 +113,9 @@ export function setBottomNavConfig(ids: unknown): string[] {
   return finalIds;
 }
 
-function buildIcon(item: NavItem, sizeClass: string): string {
-  const dot = item.hasLiveDot ? '<span class="live-dot"></span>' : '';
-  return `<svg class="${sizeClass}" viewBox="0 0 24 24" aria-hidden="true">${item.iconPaths}</svg>${dot}`;
+function buildIcon(item: NavItem, sizeClass: string): Html {
+  const dot = item.hasLiveDot ? html`<span class="live-dot"></span>` : html``;
+  return html`<svg class="${esc(sizeClass)}" viewBox="0 0 24 24" aria-hidden="true">${item.iconPaths}</svg>${dot}`;
 }
 
 function buildMainBarButton(item: NavItem): HTMLButtonElement {
@@ -121,8 +123,7 @@ function buildMainBarButton(item: NavItem): HTMLButtonElement {
   btn.className = 'bottom-nav-btn';
   btn.id = bnDomId(item.id);
   if (item.hiddenByDefault) btn.style.display = 'none';
-  btn.innerHTML = `<span class="bn-icon" aria-hidden="true">${buildIcon(item, 'rail-icon')}</span>` +
-    `<span class="bn-label" data-i18n="${item.i18nKey}">${t(item.i18nKey)}</span>`;
+  btn.innerHTML = html`<span class="bn-icon" aria-hidden="true">${buildIcon(item, 'rail-icon')}</span><span class="bn-label" data-i18n="${esc(item.i18nKey)}">${tHtml(item.i18nKey)}</span>`;
   return btn;
 }
 
@@ -131,7 +132,7 @@ function buildMoreSheetButton(item: NavItem): HTMLButtonElement {
   btn.className = 'more-sheet-item';
   btn.id = bnDomId(item.id);
   if (item.hiddenByDefault) btn.style.display = 'none';
-  btn.innerHTML = `${buildIcon(item, 'rail-icon sm')}<span data-i18n="${item.i18nKey}">${t(item.i18nKey)}</span>`;
+  btn.innerHTML = html`${buildIcon(item, 'rail-icon sm')}<span data-i18n="${esc(item.i18nKey)}">${tHtml(item.i18nKey)}</span>`;
   return btn;
 }
 
@@ -200,18 +201,17 @@ export function renderBottomNav(): void {
   const mainBarIds = getBottomNavConfig();
   const moreSheetIds = ALL_IDS.filter(id => !mainBarIds.includes(id));
 
-  bar.innerHTML = '';
+  bar.innerHTML = html``;
   mainBarIds.forEach(id => bar.appendChild(buildMainBarButton(NAV_ITEM_MAP[id])));
   const moreBtn = document.createElement('button');
   moreBtn.className = 'bottom-nav-btn';
   moreBtn.id = 'bnMore';
   moreBtn.setAttribute('aria-haspopup', 'true');
   moreBtn.setAttribute('aria-expanded', 'false');
-  moreBtn.innerHTML = '<span class="bn-icon" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span>' +
-    `<span class="bn-label" data-i18n="nav_more">${t('nav_more')}</span>`;
+  moreBtn.innerHTML = html`<span class="bn-icon" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span><span class="bn-label" data-i18n="nav_more">${tHtml('nav_more')}</span>`;
   bar.appendChild(moreBtn);
 
-  sheet.innerHTML = '';
+  sheet.innerHTML = html``;
   moreSheetIds.forEach(id => sheet.appendChild(buildMoreSheetButton(NAV_ITEM_MAP[id])));
 
   mainBarIds.forEach(id => (document.getElementById(bnDomId(id)) as HTMLElement).addEventListener('click', () => onNavClick(id)));
@@ -275,7 +275,7 @@ function buildReorderButton(dir: 'up' | 'down', row: SettingsRow, label: string)
   btn.dataset.dir = dir;
   btn.setAttribute('aria-label', label);
   btn.disabled = dir === 'up' ? !row.canMoveUp : !row.canMoveDown;
-  btn.innerHTML = dir === 'up' ? '&#8593;' : '&#8595;';
+  btn.innerHTML = dir === 'up' ? html`&#8593;` : html`&#8595;`;
   btn.addEventListener('click', () => moveSelectedItem(row.id, dir));
   return btn;
 }
@@ -286,7 +286,7 @@ export function renderBottomNavSettings(): void {
   const container = document.getElementById('bottomNavConfigList');
   if (!container) return;
 
-  container.innerHTML = '';
+  container.innerHTML = html``;
   computeSettingsRows().forEach(row => {
     const item = NAV_ITEM_MAP[row.id];
     const rowEl = document.createElement('div');
