@@ -13,6 +13,29 @@ const commonRules = {
   ],
 };
 
+// #1104 L1: in the TypeScript sources every innerHTML/outerHTML write and every
+// insertAdjacentHTML call must receive an Html value (the html`` tag, joinHtml(),
+// tHtml(), or another Html-returning helper — see public-src/utils.ts / i18n.ts).
+// A raw string literal, an untagged template literal, a `+` concatenation, or a
+// conditional/logical whose branch is one of those would smuggle an unescaped
+// value into a markup sink, so those right-hand sides are errors. Html-producing
+// calls, tagged templates, constants and identifiers stay allowed — telling a
+// plain-string identifier apart from an Html-branded one needs type information
+// that a syntax selector does not have, so identifiers rely on the Html brand.
+const htmlSinkMessage =
+  'innerHTML/outerHTML must be assigned an Html value built with the html template tag, joinHtml(), tHtml() or another Html-returning helper (see public-src/utils.ts); a raw string, untagged template or + concatenation is not escaped (#1104).';
+const rawMarkup = (path) => `[${path}.type=/^(?:Literal|TemplateLiteral|BinaryExpression)$/]`;
+const htmlSinkRules = [
+  ...['right', 'right.consequent', 'right.alternate', 'right.left', 'right.right'].map((path) => ({
+    selector: `AssignmentExpression[left.property.name=/^(inner|outer)HTML$/]${rawMarkup(path)}`,
+    message: htmlSinkMessage,
+  })),
+  ...['arguments.1', 'arguments.1.consequent', 'arguments.1.alternate', 'arguments.1.left', 'arguments.1.right'].map((path) => ({
+    selector: `CallExpression[callee.property.name="insertAdjacentHTML"]${rawMarkup(path)}`,
+    message: htmlSinkMessage,
+  })),
+];
+
 module.exports = [
   {
     // go/ is Go, not JS — except the browser scripts under
@@ -86,6 +109,9 @@ module.exports = [
     rules: {
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
+      // #1104 L1: block unescaped values from reaching the innerHTML/outerHTML
+      // and insertAdjacentHTML markup sinks in the migrated TypeScript sources.
+      'no-restricted-syntax': ['error', ...htmlSinkRules],
     },
   }),
   {
