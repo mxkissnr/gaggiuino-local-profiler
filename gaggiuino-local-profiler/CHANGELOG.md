@@ -33,7 +33,6 @@
 - **The app architecture diagram now shows the importer and backup/restore paths through the REST API.** Part of #1176
 - **The README's architecture diagrams are now coloured and readable, and the README's AI note credits DeepSeek alongside Claude.** Closes #1180
 - **The README's architecture diagrams are now grouped into named areas and toned for readability in both GitHub themes.** Part of #1180
-- **The API spec now documents the existing milk restock endpoint, and a contract test keeps every documented API route wired to the server.** Part of #1103
 
 ## [3.2.0] – 2026-09-26
 ### Added

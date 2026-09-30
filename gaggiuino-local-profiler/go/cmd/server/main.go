@@ -147,6 +147,9 @@ func main() {
 	}
 }
 
+// onMux lets tests inspect the fully-registered mux (openapi_routes_test.go).
+var onMux func(*http.ServeMux)
+
 // buildApp wires every internal/* domain into the full net/http handler
 // chain server.js registers, exactly as main() did inline before Phase 3
 // (#901) split it out so cmd/server's HA-ingress smoke test can exercise
@@ -154,9 +157,6 @@ func main() {
 // background poller's tickers — cancelling it shuts the poller (and its
 // live-poll goroutine) down cleanly. The returned *sql.DB is the caller's
 // to Close.
-// onMux lets tests inspect the fully-registered mux (openapi_routes_test.go).
-var onMux func(*http.ServeMux)
-
 func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error) {
 	dbPath := cfg.dbPath
 	tokenPath := cfg.tokenPath
