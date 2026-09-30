@@ -575,8 +575,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const grindEl   = document.getElementById('annGrindSetting') as HTMLInputElement | null;
       const doseEl    = document.getElementById('annDose') as HTMLInputElement | null;
       if (suggested.grinder      && grinderEl) grinderEl.value = suggested.grinder;
-      if (suggested.grindSetting && grindEl)   grindEl.value   = suggested.grindSetting;
-      if (suggested.dose         && doseEl)    doseEl.value    = suggested.dose;
+      if (suggested.grindSetting && grindEl)   grindEl.value   = String(suggested.grindSetting);
+      if (suggested.dose         && doseEl)    doseEl.value    = String(suggested.dose);
 
       // Find roast date from the active bag at shot time
       const shot   = S.primaryShotId ? S.shots?.find(s => s.id === S.primaryShotId) : null;
@@ -888,7 +888,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('devExportDbBtn')?.addEventListener('click', exportDevDb);
   document.getElementById('devImportDbInput')?.addEventListener('change', e => {
     const input = e.target as HTMLInputElement;
-    importDevDb(input.files[0]);
+    importDevDb(input.files![0]);
     input.value = '';
   });
   document.getElementById('apiTokenCopyBtn')!.addEventListener('click', copyApiToken);
