@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { filterSuggestions, attachAutocomplete, type AutocompleteHandle } from '../public-src/components/autocomplete.js';
 
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`missing element at index ${i}`);
+  return v;
+}
+
 describe('filterSuggestions — pure filtering logic', () => {
   const list = ['Bourbon', 'Bourbon Rojo', 'Geisha', 'Gesha', 'SL28', 'Caturra'];
 
@@ -122,7 +128,7 @@ function makeFakeDoc(): FakeDocument {
       get innerHTML() { return el._html; },
       set innerHTML(v) { el._html = v; if (v === '') el._children = []; },
       setAttribute(k, v) { el._attrs[k] = String(v); },
-      getAttribute(k) { return Object.prototype.hasOwnProperty.call(el._attrs, k) ? el._attrs[k] : null; },
+      getAttribute(k) { return Object.prototype.hasOwnProperty.call(el._attrs, k) ? (el._attrs[k] ?? null) : null; },
       removeAttribute(k) { delete el._attrs[k]; },
       appendChild(child) {
         if (child.parentNode && child.parentNode._children) {
@@ -170,7 +176,7 @@ describe('attachAutocomplete — DOM wiring', () => {
   it('wraps the input in a positioned wrap div and sets combobox ARIA', () => {
     const { input, field } = setup(options);
     expect(field._children).toHaveLength(1);
-    expect(field._children[0].className).toBe('autocomplete-wrap');
+    expect(at(field._children, 0).className).toBe('autocomplete-wrap');
     expect(input.getAttribute('role')).toBe('combobox');
     expect(input.getAttribute('aria-expanded')).toBe('false');
     expect(input.getAttribute('aria-controls')).toBe('beanFormVariety-listbox');
@@ -211,13 +217,13 @@ describe('attachAutocomplete — DOM wiring', () => {
     const { input, list } = setup(options);
     input.fire('focus');
     input.fire('keydown', { key: 'ArrowDown' });
-    expect(list.children[0].classList.contains('active')).toBe(true);
-    expect(input.getAttribute('aria-activedescendant')).toBe(list.children[0].id);
+    expect(at(list.children, 0).classList.contains('active')).toBe(true);
+    expect(input.getAttribute('aria-activedescendant')).toBe(at(list.children, 0).id);
     input.fire('keydown', { key: 'ArrowDown' });
-    expect(list.children[1].classList.contains('active')).toBe(true);
-    expect(list.children[0].classList.contains('active')).toBe(false);
+    expect(at(list.children, 1).classList.contains('active')).toBe(true);
+    expect(at(list.children, 0).classList.contains('active')).toBe(false);
     input.fire('keydown', { key: 'ArrowUp' });
-    expect(list.children[0].classList.contains('active')).toBe(true);
+    expect(at(list.children, 0).classList.contains('active')).toBe(true);
   });
 
   it('Enter selects the active item and fires input+change', () => {
@@ -266,7 +272,7 @@ describe('attachAutocomplete — DOM wiring', () => {
     const { input, list } = setup(options);
     input.fire('focus');
     let prevented = false;
-    list.children[1].fire('pointerdown', { preventDefault() { prevented = true; } });
+    at(list.children, 1).fire('pointerdown', { preventDefault() { prevented = true; } });
     expect(prevented).toBe(true);
     expect(input.value).toBe('Bourbon Rojo');
     expect(list.hidden).toBe(true);

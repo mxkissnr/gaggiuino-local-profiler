@@ -18,6 +18,22 @@ beforeAll(async () => {
   ({ splitAntimeridianRing } = await import('../public-src/views/analytics.js'));
 });
 
+// These rings are plain number[][] (not tuples), so every element access
+// would be `number | undefined` under noUncheckedIndexedAccess. These helpers
+// narrow it back by throwing on a missing element — the ring fixtures and the
+// split output always have the points/coordinates the assertions read.
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`no element at index ${i}`);
+  return v;
+}
+
+function coord(point: readonly number[], k: number): number {
+  const v = point[k];
+  if (v === undefined) throw new Error(`no coordinate at index ${k}`);
+  return v;
+}
+
 describe('splitAntimeridianRing', () => {
     it('passes a normal ring through unchanged', () => {
         const ring = [[10, 50], [12, 51], [12, 48], [10, 50]];
@@ -34,12 +50,12 @@ describe('splitAntimeridianRing', () => {
         const result = splitAntimeridianRing(ring);
         expect(result.length).toBeGreaterThan(1);
         for (const piece of result) {
-            for (const [lon] of piece) {
-                expect(Math.abs(lon)).toBeLessThanOrEqual(180);
+            for (const point of piece) {
+                expect(Math.abs(coord(point, 0))).toBeLessThanOrEqual(180);
             }
             // no consecutive points within a single piece should still jump >180°
             for (let i = 1; i < piece.length; i++) {
-                expect(Math.abs(piece[i][0] - piece[i - 1][0])).toBeLessThanOrEqual(180);
+                expect(Math.abs(coord(at(piece, i), 0) - coord(at(piece, i - 1), 0))).toBeLessThanOrEqual(180);
             }
             // each resulting piece must be a closed ring
             expect(piece[0]).toEqual(piece[piece.length - 1]);
@@ -54,7 +70,7 @@ describe('splitAntimeridianRing', () => {
         expect(result.length).toBeGreaterThan(1);
         for (const piece of result) {
             for (let i = 1; i < piece.length; i++) {
-                expect(Math.abs(piece[i][0] - piece[i - 1][0])).toBeLessThanOrEqual(180);
+                expect(Math.abs(coord(at(piece, i), 0) - coord(at(piece, i - 1), 0))).toBeLessThanOrEqual(180);
             }
         }
     });
@@ -75,23 +91,23 @@ describe('splitAntimeridianRing', () => {
         ];
         const result = splitAntimeridianRing(ring);
         expect(result).toHaveLength(1);
-        const piece = result[0];
+        const piece = at(result, 0);
         // The pole-hug detour has one intentional ±180 edge at the pole
         // itself (geographically a single point, rendered right at the map's
         // border) — that's fine. Any *other* consecutive pair must not jump
         // the seam, or the line would cut across the visible map body.
         for (let i = 1; i < piece.length; i++) {
-            const jump = Math.abs(piece[i][0] - piece[i - 1][0]);
+            const jump = Math.abs(coord(at(piece, i), 0) - coord(at(piece, i - 1), 0));
             if (jump > 180) {
-                expect(Math.abs(piece[i][1])).toBe(90);
-                expect(Math.abs(piece[i - 1][1])).toBe(90);
+                expect(Math.abs(coord(at(piece, i), 1))).toBe(90);
+                expect(Math.abs(coord(at(piece, i - 1), 1))).toBe(90);
             }
         }
         // Still closed.
         expect(piece[0]).toEqual(piece[piece.length - 1]);
         // The detour actually dips toward the pole rather than just
         // re-appending the ±180 duplicate directly.
-        expect(piece.some(([, lat]) => lat <= -89)).toBe(true);
+        expect(piece.some(point => coord(point, 1) <= -89)).toBe(true);
     });
 
     it('closes each piece of a ring with multiple antimeridian crossings independently, not with a direct chord', () => {
@@ -104,7 +120,7 @@ describe('splitAntimeridianRing', () => {
         const result = splitAntimeridianRing(ring);
         for (const piece of result) {
             for (let i = 1; i < piece.length; i++) {
-                expect(Math.abs(piece[i][0] - piece[i - 1][0])).toBeLessThanOrEqual(180);
+                expect(Math.abs(coord(at(piece, i), 0) - coord(at(piece, i - 1), 0))).toBeLessThanOrEqual(180);
             }
         }
     });

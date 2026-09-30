@@ -137,6 +137,6 @@ function _parseBrewRatio(brewRatio: string | number | null | undefined): number 
   if (!brewRatio) return null;
   const m = String(brewRatio).trim().match(/^1\s*:\s*([\d.]+)$/);
   if (!m) return null;
-  const n = parseFloat(m[1]);
+  const n = parseFloat(m[1] ?? '');
   return Number.isFinite(n) && n > 0 ? n : null;
 }
