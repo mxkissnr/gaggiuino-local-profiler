@@ -21,12 +21,14 @@ export type ShotAnnotation = components['schemas']['Annotation'];
 
 /**
  * POST /api/shots/{id}/annotate body. The generated Annotation schema types
- * `dose` as number|null, but the manual panel and both dial-in wizards pass the
- * raw form value (string or number) straight through; name what the endpoint
+ * `dose` as number|null and `roastDate` as a non-null string, but the manual
+ * panel and both dial-in wizards pass the raw form value (string or number) and
+ * the panel's possibly-null roast date straight through; name what the endpoint
  * actually receives so the callers need no cast (see #1103).
  */
-export type ShotAnnotationInput = Omit<ShotAnnotation, 'dose'> & {
+export type ShotAnnotationInput = Omit<ShotAnnotation, 'dose' | 'roastDate'> & {
   dose?: string | number | null;
+  roastDate?: string | null;
 };
 
 /**

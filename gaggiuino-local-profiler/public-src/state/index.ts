@@ -84,7 +84,7 @@ export interface LiveSlice {
   liveWasLive: boolean;
   liveBrewStartWall: number | null;
   liveTimerTick: number | null;
-  machinePowerState: string | null;
+  machinePowerState: boolean | null;
   machineReachable: boolean | null;
 }
 
