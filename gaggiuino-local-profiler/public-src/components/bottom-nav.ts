@@ -202,7 +202,10 @@ export function renderBottomNav(): void {
   const moreSheetIds = ALL_IDS.filter(id => !mainBarIds.includes(id));
 
   bar.innerHTML = html``;
-  mainBarIds.forEach(id => bar.appendChild(buildMainBarButton(NAV_ITEM_MAP[id])));
+  mainBarIds.forEach(id => {
+    const item = NAV_ITEM_MAP[id];
+    if (item) bar.appendChild(buildMainBarButton(item));
+  });
   const moreBtn = document.createElement('button');
   moreBtn.className = 'bottom-nav-btn';
   moreBtn.id = 'bnMore';
@@ -212,7 +215,10 @@ export function renderBottomNav(): void {
   bar.appendChild(moreBtn);
 
   sheet.innerHTML = html``;
-  moreSheetIds.forEach(id => sheet.appendChild(buildMoreSheetButton(NAV_ITEM_MAP[id])));
+  moreSheetIds.forEach(id => {
+    const item = NAV_ITEM_MAP[id];
+    if (item) sheet.appendChild(buildMoreSheetButton(item));
+  });
 
   mainBarIds.forEach(id => (document.getElementById(bnDomId(id)) as HTMLElement).addEventListener('click', () => onNavClick(id)));
   moreBtn.addEventListener('click', toggleMoreSheet);
@@ -262,7 +268,9 @@ function moveSelectedItem(id: string, dir: 'up' | 'down'): void {
   if (i <= 0) return; // not selected, or "shots" (always index 0)
   const j = dir === 'up' ? i - 1 : i + 1;
   if (j <= 0 || j >= cur.length) return; // never swap into/out of the shots slot
-  [cur[i], cur[j]] = [cur[j], cur[i]];
+  const a = cur[i], b = cur[j];
+  if (a === undefined || b === undefined) return;
+  cur[i] = b; cur[j] = a;
   setBottomNavConfig(cur);
   renderBottomNav();
   renderBottomNavSettings();
@@ -289,6 +297,7 @@ export function renderBottomNavSettings(): void {
   container.innerHTML = html``;
   computeSettingsRows().forEach(row => {
     const item = NAV_ITEM_MAP[row.id];
+    if (!item) return;
     const rowEl = document.createElement('div');
     rowEl.className = 'bottom-nav-config-row';
 
