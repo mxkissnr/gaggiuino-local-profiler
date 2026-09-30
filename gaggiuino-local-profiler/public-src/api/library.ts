@@ -85,7 +85,7 @@ export async function adjustFrozenPortion(beanId: number, payload: AdjustFrozenP
 /** POST /api/library/bean/{id}/known-grind — remember a (grinder, grindSetting) pair. */
 export async function saveBeanKnownGrind(
   id: number,
-  payload: { grinder?: string; grindSetting?: string },
+  payload: { grinder?: string; grindSetting?: string | number },
 ): Promise<Bean | null> {
   return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/known-grind`, _json('POST', payload)));
 }

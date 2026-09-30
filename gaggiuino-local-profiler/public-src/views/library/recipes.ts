@@ -13,16 +13,16 @@ import type { ShotMeta } from '../../state/index.js';
 const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_TRASH: Html  = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
 
-// state/index.ts's CoffeeLibrary only declares beans/grinders and it has no
-// recipeEditId (unlike the basket/puck-screen edit ids); this section owns the
-// recipe collection and that id, reached through one typed view of S (same
-// pattern as views/shots/index.ts's _libCollection).
+// state/index.ts's CoffeeLibrary types the recipe collection as Recipe[] but
+// has no recipeEditId (unlike the basket/puck-screen edit ids); this section
+// declares just the slice of S it reads (same pattern as
+// views/library/baskets.ts).
 interface RecipeState {
   recipeEditId?: number | null;
   coffeeLibrary: { recipes?: Recipe[] };
 }
 function _state(): RecipeState {
-  return S as unknown as RecipeState;
+  return S;
 }
 
 // Shot rows are typed metadata-only (ShotMeta); this section reads the
