@@ -7,14 +7,14 @@ import { esc, html, joinHtml } from '../../utils.js';
 import { CLOSE_ICON_SVG } from '../../icons.js';
 import type { Milk } from '../../api/types.js';
 
-// state/index.ts's CoffeeLibrary only declares beans/grinders; this section
-// owns the milk collection, reached through this typed view of S (same pattern
-// as views/shots/index.ts's _libCollection).
+// state/index.ts's CoffeeLibrary types the milk collection as Milk[]; this
+// section declares just the slice of S it reads (same pattern as
+// views/library/baskets.ts).
 interface MilkState {
   coffeeLibrary: { milks?: Milk[] };
 }
 function _state(): MilkState {
-  return S as unknown as MilkState;
+  return S;
 }
 
 const _el = (id: string): HTMLInputElement => document.getElementById(id) as HTMLInputElement;

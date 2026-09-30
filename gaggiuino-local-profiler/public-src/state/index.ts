@@ -1,6 +1,6 @@
 import type { Chart } from 'chart.js';
 import { TRANSLATIONS } from '../constants.js';
-import type { Basket, PuckScreen } from '../api/types.js';
+import type { Basket, Milk, PuckScreen, Recipe } from '../api/types.js';
 
 // ── State ─────────────────────────────────────────────────────────────────
 // S is one flat runtime object — every view reads S.<field> directly. The
@@ -37,11 +37,13 @@ export type LibraryRow = Record<string, unknown>;
 export interface CoffeeLibrary {
   beans: LibraryRow[];
   grinders: LibraryRow[];
-  // Baskets/puck screens load with the rest of the library; typed with the
-  // real API shapes so views can read them (and the collection-by-name
-  // lookup) without casting coffeeLibrary.
+  // Baskets/puck screens/recipes/milks load with the rest of the library;
+  // typed with the real API shapes so views can read them (and the
+  // collection-by-name lookup) without casting coffeeLibrary.
   baskets?: Basket[];
   puckScreens?: PuckScreen[];
+  recipes?: Recipe[];
+  milks?: Milk[];
 }
 
 // BarcodeDetector is not in TypeScript's DOM lib yet; only the shape GLP uses.

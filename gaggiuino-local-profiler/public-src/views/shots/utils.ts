@@ -1,5 +1,4 @@
 import { S }                    from '../../state/index.js';
-import type { LibraryRow }      from '../../state/index.js';
 import { mapShotDatapoints }    from '../../utils.js';
 import type { ShotDatapoints, ShotSeries } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
@@ -30,12 +29,12 @@ interface BeanBag {
   roastDate?: string | null;
 }
 
-interface BeanRecord {
+type BeanRecord = {
   id: number;
   name?: string | null;
   roastDate?: string | null;
   bags?: BeanBag[];
-}
+};
 
 // ── Bean age ───────────────────────────────────────────────────────────────
 
@@ -55,9 +54,9 @@ function _parseDMY(str: string | null | undefined): number {
 // absent, or points at nothing currently in the library, does this fall
 // back to a name match (recovering a delete+reimport under the same name,
 // and covering annotations that predate beanId).
-export function resolveBeanForAnnotation(annotation: unknown, beans?: unknown): LibraryRow | null {
+export function resolveBeanForAnnotation(annotation: unknown, beans?: unknown): BeanRecord | null {
   const ann = annotation as ShotAnnotationLike | null | undefined;
-  const list = (Array.isArray(beans) ? beans : S.coffeeLibrary?.beans || []) as LibraryRow[];
+  const list = (Array.isArray(beans) ? beans : S.coffeeLibrary?.beans || []) as BeanRecord[];
   if (ann?.beanId != null) {
     const byId = list.find(b => b.id === ann.beanId);
     if (byId) return byId;
@@ -65,7 +64,7 @@ export function resolveBeanForAnnotation(annotation: unknown, beans?: unknown): 
   const name = ann?.coffee;
   if (!name) return null;
   const key = String(name).toLowerCase();
-  return list.find(b => String((b.name || '') as string).toLowerCase() === key) || null;
+  return list.find(b => String(b.name || '').toLowerCase() === key) || null;
 }
 
 export function _roastDateFromLibrary(
@@ -74,7 +73,7 @@ export function _roastDateFromLibrary(
   beanId?: number | null,
 ): string | null {
   if (!S.coffeeLibrary) return null;
-  const bean = resolveBeanForAnnotation({ coffee: beanName, beanId }, S.coffeeLibrary.beans) as unknown as BeanRecord | null;
+  const bean = resolveBeanForAnnotation({ coffee: beanName, beanId }, S.coffeeLibrary.beans);
   if (!bean) return null;
   const shotMs = (shotTimestampSec || Date.now() / 1000) * 1000;
   const bags   = Array.isArray(bean.bags) ? bean.bags : [];
@@ -94,7 +93,7 @@ export function calcBeanAgeAtShot(
   beanId?: number | null,
 ): number | null {
   if (!shotTimestampSec || !S.coffeeLibrary) return null;
-  const bean = resolveBeanForAnnotation({ coffee: beanName, beanId }, S.coffeeLibrary.beans) as unknown as BeanRecord | null;
+  const bean = resolveBeanForAnnotation({ coffee: beanName, beanId }, S.coffeeLibrary.beans);
   if (!bean) return null;
   const shotMs = shotTimestampSec * 1000;
   const bags   = Array.isArray(bean.bags) ? bean.bags : [];
