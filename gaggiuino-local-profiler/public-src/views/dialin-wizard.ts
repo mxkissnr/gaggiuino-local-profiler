@@ -52,7 +52,7 @@ interface DialinReviewRound {
   suggestion?: DialinSuggestion;
 }
 
-interface DialinSession {
+interface DialinSession extends Record<string, unknown> {
   id: number;
   startedAt: number;
   bean: string;
@@ -84,7 +84,7 @@ const POLL_MS = 3000;
 let _pollTimer: ReturnType<typeof setInterval> | null = null;
 
 function _session(): DialinSession | null {
-  return S.dialinSession as unknown as DialinSession | null;
+  return S.dialinSession as DialinSession | null;
 }
 
 function _shots(): DialinShotRow[] {
@@ -213,7 +213,7 @@ async function _evalShot(shot: DialinShotRow): Promise<{ secs: number; channelin
   const channeling = detectChanneling(pTimes, pAll);
   // calcBrewRatio declares the annotation dose as a string, but the API stores
   // a number here (which is why it parseFloat()s it) — keep passing the real value.
-  const ratio = calcBrewRatio(shot as unknown as { annotation?: { dose?: string | null } | null }, data);
+  const ratio = calcBrewRatio(shot as { annotation?: { dose?: string | null } | null }, data);
   const score = calcShotScore(shot);
   return { secs, channeling, ratio, score };
 }
@@ -326,6 +326,8 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
     dose: s.dose || null, recipeId: s.recipeId || null,
   };
   try {
+    // TODO(#1103): AnnotationSchema types dose as number|null, but the wizard
+    // passes the form value (string or number) straight through.
     const r = await annotateShot(shotId, payload as unknown as ShotAnnotation);
     if (r.ok) {
       const rows = _shots();

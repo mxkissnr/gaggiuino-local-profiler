@@ -34,10 +34,10 @@ const SO = S as OrdersRuntimeState;
 // Hand-built view of GET /api/switch as loadOrdersView reads it.
 interface SwitchState { configured?: boolean; state?: boolean }
 
-// S._ordersEtaSelected / S._ordersDeclineOpen are typed by numeric order id,
-// but the ids arrive as dataset strings — this keeps the runtime key (a
-// string either way) and the declared key type honest at the call sites.
-const _idKey = (id: string | undefined): number => id as unknown as number;
+// S._ordersEtaSelected / S._ordersDeclineOpen are keyed by the order id that
+// arrives as a dataset string — keep the runtime key a string and type the
+// lookup accordingly (object keys are strings at runtime either way).
+const _idKey = (id: string | undefined): string => id as string;
 
 // addEventListener's handler is typed void-returning; async click/change work
 // goes through this helper, which makes the fire-and-forget the .js already
@@ -58,7 +58,7 @@ const NOTIFY_TYPE_KEYS = [
   { key: 'notify_shop_state',    i18nKey: 'orders_type_shop_state' },
   { key: 'notify_new_order',     i18nKey: 'orders_type_new_order' },
   { key: 'notify_order_status',  i18nKey: 'orders_type_order_status' },
-];
+] as const;
 
 // Typed "value or fallback" wrappers: the API helpers already fall back to
 // empty values at each call site, but a bare .catch(() => ({})) widens the
@@ -92,7 +92,7 @@ export function toggleOrdersMenu(): void {
 function _playOrderChime(): void {
   try {
     const Ctor = (window.AudioContext
-      || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
+      || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
     const ctx  = new Ctor();
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -568,7 +568,7 @@ export async function loadNotifyMappingView(): Promise<void> {
   // ── Notification types section ─────────────────────────────── (#603)
   const typesRows = NOTIFY_TYPE_KEYS.map(({ key, i18nKey }) => `
       <div class="orders-broadcast-row">
-        <input type="checkbox" id="nt_${key}" data-notify-key="${key}"${(settings as unknown as Record<string, unknown>)[key] !== false ? ' checked' : ''}>
+        <input type="checkbox" id="nt_${key}" data-notify-key="${key}"${settings[key] !== false ? ' checked' : ''}>
         <label for="nt_${key}">${t(i18nKey)}</label>
       </div>`).join('');
 

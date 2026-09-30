@@ -83,7 +83,7 @@ export function getDefaultMachineId(): number | null {
 // S.activeMachineId live on every call, never cached, since both can change
 // independently of each other (machine list reload vs. topbar switch).
 export function getActiveMachine(): MachineView | null {
-  const machines = (S.machines || []) as unknown as MachineView[];
+  const machines = (S.machines || []) as MachineView[];
   const defaultMachine = machines.find(m => m.isDefault) || null;
   const active = S.activeMachineId;
   if (active == null || active === 'all') return defaultMachine;
@@ -223,6 +223,8 @@ export async function loadMachines(): Promise<void> {
   try {
     const machines = await machinesApi.listMachines();
     if (!machines) return;
+    // TODO(#1103): the API Machine type (schema.gen) has an optional id while
+    // S.machines' MachineRecord requires one, so this narrowing stays forced.
     setState('machines', machines as unknown as MachineRecord[]);
     if (!S.activeMachineId) {
       const def = machines.find(m => m.isDefault) || machines[0];
@@ -267,7 +269,7 @@ export function renderMachineSwitcher(): void {
   // hosts #expandSidebarBtn) rather than collapsing itself away, since that
   // visibility would depend on two independently-changing things (this and
   // the sidebar's own collapsed state) for one thin, low-cost bar.
-  const machines = (S.machines || []) as unknown as MachineView[];
+  const machines = (S.machines || []) as MachineView[];
   if (machines.length < 2) {
     el.style.display = 'none'; el.innerHTML = '';
     return;
@@ -330,7 +332,7 @@ export function renderMachinesList(): void {
   // them writing into detached DOM.
   stopAllFirmwarePolls();
   list.innerHTML = '';
-  ((S.machines || []) as unknown as MachineView[]).forEach(m => {
+  ((S.machines || []) as MachineView[]).forEach(m => {
     // #334: per-machine shot count, computed client-side from S.allShots
     // (already carries machineId per shot, see ShotRepository) — no backend
     // change needed. A shot with no machineId at all belongs to the default
@@ -799,8 +801,8 @@ export function closeMachineForm(): void {
 // strictly, so an extra JSON field would be unclean at best.
 async function _saveMachine({ triggerSync = true }: { triggerSync?: boolean } = {}): Promise<string | number | null> {
   const id = (document.getElementById('machineFormId') as HTMLInputElement).value;
-  const type = (document.getElementById('machineFormType') as HTMLSelectElement).value;
-  const payload = {
+  const type = (document.getElementById('machineFormType') as HTMLSelectElement).value as 'gaggiuino' | 'gaggimate';
+  const payload: MachineSaveInput = {
     name: (document.getElementById('machineFormName') as HTMLInputElement).value.trim(),
     type,
     host: (document.getElementById('machineFormHost') as HTMLInputElement).value.trim(),
@@ -810,7 +812,7 @@ async function _saveMachine({ triggerSync = true }: { triggerSync?: boolean } = 
   };
   if (!payload.name || !payload.host) return null;
   const resultEl = document.getElementById('machineFormTestResult');
-  const r = await machinesApi.saveMachine(id || null, payload as unknown as MachineSaveInput, { triggerSync });
+  const r = await machinesApi.saveMachine(id || null, payload, { triggerSync });
   if (r.ok) {
     const data = await r.json().catch(() => ({})) as { error?: string; id?: number; reachable?: boolean };
     return id || data?.id || null;
@@ -923,7 +925,7 @@ export async function testMachineForm(): Promise<void> {
   }
   // #730: raw (uncoerced) write-back — the DOM stringifies it anyway, and the
   // id may still be the server's numeric one on create.
-  (document.getElementById('machineFormId') as HTMLInputElement).value = id as unknown as string;
+  (document.getElementById('machineFormId') as HTMLInputElement).value = id as string;
   await _testMachine(id);
   void loadMachines();
   if (btn) btn.disabled = false;

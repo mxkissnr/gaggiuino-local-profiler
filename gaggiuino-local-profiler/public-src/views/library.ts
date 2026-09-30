@@ -31,10 +31,10 @@ const ICON_QR      = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" he
 const ICON_PLUS    = `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/></svg>`;
 
 // ── Typed views of S ──────────────────────────────────────────────────────
-// state/index.ts types library rows as opaque LibraryRow records and its
-// coffeeLibrary only declares beans/grinders; this view owns the bean shape
-// plus the bag-level fields the backend attaches on read, reached through one
-// typed view of the same array/state (same pattern as views/library/bags.ts).
+// state/index.ts types library rows as opaque LibraryRow records; this view
+// owns the bean shape plus the bag-level fields the backend attaches on read,
+// reached through one typed view of the same array/state (same pattern as
+// views/library/bags.ts).
 type BeanListRow = BeanRow & {
   consumedG?: number | undefined;
   remainingG?: number | null | undefined;
@@ -72,7 +72,7 @@ interface LibraryState {
   _urlImportImageUrl?: string | null;
   _urlImportExtraRecipes?: BeanFormExtraRecipe[] | null;
 }
-function _state(): LibraryState { return S as LibraryState; }
+function _state(): LibraryState { return S; }
 
 // Shot rows are metadata-only (ShotMeta); the bean list reads the annotation's
 // coffee/rating fields and the timestamp — named here, same convention as
