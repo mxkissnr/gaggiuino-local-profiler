@@ -480,7 +480,7 @@ export function updatePowerButton(sw: SwitchPayload): void {
   }
   btn.style.display = '';
   if (railBtn) railBtn.style.display = '';
-  S.machinePowerState = (sw.state ?? null) as unknown as string | null;
+  S.machinePowerState = sw.state ?? null;
   btn.className = sw.state === true  ? 'machine-on'
                 : sw.state === false ? 'machine-off' : '';
   btn.title = sw.state === true  ? 'Maschine AN – zum Ausschalten klicken'

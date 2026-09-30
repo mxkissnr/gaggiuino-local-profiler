@@ -224,9 +224,7 @@ export async function loadMachines(): Promise<void> {
   try {
     const machines = await machinesApi.listMachines();
     if (!machines) return;
-    // TODO(#1103): the API Machine type (schema.gen) has an optional id while
-    // S.machines' MachineRecord requires one, so this narrowing stays forced.
-    setState('machines', machines as unknown as MachineRecord[]);
+    setState('machines', machines);
     if (!S.activeMachineId) {
       const [firstMachine] = machines;
       const def = machines.find(m => m.isDefault) || firstMachine;
