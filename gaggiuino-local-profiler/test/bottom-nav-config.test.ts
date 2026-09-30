@@ -177,6 +177,15 @@ interface FakeElement {
   classList: FakeClassList;
 }
 
+// _attrs is a Record, so with noUncheckedIndexedAccess a looked-up key is
+// possibly-undefined. This fake only reads keys the render path just wrote,
+// so make a miss fail loudly instead of asserting.
+function at<T>(rec: Record<string, T>, key: string): T {
+  const v = rec[key];
+  if (v === undefined) throw new Error(`fake element is missing ${key}`);
+  return v;
+}
+
 function makeFakeDocument() {
   const registry = new Map<string, FakeElement>();
   function makeElement(): FakeElement {
@@ -196,7 +205,7 @@ function makeFakeDocument() {
       appendChild(child: FakeElement) { el._children.push(child); return child; },
       contains(child: FakeElement) { return el._children.includes(child); },
       setAttribute(k: string, v: string) { el._attrs[k] = v; },
-      getAttribute(k: string) { return el._attrs[k]; },
+      getAttribute(k: string) { return at(el._attrs, k); },
       addEventListener(evt: string, fn: (evt: unknown) => void) { (el._listeners[evt] ||= []).push(fn); },
       click() { (el._listeners.click || []).forEach(fn => fn({})); },
       classList: {
