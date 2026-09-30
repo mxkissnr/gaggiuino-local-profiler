@@ -17,8 +17,9 @@
 // documented in machines-settings.js all apply here for free.
 import { S, subscribe } from '../state/index.js';
 import type { MachineRecord } from '../state/index.js';
-import { t } from '../i18n.js';
-import { esc } from '../utils.js';
+import { tHtml } from '../i18n.js';
+import { html } from '../utils.js';
+import type { Html } from '../utils.js';
 import { openMachineForm } from '../components/machines-settings.js';
 import { loadDemoData } from '../components/onboarding.js';
 
@@ -177,31 +178,31 @@ function _leaveConnectStep(): void {
   origParent.insertBefore(card, _formOrigNextSibling);
 }
 
-function _renderWelcome(): string {
-  return `<div class="dw-summary">
-    <div class="dw-summary-title">${esc(t('setup_wizard_welcome_title'))}</div>
-    <div class="dw-summary-reason">${esc(t('setup_wizard_welcome_body'))}</div>
+function _renderWelcome(): Html {
+  return html`<div class="dw-summary">
+    <div class="dw-summary-title">${tHtml('setup_wizard_welcome_title')}</div>
+    <div class="dw-summary-reason">${tHtml('setup_wizard_welcome_body')}</div>
     <div class="dw-actions">
-      <button class="lib-save-btn" data-action="setup-wizard-get-started">${esc(t('setup_wizard_get_started'))}</button>
-      <button class="lib-btn-sm" data-action="setup-wizard-close">${esc(t('setup_wizard_later'))}</button>
+      <button class="lib-save-btn" data-action="setup-wizard-get-started">${tHtml('setup_wizard_get_started')}</button>
+      <button class="lib-btn-sm" data-action="setup-wizard-close">${tHtml('setup_wizard_later')}</button>
     </div>
   </div>`;
 }
 
-function _renderConnectShell(): string {
-  return `<div class="dw-setup">
-    <div class="dw-summary-reason">${esc(t('setup_wizard_connect_body'))}</div>
+function _renderConnectShell(): Html {
+  return html`<div class="dw-setup">
+    <div class="dw-summary-reason">${tHtml('setup_wizard_connect_body')}</div>
     <div id="swConnectFormSlot"></div>
-    <button type="button" class="lib-btn-sm" data-action="setup-wizard-skip-demo">${esc(t('setup_wizard_demo_link'))}</button>
+    <button type="button" class="lib-btn-sm" data-action="setup-wizard-skip-demo">${tHtml('setup_wizard_demo_link')}</button>
   </div>`;
 }
 
-function _renderDone(): string {
-  return `<div class="dw-summary">
-    <div class="dw-summary-title">${esc(t('setup_wizard_done_title'))}</div>
-    <div class="dw-summary-reason">${esc(t('setup_wizard_done_body'))}</div>
+function _renderDone(): Html {
+  return html`<div class="dw-summary">
+    <div class="dw-summary-title">${tHtml('setup_wizard_done_title')}</div>
+    <div class="dw-summary-reason">${tHtml('setup_wizard_done_body')}</div>
     <div class="dw-actions">
-      <button class="lib-save-btn" data-action="setup-wizard-close">${esc(t('setup_wizard_done_btn'))}</button>
+      <button class="lib-save-btn" data-action="setup-wizard-close">${tHtml('setup_wizard_done_btn')}</button>
     </div>
   </div>`;
 }

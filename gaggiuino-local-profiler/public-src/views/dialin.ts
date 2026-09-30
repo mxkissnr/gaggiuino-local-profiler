@@ -1,8 +1,9 @@
 import { S } from '../state/index.js';
 import type { ShotMeta } from '../state/index.js';
-import { t } from '../i18n.js';
+import { tHtml } from '../i18n.js';
 import { localeFor } from '../constants.js';
-import { esc, scoreColor } from '../utils.js';
+import { esc, html, joinHtml, scoreColor } from '../utils.js';
+import type { Html } from '../utils.js';
 
 interface DialinAnnotation {
   dose?: string | number | null;
@@ -35,7 +36,7 @@ export async function renderDialin(): Promise<void> {
     .slice(0, n);
 
   if (recent.length === 0) {
-    grid.innerHTML = `<div class="dialin-empty">${t('dialin_empty')}</div>`;
+    grid.innerHTML = html`<div class="dialin-empty">${tHtml('dialin_empty')}</div>`;
     return;
   }
 
@@ -45,7 +46,7 @@ export async function renderDialin(): Promise<void> {
   if (window.ensureCurves) await window.ensureCurves(recent.map(s => s.id));
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  grid.innerHTML = recent.map(s => {
+  grid.innerHTML = joinHtml(recent.map(s => {
     const data  = window.getShotDataById ? window.getShotDataById(s.id) : null;
     const ann   = s.annotation || {};
     const score = window.calcShotScore ? window.calcShotScore(s) : null;
@@ -58,38 +59,38 @@ export async function renderDialin(): Promise<void> {
       pAvg = pActive.length ? (pActive.reduce((a, pt) => a + pt.y, 0) / pActive.length).toFixed(1) + ' bar' : '–';
     }
 
-    const dose   = ann.dose  ? esc(String(ann.dose)) + ' g'  : null;
-    const yield_ = s.weight  ? (s.weight / 10).toFixed(1) + ' g' : null;
-    const ratio  = (ann.dose && s.weight) ? '1:' + (s.weight / 10 / (ann.dose as number)).toFixed(1) : null;
+    const dose   = ann.dose  ? html`${esc(String(ann.dose))} g`  : null;
+    const yield_ = s.weight  ? html`${esc((s.weight / 10).toFixed(1))} g` : null;
+    const ratio  = (ann.dose && s.weight) ? html`1:${esc((s.weight / 10 / (ann.dose as number)).toFixed(1))}` : null;
     const date   = new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
     const profile = s.profile?.name || s.profileName || '–';
-    const scorePill = score != null
+    const scorePill: Html = score != null
       // #811: colour/size/radius moved to .score-pill in style.css so this
       // resolves through --on-fill and the type scale. The hardcoded #fff
       // measured 2.37-3.16:1 on the dark theme's semantic fills; only the
       // background stays inline, since it is computed per score.
-      ? `<span class="score-pill" style="background:${scoreColor(score)}">${score}</span>`
-      : '';
+      ? html`<span class="score-pill" style="background:${esc(scoreColor(score))}">${esc(score)}</span>`
+      : html``;
 
     const metrics = [
-      [t('dialin_pressure'), pAvg],
-      [t('dialin_duration'), dur],
-      dose   ? [t('dialin_dose'),  dose]   : null,
-      ratio  ? [t('dialin_ratio'), ratio]  : null,
-      yield_ ? [t('dialin_yield'), yield_] : null,
-    ].filter((m): m is [string, string] => m !== null).slice(0, 5);
+      [tHtml('dialin_pressure'), esc(pAvg)],
+      [tHtml('dialin_duration'), esc(dur)],
+      dose   ? [tHtml('dialin_dose'),  dose]   : null,
+      ratio  ? [tHtml('dialin_ratio'), ratio]  : null,
+      yield_ ? [tHtml('dialin_yield'), yield_] : null,
+    ].filter((m): m is [Html, Html] => m !== null).slice(0, 5);
 
-    return `<div class="dialin-card" data-action="goto-shot" data-id="${s.id}">
+    return html`<div class="dialin-card" data-action="goto-shot" data-id="${esc(s.id)}">
       <div class="dialin-card-head">
         <div>
           <div class="dialin-profile">${esc(profile)}</div>
-          <div class="dialin-date">${date}${ann.coffee ? ' · ' + esc(ann.coffee) : ''}</div>
+          <div class="dialin-date">${esc(date)}${ann.coffee ? html` · ${esc(ann.coffee)}` : html``}</div>
         </div>
         ${scorePill}
       </div>
       <div class="dialin-metrics">
-        ${metrics.map(([l, v]) => `<div class="dialin-metric"><span class="dialin-metric-lbl">${l}</span><span class="dialin-metric-val">${v}</span></div>`).join('')}
+        ${joinHtml(metrics.map(([l, v]) => html`<div class="dialin-metric"><span class="dialin-metric-lbl">${l}</span><span class="dialin-metric-val">${v}</span></div>`))}
       </div>
     </div>`;
-  }).join('');
+  }));
 }
