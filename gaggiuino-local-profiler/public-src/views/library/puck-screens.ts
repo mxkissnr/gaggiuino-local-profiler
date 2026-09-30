@@ -1,16 +1,17 @@
 // Puck Screens section (#635) of the Library view, split out of
 // views/library.js. Pure move + type port (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
-import { t } from '../../i18n.js';
+import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
-import { esc } from '../../utils.js';
+import { esc, html, joinHtml } from '../../utils.js';
+import type { Html } from '../../utils.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { loadPuckScreenImageBlobUrl, invalidatePuckScreenImage } from '../../bean-image.js';
 import type { PuckScreen } from '../../api/types.js';
 
-const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
-const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
+const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
+const ICON_TRASH: Html  = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
 
 // state/index.ts's CoffeeLibrary only declares beans/grinders; this section
 // owns the puck-screen collection, reached through this typed view of S (same
@@ -30,24 +31,24 @@ export function renderPuckScreenList(): void {
   const el = document.getElementById('puckScreenListUI');
   if (!el) return;
   const puckScreens = _state().coffeeLibrary.puckScreens || [];
-  if (!puckScreens.length) { el.innerHTML = `<div class="lib-empty">${t('lib_empty_puckscreens')}</div>`; return; }
+  if (!puckScreens.length) { el.innerHTML = html`<div class="lib-empty">${tHtml('lib_empty_puckscreens')}</div>`; return; }
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  el.innerHTML = puckScreens.map(p => {
+  el.innerHTML = joinHtml(puckScreens.map(p => {
     const extra = [_puckScreenThicknessLabel(p.thickness), p.material].filter(Boolean).join(' · ');
-    return `
+    return html`
     <div class="lib-item">
-      ${p.image ? `<img class="lib-puckscreen-thumb" data-puckscreen-id="${p.id}" alt="">` : ''}
+      ${p.image ? html`<img class="lib-puckscreen-thumb" data-puckscreen-id="${esc(p.id)}" alt="">` : html``}
       <div class="lib-item-info">
         <div class="lib-item-name">${esc(p.name)}</div>
-        ${extra ? `<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : ''}
-        ${p.notes ? `<div class="lib-item-sub">${esc(p.notes)}</div>` : ''}
+        ${extra ? html`<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : html``}
+        ${p.notes ? html`<div class="lib-item-sub">${esc(p.notes)}</div>` : html``}
       </div>
       <div class="lib-item-actions">
-        <button class="lib-btn-sm lib-btn-icon" data-action="edit-puckscreen" data-id="${p.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-puckscreen" data-id="${p.id}" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
+        <button class="lib-btn-sm lib-btn-icon" data-action="edit-puckscreen" data-id="${esc(p.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-puckscreen" data-id="${esc(p.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
     </div>`;
-  }).join('');
+  }));
   loadPuckScreenThumbnails();
 }
 
