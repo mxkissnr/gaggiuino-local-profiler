@@ -653,7 +653,7 @@ export function openMaintLogForm(): void {
     sel.appendChild(opt);
   }
   // Set date to today
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0] ?? '';
   (document.getElementById('maintLogDate') as HTMLInputElement).value = today;
   (document.getElementById('maintLogDate') as HTMLInputElement).max   = today;
   (document.getElementById('maintLogNotes') as HTMLTextAreaElement).value = '';
