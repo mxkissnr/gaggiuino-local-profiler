@@ -195,7 +195,7 @@ function renderFsChart(): void {
       plugins: {
         legend: { display: true, position: 'bottom',
           labels: { color: C.text, font: { family: 'Figtree', size: 11 }, boxWidth: 12, padding: 8 } },
-        tooltip: { callbacks: { title: c => 'Zeit: ' + formatTimeLabel(c[0].parsed.x) } }
+        tooltip: { callbacks: { title: c => 'Zeit: ' + formatTimeLabel(c[0]?.parsed.x ?? 0) } }
       },
       scales: {
         x:  { type:'linear', min:0, max:maxTime, clip:false,
