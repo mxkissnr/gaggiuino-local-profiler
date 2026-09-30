@@ -5601,7 +5601,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["MqttSettings"];
+                    "application/json": components["schemas"]["MqttSettingsInput"];
                 };
             };
             responses: {
@@ -7181,7 +7181,7 @@ export interface components {
             haUserId?: string;
             /** @description Menu item name */
             item: string;
-            /** @description Selected variant */
+            /** @description Selected variant, if the menu item has any */
             variant: string | null;
             note: string;
             notifyService: string | null;
@@ -7199,7 +7199,7 @@ export interface components {
             /** @description Optional machine name/slug target as supplied by the client (#317/glp-order-card #29) */
             machine: string | null;
             /** @description machine's registry id, resolved server-side from `machine` (#326) — always set on orders placed since #326, falls back to the default machine when `machine` is unset/unmatched */
-            machineId: number | null;
+            machineId: number;
             /** @description Library bean id for stable order-to-bean attribution (#563, glp-order-card #35). Resolved server-side against the library's actual beans — a stale/unknown id becomes null. */
             beanId: number | null;
         };
@@ -7629,23 +7629,32 @@ export interface components {
             } | null;
             /** @description Whether the machine reports a water-level sensor */
             hasWaterSensor?: boolean;
-            /** @default true */
-            enabled: boolean;
+            /** @description Defaults to true when omitted */
+            enabled?: boolean;
         };
-        /** @description GET/POST /api/mqtt/settings (go/internal/mqtt's SettingsView). GET is redacted: it reports hasPassword instead of the stored password (#1050). POST accepts the same keys plus the write-only password/clearPassword pair. */
+        /** @description GET/POST /api/mqtt/settings response (go/internal/mqtt's SettingsView): the redacted view, which reports hasPassword instead of the stored password and never echoes the password back (#1050). The POST request body is MqttSettingsInput instead, since it additionally carries the write-only password/clearPassword pair. */
         MqttSettings: {
             /** @enum {string} */
             transport: "websocket" | "mqtt";
             host: string;
             port: number;
             username: string;
-            /** @description GET only: whether a password is stored (never the password itself, #1050) */
-            hasPassword?: boolean;
-            /** @description POST only: omit to keep the stored password unchanged (#1050); a present value overwrites it unless clearPassword is also set. */
-            password?: string;
-            /** @description POST only: wipe the stored password regardless of the password field (#1062). */
-            clearPassword?: boolean;
+            /** @description Whether a password is stored (never the password itself, #1050) */
+            hasPassword: boolean;
             prefix: string;
+        };
+        /** @description POST /api/mqtt/settings request body (go/internal/mqtt's parseSettings). Only transport is required; every other field is optional and keeps its current value (or schema default) when omitted. password is write-only (absent keeps the stored password unchanged, #1050) and clearPassword wipes it regardless (#1062). */
+        MqttSettingsInput: {
+            /** @enum {string} */
+            transport: "websocket" | "mqtt";
+            host?: string;
+            port?: number;
+            username?: string;
+            /** @description Write-only: omit to keep the stored password unchanged (#1050); a present value overwrites it unless clearPassword is also set. */
+            password?: string;
+            /** @description Write-only: wipe the stored password regardless of the password field (#1062). */
+            clearPassword?: boolean;
+            prefix?: string;
         };
     };
     responses: never;

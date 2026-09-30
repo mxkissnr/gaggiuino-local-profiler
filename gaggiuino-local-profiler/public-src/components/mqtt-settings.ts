@@ -14,7 +14,7 @@ import { t, tHtml } from '../i18n.js';
 import { html } from '../utils.js';
 import { CHECK_ICON_SVG } from '../icons.js';
 import { S } from '../state/index.js';
-import type { MqttSettings } from '../api/types.js';
+import type { MqttSettings, MqttSettingsInput } from '../api/types.js';
 
 interface MqttDiscovery {
   available?: boolean;
@@ -88,7 +88,7 @@ export function setMqttTransport(value: string): void {
 
 export async function saveMqttSettings(): Promise<void> {
   const resultEl = document.getElementById('mqttSettingsResult');
-  const payload: MqttSettings = {
+  const payload: MqttSettingsInput = {
     transport: _selectedTransport,
     host:      (document.getElementById('mqttHost') as HTMLInputElement).value.trim(),
     port:      parseInt((document.getElementById('mqttPort') as HTMLInputElement).value, 10) || 1883,

@@ -29,6 +29,7 @@
 
 ### Changed
 - **The API description now documents every response the app uses, checked by tests against the real server.**
+- **The API description now distinguishes the MQTT settings request body from its redacted response, and marks the machine and order fields that are actually optional.** Part of #1103
 - **The frontend's entry point is now linted with the same strict type-checked rules as every other TypeScript file.** Part of #1115
 - **The live view is now type-checked.**
 - **The screenshot tool can restore a real GLP backup instead of the demo seed, so the README/wiki views can be captured from actual data.** Closes #1181

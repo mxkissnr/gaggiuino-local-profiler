@@ -1,5 +1,5 @@
 import { apiFetch } from './fetch.js';
-import type { MqttSettings } from './types.js';
+import type { MqttSettingsInput } from './types.js';
 
 // Typed client for the `mqtt` domain (go/internal/mqtt — its four routes:
 // GET /api/mqtt/discovery, GET/POST /api/mqtt/settings,
@@ -24,7 +24,7 @@ export function getMqttDiscovery(): Promise<Response> {
 }
 
 /** POST /api/mqtt/settings — save the connection; the caller reads the JSON error body on a non-ok. */
-export function saveMqttSettings(payload: MqttSettings): Promise<Response> {
+export function saveMqttSettings(payload: MqttSettingsInput): Promise<Response> {
   return apiFetch('api/mqtt/settings', _json(payload));
 }
 

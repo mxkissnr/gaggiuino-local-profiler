@@ -148,9 +148,15 @@ export type MachineSaveInput = components['schemas']['MachineSaveInput'];
 // ── MQTT (go/internal/mqtt) ──────────────────────────────────────────────
 
 /**
- * GET/POST /api/mqtt/settings (go/internal/mqtt's SettingsView). GET is
- * redacted: it reports `hasPassword` instead of the stored password (#1050).
- * POST accepts the same keys plus the write-only `password`/`clearPassword`
- * pair.
+ * GET/POST /api/mqtt/settings response (go/internal/mqtt's SettingsView): the
+ * redacted view — it reports `hasPassword` instead of the stored password,
+ * which is never echoed back (#1050).
  */
 export type MqttSettings = components['schemas']['MqttSettings'];
+
+/**
+ * POST /api/mqtt/settings request body: the fields the Settings form sends.
+ * Only `transport` is required; `password`/`clearPassword` are write-only and
+ * omitting `password` keeps the stored one (#1050/#1062).
+ */
+export type MqttSettingsInput = components['schemas']['MqttSettingsInput'];

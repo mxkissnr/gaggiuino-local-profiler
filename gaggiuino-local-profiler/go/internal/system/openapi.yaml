@@ -483,7 +483,7 @@ components:
         customer:      { type: string, maxLength: 50 }
         haUserId:      { type: string, maxLength: 100, description: "Absent on rows persisted before the field existed" }
         item:          { type: string, description: Menu item name }
-        variant:       { type: string, nullable: true, maxLength: 50, description: Selected variant, if the menu item has any }
+        variant:       { type: string, nullable: true, maxLength: 50, description: "Selected variant, if the menu item has any" }
         note:          { type: string, maxLength: 200 }
         notifyService: { type: string, nullable: true }
         status:
@@ -495,7 +495,7 @@ components:
         declineReason: { type: string, nullable: true }
         shotId:        { type: integer, description: "Last shot ID when order completed — resolved from the order's own machineId (#326), not the global latest shot", nullable: true }
         machine:       { type: string, maxLength: 100, nullable: true, description: "Optional machine name/slug target as supplied by the client (#317/glp-order-card #29)" }
-        machineId:     { type: integer, nullable: true, description: "machine's registry id, resolved server-side from `machine` (#326) — always set on orders placed since #326, falls back to the default machine when `machine` is unset/unmatched" }
+        machineId:     { type: integer, description: "machine's registry id, resolved server-side from `machine` (#326) — always set on orders placed since #326, falls back to the default machine when `machine` is unset/unmatched" }
         beanId:        { type: integer, nullable: true, description: "Library bean id for stable order-to-bean attribution (#563, glp-order-card #35). Resolved server-side against the library's actual beans — a stale/unknown id becomes null." }
 
     OrdersSettings:
@@ -1030,26 +1030,43 @@ components:
             a: { type: string }
             b: { type: string }
         hasWaterSensor: { type: boolean, description: "Whether the machine reports a water-level sensor" }
-        enabled: { type: boolean, default: true }
+        enabled: { type: boolean, description: "Defaults to true when omitted" }
 
     # ── MQTT ───────────────────────────────────────────────────────────────
 
     MqttSettings:
       type: object
-      required: [transport, host, port, username, prefix]
+      required: [transport, host, port, username, hasPassword, prefix]
       description: >
-        GET/POST /api/mqtt/settings (go/internal/mqtt's SettingsView). GET is
-        redacted: it reports hasPassword instead of the stored password
-        (#1050). POST accepts the same keys plus the write-only
-        password/clearPassword pair.
+        GET/POST /api/mqtt/settings response (go/internal/mqtt's SettingsView):
+        the redacted view, which reports hasPassword instead of the stored
+        password and never echoes the password back (#1050). The POST request
+        body is MqttSettingsInput instead, since it additionally carries the
+        write-only password/clearPassword pair.
       properties:
         transport: { type: string, enum: [websocket, mqtt] }
         host: { type: string }
         port: { type: integer }
         username: { type: string }
-        hasPassword: { type: boolean, description: "GET only: whether a password is stored (never the password itself, #1050)" }
-        password: { type: string, description: "POST only: omit to keep the stored password unchanged (#1050); a present value overwrites it unless clearPassword is also set." }
-        clearPassword: { type: boolean, description: "POST only: wipe the stored password regardless of the password field (#1062)." }
+        hasPassword: { type: boolean, description: "Whether a password is stored (never the password itself, #1050)" }
+        prefix: { type: string }
+
+    MqttSettingsInput:
+      type: object
+      required: [transport]
+      description: >
+        POST /api/mqtt/settings request body (go/internal/mqtt's
+        parseSettings). Only transport is required; every other field is
+        optional and keeps its current value (or schema default) when omitted.
+        password is write-only (absent keeps the stored password unchanged,
+        #1050) and clearPassword wipes it regardless (#1062).
+      properties:
+        transport: { type: string, enum: [websocket, mqtt] }
+        host: { type: string }
+        port: { type: integer }
+        username: { type: string }
+        password: { type: string, description: "Write-only: omit to keep the stored password unchanged (#1050); a present value overwrites it unless clearPassword is also set." }
+        clearPassword: { type: boolean, description: "Write-only: wipe the stored password regardless of the password field (#1062)." }
         prefix: { type: string }
 
 paths:
@@ -2916,7 +2933,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MqttSettings' }
+            schema: { $ref: '#/components/schemas/MqttSettingsInput' }
       responses:
         "200": { description: Saved settings, content: { application/json: { schema: { $ref: '#/components/schemas/MqttSettings' } } } }
         "400": { description: Invalid settings payload }
