@@ -14,6 +14,7 @@
 - **Tapping complete twice on an order (or an automation and the dashboard at the same moment) no longer deducts the milk twice.** Closes #1199
 - **Backups now also keep the water-sensor setting, the default shot values and your unlocked badges with their original dates.** Closes #1197
 - **Library changes made at the same moment (for example a milk deduction from a completed order while you edit a bean) no longer overwrite each other.** Part of #1199
+- **Order, dial-in wizard and machine settings screens escape every machine and server value they display.** Part of #1104
 - **The same no-lost-updates fix now covers every library endpoint — bags, frozen portions, milk stock, grinder resets and image uploads can no longer overwrite a concurrent change.** Part of #1199
 - **Adding a new bean, grinder, basket, puck screen, milk or recipe at the same moment as another library change no longer discards either one.** Part of #1199
 - **Completing an order no longer attaches it to an older, unrelated shot when no new shot was pulled for it.** Part of #1197

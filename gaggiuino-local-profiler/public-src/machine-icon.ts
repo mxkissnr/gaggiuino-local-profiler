@@ -307,7 +307,7 @@ function gaggimatePanelAndDisplay(): { panel: string; disp: string } {
 //     idle look
 //   - no lamps/cup/jug/steam/pour groups — Live-view-only extras that were
 //     never part of the pre-#811 static icon either
-function machineIconStaticMarkup(theme: unknown, kind: unknown, mini: boolean): string {
+function machineIconStaticMarkup(theme: unknown, kind: unknown, mini: boolean): Html {
     const mate = kind === 'gaggimate';
     const id = nextGradientId();
     const { a, b } = stopsFor(theme);
@@ -327,20 +327,20 @@ function machineIconStaticMarkup(theme: unknown, kind: unknown, mini: boolean): 
       </defs>
       ${animBody(id, `${id}-steel`, mini)}
       ${panel}
-    </svg>`;
+    </svg>` as Html; // interpolations: module-internal ids/paths, theme colours pre-validated by stopsFor() (HEX_RE or CSS var)
 }
 
 // Detail variant — full geometry, for anywhere the icon renders at a
 // reasonable size (machine form, larger list rows). `kind` is
 // 'gaggiuino' (default) or 'gaggimate', same convention as
 // machineIconAnimatedSvg(theme, kind) below.
-export function machineIconSvg(theme: unknown, kind: unknown = 'gaggiuino'): string {
+export function machineIconSvg(theme: unknown, kind: unknown = 'gaggiuino'): Html {
     return machineIconStaticMarkup(theme, kind, false);
 }
 
 // Mini variant — drops sub-2px detail (button highlights, drip tray ribs;
 // see animBody()'s `mini` param). Use at <=24px.
-export function machineIconMiniSvg(theme: unknown, kind: unknown = 'gaggiuino'): string {
+export function machineIconMiniSvg(theme: unknown, kind: unknown = 'gaggiuino'): Html {
     return machineIconStaticMarkup(theme, kind, true);
 }
 

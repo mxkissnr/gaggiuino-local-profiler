@@ -8,8 +8,8 @@
 import { saveShotDefaults } from '../api/shots.js';
 import { S } from '../state/index.js';
 import type { LibraryRow } from '../state/index.js';
-import { t } from '../i18n.js';
-import { esc } from '../utils.js';
+import { t, tHtml } from '../i18n.js';
+import { esc, html, joinHtml } from '../utils.js';
 import { loadShotDefaults, loadDrinkMenu } from '../views/shots/annotation.js';
 import { attachAutocomplete } from './autocomplete.js';
 import { CHECK_ICON_SVG } from '../icons.js';
@@ -31,32 +31,32 @@ export function renderShotDefaultsSettingsCard(): void {
   if (drinkSelect) {
     const options = (S.drinkMenu || []) as DrinkRow[];
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-    drinkSelect.innerHTML = `<option value="">${esc(t('sd_none'))}</option>` +
-      options.map(m => `<option value="${esc(m.id)}"${d.drinkType === m.id ? ' selected' : ''}>${esc(m.emoji)} ${esc(m.name)}</option>`).join('');
+    drinkSelect.innerHTML = html`<option value="">${esc(t('sd_none'))}</option>${joinHtml(
+      options.map(m => html`<option value="${esc(m.id)}"${d.drinkType === m.id ? html` selected` : html``}>${esc(m.emoji)} ${esc(m.name)}</option>`))}`;
   }
 
   const coffeeSelect = document.getElementById('sdCoffee');
   if (coffeeSelect) {
     const beans = _catalog(lib.beans);
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-    coffeeSelect.innerHTML = `<option value="">${esc(t('sd_none'))}</option>` +
-      beans.map(b => `<option value="${esc(b.name)}" data-bean-id="${b.id}"${d.coffee === b.name ? ' selected' : ''}>${esc(b.name)}</option>`).join('');
+    coffeeSelect.innerHTML = html`<option value="">${esc(t('sd_none'))}</option>${joinHtml(
+      beans.map(b => html`<option value="${esc(b.name)}" data-bean-id="${esc(b.id)}"${d.coffee === b.name ? html` selected` : html``}>${esc(b.name)}</option>`))}`;
   }
 
   const basketSelect = document.getElementById('sdBasket');
   if (basketSelect) {
     const baskets = _catalog(lib.baskets);
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-    basketSelect.innerHTML = `<option value="">${esc(t('ann_basket_none'))}</option>` +
-      baskets.map(b => `<option value="${b.id}"${d.basketId === b.id ? ' selected' : ''}>${esc(b.name)}</option>`).join('');
+    basketSelect.innerHTML = html`<option value="">${esc(t('ann_basket_none'))}</option>${joinHtml(
+      baskets.map(b => html`<option value="${esc(b.id)}"${d.basketId === b.id ? html` selected` : html``}>${esc(b.name)}</option>`))}`;
   }
 
   const puckSelect = document.getElementById('sdPuckScreen');
   if (puckSelect) {
     const puckScreens = _catalog(lib.puckScreens);
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-    puckSelect.innerHTML = `<option value="">${esc(t('ann_puckscreen_none'))}</option>` +
-      puckScreens.map(p => `<option value="${p.id}"${d.puckScreenId === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('');
+    puckSelect.innerHTML = html`<option value="">${esc(t('ann_puckscreen_none'))}</option>${joinHtml(
+      puckScreens.map(p => html`<option value="${esc(p.id)}"${d.puckScreenId === p.id ? html` selected` : html``}>${esc(p.name)}</option>`))}`;
   }
 
   const grinderInput = document.getElementById('sdGrinder') as HTMLInputElement | null;
@@ -104,7 +104,7 @@ export async function saveShotDefaultsSettings(): Promise<void> {
 
   const btn = document.getElementById('shotDefaultsSaveBtn');
   if (btn) {
-    btn.innerHTML = `${CHECK_ICON_SVG} ${t('sd_saved')}`;
+    btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('sd_saved')}`;
     setTimeout(() => { btn.textContent = t('sd_save'); }, 2000);
   }
 }
