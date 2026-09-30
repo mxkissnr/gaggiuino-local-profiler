@@ -21,6 +21,15 @@ beforeAll(async () => {
   ({ findPreviousShotForBean, isNewestShotForBean, buildGrinderGrindLabel } = await import('../public-src/views/shots/utils.js'));
 });
 
+// shots is a plain array, so shots[i] is `ShotLike | undefined` under
+// noUncheckedIndexedAccess; this narrows it back by throwing on a missing
+// element, which is what the old indexed access would have crashed on anyway.
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`no element at index ${i}`);
+  return v;
+}
+
 const shot = (id: number, coffee: string, grindSetting: string, timestamp: number): ShotLike => ({
   id, timestamp, annotation: { coffee, grindSetting },
 });
@@ -33,50 +42,50 @@ describe('findPreviousShotForBean (#429)', () => {
       shot(3, 'Bean B', '20', 250),
       shot(4, 'Bean A', '19', 300),
     ];
-    const prev = findPreviousShotForBean(shots, shots[3]);
-    expect(prev!.id).toBe(2);
+    const prev = findPreviousShotForBean(shots, at(shots, 3));
+    expect(prev?.id).toBe(2);
   });
 
   it('ignores shots from a different bean', () => {
     const shots = [shot(1, 'Bean B', '20', 100), shot(2, 'Bean A', '18', 200)];
-    expect(findPreviousShotForBean(shots, shots[1])).toBeNull();
+    expect(findPreviousShotForBean(shots, at(shots, 1))).toBeNull();
   });
 
   it('returns null when the shot has no bean annotated', () => {
     const shots = [shot(1, '', '18', 100), shot(2, '', '19', 200)];
-    expect(findPreviousShotForBean(shots, shots[1])).toBeNull();
+    expect(findPreviousShotForBean(shots, at(shots, 1))).toBeNull();
   });
 
   it('returns null for the first-ever shot of a bean', () => {
     const shots = [shot(1, 'Bean A', '18', 100)];
-    expect(findPreviousShotForBean(shots, shots[0])).toBeNull();
+    expect(findPreviousShotForBean(shots, at(shots, 0))).toBeNull();
   });
 
   it('is case-insensitive on the bean name', () => {
     const shots = [shot(1, 'bean a', '18', 100), shot(2, 'Bean A', '19', 200)];
-    expect(findPreviousShotForBean(shots, shots[1])!.id).toBe(1);
+    expect(findPreviousShotForBean(shots, at(shots, 1))?.id).toBe(1);
   });
 });
 
 describe('isNewestShotForBean (#429)', () => {
   it('is true for the most recent shot of a bean', () => {
     const shots = [shot(1, 'Bean A', '18', 100), shot(2, 'Bean A', '19', 200)];
-    expect(isNewestShotForBean(shots, shots[1])).toBe(true);
+    expect(isNewestShotForBean(shots, at(shots, 1))).toBe(true);
   });
 
   it('is false when a later shot exists for the same bean', () => {
     const shots = [shot(1, 'Bean A', '18', 100), shot(2, 'Bean A', '19', 200)];
-    expect(isNewestShotForBean(shots, shots[0])).toBe(false);
+    expect(isNewestShotForBean(shots, at(shots, 0))).toBe(false);
   });
 
   it('ignores other beans when deciding newest', () => {
     const shots = [shot(1, 'Bean A', '18', 100), shot(2, 'Bean B', '19', 500)];
-    expect(isNewestShotForBean(shots, shots[0])).toBe(true);
+    expect(isNewestShotForBean(shots, at(shots, 0))).toBe(true);
   });
 
   it('is false without a bean annotated', () => {
     const shots = [shot(1, '', '18', 100)];
-    expect(isNewestShotForBean(shots, shots[0])).toBe(false);
+    expect(isNewestShotForBean(shots, at(shots, 0))).toBe(false);
   });
 });
 
@@ -93,22 +102,25 @@ describe('buildGrinderGrindLabel (#838)', () => {
     recipe_grinder_grind: (g, s) => (g ? `${g} · grind ${s}` : `Grind ${s}`),
     recipe_grind_with_baseline: (g, s, p) => (g ? `${g} · grind ${s} (last ${p})` : `Grind ${s} (last ${p})`),
   };
-  const t = (key: string, ...args: unknown[]): string =>
-    dict[key](...(args as [string, string, string?]));
+  const t = (key: string, ...args: unknown[]): string => {
+    const template = dict[key];
+    if (template === undefined) throw new Error(`unknown template: ${key}`);
+    return template(...(args as [string, string, string?]));
+  };
 
   it('shows "(last X)" when the newest shot for a bean has a different previous grind setting', () => {
     const shots = [
       shot(1, 'Bean A', '18', 100),
       shot(2, 'Bean A', '19', 200),
     ];
-    const label = buildGrinderGrindLabel(shots, shots[1], true, t);
+    const label = buildGrinderGrindLabel(shots, at(shots, 1), true, t);
     expect(label).toContain('(last 18)');
     expect(label).toContain('19');
   });
 
   it('omits the baseline when there is no previous shot for the bean', () => {
     const shots = [shot(1, 'Bean A', '18', 100)];
-    const label = buildGrinderGrindLabel(shots, shots[0], true, t);
+    const label = buildGrinderGrindLabel(shots, at(shots, 0), true, t);
     expect(label).not.toContain('last');
     expect(label).toBe('Grind 18');
   });
@@ -118,7 +130,7 @@ describe('buildGrinderGrindLabel (#838)', () => {
       shot(1, 'Bean A', '18', 100),
       shot(2, 'Bean A', '19', 200),
     ];
-    const label = buildGrinderGrindLabel(shots, shots[1], false, t);
+    const label = buildGrinderGrindLabel(shots, at(shots, 1), false, t);
     expect(label).not.toContain('last');
     expect(label).toBe('Grind 19');
   });
@@ -128,7 +140,7 @@ describe('buildGrinderGrindLabel (#838)', () => {
       shot(1, 'Bean A', '18', 100),
       shot(2, 'Bean A', '19', 200),
     ];
-    const label = buildGrinderGrindLabel(shots, shots[0], true, t);
+    const label = buildGrinderGrindLabel(shots, at(shots, 0), true, t);
     expect(label).not.toContain('last');
     expect(label).toBe('Grind 18');
   });
