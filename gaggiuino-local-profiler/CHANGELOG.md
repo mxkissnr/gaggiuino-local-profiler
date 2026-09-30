@@ -33,6 +33,9 @@
 ### Changed
 - **The API description now documents every response the app uses, checked by tests against the real server.**
 - **The API description now distinguishes the MQTT settings request body from its redacted response, and marks the machine and order fields that are actually optional.** Part of #1103
+- **The analytics screens now build their markup through the type-checked HTML builder, so every bean, grinder, profile and machine name they display is escaped.** Part of #1104
+
+### Changed
 - **The coffee library's basket and puck-screen collections are now typed with the real API shapes.** Part of #1105
 - **The frontend's entry point is now linted with the same strict type-checked rules as every other TypeScript file.** Part of #1115
 - **The live view is now type-checked.**
