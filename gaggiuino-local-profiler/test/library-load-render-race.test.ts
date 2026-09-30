@@ -25,7 +25,7 @@ const { loadLibrary } = (await import('../public-src/views/library.js')) as unkn
 // Stub only the DOM the load path touches, same "fake minimal document"
 // approach the other frontend tests use instead of pulling in jsdom.
 interface FakeDocument {
-  elements: Record<string, { innerHTML: string }>;
+  beanListUI: { innerHTML: string };
   document: {
     getElementById: (id: string) => { innerHTML: string } | undefined;
     querySelectorAll: () => never[];
@@ -33,12 +33,13 @@ interface FakeDocument {
 }
 
 function fakeDocument(): FakeDocument {
+  const beanListUI = { innerHTML: '' };
   const elements: Record<string, { innerHTML: string }> = {
-    beanListUI:    { innerHTML: '' },
+    beanListUI,
     grinderListUI: { innerHTML: '' },
   };
   return {
-    elements,
+    beanListUI,
     document: {
       getElementById: (id: string) => elements[id],
       querySelectorAll: () => [],
@@ -59,16 +60,16 @@ describe('loadLibrary (#526 render race)', () => {
   });
 
   it('renders the flavor-wheel button once the fetch resolves, even though the bean list was already on screen (empty) beforehand', async () => {
-    const { elements, document } = fakeDocument();
+    const { beanListUI, document } = fakeDocument();
     g.document = document;
     // Simulates switchMode('library') having already rendered the
     // still-empty default list before this fetch resolves.
-    elements.beanListUI.innerHTML = '<div class="lib-empty">no beans yet</div>';
+    beanListUI.innerHTML = '<div class="lib-empty">no beans yet</div>';
 
     g.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ beans: [bean], grinders: [] }) });
     await loadLibrary();
 
-    expect(elements.beanListUI.innerHTML).toContain('data-action="open-flavor-wheel"');
+    expect(beanListUI.innerHTML).toContain('data-action="open-flavor-wheel"');
   });
 
   it('is a harmless no-op re-render when the Library view is not the current DOM (elements absent)', async () => {

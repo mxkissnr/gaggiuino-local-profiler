@@ -140,7 +140,7 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
     });
 
     expect(annotateShotMock).toHaveBeenCalledTimes(1);
-    expect(annotateShotMock.mock.calls[0][0]).toBe(12);
+    expect(annotateShotMock.mock.calls[0]?.[0]).toBe(12);
   });
 
   it('sends only the fields the draft actually set, not every field with empty/null defaults', async () => {
@@ -154,7 +154,7 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
     });
 
     expect(annotateShotMock).toHaveBeenCalledTimes(1);
-    const payload = annotateShotMock.mock.calls[0][1] as Record<string, unknown>;
+    const payload = annotateShotMock.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(payload).toEqual({ grinder: 'Niche Zero', grindSetting: '4.2' });
     expect(payload).not.toHaveProperty('coffee');
     expect(payload).not.toHaveProperty('dose');

@@ -15,10 +15,19 @@ const { _renderBeanSelect } = await import('../public-src/views/shots/annotation
 // them back to the FakeOption instances the render path actually created.
 const optionsOf = (select: FakeSelect): FakeOption[] => (select.options ?? []) as FakeOption[];
 
+// installFakeOptionDom() returns a Record, so with noUncheckedIndexedAccess a
+// looked-up id is possibly-undefined. The helper always installs the ids it is
+// given, so make a miss fail loudly instead of asserting.
+function at(selects: Record<string, FakeSelect>, id: string): FakeSelect {
+  const el = selects[id];
+  if (el === undefined) throw new Error(`fake select #${id} was not installed`);
+  return el;
+}
+
 let selectEl: FakeSelect;
 
 beforeEach(() => {
-  selectEl = installFakeOptionDom(['annCoffee']).annCoffee;
+  selectEl = at(installFakeOptionDom(['annCoffee']), 'annCoffee');
   S.shots = [];
 });
 

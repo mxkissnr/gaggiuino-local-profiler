@@ -32,6 +32,15 @@ interface FakeDocument {
   };
 }
 
+// `elements` is a plain Record, so elements.beanListUI is
+// `{ innerHTML } | undefined` under noUncheckedIndexedAccess; this narrows it
+// back by throwing on a missing element rather than asserting it exists.
+function uiHtml(elements: Record<string, { innerHTML: string }>): string {
+  const node = elements.beanListUI;
+  if (node === undefined) throw new Error('beanListUI element missing');
+  return node.innerHTML;
+}
+
 function fakeDocument(): FakeDocument {
   const elements: Record<string, { innerHTML: string }> = { beanListUI: { innerHTML: '' } };
   return {
@@ -57,16 +66,16 @@ describe('renderBeanList last-used grind setting (#829)', () => {
     ];
 
     renderBeanList();
-    expect(elements.beanListUI.innerHTML).toContain('lib-last-grind-row');
-    expect(elements.beanListUI.innerHTML).toContain('Niche Zero @ 4.2');
-    expect(elements.beanListUI.innerHTML).not.toContain('Niche Zero @ 4.6');
+    expect(uiHtml(elements)).toContain('lib-last-grind-row');
+    expect(uiHtml(elements)).toContain('Niche Zero @ 4.2');
+    expect(uiHtml(elements)).not.toContain('Niche Zero @ 4.6');
 
     // A new, later shot changes the grind setting for the same bean.
     S.shots.push({ id: 2, timestamp: 2000, annotation: { beanId: 1, coffee: 'Yirgacheffe Chelelektu', grinder: 'Niche Zero', grindSetting: '4.6' } });
 
     renderBeanList();
-    expect(elements.beanListUI.innerHTML).toContain('Niche Zero @ 4.6');
-    expect(elements.beanListUI.innerHTML).not.toContain('Niche Zero @ 4.2');
+    expect(uiHtml(elements)).toContain('Niche Zero @ 4.6');
+    expect(uiHtml(elements)).not.toContain('Niche Zero @ 4.2');
   });
 
   it('picks the most recent shot by timestamp, not array order', () => {
@@ -80,8 +89,8 @@ describe('renderBeanList last-used grind setting (#829)', () => {
     ];
 
     renderBeanList();
-    expect(elements.beanListUI.innerHTML).toContain('DF64 @ 2.8');
-    expect(elements.beanListUI.innerHTML).not.toContain('Niche Zero @ 4.2');
+    expect(uiHtml(elements)).toContain('DF64 @ 2.8');
+    expect(uiHtml(elements)).not.toContain('Niche Zero @ 4.2');
   });
 
   it('matches by beanId first, not falling back to a stale name match once beanId is present (#456 convention)', () => {
@@ -95,8 +104,8 @@ describe('renderBeanList last-used grind setting (#829)', () => {
     ];
 
     renderBeanList();
-    expect(elements.beanListUI.innerHTML).toContain('Niche Zero @ 4.2');
-    expect(elements.beanListUI.innerHTML).not.toContain('Wrong Grinder');
+    expect(uiHtml(elements)).toContain('Niche Zero @ 4.2');
+    expect(uiHtml(elements)).not.toContain('Wrong Grinder');
   });
 
   it('renders no last-grind row when the bean has no annotated shots with a grind setting yet', () => {
@@ -106,6 +115,6 @@ describe('renderBeanList last-used grind setting (#829)', () => {
     S.shots = [];
 
     renderBeanList();
-    expect(elements.beanListUI.innerHTML).not.toContain('lib-last-grind-row');
+    expect(uiHtml(elements)).not.toContain('lib-last-grind-row');
   });
 });

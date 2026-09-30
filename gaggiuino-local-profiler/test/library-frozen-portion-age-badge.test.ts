@@ -19,7 +19,7 @@ const { renderBeanList } = (await import('../public-src/views/library.js')) as u
 const { todayIsoDate } = await import('../public-src/utils.js');
 
 interface FakeDocument {
-  elements: Record<string, { innerHTML: string }>;
+  beanListUI: { innerHTML: string };
   document: {
     getElementById: (id: string) => { innerHTML: string } | undefined;
     querySelectorAll: () => never[];
@@ -27,9 +27,10 @@ interface FakeDocument {
 }
 
 function fakeDocument(): FakeDocument {
-  const elements: Record<string, { innerHTML: string }> = { beanListUI: { innerHTML: '' } };
+  const beanListUI = { innerHTML: '' };
+  const elements: Record<string, { innerHTML: string }> = { beanListUI };
   return {
-    elements,
+    beanListUI,
     document: {
       getElementById: (id: string) => elements[id],
       querySelectorAll: () => [],
@@ -49,7 +50,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
   });
 
   it('renders a fresh-badge with the paused age for a still-frozen portion', () => {
-    const { elements, document } = fakeDocument();
+    const { beanListUI, document } = fakeDocument();
     g.document = document;
 
     const now = Date.now();
@@ -77,7 +78,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
 
     renderBeanList();
 
-    const html = elements.beanListUI.innerHTML;
+    const html = beanListUI.innerHTML;
     expect(html).toContain('lib-frozen-badge');
     // the portion's own paused age (5d, held flat since freezing) rendered
     // as its own lib-fresh-badge, distinct from the bag-level badge
@@ -85,7 +86,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
   });
 
   it('renders the age badge for an already-thawed portion too', () => {
-    const { elements, document } = fakeDocument();
+    const { beanListUI, document } = fakeDocument();
     g.document = document;
 
     const now = Date.now();
@@ -110,7 +111,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
 
     renderBeanList();
 
-    const html = elements.beanListUI.innerHTML;
+    const html = beanListUI.innerHTML;
     expect(html).toContain('lib-frozen-badge thawed');
     // age at freeze (5d) + 2 days since thaw = 7d
     expect(html).toMatch(/lib-fresh-badge fresh-\w+"[^>]*>7d<\/span>/);
