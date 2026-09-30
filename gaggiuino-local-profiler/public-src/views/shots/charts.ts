@@ -49,8 +49,10 @@ function getPQData(shot: ChartShot): PQPoint[] {
   const n  = Math.min(tm.length, p.length, f.length);
   const result: PQPoint[] = [];
   for (let i = 0; i < n; i++) {
-    if (p[i] != null && f[i] != null && p[i] >= 30 && f[i] > 0)
-      result.push({ x: f[i] / 10, y: p[i] / 10 });
+    const pv = p[i];
+    const fv = f[i];
+    if (pv != null && fv != null && pv >= 30 && fv > 0)
+      result.push({ x: fv / 10, y: pv / 10 });
   }
   return result;
 }
@@ -180,7 +182,7 @@ function renderFsChart(): void {
   const dA     = _xyCurve(shotA);
   const maxTempA = Math.max(...(_rawCurve(shotA).temperature || []).map(v => v / 10), 0);
   const tms    = Math.ceil(maxTempA + 5) || 100;
-  const maxTime = dA.rawTimes.length > 0 ? dA.rawTimes[dA.rawTimes.length - 1] : 60;
+  const maxTime = dA.rawTimes.at(-1) ?? 60;
   const datasets = shotChart.data.datasets.map(ds => ({ ...ds, data: [...ds.data] }));
 
   const fsChart = new Chart(canvas, {

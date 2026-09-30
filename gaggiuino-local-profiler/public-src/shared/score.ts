@@ -32,10 +32,13 @@ function _stddev(vals: number[]): number {
 function _detectChanneling(times: number[], pressures: number[]): boolean {
   if (!times || !times.length || pressures.length < 5) return false;
   for (let i = 1; i < pressures.length; i++) {
-    if (pressures[i - 1] < 5) continue;
-    const dt = times[i] - times[i - 1];
+    const prev = pressures[i - 1];
+    const cur = pressures[i];
+    if (prev === undefined || cur === undefined) continue;
+    if (prev < 5) continue;
+    const dt = (times[i] ?? NaN) - (times[i - 1] ?? NaN);
     if (dt <= 0 || dt > 3) continue;
-    if (pressures[i - 1] - pressures[i] > 1.5) return true;
+    if (prev - cur > 1.5) return true;
   }
   return false;
 }
@@ -46,7 +49,8 @@ function _detectChanneling(times: number[], pressures: number[]): boolean {
 function _parseBrewRatioTarget(brewRatio: string | number | null | undefined): number | null {
   if (!brewRatio) return null;
   const m = String(brewRatio).match(/^\s*1\s*:\s*(\d+(?:\.\d+)?)\s*$/);
-  return m ? parseFloat(m[1]) : null;
+  const captured = m?.[1];
+  return captured !== undefined ? parseFloat(captured) : null;
 }
 
 // Weighted: pressure 25, temp stability 20, duration 20, brew ratio 20, channeling 15.
@@ -155,7 +159,7 @@ function calcShotScoreDetail(shot: unknown, bean?: unknown): { score: number | n
   scores.push(_detectChanneling(times, p) ? 20 : 100); weights.push(15);
 
   const tw = weights.reduce((a, b) => a + b, 0);
-  const score = tw ? Math.round(scores.reduce((acc, v, i) => acc + v * weights[i], 0) / tw) : null;
+  const score = tw ? Math.round(scores.reduce((acc, v, i) => acc + v * (weights[i] ?? 0), 0) / tw) : null;
   return { score, usedBeanTarget: score !== null && usedBeanTarget };
 }
 
