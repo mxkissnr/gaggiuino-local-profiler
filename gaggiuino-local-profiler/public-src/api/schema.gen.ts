@@ -6982,7 +6982,7 @@ export interface components {
             origins?: {
                 code?: string;
                 /** @description Blend share, 0–100, rounded to one decimal — sent as `percent`, not `pct` */
-                percent?: number | null;
+                percent?: number;
             }[];
             variety?: string;
             /** @description Allowlist-validated (e.g. arabica/robusta) */

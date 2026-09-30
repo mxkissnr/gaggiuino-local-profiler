@@ -215,7 +215,7 @@ components:
             type: object
             properties:
               code:    { type: string, maxLength: 2 }
-              percent: { type: number, nullable: true, description: "Blend share, 0–100, rounded to one decimal — sent as `percent`, not `pct`" }
+              percent: { type: number, description: "Blend share, 0–100, rounded to one decimal — sent as `percent`, not `pct`" }
         variety:       { type: string, maxLength: 200 }
         species:       { type: string, description: Allowlist-validated (e.g. arabica/robusta) }
         category:      { type: string, description: Allowlist-validated }
