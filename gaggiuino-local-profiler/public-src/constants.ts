@@ -169,7 +169,9 @@ export interface PhasePluginOptions {
 export const phasePlugin: Plugin<ChartType, PhasePluginOptions> = {
   id: 'phases',
   beforeDatasetsDraw(chart, _args, opts) {
-    const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+    const { ctx, chartArea: { top, bottom, left, right } } = chart;
+    const x = chart.scales.x;
+    if (!x) return;
 
     // GaggiMate: shade one region per named phase, before the datasets draw.
     const gmPhases = opts?.gaggimatePhases;
@@ -239,7 +241,9 @@ export const phasePlugin: Plugin<ChartType, PhasePluginOptions> = {
     const gmPhases = opts?.gaggimatePhases;
     if (!gmPhases || !Array.isArray(gmPhases) || gmPhases.length === 0) return;
 
-    const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+    const { ctx, chartArea: { top, bottom, left, right } } = chart;
+    const x = chart.scales.x;
+    if (!x) return;
     const ink = _currentInk();
 
     // Dividers + labels, drawn after the lines so they sit on top.

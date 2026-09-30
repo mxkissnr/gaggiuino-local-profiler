@@ -302,7 +302,8 @@ export function applyActiveMachineChange(): void {
   S.shots = filterShotsByMachine(S.allShots || [], S.activeMachineId);
   if (window.renderSidebar) window.renderSidebar();
   if (S.shots.length && !S.shots.some(s => s.id === S.primaryShotId)) {
-    S.primaryShotId = S.shots[S.shots.length - 1].id;
+    const last = S.shots.at(-1);
+    if (last) S.primaryShotId = last.id;
     S.compareShotId = null;
   }
   if (window.updateView) window.updateView();

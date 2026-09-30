@@ -1,6 +1,7 @@
 const js = require('@eslint/js');
 const globals = require('globals');
 const tseslint = require('typescript-eslint');
+const { htmlSinkRule } = require('./eslint-rules/html-sink.js');
 
 const commonRules = {
   'no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
@@ -13,6 +14,13 @@ const commonRules = {
   ],
 };
 
+const localPlugin = {
+  rules: {
+    // #1104 L1.
+    'html-sink': htmlSinkRule,
+  },
+};
+
 module.exports = [
   {
     // go/ is Go, not JS — except the browser scripts under
@@ -23,11 +31,18 @@ module.exports = [
     ignores: [
       'public/**', 'node_modules/**', 'docs/**', 'graphify-out/**',
       'go/internal/web/static/vendor/**', 'go/internal/webapp/dist/**',
+      // Deliberately-bad lint fixtures for the rule test; typed by tsc, never
+      // linted as project code.
+      'test/fixtures/**',
     ],
+  },
+  {
+    // #1104 L1: local rules (eslint-rules/), available to every file.
+    plugins: { local: localPlugin },
   },
   js.configs.recommended,
   {
-    files: ['eslint.config.js', 'vite.config.js', 'vitest.config.js'],
+    files: ['eslint.config.js', 'vite.config.js', 'vitest.config.js', 'eslint-rules/**/*.js'],
     languageOptions: {
       globals: globals.node,
     },
@@ -86,6 +101,9 @@ module.exports = [
     rules: {
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
+      // #1104 L1: every innerHTML/outerHTML write and insertAdjacentHTML call
+      // must carry an Html-branded value; the rule checks the RHS type.
+      'local/html-sink': 'error',
     },
   }),
   {
@@ -120,6 +138,13 @@ module.exports = [
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
     },
   }),
+  {
+    // #1104 L1: the fixture linted by test/html-sink-lint.test.ts. It is globally
+    // ignored above, so `eslint .` never sees its deliberate violations; the test
+    // re-lints it through the ESLint API with ignore disabled.
+    files: ['test/fixtures/**/*.ts'],
+    rules: { 'local/html-sink': 'error' },
+  },
   {
     // test/e2e/*.mjs runs on node:test (Playwright), not vitest — see
     // test:e2e in package.json (#798) — so it gets node globals only, not
