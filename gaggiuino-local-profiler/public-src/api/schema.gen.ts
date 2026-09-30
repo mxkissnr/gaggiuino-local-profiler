@@ -4629,18 +4629,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            available?: boolean;
-                            /** @description True when the list came from the last-known cache rather than a fresh fetch */
-                            stale?: boolean;
-                            current?: string | null;
-                            currentId?: number | null;
-                            options?: string[];
-                            optionsRaw?: {
-                                id?: number;
-                                name?: string;
-                            }[];
-                        };
+                        "application/json": components["schemas"]["MachineProfileList"];
                     };
                 };
             };
@@ -4739,12 +4728,14 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Profile detail (name */
+                /** @description Profile detail (name, phases, globalStopConditions, waterTemperature, recipe) */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["MachineProfile"];
+                    };
                 };
                 /** @description Machine unreachable or returned an error */
                 502: {
@@ -4935,7 +4926,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["MachineSystemSettings"];
+                    };
                 };
                 /** @description unknown category */
                 400: {
@@ -5351,7 +5344,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["FirmwareProgress"];
+                    };
                 };
                 /** @description machine type does not support the settings proxy */
                 501: {
@@ -5455,7 +5450,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["FirmwareVersion"];
+                    };
                 };
                 /** @description machine type does not support the settings proxy */
                 501: {
@@ -5587,7 +5584,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["MqttSettings"];
+                    };
                 };
             };
         };
@@ -5602,18 +5601,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        transport?: "websocket" | "mqtt";
-                        host?: string;
-                        port?: number;
-                        username?: string;
-                        /** @description Omit to keep the stored password unchanged (#1050); a present value always overwrites it unless clearPassword is also set. */
-                        password?: string;
-                        /** @description Wipe the stored password regardless of the password field (#1062). */
-                        clearPassword?: boolean;
-                        prefix?: string;
-                    };
+                    "application/json": components["schemas"]["MqttSettings"];
                 };
             };
             responses: {
@@ -5622,7 +5610,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["MqttSettings"];
+                    };
                 };
                 /** @description Invalid settings payload */
                 400: {
@@ -5736,7 +5726,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["MachineInput"];
+                    "application/json": components["schemas"]["MachineSaveInput"];
                 };
             };
             responses: {
@@ -5787,7 +5777,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["MachineInput"];
+                    "application/json": components["schemas"]["MachineSaveInput"];
                 };
             };
             responses: {
@@ -7535,14 +7525,14 @@ export interface components {
             total: number;
             customers: components["schemas"]["OrderCustomerStat"][];
             mostPopular: {
-                item?: string;
-                count?: number;
+                item: string;
+                count: number;
             } | null;
             /** @description Only present once orders reference more than one machine. */
             byMachine: {
-                machineId?: number;
-                machineName?: string | null;
-                count?: number;
+                machineId: number;
+                machineName: string | null;
+                count: number;
             }[] | null;
         };
         /** @description One HA notify service (go/internal/ha's NotifyService). */
@@ -7558,6 +7548,104 @@ export interface components {
             customers: {
                 [key: string]: string;
             };
+        };
+        /** @description A machine profile as GET/POST/PUT /api/machine/profile[/{id}] carries it. Covers both device dialects the app touches: the Gaggiuino shape (name/phases/recipe/globalStopConditions/waterTemperature) and the GaggiMate one (label/description/temperature/phases). The machine payload is passed through, so unknown keys are preserved. */
+        MachineProfile: {
+            id?: string | number;
+            name?: string;
+            label?: string;
+            description?: string;
+            temperature?: number;
+            type?: string;
+            utility?: boolean;
+            favorite?: boolean;
+            waterTemperature?: number;
+            phases?: {
+                [key: string]: unknown;
+            }[];
+            recipe?: {
+                coffeeIn?: number;
+                coffeeOut?: number;
+                ratio?: number;
+            };
+            globalStopConditions?: {
+                /** @description milliseconds */
+                time?: number;
+                weight?: number;
+                waterPumped?: number;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description GET /api/machine/profiles — the machine's profile names plus a last-known offline/cache flag. */
+        MachineProfileList: {
+            available: boolean;
+            /** @description True when the list came from the last-known cache rather than a fresh fetch */
+            stale: boolean;
+            current: string | null;
+            currentId: number | null;
+            options: string[];
+            optionsRaw: {
+                /** @description Machine-assigned id, or a "local:<n>" placeholder until first synced */
+                id: string;
+                name: string;
+                utility: boolean;
+                syncStatus: string;
+            }[];
+        };
+        /** @description GET /api/machine/settings — the machine's own settings object, passed through from its GET /api/settings/{category}. Only releaseChannel is read by the app today, so the rest stays an open object. */
+        MachineSystemSettings: {
+            releaseChannel?: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description GET /api/machine/firmware/version — installed vs latest release; latest/releaseUrl are null when no matching release was found. */
+        FirmwareVersion: {
+            installed: string | null;
+            latest: string | null;
+            updateAvailable: boolean;
+            releaseUrl: string | null;
+        };
+        /** @description GET /api/machine/firmware/progress — the machine's own OTA progress payload, passed through verbatim (progress/status/type today). */
+        FirmwareProgress: {
+            status?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description POST/PUT /api/machines body — the Settings machine form's fields (go/internal/machines' MachineInput). */
+        MachineSaveInput: {
+            name: string;
+            /** @enum {string} */
+            type: "gaggiuino" | "gaggimate";
+            /** @description Hostname or host:port, e.g. gaggiuino.local or 192.168.1.50 */
+            host: string;
+            /** @description HA switch entity id for this machine's power outlet */
+            switchEntity?: string | null;
+            /** @description #701 accent color — either {preset} or {a,b} hex colors; null when unset */
+            theme?: {
+                preset?: string;
+                a?: string;
+                b?: string;
+            } | null;
+            /** @description Whether the machine reports a water-level sensor */
+            hasWaterSensor?: boolean;
+            /** @default true */
+            enabled: boolean;
+        };
+        /** @description GET/POST /api/mqtt/settings (go/internal/mqtt's SettingsView). GET is redacted: it reports hasPassword instead of the stored password (#1050). POST accepts the same keys plus the write-only password/clearPassword pair. */
+        MqttSettings: {
+            /** @enum {string} */
+            transport: "websocket" | "mqtt";
+            host: string;
+            port: number;
+            username: string;
+            /** @description GET only: whether a password is stored (never the password itself, #1050) */
+            hasPassword?: boolean;
+            /** @description POST only: omit to keep the stored password unchanged (#1050); a present value overwrites it unless clearPassword is also set. */
+            password?: string;
+            /** @description POST only: wipe the stored password regardless of the password field (#1062). */
+            clearPassword?: boolean;
+            prefix: string;
         };
     };
     responses: never;

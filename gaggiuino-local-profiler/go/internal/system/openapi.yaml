@@ -885,6 +885,7 @@ components:
         mostPopular:
           type: object
           nullable: true
+          required: [item, count]
           properties:
             item:  { type: string }
             count: { type: integer }
@@ -894,6 +895,7 @@ components:
           description: Only present once orders reference more than one machine.
           items:
             type: object
+            required: [machineId, machineName, count]
             properties:
               machineId:   { type: integer }
               machineName: { type: string, nullable: true }
@@ -917,6 +919,138 @@ components:
           type: object
           description: Map of haUserId → customer display name (derived from order history)
           additionalProperties: { type: string }
+
+
+    # ── Machines ───────────────────────────────────────────────────────────
+
+    MachineProfile:
+      type: object
+      description: >
+        A machine profile as GET/POST/PUT /api/machine/profile[/{id}] carries
+        it. Covers both device dialects the app touches: the Gaggiuino shape
+        (name/phases/recipe/globalStopConditions/waterTemperature) and the
+        GaggiMate one (label/description/temperature/phases). The machine
+        payload is passed through, so unknown keys are preserved.
+      properties:
+        id:   { oneOf: [{ type: string }, { type: integer }] }
+        name: { type: string }
+        label: { type: string }
+        description: { type: string }
+        temperature: { type: number }
+        type: { type: string }
+        utility: { type: boolean }
+        favorite: { type: boolean }
+        waterTemperature: { type: number }
+        phases:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        recipe:
+          type: object
+          properties:
+            coffeeIn: { type: number }
+            coffeeOut: { type: number }
+            ratio: { type: number }
+        globalStopConditions:
+          type: object
+          properties:
+            time: { type: integer, description: milliseconds }
+            weight: { type: number }
+            waterPumped: { type: number }
+      additionalProperties: true
+
+    MachineProfileList:
+      type: object
+      required: [available, stale, current, currentId, options, optionsRaw]
+      description: GET /api/machine/profiles — the machine's profile names plus a last-known offline/cache flag.
+      properties:
+        available: { type: boolean }
+        stale: { type: boolean, description: True when the list came from the last-known cache rather than a fresh fetch }
+        current: { type: string, nullable: true }
+        currentId: { type: integer, nullable: true }
+        options:
+          type: array
+          items: { type: string }
+        optionsRaw:
+          type: array
+          items:
+            type: object
+            required: [id, name, utility, syncStatus]
+            properties:
+              id: { type: string, description: "Machine-assigned id, or a \"local:<n>\" placeholder until first synced" }
+              name: { type: string }
+              utility: { type: boolean }
+              syncStatus: { type: string }
+
+    MachineSystemSettings:
+      type: object
+      description: >
+        GET /api/machine/settings — the machine's own settings object, passed
+        through from its GET /api/settings/{category}. Only releaseChannel is
+        read by the app today, so the rest stays an open object.
+      properties:
+        releaseChannel: { type: integer }
+      additionalProperties: true
+
+    FirmwareVersion:
+      type: object
+      required: [installed, latest, updateAvailable, releaseUrl]
+      description: GET /api/machine/firmware/version — installed vs latest release; latest/releaseUrl are null when no matching release was found.
+      properties:
+        installed: { type: string, nullable: true }
+        latest: { type: string, nullable: true }
+        updateAvailable: { type: boolean }
+        releaseUrl: { type: string, nullable: true }
+
+    FirmwareProgress:
+      type: object
+      description: >
+        GET /api/machine/firmware/progress — the machine's own OTA progress
+        payload, passed through verbatim (progress/status/type today).
+      properties:
+        status: { type: string }
+      additionalProperties: true
+
+    MachineSaveInput:
+      type: object
+      required: [name, type, host]
+      description: POST/PUT /api/machines body — the Settings machine form's fields (go/internal/machines' MachineInput).
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [gaggiuino, gaggimate] }
+        host: { type: string, description: "Hostname or host:port, e.g. gaggiuino.local or 192.168.1.50" }
+        switchEntity: { type: string, nullable: true, description: "HA switch entity id for this machine's power outlet" }
+        theme:
+          type: object
+          nullable: true
+          description: "#701 accent color — either {preset} or {a,b} hex colors; null when unset"
+          properties:
+            preset: { type: string }
+            a: { type: string }
+            b: { type: string }
+        hasWaterSensor: { type: boolean, description: "Whether the machine reports a water-level sensor" }
+        enabled: { type: boolean, default: true }
+
+    # ── MQTT ───────────────────────────────────────────────────────────────
+
+    MqttSettings:
+      type: object
+      required: [transport, host, port, username, prefix]
+      description: >
+        GET/POST /api/mqtt/settings (go/internal/mqtt's SettingsView). GET is
+        redacted: it reports hasPassword instead of the stored password
+        (#1050). POST accepts the same keys plus the write-only
+        password/clearPassword pair.
+      properties:
+        transport: { type: string, enum: [websocket, mqtt] }
+        host: { type: string }
+        port: { type: integer }
+        username: { type: string }
+        hasPassword: { type: boolean, description: "GET only: whether a password is stored (never the password itself, #1050)" }
+        password: { type: string, description: "POST only: omit to keep the stored password unchanged (#1050); a present value overwrites it unless clearPassword is also set." }
+        clearPassword: { type: boolean, description: "POST only: wipe the stored password regardless of the password field (#1062)." }
+        prefix: { type: string }
 
 paths:
 
@@ -2507,15 +2641,7 @@ paths:
           description: Profile list
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  available:  { type: boolean }
-                  stale:      { type: boolean, description: True when the list came from the last-known cache rather than a fresh fetch }
-                  current:    { type: string, nullable: true }
-                  currentId:  { type: integer, nullable: true }
-                  options:    { type: array, items: { type: string } }
-                  optionsRaw: { type: array, items: { type: object, properties: { id: { type: integer }, name: { type: string } } } }
+              schema: { $ref: '#/components/schemas/MachineProfileList' }
 
   /api/machine/profile/set:
     post:
@@ -2545,7 +2671,11 @@ paths:
         - { name: id, in: path, required: true, schema: { type: integer } }
         - { name: machineId, in: query, schema: { type: integer } }
       responses:
-        "200": { description: Profile detail (name, phases, globalStopConditions, waterTemperature, recipe) }
+        "200":
+          description: Profile detail (name, phases, globalStopConditions, waterTemperature, recipe)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineProfile' }
         "502": { description: Machine unreachable or returned an error }
     put:
       tags: [System]
@@ -2604,7 +2734,11 @@ paths:
         - { name: machineId, in: query, schema: { type: integer } }
         - { name: category, in: query, schema: { type: string, enum: [boiler, system, display, scales, led, theme, versions] } }
       responses:
-        "200": { description: Settings object (shape mirrors the machine's own GET /api/settings/* response) }
+        "200":
+          description: Settings object (shape mirrors the machine's own GET /api/settings/* response)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineSystemSettings' }
         "400": { description: unknown category }
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
@@ -2711,7 +2845,11 @@ paths:
       parameters:
         - { name: machineId, in: query, schema: { type: integer } }
       responses:
-        "200": { description: "{ progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS }" }
+        "200":
+          description: "{ progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FirmwareProgress' }
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
 
@@ -2735,7 +2873,11 @@ paths:
       parameters:
         - { name: machineId, in: query, schema: { type: integer } }
       responses:
-        "200": { description: "{ installed, latest, updateAvailable, releaseUrl } — latest/releaseUrl are null when no matching release could be found" }
+        "200":
+          description: "{ installed, latest, updateAvailable, releaseUrl } — latest/releaseUrl are null when no matching release could be found"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FirmwareVersion' }
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable, or the GitHub releases lookup failed }
 
@@ -2762,7 +2904,11 @@ paths:
       tags: [Mqtt]
       summary: Current live-data transport settings (Settings-page WebSocket/MQTT toggle + broker connection)
       responses:
-        "200": { description: "{ transport: 'websocket'|'mqtt', host, port, username, hasPassword, prefix } — hasPassword replaces the stored password, which is never echoed back (#1050)" }
+        "200":
+          description: "{ transport: 'websocket'|'mqtt', host, port, username, hasPassword, prefix } — hasPassword replaces the stored password, which is never echoed back (#1050)"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MqttSettings' }
     post:
       tags: [Mqtt]
       summary: Save the live-data transport settings. Drops any already-open MQTT session so a changed broker/prefix/credentials takes effect on the next read.
@@ -2770,9 +2916,9 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, properties: { transport: { type: string, enum: [websocket, mqtt] }, host: { type: string }, port: { type: integer }, username: { type: string }, password: { type: string, description: "Omit to keep the stored password unchanged (#1050); a present value always overwrites it unless clearPassword is also set." }, clearPassword: { type: boolean, description: "Wipe the stored password regardless of the password field (#1062)." }, prefix: { type: string } } }
+            schema: { $ref: '#/components/schemas/MqttSettings' }
       responses:
-        "200": { description: Saved settings }
+        "200": { description: Saved settings, content: { application/json: { schema: { $ref: '#/components/schemas/MqttSettings' } } } }
         "400": { description: Invalid settings payload }
 
   /api/mqtt/apply-to-machine:
@@ -2804,7 +2950,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MachineInput' }
+            schema: { $ref: '#/components/schemas/MachineSaveInput' }
       responses:
         "200": { description: Created machine, content: { application/json: { schema: { $ref: '#/components/schemas/Machine' } } } }
         "400": { description: Invalid machine payload, or host resolves to a private/blocked address }
@@ -2820,7 +2966,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MachineInput' }
+            schema: { $ref: '#/components/schemas/MachineSaveInput' }
       responses:
         "200": { description: Updated machine }
         "400": { description: Invalid payload, or host resolves to a private/blocked address }

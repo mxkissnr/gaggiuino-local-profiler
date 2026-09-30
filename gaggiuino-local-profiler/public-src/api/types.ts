@@ -122,66 +122,28 @@ export type CoffeeLibrary = components['schemas']['Library'];
 export type Machine = components['schemas']['Machine'];
 export type MachineInput = components['schemas']['MachineInput'];
 
-type MachineProfileInput = components['schemas']['MachineProfileInput'];
-
 /**
  * A machine profile as GET/POST/PUT /api/machine/profile[/{id}] carries it.
  * Covers both shapes the app touches: the Gaggiuino one
- * (MachineProfileInput — name/phases/recipe/...) and the GaggiMate one
+ * (name/phases/recipe/globalStopConditions/...) and the GaggiMate one
  * gaggimate-profile-editor.js uses (label/description/temperature/phases).
  */
-export interface MachineProfile {
-  id?: string | number | undefined;
-  name?: string;
-  label?: string;
-  description?: string;
-  temperature?: number;
-  type?: string;
-  utility?: boolean;
-  favorite?: boolean;
-  waterTemperature?: number;
-  phases?: MachineProfileInput['phases'];
-  recipe?: MachineProfileInput['recipe'];
-  globalStopConditions?: MachineProfileInput['globalStopConditions'];
-  [key: string]: unknown;
-}
+export type MachineProfile = components['schemas']['MachineProfile'];
 
 /** GET /api/machine/profiles — the profile list plus its offline/stale flag. */
-export interface MachineProfileList {
-  optionsRaw?: MachineProfile[];
-  stale?: boolean;
-}
+export type MachineProfileList = components['schemas']['MachineProfileList'];
 
 /** GET /api/machine/settings — the opaque per-machine settings blob (only `releaseChannel` is read today). */
-export interface MachineSystemSettings {
-  releaseChannel?: number;
-  [key: string]: unknown;
-}
+export type MachineSystemSettings = components['schemas']['MachineSystemSettings'];
 
 /** GET /api/machine/firmware/version — the machine's OTA status. */
-export interface FirmwareVersion {
-  installed?: string | null;
-  latest?: string | null;
-  updateAvailable?: boolean;
-  releaseUrl?: string | null;
-  [key: string]: unknown;
-}
+export type FirmwareVersion = components['schemas']['FirmwareVersion'];
 
 /** GET /api/machine/firmware/progress — one poll of the OTA progress. */
-export interface FirmwareProgress {
-  status?: string;
-  [key: string]: unknown;
-}
+export type FirmwareProgress = components['schemas']['FirmwareProgress'];
 
 /** POST/PUT /api/machines body — the fields the Settings machine form sends. */
-export interface MachineSaveInput {
-  name: string;
-  type: 'gaggiuino' | 'gaggimate';
-  host: string;
-  switchEntity?: string | null;
-  theme?: unknown;
-  hasWaterSensor?: boolean;
-}
+export type MachineSaveInput = components['schemas']['MachineSaveInput'];
 
 // ── MQTT (go/internal/mqtt) ──────────────────────────────────────────────
 
@@ -189,16 +151,6 @@ export interface MachineSaveInput {
  * GET/POST /api/mqtt/settings (go/internal/mqtt's SettingsView). GET is
  * redacted: it reports `hasPassword` instead of the stored password (#1050).
  * POST accepts the same keys plus the write-only `password`/`clearPassword`
- * pair, hence the index signature.
+ * pair.
  */
-export interface MqttSettings {
-  transport?: string;
-  host?: string;
-  port?: number;
-  username?: string;
-  password?: string;
-  clearPassword?: boolean;
-  prefix?: string;
-  hasPassword?: boolean;
-  [key: string]: unknown;
-}
+export type MqttSettings = components['schemas']['MqttSettings'];
