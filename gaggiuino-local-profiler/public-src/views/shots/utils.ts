@@ -43,7 +43,8 @@ function _parseDMY(str: string | null | undefined): number {
   if (!str) return NaN;
   const p = str.split('.');
   if (p.length !== 3) return NaN;
-  return new Date(+p[2], +p[1] - 1, +p[0]).getTime();
+  const [day = '', month = '', year = ''] = p;
+  return new Date(+year, +month - 1, +day).getTime();
 }
 
 // #456: resolves a shot/annotation to its library bean, preferring the

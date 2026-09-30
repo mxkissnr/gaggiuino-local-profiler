@@ -20,8 +20,8 @@ export function esc(str: string | number | bigint | boolean | null | undefined):
 // `Html`, so the tag never escapes anything itself. The seam for migrating
 // innerHTML call sites (#1104) onto a typed builder.
 export function html(strings: TemplateStringsArray, ...values: Html[]): Html {
-  let out = strings[0];
-  for (let i = 0; i < values.length; i++) out += values[i] + strings[i + 1];
+  let out = strings[0] ?? '';
+  for (let i = 0; i < values.length; i++) out += (values[i] ?? '') + (strings[i + 1] ?? '');
   return out as Html;
 }
 
@@ -39,11 +39,15 @@ export function roastAgeDays(str: string | null | undefined, nowMs: number = Dat
   let d: Date | null = null;
   let m = str.trim().match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
   if (m) {
-    const y = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
-    d = new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));
+    const [, dd = '', dm = '', dy = ''] = m;
+    const y = dy.length === 2 ? 2000 + parseInt(dy) : parseInt(dy);
+    d = new Date(y, parseInt(dm) - 1, parseInt(dd));
   } else {
     m = str.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+    if (m) {
+      const [, yy = '', mm = '', dd = ''] = m;
+      d = new Date(parseInt(yy), parseInt(mm) - 1, parseInt(dd));
+    }
   }
   if (!d || isNaN(d.getTime())) return null;
   const days = Math.floor((nowMs - d.getTime()) / 86400000);
@@ -61,11 +65,15 @@ export function toIsoDateInput(str: string | null | undefined): string {
   if (!str || typeof str !== 'string') return '';
   const s = str.trim();
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  if (m) {
+    const [, yy = '', mm = '', dd = ''] = m;
+    return `${yy}-${mm}-${dd}`;
+  }
   m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
   if (m) {
-    const y = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
-    return `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
+    const [, dd = '', mm = '', yy = ''] = m;
+    const y = yy.length === 2 ? 2000 + parseInt(yy) : parseInt(yy);
+    return `${y}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
   }
   return '';
 }
@@ -90,7 +98,8 @@ export function todayIsoDate(nowMs: number = Date.now()): string {
 export function isoDateInputToMs(value: string | null | undefined): number | null {
   const m = typeof value === 'string' && value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return null;
-  const d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]), 12, 0, 0);
+  const [, yy = '', mm = '', dd = ''] = m;
+  const d = new Date(parseInt(yy), parseInt(mm) - 1, parseInt(dd), 12, 0, 0);
   return isNaN(d.getTime()) ? null : d.getTime();
 }
 
@@ -145,7 +154,7 @@ export function calcBrewRatio(
   const dose = parseFloat(shot?.annotation?.dose ?? '');
   if (!dose || dose < 5 || dose > 30) return null;
   const w = data?.weight;
-  const yieldG = w?.length ? w[w.length - 1].y : null;
+  const yieldG = w?.length ? w.at(-1)?.y ?? null : null;
   if (!yieldG || yieldG < 5) return null;
   const ratio = yieldG / dose;
   return ratio > 0.5 && ratio < 6 ? ratio : null;
@@ -211,12 +220,12 @@ export function avg(arr: number[] | null | undefined): number | null {
 export function avgActive(arr: number[] | null | undefined, t: number = 0.5): number | null {
   if (!arr?.length) return null;
   const active = arr.filter(v => v > t);
-  return active.length ? active.reduce((a, b) => a + b, 0) / active.length : arr[arr.length - 1];
+  return active.length ? active.reduce((a, b) => a + b, 0) / active.length : arr.at(-1) ?? null;
 }
 
 export function max(arr: number[] | null | undefined): number | null {
   if (!arr?.length) return null;
-  return arr.reduce((m, v) => v > m ? v : m, arr[0]);
+  return arr.reduce((m, v) => v > m ? v : m);
 }
 
 export function safeLast(arr: (number | null | undefined)[] | null | undefined): number | null {
@@ -318,24 +327,28 @@ export function mapShotDatapoints(datapoints: ShotDatapoints | null | undefined)
 export function detectPhases(times: number[], pressures: number[]): { preinfusion: number; extraction: number } | null {
   if (!times?.length || pressures?.length < 5) return null;
   const THRESH = 3.5;
-  let endIdx = -1;
-  for (let i = 0; i < pressures.length; i++) {
-    if (times[i] >= 1 && pressures[i] >= THRESH) { endIdx = i; break; }
-  }
+  const endIdx = pressures.findIndex((p, i) => (times[i] ?? 0) >= 1 && p >= THRESH);
   if (endIdx <= 0) return null;
   const preinfusion = times[endIdx];
+  const lastTime = times[times.length - 1];
+  if (preinfusion === undefined || lastTime === undefined) return null;
   if (preinfusion < 1.5) return null;
-  return { preinfusion, extraction: times[times.length - 1] - preinfusion };
+  return { preinfusion, extraction: lastTime - preinfusion };
 }
 
 // ── Channeling detection ──────────────────────────────────────────────────
 export function detectChanneling(times: number[], pressures: number[]): boolean {
   if (!times?.length || pressures?.length < 5) return false;
   for (let i = 1; i < pressures.length; i++) {
-    if (pressures[i - 1] < 5) continue;
-    const dt = times[i] - times[i - 1];
+    const pPrev = pressures[i - 1];
+    const pCur = pressures[i];
+    const tPrev = times[i - 1];
+    const tCur = times[i];
+    if (pPrev === undefined || pCur === undefined || tPrev === undefined || tCur === undefined) continue;
+    if (pPrev < 5) continue;
+    const dt = tCur - tPrev;
     if (dt <= 0 || dt > 3) continue;
-    if (pressures[i - 1] - pressures[i] > 1.5) return true;
+    if (pPrev - pCur > 1.5) return true;
   }
   return false;
 }
@@ -344,22 +357,26 @@ export function detectChanneling(times: number[], pressures: number[]): boolean 
 export function isoToGerman(iso: string | null | undefined): string {
   if (!iso) return '';
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
+  if (!m) return iso;
+  const [, yy = '', mm = '', dd = ''] = m;
+  return `${dd}.${mm}.${yy}`;
 }
 
 export function germanToIso(s: string | null | undefined): string | null {
   if (!s) return null;
   const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if (!m) return null;
-  return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  const [, dd = '', mm = '', yy = ''] = m;
+  return `${yy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
 }
 
 export function parseDMY(s: string | null | undefined): Date | null {
   if (!s) return null;
   const m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
   if (!m) return null;
-  const y = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
-  const d = new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));
+  const [, dd = '', mm = '', yy = ''] = m;
+  const y = yy.length === 2 ? 2000 + parseInt(yy) : parseInt(yy);
+  const d = new Date(y, parseInt(mm) - 1, parseInt(dd));
   return isNaN(d.getTime()) ? null : d;
 }
 

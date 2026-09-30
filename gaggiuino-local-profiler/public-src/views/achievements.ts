@@ -180,7 +180,7 @@ function pageHtml(cardBadges: Achievement[], idx: number): Html {
 function updateFineline(): void {
   const key = CARD_KEYS[_state.page];
   const titleEl = document.getElementById('achTitle');
-  if (titleEl) titleEl.textContent = t(CARD_NAME_KEYS[key]);
+  if (titleEl && key !== undefined) titleEl.textContent = t(CARD_NAME_KEYS[key] ?? '');
   const fineEl = document.getElementById('achFine');
   if (fineEl) fineEl.textContent = t('ach_card_of', _state.page + 1, CARD_KEYS.length);
 }

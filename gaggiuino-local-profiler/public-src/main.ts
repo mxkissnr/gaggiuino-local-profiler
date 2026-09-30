@@ -902,7 +902,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('devExportDbBtn')?.addEventListener('click', () => { void exportDevDb(); });
   document.getElementById('devImportDbInput')?.addEventListener('change', e => {
     const input = e.target as HTMLInputElement;
-    void importDevDb(input.files![0]);
+    const file = input.files?.[0];
+    if (file) void importDevDb(file);
     input.value = '';
   });
   document.getElementById('apiTokenCopyBtn')!.addEventListener('click', copyApiToken);

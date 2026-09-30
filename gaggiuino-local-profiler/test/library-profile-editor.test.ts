@@ -44,8 +44,24 @@ interface FakeFormField {
 // the points at that x, in array order.
 type SeriesPoint = ReturnType<typeof _synthesizeSeries>[number];
 
-function pointAt(points: SeriesPoint[], x: number, type: string, occurrence = 0) {
-  return points.filter(pt => pt.x === x && pt.type === type)[occurrence];
+// Plain arrays/records, so `arr[i]` / `obj[key]` are `| undefined` under
+// noUncheckedIndexedAccess; these narrow them back by throwing on a missing
+// element/entry instead of sprinkling non-null assertions.
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`no element at index ${i}`);
+  return v;
+}
+function entry<T>(obj: Record<string, T>, key: string): T {
+  const v = obj[key];
+  if (v === undefined) throw new Error(`no entry for ${key}`);
+  return v;
+}
+
+function pointAt(points: SeriesPoint[], x: number, type: string, occurrence = 0): SeriesPoint {
+  const pt = points.filter(pt => pt.x === x && pt.type === type)[occurrence];
+  if (pt === undefined) throw new Error(`no ${type} point at x=${x} (#${occurrence})`);
+  return pt;
 }
 
 describe('_synthesizeSeries', () => {
@@ -71,7 +87,7 @@ describe('_synthesizeSeries', () => {
     const points = _synthesizeSeries([
       { type: 'PRESSURE', target: { end: 6, curve: 'LINEAR', time: 1000 } },
     ]);
-    expect(points[0].y).toBe(0);
+    expect(at(points, 0).y).toBe(0);
   });
 
   it('an explicit target.start always wins over carry-over', () => {
@@ -106,7 +122,7 @@ describe('_collectPhases', () => {
     });
     g.document = { querySelectorAll: (sel: string) => sel === '#profilePhaseList .pp-row' ? [row] : [] };
 
-    const [phase] = _collectPhases();
+    const phase = at(_collectPhases(), 0);
     expect(phase.target!.volume).toBe(40);
     expect(phase.waterTemperature).toBe(93.5);
   });
@@ -123,7 +139,7 @@ describe('_collectPhases', () => {
     });
     g.document = { querySelectorAll: (sel: string) => sel === '#profilePhaseList .pp-row' ? [row] : [] };
 
-    const [phase] = _collectPhases();
+    const phase = at(_collectPhases(), 0);
     expect(phase.target!.volume).toBeUndefined();
     expect(phase.waterTemperature).toBeUndefined();
   });
@@ -158,10 +174,10 @@ describe('duplicateProfile', () => {
     await duplicateProfile('p1');
 
     expect(S.profileEditId).toBeNull(); // save must POST a new profile, not PUT over the source
-    expect(fields.profileFormName.value).toBe('Turbo Shot (Copy)');
+    expect(entry(fields, 'profileFormName').value).toBe('Turbo Shot (Copy)');
     // '93' as a string: the .ts module stringifies input values (`String(profile?.waterTemperature)`),
     // which is what a real <input type="number">.value holds anyway.
-    expect(fields.profileFormWaterTemp.value).toBe('93');
+    expect(entry(fields, 'profileFormWaterTemp').value).toBe('93');
   });
 });
 

@@ -169,7 +169,10 @@ function calcLongestStreak(shots: ShotRow[]): number {
   }))].sort();
   let max = 1, cur = 1;
   for (let i = 1; i < days.length; i++) {
-    const diff = (new Date(days[i]).getTime() - new Date(days[i-1]).getTime()) / 86400000;
+    const day = days[i];
+    const prevDay = days[i - 1];
+    if (day === undefined || prevDay === undefined) continue;
+    const diff = (new Date(day).getTime() - new Date(prevDay).getTime()) / 86400000;
     if (diff === 1) { max = Math.max(max, ++cur); } else cur = 1;
   }
   return max;
@@ -226,7 +229,7 @@ export function buildSummaryKpis() {
       const xs = recentScores.map((_, i) => i);
       const xm = (n - 1) / 2;
       const ym = recentScores.reduce((a, b) => a + b, 0) / n;
-      const slope = xs.reduce((s, x, i) => s + (x - xm) * (recentScores[i] - ym), 0) /
+      const slope = xs.reduce((s, x, i) => s + (x - xm) * ((recentScores[i] ?? 0) - ym), 0) /
                     xs.reduce((s, x) => s + (x - xm) ** 2, 0);
       if (slope < -1.5) {
         const drop = Math.abs(slope).toFixed(1);
@@ -323,12 +326,13 @@ export function _computeEquipmentStats(
   for (const s of shots) {
     const key = getKey(s);
     if (key == null) continue;
-    if (!byEquip[key]) byEquip[key] = { count: 0, scores: [], durations: [] };
-    byEquip[key].count++;
+    let stat = byEquip[key];
+    if (!stat) { stat = { count: 0, scores: [], durations: [] }; byEquip[key] = stat; }
+    stat.count++;
     const sc = window.calcShotScore ? window.calcShotScore(s) : null;
-    if (sc !== null) byEquip[key].scores.push(sc);
+    if (sc !== null) stat.scores.push(sc);
     const dur = (s.duration || 0) / 10;
-    if (dur > 5) byEquip[key].durations.push(dur);
+    if (dur > 5) stat.durations.push(dur);
   }
   return Object.entries(byEquip)
     .map(([key, d]) => {
@@ -414,7 +418,7 @@ function _buildDoseDist() {
   const hi = Math.ceil(Math.max(...doses) * 2) / 2;
   const buckets: Record<string, number> = {};
   for (let b = lo; b <= hi + 0.001; b += 0.5) buckets[b.toFixed(1)] = 0;
-  for (const d of doses) { const k = (Math.floor(d * 2) / 2).toFixed(1); if (k in buckets) buckets[k]++; }
+  for (const d of doses) { const k = (Math.floor(d * 2) / 2).toFixed(1); if (k in buckets) buckets[k] = (buckets[k] ?? 0) + 1; }
   chartRegistry.set('doseDistChart', new Chart(ctx, {
     type: 'bar',
     data: { labels: Object.keys(buckets).map(k => k + 'g'),
@@ -444,7 +448,7 @@ function _buildRatioDist() {
   const hi = Math.ceil(Math.max(...ratios) * 10) / 10;
   const buckets: Record<string, number> = {};
   for (let b = lo; b <= hi + 0.001; b += 0.1) buckets[b.toFixed(1)] = 0;
-  for (const r of ratios) { const k = (Math.floor(r * 10) / 10).toFixed(1); if (k in buckets) buckets[k]++; }
+  for (const r of ratios) { const k = (Math.floor(r * 10) / 10).toFixed(1); if (k in buckets) buckets[k] = (buckets[k] ?? 0) + 1; }
   chartRegistry.set('ratioDistChart', new Chart(ctx, {
     type: 'bar',
     data: { labels: Object.keys(buckets).map(k => '1:' + k),
@@ -467,10 +471,12 @@ export function buildTimeOfDay() {
   const hours: { count: number; scores: number[] }[] = Array.from({ length: 24 }, () => ({ count: 0, scores: [] }));
   for (const s of _shots()) {
     const h = new Date(s.timestamp * 1000).getHours();
-    hours[h].count++;
+    const bin = hours[h];
+    if (!bin) continue;
+    bin.count++;
     if (window.calcShotScore) {
       const sc = window.calcShotScore(s);
-      if (sc !== null) hours[h].scores.push(sc);
+      if (sc !== null) bin.scores.push(sc);
     }
   }
   if (!hours.some(h => h.count > 0)) {
@@ -488,7 +494,8 @@ export function buildTimeOfDay() {
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false },
         tooltip: { callbacks: { label: (c: TooltipItem<'bar'>) => {
-          const h = hours[c.dataIndex], sc = avgSc(h);
+          const h = hours[c.dataIndex];
+          const sc = h ? avgSc(h) : null;
           return `${c.parsed.y} Shot${c.parsed.y !== 1 ? 's' : ''}${sc !== null ? ' · Ø ' + sc : ''}`;
         }}}
       },
@@ -549,7 +556,9 @@ export function buildTrendChart() {
     options: {
       responsive: true, maintainAspectRatio: false,
       onClick: (_: unknown, elements: { index: number }[]) => {
-        if (elements.length > 0 && window.goToShot) window.goToShot(src[elements[0].index].id);
+        const first = elements[0];
+        const shot = first ? src[first.index] : undefined;
+        if (shot && window.goToShot) window.goToShot(shot.id);
       },
       plugins: {
         legend: { labels: { color: C.tick, font: { size: 11 } } },
@@ -582,12 +591,13 @@ export function _renderCalendar() {
   const dayMap: Record<string, { count: number; scores: number[]; lastId: number | null }> = {};
   for (const s of _shots()) {
     const key = new Date(s.timestamp * 1000).toISOString().slice(0, 10);
-    if (!dayMap[key]) dayMap[key] = { count: 0, scores: [], lastId: null };
-    dayMap[key].count++;
-    dayMap[key].lastId = s.id;
+    let day = dayMap[key];
+    if (!day) { day = { count: 0, scores: [], lastId: null }; dayMap[key] = day; }
+    day.count++;
+    day.lastId = s.id;
     if (window.calcShotScore) {
       const sc = window.calcShotScore(s);
-      if (sc !== null) dayMap[key].scores.push(sc);
+      if (sc !== null) day.scores.push(sc);
     }
   }
 
@@ -651,18 +661,19 @@ export function buildBeanStats() {
   for (const s of _shots()) {
     const name = s.annotation?.coffee;
     if (!name) continue;
-    if (!byBean[name]) byBean[name] = { count: 0, scores: [], durations: [], dialinShot: null };
-    byBean[name].count++;
+    let bean = byBean[name];
+    if (!bean) { bean = { count: 0, scores: [], durations: [], dialinShot: null }; byBean[name] = bean; }
+    bean.count++;
     if (window.calcShotScore) {
       const sc = window.calcShotScore(s);
       if (sc !== null) {
-        byBean[name].scores.push(sc);
-        if (byBean[name].dialinShot === null && sc >= 80)
-          byBean[name].dialinShot = byBean[name].count;
+        bean.scores.push(sc);
+        if (bean.dialinShot === null && sc >= 80)
+          bean.dialinShot = bean.count;
       }
     }
     const dur = (s.duration || 0) / 10;
-    if (dur > 5) byBean[name].durations.push(dur);
+    if (dur > 5) bean.durations.push(dur);
   }
 
   const beans = Object.entries(byBean).sort((a, b) => b[1].count - a[1].count);
@@ -724,7 +735,7 @@ let _worldMapReqToken = 0;
 function _hexToRgba(hex: string, alpha: number): string {
   const m = /^#?([a-f\d]{3}|[a-f\d]{6})$/i.exec(String(hex || '').trim());
   if (!m) return hex;
-  let h = m[1];
+  let h = m[1] ?? '';
   if (h.length === 3) h = h.split('').map(c => c + c).join('');
   const num = parseInt(h, 16);
   const r = (num >> 16) & 255, g = (num >> 8) & 255, b = num & 255;
@@ -792,7 +803,7 @@ function _repaintWorldMapTheme() {
 // single country (or a single point) doesn't zoom in absurdly far, and
 // stays within the geo.scaleLimit used by buildWorldMap (max 12).
 export function computeMapBoundingView(coords: (number[] | null | undefined)[] | null): { center: number[] | undefined; zoom: number } {
-  const valid = (coords || []).filter((c): c is number[] => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1]));
+  const valid = (coords || []).filter((c): c is [number, number] => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1]));
   if (!valid.length) return { center: undefined, zoom: 1 };
   let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
   for (const [lon, lat] of valid) {
@@ -830,11 +841,14 @@ export function computeMapBoundingView(coords: (number[] | null | undefined)[] |
 // of drawing straight across the map.
 function _closeRingPiece(seg: Ring): Ring {
   const first = seg[0], lastPt = seg[seg.length - 1];
-  if (first[0] === lastPt[0] && first[1] === lastPt[1]) return seg;
-  if (Math.abs(first[0] - lastPt[0]) > 180) {
-    const pole = lastPt[1] < 0 ? -90 : 90;
-    const sideOut = lastPt[0] > 0 ? 180 : -180;
-    const sideIn  = first[0] > 0 ? 180 : -180;
+  if (!first || !lastPt) return seg;
+  const [fx = 0, fy = 0] = first;
+  const [lx = 0, ly = 0] = lastPt;
+  if (fx === lx && fy === ly) return seg;
+  if (Math.abs(fx - lx) > 180) {
+    const pole = ly < 0 ? -90 : 90;
+    const sideOut = lx > 0 ? 180 : -180;
+    const sideIn  = fx > 0 ? 180 : -180;
     seg.push([sideOut, pole], [sideIn, pole], first);
   } else {
     seg.push(first);
@@ -853,13 +867,20 @@ export function splitAntimeridianRing(ring: Ring): Ring[] {
   // that closing edge along the map border (nearest pole) instead of cutting
   // straight across, the standard way flat equirectangular maps render a
   // polygon that touches both the left and right edges.
+  const firstPt = ring[0];
   const last = ring[ring.length - 1];
-  const closesAtStart = last[0] === ring[0][0] && last[1] === ring[0][1];
+  if (!firstPt || !last) return [ring];
+  const closesAtStart = last[0] === firstPt[0] && last[1] === firstPt[1];
   const scanEnd = closesAtStart ? ring.length - 1 : ring.length;
-  const segments = [[ring[0]]];
+  const segments: Ring[] = [[firstPt]];
   for (let i = 1; i < scanEnd; i++) {
-    const [lon1] = ring[i - 1];
-    const [lon2, lat2] = ring[i];
+    const prev = ring[i - 1];
+    const cur = ring[i];
+    const current = segments[segments.length - 1];
+    if (!prev || !cur || !current) continue;
+    const lon1 = prev[0] ?? 0;
+    const lon2 = cur[0] ?? 0;
+    const lat2 = cur[1] ?? 0;
     const dLon = lon2 - lon1;
     if (Math.abs(dLon) > 180) {
       // Crossing the seam: close the current segment on this side, start a
@@ -867,14 +888,16 @@ export function splitAntimeridianRing(ring: Ring): Ring[] {
       // latitude on their respective edge (+180 or -180).
       const side1 = lon1 > 0 ? 180 : -180;
       const side2 = lon2 > 0 ? 180 : -180;
-      segments[segments.length - 1].push([side1, lat2]);
+      current.push([side1, lat2]);
       segments.push([[side2, lat2]]);
     } else {
-      segments[segments.length - 1].push([lon2, lat2]);
+      current.push([lon2, lat2]);
     }
   }
   if (segments.length === 1) {
-    return [closesAtStart ? _closeRingPiece(segments[0]) : segments[0]];
+    const only = segments[0];
+    if (!only) return [ring];
+    return [closesAtStart ? _closeRingPiece(only) : only];
   }
   // A jump landing exactly on a closed ring's own closing edge produces a
   // degenerate 1-point trailing segment — not a renderable ring. Drop
@@ -1011,9 +1034,10 @@ export async function buildWorldMap() {
   const byCode: Record<string, MapStats> = {};
   for (const { bean, origins } of nameToBean.values()) {
     for (const o of origins) {
-      if (!byCode[o.code]) byCode[o.code] = { shots: 0, beans: new Set(), beanShots: new Map() };
-      byCode[o.code].beans.add(bean.name);
-      if (!byCode[o.code].beanShots.has(bean.name)) byCode[o.code].beanShots.set(bean.name, 0);
+      let codeStats = byCode[o.code];
+      if (!codeStats) { codeStats = { shots: 0, beans: new Set(), beanShots: new Map() }; byCode[o.code] = codeStats; }
+      codeStats.beans.add(bean.name);
+      if (!codeStats.beanShots.has(bean.name)) codeStats.beanShots.set(bean.name, 0);
     }
   }
   for (const s of _shots()) {
@@ -1021,6 +1045,7 @@ export async function buildWorldMap() {
     if (!entry) continue;
     for (const o of entry.origins) {
       const stats = byCode[o.code];
+      if (!stats) continue;
       stats.shots += o.weight;
       stats.beanShots.set(entry.bean.name, (stats.beanShots.get(entry.bean.name) ?? 0) + o.weight);
     }
@@ -1105,7 +1130,9 @@ export async function buildWorldMap() {
     // Even a blend gets exactly one map point — from its geocoded growing
     // region if resolved, else a centroid fallback keyed on its primary
     // (first-listed) origin country.
-    const primaryCode = origins[0].code;
+    const primary = origins[0];
+    if (!primary) continue;
+    const primaryCode = primary.code;
     let coord: number[] | null = bean.location ? [bean.location.lon, bean.location.lat] : null;
     if (!coord) {
       const centroid = COUNTRY_CENTROIDS[primaryCode];
@@ -1138,7 +1165,7 @@ export async function buildWorldMap() {
 
   const boundingCoords = [
     ...Object.keys(byCode).map(code => COUNTRY_CENTROIDS[code]).filter(Boolean),
-    ...points.map(p => [p.value[0], p.value[1]]),
+    ...points.map(p => [p.value[0] ?? 0, p.value[1] ?? 0]),
   ];
   const { center, zoom } = computeMapBoundingView(boundingCoords);
 
@@ -1185,11 +1212,12 @@ export function buildProfileChart() {
   const byProfile: Record<string, { scores: number[]; count: number }> = {};
   for (const s of _shots()) {
     const p = s.profile?.name || s.profileName || 'Unbekannt';
-    if (!byProfile[p]) byProfile[p] = { scores: [], count: 0 };
-    byProfile[p].count++;
+    let entry = byProfile[p];
+    if (!entry) { entry = { scores: [], count: 0 }; byProfile[p] = entry; }
+    entry.count++;
     if (window.calcShotScore) {
       const sc = window.calcShotScore(s);
-      if (sc !== null) byProfile[p].scores.push(sc);
+      if (sc !== null) entry.scores.push(sc);
     }
   }
 
@@ -1224,7 +1252,10 @@ export function buildProfileChart() {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { afterLabel: (c: { dataIndex: number }) => `${entries[c.dataIndex].count} Shots` } }
+        tooltip: { callbacks: { afterLabel: (c: { dataIndex: number }) => {
+          const e = entries[c.dataIndex];
+          return `${e ? e.count : 0} Shots`;
+        } } }
       },
       scales: {
         x: { min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { color: 'rgba(63,63,70,.3)' } },
@@ -1252,7 +1283,10 @@ export function buildWeekdayHourHeatmap() {
   for (const s of _shots()) {
     const d  = new Date(s.timestamp * 1000);
     const wd = (d.getDay() + 6) % 7; // 0=Mon..6=Sun, same convention as the calendar above
-    matrix[wd][d.getHours()]++;
+    const row = matrix[wd];
+    if (!row) continue;
+    const h = d.getHours();
+    row[h] = (row[h] ?? 0) + 1;
   }
   const max = Math.max(1, ...matrix.flat());
   const level = (c: number): number => c === 0 ? 0 : Math.min(4, Math.ceil((c / max) * 4));
@@ -1273,7 +1307,7 @@ export function buildWeekdayHourHeatmap() {
   for (let wd = 0; wd < 7; wd++) {
     const cells: Html[] = [];
     for (let h = 0; h < 24; h++) {
-      const c = matrix[wd][h];
+      const c = matrix[wd]?.[h] ?? 0;
       const title = `${weekdayLabels[wd]} ${String(h).padStart(2, '0')}:00 — ${c} Shot${c === 1 ? '' : 's'}`;
       cells.push(html`<div class="wh-cell wh-l${esc(level(c))}" title="${esc(title)}"></div>`);
     }
@@ -1291,8 +1325,9 @@ export function _computeBeanRanking(shots: ShotRow[]): BeanRankRow[] {
   for (const s of shots) {
     const name = s.annotation?.coffee;
     if (!name) continue;
-    if (!byBean[name]) byBean[name] = [];
-    byBean[name].push(s);
+    let list = byBean[name];
+    if (!list) { list = []; byBean[name] = list; }
+    list.push(s);
   }
 
   const rows: BeanRankRow[] = [];
@@ -1350,7 +1385,7 @@ export function buildBeanRanking() {
   rows.sort((a, b) => key === 'name' ? _cmpNullsLast(a.name.toLowerCase(), b.name.toLowerCase(), dir) : _cmpNullsLast(a[key], b[key], dir));
 
   const arrow = (k: string): Html => k === key ? html`<span class="sort-arrow">${esc(dir === 'asc' ? '▲' : '▼')}</span>` : esc('');
-  const cols = [
+  const cols: [string, string][] = [
     ['name', t('lib_recipe_bean')], ['shots', t('bean_stat_shots')], ['avgScore', t('bean_stat_avg')],
     ['lastGrind', t('ann_grind_setting')], ['trend', t('analytics_bean_rank_trend')],
   ];
@@ -1409,7 +1444,8 @@ export function _computeMachineComparison(shots: ShotRow[], machines: MachineRow
   for (const m of machines) byMachine[m.id] = { name: m.name, shots: [] };
   for (const s of shots) {
     const mid = s.machineId ?? 1;
-    if (byMachine[mid]) byMachine[mid].shots.push(s);
+    const machine = byMachine[mid];
+    if (machine) machine.shots.push(s);
   }
 
   return Object.values(byMachine).map(d => {
@@ -1487,7 +1523,7 @@ export function buildDialinProgression() {
 
   const prevValue = sel.value;
   sel.innerHTML = joinHtml(beanNames.map(n => html`<option value="${esc(n)}">${esc(n)}</option>`));
-  sel.value = beanNames.includes(prevValue) ? prevValue : beanNames[0];
+  sel.value = beanNames.includes(prevValue) ? prevValue : beanNames[0] ?? '';
   _renderDialinProgressionChart(sel.value);
 }
 
@@ -1535,7 +1571,9 @@ function _renderDialinProgressionChart(beanName: string | null): void {
     options: {
       responsive: true, maintainAspectRatio: false,
       onClick: (_: unknown, elements: { index: number }[]) => {
-        if (elements.length > 0 && window.goToShot) window.goToShot(shots[elements[0].index].id);
+        const first = elements[0];
+        const shot = first ? shots[first.index] : undefined;
+        if (shot && window.goToShot) window.goToShot(shot.id);
       },
       plugins: { legend: { labels: { color: C.tick, font: { size: 11 } } } },
       scales: {

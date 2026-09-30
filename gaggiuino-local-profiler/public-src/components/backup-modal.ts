@@ -365,7 +365,7 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
             }
             restoreBundle = bundle;
             restoreZipBytes = null;
-            present = new Set(SECTION_KEYS.filter(key => SECTION_PRESENCE_KEYS[key].some(k => k in bundle)));
+            present = new Set(SECTION_KEYS.filter(key => (SECTION_PRESENCE_KEYS[key] ?? []).some(k => k in bundle)));
         } catch (e) {
             alert(t('backup_error', (e as Error).message));
             input.value = '';
