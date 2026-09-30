@@ -801,8 +801,8 @@ function _bindInputs(): void {
       case 'gm-pro-temperature':  _setPhase(idx, { temperature: num() }); break;
       case 'gm-std-pump-power':
       case 'gm-pro-pump-power': { const pv = parseFloat(el.value); _setPhase(idx, { pump: isNaN(pv) ? 100 : pv }); break; }
-      case 'gm-pro-pressure':     _setPhase(idx, { pump: { ...((ph().pump as GmPump | undefined) ?? {}), pressure: num() } }); break;
-      case 'gm-pro-flow':         _setPhase(idx, { pump: { ...((ph().pump as GmPump | undefined) ?? {}), flow: num() } }); break;
+      case 'gm-pro-pressure': { const pump = ph().pump; _setPhase(idx, { pump: { ...(typeof pump === 'object' ? pump : {}), pressure: num() } }); break; }
+      case 'gm-pro-flow':     { const pump = ph().pump; _setPhase(idx, { pump: { ...(typeof pump === 'object' ? pump : {}), flow: num() } }); break; }
       case 'gm-pro-ramp-duration':
         _setPhase(idx, { transition: { ...(ph().transition ?? {}), duration: num() } });
         break;
