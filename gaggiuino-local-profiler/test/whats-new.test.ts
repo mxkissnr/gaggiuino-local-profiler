@@ -2,6 +2,8 @@
 // (public-src/shared/whats-new.js). Pure data + getter, no DOM deps, so
 // it's tested directly.
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { WHATS_NEW_ENTRIES, MAX_ENTRIES, getWhatsNewEntries } from '../public-src/shared/whats-new.js';
 
 const SEMVER_RE = /^\d+\.\d+\.\d+$/;
@@ -48,5 +50,17 @@ describe('getWhatsNewEntries', () => {
         const before = WHATS_NEW_ENTRIES.map(e => e.version);
         getWhatsNewEntries();
         expect(WHATS_NEW_ENTRIES.map(e => e.version)).toEqual(before);
+    });
+});
+
+describe('whats-new vs release version', () => {
+    it('newest entry matches config.yaml version when CHANGELOG has a section for it', () => {
+        const root = resolve(import.meta.dirname, '..');
+        const version = readFileSync(join(root, 'config.yaml'), 'utf8').match(/^version:\s*"([^"]+)"/m)?.[1];
+        const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
+        expect(version).toBeDefined();
+        if (changelog.includes(`## [${version}]`)) {
+            expect(getWhatsNewEntries()[0]?.version).toBe(version);
+        }
     });
 });
