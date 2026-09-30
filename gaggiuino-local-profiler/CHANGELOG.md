@@ -8,6 +8,7 @@
 - **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, with separate opt-ins for write and developer tools.** Closes #1196
 ### Fixed
 - **The bean picker now shows a bean as empty based on the stock the server calculated, not only the shots loaded in the browser.** Closes #1225
+- **The machine icon in the top bar now shows whether the selected machine is on, not the default machine's state.** Part of #1201
 - **With several machines, each one now shows its own reachability, last error and firmware version, and a shot is stamped with the firmware of the machine that pulled it.** Part of #1201
 - **Tapping complete twice on an order (or an automation and the dashboard at the same moment) no longer deducts the milk twice.** Closes #1199
 - **Backups now also keep the water-sensor setting, the default shot values and your unlocked badges with their original dates.** Closes #1197

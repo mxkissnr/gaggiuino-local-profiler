@@ -34,17 +34,34 @@ function host(): HTMLElement | null {
 // switch, not a new regression here.
 let _iconFor: unknown = null;
 
+function iconMachine() {
+  return (S.machines || []).find(m => m.id === S.activeMachineId)
+      || (S.machines || []).find(m => m.isDefault)
+      || (S.machines || [])[0];
+}
+
+// SSE live data only describes the default machine (#952), so it may drive
+// the icon only while the icon shows that one. A single-machine install
+// always counts as default.
+function iconShowsDefaultMachine(): boolean {
+  const machines = S.machines || [];
+  if (machines.length <= 1) return true;
+  const machine = iconMachine();
+  return !machine || machine.isDefault === true;
+}
+
+let _lastSnapshot: unknown = null;
+
 export function renderTopbarMachineIcon(): void {
   const el = host();
   if (!el) return;
-  const machine = (S.machines || []).find(m => m.id === S.activeMachineId)
-               || (S.machines || []).find(m => m.isDefault)
-               || (S.machines || [])[0];
+  const machine = iconMachine();
   const id = machine?.id ?? null;
   if (_iconFor !== id || !el.firstChild) {
     el.className = `topbar-machine-icon ${MACHINE_ICON_LIVE_CLASS}`;
     el.innerHTML = machineIconAnimatedSvg(machine?.theme, machine?.type);
     _iconFor = id;
+    if (S.sseActive && iconShowsDefaultMachine()) _applyState(_lastSnapshot);
   }
 }
 
@@ -54,11 +71,14 @@ let _lastPreheat: unknown = null;
 // live.js's own handlers for the same two event types (multiple listeners
 // per event are supported, see sse.js's onEvent()).
 export function handleTopbarLiveSnapshotEvent(msg: unknown): void {
+  _lastSnapshot = msg;
+  if (!iconShowsDefaultMachine()) return;
   _applyState(msg);
 }
 
 export function handleTopbarPreheatUpdateEvent(preheat: unknown): void {
   _lastPreheat = preheat;
+  if (!iconShowsDefaultMachine()) return;
   _applyState(null);
 }
 
@@ -78,7 +98,7 @@ function _applyState(msg: unknown): void {
 // falls back to once a machine is reachable but reports neither isLive nor
 // an active preheat.
 export function syncTopbarMachineIconFallback(reachable: unknown): void {
-  if (S.sseActive) return;
+  if (S.sseActive && iconShowsDefaultMachine()) return;
   const el = host();
   if (!el) return;
   setMachineIconMode(el, reachable === false ? 'off' : 'hot', 1);
