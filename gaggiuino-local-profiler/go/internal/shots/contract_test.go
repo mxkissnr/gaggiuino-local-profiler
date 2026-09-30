@@ -232,6 +232,9 @@ func TestContract_HydratedShotShape(t *testing.T) {
 			t.Fatalf("expected shots[0] to be an object, got %T", shots[0])
 		}
 		requireHydratedShotRequiredKeys(t, shot)
+		if _, ok := shot["datapoints"]; ok {
+			t.Error("GET /api/shots rows are metadata-only and must not carry datapoints")
+		}
 	})
 
 	t.Run("detail", func(t *testing.T) {
