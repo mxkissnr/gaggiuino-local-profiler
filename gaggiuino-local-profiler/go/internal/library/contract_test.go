@@ -188,3 +188,87 @@ func TestContract_ErrorShape(t *testing.T) {
 		})
 	}
 }
+
+func requireStringField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got keys %v", key, keysOf(body))
+		return
+	}
+	if _, ok := v.(string); !ok {
+		t.Errorf("expected %q to be a string, got %T (%v)", key, v, v)
+	}
+}
+
+func requireNumberField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got keys %v", key, keysOf(body))
+		return
+	}
+	if _, ok := v.(float64); !ok {
+		t.Errorf("expected %q to be a number, got %T (%v)", key, v, v)
+	}
+}
+
+func requireArrayField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got keys %v", key, keysOf(body))
+		return
+	}
+	if _, ok := v.([]any); !ok {
+		t.Errorf("expected %q to be an array, got %T (%v)", key, v, v)
+	}
+}
+
+// TestContract_BeanEnrichedShape pins openapi.yaml's Bean #1122 stock fields
+// (bean-level remainingG/consumedG, per-bag sortOrder/consumedG/remainingG/
+// current) on both the single-bean create response and the GET /api/library
+// list, which share decorateBeanStatus.
+func TestContract_BeanEnrichedShape(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean", mustMarshal(t, map[string]any{"name": "Kenya AA", "stock_g": 250}))
+	requireBeanEnrichedShape(t, decodeBody(t, rec.Body.Bytes()))
+
+	rec = doJSON(t, mux, http.MethodGet, "/api/library", nil)
+	lib := decodeBody(t, rec.Body.Bytes())
+	beans, ok := lib["beans"].([]any)
+	if !ok || len(beans) == 0 {
+		t.Fatalf("expected a non-empty beans array, got %+v", lib["beans"])
+	}
+	bean, ok := beans[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected beans[0] to be an object, got %T", beans[0])
+	}
+	requireBeanEnrichedShape(t, bean)
+}
+
+func requireBeanEnrichedShape(t *testing.T, bean map[string]any) {
+	t.Helper()
+	requireNumberField(t, bean, "id")
+	requireStringField(t, bean, "name")
+	requireArrayField(t, bean, "origins")
+	requireBoolField(t, bean, "enabled")
+	requireBoolField(t, bean, "decaf")
+	// A bean created with stock has a tracked bag, so decorateBeanStatus
+	// attaches both bean-level totals.
+	requireNumberField(t, bean, "remainingG")
+	requireNumberField(t, bean, "consumedG")
+	bags, ok := bean["bags"].([]any)
+	if !ok || len(bags) == 0 {
+		t.Fatalf("expected a non-empty bags array, got %+v", bean["bags"])
+	}
+	bag, ok := bags[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected bags[0] to be an object, got %T", bags[0])
+	}
+	requireNumberField(t, bag, "sortOrder")
+	requireNumberField(t, bag, "consumedG")
+	requireNumberField(t, bag, "remainingG")
+	requireBoolField(t, bag, "current")
+}

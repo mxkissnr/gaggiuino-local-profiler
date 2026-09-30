@@ -287,7 +287,7 @@ export async function loadDrinkMenu(): Promise<void> {
 export async function loadShotDefaults(): Promise<void> {
   try {
     const defaults = await getShotDefaults();
-    if (defaults) S.shotDefaults = defaults as unknown as Record<string, unknown>;
+    if (defaults) S.shotDefaults = defaults;
   } catch { /* non-critical */ }
 }
 

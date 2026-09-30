@@ -127,25 +127,66 @@ components:
             customer:  { type: string }
             haUserId:  { type: string }
             orderId:   { type: string }
+        beanId:          { type: integer, nullable: true, description: Library bean the shot used (#450) — drives bean-stock/age math }
+        basketId:        { type: integer, nullable: true, description: Library basket the shot used (#635) }
+        puckScreenId:    { type: integer, nullable: true, description: Library puck screen the shot used (#635) }
+        beanAgeDays:     { type: integer, nullable: true, description: "Bean age in days at brew time, computed on save" }
+        recipeId:        { type: integer, nullable: true, description: "Selected brew recipe, if the install has any" }
+        frozenPortionId: { type: integer, nullable: true, description: "Selected frozen portion, if the install uses them" }
+        drinkType:       { type: string, nullable: true, description: Barista-order drink type (orders feature) }
+        milkType:        { type: integer, nullable: true, description: Barista-order milk type id (orders feature) }
+        score:           { type: number, nullable: true, description: Score snapshot read by the live view's reference-shot selector }
 
     Shot:
       type: object
       description: >
         Raw shot record from the Gaggiuino machine, enriched with annotation
         and trash metadata by the add-on.
+      required: [id, timestamp, duration, profile_name, profileName, machineId, nativeId, annotation]
       properties:
         id:          { type: integer, description: Unique shot ID }
         timestamp:   { type: integer, description: Unix seconds (divide by 1 to get Date) }
-        duration:    { type: integer, description: "Duration × 10 — divide by 10 for seconds" }
-        profileName: { type: string }
+        duration:    { type: integer, nullable: true, description: "Duration × 10 — divide by 10 for seconds; null when stored without one" }
+        profileName: { type: string, nullable: true, description: Null when the shot was stored without a profile name }
+        profile_name: { type: string, nullable: true, description: "Snake-case alias of profileName, served alongside it" }
         profile:
           type: object
           properties:
             name: { type: string }
         weight:      { type: number, description: Output weight in grams }
+        machineId:   { type: integer, nullable: true, description: Owning machine id (#317); defaults to 1 backend-side }
+        nativeId:    { type: integer, description: Machine-local shot number (toNativeShotID) — global id minus the machine offset }
+        datapoints:
+          type: object
+          additionalProperties: true
+          description: >
+            Machine-reported curve series: an open-ended map of series name
+            to samples. Deliberately an open object (additionalProperties:
+            true) because the machine payload is a cross-repo contract the
+            add-on passes through without knowing every field. Present on
+            GET /api/shots/{id} and /shots.json; stripped from the
+            GET /api/shots metadata list.
+        image:       { type: string, nullable: true, description: "Stored photo extension (see GET /api/shots/{id}/image), if any" }
+        gaggimateBleScale: { type: boolean, nullable: true, description: "GaggiMate BLE-scale flag, merged from the machine payload" }
         annotation:
           $ref: '#/components/schemas/Annotation'
-        trashedAt:   { type: integer, description: Unix ms timestamp when shot was trashed, nullable: true }
+        trashedAt:   { type: integer, nullable: true, description: Unix ms timestamp when shot was trashed }
+
+    HydratedShot:
+      allOf:
+        - $ref: '#/components/schemas/Shot'
+        - type: object
+          required: [score, usedBeanTarget]
+          properties:
+            score:            { type: integer, nullable: true, description: Computed 0-100 score; null when the shot has too little data to score }
+            usedBeanTarget:   { type: boolean, description: Whether scoring detected the shot hit the bean's target }
+            hasChartData:     { type: boolean, description: "GET /api/shots rows only: whether the shot has a non-empty pressure/time curve series" }
+            tempStabilityDev: { type: number, nullable: true, description: "GET /api/shots rows only: mean absolute deviation of the temperature series from target, in °C" }
+            previousShotId:   { type: integer, nullable: true, description: "GET /api/shots/{id} only: id of the previous same-profile shot (null if none)" }
+            previousShot:
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/HydratedShot'
 
     # ── Library ────────────────────────────────────────────────────────────
 
@@ -173,8 +214,8 @@ components:
           items:
             type: object
             properties:
-              code: { type: string, maxLength: 2 }
-              pct:  { type: number, nullable: true }
+              code:    { type: string, maxLength: 2 }
+              percent: { type: number, description: "Blend share, 0–100, rounded to one decimal — sent as `percent`, not `pct`" }
         variety:       { type: string, maxLength: 200 }
         species:       { type: string, description: Allowlist-validated (e.g. arabica/robusta) }
         category:      { type: string, description: Allowlist-validated }
@@ -209,6 +250,8 @@ components:
               stock_g:    { type: number, nullable: true }
               openedAt:   { type: integer, description: Unix ms }
               batchNumber: { type: string, maxLength: 50 }
+              price_eur:  { type: number, nullable: true, description: "Set on new-bag/update-bag, not on the initial create bag" }
+              sortOrder:  { type: integer, description: "Queue position (#1122) — the current bag is the lowest-sortOrder tracked bag" }
               frozenPortions:
                 type: array
                 items:
@@ -220,6 +263,9 @@ components:
                     portionWeight_g: { type: number }
                     remainingCount:  { type: integer }
                     thawedAt:        { type: integer, nullable: true, description: Unix ms, set once remainingCount reaches 0 }
+              consumedG:  { type: integer, description: "Grams drawn from this bag, computed on read (#1122); absent for an untracked bag" }
+              remainingG: { type: integer, description: "Grams left in this bag, computed on read (#1122); absent for an untracked bag" }
+              current:    { type: boolean, description: "Whether this is the bag currently being drawn from, computed on read (#1122); absent for an untracked bag" }
         knownGrindSettings:
           type: array
           description: "Guided Dial-In (#310) — remembered (grinder, grindSetting) pairs, see POST .../known-grind"
@@ -228,6 +274,8 @@ components:
             properties:
               grinder:      { type: string, maxLength: 200 }
               grindSetting: { type: string, maxLength: 50 }
+        remainingG: { type: integer, description: "Total grams left across the bean's tracked bags, computed on read (#1122); absent for an untracked (unlimited-stock) bean" }
+        consumedG:  { type: integer, description: "Total grams drawn from the bean, computed on read (#1122); absent for an untracked (unlimited-stock) bean" }
 
     Grinder:
       type: object
@@ -336,14 +384,26 @@ components:
 
     MaintenanceTask:
       type: object
+      description: >
+        One maintenance task's computed state. The base keys are always sent;
+        threshold_g/grinderName/disabled are grinder_* only, label is custom_*
+        only, machineSyncedAt is descaling/backflush only, and gramsSince is
+        only added for grinder_* tasks that track a gram threshold.
+      required: [lastDate, threshold_shots, threshold_days, daysSince, shotsSince, pct, status]
       properties:
-        lastDate:        { type: string, format: date, nullable: true }
+        lastDate:        { type: string, nullable: true, description: "ISO timestamp of the last completion (a plain YYYY-MM-DD after a restore/import), null when never done" }
         threshold_shots: { type: integer, minimum: 1, maximum: 10000, nullable: true }
-        threshold_days:  { type: integer, minimum: 1, maximum: 365, nullable: true }
-        shots_since:     { type: integer, description: Shots since last maintenance }
-        days_since:      { type: integer, description: Days since last maintenance, nullable: true }
-        pct:             { type: number, minimum: 0, maximum: 1, description: Progress toward threshold (0–1) }
-        status:          { type: string, enum: [ok, warning, overdue] }
+        threshold_days:  { type: integer, minimum: 1, maximum: 3650, nullable: true }
+        threshold_g:     { type: integer, minimum: 1, maximum: 100000, nullable: true, description: "grinder_* only: gram threshold backing gramsSince" }
+        grinderName:     { type: string, description: "grinder_* only: the grinder's display name" }
+        label:           { type: string, description: "custom_* only: the user-defined label" }
+        machineSyncedAt: { type: string, nullable: true, description: "descaling/backflush only: when the task was last auto-synced from the machine" }
+        disabled:        { type: boolean, description: "grinder_* only: task hidden from the maintenance view when true" }
+        daysSince:       { type: integer, nullable: true, description: "Days since last maintenance, null when never done" }
+        shotsSince:      { type: integer, description: Shots since last maintenance }
+        gramsSince:      { type: integer, description: "grinder_* only: grams dosed since last maintenance" }
+        pct:             { type: number, minimum: 0, maximum: 1, description: "Progress toward threshold (0–1, capped at 1)" }
+        status:          { type: string, enum: [never, ok, soon, due] }
 
     MaintenanceStats:
       type: object
@@ -411,14 +471,19 @@ components:
 
     Order:
       type: object
-      required: [id, createdAt, customer, item, status]
+      description: >
+        A barista order. id/createdAt/customer/item/variant/note/notifyService/
+        machine/machineId/status/eta/acceptedAt/completedAt/declineReason/beanId
+        are always sent by the current handlers; haUserId and shotId are not
+        (haUserId on legacy rows, shotId only once the order is completed).
+      required: [id, createdAt, customer, item, variant, note, notifyService, machine, machineId, status, eta, acceptedAt, completedAt, declineReason, beanId]
       properties:
         id:            { type: string, example: "ord_1716000000000_ab12" }
         createdAt:     { type: integer, description: Unix ms }
         customer:      { type: string, maxLength: 50 }
-        haUserId:      { type: string, maxLength: 100 }
+        haUserId:      { type: string, maxLength: 100, description: "Absent on rows persisted before the field existed" }
         item:          { type: string, description: Menu item name }
-        variant:       { type: string, nullable: true, maxLength: 50, description: Selected variant, if the menu item has any }
+        variant:       { type: string, nullable: true, maxLength: 50, description: "Selected variant, if the menu item has any" }
         note:          { type: string, maxLength: 200 }
         notifyService: { type: string, nullable: true }
         status:
@@ -430,7 +495,7 @@ components:
         declineReason: { type: string, nullable: true }
         shotId:        { type: integer, description: "Last shot ID when order completed — resolved from the order's own machineId (#326), not the global latest shot", nullable: true }
         machine:       { type: string, maxLength: 100, nullable: true, description: "Optional machine name/slug target as supplied by the client (#317/glp-order-card #29)" }
-        machineId:     { type: integer, nullable: true, description: "machine's registry id, resolved server-side from `machine` (#326) — always set on orders placed since #326, falls back to the default machine when `machine` is unset/unmatched" }
+        machineId:     { type: integer, description: "machine's registry id, resolved server-side from `machine` (#326) — always set on orders placed since #326, falls back to the default machine when `machine` is unset/unmatched" }
         beanId:        { type: integer, nullable: true, description: "Library bean id for stable order-to-bean attribution (#563, glp-order-card #35). Resolved server-side against the library's actual beans — a stale/unknown id becomes null." }
 
     OrdersSettings:
@@ -513,15 +578,24 @@ components:
 
     Machine:
       type: object
+      required: [id, name, type, host, switchEntity, theme, hasWaterSensor, isDefault, enabled, createdAt]
       properties:
         id:           { type: integer }
         name:         { type: string }
         type:         { type: string, enum: [gaggiuino, gaggimate] }
         host:         { type: string }
         switchEntity: { type: string, nullable: true }
+        theme:
+          type: object
+          nullable: true
+          description: "#701 accent color — either {preset} or {a,b} hex colors; null when unset"
+          properties:
+            preset: { type: string }
+            a:      { type: string }
+            b:      { type: string }
+        hasWaterSensor: { type: boolean, description: "Whether the machine reports a water-level sensor" }
         isDefault:    { type: boolean }
         enabled:      { type: boolean }
-        theme:        { type: string, nullable: true, description: "#701 accent color picker" }
         createdAt:    { type: integer, description: Unix ms }
 
     MachineInput:
@@ -549,15 +623,26 @@ components:
 
     LiveData:
       type: object
+      description: >
+        GET /api/live/data and the SSE live-snapshot payload (one shared Go
+        builder, so every key below is always present — null where noted).
+      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel]
       properties:
         isLive:      { type: boolean }
         profileName: { type: string }
         datapoints:
-          type: array
+          type: object
           nullable: true
-          items:
-            type: object
-            description: Live brew datapoint
+          description: "Brew session's per-tenth-second series; null when not brewing. Each series is null until its first sample arrives."
+          required: [timeInShot, pressure, temperature, shotWeight, weightFlow, pumpFlow, targetTemperature]
+          properties:
+            timeInShot:        { type: array, nullable: true, items: { type: integer } }
+            pressure:          { type: array, nullable: true, items: { type: integer } }
+            temperature:       { type: array, nullable: true, items: { type: integer } }
+            shotWeight:        { type: array, nullable: true, items: { type: integer } }
+            weightFlow:        { type: array, nullable: true, items: { type: integer } }
+            pumpFlow:          { type: array, nullable: true, items: { type: integer } }
+            targetTemperature: { type: array, nullable: true, items: { type: integer } }
         seq: { type: integer, description: Sequence counter — increments on each update }
         machineReachable: { type: boolean, nullable: true, description: "#655: distinguishes a powered-off machine (false) from an idle-but-reachable one (isLive:false, machineReachable:true) — without it both looked identical" }
         isSteaming: { type: boolean, description: "#902: a steam live-session is active (kept separate from isLive, which stays brew-only)" }
@@ -565,19 +650,34 @@ components:
         steamDatapoints:
           type: object
           nullable: true
-          description: "#902: timeInMode/pressure/temperature arrays while steaming, null otherwise"
+          description: "#902: timeInMode/pressure/temperature series while steaming, null otherwise"
+          required: [timeInMode, pressure, temperature]
+          properties:
+            timeInMode:  { type: array, nullable: true, items: { type: integer } }
+            pressure:    { type: array, nullable: true, items: { type: integer } }
+            temperature: { type: array, nullable: true, items: { type: integer } }
         isFlushing: { type: boolean, description: "#902: a flush live-session is active" }
         flushSeq: { type: integer, description: "#902: increments when a flush session ends" }
         flushDatapoints:
           type: object
           nullable: true
-          description: "#902: timeInMode/pressure/temperature arrays while flushing, null otherwise"
+          description: "#902: timeInMode/pressure/temperature series while flushing, null otherwise"
+          required: [timeInMode, pressure, temperature]
+          properties:
+            timeInMode:  { type: array, nullable: true, items: { type: integer } }
+            pressure:    { type: array, nullable: true, items: { type: integer } }
+            temperature: { type: array, nullable: true, items: { type: integer } }
         isDescaling: { type: boolean, description: "#983: a descale live-session is active" }
         descaleSeq: { type: integer, description: "#983: increments when a descale session ends" }
         descaleDatapoints:
           type: object
           nullable: true
-          description: "#983: timeInMode/pressure/temperature arrays while descaling, null otherwise"
+          description: "#983: timeInMode/pressure/temperature series while descaling, null otherwise"
+          required: [timeInMode, pressure, temperature]
+          properties:
+            timeInMode:  { type: array, nullable: true, items: { type: integer } }
+            pressure:    { type: array, nullable: true, items: { type: integer } }
+            temperature: { type: array, nullable: true, items: { type: integer } }
         temperature: { type: number, nullable: true, description: "#902 idle stats: current temperature from the per-tick machineStatus, null before the first successful poll" }
         targetTemperature: { type: number, nullable: true, description: "#902 idle stats: current target temperature" }
         pressure: { type: number, nullable: true, description: "#902 idle stats: current pressure" }
@@ -646,7 +746,7 @@ components:
       type: object
       properties:
         roastDate:   { type: string, format: date }
-        stock_g:     { type: number }
+        stock_g:     { type: number, nullable: true }
         batchNumber: { type: string, maxLength: 50 }
 
     BagUpdateInput:
@@ -690,6 +790,284 @@ components:
         portionWeight_g: { type: number, minimum: 0.1, maximum: 2000 }
         frozenAt:        { type: integer, description: Epoch ms }
         remainingCount:  { type: integer, minimum: 0, description: "Set absolutely, re-clamped to [0, portionCount]" }
+
+
+    # ── Shots (defaults) ───────────────────────────────────────────────────
+
+    ShotDefaults:
+      type: object
+      required: [drinkType, coffee, beanId, basketId, puckScreenId, grinder, dose]
+      description: >
+        GET/POST /api/shots/defaults (#654) — per-install values pre-filled
+        into a new shot's annotation panel. Mirrors
+        go/internal/shots/defaults.go's DEFAULTS-merged blob: all seven keys
+        are always present, nil values stay null and grinder stays a string.
+      properties:
+        drinkType:    { type: string, nullable: true }
+        coffee:       { type: string, nullable: true }
+        beanId:       { type: integer, nullable: true }
+        basketId:     { type: integer, nullable: true }
+        puckScreenId: { type: integer, nullable: true }
+        grinder:      { type: string }
+        dose:         { type: number, nullable: true }
+
+    ShotDefaultsInput:
+      type: object
+      description: >
+        POST /api/shots/defaults body — a partial update. Every key is
+        optional: go/internal/shots/validation.go's ValidateShotDefaults
+        accepts absent keys and handlers.go's shotDefaultsFromBody fills
+        each missing one (nil, or "" for grinder).
+      properties:
+        drinkType:    { type: string, nullable: true }
+        coffee:       { type: string, nullable: true }
+        beanId:       { type: integer, nullable: true }
+        basketId:     { type: integer, nullable: true }
+        puckScreenId: { type: integer, nullable: true }
+        grinder:      { type: string }
+        dose:         { type: number, nullable: true }
+
+    # ── Orders (derived, request/response) ─────────────────────────────────
+
+    QueuePosition:
+      type: object
+      required: [position, suggestedEta]
+      description: One entry of GET /api/orders/queue-eta's `positions` map.
+      properties:
+        position:     { type: integer }
+        suggestedEta: { type: integer, description: "Minutes, clamped to 1..60" }
+
+    QueueEta:
+      type: object
+      required: [acceptedRemaining, pendingCount, prepTime, positions]
+      description: >
+        GET /api/orders/queue-eta — rolling prep-time estimate plus a queue
+        position for every pending order (go/internal/orders ComputeQueueEta).
+      properties:
+        acceptedRemaining: { type: number }
+        pendingCount:      { type: integer }
+        prepTime:          { type: number }
+        positions:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/QueuePosition' }
+
+    MilkStock:
+      description: >
+        One row of GET /api/orders/milk-stock: a library milk entity plus the
+        two order-derived fields the go/internal/orders handler adds.
+      allOf:
+        - $ref: '#/components/schemas/Milk'
+        - type: object
+          required: [demand, remaining]
+          properties:
+            demand:    { type: number, description: "ml requested by pending/accepted orders for this milk" }
+            remaining: { type: number, description: "max(0, stockMl - demand)" }
+
+    OrderCustomerStat:
+      type: object
+      required: [name, count, favItem, lastAt]
+      description: One row of GET /api/orders/stats's `customers`.
+      properties:
+        name:    { type: string }
+        count:   { type: integer }
+        favItem: { type: string, nullable: true }
+        lastAt:  { type: integer, description: Unix ms }
+
+    OrderStats:
+      type: object
+      required: [total, customers, mostPopular, byMachine]
+      description: GET /api/orders/stats — lifetime completed-order rollups (go/internal/orders' stats handler).
+      properties:
+        total: { type: integer }
+        customers:
+          type: array
+          items: { $ref: '#/components/schemas/OrderCustomerStat' }
+        mostPopular:
+          type: object
+          nullable: true
+          required: [item, count]
+          properties:
+            item:  { type: string }
+            count: { type: integer }
+        byMachine:
+          type: array
+          nullable: true
+          description: Only present once orders reference more than one machine.
+          items:
+            type: object
+            required: [machineId, machineName, count]
+            properties:
+              machineId:   { type: integer }
+              machineName: { type: string, nullable: true }
+              count:       { type: integer }
+
+    NotifyService:
+      type: object
+      required: [id, name]
+      description: One HA notify service (go/internal/ha's NotifyService).
+      properties:
+        id:   { type: string, example: "notify.mobile_app_phone" }
+        name: { type: string }
+
+    NotifyMappingView:
+      type: object
+      required: [mapping, customers]
+      description: GET /api/orders/notify-mapping — per-HA-user mapping plus the known customer names.
+      properties:
+        mapping: { $ref: '#/components/schemas/NotifyMapping' }
+        customers:
+          type: object
+          description: Map of haUserId → customer display name (derived from order history)
+          additionalProperties: { type: string }
+
+
+    # ── Machines ───────────────────────────────────────────────────────────
+
+    MachineProfile:
+      type: object
+      description: >
+        A machine profile as GET/POST/PUT /api/machine/profile[/{id}] carries
+        it. Covers both device dialects the app touches: the Gaggiuino shape
+        (name/phases/recipe/globalStopConditions/waterTemperature) and the
+        GaggiMate one (label/description/temperature/phases). The machine
+        payload is passed through, so unknown keys are preserved.
+      properties:
+        id:   { oneOf: [{ type: string }, { type: integer }] }
+        name: { type: string }
+        label: { type: string }
+        description: { type: string }
+        temperature: { type: number }
+        type: { type: string }
+        utility: { type: boolean }
+        favorite: { type: boolean }
+        waterTemperature: { type: number }
+        phases:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        recipe:
+          type: object
+          properties:
+            coffeeIn: { type: number }
+            coffeeOut: { type: number }
+            ratio: { type: number }
+        globalStopConditions:
+          type: object
+          properties:
+            time: { type: integer, description: milliseconds }
+            weight: { type: number }
+            waterPumped: { type: number }
+      additionalProperties: true
+
+    MachineProfileList:
+      type: object
+      required: [available, stale, current, currentId, options, optionsRaw]
+      description: GET /api/machine/profiles — the machine's profile names plus a last-known offline/cache flag.
+      properties:
+        available: { type: boolean }
+        stale: { type: boolean, description: True when the list came from the last-known cache rather than a fresh fetch }
+        current: { type: string, nullable: true }
+        currentId: { type: integer, nullable: true }
+        options:
+          type: array
+          items: { type: string }
+        optionsRaw:
+          type: array
+          items:
+            type: object
+            required: [id, name, utility, syncStatus]
+            properties:
+              id: { type: string, description: "Machine-assigned id, or a \"local:<n>\" placeholder until first synced" }
+              name: { type: string }
+              utility: { type: boolean }
+              syncStatus: { type: string }
+
+    MachineSystemSettings:
+      type: object
+      description: >
+        GET /api/machine/settings — the machine's own settings object, passed
+        through from its GET /api/settings/{category}. Only releaseChannel is
+        read by the app today, so the rest stays an open object.
+      properties:
+        releaseChannel: { type: integer }
+      additionalProperties: true
+
+    FirmwareVersion:
+      type: object
+      required: [installed, latest, updateAvailable, releaseUrl]
+      description: GET /api/machine/firmware/version — installed vs latest release; latest/releaseUrl are null when no matching release was found.
+      properties:
+        installed: { type: string, nullable: true }
+        latest: { type: string, nullable: true }
+        updateAvailable: { type: boolean }
+        releaseUrl: { type: string, nullable: true }
+
+    FirmwareProgress:
+      type: object
+      description: >
+        GET /api/machine/firmware/progress — the machine's own OTA progress
+        payload, passed through verbatim (progress/status/type today).
+      properties:
+        status: { type: string }
+      additionalProperties: true
+
+    MachineSaveInput:
+      type: object
+      required: [name, type, host]
+      description: POST/PUT /api/machines body — the Settings machine form's fields (go/internal/machines' MachineInput).
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [gaggiuino, gaggimate] }
+        host: { type: string, description: "Hostname or host:port, e.g. gaggiuino.local or 192.168.1.50" }
+        switchEntity: { type: string, nullable: true, description: "HA switch entity id for this machine's power outlet" }
+        theme:
+          type: object
+          nullable: true
+          description: "#701 accent color — either {preset} or {a,b} hex colors; null when unset"
+          properties:
+            preset: { type: string }
+            a: { type: string }
+            b: { type: string }
+        hasWaterSensor: { type: boolean, description: "Whether the machine reports a water-level sensor" }
+        enabled: { type: boolean, description: "Defaults to true when omitted" }
+
+    # ── MQTT ───────────────────────────────────────────────────────────────
+
+    MqttSettings:
+      type: object
+      required: [transport, host, port, username, hasPassword, prefix]
+      description: >
+        GET/POST /api/mqtt/settings response (go/internal/mqtt's SettingsView):
+        the redacted view, which reports hasPassword instead of the stored
+        password and never echoes the password back (#1050). The POST request
+        body is MqttSettingsInput instead, since it additionally carries the
+        write-only password/clearPassword pair.
+      properties:
+        transport: { type: string, enum: [websocket, mqtt] }
+        host: { type: string }
+        port: { type: integer }
+        username: { type: string }
+        hasPassword: { type: boolean, description: "Whether a password is stored (never the password itself, #1050)" }
+        prefix: { type: string }
+
+    MqttSettingsInput:
+      type: object
+      required: [transport]
+      description: >
+        POST /api/mqtt/settings request body (go/internal/mqtt's
+        parseSettings). Only transport is required; every other field is
+        optional and keeps its current value (or schema default) when omitted.
+        password is write-only (absent keeps the stored password unchanged,
+        #1050) and clearPassword wipes it regardless (#1062).
+      properties:
+        transport: { type: string, enum: [websocket, mqtt] }
+        host: { type: string }
+        port: { type: integer }
+        username: { type: string }
+        password: { type: string, description: "Write-only: omit to keep the stored password unchanged (#1050); a present value overwrites it unless clearPassword is also set." }
+        clearPassword: { type: boolean, description: "Write-only: wipe the stored password regardless of the password field (#1062)." }
+        prefix: { type: string }
 
 paths:
 
@@ -754,18 +1132,10 @@ paths:
                   shots:
                     type: array
                     description: >
-                      Each row is a Shot with the `datapoints` curve blob removed
-                      (fetch it via GET /api/shots/{id}) plus `score`,
-                      `usedBeanTarget` and `hasChartData`.
+                      Each row is a HydratedShot with the `datapoints` curve
+                      blob removed (fetch it via GET /api/shots/{id}).
                     items:
-                      allOf:
-                        - $ref: '#/components/schemas/Shot'
-                        - type: object
-                          properties:
-                            score:            { type: integer, nullable: true }
-                            usedBeanTarget:   { type: boolean }
-                            hasChartData:     { type: boolean, description: Whether the shot has a non-empty pressure/time curve series }
-                            tempStabilityDev: { type: number, nullable: true, description: Mean absolute deviation of the temperature series from target, in °C (for the Analytics machine-comparison stability column) }
+                      $ref: '#/components/schemas/HydratedShot'
                   nextCursor:
                     type: string
                     nullable: true
@@ -796,32 +1166,14 @@ paths:
           description: Defaults object
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  drinkType:    { type: string, nullable: true }
-                  coffee:       { type: string, nullable: true }
-                  beanId:       { type: integer, nullable: true }
-                  basketId:     { type: integer, nullable: true }
-                  puckScreenId: { type: integer, nullable: true }
-                  grinder:      { type: string }
-                  dose:         { type: number, nullable: true }
+              schema: { $ref: '#/components/schemas/ShotDefaults' }
     post:
       tags: [Shots]
       summary: Save per-install shot defaults
       requestBody:
         content:
           application/json:
-            schema:
-              type: object
-              properties:
-                drinkType:    { type: string, nullable: true }
-                coffee:       { type: string, nullable: true }
-                beanId:       { type: integer, nullable: true }
-                basketId:     { type: integer, nullable: true }
-                puckScreenId: { type: integer, nullable: true }
-                grinder:      { type: string }
-                dose:         { type: number, nullable: true }
+            schema: { $ref: '#/components/schemas/ShotDefaultsInput' }
       responses:
         "200": { description: Saved defaults }
         "400": { description: Validation error }
@@ -846,7 +1198,7 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/Shot'
+                  - $ref: '#/components/schemas/HydratedShot'
                   - type: "null"
 
   /api/shots/{id}/card:
@@ -2009,15 +2361,7 @@ paths:
           description: Array of milks with demand/remaining
           content:
             application/json:
-              schema:
-                type: array
-                items:
-                  allOf:
-                    - $ref: '#/components/schemas/Milk'
-                    - type: object
-                      properties:
-                        demand:    { type: number, description: "ml requested by pending/accepted orders for this milk" }
-                        remaining: { type: number, description: "max(0, stockMl - demand)" }
+              schema: { type: array, items: { $ref: '#/components/schemas/MilkStock' } }
 
   /api/orders/queue-eta:
     get:
@@ -2026,7 +2370,11 @@ paths:
       parameters:
         - { name: machine, in: query, schema: { type: integer }, description: "Scope to one machine's queue by registry id (#326)" }
       responses:
-        "200": { description: Queue ETA object (shape defined by OrderService.computeQueueEta) }
+        "200":
+          description: Queue ETA object (shape defined by OrderService.computeQueueEta)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueEta' }
 
   /api/orders/stats:
     get:
@@ -2042,35 +2390,7 @@ paths:
           description: Stats object
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  total: { type: integer }
-                  customers:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:    { type: string }
-                        count:   { type: integer }
-                        favItem: { type: string, nullable: true }
-                        lastAt:  { type: integer, description: Unix ms }
-                  mostPopular:
-                    type: object
-                    nullable: true
-                    properties:
-                      item:  { type: string }
-                      count: { type: integer }
-                  byMachine:
-                    type: array
-                    nullable: true
-                    description: Only present once orders reference more than one machine.
-                    items:
-                      type: object
-                      properties:
-                        machineId:   { type: integer }
-                        machineName: { type: string, nullable: true }
-                        count:       { type: integer }
+              schema: { $ref: '#/components/schemas/OrderStats' }
 
   /api/orders/menu:
     get:
@@ -2179,7 +2499,7 @@ paths:
           description: Array of service names
           content:
             application/json:
-              schema: { type: array, items: { type: string }, example: ["notify.mobile_app_phone"] }
+              schema: { type: array, items: { $ref: '#/components/schemas/NotifyService' } }
 
   /api/orders/notify-mapping:
     get:
@@ -2190,15 +2510,7 @@ paths:
           description: Mapping + known customers
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  mapping:
-                    $ref: '#/components/schemas/NotifyMapping'
-                  customers:
-                    type: object
-                    description: Map of haUserId → customer display name (derived from order history)
-                    additionalProperties: { type: string }
+              schema: { $ref: '#/components/schemas/NotifyMappingView' }
     post:
       tags: [Orders]
       summary: Update the haUserId → notify service mapping
@@ -2346,15 +2658,7 @@ paths:
           description: Profile list
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  available:  { type: boolean }
-                  stale:      { type: boolean, description: True when the list came from the last-known cache rather than a fresh fetch }
-                  current:    { type: string, nullable: true }
-                  currentId:  { type: integer, nullable: true }
-                  options:    { type: array, items: { type: string } }
-                  optionsRaw: { type: array, items: { type: object, properties: { id: { type: integer }, name: { type: string } } } }
+              schema: { $ref: '#/components/schemas/MachineProfileList' }
 
   /api/machine/profile/set:
     post:
@@ -2384,7 +2688,11 @@ paths:
         - { name: id, in: path, required: true, schema: { type: integer } }
         - { name: machineId, in: query, schema: { type: integer } }
       responses:
-        "200": { description: Profile detail (name, phases, globalStopConditions, waterTemperature, recipe) }
+        "200":
+          description: Profile detail (name, phases, globalStopConditions, waterTemperature, recipe)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineProfile' }
         "502": { description: Machine unreachable or returned an error }
     put:
       tags: [System]
@@ -2443,7 +2751,11 @@ paths:
         - { name: machineId, in: query, schema: { type: integer } }
         - { name: category, in: query, schema: { type: string, enum: [boiler, system, display, scales, led, theme, versions] } }
       responses:
-        "200": { description: Settings object (shape mirrors the machine's own GET /api/settings/* response) }
+        "200":
+          description: Settings object (shape mirrors the machine's own GET /api/settings/* response)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineSystemSettings' }
         "400": { description: unknown category }
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
@@ -2550,7 +2862,11 @@ paths:
       parameters:
         - { name: machineId, in: query, schema: { type: integer } }
       responses:
-        "200": { description: "{ progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS }" }
+        "200":
+          description: "{ progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FirmwareProgress' }
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
 
@@ -2574,7 +2890,11 @@ paths:
       parameters:
         - { name: machineId, in: query, schema: { type: integer } }
       responses:
-        "200": { description: "{ installed, latest, updateAvailable, releaseUrl } — latest/releaseUrl are null when no matching release could be found" }
+        "200":
+          description: "{ installed, latest, updateAvailable, releaseUrl } — latest/releaseUrl are null when no matching release could be found"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FirmwareVersion' }
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable, or the GitHub releases lookup failed }
 
@@ -2601,7 +2921,11 @@ paths:
       tags: [Mqtt]
       summary: Current live-data transport settings (Settings-page WebSocket/MQTT toggle + broker connection)
       responses:
-        "200": { description: "{ transport: 'websocket'|'mqtt', host, port, username, hasPassword, prefix } — hasPassword replaces the stored password, which is never echoed back (#1050)" }
+        "200":
+          description: "{ transport: 'websocket'|'mqtt', host, port, username, hasPassword, prefix } — hasPassword replaces the stored password, which is never echoed back (#1050)"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MqttSettings' }
     post:
       tags: [Mqtt]
       summary: Save the live-data transport settings. Drops any already-open MQTT session so a changed broker/prefix/credentials takes effect on the next read.
@@ -2609,9 +2933,9 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, properties: { transport: { type: string, enum: [websocket, mqtt] }, host: { type: string }, port: { type: integer }, username: { type: string }, password: { type: string, description: "Omit to keep the stored password unchanged (#1050); a present value always overwrites it unless clearPassword is also set." }, clearPassword: { type: boolean, description: "Wipe the stored password regardless of the password field (#1062)." }, prefix: { type: string } } }
+            schema: { $ref: '#/components/schemas/MqttSettingsInput' }
       responses:
-        "200": { description: Saved settings }
+        "200": { description: Saved settings, content: { application/json: { schema: { $ref: '#/components/schemas/MqttSettings' } } } }
         "400": { description: Invalid settings payload }
 
   /api/mqtt/apply-to-machine:
@@ -2643,7 +2967,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MachineInput' }
+            schema: { $ref: '#/components/schemas/MachineSaveInput' }
       responses:
         "200": { description: Created machine, content: { application/json: { schema: { $ref: '#/components/schemas/Machine' } } } }
         "400": { description: Invalid machine payload, or host resolves to a private/blocked address }
@@ -2659,7 +2983,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MachineInput' }
+            schema: { $ref: '#/components/schemas/MachineSaveInput' }
       responses:
         "200": { description: Updated machine }
         "400": { description: Invalid payload, or host resolves to a private/blocked address }

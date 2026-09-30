@@ -785,6 +785,25 @@ export function closeMachineForm(): void {
   if (card) card.style.display = 'none';
 }
 
+// The generated request schema leaves theme.preset/a/b plain-optional, while
+// the form's ThemeSelection marks them optional-with-undefined (the swatch and
+// colour-input handlers assign straight from possibly-absent DOM values). Drop
+// the absent keys so the form value satisfies the request schema without a
+// cast; JSON.stringify already omitted undefined values, so the body is
+// unchanged. openapi.yaml and the generated schema.gen.ts are intentionally
+// left as-is: their theme object already matches the Go Theme's omitempty shape
+// (three plain-optional strings) and openapi-typescript emits optional
+// properties without an explicit `| undefined`, so the spec cannot express the
+// form's values; the mismatch is resolved here, at the request boundary.
+function themeForSave(theme: ThemeSelection | null): NonNullable<MachineSaveInput['theme']> | null {
+  if (!theme) return null;
+  const out: NonNullable<MachineSaveInput['theme']> = {};
+  if (theme.preset !== undefined) out.preset = theme.preset;
+  if (theme.a !== undefined) out.a = theme.a;
+  if (theme.b !== undefined) out.b = theme.b;
+  return out;
+}
+
 // #727: shared by saveMachineForm() and testMachineForm() so the
 // payload-building/fetch logic (and the SSRF-guard error surfacing from
 // #336) lives in exactly one place. Returns the saved machine's id on
@@ -808,7 +827,7 @@ async function _saveMachine({ triggerSync = true }: { triggerSync?: boolean } = 
     type,
     host: (document.getElementById('machineFormHost') as HTMLInputElement).value.trim(),
     switchEntity: (document.getElementById('machineFormSwitch') as HTMLInputElement).value.trim() || null,
-    theme: _selectedTheme,
+    theme: themeForSave(_selectedTheme),
     hasWaterSensor: type === 'gaggimate' ? ((document.getElementById('machineFormWaterSensor') as HTMLInputElement | null)?.checked || false) : false,
   };
   if (!payload.name || !payload.host) return null;

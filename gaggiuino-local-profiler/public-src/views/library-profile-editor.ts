@@ -10,7 +10,6 @@
 // removeRecipeStep().
 import Chart from 'chart.js/auto';
 import { S } from '../state/index.js';
-import type { MachineProfileRow } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import { t, tHtml } from '../i18n.js';
 import * as machinesApi from '../api/machines.js';
@@ -94,7 +93,7 @@ export async function loadMachineProfileList(): Promise<void> {
   const data = await _profileListRequest();
   if (!data) return;
   if (token !== _profileListReqToken) return;
-  S.machineProfiles = Array.isArray(data.optionsRaw) ? data.optionsRaw as MachineProfileRow[] : [];
+  S.machineProfiles = Array.isArray(data.optionsRaw) ? data.optionsRaw : [];
   S.machineProfilesStale = !!data.stale;
   renderProfileList();
   updateProfileDatalist();
@@ -145,7 +144,9 @@ export async function editProfile(id: string): Promise<void> {
 export async function duplicateProfile(id: string): Promise<void> {
   const profile = await machinesApi.getMachineProfile(id, S.activeMachineId ?? '');
   if (!profile) { window.showToast?.(t('profile_load_error')); return; }
-  openProfileForm({ ...profile, id: undefined, name: `${profile.name}${t('profile_duplicate_suffix')}` });
+  const duplicate: MachineProfile = { ...profile };
+  delete duplicate.id;
+  openProfileForm({ ...duplicate, name: `${profile.name}${t('profile_duplicate_suffix')}` });
 }
 
 export async function deleteMachineProfile(id: string): Promise<void> {

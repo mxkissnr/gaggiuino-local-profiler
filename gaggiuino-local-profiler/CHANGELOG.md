@@ -30,6 +30,10 @@
 - **A machine's last error in the status API is now only sent to authenticated callers, like the existing machine error field, so an anonymous request can no longer see a machine's address.** Part of #1201
 - **Values read from a GaggiMate machine are now escaped in the profile editor.** Part of #1115
 - **The library sub-views and both profile editors now build their markup through the type-checked HTML builder, so library and machine values can no longer be injected as markup.** Part of #1104
+
+### Changed
+- **The API description now documents every response the app uses, checked by tests against the real server.**
+- **The API description now distinguishes the MQTT settings request body from its redacted response, and marks the machine and order fields that are actually optional.** Part of #1103
 - **The analytics screens now build their markup through the type-checked HTML builder, so every bean, grinder, profile and machine name they display is escaped.** Part of #1104
 
 ### Changed
