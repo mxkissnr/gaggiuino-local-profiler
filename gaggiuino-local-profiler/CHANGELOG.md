@@ -38,7 +38,6 @@
 
 ### Changed
 - **The coffee library's basket and puck-screen collections are now typed with the real API shapes.** Part of #1105
-- **Eight more frontend modules now type-check under stricter indexed-access rules, with no behavior change.** Part of #1105
 - **The frontend's entry point is now linted with the same strict type-checked rules as every other TypeScript file.** Part of #1115
 - **The live view is now type-checked.**
 - **The screenshot tool can restore a real GLP backup instead of the demo seed, so the README/wiki views can be captured from actual data.** Closes #1181
