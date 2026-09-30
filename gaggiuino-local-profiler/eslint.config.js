@@ -139,6 +139,13 @@ module.exports = [
     },
   }),
   {
+    // #1104 L1: the fixture linted by test/html-sink-lint.test.ts. It is globally
+    // ignored above, so `eslint .` never sees its deliberate violations; the test
+    // re-lints it through the ESLint API with ignore disabled.
+    files: ['test/fixtures/**/*.ts'],
+    rules: { 'local/html-sink': 'error' },
+  },
+  {
     // test/e2e/*.mjs runs on node:test (Playwright), not vitest — see
     // test:e2e in package.json (#798) — so it gets node globals only, not
     // globals.vitest.

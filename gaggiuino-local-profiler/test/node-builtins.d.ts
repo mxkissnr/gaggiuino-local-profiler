@@ -26,10 +26,6 @@ declare module 'node:fs' {
     export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
 }
 
-declare module 'node:module' {
-    export function createRequire(filename: string | URL): (id: string) => unknown;
-}
-
 declare module 'node:os' {
     export function tmpdir(): string;
 }
