@@ -29,6 +29,7 @@
 - **The library sub-views and both profile editors now build their markup through the type-checked HTML builder, so library and machine values can no longer be injected as markup.** Part of #1104
 
 ### Changed
+- **The coffee library's basket and puck-screen collections are now typed with the real API shapes.** Part of #1105
 - **The frontend's entry point is now linted with the same strict type-checked rules as every other TypeScript file.** Part of #1115
 - **The live view is now type-checked.**
 - **The screenshot tool can restore a real GLP backup instead of the demo seed, so the README/wiki views can be captured from actual data.** Closes #1181

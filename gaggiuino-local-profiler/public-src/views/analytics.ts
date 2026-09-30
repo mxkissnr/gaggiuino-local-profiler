@@ -8,8 +8,8 @@ import { esc, scoreClass, chartColors, themeColor, onThemeChange } from '../util
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
 import { TARGET_ICON_SVG, WARNING_ICON_SVG } from '../icons.js';
-import type { MachineRecord, ShotMeta } from '../state/index.js';
-import type { ChartConfiguration } from 'chart.js';
+import type { LibraryRow, MachineRecord, ShotMeta } from '../state/index.js';
+import type { ChartConfiguration, TooltipItem } from 'chart.js';
 
 // state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
 // an index signature); this view reads the annotation, profile, curve and
@@ -74,7 +74,7 @@ type BeanRankKey = 'name' | 'shots' | 'avgScore' | 'lastGrind' | 'trend';
 
 // CoffeeLibrary (state/index.ts) types beans/grinders only; the world map
 // additionally reads each bean's origin list and geocoded location.
-interface SharedBean {
+interface SharedBean extends LibraryRow {
   id?: number | null;
   name: string;
   origin?: string | null;
@@ -83,13 +83,13 @@ interface SharedBean {
   location?: { lon: number; lat: number } | null;
 }
 
-function _beans(): SharedBean[] { return (S.coffeeLibrary.beans || []) as unknown as SharedBean[]; }
+function _beans(): SharedBean[] { return (S.coffeeLibrary.beans || []) as SharedBean[]; }
 
-// baskets/puckScreens are library collections CoffeeLibrary doesn't declare —
+// baskets/puckScreens are optional library collections (see CoffeeLibrary) —
 // same collection-by-name lookup views/shots/index.ts does for its own
 // annotation panel.
 function _libCollection(name: 'baskets' | 'puckScreens'): Record<string, unknown>[] | undefined {
-  return (S.coffeeLibrary as unknown as Record<string, Record<string, unknown>[] | undefined>)[name];
+  return S.coffeeLibrary[name];
 }
 
 // World map: a bean's origins (a blend carries several), the per-country
@@ -428,7 +428,7 @@ function _buildDoseDist() {
         y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(63,63,70,.3)' } }
       }
     }
-  } as unknown as ChartConfiguration<'bar'>));
+  } satisfies ChartConfiguration<'bar'>));
 }
 
 function _buildRatioDist() {
@@ -458,7 +458,7 @@ function _buildRatioDist() {
         y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(63,63,70,.3)' } }
       }
     }
-  } as unknown as ChartConfiguration<'bar'>));
+  } satisfies ChartConfiguration<'bar'>));
 }
 
 // ── Time of Day ───────────────────────────────────────────────────────────
@@ -489,7 +489,7 @@ export function buildTimeOfDay() {
     },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false },
-        tooltip: { callbacks: { label: (c: { dataIndex: number; parsed: { y: number } }) => {
+        tooltip: { callbacks: { label: (c: TooltipItem<'bar'>) => {
           const h = hours[c.dataIndex], sc = avgSc(h);
           return `${c.parsed.y} Shot${c.parsed.y !== 1 ? 's' : ''}${sc !== null ? ' · Ø ' + sc : ''}`;
         }}}
@@ -499,7 +499,7 @@ export function buildTimeOfDay() {
         y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(63,63,70,.3)' } }
       }
     }
-  } as unknown as ChartConfiguration<'bar'>));
+  } satisfies ChartConfiguration<'bar'>));
 }
 
 export function setTrendWindow(n: number): void {
@@ -562,7 +562,7 @@ export function buildTrendChart() {
         y: { min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: 'rgba(63,63,70,.3)' } }
       }
     }
-  } as unknown as ChartConfiguration<'line'>));
+  } satisfies ChartConfiguration<'line'>));
 }
 
 export function buildCalendar() {
@@ -1094,6 +1094,7 @@ export async function buildWorldMap() {
     for (const f of geo.features) f.geometry = _splitGeometryAtAntimeridian(f.geometry);
     const numToCode = new Map(COFFEE_COUNTRIES.map(c => [c.num, c.code]));
     for (const f of geo.features) f.properties = { ...f.properties, code: numToCode.get(String(f.id)) || null };
+    // topojson-client ships no types, so its GeoJSON output can't be matched to ECharts' map input.
     echarts.registerMap('world', geo as unknown as Parameters<typeof echarts.registerMap>[1]);
     _worldMapRegistered = true;
   }
@@ -1238,7 +1239,7 @@ export function buildProfileChart() {
         y: { ticks: { color: C.tick, font: { size: 11 } }, grid: { display: false } }
       }
     }
-  } as unknown as ChartConfiguration<'bar'>));
+  } satisfies ChartConfiguration<'bar'>));
 }
 
 // ── Weekday x Hour heatmap ─────────────────────────────────────────────────
@@ -1552,5 +1553,5 @@ function _renderDialinProgressionChart(beanName: string | null): void {
         y1: { position: 'right', min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { drawOnChartArea: false } },
       },
     },
-  } as unknown as ChartConfiguration<'line'>));
+  } satisfies ChartConfiguration<'line'>));
 }
