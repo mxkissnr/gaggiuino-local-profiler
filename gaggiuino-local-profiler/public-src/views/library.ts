@@ -72,7 +72,7 @@ interface LibraryState {
   _urlImportImageUrl?: string | null;
   _urlImportExtraRecipes?: BeanFormExtraRecipe[] | null;
 }
-function _state(): LibraryState { return S as LibraryState; }
+function _state(): LibraryState { return S; }
 
 // Shot rows are metadata-only (ShotMeta); the bean list reads the annotation's
 // coffee/rating fields and the timestamp — named here, same convention as
