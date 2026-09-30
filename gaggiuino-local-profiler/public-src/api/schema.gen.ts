@@ -6981,7 +6981,8 @@ export interface components {
             /** @description Source of truth for origin (#singleOrBlend beans) — replaces the legacy `origin` field. */
             origins?: {
                 code?: string;
-                pct?: number | null;
+                /** @description Blend share, 0–100, rounded to one decimal — sent as `percent`, not `pct` */
+                percent?: number | null;
             }[];
             variety?: string;
             /** @description Allowlist-validated (e.g. arabica/robusta) */
@@ -7022,6 +7023,10 @@ export interface components {
                 /** @description Unix ms */
                 openedAt?: number;
                 batchNumber?: string;
+                /** @description Set on new-bag/update-bag, not on the initial create bag */
+                price_eur?: number | null;
+                /** @description Queue position (#1122) — the current bag is the lowest-sortOrder tracked bag */
+                sortOrder?: number;
                 frozenPortions?: {
                     id?: number;
                     /** @description Unix ms */
@@ -7032,12 +7037,22 @@ export interface components {
                     /** @description Unix ms */
                     thawedAt?: number | null;
                 }[];
+                /** @description Grams drawn from this bag, computed on read (#1122); absent for an untracked bag */
+                consumedG?: number;
+                /** @description Grams left in this bag, computed on read (#1122); absent for an untracked bag */
+                remainingG?: number;
+                /** @description Whether this is the bag currently being drawn from, computed on read (#1122); absent for an untracked bag */
+                current?: boolean;
             }[];
             /** @description Guided Dial-In (#310) — remembered (grinder, grindSetting) pairs, see POST .../known-grind */
             knownGrindSettings?: {
                 grinder?: string;
                 grindSetting?: string;
             }[];
+            /** @description Total grams left across the bean's tracked bags, computed on read (#1122); absent for an untracked (unlimited-stock) bean */
+            remainingG?: number;
+            /** @description Total grams drawn from the bean, computed on read (#1122); absent for an untracked (unlimited-stock) bean */
+            consumedG?: number;
         };
         Grinder: {
             id: number;
@@ -7128,19 +7143,32 @@ export interface components {
             recipes?: components["schemas"]["Recipe"][];
             milks?: components["schemas"]["Milk"][];
         };
+        /** @description One maintenance task's computed state. The base keys are always sent; threshold_g/grinderName/disabled are grinder_* only, label is custom_* only, machineSyncedAt is descaling/backflush only, and gramsSince is only added for grinder_* tasks that track a gram threshold. */
         MaintenanceTask: {
-            /** Format: date */
-            lastDate?: string | null;
-            threshold_shots?: number | null;
-            threshold_days?: number | null;
+            /** @description ISO timestamp of the last completion (a plain YYYY-MM-DD after a restore/import), null when never done */
+            lastDate: string | null;
+            threshold_shots: number | null;
+            threshold_days: number | null;
+            /** @description grinder_* only: gram threshold backing gramsSince */
+            threshold_g?: number | null;
+            /** @description grinder_* only: the grinder's display name */
+            grinderName?: string;
+            /** @description custom_* only: the user-defined label */
+            label?: string;
+            /** @description descaling/backflush only: when the task was last auto-synced from the machine */
+            machineSyncedAt?: string | null;
+            /** @description grinder_* only: task hidden from the maintenance view when true */
+            disabled?: boolean;
+            /** @description Days since last maintenance, null when never done */
+            daysSince: number | null;
             /** @description Shots since last maintenance */
-            shots_since?: number;
-            /** @description Days since last maintenance */
-            days_since?: number | null;
-            /** @description Progress toward threshold (0–1) */
-            pct?: number;
+            shotsSince: number;
+            /** @description grinder_* only: grams dosed since last maintenance */
+            gramsSince?: number;
+            /** @description Progress toward threshold (0–1, capped at 1) */
+            pct: number;
             /** @enum {string} */
-            status?: "ok" | "warning" | "overdue";
+            status: "never" | "ok" | "soon" | "due";
         };
         /** @description Keys are task names: `descaling`, `backflush`, `grouphead`, `gaskets`, `waterfilter`, `grinder_{id}`. */
         MaintenanceStats: {
@@ -7196,36 +7224,38 @@ export interface components {
             /** @description Milk demand per order */
             milkMl?: number | null;
         };
+        /** @description A barista order. id/createdAt/customer/item/variant/note/notifyService/ machine/machineId/status/eta/acceptedAt/completedAt/declineReason/beanId are always sent by the current handlers; haUserId and shotId are not (haUserId on legacy rows, shotId only once the order is completed). */
         Order: {
             /** @example ord_1716000000000_ab12 */
             id: string;
             /** @description Unix ms */
             createdAt: number;
             customer: string;
+            /** @description Absent on rows persisted before the field existed */
             haUserId?: string;
             /** @description Menu item name */
             item: string;
-            /** @description Selected variant */
-            variant?: string | null;
-            note?: string;
-            notifyService?: string | null;
+            /** @description Selected variant, if the menu item has any */
+            variant: string | null;
+            note: string;
+            notifyService: string | null;
             /** @enum {string} */
             status: "pending" | "accepted" | "done" | "declined";
             /** @description Minutes */
-            eta?: number | null;
+            eta: number | null;
             /** @description Unix ms */
-            acceptedAt?: number | null;
+            acceptedAt: number | null;
             /** @description Unix ms */
-            completedAt?: number | null;
-            declineReason?: string | null;
+            completedAt: number | null;
+            declineReason: string | null;
             /** @description Last shot ID when order completed — resolved from the order's own machineId (#326), not the global latest shot */
             shotId?: number | null;
             /** @description Optional machine name/slug target as supplied by the client (#317/glp-order-card #29) */
-            machine?: string | null;
+            machine: string | null;
             /** @description machine's registry id, resolved server-side from `machine` (#326) — always set on orders placed since #326, falls back to the default machine when `machine` is unset/unmatched */
-            machineId?: number | null;
+            machineId: number;
             /** @description Library bean id for stable order-to-bean attribution (#563, glp-order-card #35). Resolved server-side against the library's actual beans — a stale/unknown id becomes null. */
-            beanId?: number | null;
+            beanId: number | null;
         };
         OrdersSettings: {
             enabled?: boolean;
@@ -7309,18 +7339,24 @@ export interface components {
             isDemo?: boolean;
         };
         Machine: {
-            id?: number;
-            name?: string;
+            id: number;
+            name: string;
             /** @enum {string} */
-            type?: "gaggiuino" | "gaggimate";
-            host?: string;
-            switchEntity?: string | null;
-            isDefault?: boolean;
-            enabled?: boolean;
-            /** @description #701 accent color picker */
-            theme?: string | null;
+            type: "gaggiuino" | "gaggimate";
+            host: string;
+            switchEntity: string | null;
+            /** @description #701 accent color — either {preset} or {a,b} hex colors; null when unset */
+            theme: {
+                preset?: string;
+                a?: string;
+                b?: string;
+            } | null;
+            /** @description Whether the machine reports a water-level sensor */
+            hasWaterSensor: boolean;
+            isDefault: boolean;
+            enabled: boolean;
             /** @description Unix ms */
-            createdAt?: number;
+            createdAt: number;
         };
         MachineInput: {
             name: string;
@@ -7351,40 +7387,62 @@ export interface components {
             /** @description Epoch-ms when the preheat watcher will turn the switch on to hit readyByTargetAt, or null */
             plannedSwitchOnAt?: number | null;
         };
+        /** @description GET /api/live/data and the SSE live-snapshot payload (one shared Go builder, so every key below is always present — null where noted). */
         LiveData: {
-            isLive?: boolean;
-            profileName?: string;
-            datapoints?: Record<string, never>[] | null;
+            isLive: boolean;
+            profileName: string;
+            /** @description Brew session's per-tenth-second series; null when not brewing. Each series is null until its first sample arrives. */
+            datapoints: {
+                timeInShot: number[] | null;
+                pressure: number[] | null;
+                temperature: number[] | null;
+                shotWeight: number[] | null;
+                weightFlow: number[] | null;
+                pumpFlow: number[] | null;
+                targetTemperature: number[] | null;
+            } | null;
             /** @description Sequence counter — increments on each update */
-            seq?: number;
+            seq: number;
             /** @description #655: distinguishes a powered-off machine (false) from an idle-but-reachable one (isLive:false, machineReachable:true) — without it both looked identical */
-            machineReachable?: boolean | null;
+            machineReachable: boolean | null;
             /** @description #902: a steam live-session is active (kept separate from isLive, which stays brew-only) */
-            isSteaming?: boolean;
+            isSteaming: boolean;
             /** @description #902: increments when a steam session ends */
-            steamSeq?: number;
-            /** @description #902: timeInMode/pressure/temperature arrays while steaming, null otherwise */
-            steamDatapoints?: Record<string, never> | null;
+            steamSeq: number;
+            /** @description #902: timeInMode/pressure/temperature series while steaming, null otherwise */
+            steamDatapoints: {
+                timeInMode: number[] | null;
+                pressure: number[] | null;
+                temperature: number[] | null;
+            } | null;
             /** @description #902: a flush live-session is active */
-            isFlushing?: boolean;
+            isFlushing: boolean;
             /** @description #902: increments when a flush session ends */
-            flushSeq?: number;
-            /** @description #902: timeInMode/pressure/temperature arrays while flushing, null otherwise */
-            flushDatapoints?: Record<string, never> | null;
+            flushSeq: number;
+            /** @description #902: timeInMode/pressure/temperature series while flushing, null otherwise */
+            flushDatapoints: {
+                timeInMode: number[] | null;
+                pressure: number[] | null;
+                temperature: number[] | null;
+            } | null;
             /** @description #983: a descale live-session is active */
-            isDescaling?: boolean;
+            isDescaling: boolean;
             /** @description #983: increments when a descale session ends */
-            descaleSeq?: number;
-            /** @description #983: timeInMode/pressure/temperature arrays while descaling, null otherwise */
-            descaleDatapoints?: Record<string, never> | null;
+            descaleSeq: number;
+            /** @description #983: timeInMode/pressure/temperature series while descaling, null otherwise */
+            descaleDatapoints: {
+                timeInMode: number[] | null;
+                pressure: number[] | null;
+                temperature: number[] | null;
+            } | null;
             /** @description #902 idle stats: current temperature from the per-tick machineStatus, null before the first successful poll */
-            temperature?: number | null;
+            temperature: number | null;
             /** @description #902 idle stats: current target temperature */
-            targetTemperature?: number | null;
+            targetTemperature: number | null;
             /** @description #902 idle stats: current pressure */
-            pressure?: number | null;
+            pressure: number | null;
             /** @description #902 idle stats: current water level */
-            waterLevel?: number | null;
+            waterLevel: number | null;
         };
         BackupBundle: {
             /** @example true */

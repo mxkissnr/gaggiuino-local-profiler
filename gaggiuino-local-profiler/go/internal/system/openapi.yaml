@@ -214,8 +214,8 @@ components:
           items:
             type: object
             properties:
-              code: { type: string, maxLength: 2 }
-              pct:  { type: number, nullable: true }
+              code:    { type: string, maxLength: 2 }
+              percent: { type: number, nullable: true, description: "Blend share, 0–100, rounded to one decimal — sent as `percent`, not `pct`" }
         variety:       { type: string, maxLength: 200 }
         species:       { type: string, description: Allowlist-validated (e.g. arabica/robusta) }
         category:      { type: string, description: Allowlist-validated }
@@ -250,6 +250,8 @@ components:
               stock_g:    { type: number, nullable: true }
               openedAt:   { type: integer, description: Unix ms }
               batchNumber: { type: string, maxLength: 50 }
+              price_eur:  { type: number, nullable: true, description: "Set on new-bag/update-bag, not on the initial create bag" }
+              sortOrder:  { type: integer, description: "Queue position (#1122) — the current bag is the lowest-sortOrder tracked bag" }
               frozenPortions:
                 type: array
                 items:
@@ -261,6 +263,9 @@ components:
                     portionWeight_g: { type: number }
                     remainingCount:  { type: integer }
                     thawedAt:        { type: integer, nullable: true, description: Unix ms, set once remainingCount reaches 0 }
+              consumedG:  { type: integer, description: "Grams drawn from this bag, computed on read (#1122); absent for an untracked bag" }
+              remainingG: { type: integer, description: "Grams left in this bag, computed on read (#1122); absent for an untracked bag" }
+              current:    { type: boolean, description: "Whether this is the bag currently being drawn from, computed on read (#1122); absent for an untracked bag" }
         knownGrindSettings:
           type: array
           description: "Guided Dial-In (#310) — remembered (grinder, grindSetting) pairs, see POST .../known-grind"
@@ -269,6 +274,8 @@ components:
             properties:
               grinder:      { type: string, maxLength: 200 }
               grindSetting: { type: string, maxLength: 50 }
+        remainingG: { type: integer, description: "Total grams left across the bean's tracked bags, computed on read (#1122); absent for an untracked (unlimited-stock) bean" }
+        consumedG:  { type: integer, description: "Total grams drawn from the bean, computed on read (#1122); absent for an untracked (unlimited-stock) bean" }
 
     Grinder:
       type: object
@@ -377,14 +384,26 @@ components:
 
     MaintenanceTask:
       type: object
+      description: >
+        One maintenance task's computed state. The base keys are always sent;
+        threshold_g/grinderName/disabled are grinder_* only, label is custom_*
+        only, machineSyncedAt is descaling/backflush only, and gramsSince is
+        only added for grinder_* tasks that track a gram threshold.
+      required: [lastDate, threshold_shots, threshold_days, daysSince, shotsSince, pct, status]
       properties:
-        lastDate:        { type: string, format: date, nullable: true }
+        lastDate:        { type: string, nullable: true, description: "ISO timestamp of the last completion (a plain YYYY-MM-DD after a restore/import), null when never done" }
         threshold_shots: { type: integer, minimum: 1, maximum: 10000, nullable: true }
-        threshold_days:  { type: integer, minimum: 1, maximum: 365, nullable: true }
-        shots_since:     { type: integer, description: Shots since last maintenance }
-        days_since:      { type: integer, description: Days since last maintenance, nullable: true }
-        pct:             { type: number, minimum: 0, maximum: 1, description: Progress toward threshold (0–1) }
-        status:          { type: string, enum: [ok, warning, overdue] }
+        threshold_days:  { type: integer, minimum: 1, maximum: 3650, nullable: true }
+        threshold_g:     { type: integer, minimum: 1, maximum: 100000, nullable: true, description: "grinder_* only: gram threshold backing gramsSince" }
+        grinderName:     { type: string, description: "grinder_* only: the grinder's display name" }
+        label:           { type: string, description: "custom_* only: the user-defined label" }
+        machineSyncedAt: { type: string, nullable: true, description: "descaling/backflush only: when the task was last auto-synced from the machine" }
+        disabled:        { type: boolean, description: "grinder_* only: task hidden from the maintenance view when true" }
+        daysSince:       { type: integer, nullable: true, description: "Days since last maintenance, null when never done" }
+        shotsSince:      { type: integer, description: Shots since last maintenance }
+        gramsSince:      { type: integer, description: "grinder_* only: grams dosed since last maintenance" }
+        pct:             { type: number, minimum: 0, maximum: 1, description: "Progress toward threshold (0–1, capped at 1)" }
+        status:          { type: string, enum: [never, ok, soon, due] }
 
     MaintenanceStats:
       type: object
@@ -452,12 +471,17 @@ components:
 
     Order:
       type: object
-      required: [id, createdAt, customer, item, status]
+      description: >
+        A barista order. id/createdAt/customer/item/variant/note/notifyService/
+        machine/machineId/status/eta/acceptedAt/completedAt/declineReason/beanId
+        are always sent by the current handlers; haUserId and shotId are not
+        (haUserId on legacy rows, shotId only once the order is completed).
+      required: [id, createdAt, customer, item, variant, note, notifyService, machine, machineId, status, eta, acceptedAt, completedAt, declineReason, beanId]
       properties:
         id:            { type: string, example: "ord_1716000000000_ab12" }
         createdAt:     { type: integer, description: Unix ms }
         customer:      { type: string, maxLength: 50 }
-        haUserId:      { type: string, maxLength: 100 }
+        haUserId:      { type: string, maxLength: 100, description: "Absent on rows persisted before the field existed" }
         item:          { type: string, description: Menu item name }
         variant:       { type: string, nullable: true, maxLength: 50, description: Selected variant, if the menu item has any }
         note:          { type: string, maxLength: 200 }
@@ -554,15 +578,24 @@ components:
 
     Machine:
       type: object
+      required: [id, name, type, host, switchEntity, theme, hasWaterSensor, isDefault, enabled, createdAt]
       properties:
         id:           { type: integer }
         name:         { type: string }
         type:         { type: string, enum: [gaggiuino, gaggimate] }
         host:         { type: string }
         switchEntity: { type: string, nullable: true }
+        theme:
+          type: object
+          nullable: true
+          description: "#701 accent color — either {preset} or {a,b} hex colors; null when unset"
+          properties:
+            preset: { type: string }
+            a:      { type: string }
+            b:      { type: string }
+        hasWaterSensor: { type: boolean, description: "Whether the machine reports a water-level sensor" }
         isDefault:    { type: boolean }
         enabled:      { type: boolean }
-        theme:        { type: string, nullable: true, description: "#701 accent color picker" }
         createdAt:    { type: integer, description: Unix ms }
 
     MachineInput:
@@ -590,15 +623,26 @@ components:
 
     LiveData:
       type: object
+      description: >
+        GET /api/live/data and the SSE live-snapshot payload (one shared Go
+        builder, so every key below is always present — null where noted).
+      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel]
       properties:
         isLive:      { type: boolean }
         profileName: { type: string }
         datapoints:
-          type: array
+          type: object
           nullable: true
-          items:
-            type: object
-            description: Live brew datapoint
+          description: "Brew session's per-tenth-second series; null when not brewing. Each series is null until its first sample arrives."
+          required: [timeInShot, pressure, temperature, shotWeight, weightFlow, pumpFlow, targetTemperature]
+          properties:
+            timeInShot:        { type: array, nullable: true, items: { type: integer } }
+            pressure:          { type: array, nullable: true, items: { type: integer } }
+            temperature:       { type: array, nullable: true, items: { type: integer } }
+            shotWeight:        { type: array, nullable: true, items: { type: integer } }
+            weightFlow:        { type: array, nullable: true, items: { type: integer } }
+            pumpFlow:          { type: array, nullable: true, items: { type: integer } }
+            targetTemperature: { type: array, nullable: true, items: { type: integer } }
         seq: { type: integer, description: Sequence counter — increments on each update }
         machineReachable: { type: boolean, nullable: true, description: "#655: distinguishes a powered-off machine (false) from an idle-but-reachable one (isLive:false, machineReachable:true) — without it both looked identical" }
         isSteaming: { type: boolean, description: "#902: a steam live-session is active (kept separate from isLive, which stays brew-only)" }
@@ -606,19 +650,34 @@ components:
         steamDatapoints:
           type: object
           nullable: true
-          description: "#902: timeInMode/pressure/temperature arrays while steaming, null otherwise"
+          description: "#902: timeInMode/pressure/temperature series while steaming, null otherwise"
+          required: [timeInMode, pressure, temperature]
+          properties:
+            timeInMode:  { type: array, nullable: true, items: { type: integer } }
+            pressure:    { type: array, nullable: true, items: { type: integer } }
+            temperature: { type: array, nullable: true, items: { type: integer } }
         isFlushing: { type: boolean, description: "#902: a flush live-session is active" }
         flushSeq: { type: integer, description: "#902: increments when a flush session ends" }
         flushDatapoints:
           type: object
           nullable: true
-          description: "#902: timeInMode/pressure/temperature arrays while flushing, null otherwise"
+          description: "#902: timeInMode/pressure/temperature series while flushing, null otherwise"
+          required: [timeInMode, pressure, temperature]
+          properties:
+            timeInMode:  { type: array, nullable: true, items: { type: integer } }
+            pressure:    { type: array, nullable: true, items: { type: integer } }
+            temperature: { type: array, nullable: true, items: { type: integer } }
         isDescaling: { type: boolean, description: "#983: a descale live-session is active" }
         descaleSeq: { type: integer, description: "#983: increments when a descale session ends" }
         descaleDatapoints:
           type: object
           nullable: true
-          description: "#983: timeInMode/pressure/temperature arrays while descaling, null otherwise"
+          description: "#983: timeInMode/pressure/temperature series while descaling, null otherwise"
+          required: [timeInMode, pressure, temperature]
+          properties:
+            timeInMode:  { type: array, nullable: true, items: { type: integer } }
+            pressure:    { type: array, nullable: true, items: { type: integer } }
+            temperature: { type: array, nullable: true, items: { type: integer } }
         temperature: { type: number, nullable: true, description: "#902 idle stats: current temperature from the per-tick machineStatus, null before the first successful poll" }
         targetTemperature: { type: number, nullable: true, description: "#902 idle stats: current target temperature" }
         pressure: { type: number, nullable: true, description: "#902 idle stats: current pressure" }
