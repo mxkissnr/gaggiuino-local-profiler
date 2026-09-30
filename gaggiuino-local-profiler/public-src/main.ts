@@ -1134,7 +1134,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // #750: awaited (was fire-and-forget) so the installId comparison inside
     // updateStatus() -> syncInstallId() has a chance to clear a stale
     // setup-wizard-completed flag before the shouldOpenSetupWizard() check
-    // below runs -- see setup-wizard.js's syncInstallId() comment.
+    // below runs -- see utils.js's syncInstallId() comment.
     await updateStatus();
     void checkForUpdate();
     renderApiTokenCard();

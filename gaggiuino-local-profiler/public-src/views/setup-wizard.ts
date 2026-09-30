@@ -18,13 +18,10 @@
 import { S, subscribe } from '../state/index.js';
 import type { MachineRecord } from '../state/index.js';
 import { tHtml } from '../i18n.js';
-import { html } from '../utils.js';
+import { html, COMPLETED_KEY } from '../utils.js';
 import type { Html } from '../utils.js';
 import { openMachineForm } from '../components/machines-settings.js';
 import { loadDemoData } from '../components/onboarding.js';
-
-const COMPLETED_KEY  = 'glp_setup_wizard_completed';
-const INSTALL_ID_KEY = 'glp_install_id';
 
 // Captured once, the first time the wizard ever reaches the connect step —
 // #machineFormCard's original position in the Settings "Machines" card, so
@@ -45,38 +42,11 @@ export function shouldOpenSetupWizard(machines: MachineRecord[] | null | undefin
   return (machines || []).every(m => !m?.host) && !localStorage.getItem(COMPLETED_KEY);
 }
 
-// #750: glp_setup_wizard_completed lives in the browser, not the app's DB —
-// an HA Supervisor-level "uninstall + delete add-on data" wipes /data/glp.db
-// server-side but leaves the browser's localStorage untouched, so a user who
-// completed the wizard once and later wipes the add-on's data for a genuine
-// fresh start never sees it again; the stale flag silently suppresses it
-// forever. installId (lib/db.js's ensureInstallId(), served on every
-// GET /api/status) is a random id generated once per DB file — a mismatch
-// against the locally-remembered one means "this isn't the DB this browser
-// last saw", so the stale completed flag gets cleared before
-// shouldOpenSetupWizard() runs. A normal user whose DB file is untouched
-// keeps a stable installId, so this is a no-op for them on every call.
-//
-// #757: comparison must be unconditional (`stored !== installId`, not
-// `stored && stored !== installId`) -- glp_install_id never existed in any
-// browser before this feature shipped, so `stored` is always null on the
-// very first status poll after deploying it. The old guard treated that as
-// "nothing to compare, skip" and just recorded the current installId as the
-// new baseline -- a no-op for exactly the case this was built for (a browser
-// with an already-stale completed flag from before this fix existed, hitting
-// a genuine data wipe). A missing stored value is never equal to a real
-// installId string, so the unconditional comparison clears it here too; this
-// stays safe for an already-configured install because
-// shouldOpenSetupWizard()'s own host check keeps the wizard closed
-// regardless of the completed flag once a real host exists.
-export function syncInstallId(installId?: string | null): void {
-  if (!installId) return;
-  const stored = localStorage.getItem(INSTALL_ID_KEY);
-  if (stored !== installId) {
-    try { localStorage.removeItem(COMPLETED_KEY); } catch { /* ignore */ }
-  }
-  try { localStorage.setItem(INSTALL_ID_KEY, installId); } catch { /* ignore */ }
-}
+// #750: syncInstallId() now lives in public-src/utils.js —
+// components/status.js calls it from updateStatus() without importing this
+// wizard module back (import-cycle #1102). Re-exported here for existing
+// importers (e.g. test/setup-wizard.test.js).
+export { syncInstallId } from '../utils.js';
 
 export function openSetupWizard(): void {
   S.setupWizardStep = 'welcome';
