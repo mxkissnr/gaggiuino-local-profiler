@@ -79,15 +79,8 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            /** @description Each row is a Shot with the `datapoints` curve blob removed (fetch it via GET /api/shots/{id}) plus `score`, `usedBeanTarget` and `hasChartData`. */
-                            shots: (components["schemas"]["Shot"] & {
-                                score?: number | null;
-                                usedBeanTarget?: boolean;
-                                /** @description Whether the shot has a non-empty pressure/time curve series */
-                                hasChartData?: boolean;
-                                /** @description Mean absolute deviation of the temperature series from target */
-                                tempStabilityDev?: number | null;
-                            })[];
+                            /** @description Each row is a HydratedShot with the `datapoints` curve blob removed (fetch it via GET /api/shots/{id}). */
+                            shots: components["schemas"]["HydratedShot"][];
                             /** @description Cursor for the next page, or null when hasMore is false. */
                             nextCursor: string | null;
                             hasMore: boolean;
@@ -256,7 +249,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Shot"] | null;
+                        "application/json": components["schemas"]["HydratedShot"] | null;
                     };
                 };
             };
@@ -6901,24 +6894,70 @@ export interface components {
                 haUserId?: string;
                 orderId?: string;
             };
+            /** @description Library bean the shot used (#450) — drives bean-stock/age math */
+            beanId?: number | null;
+            /** @description Library basket the shot used (#635) */
+            basketId?: number | null;
+            /** @description Library puck screen the shot used (#635) */
+            puckScreenId?: number | null;
+            /** @description Bean age in days at brew time, computed on save */
+            beanAgeDays?: number | null;
+            /** @description Selected brew recipe, if the install has any */
+            recipeId?: number | null;
+            /** @description Selected frozen portion, if the install uses them */
+            frozenPortionId?: number | null;
+            /** @description Barista-order drink type (orders feature) */
+            drinkType?: string | null;
+            /** @description Barista-order milk type id (orders feature) */
+            milkType?: number | null;
+            /** @description Score snapshot read by the live view's reference-shot selector */
+            score?: number | null;
         };
         /** @description Raw shot record from the Gaggiuino machine, enriched with annotation and trash metadata by the add-on. */
         Shot: {
             /** @description Unique shot ID */
-            id?: number;
+            id: number;
             /** @description Unix seconds (divide by 1 to get Date) */
-            timestamp?: number;
-            /** @description Duration × 10 — divide by 10 for seconds */
-            duration?: number;
-            profileName?: string;
+            timestamp: number;
+            /** @description Duration × 10 — divide by 10 for seconds; null when stored without one */
+            duration: number | null;
+            /** @description Null when the shot was stored without a profile name */
+            profileName: string | null;
+            /** @description Snake-case alias of profileName, served alongside it */
+            profile_name: string | null;
             profile?: {
                 name?: string;
             };
             /** @description Output weight in grams */
             weight?: number;
-            annotation?: components["schemas"]["Annotation"];
+            /** @description Owning machine id (#317); defaults to 1 backend-side */
+            machineId: number | null;
+            /** @description Machine-local shot number (toNativeShotID) — global id minus the machine offset */
+            nativeId: number;
+            /** @description Machine-reported curve series: an open-ended map of series name to samples. Deliberately an open object (additionalProperties: true) because the machine payload is a cross-repo contract the add-on passes through without knowing every field. Present on GET /api/shots/{id} and /shots.json; stripped from the GET /api/shots metadata list. */
+            datapoints?: {
+                [key: string]: unknown;
+            };
+            /** @description Stored photo extension (see GET /api/shots/{id}/image), if any */
+            image?: string | null;
+            /** @description GaggiMate BLE-scale flag, merged from the machine payload */
+            gaggimateBleScale?: boolean | null;
+            annotation: components["schemas"]["Annotation"];
             /** @description Unix ms timestamp when shot was trashed */
             trashedAt?: number | null;
+        };
+        HydratedShot: components["schemas"]["Shot"] & {
+            /** @description Computed 0-100 score; null when the shot has too little data to score */
+            score: number | null;
+            /** @description Whether scoring detected the shot hit the bean's target */
+            usedBeanTarget: boolean;
+            /** @description GET /api/shots rows only: whether the shot has a non-empty pressure/time curve series */
+            hasChartData?: boolean;
+            /** @description GET /api/shots rows only: mean absolute deviation of the temperature series from target, in °C */
+            tempStabilityDev?: number | null;
+            /** @description GET /api/shots/{id} only: id of the previous same-profile shot (null if none) */
+            previousShotId?: number | null;
+            previousShot?: components["schemas"]["HydratedShot"] | null;
         };
         /** @description Field set as actually accepted by POST/PUT /api/library/bean — see those operations for per-field length caps and sanitizer behavior (species/category/roastType/flavors/origins are allowlist-validated, not just trimmed). */
         Bean: {

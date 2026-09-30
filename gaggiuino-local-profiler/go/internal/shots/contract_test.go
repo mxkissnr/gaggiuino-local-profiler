@@ -40,6 +40,62 @@ func requireStringField(t *testing.T, body map[string]any, key string) {
 	}
 }
 
+func requireNumberField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got %+v", key, body)
+		return
+	}
+	if _, ok := v.(float64); !ok {
+		t.Errorf("expected %q to be a number, got %T (%v)", key, v, v)
+	}
+}
+
+// requireNullableNumberField accepts a JSON number or null — the shape of a
+// `nullable: true` numeric field the spec still marks required.
+func requireNullableNumberField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got %+v", key, body)
+		return
+	}
+	if v == nil {
+		return
+	}
+	if _, ok := v.(float64); !ok {
+		t.Errorf("expected %q to be a number or null, got %T (%v)", key, v, v)
+	}
+}
+
+func requireNullableStringField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got %+v", key, body)
+		return
+	}
+	if v == nil {
+		return
+	}
+	if _, ok := v.(string); !ok {
+		t.Errorf("expected %q to be a string or null, got %T (%v)", key, v, v)
+	}
+}
+
+func requireObjectField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got %+v", key, body)
+		return
+	}
+	if _, ok := v.(map[string]any); !ok {
+		t.Errorf("expected %q to be an object, got %T (%v)", key, v, v)
+	}
+}
+
 // TestContract_OkShape pins openapi.yaml's Ok schema (required: [ok],
 // ok: boolean) against every endpoint documented as returning it:
 // annotate/trash/restore/delete (200) and image DELETE (200, {ok, shot}).
@@ -129,12 +185,60 @@ func TestContract_ShotShape(t *testing.T) {
 	if len(list) != 1 {
 		t.Fatalf("expected 1 shot, got %d", len(list))
 	}
-	shot := list[0]
-	for _, field := range []string{"id", "timestamp", "duration", "profileName", "annotation"} {
-		if _, ok := shot[field]; !ok {
-			t.Errorf("expected Shot field %q, got keys %v", field, keysOf(shot))
+	requireShotRequiredKeys(t, list[0])
+}
+
+// requireShotRequiredKeys pins every key openapi.yaml's Shot schema now
+// marks `required`, with its JSON type; nullable fields accept null.
+func requireShotRequiredKeys(t *testing.T, shot map[string]any) {
+	t.Helper()
+	requireNumberField(t, shot, "id")
+	requireNumberField(t, shot, "timestamp")
+	requireNullableNumberField(t, shot, "duration")
+	requireNullableStringField(t, shot, "profileName")
+	requireNullableStringField(t, shot, "profile_name")
+	requireNullableNumberField(t, shot, "machineId")
+	requireNumberField(t, shot, "nativeId")
+	requireObjectField(t, shot, "annotation")
+}
+
+// requireHydratedShotRequiredKeys pins openapi.yaml's HydratedShot required
+// set: Shot's required keys plus score/usedBeanTarget.
+func requireHydratedShotRequiredKeys(t *testing.T, shot map[string]any) {
+	t.Helper()
+	requireShotRequiredKeys(t, shot)
+	requireNullableNumberField(t, shot, "score")
+	requireBoolField(t, shot, "usedBeanTarget")
+}
+
+// TestContract_HydratedShotShape pins openapi.yaml's HydratedShot schema on
+// the two endpoints it backs: the GET /api/shots metadata list (no
+// datapoints) and the GET /api/shots/{id} detail (full shot + previous
+// same-profile shot).
+func TestContract_HydratedShotShape(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "V60", nil, nil)
+
+	t.Run("list", func(t *testing.T) {
+		rec := doJSON(t, mux, http.MethodGet, "/api/shots", nil)
+		body := decodeBody(t, rec.Body.Bytes())
+		shots, ok := body["shots"].([]any)
+		if !ok || len(shots) == 0 {
+			t.Fatalf("expected a non-empty shots array, got %+v", body["shots"])
 		}
-	}
+		shot, ok := shots[0].(map[string]any)
+		if !ok {
+			t.Fatalf("expected shots[0] to be an object, got %T", shots[0])
+		}
+		requireHydratedShotRequiredKeys(t, shot)
+	})
+
+	t.Run("detail", func(t *testing.T) {
+		rec := doJSON(t, mux, http.MethodGet, "/api/shots/1", nil)
+		requireHydratedShotRequiredKeys(t, decodeBody(t, rec.Body.Bytes()))
+	})
 }
 
 func keysOf(m map[string]any) []string {
