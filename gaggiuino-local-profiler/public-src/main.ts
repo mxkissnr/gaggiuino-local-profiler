@@ -157,6 +157,20 @@ import { attachAutocomplete } from './components/autocomplete.js';
 
 import { BEAN_ICON_SVG } from './icons.js';
 
+// Local aliases for the loosely-typed library rows main.ts reads
+// (same pattern as views/shots/utils.ts).
+interface BeanBag {
+  openedAt?: number | null;
+  roastDate?: string | null;
+}
+
+interface BeanRecord {
+  id: number;
+  name?: string | null;
+  roastDate?: string | null;
+  bags?: BeanBag[];
+}
+
 declare global {
   interface Window {
     scheduleAutoSave?: () => void;
@@ -564,13 +578,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const hintEl = document.getElementById('beanAgeHint');
       if (!name || !S.coffeeLibrary) { if (hintEl) hintEl.style.display = 'none'; _renderFrozenPortionPills(null, Date.now(), null); return; }
 
-      const bean = S.coffeeLibrary.beans?.find(b => b.name === name);
+      const bean = S.coffeeLibrary.beans?.find(b => b.name === name) as unknown as BeanRecord | undefined;
       if (!bean) { if (hintEl) hintEl.style.display = 'none'; _renderFrozenPortionPills(null, Date.now(), null); return; }
 
       // Prefill grinder/grind setting/dose from this bean's own history
       // (best scored combo, then known-good grind, then its last shot) —
       // never the literal previous shot, which may have used a different bean.
-      const suggested = suggestGrindDoseForBean(name, S.coffeeLibrary, S.shots, { beanId: bean.id as number });
+      const suggested = suggestGrindDoseForBean(name, S.coffeeLibrary, S.shots, { beanId: bean.id });
       const grinderEl = document.getElementById('annGrinder') as HTMLInputElement | null;
       const grindEl   = document.getElementById('annGrindSetting') as HTMLInputElement | null;
       const doseEl    = document.getElementById('annDose') as HTMLInputElement | null;
@@ -582,11 +596,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const shot   = S.primaryShotId ? S.shots?.find(s => s.id === S.primaryShotId) : null;
       const shotMs = shot ? shot.timestamp * 1000 : Date.now();
       const bags   = Array.isArray(bean.bags) ? bean.bags : [];
-      let roastDate = bean.roastDate as string | undefined;
+      let roastDate = bean.roastDate;
       if (bags.length) {
         const activeBag = bags
           .filter(b => (b.openedAt || 0) <= shotMs)
-          .sort((a, b) => b.openedAt - a.openedAt)[0];
+          .sort((a, b) => (b.openedAt as number) - (a.openedAt as number))[0];
         if (activeBag?.roastDate) roastDate = activeBag.roastDate;
       }
 
@@ -598,7 +612,7 @@ document.addEventListener('DOMContentLoaded', () => {
       _renderFrozenPortionPills(name, shotMs, null);
 
       // Show bean age hint
-      const ageDays = calcBeanAgeAtShot(name, shot?.timestamp, bean.id as number);
+      const ageDays = calcBeanAgeAtShot(name, shot?.timestamp, bean.id);
       if (hintEl && ageDays != null) {
         hintEl.innerHTML = `${BEAN_ICON_SVG} ${t('bean_age_at_shot', ageDays)}`;
         hintEl.style.display = '';
@@ -682,12 +696,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sortRating')!.addEventListener('click', () => setSortMode('rating'));
   document.getElementById('sortDur')!.addEventListener('click', () => setSortMode('duration'));
   document.getElementById('trash-toggle')!.addEventListener('click', toggleTrash);
-  document.getElementById('powerBtn')!.addEventListener('click', toggleMachinePower);
+  document.getElementById('powerBtn')!.addEventListener('click', () => { void toggleMachinePower(); });
   // #914: mobile topbar duplicate of #powerBtn -- see index.html comment.
-  document.getElementById('railPowerBtn')!.addEventListener('click', toggleMachinePower);
-  document.getElementById('syncBtn')!.addEventListener('click', triggerSync);
-  document.getElementById('onboardingDemoBtn')!.addEventListener('click', loadDemoData);
-  document.getElementById('glpDemoEndBtn')!.addEventListener('click', endDemo);
+  document.getElementById('railPowerBtn')!.addEventListener('click', () => { void toggleMachinePower(); });
+  document.getElementById('syncBtn')!.addEventListener('click', () => { void triggerSync(); });
+  document.getElementById('onboardingDemoBtn')!.addEventListener('click', () => { void loadDemoData(); });
+  document.getElementById('glpDemoEndBtn')!.addEventListener('click', () => { void endDemo(); });
   // ── Desktop topbar nav (#424) — same ids as the old #rail/#mode-bar
   // buttons, just relocated+restyled markup, so switchMode()'s active-state
   // toggling and status.js's live/orders visibility gating both keep
@@ -726,9 +740,9 @@ document.addEventListener('DOMContentLoaded', () => {
   renderBottomNavSettings();
   renderWhatsNewCard();
   document.getElementById('more-sheet-backdrop')!.addEventListener('click', closeMoreSheet);
-  document.getElementById('exportAllCsvBtn')!.addEventListener('click', exportAllCSV);
-  document.getElementById('exportShotBtn')!.addEventListener('click', exportShot);
-  document.getElementById('exportProfileBtn')!.addEventListener('click', exportProfile);
+  document.getElementById('exportAllCsvBtn')!.addEventListener('click', () => { void exportAllCSV(); });
+  document.getElementById('exportShotBtn')!.addEventListener('click', () => { void exportShot(); });
+  document.getElementById('exportProfileBtn')!.addEventListener('click', () => { void exportProfile(); });
   // Share-card format picker: toggle dropdown, pick format on option click
   document.getElementById('shareCardBtn')!.addEventListener('click', () => {
     const menu = document.getElementById('cardFmtMenu')!;
@@ -738,7 +752,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const opt = (e.target as HTMLElement).closest<HTMLElement>('.card-fmt-opt');
     if (!opt) return;
     document.getElementById('cardFmtMenu')!.style.display = 'none';
-    shareCard(opt.dataset.format!);
+    void shareCard(opt.dataset.format!);
   });
   document.addEventListener('click', e => {
     if (!document.getElementById('cardFmtWrap')!.contains(e.target as Node))
@@ -752,8 +766,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('closeFullscreenBtn')!.addEventListener('click', closeChartFullscreen);
   document.getElementById('quickCloneBtn')!.addEventListener('click', quickClone);
   document.getElementById('annPhotoPickBtn')!.addEventListener('click', () => document.getElementById('annPhotoInput')!.click());
-  document.getElementById('annPhotoInput')!.addEventListener('change', function (this: HTMLInputElement) { uploadShotImage(this); });
-  document.getElementById('annPhotoRemoveBtn')!.addEventListener('click', removeShotImage);
+  document.getElementById('annPhotoInput')!.addEventListener('change', function (this: HTMLInputElement) { void uploadShotImage(this); });
+  document.getElementById('annPhotoRemoveBtn')!.addEventListener('click', () => { void removeShotImage(); });
   document.getElementById('annPhotoThumb')!.addEventListener('click', openShotPhotoLightbox);
   // #430: no more explicit Save button — auto-save on input, flushed
   // immediately on blur (leaving the field) and on page hide/mode-switch
@@ -781,67 +795,67 @@ document.addEventListener('DOMContentLoaded', () => {
     // default machine's /api/status and overwrites #railMachineName/
     // #railStatusDot even when a non-default machine is the active
     // selection, undoing #464's fix via this new trigger.
-    if (document.visibilityState === 'visible') updateStatus(S.activeMachineId);
+    if (document.visibilityState === 'visible') void updateStatus(S.activeMachineId);
   });
   document.getElementById('topbarMachineIcon')!.addEventListener('click', handleTopbarMachineIconClick);
   document.getElementById('openMaintLogBtn')!.addEventListener('click', openMaintLogForm);
-  document.getElementById('submitMaintLogBtn')!.addEventListener('click', submitMaintLogEntry);
+  document.getElementById('submitMaintLogBtn')!.addEventListener('click', () => { void submitMaintLogEntry(); });
   document.getElementById('cancelMaintLogBtn')!.addEventListener('click', closeMaintLogForm);
-  document.getElementById('ordersEnabledToggle')!.addEventListener('change', e => setOrdersEnabled((e.target as HTMLInputElement).checked));
+  document.getElementById('ordersEnabledToggle')!.addEventListener('change', e => { void setOrdersEnabled((e.target as HTMLInputElement).checked); });
   document.getElementById('ordersMenuTitle')!.addEventListener('click', toggleOrdersMenu);
   document.getElementById('ordersStatsTitle')!.addEventListener('click', toggleOrdersStats);
   document.getElementById('ordersNotifyTitle')!.addEventListener('click', toggleOrdersNotify);
-  document.getElementById('addOrderMenuItemBtn')!.addEventListener('click', addOrderMenuItem);
+  document.getElementById('addOrderMenuItemBtn')!.addEventListener('click', () => { void addOrderMenuItem(); });
   document.getElementById('libTabBeans')!.addEventListener('click', () => switchLibTab('beans'));
   document.getElementById('libTabGrinders')!.addEventListener('click', () => switchLibTab('grinders'));
   document.getElementById('libTabRecipes')!.addEventListener('click', () => switchLibTab('recipes'));
   document.getElementById('libTabMilk')!.addEventListener('click', () => switchLibTab('milk'));
   document.getElementById('libTabProfiles')!.addEventListener('click', () => switchLibTab('profiles'));
   document.getElementById('closeBeanFormBtn')!.addEventListener('click', closeBeanForm);
-  document.getElementById('saveBeanBtn')!.addEventListener('click', saveBean);
-  document.getElementById('saveBeanNoBagBtn')!.addEventListener('click', saveBeanNoBag);
-  document.getElementById('saveBeanAddBagBtn')!.addEventListener('click', saveBeanAddBag);
+  document.getElementById('saveBeanBtn')!.addEventListener('click', () => { void saveBean(); });
+  document.getElementById('saveBeanNoBagBtn')!.addEventListener('click', () => { void saveBeanNoBag(); });
+  document.getElementById('saveBeanAddBagBtn')!.addEventListener('click', () => { void saveBeanAddBag(); });
   document.getElementById('beanAddTrigger')!.addEventListener('click', () => openBeanForm());
-  document.getElementById('openScanModalBtn')!.addEventListener('click', openScanModal);
+  document.getElementById('openScanModalBtn')!.addEventListener('click', () => { void openScanModal(); });
   document.getElementById('toggleUrlImportBtn')!.addEventListener('click', toggleUrlImport);
-  document.getElementById('urlImportInput')!.addEventListener('keydown', e => { if (e.key === 'Enter') importFromUrl(); });
-  document.getElementById('importFromUrlBtn')!.addEventListener('click', importFromUrl);
-  document.getElementById('toggleImportSettingsBtn')!.addEventListener('click', toggleImportSettings);
-  document.getElementById('importSettingsAddDomainBtn')!.addEventListener('click', addCustomShopifyDomain);
-  document.getElementById('importSettingsDomainInput')!.addEventListener('keydown', e => { if (e.key === 'Enter') addCustomShopifyDomain(); });
+  document.getElementById('urlImportInput')!.addEventListener('keydown', e => { if (e.key === 'Enter') void importFromUrl(); });
+  document.getElementById('importFromUrlBtn')!.addEventListener('click', () => { void importFromUrl(); });
+  document.getElementById('toggleImportSettingsBtn')!.addEventListener('click', () => { void toggleImportSettings(); });
+  document.getElementById('importSettingsAddDomainBtn')!.addEventListener('click', () => { void addCustomShopifyDomain(); });
+  document.getElementById('importSettingsDomainInput')!.addEventListener('keydown', e => { if (e.key === 'Enter') void addCustomShopifyDomain(); });
   document.getElementById('closeGrinderFormBtn')!.addEventListener('click', closeGrinderForm);
-  document.getElementById('saveGrinderBtn')!.addEventListener('click', saveGrinder);
+  document.getElementById('saveGrinderBtn')!.addEventListener('click', () => { void saveGrinder(); });
   document.getElementById('grinderAddTrigger')!.addEventListener('click', () => openGrinderForm());
   document.getElementById('grinderFormImagePickBtn')!.addEventListener('click', () => document.getElementById('grinderFormImage')!.click());
   document.getElementById('grinderFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
-    if (S.grinderEditId) uploadGrinderImage(S.grinderEditId, this);
+    if (S.grinderEditId) void uploadGrinderImage(S.grinderEditId, this);
   });
   document.getElementById('beanFormImagePickBtn')!.addEventListener('click', () => document.getElementById('beanFormImage')!.click());
   document.getElementById('beanFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
-    if (S.beanEditId) uploadBeanImage(S.beanEditId, this);
+    if (S.beanEditId) void uploadBeanImage(S.beanEditId, this);
   });
   document.getElementById('addRecipeStepBtn')!.addEventListener('click', addRecipeStep);
   document.getElementById('closeRecipeFormBtn')!.addEventListener('click', closeRecipeForm);
-  document.getElementById('saveRecipeBtn')!.addEventListener('click', saveRecipe);
+  document.getElementById('saveRecipeBtn')!.addEventListener('click', () => { void saveRecipe(); });
   document.getElementById('recipeAddTrigger')!.addEventListener('click', () => openRecipeForm());
   document.getElementById('closeMilkFormBtn')!.addEventListener('click', closeMilkForm);
-  document.getElementById('saveMilkBtn')!.addEventListener('click', saveMilk);
+  document.getElementById('saveMilkBtn')!.addEventListener('click', () => { void saveMilk(); });
   document.getElementById('milkAddTrigger')!.addEventListener('click', openMilkForm);
   document.getElementById('libTabBaskets')!.addEventListener('click', () => switchLibTab('baskets'));
   document.getElementById('libTabPuckScreens')!.addEventListener('click', () => switchLibTab('puckscreens'));
   document.getElementById('closeBasketFormBtn')!.addEventListener('click', closeBasketForm);
-  document.getElementById('saveBasketBtn')!.addEventListener('click', saveBasket);
+  document.getElementById('saveBasketBtn')!.addEventListener('click', () => { void saveBasket(); });
   document.getElementById('basketAddTrigger')!.addEventListener('click', () => openBasketForm());
   document.getElementById('basketFormImagePickBtn')!.addEventListener('click', () => document.getElementById('basketFormImage')!.click());
   document.getElementById('basketFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
-    if (S.basketEditId) uploadBasketImage(S.basketEditId, this);
+    if (S.basketEditId) void uploadBasketImage(S.basketEditId, this);
   });
   document.getElementById('closePuckScreenFormBtn')!.addEventListener('click', closePuckScreenForm);
-  document.getElementById('savePuckScreenBtn')!.addEventListener('click', savePuckScreen);
+  document.getElementById('savePuckScreenBtn')!.addEventListener('click', () => { void savePuckScreen(); });
   document.getElementById('puckScreenAddTrigger')!.addEventListener('click', () => openPuckScreenForm());
   document.getElementById('puckScreenFormImagePickBtn')!.addEventListener('click', () => document.getElementById('puckScreenFormImage')!.click());
   document.getElementById('puckScreenFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
-    if (S.puckScreenEditId) uploadPuckScreenImage(S.puckScreenEditId, this);
+    if (S.puckScreenEditId) void uploadPuckScreenImage(S.puckScreenEditId, this);
   });
   document.getElementById('annBasket')!.addEventListener('change', scheduleAutoSave);
   document.getElementById('annPuckScreen')!.addEventListener('change', scheduleAutoSave);
@@ -853,7 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('cancelProfileFormBtn')!.addEventListener('click', closeProfileForm);
   document.getElementById('addProfilePhaseBtn')!.addEventListener('click', addProfilePhase);
   document.getElementById('profileApplySuggestionBtn')!.addEventListener('click', applyBeanSuggestion);
-  document.getElementById('sendProfileToMachineBtn')!.addEventListener('click', sendProfileToMachine);
+  document.getElementById('sendProfileToMachineBtn')!.addEventListener('click', () => { void sendProfileToMachine(); });
   // Live preview: any field/phase edit re-synthesizes the chart from the
   // current DOM state (same DOM-as-state source of truth as _collectPhases()).
   document.getElementById('profileEditorModal')!.addEventListener('input', renderProfilePreviewChart);
@@ -865,7 +879,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('trendBtnAll')!.addEventListener('click', () => setTrendWindow(0));
   document.getElementById('dialinCount')!.addEventListener('change', e => {
     localStorage.setItem('glp_dialin_count', (e.target as HTMLInputElement).value);
-    renderDialin();
+    void renderDialin();
   });
   // #1018: scoped to #themeToggleGroup, not the bare .theme-btn class --
   // #mqttTransportToggle below reuses that same class for its own toggle and
@@ -883,19 +897,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // components/backup-modal.js) -- no separate wiring needed here, same
   // convention #scanModal uses (its "Schließen" button is wired once, in
   // main.js, but this modal's actions depend on which flow opened it).
-  document.getElementById('backupRestoreInput')!.addEventListener('change', e => openBackupRestoreModal(e.target as HTMLInputElement));
+  document.getElementById('backupRestoreInput')!.addEventListener('change', e => { void openBackupRestoreModal(e.target as HTMLInputElement); });
   document.getElementById('backupDownloadBtn')!.addEventListener('click', openBackupExportModal);
-  document.getElementById('devExportDbBtn')?.addEventListener('click', exportDevDb);
+  document.getElementById('devExportDbBtn')?.addEventListener('click', () => { void exportDevDb(); });
   document.getElementById('devImportDbInput')?.addEventListener('change', e => {
     const input = e.target as HTMLInputElement;
-    importDevDb(input.files![0]);
+    void importDevDb(input.files![0]);
     input.value = '';
   });
   document.getElementById('apiTokenCopyBtn')!.addEventListener('click', copyApiToken);
   document.getElementById('addMachineBtn')?.addEventListener('click', () => openMachineForm(null));
   document.getElementById('machineFormCancelBtn')?.addEventListener('click', closeMachineForm);
-  document.getElementById('machineFormSaveBtn')?.addEventListener('click', saveMachineForm);
-  document.getElementById('machineFormTestBtn')?.addEventListener('click', testMachineForm);
+  document.getElementById('machineFormSaveBtn')?.addEventListener('click', () => { void saveMachineForm(); });
+  document.getElementById('machineFormTestBtn')?.addEventListener('click', () => { void testMachineForm(); });
   document.getElementById('restartSetupWizardBtn')?.addEventListener('click', () => openSetupWizard());
   document.getElementById('setupWizardModal')?.addEventListener('click', e => {
     if ((e.target as HTMLElement).id === 'setupWizardModal') closeSetupWizard();
@@ -907,10 +921,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll<HTMLElement>('#mqttTransportToggle [data-mqtt-transport]').forEach(btn => {
     btn.addEventListener('click', () => setMqttTransport(btn.dataset.mqttTransport!));
   });
-  document.getElementById('mqttSaveBtn')?.addEventListener('click', saveMqttSettings);
-  document.getElementById('mqttApplyToMachineBtn')?.addEventListener('click', applyMqttToMachine);
-  document.getElementById('notifySettingsSaveBtn')?.addEventListener('click', saveNotifySettings);
-  document.getElementById('shotDefaultsSaveBtn')?.addEventListener('click', saveShotDefaultsSettings);
+  document.getElementById('mqttSaveBtn')?.addEventListener('click', () => { void saveMqttSettings(); });
+  document.getElementById('mqttApplyToMachineBtn')?.addEventListener('click', () => { void applyMqttToMachine(); });
+  document.getElementById('notifySettingsSaveBtn')?.addEventListener('click', () => { void saveNotifySettings(); });
+  document.getElementById('shotDefaultsSaveBtn')?.addEventListener('click', () => { void saveShotDefaultsSettings(); });
   document.getElementById('closeScanModalBtn')!.addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
@@ -932,102 +946,102 @@ document.addEventListener('DOMContentLoaded', () => {
     switch (action) {
       case 'open-new-bag':       openNewBagForm(numId()); break;
       case 'close-new-bag':      closeNewBagForm(numId()); break;
-      case 'save-new-bag':       saveNewBag(numId()); break;
+      case 'save-new-bag':       void saveNewBag(numId()); break;
       case 'toggle-month-group':  toggleMonthGroup(strId()); break;
-      case 'delete-bag':         deleteBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'delete-bag':         void deleteBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'open-edit-bag':        openEditBag(Number(el.dataset.bagId)); break;
       case 'close-edit-bag':       closeEditBag(); break;
-      case 'save-edit-bag':        saveEditBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'save-edit-bag':        void saveEditBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'open-bag-stock-edit':  openBagStockEdit(Number(el.dataset.bagId)); break;
       case 'close-bag-stock-edit': closeBagStockEdit(); break;
-      case 'save-bag-stock-edit':  saveBagStock(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
-      case 'mark-bag-empty':       markBagEmpty(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'save-bag-stock-edit':  void saveBagStock(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'mark-bag-empty':       void markBagEmpty(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'toggle-bag-card':      toggleBagCard(Number(el.dataset.bagId)); break;
       case 'toggle-past-bags':     togglePastBags(numId()); break;
       case 'open-freeze-form':   openFreezeForm(numId()); break;
       case 'close-freeze-form':  closeFreezeForm(numId()); break;
-      case 'save-freeze-form':   saveFreezePortions(numId()); break;
-      case 'thaw-portion':       thawPortion(Number(el.dataset.beanId), Number(el.dataset.portionId)); break;
+      case 'save-freeze-form':   void saveFreezePortions(numId()); break;
+      case 'thaw-portion':       void thawPortion(Number(el.dataset.beanId), Number(el.dataset.portionId)); break;
       case 'open-edit-frozen-form':  openEditFrozenForm(Number(el.dataset.portionId)); break;
       case 'close-edit-frozen-form': closeEditFrozenForm(Number(el.dataset.portionId)); break;
-      case 'save-edit-frozen-form':  saveEditFrozenForm(numId(), Number(el.dataset.portionId)); break;
+      case 'save-edit-frozen-form':  void saveEditFrozenForm(numId(), Number(el.dataset.portionId)); break;
       case 'filter-by-bean':     filterShotsByBean(numId()); break;
       case 'clear-bean-filter':  clearBeanFilter(); break;
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
       case 'edit-bean':          editBean(numId()); break;
-      case 'delete-bean':        deleteBean(numId()); break;
-      case 'toggle-bean-active': toggleBeanActive(numId()); break;
+      case 'delete-bean':        void deleteBean(numId()); break;
+      case 'toggle-bean-active': void toggleBeanActive(numId()); break;
       case 'edit-grinder':       editGrinder(numId()); break;
-      case 'delete-grinder':     deleteGrinder(numId()); break;
-      case 'reset-grinder-burrs': resetGrinderBurrs(numId()); break;
-      case 'delete-grinder-zero-point': deleteGrinderZeroPointEntry(numId(), Number(el.dataset.since)); break;
+      case 'delete-grinder':     void deleteGrinder(numId()); break;
+      case 'reset-grinder-burrs': void resetGrinderBurrs(numId()); break;
+      case 'delete-grinder-zero-point': void deleteGrinderZeroPointEntry(numId(), Number(el.dataset.since)); break;
       case 'edit-recipe':        editRecipe(numId()); break;
-      case 'delete-recipe':      deleteRecipe(numId()); break;
+      case 'delete-recipe':      void deleteRecipe(numId()); break;
       case 'remove-recipe-step': removeRecipeStep(Number(el.dataset.idx)); break;
-      case 'delete-milk':        deleteMilk(numId()); break;
-      case 'restock-milk':       restockMilk(numId()); break;
+      case 'delete-milk':        void deleteMilk(numId()); break;
+      case 'restock-milk':       void restockMilk(numId()); break;
       case 'edit-basket':        editBasket(numId()); break;
-      case 'delete-basket':      deleteBasket(numId()); break;
+      case 'delete-basket':      void deleteBasket(numId()); break;
       case 'edit-puckscreen':    editPuckScreen(numId()); break;
-      case 'delete-puckscreen':  deletePuckScreen(numId()); break;
+      case 'delete-puckscreen':  void deletePuckScreen(numId()); break;
       case 'edit-profile':
-        if (_isActiveMachineGaggiMate()) openGaggiMateProfileEditor(strId());
-        else editProfile(String(numId()));
+        if (_isActiveMachineGaggiMate()) void openGaggiMateProfileEditor(strId());
+        else void editProfile(String(numId()));
         break;
       case 'duplicate-profile':
-        if (_isActiveMachineGaggiMate()) duplicateGaggiMateProfile(strId());
-        else duplicateProfile(String(numId()));
+        if (_isActiveMachineGaggiMate()) void duplicateGaggiMateProfile(strId());
+        else void duplicateProfile(String(numId()));
         break;
-      case 'delete-profile':        deleteMachineProfile(strId()); break;
+      case 'delete-profile':        void deleteMachineProfile(strId()); break;
       case 'remove-profile-phase':  removeProfilePhase(Number(el.dataset.idx)); break;
       case 'create-profile-from-bean':
         if (_isActiveMachineGaggiMate()) openNewGaggiMateProfile();
         else createProfileFromBean(numId());
         break;
-      case 'restore-shot':       restoreShot(numId()); break;
-      case 'perm-delete-shot':   permanentDeleteShot(numId()); break;
+      case 'restore-shot':       void restoreShot(numId()); break;
+      case 'perm-delete-shot':   void permanentDeleteShot(numId()); break;
       case 'select-drink':       selectDrinkType(strId()); break;
       case 'select-milk':        selectMilkType(strId()); break;
       case 'select-frozen-portion': selectFrozenPortion(strId()); break;
-      case 'reload-data':        loadData(); break;
+      case 'reload-data':        void loadData(); break;
       // #807: the "why is this empty" notices (in-view block and app-wide
       // banner, components/api-port-notice.js) both link here.
       case 'goto-settings':      switchMode('settings'); break;
-      case 'set-maint-mode':     setMaintMode(el.dataset.task!, el.dataset.mode!, el.dataset.machineId, el.dataset.currentShots, el.dataset.currentDays, el.dataset.currentG); break;
-      case 'mark-maint-done':    markMaintDone(el.dataset.task!, el.dataset.machineId); break;
+      case 'set-maint-mode':     void setMaintMode(el.dataset.task!, el.dataset.mode!, el.dataset.machineId, el.dataset.currentShots, el.dataset.currentDays, el.dataset.currentG); break;
+      case 'mark-maint-done':    void markMaintDone(el.dataset.task!, el.dataset.machineId); break;
       case 'open-guided-maint':  openGuidedMaint(el.dataset.task!, el.dataset.machineId!); break;
-      case 'toggle-maint-disabled': toggleMaintDisabled(el.dataset.task!, el.dataset.machineId, el.dataset.disabled === 'true'); break;
-      case 'add-custom-maint-task':  addCustomMaintTask(el.dataset.machineId); break;
-      case 'delete-custom-maint-task': deleteCustomMaintTask(el.dataset.task!, el.dataset.machineId); break;
-      case 'guided-maint-done':  submitGuidedMaint(); break;
+      case 'toggle-maint-disabled': void toggleMaintDisabled(el.dataset.task!, el.dataset.machineId, el.dataset.disabled === 'true'); break;
+      case 'add-custom-maint-task':  void addCustomMaintTask(el.dataset.machineId); break;
+      case 'delete-custom-maint-task': void deleteCustomMaintTask(el.dataset.task!, el.dataset.machineId); break;
+      case 'guided-maint-done':  void submitGuidedMaint(); break;
       case 'guided-maint-cancel': closeGuidedMaint(); break;
       case 'set-maint-scope':    setMaintScope(el.dataset.scope!); break;
       case 'toggle-maint-detail': el.closest('.maint-card')?.classList.toggle('expanded'); break;
       case 'set-bean-rank-sort': setBeanRankSort(el.dataset.key as Parameters<typeof setBeanRankSort>[0]); break;
-      case 'open-flavor-wheel':   openFlavorWheel(numId()); break;
+      case 'open-flavor-wheel':   void openFlavorWheel(numId()); break;
       case 'close-flavor-wheel':  closeFlavorWheel(); break;
       case 'zoom-flavor-wheel':   zoomFlavorWheelTo(strId()); break;
-      case 'delete-maint-log':   deleteMaintLogEntry(numId()); break;
+      case 'delete-maint-log':   void deleteMaintLogEntry(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
       case 'toggle-comp-grind':  document.getElementById('grindAdviceComparative')?.classList.toggle('expanded'); break;
       case 'start-dialin':           openDialinWizard(); break;
       case 'start-dialin-from-bean': startDialinFromBean(numId()); break;
-      case 'dialin-confirm-shot':    dialinConfirmShot(numId(), el.dataset.match === '1'); break;
+      case 'dialin-confirm-shot':    void dialinConfirmShot(numId(), el.dataset.match === '1'); break;
       case 'dialin-accept-next':     dialinAcceptNext(); break;
       case 'dialin-override':        dialinOverride(); break;
       case 'dialin-end':             dialinEnd(); break;
-      case 'dialin-save-known-grind': dialinSaveKnownGrind(); break;
+      case 'dialin-save-known-grind': void dialinSaveKnownGrind(); break;
       case 'dialin-close':           dialinClose(); break;
-      case 'start-profile-dialin':      startProfileDialinFromList(strId()); break;
+      case 'start-profile-dialin':      void startProfileDialinFromList(strId()); break;
       case 'profile-dialin-symptom':    profileDialinToggleSymptom(el.dataset.symptom); break;
       case 'profile-dialin-confirm-shot': profileDialinConfirmShot(numId(), el.dataset.match === '1'); break;
-      case 'profile-dialin-accept-next':  profileDialinAcceptNext(); break;
-      case 'profile-dialin-override':     profileDialinOverride(); break;
+      case 'profile-dialin-accept-next':  void profileDialinAcceptNext(); break;
+      case 'profile-dialin-override':     void profileDialinOverride(); break;
       case 'profile-dialin-end':          profileDialinEnd(); break;
       case 'profile-dialin-close':        profileDialinClose(); break;
       case 'setup-wizard-close':          closeSetupWizard(); break;
       case 'setup-wizard-get-started':    setupWizardGetStarted(); break;
-      case 'setup-wizard-skip-demo':      setupWizardSkipToDemo(); break;
+      case 'setup-wizard-skip-demo':      void setupWizardSkipToDemo(); break;
       case 'close-easter-egg':            closeEasterEggPanel(); break;
     }
   });
@@ -1037,10 +1051,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!el) return;
     if (el.dataset.action === 'save-maint-threshold') {
-      saveMaintThreshold(el.dataset.task!, el.dataset.field!, (el as HTMLInputElement).value, el.dataset.machineId);
+      void saveMaintThreshold(el.dataset.task!, el.dataset.field!, (el as HTMLInputElement).value, el.dataset.machineId);
     }
     if (el.dataset.action === 'rename-maint-label') {
-      renameCustomMaintTask(el.dataset.task!, (el as HTMLInputElement).value, el.dataset.machineId);
+      void renameCustomMaintTask(el.dataset.task!, (el as HTMLInputElement).value, el.dataset.machineId);
     }
     if (el.dataset.action === 'dialin-grinder-select') {
       dialinGrinderChange();
@@ -1056,7 +1070,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Init sequence ──────────────────────────────────────────────────────
   applyTranslations();
 
-  initToken().then(async () => {
+  void initToken().then(async () => {
     // #735: opened once at app bootstrap, not per view-switch -- sync
     // progress must keep updating regardless of which view/tab is
     // currently open, same reasoning as the 30s updateStatus() interval
@@ -1087,10 +1101,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // nothing to display itself against. Now runs once the token is ready,
     // same as loadData()/loadLibrary() below.
     const machinesPromise = loadMachines();
-    loadMqttSettings();
-    loadNotifySettingsCard();
-    loadDrinkMenu();
-    loadMilkTypes();
+    void loadMqttSettings();
+    void loadNotifySettingsCard();
+    void loadDrinkMenu();
+    void loadMilkTypes();
     // Awaited (unlike the two loads above): loadData() below can render the
     // annotation panel for the initially-selected shot synchronously once
     // it resolves (updateView() -> renderAnnotationPanel()), which reads
@@ -1115,13 +1129,13 @@ document.addEventListener('DOMContentLoaded', () => {
     await machinesPromise;
     renderMqttSettingsCard();
     renderMachinesList();
-    loadMachineProfileList();
+    void loadMachineProfileList();
     // #750: awaited (was fire-and-forget) so the installId comparison inside
     // updateStatus() -> syncInstallId() has a chance to clear a stale
     // setup-wizard-completed flag before the shouldOpenSetupWizard() check
     // below runs -- see setup-wizard.js's syncInstallId() comment.
     await updateStatus();
-    checkForUpdate();
+    void checkForUpdate();
     renderApiTokenCard();
     // #744: first-run setup wizard — auto-opens once S.machines is actually
     // known (after machinesPromise resolves), not before, so a returning
