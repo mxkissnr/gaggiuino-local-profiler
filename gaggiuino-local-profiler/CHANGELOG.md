@@ -38,7 +38,6 @@
 - **The analytics screens now build their markup through the type-checked HTML builder, so every bean, grinder, profile and machine name they display is escaped.** Part of #1104
 
 ### Changed
-- **The library, dial-in wizard and shot views now use the real generated API types instead of unchecked casts.** Part of #1102
 - **The library import, dial-in wizard, flavor matching, shot utilities, maintenance, grinder, machine-settings and recipe modules are now type-checked under the stricter indexed-access rule.** Part of #1105
 - **The coffee library's basket and puck-screen collections are now typed with the real API shapes.** Part of #1105
 - **The frontend's entry point is now linted with the same strict type-checked rules as every other TypeScript file.** Part of #1115
