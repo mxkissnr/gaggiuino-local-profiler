@@ -7,17 +7,19 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import path from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Linter } from 'eslint';
-import * as tsParser from '@typescript-eslint/parser';
 
 const nodeRequire = createRequire(import.meta.url);
 const ruleModule = nodeRequire('../eslint-rules/html-sink.js') as { htmlSinkRule: unknown };
+// @typescript-eslint/parser is a transitive dev dependency; load it through
+// Node rather than a static import so no extra direct dependency is declared.
+const tsParser = nodeRequire('@typescript-eslint/parser') as Record<string, unknown>;
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const appRoot = path.resolve(here, '..');
-const fixturePath = path.join(here, 'fixtures', 'html-sink-cases.ts');
+const here = dirname(fileURLToPath(import.meta.url));
+const appRoot = resolve(here, '..');
+const fixturePath = join(here, 'fixtures', 'html-sink-cases.ts');
 const fixtureCode = readFileSync(fixturePath, 'utf8');
 
 type VerifyConfig = Parameters<Linter['verify']>[1];
