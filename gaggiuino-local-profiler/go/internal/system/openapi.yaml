@@ -127,25 +127,66 @@ components:
             customer:  { type: string }
             haUserId:  { type: string }
             orderId:   { type: string }
+        beanId:          { type: integer, nullable: true, description: Library bean the shot used (#450) — drives bean-stock/age math }
+        basketId:        { type: integer, nullable: true, description: Library basket the shot used (#635) }
+        puckScreenId:    { type: integer, nullable: true, description: Library puck screen the shot used (#635) }
+        beanAgeDays:     { type: integer, nullable: true, description: "Bean age in days at brew time, computed on save" }
+        recipeId:        { type: integer, nullable: true, description: "Selected brew recipe, if the install has any" }
+        frozenPortionId: { type: integer, nullable: true, description: "Selected frozen portion, if the install uses them" }
+        drinkType:       { type: string, nullable: true, description: Barista-order drink type (orders feature) }
+        milkType:        { type: integer, nullable: true, description: Barista-order milk type id (orders feature) }
+        score:           { type: number, nullable: true, description: Score snapshot read by the live view's reference-shot selector }
 
     Shot:
       type: object
       description: >
         Raw shot record from the Gaggiuino machine, enriched with annotation
         and trash metadata by the add-on.
+      required: [id, timestamp, duration, profile_name, profileName, machineId, nativeId, annotation]
       properties:
         id:          { type: integer, description: Unique shot ID }
         timestamp:   { type: integer, description: Unix seconds (divide by 1 to get Date) }
-        duration:    { type: integer, description: "Duration × 10 — divide by 10 for seconds" }
-        profileName: { type: string }
+        duration:    { type: integer, nullable: true, description: "Duration × 10 — divide by 10 for seconds; null when stored without one" }
+        profileName: { type: string, nullable: true, description: Null when the shot was stored without a profile name }
+        profile_name: { type: string, nullable: true, description: "Snake-case alias of profileName, served alongside it" }
         profile:
           type: object
           properties:
             name: { type: string }
         weight:      { type: number, description: Output weight in grams }
+        machineId:   { type: integer, nullable: true, description: Owning machine id (#317); defaults to 1 backend-side }
+        nativeId:    { type: integer, description: Machine-local shot number (toNativeShotID) — global id minus the machine offset }
+        datapoints:
+          type: object
+          additionalProperties: true
+          description: >
+            Machine-reported curve series: an open-ended map of series name
+            to samples. Deliberately an open object (additionalProperties:
+            true) because the machine payload is a cross-repo contract the
+            add-on passes through without knowing every field. Present on
+            GET /api/shots/{id} and /shots.json; stripped from the
+            GET /api/shots metadata list.
+        image:       { type: string, nullable: true, description: "Stored photo extension (see GET /api/shots/{id}/image), if any" }
+        gaggimateBleScale: { type: boolean, nullable: true, description: "GaggiMate BLE-scale flag, merged from the machine payload" }
         annotation:
           $ref: '#/components/schemas/Annotation'
-        trashedAt:   { type: integer, description: Unix ms timestamp when shot was trashed, nullable: true }
+        trashedAt:   { type: integer, nullable: true, description: Unix ms timestamp when shot was trashed }
+
+    HydratedShot:
+      allOf:
+        - $ref: '#/components/schemas/Shot'
+        - type: object
+          required: [score, usedBeanTarget]
+          properties:
+            score:            { type: integer, nullable: true, description: Computed 0-100 score; null when the shot has too little data to score }
+            usedBeanTarget:   { type: boolean, description: Whether scoring detected the shot hit the bean's target }
+            hasChartData:     { type: boolean, description: "GET /api/shots rows only: whether the shot has a non-empty pressure/time curve series" }
+            tempStabilityDev: { type: number, nullable: true, description: "GET /api/shots rows only: mean absolute deviation of the temperature series from target, in °C" }
+            previousShotId:   { type: integer, nullable: true, description: "GET /api/shots/{id} only: id of the previous same-profile shot (null if none)" }
+            previousShot:
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/HydratedShot'
 
     # ── Library ────────────────────────────────────────────────────────────
 
@@ -754,18 +795,10 @@ paths:
                   shots:
                     type: array
                     description: >
-                      Each row is a Shot with the `datapoints` curve blob removed
-                      (fetch it via GET /api/shots/{id}) plus `score`,
-                      `usedBeanTarget` and `hasChartData`.
+                      Each row is a HydratedShot with the `datapoints` curve
+                      blob removed (fetch it via GET /api/shots/{id}).
                     items:
-                      allOf:
-                        - $ref: '#/components/schemas/Shot'
-                        - type: object
-                          properties:
-                            score:            { type: integer, nullable: true }
-                            usedBeanTarget:   { type: boolean }
-                            hasChartData:     { type: boolean, description: Whether the shot has a non-empty pressure/time curve series }
-                            tempStabilityDev: { type: number, nullable: true, description: Mean absolute deviation of the temperature series from target, in °C (for the Analytics machine-comparison stability column) }
+                      $ref: '#/components/schemas/HydratedShot'
                   nextCursor:
                     type: string
                     nullable: true
@@ -846,7 +879,7 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/Shot'
+                  - $ref: '#/components/schemas/HydratedShot'
                   - type: "null"
 
   /api/shots/{id}/card:
