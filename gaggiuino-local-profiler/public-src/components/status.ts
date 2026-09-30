@@ -15,9 +15,6 @@ import { syncTopbarMachineIconFallback } from './topbar-machine-icon.js';
 
 // /api/status and /api/switch responses are plain fetch Responses, so their
 // parsed bodies are named here rather than left as `any`.
-interface SyncProgressEntry { machineId: number; current: number; total: number }
-interface SyncProgressEvent { machineId: number; current: number; total: number }
-interface SyncCompleteEvent { machineId: number; total: number; success: boolean }
 interface ProgressButton { textContent: string | null; disabled: boolean }
 interface SwitchPayload { configured?: boolean | undefined; state?: boolean | null | undefined }
 
@@ -26,7 +23,6 @@ interface SwitchPayload { configured?: boolean | undefined; state?: boolean | nu
 interface StatusPayload {
   installId?: string | null;
   shotCount?: number;
-  syncProgress?: SyncProgressEntry[] | null;
   exposeApiPort?: boolean;
   machineOn?: boolean;
   machineOnSince?: number | null;
@@ -48,193 +44,11 @@ interface StatusPayload {
 // see #296.
 let knownShotCount: number | null = null;
 
-// #731/#735: active shot-import progress entries as last seen by the
-// *polling fallback* (pollSyncProgressFallback() below, only exercised when
-// S.sseActive is falsy) -- keyed by machineId, kept only so the poll that
-// finds a given machine's entry gone can show that machine's own "done"
-// toast. Must be per-machine, not a single scalar: lib/state.js's own
-// state.syncProgress is deliberately keyed by machineId too (see its and
-// lib/sync.js's comments), because more than one machine can be backfilling
-// at once and their progress must not clobber each other -- a scalar here
-// would let machine B's completion go untoasted for as long as machine A is
-// still active (whichever entry happened to be tracked last wins), and would
-// misattribute A's total to B's toast once A also finished. An entry is
-// deleted the moment its toast fires, so it doesn't repeat on later polls,
-// and a machineId only ever toasts once it's first been seen active (so
-// app startup never fires it for an import already in progress before this
-// session opened). Entirely separate from _pushSyncProgress below -- the two
-// paths never share state, so a mid-session S.sseActive flip can't leave
-// either one with stale/duplicate data.
-const _lastSyncProgress = new Map<number, SyncProgressEntry>();
-
-// #735: same per-machine tracking as _lastSyncProgress above, but driven
-// purely by SSE push (handleSyncProgressEvent/handleSyncCompleteEvent) --
-// used only to pick which machine's bar to render when more than one is
-// backfilling, since a "complete" push has no list to fall back to the way
-// the polling fallback's /api/status response does.
-const _pushSyncProgress = new Map<number, { current: number; total: number }>();
-
-// #742 review: two machines can genuinely backfill concurrently (syncShots()/
-// syncMachineShots() are not mutually exclusive, see lib/sync.js) -- an
-// earlier version of this tracked a baseline PER machine and displayed
-// "that machine's own baseline + current" on every event, which made the
-// shared header flicker/regress between each machine's independent total
-// (e.g. 42 -> 39 -> 42...) instead of showing one consistent combined
-// count. The same global/scalar-instead-of-per-machine-keyed bug class
-// already fixed in #730/#732, except inverted here: S.shots.length is a
-// single global count (not per-machine), so there can only be ONE shared
-// base, with each machine contributing its own `current` on top of it.
-//
-// _midSyncCurrent: machineId -> that machine's own last-seen `current`, for
-// every machine presently mid-sync. The displayed count is always
-// _globalBaseline + the SUM of every entry here.
-// _globalBaseline: S.shots.length (or a running fold of already-finished
-// machines' final `current`, see below), captured fresh the moment the
-// FIRST machine of a new "nobody currently mid-sync" round starts
-// backfilling -- stays fixed while anything is still mid-sync, so a second
-// machine joining in never re-samples S.shots.length out from under an
-// already-in-progress display. Reserved for the SSE push path only.
-const _midSyncCurrent = new Map<number, number>();
-let _globalBaseline: number | null = null;
-
-function displaySyncCount(): void {
-  let sum = 0;
-  for (const c of _midSyncCurrent.values()) sum += c;
-  setShotCountDisplay((_globalBaseline ?? S.shots.length) + sum);
-}
-
-// #742: updates just the sidebar's shot-count text -- since #823/#830
-// flattened it to a single element -- without going through the full
-// renderSidebar()/loadData() cycle, which would be far too expensive to run
-// on every SYNC_PROGRESS tick (as fast as per-shot).
-function setShotCountDisplay(n: number): void {
-  if (window.updateFlapCounter) window.updateFlapCounter(n);
-}
-
-// #735: shared bar-rendering helper -- both the polling fallback and the
-// SSE push handlers need to render "this machine's import is at
-// current/total" (or hide the bar entirely) the exact same way.
-function renderSyncProgressBar(entry: { current: number; total: number } | null): void {
-  const syncProgressBar = document.getElementById('syncProgressBar');
-  if (!syncProgressBar) return;
-  if (!entry) {
-    syncProgressBar.style.display = 'none';
-    return;
-  }
-  const { current, total } = entry;
-  const label = document.getElementById('syncProgressLabel');
-  const fill  = syncProgressBar.querySelector<HTMLElement>('.sync-progress-fill');
-  if (label) label.textContent = t('sync_progress_label', current, total);
-  if (fill) fill.style.width = `${Math.min(100, (current / total) * 100)}%`;
-  syncProgressBar.style.display = '';
-}
-
-// #731: the pre-SSE polling implementation, kept as the fallback path for
-// whenever SSE hasn't (yet, or ever) connected this session -- see
-// public-src/sse.js's fallback detection. Derives "a backfill just
-// finished" purely from an entry disappearing between two /api/status
-// polls, which is why it needs the toast/list bookkeeping below; the SSE
-// push path (handleSyncCompleteEvent) doesn't need any of this, since the
-// backend tells it directly.
-function pollSyncProgressFallback(list: SyncProgressEntry[], machineId: string | number | null | undefined): void {
-  // #731: toast every previously-tracked machine whose entry is gone from
-  // this poll's list -- independent of whichever single entry the bar
-  // itself ends up showing below, so machine B finishing while A is still
-  // backfilling still gets its own toast right away, not only once A also
-  // finishes (or never, if A finished first and B's entry never got picked
-  // as "the" entry to track).
-  for (const [id, prev] of _lastSyncProgress) {
-    if (!list.some(p => p.machineId === id)) {
-      if (window.showToast) window.showToast(t('sync_complete_toast', prev.total));
-      _lastSyncProgress.delete(id);
-    }
-  }
-  for (const p of list) _lastSyncProgress.set(p.machineId, p);
-
-  // There's only one bar to show even with multiple machines active --
-  // prefer whichever machine this poll was scoped to, falling back to
-  // the first active entry otherwise.
-  const entry = list.find(p => p.machineId === Number(machineId)) ?? list[0] ?? null;
-  renderSyncProgressBar(entry);
-}
-
-// #735: SSE push handlers -- registered once in main.js's bootstrap
-// (connectEvents()/onEvent()), independent of whichever view is currently
-// open. Structurally simpler than the polling fallback above: the backend
-// tells us directly when a backfill finishes and whether it succeeded, so
-// there's no "entry vanished between two polls" inference and no #731/#734
-// class of race to guard against.
-export function handleSyncProgressEvent({ machineId, current, total }: SyncProgressEvent): void {
-  _pushSyncProgress.set(machineId, { current, total });
-  renderSyncProgressBar(_pickPushEntry());
-
-  // #742 review: per-machine sequence detection (a fresh backfill for THIS
-  // machine, either never tracked before or `current` resetting lower than
-  // previously seen -- e.g. it restarted without a SYNC_COMPLETE ever
-  // arriving for the prior attempt) is still needed, but must never disturb
-  // another machine's already-in-flight contribution.
-  const prevCurrent = _midSyncCurrent.get(machineId);
-  if (prevCurrent === undefined) {
-    // Only resample the shared base when NOTHING is currently mid-sync --
-    // otherwise this machine is simply joining an already-active round.
-    if (_midSyncCurrent.size === 0) _globalBaseline = S.shots.length;
-  } else if (current < prevCurrent) {
-    // This machine restarted its own sequence without ever completing the
-    // previous one -- fold what it had already contributed into the shared
-    // base (so the total never visibly regresses), then start it fresh.
-    _globalBaseline = (_globalBaseline ?? S.shots.length) + prevCurrent;
-  }
-  _midSyncCurrent.set(machineId, current);
-  displaySyncCount();
-}
-
-export function handleSyncCompleteEvent({ machineId, total, success }: SyncCompleteEvent): void {
-  _pushSyncProgress.delete(machineId);
-  // #742 review: fold this machine's final `current` into the shared base
-  // instead of just dropping its entry -- those shots are already saved to
-  // the DB (bumpSyncProgress() only fires per successfully-saved shot, see
-  // lib/sync.js), so removing its contribution outright would make the
-  // displayed count visibly drop by exactly that amount the moment it
-  // finishes, even though nothing was actually lost.
-  const finalCurrent = _midSyncCurrent.get(machineId) ?? 0;
-  _midSyncCurrent.delete(machineId);
-  _globalBaseline = (_globalBaseline ?? S.shots.length) + finalCurrent;
-  displaySyncCount();
-  renderSyncProgressBar(_pickPushEntry());
-  // #737 review: the polling fallback above always toasts on completion
-  // (it has no success/failure signal to work with) -- mirror that here so
-  // an aborted backfill (success:false, e.g. a non-404 network error mid-
-  // loop, see lib/sync.js) isn't silently swallowed just because SSE
-  // happened to be the active transport this session.
-  if (window.showToast) {
-    window.showToast(success ? t('sync_complete_toast', total) : t('sync_failed_toast'));
-  }
-  // #742: on success, reconcile the exact DB count/shot list against the
-  // baseline+current running total shown during the backfill above -- which
-  // can drift from the truth (interleaved multi-machine backfills, a missed
-  // tick) -- window.loadData() also calls renderSidebar() internally, so
-  // this corrects the displayed count too, not just S.shots itself.
-  if (success && window.loadData) void window.loadData();
-}
-
-// Same "prefer the active machine, fall back to the first active entry"
-// convention pollSyncProgressFallback() above uses for the REST list.
-function _pickPushEntry(): { current: number; total: number } | null {
-  if (!_pushSyncProgress.size) return null;
-  const key = typeof S.activeMachineId === 'number' ? S.activeMachineId : null;
-    return (key != null ? _pushSyncProgress.get(key) : undefined) ?? _pushSyncProgress.values().next().value ?? null;
-}
-
-// #734 review: updateStatus() can now be triggered from three independent
-// places (the 30s setInterval, applyActiveMachineChange() on a machine
-// switch, and #733's visibilitychange refocus handler) with no ordering
-// guarantee between them. Two overlapping calls both read+mutate
-// _lastSyncProgress without synchronization -- if a machine's import
-// finishes in the gap between two in-flight calls' fetches, both can pass
-// the "entry just disappeared" check and double-fire its completion toast.
-// A plain in-flight guard turns a same-tick collision into "skip, the other
-// call's result already covers this tick" rather than a race -- the
-// skipped call's data is never more than one poll interval stale.
+// #734 review: updateStatus() can be triggered from three independent places
+// (the 30s setInterval, applyActiveMachineChange() on a machine switch, and
+// #733's visibilitychange refocus handler) with no ordering guarantee between
+// them, so a plain in-flight guard keeps overlapping calls from each running
+// a redundant fetch+render in the same tick.
 let _statusUpdateInFlight = false;
 
 // #464: an explicit machineId scopes the status-dot/hostname fields below to
@@ -268,17 +82,6 @@ export async function updateStatus(machineId?: string | number | null): Promise<
         void window.loadData();
       }
       knownShotCount = s.shotCount;
-    }
-    // #729/#730/#735: shot-import progress bar next to the shot count
-    // header. Preferred path is SSE push (handleSyncProgressEvent/
-    // handleSyncCompleteEvent, wired once in main.js's bootstrap,
-    // independent of this poll). This polling fallback only runs when SSE
-    // hasn't (yet, or ever) taken over for this session -- see
-    // public-src/sse.js's fallback detection -- so it doesn't fight the
-    // push path over which entry is currently shown.
-    if (!S.sseActive) {
-      const list = Array.isArray(s.syncProgress) ? s.syncProgress : [];
-      pollSyncProgressFallback(list, machineId);
     }
     // Token is no longer returned by /api/status — it comes from /api/token (initToken)
     // #803: exposeApiPort mirrors the add-on option of the same name (default

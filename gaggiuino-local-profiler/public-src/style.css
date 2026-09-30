@@ -2473,7 +2473,6 @@
             }
             .shot-wrapper      { padding-right: var(--sp-4); }
             #sidebar h2        { padding: var(--sp-4) var(--sp-4); }
-            #syncProgressBar   { padding: 0 var(--sp-4) var(--sp-3); }
 
             /* Annotation panel — mobile improvements */
             .annotation-panel  { padding: var(--sp-4); margin-top: var(--sp-4); }
@@ -2963,16 +2962,6 @@
         .shot-count-num { font-weight: 600; margin-right: var(--sp-2); }
         .shot-count-label { font-size: var(--fs-1); font-weight: normal; color: var(--gray-500); }
 
-        /* ── Shot-import progress bar (#729, own row under the sidebar
-           header — #730 review: was squeezed inline next to the shot
-           counter, moved out to its own line below) ── */
-        #syncProgressBar {
-            display: flex;
-            align-items: center;
-            gap: var(--sp-2);
-            padding: 0 var(--sp-5) var(--sp-3);
-        }
-        #syncProgressLabel { font-size: var(--fs-1); color: var(--gray-500); white-space: nowrap; }
         .sync-progress-track {
             width: 100px;
             height: 4px;
@@ -2988,7 +2977,7 @@
             transition: width .2s ease;
         }
 
-        /* ── Backup/restore modal progress (#960) — reuses the shot-import
+        /* ── Backup/restore modal progress (#960) — reuses the shared
            track/fill above; adds an indeterminate mode for transfers whose
            size is genuinely unknown (Node backend sends no estimate header,
            or the server-side restore phase after the upload completes). ── */

@@ -438,9 +438,9 @@ export function connectLiveStream(): void {
   // still over HA Ingress per #738/#740) to actually open, so S.sseActive
   // can still be null/false right now even though it flips true moments
   // later -- these intervals must always start, and instead self-correct on
-  // every tick, same convention as status.js's updateStatus()/
-  // pollSyncProgressFallback() (a 30s interval that always fires, gating its
-  // own fallback-only work behind a fresh S.sseActive check each time).
+  // every tick, same convention as status.js's own 30s updateStatus()
+  // interval, which likewise always fires rather than deciding once at
+  // startup.
   timerRegistry.set('livePollInterval',    setInterval(() => { if (!S.sseActive) void fetchLiveData(); }, 1000));
   timerRegistry.set('preheatPollInterval', setInterval(() => { if (!S.sseActive) void fetchPreheatData(); }, 10000));
 }

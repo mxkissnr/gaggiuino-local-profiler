@@ -49,8 +49,7 @@ import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sor
          openShotDrawer, closeShotDrawer, handleDrawerTouchStart, handleDrawerTouchEnd,
          handleEdgeSwipeStart, handleEdgeSwipeEnd,
          toggleMonthGroup, setBeanFilter, clearBeanFilter } from './components/sidebar.js';
-import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync, exportDevDb, importDevDb,
-         handleSyncProgressEvent, handleSyncCompleteEvent } from './components/status.js';
+import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync, exportDevDb, importDevDb } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
 import { renderBottomNav, renderBottomNavSettings, closeMoreSheet } from './components/bottom-nav.js';
@@ -768,14 +767,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushAutoSave();
     // #733: the 30s setInterval(updateStatus, ...) below gets throttled by
-    // the browser while the tab is backgrounded -- a shot import that both
-    // starts and finishes while the tab is hidden can end up with zero
-    // polls landing while it was still active, so status.js's per-machine
-    // _lastSyncProgress map never records it as "seen active" and the
-    // completion toast never fires. Forcing one immediate poll on refocus
-    // catches an import that's still running by then; one that already
-    // finished fully in the background is a case no client-side poll can
-    // retroactively catch (nothing else was watching either).
+    // the browser while the tab is backgrounded, so force one immediate poll
+    // on refocus to refresh the status dot/hostname/sync time without waiting
+    // for the next tick.
     //
     // #734 review: must pass S.activeMachineId through, same as
     // applyActiveMachineChange() does (#464) -- an unscoped call hits the
@@ -1059,17 +1053,15 @@ document.addEventListener('DOMContentLoaded', () => {
   applyTranslations();
 
   void initToken().then(async () => {
-    // #735: opened once at app bootstrap, not per view-switch -- sync
-    // progress must keep updating regardless of which view/tab is
-    // currently open, same reasoning as the 30s updateStatus() interval
-    // below. Needs S.glpToken to already be populated (for the ?token=
-    // fallback EventSource itself can't send as a header), hence after
-    // initToken() resolves. `onFallback` is a no-op here -- the PR 2
-    // follow-up (Live view over the same stream) extends it.
-    onEvent(EVENTS.SYNC_PROGRESS, data => handleSyncProgressEvent(data as Parameters<typeof handleSyncProgressEvent>[0]));
-    onEvent(EVENTS.SYNC_COMPLETE, data => handleSyncCompleteEvent(data as Parameters<typeof handleSyncCompleteEvent>[0]));
+    // #735: opened once at app bootstrap, not per view-switch -- SSE-driven
+    // updates must keep arriving regardless of which view/tab is currently
+    // open, same reasoning as the 30s updateStatus() interval below. Needs
+    // S.glpToken to already be populated (for the ?token= fallback
+    // EventSource itself can't send as a header), hence after initToken()
+    // resolves. `onFallback` is a no-op here -- the PR 2 follow-up (Live
+    // view over the same stream) extends it.
     // #736: Live view telemetry/preheat push -- same bootstrap-time wiring
-    // as the sync-progress events above.
+    // as above.
     onEvent(EVENTS.LIVE_SNAPSHOT, data => handleLiveSnapshotEvent(data as Parameters<typeof handleLiveSnapshotEvent>[0]));
     onEvent(EVENTS.PREHEAT_UPDATE, data => handlePreheatUpdateEvent(data as Parameters<typeof handlePreheatUpdateEvent>[0]));
     // #837: the topbar's ambient machine icon -- a second, independent
