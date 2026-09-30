@@ -369,10 +369,11 @@ export function renderBeanList(): void {
     // settings tested per bean this can get noisy fast, and "the one thing
     // to try next" is more useful at a glance than a ranked list.
     const bestCombos = calcBestGrindCombosForBean(b.name, _shots(), b.id);
-    const bestComboHtml: Html = bestCombos ? html`<div class="lib-best-combo-row" title="${esc(t('bean_best_combo_tooltip', bestCombos[0].shotCount))}">
+    const bestCombo = bestCombos?.[0];
+    const bestComboHtml: Html = bestCombo ? html`<div class="lib-best-combo-row" title="${esc(t('bean_best_combo_tooltip', bestCombo.shotCount))}">
       <span class="lib-best-combo-label">${tHtml('bean_best_combo_label')}</span>
-      <span class="lib-best-combo-value">${esc(t('bean_best_combo_value', bestCombos[0].grinder, bestCombos[0].grindSetting))}</span>
-      <span class="lib-best-combo-score">${tHtml('bean_best_combo_score', bestCombos[0].avgScore)}</span>
+      <span class="lib-best-combo-value">${esc(t('bean_best_combo_value', bestCombo.grinder, bestCombo.grindSetting))}</span>
+      <span class="lib-best-combo-score">${tHtml('bean_best_combo_score', bestCombo.avgScore)}</span>
     </div>` : esc('');
 
     // Last-used grind setting (#829) — separate from bestComboHtml above:
@@ -770,7 +771,8 @@ function bindOriginInput(): void {
     if (!input) return;
     const i = Number(input.dataset.originIdx);
     const n = parseFloat(input.value);
-    _formOrigins[i].percent = Number.isFinite(n) && n >= 0 && n <= 100 ? n : undefined;
+    const origin = _formOrigins[i];
+    if (origin) origin.percent = Number.isFinite(n) && n >= 0 && n <= 100 ? n : undefined;
   });
 }
 
