@@ -7,12 +7,14 @@
 - **A browser demo with sample data now runs on GitHub Pages, including a simulated live shot.** Closes #1193
 - **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, with separate opt-ins for write and developer tools.** Closes #1196
 ### Fixed
+- **Settings → What's New shows v3.2.0 again, and a release without a What's New entry now fails the tests.** Closes #1240
 - **The bean picker now shows a bean as empty based on the stock the server calculated, not only the shots loaded in the browser.** Closes #1225
 - **The machine icon in the top bar now shows whether the selected machine is on, not the default machine's state.** Part of #1201
 - **With several machines, each one now shows its own reachability, last error and firmware version, and a shot is stamped with the firmware of the machine that pulled it.** Part of #1201
 - **Tapping complete twice on an order (or an automation and the dashboard at the same moment) no longer deducts the milk twice.** Closes #1199
 - **Backups now also keep the water-sensor setting, the default shot values and your unlocked badges with their original dates.** Closes #1197
 - **Library changes made at the same moment (for example a milk deduction from a completed order while you edit a bean) no longer overwrite each other.** Part of #1199
+- **Order, dial-in wizard and machine settings screens escape every machine and server value they display.** Part of #1104
 - **The same no-lost-updates fix now covers every library endpoint — bags, frozen portions, milk stock, grinder resets and image uploads can no longer overwrite a concurrent change.** Part of #1199
 - **Adding a new bean, grinder, basket, puck screen, milk or recipe at the same moment as another library change no longer discards either one.** Part of #1199
 - **Completing an order no longer attaches it to an older, unrelated shot when no new shot was pulled for it.** Part of #1197
@@ -26,10 +28,12 @@
 - **The generated API token file is now readable only by the app itself.** Closes #1057
 - **A machine's last error in the status API is now only sent to authenticated callers, like the existing machine error field, so an anonymous request can no longer see a machine's address.** Part of #1201
 - **Values read from a GaggiMate machine are now escaped in the profile editor.** Part of #1115
+- **The library sub-views and both profile editors now build their markup through the type-checked HTML builder, so library and machine values can no longer be injected as markup.** Part of #1104
 
 ### Changed
 - **The API description now documents every response the app uses, checked by tests against the real server.**
 - **The API description now distinguishes the MQTT settings request body from its redacted response, and marks the machine and order fields that are actually optional.** Part of #1103
+- **The coffee library's basket and puck-screen collections are now typed with the real API shapes.** Part of #1105
 - **The frontend's entry point is now linted with the same strict type-checked rules as every other TypeScript file.** Part of #1115
 - **The live view is now type-checked.**
 - **The screenshot tool can restore a real GLP backup instead of the demo seed, so the README/wiki views can be captured from actual data.** Closes #1181

@@ -1,9 +1,10 @@
 // Grinder list + grinder form sections of the Library view, split out of
 // views/library.js. Pure move + type port (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
-import { t } from '../../i18n.js';
+import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
-import { esc, toIsoDateInput } from '../../utils.js';
+import { esc, html, joinHtml, toIsoDateInput } from '../../utils.js';
+import type { Html } from '../../utils.js';
 import { WRENCH_ICON_SVG } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
@@ -17,8 +18,8 @@ import * as libraryView from '../library.js';
 // call time, never read at module load.
 const library = libraryView;
 
-const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
-const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
+const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
+const ICON_TRASH: Html  = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
 
 // Static burr-type suggestions for the grinder form (moved out of the old
 // <datalist> markup in index.html).
@@ -69,32 +70,32 @@ export function renderGrinderList(): void {
   // wrong (it hid nearly the whole library once a second machine existed).
   const grinders = _grinders();
   if (!grinders.length) {
-    el.innerHTML = `<div class="lib-empty">${t('lib_empty_grinders')}</div>`;
+    el.innerHTML = html`<div class="lib-empty">${tHtml('lib_empty_grinders')}</div>`;
     return;
   }
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  el.innerHTML = grinders.map(g => {
+  el.innerHTML = joinHtml(grinders.map(g => {
     const extra = [g.burrType, g.purchaseDate].filter(Boolean).join(' · ');
     const zeroPoint = currentGrinderZeroPoint(g);
-    return `
+    return html`
     <div class="lib-item">
-      ${g.image ? `<img class="lib-grinder-thumb" data-grinder-id="${g.id}" alt="">` : ''}
+      ${g.image ? html`<img class="lib-grinder-thumb" data-grinder-id="${esc(g.id)}" alt="">` : html``}
       <div class="lib-item-info">
         <div class="lib-item-name">${esc(g.name)}</div>
-        ${extra ? `<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : ''}
-        ${g.notes ? `<div class="lib-item-sub">${esc(g.notes)}</div>` : ''}
-        ${zeroPoint != null ? `<div class="lib-item-sub">${t('lib_grinder_zero_point')}: ${esc(String(zeroPoint))}</div>` : ''}
-        ${g.wear ? `<div class="lib-item-sub lib-grinder-wear">
-          <span>${WRENCH_ICON_SVG} ${t('lib_grinder_wear', g.wear.shotsSinceBurrs, formatWearGrams(g.wear.gramsSinceBurrs))}</span>
-          <button class="lib-btn-sm lib-grinder-reset-burrs" data-action="reset-grinder-burrs" data-id="${g.id}">${t('lib_grinder_reset_burrs')}</button>
-        </div>` : ''}
+        ${extra ? html`<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : html``}
+        ${g.notes ? html`<div class="lib-item-sub">${esc(g.notes)}</div>` : html``}
+        ${zeroPoint != null ? html`<div class="lib-item-sub">${tHtml('lib_grinder_zero_point')}: ${esc(String(zeroPoint))}</div>` : html``}
+        ${g.wear ? html`<div class="lib-item-sub lib-grinder-wear">
+          <span>${WRENCH_ICON_SVG} ${tHtml('lib_grinder_wear', g.wear.shotsSinceBurrs, formatWearGrams(g.wear.gramsSinceBurrs))}</span>
+          <button class="lib-btn-sm lib-grinder-reset-burrs" data-action="reset-grinder-burrs" data-id="${esc(g.id)}">${tHtml('lib_grinder_reset_burrs')}</button>
+        </div>` : html``}
       </div>
       <div class="lib-item-actions">
-        <button class="lib-btn-sm lib-btn-icon" data-action="edit-grinder" data-id="${g.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder" data-id="${g.id}" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
+        <button class="lib-btn-sm lib-btn-icon" data-action="edit-grinder" data-id="${esc(g.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder" data-id="${esc(g.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
     </div>`;
-  }).join('');
+  }));
   loadGrinderThumbnails();
 }
 
@@ -153,15 +154,15 @@ function renderGrinderZeroPointHistory(grinder: GrinderRow | null | undefined): 
   const el = document.getElementById('grinderFormZeroPointHistory');
   if (!el) return;
   const history = grinder?.zeroPointHistory;
-  if (!Array.isArray(history) || !history.length) { el.innerHTML = ''; return; }
+  if (!Array.isArray(history) || !history.length) { el.innerHTML = html``; return; }
   const sorted = [...history].sort((a, b) => a.since - b.since);
-  el.innerHTML = `<div class="zp-history">${sorted.map(e => {
+  el.innerHTML = html`<div class="zp-history">${joinHtml(sorted.map(e => {
     const date = new Date(e.since).toLocaleDateString();
-    return `<div class="zp-history-entry">
+    return html`<div class="zp-history-entry">
       <span>${esc(String(e.zeroPoint))} &mdash; ${esc(date)}</span>
-      <button type="button" class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder-zero-point" data-id="${esc(grinder?.id)}" data-since="${esc(e.since)}" title="${t('lib_grinder_zero_point_delete')}">&#x2715;</button>
+      <button type="button" class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder-zero-point" data-id="${esc(grinder?.id)}" data-since="${esc(e.since)}" title="${tHtml('lib_grinder_zero_point_delete')}">&#x2715;</button>
     </div>`;
-  }).join('')}</div>`;
+  }))}</div>`;
 }
 
 export async function deleteGrinderZeroPointEntry(grinderId: number, since: number): Promise<void> {

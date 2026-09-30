@@ -3,12 +3,12 @@ import type { ChartConfiguration } from 'chart.js';
 import { S } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import * as timerRegistry from '../state/timers.js';
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
 import { isApiPortBlocked } from '../api/transport.js';
 import { getPreheat, getLiveData } from '../api/system.js';
 import { annotateShot } from '../api/shots.js';
 import type { ShotAnnotation } from '../api/types.js';
-import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints } from '../utils.js';
+import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints, html } from '../utils.js';
 import type { ShotSeries } from '../utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
@@ -348,7 +348,7 @@ export function populateRefSelector(): void {
   const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
   if (!sel) return;
   const prev = sel.value;
-  sel.innerHTML = `<option value="">${t('ref_none')}</option>`;
+  sel.innerHTML = html`<option value="">${tHtml('ref_none')}</option>`;
   S.shots.filter(s => s.hasChartData)
     .slice().reverse().slice(0, 40)
     .forEach(s => {

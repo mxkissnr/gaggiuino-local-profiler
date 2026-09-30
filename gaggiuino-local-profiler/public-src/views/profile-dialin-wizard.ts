@@ -15,9 +15,10 @@
 // there's no separate "save" step, the machine is always in sync with the
 // session's current profile.
 import { S }             from '../state/index.js';
-import { t }              from '../i18n.js';
+import { t, tHtml }        from '../i18n.js';
 import * as machinesApi from '../api/machines.js';
-import { esc, scoreColor } from '../utils.js';
+import { esc, html, joinHtml, scoreColor } from '../utils.js';
+import type { Html } from '../utils.js';
 import { calcShotScore } from './shots/utils.js';
 import type { ShotLike } from './shots/utils.js';
 import { _miniShotChart } from './shots/grind.js';
@@ -312,7 +313,7 @@ export function renderProfileDialinWizard(): void {
   const s = _session();
   const body = document.getElementById('pdwBody');
   if (!body) return;
-  if (!s) { body.innerHTML = ''; return; }
+  if (!s) { body.innerHTML = html``; return; }
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   if (s.status === 'converged' || s.status === 'ended') { body.innerHTML = _renderSummary(s); return; }
@@ -329,89 +330,89 @@ export function renderProfileDialinWizard(): void {
   body.innerHTML = _renderRound(s);
 }
 
-function _renderRound(s: ProfileDialinSession): string {
+function _renderRound(s: ProfileDialinSession): Html {
   const roundNum = s.rounds.length + 1;
   const chips = _renderChips(s.rounds);
 
   if (s.reviewRound) {
     const rr = s.reviewRound;
     const sug = rr.suggestion;
-    const symptomButtons = SYMPTOMS.map(sym => `<button type="button" class="pdw-symptom-btn${(s.pendingSymptoms || []).includes(sym) ? ' active' : ''}" data-action="profile-dialin-symptom" data-symptom="${sym}">${t('profile_dialin_symptom_' + sym)}</button>`).join('');
+    const symptomButtons = joinHtml(SYMPTOMS.map(sym => html`<button type="button" class="pdw-symptom-btn${esc((s.pendingSymptoms || []).includes(sym) ? ' active' : '')}" data-action="profile-dialin-symptom" data-symptom="${esc(sym)}">${tHtml('profile_dialin_symptom_' + sym)}</button>`));
 
-    let suggestionBlock = '';
+    let suggestionBlock: Html = html``;
     if (sug) {
       if (sug.type === 'adjust') {
         const text = t(sug.reason, sug.phaseName || t('profile_dialin_generic_field'), sug.oldValue, sug.newValue, sug.unit || '');
-        suggestionBlock = `<div class="dw-suggestion">${esc(text)}</div>
+        suggestionBlock = html`<div class="dw-suggestion">${esc(text)}</div>
           <div class="dw-actions">
-            <button class="lib-save-btn" data-action="profile-dialin-accept-next">${t('profile_dialin_accept_next')}</button>
+            <button class="lib-save-btn" data-action="profile-dialin-accept-next">${tHtml('profile_dialin_accept_next')}</button>
             <div class="dw-override-row">
-              <input type="number" step="0.1" id="pdwOverrideInput" placeholder="${sug.newValue}">
-              <button class="lib-btn-sm" data-action="profile-dialin-override">${t('dialin_wizard_override')}</button>
+              <input type="number" step="0.1" id="pdwOverrideInput" placeholder="${esc(sug.newValue)}">
+              <button class="lib-btn-sm" data-action="profile-dialin-override">${tHtml('dialin_wizard_override')}</button>
             </div>
           </div>`;
       } else {
-        suggestionBlock = `<div class="dw-suggestion">${esc(t(sug.reason))}</div>
-          <div class="dw-actions"><button class="lib-save-btn" data-action="profile-dialin-accept-next">${t('profile_dialin_accept_next')}</button></div>`;
+        suggestionBlock = html`<div class="dw-suggestion">${esc(t(sug.reason))}</div>
+          <div class="dw-actions"><button class="lib-save-btn" data-action="profile-dialin-accept-next">${tHtml('profile_dialin_accept_next')}</button></div>`;
       }
     }
 
-    return `<div class="dw-round">
-      <div class="dw-round-label">${t('dialin_wizard_round_label', roundNum)}</div>
+    return html`<div class="dw-round">
+      <div class="dw-round-label">${tHtml('dialin_wizard_round_label', roundNum)}</div>
       <div class="dw-score-row">
-        <div class="dw-score-chip" style="background:${scoreColor(rr.score)}">${rr.score ?? '–'}</div>
+        <div class="dw-score-chip" style="background:${esc(scoreColor(rr.score))}">${esc(rr.score ?? '–')}</div>
       </div>
-      <div class="pdw-symptom-label">${t('profile_dialin_symptom_prompt')}</div>
+      <div class="pdw-symptom-label">${tHtml('profile_dialin_symptom_prompt')}</div>
       <div class="pdw-symptom-row">${symptomButtons}</div>
       ${suggestionBlock}
-      <button class="lib-btn-sm del" data-action="profile-dialin-end">${t('dialin_wizard_end')}</button>
+      <button class="lib-btn-sm del" data-action="profile-dialin-end">${tHtml('dialin_wizard_end')}</button>
       ${chips}
     </div>`;
   }
 
   const candidate = s.candidateShotId ? _shots().find(sh => sh.id === s.candidateShotId) : null;
 
-  return `<div class="dw-round">
-    <div class="dw-round-label">${t('dialin_wizard_round_label', roundNum)}</div>
+  return html`<div class="dw-round">
+    <div class="dw-round-label">${tHtml('dialin_wizard_round_label', roundNum)}</div>
     <div class="pdw-profile-name">${esc(s.profileName)}</div>
-    ${candidate ? `
+    ${candidate ? html`
       <div class="dw-candidate">
-        <div class="dw-candidate-title">${t('dialin_wizard_candidate_title')}</div>
+        <div class="dw-candidate-title">${tHtml('dialin_wizard_candidate_title')}</div>
         ${_miniShotChart(candidate)}
         <div class="dw-candidate-actions">
-          <button class="lib-save-btn" data-action="profile-dialin-confirm-shot" data-id="${candidate.id}" data-match="1">${t('dialin_wizard_candidate_confirm')}</button>
-          <button class="lib-btn-sm" data-action="profile-dialin-confirm-shot" data-id="${candidate.id}" data-match="0">${t('dialin_wizard_candidate_reject')}</button>
+          <button class="lib-save-btn" data-action="profile-dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="1">${tHtml('dialin_wizard_candidate_confirm')}</button>
+          <button class="lib-btn-sm" data-action="profile-dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="0">${tHtml('dialin_wizard_candidate_reject')}</button>
         </div>
-      </div>` : `<div class="dw-waiting">${t('dialin_wizard_waiting')}</div>`}
-    <button class="lib-btn-sm del" data-action="profile-dialin-end">${t('dialin_wizard_end')}</button>
+      </div>` : html`<div class="dw-waiting">${tHtml('dialin_wizard_waiting')}</div>`}
+    <button class="lib-btn-sm del" data-action="profile-dialin-end">${tHtml('dialin_wizard_end')}</button>
     ${chips}
   </div>`;
 }
 
-function _renderSummary(s: ProfileDialinSession): string {
+function _renderSummary(s: ProfileDialinSession): Html {
   const best = _bestRound(s.rounds);
   const title = s.status === 'converged' ? t('dialin_wizard_converged_title') : t('dialin_wizard_summary_title');
   const reasonText = s.status === 'converged' && s.rounds.length ? t(profileDialinConvergenceReason(s.rounds)) : '';
-  return `<div class="dw-summary">
-    <div class="dw-summary-title">${title}</div>
-    ${reasonText ? `<div class="dw-summary-reason">${esc(reasonText)}</div>` : ''}
-    ${best ? `<div class="dw-summary-best">
-      <div class="dw-score-chip" style="background:${scoreColor(best.score)}">${best.score}</div>
-      <div>${t('profile_dialin_summary_best')}</div>
-    </div>` : ''}
+  return html`<div class="dw-summary">
+    <div class="dw-summary-title">${esc(title)}</div>
+    ${reasonText ? html`<div class="dw-summary-reason">${esc(reasonText)}</div>` : html``}
+    ${best ? html`<div class="dw-summary-best">
+      <div class="dw-score-chip" style="background:${esc(scoreColor(best.score))}">${esc(best.score)}</div>
+      <div>${tHtml('profile_dialin_summary_best')}</div>
+    </div>` : html``}
     <div class="dw-actions">
-      ${best ? `<button class="lib-btn-sm" data-action="goto-shot" data-id="${best.shotId}">${t('dialin_wizard_goto_shot')}</button>` : ''}
-      <button class="lib-btn-sm" data-action="profile-dialin-close">${t('dialin_wizard_continue')}</button>
+      ${best ? html`<button class="lib-btn-sm" data-action="goto-shot" data-id="${esc(best.shotId)}">${tHtml('dialin_wizard_goto_shot')}</button>` : html``}
+      <button class="lib-btn-sm" data-action="profile-dialin-close">${tHtml('dialin_wizard_continue')}</button>
     </div>
     ${_renderChips(s.rounds)}
   </div>`;
 }
 
-function _renderChips(rounds: ProfileDialinRound[]): string {
-  if (!rounds?.length) return '';
-  return `<div class="dw-chip-strip">${rounds.map(r =>
-    `<div class="dw-chip" style="border-color:${scoreColor(r.score)}">${esc(t('profile_dialin_symptom_' + String(r.symptom)))} → ${r.score ?? '–'}</div>`
-  ).join('')}</div>`;
+function _renderChips(rounds: ProfileDialinRound[]): Html {
+  if (!rounds?.length) return html``;
+  return html`<div class="dw-chip-strip">${joinHtml(rounds.map(r =>
+    html`<div class="dw-chip" style="border-color:${esc(scoreColor(r.score))}">${tHtml('profile_dialin_symptom_' + String(r.symptom))} → ${esc(r.score ?? '–')}</div>`
+  ))}</div>`;
 }
 
 function _bestRound(rounds: ProfileDialinRound[]): ProfileDialinRound | null {

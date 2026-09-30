@@ -7,7 +7,7 @@ import * as timerRegistry from '../../state/timers.js';
 import { t } from '../../i18n.js';
 import { importFromUrl as apiImportFromUrl, getImportSettings, saveImportSettings } from '../../api/system.js';
 import * as libraryApi from '../../api/library.js';
-import { esc, toIsoDateInput } from '../../utils.js';
+import { esc, html, joinHtml, toIsoDateInput } from '../../utils.js';
 import { WARNING_ICON_SVG } from '../../icons.js';
 import { parseGlpQrParams } from '../../glp-qr.js';
 import * as libraryView from '../library.js';
@@ -163,9 +163,9 @@ function _renderImportNotice(method: string | null | undefined, host: string | n
   const el = document.getElementById('beanFormImportNotice');
   if (!el) return;
   const label = _importMethodLabel(method, host);
-  if (!label) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  if (!label) { el.style.display = 'none'; el.innerHTML = html``; return; }
   const unverified = !BUILTIN_IMPORT_METHODS.has(method!);
-  el.innerHTML = `<div>${esc(label)}</div>${unverified ? `<div class="lib-import-notice-hint">${esc(t('lib_import_unverified_hint'))}</div>` : ''}`;
+  el.innerHTML = html`<div>${esc(label)}</div>${unverified ? html`<div class="lib-import-notice-hint">${esc(t('lib_import_unverified_hint'))}</div>` : html``}`;
   el.style.display = '';
 }
 
@@ -175,10 +175,10 @@ function _renderImportNotice(method: string | null | undefined, host: string | n
 function _renderDuplicateWarning(duplicateWarning: { name: string } | null | undefined): void {
   const el = document.getElementById('beanFormDuplicateWarning');
   if (!el) return;
-  if (!duplicateWarning) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  if (!duplicateWarning) { el.style.display = 'none'; el.innerHTML = html``; return; }
   // #811: icon rendered here rather than baked into the translated string.
   // duplicateWarning.name is user/import data — escaped, since this is now innerHTML.
-  el.innerHTML = `${WARNING_ICON_SVG} ${esc(t('lib_import_duplicate_warning', duplicateWarning.name))}`;
+  el.innerHTML = html`${WARNING_ICON_SVG} ${esc(t('lib_import_duplicate_warning', duplicateWarning.name))}`;
   el.style.display = '';
 }
 
@@ -190,7 +190,7 @@ function _renderExtraRecipeCandidates(extraRecipes: ExtraRecipe[] | null | undef
   const el = document.getElementById('beanFormExtraRecipes');
   if (!el) return;
   if (!Array.isArray(extraRecipes) || !extraRecipes.length) {
-    el.style.display = 'none'; el.innerHTML = '';
+    el.style.display = 'none'; el.innerHTML = html``;
     return;
   }
   const sub = (r: ExtraRecipe): string => [
@@ -198,12 +198,11 @@ function _renderExtraRecipeCandidates(extraRecipes: ExtraRecipe[] | null | undef
     r.targetTime_s != null ? `${r.targetTime_s}s` : null,
     r.waterTemp_c != null ? `${r.waterTemp_c}°C` : null,
   ].filter(Boolean).join(' · ');
-  el.innerHTML = `<div class="lib-import-extra-recipes-title">${esc(t('lib_import_extra_recipes_title'))}</div>` +
-    extraRecipes.map((r, i) => `
+  el.innerHTML = html`<div class="lib-import-extra-recipes-title">${esc(t('lib_import_extra_recipes_title'))}</div>${joinHtml(extraRecipes.map((r, i) => html`
       <label class="lib-import-extra-recipe-row">
-        <input type="checkbox" data-extra-recipe-idx="${i}" checked>
+        <input type="checkbox" data-extra-recipe-idx="${esc(i)}" checked>
         <span>${esc(r.name)} <span class="lib-import-extra-recipe-sub">${esc(sub(r))}</span></span>
-      </label>`).join('');
+      </label>`))}`;
   el.style.display = '';
 }
 
@@ -250,11 +249,11 @@ function openVariantPicker(variants: ImportVariant[], onPick: (variant: ImportVa
   const list = document.getElementById('variantPickerList');
   const confirmBtn = document.getElementById('variantPickerConfirm');
   if (!row || !list || !confirmBtn) { onPick(variants[0]); return; }
-  list.innerHTML = variants.map((v, i) => `
+  list.innerHTML = joinHtml(variants.map((v, i) => html`
     <label class="lib-variant-picker-option">
-      <input type="radio" name="variantPick" value="${i}" ${i === 0 ? 'checked' : ''}>
-      ${esc(v.title || '?')} — ${(v.price / 100).toFixed(2)} €
-    </label>`).join('');
+      <input type="radio" name="variantPick" value="${esc(i)}" ${i === 0 ? html`checked` : html``}>
+      ${esc(v.title || '?')} — ${esc((v.price / 100).toFixed(2))} €
+    </label>`));
   row.style.display = '';
   const handler = (): void => {
     const idx = Number(list.querySelector<HTMLInputElement>('input[name="variantPick"]:checked')?.value || 0);
@@ -284,21 +283,21 @@ async function _loadAndRenderImportSettings(): Promise<void> {
 function _renderImportSettingsPanel(data: ImportSettings): void {
   const providersEl = _field('importSettingsProviders');
   const customEl    = _field('importSettingsCustomList');
-  providersEl.innerHTML = data.providers.map(p => `
+  providersEl.innerHTML = joinHtml(data.providers.map(p => html`
     <label class="lib-import-settings-provider">
-      <input type="checkbox" data-provider-id="${esc(p.id)}" ${p.enabled ? 'checked' : ''}>
+      <input type="checkbox" data-provider-id="${esc(p.id)}" ${p.enabled ? html`checked` : html``}>
       ${esc(p.label)} <span class="lib-import-settings-host">(${esc(p.hostSuffix)})</span>
-    </label>`).join('');
+    </label>`));
   providersEl.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach(cb => {
     cb.addEventListener('change', () => { void _saveProviderToggle(cb.dataset.providerId!, cb.checked); });
   });
   customEl.innerHTML = data.customShopifyDomains.length
-    ? data.customShopifyDomains.map(d => `
+    ? joinHtml(data.customShopifyDomains.map(d => html`
         <div class="lib-import-settings-domain">
           <span>${esc(d)}</span>
           <button class="lib-import-settings-remove" data-domain="${esc(d)}" aria-label="${esc(t('lib_import_settings_remove'))}">×</button>
-        </div>`).join('')
-    : `<div class="lib-form-hint">${esc(t('lib_import_settings_none'))}</div>`;
+        </div>`))
+    : html`<div class="lib-form-hint">${esc(t('lib_import_settings_none'))}</div>`;
   customEl.querySelectorAll<HTMLButtonElement>('.lib-import-settings-remove').forEach(btn => {
     btn.addEventListener('click', () => { void _removeCustomShopifyDomain(btn.dataset.domain!); });
   });

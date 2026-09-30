@@ -21,6 +21,13 @@ export interface WhatsNewEntry {
 }
 
 const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
+    { version: '3.2.0', date: '2026-09-26', highlights: [
+        'New kiosk page for a tablet on the table: guests enter their name, pick a drink and place an order, and see the live queue with estimated times.',
+        'Grinders can log a zero-point history, so re-zeroing after cleaning no longer means rewriting past grind settings.',
+        'Add your own maintenance tasks with an optional shots and/or days interval, and disable any task without deleting it.',
+        'Machine profiles can now be duplicated, and a firmware update triggered from the app is recorded in the maintenance log.',
+        'Fixed: shot sync now works with more machines and firmware versions, and shots in the trash are deleted after 30 days again.',
+    ] },
     { version: '3.1.0', date: '2026-09-17', highlights: [
         'Machines can now check for, trigger, and track Gaggiuino firmware updates right from the web app — a status badge on the machine\'s row expands into a progress bar naming the component being flashed, plus a release-channel selector in the machine\'s edit form.',
         'Fixed: manual shot sync and the machine debug probe are now protected against a machine host that changes what it points to.',
@@ -55,9 +62,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
         '"Instrument" redesign: a cooler graphite look throughout the app, drawn icons in place of emoji, and a calmer, less boxy shot view with a guided metric line and a plain-text verdict.',
         'Added the achievement stamp card: a browsable catalogue of 54 badges across 7 categories, unlocked automatically as you brew.',
         'The machine icon (Settings, topbar, Live view) now draws the right body for your machine type, and toggle buttons/the sidebar shot counter got a lighter, less mechanical look.',
-    ] },
-    { version: '2.33.3', date: '2026-08-11', highlights: [
-        'Live view updates faster on a fresh sensor reading: a WebSocket or MQTT sample now pushes to the Live tab instantly instead of waiting for the next 1-second poll.',
     ] },
 ];
 

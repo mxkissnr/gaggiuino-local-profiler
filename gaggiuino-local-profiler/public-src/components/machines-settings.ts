@@ -7,7 +7,7 @@
 // selected machine.
 import { S, setState, filterShotsByMachine } from '../state/index.js';
 import * as machinesApi from '../api/machines.js';
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
 import { WARNING_ICON_SVG, CHECK_ICON_SVG, CLOSE_ICON_SVG } from '../icons.js';
 import { updateStatus } from './status.js';
@@ -15,7 +15,8 @@ import { THEME_PRESETS, getThemePreset, resolveTheme } from '../shared/theme-pre
 import { migrateLegacyAccent } from '../theme.js';
 import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
 import { renderTopbarMachineIcon } from './topbar-machine-icon.js';
-import { esc as escapeHtml } from '../utils.js';
+import { esc as escapeHtml, html, joinHtml } from '../utils.js';
+import type { Html } from '../utils.js';
 import type { MachineRecord } from '../state/index.js';
 import type { FirmwareVersion, MachineSaveInput } from '../api/types.js';
 
@@ -83,7 +84,7 @@ export function getDefaultMachineId(): number | null {
 // S.activeMachineId live on every call, never cached, since both can change
 // independently of each other (machine list reload vs. topbar switch).
 export function getActiveMachine(): MachineView | null {
-  const machines = (S.machines || []) as unknown as MachineView[];
+  const machines = (S.machines || []) as MachineView[];
   const defaultMachine = machines.find(m => m.isDefault) || null;
   const active = S.activeMachineId;
   if (active == null || active === 'all') return defaultMachine;
@@ -223,6 +224,8 @@ export async function loadMachines(): Promise<void> {
   try {
     const machines = await machinesApi.listMachines();
     if (!machines) return;
+    // TODO(#1103): the API Machine type (schema.gen) has an optional id while
+    // S.machines' MachineRecord requires one, so this narrowing stays forced.
     setState('machines', machines as unknown as MachineRecord[]);
     if (!S.activeMachineId) {
       const def = machines.find(m => m.isDefault) || machines[0];
@@ -267,15 +270,15 @@ export function renderMachineSwitcher(): void {
   // hosts #expandSidebarBtn) rather than collapsing itself away, since that
   // visibility would depend on two independently-changing things (this and
   // the sidebar's own collapsed state) for one thin, low-cost bar.
-  const machines = (S.machines || []) as unknown as MachineView[];
+  const machines = (S.machines || []) as MachineView[];
   if (machines.length < 2) {
-    el.style.display = 'none'; el.innerHTML = '';
+    el.style.display = 'none'; el.innerHTML = html``;
     return;
   }
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  el.innerHTML = `<option value="all">${escapeHtml(t('machine_switcher_all'))}</option>` +
-    machines.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  el.innerHTML = html`<option value="all">${escapeHtml(t('machine_switcher_all'))}</option>${joinHtml(
+    machines.map(m => html`<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`))}`;
   el.value = String(S.activeMachineId ?? 'all');
   el.style.display = '';
 }
@@ -329,8 +332,8 @@ export function renderMachinesList(): void {
   // about to be torn down below -- stop them all first rather than leave
   // them writing into detached DOM.
   stopAllFirmwarePolls();
-  list.innerHTML = '';
-  ((S.machines || []) as unknown as MachineView[]).forEach(m => {
+  list.innerHTML = html``;
+  ((S.machines || []) as MachineView[]).forEach(m => {
     // #334: per-machine shot count, computed client-side from S.allShots
     // (already carries machineId per shot, see ShotRepository) — no backend
     // change needed. A shot with no machineId at all belongs to the default
@@ -339,18 +342,18 @@ export function renderMachinesList(): void {
     const isGaggiuino = m.type === 'gaggiuino';
     const row = document.createElement('div');
     row.className = 'machine-row';
-    row.innerHTML = `
+    row.innerHTML = html`
       <span class="machine-row-icon">${machineIconMiniSvg(m.theme, m.type)}</span>
       <span class="machine-row-name">${escapeHtml(m.name)}</span>
-      <span class="machine-row-type">${m.type === 'gaggimate' ? 'GaggiMate' : 'Gaggiuino'}</span>
-      <span class="machine-row-shot-count">${t('settings_machine_shot_count', shotCount)}</span>
-      ${m.type === 'gaggimate' ? `<span class="machine-row-badge-experimental" title="${escapeHtml(t('settings_machine_type_gaggimate'))}">${WARNING_ICON_SVG} ${t('settings_machine_experimental_badge')}</span>` : ''}
-      ${m.isDefault ? `<span class="machine-row-badge">${t('settings_machine_default')}</span>` : ''}
-      ${isGaggiuino ? `<span class="machine-row-firmware-badge machine-row-firmware-badge-muted">${escapeHtml(t('settings_machine_firmware_checking'))}</span>` : ''}
+      <span class="machine-row-type">${m.type === 'gaggimate' ? html`GaggiMate` : html`Gaggiuino`}</span>
+      <span class="machine-row-shot-count">${tHtml('settings_machine_shot_count', shotCount)}</span>
+      ${m.type === 'gaggimate' ? html`<span class="machine-row-badge-experimental" title="${escapeHtml(t('settings_machine_type_gaggimate'))}">${WARNING_ICON_SVG} ${tHtml('settings_machine_experimental_badge')}</span>` : html``}
+      ${m.isDefault ? html`<span class="machine-row-badge">${tHtml('settings_machine_default')}</span>` : html``}
+      ${isGaggiuino ? html`<span class="machine-row-firmware-badge machine-row-firmware-badge-muted">${escapeHtml(t('settings_machine_firmware_checking'))}</span>` : html``}
       <span class="machine-row-actions">
-        <button type="button" class="machine-edit-btn">${t('settings_machine_edit')}</button>
-        ${!m.isDefault ? `<button type="button" class="machine-set-default-btn">${t('settings_machine_set_default')}</button>` : ''}
-        <button type="button" class="machine-delete-btn">${t('settings_machine_delete')}</button>
+        <button type="button" class="machine-edit-btn">${tHtml('settings_machine_edit')}</button>
+        ${!m.isDefault ? html`<button type="button" class="machine-set-default-btn">${tHtml('settings_machine_set_default')}</button>` : html``}
+        <button type="button" class="machine-delete-btn">${tHtml('settings_machine_delete')}</button>
       </span>`;
     (row.querySelector('.machine-edit-btn') as HTMLElement).addEventListener('click', () => openMachineForm(m));
     row.querySelector('.machine-set-default-btn')?.addEventListener('click', () => void setDefaultMachine(m.id));
@@ -372,10 +375,10 @@ function renderThemeSwatches(): void {
   const wrap = document.getElementById('machineThemeSwatches');
   if (!wrap) return;
   const isCustom = !!(_selectedTheme && !_selectedTheme.preset);
-  wrap.innerHTML = `
-    <button type="button" class="machine-theme-swatch machine-theme-swatch-none${!_selectedTheme ? ' active' : ''}" data-theme-action="none" title="${escapeHtml(t('settings_machine_theme_none'))}" aria-label="${escapeHtml(t('settings_machine_theme_none'))}"></button>
-    ${THEME_PRESETS.map(p => `<button type="button" class="machine-theme-swatch${_selectedTheme?.preset === p.key ? ' active' : ''}" data-theme-action="preset" data-preset-key="${escapeHtml(p.key)}" style="${p.a === p.b ? `background-color:${p.a}` : `background-image:linear-gradient(135deg,${p.a},${p.b})`}" title="${escapeHtml(t(presetLabelKey(p.key)))}" aria-label="${escapeHtml(t(presetLabelKey(p.key)))}"></button>`).join('')}
-    <button type="button" class="machine-theme-swatch machine-theme-swatch-custom${isCustom ? ' active' : ''}" data-theme-action="custom" title="${escapeHtml(t('settings_machine_theme_custom'))}" aria-label="${escapeHtml(t('settings_machine_theme_custom'))}"></button>`;
+  wrap.innerHTML = html`
+    <button type="button" class="machine-theme-swatch machine-theme-swatch-none${!_selectedTheme ? html` active` : html``}" data-theme-action="none" title="${escapeHtml(t('settings_machine_theme_none'))}" aria-label="${escapeHtml(t('settings_machine_theme_none'))}"></button>
+    ${joinHtml(THEME_PRESETS.map(p => html`<button type="button" class="machine-theme-swatch${_selectedTheme?.preset === p.key ? html` active` : html``}" data-theme-action="preset" data-preset-key="${escapeHtml(p.key)}" style="${p.a === p.b ? html`background-color:${escapeHtml(p.a)}` : html`background-image:linear-gradient(135deg,${escapeHtml(p.a)},${escapeHtml(p.b)})`}" title="${escapeHtml(t(presetLabelKey(p.key)))}" aria-label="${escapeHtml(t(presetLabelKey(p.key)))}"></button>`))}
+    <button type="button" class="machine-theme-swatch machine-theme-swatch-custom${isCustom ? html` active` : html``}" data-theme-action="custom" title="${escapeHtml(t('settings_machine_theme_custom'))}" aria-label="${escapeHtml(t('settings_machine_theme_custom'))}"></button>`;
   wrap.querySelectorAll<HTMLElement>('[data-theme-action]').forEach(btn => {
     btn.addEventListener('click', () => {
       const action = btn.dataset.themeAction;
@@ -401,7 +404,7 @@ export function renderAccentSwatches(): void {
   const wrap = document.getElementById('accentSwatches');
   if (!wrap) return;
   const current = migrateLegacyAccent(localStorage.getItem('glp_accent_theme')) || 'amber-americano';
-  wrap.innerHTML = THEME_PRESETS.map(p => `<button type="button" class="accent-swatch${current === p.key ? ' active' : ''}" data-preset-key="${escapeHtml(p.key)}" style="${p.a === p.b ? `background-color:${p.a}` : `background-image:linear-gradient(135deg,${p.a},${p.b})`}" title="${escapeHtml(t(presetLabelKey(p.key)))}" aria-label="${escapeHtml(t(presetLabelKey(p.key)))}"></button>`).join('');
+  wrap.innerHTML = joinHtml(THEME_PRESETS.map(p => html`<button type="button" class="accent-swatch${current === p.key ? html` active` : html``}" data-preset-key="${escapeHtml(p.key)}" style="${p.a === p.b ? html`background-color:${escapeHtml(p.a)}` : html`background-image:linear-gradient(135deg,${escapeHtml(p.a)},${escapeHtml(p.b)})`}" title="${escapeHtml(t(presetLabelKey(p.key)))}" aria-label="${escapeHtml(t(presetLabelKey(p.key)))}"></button>`));
   wrap.querySelectorAll<HTMLElement>('[data-preset-key]').forEach(btn => {
     // setAccentTheme is assigned onto window in main.js (Object.assign).
     btn.addEventListener('click', () => window.setAccentTheme?.(btn.dataset.presetKey ?? ''));
@@ -605,8 +608,8 @@ function renderFirmwareRow(machineId: number, row: HTMLElement, data: FirmwareVe
   }
 }
 
-function renderFirmwarePanelHtml(): string {
-  return `<span class="machine-row-firmware-panel" style="display:none">
+function renderFirmwarePanelHtml(): Html {
+  return html`<span class="machine-row-firmware-panel" style="display:none">
     <span class="machine-firmware-update-banner">
       <span class="machine-firmware-update-msg"></span>
       <a class="machine-firmware-changelog-link" href="#" target="_blank" rel="noopener">${escapeHtml(t('update_changelog'))}</a>
@@ -782,6 +785,21 @@ export function closeMachineForm(): void {
   if (card) card.style.display = 'none';
 }
 
+// The generated request schema leaves theme.preset/a/b plain-optional, while
+// the form's ThemeSelection marks them optional-with-undefined (the swatch and
+// colour-input handlers assign straight from possibly-absent DOM values). Drop
+// the absent keys so the form value satisfies the request schema without a
+// cast; JSON.stringify already omitted undefined values, so the body is
+// unchanged.
+function themeForSave(theme: ThemeSelection | null): NonNullable<MachineSaveInput['theme']> | null {
+  if (!theme) return null;
+  const out: NonNullable<MachineSaveInput['theme']> = {};
+  if (theme.preset !== undefined) out.preset = theme.preset;
+  if (theme.a !== undefined) out.a = theme.a;
+  if (theme.b !== undefined) out.b = theme.b;
+  return out;
+}
+
 // #727: shared by saveMachineForm() and testMachineForm() so the
 // payload-building/fetch logic (and the SSRF-guard error surfacing from
 // #336) lives in exactly one place. Returns the saved machine's id on
@@ -799,18 +817,18 @@ export function closeMachineForm(): void {
 // strictly, so an extra JSON field would be unclean at best.
 async function _saveMachine({ triggerSync = true }: { triggerSync?: boolean } = {}): Promise<string | number | null> {
   const id = (document.getElementById('machineFormId') as HTMLInputElement).value;
-  const type = (document.getElementById('machineFormType') as HTMLSelectElement).value;
-  const payload = {
+  const type = (document.getElementById('machineFormType') as HTMLSelectElement).value as 'gaggiuino' | 'gaggimate';
+  const payload: MachineSaveInput = {
     name: (document.getElementById('machineFormName') as HTMLInputElement).value.trim(),
     type,
     host: (document.getElementById('machineFormHost') as HTMLInputElement).value.trim(),
     switchEntity: (document.getElementById('machineFormSwitch') as HTMLInputElement).value.trim() || null,
-    theme: _selectedTheme,
+    theme: themeForSave(_selectedTheme),
     hasWaterSensor: type === 'gaggimate' ? ((document.getElementById('machineFormWaterSensor') as HTMLInputElement | null)?.checked || false) : false,
   };
   if (!payload.name || !payload.host) return null;
   const resultEl = document.getElementById('machineFormTestResult');
-  const r = await machinesApi.saveMachine(id || null, payload as unknown as MachineSaveInput, { triggerSync });
+  const r = await machinesApi.saveMachine(id || null, payload, { triggerSync });
   if (r.ok) {
     const data = await r.json().catch(() => ({})) as { error?: string; id?: number; reachable?: boolean };
     return id || data?.id || null;
@@ -843,11 +861,11 @@ async function _testMachine(id: string | number): Promise<void> {
     const data = await r.json().catch(() => ({})) as { error?: string; id?: number; reachable?: boolean };
     if (String((document.getElementById('machineFormId') as HTMLInputElement).value) !== String(id)) return;
     resultEl.innerHTML = data.reachable
-      ? `${CHECK_ICON_SVG} ${t('settings_machine_test_ok')}`
-      : `${CLOSE_ICON_SVG} ${t('settings_machine_test_fail')}`;
+      ? html`${CHECK_ICON_SVG} ${tHtml('settings_machine_test_ok')}`
+      : html`${CLOSE_ICON_SVG} ${tHtml('settings_machine_test_fail')}`;
   } catch {
     if (String((document.getElementById('machineFormId') as HTMLInputElement).value) !== String(id)) return;
-    resultEl.innerHTML = `${CLOSE_ICON_SVG} ${t('settings_machine_test_fail')}`;
+    resultEl.innerHTML = html`${CLOSE_ICON_SVG} ${tHtml('settings_machine_test_fail')}`;
   }
 }
 
@@ -923,7 +941,7 @@ export async function testMachineForm(): Promise<void> {
   }
   // #730: raw (uncoerced) write-back — the DOM stringifies it anyway, and the
   // id may still be the server's numeric one on create.
-  (document.getElementById('machineFormId') as HTMLInputElement).value = id as unknown as string;
+  (document.getElementById('machineFormId') as HTMLInputElement).value = id as string;
   await _testMachine(id);
   void loadMachines();
   if (btn) btn.disabled = false;
