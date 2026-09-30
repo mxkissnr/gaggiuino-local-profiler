@@ -7,7 +7,7 @@ import { t, tHtml } from '../i18n.js';
 import { isApiPortBlocked } from '../api/transport.js';
 import { getPreheat, getLiveData } from '../api/system.js';
 import { annotateShot } from '../api/shots.js';
-import type { ShotAnnotation } from '../api/types.js';
+import type { Bean, ShotAnnotation } from '../api/types.js';
 import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints, html } from '../utils.js';
 import type { ShotSeries } from '../utils.js';
 import { getShotCurve } from '../shot-curves.js';
@@ -182,8 +182,7 @@ export function renderLiveShotSetupPanel(): void {
     // when the user hasn't already typed something into those fields, so
     // this never clobbers a manual override.
     if (!d.grinder && !d.grindSetting && d.beanId != null) {
-      const bean = (S.coffeeLibrary?.beans || []).find(b => b.id === d.beanId) as unknown as
-        { knownGrindSettings?: { grinder?: string; grindSetting?: string }[] } | undefined;
+      const bean = (S.coffeeLibrary?.beans || []).find((b): b is Bean => b.id === d.beanId);
       const known = bean?.knownGrindSettings?.[0];
       if (known) { d.grinder = known.grinder || ''; d.grindSetting = known.grindSetting || ''; }
     }

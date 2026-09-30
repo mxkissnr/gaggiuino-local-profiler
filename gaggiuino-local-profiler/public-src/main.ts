@@ -36,6 +36,7 @@ if ('serviceWorker' in navigator && document.querySelector('link[rel="manifest"]
 
 import { S } from './state/index.js';
 import { initToken, apiFetch } from './api/transport.js';
+import type { Bean } from './api/types.js';
 import { t, tHtml, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
 import { generateBeanQR } from './glp-qr.js';
@@ -156,20 +157,6 @@ import { renderWhatsNewCard } from './components/whats-new.js';
 import { attachAutocomplete } from './components/autocomplete.js';
 
 import { BEAN_ICON_SVG } from './icons.js';
-
-// Local aliases for the loosely-typed library rows main.ts reads
-// (same pattern as views/shots/utils.ts).
-interface BeanBag {
-  openedAt?: number | null;
-  roastDate?: string | null;
-}
-
-interface BeanRecord {
-  id: number;
-  name?: string | null;
-  roastDate?: string | null;
-  bags?: BeanBag[];
-}
 
 declare global {
   interface Window {
@@ -578,7 +565,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const hintEl = document.getElementById('beanAgeHint');
       if (!name || !S.coffeeLibrary) { if (hintEl) hintEl.style.display = 'none'; _renderFrozenPortionPills(null, Date.now(), null); return; }
 
-      const bean = S.coffeeLibrary.beans?.find(b => b.name === name) as unknown as BeanRecord | undefined;
+      const bean = S.coffeeLibrary.beans?.find((b): b is Bean => b.name === name);
       if (!bean) { if (hintEl) hintEl.style.display = 'none'; _renderFrozenPortionPills(null, Date.now(), null); return; }
 
       // Prefill grinder/grind setting/dose from this bean's own history
