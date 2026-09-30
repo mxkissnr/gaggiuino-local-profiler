@@ -36,6 +36,10 @@ export type LibraryRow = Record<string, unknown>;
 export interface CoffeeLibrary {
   beans: LibraryRow[];
   grinders: LibraryRow[];
+  // Baskets/puck screens load with the rest of the library; declared here so
+  // collection-by-name lookups can stay typed instead of casting coffeeLibrary.
+  baskets?: LibraryRow[];
+  puckScreens?: LibraryRow[];
 }
 
 // BarcodeDetector is not in TypeScript's DOM lib yet; only the shape GLP uses.
