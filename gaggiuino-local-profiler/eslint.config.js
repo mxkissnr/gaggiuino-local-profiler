@@ -90,12 +90,10 @@ module.exports = [
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
     },
   }),
-  // public-src/main.ts was only renamed from main.js (#1106), not converted: it
-  // still imports untyped .js modules, so recommendedTypeChecked's
-  // any-propagation rules would error on nearly every line. It carries a
-  // file-level @ts-nocheck for the same reason and is linted like its JavaScript
-  // siblings until a later package converts it, at which point this block folds
-  // into the one above.
+  // public-src/main.ts is fully typed now -- its file-level @ts-nocheck was
+  // removed in #1115 -- but it is still linted with the non-type-checked
+  // recommended config here until slice M2 folds this block into the typed one
+  // above.
   ...tseslint.config({
     files: ['public-src/main.ts'],
     extends: [...tseslint.configs.recommended],
