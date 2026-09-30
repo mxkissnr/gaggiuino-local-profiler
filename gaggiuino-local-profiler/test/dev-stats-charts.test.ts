@@ -16,7 +16,12 @@ const ITEMS = [
 ];
 
 function barFills(svg: string): string[] {
-    return [...svg.matchAll(/<path d="[^"]*" fill="([^"]+)"/g)].map(m => m[1]);
+    const fills: string[] = [];
+    for (const m of svg.matchAll(/<path d="[^"]*" fill="([^"]+)"/g)) {
+        const fill = m[1];
+        if (fill !== undefined) fills.push(fill);
+    }
+    return fills;
 }
 
 describe('dev-stats barChartSVG (#1210)', () => {
@@ -97,7 +102,7 @@ describe('dev-stats model breakdown (#1210)', () => {
     it('omits vendors that are not present from the legend', () => {
         const { legend } = modelBreakdownData({ 'Claude Opus 4': 4 }, 'dark');
         expect(legend.map(l => l.label)).toEqual(['Claude']);
-        expect(legend[0].color).toBe('#3987e5');
+        expect(legend[0]?.color).toBe('#3987e5');
     });
 
     it('shows the unversioned Claude row as "Claude (version not recorded)"', () => {

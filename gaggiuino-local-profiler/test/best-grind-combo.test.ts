@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { GrindShot } from '../public-src/views/shots/grind.js';
 
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`missing element at index ${i}`);
+  return v;
+}
+
 // grind.js pulls in state.js (localStorage/navigator at module load) and
 // i18n.js — neither is available in the plain Node test environment, so
 // stub the minimum before importing, same approach as share-or-download.test.js.
@@ -49,7 +55,7 @@ describe('calcBestGrindCombosForBean', () => {
     const result = calcBestGrindCombosForBean('bean a', uniform)!; // case-insensitive
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ grinder: 'Niche Zero', grindSetting: 18, shotCount: 3 });
-    expect(result[0].avgScore).toBe(Math.round((90 + 80 + 88) / 3));
+    expect(at(result, 0).avgScore).toBe(Math.round((90 + 80 + 88) / 3));
   });
 
   it('picks the best-scoring grind setting among several for the same grinder', () => {
@@ -63,7 +69,7 @@ describe('calcBestGrindCombosForBean', () => {
     ];
     const result = calcBestGrindCombosForBean('Bean A', shots)!;
     expect(result[0]).toMatchObject({ grinder: 'Niche Zero', grindSetting: 18 });
-    expect(result[0].avgScore).toBe(95);
+    expect(at(result, 0).avgScore).toBe(95);
   });
 
   it('ranks combos across multiple grinders best-first', () => {
@@ -91,6 +97,6 @@ describe('calcBestGrindCombosForBean', () => {
     ];
     const result = calcBestGrindCombosForBean('Bean A', shots)!;
     expect(result).toHaveLength(1);
-    expect(result[0].shotCount).toBe(3);
+    expect(at(result, 0).shotCount).toBe(3);
   });
 });

@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { suggestProfileFromBean, type ProfileSuggestion, type ProfileSuggestionPhase } from '../public-src/profile-suggestion.js';
 
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`missing element at index ${i}`);
+  return v;
+}
+
 // Every phase in the fixed 4-phase Sertao skeleton carries a target and
 // stopConditions, so the finder hands those back non-optionally.
 type SkeletonPhase = ProfileSuggestionPhase & {
@@ -16,10 +22,10 @@ describe('suggestProfileFromBean', () => {
   it('always produces the fixed 4-phase Sertao skeleton', () => {
     const p = suggestProfileFromBean({ name: 'Washed Ethiopia' });
     expect(p.phases.map(ph => ph.name)).toEqual(['Preinfusion', 'Bloom', 'Ramp', 'Decline Flow']);
-    expect(p.phases[0].type).toBe('FLOW');
-    expect(p.phases[1].type).toBe('PRESSURE');
-    expect(p.phases[2].type).toBe('PRESSURE');
-    expect(p.phases[3].type).toBe('FLOW');
+    expect(at(p.phases, 0).type).toBe('FLOW');
+    expect(at(p.phases, 1).type).toBe('PRESSURE');
+    expect(at(p.phases, 2).type).toBe('PRESSURE');
+    expect(at(p.phases, 3).type).toBe('FLOW');
   });
 
   it('decaf beans get the longer 10s preinfusion, washed non-decaf gets 7s', () => {

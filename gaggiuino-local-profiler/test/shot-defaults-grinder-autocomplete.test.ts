@@ -8,6 +8,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { CoffeeLibrary } from '../public-src/state/index.js';
 
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`missing element at index ${i}`);
+  return v;
+}
+
 // vitest's node environment has no browser globals; stub them through a loose
 // view of globalThis (the same bridge test/annotation-basket-puckscreen-save.ts
 // uses) so the minimal fakes need not satisfy the full Storage/Navigator shapes.
@@ -50,20 +56,20 @@ describe('shot defaults grinder autocomplete (#691)', () => {
   it('attaches autocomplete to #sdGrinder on render', () => {
     renderShotDefaultsSettingsCard();
     expect(attachAutocompleteMock).toHaveBeenCalledTimes(1);
-    expect(attachAutocompleteMock.mock.calls[0][0]).toBe(grinderInput);
+    expect(at(attachAutocompleteMock.mock.calls, 0)[0]).toBe(grinderInput);
   });
 
   it('the attached getOptions callback returns grinder names from the coffee library', () => {
     S.coffeeLibrary = { beans: [], grinders: [{ name: 'Niche Zero' }, { name: 'Kingrinder K6' }] };
     renderShotDefaultsSettingsCard();
-    const getOptions = attachAutocompleteMock.mock.calls[0][1] as () => unknown;
+    const getOptions = at(attachAutocompleteMock.mock.calls, 0)[1] as () => unknown;
     expect(getOptions()).toEqual(['Niche Zero', 'Kingrinder K6']);
   });
 
   it('the getOptions callback does not throw when the coffee library has no grinders yet', () => {
     S.coffeeLibrary = {} as CoffeeLibrary;
     renderShotDefaultsSettingsCard();
-    const getOptions = attachAutocompleteMock.mock.calls[0][1] as () => unknown;
+    const getOptions = at(attachAutocompleteMock.mock.calls, 0)[1] as () => unknown;
     expect(getOptions()).toEqual([]);
   });
 });
