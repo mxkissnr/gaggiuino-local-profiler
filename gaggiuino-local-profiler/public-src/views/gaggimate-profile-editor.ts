@@ -801,10 +801,10 @@ function _bindInputs(): void {
       case 'gm-pro-temperature':  _setPhase(idx, { temperature: num() }); break;
       case 'gm-std-pump-power':
       case 'gm-pro-pump-power': { const pv = parseFloat(el.value); _setPhase(idx, { pump: isNaN(pv) ? 100 : pv }); break; }
-      case 'gm-pro-pressure':     _setPhase(idx, { pump: { ...(ph().pump as GmPump | undefined), pressure: num() } }); break;
-      case 'gm-pro-flow':         _setPhase(idx, { pump: { ...(ph().pump as GmPump | undefined), flow: num() } }); break;
+      case 'gm-pro-pressure':     _setPhase(idx, { pump: { ...((ph().pump as GmPump | undefined) ?? {}), pressure: num() } }); break;
+      case 'gm-pro-flow':         _setPhase(idx, { pump: { ...((ph().pump as GmPump | undefined) ?? {}), flow: num() } }); break;
       case 'gm-pro-ramp-duration':
-        _setPhase(idx, { transition: { ...ph().transition, duration: num() } });
+        _setPhase(idx, { transition: { ...(ph().transition ?? {}), duration: num() } });
         break;
       case 'gm-std-vol-target': {
         const val = num();
@@ -889,14 +889,14 @@ export function handleGmEditorAction(action: string, el: HTMLElement): void {
     }
     case 'gm-pro-ramp-type': {
       const rt = el.dataset.val;
-      _setPhase(idx, { transition: { ...ph().transition, type: rt, duration: rt === 'instant' ? 0 : ph().transition?.duration || 0 } });
+      _setPhase(idx, { transition: { ...(ph().transition ?? {}), type: rt, duration: rt === 'instant' ? 0 : ph().transition?.duration || 0 } });
       break;
     }
     case 'gm-pro-ramp-adaptive':
-      _setPhase(idx, { transition: { ...ph().transition, adaptive: el.dataset.val === '1' } });
+      _setPhase(idx, { transition: { ...(ph().transition ?? {}), adaptive: el.dataset.val === '1' } });
       break;
     case 'gm-pro-ramp-target':
-      _setPhase(idx, { transition: { ...ph().transition, target: el.dataset.val } });
+      _setPhase(idx, { transition: { ...(ph().transition ?? {}), target: el.dataset.val } });
       break;
     case 'gm-pro-target-menu': {
       const menu = document.getElementById(`gmTargetMenu${idx}`);
