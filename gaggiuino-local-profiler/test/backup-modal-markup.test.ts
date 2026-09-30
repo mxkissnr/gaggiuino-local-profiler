@@ -55,7 +55,7 @@ describe('backup modal: progress row markup (#960)', () => {
         expect(modalBlock).toContain('id="backupModalProgress"');
     });
 
-    it('the progress row contains a .sync-progress-fill child (reuses the shot-import bar styles)', () => {
+    it('the progress row contains a .sync-progress-fill child (reuses the shared progress-bar styles)', () => {
         const m = html.match(/<div id="backupModalProgress"[\s\S]*?<\/div>\s*<\/div>/);
         expect(m).not.toBeNull();
         expect(m![0]).toContain('sync-progress-fill');

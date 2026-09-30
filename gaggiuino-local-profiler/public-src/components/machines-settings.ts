@@ -533,9 +533,7 @@ async function _saveReleaseChannel(machineId: string | number): Promise<void> {
 // the machine's own OTA flow, unchanged since #1044; only the DOM this talks
 // to moved, from the single #machineFormCard to each Gaggiuino machine's own
 // row in renderMachinesList() above. There is no SSE push for firmware
-// progress on the backend (unlike shot-import progress, components/
-// status.js's renderSyncProgressBar/pollSyncProgressFallback), so this is
-// polling-only throughout.
+// progress on the backend, so this is polling-only throughout.
 
 const FIRMWARE_POLL_INTERVAL_MS = 2000;
 // ~10 minutes of polling before giving up inconclusively -- a real OTA
@@ -743,8 +741,7 @@ export function firmwareProgressLabel(progress: FirmwareProgress | null | undefi
     : t('settings_machine_firmware_progress_label', pct);
 }
 
-// Mirrors components/status.js's renderSyncProgressBar() -- same
-// hide-when-null / label+fill-width shape, reusing that file's own
+// Hide-when-null / label+fill-width progress bar, reusing the shared
 // .sync-progress-track/.sync-progress-fill classes (style.css), just
 // against this row panel's own bar/label elements instead of the sidebar's.
 function renderFirmwareProgressBar(row: HTMLElement, progress: FirmwareProgress | null): void {

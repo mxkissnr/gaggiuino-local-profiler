@@ -15,7 +15,6 @@ import { syncTopbarMachineIconFallback } from './topbar-machine-icon.js';
 
 // /api/status and /api/switch responses are plain fetch Responses, so their
 // parsed bodies are named here rather than left as `any`.
-interface SyncProgressEntry { machineId: number; current: number; total: number }
 interface ProgressButton { textContent: string | null; disabled: boolean }
 interface SwitchPayload { configured?: boolean | undefined; state?: boolean | null | undefined }
 
@@ -24,7 +23,6 @@ interface SwitchPayload { configured?: boolean | undefined; state?: boolean | nu
 interface StatusPayload {
   installId?: string | null;
   shotCount?: number;
-  syncProgress?: SyncProgressEntry[] | null;
   exposeApiPort?: boolean;
   machineOn?: boolean;
   machineOnSince?: number | null;
@@ -46,77 +44,11 @@ interface StatusPayload {
 // see #296.
 let knownShotCount: number | null = null;
 
-// #731/#735: active shot-import progress entries as last seen by the
-// *polling fallback* (pollSyncProgressFallback() below, only exercised when
-// S.sseActive is falsy) -- keyed by machineId, kept only so the poll that
-// finds a given machine's entry gone can show that machine's own "done"
-// toast. Must be per-machine, not a single scalar: lib/state.js's own
-// state.syncProgress is deliberately keyed by machineId too (see its and
-// lib/sync.js's comments), because more than one machine can be backfilling
-// at once and their progress must not clobber each other -- a scalar here
-// would let machine B's completion go untoasted for as long as machine A is
-// still active (whichever entry happened to be tracked last wins), and would
-// misattribute A's total to B's toast once A also finished. An entry is
-// deleted the moment its toast fires, so it doesn't repeat on later polls,
-// and a machineId only ever toasts once it's first been seen active (so
-// app startup never fires it for an import already in progress before this
-// session opened).
-const _lastSyncProgress = new Map<number, SyncProgressEntry>();
-
-// #735: renders "this machine's import is at current/total" for the polling
-// fallback (or hides the bar entirely).
-function renderSyncProgressBar(entry: { current: number; total: number } | null): void {
-  const syncProgressBar = document.getElementById('syncProgressBar');
-  if (!syncProgressBar) return;
-  if (!entry) {
-    syncProgressBar.style.display = 'none';
-    return;
-  }
-  const { current, total } = entry;
-  const label = document.getElementById('syncProgressLabel');
-  const fill  = syncProgressBar.querySelector<HTMLElement>('.sync-progress-fill');
-  if (label) label.textContent = t('sync_progress_label', current, total);
-  if (fill) fill.style.width = `${Math.min(100, (current / total) * 100)}%`;
-  syncProgressBar.style.display = '';
-}
-
-// #731: the polling implementation, used as the fallback path whenever SSE
-// hasn't (yet, or ever) connected this session -- see public-src/sse.js's
-// fallback detection. Derives "a backfill just finished" purely from an
-// entry disappearing between two /api/status polls, which is why it needs
-// the toast/list bookkeeping below.
-function pollSyncProgressFallback(list: SyncProgressEntry[], machineId: string | number | null | undefined): void {
-  // #731: toast every previously-tracked machine whose entry is gone from
-  // this poll's list -- independent of whichever single entry the bar
-  // itself ends up showing below, so machine B finishing while A is still
-  // backfilling still gets its own toast right away, not only once A also
-  // finishes (or never, if A finished first and B's entry never got picked
-  // as "the" entry to track).
-  for (const [id, prev] of _lastSyncProgress) {
-    if (!list.some(p => p.machineId === id)) {
-      if (window.showToast) window.showToast(t('sync_complete_toast', prev.total));
-      _lastSyncProgress.delete(id);
-    }
-  }
-  for (const p of list) _lastSyncProgress.set(p.machineId, p);
-
-  // There's only one bar to show even with multiple machines active --
-  // prefer whichever machine this poll was scoped to, falling back to
-  // the first active entry otherwise.
-  const entry = list.find(p => p.machineId === Number(machineId)) ?? list[0] ?? null;
-  renderSyncProgressBar(entry);
-}
-
-// #734 review: updateStatus() can now be triggered from three independent
-// places (the 30s setInterval, applyActiveMachineChange() on a machine
-// switch, and #733's visibilitychange refocus handler) with no ordering
-// guarantee between them. Two overlapping calls both read+mutate
-// _lastSyncProgress without synchronization -- if a machine's import
-// finishes in the gap between two in-flight calls' fetches, both can pass
-// the "entry just disappeared" check and double-fire its completion toast.
-// A plain in-flight guard turns a same-tick collision into "skip, the other
-// call's result already covers this tick" rather than a race -- the
-// skipped call's data is never more than one poll interval stale.
+// #734 review: updateStatus() can be triggered from three independent places
+// (the 30s setInterval, applyActiveMachineChange() on a machine switch, and
+// #733's visibilitychange refocus handler) with no ordering guarantee between
+// them, so a plain in-flight guard keeps overlapping calls from each running
+// a redundant fetch+render in the same tick.
 let _statusUpdateInFlight = false;
 
 // #464: an explicit machineId scopes the status-dot/hostname fields below to
@@ -150,13 +82,6 @@ export async function updateStatus(machineId?: string | number | null): Promise<
         void window.loadData();
       }
       knownShotCount = s.shotCount;
-    }
-    // #729/#730/#735: shot-import progress bar next to the shot count
-    // header. Only runs when SSE hasn't (yet, or ever) taken over for this
-    // session -- see public-src/sse.js's fallback detection.
-    if (!S.sseActive) {
-      const list = Array.isArray(s.syncProgress) ? s.syncProgress : [];
-      pollSyncProgressFallback(list, machineId);
     }
     // Token is no longer returned by /api/status — it comes from /api/token (initToken)
     // #803: exposeApiPort mirrors the add-on option of the same name (default

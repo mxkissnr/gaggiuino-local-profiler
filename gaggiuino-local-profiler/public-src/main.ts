@@ -767,14 +767,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushAutoSave();
     // #733: the 30s setInterval(updateStatus, ...) below gets throttled by
-    // the browser while the tab is backgrounded -- a shot import that both
-    // starts and finishes while the tab is hidden can end up with zero
-    // polls landing while it was still active, so status.js's per-machine
-    // _lastSyncProgress map never records it as "seen active" and the
-    // completion toast never fires. Forcing one immediate poll on refocus
-    // catches an import that's still running by then; one that already
-    // finished fully in the background is a case no client-side poll can
-    // retroactively catch (nothing else was watching either).
+    // the browser while the tab is backgrounded, so force one immediate poll
+    // on refocus to refresh the status dot/hostname/sync time without waiting
+    // for the next tick.
     //
     // #734 review: must pass S.activeMachineId through, same as
     // applyActiveMachineChange() does (#464) -- an unscoped call hits the

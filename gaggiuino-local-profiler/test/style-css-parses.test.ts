@@ -19,8 +19,6 @@ describe('public-src/style.css', () => {
     expect(() => postcss.parse(css, { from: CSS_PATH })).not.toThrow();
   });
 
-  // Slow scan over the whole stylesheet: give it more than vitest's default
-  // 5s budget, like html-sink-lint.test.ts does for its own lint pass.
   it('has no comment that closes itself early', () => {
     // Independent of the parser, and it points straight at the offending
     // line instead of at the far-away place where parsing finally gave up.
@@ -45,5 +43,5 @@ describe('public-src/style.css', () => {
       `stray "*/" at style.css:${strayLine} — a comment closed earlier than intended`,
     ).toBe(0);
     expect(open, 'style.css ends inside an unclosed comment').toBe(false);
-  }, 60000);
+  });
 });

@@ -7,9 +7,9 @@
 // connect moments later, permanently locking in the (now redundant) REST
 // polling for the rest of the session. Fixed by always starting the
 // intervals, but having their own callbacks re-check S.sseActive fresh on
-// every tick -- same self-correcting convention as status.js's
-// updateStatus()/pollSyncProgressFallback() (a 30s interval that always
-// fires, gating only its fallback-only *work* behind a fresh check).
+// every tick -- same self-correcting convention as status.js's own 30s
+// updateStatus() interval, which likewise always fires rather than deciding
+// once at startup.
 //
 // Chart.js needs a real <canvas> context this test harness doesn't provide,
 // and isn't what's under test here -- stubbed out with a minimal fake, same
