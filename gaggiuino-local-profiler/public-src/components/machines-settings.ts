@@ -98,7 +98,7 @@ const HEX_RE = /^#([0-9a-f]{6})$/i;
 function hexToRgb(hex: string | null | undefined): { r: number; g: number; b: number } | null {
   const m = HEX_RE.exec(hex || '');
   if (!m) return null;
-  const n = parseInt(m[1], 16);
+  const n = parseInt(m[1] ?? '', 16);
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
@@ -228,7 +228,8 @@ export async function loadMachines(): Promise<void> {
     // S.machines' MachineRecord requires one, so this narrowing stays forced.
     setState('machines', machines as unknown as MachineRecord[]);
     if (!S.activeMachineId) {
-      const def = machines.find(m => m.isDefault) || machines[0];
+      const [firstMachine] = machines;
+      const def = machines.find(m => m.isDefault) || firstMachine;
       if (def?.id != null) setActiveMachine(def.id);
     }
     renderMachinesList();
