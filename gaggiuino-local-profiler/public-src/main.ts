@@ -157,6 +157,12 @@ import { attachAutocomplete } from './components/autocomplete.js';
 
 import { BEAN_ICON_SVG } from './icons.js';
 
+declare global {
+  interface Window {
+    scheduleAutoSave?: () => void;
+  }
+}
+
 // Profile creation/editing branches to the GaggiMate editor instead of the
 // Gaggiuino one for GaggiMate machines — checked at 3 call sites below.
 function _isActiveMachineGaggiMate() {
@@ -164,7 +170,7 @@ function _isActiveMachineGaggiMate() {
 }
 
 // ── Toast helper ──────────────────────────────────────────────────────────
-function showToast(msg, duration = 3000) {
+function showToast(msg: string, duration = 3000) {
   let el = document.getElementById('glpToast');
   if (!el) {
     el = document.createElement('div');
@@ -179,10 +185,11 @@ function showToast(msg, duration = 3000) {
     ].join(';');
     document.body.appendChild(el);
   }
-  el.textContent = msg;
-  el.style.opacity = '1';
-  clearTimeout(el._t);
-  el._t = setTimeout(() => { el.style.opacity = '0'; }, duration);
+  const toast = el as HTMLElement & { _t?: ReturnType<typeof setTimeout> };
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { toast.style.opacity = '0'; }, duration);
 }
 
 // ── API token (Settings view) ──────────────────────────────────────────────
@@ -225,6 +232,13 @@ function copyApiToken() {
 // #1018: live re-resolution while 'auto' is selected -- see theme.js.
 watchSystemTheme();
 
+// Theme picker — exposed on window for HTML onclick handlers and called by
+// the #themeToggleGroup wiring inside DOMContentLoaded below.
+function setTheme(theme: string): void {
+  localStorage.setItem(THEME_STORAGE_KEY, theme);
+  applyTheme(theme);
+}
+
 // ── Expose everything on window (for HTML onclick handlers) ───────────────
 Object.assign(window, {
   // state & i18n
@@ -234,11 +248,8 @@ Object.assign(window, {
   applyTranslations,
 
   // theme
-  setTheme: (theme) => {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
-    applyTheme(theme);
-  },
-  setAccentTheme: (name) => {
+  setTheme,
+  setAccentTheme: (name: string) => {
     localStorage.setItem('glp_accent_theme', name);
     // #1019: the only thing that still applies --accent-* now -- the
     // [data-accent="..."] CSS blocks that used to pick this up on their own
@@ -255,7 +266,7 @@ Object.assign(window, {
     // preset the user actually picked, independent of this DOM attribute's
     // now-defunct original CSS purpose.
     document.documentElement.dataset.accent = name;
-    document.querySelectorAll('.accent-swatch').forEach(b =>
+    document.querySelectorAll<HTMLElement>('.accent-swatch').forEach(b =>
       b.classList.toggle('active', b.dataset.presetKey === name));
   },
 
@@ -525,20 +536,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const starRating = document.getElementById('starRating');
   if (starRating) {
     starRating.addEventListener('mouseover', e => {
-      const star = e.target.closest('.star');
+      const star = (e.target as HTMLElement).closest<HTMLElement>('.star');
       if (!star) return;
-      const val = parseInt(star.dataset.val);
-      starRating.querySelectorAll('.star').forEach(s => {
-        s.classList.toggle('hovered', parseInt(s.dataset.val) <= val);
+      const val = parseInt(star.dataset.val ?? '');
+      starRating.querySelectorAll<HTMLElement>('.star').forEach(s => {
+        s.classList.toggle('hovered', parseInt(s.dataset.val ?? '') <= val);
       });
     });
     starRating.addEventListener('mouseout', () => {
       starRating.querySelectorAll('.star').forEach(s => s.classList.remove('hovered'));
     });
     starRating.addEventListener('click', e => {
-      const star = e.target.closest('.star');
+      const star = (e.target as HTMLElement).closest<HTMLElement>('.star');
       if (!star) return;
-      const val = parseInt(star.dataset.val);
+      const val = parseInt(star.dataset.val ?? '');
       S.currentRating = S.currentRating === val ? 0 : val;
       renderStars(S.currentRating);
       if (window.scheduleAutoSave) window.scheduleAutoSave();
@@ -546,7 +557,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── annCoffee: auto-fill roast date + show bean age hint ───────────────
-  const annCoffee = document.getElementById('annCoffee');
+  const annCoffee = document.getElementById('annCoffee') as HTMLInputElement | null;
   if (annCoffee) {
     annCoffee.addEventListener('change', () => {
       const name = annCoffee.value.trim();
@@ -559,10 +570,10 @@ document.addEventListener('DOMContentLoaded', () => {
       // Prefill grinder/grind setting/dose from this bean's own history
       // (best scored combo, then known-good grind, then its last shot) —
       // never the literal previous shot, which may have used a different bean.
-      const suggested = suggestGrindDoseForBean(name, S.coffeeLibrary, S.shots, { beanId: bean.id });
-      const grinderEl = document.getElementById('annGrinder');
-      const grindEl   = document.getElementById('annGrindSetting');
-      const doseEl    = document.getElementById('annDose');
+      const suggested = suggestGrindDoseForBean(name, S.coffeeLibrary, S.shots, { beanId: bean.id as number });
+      const grinderEl = document.getElementById('annGrinder') as HTMLInputElement | null;
+      const grindEl   = document.getElementById('annGrindSetting') as HTMLInputElement | null;
+      const doseEl    = document.getElementById('annDose') as HTMLInputElement | null;
       if (suggested.grinder      && grinderEl) grinderEl.value = suggested.grinder;
       if (suggested.grindSetting && grindEl)   grindEl.value   = suggested.grindSetting;
       if (suggested.dose         && doseEl)    doseEl.value    = suggested.dose;
@@ -571,7 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const shot   = S.primaryShotId ? S.shots?.find(s => s.id === S.primaryShotId) : null;
       const shotMs = shot ? shot.timestamp * 1000 : Date.now();
       const bags   = Array.isArray(bean.bags) ? bean.bags : [];
-      let roastDate = bean.roastDate;
+      let roastDate = bean.roastDate as string | undefined;
       if (bags.length) {
         const activeBag = bags
           .filter(b => (b.openedAt || 0) <= shotMs)
@@ -587,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
       _renderFrozenPortionPills(name, shotMs, null);
 
       // Show bean age hint
-      const ageDays = calcBeanAgeAtShot(name, shot?.timestamp, bean.id);
+      const ageDays = calcBeanAgeAtShot(name, shot?.timestamp, bean.id as number);
       if (hintEl && ageDays != null) {
         hintEl.innerHTML = `${BEAN_ICON_SVG} ${t('bean_age_at_shot', ageDays)}`;
         hintEl.style.display = '';
@@ -631,8 +642,8 @@ document.addEventListener('DOMContentLoaded', () => {
   onThemeChange(() => {
     for (const key of ['chart', 'pqChart', 'fsChart', 'liveChart', 'trendChart',
                        'profileBarChart', 'profilePreviewChart', 'doseDistChart',
-                       'ratioDistChart', 'timeOfDayChart', 'dialinProgressionChart']) {
-      applyChartTheme(S[key]);
+                       'ratioDistChart', 'timeOfDayChart', 'dialinProgressionChart'] as const) {
+      applyChartTheme(S[key] as Parameters<typeof applyChartTheme>[0]);
     }
   });
 
@@ -660,9 +671,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // #969: filterShots() does 3 full DOM passes over the shot list; on a
   // large history that's too much work to redo synchronously on every
   // keystroke. Debounce so a fast typist only pays for it once per pause.
-  let _searchDebounce = null;
+  let _searchDebounce: ReturnType<typeof setTimeout> | undefined;
   document.getElementById('shotSearch')!.addEventListener('input', e => {
-    const value = e.target.value;
+    const value = (e.target as HTMLInputElement).value;
     clearTimeout(_searchDebounce);
     _searchDebounce = setTimeout(() => filterShots(value), 150);
   });
@@ -720,18 +731,18 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('exportProfileBtn')!.addEventListener('click', exportProfile);
   // Share-card format picker: toggle dropdown, pick format on option click
   document.getElementById('shareCardBtn')!.addEventListener('click', () => {
-    const menu = document.getElementById('cardFmtMenu');
+    const menu = document.getElementById('cardFmtMenu')!;
     menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
   });
   document.getElementById('cardFmtMenu')!.addEventListener('click', e => {
-    const opt = e.target.closest('.card-fmt-opt');
+    const opt = (e.target as HTMLElement).closest<HTMLElement>('.card-fmt-opt');
     if (!opt) return;
-    document.getElementById('cardFmtMenu').style.display = 'none';
-    shareCard(opt.dataset.format);
+    document.getElementById('cardFmtMenu')!.style.display = 'none';
+    shareCard(opt.dataset.format!);
   });
   document.addEventListener('click', e => {
-    if (!document.getElementById('cardFmtWrap').contains(e.target))
-      document.getElementById('cardFmtMenu').style.display = 'none';
+    if (!document.getElementById('cardFmtWrap')!.contains(e.target as Node))
+      document.getElementById('cardFmtMenu')!.style.display = 'none';
   });
   document.getElementById('tabZeit')!.addEventListener('click', () => switchChartTab('zeit'));
   document.getElementById('tabPQ')!.addEventListener('click', () => switchChartTab('pq'));
@@ -741,18 +752,18 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('closeFullscreenBtn')!.addEventListener('click', closeChartFullscreen);
   document.getElementById('quickCloneBtn')!.addEventListener('click', quickClone);
   document.getElementById('annPhotoPickBtn')!.addEventListener('click', () => document.getElementById('annPhotoInput')!.click());
-  document.getElementById('annPhotoInput')!.addEventListener('change', function () { uploadShotImage(this); });
+  document.getElementById('annPhotoInput')!.addEventListener('change', function (this: HTMLInputElement) { uploadShotImage(this); });
   document.getElementById('annPhotoRemoveBtn')!.addEventListener('click', removeShotImage);
   document.getElementById('annPhotoThumb')!.addEventListener('click', openShotPhotoLightbox);
   // #430: no more explicit Save button — auto-save on input, flushed
   // immediately on blur (leaving the field) and on page hide/mode-switch
   // (below) so a pending debounced save is never silently dropped.
   ['annCoffee','annGrinder','annGrindSetting','annDose','annTds','annNotes'].forEach(id => {
-    const el = document.getElementById(id);
+    const el = document.getElementById(id)!;
     el.addEventListener('input', scheduleAutoSave);
     el.addEventListener('blur', flushAutoSave);
   });
-  attachAutocomplete(document.getElementById('annGrinder'), () => S.coffeeLibrary.grinders.map(g => g.name));
+  attachAutocomplete(document.getElementById('annGrinder') as HTMLInputElement | null, () => S.coffeeLibrary.grinders.map(g => g.name));
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushAutoSave();
     // #733: the 30s setInterval(updateStatus, ...) below gets throttled by
@@ -776,7 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('openMaintLogBtn')!.addEventListener('click', openMaintLogForm);
   document.getElementById('submitMaintLogBtn')!.addEventListener('click', submitMaintLogEntry);
   document.getElementById('cancelMaintLogBtn')!.addEventListener('click', closeMaintLogForm);
-  document.getElementById('ordersEnabledToggle')!.addEventListener('change', e => setOrdersEnabled(e.target.checked));
+  document.getElementById('ordersEnabledToggle')!.addEventListener('change', e => setOrdersEnabled((e.target as HTMLInputElement).checked));
   document.getElementById('ordersMenuTitle')!.addEventListener('click', toggleOrdersMenu);
   document.getElementById('ordersStatsTitle')!.addEventListener('click', toggleOrdersStats);
   document.getElementById('ordersNotifyTitle')!.addEventListener('click', toggleOrdersNotify);
@@ -790,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('saveBeanBtn')!.addEventListener('click', saveBean);
   document.getElementById('saveBeanNoBagBtn')!.addEventListener('click', saveBeanNoBag);
   document.getElementById('saveBeanAddBagBtn')!.addEventListener('click', saveBeanAddBag);
-  document.getElementById('beanAddTrigger')!.addEventListener('click', openBeanForm);
+  document.getElementById('beanAddTrigger')!.addEventListener('click', () => openBeanForm());
   document.getElementById('openScanModalBtn')!.addEventListener('click', openScanModal);
   document.getElementById('toggleUrlImportBtn')!.addEventListener('click', toggleUrlImport);
   document.getElementById('urlImportInput')!.addEventListener('keydown', e => { if (e.key === 'Enter') importFromUrl(); });
@@ -800,19 +811,19 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('importSettingsDomainInput')!.addEventListener('keydown', e => { if (e.key === 'Enter') addCustomShopifyDomain(); });
   document.getElementById('closeGrinderFormBtn')!.addEventListener('click', closeGrinderForm);
   document.getElementById('saveGrinderBtn')!.addEventListener('click', saveGrinder);
-  document.getElementById('grinderAddTrigger')!.addEventListener('click', openGrinderForm);
+  document.getElementById('grinderAddTrigger')!.addEventListener('click', () => openGrinderForm());
   document.getElementById('grinderFormImagePickBtn')!.addEventListener('click', () => document.getElementById('grinderFormImage')!.click());
-  document.getElementById('grinderFormImage')!.addEventListener('change', function () {
+  document.getElementById('grinderFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
     if (S.grinderEditId) uploadGrinderImage(S.grinderEditId, this);
   });
   document.getElementById('beanFormImagePickBtn')!.addEventListener('click', () => document.getElementById('beanFormImage')!.click());
-  document.getElementById('beanFormImage')!.addEventListener('change', function () {
+  document.getElementById('beanFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
     if (S.beanEditId) uploadBeanImage(S.beanEditId, this);
   });
   document.getElementById('addRecipeStepBtn')!.addEventListener('click', addRecipeStep);
   document.getElementById('closeRecipeFormBtn')!.addEventListener('click', closeRecipeForm);
   document.getElementById('saveRecipeBtn')!.addEventListener('click', saveRecipe);
-  document.getElementById('recipeAddTrigger')!.addEventListener('click', openRecipeForm);
+  document.getElementById('recipeAddTrigger')!.addEventListener('click', () => openRecipeForm());
   document.getElementById('closeMilkFormBtn')!.addEventListener('click', closeMilkForm);
   document.getElementById('saveMilkBtn')!.addEventListener('click', saveMilk);
   document.getElementById('milkAddTrigger')!.addEventListener('click', openMilkForm);
@@ -820,16 +831,16 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('libTabPuckScreens')!.addEventListener('click', () => switchLibTab('puckscreens'));
   document.getElementById('closeBasketFormBtn')!.addEventListener('click', closeBasketForm);
   document.getElementById('saveBasketBtn')!.addEventListener('click', saveBasket);
-  document.getElementById('basketAddTrigger')!.addEventListener('click', openBasketForm);
+  document.getElementById('basketAddTrigger')!.addEventListener('click', () => openBasketForm());
   document.getElementById('basketFormImagePickBtn')!.addEventListener('click', () => document.getElementById('basketFormImage')!.click());
-  document.getElementById('basketFormImage')!.addEventListener('change', function () {
+  document.getElementById('basketFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
     if (S.basketEditId) uploadBasketImage(S.basketEditId, this);
   });
   document.getElementById('closePuckScreenFormBtn')!.addEventListener('click', closePuckScreenForm);
   document.getElementById('savePuckScreenBtn')!.addEventListener('click', savePuckScreen);
-  document.getElementById('puckScreenAddTrigger')!.addEventListener('click', openPuckScreenForm);
+  document.getElementById('puckScreenAddTrigger')!.addEventListener('click', () => openPuckScreenForm());
   document.getElementById('puckScreenFormImagePickBtn')!.addEventListener('click', () => document.getElementById('puckScreenFormImage')!.click());
-  document.getElementById('puckScreenFormImage')!.addEventListener('change', function () {
+  document.getElementById('puckScreenFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
     if (S.puckScreenEditId) uploadPuckScreenImage(S.puckScreenEditId, this);
   });
   document.getElementById('annBasket')!.addEventListener('change', scheduleAutoSave);
@@ -847,13 +858,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // current DOM state (same DOM-as-state source of truth as _collectPhases()).
   document.getElementById('profileEditorModal')!.addEventListener('input', renderProfilePreviewChart);
   document.getElementById('profileEditorModal')!.addEventListener('change', renderProfilePreviewChart);
-  document.getElementById('refShotSelect')!.addEventListener('change', e => onRefShotChange(e.target.value));
+  document.getElementById('refShotSelect')!.addEventListener('change', e => onRefShotChange((e.target as HTMLInputElement).value));
   document.getElementById('refClearBtn')!.addEventListener('click', clearReferenceShot);
   document.getElementById('trendBtn30')!.addEventListener('click', () => setTrendWindow(30));
   document.getElementById('trendBtn90')!.addEventListener('click', () => setTrendWindow(90));
   document.getElementById('trendBtnAll')!.addEventListener('click', () => setTrendWindow(0));
   document.getElementById('dialinCount')!.addEventListener('change', e => {
-    localStorage.setItem('glp_dialin_count', e.target.value);
+    localStorage.setItem('glp_dialin_count', (e.target as HTMLInputElement).value);
     renderDialin();
   });
   // #1018: scoped to #themeToggleGroup, not the bare .theme-btn class --
@@ -861,24 +872,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // has no data-theme-val, so an unscoped query used to also wire this click
   // handler onto it, calling setTheme(undefined) and silently corrupting the
   // stored theme (neither Dark nor Light showed .active afterwards).
-  document.querySelectorAll('#themeToggleGroup .theme-btn').forEach(btn => {
-    // eslint-disable-next-line no-undef -- setTheme is assigned onto window above (Object.assign), resolves as a global at runtime
-    btn.addEventListener('click', () => setTheme(btn.dataset.themeVal));
+  document.querySelectorAll<HTMLElement>('#themeToggleGroup .theme-btn').forEach(btn => {
+    btn.addEventListener('click', () => setTheme(btn.dataset.themeVal!));
   });
-  document.querySelectorAll('.lang-option-btn').forEach(btn => {
-    btn.addEventListener('click', () => setLang(btn.dataset.lang));
+  document.querySelectorAll<HTMLElement>('.lang-option-btn').forEach(btn => {
+    btn.addEventListener('click', () => setLang(btn.dataset.lang!));
   });
   // Cancel/confirm handlers are wired fresh by openBackupExportModal()/
   // openBackupRestoreModal() every time the modal opens (see
   // components/backup-modal.js) -- no separate wiring needed here, same
   // convention #scanModal uses (its "Schließen" button is wired once, in
   // main.js, but this modal's actions depend on which flow opened it).
-  document.getElementById('backupRestoreInput')!.addEventListener('change', e => openBackupRestoreModal(e.target));
+  document.getElementById('backupRestoreInput')!.addEventListener('change', e => openBackupRestoreModal(e.target as HTMLInputElement));
   document.getElementById('backupDownloadBtn')!.addEventListener('click', openBackupExportModal);
   document.getElementById('devExportDbBtn')?.addEventListener('click', exportDevDb);
   document.getElementById('devImportDbInput')?.addEventListener('change', e => {
-    importDevDb(e.target.files[0]);
-    e.target.value = '';
+    const input = e.target as HTMLInputElement;
+    importDevDb(input.files[0]);
+    input.value = '';
   });
   document.getElementById('apiTokenCopyBtn')!.addEventListener('click', copyApiToken);
   document.getElementById('addMachineBtn')?.addEventListener('click', () => openMachineForm(null));
@@ -887,14 +898,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('machineFormTestBtn')?.addEventListener('click', testMachineForm);
   document.getElementById('restartSetupWizardBtn')?.addEventListener('click', () => openSetupWizard());
   document.getElementById('setupWizardModal')?.addEventListener('click', e => {
-    if (e.target.id === 'setupWizardModal') closeSetupWizard();
+    if ((e.target as HTMLElement).id === 'setupWizardModal') closeSetupWizard();
   });
   document.getElementById('machineFormType')?.addEventListener('change', onMachineTypeChange);
   document.getElementById('machineThemeCustomA')?.addEventListener('input', onThemeCustomColorAChange);
   document.getElementById('machineThemeCustomB')?.addEventListener('input', onThemeCustomColorBChange);
   document.getElementById('machineThemeGradientToggle')?.addEventListener('change', onThemeGradientToggleChange);
-  document.querySelectorAll('#mqttTransportToggle [data-mqtt-transport]').forEach(btn => {
-    btn.addEventListener('click', () => setMqttTransport(btn.dataset.mqttTransport));
+  document.querySelectorAll<HTMLElement>('#mqttTransportToggle [data-mqtt-transport]').forEach(btn => {
+    btn.addEventListener('click', () => setMqttTransport(btn.dataset.mqttTransport!));
   });
   document.getElementById('mqttSaveBtn')?.addEventListener('click', saveMqttSettings);
   document.getElementById('mqttApplyToMachineBtn')?.addEventListener('click', applyMqttToMachine);
@@ -904,17 +915,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
   document.getElementById('flavorWheelModal')?.addEventListener('click', e => {
-    if (e.target.id === 'flavorWheelModal') closeFlavorWheel();
+    if ((e.target as HTMLElement).id === 'flavorWheelModal') closeFlavorWheel();
   });
   document.getElementById('annRecipe')?.addEventListener('change', scheduleAutoSave);
 
   // ── Global click delegation for dynamic content ────────────────────────
   document.body.addEventListener('click', e => {
-    const el = e.target.closest('[data-action]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!el) return;
-    const action = el.dataset.action;
+    const action = el.dataset.action!;
     const numId = () => Number(el.dataset.id);
-    const strId = () => el.dataset.id;
+    const strId = (): string => el.dataset.id as string;
     // GaggiMate profile editor actions all share one prefix — route by that
     // instead of listing all 18 action names as switch cases.
     if (action.startsWith('gm-')) { handleGmEditorAction(action, el); return; }
@@ -961,11 +972,11 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'delete-puckscreen':  deletePuckScreen(numId()); break;
       case 'edit-profile':
         if (_isActiveMachineGaggiMate()) openGaggiMateProfileEditor(strId());
-        else editProfile(numId());
+        else editProfile(String(numId()));
         break;
       case 'duplicate-profile':
         if (_isActiveMachineGaggiMate()) duplicateGaggiMateProfile(strId());
-        else duplicateProfile(numId());
+        else duplicateProfile(String(numId()));
         break;
       case 'delete-profile':        deleteMachineProfile(strId()); break;
       case 'remove-profile-phase':  removeProfilePhase(Number(el.dataset.idx)); break;
@@ -982,17 +993,17 @@ document.addEventListener('DOMContentLoaded', () => {
       // #807: the "why is this empty" notices (in-view block and app-wide
       // banner, components/api-port-notice.js) both link here.
       case 'goto-settings':      switchMode('settings'); break;
-      case 'set-maint-mode':     setMaintMode(el.dataset.task, el.dataset.mode, el.dataset.machineId, el.dataset.currentShots, el.dataset.currentDays, el.dataset.currentG); break;
-      case 'mark-maint-done':    markMaintDone(el.dataset.task, el.dataset.machineId); break;
-      case 'open-guided-maint':  openGuidedMaint(el.dataset.task, el.dataset.machineId); break;
-      case 'toggle-maint-disabled': toggleMaintDisabled(el.dataset.task, el.dataset.machineId, el.dataset.disabled === 'true'); break;
+      case 'set-maint-mode':     setMaintMode(el.dataset.task!, el.dataset.mode!, el.dataset.machineId, el.dataset.currentShots, el.dataset.currentDays, el.dataset.currentG); break;
+      case 'mark-maint-done':    markMaintDone(el.dataset.task!, el.dataset.machineId); break;
+      case 'open-guided-maint':  openGuidedMaint(el.dataset.task!, el.dataset.machineId!); break;
+      case 'toggle-maint-disabled': toggleMaintDisabled(el.dataset.task!, el.dataset.machineId, el.dataset.disabled === 'true'); break;
       case 'add-custom-maint-task':  addCustomMaintTask(el.dataset.machineId); break;
-      case 'delete-custom-maint-task': deleteCustomMaintTask(el.dataset.task, el.dataset.machineId); break;
+      case 'delete-custom-maint-task': deleteCustomMaintTask(el.dataset.task!, el.dataset.machineId); break;
       case 'guided-maint-done':  submitGuidedMaint(); break;
       case 'guided-maint-cancel': closeGuidedMaint(); break;
-      case 'set-maint-scope':    setMaintScope(el.dataset.scope); break;
+      case 'set-maint-scope':    setMaintScope(el.dataset.scope!); break;
       case 'toggle-maint-detail': el.closest('.maint-card')?.classList.toggle('expanded'); break;
-      case 'set-bean-rank-sort': setBeanRankSort(el.dataset.key); break;
+      case 'set-bean-rank-sort': setBeanRankSort(el.dataset.key as Parameters<typeof setBeanRankSort>[0]); break;
       case 'open-flavor-wheel':   openFlavorWheel(numId()); break;
       case 'close-flavor-wheel':  closeFlavorWheel(); break;
       case 'zoom-flavor-wheel':   zoomFlavorWheelTo(strId()); break;
@@ -1022,23 +1033,23 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.body.addEventListener('change', e => {
-    if (e.target.classList?.contains('guided-maint-check')) { updateGuidedMaintDoneState(); return; }
-    const el = e.target.closest('[data-action]');
+    if ((e.target as HTMLElement).classList?.contains('guided-maint-check')) { updateGuidedMaintDoneState(); return; }
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!el) return;
     if (el.dataset.action === 'save-maint-threshold') {
-      saveMaintThreshold(el.dataset.task, el.dataset.field, el.value, el.dataset.machineId);
+      saveMaintThreshold(el.dataset.task!, el.dataset.field!, (el as HTMLInputElement).value, el.dataset.machineId);
     }
     if (el.dataset.action === 'rename-maint-label') {
-      renameCustomMaintTask(el.dataset.task, el.value, el.dataset.machineId);
+      renameCustomMaintTask(el.dataset.task!, (el as HTMLInputElement).value, el.dataset.machineId);
     }
     if (el.dataset.action === 'dialin-grinder-select') {
       dialinGrinderChange();
     }
     if (el.dataset.action === 'switch-machine') {
-      switchActiveMachine(el.value);
+      switchActiveMachine((el as HTMLInputElement).value);
     }
     if (el.dataset.action === 'dialin-progression-bean-change') {
-      setDialinProgressionBean(el.value);
+      setDialinProgressionBean((el as HTMLInputElement).value);
     }
   });
 
@@ -1053,12 +1064,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // fallback EventSource itself can't send as a header), hence after
     // initToken() resolves. `onFallback` is a no-op here -- the PR 2
     // follow-up (Live view over the same stream) extends it.
-    onEvent(EVENTS.SYNC_PROGRESS, handleSyncProgressEvent);
-    onEvent(EVENTS.SYNC_COMPLETE, handleSyncCompleteEvent);
+    onEvent(EVENTS.SYNC_PROGRESS, data => handleSyncProgressEvent(data as Parameters<typeof handleSyncProgressEvent>[0]));
+    onEvent(EVENTS.SYNC_COMPLETE, data => handleSyncCompleteEvent(data as Parameters<typeof handleSyncCompleteEvent>[0]));
     // #736: Live view telemetry/preheat push -- same bootstrap-time wiring
     // as the sync-progress events above.
-    onEvent(EVENTS.LIVE_SNAPSHOT, handleLiveSnapshotEvent);
-    onEvent(EVENTS.PREHEAT_UPDATE, handlePreheatUpdateEvent);
+    onEvent(EVENTS.LIVE_SNAPSHOT, data => handleLiveSnapshotEvent(data as Parameters<typeof handleLiveSnapshotEvent>[0]));
+    onEvent(EVENTS.PREHEAT_UPDATE, data => handlePreheatUpdateEvent(data as Parameters<typeof handlePreheatUpdateEvent>[0]));
     // #837: the topbar's ambient machine icon -- a second, independent
     // listener for the same two event types (see components/
     // topbar-machine-icon.js's module doc comment for why it doesn't just
