@@ -1,11 +1,11 @@
 import { S }                              from '../../state/index.js';
-import type { LibraryRow }                from '../../state/index.js';
-import { t }                              from '../../i18n.js';
+import type { LibraryRow, ShotMeta } from '../../state/index.js';
+import { t, tHtml }                       from '../../i18n.js';
 import { getMenu }                        from '../../api/system.js';
 import { deductMilk, adjustFrozenPortion, listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, postShotImage, deleteShotImage } from '../../api/shots.js';
 import type { ShotAnnotation, ShotDefaults } from '../../api/types.js';
-import { esc, germanToIso }               from '../../utils.js';
+import { esc, germanToIso, html, joinHtml } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { calcBeanAgeAtShot, _roastDateFromLibrary } from './utils.js';
 import { suggestGrindDoseForBean } from './grind.js';
@@ -51,6 +51,14 @@ interface AnnotationShot {
   annotation?: AnnotationData | null | undefined;
 }
 
+// S.shots is typed metadata-only (ShotMeta); this view reads the annotation
+// fields through this alias, same pattern as analytics.ts's _shots().
+interface AnnotationShotRow extends ShotMeta {
+  image?: string | null;
+  annotation?: AnnotationData | null | undefined;
+}
+function _shots(): AnnotationShotRow[] { return S.shots; }
+
 // What _buildAnnotationPayload() posts. Matches api/types.ts's ShotAnnotation
 // except for the nullable fields the hand-maintained type (see its header) and
 // the generated Annotation schema still type as non-nullable.
@@ -73,8 +81,8 @@ interface AnnotationPayload {
   frozenPortionId: number | null;
 }
 
-interface DrinkRow { id: string; name?: string; emoji?: string; milkMl?: number }
-interface MilkRow { id: number; name?: string; emoji?: string }
+interface DrinkRow extends LibraryRow { id: string; name?: string; emoji?: string; milkMl?: number }
+interface MilkRow extends LibraryRow { id: number; name?: string; emoji?: string }
 interface CatalogRow { id: number; name: string }
 interface CatalogLibrary {
   beans?: LibraryRow[];
@@ -110,7 +118,7 @@ export function _maybeDeductMilk(shot: AnnotationShot | undefined, payload: Anno
   const prevDrinkType = shot?.annotation?.drinkType ?? null;
   if (!payload.milkType || !payload.drinkType) return;
   if (payload.milkType === prevMilkType && payload.drinkType === prevDrinkType) return;
-  const menuItem = ((S.drinkMenu || []) as unknown as DrinkRow[]).find(m => m.id === payload.drinkType);
+  const menuItem = ((S.drinkMenu || []) as DrinkRow[]).find(m => m.id === payload.drinkType);
   const milkMl = menuItem?.milkMl;
   if (!(milkMl && milkMl > 0)) return;
   deductMilk(payload.milkType, milkMl).then(updated => {
@@ -222,7 +230,7 @@ function _setAutoSaveStatus(state: AutoSaveState): void {
     status.textContent = t('autosave_pending');
     status.classList.add('visible');
   } else if (state === 'saved') {
-    status.innerHTML = `${CHECK_ICON_SVG} ${esc(t('autosave_saved'))}`;
+    status.innerHTML = html`${CHECK_ICON_SVG} ${esc(t('autosave_saved'))}`;
     status.classList.add('visible');
     status._hideTimer = setTimeout(() => status.classList.remove('visible'), 1800);
   } else {
@@ -233,9 +241,12 @@ function _setAutoSaveStatus(state: AutoSaveState): void {
 async function _performAnnotationSave(): Promise<void> {
   if (!S.primaryShotId) return;
   const id   = S.primaryShotId;
-  const shot = S.shots.find(s => s.id === id) as unknown as AnnotationShot | undefined;
+  const shot = _shots().find(s => s.id === id);
   const payload = _buildAnnotationPayload(shot);
   try {
+    // TODO(#1103): the generated Annotation schema types roastDate/coffee/
+    // grinder/notes as non-null while AnnotationPayload allows null (see its
+    // header), so this forced cast stays until the spec makes them nullable.
     const r = await annotateShot(id, payload as unknown as ShotAnnotation);
     if (r.ok) {
       _maybeDeductMilk(shot, payload);
@@ -300,7 +311,7 @@ export async function loadShotDefaults(): Promise<void> {
 // this only changes what the form starts out showing.
 export function _applyShotDefaults(ann: AnnotationData | null | undefined): AnnotationData | null | undefined {
   if (ann && Object.keys(ann).length > 0) return ann;
-  const d = S.shotDefaults as unknown as Partial<ShotDefaults> | null;
+  const d = S.shotDefaults as Partial<ShotDefaults> | null;
   if (!d) return ann;
   return {
     drinkType:    d.drinkType    || null,
@@ -324,11 +335,11 @@ export function _renderDrinkPills(selectedId: string): void {
   const container = document.getElementById('drinkPillsContainer');
   const hidden    = document.getElementById('annDrinkType') as HTMLInputElement | null;
   if (!container) return;
-  if (!S.drinkMenu?.length) { container.innerHTML = ''; return; }
-  container.innerHTML = (S.drinkMenu as unknown as DrinkRow[]).map(m =>
-    `<button type="button" class="drink-pill${selectedId === m.id ? ' active' : ''}"
+  if (!S.drinkMenu?.length) { container.innerHTML = html``; return; }
+  container.innerHTML = joinHtml((S.drinkMenu as DrinkRow[]).map(m =>
+    html`<button type="button" class="drink-pill${esc(selectedId === m.id ? ' active' : '')}"
       data-action="select-drink" data-id="${esc(m.id)}">${esc(m.emoji)} ${esc(m.name)}</button>`
-  ).join('');
+  ));
   if (hidden) hidden.value = selectedId || '';
 }
 
@@ -345,11 +356,11 @@ export function _renderMilkPills(selectedId: string): void {
   const container = document.getElementById('milkPillsContainer');
   const hidden    = document.getElementById('annMilkType') as HTMLInputElement | null;
   if (!container) return;
-  if (!S.milkTypes?.length) { container.innerHTML = ''; return; }
-  container.innerHTML = (S.milkTypes as unknown as MilkRow[]).map(m =>
-    `<button type="button" class="drink-pill${selectedId === String(m.id) ? ' active' : ''}"
+  if (!S.milkTypes?.length) { container.innerHTML = html``; return; }
+  container.innerHTML = joinHtml((S.milkTypes as MilkRow[]).map(m =>
+    html`<button type="button" class="drink-pill${esc(selectedId === String(m.id) ? ' active' : '')}"
       data-action="select-milk" data-id="${esc(String(m.id))}">${esc(m.emoji || '🥛')} ${esc(m.name)}</button>`
-  ).join('');
+  ));
   if (hidden) hidden.value = selectedId || '';
 }
 
@@ -388,7 +399,7 @@ export function _renderFrozenPortionPills(beanName: string | null, shotMs: numbe
   if (!field || !container || !hidden) return;
   const bean = beanName ? S.coffeeLibrary?.beans?.find(b => b.name === beanName) : null;
   const portions = _activeFrozenPortionsForBean(bean, shotMs ?? Date.now());
-  if (!portions.length) { field.style.display = 'none'; container.innerHTML = ''; hidden.value = ''; return; }
+  if (!portions.length) { field.style.display = 'none'; container.innerHTML = html``; hidden.value = ''; return; }
   field.style.display = '';
   const locale = localeFor(S.currentLang);
   const selected = selectedId != null ? String(selectedId) : '';
@@ -401,9 +412,9 @@ export function _renderFrozenPortionPills(beanName: string | null, shotMs: numbe
     // portion count and date, and by the icon on the badge itself.
     return { id: String(p.id), label: `${remaining}/${p.portionCount} · ${dateStr}` };
   })];
-  container.innerHTML = options.map(o =>
-    `<button type="button" class="drink-pill${selected === o.id ? ' active' : ''}" data-action="select-frozen-portion" data-id="${esc(o.id)}">${esc(o.label)}</button>`
-  ).join('');
+  container.innerHTML = joinHtml(options.map(o =>
+    html`<button type="button" class="drink-pill${esc(selected === o.id ? ' active' : '')}" data-action="select-frozen-portion" data-id="${esc(o.id)}">${esc(o.label)}</button>`
+  ));
   hidden.value = selected;
 }
 
@@ -441,9 +452,9 @@ export function renderGrinderField(selectId: string, otherId: string, currentVal
   const grinders    = S.coffeeLibrary?.grinders || [];
   const knownNames  = new Set(grinders.map(g => g.name));
   const isOther     = !!currentValue && !knownNames.has(currentValue);
-  select.innerHTML = grinders.map(g =>
-    `<option value="${esc(g.name as string)}"${!isOther && currentValue === g.name ? ' selected' : ''}>${esc(g.name as string)}</option>`
-  ).join('') + `<option value="__other__"${isOther ? ' selected' : ''}>${t('dialin_wizard_grinder_other')}</option>`;
+  select.innerHTML = html`${joinHtml(grinders.map(g =>
+    html`<option value="${esc(g.name as string)}"${esc(!isOther && currentValue === g.name ? ' selected' : '')}>${esc(g.name as string)}</option>`
+  ))}<option value="__other__"${esc(isOther ? ' selected' : '')}>${tHtml('dialin_wizard_grinder_other')}</option>`;
   if (other) {
     other.style.display = isOther ? '' : 'none';
     other.value = isOther ? currentValue : '';
@@ -553,14 +564,14 @@ function _fillIdSelect(select: HTMLSelectElement, noneLabel: string, items: Libr
 export function _renderBasketSelect(selectedId: number | null, selectId = 'annBasket'): void {
   const select = document.getElementById(selectId) as HTMLSelectElement | null;
   if (!select) return;
-  const lib = (S.coffeeLibrary || {}) as unknown as CatalogLibrary;
+  const lib: CatalogLibrary = S.coffeeLibrary;
   _fillIdSelect(select, t('ann_basket_none'), lib.baskets || [], selectedId, 'basketId');
 }
 
 export function _renderPuckScreenSelect(selectedId: number | null, selectId = 'annPuckScreen'): void {
   const select = document.getElementById(selectId) as HTMLSelectElement | null;
   if (!select) return;
-  const lib = (S.coffeeLibrary || {}) as unknown as CatalogLibrary;
+  const lib: CatalogLibrary = S.coffeeLibrary;
   _fillIdSelect(select, t('ann_puckscreen_none'), lib.puckScreens || [], selectedId, 'puckscreenId');
 }
 
@@ -568,7 +579,7 @@ export function _renderRecipeSelect(selectedId: number | null, fieldId = 'recipe
   const field  = document.getElementById(fieldId);
   const select = document.getElementById(selectId) as HTMLSelectElement | null;
   if (!field || !select) return;
-  const lib = (S.coffeeLibrary || {}) as unknown as CatalogLibrary;
+  const lib: CatalogLibrary = S.coffeeLibrary;
   const recipes = lib.recipes || [];
   if (!recipes.length) { field.style.display = 'none'; return; }
   field.style.display = '';
@@ -620,7 +631,7 @@ export function updateDegassing(val: string | null | undefined): void {
 
 // ── Shot photo ────────────────────────────────────────────────────────────
 
-function _renderShotPhoto(shot: AnnotationShot): void {
+function _renderShotPhoto(shot: { id: number; image?: string | null | undefined }): void {
   const thumb  = document.getElementById('annPhotoThumb') as HTMLImageElement;
   const remove = document.getElementById('annPhotoRemoveBtn') as HTMLElement;
   if (!thumb || !remove) return;
@@ -662,7 +673,7 @@ export async function uploadShotImage(input: HTMLInputElement): Promise<void> {
   const idx = S.shots.findIndex(s => s.id === id);
   if (idx !== -1) S.shots[idx].image = saved.image;
   invalidateShotImage(id);
-  _renderShotPhoto(saved as unknown as AnnotationShot);
+  _renderShotPhoto({ id, image: saved.image });
   renderSidebar();
   updateSidebarHighlighting();
 }
@@ -705,7 +716,7 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
     const ob = ann.orderedBy;
     if (ob?.customer) {
       const drink = ob.item ? (ob.variant ? `${ob.item} · ${ob.variant}` : ob.item) : null;
-      badge.innerHTML = `${COFFEE_ICON_SVG} ${esc(ob.customer)}${drink ? ` · ${esc(drink)}` : ''}${ob.note ? ` · ${esc(ob.note)}` : ''}`;
+      badge.innerHTML = html`${COFFEE_ICON_SVG} ${esc(ob.customer)}${drink ? html` · ${esc(drink)}` : esc('')}${ob.note ? html` · ${esc(ob.note)}` : esc('')}`;
       badge.style.display = '';
     } else {
       badge.style.display = 'none';
@@ -716,10 +727,10 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
 export function quickClone(): void {
   const primaryId = S.primaryShotId;
   if (!primaryId) return;
-  const prev = (S.shots as unknown as AnnotationShot[]).filter(s => s.id < primaryId).sort((a, b) => b.id - a.id)[0];
+  const prev = _shots().filter(s => s.id < primaryId).sort((a, b) => b.id - a.id)[0];
   if (!prev) return;
   const ann         = prev.annotation || {};
-  const currentShot = (S.shots as unknown as AnnotationShot[]).find(s => s.id === primaryId);
+  const currentShot = _shots().find(s => s.id === primaryId);
   // Prefer the currently-viewed shot's own bean when it already has one
   // annotated — only fall back to the previous shot's bean otherwise (#389).
   const currentAnn   = currentShot?.annotation || {};
