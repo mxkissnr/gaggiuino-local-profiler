@@ -1,9 +1,3 @@
-// @ts-nocheck -- renamed from main.js (TypeScript migration package A1,
-// #1106) without converting its contents: it still imports untyped .js
-// modules, and strict mode's any-propagation would error on nearly every
-// line until those are migrated too. Remove once main.ts's own imports are
-// converted (a later package) -- see eslint.config.js's matching block.
-
 import './style.css';
 
 // One-time cleanup for the v1.102.0 service worker (reverted in v1.102.1):
@@ -661,48 +655,48 @@ document.addEventListener('DOMContentLoaded', () => {
   renderAccentSwatches();
 
   // ── Static element wiring ──────────────────────────────────────────────
-  document.getElementById('collapseBtn').addEventListener('click', toggleDesktopSidebar);
-  document.getElementById('expandSidebarBtn').addEventListener('click', toggleDesktopSidebar);
+  document.getElementById('collapseBtn')!.addEventListener('click', toggleDesktopSidebar);
+  document.getElementById('expandSidebarBtn')!.addEventListener('click', toggleDesktopSidebar);
   // #969: filterShots() does 3 full DOM passes over the shot list; on a
   // large history that's too much work to redo synchronously on every
   // keystroke. Debounce so a fast typist only pays for it once per pause.
   let _searchDebounce = null;
-  document.getElementById('shotSearch').addEventListener('input', e => {
+  document.getElementById('shotSearch')!.addEventListener('input', e => {
     const value = e.target.value;
     clearTimeout(_searchDebounce);
     _searchDebounce = setTimeout(() => filterShots(value), 150);
   });
-  document.getElementById('sortNewest').addEventListener('click', () => setSortMode('newest'));
-  document.getElementById('sortScore').addEventListener('click', () => setSortMode('score'));
-  document.getElementById('sortRating').addEventListener('click', () => setSortMode('rating'));
-  document.getElementById('sortDur').addEventListener('click', () => setSortMode('duration'));
-  document.getElementById('trash-toggle').addEventListener('click', toggleTrash);
-  document.getElementById('powerBtn').addEventListener('click', toggleMachinePower);
+  document.getElementById('sortNewest')!.addEventListener('click', () => setSortMode('newest'));
+  document.getElementById('sortScore')!.addEventListener('click', () => setSortMode('score'));
+  document.getElementById('sortRating')!.addEventListener('click', () => setSortMode('rating'));
+  document.getElementById('sortDur')!.addEventListener('click', () => setSortMode('duration'));
+  document.getElementById('trash-toggle')!.addEventListener('click', toggleTrash);
+  document.getElementById('powerBtn')!.addEventListener('click', toggleMachinePower);
   // #914: mobile topbar duplicate of #powerBtn -- see index.html comment.
-  document.getElementById('railPowerBtn').addEventListener('click', toggleMachinePower);
-  document.getElementById('syncBtn').addEventListener('click', triggerSync);
-  document.getElementById('onboardingDemoBtn').addEventListener('click', loadDemoData);
-  document.getElementById('glpDemoEndBtn').addEventListener('click', endDemo);
+  document.getElementById('railPowerBtn')!.addEventListener('click', toggleMachinePower);
+  document.getElementById('syncBtn')!.addEventListener('click', triggerSync);
+  document.getElementById('onboardingDemoBtn')!.addEventListener('click', loadDemoData);
+  document.getElementById('glpDemoEndBtn')!.addEventListener('click', endDemo);
   // ── Desktop topbar nav (#424) — same ids as the old #rail/#mode-bar
   // buttons, just relocated+restyled markup, so switchMode()'s active-state
   // toggling and status.js's live/orders visibility gating both keep
   // working unchanged.
-  document.getElementById('btnLive').addEventListener('click', () => switchMode('live'));
-  document.getElementById('btnShots').addEventListener('click', () => switchMode('shots'));
-  document.getElementById('btnAnalytics').addEventListener('click', () => switchMode('analytics'));
-  document.getElementById('btnDialin').addEventListener('click', () => switchMode('dialin'));
-  document.getElementById('btnLibrary').addEventListener('click', () => switchMode('library'));
-  document.getElementById('btnMaintenance').addEventListener('click', () => switchMode('maintenance'));
-  document.getElementById('btnAchievements').addEventListener('click', () => switchMode('achievements'));
-  document.getElementById('btnOrders').addEventListener('click', () => switchMode('orders'));
-  document.getElementById('btnSettings').addEventListener('click', () => switchMode('settings'));
+  document.getElementById('btnLive')!.addEventListener('click', () => switchMode('live'));
+  document.getElementById('btnShots')!.addEventListener('click', () => switchMode('shots'));
+  document.getElementById('btnAnalytics')!.addEventListener('click', () => switchMode('analytics'));
+  document.getElementById('btnDialin')!.addEventListener('click', () => switchMode('dialin'));
+  document.getElementById('btnLibrary')!.addEventListener('click', () => switchMode('library'));
+  document.getElementById('btnMaintenance')!.addEventListener('click', () => switchMode('maintenance'));
+  document.getElementById('btnAchievements')!.addEventListener('click', () => switchMode('achievements'));
+  document.getElementById('btnOrders')!.addEventListener('click', () => switchMode('orders'));
+  document.getElementById('btnSettings')!.addEventListener('click', () => switchMode('settings'));
 
   // ── Mobile burger drawer (#425) — additive shot-list access from any
   // view; the bottom-nav Shots-primary-screen flow below is unaffected.
-  document.getElementById('mobileDrawerBtn').addEventListener('click', openShotDrawer);
-  document.getElementById('sidebar-drawer-backdrop').addEventListener('click', closeShotDrawer);
-  document.getElementById('sidebar').addEventListener('touchstart', handleDrawerTouchStart, { passive: true });
-  document.getElementById('sidebar').addEventListener('touchend', handleDrawerTouchEnd, { passive: true });
+  document.getElementById('mobileDrawerBtn')!.addEventListener('click', openShotDrawer);
+  document.getElementById('sidebar-drawer-backdrop')!.addEventListener('click', closeShotDrawer);
+  document.getElementById('sidebar')!.addEventListener('touchstart', handleDrawerTouchStart, { passive: true });
+  document.getElementById('sidebar')!.addEventListener('touchend', handleDrawerTouchEnd, { passive: true });
   // #682: edge-swipe-to-open is bound to `document`, not #sidebar -- the
   // sidebar is transformed off-screen while closed and therefore can't
   // receive touch events itself.
@@ -720,16 +714,16 @@ document.addEventListener('DOMContentLoaded', () => {
   renderBottomNav();
   renderBottomNavSettings();
   renderWhatsNewCard();
-  document.getElementById('more-sheet-backdrop').addEventListener('click', closeMoreSheet);
-  document.getElementById('exportAllCsvBtn').addEventListener('click', exportAllCSV);
-  document.getElementById('exportShotBtn').addEventListener('click', exportShot);
-  document.getElementById('exportProfileBtn').addEventListener('click', exportProfile);
+  document.getElementById('more-sheet-backdrop')!.addEventListener('click', closeMoreSheet);
+  document.getElementById('exportAllCsvBtn')!.addEventListener('click', exportAllCSV);
+  document.getElementById('exportShotBtn')!.addEventListener('click', exportShot);
+  document.getElementById('exportProfileBtn')!.addEventListener('click', exportProfile);
   // Share-card format picker: toggle dropdown, pick format on option click
-  document.getElementById('shareCardBtn').addEventListener('click', () => {
+  document.getElementById('shareCardBtn')!.addEventListener('click', () => {
     const menu = document.getElementById('cardFmtMenu');
     menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
   });
-  document.getElementById('cardFmtMenu').addEventListener('click', e => {
+  document.getElementById('cardFmtMenu')!.addEventListener('click', e => {
     const opt = e.target.closest('.card-fmt-opt');
     if (!opt) return;
     document.getElementById('cardFmtMenu').style.display = 'none';
@@ -739,17 +733,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('cardFmtWrap').contains(e.target))
       document.getElementById('cardFmtMenu').style.display = 'none';
   });
-  document.getElementById('tabZeit').addEventListener('click', () => switchChartTab('zeit'));
-  document.getElementById('tabPQ').addEventListener('click', () => switchChartTab('pq'));
-  document.getElementById('expandChartBtn').addEventListener('click', openChartFullscreen);
-  document.getElementById('fsTabZeit').addEventListener('click', () => switchFsTab('zeit'));
-  document.getElementById('fsTabPQ').addEventListener('click', () => switchFsTab('pq'));
-  document.getElementById('closeFullscreenBtn').addEventListener('click', closeChartFullscreen);
-  document.getElementById('quickCloneBtn').addEventListener('click', quickClone);
-  document.getElementById('annPhotoPickBtn').addEventListener('click', () => document.getElementById('annPhotoInput').click());
-  document.getElementById('annPhotoInput').addEventListener('change', function () { uploadShotImage(this); });
-  document.getElementById('annPhotoRemoveBtn').addEventListener('click', removeShotImage);
-  document.getElementById('annPhotoThumb').addEventListener('click', openShotPhotoLightbox);
+  document.getElementById('tabZeit')!.addEventListener('click', () => switchChartTab('zeit'));
+  document.getElementById('tabPQ')!.addEventListener('click', () => switchChartTab('pq'));
+  document.getElementById('expandChartBtn')!.addEventListener('click', openChartFullscreen);
+  document.getElementById('fsTabZeit')!.addEventListener('click', () => switchFsTab('zeit'));
+  document.getElementById('fsTabPQ')!.addEventListener('click', () => switchFsTab('pq'));
+  document.getElementById('closeFullscreenBtn')!.addEventListener('click', closeChartFullscreen);
+  document.getElementById('quickCloneBtn')!.addEventListener('click', quickClone);
+  document.getElementById('annPhotoPickBtn')!.addEventListener('click', () => document.getElementById('annPhotoInput')!.click());
+  document.getElementById('annPhotoInput')!.addEventListener('change', function () { uploadShotImage(this); });
+  document.getElementById('annPhotoRemoveBtn')!.addEventListener('click', removeShotImage);
+  document.getElementById('annPhotoThumb')!.addEventListener('click', openShotPhotoLightbox);
   // #430: no more explicit Save button — auto-save on input, flushed
   // immediately on blur (leaving the field) and on page hide/mode-switch
   // (below) so a pending debounced save is never silently dropped.
@@ -778,87 +772,87 @@ document.addEventListener('DOMContentLoaded', () => {
     // selection, undoing #464's fix via this new trigger.
     if (document.visibilityState === 'visible') updateStatus(S.activeMachineId);
   });
-  document.getElementById('topbarMachineIcon').addEventListener('click', handleTopbarMachineIconClick);
-  document.getElementById('openMaintLogBtn').addEventListener('click', openMaintLogForm);
-  document.getElementById('submitMaintLogBtn').addEventListener('click', submitMaintLogEntry);
-  document.getElementById('cancelMaintLogBtn').addEventListener('click', closeMaintLogForm);
-  document.getElementById('ordersEnabledToggle').addEventListener('change', e => setOrdersEnabled(e.target.checked));
-  document.getElementById('ordersMenuTitle').addEventListener('click', toggleOrdersMenu);
-  document.getElementById('ordersStatsTitle').addEventListener('click', toggleOrdersStats);
-  document.getElementById('ordersNotifyTitle').addEventListener('click', toggleOrdersNotify);
-  document.getElementById('addOrderMenuItemBtn').addEventListener('click', addOrderMenuItem);
-  document.getElementById('libTabBeans').addEventListener('click', () => switchLibTab('beans'));
-  document.getElementById('libTabGrinders').addEventListener('click', () => switchLibTab('grinders'));
-  document.getElementById('libTabRecipes').addEventListener('click', () => switchLibTab('recipes'));
-  document.getElementById('libTabMilk').addEventListener('click', () => switchLibTab('milk'));
-  document.getElementById('libTabProfiles').addEventListener('click', () => switchLibTab('profiles'));
-  document.getElementById('closeBeanFormBtn').addEventListener('click', closeBeanForm);
-  document.getElementById('saveBeanBtn').addEventListener('click', saveBean);
-  document.getElementById('saveBeanNoBagBtn').addEventListener('click', saveBeanNoBag);
-  document.getElementById('saveBeanAddBagBtn').addEventListener('click', saveBeanAddBag);
-  document.getElementById('beanAddTrigger').addEventListener('click', openBeanForm);
-  document.getElementById('openScanModalBtn').addEventListener('click', openScanModal);
-  document.getElementById('toggleUrlImportBtn').addEventListener('click', toggleUrlImport);
-  document.getElementById('urlImportInput').addEventListener('keydown', e => { if (e.key === 'Enter') importFromUrl(); });
-  document.getElementById('importFromUrlBtn').addEventListener('click', importFromUrl);
-  document.getElementById('toggleImportSettingsBtn').addEventListener('click', toggleImportSettings);
-  document.getElementById('importSettingsAddDomainBtn').addEventListener('click', addCustomShopifyDomain);
-  document.getElementById('importSettingsDomainInput').addEventListener('keydown', e => { if (e.key === 'Enter') addCustomShopifyDomain(); });
-  document.getElementById('closeGrinderFormBtn').addEventListener('click', closeGrinderForm);
-  document.getElementById('saveGrinderBtn').addEventListener('click', saveGrinder);
-  document.getElementById('grinderAddTrigger').addEventListener('click', openGrinderForm);
-  document.getElementById('grinderFormImagePickBtn').addEventListener('click', () => document.getElementById('grinderFormImage').click());
-  document.getElementById('grinderFormImage').addEventListener('change', function () {
+  document.getElementById('topbarMachineIcon')!.addEventListener('click', handleTopbarMachineIconClick);
+  document.getElementById('openMaintLogBtn')!.addEventListener('click', openMaintLogForm);
+  document.getElementById('submitMaintLogBtn')!.addEventListener('click', submitMaintLogEntry);
+  document.getElementById('cancelMaintLogBtn')!.addEventListener('click', closeMaintLogForm);
+  document.getElementById('ordersEnabledToggle')!.addEventListener('change', e => setOrdersEnabled(e.target.checked));
+  document.getElementById('ordersMenuTitle')!.addEventListener('click', toggleOrdersMenu);
+  document.getElementById('ordersStatsTitle')!.addEventListener('click', toggleOrdersStats);
+  document.getElementById('ordersNotifyTitle')!.addEventListener('click', toggleOrdersNotify);
+  document.getElementById('addOrderMenuItemBtn')!.addEventListener('click', addOrderMenuItem);
+  document.getElementById('libTabBeans')!.addEventListener('click', () => switchLibTab('beans'));
+  document.getElementById('libTabGrinders')!.addEventListener('click', () => switchLibTab('grinders'));
+  document.getElementById('libTabRecipes')!.addEventListener('click', () => switchLibTab('recipes'));
+  document.getElementById('libTabMilk')!.addEventListener('click', () => switchLibTab('milk'));
+  document.getElementById('libTabProfiles')!.addEventListener('click', () => switchLibTab('profiles'));
+  document.getElementById('closeBeanFormBtn')!.addEventListener('click', closeBeanForm);
+  document.getElementById('saveBeanBtn')!.addEventListener('click', saveBean);
+  document.getElementById('saveBeanNoBagBtn')!.addEventListener('click', saveBeanNoBag);
+  document.getElementById('saveBeanAddBagBtn')!.addEventListener('click', saveBeanAddBag);
+  document.getElementById('beanAddTrigger')!.addEventListener('click', openBeanForm);
+  document.getElementById('openScanModalBtn')!.addEventListener('click', openScanModal);
+  document.getElementById('toggleUrlImportBtn')!.addEventListener('click', toggleUrlImport);
+  document.getElementById('urlImportInput')!.addEventListener('keydown', e => { if (e.key === 'Enter') importFromUrl(); });
+  document.getElementById('importFromUrlBtn')!.addEventListener('click', importFromUrl);
+  document.getElementById('toggleImportSettingsBtn')!.addEventListener('click', toggleImportSettings);
+  document.getElementById('importSettingsAddDomainBtn')!.addEventListener('click', addCustomShopifyDomain);
+  document.getElementById('importSettingsDomainInput')!.addEventListener('keydown', e => { if (e.key === 'Enter') addCustomShopifyDomain(); });
+  document.getElementById('closeGrinderFormBtn')!.addEventListener('click', closeGrinderForm);
+  document.getElementById('saveGrinderBtn')!.addEventListener('click', saveGrinder);
+  document.getElementById('grinderAddTrigger')!.addEventListener('click', openGrinderForm);
+  document.getElementById('grinderFormImagePickBtn')!.addEventListener('click', () => document.getElementById('grinderFormImage')!.click());
+  document.getElementById('grinderFormImage')!.addEventListener('change', function () {
     if (S.grinderEditId) uploadGrinderImage(S.grinderEditId, this);
   });
-  document.getElementById('beanFormImagePickBtn').addEventListener('click', () => document.getElementById('beanFormImage').click());
-  document.getElementById('beanFormImage').addEventListener('change', function () {
+  document.getElementById('beanFormImagePickBtn')!.addEventListener('click', () => document.getElementById('beanFormImage')!.click());
+  document.getElementById('beanFormImage')!.addEventListener('change', function () {
     if (S.beanEditId) uploadBeanImage(S.beanEditId, this);
   });
-  document.getElementById('addRecipeStepBtn').addEventListener('click', addRecipeStep);
-  document.getElementById('closeRecipeFormBtn').addEventListener('click', closeRecipeForm);
-  document.getElementById('saveRecipeBtn').addEventListener('click', saveRecipe);
-  document.getElementById('recipeAddTrigger').addEventListener('click', openRecipeForm);
-  document.getElementById('closeMilkFormBtn').addEventListener('click', closeMilkForm);
-  document.getElementById('saveMilkBtn').addEventListener('click', saveMilk);
-  document.getElementById('milkAddTrigger').addEventListener('click', openMilkForm);
-  document.getElementById('libTabBaskets').addEventListener('click', () => switchLibTab('baskets'));
-  document.getElementById('libTabPuckScreens').addEventListener('click', () => switchLibTab('puckscreens'));
-  document.getElementById('closeBasketFormBtn').addEventListener('click', closeBasketForm);
-  document.getElementById('saveBasketBtn').addEventListener('click', saveBasket);
-  document.getElementById('basketAddTrigger').addEventListener('click', openBasketForm);
-  document.getElementById('basketFormImagePickBtn').addEventListener('click', () => document.getElementById('basketFormImage').click());
-  document.getElementById('basketFormImage').addEventListener('change', function () {
+  document.getElementById('addRecipeStepBtn')!.addEventListener('click', addRecipeStep);
+  document.getElementById('closeRecipeFormBtn')!.addEventListener('click', closeRecipeForm);
+  document.getElementById('saveRecipeBtn')!.addEventListener('click', saveRecipe);
+  document.getElementById('recipeAddTrigger')!.addEventListener('click', openRecipeForm);
+  document.getElementById('closeMilkFormBtn')!.addEventListener('click', closeMilkForm);
+  document.getElementById('saveMilkBtn')!.addEventListener('click', saveMilk);
+  document.getElementById('milkAddTrigger')!.addEventListener('click', openMilkForm);
+  document.getElementById('libTabBaskets')!.addEventListener('click', () => switchLibTab('baskets'));
+  document.getElementById('libTabPuckScreens')!.addEventListener('click', () => switchLibTab('puckscreens'));
+  document.getElementById('closeBasketFormBtn')!.addEventListener('click', closeBasketForm);
+  document.getElementById('saveBasketBtn')!.addEventListener('click', saveBasket);
+  document.getElementById('basketAddTrigger')!.addEventListener('click', openBasketForm);
+  document.getElementById('basketFormImagePickBtn')!.addEventListener('click', () => document.getElementById('basketFormImage')!.click());
+  document.getElementById('basketFormImage')!.addEventListener('change', function () {
     if (S.basketEditId) uploadBasketImage(S.basketEditId, this);
   });
-  document.getElementById('closePuckScreenFormBtn').addEventListener('click', closePuckScreenForm);
-  document.getElementById('savePuckScreenBtn').addEventListener('click', savePuckScreen);
-  document.getElementById('puckScreenAddTrigger').addEventListener('click', openPuckScreenForm);
-  document.getElementById('puckScreenFormImagePickBtn').addEventListener('click', () => document.getElementById('puckScreenFormImage').click());
-  document.getElementById('puckScreenFormImage').addEventListener('change', function () {
+  document.getElementById('closePuckScreenFormBtn')!.addEventListener('click', closePuckScreenForm);
+  document.getElementById('savePuckScreenBtn')!.addEventListener('click', savePuckScreen);
+  document.getElementById('puckScreenAddTrigger')!.addEventListener('click', openPuckScreenForm);
+  document.getElementById('puckScreenFormImagePickBtn')!.addEventListener('click', () => document.getElementById('puckScreenFormImage')!.click());
+  document.getElementById('puckScreenFormImage')!.addEventListener('change', function () {
     if (S.puckScreenEditId) uploadPuckScreenImage(S.puckScreenEditId, this);
   });
-  document.getElementById('annBasket').addEventListener('change', scheduleAutoSave);
-  document.getElementById('annPuckScreen').addEventListener('change', scheduleAutoSave);
-  document.getElementById('profileAddTrigger').addEventListener('click', () => {
+  document.getElementById('annBasket')!.addEventListener('change', scheduleAutoSave);
+  document.getElementById('annPuckScreen')!.addEventListener('change', scheduleAutoSave);
+  document.getElementById('profileAddTrigger')!.addEventListener('click', () => {
     if (_isActiveMachineGaggiMate()) openNewGaggiMateProfile();
     else openNewProfileForm();
   });
-  document.getElementById('closeProfileFormBtn').addEventListener('click', closeProfileForm);
-  document.getElementById('cancelProfileFormBtn').addEventListener('click', closeProfileForm);
-  document.getElementById('addProfilePhaseBtn').addEventListener('click', addProfilePhase);
-  document.getElementById('profileApplySuggestionBtn').addEventListener('click', applyBeanSuggestion);
-  document.getElementById('sendProfileToMachineBtn').addEventListener('click', sendProfileToMachine);
+  document.getElementById('closeProfileFormBtn')!.addEventListener('click', closeProfileForm);
+  document.getElementById('cancelProfileFormBtn')!.addEventListener('click', closeProfileForm);
+  document.getElementById('addProfilePhaseBtn')!.addEventListener('click', addProfilePhase);
+  document.getElementById('profileApplySuggestionBtn')!.addEventListener('click', applyBeanSuggestion);
+  document.getElementById('sendProfileToMachineBtn')!.addEventListener('click', sendProfileToMachine);
   // Live preview: any field/phase edit re-synthesizes the chart from the
   // current DOM state (same DOM-as-state source of truth as _collectPhases()).
-  document.getElementById('profileEditorModal').addEventListener('input', renderProfilePreviewChart);
-  document.getElementById('profileEditorModal').addEventListener('change', renderProfilePreviewChart);
-  document.getElementById('refShotSelect').addEventListener('change', e => onRefShotChange(e.target.value));
-  document.getElementById('refClearBtn').addEventListener('click', clearReferenceShot);
-  document.getElementById('trendBtn30').addEventListener('click', () => setTrendWindow(30));
-  document.getElementById('trendBtn90').addEventListener('click', () => setTrendWindow(90));
-  document.getElementById('trendBtnAll').addEventListener('click', () => setTrendWindow(0));
-  document.getElementById('dialinCount').addEventListener('change', e => {
+  document.getElementById('profileEditorModal')!.addEventListener('input', renderProfilePreviewChart);
+  document.getElementById('profileEditorModal')!.addEventListener('change', renderProfilePreviewChart);
+  document.getElementById('refShotSelect')!.addEventListener('change', e => onRefShotChange(e.target.value));
+  document.getElementById('refClearBtn')!.addEventListener('click', clearReferenceShot);
+  document.getElementById('trendBtn30')!.addEventListener('click', () => setTrendWindow(30));
+  document.getElementById('trendBtn90')!.addEventListener('click', () => setTrendWindow(90));
+  document.getElementById('trendBtnAll')!.addEventListener('click', () => setTrendWindow(0));
+  document.getElementById('dialinCount')!.addEventListener('change', e => {
     localStorage.setItem('glp_dialin_count', e.target.value);
     renderDialin();
   });
@@ -879,14 +873,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // components/backup-modal.js) -- no separate wiring needed here, same
   // convention #scanModal uses (its "Schließen" button is wired once, in
   // main.js, but this modal's actions depend on which flow opened it).
-  document.getElementById('backupRestoreInput').addEventListener('change', e => openBackupRestoreModal(e.target));
-  document.getElementById('backupDownloadBtn').addEventListener('click', openBackupExportModal);
+  document.getElementById('backupRestoreInput')!.addEventListener('change', e => openBackupRestoreModal(e.target));
+  document.getElementById('backupDownloadBtn')!.addEventListener('click', openBackupExportModal);
   document.getElementById('devExportDbBtn')?.addEventListener('click', exportDevDb);
   document.getElementById('devImportDbInput')?.addEventListener('change', e => {
     importDevDb(e.target.files[0]);
     e.target.value = '';
   });
-  document.getElementById('apiTokenCopyBtn').addEventListener('click', copyApiToken);
+  document.getElementById('apiTokenCopyBtn')!.addEventListener('click', copyApiToken);
   document.getElementById('addMachineBtn')?.addEventListener('click', () => openMachineForm(null));
   document.getElementById('machineFormCancelBtn')?.addEventListener('click', closeMachineForm);
   document.getElementById('machineFormSaveBtn')?.addEventListener('click', saveMachineForm);
@@ -906,7 +900,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('mqttApplyToMachineBtn')?.addEventListener('click', applyMqttToMachine);
   document.getElementById('notifySettingsSaveBtn')?.addEventListener('click', saveNotifySettings);
   document.getElementById('shotDefaultsSaveBtn')?.addEventListener('click', saveShotDefaultsSettings);
-  document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
+  document.getElementById('closeScanModalBtn')!.addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
   document.getElementById('flavorWheelModal')?.addEventListener('click', e => {
