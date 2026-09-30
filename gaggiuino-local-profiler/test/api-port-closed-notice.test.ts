@@ -127,7 +127,7 @@ describe('app-wide banner (#807)', () => {
     const banner = doc.getElementById('glpApiPortClosedBanner');
     expect(banner).toBeDefined();
     expect(banner?.children.some(c => c.dataset.action === 'goto-settings')).toBe(true);
-    expect(banner?.children[0].textContent).toContain('expose_api_port');
+    expect(banner?.children[0]?.textContent).toContain('expose_api_port');
   });
 
   it('is not shown in the default (port exposed) state', () => {
@@ -151,7 +151,7 @@ describe('app-wide banner (#807)', () => {
     updateApiPortClosedBanner();
     const banner = doc.getElementById('glpApiPortClosedBanner');
     const closeBtn = banner?.children[banner.children.length - 1];
-    closeBtn?._listeners.click();
+    closeBtn?._listeners.click?.();
 
     expect(doc.getElementById('glpApiPortClosedBanner')).toBeUndefined();
     updateApiPortClosedBanner();
