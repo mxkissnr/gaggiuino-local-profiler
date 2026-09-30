@@ -7,11 +7,10 @@ import {
   exportDevDb as exportDevDbRequest,
   importDevDb as importDevDbRequest,
 } from '../api/system.js';
-import { shareOrDownloadBlob } from '../utils.js';
+import { shareOrDownloadBlob, syncInstallId } from '../utils.js';
 import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge, updateLegacyMachineOptionsBanner } from './onboarding.js';
 import { updateApiPortClosedBanner } from './api-port-notice.js';
 import { showDevBuildBanner } from './dev-banner.js';
-import { syncInstallId } from '../views/setup-wizard.js';
 import { syncTopbarMachineIconFallback } from './topbar-machine-icon.js';
 
 // /api/status and /api/switch responses are plain fetch Responses, so their
