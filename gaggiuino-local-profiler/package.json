@@ -33,6 +33,11 @@
     "vite": "8.3.1",
     "vitest": "5.0.2"
   },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
+  },
   "allowScripts": {
     "esbuild@0.25.12": true
   }
