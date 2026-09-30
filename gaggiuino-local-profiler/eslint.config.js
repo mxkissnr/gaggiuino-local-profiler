@@ -75,8 +75,6 @@ module.exports = [
   // the type-aware rules don't touch the .js files still in flight.
   ...tseslint.config({
     files: ['public-src/**/*.ts'],
-    // main.ts is the not-yet-converted entry point — see its own block below.
-    ignores: ['public-src/main.ts'],
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       globals: globals.browser,
@@ -88,25 +86,6 @@ module.exports = [
     rules: {
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
-    },
-  }),
-  // public-src/main.ts was only renamed from main.js (#1106), not converted: it
-  // still imports untyped .js modules, so recommendedTypeChecked's
-  // any-propagation rules would error on nearly every line. It carries a
-  // file-level @ts-nocheck for the same reason and is linted like its JavaScript
-  // siblings until a later package converts it, at which point this block folds
-  // into the one above.
-  ...tseslint.config({
-    files: ['public-src/main.ts'],
-    extends: [...tseslint.configs.recommended],
-    languageOptions: {
-      globals: globals.browser,
-    },
-    rules: {
-      ...commonRules,
-      'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
-      '@typescript-eslint/ban-ts-comment': ['error', { 'ts-nocheck': 'allow-with-description' }],
     },
   }),
   {
