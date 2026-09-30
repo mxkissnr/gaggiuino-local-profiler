@@ -27,6 +27,7 @@
 - **A machine's last error in the status API is now only sent to authenticated callers, like the existing machine error field, so an anonymous request can no longer see a machine's address.** Part of #1201
 - **Values read from a GaggiMate machine are now escaped in the profile editor.** Part of #1115
 - **The library sub-views and both profile editors now build their markup through the type-checked HTML builder, so library and machine values can no longer be injected as markup.** Part of #1104
+- **The maintenance, achievements, dial-in, setup-wizard, profile dial-in wizard, live and shots views now build their markup through the same type-checked HTML builder, so shot, machine and library values can no longer be injected as markup.** Part of #1104
 
 ### Changed
 - **The coffee library's basket and puck-screen collections are now typed with the real API shapes.** Part of #1105

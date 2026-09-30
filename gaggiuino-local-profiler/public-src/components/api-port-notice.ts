@@ -8,19 +8,20 @@
 //     most other views don't render an error at all in this state — they
 //     just come up empty (library, orders, maintenance, analytics all
 //     `return` on a failed fetch), which is just as unexplained.
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
 import { isApiPortBlocked } from '../api/transport.js';
 import { devBannerHeight } from './dev-banner.js';
-import { themeColor } from '../utils.js';
+import { themeColor, html } from '../utils.js';
+import type { Html } from '../utils.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
 
 const DISMISS_KEY = 'glp_api_port_closed_banner_dismissed';
 
-export function apiPortClosedHtml(): string {
-  return `<div class="loading-state" style="max-width:520px;margin:0 auto;text-align:center">
-    <div style="font-weight:600;margin-bottom:6px">${t('api_port_closed_title')}</div>
-    <div style="font-size:var(--fs-2);line-height:1.45">${t('api_port_closed_desc')}</div>
-    <button data-action="goto-settings" class="export-btn" style="margin-top:var(--sp-3)">${t('api_port_closed_settings_btn')}</button>
+export function apiPortClosedHtml(): Html {
+  return html`<div class="loading-state" style="max-width:520px;margin:0 auto;text-align:center">
+    <div style="font-weight:600;margin-bottom:6px">${tHtml('api_port_closed_title')}</div>
+    <div style="font-size:var(--fs-2);line-height:1.45">${tHtml('api_port_closed_desc')}</div>
+    <button data-action="goto-settings" class="export-btn" style="margin-top:var(--sp-3)">${tHtml('api_port_closed_settings_btn')}</button>
   </div>`;
 }
 

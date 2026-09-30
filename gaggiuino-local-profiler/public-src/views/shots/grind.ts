@@ -1,7 +1,7 @@
 import { t }                               from '../../i18n.js';
 import { S }                               from '../../state/index.js';
-import { detectChanneling, calcBrewRatio } from '../../utils.js';
-import type { ShotSeries } from '../../utils.js';
+import { detectChanneling, calcBrewRatio, esc, html, joinHtml } from '../../utils.js';
+import type { ShotSeries, Html } from '../../utils.js';
 import { calcShotScore }                   from './utils.js';
 import type { ShotLike }                   from './utils.js';
 import { getRawCurve }                     from '../../shot-curves.js';
@@ -27,7 +27,7 @@ interface XYPoint { x: number; y: number }
 
 export interface GrindAdvice {
   type: string;
-  icon: string;
+  icon: Html;
   text: string;
 }
 
@@ -70,14 +70,14 @@ export interface GrindSuggestion {
 // every comparable shot before rendering the panel, so the cache read is
 // synchronous here; a still-missing curve falls back to the shot's own
 // datapoints (synthetic/demo) and finally to the no-data placeholder.
-export function _miniShotChart(shot: GrindShot): string {
+export function _miniShotChart(shot: GrindShot): Html {
   const d  = getRawCurve(shot.id) || shot.datapoints || {};
   const tm = d.timeInShot || [];
   const series = [
     { vals: (d.pressure  || []).map((v, i) => ({ x: tm[i] / 10, y: v / 10 })).filter(p => p.y > 0), color: '#60a5fa' },
     { vals: (d.pumpFlow  || []).map((v, i) => ({ x: tm[i] / 10, y: v / 10 })).filter(p => p.y >= 0), color: '#fb923c' },
   ].filter(s => s.vals.length >= 3);
-  if (!series.length) return '<div class="comp-thumb-no-data">–</div>';
+  if (!series.length) return html`<div class="comp-thumb-no-data">–</div>`;
 
   const W = 140, H = 65, pad = 2;
   const allX = series.flatMap(s => s.vals.map(p => p.x));
@@ -88,11 +88,11 @@ export function _miniShotChart(shot: GrindShot): string {
   const px = (x: number): number => pad + ((x - xMin) / (xMax - xMin)) * (W - pad * 2);
   const py = (y: number): number => H - pad - (y / yMax) * (H - pad * 2);
 
-  const polyline = ({ vals, color }: { vals: XYPoint[]; color: string }): string => {
+  const polyline = ({ vals, color }: { vals: XYPoint[]; color: string }): Html => {
     const pts = vals.map(p => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ');
-    return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity=".9"/>`;
+    return html`<polyline points="${esc(pts)}" fill="none" stroke="${esc(color)}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity=".9"/>`;
   };
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:${H}px;display:block">${series.map(polyline).join('')}</svg>`;
+  return html`<svg viewBox="0 0 ${esc(W)} ${esc(H)}" preserveAspectRatio="none" style="width:100%;height:${esc(H)}px;display:block">${joinHtml(series.map(polyline))}</svg>`;
 }
 
 // ── Grind setting parser ───────────────────────────────────────────────────
@@ -112,10 +112,10 @@ export function calcGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice 
   const pAll   = data.pressure.map(p => p.y);
   if (detectChanneling(pTimes, pAll))
     return { type: 'warning', icon: LIGHTNING_ICON_SVG, text: t('grind_channeling_full') };
-  if (secs < 18) return { type: 'finer',   icon: '↓', text: t('grind_short', secs.toFixed(0)) };
-  if (secs < 23) return { type: 'finer',   icon: '↓', text: t('grind_short_slight', secs.toFixed(0)) };
-  if (secs > 50) return { type: 'coarser', icon: '↑', text: t('grind_long', secs.toFixed(0)) };
-  if (secs > 42) return { type: 'coarser', icon: '↑', text: t('grind_long_slight', secs.toFixed(0)) };
+  if (secs < 18) return { type: 'finer',   icon: html`↓`, text: t('grind_short', secs.toFixed(0)) };
+  if (secs < 23) return { type: 'finer',   icon: html`↓`, text: t('grind_short_slight', secs.toFixed(0)) };
+  if (secs > 50) return { type: 'coarser', icon: html`↑`, text: t('grind_long', secs.toFixed(0)) };
+  if (secs > 42) return { type: 'coarser', icon: html`↑`, text: t('grind_long_slight', secs.toFixed(0)) };
   // Duration is fine — check the brew ratio against the classic espresso
   // window (1:1.8–1:2.2). Yield is machine-stopped, so this is dose/yield
   // guidance rather than a grind direction.
@@ -126,7 +126,7 @@ export function calcGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice 
     return { type: 'warning', icon: SCALE_ICON_SVG, text: t('dialin_ratio_low', ratio.toFixed(1)) };
   const pVals = pAll.filter(v => v >= 5);
   const avgP  = pVals.length ? pVals.reduce((a, b) => a + b, 0) / pVals.length : 0;
-  return { type: 'ok', icon: '✓', text: `${t('grind_ok')} – ${secs.toFixed(0)} s${avgP > 0 ? `, ${avgP.toFixed(1)} bar Ø` : ''}` };
+  return { type: 'ok', icon: html`✓`, text: `${t('grind_ok')} – ${secs.toFixed(0)} s${avgP > 0 ? `, ${avgP.toFixed(1)} bar Ø` : ''}` };
 }
 
 // Parses a shot's own recorded grindSetting and normalizes it to what it
