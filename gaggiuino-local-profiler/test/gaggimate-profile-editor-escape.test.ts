@@ -49,7 +49,9 @@ async function renderRaw(profile: unknown): Promise<string> {
   fetchSpy.mockReset();
   fetchSpy.mockResolvedValueOnce(profileResponse(profile));
   await openGaggiMateProfileEditor('p1');
-  return els.gmEditorBody.innerHTML;
+  const body = els.gmEditorBody;
+  if (body === undefined) throw new Error('gmEditorBody not rendered');
+  return body.innerHTML;
 }
 
 describe('gaggimate profile editor escapes machine-supplied values', () => {

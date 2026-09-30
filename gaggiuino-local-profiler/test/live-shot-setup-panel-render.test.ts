@@ -118,7 +118,9 @@ describe('renderLiveShotSetupPanel()', () => {
     grindEl.value = '5.0';
     grindEl._fire('input');
 
-    const saved = JSON.parse(draftStore['glp_live_shot_setup_1']) as { grindSetting?: string };
+    const raw = draftStore['glp_live_shot_setup_1'];
+    if (raw === undefined) throw new Error('draft not persisted');
+    const saved = JSON.parse(raw) as { grindSetting?: string };
     expect(saved.grindSetting).toBe('5.0');
   });
 

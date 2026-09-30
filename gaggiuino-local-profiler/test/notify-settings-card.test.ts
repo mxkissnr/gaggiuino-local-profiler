@@ -107,7 +107,8 @@ describe('saveNotifySettings', () => {
 
     await saveNotifySettings();
 
-    const postBody = JSON.parse(fetchSpy.mock.calls[1][1]!.body as string) as Record<string, unknown>;
+    const postCall = fetchSpy.mock.calls[1];
+    const postBody = JSON.parse(postCall?.[1]?.body as string) as Record<string, unknown>;
     expect(postBody).toEqual({ enabled: false, notify_preheat_ready: false, notify_low_stock: false });
   });
 
