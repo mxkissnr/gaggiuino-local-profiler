@@ -18,14 +18,14 @@ func TestHub_PublishFanOutAndUnsubscribe(t *testing.T) {
 	sub2, cancel2 := h.Subscribe()
 	defer cancel2()
 
-	ev := Event{Type: EventSyncProgress, Data: map[string]any{"current": 1}}
+	ev := Event{Type: EventLiveSnapshot, Data: map[string]any{"current": 1}}
 	h.Publish(ev)
 
 	for _, sub := range []<-chan Event{sub1, sub2} {
 		select {
 		case got := <-sub:
-			if got.Type != EventSyncProgress {
-				t.Errorf("got event type %q, want %q", got.Type, EventSyncProgress)
+			if got.Type != EventLiveSnapshot {
+				t.Errorf("got event type %q, want %q", got.Type, EventLiveSnapshot)
 			}
 		case <-time.After(time.Second):
 			t.Fatal("timed out waiting for published event")
@@ -39,11 +39,11 @@ func TestHub_PublishFanOutAndUnsubscribe(t *testing.T) {
 
 	// A second publish must still reach the still-subscribed sub2 and must
 	// not panic/block because sub1 unsubscribed.
-	h.Publish(Event{Type: EventSyncComplete, Data: nil})
+	h.Publish(Event{Type: EventPreheatUpdate, Data: nil})
 	select {
 	case got := <-sub2:
-		if got.Type != EventSyncComplete {
-			t.Errorf("got event type %q, want %q", got.Type, EventSyncComplete)
+		if got.Type != EventPreheatUpdate {
+			t.Errorf("got event type %q, want %q", got.Type, EventPreheatUpdate)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for second published event")
@@ -170,11 +170,11 @@ func TestHandler_ConnectPrimeAndPublish(t *testing.T) {
 	// — priming and subscribing happen before this call returns control to
 	// the client, but the network round trip above doesn't guarantee it.
 	time.Sleep(50 * time.Millisecond)
-	hub.Publish(Event{Type: EventSyncProgress, Data: map[string]any{"current": 3, "total": 10}})
+	hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"current": 3, "total": 10}})
 
 	pubLines := readLines(t, reader, 3, 2*time.Second)
-	if pubLines[0] != "event: "+EventSyncProgress+"\n" {
-		t.Errorf("published event line = %q, want \"event: %s\\n\"", pubLines[0], EventSyncProgress)
+	if pubLines[0] != "event: "+EventLiveSnapshot+"\n" {
+		t.Errorf("published event line = %q, want \"event: %s\\n\"", pubLines[0], EventLiveSnapshot)
 	}
 	var pubData map[string]any
 	if err := json.Unmarshal([]byte(strings.TrimPrefix(pubLines[1], "data: ")), &pubData); err != nil {

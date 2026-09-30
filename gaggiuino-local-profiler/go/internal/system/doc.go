@@ -119,9 +119,8 @@
 //     pulled over the same /api/shots REST surface as the default one, a
 //     GaggiMate through its history adapter — so the default machine's own
 //     retry/backoff stays the only thing driven by a sync result. Still not
-//     ported are syncNativeMaintenance() (#578), the SYNC_PROGRESS/
-//     SYNC_COMPLETE bus events (state.syncProgress), state.syncRetryCount
-//     (the backoff is
+//     ported are syncNativeMaintenance() (#578), state.syncProgress,
+//     state.syncRetryCount (the backoff is
 //     tracked locally in runScheduledSync, not exposed), and
 //     fetchMachineVersion() — backgroundHaCheck's
 //     `if (!cachedMachineVersion) fetchMachineVersion()` fallback (this

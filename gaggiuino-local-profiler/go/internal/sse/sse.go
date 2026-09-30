@@ -21,14 +21,12 @@ const PingInterval = 20 * time.Second
 // response (see doc.go).
 const paddingBytes = 2048
 
-// Event types this package's Handler multiplexes over /api/events — the
-// exact set routes/sse.js forwards: SYNC_PROGRESS/SYNC_COMPLETE (#735),
-// LIVE_SNAPSHOT/PREHEAT_UPDATE (#736); EventOrdersUpdate is new in this Go
-// rewrite (#901, no Node equivalent — see below). See doc.go for the events
-// this endpoint deliberately does NOT carry.
+// Event types this package's Handler multiplexes over /api/events:
+// LIVE_SNAPSHOT/PREHEAT_UPDATE (#736) as routes/sse.js forwards them, plus
+// EventOrdersUpdate, which is new in this Go rewrite (#901, no Node
+// equivalent — see below). See doc.go for the events this endpoint
+// deliberately does NOT carry.
 const (
-	EventSyncProgress  = "sync-progress"
-	EventSyncComplete  = "sync-complete"
 	EventLiveSnapshot  = "live-snapshot"
 	EventPreheatUpdate = "preheat-update"
 
@@ -53,9 +51,9 @@ const (
 // producer that wants that behavior sets Data to an HTML value (a plain
 // string conversion, `sse.HTML(rendered)`); Handler's send() type-switches
 // on it and skips json.Marshal entirely for that one event — every other
-// event type (live-snapshot, preheat-update, sync-progress/complete) is
-// unaffected, since none of them are HTML and Node's own live.js JSON
-// consumers depend on that encoding staying JSON (see this file's own
+// event type (live-snapshot, preheat-update) is unaffected, since none of
+// them are HTML and Node's own live.js JSON consumers depend on that
+// encoding staying JSON (see this file's own
 // EventOrdersUpdate doc comment for the one current producer).
 type HTML string
 

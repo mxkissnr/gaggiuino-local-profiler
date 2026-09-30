@@ -24,8 +24,8 @@ import (
 //     catch up immediately instead of waiting for the next scheduled pull.
 //
 // syncOtherMachines (#1146) now rides along with the scheduled loop (and with
-// the manual trigger) — see sync.go; native-maintenance sync and the
-// SYNC_PROGRESS events stay unported (see sync.go + doc.go). The post-brew
+// the manual trigger) — see sync.go; native-maintenance sync and
+// state.syncProgress stay unported (see sync.go + doc.go). The post-brew
 // and reachability-recovery catch-up paths deliberately stay default-only,
 // matching Node's syncAfterBrew()/poll.js, which call syncShots() alone.
 

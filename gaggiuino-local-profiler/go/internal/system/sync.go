@@ -45,10 +45,8 @@ import (
 //     nothing drives an automatic sync loop in this Go port yet, so a
 //     retry schedule has nothing to hang off. GET /api/status's
 //     syncRetryCount stays 0.
-//   - the SYNC_PROGRESS / SYNC_COMPLETE bus events (state.syncProgress) —
-//     no event bus in this port, and system/doc.go already documents
-//     state.syncProgress as unported. The backfill still runs; it just
-//     doesn't stream a progress bar.
+//   - state.syncProgress — the backfill still runs, but nothing tracks or
+//     streams its progress in this port, so there is no progress bar.
 
 // manualSyncCooldown mirrors routes/system.js's `now - state.lastManualSync
 // < 30000` guard.
@@ -111,7 +109,7 @@ type SyncState struct {
 	LastSyncError *string
 }
 
-// SyncState snapshots the sync-progress fields.
+// SyncState snapshots the lastSync/lastSyncError fields.
 func (p *Poller) SyncState() SyncState {
 	p.state.mu.Lock()
 	defer p.state.mu.Unlock()
