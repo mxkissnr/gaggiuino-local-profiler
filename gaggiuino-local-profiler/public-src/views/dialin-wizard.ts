@@ -214,9 +214,7 @@ async function _evalShot(shot: DialinShotRow): Promise<{ secs: number; channelin
   const pTimes = data.pressure.map(p => p.x);
   const pAll   = data.pressure.map(p => p.y);
   const channeling = detectChanneling(pTimes, pAll);
-  // calcBrewRatio declares the annotation dose as a string, but the API stores
-  // a number here (which is why it parseFloat()s it) — keep passing the real value.
-  const ratio = calcBrewRatio(shot as { annotation?: { dose?: string | null } | null }, data);
+  const ratio = calcBrewRatio(shot, data);
   const score = calcShotScore(shot);
   return { secs, channeling, ratio, score };
 }
