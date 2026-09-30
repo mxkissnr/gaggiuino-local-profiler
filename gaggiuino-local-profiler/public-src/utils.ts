@@ -25,6 +25,11 @@ export function html(strings: TemplateStringsArray, ...values: Html[]): Html {
   return out as Html;
 }
 
+// Concatenation of Html parts is itself Html (Array.join returns a plain string).
+export function joinHtml(parts: readonly Html[]): Html {
+  return parts.join('') as Html; // every part is already Html
+}
+
 // ── Roast freshness ───────────────────────────────────────────────────────
 // Roast dates appear in two formats across the app: DD.MM.YYYY (bean form,
 // TT.MM.JJJJ placeholder) and YYYY-MM-DD (ISO, bags & imports). Returns whole

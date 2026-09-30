@@ -17,6 +17,8 @@
 
 // ── Pure filtering logic (kept separate from DOM so it's unit-testable
 // under vitest's node environment) ──────────────────────────────────────
+import { html } from '../utils.js';
+
 export function filterSuggestions(list: unknown, query: unknown, limit = 8): string[] {
   const source = Array.isArray(list) ? list : [];
   const pool = Array.from(new Set(source.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)));
@@ -100,7 +102,7 @@ export function attachAutocomplete(
 
   function render(): void {
     if (!items.length) { close(); return; }
-    list.innerHTML = '';
+    list.innerHTML = html``;
     items.forEach((val, i) => {
       const li = doc.createElement('li');
       li.className = 'autocomplete-item';

@@ -1,6 +1,7 @@
 import { S } from './state/index.js';
 import { TRANSLATIONS } from './constants.js';
 import { STAR_ICON_SVG } from './icons.js';
+import type { Html } from './utils.js';
 
 // Cross-module entry points main.js wires onto `window` (kept off direct
 // imports to avoid circular deps); declared so the calls below stay typed.
@@ -39,6 +40,13 @@ export function t(key: string, ...args: unknown[]): string {
   // individual key that's out of sync across the 6 language files.
   const val = dictionary(S.currentLang)?.[key] ?? dictionary('en')?.[key] ?? key;
   return typeof val === 'function' ? val(...args) : val;
+}
+
+// t() for markup contexts: dictionary entries are bundled at build time and
+// may carry trusted markup (icon SVGs), so the result is Html. Arguments are
+// still the caller's responsibility, esc() them.
+export function tHtml(key: string, ...args: unknown[]): Html {
+  return t(key, ...args) as Html; // static dictionaries, never user data
 }
 
 export function setLang(lang: string): void {
