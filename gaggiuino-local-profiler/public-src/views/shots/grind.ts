@@ -120,7 +120,7 @@ export function calcGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice 
   // Duration is fine — check the brew ratio against the classic espresso
   // window (1:1.8–1:2.2). Yield is machine-stopped, so this is dose/yield
   // guidance rather than a grind direction.
-  const ratio = calcBrewRatio(shot as unknown as Parameters<typeof calcBrewRatio>[0], data);
+  const ratio = calcBrewRatio(shot, data);
   if (ratio !== null && ratio > 2.3)
     return { type: 'warning', icon: SCALE_ICON_SVG, text: t('dialin_ratio_high', ratio.toFixed(1)) };
   if (ratio !== null && ratio < 1.7)

@@ -13,7 +13,7 @@ import { S }                     from '../state/index.js';
 import { t, tHtml }              from '../i18n.js';
 import { saveBeanKnownGrind } from '../api/library.js';
 import { annotateShot }          from '../api/shots.js';
-import type { ShotAnnotation }   from '../api/types.js';
+import type { ShotAnnotationInput } from '../api/types.js';
 import { esc, html, joinHtml, detectChanneling, calcBrewRatio, scoreColor } from '../utils.js';
 import type { Html } from '../utils.js';
 import { calcShotScore } from './shots/utils.js';
@@ -324,14 +324,14 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
   const shot = _shots().find(sh => sh.id === shotId);
   if (!shot) return;
 
-  const payload = {
+  const payload: ShotAnnotationInput = {
     coffee: s.bean, beanId: s.beanId ?? null, grinder: s.grinder, grindSetting: String(s.pendingGrind),
     dose: s.dose || null, recipeId: s.recipeId || null,
   };
   try {
-    // TODO(#1103): AnnotationSchema types dose as number|null, but the wizard
-    // passes the form value (string or number) straight through.
-    const r = await annotateShot(shotId, payload as unknown as ShotAnnotation);
+    // ShotAnnotationInput types dose as the raw form value (string or number)
+    // the wizard passes straight through (#1103).
+    const r = await annotateShot(shotId, payload);
     if (r.ok) {
       const rows = _shots();
       const idx = rows.findIndex(sh => sh.id === shotId);
@@ -363,9 +363,9 @@ export async function dialinSaveKnownGrind(): Promise<void> {
     : S.coffeeLibrary?.beans?.find(b => b.name === s.bean);
   const best = _bestRound(s.rounds);
   if (!bean || !best) return;
-  // api/library.ts declares grindSetting as string, but the untyped .js sent
-  // the round's numeric value straight through — keep the wire body identical.
-  const updated = await saveBeanKnownGrind(bean.id as number, { grinder: s.grinder, grindSetting: best.grindSetting as unknown as string });
+  // saveBeanKnownGrind's grindSetting accepts the round's numeric value too,
+  // so the wire body stays identical to the untyped .js.
+  const updated = await saveBeanKnownGrind(bean.id as number, { grinder: s.grinder, grindSetting: best.grindSetting });
   if (updated) {
     const idx = S.coffeeLibrary.beans.findIndex(b => b.id === bean.id);
     if (idx !== -1) S.coffeeLibrary.beans[idx] = updated;
