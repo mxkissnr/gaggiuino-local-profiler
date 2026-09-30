@@ -18,6 +18,15 @@ function _profile() {
   };
 }
 
+// `profile.phases` is a plain array, so phases[i] is `... | undefined` under
+// noUncheckedIndexedAccess; this narrows it back by throwing on a missing
+// phase, which is the element the old indexed access assumed existed.
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`no element at index ${i}`);
+  return v;
+}
+
 describe('suggestPhaseAdjustment', () => {
   it('balanced yields a hold with no field change', () => {
     const r = suggestPhaseAdjustment('balanced', _profile(), []);
@@ -38,7 +47,7 @@ describe('suggestPhaseAdjustment', () => {
 
   it('sour falls through to the Ramp pressure once preinfusion time is maxed', () => {
     const profile = _profile();
-    profile.phases[0].stopConditions!.time = 15000; // already at the sane limit
+    at(profile.phases, 0).stopConditions!.time = 15000; // already at the sane limit
     const r = suggestPhaseAdjustment('sour', profile, []);
     expect(r.phaseName).toBe('Ramp');
     expect(r.field).toBe('target.end');
@@ -88,8 +97,8 @@ describe('suggestPhaseAdjustment', () => {
   // candidate, with plenty of headroom left before its own min/max.
   it('halves the step size when the direction reverses vs. the previous round targeting the same field', () => {
     const p1 = _profile();
-    p1.phases[0].stopConditions!.time = 15000; // maxed -> sour falls through to ramp
-    p1.phases[1].target.end = 7;
+    at(p1.phases, 0).stopConditions!.time = 15000; // maxed -> sour falls through to ramp
+    at(p1.phases, 1).target.end = 7;
     const round1 = suggestPhaseAdjustment('sour', p1, []);
     expect(round1.field).toBe('target.end');
     expect(round1.delta).toBeCloseTo(0.8, 1); // baseStep 0.75, rounded to 0.1 precision
@@ -97,7 +106,7 @@ describe('suggestPhaseAdjustment', () => {
 
     const p2 = _profile();
     p2.waterTemperature = 85; // maxed -> bitter falls through to ramp
-    p2.phases[1].target.end = round1.newValue!;
+    at(p2.phases, 1).target.end = round1.newValue!;
     const round2 = suggestPhaseAdjustment('bitter', p2, history);
     expect(round2.field).toBe('target.end');
     expect(round2.delta).toBeLessThan(0); // bitter pushes ramp pressure DOWN — direction reversed
@@ -106,14 +115,14 @@ describe('suggestPhaseAdjustment', () => {
 
   it('keeps the step size when the direction repeats for the same field', () => {
     const p1 = _profile();
-    p1.phases[0].stopConditions!.time = 15000;
-    p1.phases[1].target.end = 7;
+    at(p1.phases, 0).stopConditions!.time = 15000;
+    at(p1.phases, 1).target.end = 7;
     const round1 = suggestPhaseAdjustment('sour', p1, []);
     expect(round1.field).toBe('target.end');
 
     const p2 = _profile();
-    p2.phases[0].stopConditions!.time = 15000;
-    p2.phases[1].target.end = round1.newValue!;
+    at(p2.phases, 0).stopConditions!.time = 15000;
+    at(p2.phases, 1).target.end = round1.newValue!;
     const history = [{ symptom: 'sour', score: 60, appliedAdjustment: round1 }];
     const round2 = suggestPhaseAdjustment('sour', p2, history);
     expect(round2.field).toBe('target.end');
@@ -122,8 +131,8 @@ describe('suggestPhaseAdjustment', () => {
 
   it('returns at-limit when every candidate for the symptom is already maxed', () => {
     const p = _profile();
-    p.phases[0].stopConditions!.time = 15000;
-    p.phases[1].target.end = 9.5;
+    at(p.phases, 0).stopConditions!.time = 15000;
+    at(p.phases, 1).target.end = 9.5;
     const r = suggestPhaseAdjustment('sour', p, []);
     expect(r.type).toBe('at-limit');
     expect(r.delta).toBe(0);
@@ -136,8 +145,8 @@ describe('applyPhaseAdjustment', () => {
     const profile = _profile();
     const suggestion = suggestPhaseAdjustment('sour', profile, []);
     const next = applyPhaseAdjustment(profile, suggestion);
-    expect(profile.phases[0].stopConditions!.time).toBe(7000);
-    expect(next.phases[0].stopConditions!.time).toBe(8500);
+    expect(at(profile.phases, 0).stopConditions!.time).toBe(7000);
+    expect(at(next.phases, 0).stopConditions!.time).toBe(8500);
   });
 
   it('applies a profile-level field (waterTemperature)', () => {

@@ -35,7 +35,9 @@ describe('getWhatsNewEntries', () => {
             const pa = a.split('.').map(Number);
             const pb = b.split('.').map(Number);
             for (let i = 0; i < 3; i++) {
-                if (pb[i] !== pa[i]) return pb[i] - pa[i];
+                const pbPart = pb[i] ?? 0;
+                const paPart = pa[i] ?? 0;
+                if (pbPart !== paPart) return pbPart - paPart;
             }
             return 0;
         });

@@ -20,7 +20,7 @@ const { renderBeanList } = (await import('../public-src/views/library.js')) as u
 // reachable via a crafted direct API call or a compromised import/backup-
 // restore path — defense-in-depth fix, same esc() wrap batchNumber already gets.
 interface FakeDocument {
-  elements: Record<string, { innerHTML: string }>;
+  beanListUI: { innerHTML: string };
   document: {
     getElementById: (id: string) => { innerHTML: string } | undefined;
     querySelectorAll: () => never[];
@@ -28,9 +28,10 @@ interface FakeDocument {
 }
 
 function fakeDocument(): FakeDocument {
-  const elements: Record<string, { innerHTML: string }> = { beanListUI: { innerHTML: '' } };
+  const beanListUI = { innerHTML: '' };
+  const elements: Record<string, { innerHTML: string }> = { beanListUI };
   return {
-    elements,
+    beanListUI,
     document: {
       getElementById: (id: string) => elements[id],
       querySelectorAll: () => [],
@@ -44,7 +45,7 @@ describe('renderBeanList (#648 bag-history roastDate escaping)', () => {
   });
 
   it('escapes a malicious bag roastDate instead of injecting it raw into innerHTML', () => {
-    const { elements, document } = fakeDocument();
+    const { beanListUI, document } = fakeDocument();
     g.document = document;
 
     S.coffeeLibrary = {
@@ -64,7 +65,7 @@ describe('renderBeanList (#648 bag-history roastDate escaping)', () => {
 
     renderBeanList();
 
-    expect(elements.beanListUI.innerHTML).not.toContain('<img src=x onerror=alert(1)>');
-    expect(elements.beanListUI.innerHTML).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(beanListUI.innerHTML).not.toContain('<img src=x onerror=alert(1)>');
+    expect(beanListUI.innerHTML).toContain('&lt;img src=x onerror=alert(1)&gt;');
   });
 });

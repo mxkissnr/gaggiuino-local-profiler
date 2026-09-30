@@ -83,10 +83,10 @@ describe('_normalizeMaintTiles (#393)', () => {
     expect(descalingTiles.map(t => t.machineId).sort()).toEqual([1, 2]);
     const waterfilterTiles = tiles.filter(t => t.task === 'waterfilter');
     expect(waterfilterTiles).toHaveLength(1);
-    expect(waterfilterTiles[0].isGlobal).toBe(true);
+    expect(waterfilterTiles[0]?.isGlobal).toBe(true);
     // Global tile still needs a concrete machineId for its own done/threshold
     // writes (the backend ignores it for global tasks, but the URL needs one).
-    expect(waterfilterTiles[0].machineId).toBe(1);
+    expect(waterfilterTiles[0]?.machineId).toBe(1);
   });
 });
 
