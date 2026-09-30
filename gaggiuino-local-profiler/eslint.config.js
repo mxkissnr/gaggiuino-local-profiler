@@ -1,6 +1,7 @@
 const js = require('@eslint/js');
 const globals = require('globals');
 const tseslint = require('typescript-eslint');
+const { htmlSinkRule } = require('./eslint-rules/html-sink.js');
 
 const commonRules = {
   'no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
@@ -13,28 +14,12 @@ const commonRules = {
   ],
 };
 
-// #1104 L1: in the TypeScript sources every innerHTML/outerHTML write and every
-// insertAdjacentHTML call must receive an Html value (the html`` tag, joinHtml(),
-// tHtml(), or another Html-returning helper — see public-src/utils.ts / i18n.ts).
-// A raw string literal, an untagged template literal, a `+` concatenation, or a
-// conditional/logical whose branch is one of those would smuggle an unescaped
-// value into a markup sink, so those right-hand sides are errors. Html-producing
-// calls, tagged templates, constants and identifiers stay allowed — telling a
-// plain-string identifier apart from an Html-branded one needs type information
-// that a syntax selector does not have, so identifiers rely on the Html brand.
-const htmlSinkMessage =
-  'innerHTML/outerHTML must be assigned an Html value built with the html template tag, joinHtml(), tHtml() or another Html-returning helper (see public-src/utils.ts); a raw string, untagged template or + concatenation is not escaped (#1104).';
-const rawMarkup = (path) => `[${path}.type=/^(?:Literal|TemplateLiteral|BinaryExpression)$/]`;
-const htmlSinkRules = [
-  ...['right', 'right.consequent', 'right.alternate', 'right.left', 'right.right'].map((path) => ({
-    selector: `AssignmentExpression[left.property.name=/^(inner|outer)HTML$/]${rawMarkup(path)}`,
-    message: htmlSinkMessage,
-  })),
-  ...['arguments.1', 'arguments.1.consequent', 'arguments.1.alternate', 'arguments.1.left', 'arguments.1.right'].map((path) => ({
-    selector: `CallExpression[callee.property.name="insertAdjacentHTML"]${rawMarkup(path)}`,
-    message: htmlSinkMessage,
-  })),
-];
+const localPlugin = {
+  rules: {
+    // #1104 L1.
+    'html-sink': htmlSinkRule,
+  },
+};
 
 module.exports = [
   {
@@ -46,11 +31,18 @@ module.exports = [
     ignores: [
       'public/**', 'node_modules/**', 'docs/**', 'graphify-out/**',
       'go/internal/web/static/vendor/**', 'go/internal/webapp/dist/**',
+      // Deliberately-bad lint fixtures for the rule test; typed by tsc, never
+      // linted as project code.
+      'test/fixtures/**',
     ],
+  },
+  {
+    // #1104 L1: local rules (eslint-rules/), available to every file.
+    plugins: { local: localPlugin },
   },
   js.configs.recommended,
   {
-    files: ['eslint.config.js', 'vite.config.js', 'vitest.config.js'],
+    files: ['eslint.config.js', 'vite.config.js', 'vitest.config.js', 'eslint-rules/**/*.js'],
     languageOptions: {
       globals: globals.node,
     },
@@ -109,9 +101,9 @@ module.exports = [
     rules: {
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
-      // #1104 L1: block unescaped values from reaching the innerHTML/outerHTML
-      // and insertAdjacentHTML markup sinks in the migrated TypeScript sources.
-      'no-restricted-syntax': ['error', ...htmlSinkRules],
+      // #1104 L1: every innerHTML/outerHTML write and insertAdjacentHTML call
+      // must carry an Html-branded value; the rule checks the RHS type.
+      'local/html-sink': 'error',
     },
   }),
   {
