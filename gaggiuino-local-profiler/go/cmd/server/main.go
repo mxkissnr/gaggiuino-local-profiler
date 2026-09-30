@@ -154,6 +154,9 @@ func main() {
 // background poller's tickers — cancelling it shuts the poller (and its
 // live-poll goroutine) down cleanly. The returned *sql.DB is the caller's
 // to Close.
+// onMux lets tests inspect the fully-registered mux (openapi_routes_test.go).
+var onMux func(*http.ServeMux)
+
 func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error) {
 	dbPath := cfg.dbPath
 	tokenPath := cfg.tokenPath
@@ -575,6 +578,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// falls through auth.RequireToken's static-asset bypass, exactly as the
 	// Node app's own express.static frontend does. See internal/webapp/doc.go.
 	webapp.NewHandlers().RegisterRoutes(mux)
+
+	if onMux != nil {
+		onMux(mux)
+	}
 
 	limiter := ratelimit.New(rateLimitWindow, rateLimitMax)
 

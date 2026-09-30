@@ -1592,6 +1592,22 @@ paths:
         "400": { description: ml must be positive }
         "404": { description: Not found }
 
+  /api/library/milk/{id}/restock:
+    post:
+      tags: [Library]
+      summary: Restock milk (additive top-up of stockMl)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [ml], properties: { ml: { type: number, exclusiveMinimum: 0 } } }
+      responses:
+        "200": { description: Updated milk, content: { application/json: { schema: { $ref: '#/components/schemas/Milk' } } } }
+        "400": { description: ml must be positive }
+        "404": { description: Not found }
+
   /api/library/recipe:
     post:
       tags: [Library]
