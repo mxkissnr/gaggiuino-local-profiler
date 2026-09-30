@@ -252,7 +252,10 @@ async function _performAnnotationSave(): Promise<void> {
       _maybeDeductMilk(shot, payload);
       _maybeAdjustFrozenPortion(shot, payload);
       const idx = S.shots.findIndex(s => s.id === id);
-      if (idx !== -1) S.shots[idx].annotation = payload;
+      if (idx !== -1) {
+        const entry = S.shots[idx];
+        if (entry) entry.annotation = payload;
+      }
       renderSidebar();
       updateSidebarHighlighting();
       _setAutoSaveStatus('saved');
@@ -607,8 +610,10 @@ export function updateDegassing(val: string | null | undefined): void {
     if (!s) return null;
     const m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
     if (!m) return null;
-    const y = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
-    const d = new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));
+    const [, dayRaw, monthRaw, yearRaw] = m;
+    if (dayRaw === undefined || monthRaw === undefined || yearRaw === undefined) return null;
+    const y = yearRaw.length === 2 ? 2000 + parseInt(yearRaw) : parseInt(yearRaw);
+    const d = new Date(y, parseInt(monthRaw) - 1, parseInt(dayRaw));
     return isNaN(d.getTime()) ? null : d;
   };
   const date = parseDMY(val);
@@ -671,7 +676,10 @@ export async function uploadShotImage(input: HTMLInputElement): Promise<void> {
   }
   const saved = await r.json() as { image?: string | null };
   const idx = S.shots.findIndex(s => s.id === id);
-  if (idx !== -1) S.shots[idx].image = saved.image;
+  if (idx !== -1) {
+    const entry = S.shots[idx];
+    if (entry) entry.image = saved.image;
+  }
   invalidateShotImage(id);
   _renderShotPhoto({ id, image: saved.image });
   renderSidebar();
@@ -684,7 +692,10 @@ export async function removeShotImage(): Promise<void> {
   const r = await deleteShotImage(id);
   if (!r.ok) return;
   const idx = S.shots.findIndex(s => s.id === id);
-  if (idx !== -1) delete S.shots[idx].image;
+  if (idx !== -1) {
+    const entry = S.shots[idx];
+    if (entry) delete entry.image;
+  }
   invalidateShotImage(id);
   _renderShotPhoto({ id, image: null });
   renderSidebar();
