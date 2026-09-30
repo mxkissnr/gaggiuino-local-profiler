@@ -50,6 +50,9 @@
 - **The README's architecture diagrams are now coloured and readable, and the README's AI note credits DeepSeek alongside Claude.** Closes #1180
 - **The README's architecture diagrams are now grouped into named areas and toned for readability in both GitHub themes.** Part of #1180
 
+### Removed
+- **The backend no longer defines the two sync event types that were never emitted, with no behavior change.** Part of #1200
+
 ## [3.2.0] – 2026-09-26
 ### Added
 - **Added a kiosk page for a tablet on the table: guests enter their name, pick a drink and place an order, and see the live queue with estimated times.** Part of #1125
