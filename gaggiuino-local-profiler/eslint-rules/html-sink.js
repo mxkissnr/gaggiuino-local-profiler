@@ -13,30 +13,16 @@
 // therefore stays allowed, which is the point of the branding work.
 
 const { ESLintUtils } = require('@typescript-eslint/utils');
-const ts = require('typescript');
 
 const SINK_PROPERTIES = new Set(['innerHTML', 'outerHTML']);
 
-// The brand property added by the `Html` intersection type.
+// The brand property that the `Html` intersection type adds.
 const HTML_BRAND = '__html';
 
-// Locate the `Html` type alias in public-src/utils.ts so the value can be
-// checked for assignability to it, not just for the brand marker.
-function findHtmlType(program, checker) {
-  for (const sourceFile of program.getSourceFiles()) {
-    if (sourceFile.isDeclarationFile || !/[\\/]utils\.ts$/.test(sourceFile.fileName)) continue;
-    let htmlType;
-    sourceFile.forEachChild(function visit(node) {
-      if (htmlType) return;
-      if (ts.isTypeAliasDeclaration(node) && node.name.text === 'Html') {
-        const symbol = checker.getSymbolAtLocation(node.name);
-        if (symbol) htmlType = checker.getDeclaredTypeOfSymbol(symbol);
-      }
-      if (!htmlType) ts.forEachChild(node, visit);
-    });
-    if (htmlType) return htmlType;
-  }
-  return undefined;
+// Whether a resolved expression type carries the Html brand. Given a plain
+// `string` (or `any`) this is false, so the value is reported.
+function isHtmlValue(checker, type) {
+  return checker.getPropertyOfType(type, HTML_BRAND) !== undefined;
 }
 
 function memberPropertyName(member) {
@@ -71,20 +57,12 @@ const htmlSinkRule = {
       return {};
     }
     const checker = services.program.getTypeChecker();
-    const htmlType = findHtmlType(services.program, checker);
-
-    const isHtmlValue = (type) => {
-      if (htmlType && typeof checker.isTypeAssignableTo === 'function') {
-        if (checker.isTypeAssignableTo(type, htmlType)) return true;
-      }
-      return checker.getPropertyOfType(type, HTML_BRAND) !== undefined;
-    };
 
     const checkValue = (node) => {
       if (!node || node.type === 'SpreadElement') return;
       const tsNode = services.esTreeNodeToTSNodeMap.get(node);
       if (!tsNode) return;
-      if (!isHtmlValue(checker.getTypeAtLocation(tsNode))) {
+      if (!isHtmlValue(checker, checker.getTypeAtLocation(tsNode))) {
         context.report({ node, messageId: 'htmlSink' });
       }
     };

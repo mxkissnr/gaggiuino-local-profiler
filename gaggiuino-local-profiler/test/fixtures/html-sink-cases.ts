@@ -1,8 +1,8 @@
 // Fixture for test/html-sink-lint.test.ts (#1104 L1). ESLint ignores this file
 // as project code (see eslint.config.js) but tsc still type-checks it, and the
-// test lints it through a Linter so the typed `html-sink` rule can see the Html
-// brand. Lines ending in "// rejected" must be reported by the rule; lines
-// ending in "// accepted" must not.
+// test lints it through ESLint with ignore disabled so the typed `html-sink`
+// rule can see the Html brand. Lines ending in "// rejected" must be reported by
+// the rule; lines ending in "// accepted" must not.
 import { esc, html, joinHtml } from '../../public-src/utils.js';
 import { tHtml } from '../../public-src/i18n.js';
 
