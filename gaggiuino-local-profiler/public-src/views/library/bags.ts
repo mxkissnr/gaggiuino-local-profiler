@@ -2,9 +2,10 @@
 // the Library view, split out of views/library.js. Pure move + type port
 // (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
-import { t } from '../../i18n.js';
+import { tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
-import { esc, todayIsoDate } from '../../utils.js';
+import { esc, todayIsoDate, html, joinHtml } from '../../utils.js';
+import type { Html } from '../../utils.js';
 import type { Bean } from '../../api/types.js';
 import * as libraryView from '../library.js';
 
@@ -12,8 +13,8 @@ import * as libraryView from '../library.js';
 // call time, never read at module load.
 const library = libraryView as unknown as { renderBeanList: () => void };
 
-const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
-const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
+const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>` as Html;
+const ICON_TRASH = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>` as Html;
 
 // The generated Bean.bags item lags the backend: every bean-returning
 // response also carries price_eur/sortOrder (stored) and the server-computed
@@ -115,7 +116,7 @@ export const _expandedPastSections = new Set<number>();
 // current loses it as soon as any dose lands on it, past bags never had it.
 // Only 'upcoming' bags are drag-reorderable (see main.js's pointer-events
 // drag handler) — current is queue-position-fixed, past is inert.
-export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, beans: BeanRow[], canDelete: boolean): string {
+export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, beans: BeanRow[], canDelete: boolean): Html {
   const { bg, consumed, stockG, remaining } = entry;
   const pct = remaining != null && stockG != null && stockG > 0 ? Math.round((remaining / stockG) * 100) : null;
   const editingStock = S._bagStockEditId === bg.id;
@@ -126,73 +127,73 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
   // (fat-fingered) mark-empty/stock-adjust get corrected without reopening
   // arbitrary older history.
   const canEdit = state === 'past' ? !!entry.isLastEmpty : consumed === 0;
-  const details = [
-    stockG != null && stockG > 0 ? `<span class="lib-bag-detail"><span class="lib-bag-detail-label">${t('lib_bag_weight')}</span><span class="lib-bag-detail-val">${stockG} g</span></span>` : '',
-    consumed > 0 ? `<span class="lib-bag-detail"><span class="lib-bag-detail-label">${t('lib_bag_consumed')}</span><span class="lib-bag-detail-val">${consumed} g</span></span>` : '',
-    remaining != null ? `<span class="lib-bag-detail"><span class="lib-bag-detail-label">${t('lib_bag_remaining')}</span><span class="lib-bag-detail-val">${remaining} g${pct != null ? ` (${pct}%)` : ''}</span></span>` : '',
-    bg.price_eur ? `<span class="lib-bag-detail"><span class="lib-bag-detail-label">${t('lib_bag_price')}</span><span class="lib-bag-detail-val">${parseFloat(String(bg.price_eur)).toFixed(2)} €</span></span>` : '',
-    bg.batchNumber ? `<span class="lib-bag-detail"><span class="lib-bag-detail-label">${t('lib_bag_batch_number')}</span><span class="lib-bag-detail-val">${esc(bg.batchNumber)}</span></span>` : '',
+  const details: Html[] = [
+    stockG != null && stockG > 0 ? html`<span class="lib-bag-detail"><span class="lib-bag-detail-label">${tHtml('lib_bag_weight')}</span><span class="lib-bag-detail-val">${esc(stockG)} g</span></span>` : esc(''),
+    consumed > 0 ? html`<span class="lib-bag-detail"><span class="lib-bag-detail-label">${tHtml('lib_bag_consumed')}</span><span class="lib-bag-detail-val">${esc(consumed)} g</span></span>` : esc(''),
+    remaining != null ? html`<span class="lib-bag-detail"><span class="lib-bag-detail-label">${tHtml('lib_bag_remaining')}</span><span class="lib-bag-detail-val">${esc(remaining)} g${pct != null ? html` (${esc(pct)}%)` : esc('')}</span></span>` : esc(''),
+    bg.price_eur ? html`<span class="lib-bag-detail"><span class="lib-bag-detail-label">${tHtml('lib_bag_price')}</span><span class="lib-bag-detail-val">${esc(parseFloat(String(bg.price_eur)).toFixed(2))} €</span></span>` : esc(''),
+    bg.batchNumber ? html`<span class="lib-bag-detail"><span class="lib-bag-detail-label">${tHtml('lib_bag_batch_number')}</span><span class="lib-bag-detail-val">${esc(bg.batchNumber)}</span></span>` : esc(''),
   ].filter(Boolean);
-  const stateBadge = state === 'current'
-    ? `<span class="lib-bag-active-badge">${t('lib_bag_state_current')}</span>`
+  const stateBadge: Html = state === 'current'
+    ? html`<span class="lib-bag-active-badge">${tHtml('lib_bag_state_current')}</span>`
     : state === 'upcoming'
-    ? `<span class="lib-bag-upcoming-badge">${t('lib_bag_state_upcoming')}</span>`
-    : `<span class="lib-bag-past-badge">${t('lib_bag_state_past')}</span>`;
+    ? html`<span class="lib-bag-upcoming-badge">${tHtml('lib_bag_state_upcoming')}</span>`
+    : html`<span class="lib-bag-past-badge">${tHtml('lib_bag_state_past')}</span>`;
   // stockG != null (tracked), not stockG > 0 — the last-emptied exception
   // is specifically for a bag sitting at 0, so requiring a positive stock
   // here would hide the fix for the exact case it exists for.
   const canAdjust = (state === 'current' || state === 'upcoming' || (state === 'past' && entry.isLastEmpty)) && stockG != null;
   // "Als leer markieren" lives inside the stock-adjust row now, not as its
   // own always-visible button — both are "change this bag's stock" actions.
-  const stockRow = editingStock
-    ? `<div class="lib-stock-edit-row">
-         <input type="number" class="lib-new-bag-input" id="bagStockEditInput${bg.id}" value="${remaining ?? 0}" min="0" step="1" placeholder="${t('lib_stock_adjust_ph')}">
-         <button class="lib-save-btn" data-action="save-bag-stock-edit" data-bean-id="${b.id}" data-bag-id="${bg.id}">${t('lib_save')}</button>
-         <button class="lib-btn-sm" data-action="mark-bag-empty" data-bean-id="${b.id}" data-bag-id="${bg.id}">${t('lib_bag_mark_empty')}</button>
-         <button class="lib-btn-sm" data-action="close-bag-stock-edit" data-bean-id="${b.id}">${t('lib_cancel')}</button>
+  const stockRow: Html = editingStock
+    ? html`<div class="lib-stock-edit-row">
+         <input type="number" class="lib-new-bag-input" id="bagStockEditInput${esc(bg.id)}" value="${esc(remaining ?? 0)}" min="0" step="1" placeholder="${tHtml('lib_stock_adjust_ph')}">
+         <button class="lib-save-btn" data-action="save-bag-stock-edit" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_save')}</button>
+         <button class="lib-btn-sm" data-action="mark-bag-empty" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_bag_mark_empty')}</button>
+         <button class="lib-btn-sm" data-action="close-bag-stock-edit" data-bean-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
        </div>`
-    : '';
+    : esc('');
   // Full-detail edit (roastDate/original weight/price/batch number) — the
   // pencil icon's target. Distinct from stockRow above: that one only ever
   // adjusts remaining stock (via consumedG math), this one PUTs every
   // field updateBag accepts at once, same contract putBagStock already
   // relies on for its own partial (stock-only) writes.
-  const editRow = editingFull
-    ? `<div class="lib-new-bag-form" style="display:flex">
+  const editRow: Html = editingFull
+    ? html`<div class="lib-new-bag-form" style="display:flex">
          <div class="lib-new-bag-fields">
-           <input type="date" class="lib-new-bag-input" id="editBagRoastDate${bg.id}" title="${t('lib_bag_roast_date')}" value="${esc(bg.roastDate || '')}" max="${todayIsoDate()}">
-           <input type="number" class="lib-new-bag-input" id="editBagStock${bg.id}" placeholder="${t('lib_bag_stock')}" min="0" step="1" value="${stockG ?? ''}">
-           <input type="number" class="lib-new-bag-input" id="editBagPrice${bg.id}" placeholder="${t('lib_bag_price')}" min="0" step="0.01" value="${bg.price_eur ?? ''}">
-           <input type="text" class="lib-new-bag-input" id="editBagBatchNumber${bg.id}" placeholder="${t('lib_bag_batch_number')}" maxlength="50" value="${esc(bg.batchNumber || '')}">
+           <input type="date" class="lib-new-bag-input" id="editBagRoastDate${esc(bg.id)}" title="${tHtml('lib_bag_roast_date')}" value="${esc(bg.roastDate || '')}" max="${esc(todayIsoDate())}">
+           <input type="number" class="lib-new-bag-input" id="editBagStock${esc(bg.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" step="1" value="${esc(stockG ?? '')}">
+           <input type="number" class="lib-new-bag-input" id="editBagPrice${esc(bg.id)}" placeholder="${tHtml('lib_bag_price')}" min="0" step="0.01" value="${esc(bg.price_eur ?? '')}">
+           <input type="text" class="lib-new-bag-input" id="editBagBatchNumber${esc(bg.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50" value="${esc(bg.batchNumber || '')}">
          </div>
          <div class="lib-form-actions">
-           <button class="lib-btn-sm" data-action="close-edit-bag" data-bean-id="${b.id}">${t('lib_cancel')}</button>
-           <button class="lib-save-btn" data-action="save-edit-bag" data-bean-id="${b.id}" data-bag-id="${bg.id}">${t('lib_bag_save')}</button>
+           <button class="lib-btn-sm" data-action="close-edit-bag" data-bean-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
+           <button class="lib-save-btn" data-action="save-edit-bag" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_bag_save')}</button>
          </div>
        </div>`
-    : '';
-  const dragHandle = state === 'upcoming'
-    ? `<span class="lib-bag-drag-handle" data-bag-drag-handle data-bean-id="${b.id}" data-bag-id="${bg.id}" title="${t('lib_bag_reorder_handle')}">⠿</span>`
-    : '';
-  return `<div class="lib-bag-card${state === 'current' ? ' active' : ''}${expanded ? ' expanded' : ''}" data-bag-card data-bag-id="${bg.id}">
-    <div class="lib-bag-card-header" data-action="toggle-bag-card" data-bag-id="${bg.id}">
+    : esc('');
+  const dragHandle: Html = state === 'upcoming'
+    ? html`<span class="lib-bag-drag-handle" data-bag-drag-handle data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}" title="${tHtml('lib_bag_reorder_handle')}">⠿</span>`
+    : esc('');
+  return html`<div class="lib-bag-card${esc(state === 'current' ? ' active' : '')}${esc(expanded ? ' expanded' : '')}" data-bag-card data-bag-id="${esc(bg.id)}">
+    <div class="lib-bag-card-header" data-action="toggle-bag-card" data-bag-id="${esc(bg.id)}">
       ${dragHandle}
-      <span class="lib-bag-date">${bg.roastDate ? esc(bg.roastDate) : t('lib_bag_no_roast_date')}</span>
+      <span class="lib-bag-date">${bg.roastDate ? esc(bg.roastDate) : tHtml('lib_bag_no_roast_date')}</span>
       ${stateBadge}
-      ${pct != null ? `<span class="lib-bag-pct">${pct}%</span>` : ''}
-      <span class="lib-bag-chevron">${expanded ? '▾' : '▸'}</span>
+      ${pct != null ? html`<span class="lib-bag-pct">${esc(pct)}%</span>` : esc('')}
+      <span class="lib-bag-chevron">${esc(expanded ? '▾' : '▸')}</span>
     </div>
-    <div class="lib-bag-card-body" style="${expanded ? '' : 'display:none'}">
+    <div class="lib-bag-card-body" style="${esc(expanded ? '' : 'display:none')}">
       <div class="lib-bag-card-actions">
-        ${canEdit && !editingFull ? `<button class="lib-bag-edit-btn" data-action="open-edit-bag" data-bean-id="${b.id}" data-bag-id="${bg.id}" title="${t('lib_bag_edit')}">${ICON_PENCIL}</button>` : ''}
-        ${canDelete ? `<button class="lib-bag-del" data-action="delete-bag" data-bean-id="${b.id}" data-bag-id="${bg.id}" title="${t('lib_bag_delete')}">${ICON_TRASH}</button>` : ''}
+        ${canEdit && !editingFull ? html`<button class="lib-bag-edit-btn" data-action="open-edit-bag" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}" title="${tHtml('lib_bag_edit')}">${ICON_PENCIL}</button>` : esc('')}
+        ${canDelete ? html`<button class="lib-bag-del" data-action="delete-bag" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}" title="${tHtml('lib_bag_delete')}">${ICON_TRASH}</button>` : esc('')}
       </div>
-      ${editingFull ? '' : `<div class="lib-bag-card-details">
-        ${details.length ? details.join('') : `<span class="lib-bag-empty-note">${t('lib_bag_stock_untracked')}</span>`}
+      ${editingFull ? esc('') : html`<div class="lib-bag-card-details">
+        ${details.length ? joinHtml(details) : html`<span class="lib-bag-empty-note">${tHtml('lib_bag_stock_untracked')}</span>`}
       </div>`}
-      ${canAdjust && !editingStock && !editingFull ? `<div class="lib-bag-card-actions-row">
-        <button class="lib-btn-sm" data-action="open-bag-stock-edit" data-bag-id="${bg.id}">${t('lib_stock_edit_btn')}</button>
-      </div>` : ''}
+      ${canAdjust && !editingStock && !editingFull ? html`<div class="lib-bag-card-actions-row">
+        <button class="lib-btn-sm" data-action="open-bag-stock-edit" data-bag-id="${esc(bg.id)}">${tHtml('lib_stock_edit_btn')}</button>
+      </div>` : esc('')}
       ${stockRow}
       ${editRow}
     </div>
