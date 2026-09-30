@@ -1,12 +1,13 @@
 import { S } from '../state/index.js';
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
 import {
   getMaintenance, markMaintenanceDone, saveMaintenanceThreshold,
   getMaintenanceLog, addMaintenanceLogEntry, deleteMaintenanceLogEntry,
   addCustomMaintenanceTask, deleteCustomMaintenanceTask,
 } from '../api/maintenance.js';
 import { MAINT_META, GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
-import { esc } from '../utils.js';
+import { esc, html, joinHtml } from '../utils.js';
+import type { Html } from '../utils.js';
 
 // One task's status block as GET /api/maintenance serves it (flat for a
 // single machine, nested under machines[]/global for the fleet view).
@@ -72,19 +73,19 @@ type MaintScope = string | number;
 // Dashboard mockup Max picked. Purely decorative; task identity always comes
 // from MAINT_META's translation key (or the grinder's own name), never the
 // icon alone, so a missing/unmapped icon never loses information.
-const TASK_ICON_PATHS: Record<string, string> = {
-  descaling:   '<path d="M3 6h8v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6zM11 7h1.5a1.5 1.5 0 0 1 0 3H11M5 3.5v1M8 3.5v1"/>',
-  backflush:   '<path d="M8 2v6M4.5 5.5 8 8l3.5-2.5M3 11h10M4 11v2h8v-2"/>',
-  grouphead:   '<circle cx="8" cy="8" r="5"/><path d="M8 5.5v.01M6.2 8h.01M9.8 8h.01M8 10.5v.01"/>',
-  gaskets:     '<circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="2"/>',
-  waterfilter: '<path d="M8 2.5S4 7 4 9.8a4 4 0 0 0 8 0C12 7 8 2.5 8 2.5z"/>',
-  grinder:     '<circle cx="8" cy="8" r="2"/><path d="M8 2v2.5M8 11.5V14M2 8h2.5M11.5 8H14M4 4l1.8 1.8M10.2 10.2 12 12M12 4l-1.8 1.8M5.8 10.2 4 12"/>',
-  custom:      '<path d="M10.5 2.5a2 2 0 0 1 2.83 2.83l-7 7L3 13l.67-3.33 7-7z"/>',
+const TASK_ICON_PATHS: Record<string, Html> = {
+  descaling:   html`<path d="M3 6h8v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6zM11 7h1.5a1.5 1.5 0 0 1 0 3H11M5 3.5v1M8 3.5v1"/>`,
+  backflush:   html`<path d="M8 2v6M4.5 5.5 8 8l3.5-2.5M3 11h10M4 11v2h8v-2"/>`,
+  grouphead:   html`<circle cx="8" cy="8" r="5"/><path d="M8 5.5v.01M6.2 8h.01M9.8 8h.01M8 10.5v.01"/>`,
+  gaskets:     html`<circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="2"/>`,
+  waterfilter: html`<path d="M8 2.5S4 7 4 9.8a4 4 0 0 0 8 0C12 7 8 2.5 8 2.5z"/>`,
+  grinder:     html`<circle cx="8" cy="8" r="2"/><path d="M8 2v2.5M8 11.5V14M2 8h2.5M11.5 8H14M4 4l1.8 1.8M10.2 10.2 12 12M12 4l-1.8 1.8M5.8 10.2 4 12"/>`,
+  custom:      html`<path d="M10.5 2.5a2 2 0 0 1 2.83 2.83l-7 7L3 13l.67-3.33 7-7z"/>`,
 };
-function taskIconSvg(task: string): string {
+function taskIconSvg(task: string): Html {
   const key = task.startsWith('grinder_') ? 'grinder' : task.startsWith('custom_') ? 'custom' : task;
-  const path = TASK_ICON_PATHS[key] || '';
-  return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">${path}</svg>`;
+  const path = TASK_ICON_PATHS[key] ?? html``;
+  return html`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">${path}</svg>`;
 }
 
 // Mirrors lib/constants.js's isGlobalMaintenanceTask() — waterfilter and
@@ -216,14 +217,14 @@ export function _pickNextDueTile(tiles: MaintTile[]): MaintTile | null {
 
 export async function loadMaintenanceView(): Promise<void> {
   const container = document.getElementById('maint-cards') as HTMLElement;
-  container.innerHTML = `<div class="loading-state">${t('loading')}</div>`;
+  container.innerHTML = html`<div class="loading-state">${tHtml('loading')}</div>`;
   try {
     const scope = _effectiveScope();
     const r = await getMaintenance(scope);
     const data = await r.json() as MaintResponse;
     renderMaintenanceDashboard(data, scope);
   } catch {
-    container.innerHTML = `<div class="loading-state" style="color:var(--err)">${t('error_load')}</div>`;
+    container.innerHTML = html`<div class="loading-state" style="color:var(--err)">${tHtml('error_load')}</div>`;
   }
   void loadMaintLog();
 }
@@ -237,23 +238,23 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   const nextTile   = _pickNextDueTile(active);
   const hasMachines = (S.machines || []).length > 1;
 
-  container.innerHTML = `
+  container.innerHTML = html`
     <div class="maint-summary" id="maintSummary"></div>
     <div class="maint-next-banner" id="maintNextBanner" style="display:none"></div>
-    <div class="maint-scope-row" id="maintScopeRow" style="display:${hasMachines ? '' : 'none'}">
+    <div class="maint-scope-row" id="maintScopeRow" style="display:${esc(hasMachines ? '' : 'none')}">
       <div class="maint-seg" id="maintScopeSeg" role="group" aria-label="${esc(t('machine_switcher_title') || '')}"></div>
-      <span class="maint-scope-hint" id="maintScopeHint">${t('maint_shared_once')}</span>
+      <span class="maint-scope-hint" id="maintScopeHint">${tHtml('maint_shared_once')}</span>
     </div>
     <div class="maint-grid-compact" id="maintGrid"></div>
     <div class="maint-custom-section" id="maintCustomSection"></div>
     <div class="maint-disabled-section" id="maintDisabledSection" style="display:none"></div>
   `;
 
-  (document.getElementById('maintSummary') as HTMLElement).innerHTML = `
-    <div class="maint-tile due"><div class="k num">${counts.due}</div><div class="l">${t('maint_due')}</div></div>
-    <div class="maint-tile soon"><div class="k num">${counts.soon}</div><div class="l">${t('maint_soon')}</div></div>
-    <div class="maint-tile ok"><div class="k num">${counts.ok}</div><div class="l">${t('maint_ok')}</div></div>
-    <div class="maint-tile"><div class="k num" id="maintLogYearCount">–</div><div class="l">${t('maint_summary_log_entries', new Date().getFullYear())}</div></div>
+  (document.getElementById('maintSummary') as HTMLElement).innerHTML = html`
+    <div class="maint-tile due"><div class="k num">${esc(counts.due)}</div><div class="l">${tHtml('maint_due')}</div></div>
+    <div class="maint-tile soon"><div class="k num">${esc(counts.soon)}</div><div class="l">${tHtml('maint_soon')}</div></div>
+    <div class="maint-tile ok"><div class="k num">${esc(counts.ok)}</div><div class="l">${tHtml('maint_ok')}</div></div>
+    <div class="maint-tile"><div class="k num" id="maintLogYearCount">–</div><div class="l">${tHtml('maint_summary_log_entries', new Date().getFullYear())}</div></div>
   `;
 
   _renderNextBanner(document.getElementById('maintNextBanner'), nextTile);
@@ -261,16 +262,16 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   if (hasMachines) {
     const seg = document.getElementById('maintScopeSeg') as HTMLElement;
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-    seg.innerHTML = [
-      `<button class="${scope === 'all' ? 'on' : ''}" data-action="set-maint-scope" data-scope="all">${esc(t('machine_switcher_all'))}</button>`,
-      ...S.machines.map(m => `<button class="${scope === m.id ? 'on' : ''}" data-action="set-maint-scope" data-scope="${m.id}">${esc(m.name as string)}</button>`),
-    ].join('');
+    seg.innerHTML = joinHtml([
+      html`<button class="${esc(scope === 'all' ? 'on' : '')}" data-action="set-maint-scope" data-scope="all">${tHtml('machine_switcher_all')}</button>`,
+      ...S.machines.map(m => html`<button class="${esc(scope === m.id ? 'on' : '')}" data-action="set-maint-scope" data-scope="${esc(m.id)}">${esc(m.name as string)}</button>`),
+    ]);
     const hint = document.getElementById('maintScopeHint');
     if (hint) hint.style.display = active.some(x => x.isGlobal) ? '' : 'none';
   }
 
   const grid = document.getElementById('maintGrid') as HTMLElement;
-  grid.innerHTML = '';
+  grid.innerHTML = html``;
   for (const tile of active) grid.appendChild(_buildMaintMiniTile(tile));
 
   _renderCustomSection(document.getElementById('maintCustomSection'), scope);
@@ -289,7 +290,7 @@ function _renderCustomSection(container: HTMLElement | null, scope: MaintScope):
   if (!container) return;
   const writeMid = _writeMachineId(scope === 'all' ? undefined : scope);
   // codeql[js/xss-through-dom] false positive: esc() applied
-  container.innerHTML = `
+  container.innerHTML = html`
     <details class="maint-custom-add">
       <summary>${esc(t('maint_custom_add_summary'))}</summary>
       <div class="maint-custom-form">
@@ -305,24 +306,24 @@ function _renderCustomSection(container: HTMLElement | null, scope: MaintScope):
 }
 
 function _renderDisabledSection(container: HTMLElement, tiles: MaintTile[]): void {
-  const rows = tiles.map(tile => {
+  const rows = joinHtml(tiles.map(tile => {
     const title = taskTitle(tile.task, tile.d);
-    return `<div class="maint-disabled-row">
+    return html`<div class="maint-disabled-row">
       <span class="icon">${taskIconSvg(tile.task)}</span>
       <span>${esc(title)}</span>
-      <button class="maint-reenable-btn" data-action="toggle-maint-disabled" data-task="${esc(tile.task)}" data-machine-id="${tile.machineId}" data-disabled="false">${esc(t('maint_enable_btn'))}</button>
+      <button class="maint-reenable-btn" data-action="toggle-maint-disabled" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}" data-disabled="false">${tHtml('maint_enable_btn')}</button>
     </div>`;
-  }).join('');
+  }));
   // codeql[js/xss-through-dom] false positive: esc() applied
-  container.innerHTML = `<details class="maint-disabled-details"><summary>${esc(t('maint_disabled_section', tiles.length))}</summary>${rows}</details>`;
+  container.innerHTML = html`<details class="maint-disabled-details"><summary>${tHtml('maint_disabled_section', tiles.length)}</summary>${rows}</details>`;
 }
 
 function _renderNextBanner(container: HTMLElement | null, tile: MaintTile | null): void {
   if (!container) return;
-  if (!tile) { container.style.display = 'none'; container.innerHTML = ''; return; }
+  if (!tile) { container.style.display = 'none'; container.innerHTML = html``; return; }
   container.style.display = '';
   const title       = taskTitle(tile.task, tile.d);
-  const machinePart = !tile.isGlobal && tile.machineName ? ` · ${esc(tile.machineName)}` : '';
+  const machinePart = !tile.isGlobal && tile.machineName ? html` · ${esc(tile.machineName)}` : html``;
 
   let detail;
   if (tile.d.status === 'never') detail = t('maint_never_done');
@@ -331,10 +332,10 @@ function _renderNextBanner(container: HTMLElement | null, tile: MaintTile | null
   else detail = t('maint_next_due');
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  container.innerHTML = `
-    <b>${esc(t('maint_next_label'))}</b> ${esc(title)}${machinePart} — ${esc(detail)}
+  container.innerHTML = html`
+    <b>${tHtml('maint_next_label')}</b> ${esc(title)}${machinePart} — ${esc(detail)}
     <span class="spacer"></span>
-    <button class="maint-banner-btn" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${tile.machineId}">${esc(t('maint_next_action'))}</button>
+    <button class="maint-banner-btn" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('maint_next_action')}</button>
   `;
 }
 
@@ -372,60 +373,60 @@ function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
   const shotsVal = d.threshold_shots ?? '';
   const daysVal  = d.threshold_days  ?? '';
   const gVal     = d.threshold_g ?? '';
-  const shotsInput = `<label class="maint-threshold-field">
-    <span>${esc(t('maint_unit_shots'))}</span>
-    <input type="number" min="1" max="10000" value="${shotsVal}" placeholder="–"
-        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_shots" data-machine-id="${machineId}">
+  const shotsInput = html`<label class="maint-threshold-field">
+    <span>${tHtml('maint_unit_shots')}</span>
+    <input type="number" min="1" max="10000" value="${esc(shotsVal)}" placeholder="–"
+        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_shots" data-machine-id="${esc(machineId)}">
   </label>`;
-  const daysInput = `<label class="maint-threshold-field">
-    <span>${esc(t('maint_by_days'))}</span>
-    <input type="number" min="1" max="3650" value="${daysVal}" placeholder="–"
-        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_days" data-machine-id="${machineId}">
+  const daysInput = html`<label class="maint-threshold-field">
+    <span>${tHtml('maint_by_days')}</span>
+    <input type="number" min="1" max="3650" value="${esc(daysVal)}" placeholder="–"
+        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_days" data-machine-id="${esc(machineId)}">
   </label>`;
-  const gInput = `<label class="maint-threshold-field">
-    <span>${esc(t('maint_unit_grams'))}</span>
-    <input type="number" min="1" max="100000" value="${gVal}" placeholder="–"
-        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_g" data-machine-id="${machineId}">
+  const gInput = html`<label class="maint-threshold-field">
+    <span>${tHtml('maint_unit_grams')}</span>
+    <input type="number" min="1" max="100000" value="${esc(gVal)}" placeholder="–"
+        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_g" data-machine-id="${esc(machineId)}">
   </label>`;
-  const thresholdFields = mode === 'g' ? gInput : mode === 'shots' ? shotsInput : mode === 'days' ? daysInput : shotsInput + daysInput;
+  const thresholdFields: Html = mode === 'g' ? gInput : mode === 'shots' ? shotsInput : mode === 'days' ? daysInput : joinHtml([shotsInput, daysInput]);
 
   const pct = Math.round(d.pct * 100);
   const el = document.createElement('div');
   el.className = `maint-card status-${d.status}`;
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  el.innerHTML = `
+  el.innerHTML = html`
     <div class="maint-card-indicator"></div>
     <div class="maint-card-body">
       <div class="maint-card-header">
         <span class="maint-card-icon">${taskIconSvg(task)}</span>
         <span class="maint-card-title">${esc(title)}</span>
-        <span class="maint-card-chip ${d.status}">${maintStatusLabel(d.status)}</span>
+        <span class="maint-card-chip ${esc(d.status)}">${esc(maintStatusLabel(d.status))}</span>
       </div>
-      <div class="maint-card-progress"><div class="maint-card-progress-fill ${d.status}" style="width:${pct}%"></div></div>
+      <div class="maint-card-progress"><div class="maint-card-progress-fill ${esc(d.status)}" style="width:${esc(pct)}%"></div></div>
       <div class="maint-card-meta">
-        ${machineTagText ? `<span class="shot-machine-badge">${esc(machineTagText)}</span>` : ''}
+        ${machineTagText ? html`<span class="shot-machine-badge">${esc(machineTagText)}</span>` : html``}
         <span class="maint-card-count">${esc(countText)}</span>
-        ${d.machineSyncedAt ? `<span class="maint-auto-synced" title="${esc(t('maint_auto_synced_hint'))}">${esc(t('maint_auto_synced'))}</span>` : ''}
+        ${d.machineSyncedAt ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
       </div>
-      <button class="maint-detail-toggle" type="button" data-action="toggle-maint-detail" data-task="${esc(task)}">${esc(t('maint_tile_details'))}</button>
+      <button class="maint-detail-toggle" type="button" data-action="toggle-maint-detail" data-task="${esc(task)}">${tHtml('maint_tile_details')}</button>
       <div class="detail">
         <div class="maint-mode-seg">
-          <button class="${mode === 'shots' ? 'active' : ''}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="shots" data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">${esc(t('maint_unit_shots'))}</button>
-          <button class="${mode === 'days'  ? 'active' : ''}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="days"  data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">${esc(t('maint_by_days'))}</button>
-          <button class="${mode === 'both'  ? 'active' : ''}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="both"  data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">${esc(t('maint_mode_both'))}</button>
-          ${isGrinder ? `<button class="${mode === 'g' ? 'active' : ''}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="g" data-machine-id="${machineId}" data-current-shots="${shotsVal}" data-current-days="${daysVal}" data-current-g="${gVal}">${esc(t('maint_unit_grams'))}</button>` : ''}
+          <button class="${esc(mode === 'shots' ? 'active' : '')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="shots" data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}">${tHtml('maint_unit_shots')}</button>
+          <button class="${esc(mode === 'days'  ? 'active' : '')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="days"  data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}">${tHtml('maint_by_days')}</button>
+          <button class="${esc(mode === 'both'  ? 'active' : '')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="both"  data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}">${tHtml('maint_mode_both')}</button>
+          ${isGrinder ? html`<button class="${esc(mode === 'g' ? 'active' : '')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="g" data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}">${tHtml('maint_unit_grams')}</button>` : html``}
         </div>
         <div class="maint-threshold-inputs">${thresholdFields}</div>
-        ${isCustom ? `<label class="maint-threshold-field maint-rename-field">
-          <span>${esc(t('maint_rename_label'))}</span>
+        ${isCustom ? html`<label class="maint-threshold-field maint-rename-field">
+          <span>${tHtml('maint_rename_label')}</span>
           <input type="text" maxlength="100" value="${esc(d.label || '')}"
-              data-action="rename-maint-label" data-task="${esc(task)}" data-machine-id="${machineId}">
-        </label>` : ''}
+              data-action="rename-maint-label" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">
+        </label>` : html``}
         <div class="maint-card-actions">
-          <button class="maint-done-btn" data-action="mark-maint-done" data-task="${esc(task)}" data-machine-id="${machineId}">${t('maint_done_btn')}</button>
+          <button class="maint-done-btn" data-action="mark-maint-done" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">${tHtml('maint_done_btn')}</button>
           ${isCustom
-            ? `<button class="maint-delete-btn" data-action="delete-custom-maint-task" data-task="${esc(task)}" data-machine-id="${machineId}">${esc(t('maint_log_delete'))}</button>`
-            : `<button class="maint-disable-btn" data-action="toggle-maint-disabled" data-task="${esc(task)}" data-machine-id="${machineId}" data-disabled="true">${esc(t('maint_disable_btn'))}</button>`
+            ? html`<button class="maint-delete-btn" data-action="delete-custom-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">${tHtml('maint_log_delete')}</button>`
+            : html`<button class="maint-disable-btn" data-action="toggle-maint-disabled" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" data-disabled="true">${tHtml('maint_disable_btn')}</button>`
           }
         </div>
       </div>
@@ -446,12 +447,12 @@ export function openGuidedMaint(task: string, machineId: string | number): void 
   _guidedTask = task;
   _guidedMachineId = machineId;
   (document.getElementById('guidedMaintTitle') as HTMLElement).textContent = t(MAINT_META[task]?.key || task);
-  (document.getElementById('guidedMaintSteps') as HTMLElement).innerHTML = steps.map((key, i) => `
+  (document.getElementById('guidedMaintSteps') as HTMLElement).innerHTML = joinHtml(steps.map((key, i) => html`
     <label class="guided-maint-step">
       <input type="checkbox" class="guided-maint-check">
-      <span class="guided-maint-step-num">${i + 1}</span>
-      <span>${esc(t(key))}</span>
-    </label>`).join('');
+      <span class="guided-maint-step-num">${esc(i + 1)}</span>
+      <span>${tHtml(key)}</span>
+    </label>`));
   const doneBtn = document.getElementById('guidedMaintDoneBtn') as HTMLButtonElement;
   doneBtn.textContent = t('maint_done_btn');
   doneBtn.disabled = true;
@@ -578,7 +579,7 @@ export async function loadMaintLog(): Promise<void> {
     const scope = _effectiveScope();
     const entries = await getMaintenanceLog(scope).then(r => r.json()) as MaintLogEntry[];
     renderMaintLog(entries);
-  } catch { el.innerHTML = ''; }
+  } catch { el.innerHTML = html``; }
 }
 
 export function renderMaintLog(entries: MaintLogEntry[]): void {
@@ -592,32 +593,32 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
   }
 
   if (!entries.length) {
-    el.innerHTML = `<p class="empty-note pad-top">${t('maint_log_empty')}</p>`;
+    el.innerHTML = html`<p class="empty-note pad-top">${tHtml('maint_log_empty')}</p>`;
     return;
   }
 
   const locale = localeFor(S.currentLang);
-  const rows = entries.map(e => {
+  const rows = joinHtml(entries.map(e => {
     const dateStr   = new Date(e.ts * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
     const isManual  = e.shotCountAtTime === null;
     const machineTag = isGlobalTask(e.task)
       ? t('maint_shared_tag')
       : ((S.machines || []).find(m => m.id === e.machineId)?.name || e.machine || '');
-    return `<tr>
-      <td>${dateStr}</td>
-      <td>${esc(taskTitle(e.task, e))}${isManual ? `<span class="maint-log-manual-badge">${t('maint_log_manual_badge')}</span>` : ''}</td>
-      <td>${machineTag ? `<span class="shot-machine-badge">${esc(machineTag as string)}</span>` : ''}</td>
-      <td class="num">${e.shotCountAtTime ?? '–'}</td>
-      <td>${e.notes ? esc(e.notes) : ''}
-        <button class="maint-log-del-btn" data-action="delete-maint-log" data-id="${e.id}" title="${t('maint_log_confirm_delete')}">${t('maint_log_delete')}</button>
+    return html`<tr>
+      <td>${esc(dateStr)}</td>
+      <td>${esc(taskTitle(e.task, e))}${isManual ? html`<span class="maint-log-manual-badge">${tHtml('maint_log_manual_badge')}</span>` : html``}</td>
+      <td>${machineTag ? html`<span class="shot-machine-badge">${esc(machineTag as string)}</span>` : html``}</td>
+      <td class="num">${esc(e.shotCountAtTime ?? '–')}</td>
+      <td>${e.notes ? esc(e.notes) : html``}
+        <button class="maint-log-del-btn" data-action="delete-maint-log" data-id="${esc(e.id)}" title="${tHtml('maint_log_confirm_delete')}">${tHtml('maint_log_delete')}</button>
       </td>
     </tr>`;
-  }).join('');
+  }));
 
-  el.innerHTML = `<div class="maint-log-tablewrap"><table class="maint-log-table">
+  el.innerHTML = html`<div class="maint-log-tablewrap"><table class="maint-log-table">
     <thead><tr>
-      <th>${t('maint_log_col_date')}</th><th>${t('maint_log_col_task')}</th>
-      <th>${t('maint_log_machine')}</th><th>${t('maint_by_shots')}</th><th>${t('maint_log_col_notes')}</th>
+      <th>${tHtml('maint_log_col_date')}</th><th>${tHtml('maint_log_col_task')}</th>
+      <th>${tHtml('maint_log_machine')}</th><th>${tHtml('maint_by_shots')}</th><th>${tHtml('maint_log_col_notes')}</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
@@ -645,7 +646,7 @@ export function openMaintLogForm(): void {
   const form = document.getElementById('maintLogForm');
   if (!form) return;
   const sel = document.getElementById('maintLogTask') as HTMLSelectElement;
-  sel.innerHTML = '';
+  sel.innerHTML = html``;
   for (const { task, label } of _maintLogTaskOptions(_lastActiveTiles)) {
     const opt = document.createElement('option');
     opt.value = task; opt.textContent = label;
