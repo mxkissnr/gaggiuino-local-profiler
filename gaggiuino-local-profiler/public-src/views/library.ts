@@ -1,6 +1,7 @@
 import type { Basket, Milk, PuckScreen, Recipe, NewBagInput } from '../api/types.js';
 import type { BeanRow } from './library/bags.js';
 import { S } from '../state/index.js';
+import type { ShotMeta } from '../state/index.js';
 import { t } from '../i18n.js';
 import * as libraryApi from '../api/library.js';
 import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, toIsoDateInput, todayIsoDate, isoDateInputToMs } from '../utils.js';
@@ -40,7 +41,7 @@ type BeanListRow = BeanRow & {
 };
 
 function _beanList(): BeanListRow[] {
-  return S.coffeeLibrary.beans as unknown as BeanListRow[];
+  return S.coffeeLibrary.beans as BeanListRow[];
 }
 
 // The generated Bean.bags item lags the backend: frozenPortion fields are all
@@ -71,13 +72,12 @@ interface LibraryState {
   _urlImportImageUrl?: string | null;
   _urlImportExtraRecipes?: BeanFormExtraRecipe[] | null;
 }
-function _state(): LibraryState { return S as unknown as LibraryState; }
+function _state(): LibraryState { return S as LibraryState; }
 
 // Shot rows are metadata-only (ShotMeta); the bean list reads the annotation's
 // coffee/rating fields and the timestamp — named here, same convention as
 // views/library/recipes.ts's RecipeShotRow.
-interface BeanShotRow {
-  timestamp: number;
+type BeanShotRow = ShotMeta & {
   annotation: {
     grinder: string;
     grindSetting: string;
@@ -85,8 +85,8 @@ interface BeanShotRow {
     coffee?: string | null;
     rating?: string | null;
   };
-}
-function _shots(): BeanShotRow[] { return S.shots as unknown as BeanShotRow[]; }
+};
+function _shots(): BeanShotRow[] { return S.shots as BeanShotRow[]; }
 
 // qrcode ships no type declarations; name the one call this view makes.
 interface QrCodeModule {
@@ -149,7 +149,7 @@ export async function loadLibrary(): Promise<void> {
   try {
     const library = await libraryApi.getLibrary();
     if (!library) return;
-    S.coffeeLibrary = library as unknown as typeof S.coffeeLibrary;
+    S.coffeeLibrary = library as typeof S.coffeeLibrary;
     const lib = _state().coffeeLibrary;
     if (!lib.recipes)     lib.recipes     = [];
     if (!lib.milks)       lib.milks       = [];
@@ -530,8 +530,8 @@ export async function saveNewBag(id: number): Promise<void> {
   const roastDate   = _field(`newBagRoastDate${id}`)?.value.trim() || '';
   const stock_g     = parseFloat(_field(`newBagStock${id}`)?.value) || null;
   const batchNumber = _field(`newBagBatchNumber${id}`)?.value.trim() || '';
-  // stock_g is nullable server-side; NewBagInput under-documents that.
-  const saved = await libraryApi.addBeanBag(id, { roastDate, stock_g, batchNumber } as unknown as NewBagInput);
+  // stock_g is nullable server-side; NewBagInput under-documents that. TODO(#1103)
+  const saved = await libraryApi.addBeanBag(id, { roastDate, stock_g, batchNumber } as NewBagInput);
   if (!saved) return;
   const idx = _beanList().findIndex(b => b.id === id);
   if (idx !== -1) _beanList()[idx] = saved;
@@ -636,7 +636,7 @@ export function toggleBeanQR(id: number): void {
   // an unhandled rejection: the canvas stayed silently blank, no error ever
   // reached the user.
   // @ts-expect-error -- qrcode ships no type declarations
-  const qrModule = import('qrcode') as unknown as Promise<{ default: QrCodeModule }>;
+  const qrModule = import('qrcode') as Promise<{ default: QrCodeModule }>;
   qrModule.then(({ default: QRCode }) =>
     // #814: this was drawn INVERTED — dark: '#e4e4e7' on light: '#18181b' means
     // light modules on a dark ground, to match the dark theme. The QR spec
