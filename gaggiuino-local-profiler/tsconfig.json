@@ -6,6 +6,7 @@
     "moduleResolution": "bundler",
     "strict": true,
     "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
