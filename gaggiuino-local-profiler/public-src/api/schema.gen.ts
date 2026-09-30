@@ -179,7 +179,7 @@ export interface paths {
             };
             requestBody?: {
                 content: {
-                    "application/json": components["schemas"]["ShotDefaults"];
+                    "application/json": components["schemas"]["ShotDefaultsInput"];
                 };
             };
             responses: {
@@ -7489,6 +7489,16 @@ export interface components {
             puckScreenId: number | null;
             grinder: string;
             dose: number | null;
+        };
+        /** @description POST /api/shots/defaults body — a partial update. Every key is optional: go/internal/shots/validation.go's ValidateShotDefaults accepts absent keys and handlers.go's shotDefaultsFromBody fills each missing one (nil, or "" for grinder). */
+        ShotDefaultsInput: {
+            drinkType?: string | null;
+            coffee?: string | null;
+            beanId?: number | null;
+            basketId?: number | null;
+            puckScreenId?: number | null;
+            grinder?: string;
+            dose?: number | null;
         };
         /** @description One entry of GET /api/orders/queue-eta's `positions` map. */
         QueuePosition: {

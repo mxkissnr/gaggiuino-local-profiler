@@ -811,6 +811,22 @@ components:
         grinder:      { type: string }
         dose:         { type: number, nullable: true }
 
+    ShotDefaultsInput:
+      type: object
+      description: >
+        POST /api/shots/defaults body — a partial update. Every key is
+        optional: go/internal/shots/validation.go's ValidateShotDefaults
+        accepts absent keys and handlers.go's shotDefaultsFromBody fills
+        each missing one (nil, or "" for grinder).
+      properties:
+        drinkType:    { type: string, nullable: true }
+        coffee:       { type: string, nullable: true }
+        beanId:       { type: integer, nullable: true }
+        basketId:     { type: integer, nullable: true }
+        puckScreenId: { type: integer, nullable: true }
+        grinder:      { type: string }
+        dose:         { type: number, nullable: true }
+
     # ── Orders (derived, request/response) ─────────────────────────────────
 
     QueuePosition:
@@ -1006,7 +1022,7 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ShotDefaults' }
+            schema: { $ref: '#/components/schemas/ShotDefaultsInput' }
       responses:
         "200": { description: Saved defaults }
         "400": { description: Validation error }

@@ -95,7 +95,6 @@ export type NotifyService = components['schemas']['NotifyService'];
 /** GET /api/orders/notify-mapping — per-HA-user mapping plus the known customer names. */
 export type NotifyMappingView = components['schemas']['NotifyMappingView'];
 
-
 // ── Library (go/internal/library) ────────────────────────────────────────
 
 export type Bean = components['schemas']['Bean'];
