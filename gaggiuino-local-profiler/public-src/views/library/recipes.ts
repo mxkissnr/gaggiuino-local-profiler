@@ -1,16 +1,17 @@
 // Recipes section of the Library view, split out of views/library.js.
 // Pure move + type port (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
-import { t } from '../../i18n.js';
+import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
-import { esc } from '../../utils.js';
+import { esc, html, joinHtml } from '../../utils.js';
+import type { Html } from '../../utils.js';
 import { WATER_DROP_ICON_SVG, SNOWFLAKE_ICON_SVG, LINK_ICON_SVG } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
 import type { Recipe } from '../../api/types.js';
 import type { ShotMeta } from '../../state/index.js';
 
-const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
-const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
+const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
+const ICON_TRASH: Html  = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
 
 // state/index.ts's CoffeeLibrary only declares beans/grinders and it has no
 // recipeEditId (unlike the basket/puck-screen edit ids); this section owns the
@@ -46,70 +47,71 @@ export function renderRecipeList(): void {
   if (!el) return;
   const recipes = _state().coffeeLibrary.recipes || [];
   if (!recipes.length) {
-    el.innerHTML = `<div class="lib-empty">${t('lib_empty_recipes')}</div>`;
+    el.innerHTML = html`<div class="lib-empty">${tHtml('lib_empty_recipes')}</div>`;
     return;
   }
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  el.innerHTML = recipes.map(r => {
+  el.innerHTML = joinHtml(recipes.map(r => {
     const brewLabel = r.brewMethod && BREW_METHOD_LABELS[r.brewMethod]
-      ? `<span class="lib-brew-badge">${t(BREW_METHOD_LABELS[r.brewMethod])}</span>`
-      : '';
-    const meta = [r.drinkType, r.beanName, r.profileName].filter(Boolean).map(esc).join(' · ');
-    const params: string[] = [
-      r.targetDose_g  ? `${r.targetDose_g} g`    : null,
-      r.targetYield_g ? `→ ${r.targetYield_g} g` : null,
-      r.water_g       ? `${WATER_DROP_ICON_SVG} ${r.water_g} g` : null,
-      r.ice_g         ? `${SNOWFLAKE_ICON_SVG} ${r.ice_g} g`     : null,
-      r.targetTime_s  ? `${r.targetTime_s} s`    : null,
-      r.waterTemp_c   ? `${r.waterTemp_c} °C`    : null,
+      ? html`<span class="lib-brew-badge">${tHtml(BREW_METHOD_LABELS[r.brewMethod])}</span>`
+      : html``;
+    const metaParts = [r.drinkType, r.beanName, r.profileName].filter(Boolean).map(esc);
+    const meta = metaParts.length ? joinHtml(metaParts.map((p, i) => (i ? html` · ${p}` : p))) : null;
+    const params: Html[] = [
+      r.targetDose_g  ? html`${esc(r.targetDose_g)} g`    : null,
+      r.targetYield_g ? html`→ ${esc(r.targetYield_g)} g` : null,
+      r.water_g       ? html`${WATER_DROP_ICON_SVG} ${esc(r.water_g)} g` : null,
+      r.ice_g         ? html`${SNOWFLAKE_ICON_SVG} ${esc(r.ice_g)} g`     : null,
+      r.targetTime_s  ? html`${esc(r.targetTime_s)} s`    : null,
+      r.waterTemp_c   ? html`${esc(r.waterTemp_c)} °C`    : null,
       r.grindSize     ? esc(r.grindSize)          : null,
-    ].filter((p): p is string => Boolean(p));
+    ].filter((p): p is Html => Boolean(p));
     const stepsHtml = Array.isArray(r.steps) && r.steps.length
-      ? `<div class="lib-recipe-steps-list">${r.steps.map((s, i) => `
+      ? html`<div class="lib-recipe-steps-list">${joinHtml(r.steps.map((s, i) => html`
           <div class="lib-recipe-step">
-            <span class="lib-recipe-step-n">${i + 1}.</span>
+            <span class="lib-recipe-step-n">${esc(i + 1)}.</span>
             <span>${esc(s.text)}</span>
-            ${s.duration_s ? `<span class="lib-recipe-step-dur">${s.duration_s} s</span>` : ''}
-          </div>`).join('')}</div>`
-      : '';
+            ${s.duration_s ? html`<span class="lib-recipe-step-dur">${esc(s.duration_s)} s</span>` : html``}
+          </div>`))}</div>`
+      : html``;
     const linkedShots = _shots().filter(s => s.annotation?.recipeId === r.id);
     const shotCount   = linkedShots.length;
     const avgScore    = shotCount > 0
       ? (linkedShots.reduce((sum, s) => sum + (s.score ?? 0), 0) / shotCount).toFixed(1)
       : null;
     const shotsBadge  = shotCount > 0
-      ? `<span class="lib-recipe-shots-badge">${shotCount} Shot${shotCount !== 1 ? 's' : ''}${avgScore !== null ? ` · Ø ${avgScore}` : ''}</span>`
-      : '';
-    return `<div class="lib-item">
+      ? html`<span class="lib-recipe-shots-badge">${esc(shotCount)} Shot${shotCount !== 1 ? html`s` : html``}${avgScore !== null ? html` · Ø ${esc(avgScore)}` : html``}</span>`
+      : html``;
+    return html`<div class="lib-item">
       <div class="lib-item-info">
         <div class="lib-item-name">${brewLabel}${esc(r.name)}${shotsBadge}</div>
-        ${meta ? `<div class="lib-item-sub">${meta}</div>` : ''}
-        ${params.length ? `<div class="lib-recipe-params">${params.map(p => `<span>${p}</span>`).join('')}</div>` : ''}
+        ${meta ? html`<div class="lib-item-sub">${meta}</div>` : html``}
+        ${params.length ? html`<div class="lib-recipe-params">${joinHtml(params.map(p => html`<span>${p}</span>`))}</div>` : html``}
         ${stepsHtml}
-        ${r.notes ? `<div class="lib-item-sub" style="margin-top:4px">${esc(r.notes)}</div>` : ''}
-        ${r.sourceUrl ? `<div class="lib-item-source"><a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">${LINK_ICON_SVG} Quelle</a></div>` : ''}
+        ${r.notes ? html`<div class="lib-item-sub" style="margin-top:4px">${esc(r.notes)}</div>` : html``}
+        ${r.sourceUrl ? html`<div class="lib-item-source"><a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">${LINK_ICON_SVG} Quelle</a></div>` : html``}
       </div>
       <div class="lib-item-actions">
-        <button class="lib-btn-sm lib-btn-icon" data-action="edit-recipe" data-id="${r.id}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-recipe" data-id="${r.id}" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
+        <button class="lib-btn-sm lib-btn-icon" data-action="edit-recipe" data-id="${esc(r.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-recipe" data-id="${esc(r.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
     </div>`;
-  }).join('');
+  }));
 }
 
 function _renderStepRows(steps: Recipe['steps']): void {
   const list = document.getElementById('recipeStepsList');
   if (!list) return;
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  list.innerHTML = (steps || []).map((s, i) => _stepRowHtml(i, s.text, s.duration_s)).join('');
+  list.innerHTML = joinHtml((steps || []).map((s, i) => _stepRowHtml(i, s.text, s.duration_s)));
 }
 
-function _stepRowHtml(i: number, text: string | undefined = '', dur: number | string | null | undefined = ''): string {
-  return `<div class="lib-step-row" id="recipeStep${i}">
-    <span class="lib-step-num">${i + 1}</span>
-    <input class="lib-step-text" placeholder="${t('lib_recipe_step_ph')}" value="${esc(text)}">
-    <input class="lib-step-dur" type="number" min="0" step="1" placeholder="${t('lib_recipe_step_dur')}" value="${dur ?? ''}">
-    <button class="lib-btn-sm del lib-btn-icon" data-action="remove-recipe-step" data-idx="${i}">${ICON_TRASH}</button>
+function _stepRowHtml(i: number, text: string | undefined = '', dur: number | string | null | undefined = ''): Html {
+  return html`<div class="lib-step-row" id="recipeStep${esc(i)}">
+    <span class="lib-step-num">${esc(i + 1)}</span>
+    <input class="lib-step-text" placeholder="${tHtml('lib_recipe_step_ph')}" value="${esc(text)}">
+    <input class="lib-step-dur" type="number" min="0" step="1" placeholder="${tHtml('lib_recipe_step_dur')}" value="${esc(dur ?? '')}">
+    <button class="lib-btn-sm del lib-btn-icon" data-action="remove-recipe-step" data-idx="${esc(i)}">${ICON_TRASH}</button>
   </div>`;
 }
 
