@@ -1,8 +1,8 @@
 import { S } from './state/index.js';
 
 // #735: thin wrapper around EventSource for the single multiplexed
-// GET /api/events stream (sync-progress/sync-complete now, live-snapshot/
-// preheat-update from the PR 2 follow-up). No Ingress precedent exists for
+// GET /api/events stream (live-snapshot/preheat-update). No Ingress
+// precedent exists for
 // streaming in this app, so this deliberately does NOT trust SSE blindly --
 // see the fallback detection below -- callers keep their existing polling
 // code path as a fallback for whenever it doesn't connect cleanly.
@@ -13,8 +13,6 @@ import { S } from './state/index.js';
 // JS module (CommonJS backend vs. bundled ESM frontend), so this is a
 // values-must-match-lib/events.js contract, not true DRY.
 export const EVENTS = {
-  SYNC_PROGRESS: 'sync-progress',
-  SYNC_COMPLETE: 'sync-complete',
   LIVE_SNAPSHOT: 'live-snapshot',
   PREHEAT_UPDATE: 'preheat-update',
 };

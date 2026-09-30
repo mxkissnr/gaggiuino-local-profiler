@@ -49,8 +49,7 @@ import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sor
          openShotDrawer, closeShotDrawer, handleDrawerTouchStart, handleDrawerTouchEnd,
          handleEdgeSwipeStart, handleEdgeSwipeEnd,
          toggleMonthGroup, setBeanFilter, clearBeanFilter } from './components/sidebar.js';
-import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync, exportDevDb, importDevDb,
-         handleSyncProgressEvent, handleSyncCompleteEvent } from './components/status.js';
+import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync, exportDevDb, importDevDb } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
 import { renderBottomNav, renderBottomNavSettings, closeMoreSheet } from './components/bottom-nav.js';
@@ -1059,17 +1058,15 @@ document.addEventListener('DOMContentLoaded', () => {
   applyTranslations();
 
   void initToken().then(async () => {
-    // #735: opened once at app bootstrap, not per view-switch -- sync
-    // progress must keep updating regardless of which view/tab is
-    // currently open, same reasoning as the 30s updateStatus() interval
-    // below. Needs S.glpToken to already be populated (for the ?token=
-    // fallback EventSource itself can't send as a header), hence after
-    // initToken() resolves. `onFallback` is a no-op here -- the PR 2
-    // follow-up (Live view over the same stream) extends it.
-    onEvent(EVENTS.SYNC_PROGRESS, data => handleSyncProgressEvent(data as Parameters<typeof handleSyncProgressEvent>[0]));
-    onEvent(EVENTS.SYNC_COMPLETE, data => handleSyncCompleteEvent(data as Parameters<typeof handleSyncCompleteEvent>[0]));
+    // #735: opened once at app bootstrap, not per view-switch -- SSE-driven
+    // updates must keep arriving regardless of which view/tab is currently
+    // open, same reasoning as the 30s updateStatus() interval below. Needs
+    // S.glpToken to already be populated (for the ?token= fallback
+    // EventSource itself can't send as a header), hence after initToken()
+    // resolves. `onFallback` is a no-op here -- the PR 2 follow-up (Live
+    // view over the same stream) extends it.
     // #736: Live view telemetry/preheat push -- same bootstrap-time wiring
-    // as the sync-progress events above.
+    // as above.
     onEvent(EVENTS.LIVE_SNAPSHOT, data => handleLiveSnapshotEvent(data as Parameters<typeof handleLiveSnapshotEvent>[0]));
     onEvent(EVENTS.PREHEAT_UPDATE, data => handlePreheatUpdateEvent(data as Parameters<typeof handlePreheatUpdateEvent>[0]));
     // #837: the topbar's ambient machine icon -- a second, independent

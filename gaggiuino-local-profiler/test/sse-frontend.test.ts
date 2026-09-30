@@ -139,17 +139,6 @@ describe('public-src/sse.js', () => {
     expect(onFallback).not.toHaveBeenCalled();
   });
 
-  it('dispatches a pushed event to a registered onEvent() handler', () => {
-    const handler = vi.fn();
-    onEvent('sync-progress', handler);
-    connectEvents(() => {});
-    const es = firstSource();
-    es._open();
-
-    es._emit('sync-progress', { machineId: 1, current: 2, total: 5 });
-    expect(handler).toHaveBeenCalledWith({ machineId: 1, current: 2, total: 5 });
-  });
-
   it('builds the stream URL with a ?token= fallback when S.glpToken is set', () => {
     S.glpToken = 'abc123';
     connectEvents(() => {});
