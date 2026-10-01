@@ -43,6 +43,7 @@
 - **The unused shot-import progress tracking and its progress bar have been removed from the frontend, with no behavior change.** Part of #1200
 
 ### Changed
+- **The build and test tooling (Vite and Vitest configs) is now TypeScript, matching the rest of the frontend.** Part of #1270
 - **The whole frontend, including the remaining views and the whole test suite, is now type-checked with the stricter indexed-access rule enabled project-wide.** Part of #1105
 - **The library import, dial-in wizard, flavor matching, shot utilities, maintenance, grinder, machine-settings and recipe modules are now type-checked under the stricter indexed-access rule.** Part of #1105
 - **The coffee library's basket and puck-screen collections are now typed with the real API shapes.** Part of #1105
