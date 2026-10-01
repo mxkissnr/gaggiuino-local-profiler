@@ -39,6 +39,24 @@ export function listOrders(): Promise<Order[]> {
   return apiFetchJson<Order[]>('api/orders');
 }
 
+/**
+ * POST /api/orders — place a guest order. Returns the raw Response so the
+ * caller can tell a 429 (rate-limited) from any other failure and read the
+ * server's `error` body.
+ */
+export function placeOrder(body: {
+  item: string;
+  customer: string;
+  note?: string;
+  variants?: string[];
+}): Promise<Response> {
+  return apiFetch('api/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 /** GET /api/orders/queue-eta. */
 export function getQueueEta(): Promise<QueueEta> {
   return apiFetchJson<QueueEta>('api/orders/queue-eta');
@@ -88,6 +106,11 @@ export function deleteOrderHistory(): Promise<Response> {
 }
 
 // ── Menu ─────────────────────────────────────────────────────────────────
+
+/** GET /api/menu — the public, deliberately-ungated menu the kiosk page reads. */
+export function getMenu(): Promise<MenuItem[]> {
+  return apiFetchJson<MenuItem[]>('api/menu');
+}
 
 /** GET /api/orders/menu (the gated twin of GET /api/menu). */
 export function getOrdersMenu(): Promise<MenuItem[]> {
