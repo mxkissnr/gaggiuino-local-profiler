@@ -57,7 +57,28 @@ func newHandlers(dist fs.FS) *Handlers {
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", h.index)
 	mux.HandleFunc("GET /index.html", h.index)
+	// GET /ui/kiosk is the pre-#1267 tablet kiosk address. It is registered here
+	// as a more-specific literal pattern than cmd/server's "/ui/" subtree, so
+	// ServeMux precedence routes it to a relative redirect onto the rebuilt
+	// kiosk page. See kioskRedirect for why the Location must stay relative.
+	mux.HandleFunc("GET /ui/kiosk", h.kioskRedirect)
 	mux.HandleFunc("/", h.static)
+}
+
+// kioskRedirect forwards the old /ui/kiosk bookmark (#1267) to the rebuilt
+// TypeScript kiosk at /kiosk.html. The target is deliberately relative: under
+// HA Ingress a request arrives at /api/hassio_ingress/<token>/ui/kiosk, so
+// "../kiosk.html" resolves against the browser's own address bar (prefix
+// included) where a leading slash would escape to the origin root — the same
+// reasoning as cmd/server's bare /ui/ redirect. The raw query is carried over
+// so old links like ?eink=1 still reach the new page.
+func (h *Handlers) kioskRedirect(w http.ResponseWriter, r *http.Request) {
+	loc := "../kiosk.html"
+	if r.URL.RawQuery != "" {
+		loc += "?" + r.URL.RawQuery
+	}
+	w.Header().Set("Location", loc)
+	w.WriteHeader(http.StatusFound)
 }
 
 // index serves the server-templated index.html — see doc.go's "Handler

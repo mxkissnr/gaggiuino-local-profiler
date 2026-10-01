@@ -216,6 +216,12 @@ css_code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_A/ui/web/static/style.c
 [[ "$css_code" == "200" ]] && ok "GET /ui/web/static/style.css -> 200 (vendored assets moved with the pages)" || bad "GET /ui/web/static/style.css: $css_code"
 ui_root=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE_A/ui/")
 [[ "$ui_root" == 302* ]] && ok "GET /ui/ -> 302 (relative redirect to shots)" || bad "GET /ui/: $ui_root"
+# #1267: the old /ui/kiosk bookmark must keep working, redirecting (relative,
+# so it survives the Ingress prefix) to the built kiosk page.
+kiosk_headers=$(curl -s -D - -o /dev/null "$BASE_A/ui/kiosk")
+grep -qi '^HTTP/[0-9.]* 302' <<<"$kiosk_headers" && ok "GET /ui/kiosk -> 302 (old kiosk bookmark redirects)" || bad "GET /ui/kiosk: $(head -1 <<<"$kiosk_headers")"
+kiosk_loc=$(grep -i '^Location:' <<<"$kiosk_headers" | tr -d '\r' | sed 's/^[^:]*: *//')
+[[ "$kiosk_loc" == "../kiosk.html" ]] && ok "GET /ui/kiosk Location is relative ($kiosk_loc)" || bad "GET /ui/kiosk Location: $kiosk_loc"
 
 if [[ -n "$DOCKER_IMAGE" ]]; then
 	for asset in manifest.json sw.js; do

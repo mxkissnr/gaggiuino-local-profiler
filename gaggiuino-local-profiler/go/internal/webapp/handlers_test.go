@@ -95,6 +95,36 @@ func TestRoutes_IndexAndIndexHTML(t *testing.T) {
 	}
 }
 
+// TestRoutes_KioskRedirects covers #1267: the old /ui/kiosk address answers a
+// 302 whose Location is relative (no leading slash) so it survives the Ingress
+// prefix, and the original query string is carried onto the new kiosk page.
+func TestRoutes_KioskRedirects(t *testing.T) {
+	mux := http.NewServeMux()
+	testHandlers(t).RegisterRoutes(mux)
+
+	for _, tc := range []struct {
+		target string
+		want   string
+	}{
+		{"/ui/kiosk", "../kiosk.html"},
+		{"/ui/kiosk?eink=1", "../kiosk.html?eink=1"},
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.target, nil))
+
+		if rec.Code != http.StatusFound {
+			t.Fatalf("GET %s: status = %d, want 302", tc.target, rec.Code)
+		}
+		loc := rec.Header().Get("Location")
+		if strings.HasPrefix(loc, "/") {
+			t.Errorf("GET %s: Location = %q, want a relative target (no leading slash)", tc.target, loc)
+		}
+		if loc != tc.want {
+			t.Errorf("GET %s: Location = %q, want %q", tc.target, loc, tc.want)
+		}
+	}
+}
+
 func TestStatic_AssetsServed(t *testing.T) {
 	mux := http.NewServeMux()
 	testHandlers(t).RegisterRoutes(mux)
