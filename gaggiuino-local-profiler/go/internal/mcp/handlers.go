@@ -41,7 +41,9 @@ func NewSettingsHandlers(repo *Repository) *SettingsHandlers {
 // RegisterRoutes mounts the settings API. The patterns are more specific than
 // server.go's "/api/mcp", so net/http's ServeMux routes /api/mcp/settings here
 // and everything else under /api/mcp to the MCP endpoint (see
-// TestSettingsRoutesDoNotCollideWithMCPEndpoint).
+// TestSettingsRoutesDoNotCollideWithMCPEndpoint). The route contract test in
+// go/cmd/server/openapi_routes_test.go keeps both paths in sync with the
+// OpenAPI description.
 func (h *SettingsHandlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/mcp/settings", h.get)
 	mux.HandleFunc("POST /api/mcp/settings", h.post)

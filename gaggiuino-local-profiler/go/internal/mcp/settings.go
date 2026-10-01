@@ -18,6 +18,12 @@ import (
 // table (go/internal/db/db.go). The three options.json entries were removed
 // from config.yaml in the same slice; MCP is unreleased, so there is nothing
 // to migrate.
+//
+// The store follows the app-stored-settings pattern of
+// go/internal/mqtt/settings.go and its two handlers in
+// go/internal/mqtt/handlers.go. The GLP_DEV_BUILD check below mirrors
+// go/internal/debug/debug.go and go/internal/system/handlers.go's devBuild
+// field.
 
 // Settings is the stored MCP toggle set: the master switch plus the two
 // independent opt-ins on top of it. Every field defaults to false.
