@@ -107,6 +107,17 @@ func TestIngressSmoke_NoOriginAbsoluteReferences(t *testing.T) {
 		t.Errorf("GET /ui/ Location = %q, want a relative target (no leading slash)", loc)
 	}
 
+	// The old /ui/kiosk bookmark must keep working (#1267): 302 with a
+	// genuinely relative Location onto the rebuilt kiosk page.
+	respKiosk := smokeGet(t, base+"/ui/kiosk", map[string]string{"X-Ingress-Path": ingressHeader})
+	defer respKiosk.Body.Close()
+	if respKiosk.StatusCode != http.StatusFound {
+		t.Fatalf("GET /ui/kiosk status = %d, want 302", respKiosk.StatusCode)
+	}
+	if loc := respKiosk.Header.Get("Location"); strings.HasPrefix(loc, "/") || loc == "" {
+		t.Errorf("GET /ui/kiosk Location = %q, want a relative target (no leading slash)", loc)
+	}
+
 	// The SPA shell and every templ page must reference their assets/links
 	// relatively — a leading-slash href/src/action/hx-* breaks the moment
 	// the app is served under /api/hassio_ingress/<tok>/.
