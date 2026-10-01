@@ -18,10 +18,11 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
 
-// The developer tools are a third, opt-in slice (Deps.AllowDeveloperTools):
-// read-only analysis exposing full-resolution or bulk data a model should not
-// get by default. get_shot_raw returns one shot's every recorded series
-// without downsampling.
+// The developer tools are a third, opt-in slice (the stored
+// allowDeveloperTools setting, effective only on a dev build): read-only
+// analysis exposing full-resolution or bulk data a model should not get by
+// default. get_shot_raw returns one shot's every recorded series without
+// downsampling.
 const maxRawSamples = 3000
 
 type getShotRawInput struct {

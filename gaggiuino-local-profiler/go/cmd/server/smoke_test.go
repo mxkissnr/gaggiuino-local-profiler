@@ -263,3 +263,34 @@ func TestIngressSmoke_AuthBehindIngressHeader(t *testing.T) {
 		t.Errorf("GET %s with a valid token: status = %d, want 200", apiPath, withToken.StatusCode)
 	}
 }
+
+// TestIngressSmoke_MCPSettingsRequireToken pins #1288's auth shape: the MCP
+// settings API lives under /api/, so like every other route it needs the
+// token. The MCP endpoint itself is now always mounted but disabled by
+// default, so a token-holder gets a 404 (not a 401) from it.
+func TestIngressSmoke_MCPSettingsRequireToken(t *testing.T) {
+	base, token := newSmokeServer(t)
+	const settingsPath = "/api/mcp/settings"
+
+	noAuth := smokeGet(t, base+settingsPath, nil)
+	noAuth.Body.Close()
+	if noAuth.StatusCode != http.StatusUnauthorized {
+		t.Errorf("GET %s unauthenticated: status = %d, want 401", settingsPath, noAuth.StatusCode)
+	}
+
+	withToken := smokeGet(t, base+settingsPath, map[string]string{"X-GLP-Token": token})
+	body, _ := io.ReadAll(withToken.Body)
+	withToken.Body.Close()
+	if withToken.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s with token: status = %d, want 200", settingsPath, withToken.StatusCode)
+	}
+	if !strings.Contains(string(body), "developerToolsAvailable") {
+		t.Errorf("GET %s body = %s, want developerToolsAvailable", settingsPath, body)
+	}
+
+	disabled := smokeGet(t, base+"/api/mcp", map[string]string{"X-GLP-Token": token})
+	disabled.Body.Close()
+	if disabled.StatusCode != http.StatusNotFound {
+		t.Errorf("GET /api/mcp with token while disabled: status = %d, want 404", disabled.StatusCode)
+	}
+}

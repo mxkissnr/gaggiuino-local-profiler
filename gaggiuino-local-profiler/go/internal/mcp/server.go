@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -66,17 +67,13 @@ type Deps struct {
 	// /api/mcp, so this only matters when the operator has raised the limit.
 	RateLimitWindow time.Duration
 	RateLimitMax    int
-	// AllowWrite turns on the write tools (annotate_shot, set_known_grind,
-	// mark_maintenance_done). Off by default and a second opt-in on top of
-	// Enabled: when false the tools are never registered, so a client cannot
-	// list or call them. cmd/server sets it from mcp.WriteEnabled().
-	AllowWrite bool
-	// AllowDeveloperTools turns on the read-only analysis tools that return
-	// full-resolution or bulk data (currently get_shot_raw). A third,
-	// independent opt-in on top of Enabled and independent of AllowWrite: when
-	// false the tools are never registered, so a client cannot list or call
-	// them. cmd/server sets it from mcp.DeveloperToolsEnabled().
-	AllowDeveloperTools bool
+	// Settings supplies the MCP toggles that apply right now: the app-stored
+	// kv row 'mcp_settings' (#1288), with the dev-build rule already applied
+	// (Settings.Effective). Read per request, so enabling MCP or flipping the
+	// write/developer opt-ins takes effect without a restart. A nil source
+	// means everything off — the endpoint then answers 404 like an unmounted
+	// route. cmd/server passes the *Repository.
+	Settings SettingsSource
 }
 
 // LogSource is the narrow slice of internal/logbuf.Buffer the get_diagnostics
@@ -101,14 +98,18 @@ type PreheatHistorySource interface {
 
 // NewHandler builds the stateless Streamable-HTTP MCP endpoint: the SDK
 // server, an Origin (DNS-rebinding) check, and a rate limiter sharing the
-// REST API's defaults.
+// REST API's defaults. The settings source is consulted per request, so a
+// disabled server answers 404 (exactly like an unmounted route) and a
+// newly-enabled one works without rebuilding the process. One SDK server is
+// cached per (allowWrite, allowDeveloperTools) combination — at most four —
+// and built lazily.
 func NewHandler(deps Deps) http.Handler {
-	srv := newServer(deps)
 	opts := &mcpsdk.StreamableHTTPOptions{
 		Stateless:    true,
 		JSONResponse: true,
 	}
-	handler := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server { return srv }, opts)
+	endpoint := &mcpEndpoint{deps: deps}
+	sdk := mcpsdk.NewStreamableHTTPHandler(endpoint.serverFor, opts)
 	window := deps.RateLimitWindow
 	if window <= 0 {
 		window = ratelimit.DefaultWindow
@@ -118,10 +119,58 @@ func NewHandler(deps Deps) http.Handler {
 		max = ratelimit.DefaultMax
 	}
 	limiter := ratelimit.New(window, max)
-	return sameOrigin(limiter.Middleware(handler))
+	return sameOrigin(limiter.Middleware(endpoint.gate(sdk)))
 }
 
-func newServer(deps Deps) *mcpsdk.Server {
+// mcpEndpoint gates the SDK handler on the current settings and caches one SDK
+// server per (allowWrite, allowDeveloperTools) combination.
+type mcpEndpoint struct {
+	deps Deps
+
+	mu      sync.Mutex
+	servers map[[2]bool]*mcpsdk.Server
+}
+
+// settings returns the effective settings, treating a nil source as off.
+func (e *mcpEndpoint) settings() Settings {
+	if e.deps.Settings == nil {
+		return Settings{}
+	}
+	return e.deps.Settings.EffectiveSettings()
+}
+
+// gate answers 404 before the SDK sees the request when MCP is disabled — the
+// same response an unmounted route would give, so a non-enabled install can't
+// tell the endpoint exists.
+func (e *mcpEndpoint) gate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !e.settings().Enabled {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// serverFor is the SDK's per-request factory; it returns the cached server for
+// the current tool combination, building it on first use.
+func (e *mcpEndpoint) serverFor(*http.Request) *mcpsdk.Server {
+	s := e.settings()
+	key := [2]bool{s.AllowWrite, s.AllowDeveloperTools}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if srv, ok := e.servers[key]; ok {
+		return srv
+	}
+	srv := newServer(e.deps, s.AllowWrite, s.AllowDeveloperTools)
+	if e.servers == nil {
+		e.servers = make(map[[2]bool]*mcpsdk.Server, 4)
+	}
+	e.servers[key] = srv
+	return srv
+}
+
+func newServer(deps Deps, allowWrite, allowDeveloperTools bool) *mcpsdk.Server {
 	version := deps.Version
 	if version == "" {
 		version = "dev"
@@ -134,13 +183,13 @@ func newServer(deps Deps) *mcpsdk.Server {
 		"and get_analytics_summary aggregates shots over a period. " +
 		"The dial_in_bean and analyse_shot prompts hand you a ready-made plan for " +
 		"dialling in a bean or reviewing a shot."
-	if deps.AllowWrite {
+	if allowWrite {
 		instructions += " This server can also change a few things on the user's behalf: " +
 			"annotate_shot merges rating, notes and grind setting into one shot, " +
 			"set_known_grind remembers a bean's winning grind setting, " +
 			"and mark_maintenance_done records that a maintenance task was completed."
 	}
-	if deps.AllowDeveloperTools {
+	if allowDeveloperTools {
 		instructions += " Developer tools are enabled: " +
 			"get_shot_raw returns a shot's full-resolution brew data for detailed analysis, " +
 			"explain_score breaks a shot's score into its weighted parts and the targets used, " +
@@ -159,11 +208,11 @@ func newServer(deps Deps) *mcpsdk.Server {
 	registerLibraryTools(srv, deps)
 	registerStatusTools(srv, deps)
 	registerAnalyticsTools(srv, deps.Shots)
-	registerPrompts(srv, deps.AllowWrite)
-	if deps.AllowDeveloperTools {
+	registerPrompts(srv, allowWrite)
+	if allowDeveloperTools {
 		registerDeveloperTools(srv, deps)
 	}
-	if deps.AllowWrite {
+	if allowWrite {
 		registerWriteTools(srv, deps)
 	}
 	return srv

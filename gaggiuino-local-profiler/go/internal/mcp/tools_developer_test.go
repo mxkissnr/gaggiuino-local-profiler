@@ -46,18 +46,17 @@ func newDeveloperServerFull(t *testing.T, allowDeveloper, allowWrite bool, polle
 	registry := machines.NewRegistry(sqlDB)
 	mux := http.NewServeMux()
 	mux.Handle(Path, NewHandler(Deps{
-		Shots:               shots.NewService(shotsRepo),
-		ShotsRepo:           shotsRepo,
-		Library:             libRepo,
-		Maintenance:         maintRepo,
-		Registry:            registry,
-		Poller:              poller,
-		Logs:                logs,
-		Sync:                sync,
-		Preheat:             preheat,
-		Version:             "test",
-		AllowWrite:          allowWrite,
-		AllowDeveloperTools: allowDeveloper,
+		Shots:       shots.NewService(shotsRepo),
+		ShotsRepo:   shotsRepo,
+		Library:     libRepo,
+		Maintenance: maintRepo,
+		Registry:    registry,
+		Poller:      poller,
+		Logs:        logs,
+		Sync:        sync,
+		Preheat:     preheat,
+		Version:     "test",
+		Settings:    settingsSource(true, allowWrite, allowDeveloper),
 	}))
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)

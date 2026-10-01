@@ -376,29 +376,31 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		return err
 	})
 
-	// MCP (#1196): the Model Context Protocol server is off by default; when
-	// enabled, mount its streamable-HTTP endpoint under /api/ so auth.RequireToken
-	// guards it with X-GLP-Token like every other API route. Registered here —
+	// MCP (#1196, #1288): the Model Context Protocol server is always mounted
+	// under /api/ so auth.RequireToken guards it with X-GLP-Token like every
+	// other API route. Whether it answers is decided per request from the
+	// app-database-backed 'mcp_settings' row: while disabled it 404s, and
+	// enabling it (or its write/developer opt-ins) via GET/POST
+	// /api/mcp/settings takes effect without a restart. Registered here —
 	// after the library, registry, poller and maintenance wiring — so the
 	// read-only library/status/analytics tools get their dependencies.
-	if mcp.Enabled() {
-		mux.Handle(mcp.Path, mcp.NewHandler(mcp.Deps{
-			Shots:               shots.NewService(shotsRepo),
-			ShotsRepo:           shotsRepo,
-			Library:             libRepo,
-			Maintenance:         maintenanceRepo,
-			Registry:            registry,
-			Poller:              poller,
-			Logs:                cfg.logs,
-			Sync:                poller,
-			Preheat:             poller,
-			Version:             system.Version(),
-			RateLimitWindow:     rateLimitWindow,
-			RateLimitMax:        rateLimitMax,
-			AllowWrite:          mcp.WriteEnabled(),
-			AllowDeveloperTools: mcp.DeveloperToolsEnabled(),
-		}))
-	}
+	mcpRepo := mcp.NewRepository(sqlDB)
+	mux.Handle(mcp.Path, mcp.NewHandler(mcp.Deps{
+		Shots:           shots.NewService(shotsRepo),
+		ShotsRepo:       shotsRepo,
+		Library:         libRepo,
+		Maintenance:     maintenanceRepo,
+		Registry:        registry,
+		Poller:          poller,
+		Logs:            cfg.logs,
+		Sync:            poller,
+		Preheat:         poller,
+		Version:         system.Version(),
+		RateLimitWindow: rateLimitWindow,
+		RateLimitMax:    rateLimitMax,
+		Settings:        mcpRepo,
+	}))
+	mcp.NewSettingsHandlers(mcpRepo).RegisterRoutes(mux)
 
 	// Phase 2b (#901): the achievements ("stamp card") domain —
 	// GET /api/achievements. A pure-logic port reading across shots,
