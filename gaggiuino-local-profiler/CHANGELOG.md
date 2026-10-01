@@ -56,6 +56,7 @@
 
 ### Removed
 - **Removed the old server-rendered fallback pages under `/ui/` (left over from the Go migration); the app itself and the kiosk are unaffected, and `/ui/kiosk` still redirects to the kiosk.** Part of #1200
+- **The unused live orders-queue update left over from the old server-rendered UI is now removed, with no behavior change.** Part of #1200
 
 ## [3.2.0] – 2026-09-26
 ### Added
