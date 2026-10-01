@@ -25,9 +25,6 @@ const __dirname   = path.dirname(fileURLToPath(import.meta.url));
 export const appRoot = path.join(__dirname, '..');
 const goDir       = path.join(appRoot, 'go');
 const distDir     = path.join(goDir, 'internal', 'webapp', 'dist');
-const templatesDir = path.join(goDir, 'internal', 'web', 'templates');
-// Pinned to the version go/go.mod already requires — keep in lockstep.
-const TEMPL_VERSION = 'v0.3.1020';
 
 export const PORT = 8199;
 
@@ -62,12 +59,6 @@ function buildServerBinary() {
     const binPath = path.join(tmpDataDir, 'glp-server');
 
     try {
-        // templ generate — internal/web/templates' .templ sources aren't
-        // valid Go until this runs (git-ignored _templ.go output). `go run`
-        // the pinned CLI so this works with no global install.
-        execFileSync('go', ['run', `github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}`, 'generate'],
-            { cwd: templatesDir, stdio: 'inherit' });
-
         // Frontend bundle → internal/webapp/dist (the //go:embed tree), then
         // the server binary that embeds it.
         execFileSync('go', ['run', './cmd/frontend-build'], { cwd: goDir, stdio: 'inherit' });
