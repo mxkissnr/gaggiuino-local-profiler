@@ -184,10 +184,10 @@ html.eink .queue-row {
   border: 3px solid #000; box-shadow: none;
 }
 html.eink .kiosk-queue { background: #fff; }
-html.eink .btn-primary:disabled { opacity: 1; }
 html.eink .drink.selected,
 html.eink .variant-chip.selected,
 html.eink .btn-primary { background: #000; color: #fff; }
+html.eink .btn-primary:disabled { background: #fff; color: #000; opacity: 1; }
 html.eink .drink.selected { border-color: #000; }
 html.eink .queue-row.accepted { border-left-color: #000; }
 html.eink .closed-banner { border-left: 3px solid #000; }
