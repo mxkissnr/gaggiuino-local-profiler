@@ -1,5 +1,5 @@
 // #811: WCAG audit of the design-token palette, computed from the values
-// actually declared in public-src/style.css rather than from a copy kept
+// actually declared in public-src/tokens.css rather than from a copy kept
 // alongside them.
 //
 // This exists because the previous audits (#397, #404) checked the gray
@@ -37,7 +37,7 @@ const { resolveAccentInk } = await import('../public-src/components/machines-set
 const { THEME_PRESETS } = await import('../public-src/shared/theme-presets.js');
 
 const CSS = fs.readFileSync(
-  path.join(import.meta.dirname, '..', 'public-src', 'style.css'), 'utf8');
+  path.join(import.meta.dirname, '..', 'public-src', 'tokens.css'), 'utf8');
 
 // Pulls one selector block's custom properties out of the stylesheet. Later
 // declarations win, matching the cascade for identical specificity.
