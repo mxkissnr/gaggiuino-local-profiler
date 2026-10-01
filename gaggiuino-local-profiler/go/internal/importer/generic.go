@@ -550,14 +550,6 @@ func findLine(lines []string, re *regexp.Regexp) string {
 	return ""
 }
 
-// espressoHeadingRe: a heading is a short non-key line not ending in .!?
-func isHeading(line string) bool {
-	if brewRecipeKeyRe.MatchString(line) {
-		return false
-	}
-	return len([]rune(line)) <= 40 && !sentenceEndRe.MatchString(line)
-}
-
 type brewBlock struct {
 	heading string
 	lines   []string

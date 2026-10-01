@@ -230,14 +230,6 @@ func wsSendCommand(ctx context.Context, baseURL, action string, requestData []by
 // ── Profile CRUD (ports the profile-management functions in
 // gaggiuino-ws-client.js) ──────────────────────────────────────────────
 
-func wsGetProfileDict(ctx context.Context, baseURL string) ([]proto.SavedProfileDto, error) {
-	var dict proto.SavedProfilesDto
-	if err := wsSendAndWait(ctx, baseURL, actionGetProfileDict, nil, dict.Unmarshal); err != nil {
-		return nil, err
-	}
-	return dict.Profiles, nil
-}
-
 func wsGetProfileByID(ctx context.Context, baseURL string, id uint32) (*proto.ProfileDto, error) {
 	req := &proto.WebSocketProfileIdCommandDto{ID: id}
 	var profile proto.ProfileDto

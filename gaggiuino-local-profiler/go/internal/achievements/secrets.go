@@ -113,13 +113,3 @@ func decodeB64(s string) string {
 	}
 	return string(b)
 }
-
-// secretIDs mirrors secrets.js's SECRET_IDS (Object.keys order isn't
-// load-bearing — nothing iterates it in a fixed order).
-func secretIDs() map[string]bool {
-	out := make(map[string]bool, len(secretsTable))
-	for id := range secretsTable {
-		out[id] = true
-	}
-	return out
-}
