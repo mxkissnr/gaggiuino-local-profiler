@@ -101,6 +101,31 @@ type Dependencies struct {
 type Handlers struct {
 	deps Dependencies
 	rl   *ratelimit.KeyedLimiter
+
+	// onExported runs after a backup export has been written completely and
+	// without error — both GET /api/backup's legacy JSON and POST
+	// /api/backup's zip. Set via SetOnExported by cmd/server, which uses it
+	// to drive the backup achievement (#1286 R2). A callback rather than a
+	// direct achievements.Service call so this domain stays decoupled from
+	// the achievements package (mirrors machines.Handlers.SetOnProfileSaved).
+	// A nil hook is a no-op; the callback never alters the response.
+	onExported func()
+}
+
+// SetOnExported wires the side effect to run after a backup export has been
+// written completely and without error (#1286 R2). cmd/server uses it to let
+// the achievements service see a `backup-exported` event, which unlocks the
+// backup badge. A nil hook (never wired, e.g. in this package's own unit
+// tests) is a no-op, and the callback never changes the response — the
+// export itself already succeeded.
+func (h *Handlers) SetOnExported(fn func()) {
+	h.onExported = fn
+}
+
+func (h *Handlers) notifyExported() {
+	if h.onExported != nil {
+		h.onExported()
+	}
 }
 
 // NewHandlers builds Handlers around deps. TokenFile defaults to
@@ -167,7 +192,9 @@ func (h *Handlers) getBackup(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	if err := h.deps.writeBundleJSON(w, small, nil, true); err != nil {
 		log.Printf("backup: streaming legacy JSON export failed mid-response: %v", err)
+		return
 	}
+	h.notifyExported()
 }
 
 // ── POST /api/backup ─────────────────────────────────────────────────────
@@ -239,7 +266,9 @@ func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 
 	if err := zw.Close(); err != nil {
 		log.Printf("backup: closing backup zip: %v", err)
+		return
 	}
+	h.notifyExported()
 }
 
 // backupSizeEstimate computes the X-GLP-Backup-Estimate value for a given

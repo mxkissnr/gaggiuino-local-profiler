@@ -407,7 +407,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// library, orders, maintenance, machines and the cached version check
 	// (systemHandlers.CachedVersion, via a callback — no cross-domain
 	// import). See go/internal/achievements/doc.go, incl. the documented
-	// "no event bus" deviation (evaluate-before-read instead).
+	// "no event bus" design (evaluate-before-read instead).
 	achievementsRepo := achievements.NewRepository(sqlDB)
 	achievementsSvc := achievements.NewService(achievementsRepo, achievements.Deps{
 		Shots:       shotsRepo,
@@ -422,17 +422,27 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	})
 	achievements.NewHandlers(achievementsSvc).RegisterRoutes(mux)
 
-	// #1286 R1: the achievements domain has no event bus, so the two profile
-	// badges (first_profile/profile_edit) are driven by an explicit callback from
-	// the machines handlers once a profile create/update has fully succeeded.
-	// Best-effort: an EvaluateEvent failure is logged only -- the profile request
-	// itself already succeeded and must not be affected.
+	// #1286: the achievements domain has no event bus, so the four live-moment
+	// badges are driven by explicit callbacks. R1 wired the two profile badges
+	// (first_profile/profile_edit) from the machines handlers once a profile
+	// create/update has fully succeeded; R2 wires the backup and restock badges
+	// from the backup/library handlers (see those packages' SetOn* setters).
+	// Best-effort: an EvaluateEvent failure is logged only -- the originating
+	// request itself already succeeded and must not be affected.
 	machinesHandlers.SetOnProfileSaved(func(action string) {
 		if _, err := achievementsSvc.EvaluateEvent(&achievements.Event{
 			Type:    "profile-saved",
 			Payload: map[string]any{"action": action},
 		}); err != nil {
 			log.Printf("achievements: evaluating profile-saved %q failed: %v", action, err)
+		}
+	})
+	libraryHandlers.SetOnBeanRestocked(func(wasEmpty bool) {
+		if _, err := achievementsSvc.EvaluateEvent(&achievements.Event{
+			Type:    "bean-changed",
+			Payload: map[string]any{"reason": "restock", "wasEmpty": wasEmpty},
+		}); err != nil {
+			log.Printf("achievements: evaluating bean-changed restock (wasEmpty=%t) failed: %v", wasEmpty, err)
 		}
 	})
 
@@ -451,6 +461,11 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		TokenFile: tokenPath,
 	})
 	backupHandlers.RegisterRoutes(mux)
+	backupHandlers.SetOnExported(func() {
+		if _, err := achievementsSvc.EvaluateEvent(&achievements.Event{Type: "backup-exported"}); err != nil {
+			log.Printf("achievements: evaluating backup-exported failed: %v", err)
+		}
+	})
 
 	// Phase 1 (#901): the production frontend. internal/webapp embeds and
 	// serves the existing Vite SPA bundle (gaggiuino-local-profiler/
