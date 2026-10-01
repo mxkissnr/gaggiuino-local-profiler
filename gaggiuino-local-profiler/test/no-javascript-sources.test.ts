@@ -37,8 +37,6 @@ const ALLOWLIST: readonly string[] = [
     'gaggiuino-local-profiler/scripts/screenshots.mjs',
     'gaggiuino-local-profiler/scripts/sync-dev-config.mjs',
     'gaggiuino-local-profiler/test/e2e/smoke.test.mjs',
-    'gaggiuino-local-profiler/vite.config.js',
-    'gaggiuino-local-profiler/vitest.config.js',
 ];
 
 const JAVASCRIPT_SOURCE = /\.(js|mjs|cjs)$/;

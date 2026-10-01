@@ -1,7 +1,7 @@
 // "What's New" Settings card (#610) — always-visible in-app changelog,
 // reading the hand-maintained lib/whats-new.js (shared with the backend
 // via the same CommonJS-in-Vite pattern as lib/machines/theme-presets.js,
-// see vite.config.js's commonjsOptions). Static local data, no fetch — safe
+// see vite.config.ts's commonjsOptions). Static local data, no fetch — safe
 // to render immediately at startup rather than waiting on initToken() like
 // the token-gated cards do.
 import { getWhatsNewEntries } from '../shared/whats-new.js';

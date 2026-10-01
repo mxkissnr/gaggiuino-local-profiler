@@ -2,7 +2,7 @@
 // and writes the result to internal/webapp/dist/ (or -out), replacing the
 // npm/Vite build formerly run in the Dockerfile's Node stage and invoked by
 // go/Makefile's `frontend` target (#1033). It reproduces the parts of
-// vite.config.js that matter for internal/webapp's //go:embed all:dist and
+// vite.config.ts that matter for internal/webapp's //go:embed all:dist and
 // for running behind HA Ingress's dynamic path prefix (#797):
 //   - relative asset URLs (no leading `/`, no absolute PublicPath)
 //   - hashed, content-addressed output filenames
@@ -346,7 +346,7 @@ func (m *metafile) staticImportClosure(outputPath string) []string {
 
 // relFromOutDir returns p (an output path from the metafile, relative to
 // base/AbsWorkingDir) as a "./"-prefixed relative URL from outDir's own root
-// — the same relative-path convention vite.config.js's `base: './'`
+// — the same relative-path convention vite.config.ts's `base: './'`
 // produced, required for HA Ingress's dynamic path prefix.
 func relFromOutDir(base, outDir, p string) (string, error) {
 	outAbs, err := filepath.Abs(outDir)
