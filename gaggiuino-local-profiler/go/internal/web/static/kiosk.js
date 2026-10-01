@@ -11,7 +11,11 @@
       return;
     }
     var stored = null;
-    try { stored = localStorage.getItem("glp_theme"); } catch { /* storage unavailable, fall back to the OS setting */ }
+    // localStorage access can throw (private mode / disabled storage). Keep
+    // the read guarded and fall back to the OS preference; the catch binding
+    // is the ES5 form so the script still parses on old browsers.
+    // eslint-disable-next-line no-unused-vars -- the thrown error is not actionable, only the fallback matters
+    try { stored = localStorage.getItem("glp_theme"); } catch (e) { stored = null; }
     if (stored !== "light" && stored !== "dark") stored = null;
     var mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
     function resolve() {
