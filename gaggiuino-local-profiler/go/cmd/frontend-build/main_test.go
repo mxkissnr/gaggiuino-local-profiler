@@ -41,6 +41,12 @@ func TestRunBundlesRelativeHashedAssets(t *testing.T) {
 		t.Errorf("index.html has no hashed relative entry script:\n%s", headOf(page))
 	}
 
+	// index.html carries only the main entry; the kiosk is a separate page
+	// with its own bundle (#1267).
+	if strings.Contains(page, "kiosk-") {
+		t.Errorf("index.html references the kiosk entry script:\n%s", headOf(page))
+	}
+
 	// Every asset URL must stay relative (#797): an absolute "/assets/…"
 	// breaks under HA Ingress's dynamic path prefix.
 	for _, attr := range []string{"src", "href"} {
@@ -72,6 +78,27 @@ func TestRunBundlesRelativeHashedAssets(t *testing.T) {
 	if matches, _ := filepath.Glob(filepath.Join(out, "assets", "main-*.css")); len(matches) == 0 {
 		t.Error("no hashed stylesheet in assets/")
 	}
+
+	// The kiosk page is built as its own entry point (#1267): its source
+	// <script> tag is replaced by a hashed kiosk entry script and every asset
+	// it references exists in the output.
+	kioskHTML, err := os.ReadFile(filepath.Join(out, "kiosk.html"))
+	if err != nil {
+		t.Fatalf("read kiosk.html: %v", err)
+	}
+	kiosk := string(kioskHTML)
+	if strings.Contains(kiosk, `src="./kiosk.ts"`) {
+		t.Error("kiosk.html still references the source entry point ./kiosk.ts")
+	}
+	if !regexp.MustCompile(`<script type="module" crossorigin src="\./assets/kiosk-[A-Z0-9]+\.js">`).MatchString(kiosk) {
+		t.Errorf("kiosk.html has no hashed relative entry script:\n%s", headOf(kiosk))
+	}
+	for _, m := range regexp.MustCompile(`(?:src|href)="(\./[^"]+)"`).FindAllStringSubmatch(kiosk, -1) {
+		rel := filepath.FromSlash(strings.TrimPrefix(m[1], "./"))
+		if _, err := os.Stat(filepath.Join(out, rel)); err != nil {
+			t.Errorf("kiosk.html references %s, which was not written: %v", m[1], err)
+		}
+	}
 }
 
 func TestRunRejectsMissingSources(t *testing.T) {
@@ -84,10 +111,40 @@ func TestRunRejectsMissingSources(t *testing.T) {
 	}
 }
 
+func TestRunRejectsMissingKioskSources(t *testing.T) {
+	for _, missing := range []string{"kiosk.ts", "kiosk.html"} {
+		t.Run(missing, func(t *testing.T) {
+			src := t.TempDir()
+			writeFile(t, filepath.Join(src, "main.ts"), "console.log('x');\n")
+			writeFile(t, filepath.Join(src, "index.html"),
+				"<html><head>"+scriptTag("main.ts")+"</head><body></body></html>\n")
+			writeFile(t, filepath.Join(src, "kiosk.ts"), "console.log('kiosk');\n")
+			writeFile(t, filepath.Join(src, "kiosk.html"),
+				"<html><head>"+scriptTag("kiosk.ts")+"</head><body><main id=\"kiosk\"></main></body></html>\n")
+			if err := os.Remove(filepath.Join(src, missing)); err != nil {
+				t.Fatal(err)
+			}
+
+			err := run(src, t.TempDir(), "")
+			if err == nil {
+				t.Fatalf("expected an error for a missing %s", missing)
+			}
+			if !strings.Contains(err.Error(), missing) {
+				t.Errorf("error should name the missing %s, got: %v", missing, err)
+			}
+		})
+	}
+}
+
 func TestRunRejectsIndexWithoutScriptTag(t *testing.T) {
 	src := t.TempDir()
 	writeFile(t, filepath.Join(src, "main.ts"), "console.log('x');\n")
 	writeFile(t, filepath.Join(src, "index.html"), "<html><head></head><body></body></html>\n")
+	// A complete kiosk page so the failure below is unambiguously index.html's
+	// missing script tag.
+	writeFile(t, filepath.Join(src, "kiosk.ts"), "console.log('kiosk');\n")
+	writeFile(t, filepath.Join(src, "kiosk.html"),
+		"<html><head>"+scriptTag("kiosk.ts")+"</head><body><main id=\"kiosk\"></main></body></html>\n")
 
 	// The source check runs before the node_modules one, so this stays
 	// deterministic whether or not the checkout has `npm ci`'d.
@@ -109,7 +166,10 @@ func TestRunRejectsMissingNodeModules(t *testing.T) {
 	src := t.TempDir()
 	writeFile(t, filepath.Join(src, "main.ts"), "console.log('x');\n")
 	writeFile(t, filepath.Join(src, "index.html"),
-		"<html><head>"+origScriptTag+"</head><body></body></html>\n")
+		"<html><head>"+scriptTag("main.ts")+"</head><body></body></html>\n")
+	writeFile(t, filepath.Join(src, "kiosk.ts"), "console.log('kiosk');\n")
+	writeFile(t, filepath.Join(src, "kiosk.html"),
+		"<html><head>"+scriptTag("kiosk.ts")+"</head><body><main id=\"kiosk\"></main></body></html>\n")
 
 	err := run(src, t.TempDir(), filepath.Join(t.TempDir(), "node_modules"))
 	if err == nil {

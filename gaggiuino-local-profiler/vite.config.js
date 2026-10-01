@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import { cpSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Demo mode (#1193) builds the SPA for GitHub Pages: static output in
 // ../demo-dist, the entry point swapped for the service-worker bootstrap, and
@@ -45,6 +46,13 @@ export default defineConfig(({ mode }) => {
       outDir: demo ? '../demo-dist' : '../public',
       emptyOutDir: true,
       rollupOptions: {
+        // Two entry points (#1267): the SPA and its kiosk page. Without an
+        // explicit input Vite would build only public-src/index.html and drop
+        // kiosk.html, so both pages are listed here.
+        input: {
+          index: fileURLToPath(new URL('./public-src/index.html', import.meta.url)),
+          kiosk: fileURLToPath(new URL('./public-src/kiosk.html', import.meta.url)),
+        },
         output: {
           // Splits the biggest vendor libraries into their own chunks instead
           // of one ~2MB bundle. #797 verified empirically (Vite 8.2.1, built
