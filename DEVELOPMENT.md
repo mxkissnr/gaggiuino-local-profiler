@@ -2,6 +2,10 @@
 
 Generated 2026-09-26 by `scripts/dev-stats.mjs`. Re-run it any time to refresh these numbers — they are computed live from git history, not hand-maintained.
 
+## Languages
+
+The repository is Go + TypeScript only: the backend is Go, and everything that runs in the browser or as build/dev tooling is TypeScript. No new `.js`/`.mjs`/`.cjs` files may be added — vendored third-party files are the only exception. The remaining JavaScript leftovers are listed in `test/no-javascript-sources.test.ts` and get ported under #1270; that allowlist may only shrink.
+
 ## Timeline
 
 The GLP ecosystem (this app + 3 companion repos) has been in development since **2026-05-20** — **130 days** as of the last commit (2026-09-26).
