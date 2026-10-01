@@ -133,7 +133,7 @@ Eine maschinenlesbare OpenAPI-3.0.3-Spezifikation aller Endpunkte ist unter `GET
 
 ## KI-Assistenten (MCP-Server)
 
-GLP bringt einen optionalen [Model-Context-Protocol](https://modelcontextprotocol.io/)-Endpunkt unter `http://<ha-host>:8099/api/mcp` mit, damit KI-Assistenten wie Claude Code, Claude Desktop oder jeder andere MCP-Client deine Shot-Historie, Kurven, die Bohnen-Bibliothek, Wartung und Statistiken lesen können. Er ist **standardmäßig aus** — einschalten über die Option `enable_mcp` (oder `GLP_ENABLE_MCP=true` bei einer Standalone-Docker-Installation). Er steuert die Maschine nie: Brühen, Strom und Profile bleiben bei der App und beim MCP-Server von Home Assistant selbst, der Entitäten und Dienste abdeckt.
+GLP bringt einen optionalen [Model-Context-Protocol](https://modelcontextprotocol.io/)-Endpunkt unter `http://<ha-host>:8099/api/mcp` mit, damit KI-Assistenten wie Claude Code, Claude Desktop oder jeder andere MCP-Client deine Shot-Historie, Kurven, die Bohnen-Bibliothek, Wartung und Statistiken lesen können. Er ist **standardmäßig aus** — einschalten unter **Einstellungen → „KI-Assistenten (MCP)"**, das funktioniert unter Home Assistant, direktem Portzugriff und Standalone-Docker gleich. Er steuert die Maschine nie: Brühen, Strom und Profile bleiben bei der App und beim MCP-Server von Home Assistant selbst, der Entitäten und Dienste abdeckt. Änderungen greifen beim nächsten Request — kein Neustart.
 
 ### Authentifizierung
 
@@ -141,13 +141,13 @@ Der Endpunkt nutzt denselben `X-GLP-Token`-Header wie die REST-API — siehe [AP
 
 ### Die drei Stufen
 
-Drei unabhängige Opt-ins steuern, was ein Assistent sehen und tun darf. Die Schreib- und Entwicklerwerkzeuge werden nur registriert, wenn `enable_mcp` ebenfalls an ist.
+Die Werkzeuge zum Lesen kommen mit dem Hauptschalter. Die Schreibwerkzeuge haben ein eigenes Kontrollkästchen in derselben Einstellungen-Karte; die Entwicklerwerkzeuge gibt es nur in einem Dev-Channel-Build, ihr Kontrollkästchen ist sonst ausgeblendet. Die Schreib- und Entwicklerwerkzeuge werden nur registriert, wenn MCP ebenfalls an ist.
 
-| Stufe | Option | Werkzeuge |
+| Stufe | Einstellung | Werkzeuge |
 |---|---|---|
-| Nur lesend (immer an mit `enable_mcp`) | — | `list_shots`, `get_shot`, `compare_shots`, `list_beans`, `get_library`, `get_maintenance_status`, `get_machine_status`, `get_analytics_summary` |
-| Schreiben | `enable_mcp_write` | `annotate_shot`, `set_known_grind`, `mark_maintenance_done` — diese verändern deine Daten |
-| Entwickler | `enable_mcp_developer_tools` | `get_shot_raw`, `explain_score`, `export_shots_dataset`, `get_diagnostics`, `get_preheat_history` — größere Ausgaben, inklusive der aktuellen Log-Zeilen der App |
+| Nur lesend (kommt mit dem Hauptschalter) | — | `list_shots`, `get_shot`, `compare_shots`, `list_beans`, `get_library`, `get_maintenance_status`, `get_machine_status`, `get_analytics_summary` |
+| Schreiben | Kontrollkästchen „Schreibwerkzeuge" | `annotate_shot`, `set_known_grind`, `mark_maintenance_done` — diese verändern deine Daten |
+| Entwickler | Kontrollkästchen „Entwicklerwerkzeuge" (nur Dev-Channel-Builds) | `get_shot_raw`, `explain_score`, `export_shots_dataset`, `get_diagnostics`, `get_preheat_history` — größere Ausgaben, inklusive der aktuellen Log-Zeilen der App |
 
 Der Server bietet außerdem zwei Prompts, die dem Assistenten einen fertigen Plan an die Hand geben: `dial_in_bean` und `analyse_shot`.
 
@@ -221,9 +221,6 @@ Auf schmalen Bildschirmen (Smartphones, Tablets im Hochformat) wird die Tab-Leis
 | `preheat_time` | Aufwärmzeit in Minuten — wie lange nach dem Einschalten bis die Maschine brühbereit ist (1–120) | `20` |
 | `enable_orders` | Bestellsystem aktivieren — Barista-Backend-Tab + Kunden-Bestellkarte; standardmäßig deaktiviert | `false` |
 | `debug_logging` | Ausführliches Diagnose-Logging (z.B. jeder Schritt des Bohnen-Imports) im App-Log — standardmäßig aus, damit der Normalbetrieb nicht zugespammt wird, bei Bedarf zum Debuggen einschalten | `false` |
-| `enable_mcp` | Einen Model-Context-Protocol-(MCP-)Endpunkt unter `http://<ha-host>:8099/api/mcp` bereitstellen, damit KI-Assistenten (Claude Code, Claude Desktop, andere) die Shot-Historie, Kurven, die Bohnen-Bibliothek, Wartung und Statistiken lesen können — standardmäßig aus, und er steuert die Maschine nie; siehe [KI-Assistenten (MCP-Server)](#ki-assistenten-mcp-server) | `false` |
-| `enable_mcp_write` | Registriert zusätzlich die MCP-Schreibwerkzeuge (`annotate_shot`, `set_known_grind`, `mark_maintenance_done`), die deine Daten verändern — wirkt nur zusammen mit `enable_mcp` | `false` |
-| `enable_mcp_developer_tools` | Registriert zusätzlich die MCP-Entwicklerwerkzeuge (`get_shot_raw`, `explain_score`, `export_shots_dataset`, `get_diagnostics`, `get_preheat_history`), die größere Ausgaben liefern — wirkt nur zusammen mit `enable_mcp` | `false` |
 | `expose_api_port` | Ob `GET /api/token` auf Anfragen antwortet, die nicht über HA Ingress kommen (#803). Deaktivierung stoppt **direkten Browser-Zugriff auf die App über den Port komplett** (das schließt die installierbare PWA ein — sie ist nur die installierte Form derselben Oberfläche) und bricht die **erstmalige Einrichtung des Direkt-URL-Modus der Order Card**, da keine der beiden eine andere Möglichkeit hat, an einen Token zu kommen — eine bereits eingerichtete Order Card im Direkt-URL-Modus funktioniert weiter. Gibt Port 8099 selbst nicht frei und verengt die Vertrauensgrenze nicht unter das gesamte Supervisor-App-Netzwerk. Siehe [Vertrauensmodell](#vertrauensmodell) oben. | `true` |
 | `port` | Port, auf dem der Server lauscht (1024–65535) | `8099` |
 
@@ -271,9 +268,6 @@ Umgebungsvariablen zurück, alle optional:
 | `GLP_PREHEAT_TIME` | App-Option `preheat_time` | Minuten, 1–120, Standard `20` |
 | `GLP_ENABLE_ORDERS` | App-Option `enable_orders` | `true`/`false`, Standard `false` |
 | `GLP_DEBUG_LOGGING` | App-Option `debug_logging` | `true`/`false`, Standard `false` |
-| `GLP_ENABLE_MCP` | App-Option `enable_mcp` | `true`/`false`, Standard `false` |
-| `GLP_ENABLE_MCP_WRITE` | App-Option `enable_mcp_write` | `true`/`false`, Standard `false` |
-| `GLP_ENABLE_MCP_DEVELOPER_TOOLS` | App-Option `enable_mcp_developer_tools` | `true`/`false`, Standard `false` |
 | `GLP_EXPOSE_API_PORT` | App-Option `expose_api_port` | `true`/`false`, Standard `true` |
 | `GLP_HA_URL` + `GLP_HA_TOKEN` | `SUPERVISOR_TOKEN` (HA-API-Zugriff) | Stellt Auto-Sync, Switch-Entity-Power-Control und Push-Benachrichtigungen wieder her — siehe unten. Beide müssen gemeinsam gesetzt sein. |
 
