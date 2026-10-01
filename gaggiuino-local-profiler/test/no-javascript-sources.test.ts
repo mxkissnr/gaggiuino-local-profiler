@@ -29,7 +29,6 @@ const ALLOWLIST: readonly string[] = [
     'gaggiuino-local-profiler/eslint-rules/html-sink.js',
     'gaggiuino-local-profiler/eslint.config.js',
     'gaggiuino-local-profiler/go/internal/web/static/glp-token.js',
-    'gaggiuino-local-profiler/go/internal/web/static/kiosk.js',
     'gaggiuino-local-profiler/go/internal/web/static/live.js',
     'gaggiuino-local-profiler/go/internal/web/static/shot-chart.js',
     'gaggiuino-local-profiler/public-src/public/sw.js',
