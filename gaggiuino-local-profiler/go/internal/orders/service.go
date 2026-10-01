@@ -3,6 +3,7 @@ package orders
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"strconv"
@@ -518,12 +519,14 @@ func (s *Service) CompleteOrder(id string) (Order, error) {
 	}
 	if shotID, ok, err := s.shotsRepo.GetLatestID(orderMachineID(order), sinceSec); err == nil && ok {
 		order["shotId"] = shotID
-		if ann, err := s.shotsRepo.GetAnnotation(shotID); err == nil {
+		if _, err := s.shotsRepo.UpdateAnnotation(shotID, func(ann map[string]any) error {
 			ann["orderedBy"] = map[string]any{
 				"customer": order["customer"], "haUserId": order["haUserId"], "orderId": order["id"],
 				"item": order["item"], "variant": order["variant"], "note": order["note"],
 			}
-			s.shotsRepo.SaveAnnotation(shotID, ann)
+			return nil
+		}); err != nil {
+			log.Printf("orders: writing orderedBy for shot %d: %v", shotID, err)
 		}
 	} else {
 		order["shotId"] = nil
