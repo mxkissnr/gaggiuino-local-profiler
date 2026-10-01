@@ -46,21 +46,20 @@ func newHandlers(dist fs.FS) *Handlers {
 // bypass exactly as the Node app's own static frontend does.
 //
 // "/" is a method-less catch-all: it only ever runs for paths no
-// more-specific pattern claimed (every /api/* route, /shots.json, the /ui/
-// templ subtree). It is registered without a method because a method-bound
-// "GET /" conflicts with cmd/server's "/ui/" subtree pattern under
-// net/http.ServeMux's precedence rules (neither is strictly more specific);
-// static filters non-GET/HEAD itself instead. A genuinely unknown path
-// 404s, matching express.static + Express's default 404 — the SPA is
-// tab-driven with no client-side history routing, so there is no
-// index.html fallback to serve.
+// more-specific pattern claimed (every /api/* route, /shots.json, the
+// /ui/kiosk redirect below). It is registered without a method because a
+// method-bound "GET /" conflicts with cmd/server's method-less "/api/events"
+// route under net/http.ServeMux's precedence rules (neither is strictly
+// more specific); static filters non-GET/HEAD itself instead. A genuinely
+// unknown path 404s, matching express.static + Express's default 404 —
+// the SPA is tab-driven with no client-side history routing, so there is
+// no index.html fallback to serve.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", h.index)
 	mux.HandleFunc("GET /index.html", h.index)
-	// GET /ui/kiosk is the pre-#1267 tablet kiosk address. It is registered here
-	// as a more-specific literal pattern than cmd/server's "/ui/" subtree, so
-	// ServeMux precedence routes it to a relative redirect onto the rebuilt
-	// kiosk page. See kioskRedirect for why the Location must stay relative.
+	// GET /ui/kiosk is the pre-#1267 tablet kiosk address. It answers with a
+	// relative redirect onto the rebuilt kiosk page; see kioskRedirect for
+	// why the Location must stay relative.
 	mux.HandleFunc("GET /ui/kiosk", h.kioskRedirect)
 	mux.HandleFunc("/", h.static)
 }
@@ -69,9 +68,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 // TypeScript kiosk at /kiosk.html. The target is deliberately relative: under
 // HA Ingress a request arrives at /api/hassio_ingress/<token>/ui/kiosk, so
 // "../kiosk.html" resolves against the browser's own address bar (prefix
-// included) where a leading slash would escape to the origin root — the same
-// reasoning as cmd/server's bare /ui/ redirect. The raw query is carried over
-// so old links like ?eink=1 still reach the new page.
+// included) where a leading slash would escape to the origin root. The raw
+// query is carried over so old links like ?eink=1 still reach the new page.
 func (h *Handlers) kioskRedirect(w http.ResponseWriter, r *http.Request) {
 	loc := "../kiosk.html"
 	if r.URL.RawQuery != "" {
