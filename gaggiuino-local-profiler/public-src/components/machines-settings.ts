@@ -123,13 +123,6 @@ function relativeLuminance({ r, g, b }: { r: number; g: number; b: number }): nu
 // on --raised) and mulberry-mocha (7.18:1) already clear the floor
 // unmodified and are absent deliberately, not by oversight — see
 // test/theme-contrast.test.js.
-//
-// The ordering kiosk (#1267) is the one page that never runs this module, so
-// it cannot inherit the inline --accent-ink these entries produce. Its
-// stylesheet therefore mirrors the amber-americano value below for
-// html[data-theme="light"], and test/kiosk.test.ts asserts that mirror stays
-// equal to resolveAccentInk('amber-americano', '#f59e0b', true) — this table
-// is the source of truth and needs no kiosk-specific change.
 const LIGHT_ACCENT_INK_OVERRIDES: Record<string, string> = {
   'amber-americano':   '#905c06',
   'copper-cortado':    '#975730',

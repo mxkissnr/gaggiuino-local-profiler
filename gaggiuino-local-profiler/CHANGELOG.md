@@ -7,7 +7,6 @@
 - **A browser demo with sample data now runs on GitHub Pages, including a simulated live shot.** Closes #1193
 - **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, with separate opt-ins for write and developer tools.** Closes #1196
 ### Fixed
-- **The ordering kiosk's accent text and icons are readable in the light theme, and its drink cards keep their size instead of stretching to fill the column.** Part of #1267
 - **Editing a shot no longer wipes its order attribution, rating or notes when only some fields are saved.** Part of #1273
 - **Settings → What's New shows v3.2.0 again, and a release without a What's New entry now fails the tests.** Closes #1240
 - **The bean picker now shows a bean as empty based on the stock the server calculated, not only the shots loaded in the browser.** Closes #1225
