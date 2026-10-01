@@ -26,7 +26,11 @@ func newTestServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	}
 	t.Cleanup(func() { sqlDB.Close() })
 	mux := http.NewServeMux()
-	mux.Handle(Path, NewHandler(Deps{Shots: shots.NewService(shots.NewRepository(sqlDB)), Version: "test"}))
+	mux.Handle(Path, NewHandler(Deps{
+		Shots:    shots.NewService(shots.NewRepository(sqlDB)),
+		Version:  "test",
+		Settings: settingsSource(true, false, false),
+	}))
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 	return ts, sqlDB

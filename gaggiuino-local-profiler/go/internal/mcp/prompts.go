@@ -11,9 +11,9 @@ import (
 // Prompts are lightweight, read-only starting points the user can invoke from
 // their MCP client; unlike tools they run no code, they just hand the
 // assistant a user message naming the tools to call. Both are registered
-// regardless of AllowWrite, because even a read-only client benefits from the
-// guidance. The only write-aware part is the optional closing offer to record
-// the outcome, which is added solely when the write tools exist.
+// regardless of the write setting, because even a read-only client benefits
+// from the guidance. The only write-aware part is the optional closing offer
+// to record the outcome, which is added solely when the write tools exist.
 
 const (
 	dialInBeanPromptName  = "dial_in_bean"

@@ -58,6 +58,7 @@ func newReadServer(t *testing.T, poller MachineStatus) (*httptest.Server, *libra
 		Registry:    registry,
 		Poller:      poller,
 		Version:     "test",
+		Settings:    settingsSource(true, false, false),
 	}))
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
