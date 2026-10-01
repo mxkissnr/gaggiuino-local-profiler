@@ -1,6 +1,6 @@
 // Package sse is the Go port of routes/sse.js — the single /api/events
-// Server-Sent Events endpoint multiplexing live-snapshot, preheat-update and
-// orders-update pushes over one connection (see the Event* constants in
+// Server-Sent Events endpoint multiplexing live-snapshot and preheat-update
+// pushes over one connection (see the Event* constants in
 // sse.go for the exact set; lib/events.js's other four
 // event types — shot-saved/bean-changed/maintenance-acknowledged/
 // order-completed, plus profile-saved/backup-exported — feed only

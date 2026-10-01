@@ -3,7 +3,6 @@ package sse
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -22,47 +21,17 @@ const PingInterval = 20 * time.Second
 const paddingBytes = 2048
 
 // Event types this package's Handler multiplexes over /api/events:
-// LIVE_SNAPSHOT/PREHEAT_UPDATE (#736) as routes/sse.js forwards them, plus
-// EventOrdersUpdate, which is new in this Go rewrite (#901, no Node
-// equivalent — see below). See doc.go for the events this endpoint
-// deliberately does NOT carry.
+// LIVE_SNAPSHOT/PREHEAT_UPDATE (#736) as routes/sse.js forwards them. See
+// doc.go for the events this endpoint deliberately does NOT carry.
 const (
 	EventLiveSnapshot  = "live-snapshot"
 	EventPreheatUpdate = "preheat-update"
-
-	// EventOrdersUpdate carries a pre-rendered HTML fragment (Data must be
-	// an HTML value, see below), not JSON — internal/web's Orders page
-	// hx-swaps it straight into the barista queue via the vendored htmx
-	// SSE extension's sse-swap, replacing that page's original 10s
-	// hx-trigger="every 10s" poll. See HTML's own doc comment for why this
-	// needed a new Data shape, not just a new event name.
-	EventOrdersUpdate = "orders-update"
 )
-
-// HTML marks an Event's Data as a pre-rendered HTML fragment to be sent
-// through the SSE stream unmarshaled (raw bytes, not JSON.stringify'd) —
-// the fix for the second of the two concrete blockers go/README.md's
-// Status section documents against using SSE for live updates:
-// `internal/sse.Handler`'s `send()` used to unconditionally
-// `json.Marshal()` every event's Data, but the htmx SSE extension's
-// `sse-swap` attribute (unlike `hx-trigger="sse:*"`, dead code in the
-// vendored 2.0.10 build — see that same section) expects an event's raw
-// data to already BE the HTML it swaps in, not a JSON string of it. A
-// producer that wants that behavior sets Data to an HTML value (a plain
-// string conversion, `sse.HTML(rendered)`); Handler's send() type-switches
-// on it and skips json.Marshal entirely for that one event — every other
-// event type (live-snapshot, preheat-update) is unaffected, since none of
-// them are HTML and Node's own live.js JSON consumers depend on that
-// encoding staying JSON (see this file's own
-// EventOrdersUpdate doc comment for the one current producer).
-type HTML string
 
 // Event is one push through a Hub. Data is marshaled to JSON the same way
 // routes/sse.js's send(type, data) calls JSON.stringify(data) — Data should
 // be whatever value a future producer would otherwise have passed straight
-// to JSON.stringify (a plain map or struct, not a pre-encoded string) —
-// UNLESS Data is an HTML value (see that type's own doc comment), in which
-// case it's sent through unmarshaled instead.
+// to JSON.stringify (a plain map or struct, not a pre-encoded string).
 type Event struct {
 	Type string
 	Data any
@@ -156,29 +125,6 @@ type Handler struct {
 	PingInterval time.Duration
 }
 
-// sendHTML writes one SSE event whose data is raw HTML, not JSON — an SSE
-// "data:" field can't itself contain a bare newline (the blank line ends
-// the event), so a multi-line payload needs one "data: " line per line of
-// html, exactly as the SSE spec requires and as sse-swap's own htmx
-// extension expects to receive (it joins consecutive data: lines back
-// together with "\n" before swapping). See HTML's own doc comment for why
-// this bypasses json.Marshal entirely.
-func sendHTML(w http.ResponseWriter, flusher http.Flusher, eventType, html string) bool {
-	var b strings.Builder
-	fmt.Fprintf(&b, "event: %s\n", eventType)
-	for _, line := range strings.Split(html, "\n") {
-		b.WriteString("data: ")
-		b.WriteString(line)
-		b.WriteByte('\n')
-	}
-	b.WriteByte('\n')
-	if _, err := io.WriteString(w, b.String()); err != nil {
-		return false
-	}
-	flusher.Flush()
-	return true
-}
-
 // drainBuffered returns first plus every event already sitting in ch's
 // buffer (a non-blocking drain — it never waits for a new event). closed is
 // true when ch was closed mid-drain, so the caller can flush what it has
@@ -245,9 +191,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 
 	send := func(ev Event) bool {
-		if html, ok := ev.Data.(HTML); ok {
-			return sendHTML(w, flusher, ev.Type, string(html))
-		}
 		payload, err := json.Marshal(ev.Data)
 		if err != nil {
 			// A future producer's Data must always be JSON-marshalable;
