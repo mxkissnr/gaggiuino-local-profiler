@@ -165,15 +165,10 @@ func queryMachineID(r *http.Request) *int64 {
 	return &n
 }
 
-// pathID64/pathIDInt parse the {id} path wildcard as an int64/int —
+// pathID64 parses the {id} path wildcard as an int64 —
 // mirrors `parseInt(req.params.id, 10)`.
 func pathID64(r *http.Request) (int64, bool) {
 	n, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	return n, err == nil
-}
-
-func pathIDInt(r *http.Request) (int, bool) {
-	n, err := strconv.Atoi(r.PathValue("id"))
 	return n, err == nil
 }
 
