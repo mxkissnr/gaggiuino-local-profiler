@@ -401,7 +401,6 @@ func TestDecodeJSONBody_MalformedBodyStill400s(t *testing.T) {
 	}
 }
 
-
 // TestHandlers_MachineProfileSavedCallback_ReportsCreateAndUpdate pins
 // #1286 R1: after a profile create and a profile update have both fully
 // succeeded against a reachable machine, SetOnProfileSaved's hook fires

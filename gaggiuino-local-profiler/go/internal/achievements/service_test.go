@@ -266,7 +266,6 @@ func jsonNumber(v any) float64 {
 	return f
 }
 
-
 // TestEvaluateEvent_ProfileSavedUnlocksProfileBadges pins #1286 R1: the two
 // profile live-moment badges have no event bus, so cmd/server drives them
 // with explicit Service.EvaluateEvent calls. A profile-saved create unlocks
