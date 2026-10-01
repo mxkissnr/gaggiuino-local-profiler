@@ -41,7 +41,7 @@ func newHandlers(dist fs.FS) *Handlers {
 }
 
 // RegisterRoutes registers the SPA routes onto mux, following the codebase
-// convention (see internal/web's *Handlers.RegisterRoutes). Not prefixed
+// convention. Not prefixed
 // with /api/ — GET requests fall through auth.RequireToken's static-asset
 // bypass exactly as the Node app's own static frontend does.
 //

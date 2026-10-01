@@ -81,16 +81,12 @@ step "build"
 if [[ -n "$DOCKER_IMAGE" ]]; then
 	ok "using pre-built Docker image $DOCKER_IMAGE (skipping native go build)"
 else
-	# Phase 2a (#901): cmd/server now imports internal/web, whose .templ
-	# sources aren't valid Go until `templ generate` writes their _templ.go
-	# files (git-ignored — see go/README.md's Frontend section) — required
-	# before this build step on a clean checkout.
-	if ! (cd "$GO_DIR" && go generate ./... && go build -o "$BIN" ./cmd/server) 2>"$SMOKE_DIR/build.log"; then
-		bad "go generate && go build ./cmd/server"
+	if ! (cd "$GO_DIR" && go build -o "$BIN" ./cmd/server) 2>"$SMOKE_DIR/build.log"; then
+		bad "go build ./cmd/server"
 		cat "$SMOKE_DIR/build.log"
 		exit 1
 	fi
-	ok "go generate && go build ./cmd/server"
+	ok "go build ./cmd/server"
 fi
 
 # start_server launches either the native binary against

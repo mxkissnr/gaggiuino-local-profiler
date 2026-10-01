@@ -24,8 +24,7 @@ func findBeanIndex(lib Library, id int64) int {
 }
 
 // createBean ports POST /api/library/bean — a thin wrapper around
-// CreateBean (create.go), the same read-validate-save logic internal/web's
-// "New bean" form also calls.
+// CreateBean (create.go).
 func (h *Handlers) createBean(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
 		return
@@ -48,8 +47,7 @@ func (h *Handlers) createBean(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateBean ports PUT /api/library/bean/:id — a thin wrapper around
-// UpdateBean (update.go), the same partial-update logic internal/web's Edit
-// bean form also calls. Partial update: omitted fields keep their current
+// UpdateBean (update.go). Partial update: omitted fields keep their current
 // value.
 func (h *Handlers) updateBean(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))

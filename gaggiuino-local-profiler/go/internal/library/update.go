@@ -7,9 +7,7 @@ import "errors"
 // own http.HandlerFunc, into package-level functions the REST handlers now
 // call as thin wrappers — the same "service layer, not the REST handler
 // itself" reuse convention CreateBean et al. (create.go) already established
-// for POST, applied to PUT so internal/web's Phase 2b/2c-follow-up Edit UI
-// (go/README.md's "Status" section) can call the identical validated patch
-// logic instead of duplicating it a second time.
+// for POST, applied to PUT.
 //
 // Every UpdateX returns (updated entity, current Library, found, error):
 // found is false when id doesn't match any entity of that kind (including

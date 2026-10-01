@@ -17,7 +17,7 @@ import (
 //
 // The datapoints value stays an encoding/json.RawMessage (not goccy's own
 // RawMessage type) so the packages that marshal a hydrated shot through
-// plain encoding/json — internal/backup's export, internal/web's views —
+// plain encoding/json — internal/backup's export —
 // keep emitting it as raw JSON rather than a base64 []byte.
 
 // writeJSON is the package-local counterpart of httputil.WriteJSON: same

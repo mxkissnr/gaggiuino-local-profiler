@@ -52,8 +52,8 @@ type Service struct {
 // decline notification every consumer of AcceptOrder/CompleteOrder/
 // DeclineOrder gets for free — #901 code review: this used to be a private
 // method on internal/orders' own REST *Handlers, which meant
-// internal/web's separate *OrdersHandlers had no way to call it and
-// silently shipped without customer notifications).
+// any other caller had no way to call it and silently shipped without
+// customer notifications).
 func NewService(repo *Repository, shotsRepo *shots.Repository, libRepo *library.Repository, registry *machines.Registry, haClient *ha.Client) *Service {
 	return &Service{repo: repo, shotsRepo: shotsRepo, libRepo: libRepo, registry: registry, ha: haClient}
 }
@@ -64,7 +64,7 @@ func NewService(repo *Repository, shotsRepo *shots.Repository, libRepo *library.
 // matching Node's fire-and-forget sendHaNotify() (no caller awaits it
 // either). Lives on Service (not the REST-only *Handlers it used to be a
 // method of) so every caller of these three lifecycle methods — the REST
-// API and internal/web's htmx queue actions alike — gets the same customer
+// API and any other caller alike — gets the same customer
 // notification without having to remember to trigger it separately.
 func (s *Service) notifyOrderStatus(order Order, title, body string) {
 	if s.ha == nil {

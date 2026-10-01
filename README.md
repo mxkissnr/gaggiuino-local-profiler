@@ -311,7 +311,7 @@ flowchart TB
     API["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;REST API&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmd/server&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
     SSE["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Event stream&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/sse&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
     MCP["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MCP server&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/mcp&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    WEB["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Kiosk view&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/web&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    WEB["&nbsp;&nbsp;Dashboard + kiosk&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/webapp&nbsp;&nbsp;&nbsp;"]
     HAC["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HA client&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/ha&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
     NET["&nbsp;&nbsp;&nbsp;&nbsp;Outbound guard&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/netguard&nbsp;&nbsp;&nbsp;"]
   end

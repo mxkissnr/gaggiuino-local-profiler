@@ -37,8 +37,7 @@ func (h *Handlers) listMilks(w http.ResponseWriter, r *http.Request) {
 }
 
 // createMilk ports POST /api/library/milk — a thin wrapper around
-// CreateMilk (create.go), the same logic internal/web's "New milk" form
-// also calls.
+// CreateMilk (create.go).
 func (h *Handlers) createMilk(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
 		return
@@ -61,8 +60,7 @@ func (h *Handlers) createMilk(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateMilk ports PUT /api/library/milk/:id — a thin wrapper around
-// UpdateMilk (update.go), the same logic internal/web's Edit milk form also
-// calls.
+// UpdateMilk (update.go).
 func (h *Handlers) updateMilk(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)

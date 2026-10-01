@@ -31,8 +31,7 @@ func (h *Handlers) listPuckScreens(w http.ResponseWriter, r *http.Request) {
 }
 
 // createPuckScreen ports POST /api/library/puckscreen — a thin wrapper
-// around CreatePuckScreen (create.go), the same logic internal/web's "New
-// puck screen" form also calls.
+// around CreatePuckScreen (create.go).
 func (h *Handlers) createPuckScreen(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
 		return
@@ -55,8 +54,7 @@ func (h *Handlers) createPuckScreen(w http.ResponseWriter, r *http.Request) {
 }
 
 // updatePuckScreen ports PUT /api/library/puckscreen/:id — a thin wrapper
-// around UpdatePuckScreen (update.go), the same logic internal/web's Edit
-// puck screen form also calls.
+// around UpdatePuckScreen (update.go).
 func (h *Handlers) updatePuckScreen(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)

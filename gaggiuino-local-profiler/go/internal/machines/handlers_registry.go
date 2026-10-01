@@ -37,8 +37,8 @@ func (h *Handlers) listMachines(w http.ResponseWriter, r *http.Request) {
 }
 
 // createMachine ports POST /api/machines — a thin wrapper around
-// CreateMachineChecked (create.go), the same validate/SSRF-check/create
-// sequence internal/web's "New machine" form also calls.
+// CreateMachineChecked (create.go), the validate/SSRF-check/create
+// sequence.
 func (h *Handlers) createMachine(w http.ResponseWriter, r *http.Request) {
 	var in MachineInput
 	if !decodeJSONBody(w, r, &in) {

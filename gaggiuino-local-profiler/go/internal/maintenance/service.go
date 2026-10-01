@@ -24,13 +24,11 @@ var ErrUnknownTask = errors.New("unknown maintenance task")
 // this): validate the task, stamp lastDate, persist it, and add a
 // maintenance_log entry — then return the freshly recomputed stats for
 // machineID. Extracted into this service-layer function, not left as a
-// REST-handler-only private method, specifically so internal/web's
-// maintenance page (#901 Phase 2e) gets the exact same maintenance_log side
-// effect the REST path does instead of silently missing it — the same
+// REST-handler-only private method, so any caller gets the exact
+// same maintenance_log side effect without silently missing it — the same
 // service-layer-extraction fix Phase 2d already applied to
 // internal/orders' AcceptOrder/CompleteOrder/DeclineOrder (see that
-// package's service.go) after the web queue was found to skip the
-// customer HA-notify side effect a REST-handler-only method held.
+// package's service.go).
 func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *library.Repository, registry *machines.Registry, rawTask, notes string, machineID int64) (map[string]Stat, error) {
 	maint, err := repo.GetMaintenance(machineID)
 	if err != nil {
