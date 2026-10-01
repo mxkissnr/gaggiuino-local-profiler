@@ -3,6 +3,7 @@ package shots
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 )
@@ -150,12 +151,43 @@ func (s *Service) GetComparativeGrindAdvice(shot Shot) (*ComparativeGrindAdvice,
 	return ComputeComparativeGrindAdvice(shot, all), nil
 }
 
-// SaveAnnotation ports ShotService.js's saveAnnotation. The Node version
-// also re-reads and returns the saved annotation, but every caller
-// (routes/shots.js's POST /annotate) discards that return value, so this
-// just performs the write.
-func (s *Service) SaveAnnotation(shotID int64, annotation map[string]any) error {
-	return s.repo.SaveAnnotation(shotID, annotation)
+// AnnotationValidationError reports that a merged annotation failed
+// ValidateAnnotation. The merged result was never written; handlers.go's
+// annotate turns it back into the same 400 shape the pre-merge body check
+// produces.
+type AnnotationValidationError struct {
+	Issues []ValidationIssue
+}
+
+func (e *AnnotationValidationError) Error() string {
+	return fmt.Sprintf("annotation validation failed: %d issue(s)", len(e.Issues))
+}
+
+// serverOwnedAnnotationKeys are annotation keys clients may send but never
+// change. They are dropped from a patch before it is merged, so a client
+// payload that happens to carry one cannot overwrite the server-written
+// value (see orders' CompleteOrder, which owns orderedBy).
+var serverOwnedAnnotationKeys = map[string]bool{"orderedBy": true}
+
+// PatchAnnotation merges patch into the shot's stored annotation (#1273):
+// every remaining top-level key of patch overwrites the stored value, a key
+// present as JSON null or "" clears the field, and keys absent from patch
+// are kept. Server-owned keys are ignored. The merged result is validated
+// before it is written; an invalid merge returns *AnnotationValidationError
+// and leaves the stored annotation untouched. Returns the saved annotation.
+func (s *Service) PatchAnnotation(shotID int64, patch map[string]any) (map[string]any, error) {
+	return s.repo.UpdateAnnotation(shotID, func(ann map[string]any) error {
+		for k, v := range patch {
+			if serverOwnedAnnotationKeys[k] {
+				continue
+			}
+			ann[k] = v
+		}
+		if issues := ValidateAnnotation(ann); len(issues) > 0 {
+			return &AnnotationValidationError{Issues: issues}
+		}
+		return nil
+	})
 }
 
 // SetImage ports ShotService.js's setImage.

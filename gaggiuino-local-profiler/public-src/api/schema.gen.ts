@@ -448,7 +448,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Save or update annotation for a shot */
+        /**
+         * Save or update annotation for a shot
+         * @description Merges the posted fields into the shot's stored annotation: a key omitted from the body keeps its stored value, while a key sent as null or "" clears it. The orderedBy attribution is server-owned and cannot be changed here.
+         */
         post: {
             parameters: {
                 query?: never;

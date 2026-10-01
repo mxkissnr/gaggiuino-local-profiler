@@ -451,7 +451,13 @@ func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
 
 // annotate ports POST /api/shots/:id/annotate. Body validation runs before
 // id parsing — see this file's header comment for why that order matters.
-// SaveAnnotation itself has no existence check (matching ShotService.js's
+// The body is then *merged* into the stored annotation (Service.PatchAnnotation,
+// #1273): keys absent from the body are kept, keys present as null or ""
+// clear, and server-owned keys (orderedBy) are ignored. The merged result is
+// validated again before it is written; a merge that fails validation is the
+// same 400 shape the body check above returns.
+//
+// The write itself has no existence check (matching ShotService.js's
 // saveAnnotation), but annotations.shot_id REFERENCES shots(id) with
 // foreign_keys=ON in both Node and Go, so annotating an id that isn't an
 // actual shot row still fails — as a foreign-key constraint error, mapped
@@ -478,7 +484,12 @@ func (h *Handlers) annotate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid shot ID")
 		return
 	}
-	if err := h.service.SaveAnnotation(id, body); err != nil {
+	if _, err := h.service.PatchAnnotation(id, body); err != nil {
+		var verr *AnnotationValidationError
+		if errors.As(err, &verr) {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Validation failed", "issues": verr.Issues})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
