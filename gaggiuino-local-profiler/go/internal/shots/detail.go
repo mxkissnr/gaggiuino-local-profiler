@@ -1,17 +1,13 @@
 package shots
 
-import "fmt"
-
-// This file ports the shot-detail metrics/advice math CalcShotScoreDetail
-// (score.go) doesn't already expose: public-src/views/shots/utils.js's
-// getShotData()+calcBrewRatio() (dose->yield->ratio, EY), public-src/
-// utils.js's detectPhases() (preinfusion/extraction split), and public-src/
-// views/shots/grind.js's calcGrindAdvice() (single-shot dial-in heuristic).
-// Deliberately NOT ported: calcComparativeGrindAdvice (needs the full shot
-// history, not just this shot) and any bean-library-aware branch (#450,
-// same internal/library-not-ported-yet boundary CalcShotScoreDetail's own
-// doc comment already describes) — both are out of scope for a single
-// shot's own detail view.
+// This file ports the shot-detail metrics math CalcShotScoreDetail (score.go)
+// doesn't already expose: public-src/views/shots/utils.js's
+// getShotData()+calcBrewRatio() (dose->yield->ratio, EY) and public-src/
+// utils.js's detectPhases() (preinfusion/extraction split). The history-aware
+// calcComparativeGrindAdvice is ported separately in comparative.go.
+// Deliberately NOT ported here: any bean-library-aware branch (#450, the same
+// internal/library-not-ported-yet boundary CalcShotScoreDetail's own doc
+// comment already describes) — out of scope for a single shot's detail view.
 
 // ShotMetrics is the shot-detail page's derived recipe/duration/channeling
 // figures — a plain data struct (not pre-formatted strings), same division
@@ -19,10 +15,9 @@ import "fmt"
 // view layer decides display formatting/units.
 //
 // Yield/Ratio/EY reuse CalcShotScoreDetail's own "final weight = max of the
-// weight series" convention (not calcBrewRatio's "last sample" convention —
-// see calcGrindAdvice's own doc comment below for why that distinction is
-// deliberately not carried over) so a shot's Metrics-Grid ratio always
-// matches the ratio CalcShotScoreDetail itself scored against.
+// weight series" convention (not calcBrewRatio's "last sample" convention)
+// so a shot's Metrics-Grid ratio always matches the ratio
+// CalcShotScoreDetail itself scored against.
 type ShotMetrics struct {
 	HasDose bool
 	DoseG   float64
@@ -163,70 +158,4 @@ func ComputeShotMetrics(shot Shot) ShotMetrics {
 	}
 
 	return m
-}
-
-// GrindAdvice mirrors public-src/views/shots/grind.js's calcGrindAdvice —
-// a single-shot dial-in heuristic (duration -> channeling -> brew-ratio
-// checks). Icon is a plain glyph, not inline SVG, matching this package's
-// existing shots.templ stars()/icon convention (kept as text to avoid CSP
-// questions this foundation doesn't need to answer).
-//
-// Deliberately NOT ported: calcComparativeGrindAdvice (needs the full shot
-// history to find "the best-scoring grind setting among comparable
-// shots", out of scope for a single Shot value) and calcBrewRatio's
-// "last weight sample" ratio definition (this uses ShotMetrics.Ratio's
-// max-of-series definition instead — the two are within noise of each
-// other for any well-formed weight series, and using one definition
-// throughout keeps the Metrics-Grid ratio and this advice's ratio check
-// always in agreement, which matters more here than matching the Node
-// original's incidental use of two different weight extractions for two
-// unrelated features).
-type GrindAdvice struct {
-	// Type is "finer" | "coarser" | "warning" | "ok".
-	Type string
-	Icon string
-	Text string
-}
-
-// ComputeGrindAdvice returns nil exactly when the Node original's
-// calcGrindAdvice would (shot.duration < 8s — not enough of a pull to say
-// anything).
-func ComputeGrindAdvice(shot Shot, m ShotMetrics) *GrindAdvice {
-	secs := m.DurationSecs
-	if secs < 8 {
-		return nil
-	}
-
-	d := DatapointsMap(shot)
-	times := divAll(floatSlice(d["timeInShot"]), 10)
-	pressures := divAll(floatSlice(d["pressure"]), 10)
-	if detectChanneling(times, pressures) {
-		return &GrindAdvice{Type: "warning", Icon: "⚡", Text: "Channeling detected — check your puck prep"}
-	}
-
-	switch {
-	case secs < 18:
-		return &GrindAdvice{Type: "finer", Icon: "↓", Text: fmt.Sprintf("%.0fs — grind finer", secs)}
-	case secs < 23:
-		return &GrindAdvice{Type: "finer", Icon: "↓", Text: fmt.Sprintf("%.0fs — grind slightly finer", secs)}
-	case secs > 50:
-		return &GrindAdvice{Type: "coarser", Icon: "↑", Text: fmt.Sprintf("%.0fs — grind coarser", secs)}
-	case secs > 42:
-		return &GrindAdvice{Type: "coarser", Icon: "↑", Text: fmt.Sprintf("%.0fs — grind slightly coarser", secs)}
-	}
-
-	if m.HasRatio {
-		if m.Ratio > 2.3 {
-			return &GrindAdvice{Type: "warning", Icon: "⚖", Text: fmt.Sprintf("Ratio 1:%.1f — yield high for the dose", m.Ratio)}
-		}
-		if m.Ratio < 1.7 {
-			return &GrindAdvice{Type: "warning", Icon: "⚖", Text: fmt.Sprintf("Ratio 1:%.1f — yield low for the dose", m.Ratio)}
-		}
-	}
-
-	text := fmt.Sprintf("Dialed in — %.0fs", secs)
-	if m.HasAvgPressure && m.AvgPressureBar > 0 {
-		text += fmt.Sprintf(", %.1f bar avg", m.AvgPressureBar)
-	}
-	return &GrindAdvice{Type: "ok", Icon: "✓", Text: text}
 }
