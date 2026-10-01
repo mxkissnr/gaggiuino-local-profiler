@@ -89,7 +89,7 @@ A self-contained ordering page for a tablet that stays on the table: a guest ent
 
 Next to the order flow, a queue panel lists the active orders (waiting / being prepared) with their estimated times and refreshes every 8 seconds; the menu and the open/closed state refresh every 30 seconds.
 
-Reachable at `/ui/kiosk` — through the Ingress prefix on Home Assistant, or at `http://<host>:<port>/ui/kiosk` on a standalone Docker install. It needs the ordering feature to be enabled (`enable_orders: true`); without it the page shows a "not enabled" banner. No separate login is required.
+Reachable at `kiosk.html` — through the Ingress prefix on Home Assistant, or at `http://<host>:<port>/kiosk.html` on a standalone Docker install; the old `/ui/kiosk` address redirects there. The page follows the app's light/dark theme and language (the app's stored choice, otherwise the system/browser setting, falling back to English), and `?eink=1` switches it to a high-contrast black/white mode without animations for e-ink tablets. It needs the ordering feature to be enabled (`enable_orders: true`); without it the page shows a "not enabled" banner. No separate login is required.
 
 ### API token
 
