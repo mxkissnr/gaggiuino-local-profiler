@@ -34,6 +34,16 @@ type Handlers struct {
 	imageDir        string
 	limiter         *rateLimiter
 	onGrinderDelete func(grinderID int64) error
+
+	// onBeanRestocked runs after a new bag has been added to a bean
+	// successfully (newBag). wasEmpty reports whether the bean had no
+	// remaining stock before the bag was added — see newBag. Set via
+	// SetOnBeanRestocked by cmd/server, which uses it to drive the restock
+	// achievement (#1286 R2). A callback rather than a direct import for the
+	// same reason as onGrinderDelete: internal/achievements already imports
+	// internal/library, so the wiring has to run this direction. A nil hook
+	// (never wired, e.g. in this package's own unit tests) is a no-op.
+	onBeanRestocked func(wasEmpty bool)
 }
 
 // SetOnGrinderDeleted wires the maintenance domain's cleanup of a deleted
@@ -52,6 +62,25 @@ type Handlers struct {
 // cleanup) — see this file's deleteGrinder doc comment.
 func (h *Handlers) SetOnGrinderDeleted(fn func(grinderID int64) error) {
 	h.onGrinderDelete = fn
+}
+
+// SetOnBeanRestocked wires the side effect to run after a new bag has been
+// added to a bean successfully (#1286 R2). cmd/server uses it to let the
+// achievements service see a `bean-changed` event with reason `restock`,
+// which unlocks the restock badge when the bean had no stock left. wasEmpty
+// is computed before the write — see newBag. internal/achievements imports
+// internal/library, so wiring this as a callback here avoids the import
+// cycle a direct dependency would create. A nil hook is a no-op; the
+// callback never changes the response — the new-bag request itself already
+// succeeded.
+func (h *Handlers) SetOnBeanRestocked(fn func(wasEmpty bool)) {
+	h.onBeanRestocked = fn
+}
+
+func (h *Handlers) notifyBeanRestocked(wasEmpty bool) {
+	if h.onBeanRestocked != nil {
+		h.onBeanRestocked(wasEmpty)
+	}
 }
 
 // NewHandlers builds Handlers around repo and shotsDB (the same *sql.DB

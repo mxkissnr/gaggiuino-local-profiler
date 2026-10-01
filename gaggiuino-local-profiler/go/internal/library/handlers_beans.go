@@ -2,6 +2,7 @@ package library
 
 import (
 	"errors"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -75,8 +76,17 @@ func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Read the dose rows before the write so newBag can tell whether the bean
+	// was already empty when the new bag lands — the restock achievement's
+	// "wasEmpty" moment (#1286 R2). Best-effort: a failure here must not fail
+	// an otherwise valid new-bag request; it just leaves wasEmpty false.
+	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+	if err != nil {
+		log.Printf("library: reading doses for restock check: %v", err)
+	}
 	var bean Entity
-	err := h.repo.Update(func(lib *Library) error {
+	var wasEmpty bool
+	err = h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
 			idx = findBeanIndex(*lib, id)
@@ -85,6 +95,12 @@ func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 			return errNotFound
 		}
 		bean = lib.Beans[idx]
+		// Same definition of "no remaining stock" as ComputeBeanRemaining
+		// exposes as the bean's remainingG (and the bean_empty badge reads):
+		// present and non-positive, before the new bag is appended below.
+		if rem, present := ComputeBeanRemaining(bean, doseRows, lib.Beans); present && rem <= 0 {
+			wasEmpty = true
+		}
 		roastDate := trimMax(body["roastDate"], 10)
 		stockG := floatOrNilFalsy(body["stock_g"])
 		batchNumber := trimMax(body["batchNumber"], 50)
@@ -123,6 +139,7 @@ func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 		writeUpdateError(w, err)
 		return
 	}
+	h.notifyBeanRestocked(wasEmpty)
 	h.writeEnrichedBean(w, bean)
 }
 
