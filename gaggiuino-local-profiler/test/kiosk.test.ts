@@ -2,14 +2,34 @@
 // Kept a separate module from kiosk.ts so importing them here never runs the
 // page's DOM bootstrap.
 import { describe, it, expect, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { Order, QueueEta } from '../public-src/api/types.js';
 
-// kiosk-helpers -> i18n -> state/index.js reads localStorage at module load;
-// vitest's node environment has none, so stub it before the dynamic import.
-vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} });
+// kiosk-helpers -> i18n -> state/index.js, and components/machines-settings.js
+// below, read localStorage at module load; vitest's node environment has none,
+// so stub a complete-enough Storage before the dynamic imports.
+vi.stubGlobal('localStorage', {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+  clear: () => {},
+  key: () => null,
+  length: 0,
+});
+// components/machines-settings.js also touches window/document at call time —
+// same minimal fakes test/theme-contrast.test.ts uses (navigator comes from
+// test/setup.ts).
+const g = globalThis as unknown as Record<string, unknown>;
+g.window ??= globalThis;
+g.document ??= { documentElement: {}, getElementById: () => undefined };
 
 const { etaText, isEinkMode } = await import('../public-src/kiosk-helpers.js');
 const { t } = await import('../public-src/i18n.js');
+const { resolveAccentInk } = await import('../public-src/components/machines-settings.js');
+
+const KIOSK_CSS = fs.readFileSync(
+  path.join(import.meta.dirname, '..', 'public-src', 'kiosk.css'), 'utf8');
 
 // Every field the Order schema requires, so a test only sets the ones it
 // exercises (mutating the returned object rather than spreading a Partial,
@@ -77,5 +97,18 @@ describe('isEinkMode', () => {
     expect(isEinkMode('?eink=0')).toBe(false);
     expect(isEinkMode('?eink')).toBe(false);
     expect(isEinkMode('?other=1')).toBe(false);
+  });
+});
+
+describe('kiosk light-theme accent ink', () => {
+  it('matches resolveAccentInk for the kiosk default amber-americano accent', () => {
+    const at = KIOSK_CSS.search(/html\[data-theme="light"\]:not\(\.eink\)\s*\{/);
+    expect(at, 'light-theme --accent-ink rule not found in kiosk.css').toBeGreaterThanOrEqual(0);
+    const body = KIOSK_CSS.slice(at, KIOSK_CSS.indexOf('}', at));
+    const m = /--accent-ink:\s*(#[0-9a-fA-F]{3,6})\b/.exec(body);
+    const ink = m?.[1];
+    if (ink === undefined) throw new Error('--accent-ink not declared in the kiosk light-theme block');
+    expect(ink).toBe(resolveAccentInk('amber-americano', '#f59e0b', true));
+    expect(ink).toBe('#905c06');
   });
 });

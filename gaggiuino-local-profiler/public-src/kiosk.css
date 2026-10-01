@@ -41,6 +41,13 @@ body { user-select: none; }
 }
 .kiosk-header svg { width: 32px; height: 32px; color: var(--accent-ink); }
 
+/* The kiosk only ever paints the default amber-americano accent (it never
+   runs applyActiveMachineAccentTheme()), so the light-theme ink that the app
+   gets from resolveAccentInk('amber-americano', '#f59e0b', true)
+   (components/machines-settings.ts) has to come from CSS here.
+   test/kiosk.test.ts keeps the two values in sync. */
+html[data-theme="light"]:not(.eink) { --accent-ink: #905c06; }
+
 .closed-banner {
   background: var(--raised); color: var(--gray-200);
   border-left: 4px solid var(--err); border-radius: var(--radius-sm);
@@ -80,12 +87,19 @@ body { user-select: none; }
   min-height: 44px; padding: 0 var(--sp-3); background: none; border: none;
   color: var(--gray-600); font-family: inherit; font-size: var(--fs-2);
   text-decoration: underline; cursor: pointer; transition: transform 120ms ease;
+  /* Keep "Nicht du?" on one line at narrow widths; the greeting flexes and
+     wraps instead of forcing this link to break. */
+  white-space: nowrap; flex-shrink: 0;
 }
 .link-btn:active { transform: scale(.98); }
 
 .drink-grid {
   flex: 1 1 auto; min-height: 0; overflow-y: auto;
   display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  /* align-content: start keeps cards at their 140px min-height instead of
+     stretching the rows to fill the column; the grid still scrolls when the
+     rows overflow. */
+  align-content: start; grid-auto-rows: minmax(140px, auto);
   gap: var(--sp-3); padding-bottom: var(--sp-2);
 }
 .drink {
