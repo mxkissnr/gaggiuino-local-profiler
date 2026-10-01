@@ -5531,6 +5531,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mcp/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current MCP settings (stored toggles + whether developer tools are available on this build) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { enabled, allowWrite, allowDeveloperTools, developerToolsAvailable } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpSettings"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Save the MCP settings. Takes effect on the next request — no restart. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["McpSettingsInput"];
+                };
+            };
+            responses: {
+                /** @description Saved settings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpSettings"];
+                    };
+                };
+                /** @description Invalid settings payload */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/mqtt/discovery": {
         parameters: {
             query?: never;
@@ -7652,6 +7719,23 @@ export interface components {
             /** @description Write-only: wipe the stored password regardless of the password field (#1062). */
             clearPassword?: boolean;
             prefix?: string;
+        };
+        /** @description GET/POST /api/mcp/settings response (go/internal/mcp's SettingsView): the stored MCP toggles plus developerToolsAvailable, which reports whether this build offers the developer tools at all (the GLP_DEV_BUILD channel — allowDeveloperTools can only be stored true on such a build). */
+        McpSettings: {
+            /** @description Master switch for the /api/mcp endpoint */
+            enabled: boolean;
+            /** @description Register the write tools (annotate_shot, set_known_grind, mark_maintenance_done) */
+            allowWrite: boolean;
+            /** @description Register the developer tools; only effective on a dev build */
+            allowDeveloperTools: boolean;
+            /** @description Whether this build is a dev build, i.e. whether allowDeveloperTools can be enabled */
+            developerToolsAvailable: boolean;
+        };
+        /** @description POST /api/mcp/settings request body (go/internal/mcp's SettingsHandlers). All three toggles are required booleans; the body replaces the stored settings. allowDeveloperTools: true is rejected with 400 on a non-dev build. */
+        McpSettingsInput: {
+            enabled: boolean;
+            allowWrite: boolean;
+            allowDeveloperTools: boolean;
         };
     };
     responses: never;
