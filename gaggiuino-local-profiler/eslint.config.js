@@ -42,12 +42,29 @@ module.exports = [
   },
   js.configs.recommended,
   {
-    files: ['eslint.config.js', 'vite.config.js', 'vitest.config.js', 'eslint-rules/**/*.js'],
+    files: ['eslint.config.js', 'eslint-rules/**/*.js'],
     languageOptions: {
       globals: globals.node,
     },
     rules: commonRules,
   },
+  ...tseslint.config({
+    // Root build/test tooling configs (#1270): TypeScript files run in Node, so
+    // node globals only (unlike the browser-scoped public-src/ block below).
+    files: ['vite.config.ts', 'vitest.config.ts'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      globals: globals.node,
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: __dirname,
+      },
+    },
+    rules: {
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
+    },
+  }),
   {
     files: ['scripts/**/*.js', 'scripts/**/*.mjs'],
     languageOptions: {

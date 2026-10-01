@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import type { Plugin } from 'vite';
 import { cpSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 // ../demo-dist, the entry point swapped for the service-worker bootstrap, and
 // the worker + recorded fixtures copied next to the bundle so the whole
 // directory is self-contained. The normal build is untouched.
-function demoServiceWorker() {
+function demoServiceWorker(): Plugin {
   let projectRoot = '';
   let outDir = '';
   return {
