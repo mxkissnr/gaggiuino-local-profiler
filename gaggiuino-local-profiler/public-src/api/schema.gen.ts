@@ -7252,12 +7252,6 @@ export interface components {
             legacyMachineOptionsPending?: boolean;
             /** @description Stable per-database identity (#751) — changes only when glp.db is freshly (re)created */
             installId?: string;
-            /** @description Present only while at least one shot-import backfill is actively running. */
-            syncProgress?: {
-                machineId?: number;
-                current?: number;
-                total?: number;
-            }[];
             /** @description All configured machines (#317). The fields above always describe the default machine, unchanged, for backward compatibility. */
             machines?: {
                 id?: number;
