@@ -56,6 +56,7 @@
 
 ### Removed
 - **Removed the old server-rendered fallback pages under `/ui/` (left over from the Go migration); the app itself and the kiosk are unaffected, and `/ui/kiosk` still redirects to the kiosk.** Part of #1200
+- **Removed the leftover templ codegen toolchain and the stale `/ui/` build docs, with no behavior change.** Part of #1200
 
 ## [3.2.0] – 2026-09-26
 ### Added
