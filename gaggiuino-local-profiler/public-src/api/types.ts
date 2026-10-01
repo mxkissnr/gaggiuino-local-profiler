@@ -174,6 +174,11 @@ export type MqttSettings = components['schemas']['MqttSettings'];
 export type MqttSettingsInput = components['schemas']['MqttSettingsInput'];
 
 // ── MCP (go/internal/mcp, #1196/#1288) ───────────────────────────────────
+//
+// Both shapes already live in the generated schema.gen.ts (the /api/mcp/settings
+// path and the two schemas were added with the OpenAPI spec by #1291), so this
+// file only re-exports them — schema.gen.ts is auto-generated from
+// go/internal/system/openapi.yaml and must not be hand-edited.
 
 /**
  * GET/POST /api/mcp/settings response (go/internal/mcp's SettingsView): the
