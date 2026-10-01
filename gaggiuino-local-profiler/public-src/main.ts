@@ -149,6 +149,7 @@ import { handleTopbarLiveSnapshotEvent, handleTopbarPreheatUpdateEvent,
 import { loadMqttSettings, renderMqttSettingsCard, setMqttTransport, saveMqttSettings, applyMqttToMachine } from './components/mqtt-settings.js';
 
 import { loadNotifySettingsCard, saveNotifySettings } from './components/notify-settings.js';
+import { loadMcpSettingsCard, renderMcpSettingsCard, saveMcpSettings } from './components/mcp-settings.js';
 
 import { loadShotDefaultsSettingsCard, saveShotDefaultsSettings } from './components/shot-defaults-settings.js';
 
@@ -906,6 +907,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('mqttSaveBtn')?.addEventListener('click', () => { void saveMqttSettings(); });
   document.getElementById('mqttApplyToMachineBtn')?.addEventListener('click', () => { void applyMqttToMachine(); });
   document.getElementById('notifySettingsSaveBtn')?.addEventListener('click', () => { void saveNotifySettings(); });
+  document.getElementById('mcpSettingsSaveBtn')?.addEventListener('click', () => { void saveMcpSettings(); });
+  // #1288: write/developer tools only apply while the server is on, so their disabled state follows the master toggle.
+  document.getElementById('mcpEnabled')?.addEventListener('change', () => renderMcpSettingsCard());
   document.getElementById('shotDefaultsSaveBtn')?.addEventListener('click', () => { void saveShotDefaultsSettings(); });
   document.getElementById('closeScanModalBtn')!.addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
@@ -1083,6 +1087,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const machinesPromise = loadMachines();
     void loadMqttSettings();
     void loadNotifySettingsCard();
+    void loadMcpSettingsCard();
     void loadDrinkMenu();
     void loadMilkTypes();
     // Awaited (unlike the two loads above): loadData() below can render the

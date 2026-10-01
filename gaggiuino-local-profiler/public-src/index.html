@@ -1408,6 +1408,30 @@
                 <button class="orders-menu-save-btn" id="notifySettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
             </div>
         </div>
+        <!-- AI assistants (MCP) settings (#1288, part of #1196) — the built-in
+             MCP server's toggles. The developer-tools row is revealed by
+             loadMcpSettingsCard() only when the build offers it (GLP_DEV_BUILD). -->
+        <div class="settings-card" id="mcpSettingsCard">
+            <h3 class="settings-card-title" data-i18n="settings_mcp_title">KI-Assistenten (MCP)</h3>
+            <p class="settings-card-desc" data-i18n="settings_mcp_desc">Erlaube KI-Assistenten wie Claude, über den eingebauten MCP-Server deine Shots, Bohnen und Analysen zu lesen.</p>
+            <div class="orders-broadcast-list" id="mcpSettingsList">
+                <div class="orders-broadcast-row">
+                    <input type="checkbox" id="mcpEnabled" data-mcp-key="enabled">
+                    <label for="mcpEnabled" data-i18n="settings_mcp_enabled">MCP-Server aktivieren</label>
+                </div>
+                <div class="orders-broadcast-row">
+                    <input type="checkbox" id="mcpAllowWrite" data-mcp-key="allowWrite">
+                    <label for="mcpAllowWrite" data-i18n="settings_mcp_write">Schreib-Tools erlauben — diese verändern deine Daten</label>
+                </div>
+                <div class="orders-broadcast-row" id="mcpDevRow" style="display:none">
+                    <input type="checkbox" id="mcpAllowDeveloperTools" data-mcp-key="allowDeveloperTools">
+                    <label for="mcpAllowDeveloperTools" data-i18n="settings_mcp_dev">Entwickler-Tools erlauben — große, rohe Diagnose-Ausgaben</label>
+                </div>
+            </div>
+            <div class="orders-notify-actions">
+                <button class="orders-menu-save-btn" id="mcpSettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
+            </div>
+        </div>
         <!-- Shot logging auto-prefill defaults (#654) — optional, per-install
              default values for a brand-new shot's annotation panel. Never
              overwrites an already-annotated shot's data (see

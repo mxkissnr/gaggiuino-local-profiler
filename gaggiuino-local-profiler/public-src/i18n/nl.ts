@@ -277,6 +277,7 @@ const nl: Partial<Translations> = {
     settings_bottom_nav:'Mobiele navigatiebalk', settings_bottom_nav_desc:'Kies tot 4 bestemmingen voor de onderste navigatiebalk op mobiel. Al het andere komt onder "Meer" terecht.',
     settings_bottom_nav_checkbox_label:'Tonen in de balk', settings_bottom_nav_move_up:'Omhoog verplaatsen', settings_bottom_nav_move_down:'Omlaag verplaatsen',
     settings_notify_title:'Meldingen', settings_notify_desc:'Welke automatische meldingen van de machine en de koffiebibliotheek moeten worden verstuurd?',
+    settings_mcp_title:'AI-assistenten (MCP)', settings_mcp_desc:'Laat AI-assistenten zoals Claude je shots, bonen en analyses lezen via de ingebouwde MCP-server.', settings_mcp_enabled:'MCP-server inschakelen', settings_mcp_write:'Schrijftools toestaan — deze wijzigen je gegevens', settings_mcp_dev:'Ontwikkelaarstools toestaan — grote, ruwe diagnostische uitvoer',
     settings_shot_defaults_title:'Standaardwaarden voor shot-registratie', settings_shot_defaults_desc:'Worden automatisch ingevuld bij het openen van een nieuwe, nog niet geannoteerde shot — blijven volledig aanpasbaar.',
     sd_none:'— geen standaardwaarde —', sd_save:'Opslaan', sd_saved:'Opgeslagen',
     settings_machines:'Machines', settings_machines_desc:'Beheer de espressomachines die deze app volgt.', settings_machines_add:'+ Machine toevoegen',
