@@ -33,13 +33,3 @@ func isOrdersEnabled() bool {
 	}
 	return opts.EnableOrders
 }
-
-// IsOrdersEnabled exposes isOrdersEnabled() to callers outside this package
-// — Phase 2d's (#901) internal/web frontend pages need the same
-// feature-disabled gate withOrdersGate applies to every /api/orders* route,
-// so GET /orders and GET /menu can degrade to a "feature disabled" notice
-// instead of an error, and their htmx write actions can 404 the same way a
-// disabled REST call would.
-func IsOrdersEnabled() bool {
-	return isOrdersEnabled()
-}
