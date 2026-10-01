@@ -11,7 +11,7 @@
       return;
     }
     var stored = null;
-    try { stored = localStorage.getItem("glp_theme"); } catch (e) {}
+    try { stored = localStorage.getItem("glp_theme"); } catch { /* storage unavailable, fall back to the OS setting */ }
     if (stored !== "light" && stored !== "dark") stored = null;
     var mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
     function resolve() {
