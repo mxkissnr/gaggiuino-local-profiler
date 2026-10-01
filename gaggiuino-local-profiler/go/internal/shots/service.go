@@ -70,35 +70,6 @@ func (s *Service) GetTrashPage(cur Cursor, limit int, machineID int64) (Page, er
 	return s.repo.findTrashedPage(cur, ClampPageLimit(limit), machineID, loadBeanLookup())
 }
 
-// GetRecent returns the newest n non-trashed shots (metadata + curves,
-// hydrated) — the templ no-JS views' bounded replacement for GetAll(),
-// which scans the whole history (#957 decision 7). Order is newest first,
-// so callers no longer reverse the slice.
-func (s *Service) GetRecent(n int) ([]Shot, error) {
-	page, err := s.repo.findPage(Cursor{}, n, 0, loadBeanLookup())
-	if err != nil {
-		return nil, err
-	}
-	out := make([]Shot, len(page.Rows))
-	for i, row := range page.Rows {
-		out[i] = row.Shot
-	}
-	return out, nil
-}
-
-// GetRecentTrash is GetRecent against the trash list.
-func (s *Service) GetRecentTrash(n int) ([]Shot, error) {
-	page, err := s.repo.findTrashedPage(Cursor{}, n, 0, loadBeanLookup())
-	if err != nil {
-		return nil, err
-	}
-	out := make([]Shot, len(page.Rows))
-	for i, row := range page.Rows {
-		out[i] = row.Shot
-	}
-	return out, nil
-}
-
 // GetByID ports ShotService.js's getById.
 func (s *Service) GetByID(id int64) (Shot, error) {
 	return s.repo.FindByID(id)
@@ -135,11 +106,10 @@ func (s *Service) GetPreviousByProfile(shot Shot) (Shot, error) {
 // GetComparativeGrindAdvice ports ShotService.js's own history-aware call
 // path for calcComparativeGrindAdvice (#901, design pass 4 follow-up — see
 // comparative.go's own doc comment for why this needed the full shot
-// history and so wasn't ported alongside ComputeGrindAdvice): loads every
-// other shot on shot's own machine, then runs the pure comparison. Returns
-// nil, nil (not an error) whenever ComputeComparativeGrindAdvice itself
-// would — no comparable shots, no coffee/grinder set — same "nil is a
-// legitimate, common answer" contract ComputeGrindAdvice already has.
+// history): loads every other shot on shot's own machine, then runs the
+// pure comparison. Returns nil, nil (not an error) whenever
+// ComputeComparativeGrindAdvice itself would — no comparable shots, no
+// coffee/grinder set; nil is a legitimate, common answer.
 func (s *Service) GetComparativeGrindAdvice(shot Shot) (*ComparativeGrindAdvice, error) {
 	if shot == nil {
 		return nil, nil

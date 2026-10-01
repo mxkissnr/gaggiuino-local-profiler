@@ -105,8 +105,8 @@ const pageColumns = `s.id, s.timestamp, s.duration, s.profile_name, s.data, s.ma
 // report HasMore without a second COUNT query.
 //
 // It scores against the generic bands (lookup nil) and is now only a test
-// helper — production callers go through Service.GetPage/GetRecent, which
-// use findPage with a loadBeanLookup source so the cache key includes the
+// helper — production callers go through Service.GetPage, which uses
+// findPage with a loadBeanLookup source so the cache key includes the
 // resolved bean target.
 func (r *Repository) FindPageExcludingTrash(cur Cursor, limit int, machineID int64) (Page, error) {
 	return r.findPage(cur, limit, machineID, nil)
@@ -140,8 +140,8 @@ func (r *Repository) findPage(cur Cursor, limit int, machineID int64, lookup bea
 // FindTrashedPage mirrors FindPageExcludingTrash but drives the join FROM
 // trash (like FindTrashed), so it lists only trashed shots, newest first.
 // Like FindPageExcludingTrash it scores against the generic bands and is
-// only a test helper; production callers use Service.GetTrashPage/
-// GetRecentTrash → findTrashedPage with a bean lookup.
+// only a test helper; production callers use Service.GetTrashPage →
+// findTrashedPage with a bean lookup.
 func (r *Repository) FindTrashedPage(cur Cursor, limit int, machineID int64) (Page, error) {
 	return r.findTrashedPage(cur, limit, machineID, nil)
 }
