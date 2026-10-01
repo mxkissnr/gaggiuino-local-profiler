@@ -1,0 +1,210 @@
+/* Ordering kiosk (#1267). Tokens + @font-face come from tokens.css (imported
+   from kiosk.ts). The page separates its regions by surface, not borders; the
+   html.eink block at the bottom overrides both themes. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--gray-950);
+  color: var(--gray-200);
+  font-family: 'Figtree', sans-serif;
+  font-variant-numeric: tabular-nums;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body { user-select: none; }
+
+#kiosk { height: 100dvh; }
+
+#kiosk svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#kiosk :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.serif { font-family: 'Fraunces', Georgia, serif; font-weight: 600; }
+
+.kiosk-layout { display: flex; height: 100%; min-height: 0; }
+
+.kiosk-main {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; flex-direction: column; gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-6);
+}
+
+.kiosk-header { display: flex; align-items: center; }
+.kiosk-header h1 {
+  display: flex; align-items: center; gap: var(--sp-3); margin: 0;
+  font-family: 'Fraunces', Georgia, serif; font-weight: 600;
+  font-size: var(--fs-6); color: var(--gray-100);
+}
+.kiosk-header svg { width: 32px; height: 32px; color: var(--accent-ink); }
+
+.closed-banner {
+  background: var(--raised); color: var(--gray-200);
+  border-left: 4px solid var(--err); border-radius: var(--radius-sm);
+  padding: var(--sp-3) var(--sp-4); font-weight: 600;
+}
+
+.step { display: none; flex: 1 1 auto; min-height: 0; flex-direction: column; }
+.step.active { display: flex; }
+
+/* ── Name step ─────────────────────────────────────────────────────────── */
+#nameStep { align-items: center; justify-content: center; text-align: center; gap: var(--sp-4); }
+.step-prompt { margin: 0; font-size: var(--fs-5); color: var(--gray-600); }
+.name-input {
+  width: min(90%, 560px); min-height: 56px; padding: var(--sp-4);
+  text-align: center; font-size: var(--fs-5); font-family: inherit;
+  color: var(--gray-200); background: var(--raised);
+  border: none; border-radius: var(--radius);
+}
+.name-input::placeholder { color: var(--gray-600); }
+
+.btn-primary {
+  min-height: 56px; padding: var(--sp-3) var(--sp-6);
+  font-family: inherit; font-size: var(--fs-4); font-weight: 600;
+  color: var(--accent-text); background: var(--accent);
+  border: none; border-radius: var(--radius); cursor: pointer;
+  transition: transform 120ms ease;
+}
+.btn-primary:active { transform: scale(.98); }
+.btn-primary:disabled { opacity: .4; cursor: default; }
+.btn-primary:disabled:active { transform: none; }
+
+/* ── Menu step ─────────────────────────────────────────────────────────── */
+#menuStep { gap: var(--sp-4); }
+.menu-header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
+.greeting { font-size: var(--fs-5); color: var(--gray-200); }
+.link-btn {
+  min-height: 44px; padding: 0 var(--sp-3); background: none; border: none;
+  color: var(--gray-600); font-family: inherit; font-size: var(--fs-2);
+  text-decoration: underline; cursor: pointer; transition: transform 120ms ease;
+}
+.link-btn:active { transform: scale(.98); }
+
+.drink-grid {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--sp-3); padding-bottom: var(--sp-2);
+}
+.drink {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--sp-2); min-height: 140px; padding: var(--sp-4) var(--sp-3);
+  font-family: inherit; font-size: var(--fs-3); font-weight: 600;
+  color: var(--gray-200); background: var(--raised);
+  border: none; border-radius: var(--radius); cursor: pointer;
+  transition: transform 120ms ease;
+}
+.drink:active { transform: scale(.98); }
+.drink .drink-icon { display: flex; font-size: var(--fs-6); line-height: 1; }
+.drink .drink-icon svg { width: 40px; height: 40px; }
+.drink.selected { background: var(--accent); color: var(--accent-text); }
+
+.variant-row { display: none; align-items: center; flex-wrap: wrap; gap: var(--sp-2); }
+.variant-row.visible { display: flex; }
+.variant-row label { color: var(--gray-600); font-size: var(--fs-2); font-weight: 600; }
+.variant-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.variant-chip {
+  min-height: 44px; padding: 0 var(--sp-4);
+  font-family: inherit; font-size: var(--fs-3); font-weight: 600;
+  color: var(--gray-200); background: var(--raised);
+  border: none; border-radius: var(--radius-sm); cursor: pointer;
+  transition: transform 120ms ease;
+}
+.variant-chip:active { transform: scale(.98); }
+.variant-chip.selected { background: var(--accent); color: var(--accent-text); }
+
+.order-bar { display: flex; align-items: stretch; gap: var(--sp-3); }
+.note-input {
+  flex: 1 1 auto; min-width: 0; min-height: 56px; padding: 0 var(--sp-4);
+  font-family: inherit; font-size: var(--fs-3);
+  color: var(--gray-200); background: var(--raised);
+  border: none; border-radius: var(--radius);
+}
+.note-input::placeholder { color: var(--gray-600); }
+.order-error { min-height: 1.4em; color: var(--err); font-size: var(--fs-2); font-style: italic; }
+
+/* ── Thank-you step ────────────────────────────────────────────────────── */
+#thanksStep { align-items: center; justify-content: center; text-align: center; gap: var(--sp-3); }
+.thanks-icon { color: var(--ok); }
+.thanks-icon svg { width: 72px; height: 72px; stroke-width: 1.4; }
+#thanksStep h2 { margin: 0; font-size: var(--fs-6); color: var(--gray-100); }
+.thanks-eta { min-height: 1.4em; font-size: var(--fs-4); font-weight: 600; color: var(--accent-ink); }
+
+/* ── Queue panel ───────────────────────────────────────────────────────── */
+.kiosk-queue {
+  flex: 0 0 320px; display: flex; flex-direction: column; gap: var(--sp-4);
+  min-height: 0; padding: var(--sp-5) var(--sp-4); background: var(--gray-900);
+}
+.queue-title {
+  margin: 0; font-size: var(--fs-2); font-weight: 600; color: var(--gray-500);
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.queue-list {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.queue-row {
+  display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3);
+  background: var(--raised); border-left: 4px solid transparent;
+  border-radius: var(--radius-sm);
+}
+.queue-row.accepted { border-left-color: var(--ok); }
+.queue-icon { display: flex; font-size: var(--fs-4); }
+.queue-icon svg { width: 24px; height: 24px; }
+.queue-meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.queue-name {
+  font-weight: 600; color: var(--gray-100);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.queue-item { font-size: var(--fs-1); color: var(--gray-600); }
+.queue-eta { font-weight: 600; color: var(--accent-ink); white-space: nowrap; }
+.queue-empty { padding: var(--sp-4) var(--sp-1); color: var(--gray-600); font-style: italic; }
+
+@media (max-width: 720px) {
+  .kiosk-layout { flex-direction: column; }
+  .kiosk-main { padding: var(--sp-4); }
+  .kiosk-queue { flex: 0 0 auto; max-height: 40vh; }
+}
+
+/* ── E-ink mode (?eink=1) ──────────────────────────────────────────────────
+   Overrides both themes: maximum contrast, no shadows, no motion. */
+html.eink,
+html.eink body { background: #fff; color: #000; }
+
+html.eink .closed-banner,
+html.eink .name-input,
+html.eink .drink,
+html.eink .variant-chip,
+html.eink .note-input,
+html.eink .btn-primary,
+html.eink .queue-row {
+  background: #fff; color: #000;
+  border: 3px solid #000; box-shadow: none;
+}
+html.eink .kiosk-queue { background: #fff; }
+html.eink .btn-primary:disabled { opacity: 1; }
+html.eink .drink.selected,
+html.eink .variant-chip.selected,
+html.eink .btn-primary { background: #000; color: #fff; }
+html.eink .drink.selected { border-color: #000; }
+html.eink .queue-row.accepted { border-left-color: #000; }
+html.eink .closed-banner { border-left: 3px solid #000; }
+
+html.eink .kiosk-header h1,
+html.eink .kiosk-header svg,
+html.eink .greeting,
+html.eink .step-prompt,
+html.eink .queue-title,
+html.eink .queue-name,
+html.eink .queue-item,
+html.eink .queue-eta,
+html.eink .queue-empty,
+html.eink .thanks-eta,
+html.eink #thanksStep h2,
+html.eink .order-error { color: #000; }
+
+html.eink *, html.eink *::before, html.eink *::after {
+  transition: none !important; animation: none !important; box-shadow: none !important;
+}
