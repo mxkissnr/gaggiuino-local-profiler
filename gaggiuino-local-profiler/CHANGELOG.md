@@ -8,6 +8,7 @@
 - **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, with separate opt-ins for write and developer tools.** Closes #1196
 ### Fixed
 - **The "First Profile" and "Tinkerer" achievements unlock again when you create or edit a brew profile.** Part of #1286
+- **The "Backup" and "Restocked" achievements unlock again when you export a backup or add a bag to an empty bean.** Part of #1286
 - **Editing a shot no longer wipes its order attribution, rating or notes when only some fields are saved.** Part of #1273
 - **Settings → What's New shows v3.2.0 again, and a release without a What's New entry now fails the tests.** Closes #1240
 - **The bean picker now shows a bean as empty based on the stock the server calculated, not only the shots loaded in the browser.** Closes #1225

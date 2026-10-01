@@ -77,11 +77,11 @@
 //     Open Food Facts call, and results are cached in the kv table.
 //   - bus.emit(EVENTS.BEAN_CHANGED, ...) (routes/library/beans.js's
 //     create/update/new-bag) is not fired: this Go port has no event bus.
-//     internal/achievements now exists (Phase 2b) but re-evaluates on
-//     every read instead of on bus events, so the only thing lost is the
-//     restock badge's live "wasEmpty" moment (documented in
-//     internal/achievements/doc.go). No effect on the Library REST
-//     contract itself.
+//     internal/achievements re-evaluates on every read instead of on bus
+//     events, and the restock badge's live "wasEmpty" moment is now driven
+//     explicitly — newBag calls the Handlers.SetOnBeanRestocked callback
+//     cmd/server wires to the achievements service (#1286 R2), so the badge
+//     unlocks again. No effect on the Library REST contract itself.
 //
 // See openapi.yaml's Library tag for the frozen response-shape contract.
 // Where Node's actual runtime behavior and the OpenAPI doc disagree (e.g.
