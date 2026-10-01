@@ -5,34 +5,99 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Kaffeebar</title>
 <style>
-  /* E-ink optimised: pure black/white, no shadows, no transitions, max contrast */
-  :root {
-    --bg: #ffffff;
-    --raised: #f4f4f4;
-    --raised-2: #e8e8e8;
-    --border: #000000;
-    --text: #000000;
-    --text-dim: #444444;
-    --accent: #d97706;
-    --ok: #16a34a;
-    --err: #dc2626;
-    --radius: 8px;
+  /* Fonts are bundled locally and served next to this page's own JS: the
+     page lives at /ui/kiosk, so "web/static/..." resolves to
+     /ui/web/static/... exactly like the <script> reference at the end. */
+  @font-face {
+    font-family: 'Figtree';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('web/static/fonts/figtree-400-latin.woff2') format('woff2');
   }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; transition: none !important; animation: none !important; }
+  @font-face {
+    font-family: 'Figtree';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('web/static/fonts/figtree-600-latin.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'Fraunces';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('web/static/fonts/fraunces-600-latin.woff2') format('woff2');
+  }
+
+  /* ── Theme tokens ──
+     Dark is the default. Light is opted into via html[data-theme="light"]
+     (set by kiosk.js from the stored preference or the OS setting); e-ink
+     wins over both and is opted into with ?eink=1. The values mirror
+     public-src/style.css. */
+  :root {
+    --bg: #0d0e10;
+    --surface: #131416;
+    --raised: #232629;
+    --line: #2b2f33;
+    --text: #eceded;
+    --text-dim: #93989c;
+    --accent: #f59e0b;
+    --accent-text: #000;
+    --accent-ink: #f59e0b;
+    --ok: #5cb98a;
+    --err: #e0705f;
+    --on-fill: #000;
+    --radius: 10px;
+    --radius-sm: 4px;
+  }
+  html[data-theme="light"] {
+    --bg: #ffffff;
+    --surface: #f7f7f6;
+    --raised: #e6e6e3;
+    --line: #dcdcd8;
+    --text: #1b1d1f;
+    --text-dim: #63686c;
+    --accent: #f59e0b;
+    --accent-text: #000;
+    --accent-ink: #92400e;
+    --ok: #2f7350;
+    --err: #a83526;
+    --on-fill: #fff;
+  }
+  html.eink {
+    --bg: #fff;
+    --surface: #fff;
+    --raised: #fff;
+    --line: #000;
+    --text: #000;
+    --text-dim: #333;
+    --accent: #000;
+    --accent-text: #fff;
+    --accent-ink: #000;
+    --ok: #000;
+    --err: #000;
+    --on-fill: #fff;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font-family: Georgia, "Times New Roman", serif;
-    overflow: hidden; user-select: none;
+    font-family: 'Figtree', sans-serif; font-variant-numeric: tabular-nums;
+    user-select: none;
   }
+  body { overflow: hidden; }
   #app { display: flex; height: 100dvh; }
+  .icon { width: 1em; height: 1em; display: inline-block; vertical-align: middle; flex: 0 0 auto; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* ── Left: main flow ─────────────────────────────────────────── */
   #main { flex: 1 1 auto; display: flex; flex-direction: column; padding: 28px 32px; min-width: 0; }
-  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 3px solid #000; padding-bottom: 12px; }
-  header h1 { font-size: 2rem; margin: 0; font-weight: 900; letter-spacing: -.5px; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  header h1 { font-family: 'Fraunces', serif; font-weight: 600; font-size: 2rem; margin: 0; letter-spacing: -.5px; display: flex; align-items: center; gap: 10px; }
   #closedBanner {
-    display: none; background: #000; color: #fff; padding: 10px 16px;
-    border-radius: var(--radius); font-weight: 700; margin-bottom: 16px;
+    display: none; background: var(--raised); color: var(--text); padding: 10px 16px;
+    border-left: 4px solid var(--err); border-radius: var(--radius); font-weight: 600; margin-bottom: 16px;
   }
 
   #nameStep, #menuStep, #thanksStep { flex: 1; display: none; flex-direction: column; min-height: 0; }
@@ -42,21 +107,21 @@
   #nameStep p { color: var(--text-dim); font-size: 1.3rem; margin: 0 0 24px; }
   #nameInput {
     font-size: 2.4rem; text-align: center; padding: 20px 24px; width: min(90%, 560px);
-    border-radius: var(--radius); border: 3px solid #000; background: #fff;
-    color: #000; outline: none; font-family: inherit;
+    border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--raised);
+    color: var(--text); outline: none; font-family: inherit; min-height: 44px;
   }
-  #nameInput:focus { border-width: 4px; }
+  #nameInput:focus { border-color: var(--accent); }
   #nameNext {
-    margin-top: 28px; font-size: 1.5rem; font-weight: 700; padding: 20px 56px;
-    border-radius: var(--radius); border: 3px solid #000; background: #fff; color: #000;
-    opacity: .25; pointer-events: none; font-family: inherit;
+    margin-top: 28px; font-size: 1.5rem; font-weight: 600; padding: 20px 56px;
+    border-radius: var(--radius); border: none; background: var(--accent); color: var(--accent-text);
+    opacity: .4; pointer-events: none; font-family: inherit; min-height: 56px;
   }
-  #nameNext.ready { opacity: 1; pointer-events: auto; background: var(--accent); color: #fff; border-color: var(--accent); }
+  #nameNext.ready { opacity: 1; pointer-events: auto; }
 
   #menuHeader { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
-  #menuHeader .greet { font-size: 1.4rem; }
-  #menuHeader .greet b { color: var(--accent); }
-  #changeName { background: none; border: none; color: var(--text-dim); font-size: 1rem; text-decoration: underline; padding: 8px; font-family: inherit; }
+  #menuHeader .greet { font-family: 'Fraunces', serif; font-weight: 600; font-size: 1.4rem; }
+  #menuHeader .greet b { color: var(--accent-ink); }
+  #changeName { background: none; border: none; color: var(--text-dim); font-size: 1rem; text-decoration: underline; padding: 8px; font-family: inherit; min-height: 44px; }
 
   #drinkGrid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;
@@ -64,75 +129,99 @@
   }
   button { color: var(--text); cursor: pointer; font-family: inherit; }
   .drink {
-    background: #fff; border: 3px solid #000; border-radius: var(--radius);
+    background: var(--raised); border: none; border-radius: var(--radius);
     padding: 20px 12px; display: flex; flex-direction: column; align-items: center; gap: 10px;
-    font-size: 1.15rem; font-weight: 700; min-height: 150px; justify-content: center;
-    color: #000;
+    font-size: 1.15rem; font-weight: 600; min-height: 140px; justify-content: center;
+    color: var(--text); transition: transform 120ms ease;
   }
   .drink .emoji { font-size: 2.4rem; }
-  .drink.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .drink .icon { width: 2.4rem; height: 2.4rem; }
+  .drink.selected { background: var(--accent); color: var(--accent-text); }
+  .drink.selected:active { transform: scale(.98); }
 
-  #variantRow {
-    display: none; flex-wrap: wrap; gap: 8px; margin-top: 14px;
-  }
+  #variantRow { display: none; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
   #variantRow.visible { display: flex; }
-  #variantRow label { font-size: .9rem; color: var(--text-dim); align-self: center; margin-right: 4px; font-weight: 700; }
+  #variantRow label { font-size: .9rem; color: var(--text-dim); align-self: center; margin-right: 4px; font-weight: 600; }
   .variant-chip {
-    padding: 8px 18px; border-radius: var(--radius); border: 2px solid #000;
-    background: #fff; color: #000; font-size: 1rem; font-weight: 600;
+    padding: 8px 18px; border-radius: var(--radius-sm); border: 1px solid var(--line);
+    background: var(--raised); color: var(--text); font-size: 1rem; font-weight: 600; min-height: 44px;
   }
-  .variant-chip.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .variant-chip.selected { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
   #orderBar {
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    margin-top: 16px; padding-top: 16px; border-top: 2px solid #000;
+    margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line);
   }
   #noteInput {
-    flex: 1; font-size: 1.1rem; padding: 14px 16px; border-radius: var(--radius);
-    border: 2px solid #000; background: #fff; color: #000; outline: none; font-family: inherit;
+    flex: 1; font-size: 1.1rem; padding: 14px 16px; border-radius: var(--radius-sm);
+    border: 1px solid var(--line); background: var(--raised); color: var(--text); outline: none;
+    font-family: inherit; min-height: 44px;
   }
+  #noteInput:focus { border-color: var(--accent); }
   #placeOrder {
-    font-size: 1.4rem; font-weight: 700; padding: 18px 40px; border-radius: var(--radius);
-    border: 3px solid #000; background: #fff; color: #000; white-space: nowrap;
-    opacity: .25; pointer-events: none;
+    font-size: 1.4rem; font-weight: 600; padding: 18px 40px; border-radius: var(--radius);
+    border: none; background: var(--accent); color: var(--accent-text); white-space: nowrap;
+    opacity: .4; pointer-events: none; min-height: 56px; font-family: inherit;
   }
-  #placeOrder.ready { opacity: 1; pointer-events: auto; background: var(--accent); color: #fff; border-color: var(--accent); }
-  #orderError { color: #000; font-size: 1rem; margin-top: 8px; min-height: 1.4em; font-style: italic; }
+  #placeOrder.ready { opacity: 1; pointer-events: auto; }
+  #orderError { color: var(--err); font-size: 1rem; margin-top: 8px; min-height: 1.4em; font-style: italic; }
 
   #thanksStep { align-items: center; justify-content: center; text-align: center; }
-  #thanksStep .big { font-size: 4rem; margin-bottom: 8px; }
-  #thanksStep h2 { font-size: 2rem; margin: 0 0 12px; font-weight: 900; }
-  #thanksStep .eta { font-size: 1.4rem; font-weight: 700; color: var(--accent); }
+  #thanksStep .big { margin-bottom: 8px; color: var(--ok); line-height: 0; }
+  #thanksStep .big .icon { width: 4rem; height: 4rem; }
+  #thanksStep h2 { font-family: 'Fraunces', serif; font-weight: 600; font-size: 2rem; margin: 0 0 12px; }
+  #thanksStep .eta { font-size: 1.4rem; font-weight: 600; color: var(--accent-ink); }
 
   /* ── Right: queue panel ──────────────────────────────────────── */
   #queue {
-    flex: 0 0 300px; background: var(--raised); border-left: 3px solid #000;
-    padding: 24px 20px; display: flex; flex-direction: column; min-height: 0;
+    flex: 0 0 300px; background: var(--surface); padding: 24px 20px;
+    display: flex; flex-direction: column; min-height: 0;
   }
-  #queue h2 { font-size: 1.1rem; margin: 0 0 16px; color: #000; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; }
+  #queue h2 { font-size: 1.1rem; margin: 0 0 16px; color: var(--text); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
   #queueList { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
   .qitem {
-    background: #fff; border: 2px solid #000; border-radius: var(--radius); padding: 10px 12px;
-    display: flex; align-items: center; gap: 10px;
+    background: var(--raised); border: none; border-left: 4px solid transparent;
+    border-radius: var(--radius); padding: 10px 12px; display: flex; align-items: center; gap: 10px;
   }
-  .qitem.accepted { background: var(--ok); color: #fff; border-color: var(--ok); }
+  .qitem.accepted { border-left-color: var(--ok); }
   .qitem .qemoji { font-size: 1.4rem; }
+  .qitem .icon { width: 1.4rem; height: 1.4rem; }
   .qitem .qmeta { flex: 1; min-width: 0; }
-  .qitem .qname { font-weight: 700; font-size: 1rem; }
-  .qitem .qitemname { font-size: .85rem; }
-  .qitem.accepted .qitemname { opacity: .8; }
-  .qitem .qeta { font-size: .9rem; font-weight: 700; white-space: nowrap; color: var(--accent); }
-  .qitem.accepted .qeta { color: #fff; }
+  .qitem .qname { font-weight: 600; font-size: 1rem; }
+  .qitem .qitemname { font-size: .85rem; color: var(--text-dim); }
+  .qitem .qeta { font-size: .9rem; font-weight: 600; white-space: nowrap; color: var(--accent-ink); }
   #queueEmpty { color: var(--text-dim); font-size: 1rem; padding: 20px 4px; font-style: italic; }
+
+  /* ── E-ink overrides: borders carry separation, no motion ────── */
+  html.eink *, html.eink *::before, html.eink *::after { transition: none !important; animation: none !important; box-shadow: none !important; }
+  html.eink .drink.selected:active { transform: none; }
+  html.eink .drink,
+  html.eink #nameInput,
+  html.eink #nameNext,
+  html.eink #noteInput,
+  html.eink #placeOrder,
+  html.eink .variant-chip,
+  html.eink .qitem,
+  html.eink #closedBanner { border: 2px solid #000; }
+  html.eink .qitem { border-left-width: 6px; }
+
+  /* ── Responsive: stack the queue under the main column ───────── */
+  @media (max-width: 720px) {
+    body { overflow: auto; }
+    #app { flex-direction: column; height: auto; min-height: 100dvh; }
+    #main { padding: 20px; }
+    #queue { flex: 0 0 auto; max-height: 40vh; overflow-y: auto; }
+    #drinkGrid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  }
 </style>
 </head>
 <body>
 <div id="app">
   <div id="main">
     <header>
-      <h1>☕ Kaffeebar</h1>
+      <h1><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg>Kaffeebar</h1>
     </header>
-    <div id="closedBanner">Die Kaffeebar ist gerade geschlossen — frag die Person an der Maschine 🙂</div>
+    <div id="closedBanner">Die Kaffeebar ist gerade geschlossen — frag die Person an der Maschine</div>
 
     <div id="nameStep" class="active">
       <p>Wie heißt du?</p>
@@ -155,14 +244,14 @@
     </div>
 
     <div id="thanksStep">
-      <div class="big">✅</div>
+      <div class="big"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
       <h2>Danke, <span id="thanksName"></span>!</h2>
       <div class="eta" id="thanksEta"></div>
     </div>
   </div>
 
   <div id="queue">
-    <h2>☕ Was kommt als Nächstes</h2>
+    <h2>Was kommt als Nächstes</h2>
     <div id="queueList"></div>
     <div id="queueEmpty" style="display:none">Gerade keine Bestellungen unterwegs.</div>
   </div>
