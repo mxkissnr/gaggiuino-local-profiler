@@ -598,7 +598,14 @@ func (r *Repository) writeData(id int64, data map[string]any) error {
 
 // annotationMu serialises every annotation write: SaveAnnotation and
 // UpdateAnnotation both take it, so a restore/sync full replace cannot
-// interleave with a patch's read-modify-write.
+// interleave with a patch's read-modify-write. Like the library blob's
+// package-level writeMu (internal/library/repository.go's Update — the
+// pattern this copies), it is package-level rather than a Repository field
+// because callers in other packages (orders, mcp) hold their own
+// *Repository over the same *sql.DB; a per-value mutex would not cover
+// them. GetAnnotation stays unlocked so read-only callers never block.
+// internal/library/repository.go is the pattern donor here and needs no
+// change of its own.
 var annotationMu sync.Mutex
 
 // UpdateAnnotation applies fn to the shot's current annotation under
