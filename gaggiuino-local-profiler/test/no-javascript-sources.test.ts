@@ -17,6 +17,12 @@ const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
 // Today's leftovers on `dev`, verbatim from `git ls-files`. Sorted, and it may
 // only shrink; see #1270. Vendored third-party files are skipped by the scan
 // below, not listed here.
+//
+// Every path below is an allowlist entry naming a file that #1270 has not
+// ported yet — an entry is not a file this change modifies. #1270 A1 only
+// records the rule and adds this enforcement test; porting each entry to
+// TypeScript is a later #1270 slice, which must delete that entry here (the
+// second test below enforces the deletion).
 const ALLOWLIST: readonly string[] = [
     'gaggiuino-local-profiler/demo/sw/demo-sw.js',
     'gaggiuino-local-profiler/demo/sw/sw-core.js',
