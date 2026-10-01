@@ -188,51 +188,6 @@ func TestHandler_ConnectPrimeAndPublish(t *testing.T) {
 	}
 }
 
-// TestHandler_PublishHTMLEvent pins HTML's own contract (#901, orders.templ's
-// live-update mechanism): an Event whose Data is an HTML value is sent
-// through unmarshaled — one "data: " line per line of the HTML, not a
-// json.Marshal'd JSON string — so a multi-line fragment survives the SSE
-// wire format's "one data: line per line of payload" requirement, and the
-// htmx SSE extension's sse-swap sees the raw markup it expects, not a
-// quoted JSON string of it.
-func TestHandler_PublishHTMLEvent(t *testing.T) {
-	hub := NewHub()
-	handler := &Handler{Hub: hub}
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL + "/api/events")
-	if err != nil {
-		t.Fatalf("GET %s: %v", srv.URL, err)
-	}
-	defer resp.Body.Close()
-	reader := bufio.NewReader(resp.Body)
-
-	// Padding + blank line before this connection is ready to receive a
-	// publish, same ordering TestHandler_ConnectPrimeAndPublish already
-	// relies on.
-	readLines(t, reader, 2, 2*time.Second)
-	time.Sleep(50 * time.Millisecond)
-
-	html := "<div>line one</div>\n<div>line two</div>"
-	hub.Publish(Event{Type: EventOrdersUpdate, Data: HTML(html)})
-
-	// event: line, one data: line per line of html (2), trailing blank line.
-	lines := readLines(t, reader, 4, 2*time.Second)
-	if lines[0] != "event: "+EventOrdersUpdate+"\n" {
-		t.Errorf("event line = %q, want \"event: %s\\n\"", lines[0], EventOrdersUpdate)
-	}
-	if lines[1] != "data: <div>line one</div>\n" {
-		t.Errorf("first data line = %q, want the raw HTML line unmarshaled", lines[1])
-	}
-	if lines[2] != "data: <div>line two</div>\n" {
-		t.Errorf("second data line = %q, want the raw HTML line unmarshaled", lines[2])
-	}
-	if lines[3] != "\n" {
-		t.Errorf("expected trailing blank line after the HTML data, got %q", lines[3])
-	}
-}
-
 func TestHandler_Ping(t *testing.T) {
 	hub := NewHub()
 	handler := &Handler{Hub: hub, PingInterval: 30 * time.Millisecond}
@@ -279,12 +234,12 @@ type noFlushRecorder struct {
 func TestCoalesceLiveSnapshots(t *testing.T) {
 	snap := func(n int) Event { return Event{Type: EventLiveSnapshot, Data: n} }
 	preheat := Event{Type: EventPreheatUpdate, Data: "p"}
-	orders := Event{Type: EventOrdersUpdate, Data: HTML("<div/>")}
+	other := Event{Type: EventPreheatUpdate, Data: "q"}
 
 	t.Run("keeps only the last snapshot, other events in order", func(t *testing.T) {
-		in := []Event{snap(1), preheat, snap(2), snap(3), orders, snap(4)}
+		in := []Event{snap(1), preheat, snap(2), snap(3), other, snap(4)}
 		got := coalesceLiveSnapshots(in)
-		want := []Event{preheat, orders, snap(4)}
+		want := []Event{preheat, other, snap(4)}
 		if len(got) != len(want) {
 			t.Fatalf("got %d events %v, want %d %v", len(got), got, len(want), want)
 		}
@@ -296,11 +251,11 @@ func TestCoalesceLiveSnapshots(t *testing.T) {
 	})
 
 	t.Run("no allocation / passthrough for 0 or 1 snapshots", func(t *testing.T) {
-		one := []Event{preheat, snap(9), orders}
+		one := []Event{preheat, snap(9), other}
 		if got := coalesceLiveSnapshots(one); &got[0] != &one[0] {
 			t.Error("expected the input slice returned unchanged for a single snapshot")
 		}
-		none := []Event{preheat, orders}
+		none := []Event{preheat, other}
 		if got := coalesceLiveSnapshots(none); &got[0] != &none[0] {
 			t.Error("expected the input slice returned unchanged for no snapshots")
 		}
@@ -370,17 +325,17 @@ func TestHandler_SlowConsumerGetsOnlyLatestSnapshot(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 
 	// While the handler is wedged on that Flush, a burst piles up on the
-	// subscriber channel: 8 more snapshots with an orders event in the middle.
+	// subscriber channel: 8 more snapshots with a preheat event in the middle.
 	for i := 2; i <= 5; i++ {
 		hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"seq": i}})
 	}
-	hub.Publish(Event{Type: EventOrdersUpdate, Data: HTML("<div>queue</div>")})
+	hub.Publish(Event{Type: EventPreheatUpdate, Data: map[string]any{"queue": "update"}})
 	for i := 6; i <= 9; i++ {
 		hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"seq": i}})
 	}
 
 	// Let the handler drain: release enough flushes for snap1 + the coalesced
-	// batch (orders + snap9). Do it from a goroutine so we don't deadlock if
+	// batch (preheat + snap9). Do it from a goroutine so we don't deadlock if
 	// the handler needs fewer/more flushes than expected.
 	flushDone := make(chan struct{})
 	go func() {
@@ -402,8 +357,8 @@ func TestHandler_SlowConsumerGetsOnlyLatestSnapshot(t *testing.T) {
 	if snaps != 2 {
 		t.Errorf("live-snapshot frames sent = %d, want 2 (the pre-burst one + one coalesced), body:\n%s", snaps, body)
 	}
-	if got := strings.Count(body, "event: "+EventOrdersUpdate+"\n"); got != 1 {
-		t.Errorf("orders-update frames = %d, want 1", got)
+	if got := strings.Count(body, "event: "+EventPreheatUpdate+"\n"); got != 1 {
+		t.Errorf("preheat-update frames = %d, want 1", got)
 	}
 	if !strings.Contains(body, `"seq":9`) {
 		t.Errorf("expected the newest snapshot (seq 9) in the stream, body:\n%s", body)
