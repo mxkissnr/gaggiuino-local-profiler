@@ -1,6 +1,31 @@
 (function () {
   "use strict";
 
+  // ── Theme selection ──────────────────────────────────────────────
+  // Runs before any rendering. ?eink=1 forces e-ink; otherwise honour a
+  // stored light/dark choice, falling back to the OS preference.
+  (function () {
+    var root = document.documentElement;
+    if (/[?&]eink=1(?:&|$)/.test(location.search)) {
+      root.classList.add("eink");
+      return;
+    }
+    var stored = null;
+    try { stored = localStorage.getItem("glp_theme"); } catch (e) {}
+    if (stored !== "light" && stored !== "dark") stored = null;
+    var mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+    function resolve() {
+      if (stored) return stored;
+      return mq && mq.matches ? "light" : "dark";
+    }
+    root.dataset.theme = resolve();
+    if (!stored && mq) {
+      var onChange = function () { root.dataset.theme = resolve(); };
+      if (mq.addEventListener) mq.addEventListener("change", onChange);
+      else if (mq.addListener) mq.addListener(onChange);
+    }
+  })();
+
   // ── Token bootstrap (mirrors static/glp-token.js's fetch-and-attach
   // pattern for this page's own fetch() calls instead of htmx) ──────────
   // All "../api/..." paths (not "api/..."): this page is served from
@@ -28,6 +53,9 @@
   }
 
   // ── State ───────────────────────────────────────────────────────────
+  // The page's own default glyph, drawn as inline stroke SVG so the kiosk
+  // needs no emoji font. A drink's own item.emoji from the menu still wins.
+  var CUP_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 8h1a3 3 0 0 1 0 6h-1M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M8 2v2M12 2v2"/></svg>';
   var guestName = "";
   var selectedDrink = null; // {id, name, emoji, variants}
   var selectedVariants = []; // string[]
@@ -92,7 +120,7 @@
       btn.className = "drink";
       btn.dataset.id = item.id;
       btn.innerHTML =
-        '<span class="emoji">' + escapeHtml(item.emoji || "☕") + "</span><span>" + escapeHtml(item.name) + "</span>";
+        '<span class="emoji">' + (item.emoji ? escapeHtml(item.emoji) : CUP_ICON) + "</span><span>" + escapeHtml(item.name) + "</span>";
       btn.addEventListener("click", function () {
         selectedDrink = item;
         selectedVariants = [];
@@ -224,7 +252,7 @@
         etaText = "~" + eta.positions[o.id].suggestedEta + " Min";
       }
       row.innerHTML =
-        '<span class="qemoji">' + escapeHtml(item && item.emoji ? item.emoji : "☕") + '</span>' +
+        '<span class="qemoji">' + (item && item.emoji ? escapeHtml(item.emoji) : CUP_ICON) + '</span>' +
         '<span class="qmeta"><div class="qname">' + escapeHtml(o.customer || "?") + '</div>' +
         '<div class="qitemname">' + escapeHtml(o.item) + " · " + escapeHtml(STATUS_LABEL[o.status] || o.status) + "</div></span>" +
         '<span class="qeta">' + escapeHtml(etaText) + "</span>";

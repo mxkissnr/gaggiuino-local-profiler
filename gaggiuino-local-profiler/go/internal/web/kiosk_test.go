@@ -33,3 +33,19 @@ func TestRegisterKioskRoute_ServesPageWithoutCaching(t *testing.T) {
 		t.Errorf("POST /kiosk = %d, want 405", rec.Code)
 	}
 }
+
+func TestRegisterKioskRoute_ServesThemedPage(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterKioskRoute(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/kiosk", nil))
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "fraunces") {
+		t.Error("kiosk page does not wire the Fraunces display font")
+	}
+	if strings.Contains(body, "\u2615") || strings.Contains(body, "\u2705") {
+		t.Error("kiosk page still uses an emoji glyph instead of an icon")
+	}
+}

@@ -33,6 +33,7 @@
 - **The coffee library's bean list and the shot annotation panel now build their markup through the type-checked HTML builder, so every bean, bag and annotation value they display is escaped.** Part of #1104
 
 ### Changed
+- **The ordering kiosk now matches the app's look, follows light/dark mode, and keeps an e-ink mode via `?eink=1`.** Part of #1267
 - **The API description now documents every response the app uses, checked by tests against the real server.**
 - **The API description now distinguishes the MQTT settings request body from its redacted response, and marks the machine and order fields that are actually optional.** Part of #1103
 - **The analytics screens now build their markup through the type-checked HTML builder, so every bean, grinder, profile and machine name they display is escaped.** Part of #1104
