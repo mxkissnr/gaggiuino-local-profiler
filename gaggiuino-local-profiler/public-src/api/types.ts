@@ -172,3 +172,19 @@ export type MqttSettings = components['schemas']['MqttSettings'];
  * omitting `password` keeps the stored one (#1050/#1062).
  */
 export type MqttSettingsInput = components['schemas']['MqttSettingsInput'];
+
+// ── MCP (go/internal/mcp, #1196/#1288) ───────────────────────────────────
+
+/**
+ * GET/POST /api/mcp/settings response (go/internal/mcp's SettingsView): the
+ * stored toggles plus `developerToolsAvailable`, which reports whether this
+ * build offers the developer tools at all (the GLP_DEV_BUILD channel).
+ */
+export type McpSettings = components['schemas']['McpSettings'];
+
+/**
+ * POST /api/mcp/settings request body. All three toggles are required
+ * booleans and the body replaces the stored settings; `allowDeveloperTools:
+ * true` is rejected with a 400 on a non-dev build.
+ */
+export type McpSettingsInput = components['schemas']['McpSettingsInput'];
