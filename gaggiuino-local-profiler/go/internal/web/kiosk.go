@@ -15,7 +15,10 @@ import (
 // instead of leaving a "thanks" screen up. It talks to the same JSON API
 // (GET /api/menu, POST /api/orders, GET /api/orders + /api/orders/queue-eta
 // for the "what's next" panel) that the main SPA and GET /orders use, so
-// no new backend surface exists purely for this page.
+// no new backend surface exists purely for this page. Its fonts and
+// kiosk.js are embedded from static/ and served by this package's
+// staticHandler (assets.go), so GET /kiosk itself only returns the page
+// shell.
 //
 //go:embed static/kiosk.html
 var kioskHTML []byte
