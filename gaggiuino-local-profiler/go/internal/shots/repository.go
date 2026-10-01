@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -186,10 +187,10 @@ func (r *Repository) GetAnnotatedDoses() ([]AnnotatedDose, error) {
 }
 
 // GetAnnotation ports ShotRepository.js's getAnnotation(shotId): the raw
-// stored annotation object, or {} if none exists — used by
-// OrderService.completeOrder's read-modify-write of the orderedBy field
-// (see internal/orders/service.go), which must merge onto whatever
-// annotation already exists rather than overwrite it wholesale.
+// stored annotation object, or {} if none exists — the read half of
+// UpdateAnnotation's locked read-modify-write (see its doc comment), which
+// merges onto whatever annotation already exists rather than overwriting it
+// wholesale.
 func (r *Repository) GetAnnotation(shotID int64) (map[string]any, error) {
 	var raw string
 	err := r.db.QueryRow(`SELECT data FROM annotations WHERE shot_id = ?`, shotID).Scan(&raw)
@@ -595,14 +596,60 @@ func (r *Repository) writeData(id int64, data map[string]any) error {
 	return nil
 }
 
-// SaveAnnotation ports ShotRepository.js's saveAnnotation — an upsert with
-// no existence check against `shots` in the query itself, matching the
-// Node original. In practice this still fails for a shot id that was never
-// synced: annotations.shot_id REFERENCES shots(id) and foreign_keys=ON in
-// both InitSchema and lib/db.js, so the INSERT hits a foreign-key
-// constraint violation, surfaced as a generic error (500) by the caller —
-// see handlers.go's annotate doc comment.
+// annotationMu serialises every annotation write: SaveAnnotation and
+// UpdateAnnotation both take it, so a restore/sync full replace cannot
+// interleave with a patch's read-modify-write. Like the library blob's
+// package-level writeMu (internal/library/repository.go's Update — the
+// pattern this copies), it is package-level rather than a Repository field
+// because callers in other packages (orders, mcp) hold their own
+// *Repository over the same *sql.DB; a per-value mutex would not cover
+// them. GetAnnotation stays unlocked so read-only callers never block.
+// internal/library/repository.go is the pattern donor here and needs no
+// change of its own.
+var annotationMu sync.Mutex
+
+// UpdateAnnotation applies fn to the shot's current annotation under
+// annotationMu and, only when fn returns nil, writes the result back and
+// returns it (#1273). The annotation starts as an empty map when none is
+// stored, so fn always sees a writable map. fn must be pure: it runs while
+// the lock is held and the lock is not re-entrant, so it must not call back
+// into an annotation writer.
+func (r *Repository) UpdateAnnotation(shotID int64, fn func(ann map[string]any) error) (map[string]any, error) {
+	annotationMu.Lock()
+	defer annotationMu.Unlock()
+
+	ann, err := r.GetAnnotation(shotID)
+	if err != nil {
+		return nil, err
+	}
+	if err := fn(ann); err != nil {
+		return nil, err
+	}
+	if err := r.saveAnnotation(shotID, ann); err != nil {
+		return nil, err
+	}
+	return ann, nil
+}
+
+// SaveAnnotation ports ShotRepository.js's saveAnnotation — a full-replace
+// upsert with no existence check against `shots` in the query itself,
+// matching the Node original. It stays the whole-object write for
+// Repository.Upsert (restore/sync/import), where the shot object carries
+// the complete annotation; callers that merge a patch use UpdateAnnotation.
+// In practice this still fails for a shot id that was never synced:
+// annotations.shot_id REFERENCES shots(id) and foreign_keys=ON in both
+// InitSchema and lib/db.js, so the INSERT hits a foreign-key constraint
+// violation, surfaced as a generic error (500) by the caller — see
+// handlers.go's annotate doc comment.
 func (r *Repository) SaveAnnotation(shotID int64, annotation map[string]any) error {
+	annotationMu.Lock()
+	defer annotationMu.Unlock()
+	return r.saveAnnotation(shotID, annotation)
+}
+
+// saveAnnotation is the shared full-replace write behind SaveAnnotation and
+// UpdateAnnotation; the caller must hold annotationMu.
+func (r *Repository) saveAnnotation(shotID int64, annotation map[string]any) error {
 	b, err := json.Marshal(annotation)
 	if err != nil {
 		return fmt.Errorf("shots: encoding annotation for shot %d: %w", shotID, err)

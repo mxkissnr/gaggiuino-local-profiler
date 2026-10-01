@@ -195,31 +195,34 @@ func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
 	if shot == nil {
 		return annotateShotOutput{}, fmt.Errorf("shot %d not found; use list_shots to find ids", in.ID)
 	}
-	ann, err := deps.ShotsRepo.GetAnnotation(in.ID)
+	// Merge, never replace: UpdateAnnotation reads, overlays only the provided
+	// fields (so keys this tool doesn't know — orderedBy, beanId, recipeId, ... —
+	// survive untouched) and writes the result under one lock (#1273).
+	ann, err := deps.ShotsRepo.UpdateAnnotation(in.ID, func(ann map[string]any) error {
+		if in.Rating != nil {
+			ann["rating"] = float64(*in.Rating)
+		}
+		if in.Notes != nil {
+			ann["notes"] = *in.Notes
+		}
+		if in.GrindSetting != nil {
+			ann["grindSetting"] = *in.GrindSetting
+		}
+		if issues := shots.ValidateAnnotation(ann); len(issues) > 0 {
+			return &shots.AnnotationValidationError{Issues: issues}
+		}
+		return nil
+	})
 	if err != nil {
-		log.Printf("mcp: annotate_shot %d: reading annotation: %v", in.ID, err)
-		return annotateShotOutput{}, fmt.Errorf("could not read shot %d; try again", in.ID)
+		var verr *shots.AnnotationValidationError
+		if errors.As(err, &verr) {
+			return annotateShotOutput{}, fmt.Errorf("invalid annotation: %s", formatValidationIssues(verr.Issues))
+		}
+		log.Printf("mcp: annotate_shot %d: saving: %v", in.ID, err)
+		return annotateShotOutput{}, fmt.Errorf("could not save the annotation for shot %d; try again", in.ID)
 	}
 	if ann == nil {
 		ann = map[string]any{}
-	}
-	// Merge, never replace: overlay only the provided fields so keys this tool
-	// doesn't know (orderedBy, beanId, recipeId, ...) survive untouched.
-	if in.Rating != nil {
-		ann["rating"] = float64(*in.Rating)
-	}
-	if in.Notes != nil {
-		ann["notes"] = *in.Notes
-	}
-	if in.GrindSetting != nil {
-		ann["grindSetting"] = *in.GrindSetting
-	}
-	if issues := shots.ValidateAnnotation(ann); len(issues) > 0 {
-		return annotateShotOutput{}, fmt.Errorf("invalid annotation: %s", formatValidationIssues(issues))
-	}
-	if err := deps.Shots.SaveAnnotation(in.ID, ann); err != nil {
-		log.Printf("mcp: annotate_shot %d: saving: %v", in.ID, err)
-		return annotateShotOutput{}, fmt.Errorf("could not save the annotation for shot %d; try again", in.ID)
 	}
 	out := annotateShotOutput{ID: in.ID}
 	if rating, ok := annotationRating(ann); ok {

@@ -1246,6 +1246,11 @@ paths:
     post:
       tags: [Shots]
       summary: Save or update annotation for a shot
+      description: >
+        Merges the posted fields into the shot's stored annotation: a key
+        omitted from the body keeps its stored value, while a key sent as
+        null or "" clears it. The orderedBy attribution is server-owned and
+        cannot be changed here.
       parameters:
         - name: id
           in: path
