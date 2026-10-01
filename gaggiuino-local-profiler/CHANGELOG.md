@@ -56,6 +56,7 @@
 
 ### Removed
 - **Removed the old server-rendered fallback pages under `/ui/` (left over from the Go migration); the app itself and the kiosk are unaffected, and `/ui/kiosk` still redirects to the kiosk.** Part of #1200
+- **Removed four unreachable Go helper functions that not even the tests called, with no behavior change.** Part of #1285
 
 ## [3.2.0] – 2026-09-26
 ### Added
