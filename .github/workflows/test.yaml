@@ -84,16 +84,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # templ codegen for internal/web/templates (git-ignored _templ.go) —
-      # cmd/server imports that package, so the harness's `go build
-      # ./cmd/server` needs it. Pinned to the version go.mod already
-      # requires, same as the go-test job.
-      - name: Install templ and generate
-        working-directory: gaggiuino-local-profiler/go
-        run: |
-          go install github.com/a-h/templ/cmd/templ@v0.3.1020
-          go generate ./...
-
       # Own job (not a step in `test` above) so a Chromium download never
       # slows the unit test job — see #798.
       - name: Install Playwright Chromium
@@ -175,17 +165,6 @@ jobs:
       - name: Install frontend dependencies
         working-directory: gaggiuino-local-profiler
         run: npm ci
-
-      # templ generate writes the _templ.go files internal/web/templates'
-      # .templ sources need to be valid Go at all — git-ignored, so every
-      # fresh checkout (including this one) needs this before build/vet/
-      # test/fmt can even parse the package. Pinned to the same version
-      # go.mod already pulls in as the templ runtime library's own indirect
-      # dependency — see go/README.md's "Codegen" section.
-      - name: Install templ and generate
-        run: |
-          go install github.com/a-h/templ/cmd/templ@v0.3.1020
-          go generate ./...
 
       - name: gofmt
         run: |
