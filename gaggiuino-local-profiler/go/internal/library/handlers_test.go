@@ -269,6 +269,47 @@ func createTestBean(t *testing.T, mux *http.ServeMux, extra map[string]any) (int
 	return int64(bean["id"].(float64)), bean
 }
 
+// TestNewBag_RestockCallbackReportsWasEmpty pins #1286 R2: newBag drives the
+// restock badge through SetOnBeanRestocked, reporting whether the bean had
+// no remaining stock before the new bag was added — Node's
+// `computeBeanRemaining() !== null && <= 0` computed on the pre-push
+// snapshot. A bean with stock left reports false; a tracked bean a logged
+// dose has consumed to zero reports true.
+func TestNewBag_RestockCallbackReportsWasEmpty(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	var got []bool
+	h.SetOnBeanRestocked(func(wasEmpty bool) { got = append(got, wasEmpty) })
+
+	// A bean with stock left: adding a bag is not a restock.
+	stockedID, _ := createTestBean(t, mux, map[string]any{"name": "Stocked Bean", "stock_g": 300})
+	if rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(stockedID)+"/new-bag",
+		mustMarshal(t, map[string]any{"stock_g": 250})); rec.Code != http.StatusOK {
+		t.Fatalf("new-bag (stocked) status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(got) != 1 || got[0] {
+		t.Fatalf("restock callback after a stocked new-bag = %v, want [false]", got)
+	}
+
+	// A tracked bean whose stock a logged dose has consumed to zero: restock.
+	emptyID, _ := createTestBean(t, mux, map[string]any{"name": "Empty Bean", "stock_g": 100})
+	if _, err := sqlDB.Exec(
+		`INSERT INTO shots (id,timestamp,duration,profile_name,data,machine_id) VALUES (7,1700000000,30,'Default','{}',1)`); err != nil {
+		t.Fatalf("insert shot: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO annotations (shot_id,data) VALUES (7,'{"coffee":"Empty Bean","dose":100}')`); err != nil {
+		t.Fatalf("insert annotation: %v", err)
+	}
+	if rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(emptyID)+"/new-bag",
+		mustMarshal(t, map[string]any{"stock_g": 250})); rec.Code != http.StatusOK {
+		t.Fatalf("new-bag (empty) status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(got) != 2 || !got[1] {
+		t.Fatalf("restock callback after an empty new-bag = %v, want [false true]", got)
+	}
+}
+
 func TestBean_BagFreezeThawAdjustLifecycle(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)

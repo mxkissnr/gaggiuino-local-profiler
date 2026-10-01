@@ -32,20 +32,18 @@
 //	               getState().
 //	handlers.go    routes/achievements.js.
 //
-// # No event bus (deviation, documented)
+// # No event bus
 //
 // Node drives evaluateAll() from six bus events plus one boot sweep. This
 // port has no event bus: GetState() runs a full evaluateAll(nil) pass
 // before every read instead (evaluateAll early-returns the moment no badge
 // is still locked, so a mostly-stamped install pays almost nothing), and
-// cmd/server drives the two profile live-moment badges through explicit
+// cmd/server drives the four live-moment badges through explicit
 // Service.EvaluateEvent calls -- machines.Handlers.SetOnProfileSaved runs
-// after a profile create/update succeeds, so first_profile and
-// profile_edit unlock again (#1286 R1). The remaining two live-moment
-// badges, backup and restock, still have no call site and no retroactive
-// path in Node either; they stay permanently locked in this port until an
-// event bus or further EvaluateEvent call sites exist (#1286 R2). See
-// service.go's header comment.
+// after a profile create/update succeeds (first_profile/profile_edit,
+// #1286 R1), backup.Handlers.SetOnExported after a successful export
+// (backup), and library.Handlers.SetOnBeanRestocked after a new bag lands
+// on an empty bean (restock, #1286 R2). See service.go's header comment.
 //
 // # up_to_date badge
 //
