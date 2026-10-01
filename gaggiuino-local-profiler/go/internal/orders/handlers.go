@@ -69,28 +69,6 @@ func NewHandlers(repo *Repository, shotsRepo *shots.Repository, libRepo *library
 	}
 }
 
-// Service exposes h's own *Service instance — #901 code review (CONFIRMED
-// finding #2): internal/web's OrdersHandlers builds a SECOND, independent
-// *orders.Service around the same repositories (see that package's own
-// NewOrdersHandlers doc comment for why: it needs Service.AcceptOrder et
-// al.'s customer-notification side effect, which the REST-only *Handlers
-// here doesn't expose otherwise), and only THAT second instance had its
-// OnQueueChanged callback wired to the SSE hub — an order mutated through
-// this package's own REST API (routes/orders.js's equivalent; used by
-// glp-integration and any other external client) went through THIS
-// Service instance instead, so it never published a live orders-update
-// event despite go/README.md documenting "regardless of caller — the REST
-// API included". cmd/server's main.go now wires this Service's own
-// OnQueueChanged to the same publish function as the web instance's,
-// closing that gap without collapsing the two *Service instances into one
-// (which would need a larger constructor-signature change across three
-// call sites for no behavior difference — both instances reading/writing
-// the same underlying DB rows makes "publish from either" equivalent to
-// "publish from one shared instance" here).
-func (h *Handlers) Service() *Service {
-	return h.service
-}
-
 // SetPreheatInfoProvider wires the shop-open broadcast's "is the machine
 // ready, or how many minutes until it is" text to internal/system's
 // Poller — see this file's header comment. A nil provider (the zero value,
