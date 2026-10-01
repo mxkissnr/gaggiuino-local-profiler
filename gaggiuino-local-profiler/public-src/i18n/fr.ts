@@ -277,6 +277,7 @@ const fr: Partial<Translations> = {
     settings_bottom_nav:'Barre de navigation mobile', settings_bottom_nav_desc:'Choisis jusqu\'à 4 destinations pour la barre de navigation inférieure sur mobile. Tout le reste va sous "Plus".',
     settings_bottom_nav_checkbox_label:'Afficher dans la barre', settings_bottom_nav_move_up:'Déplacer vers le haut', settings_bottom_nav_move_down:'Déplacer vers le bas',
     settings_notify_title:'Notifications', settings_notify_desc:'Quelles notifications automatiques de la machine et de la bibliothèque de café doivent être envoyées ?',
+    settings_mcp_title:'Assistants IA (MCP)', settings_mcp_desc:'Permets aux assistants IA comme Claude de lire tes shots, grains et analyses via le serveur MCP intégré.', settings_mcp_enabled:'Activer le serveur MCP', settings_mcp_write:'Autoriser les outils d’écriture — ils modifient tes données', settings_mcp_dev:'Autoriser les outils de développement — sortie de diagnostic brute et volumineuse',
     settings_shot_defaults_title:'Valeurs par défaut pour la saisie des shots', settings_shot_defaults_desc:'Pré-remplies automatiquement à l\'ouverture d\'un nouveau shot pas encore annoté — restent modifiables à tout moment.',
     sd_none:'— aucune valeur par défaut —', sd_save:'Enregistrer', sd_saved:'Enregistré',
     settings_machines:'Machines', settings_machines_desc:'Gérez les machines à espresso surveillées par cette application.', settings_machines_add:'+ Ajouter une machine',

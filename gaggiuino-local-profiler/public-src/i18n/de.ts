@@ -277,6 +277,7 @@ const de: Partial<Translations> = {
     settings_bottom_nav:'Mobile Navigationsleiste', settings_bottom_nav_desc:'Wähle bis zu 4 Ziele für die untere Navigationsleiste auf dem Handy. Alles andere landet unter "Mehr".',
     settings_bottom_nav_checkbox_label:'In der Leiste zeigen', settings_bottom_nav_move_up:'Nach oben verschieben', settings_bottom_nav_move_down:'Nach unten verschieben',
     settings_notify_title:'Benachrichtigungen', settings_notify_desc:'Welche automatischen Benachrichtigungen der Maschine und der Kaffee-Bibliothek sollen gesendet werden?',
+    settings_mcp_title:'KI-Assistenten (MCP)', settings_mcp_desc:'Erlaube KI-Assistenten wie Claude, über den eingebauten MCP-Server deine Shots, Bohnen und Analysen zu lesen.', settings_mcp_enabled:'MCP-Server aktivieren', settings_mcp_write:'Schreib-Tools erlauben — diese verändern deine Daten', settings_mcp_dev:'Entwickler-Tools erlauben — große, rohe Diagnose-Ausgaben',
     settings_shot_defaults_title:'Standardwerte für Shot-Notizen', settings_shot_defaults_desc:'Werden beim Öffnen eines neuen, noch nicht bewerteten Shots automatisch vorausgefüllt — bleiben dabei jederzeit änderbar.',
     sd_none:'— keine Vorgabe —', sd_save:'Speichern', sd_saved:'Gespeichert',
     settings_machines:'Maschinen', settings_machines_desc:'Verwalte die Espressomaschinen, die diese App überwacht.', settings_machines_add:'+ Maschine hinzufügen',
