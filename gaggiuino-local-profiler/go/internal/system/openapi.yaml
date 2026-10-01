@@ -1060,6 +1060,35 @@ components:
         clearPassword: { type: boolean, description: "Write-only: wipe the stored password regardless of the password field (#1062)." }
         prefix: { type: string }
 
+    # ── MCP ────────────────────────────────────────────────────────────────
+
+    McpSettings:
+      type: object
+      required: [enabled, allowWrite, allowDeveloperTools, developerToolsAvailable]
+      description: >
+        GET/POST /api/mcp/settings response (go/internal/mcp's SettingsView):
+        the stored MCP toggles plus developerToolsAvailable, which reports
+        whether this build offers the developer tools at all (the GLP_DEV_BUILD
+        channel — allowDeveloperTools can only be stored true on such a build).
+      properties:
+        enabled: { type: boolean, description: "Master switch for the /api/mcp endpoint" }
+        allowWrite: { type: boolean, description: "Register the write tools (annotate_shot, set_known_grind, mark_maintenance_done)" }
+        allowDeveloperTools: { type: boolean, description: "Register the developer tools; only effective on a dev build" }
+        developerToolsAvailable: { type: boolean, description: "Whether this build is a dev build, i.e. whether allowDeveloperTools can be enabled" }
+
+    McpSettingsInput:
+      type: object
+      required: [enabled, allowWrite, allowDeveloperTools]
+      description: >
+        POST /api/mcp/settings request body (go/internal/mcp's SettingsHandlers).
+        All three toggles are required booleans; the body replaces the stored
+        settings. allowDeveloperTools: true is rejected with 400 on a non-dev
+        build.
+      properties:
+        enabled: { type: boolean }
+        allowWrite: { type: boolean }
+        allowDeveloperTools: { type: boolean }
+
 paths:
 
   # ── Shots ───────────────────────────────────────────────────────────────
@@ -2904,6 +2933,28 @@ paths:
         "200": { description: "{ sensorSnap: SensorStateSnapshotDto|null, sysState: SystemStateDto|null } — null until the machine's first push arrives" }
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
+
+  /api/mcp/settings:
+    get:
+      tags: [Mcp]
+      summary: Current MCP settings (stored toggles + whether developer tools are available on this build)
+      responses:
+        "200":
+          description: "{ enabled, allowWrite, allowDeveloperTools, developerToolsAvailable }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/McpSettings' }
+    post:
+      tags: [Mcp]
+      summary: Save the MCP settings. Takes effect on the next request — no restart.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/McpSettingsInput' }
+      responses:
+        "200": { description: Saved settings, content: { application/json: { schema: { $ref: '#/components/schemas/McpSettings' } } } }
+        "400": { description: Invalid settings payload, or allowDeveloperTools true on a non-dev build }
 
   /api/mqtt/discovery:
     get:

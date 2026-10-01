@@ -16,11 +16,11 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// The write tools are a separate, opt-in slice: they only exist when both
-// enable_mcp and enable_mcp_write are set (Deps.AllowWrite). Each merges or
-// appends into existing state rather than replacing it, is persisted
-// immediately, and reports bad input or unknown ids as tool execution
-// errors. No deletes, no trash, no machine control, no settings.
+// The write tools are a separate, opt-in slice: they only exist when both the
+// MCP master switch and the stored allowWrite toggle are on (mcp_settings,
+// #1288). Each merges or appends into existing state rather than replacing it,
+// is persisted immediately, and reports bad input or unknown ids as tool
+// execution errors. No deletes, no trash, no machine control, no settings.
 const (
 	maxAnnotateNotes    = 2000
 	maxGrinderNameLen   = 200

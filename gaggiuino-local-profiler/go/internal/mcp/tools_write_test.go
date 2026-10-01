@@ -41,7 +41,7 @@ func newWriteServer(t *testing.T, allowWrite bool) (*httptest.Server, *sql.DB, *
 		Registry:    registry,
 		Poller:      fakePoller{},
 		Version:     "test",
-		AllowWrite:  allowWrite,
+		Settings:    settingsSource(true, allowWrite, false),
 	}))
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
