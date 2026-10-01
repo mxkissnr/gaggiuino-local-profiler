@@ -35,6 +35,7 @@
 - **The coffee library's bean list and the shot annotation panel now build their markup through the type-checked HTML builder, so every bean, bag and annotation value they display is escaped.** Part of #1104
 
 ### Changed
+- **The MCP docs now describe the Settings → "AI assistants (MCP)" card instead of the removed app options, and the standalone compose file no longer sets the obsolete MCP environment variables.** Part of #1288
 - **The old kiosk address (`/ui/kiosk`) now redirects to the rebuilt kiosk page, so existing tablet bookmarks keep working.** Part of #1267
 - **The ordering kiosk now uses the app's look and languages, follows light/dark mode, and has an e-ink mode via `?eink=1`** — reachable at `kiosk.html`, while the old `/ui/kiosk` address keeps working for now. Part of #1267
 - **The API description now documents every response the app uses, checked by tests against the real server.**
