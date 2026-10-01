@@ -420,6 +420,20 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	})
 	achievements.NewHandlers(achievementsSvc).RegisterRoutes(mux)
 
+	// #1286 R1: the achievements domain has no event bus, so the two profile
+	// badges (first_profile/profile_edit) are driven by an explicit callback from
+	// the machines handlers once a profile create/update has fully succeeded.
+	// Best-effort: an EvaluateEvent failure is logged only -- the profile request
+	// itself already succeeded and must not be affected.
+	machinesHandlers.SetOnProfileSaved(func(action string) {
+		if _, err := achievementsSvc.EvaluateEvent(&achievements.Event{
+			Type:    "profile-saved",
+			Payload: map[string]any{"action": action},
+		}); err != nil {
+			log.Printf("achievements: evaluating profile-saved %q failed: %v", action, err)
+		}
+	})
+
 	backupHandlers := backup.NewHandlers(backup.Dependencies{
 		DB:               sqlDB,
 		ShotsRepo:        shotsRepo,
