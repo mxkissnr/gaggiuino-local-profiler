@@ -265,6 +265,16 @@ func profileName(machineType string, raw json.RawMessage) string {
 	return name
 }
 
+// notifyProfileSaved runs the onProfileSaved hook (if wired) after a profile
+// create or update has fully succeeded. It is synchronous and best-effort by
+// design: the hook is a single achievements DB pass, and its outcome must
+// never change the response the save already earned.
+func (h *Handlers) notifyProfileSaved(action string) {
+	if h.onProfileSaved != nil {
+		h.onProfileSaved(action)
+	}
+}
+
 func (h *Handlers) createMachineProfile(w http.ResponseWriter, r *http.Request) {
 	rawBody, ok := readRawJSONBody(w, r)
 	if !ok {
@@ -314,6 +324,7 @@ func (h *Handlers) createMachineProfile(w http.ResponseWriter, r *http.Request) 
 			internalError(w, err)
 			return
 		}
+		h.notifyProfileSaved("create")
 		writeJSON(w, http.StatusOK, map[string]any{"id": created.ID, "name": created.Name, "utility": created.Utility, "syncStatus": ProfileSyncSynced})
 		return
 	}
@@ -345,6 +356,7 @@ func (h *Handlers) createMachineProfile(w http.ResponseWriter, r *http.Request) 
 		internalError(w, err)
 		return
 	}
+	h.notifyProfileSaved("create")
 	writeJSON(w, http.StatusOK, map[string]any{"id": created.ID, "name": created.Name, "utility": created.Utility, "syncStatus": ProfileSyncSynced})
 }
 
@@ -430,6 +442,7 @@ func (h *Handlers) updateMachineProfile(w http.ResponseWriter, r *http.Request) 
 			internalError(w, err)
 			return
 		}
+		h.notifyProfileSaved("update")
 		writeJSON(w, http.StatusOK, map[string]any{"id": updated.ID, "name": updated.Name, "utility": updated.Utility, "syncStatus": ProfileSyncSynced})
 		return
 	}
@@ -490,6 +503,7 @@ func (h *Handlers) updateMachineProfile(w http.ResponseWriter, r *http.Request) 
 		internalError(w, err)
 		return
 	}
+	h.notifyProfileSaved("update")
 	writeJSON(w, http.StatusOK, map[string]any{"id": updated.ID, "name": updated.Name, "utility": updated.Utility, "syncStatus": ProfileSyncSynced})
 }
 

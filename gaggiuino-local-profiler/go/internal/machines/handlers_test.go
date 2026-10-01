@@ -400,3 +400,83 @@ func TestDecodeJSONBody_MalformedBodyStill400s(t *testing.T) {
 		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestHandlers_MachineProfileSavedCallback_ReportsCreateAndUpdate pins
+// #1286 R1: after a profile create and a profile update have both fully
+// succeeded against a reachable machine, SetOnProfileSaved's hook fires
+// once with "create" and once with "update" (in that order), and never more
+// than that per request.
+func TestHandlers_MachineProfileSavedCallback_ReportsCreateAndUpdate(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	fake := newFakeGaggiuinoMachine()
+	fake.restProfileCreate404 = true // force the create onto the WS path, same as the adapter-level test
+	defer fake.Close()
+
+	h, registry, _ := newTestHandlers(t)
+	var actions []string
+	h.SetOnProfileSaved(func(action string) { actions = append(actions, action) })
+
+	m, err := registry.CreateMachine(MachineInput{Name: strPtr("Real"), Type: strPtr("gaggiuino"), Host: strPtr(fake.URL), Enabled: boolPtr(true)})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if _, err := registry.SetDefaultMachine(m.ID); err != nil {
+		t.Fatalf("SetDefaultMachine: %v", err)
+	}
+	mux := newMux(h)
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/profile", strings.NewReader(`{"name":"Espresso","phases":[{"type":"PRESSURE"}]}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if len(actions) != 1 || actions[0] != "create" {
+		t.Fatalf("after create, callback actions = %v, want [create]", actions)
+	}
+	profileID := decodeBody(t, rec.Body.Bytes())["id"].(string)
+
+	rec = doRequest(mux, httptest.NewRequest(http.MethodPut, "/api/machine/profile/"+profileID, strings.NewReader(`{"name":"Espresso v2","phases":[{"type":"FLOW"}]}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if len(actions) != 2 || actions[1] != "update" {
+		t.Fatalf("after update, callback actions = %v, want [create update]", actions)
+	}
+}
+
+// TestHandlers_MachineProfileSavedCallback_NotOnFailure pins the other half
+// of #1286 R1: a create that never reaches the machine (the offline
+// local-save fallback), one rejected before any write (invalid body), and
+// an update of a profile that never existed must not fire the hook at all.
+func TestHandlers_MachineProfileSavedCallback_NotOnFailure(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	var actions []string
+	h.SetOnProfileSaved(func(action string) { actions = append(actions, action) })
+	mux := newMux(h)
+	doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machines", nil)) // seed default (gaggiuino, unreachable)
+
+	// Unreachable machine: the create is saved locally with pending_create
+	// (200), not created on the machine -> no callback.
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/profile", strings.NewReader(`{"name":"Offline","phases":[{"type":"PRESSURE"}]}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("offline create status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if created := decodeBody(t, rec.Body.Bytes()); created["syncStatus"] != ProfileSyncPendingCreate {
+		t.Fatalf("syncStatus = %v, want %q", created["syncStatus"], ProfileSyncPendingCreate)
+	}
+
+	// Invalid body -> 400, nothing saved -> no callback.
+	rec = doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/profile", strings.NewReader(`{"name":"","phases":[]}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid create status = %d, want 400", rec.Code)
+	}
+
+	// Update of a profile that never existed -> 404 -> no callback.
+	rec = doRequest(mux, httptest.NewRequest(http.MethodPut, "/api/machine/profile/local:999", strings.NewReader(`{"name":"X","phases":[{"type":"PRESSURE"}]}`)))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("update missing profile status = %d, want 404, body = %s", rec.Code, rec.Body)
+	}
+
+	if len(actions) != 0 {
+		t.Fatalf("callback fired on failed create/update: %v", actions)
+	}
+}

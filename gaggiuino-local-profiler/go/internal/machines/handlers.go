@@ -53,6 +53,15 @@ type Handlers struct {
 	// internal/maintenance already imports internal/machines, so the wiring
 	// has to run this direction.
 	onFirmwareUpdate func(m *Machine, from, to string) error
+
+	// onProfileSaved runs after a machine profile create or update has fully
+	// succeeded (see createMachineProfile/updateMachineProfile in
+	// handlers_profiles.go). Set via SetOnProfileSaved by cmd/server, which
+	// uses it to drive the profile achievements (#1286). action is "create"
+	// or "update". A callback rather than a direct import for the same
+	// import-cycle reason as onFirmwareUpdate: internal/achievements already
+	// imports internal/machines, so the wiring has to run this direction.
+	onProfileSaved func(action string)
 }
 
 // NewHandlers builds Handlers around registry (backed by the same *sql.DB
@@ -87,6 +96,19 @@ func NewHandlers(registry *Registry, hub *sse.Hub, profilesRepo *ProfilesReposit
 // the update itself already succeeded.
 func (h *Handlers) SetOnFirmwareUpdate(fn func(m *Machine, from, to string) error) {
 	h.onFirmwareUpdate = fn
+}
+
+// SetOnProfileSaved wires the side effect to run after a machine profile
+// create or update has fully succeeded (#1286). cmd/server uses it to let
+// the achievements service see a `profile-saved` event, which unlocks the
+// first_profile/profile_edit badges. action is "create" or "update".
+// internal/achievements imports internal/machines, so wiring this as a
+// callback here avoids the import cycle a direct dependency would create.
+// A nil hook (never wired, e.g. in this package's own unit tests) is a
+// no-op, and the callback never changes the response -- the save itself
+// already succeeded.
+func (h *Handlers) SetOnProfileSaved(fn func(action string)) {
+	h.onProfileSaved = fn
 }
 
 // disconnectLiveForHost tears down both persistent live sessions for a host
