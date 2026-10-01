@@ -52,8 +52,7 @@ func brewMethodOrOther(v any) string {
 }
 
 // createRecipe ports POST /api/library/recipe — a thin wrapper around
-// CreateRecipe (create.go), the same logic internal/web's "New recipe" form
-// also calls.
+// CreateRecipe (create.go).
 func (h *Handlers) createRecipe(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
 		return
@@ -76,8 +75,7 @@ func (h *Handlers) createRecipe(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateRecipe ports PUT /api/library/recipe/:id — a thin wrapper around
-// UpdateRecipe (update.go), the same logic internal/web's Edit recipe form
-// also calls.
+// UpdateRecipe (update.go).
 func (h *Handlers) updateRecipe(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)

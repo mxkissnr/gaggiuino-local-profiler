@@ -11,8 +11,8 @@ package shots
 
 // ShotMetrics is the shot-detail page's derived recipe/duration/channeling
 // figures — a plain data struct (not pre-formatted strings), same division
-// of labor as ScoreDetail: this package computes the numbers, internal/web's
-// view layer decides display formatting/units.
+// of labor as ScoreDetail: this package computes the numbers, the
+// caller decides display formatting/units.
 //
 // Yield/Ratio/EY reuse CalcShotScoreDetail's own "final weight = max of the
 // weight series" convention (not calcBrewRatio's "last sample" convention)

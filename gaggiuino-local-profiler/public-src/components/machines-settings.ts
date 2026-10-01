@@ -491,11 +491,9 @@ export function onMachineTypeChange(): void {
   syncGaggiuinoOnlyRowsVisibility();
 }
 
-// #1044: GET api/machine/settings?category=system -- the same settings-
-// proxy route internal/web's own (server-rendered) Settings page uses (see
-// go/internal/web/handlers_settings.go's doc comment), just consumed here
-// from the SPA for the one field this form edits (releaseChannel) instead
-// of that page's full opaque-JSON-textarea round trip. Keeps the whole
+// #1044: GET api/machine/settings?category=system -- the settings-proxy
+// route, consumed here for the one field this form edits (releaseChannel).
+// Keeps the whole
 // fetched object in _machineSystemSettings so _saveReleaseChannel() below
 // can post it back with only releaseChannel changed.
 async function loadReleaseChannel(machineId: number): Promise<void> {

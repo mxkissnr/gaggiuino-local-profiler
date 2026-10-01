@@ -203,7 +203,7 @@ func (h *Handlers) postDemoEnd(w http.ResponseWriter, r *http.Request) {
 // browser tab and every user of the same HA instance, not scoped per
 // visitor the way it would be for a direct-port LAN caller. 10/min was
 // never enough headroom for that: a single person clicking through this
-// app's ~15 single-segment routes (go/internal/web/doc.go) inside a
+// app's SPA routes (served by internal/webapp) inside a
 // minute exhausts the budget for the whole household. Kept meaningfully
 // lower than the app-wide 600/min backstop (ratelimit.DefaultMax) so this
 // endpoint specifically still bounds a runaway client/bug, just no longer

@@ -13,10 +13,8 @@ import (
 // among this shot's comparable siblings" — deliberately NOT ported
 // alongside internal/shots/detail.go's own ComputeGrindAdvice (single-shot
 // dial-in heuristic) because, per that file's own doc comment, this needs
-// the full shot history, not just one shot. Now that internal/web's Shots
-// page has a natural place to fetch that history (the same machine's
-// FindAllExcludingTrashByMachine internal/web already loads for the list
-// column), that gap closes here.
+// the full shot history, not just one shot, so a caller supplies the same
+// machine's FindAllExcludingTrashByMachine result.
 
 // grindNumRe ports grind.js's _parseGrindNum regex: the first
 // integer-or-decimal numeric substring in a free-text grind setting string
@@ -215,10 +213,7 @@ func comparativeOkText(n int, bestSetting float64, bestScore int) string {
 	return fmt.Sprintf("%d comparable shots confirm your grind setting (avg score %d)", n, bestScore)
 }
 
-// annotationStr reads ann[key] as a string, or "" if absent/not a string —
-// this package's own equivalent of internal/web's annotationString (kept
-// local, not shared, matching that file's own note about
-// small-enough-not-to-share helpers).
+// annotationStr reads ann[key] as a string, or "" if absent/not a string.
 func annotationStr(ann map[string]any, key string) string {
 	v, _ := ann[key].(string)
 	return v

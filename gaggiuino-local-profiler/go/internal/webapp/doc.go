@@ -6,7 +6,7 @@
 // # Ship, don't rebuild (Phase 1, #901)
 //
 // The Go migration deliberately does NOT re-implement the frontend in
-// templ. internal/web's eleven templ pages were a foundation experiment;
+// templ. The former eleven server-rendered templ pages were a foundation experiment;
 // re-creating the full SPA that way (shot charts, ECharts analytics,
 // dial-in convergence, i18n across six languages, the annotator, orders,
 // achievements, ...) is ~15-20k lines of new code chasing a target that
@@ -18,9 +18,9 @@
 // byte-for-byte the same UI the Node app serves today, and the Go frontend
 // reaches parity in one step instead of never.
 //
-// During the migration internal/web's templ pages were kept as a no-JS
-// fallback mounted under a /ui/ prefix; as of #1200 cmd/server no longer
-// serves them. The only surviving legacy address is GET /ui/kiosk, which
+// During the migration those templ pages were kept as a no-JS
+// fallback mounted under a /ui/ prefix; they have since been removed. The
+// only surviving legacy address is GET /ui/kiosk, which
 // redirects onto the rebuilt kiosk page (see handlers.go).
 //
 // # Handler parity with server.js

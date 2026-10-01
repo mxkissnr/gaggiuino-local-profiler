@@ -81,8 +81,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, boo
 // falling back to "gaggiuino" on any error — cosmetic display/log text
 // stored on newly-written maintenance_log rows, no behavior depends on it.
 // A standalone function (not a *Handlers method) so service.go's
-// MarkTaskDone — shared by this REST handler and internal/web's
-// maintenance page (#901 Phase 2e) — can call it without needing a
+// MarkTaskDone can call it without needing a
 // *Handlers instance.
 func machineHostname(registry *machines.Registry) string {
 	m, err := registry.GetDefaultMachine()
@@ -149,9 +148,8 @@ func (h *Handlers) getMaintenance(w http.ResponseWriter, r *http.Request) {
 }
 
 // taskDone ports POST /api/maintenance/:task/done — thin wrapper around
-// MarkTaskDone (service.go), the same business logic internal/web's
-// maintenance page (#901 Phase 2e) calls directly rather than through this
-// REST handler, mirroring internal/orders' AcceptOrder/CompleteOrder/
+// MarkTaskDone (service.go), the business logic lives in the service
+// layer, mirroring internal/orders' AcceptOrder/CompleteOrder/
 // DeclineOrder service-layer extraction.
 func (h *Handlers) taskDone(w http.ResponseWriter, r *http.Request) {
 	body, ok := decodeJSONBody(w, r)

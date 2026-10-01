@@ -20,8 +20,7 @@ func findGrinderIndex(lib Library, id int64) int {
 }
 
 // createGrinder ports POST /api/library/grinder — a thin wrapper around
-// CreateGrinder (create.go), the same logic internal/web's "New grinder"
-// form also calls.
+// CreateGrinder (create.go).
 func (h *Handlers) createGrinder(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
 		return
@@ -44,8 +43,7 @@ func (h *Handlers) createGrinder(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateGrinder ports PUT /api/library/grinder/:id — a thin wrapper around
-// UpdateGrinder (update.go), the same logic internal/web's Edit grinder form
-// also calls.
+// UpdateGrinder (update.go).
 func (h *Handlers) updateGrinder(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)

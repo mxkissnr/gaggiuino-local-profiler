@@ -195,15 +195,13 @@ func UpsertKnownGrindSetting(lib *Library, beanID int64, grinder, grindSetting s
 // ToggleBeanActive ports routes/library/beans.js's POST .../toggle-active
 // handler body (#578): `bean.enabled === false ? true : false` — anything
 // other than the exact boolean false (including absent/undefined) flips to
-// false. Exported (unlike this file's other helpers) so internal/web's
-// Beans page can drive the same enabled/disabled flag through the same
+// false. Exported (unlike this file's other helpers) so other packages
+// can drive the same enabled/disabled flag through the same
 // read-mutate-save round trip its REST counterpart (handlers_beans.go's
-// toggleBeanActive, which now calls this too) uses, rather than
-// reimplementing the flip. found is false when id matches no bean, mirroring
+// toggleBeanActive) uses, rather than reimplementing the flip. found is false when id matches no bean, mirroring
 // the REST handler's 404. lib is the same already-read (and, on success,
 // already-saved) Library this function fetched internally — callers that
-// need the rest of the library alongside the toggled bean (internal/web's
-// toggleBeanActiveAction, which re-renders a row from lib.Beans) reuse it
+// need the rest of the library alongside the toggled bean reuse it
 // instead of issuing their own extra GetLibrary call.
 func ToggleBeanActive(repo *Repository, id int64) (bean Entity, lib Library, found bool, err error) {
 	err = repo.Update(func(l *Library) error {

@@ -1040,8 +1040,8 @@ func (h *Handlers) placeOrder(w http.ResponseWriter, r *http.Request) {
 // accept/complete/decline no longer build and send the customer HA
 // notification themselves — that now lives on Service.AcceptOrder/
 // CompleteOrder/DeclineOrder (internal/orders/service.go's
-// notifyOrderStatus), so every caller of those three methods gets it,
-// including internal/web's htmx queue actions (#901 code review).
+// notifyOrderStatus), so every caller of those three methods gets it
+// (#901 code review).
 
 func (h *Handlers) accept(w http.ResponseWriter, r *http.Request) {
 	body, ok := decodeOptionalJSONBody(w, r)

@@ -11,20 +11,17 @@ import "github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 // internal/library.ToggleBeanActive/internal/maintenance.MarkTaskDone
 // already established for this package's other web/REST-shared actions.
 // Each REST handler below is now a thin wrapper: decode + rate-limit +
-// call + map a *ValidationError to its existing 400 response. internal/web's
-// Beans/Grinders/Baskets/PuckScreens/Milks/Recipes "New ..." forms call
-// these same functions directly, so a form submission and a POST
-// /api/library/{bean,grinder,basket,puckscreen,milk,recipe} both run
-// through identical validation and Library-save logic.
+// call + map a *ValidationError to its existing 400 response. Keeping the
+// validation and Library-save logic in these functions keeps it out of the
+// HTTP layer.
 //
 // Every Create* function also returns the just-saved Library (the same
 // value SaveLibrary was called with, containing the new entity) alongside
 // the created entity itself — the same convention ToggleBeanActive already
-// established (service.go) — so a caller that needs to re-render a full
-// list right after a create (internal/web's htmx fragment redraw) can
-// build that list straight from the returned Library instead of issuing a
-// second, redundant repo.GetLibrary() read (#901 code review finding #3;
-// see internal/web/handlers_library.go's own *RowsFromLib helpers).
+// established (service.go) — so a caller that needs the full list
+// right after a create can build it straight from the returned Library
+// instead of issuing a second, redundant repo.GetLibrary() read (#901 code
+// review finding #3).
 
 // ValidationError carries the 400 message a Create* function's caller
 // should surface. Aliased to httputil.ValidationError (#901 code review

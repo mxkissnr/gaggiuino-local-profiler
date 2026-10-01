@@ -116,9 +116,10 @@ func TestRequireToken_NonAPIPathBypassesAuth(t *testing.T) {
 
 // TestRequireToken_NonAPIWritePathRequiresAuth pins the #901 code-review
 // fix: the non-/api/ bypass must not swallow write methods. Before the
-// fix, any POST/PUT/DELETE to a path outside /api/ (e.g. the htmx write
-// actions internal/web registers at /shots/{id}/trash) sailed through
+// fix, any POST/PUT/DELETE to a path outside /api/ sailed through
 // unauthenticated — a CSRF hole, since no token/custom header was needed.
+// No such write route exists in the app today; the test pins the guard for
+// future ones, using /shots/1/trash as an arbitrary non-/api/ path.
 func TestRequireToken_NonAPIWritePathRequiresAuth(t *testing.T) {
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
 		req := httptest.NewRequest(method, "/shots/1/trash", nil)

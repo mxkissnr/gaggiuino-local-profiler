@@ -101,8 +101,8 @@ func (h *Handlers) buildIngressReport(r *http.Request) ingressReport {
 	}
 
 	// The app deliberately prefixes NOTHING onto generated URLs — every
-	// href/src/action it emits is relative (internal/web/doc.go's
-	// "Ingress-safe relative paths" invariant), so the browser resolves them
+	// href/src/action it emits is relative (the SPA's relative-path
+	// assets, see internal/webapp), so the browser resolves them
 	// against whatever prefix it loaded the page under. The only meaningful
 	// "external base" for this request is therefore the X-Ingress-Path the
 	// browser is actually sitting behind, and only when this is a genuine

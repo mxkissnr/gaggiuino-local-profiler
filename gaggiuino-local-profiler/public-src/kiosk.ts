@@ -15,14 +15,12 @@ import { etaText, isEinkMode } from './kiosk-helpers.js';
 
 // The ordering kiosk (#1267): a second, tablet-facing page that shares the
 // app's design system, languages and theme. It is a typed port of the older
-// no-JS page at /ui/kiosk (go/internal/web/static/kiosk.js) — name step ->
+// no-JS page (/ui/kiosk now only redirects here) — name step ->
 // menu step -> thank-you step, with a live queue panel.
 //
 // Reused as-is and so deliberately not modified by this slice: api/transport.ts
 // (initToken), api/fetch.ts (apiFetch), api/types.ts (MenuItem/Order/QueueEta)
-// and i18n.ts (t). The old go/internal/web/static/kiosk.{html,js} stays put
-// too — it is the functional spec and is removed only in the next slice, and
-// the kiosk_* translation keys land separately in #1275.
+// and i18n.ts (t). The kiosk_* translation keys land separately in #1275.
 
 const QUEUE_POLL_MS = 8000;
 const STATUS_POLL_MS = 30000;

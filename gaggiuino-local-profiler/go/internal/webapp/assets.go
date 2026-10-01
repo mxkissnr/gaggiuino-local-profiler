@@ -20,7 +20,7 @@ func dist() fs.FS {
 	if err != nil {
 		// dist/ is embedded above in this same package — a missing subtree
 		// here is a build-time packaging bug, not a runtime condition a
-		// caller can recover from (matches internal/web/assets.go).
+		// caller can recover from.
 		panic("webapp: dist assets not embedded: " + err.Error())
 	}
 	return sub

@@ -32,8 +32,7 @@ func (h *Handlers) listBaskets(w http.ResponseWriter, r *http.Request) {
 }
 
 // createBasket ports POST /api/library/basket — a thin wrapper around
-// CreateBasket (create.go), the same logic internal/web's "New basket" form
-// also calls.
+// CreateBasket (create.go).
 func (h *Handlers) createBasket(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
 		return
@@ -56,8 +55,7 @@ func (h *Handlers) createBasket(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateBasket ports PUT /api/library/basket/:id — a thin wrapper around
-// UpdateBasket (update.go), the same logic internal/web's Edit basket form
-// also calls.
+// UpdateBasket (update.go).
 func (h *Handlers) updateBasket(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)

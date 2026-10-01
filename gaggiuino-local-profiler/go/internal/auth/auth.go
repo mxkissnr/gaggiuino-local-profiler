@@ -201,11 +201,11 @@ func SecurityHeaders(next http.Handler) http.Handler {
 // '/shots.json') return next();`) has no method check at all. That's safe
 // in server.js only because no write route is ever registered outside
 // /api/ there (routes/*.js's mutating endpoints all live under /api/,
-// static files/index.html are the only non-/api/ surface) — a precondition
-// that stopped holding once internal/web (#901, Phase 2a) registered POST
-// /shots/{id}/trash and .../restore outside /api/. Scoping the bypass to
-// GET/HEAD here closes that CSRF hole for those two routes and any future
-// one like them, without having to special-case each route individually.
+// static files/index.html are the only non-/api/ surface). The same holds
+// for today's Go routes, but scoping the bypass to GET/HEAD here keeps it
+// from silently exposing any write route someone registers outside /api/
+// later (a CSRF hole, as once happened with the since-removed server-rendered
+// pages), without having to special-case each route individually.
 // It must run behind SecurityHeaders and ahead of any route — see
 // cmd/server's middleware chain, whose ordering follows server.js's actual
 // app.use() registration order (security headers, then the rate limiter,
@@ -252,15 +252,14 @@ func RequireToken(token string) func(http.Handler) http.Handler {
 				return
 			}
 			// #901 code review: this bypass must stay scoped to read-only
-			// requests. It was originally "any non-/api/ path", which also
-			// let through htmx's POST /shots/{id}/trash and .../restore —
-			// removing the token/CSRF protection those write actions need
-			// (see internal/web/doc.go's "Auth model" section, updated
-			// alongside this fix). GET and HEAD carry no writable HTTP
-			// semantics (net/http.ServeMux itself routes HEAD to a
-			// registered GET handler, so both must bypass identically —
-			// see internal/web.Handlers.RegisterRoutes' "GET /shots"
-			// pattern), so scoping the bypass to those two methods keeps
+			// requests. It was originally "any non-/api/ path", which would
+			// also let through any write route registered outside /api/,
+			// removing the token/CSRF protection it needs. No such route
+			// exists today (the SPA routes in internal/webapp are all
+			// GET/HEAD), so this is a guard for future routes. GET and HEAD
+			// carry no writable HTTP semantics (net/http.ServeMux itself
+			// routes HEAD to a registered GET handler, so both must bypass
+			// identically), so scoping the bypass to those two methods keeps
 			// today's unauthenticated static/page reads working while
 			// automatically gating any future write route registered
 			// outside /api/, without needing a per-route opt-in.
