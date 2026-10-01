@@ -405,7 +405,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// library, orders, maintenance, machines and the cached version check
 	// (systemHandlers.CachedVersion, via a callback — no cross-domain
 	// import). See go/internal/achievements/doc.go, incl. the documented
-	// "no event bus" deviation (evaluate-before-read instead).
+	// "no event bus" design (evaluate-before-read instead).
 	achievementsRepo := achievements.NewRepository(sqlDB)
 	achievementsSvc := achievements.NewService(achievementsRepo, achievements.Deps{
 		Shots:       shotsRepo,
