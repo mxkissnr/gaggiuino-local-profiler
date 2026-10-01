@@ -71,6 +71,13 @@ func badges() []badge {
 		}},
 		{ID: "first_bean", Card: "basics", Stamp: "bean", Check: func(c *Context) bool { return len(c.Beans) > 0 }},
 		{ID: "first_shot", Card: "basics", Stamp: "cup", Check: func(c *Context) bool { return len(c.Shots) > 0 }},
+		// first_profile and profile_edit only unlock on a specific event and have
+		// no stored state that can satisfy them, so #1286 R1 deliberately leaves
+		// their predicates untouched: the missing piece was that nothing called
+		// Service.EvaluateEvent. cmd/server now does, via
+		// machines.Handlers.SetOnProfileSaved forwarding a "profile-saved" event
+		// carrying action "create"/"update" -- exactly what the two checks below
+		// match. No logic change is required here.
 		{ID: "first_profile", Card: "basics", Stamp: "slider", Check: func(c *Context) bool {
 			return eventIs(c, "profile-saved") && payloadStr(c, "action") == "create"
 		}},
