@@ -23,14 +23,11 @@ const localPlugin = {
 
 module.exports = [
   {
-    // go/ is Go, not JS — except the browser scripts under
-    // internal/web/static/ (the no-JS /ui/ fallback pages, embedded via
-    // assets.go), which are linted by the dedicated block below. The
-    // minified vendor bundles next to them, and the transient staged Vite
-    // build under internal/webapp/dist/, stay ignored.
+    // go/ is Go, not JS. The transient staged Vite build under
+    // internal/webapp/dist/ stays ignored.
     ignores: [
       'public/**', 'node_modules/**', 'docs/**', 'graphify-out/**',
-      'go/internal/web/static/vendor/**', 'go/internal/webapp/dist/**',
+      'go/internal/webapp/dist/**',
       // Deliberately-bad lint fixtures for the rule test; typed by tsc, never
       // linted as project code.
       'test/fixtures/**',
@@ -123,16 +120,6 @@ module.exports = [
       'local/html-sink': 'error',
     },
   }),
-  {
-    // go/internal/web/static/**: hand-written browser scripts embedded via
-    // internal/web/assets.go and loaded by the no-JS /ui/ fallback pages —
-    // same runtime as public-src/, hence browser globals.
-    files: ['go/internal/web/static/**/*.js'],
-    languageOptions: {
-      globals: globals.browser,
-    },
-    rules: commonRules,
-  },
   {
     files: ['test/**/*.js'],
     languageOptions: {

@@ -1,7 +1,6 @@
 gaggiuino-local-profiler/node_modules/
 gaggiuino-local-profiler/public/
 gaggiuino-local-profiler/coverage/
-gaggiuino-local-profiler/go/**/*_templ.go
 
 # Phase 1 (#901): the SPA bundle internal/webapp embeds is a build artifact,
 # produced by `make -C go frontend` or the Dockerfile's builder stage via

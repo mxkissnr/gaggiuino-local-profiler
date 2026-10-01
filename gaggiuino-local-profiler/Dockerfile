@@ -67,17 +67,10 @@ WORKDIR /src
 COPY go/go.mod go/go.sum ./
 RUN go mod download
 
-# templ generate is a required codegen step — internal/web/templates'
-# .templ sources aren't valid Go until this runs (see go/README.md's
-# "Codegen" section). Pinned to the same version go.mod already pulls in as
-# the templ runtime library's own indirect dependency, so the codegen tool
-# and the library it generates code against never drift apart.
-RUN go install github.com/a-h/templ/cmd/templ@v0.3.1020
-
 COPY go/ .
 # The SPA bundle internal/webapp embeds via `//go:embed all:dist` is built
-# here, from Go, with esbuild's Go API (#1033): templ generate, then
-# cmd/frontend-build, which wipes and rebuilds the whole dist/ directory
+# here, from Go, with esbuild's Go API (#1033): cmd/frontend-build,
+# which wipes and rebuilds the whole dist/ directory
 # (replacing the committed dist/index.html placeholder the COPY above brought
 # in). No Vite build runs in the image — but esbuild resolves the SPA's bare
 # imports out of node_modules, so the dependency tree is COPYed in from the
@@ -91,7 +84,6 @@ COPY go/ .
 # byte-identical assets.
 COPY public-src/ ./public-src/
 COPY --from=frontend-deps /app/node_modules ./node_modules
-RUN templ generate
 RUN go run ./cmd/frontend-build -src ./public-src -out ./internal/webapp/dist
 
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
