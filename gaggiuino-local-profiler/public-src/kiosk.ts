@@ -326,13 +326,20 @@ function wireStaticControls(): void {
   byId<HTMLButtonElement>('placeOrder').addEventListener('click', () => { void submitOrder(); });
 }
 
+// The stored theme, or 'auto' when it is unset or storage is unavailable.
+function storedTheme(): string {
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY) || 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
 async function bootstrap(): Promise<void> {
   const root = document.getElementById('kiosk');
   if (!root) return;
 
-  let theme = 'auto';
-  try { theme = localStorage.getItem(THEME_STORAGE_KEY) || 'auto'; } catch { theme = 'auto'; }
-  applyTheme(theme);
+  applyTheme(storedTheme());
   watchSystemTheme();
 
   if (isEinkMode(location.search)) document.documentElement.classList.add('eink');
