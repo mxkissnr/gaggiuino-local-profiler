@@ -35,6 +35,7 @@
 - **The coffee library's bean list and the shot annotation panel now build their markup through the type-checked HTML builder, so every bean, bag and annotation value they display is escaped.** Part of #1104
 
 ### Changed
+- **A redundant comment in the achievements registry was removed, with no behavior change.** Part of #1286
 - **The old kiosk address (`/ui/kiosk`) now redirects to the rebuilt kiosk page, so existing tablet bookmarks keep working.** Part of #1267
 - **The ordering kiosk now uses the app's look and languages, follows light/dark mode, and has an e-ink mode via `?eink=1`** — reachable at `kiosk.html`, while the old `/ui/kiosk` address keeps working for now. Part of #1267
 - **The API description now documents every response the app uses, checked by tests against the real server.**
