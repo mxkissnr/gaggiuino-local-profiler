@@ -133,7 +133,7 @@ A machine-readable OpenAPI 3.0.3 specification of all endpoints is served at `GE
 
 ## AI assistants (MCP server)
 
-GLP ships an optional [Model Context Protocol](https://modelcontextprotocol.io/) endpoint at `http://<ha-host>:8099/api/mcp`, so AI assistants such as Claude Code, Claude Desktop or any other MCP client can read your shot history, curves, the bean library, maintenance and analytics. It is **off by default** — turn it on with the `enable_mcp` option (or `GLP_ENABLE_MCP=true` on a standalone Docker install). It never controls the machine: brewing, power and profiles stay with the app and with Home Assistant's own MCP server, which is what covers entities and services.
+GLP ships an optional [Model Context Protocol](https://modelcontextprotocol.io/) endpoint at `http://<ha-host>:8099/api/mcp`, so AI assistants such as Claude Code, Claude Desktop or any other MCP client can read your shot history, curves, the bean library, maintenance and analytics. It is **off by default** — turn it on in **Settings → "AI assistants (MCP)"**, which works the same under Home Assistant, direct-port access and standalone Docker. It never controls the machine: brewing, power and profiles stay with the app and with Home Assistant's own MCP server, which is what covers entities and services. Changes apply on the next request — no restart.
 
 ### Authentication
 
@@ -141,13 +141,13 @@ The endpoint uses the same `X-GLP-Token` header as the REST API — see [API tok
 
 ### The three levels
 
-Three independent opt-ins control what an assistant can see and do. The write and developer tools only register when `enable_mcp` is on too.
+The read-only tools come with the main switch. The write tools have their own checkbox in the same Settings card; the developer tools only exist in a dev-channel build, so their checkbox is hidden otherwise. The write and developer tools only register when MCP is on too.
 
-| Level | Option | Tools |
+| Level | Setting | Tools |
 |---|---|---|
-| Read-only (always on with `enable_mcp`) | — | `list_shots`, `get_shot`, `compare_shots`, `list_beans`, `get_library`, `get_maintenance_status`, `get_machine_status`, `get_analytics_summary` |
-| Write | `enable_mcp_write` | `annotate_shot`, `set_known_grind`, `mark_maintenance_done` — these change your data |
-| Developer | `enable_mcp_developer_tools` | `get_shot_raw`, `explain_score`, `export_shots_dataset`, `get_diagnostics`, `get_preheat_history` — larger outputs, including the app's recent log lines |
+| Read-only (comes with the main switch) | — | `list_shots`, `get_shot`, `compare_shots`, `list_beans`, `get_library`, `get_maintenance_status`, `get_machine_status`, `get_analytics_summary` |
+| Write | Write-tools checkbox | `annotate_shot`, `set_known_grind`, `mark_maintenance_done` — these change your data |
+| Developer | Developer-tools checkbox (dev-channel builds only) | `get_shot_raw`, `explain_score`, `export_shots_dataset`, `get_diagnostics`, `get_preheat_history` — larger outputs, including the app's recent log lines |
 
 The server also offers two prompts that hand the assistant a ready-made plan: `dial_in_bean` and `analyse_shot`.
 
@@ -221,9 +221,6 @@ On narrow viewports (phones, portrait tablets) the topbar tabs are hidden and a 
 | `preheat_time` | Warmup time in minutes — how long after switch-on until the machine is ready to brew (1–120) | `20` |
 | `enable_orders` | Enable the order management system — barista backend tab + customer order card support; disabled by default | `false` |
 | `debug_logging` | Verbose diagnostic logging (e.g. every step of the bean import flow) in the app log — off by default so it never spams normal operation, switch on when actually diagnosing something | `false` |
-| `enable_mcp` | Serve a Model Context Protocol (MCP) endpoint at `http://<ha-host>:8099/api/mcp` so AI assistants (Claude Code, Claude Desktop, others) can read shot history, curves, the bean library, maintenance and analytics — off by default, and it never controls the machine; see [AI assistants (MCP server)](#ai-assistants-mcp-server) | `false` |
-| `enable_mcp_write` | Also register the MCP write tools (`annotate_shot`, `set_known_grind`, `mark_maintenance_done`), which change your data — only takes effect together with `enable_mcp` | `false` |
-| `enable_mcp_developer_tools` | Also register the MCP developer tools (`get_shot_raw`, `explain_score`, `export_shots_dataset`, `get_diagnostics`, `get_preheat_history`), which return larger outputs — only takes effect together with `enable_mcp` | `false` |
 | `expose_api_port` | Whether `GET /api/token` answers requests that don't arrive via HA Ingress (#803). Turning this off stops **direct-port browser access to the app** from working at all (this includes the installable PWA — it's just the installed form of that same UI), and breaks **first-time setup of the Order Card's direct-URL mode**, since none of those have any other way to obtain a token — an already-configured direct-URL Order Card keeps working. Does not unmap port 8099 itself, and does not narrow the trust boundary below the whole Supervisor app network. See [Trust model](#trust-model) above. | `true` |
 | `port` | Port the app server listens on (1024–65535) | `8099` |
 
@@ -269,9 +266,6 @@ outside HA OS. GLP falls back to environment variables for both, all optional:
 | `GLP_PREHEAT_TIME` | `preheat_time` app option | Minutes, 1–120, default `20` |
 | `GLP_ENABLE_ORDERS` | `enable_orders` app option | `true`/`false`, default `false` |
 | `GLP_DEBUG_LOGGING` | `debug_logging` app option | `true`/`false`, default `false` |
-| `GLP_ENABLE_MCP` | `enable_mcp` app option | `true`/`false`, default `false` |
-| `GLP_ENABLE_MCP_WRITE` | `enable_mcp_write` app option | `true`/`false`, default `false` |
-| `GLP_ENABLE_MCP_DEVELOPER_TOOLS` | `enable_mcp_developer_tools` app option | `true`/`false`, default `false` |
 | `GLP_EXPOSE_API_PORT` | `expose_api_port` app option | `true`/`false`, default `true` |
 | `GLP_HA_URL` + `GLP_HA_TOKEN` | `SUPERVISOR_TOKEN` (HA API access) | Restores auto-sync, switch-entity power control and push notifications — see below. Both must be set together. |
 

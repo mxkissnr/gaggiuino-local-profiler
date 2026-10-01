@@ -34,9 +34,6 @@ services:
       - GLP_SYNC_INTERVAL=${GLP_SYNC_INTERVAL:-}      # minutes, 1-60, default 5
       - GLP_PREHEAT_TIME=${GLP_PREHEAT_TIME:-}        # minutes, 1-120, default 20
       - GLP_ENABLE_ORDERS=${GLP_ENABLE_ORDERS:-false}
-      - GLP_ENABLE_MCP=${GLP_ENABLE_MCP:-false}
-      - GLP_ENABLE_MCP_WRITE=${GLP_ENABLE_MCP_WRITE:-false}
-      - GLP_ENABLE_MCP_DEVELOPER_TOOLS=${GLP_ENABLE_MCP_DEVELOPER_TOOLS:-false}
       - GLP_DEBUG_LOGGING=${GLP_DEBUG_LOGGING:-false}
 
       # Restores HA auto-sync, switch-entity power control and push
