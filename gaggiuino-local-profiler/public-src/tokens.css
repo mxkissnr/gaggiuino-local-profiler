@@ -1,0 +1,204 @@
+        :root {
+            /* ── Radius ── #811: two radii, not eight. --radius-sm is for
+               controls (inputs, chips, small buttons), --radius for
+               containers. Anything that reached for a third value was
+               picking a number, not making a decision. */
+            --radius: 10px;
+            --radius-sm: 4px;
+
+            /* ── Type scale ── #811: six steps, replacing 53 distinct
+               font-size literals that stepped in 0.02rem increments. A size
+               not on this ladder is a regression, not a nuance — the tail of
+               near-identical sizes is one of the clearest signs of a UI that
+               was assembled rather than designed. --fs-1 is deliberately
+               0.8125rem and not the 0.58rem the app used to reach for: the
+               border diet below removes boxes as a grouping device, and that
+               must not come back as hairline micro-typography. */
+            --fs-1: 0.8125rem;
+            --fs-2: 0.875rem;
+            --fs-3: 1rem;
+            --fs-4: 1.25rem;
+            --fs-5: 1.625rem;
+            --fs-6: 2.25rem;
+
+            /* ── Spacing ladder ── #811: replaces the loose gap/padding
+               literals. Same rule: a value off the ladder is a regression. */
+            --sp-1: 4px;
+            --sp-2: 8px;
+            --sp-3: 12px;
+            --sp-4: 16px;
+            --sp-5: 24px;
+            --sp-6: 32px;
+
+            /* ── Gray scale (dark theme) ──
+               #811: cool graphite, replacing the previous Tailwind-zinc
+               values. The scale is ROLE-based, not brightness-based, and it
+               inverts under [data-theme="light"] below: --gray-200 is always
+               "primary text" and --gray-900 always "page background",
+               whichever theme is active. Reading these names as brightness
+               levels and "fixing" them accordingly breaks the light theme.
+               Roles, from how they are actually used in this file:
+                 100  strongest text (KPI values, large figures)
+                 200  primary text          (82 uses as `color`)
+                 300  strong secondary text
+                 400  soft text
+                 500  muted text            (97 uses, the most common label)
+                 600  muted, weakest        (48 uses)
+                 700  LINES (91 uses as `border`) — not a text colour
+                 800  card / sidebar surface (53 uses as `background`)
+                 900  page background       (46 uses)
+                 950  deepest surface
+               --gray-100 and --gray-300 were USED but never defined until
+               now, so they silently inherited whatever colour was in scope.
+               Every text role clears 4.5:1 against every surface in this
+               table; worst case is --err on --raised at 4.82:1. */
+            --gray-100: #f7f8f8;
+            --gray-200: #eceded;
+            --gray-300: #d0d3d5;
+            --gray-400: #b6babd;
+            --gray-500: #a4a9ad;
+            --gray-600: #93989c;
+            --gray-700: #2b2f33;
+            --gray-800: #1a1c1f;
+            --gray-900: #131416;
+            --gray-950: #0d0e10;
+            /* #811: the nesting level that used to be drawn as a card inside
+               a card inside a card, each with its own 1px border. A surface
+               step carries that hierarchy without the boxes — which is what
+               makes the border diet possible at all. */
+            --raised:   #232629;
+
+            /* ── Functional ──
+               #811: recomputed. The previous values (#22c55e/#eab308/#ef4444,
+               Tailwind's 500 series) were never checked against the surfaces
+               they actually sit on — #397 audited the gray scale only. --err
+               measured 3.96:1 on --gray-800 in the dark theme, and in the
+               light theme --ok measured 3.00:1 against every surface. Those
+               were pre-existing WCAG failures, not something this redesign
+               introduced; they are fixed here because the values were being
+               touched anyway. */
+            --ok:     #5cb98a;
+            --warn:   #d3a03f;
+            --err:    #e0705f;
+
+            /* ── Accent (amber-americano default) ──
+               #1019: these are amber-americano's own values (see
+               lib/machines/theme-presets.js's THEME_PRESETS, the single
+               source of truth both the per-machine theme picker and the
+               Settings -> Farbschema picker now share) — this block only
+               exists so <html> already has a sensible accent painted before
+               JS runs applyActiveMachineAccentTheme() (machines-settings.js)
+               and overrides it inline with the actual resolved value. The
+               old per-swatch [data-accent="..."] blocks that used to live
+               here for the other 5 legacy swatches (plus Crema's warm-
+               neutral grayscale override) are retired entirely along with
+               them — every preset, including this default, now only ever
+               reaches the page via that one inline-style mechanism. */
+            --accent:      #f59e0b;
+            --accent-from: #f59e0b;
+            --accent-to:   #f59e0b;
+            --accent-text: #000;
+            --accent-glow: rgba(245,158,11,.15);
+            /* --on-fill: text/number sitting ON a full-strength semantic fill
+               (--ok/--warn/--err/--gray-600 used as a background rather than
+               as a text colour, e.g. the dial-in score chip).
+               It is BLACK in the dark theme and white in the light one, which
+               is the opposite of the intuition: the dark theme's semantic
+               colours are the light, saturated ones, so white on them
+               measures 2.37-3.16:1 while black measures 6.65-8.87:1. The
+               light theme's are the dark ones and it reverses. Same reasoning
+               as --accent-text above; these fills were simply never audited,
+               because #397/#404 only ever checked these tokens as TEXT ON a
+               surface, never as a surface UNDER text. */
+            --on-fill: #000;
+            /* --accent-ink: the accent used as TEXT or an icon, as opposed to
+               a fill. On dark surfaces the accent itself is readable, so this
+               is simply the accent. In the light theme it is not — #1021's
+               per-preset overrides for the 8 THEME_PRESETS are applied here
+               as an inline style by applyActiveMachineAccentTheme()
+               (components/machines-settings.js), not a CSS selector — see
+               the comment below where the old [data-accent]-scoped overrides
+               used to live. Splitting the two is what lets the fill stay
+               exactly the configured brand colour while the text form stays
+               legible. */
+            --accent-ink:  var(--accent);
+        }
+
+        /* ── Light theme ── */
+        [data-theme="light"] {
+            /* #811: the same role scale, inverted — 100/200 are the darkest
+               here because they are TEXT, 900/950 the lightest because they
+               are SURFACES. Note the light theme's own convention, which is
+               kept: a raised element gets DARKER here (800 sits below 900),
+               the opposite of the dark theme, so --raised continues in that
+               same direction. Every text role clears 4.5:1 on every surface;
+               worst case --gray-600 on --raised at 4.51:1. */
+            --gray-100: #0e0f10;
+            --gray-200: #1b1d1f;
+            --gray-300: #303438;
+            --gray-400: #4a4e52;
+            /* #397 kept: 500/600 exist to clear 4.5:1 as label text on the
+               card surface. Recomputed for the new surfaces above. */
+            --gray-500: #585d61;
+            --gray-600: #63686c;
+            --gray-700: #dcdcd8;
+            --gray-800: #eeeeec;
+            --gray-900: #f7f7f6;
+            --gray-950: #ffffff;
+            --raised:   #e6e6e3;
+            /* #811: --ok was #16a34a, which measured 3.00:1 against every
+               light surface — a pre-existing failure the gray-scale audit in
+               #397 never covered, because it only checked the grays. */
+            --ok:     #2f7350;
+            --warn:   #7d5510;
+            --err:    #a83526;
+            --on-fill: #fff;
+        }
+        /* #1019: the per-accent --accent-ink light-theme audit (#811, plus
+           Crema's whole separate warm-paper light block) was retired along
+           with the old 6-swatch [data-accent="..."] set, and those
+           selectors deliberately stay retired (#1021 does not reintroduce
+           them). #1021 redid the audit for the 8 new THEME_PRESETS instead —
+           same #397/#404/#811 precedent, same 4.5:1 floor against all four
+           light surfaces above, same "darken along the accent's own hue"
+           method — but applied through the inline-CSS-variable mechanism
+           applyActiveMachineAccentTheme() already uses for --accent itself
+           (see LIGHT_ACCENT_INK_OVERRIDES in components/machines-settings.js
+           and its test/theme-contrast.test.js coverage) rather than a new
+           CSS selector per preset. --accent-ink here in :root/[data-theme=
+           "light"] stays a plain var(--accent) alias either way — the
+           override, when one applies, always wins as an inline style. */
+
+        /* #404: bundled locally (public-src/fonts/) so it renders fully
+           offline / behind HA ingress — no external font CDN. Applied ONLY
+           via .serif-display: bean names in the Bibliothek view and the
+           shot-card share image (lib/card.js registers the same file for
+           server-side rendering). Never on numeric/data displays —
+           tabular-nums UI stays sans-serif everywhere else, regardless of
+           theme. */
+        @font-face {
+            font-family: 'Fraunces';
+            font-style: normal;
+            font-weight: 600;
+            font-display: swap;
+            src: url('./fonts/fraunces-600-latin.woff2') format('woff2');
+        }
+        .serif-display { font-family: 'Fraunces', Georgia, serif; }
+
+        /* Bundled locally same as Fraunces above (fonts.bunny.net removed —
+           was the app's last external CDN dependency). 400/600 latin only,
+           matching the two weights the app actually uses. */
+        @font-face {
+            font-family: 'Figtree';
+            font-style: normal;
+            font-weight: 400;
+            font-display: swap;
+            src: url('./fonts/figtree-400-latin.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Figtree';
+            font-style: normal;
+            font-weight: 600;
+            font-display: swap;
+            src: url('./fonts/figtree-600-latin.woff2') format('woff2');
+        }
