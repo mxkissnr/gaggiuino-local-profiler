@@ -27,14 +27,14 @@ import (
 // boot sweep does; steady-state reads with no new shot/bean/order/
 // maintenance activity pay only the fingerprint query.
 //
-// The two profile live-moment badges (first_profile/profile_edit) are now
-// driven by explicit EvaluateEvent calls: cmd/server wires
-// machines.Handlers.SetOnProfileSaved to EvaluateEvent(&Event{Type:
-// "profile-saved", Payload: {"action": "create"|"update"}}). The remaining
-// two (backup/restock) only ever unlock on their specific event and have no
-// retroactive path in Node either — they stay permanently locked in this
-// port until an event bus (or further explicit EvaluateEvent call sites)
-// exists (#1286 R2). Documented, not a silent gap.
+// The four live-moment badges (first_profile/profile_edit, backup, restock)
+// are now all driven by explicit EvaluateEvent calls: cmd/server wires
+// machines.Handlers.SetOnProfileSaved to a "profile-saved" event (#1286 R1),
+// backup.Handlers.SetOnExported to "backup-exported", and
+// library.Handlers.SetOnBeanRestocked to a "bean-changed" restock event
+// (#1286 R2). Each fires the moment its action succeeds, like Node's bus
+// listeners; as in Node, there is deliberately no retroactive path for these
+// four — every other badge re-evaluates from the data instead.
 
 var supportedLangs = map[string]bool{
 	"de": true, "en": true, "it": true, "fr": true, "es": true, "nl": true,
@@ -61,9 +61,11 @@ func NewService(repo *Repository, deps Deps) *Service {
 
 // EvaluateEvent ports evaluateAll({ type, payload }) for a live event — the
 // call Node's bus listeners make. cmd/server calls it for profile-saved
-// (from machines.Handlers.SetOnProfileSaved, #1286 R1); it stays exported
-// so an event bus / further explicit hooks can drive it without touching
-// this package.
+// (machines.Handlers.SetOnProfileSaved), backup-exported
+// (backup.Handlers.SetOnExported) and the restock bean-changed event
+// (library.Handlers.SetOnBeanRestocked) — see #1286; it stays exported so an
+// event bus / further explicit hooks can drive it without touching this
+// package.
 func (s *Service) EvaluateEvent(event *Event) ([]string, error) {
 	out, err := s.evaluateAll(event)
 	// Force the next GetState() to re-sync its fingerprint against the DB
