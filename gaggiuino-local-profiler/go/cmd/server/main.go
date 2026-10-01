@@ -59,7 +59,6 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/web"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/webapp"
 )
 
@@ -186,43 +185,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	mux := http.NewServeMux()
 	mux.Handle("/api/events", sseHandler)
 
-	// Phase 1 (#901): internal/web's templ pages are no longer the app's
-	// primary UI — internal/webapp serves the production Vite SPA at the
-	// root (see below). The templ pages are frozen as a no-JS fallback view
-	// and move behind a /ui/ prefix: they register on this dedicated
-	// sub-mux, which mux mounts under /ui/ via http.StripPrefix after every
-	// web.*Handlers has registered. StripPrefix removes the "/ui" segment
-	// before the sub-mux matches, so "GET /shots" inside internal/web is
-	// reached as GET /ui/shots, "GET /web/static/..." as GET
-	// /ui/web/static/..., etc. — every relative href/hx-* in those templates
-	// still resolves correctly because the whole route subtree moved one
-	// segment deeper together (see internal/web.Handlers.RegisterRoutes).
-	uiMux := http.NewServeMux()
-	// Bare GET /ui/ -> the first templ page, via a genuinely relative
-	// Location so the browser resolves it against its own address bar
-	// (Ingress prefix included), not the origin root — the same reasoning
-	// internal/web/static/glp-token.js's doc comment spells out. After
-	// StripPrefix this handler sees the path as "/".
-	uiMux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Location", "shots")
-		w.WriteHeader(http.StatusFound)
-	})
-
 	shotsRepo := shots.NewRepository(sqlDB)
 	shotsHandlers := shots.NewHandlers(shotsRepo)
 	shotsHandlers.RegisterRoutes(mux)
-
-	// Phase 2a (#901): the Go frontend foundation — GET /shots plus its two
-	// htmx trash/restore actions, built on the same shots.Service the JSON
-	// API above uses. Not yet reachable in production (this binary isn't
-	// wired into the Docker image/CI — see go/README.md). Registered
-	// outside /api/ so the read-only GET falls through auth.RequireToken's
-	// static-asset bypass; the two POST actions do NOT get that bypass
-	// (RequireToken scopes it to GET/HEAD) and require the same
-	// token/Ingress trust the JSON API does — see internal/web/doc.go's
-	// "Auth model" section.
-	webHandlers := web.NewHandlers(shots.NewService(shotsRepo))
-	webHandlers.RegisterRoutes(uiMux)
 
 	libRepo := library.NewRepository(sqlDB)
 	// #1198: server-side scoring resolves each shot's own library bean
@@ -283,15 +248,6 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		geocoder.GeocodeBean(context.Background(), beanID)
 	}
 
-	// Phase 2b (#901): the Library domain's Go frontend pages — Beans (plus
-	// its one htmx write action, toggle-active) and read-only lists for
-	// Grinders/Baskets/Puck Screens/Milks/Recipes, built on the same
-	// library.Repository/shots.Repository the JSON API above uses. Same
-	// registration-outside-/api/ auth model as webHandlers above — see
-	// internal/web/doc.go's "Auth model" section.
-	webLibraryHandlers := web.NewLibraryHandlers(libRepo, shotsRepo)
-	webLibraryHandlers.RegisterRoutes(uiMux)
-
 	// Phase 2c (#901): the bean-import domain — GET /api/import/url plus
 	// GET/POST /api/import/settings. beans is the loadLibrary().beans lookup
 	// routes/import.js's duplicate-warning check needs, passed as a callback
@@ -340,33 +296,6 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	ordersHandlers := orders.NewHandlers(ordersRepo, shotsRepo, libRepo, registry, haClient)
 	ordersHandlers.RegisterRoutes(mux)
 
-	// Phase 2d (#901): the Orders domain's Go frontend pages — the barista
-	// queue (GET /orders, with accept/complete/decline htmx actions) and the
-	// customer ordering form (GET /menu, with its one write action) — built
-	// on the same orders.Repository/Service dependencies the JSON API above
-	// uses, via its own *orders.Service instance (see
-	// internal/web/handlers_orders.go's own doc comment for why a second
-	// instance, not ordersHandlers' internal one). Same
-	// registration-outside-/api/ auth model as every other web.*Handlers.
-	// hub (the same one wired into sseHandler above) lets that second
-	// Service instance's OnQueueChanged callback push a live orders-update
-	// SSE event to every open /orders tab (#901, a later pass — see
-	// templates/orders.templ's own doc comment).
-	webOrdersHandlers := web.NewOrdersHandlers(ordersRepo, shotsRepo, libRepo, registry, haClient, hub)
-	webOrdersHandlers.RegisterRoutes(uiMux)
-
-	// #901 code review (CONFIRMED finding #2): ordersHandlers (REST, above)
-	// and webOrdersHandlers each own an independent *orders.Service — only
-	// the web one had OnQueueChanged wired, so an order mutated through the
-	// REST API alone (glp-integration, or any other external client) never
-	// published a live orders-update event. Wire the same publish function
-	// onto the REST instance's Service too, closing that gap without
-	// collapsing the two Service instances into one — see
-	// orders.Handlers.Service's and web.OrdersHandlers.PublishQueueUpdate's
-	// own doc comments for why two instances sharing one publish function is
-	// the chosen fix, not a shared-instance refactor.
-	ordersHandlers.Service().OnQueueChanged = webOrdersHandlers.PublishQueueUpdate
-
 	// Phase 1g (#901): the background polling loop that backs
 	// GET /api/machine/status, GET /api/live/data, GET/POST /api/preheat*,
 	// and the live-snapshot/preheat-update SSE events — see
@@ -413,32 +342,6 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	demoService := system.NewDemoService(sqlDB, shotsRepo, libRepo)
 	systemHandlers := system.NewHandlers(poller, demoService, token)
 	systemHandlers.RegisterRoutes(mux)
-
-	// Phase 2c (#901): the Machines domain's Go frontend pages — the
-	// machines list (default/reachable badges, set-default and delete htmx
-	// actions) plus GET /live, the live shot chart page whose actual chart
-	// is a standalone vanilla-JS SSE consumer (static/live.js), not an htmx
-	// fragment page — see internal/web/handlers_machines.go and
-	// templates/live.templ's own doc comments. poller is passed so the
-	// machines list can show the default machine's live reachable status
-	// (internal/system.Poller.StatusInfo) and GET /live can name the
-	// current default machine. Same registration-outside-/api/ auth model
-	// as every other web.*Handlers above.
-	webMachinesHandlers := web.NewMachinesHandlers(registry, poller)
-	webMachinesHandlers.RegisterRoutes(uiMux)
-
-	// Phase 2e (#901): GET /settings, the default machine's Gaggiuino
-	// settings categories (read-only boiler/led/scales/system, editable
-	// display), built on machines.Adapter's GetSettings/UpdateSettings via
-	// machinesHandlers.GetAdapter — the same *machines.Handlers instance
-	// internal/system's poller (above) already shares, not a second one.
-	// Same registration-outside-/api/ auth model as every other
-	// web.*Handlers. See internal/web/handlers_settings.go's own doc
-	// comment for the full scope (one editable category, no per-machine
-	// switcher, raw-JSON round trip to preserve the settings bool-as-string
-	// quirk unchanged).
-	webSettingsHandlers := web.NewSettingsHandlers(registry, machinesHandlers)
-	webSettingsHandlers.RegisterRoutes(uiMux)
 
 	// routes/sse.js primes a newly-connected client with the current
 	// preheat/live snapshot before subscribing it to future pushes — see
@@ -517,16 +420,6 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	})
 	achievements.NewHandlers(achievementsSvc).RegisterRoutes(mux)
 
-	// Phase 2e (#901): the Maintenance domain's Go frontend page —
-	// GET /maintenance (per-machine task list + a machine switcher) plus
-	// its one htmx write action, "mark done", built on
-	// maintenance.MarkTaskDone (service.go) — the same function
-	// maintenanceHandlers' own REST taskDone handler now calls too, so both
-	// paths write the identical maintenance_log side effect. Same
-	// registration-outside-/api/ auth model as every other web.*Handlers.
-	webMaintenanceHandlers := web.NewMaintenanceHandlers(maintenanceRepo, shotsRepo, libRepo, registry)
-	webMaintenanceHandlers.RegisterRoutes(uiMux)
-
 	backupHandlers := backup.NewHandlers(backup.Dependencies{
 		DB:               sqlDB,
 		ShotsRepo:        shotsRepo,
@@ -543,30 +436,15 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	})
 	backupHandlers.RegisterRoutes(mux)
 
-	// Phase 2e (#901): GET /backup — a download link for the GET /api/backup
-	// export above, plus an explicit note that restore isn't built into
-	// this page yet. No dependencies: this page only links to the existing
-	// backup REST handler, it doesn't call into internal/backup itself. See
-	// internal/web/handlers_backup.go's own doc comment for why a full
-	// upload+restore UI is deliberately out of this phase's scope.
-	webBackupHandlers := web.NewBackupHandlers()
-	webBackupHandlers.RegisterRoutes(uiMux)
-
-	// Phase 1 (#901): mount the frozen templ pages under /ui/ now that every
-	// web.*Handlers has registered on uiMux. http.StripPrefix("/ui", ...)
-	// trims the segment before uiMux matches; ServeMux redirects a bare
-	// "/ui" to "/ui/" on its own because of this "/ui/" subtree pattern.
-	mux.Handle("/ui/", http.StripPrefix("/ui", uiMux))
-
 	// Phase 1 (#901): the production frontend. internal/webapp embeds and
 	// serves the existing Vite SPA bundle (gaggiuino-local-profiler/
 	// public-src, built to public/) — byte-for-byte the UI the Node app
 	// serves today, REST+SSE only, all relative paths. Registered last so
 	// its catch-all "GET /" only ever runs for paths no more-specific
-	// pattern (every /api/*, /shots.json, the /ui/ subtree above) claimed.
-	// Same registration-outside-/api/ auth model as the templ pages: GET
-	// falls through auth.RequireToken's static-asset bypass, exactly as the
-	// Node app's own express.static frontend does. See internal/webapp/doc.go.
+	// pattern (every /api/* route, /shots.json) claimed. Same
+	// registration-outside-/api/ auth model as those: GET falls through
+	// auth.RequireToken's static-asset bypass, exactly as the Node app's own
+	// express.static frontend does. See internal/webapp/doc.go.
 	webapp.NewHandlers().RegisterRoutes(mux)
 
 	if onMux != nil {

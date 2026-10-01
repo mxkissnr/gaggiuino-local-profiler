@@ -18,16 +18,10 @@
 // byte-for-byte the same UI the Node app serves today, and the Go frontend
 // reaches parity in one step instead of never.
 //
-// internal/web's templ pages are frozen, not deleted: cmd/server mounts
-// them under a /ui/ prefix as a no-JS fallback view. Their
-// leading-slash-free relative-path convention (see internal/web/doc.go's
-// "Ingress-safe relative paths" section) still holds unchanged — every page
-// route simply moved one path segment deeper, together, so a relative link
-// from /ui/shots to "beans" still resolves to /ui/beans, and to
-// "web/static/style.css" still resolves to /ui/web/static/style.css. The
-// scheme's own load-bearing precondition ("every page route is exactly one
-// segment deep, every relative reference points at another such route")
-// becomes "one segment deep below /ui/" — the relative math is identical.
+// During the migration internal/web's templ pages were kept as a no-JS
+// fallback mounted under a /ui/ prefix; as of #1200 cmd/server no longer
+// serves them. The only surviving legacy address is GET /ui/kiosk, which
+// redirects onto the rebuilt kiosk page (see handlers.go).
 //
 // # Handler parity with server.js
 //
@@ -68,8 +62,7 @@
 // is CSV/.shot/image export via <a download> and <img>, covered by the
 // existing img-src 'self' data: blob:. The data: favicon needs img-src
 // data: (already present). So no webapp-specific policy carve-out is
-// required, and the templ pages under /ui/ keep the identical strict
-// policy they already satisfied.
+// required; the SPA is the only UI served from here.
 //
 // # dist/ and the build
 //
