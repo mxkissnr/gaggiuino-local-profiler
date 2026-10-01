@@ -89,7 +89,7 @@ Eine eigenständige Bestellseite für ein Tablet, das auf dem Tisch stehen bleib
 
 Neben dem Bestellablauf listet ein Warteschlangen-Panel die aktiven Bestellungen (wartend / in Zubereitung) mit ihren geschätzten Zeiten auf und aktualisiert sich alle 8 Sekunden; Menü und Offen-/Geschlossen-Status aktualisieren sich alle 30 Sekunden.
 
-Erreichbar unter `/ui/kiosk` — auf Home Assistant über das Ingress-Präfix, bei einer Standalone-Docker-Installation unter `http://<host>:<port>/ui/kiosk`. Erfordert, dass die Bestellfunktion aktiviert ist (`enable_orders: true`); ohne sie zeigt die Seite einen „nicht aktiviert“-Hinweis. Eine separate Anmeldung ist nicht nötig.
+Erreichbar unter `kiosk.html` — auf Home Assistant über das Ingress-Präfix, bei einer Standalone-Docker-Installation unter `http://<host>:<port>/kiosk.html`; die alte Adresse `/ui/kiosk` leitet dorthin weiter. Die Seite folgt dem Hell-/Dunkel-Design und der Sprache der App (gespeicherte Auswahl, sonst System bzw. Browser, notfalls Englisch), und `?eink=1` schaltet einen kontrastreichen Schwarz-Weiß-Modus ohne Animationen für E-Ink-Tablets ein. Erfordert, dass die Bestellfunktion aktiviert ist (`enable_orders: true`); ohne sie zeigt die Seite einen „nicht aktiviert“-Hinweis. Eine separate Anmeldung ist nicht nötig.
 
 ### API-Token
 
