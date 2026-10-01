@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Added
+- **The kiosk ordering screen's texts are now available in all six supported languages.** Part of #1267
 - **The coffee library view is now fully type-checked.**
 - **Beans can now hold several bags at once as a queue, with a drag-reorderable upcoming list and per-bag stock.** (thanks @Paul-Lukas, #1122)
 - **Machine profiles can now be created, edited and deleted while the machine is unreachable, and are pushed to it automatically once it is reachable again.** Part of #1125 Thanks @Paul-Lukas (#1119).
