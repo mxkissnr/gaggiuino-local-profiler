@@ -277,6 +277,7 @@ const en: Translations = {
     settings_bottom_nav:'Mobile bottom navigation', settings_bottom_nav_desc:'Choose up to 4 destinations for the bottom navigation bar on mobile. Everything else lands under "More".',
     settings_bottom_nav_checkbox_label:'Show in the bar', settings_bottom_nav_move_up:'Move up', settings_bottom_nav_move_down:'Move down',
     settings_notify_title:'Notifications', settings_notify_desc:'Which automatic notifications from the machine and coffee library should be sent?',
+    settings_mcp_title:'AI assistants (MCP)', settings_mcp_desc:'Let AI assistants such as Claude read your shots, beans and analytics through the built-in MCP server.', settings_mcp_enabled:'Enable the MCP server', settings_mcp_write:'Allow write tools — these change your data', settings_mcp_dev:'Allow developer tools — large, raw diagnostic output',
     settings_shot_defaults_title:'Shot logging defaults', settings_shot_defaults_desc:'Auto-prefilled when opening a new, not-yet-annotated shot — stays fully editable.',
     sd_none:'— no default —', sd_save:'Save', sd_saved:'Saved',
     settings_machines:'Machines', settings_machines_desc:'Manage the espresso machines this app monitors.', settings_machines_add:'+ Add machine',

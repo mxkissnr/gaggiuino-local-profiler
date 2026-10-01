@@ -5,7 +5,7 @@
 - **Machine profiles can now be created, edited and deleted while the machine is unreachable, and are pushed to it automatically once it is reachable again.** Part of #1125 Thanks @Paul-Lukas (#1119).
 - **The live view has a shot setup panel: pick bean, dose, grinder, grind setting, basket, puck screen and recipe before you pull, and they are saved to the shot automatically.** Part of #1125 Thanks @Paul-Lukas.
 - **A browser demo with sample data now runs on GitHub Pages, including a simulated live shot.** Closes #1193
-- **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, with separate opt-ins for write and developer tools.** Closes #1196
+- **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, which is now switched on in the app's Settings page, with developer tools available only on the dev channel.** Part of #1288 Closes #1196
 ### Fixed
 - **The "First Profile" and "Tinkerer" achievements unlock again when you create or edit a brew profile.** Part of #1286
 - **The "Backup" and "Restocked" achievements unlock again when you export a backup or add a bag to an empty bean.** Part of #1286
