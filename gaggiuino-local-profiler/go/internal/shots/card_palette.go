@@ -35,9 +35,8 @@ func (p palette) accentTint(alpha string) string {
 	return fmt.Sprintf("rgba(%s,%s)", p.accentTintRGB, alpha)
 }
 
-// accentPairs holds accent-from/accent-to per accent and theme
-// (public-src/style.css [data-accent] blocks). Only amber and crema define a
-// light-specific override.
+// accentPairs holds accent-from/accent-to per accent and theme, mirroring the
+// frontend's accent CSS. Only amber and crema define a light-specific override.
 var accentPairs = map[string]map[string][2]string{
 	"amber":  {"dark": {"#f59e0b", "#f97316"}, "light": {"#d97706", "#ea580c"}},
 	"ocean":  {"dark": {"#3b82f6", "#06b6d4"}, "light": {"#3b82f6", "#06b6d4"}},

@@ -143,11 +143,11 @@ func TestShotDefaults_ValidationError(t *testing.T) {
 	}
 }
 
-// TestShotDefaults_NoBodyIsNotAnError guards against a Go-migration
-// regression (#901): every field ValidateShotDefaults checks is optional,
-// so a genuinely empty request body (no bytes at all) must decode to {}
-// and save all-empty defaults, not 400 with "Invalid JSON body" --
-// httputil.DecodeJSONBody's io.EOF tolerance is what makes that possible.
+// TestShotDefaults_NoBodyIsNotAnError pins that a genuinely empty request body
+// (no bytes at all) decodes to {} and saves all-empty defaults rather than
+// 400ing with "Invalid JSON body": every field ValidateShotDefaults checks is
+// optional (#901), and httputil.DecodeJSONBody's io.EOF tolerance is what makes
+// that possible.
 func TestShotDefaults_NoBodyIsNotAnError(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)
@@ -289,10 +289,10 @@ func TestAnnotate_HappyPathAndPersists(t *testing.T) {
 	}
 }
 
-// TestAnnotate_NoBodyIsNotAnError guards against a Go-migration
-// regression (#901): every field ValidateAnnotation checks is optional, so
-// a genuinely empty request body (no bytes at all) must decode to {} and
-// save an empty annotation, not 400 with "Invalid JSON body".
+// TestAnnotate_NoBodyIsNotAnError pins that a genuinely empty request body (no
+// bytes at all) decodes to {} and saves an empty annotation rather than 400ing
+// with "Invalid JSON body": every field ValidateAnnotation checks is optional
+// (#901).
 func TestAnnotate_NoBodyIsNotAnError(t *testing.T) {
 	h, _, sqlDB := newTestHandlers(t)
 	mux := newMux(h)
