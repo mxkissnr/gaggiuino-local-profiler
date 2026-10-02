@@ -110,7 +110,7 @@ describe('machineIconSvg / machineIconMiniSvg kind rendering (#822)', () => {
     });
 });
 
-describe('resolveTheme (lib/machines/theme-presets.js)', () => {
+describe('resolveTheme (shared/theme-presets.js)', () => {
     it('returns null for no theme / unknown preset', () => {
         expect(resolveTheme(null)).toBeNull();
         expect(resolveTheme({ preset: 'nonexistent' })).toBeNull();
