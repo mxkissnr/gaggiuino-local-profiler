@@ -1,0 +1,127 @@
+name: Upstream firmware watch
+
+# Opens one issue per upstream firmware or API change that can affect GLP's
+# machine clients, labelled `upstream-firmware` (#1311). GaggiMate v1.9.0
+# changed its status frames in its own published spec and we only noticed
+# once live data went missing (#1303).
+#
+# No state file: an issue whose title already names the tag or commit means
+# that change was reported, so every run is idempotent.
+
+on:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+concurrency:
+  group: upstream-firmware
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+  LABEL: upstream-firmware
+  FOOTER: |
+    ---
+    *Opened automatically by the upstream firmware watch (`.github/workflows/upstream-firmware.yaml`).*
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure label
+        run: gh label create "$LABEL" --color c5def5 --description "Upstream firmware or API change of a supported machine" --force
+
+      # GaggiMate publishes its API contract in-repo; diff it between the two
+      # newest stable tags. Nightlies and pre-releases are ignored.
+      - name: GaggiMate stable release
+        run: |
+          set -euo pipefail
+          fence=$(printf "\140\140\140")
+          up=jniebuhr/gaggimate
+          mapfile -t tags < <(gh release list -R "$up" --exclude-pre-releases --exclude-drafts --limit 20 \
+            --json tagName -q '.[].tagName' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -2)
+          new=${tags[0]}; old=${tags[1]:-}
+          title="Upstream firmware: GaggiMate $new"
+          if [ -n "$(gh issue list --state all --label "$LABEL" --search "\"$title\" in:title" --json number -q '.[].number')" ]; then
+            echo "Already reported: $title"; exit 0
+          fi
+          spec() { gh api "repos/$up/contents/docs/$1?ref=$2" -q .content 2>/dev/null | base64 -d || true; }
+          {
+            echo "GaggiMate [$new](https://github.com/$up/releases/tag/$new) is out."
+            echo
+            for f in websocket-api.yaml shot-notes-api.md; do
+              echo "### \`docs/$f\` since $old"
+              d=$(diff -u <(spec "$f" "$old") <(spec "$f" "$new") | tail -n +3 | head -c 25000 || true)
+              if [ -z "$d" ]; then echo "Unchanged."; else printf '%sdiff\n%s\n%s\n' "$fence" "$d" "$fence"; fi
+              echo
+            done
+            echo "Full comparison: https://github.com/$up/compare/$old...$new"
+            echo
+            echo "- [ ] Assess the impact on GLP's GaggiMate client"
+            echo "- [ ] Open a fix issue if anything breaks"
+            echo "- [ ] Run the GaggiMate acceptance cases against this firmware (simulator, #1312)"
+            echo
+            echo "$FOOTER"
+          } > body.md
+          gh issue create --title "$title" --label "$LABEL" --body-file body.md
+
+      # Gaggiuino's firmware repo holds only binaries; its API documentation
+      # lives in the docs site repo. One issue per commit touching it.
+      - name: Gaggiuino API documentation
+        run: |
+          set -euo pipefail
+          fence=$(printf "\140\140\140")
+          up=gaggiuino/gaggiuino.github.io
+          since=$(date -u -d '8 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          for sha in $(gh api "repos/$up/commits?path=docs/rest-api&since=$since" -q '.[].sha'); do
+            short=${sha:0:7}
+            title="Upstream API docs: Gaggiuino $short"
+            if [ -n "$(gh issue list --state all --label "$LABEL" --search "\"$short\" in:title" --json number -q '.[].number')" ]; then
+              continue
+            fi
+            {
+              echo "The Gaggiuino API documentation changed in [$short](https://github.com/$up/commit/$sha):"
+              echo
+              gh api "repos/$up/commits/$sha" -q '.commit.message' | sed 's/^/> /'
+              echo
+              printf '%sdiff\n%s\n%s\n' "$fence" "$(gh api "repos/$up/commits/$sha" \
+                -q '.files[] | select(.filename | startswith("docs/rest-api/")) | "--- " + .filename + "\n" + (.patch // "")' | head -c 25000)" "$fence"
+              echo
+              echo "- [ ] Assess the impact on GLP's Gaggiuino client"
+              echo "- [ ] Open a fix issue if anything breaks"
+              echo
+              echo "$FOOTER"
+            } > body.md
+            gh issue create --title "$title" --label "$LABEL" --body-file body.md
+          done
+
+      # Gaggiuino releases ship roughly weekly; only report those whose notes
+      # mention an interface GLP talks to. Profile changes are left to the
+      # acceptance run on real hardware: "profile" appears in most notes.
+      - name: Gaggiuino firmware release
+        run: |
+          set -euo pipefail
+          up=Zer0-bit/gaggiuino
+          tag=$(gh release list -R "$up" --exclude-pre-releases --exclude-drafts --limit 1 --json tagName -q '.[0].tagName')
+          title="Upstream firmware: Gaggiuino $tag"
+          gh release view -R "$up" "$tag" --json body -q .body > notes.md
+          if ! grep -q -i -w -E 'api|websocket|mqtt|protobuf' notes.md && ! grep -q -w 'REST' notes.md; then
+            echo "No interface change mentioned in $tag"; exit 0
+          fi
+          if [ -n "$(gh issue list --state all --label "$LABEL" --search "\"$title\" in:title" --json number -q '.[].number')" ]; then
+            echo "Already reported: $title"; exit 0
+          fi
+          {
+            echo "Gaggiuino [$tag](https://github.com/$up/releases/tag/$tag) mentions an API change in its release notes:"
+            echo
+            sed 's/^/> /' notes.md
+            echo
+            echo "- [ ] Assess the impact on GLP's Gaggiuino client"
+            echo "- [ ] Run the acceptance cases on the real machine with this firmware"
+            echo
+            echo "$FOOTER"
+          } > body.md
+          gh issue create --title "$title" --label "$LABEL" --body-file body.md
