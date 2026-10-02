@@ -67,11 +67,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
         'Fixed the armv7 add-on image build, restored by reverting the Docker base image to node:22-slim.',
         'Switched dependency updates from Dependabot to Renovate.',
     ] },
-    { version: '2.34.0', date: '2026-08-16', highlights: [
-        '"Instrument" redesign: a cooler graphite look throughout the app, drawn icons in place of emoji, and a calmer, less boxy shot view with a guided metric line and a plain-text verdict.',
-        'Added the achievement stamp card: a browsable catalogue of 54 badges across 7 categories, unlocked automatically as you brew.',
-        'The machine icon (Settings, topbar, Live view) now draws the right body for your machine type, and toggle buttons/the sidebar shot counter got a lighter, less mechanical look.',
-    ] },
 ];
 
 const MAX_ENTRIES = 8;
