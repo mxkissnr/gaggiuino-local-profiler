@@ -217,22 +217,6 @@ func orderMachineID(o Order) int64 {
 	return 1
 }
 
-// Save upserts one order.
-func (r *Repository) Save(order Order) error {
-	data, err := json.Marshal(order)
-	if err != nil {
-		return fmt.Errorf("orders: encoding order: %w", err)
-	}
-	id, _ := order["id"].(string)
-	if _, err := r.db.Exec(
-		`INSERT OR REPLACE INTO orders (id, data, machine_id) VALUES (?,?,?)`,
-		id, string(data), orderMachineID(order),
-	); err != nil {
-		return fmt.Errorf("orders: saving %s: %w", id, err)
-	}
-	return nil
-}
-
 // SaveAll upserts every order
 // in one transaction — used by the lifecycle mutations (place/accept/
 // complete/decline), each of which reads the whole active set, mutates one
