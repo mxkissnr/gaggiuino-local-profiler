@@ -139,16 +139,18 @@ const HEX_RE = /\b[0-9a-f]{32,}\b/gi;
 
 /**
  * Returns the PII-looking strings found in `text`: IPv4 literals other than
- * the allowed harness addresses, any e-mail address, and any 32+ char hex run
- * that is neither one of the sanitized placeholders nor part of an extra
- * allowed value (e.g. the harness API token). Empty means clean.
+ * the allowed harness addresses or the 127.0.0.0/8 loopback range, any e-mail
+ * address, and any 32+ char hex run that is neither one of the sanitized
+ * placeholders nor part of an extra allowed value (e.g. the harness API
+ * token). Empty means clean.
  */
 export function findLeaks(text, extraAllowed = []) {
     const source = String(text ?? '');
     const allowed = [...PLACEHOLDER_HEX, ...extraAllowed].filter(Boolean).map(String);
     const hits = new Set();
     for (const match of source.matchAll(IPV4_RE)) {
-        if (!ALLOWED_IPV4.has(match[0])) hits.add(match[0]);
+        if (ALLOWED_IPV4.has(match[0]) || match[0].startsWith('127.')) continue;
+        hits.add(match[0]);
     }
     for (const match of source.matchAll(EMAIL_RE)) hits.add(match[0]);
     for (const match of source.matchAll(HEX_RE)) {
