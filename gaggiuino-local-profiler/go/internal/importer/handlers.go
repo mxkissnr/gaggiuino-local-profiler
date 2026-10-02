@@ -12,10 +12,10 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
 
-// This file ports routes/import.js: GET /api/import/url plus GET/POST
+// This file implements GET /api/import/url plus GET/POST
 // /api/import/settings.
 
-// Handlers ports routes/import.js's router.
+// Handlers is the import API router.
 type Handlers struct {
 	repo  *Repository
 	fetch *fetcher
@@ -41,7 +41,6 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 
 // FETCH_OPTS's User-Agent/timeout/size cap all live on the *fetcher.
 
-// getSettings ports GET /api/import/settings.
 func (h *Handlers) getSettings(w http.ResponseWriter, _ *http.Request) {
 	s := h.repo.GetSettings()
 	disabled := map[string]bool{}
@@ -63,7 +62,6 @@ func (h *Handlers) getSettings(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-// postSettings ports POST /api/import/settings.
 func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 	body, ok := httputil.DecodeJSONBody[map[string]any](w, r, 1<<20)
 	if !ok {
@@ -184,7 +182,7 @@ func (h *Handlers) importURL(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, bean)
 }
 
-// resolve ports the numbered fallback chain inside routes/import.js's try block.
+// resolve runs the numbered fallback chain that produces a bean.
 func (h *Handlers) resolve(ctx context.Context, parsed *url.URL, raw, host string, prov *provider, debugInfo map[string]any) (map[string]any, string, error) {
 	var bean map[string]any
 	method := ""
@@ -296,7 +294,6 @@ func (h *Handlers) resolve(ctx context.Context, parsed *url.URL, raw, host strin
 	return bean, method, nil
 }
 
-// tryHTMLEnrich ports routes/import.js's tryHtmlEnrich.
 func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host, raw string, debugInfo map[string]any) (map[string]any, error) {
 	enrich := needsHTMLEnrich(bean, host)
 	system.DebugLogf("Import: needsHtmlEnrich=%v", enrich)
@@ -335,8 +332,7 @@ func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host,
 	// is deliberate, not an accidental widening -- it matches every other
 	// debugLogf/DebugLogf call already unconditional-when-globally-enabled
 	// in this same function (needsHtmlEnrich/HTML-fetch/JSON-fetch traces
-	// above and in resolve()), porting routes/import.js's debugLog call
-	// sites, which fire the same way in Node regardless of a per-request
+	// above and in resolve()), which likewise fire regardless of a per-request
 	// flag. The reflect.DeepEqual loop itself stays cheap in practice: a
 	// bean object is a few dozen scalar/short-slice fields at most, and
 	// every call here already did a full HTTP HTML fetch immediately
@@ -360,10 +356,12 @@ func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host,
 	return enriched, nil
 }
 
-// htmlEnrichFields ports HTML_ENRICH_FIELDS.
+// htmlEnrichFields lists the bean fields the HTML-only enrichment pass may
+// fill.
 var htmlEnrichFields = []string{"process", "variety", "producer", "region", "altitude_m", "roastType"}
 
-// needsHTMLEnrich ports routes/import.js's needsHtmlEnrich(bean, host).
+// needsHTMLEnrich reports whether bean is missing fields the HTML pass could
+// fill for host.
 func needsHTMLEnrich(bean map[string]any, host string) bool {
 	for _, f := range htmlEnrichFields {
 		if beanEmpty(bean, f) {
@@ -376,7 +374,6 @@ func needsHTMLEnrich(bean map[string]any, host string) bool {
 
 // ── size-variant projection ────────────────────────────────────────────
 
-// attachVariants ports routes/import.js's attachVariants.
 func attachVariants(bean map[string]any, product map[string]any) {
 	if product == nil {
 		return
@@ -387,7 +384,6 @@ func attachVariants(bean map[string]any, product map[string]any) {
 	}
 }
 
-// distinctSizeVariants ports routes/import.js's distinctSizeVariants.
 func distinctSizeVariants(rawVariants []any) []map[string]any {
 	seen := map[string]bool{}
 	var out []map[string]any
