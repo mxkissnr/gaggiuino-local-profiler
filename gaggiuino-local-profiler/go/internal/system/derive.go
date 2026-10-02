@@ -4,25 +4,19 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
 
-// This file ports lib/machine-state.js: the two pure decisions
-// pollViaGaggiuinoStatus() makes inline in Node — normalizing one raw
-// /api/system/status poll (plus whatever's cached from the live WS
-// transport) into machineStatus/brew-detection, and the warm/cold
-// heuristic for whether a resumed live-polling session should be treated
-// as still warm. Both are pure over plain values, same as the Node
-// original, so they're unit-testable without a fake HTTP server or a
-// RuntimeState.
+// This file holds the two pure decisions pollViaGaggiuinoStatus() makes:
+// normalizing one raw /api/system/status poll (plus whatever's cached from
+// the live WS transport) into machineStatus/brew-detection, and the warm/cold
+// heuristic for whether a resumed live-polling session should be treated as
+// still warm. Both are pure over plain values, so they're unit-testable
+// without a fake HTTP server or a RuntimeState.
 
-// MachineStatus mirrors the exact JSON shape GET /api/machine/status
-// returns and Node's machineStatus object literal in
-// lib/machine-state.js's deriveMachineState() builds — field names are a
-// binding contract for glp-integration's machine_coordinator.py (polls
-// this every 5s) and glp-lovelace-card/glp-order-card. The eight
-// SensorSnap-sourced fields and four SysState-sourced fields are pointers
-// specifically so they're omitted from the JSON entirely when no live WS
-// session has pushed data yet — exactly matching Node only ever assigning
-// them onto machineStatus inside `if (sensorSnap) {...}`/`if (sysState) {...}`
-// blocks, never unconditionally.
+// MachineStatus is the exact JSON shape GET /api/machine/status returns —
+// field names are a binding contract for glp-integration's
+// machine_coordinator.py (polls this every 5s) and
+// glp-lovelace-card/glp-order-card. The eight SensorSnap-sourced fields and
+// four SysState-sourced fields are pointers specifically so they're omitted
+// from the JSON entirely when no live WS session has pushed data yet.
 type MachineStatus struct {
 	Temperature       float64 `json:"temperature"`
 	TargetTemperature float64 `json:"targetTemperature"`
@@ -38,8 +32,8 @@ type MachineStatus struct {
 	// own sensorSnap-preferred/REST-fallback pattern; isFlushing/opMode
 	// have no REST equivalent (the operation-mode enum is only ever pushed
 	// via WS/MQTT sysState) and stay false/nil whenever no live transport
-	// is connected. opMode is the canonical wire-enum name or nil, matching
-	// Node's `opMode` (string name or null), always present in the JSON.
+	// is connected. opMode is the canonical wire-enum name or nil, always
+	// present in the JSON.
 	IsSteaming bool `json:"isSteaming"`
 	IsFlushing bool `json:"isFlushing"`
 	// #983: descale mirrors isFlushing's opMode-only derivation (no REST
@@ -116,11 +110,10 @@ type DeriveResult struct {
 	MachineStatus MachineStatus
 }
 
-// deriveMachineState ports lib/machine-state.js's deriveMachineState(status,
-// now, live) field-for-field — see that file's own comments for why
-// brewing detection stays REST-sourced (status.Brewing) even when a live
-// WS sample is available, and why targetTemperature never reads off the
-// live transport either.
+// deriveMachineState computes the machine state field-for-field. Brewing
+// detection stays REST-sourced (status.Brewing) even when a live WS sample
+// is available, and targetTemperature never reads off the live transport
+// either.
 func deriveMachineState(in DeriveInput) DeriveResult {
 	// #902: brew-start detection stays anchored on the REST brewSwitchState,
 	// but once a live transport is connected, sensorSnap.brewActive flipping
@@ -229,10 +222,9 @@ func nonEmptyOrNil(s *string) *string {
 	return s
 }
 
-// isStillWarm ports lib/machine-state.js's isStillWarm(runtime, now): pure
-// over the three fields it actually reads (currentTemp, switchOnAt,
-// switchOffAt) rather than a whole RuntimeState, so RuntimeState.IsStillWarm
-// can call it while already holding its own lock.
+// isStillWarm is pure over the three fields it actually reads (currentTemp,
+// switchOnAt, switchOffAt) rather than a whole RuntimeState, so
+// RuntimeState.IsStillWarm can call it while already holding its own lock.
 func isStillWarm(currentTemp *float64, switchOnAt, switchOffAt *int64, nowMs int64) bool {
 	var offMs int64
 	if switchOffAt != nil {

@@ -7,7 +7,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 )
 
-// ── GET /api/switch, POST /api/switch/toggle (Phase 2a) ────────────────
+// ── GET /api/switch, POST /api/switch/toggle ────────────────
 
 func TestGetSwitch_NotConfigured(t *testing.T) {
 	_, mux, _ := newFullTestHandlers(t)
@@ -58,7 +58,7 @@ func TestPostSwitchToggle_NotConfigured(t *testing.T) {
 	}
 }
 
-// ── GET /api/openapi.json (Phase 2a) ──────────────────────────────────
+// ── GET /api/openapi.json ──────────────────────────────────
 
 func TestGetOpenAPI(t *testing.T) {
 	_, mux, _ := newFullTestHandlers(t)
@@ -78,7 +78,7 @@ func TestGetOpenAPI(t *testing.T) {
 	}
 }
 
-// ── POST /api/sync (Phase 2a) ─────────────────────────────────────────
+// ── POST /api/sync ─────────────────────────────────────────
 
 func TestPostSync_CooldownAfterFirstCall(t *testing.T) {
 	_, mux, _ := newFullTestHandlers(t)
