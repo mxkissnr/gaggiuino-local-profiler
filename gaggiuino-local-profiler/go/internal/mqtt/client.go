@@ -17,20 +17,20 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/netguard"
 )
 
-// This file ports lib/gaggiuino-mqtt-client.js (#608): the MQTT alternative
-// to internal/machines/live.go's persistent-WS-session cache. It subscribes
-// to the machine's own MQTT-published topics (gaggiuino.github.io's
+// This file implements the #608 MQTT alternative to
+// internal/machines/live.go's persistent-WS-session cache. It subscribes to
+// the machine's own MQTT-published topics (gaggiuino.github.io's
 // docs/rest-api/MQTT.md) and translates the `<prefix>/sensors` /
 // `<prefix>/system` JSON payloads into the exact same proto DTOs
 // internal/machines/live.go's WS decoder produces — so the poller
 // (internal/system) stays unaware of which transport populated the cache.
 //
-// The `mqtt` npm package -> github.com/eclipse/paho.mqtt.golang (v1.5.x,
-// EPL-2.0 / EDL-1.0). shot/profile/active/maintenance/notification topics
-// are subscribed (MQTT.md's full list) but not consumed, same deliberate
-// scope boundary as the Node original's subscribe() comment.
+// The client is github.com/eclipse/paho.mqtt.golang (v1.5.x, EPL-2.0 /
+// EDL-1.0). shot/profile/active/maintenance/notification topics are
+// subscribed (MQTT.md's full list) but not consumed, the same deliberate
+// scope boundary.
 
-// staleAfter mirrors gaggiuino-mqtt-client.js's STALE_MS.
+// staleAfter is how old a reading may be before it counts as stale.
 const staleAfter = 15 * time.Second
 
 // mqttHostGuardTimeout bounds the SSRF guard's DNS lookup in connect()
@@ -90,8 +90,8 @@ func (c Conn) prefix() string {
 	return c.Prefix
 }
 
-// key ports connKeyFor(conn): sessions are keyed by the connection
-// descriptor itself so tests can spin up isolated brokers without colliding.
+// key identifies a session by the connection descriptor itself, so tests can
+// spin up isolated brokers without colliding.
 func (c Conn) key() string {
 	return fmt.Sprintf("%s:%d:%s", c.Host, c.port(), c.prefix())
 }
@@ -110,9 +110,9 @@ type session struct {
 	loggedFirstSysState   bool
 }
 
-// Client ports gaggiuino-mqtt-client.js's module-level `sessions` map +
-// connect()/disconnect() as a struct, so cmd/server owns one instance
-// (same rationale as internal/machines' gaggiuinoLiveClient).
+// Client is the module-level session map plus connect/disconnect, as a
+// struct so cmd/server owns one instance (the same rationale as
+// internal/machines' gaggiuinoLiveClient).
 type Client struct {
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -140,8 +140,8 @@ func (c *Client) getSession(conn Conn) *session {
 	return s
 }
 
-// connect ports connect(conn): lazily opens the session's broker connection
-// as a side effect of a getter, exactly like the Node original.
+// connect lazily opens the session's broker connection as a side effect of a
+// getter.
 func (c *Client) connect(conn Conn) *session {
 	s := c.getSession(conn)
 	s.mu.Lock()
@@ -272,8 +272,8 @@ func freshOrNil[T any](v *T, at time.Time) *T {
 	return v
 }
 
-// GetLiveSensorSnapshot ports getLiveSensorSnapshot(conn): lazily (re)opens
-// the session as a side effect, returns nil for a stale/absent value.
+// GetLiveSensorSnapshot lazily (re)opens the session as a side effect and
+// returns nil for a stale/absent value.
 func (c *Client) GetLiveSensorSnapshot(conn Conn) *proto.SensorStateSnapshotDto {
 	s := c.connect(conn)
 	s.mu.Lock()
@@ -281,7 +281,8 @@ func (c *Client) GetLiveSensorSnapshot(conn Conn) *proto.SensorStateSnapshotDto 
 	return freshOrNil(s.sensorSnap, s.sensorSnapAt)
 }
 
-// GetLiveSystemState ports getLiveSystemState(conn).
+// GetLiveSystemState lazily (re)opens the session and returns its latest
+// system state.
 func (c *Client) GetLiveSystemState(conn Conn) *proto.SystemStateDto {
 	s := c.connect(conn)
 	s.mu.Lock()
@@ -289,9 +290,9 @@ func (c *Client) GetLiveSystemState(conn Conn) *proto.SystemStateDto {
 	return freshOrNil(s.sysState, s.sysStateAt)
 }
 
-// DisconnectAll ports disconnectAll(): closes and forgets every open
-// session, so a settings save takes effect on the next read instead of a
-// stale connection lingering against the old broker.
+// DisconnectAll closes and forgets every open session, so a settings save
+// takes effect on the next read instead of a stale connection lingering
+// against the old broker.
 func (c *Client) DisconnectAll() {
 	c.mu.Lock()
 	sessions := c.sessions
@@ -336,11 +337,11 @@ func strv(m map[string]any, key string) string {
 	return s
 }
 
-// toSensorSnap ports gaggiuino-mqtt-client.js's toSensorSnap(p): MQTT.md's
-// `<prefix>/sensors` field names -> the field names SensorStateSnapshotDto
-// decodes WS d_sensor_snap pushes into. Only the subset deriveMachineState()
-// reads is mapped, plus the direct-1:1 fields; the WS-only pin*Level
-// diagnostics have no MQTT equivalent and stay zero-valued.
+// toSensorSnap maps MQTT.md's `<prefix>/sensors` field names to the field
+// names SensorStateSnapshotDto decodes WS d_sensor_snap pushes into. Only the
+// subset deriveMachineState() reads is mapped, plus the direct-1:1 fields;
+// the WS-only pin*Level diagnostics have no MQTT equivalent and stay
+// zero-valued.
 func toSensorSnap(payload []byte) *proto.SensorStateSnapshotDto {
 	p := parseJSON(payload)
 	if p == nil {
@@ -365,12 +366,11 @@ func toSensorSnap(payload []byte) *proto.SensorStateSnapshotDto {
 	}
 }
 
-// toSysState ports gaggiuino-mqtt-client.js's toSysState(p): MQTT.md's
-// `<prefix>/system` payload -> SystemStateDto's field names. operationMode
-// arrives as the enum's string name (e.g. "BREW_AUTO") over MQTT;
-// proto.OperationMode.UnmarshalJSON accepts either the string or a numeric
-// wire value, so it decodes into the same typed value a WS push would (the
-// #901 Phase 0 NormalizeOperationMode reconciliation).
+// toSysState maps MQTT.md's `<prefix>/system` payload to SystemStateDto's
+// field names. operationMode arrives as the enum's string name (e.g.
+// "BREW_AUTO") over MQTT; proto.OperationMode.UnmarshalJSON accepts either the
+// string or a numeric wire value, so it decodes into the same typed value a WS
+// push would.
 func toSysState(payload []byte) *proto.SystemStateDto {
 	p := parseJSON(payload)
 	if p == nil {

@@ -5,10 +5,9 @@ import (
 	"unicode/utf8"
 )
 
-// parseSettings ports lib/validation/schemas.js's mqttSettingsSchema
-// (safeParse). transport is required and must be one of the two enum
-// values; every other field is optional with a default and is bounded.
-// Extra keys are ignored (plain z.object, not .strict()).
+// parseSettings validates a settings request body. transport is required and
+// must be one of the two enum values; every other field is optional with a
+// default and is bounded. Extra keys are ignored.
 func parseSettings(body map[string]any) (Settings, error) {
 	out := defaultSettings()
 
