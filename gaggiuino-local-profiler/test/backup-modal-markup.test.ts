@@ -43,7 +43,7 @@ describe('backup modal: secrets checkbox markup', () => {
         expect(tag).toMatch(/class="[^"]*\bbackup-section-cb\b[^"]*"/);
     });
 
-    it('carries value="secrets", matching the "secrets" section key routes/backup.js expects', () => {
+    it('carries value="secrets", matching the "secrets" section key internal/backup expects', () => {
         const tag = extractTag('backupSecretsCb');
         expect(tag).toMatch(/value="secrets"/);
     });

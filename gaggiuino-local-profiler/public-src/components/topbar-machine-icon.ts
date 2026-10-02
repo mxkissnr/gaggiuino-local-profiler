@@ -11,9 +11,10 @@
 // two only share the pure resolveMachineIconState() translator and the
 // setMachineIconMode()/machineIconAnimatedSvg() renderers, all in
 // machine-icon.js — #902 made isSteaming/isFlushing real signals sourced via
-// lib/machine-state.js's deriveMachineState() (sensorSnap.steamActive/
-// sysState.operationMode), so steaming and flushing are now told apart from
-// heating and from each other, not just inferred from temperature.
+// the backend's deriveMachineState() (go/internal/system/derive.go) from
+// sensorSnap.steamActive/sysState.operationMode, so steaming and flushing
+// are now told apart from heating and from each other, not just inferred
+// from temperature.
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { esc, html, joinHtml } from '../utils.js';

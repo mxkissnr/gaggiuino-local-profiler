@@ -1,4 +1,4 @@
-// This file adds the HA-ingress self-diagnostic (#901, Phase 3):
+// This file adds the HA-ingress self-diagnostic (#901):
 //
 //   - GET /api/debug/ingress            — a verdict on how THIS request
 //     reached the app through (or not through) the HA Supervisor ingress

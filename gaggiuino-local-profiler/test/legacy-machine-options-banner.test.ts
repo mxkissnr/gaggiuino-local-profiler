@@ -1,7 +1,7 @@
 // #662: one-time in-app banner pointing an upgrading install at Settings ->
 // Machines while GET /api/status reports legacyMachineOptionsPending: true
-// (see lib/machines/options-adoption.js's hasUnconfirmedLegacyMachineOptions(),
-// covered separately in test/options-adoption.test.js). Fake DOM mirrors
+// (see the backend's hasUnconfirmedLegacyMachineOptions() in
+// go/internal/system/status.go). Fake DOM mirrors
 // test/dev-banner.test.js's createElement/insertAdjacentElement pattern.
 import { describe, it, expect, beforeEach } from 'vitest';
 

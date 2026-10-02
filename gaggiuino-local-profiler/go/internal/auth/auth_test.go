@@ -175,7 +175,7 @@ func TestRequireToken_HeadRequestBypassesAuth(t *testing.T) {
 }
 
 func TestRequireToken_ShotsJSONRequiresAuth(t *testing.T) {
-	// Explicit carve-out in server.js: /shots.json is the one non-/api/
+	// Explicit carve-out in RequireToken(): /shots.json is the one non-/api/
 	// path that still requires a token.
 	req := httptest.NewRequest(http.MethodGet, "/shots.json", nil)
 	req.RemoteAddr = "192.168.1.50:1234"
