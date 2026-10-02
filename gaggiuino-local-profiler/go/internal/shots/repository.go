@@ -345,12 +345,12 @@ func (r *Repository) WipeAll() error {
 // key, the annotations row too) straight from a sync-pulled or
 // restored/imported shot object. Its statement must never go back to INSERT OR
 // REPLACE (#1150) — see the inline comment on the Exec below.
-// ownerMachineID uses a `shot.machineId ?? ownerOfShotId(id)` fallback; the
-// ownerOfShotId inference (#719) isn't implemented (it needs
-// internal/machines' MACHINE_ID_OFFSET arithmetic, out of scope here), so a
-// shot with no explicit machineId defaults to machine 1 — every backup this
-// phase's restore handles was itself exported by an app version that always
-// wrote machineId, so this fallback is not expected to be reached in practice.
+// ownerMachineID gives a shot with no explicit machineId machine 1 by default.
+// The ownerOfShotId inference (#719) isn't implemented (it needs
+// internal/machines' MACHINE_ID_OFFSET arithmetic, out of scope here); that
+// fallback is not expected to be reached in practice, because every backup the
+// restore path handles was itself exported by an app version that always wrote
+// machineId.
 func (r *Repository) Upsert(shot Shot) error {
 	row, err := shotInsertArgs(shot)
 	if err != nil {
