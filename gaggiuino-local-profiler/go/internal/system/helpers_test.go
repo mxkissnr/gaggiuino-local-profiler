@@ -163,7 +163,7 @@ func (f *fakeAdapter) TriggerFirmwareUpdate(context.Context, *machines.Machine) 
 	return nil, f.notImplemented("TriggerFirmwareUpdate")
 }
 
-// fakeAdapterProvider ports this package's AdapterProvider around a single
+// fakeAdapterProvider wraps this package's AdapterProvider around a single
 // fakeAdapter, regardless of which machine is asked for — every test here
 // only ever has the one default machine.
 type fakeAdapterProvider struct{ adapter *fakeAdapter }
@@ -174,9 +174,9 @@ func (p fakeAdapterProvider) GetAdapter(m *machines.Machine) (machines.Adapter, 
 
 // okStatus builds a machines.Status with the given JSON status body as its
 // Raw field (poll.go's rawStatusFrom decodes waterLevel/upTime straight
-// off Raw) plus the already-parsed fields Node's own adapter would have
-// extracted — mirrors gaggiuino_adapter.go's GetStatus so a test can set up
-// a fake response as tersely as the real one would produce it.
+// off Raw) plus the pre-parsed fields — mirrors gaggiuino_adapter.go's
+// GetStatus so a test can set up a fake response as tersely as the real one
+// would produce it.
 func okStatus(t *testing.T, rawJSON string, temp, targetTemp, pressure float64, weight float64, brewing bool, profileName string, profileID int) machines.Status {
 	t.Helper()
 	pn := profileName

@@ -23,10 +23,10 @@ func newFullTestHandlers(t *testing.T) (*Handlers, *http.ServeMux, *Poller) {
 	return h, newSystemMux(h), p
 }
 
-// TestGetPreheat_NeverSwitchedOn ports buildPreheatResponse's "machine off
+// TestGetPreheat_NeverSwitchedOn covers buildPreheatResponse's "machine off
 // / never switched on" branch — ready:false, and stabilityReady must be
-// entirely absent from the JSON (Node's object literal omits the key on
-// this branch, see preheat.go's PreheatStatus doc comment).
+// entirely absent from the JSON (the key is omitted on this branch, see
+// preheat.go's PreheatStatus doc comment).
 func TestGetPreheat_NeverSwitchedOn(t *testing.T) {
 	_, mux, _ := newFullTestHandlers(t)
 	rec := doGet(mux, "/api/preheat")
@@ -45,8 +45,8 @@ func TestGetPreheat_NeverSwitchedOn(t *testing.T) {
 	}
 }
 
-// TestPostPreheatReadyBy_InvalidTargetAt ports the 400 "targetAt must be
-// an epoch-ms number or null" contract.
+// TestPostPreheatReadyBy_InvalidTargetAt covers the 400 "targetAt must be an
+// epoch-ms number or null" contract.
 func TestPostPreheatReadyBy_InvalidTargetAt(t *testing.T) {
 	_, mux, _ := newFullTestHandlers(t)
 	rec := doPost(mux, "/api/preheat/ready-by", `{"targetAt":"not-a-number"}`)
@@ -59,7 +59,7 @@ func TestPostPreheatReadyBy_InvalidTargetAt(t *testing.T) {
 	}
 }
 
-// TestPostPreheatReadyBy_NoSwitchEntity_Rejects ports the 400
+// TestPostPreheatReadyBy_NoSwitchEntity_Rejects covers the 400
 // "switch_entity nicht konfiguriert" contract: setting (not clearing) a
 // target without a usable HA switch is rejected up front.
 func TestPostPreheatReadyBy_NoSwitchEntity_Rejects(t *testing.T) {
@@ -163,7 +163,7 @@ func TestLiveData_DefaultShape(t *testing.T) {
 	}
 }
 
-// ── GET /api/token (#901 Phase 3b) ─────────────────────────────────────
+// ── GET /api/token ─────────────────────────────────────
 
 func TestGetToken_ReturnsAPIToken(t *testing.T) {
 	_, mux, _ := newFullTestHandlers(t)
@@ -177,10 +177,9 @@ func TestGetToken_ReturnsAPIToken(t *testing.T) {
 	}
 }
 
-// TestGetToken_RateLimited proves the 10/min-per-IP cap (routes/system.js's
-// `rateLimit(\`token:${ip}\`, 10)`): every httptest.NewRequest in this test
-// shares the same default RemoteAddr, so the 11th call within the window
-// must 429.
+// TestGetToken_RateLimited proves the 10/min-per-IP cap: every
+// httptest.NewRequest in this test shares the same default RemoteAddr, so the
+// 11th call within the window must 429.
 func TestGetToken_RateLimited(t *testing.T) {
 	_, mux, _ := newFullTestHandlers(t)
 	for i := 0; i < 10; i++ {
@@ -199,9 +198,9 @@ func TestGetToken_RateLimited(t *testing.T) {
 // fix: a genuine Ingress caller (Supervisor-network RemoteAddr +
 // X-Ingress-Path, exactly like auth_test.go's ingress fixtures) shares one
 // token:<ip> bucket across every browser tab/user behind that Ingress
-// session, and this app — unlike the Node SPA — re-fetches the token on
-// every single page's full reload. 10 requests (tokenRateLimitDirect) must
-// NOT 429 an Ingress caller; the 121st (past tokenRateLimitIngress) must.
+// session, and this app re-fetches the token on every single page's full
+// reload. 10 requests (tokenRateLimitDirect) must NOT 429 an Ingress caller;
+// the 121st (past tokenRateLimitIngress) must.
 func TestGetToken_IngressGetsHigherRateLimit(t *testing.T) {
 	_, mux, _ := newFullTestHandlers(t)
 	ingressGet := func() *httptest.ResponseRecorder {
@@ -250,7 +249,7 @@ func TestGetToken_DirectPortDeniedWhenExposeApiPortFalse(t *testing.T) {
 	}
 }
 
-// ── GET /api/status (#901 Phase 3b) ─────────────────────────────────────
+// ── GET /api/status ─────────────────────────────────────
 
 func TestGetStatus_PublicFieldsAndNoSensitiveLeak(t *testing.T) {
 	_, mux, _ := newFullTestHandlers(t)
@@ -352,7 +351,7 @@ func TestGetStatus_WrongTokenStaysUnauthenticated(t *testing.T) {
 	}
 }
 
-// erroringAdapterProvider ports fakeAdapterProvider but lets a test force
+// erroringAdapterProvider wraps fakeAdapterProvider but lets a test force
 // GetAdapter itself to fail for specific machine IDs -- standing in for the
 // real machines.Handlers.GetAdapter's "unknown machine type"/"requires a
 // type" error path (see adapter.go), which a real orphaned registry row
@@ -377,8 +376,8 @@ func (p erroringAdapterProvider) GetAdapter(m *machines.Machine) (machines.Adapt
 // real-world trigger, see erroringAdapterProvider above) must not leave the
 // response mixing the requested machine's hostname with the DEFAULT
 // machine's reachability/error state. GetAdapter failing must be treated as
-// a probe failure for the REQUESTED machine, exactly like routes/system.js's
-// single try/catch wrapping both getAdapter() and getStatus().
+// a probe failure for the REQUESTED machine (the adapter lookup and the
+// status probe share one failure path).
 func TestGetStatus_MachineIdProbe_GetAdapterFailureNoMismatch(t *testing.T) {
 	sqlDB := newTestDB(t)
 	registry := machines.NewRegistry(sqlDB)
