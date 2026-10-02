@@ -111,9 +111,9 @@ func (w *writer) rawMessageField(fieldNo int, payload []byte) {
 // ── decoder ──────────────────────────────────────────────────────────────
 
 // reader walks an encoded message's fields in wire order. Unknown field
-// numbers are skipped (per proto3's forward-compatibility rule, and
-// matching protobuf-ts's own lenient decode behavior) rather than treated
-// as an error.
+// numbers are skipped (per proto3's forward-compatibility rule, and matching
+// the reference decoder's own lenient behavior) rather than treated as an
+// error.
 type reader struct {
 	b []byte
 	i int
