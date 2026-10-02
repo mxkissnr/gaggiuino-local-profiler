@@ -11,27 +11,25 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
 
-// This file ports lib/preheat.js. Deliberately NOT ported: _checkPreheatNotify
-// (the barista "preheat ready" HA push notification, gated by orders
-// settings' notify_preheat_ready/baristaNotifyService and
-// lib/notify-i18n.js's localized text) — wiring it would need a read
-// dependency on internal/orders' settings (Repository.GetSettings), and
-// internal/orders already depends on this package's runtime snapshot for
-// its own shop-open/closed broadcast (see internal/orders/doc.go and
-// handlers.go's SetPreheatInfoProvider). Importing internal/orders from
-// here would close that into a package cycle; the orders->system direction
-// is wired via a callback specifically to avoid it, and doing the same
-// symmetrically for this one extra notification is left as a follow-up
-// rather than adding a second callback plumbing pass in this already-large
-// phase. _checkReadyByPreheat (the ready-by auto turn-on, self-contained —
-// only needs registry + ha.Client) IS ported below.
+// This file implements the preheat state machine. Deliberately NOT
+// implemented: the barista "preheat ready" HA push notification, gated by
+// orders settings' notify_preheat_ready/baristaNotifyService and its localized
+// text — wiring it would need a read dependency on internal/orders' settings
+// (Repository.GetSettings), and internal/orders already depends on this
+// package's runtime snapshot for its own shop-open/closed broadcast (see
+// internal/orders/doc.go and handlers.go's SetPreheatInfoProvider). Importing
+// internal/orders from here would close that into a package cycle; the
+// orders->system direction is wired via a callback specifically to avoid it,
+// and doing the same symmetrically for this one extra notification is left as
+// a follow-up rather than adding a second callback plumbing pass. The ready-by
+// auto turn-on, self-contained (only needs registry + ha.Client), IS
+// implemented below.
 
-// PreheatStatus mirrors openapi.yaml's PreheatStatus schema — GET
-// /api/preheat and POST /api/preheat/ready-by's shared response shape
-// (buildPreheatResponse() in Node is the single source of truth for both,
-// same pattern this port follows). StabilityReady is a pointer because
-// Node's object literal omits the key entirely on the "machine off / never
-// switched on" branch — see buildPreheatResponse below.
+// PreheatStatus is openapi.yaml's PreheatStatus schema — GET /api/preheat and
+// POST /api/preheat/ready-by's shared response shape, built by the single
+// buildPreheatResponse() below. StabilityReady is a pointer because the key is
+// omitted entirely on the "machine off / never switched on" branch — see
+// buildPreheatResponse below.
 type PreheatStatus struct {
 	Ready             bool     `json:"ready"`
 	Elapsed           int      `json:"elapsed"`
@@ -50,11 +48,10 @@ type PreheatStatus struct {
 // methods).
 func (p *Poller) PreheatStatus() PreheatStatus { return p.buildPreheatResponse() }
 
-// PreheatInfo ports routes/orders.js's _getPreheatInfo(): whether the
-// default machine is currently within its configured preheat window, and
-// how many minutes remain if not. Exported for internal/orders' shop-open
-// broadcast (see internal/orders/handlers.go's PreheatInfoFunc) — the one
-// piece of that domain's own deferral this phase closes.
+// PreheatInfo reports whether the default machine is currently within its
+// configured preheat window, and how many minutes remain if not. Exported for
+// internal/orders' shop-open broadcast (see internal/orders/handlers.go's
+// PreheatInfoFunc).
 func (p *Poller) PreheatInfo() (ready bool, remainingMin int) {
 	preheatMins := loadPreheatMinutes()
 	preheatMs := int64(preheatMins) * 60_000
@@ -82,9 +79,9 @@ func (p *Poller) defaultSwitchEntity() string {
 	return *machine.SwitchEntity
 }
 
-// buildPreheatResponse ports buildPreheatResponse(runtime) — shared by GET
-// /api/preheat and POST /api/preheat/ready-by so both return the identical
-// shape, and by every preheat-update SSE push.
+// buildPreheatResponse is shared by GET /api/preheat and
+// POST /api/preheat/ready-by so both return the identical shape, and by every
+// preheat-update SSE push.
 func (p *Poller) buildPreheatResponse() PreheatStatus {
 	preheatMins := loadPreheatMinutes()
 	preheatMs := int64(preheatMins) * 60_000
@@ -127,8 +124,8 @@ func (p *Poller) buildPreheatResponse() PreheatStatus {
 	}
 }
 
-// SetReadyByTarget ports setReadyByTarget(targetAt, runtime): backs POST
-// /api/preheat/ready-by. targetAt == nil cancels a pending target.
+// SetReadyByTarget backs POST /api/preheat/ready-by. targetAt == nil cancels a
+// pending target.
 func (p *Poller) SetReadyByTarget(targetAt *int64) {
 	p.state.mu.Lock()
 	if targetAt == nil {
@@ -145,11 +142,10 @@ func (p *Poller) SetReadyByTarget(targetAt *int64) {
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
-// checkReadyByPreheat ports _checkReadyByPreheat(runtime): one-shot —
-// fires the switch on once the planned time is reached, then clears the
-// target so it never re-fires, cleared regardless of whether the HA call
-// succeeds (a persistently unreachable HA instance shouldn't be hammered
-// every 30s tick).
+// checkReadyByPreheat is one-shot: it fires the switch on once the planned
+// time is reached, then clears the target so it never re-fires, cleared
+// regardless of whether the HA call succeeds (a persistently unreachable HA
+// instance shouldn't be hammered every 30s tick).
 func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 	p.state.mu.Lock()
 	readyByTargetAt := p.state.readyByTargetAt
@@ -183,16 +179,16 @@ func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
-// preheatWatchTick ports startPreheatWatcher's 30s interval body, minus
-// _checkPreheatNotify (see this file's header comment).
+// preheatWatchTick is the 30s interval body, minus the preheat-ready
+// notification (see this file's header comment).
 func (p *Poller) preheatWatchTick(ctx context.Context) {
 	p.checkReadyByPreheat(ctx)
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
-// preheatStateFileShape mirrors the exact JSON preheat_state.json holds —
-// read/written verbatim so a Node-written file stays loadable by this
-// binary and vice versa (both share /data).
+// preheatStateFileShape is the exact JSON preheat_state.json holds —
+// read/written verbatim so an older file stays loadable by this binary and
+// vice versa (both share /data).
 type preheatStateFileShape struct {
 	SwitchOnAt        *int64 `json:"switchOnAt"`
 	SwitchOffAt       *int64 `json:"switchOffAt"`
@@ -200,9 +196,8 @@ type preheatStateFileShape struct {
 	PlannedSwitchOnAt *int64 `json:"plannedSwitchOnAt"`
 }
 
-// savePreheatState ports savePreheatState(runtime): writeFileSafe's
-// write-to-.tmp-then-rename pattern, best-effort (errors are swallowed,
-// matching Node's bare `catch { /* ignore */ }`).
+// savePreheatState uses the write-to-.tmp-then-rename pattern; it is
+// best-effort and swallows errors.
 func (p *Poller) savePreheatState() {
 	snap := p.runtime.Get()
 	p.state.mu.Lock()
@@ -224,10 +219,9 @@ func (p *Poller) savePreheatState() {
 	_ = os.Rename(tmp, preheatStateFile)
 }
 
-// loadPreheatState ports loadPreheatState(runtime), called once from
-// Start(): restores switchOnAt/switchOffAt (only if within
-// preheatStateTTL of now — no reviving a preheat session from days ago)
-// and any pending ready-by target.
+// loadPreheatState, called once from Start(): restores switchOnAt/switchOffAt
+// (only if within preheatStateTTL of now — no reviving a preheat session from
+// days ago) and any pending ready-by target.
 func (p *Poller) loadPreheatState() {
 	data, err := os.ReadFile(preheatStateFile)
 	if err != nil {
