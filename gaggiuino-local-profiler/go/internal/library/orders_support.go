@@ -35,6 +35,7 @@ import (
 // The canonical cases live in testdata/bean_remaining_cases.json, loaded by
 // TestComputeBeanRemaining_SharedFixture here — add new behaviour there
 // first (#1122).
+func ComputeBeanRemaining(bean Entity, doseRows []shots.AnnotatedDose, allBeans []Entity) (int64, bool) {
 	bags := bagsOf(bean)
 	name := lowerOrEmpty(strOf(bean["name"]))
 	beanID, hasBeanID := idOf(bean, "id")
