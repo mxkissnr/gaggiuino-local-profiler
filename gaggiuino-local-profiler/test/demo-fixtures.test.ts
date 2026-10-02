@@ -78,10 +78,16 @@ describe('demo-fixtures extForContentType (#1193)', () => {
 describe('demo-fixtures findLeaks (#1193)', () => {
     it('flags an unexpected IPv4 literal', () => {
         expect(findLeaks('machine_host=10.0.0.5')).toContain('10.0.0.5');
+        expect(findLeaks('machine_host=8.8.8.8')).toContain('8.8.8.8');
     });
 
     it('allows the harness loopback and fake LAN addresses', () => {
         expect(findLeaks('a=127.0.0.1 b=192.168.1.50')).toEqual([]);
+    });
+
+    it('allows loopback addresses in a resolver error', () => {
+        const err = 'lookup gaggiuino.local on 127.0.0.53:53: server misbehaving';
+        expect(findLeaks(err)).toEqual([]);
     });
 
     it('allows the sanitized placeholder hex runs', () => {
