@@ -2,18 +2,16 @@ package library
 
 import "github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 
-// This file (#901, Go web-UI Create/Edit follow-up) extracts the
-// read-validate-save entity-creation logic every routes/library/*.js
-// create endpoint's Go port (handlers_beans.go's createBean et al.)
-// already had inlined into its own http.ResponseWriter-bound handler, into
-// plain functions taking a decoded body and returning (Entity, Library,
-// error) — the same "same service method, not new logic" discipline
-// internal/library.ToggleBeanActive/internal/maintenance.MarkTaskDone
-// already established for this package's other web/REST-shared actions.
-// Each REST handler below is now a thin wrapper: decode + rate-limit +
-// call + map a *ValidationError to its existing 400 response. Keeping the
-// validation and Library-save logic in these functions keeps it out of the
-// HTTP layer.
+// This file extracts the read-validate-save entity-creation logic each
+// create handler (handlers_beans.go's createBean et al.) already had
+// inlined into its own http.ResponseWriter-bound handler, into plain
+// functions taking a decoded body and returning (Entity, Library, error)
+// — the same "same service method, not new logic" discipline
+// ToggleBeanActive/MarkTaskDone already established for this package's
+// other web/REST-shared actions. Each REST handler below is now a thin
+// wrapper: decode + rate-limit + call + map a *ValidationError to its
+// existing 400 response. Keeping the validation and Library-save logic in
+// these functions keeps it out of the HTTP layer.
 //
 // Every Create* function also returns the just-saved Library (the same
 // value SaveLibrary was called with, containing the new entity) alongside
@@ -29,8 +27,8 @@ import "github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 // used to define an identical type independently; both now share one.
 type ValidationError = httputil.ValidationError
 
-// CreateBean ports POST /api/library/bean's entity-construction body
-// (handlers_beans.go's createBean) verbatim, minus that handler's own
+// CreateBean builds POST /api/library/bean's entity-construction body
+// (handlers_beans.go's createBean), minus that handler's own
 // rate-limit/JSON-decode steps. imageDir is only used for the
 // fire-and-forget SetBeanImage download when body["imageUrl"] is set (see
 // that function's own doc comment) — a plain "name + roaster" form
@@ -114,16 +112,15 @@ func CreateBean(repo *Repository, imageDir string, body Entity) (Entity, Library
 		httputil.SafeGo("library: bean image fetch", func() { SetBeanImage(repo, imageDir, id, imageURL) })
 	}
 
-	// Fire-and-forget region -> map-coordinates geocode (Phase 2g, #901) —
-	// mirrors routes/library/beans.js's un-awaited geocodeBean call. A no-op
-	// unless cmd/server wired GeocodeHook and region is non-empty.
+	// Fire-and-forget region -> map-coordinates geocode — a no-op unless
+	// cmd/server wired GeocodeHook and region is non-empty.
 	maybeGeocode(id, trimMax(body["region"], 200), origin)
 
 	return bean, saved, nil
 }
 
-// CreateGrinder ports POST /api/library/grinder's entity-construction body
-// (handlers_grinders.go's createGrinder) verbatim.
+// CreateGrinder builds POST /api/library/grinder's entity-construction
+// body (handlers_grinders.go's createGrinder).
 func CreateGrinder(repo *Repository, body Entity) (Entity, Library, error) {
 	if trimMax(body["name"], 200) == "" {
 		return nil, Library{}, &ValidationError{Message: "name required"}
@@ -149,9 +146,9 @@ func CreateGrinder(repo *Repository, body Entity) (Entity, Library, error) {
 	return grinder, saved, nil
 }
 
-// CreateBasket ports POST /api/library/basket's entity-construction body
-// (handlers_baskets.go's createBasket) verbatim, including its wallType/
-// shape enum validation.
+// CreateBasket builds POST /api/library/basket's entity-construction body
+// (handlers_baskets.go's createBasket), including its wallType/shape enum
+// validation.
 func CreateBasket(repo *Repository, body Entity) (Entity, Library, error) {
 	if trimMax(body["name"], 200) == "" {
 		return nil, Library{}, &ValidationError{Message: "name required"}
@@ -181,8 +178,8 @@ func CreateBasket(repo *Repository, body Entity) (Entity, Library, error) {
 	return basket, saved, nil
 }
 
-// CreatePuckScreen ports POST /api/library/puckscreen's entity-construction
-// body (handlers_puckscreens.go's createPuckScreen) verbatim, including its
+// CreatePuckScreen builds POST /api/library/puckscreen's entity-construction
+// body (handlers_puckscreens.go's createPuckScreen), including its
 // thickness enum validation.
 func CreatePuckScreen(repo *Repository, body Entity) (Entity, Library, error) {
 	if trimMax(body["name"], 200) == "" {
@@ -208,8 +205,8 @@ func CreatePuckScreen(repo *Repository, body Entity) (Entity, Library, error) {
 	return puckScreen, saved, nil
 }
 
-// CreateMilk ports POST /api/library/milk's entity-construction body
-// (handlers_milks.go's createMilk) verbatim.
+// CreateMilk builds POST /api/library/milk's entity-construction body
+// (handlers_milks.go's createMilk).
 func CreateMilk(repo *Repository, body Entity) (Entity, Library, error) {
 	if trimMax(body["name"], 100) == "" {
 		return nil, Library{}, &ValidationError{Message: "name required"}
@@ -235,8 +232,8 @@ func CreateMilk(repo *Repository, body Entity) (Entity, Library, error) {
 	return milk, saved, nil
 }
 
-// CreateRecipe ports POST /api/library/recipe's entity-construction body
-// (handlers_recipes.go's createRecipe) verbatim.
+// CreateRecipe builds POST /api/library/recipe's entity-construction body
+// (handlers_recipes.go's createRecipe).
 func CreateRecipe(repo *Repository, body Entity) (Entity, Library, error) {
 	if trimMax(body["name"], 200) == "" {
 		return nil, Library{}, &ValidationError{Message: "name required"}

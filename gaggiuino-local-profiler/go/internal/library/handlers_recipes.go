@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// This file ports routes/library/recipes.js.
+// This file implements the recipe endpoints.
 
 var validBrewMethods = map[string]bool{
 	"espresso": true, "aeropress": true, "v60": true, "french_press": true,
@@ -21,8 +21,8 @@ func findRecipeIndex(lib Library, id int64) int {
 	return -1
 }
 
-// parseSteps ports routes/library/recipes.js's local _parseSteps: up to 30
-// {text, duration_s} steps, entries with a blank text dropped entirely.
+// parseSteps is the local steps parser: up to 30 {text, duration_s} steps,
+// entries with a blank text dropped entirely.
 func parseSteps(raw any) []any {
 	arr, ok := raw.([]any)
 	if !ok {
@@ -51,7 +51,7 @@ func brewMethodOrOther(v any) string {
 	return "other"
 }
 
-// createRecipe ports POST /api/library/recipe — a thin wrapper around
+// createRecipe handles POST /api/library/recipe — a thin wrapper around
 // CreateRecipe (create.go).
 func (h *Handlers) createRecipe(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
@@ -74,7 +74,7 @@ func (h *Handlers) createRecipe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, recipe)
 }
 
-// updateRecipe ports PUT /api/library/recipe/:id — a thin wrapper around
+// updateRecipe handles PUT /api/library/recipe/:id — a thin wrapper around
 // UpdateRecipe (update.go).
 func (h *Handlers) updateRecipe(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
@@ -94,7 +94,7 @@ func (h *Handlers) updateRecipe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, recipe)
 }
 
-// deleteRecipe ports POST /api/library/recipe/:id/delete.
+// deleteRecipe handles POST /api/library/recipe/:id/delete.
 func (h *Handlers) deleteRecipe(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	err := h.repo.Update(func(lib *Library) error {

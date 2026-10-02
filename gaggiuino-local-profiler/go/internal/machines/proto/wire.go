@@ -20,11 +20,11 @@ const (
 
 // writer accumulates an encoded message. Every field-append method is a
 // no-op when the value is the type's zero value — proto3's documented
-// wire behavior (also observed directly from lib/gaggiuino-proto.js's own
-// toBinary() output, see node_vectors_test.go) omits default-valued
-// scalar fields from the wire entirely; a decoder must still report the
-// Go zero value for an omitted field, which happens for free since that's
-// already every struct field's zero value.
+// wire behavior (also observed directly from the reference encoder's
+// output, see node_vectors_test.go) omits default-valued scalar fields from
+// the wire entirely; a decoder must still report the Go zero value for an
+// omitted field, which happens for free since that's already every struct
+// field's zero value.
 type writer struct{ b []byte }
 
 func (w *writer) tag(fieldNo, wireType int) {
@@ -67,11 +67,10 @@ func (w *writer) boolField(fieldNo int, v bool) {
 	w.b = append(w.b, 1)
 }
 
-// floatField ports schema.proto's `float` fields. The Go struct fields
+// floatField writes schema.proto's `float` fields. The Go struct fields
 // this backs are float64 (not float32) — see messages.go's header comment
 // — so the down-convert to the wire's actual 32-bit representation happens
-// here, at the wire boundary, the same place lib/gaggiuino-proto.js's own
-// protobuf-ts runtime does it.
+// here, at the wire boundary.
 func (w *writer) floatField(fieldNo int, v float64) {
 	if v == 0 {
 		return
@@ -112,9 +111,9 @@ func (w *writer) rawMessageField(fieldNo int, payload []byte) {
 // ── decoder ──────────────────────────────────────────────────────────────
 
 // reader walks an encoded message's fields in wire order. Unknown field
-// numbers are skipped (per proto3's forward-compatibility rule, and
-// matching protobuf-ts's own lenient decode behavior) rather than treated
-// as an error.
+// numbers are skipped (per proto3's forward-compatibility rule, and matching
+// the reference decoder's own lenient behavior) rather than treated as an
+// error.
 type reader struct {
 	b []byte
 	i int

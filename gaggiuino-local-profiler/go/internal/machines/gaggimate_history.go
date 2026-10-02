@@ -1,7 +1,6 @@
 package machines
 
-// GaggiMate binary shot-history parser — Go port of
-// lib/machines/gaggimate/history.js (format documented there).
+// GaggiMate binary shot-history parser.
 // HTTP endpoints:
 //   GET /api/history/index.bin  → fixed-header + entry records
 //   GET /api/history/NNNNNN.slog (6-digit zero-padded) → sample stream
@@ -40,7 +39,7 @@ const (
 	gaggiMateIndexMaxBytes = gaggiMateIndexHdrBytes + gaggiMateIndexMaxEntries*gaggiMateIndexEntBytes
 )
 
-// Field slots in the slog fieldsMask — bit order matches history.js FIELD_BITS.
+// Field slots in the slog fieldsMask — bit order matches the device's FIELD_BITS.
 // scale=0 marks special handling (tick multiplied, not divided; systemInfo bitfield).
 type gaggiMateFieldDef struct {
 	bit   uint
@@ -278,8 +277,7 @@ func gaggiMateParseSlog(data []byte) (*gaggiMateSlogResult, error) {
 	return s, nil
 }
 
-// gaggiMateSlogToShot converts a parsed slog into a GLP canonical shot map,
-// matching toGlpShot() in lib/machines/gaggimate/history.js exactly.
+// gaggiMateSlogToShot converts a parsed slog into a GLP canonical shot map.
 func gaggiMateSlogToShot(slog *gaggiMateSlogResult, nativeID int64) map[string]any {
 	n := len(slog.samples)
 	timeInShot := make([]int64, n)
@@ -418,7 +416,7 @@ func FetchGaggiMateIndex(ctx context.Context, baseURL string) (int64, error) {
 // separately so callers can distinguish 404 (permanently missing) from
 // transport errors, matching the Gaggiuino sync path in sync.go.
 func FetchGaggiMateShot(ctx context.Context, baseURL string, nativeID int64) (map[string]any, int, error) {
-	// Live-verified per adapter.js (#343): filename must be 6-digit zero-padded.
+	// Live-verified (#343): filename must be 6-digit zero-padded.
 	url := fmt.Sprintf("%s/api/history/%06d.slog", baseURL, nativeID)
 	ctx, cancel := context.WithTimeout(ctx, gaggiMateReqTimeout)
 	defer cancel()

@@ -5,9 +5,8 @@ import (
 	"fmt"
 )
 
-// Machine ports lib/machines/registry.js's row() shape — the JSON shape
-// returned by every /api/machines* endpoint (see openapi.yaml's Machine
-// schema).
+// Machine is the registry row shape — the JSON shape returned by every
+// /api/machines* endpoint (see openapi.yaml's Machine schema).
 type Machine struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
@@ -29,7 +28,7 @@ type Machine struct {
 	CreatedAt      int64   `json:"createdAt"`
 }
 
-// Theme ports the machines.theme JSON contract documented in
+// Theme is the machines.theme JSON contract documented in
 // internal/db's schema comment: either {preset:"<key>"} or
 // {a:"#rrggbb",b:"#rrggbb"}. Both fields are pointers so an empty/absent
 // one round-trips through JSON exactly (no "" leaking into a shape that
@@ -40,13 +39,12 @@ type Theme struct {
 	B      string `json:"b,omitempty"`
 }
 
-// MachineInput ports machineSchema/machineSchema.partial() (lib/validation
-// /schemas.js): the request body shape for POST /api/machines and
+// MachineInput is the request body shape for POST /api/machines and
 // PUT /api/machines/{id}. Pointer fields distinguish "omitted" (nil, only
 // meaningful for PUT's partial update — keep the existing value) from "sent
 // as empty/false" (non-nil, apply it) — POST additionally requires
-// Name/Type/Host to be non-nil (validated in handlers.go, matching
-// machineSchema's non-partial required fields).
+// Name/Type/Host to be non-nil (validated in handlers.go, matching the
+// POST schema's required fields).
 type MachineInput struct {
 	Name           *string `json:"name"`
 	Type           *string `json:"type"`
@@ -61,11 +59,11 @@ const maxNameLen = 100
 const maxHostLen = 255
 const maxSwitchEntityLen = 200
 
-// validate ports machineSchema's field-level checks (z.string().min(1).max(100)
-// for name, z.enum(['gaggiuino','gaggimate']) for type, z.string().max(255)
-// for host — empty allowed, #718 — z.string().max(200) for switchEntity,
-// themeSchema for theme). requireCore gates the POST-only "name/type/host
-// must be present" rule PUT's partial schema doesn't have.
+// validate applies the field-level checks: 1-100 chars for name, one of
+// "gaggiuino"/"gaggimate" for type, at most 255 chars for host (empty
+// allowed, #718), at most 200 chars for switchEntity, and validateTheme for
+// theme. requireCore gates the POST-only "name/type/host must be present"
+// rule the PUT partial shape doesn't have.
 func (m MachineInput) validate(requireCore bool) error {
 	if requireCore {
 		if m.Name == nil || m.Type == nil || m.Host == nil {
@@ -94,12 +92,11 @@ func (m MachineInput) validate(requireCore bool) error {
 	return nil
 }
 
-// validateTheme ports themeSchema: exactly one of {preset} or {a,b} (both
-// hex colors), strict (no extra fields — MachineInput's JSON decoding
-// already ignores unknown keys the same way z.object(...).strict() would
-// reject them, a minor, deliberately-accepted looseness since an extra
-// unknown key in a theme object has no code path in this app that could
-// act on it either way).
+// validateTheme requires exactly one of {preset} or {a,b} (both hex
+// colors). Unknown keys are ignored (MachineInput's JSON decoding
+// doesn't reject them, a minor, deliberately-accepted looseness since an
+// extra unknown key in a theme object has no code path in this app that
+// could act on it either way).
 func validateTheme(t Theme) error {
 	hasPreset := t.Preset != ""
 	hasColors := t.A != "" || t.B != ""
@@ -118,11 +115,9 @@ func validateTheme(t Theme) error {
 		}
 		return nil
 	}
-	// Neither set: an explicitly-empty {} theme object. themeSchema's union
-	// would reject this (neither branch matches an object with no
-	// recognized keys) — reject it here too rather than silently accepting
-	// a theme object that resolveTheme() would treat as "no theme set"
-	// anyway, matching Node's strict validation.
+	// Neither set: an explicitly-empty {} theme object. Reject it rather
+	// than silently accepting a theme object that resolveTheme() would
+	// treat as "no theme set" anyway.
 	return fmt.Errorf("theme must set either preset or a/b colors")
 }
 
@@ -139,8 +134,7 @@ func isHexColor(s string) bool {
 }
 
 // themeJSON marshals a *Theme back to the machines.theme TEXT column
-// contract (nil -> NULL, matching registry.js's `theme ?
-// JSON.stringify(theme) : null`).
+// contract (nil -> NULL).
 func themeJSON(t *Theme) (*string, error) {
 	if t == nil {
 		return nil, nil
@@ -159,7 +153,7 @@ func parseTheme(raw *string) *Theme {
 	}
 	var t Theme
 	if err := json.Unmarshal([]byte(*raw), &t); err != nil {
-		return nil // #601 parity: a hand-edited/corrupt row never breaks the registry
+		return nil // #601: a hand-edited/corrupt row never breaks the registry
 	}
 	return &t
 }

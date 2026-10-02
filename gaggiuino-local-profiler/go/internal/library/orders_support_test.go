@@ -17,11 +17,11 @@ import (
 //
 // Setup: a bean with two such bags — a stale one, then the current active
 // one (bags[len-1]) — and a single dose recorded against the bean. Neither
-// bag has openedAt, so bagAtTime resolves the dose to bags[0] (the first
-// bag on record, matching the JS original's stable-sort tie-break — see
-// LibraryService.js's computeBeanRemaining). Since bags[0] is NOT the
-// active bag, the dose must NOT be counted against the active bag's stock:
-// remaining must stay at the bean's full stock_g, not stock_g-dose.
+// bag has openedAt, so bagAtTime resolves the dose to bags[0] (the first bag
+// on record, matching the stable-sort tie-break in computeBeanRemaining).
+// Since bags[0] is NOT the active bag, the dose must NOT be counted against
+// the active bag's stock: remaining must stay at the bean's full stock_g, not
+// stock_g-dose.
 func TestComputeBeanRemaining_DistinctBagsWithoutOpenedAt_NotMisattributed(t *testing.T) {
 	bean := Entity{
 		"id": int64(1), "name": "Test Bean", "stock_g": float64(200),
@@ -205,9 +205,8 @@ func TestSimulateBagQueue_OpenedAtFallbackForLegacyBags(t *testing.T) {
 }
 
 // TestSimulateBagQueue_StockAdjustRoundTrip is the Go-side replacement for
-// the old client-side remainingToStockG/#930 regression test, ported to the
-// per-bag model: the frontend's "Bestand anpassen" flow
-// (library.js's saveBagStock) computes newStockG as
+// the old client-side remainingToStockG/#930 regression test, now against the
+// per-bag model: the frontend's "Bestand anpassen" flow computes newStockG as
 // `desiredRemaining + bag.consumedG` using SimulateBagQueue's own
 // server-computed consumedG — this verifies that round-trip actually lands
 // on the desired remaining value when SimulateBagQueue is re-run against

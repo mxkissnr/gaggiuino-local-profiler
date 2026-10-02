@@ -10,19 +10,17 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports the LibraryService.js methods routes/library/*.js's
-// handlers actually call: getBeansInfo, computeGrinderWearStats,
-// upsertKnownGrindSetting, setBeanImage. Everything else on
-// LibraryService.js (maintenance/*, migrate*, checkLowStockNotify,
-// resolveBeanForAnnotation/findBeanByName) is out of this phase's scope —
-// see doc.go. computeBeanRemaining/getActiveBeans/getActiveMilks/
-// deductMilkByName landed in Phase 1f (orders_support.go); geocodeBean
-// landed in Phase 2g (geo.go).
+// This file holds the library methods the REST handlers actually call:
+// getBeansInfo, computeGrinderWearStats, upsertKnownGrindSetting, setBeanImage.
+// The remaining pieces (maintenance, migrate*, checkLowStockNotify,
+// resolveBeanForAnnotation/findBeanByName) are not implemented — see doc.go.
+// computeBeanRemaining/getActiveBeans/getActiveMilks/deductMilkByName live in
+// orders_support.go; geocoding lives in geo.go.
 
-// GetBeansInfo ports LibraryService.js's getBeansInfo() — lightweight bean
-// metadata for GET /api/library/beans-info, a contract glp-integration's
-// proxy and glp-lovelace-card both consume directly (see the Phase 1d task
-// description), so field names/nullability here must match byte-for-byte.
+// GetBeansInfo returns lightweight bean metadata for GET
+// /api/library/beans-info, a contract glp-integration's proxy and
+// glp-lovelace-card both consume directly, so field names/nullability here
+// must match byte-for-byte.
 func GetBeansInfo(lib Library) []Entity {
 	out := make([]Entity, 0, len(lib.Beans))
 	for _, bean := range lib.Beans {
@@ -63,10 +61,10 @@ func GetBeansInfo(lib Library) []Entity {
 	return out
 }
 
-// parseJSDate ports `new Date(str).getTime()` for the two string shapes
+// parseJSDate parses `new Date(str).getTime()` for the two string shapes
 // burrsResetAt/purchaseDate ever actually hold: a plain "YYYY-MM-DD" date
-// (from the grinder create/update routes' own `s(v,10)` truncation) or a
-// full ISO timestamp (from POST .../reset-burrs' `new Date().toISOString()`).
+// (from the grinder create/update routes' own 10-char truncation) or a full
+// ISO timestamp (from POST .../reset-burrs' `new Date().toISOString()`).
 // ok=false mirrors JS's NaN result for anything else — every "since burrs"
 // comparison below then always evaluates false for it, same as a NaN
 // comparison in JS, rather than this package guessing a fallback timestamp.
@@ -79,14 +77,11 @@ func parseJSDate(s string) (ms int64, ok bool) {
 	return 0, false
 }
 
-// ComputeGrinderWearStats ports LibraryService.js's computeGrinderWearStats:
-// shots/grams ground on this grinder since its last burr swap (or
-// purchase), matched by annotated grinder name, case-insensitive.
-// shotsRepo is internal/shots' Repository — the shots domain doesn't expose
-// a Service for this cross-domain read, so this package talks to its
-// Repository directly, the same way ShotRepository.js's findAllExcludingTrash
-// is called directly from LibraryService.js rather than through
-// ShotService.js.
+// ComputeGrinderWearStats returns shots/grams ground on this grinder since
+// its last burr swap (or purchase), matched by annotated grinder name,
+// case-insensitive. shotsRepo is internal/shots' Repository — the shots
+// domain doesn't expose a Service for this cross-domain read, so this package
+// talks to its Repository directly rather than through a Service.
 func ComputeGrinderWearStats(shotsRepo *shots.Repository, grinder Entity) (shotsSinceBurrs int, gramsSinceBurrs float64, err error) {
 	allShots, err := shotsRepo.FindAllExcludingTrash()
 	if err != nil {
@@ -144,25 +139,24 @@ func ComputeGrinderWearFrom(allShots []shots.Shot, grinder Entity) (shotsSinceBu
 	return shotsSinceBurrs, roundTo1(grams)
 }
 
-// roundTo1 ports `Math.round(gramsSinceBurrs * 10) / 10` — grams ground is
-// never negative in practice (parseFloat(dose)||0, doses are non-negative),
+// roundTo1 implements `Math.round(gramsSinceBurrs * 10) / 10` — grams ground
+// is never negative in practice (parseFloat(dose)||0, doses are non-negative),
 // so plain round-half-up (matching Math.round's own tie-breaking) is enough.
 func roundTo1(f float64) float64 {
 	return float64(int64(f*10+0.5)) / 10
 }
 
-// lowerOrEmpty ports `String(...).toLowerCase()` — strings.ToLower is
-// Unicode-case-folding-aware like JS's toLowerCase(), unlike a plain A-Z
-// byte-range fold, which left non-ASCII grinder names (e.g. "Éureka",
-// "Mühle") comparing unequal to themselves (#901).
+// lowerOrEmpty is a Unicode-case-folding-aware lower-casing (like JS's
+// toLowerCase()), unlike a plain A-Z byte-range fold, which left non-ASCII
+// grinder names (e.g. "Éureka", "Mühle") comparing unequal to themselves
+// (#901).
 func lowerOrEmpty(s string) string {
 	return strings.ToLower(s)
 }
 
-// UpsertKnownGrindSetting ports LibraryService.js's upsertKnownGrindSetting
-// (#310, Guided Dial-In): remembers the winning (grinder, grindSetting)
-// combo for a bean, newest first, capped at 10. Returns (bean, false) when
-// beanID doesn't match any bean, matching the Node original's null return.
+// UpsertKnownGrindSetting remembers the winning (grinder, grindSetting) combo
+// for a bean, newest first, capped at 10 (#310, Guided Dial-In). Returns
+// (bean, false) when beanID doesn't match any bean.
 func UpsertKnownGrindSetting(lib *Library, beanID int64, grinder, grindSetting string) (Entity, bool) {
 	for i, bean := range lib.Beans {
 		id, ok := idOf(bean, "id")
@@ -192,17 +186,17 @@ func UpsertKnownGrindSetting(lib *Library, beanID int64, grinder, grindSetting s
 	return nil, false
 }
 
-// ToggleBeanActive ports routes/library/beans.js's POST .../toggle-active
-// handler body (#578): `bean.enabled === false ? true : false` — anything
-// other than the exact boolean false (including absent/undefined) flips to
-// false. Exported (unlike this file's other helpers) so other packages
-// can drive the same enabled/disabled flag through the same
-// read-mutate-save round trip its REST counterpart (handlers_beans.go's
-// toggleBeanActive) uses, rather than reimplementing the flip. found is false when id matches no bean, mirroring
+// ToggleBeanActive handles the POST .../toggle-active flip (#578):
+// `bean.enabled === false ? true : false` — anything other than the exact
+// boolean false (including absent/undefined) flips to false. Exported (unlike
+// this file's other helpers) so other packages can drive the same
+// enabled/disabled flag through the same read-mutate-save round trip its REST
+// counterpart (handlers_beans.go's toggleBeanActive) uses, rather than
+// reimplementing the flip. found is false when id matches no bean, mirroring
 // the REST handler's 404. lib is the same already-read (and, on success,
-// already-saved) Library this function fetched internally — callers that
-// need the rest of the library alongside the toggled bean reuse it
-// instead of issuing their own extra GetLibrary call.
+// already-saved) Library this function fetched internally — callers that need
+// the rest of the library alongside the toggled bean reuse it instead of
+// issuing their own extra GetLibrary call.
 func ToggleBeanActive(repo *Repository, id int64) (bean Entity, lib Library, found bool, err error) {
 	err = repo.Update(func(l *Library) error {
 		idx := findBeanIndex(*l, id)
@@ -230,13 +224,11 @@ func ToggleBeanActive(repo *Repository, id int64) (bean Entity, lib Library, fou
 	return bean, lib, true, nil
 }
 
-// SetBeanImage ports LibraryService.js's setBeanImage: fire-and-forget after
-// a bean create with an `imageUrl` field — downloads the image once and
-// records its extension on a FRESH read of the library (not the `lib`
-// object the create handler already saved), matching the Node original's
-// own re-read (the bean may have been edited/deleted by the time this
-// finishes). Called from a goroutine by handlers.go's createBean, exactly
-// mirroring the Node route's un-awaited `.catch(() => {})` call.
+// SetBeanImage runs fire-and-forget after a bean create with an `imageUrl`
+// field — it downloads the image once and records its extension on a FRESH
+// read of the library (not the `lib` object the create handler already
+// saved), because the bean may have been edited/deleted by the time this
+// finishes. Called from a goroutine on the bean create path.
 func SetBeanImage(repo *Repository, imageDir string, beanID int64, imageURL string) {
 	ext := fetchBeanImage(imageDir, beanID, imageURL)
 	if ext == "" {

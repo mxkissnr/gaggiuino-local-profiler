@@ -8,7 +8,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
-// This file ports routes/library/grinders.js.
+// This file implements the grinder endpoints.
 
 func findGrinderIndex(lib Library, id int64) int {
 	for i, g := range lib.Grinders {
@@ -19,7 +19,7 @@ func findGrinderIndex(lib Library, id int64) int {
 	return -1
 }
 
-// createGrinder ports POST /api/library/grinder — a thin wrapper around
+// createGrinder handles POST /api/library/grinder — a thin wrapper around
 // CreateGrinder (create.go).
 func (h *Handlers) createGrinder(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
@@ -42,7 +42,7 @@ func (h *Handlers) createGrinder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, grinder)
 }
 
-// updateGrinder ports PUT /api/library/grinder/:id — a thin wrapper around
+// updateGrinder handles PUT /api/library/grinder/:id — a thin wrapper around
 // UpdateGrinder (update.go).
 func (h *Handlers) updateGrinder(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
@@ -134,7 +134,7 @@ func (h *Handlers) deleteGrinderZeroPoint(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, grinder)
 }
 
-// resetBurrs ports POST /api/library/grinder/:id/reset-burrs.
+// resetBurrs handles POST /api/library/grinder/:id/reset-burrs.
 func (h *Handlers) resetBurrs(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	var grinder Entity
@@ -158,16 +158,15 @@ func (h *Handlers) resetBurrs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.withWear(grinder))
 }
 
-// deleteGrinder ports POST /api/library/grinder/:id/delete: also removes
-// its photo and (Phase 1f, #901) its `grinder_{id}` row in the
-// `maintenance` table, via the onGrinderDelete callback SetOnGrinderDeleted
-// wires — see that method's doc comment for why this is a callback rather
-// than a direct internal/maintenance import. Best-effort: a callback error
-// is swallowed (logged nowhere further — this package has no logger
-// dependency of its own, matching every other best-effort call site here)
-// rather than failing the whole delete, since the grinder itself is
-// already gone from the library at that point and there's nothing left to
-// roll back.
+// deleteGrinder handles POST /api/library/grinder/:id/delete: also removes
+// its photo and its `grinder_{id}` row in the `maintenance` table, via the
+// onGrinderDelete callback SetOnGrinderDeleted wires — see that method's doc
+// comment for why this is a callback rather than a direct
+// internal/maintenance import. Best-effort: a callback error is swallowed
+// (logged nowhere further — this package has no logger dependency of its own,
+// matching every other best-effort call site here) rather than failing the
+// whole delete, since the grinder itself is already gone from the library at
+// that point and there's nothing left to roll back.
 func (h *Handlers) deleteGrinder(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	var imgExt string
@@ -205,16 +204,16 @@ func (h *Handlers) deleteGrinder(w http.ResponseWriter, r *http.Request) {
 	if imgExt != "" {
 		img.Delete(h.imageDir, id, imgExt, "grinder-")
 	}
-	// Matches routes/library/grinders.js's own unconditional attempt (even
-	// for a param that didn't match any real grinder — `grinder_NaN` simply
-	// isn't a key in `maint` either, a silent no-op there too).
+	// Matches the unconditional attempt even for a param that didn't match any
+	// real grinder — grinder_NaN simply isn't a key in maint either, a silent
+	// no-op there too.
 	if h.onGrinderDelete != nil {
-		_ = h.onGrinderDelete(id) // best-effort, matches Node's `catch { /* ignore */ }`
+		_ = h.onGrinderDelete(id) // best-effort
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// getGrinderImage ports GET /api/library/grinder/:id/image.
+// getGrinderImage handles GET /api/library/grinder/:id/image.
 func (h *Handlers) getGrinderImage(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	lib, err := h.repo.GetLibrary()
@@ -231,7 +230,7 @@ func (h *Handlers) getGrinderImage(w http.ResponseWriter, r *http.Request) {
 	h.serveImage(w, r, ext, "grinder-", id)
 }
 
-// postGrinderImage ports POST /api/library/grinder/:id/image.
+// postGrinderImage handles POST /api/library/grinder/:id/image.
 func (h *Handlers) postGrinderImage(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitImage(w, r) {
 		return

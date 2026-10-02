@@ -12,10 +12,10 @@ import (
 	"time"
 )
 
-// This file ports lib/machines/gaggiuino/firmware-check.js (#620 Phase 1):
-// queries Zer0-bit/gaggiuino's GitHub releases for the latest release
-// matching a machine's configured release channel, so "is an update even
-// available" can be answered before triggering the OTA update endpoint.
+// This file provides the #620 firmware-update check: queries
+// Zer0-bit/gaggiuino's GitHub releases for the latest release matching a
+// machine's configured release channel, so "is an update even available"
+// can be answered before triggering the OTA update endpoint.
 
 // releasesAPI is a var (not a const) so tests can point it at a local fake
 // GitHub-releases server instead of hitting the real network — see
@@ -32,8 +32,9 @@ var releasesAPI = "https://api.github.com/repos/Zer0-bit/gaggiuino/releases"
 // reject).
 var firmwareHTTPClient = &http.Client{}
 
-// firmwareCacheTTL ports CACHE_TTL_MS — unauthenticated GitHub API calls
-// are rate-limited to 60 req/hr, so this must never be queried per-poll.
+// firmwareCacheTTL bounds how long a successful lookup is cached —
+// unauthenticated GitHub API calls are rate-limited to 60 req/hr, so this
+// must never be queried per-poll.
 const firmwareCacheTTL = time.Hour
 
 // firmwareNegativeCacheTTL bounds how long a "fetched successfully but no
@@ -53,19 +54,19 @@ const firmwareNegativeCacheTTL = 10 * time.Minute
 // round-trips, was starving the GitHub call and 502ing the endpoint.
 const firmwareFetchTimeout = 20 * time.Second
 
-// firmwareMaxPages ports MAX_PAGES (#673).
+// firmwareMaxPages bounds the number of GitHub release pages scanned (#673).
 const firmwareMaxPages = 5
 
-// channelTagPrefix ports CHANNEL_TAG_PREFIX. ASSUMPTION, carried forward
-// unverified from the Node original (#620): stable(0)/test(1) both draw
-// from main-*, debug(2) draws from dev-*. See firmware-check.js's own
-// header comment for the full caveat — not re-verified in this port.
+// channelTagPrefix maps a release channel to its tag prefix. ASSUMPTION,
+// carried forward unverified (#620): stable(0)/test(1) both draw from
+// main-*, debug(2) draws from dev-*. This mapping has not been re-verified
+// against a live repository.
 var channelTagPrefix = map[int]string{0: "main-", 1: "main-", 2: "dev-"}
 
 const defaultFirmwareChannel = 0
 
-// FirmwareRelease ports getLatestFirmwareRelease()'s {hash, publishedAt,
-// releaseUrl} result shape.
+// FirmwareRelease is the {hash, publishedAt, releaseUrl} shape returned by
+// GetLatestFirmwareRelease.
 type FirmwareRelease struct {
 	Hash        string `json:"hash"`
 	PublishedAt string `json:"publishedAt"`
@@ -77,9 +78,9 @@ type firmwareCacheEntry struct {
 	result    *FirmwareRelease
 }
 
-// FirmwareChecker ports the module-level `cache` Map + getLatestFirmwareRelease
-// function as a struct, same reasoning as gaggiuinoLiveClient (Go has no
-// module-singleton equivalent to lean on).
+// FirmwareChecker holds the per-channel cache and lookup as a struct
+// rather than leaning on package-level mutable state, same reasoning as
+// gaggiuinoLiveClient.
 type FirmwareChecker struct {
 	mu    sync.Mutex
 	cache map[int]firmwareCacheEntry
@@ -95,9 +96,9 @@ type githubRelease struct {
 	HTMLURL     string `json:"html_url"`
 }
 
-// fetchLatestRelease ports fetchLatestRelease(prefix) (#673): scans up to
-// firmwareMaxPages pages and returns the matching-prefix release with the
-// latest published_at across ALL of them.
+// fetchLatestRelease (#673) scans up to firmwareMaxPages pages and returns
+// the matching-prefix release with the latest published_at across ALL of
+// them.
 //
 // #1042: this used to return as soon as ANY page yielded a matching-prefix
 // release, using only that page's own best-by-published_at. That silently
@@ -185,10 +186,9 @@ func fetchLatestRelease(ctx context.Context, prefix string) (*githubRelease, err
 	return best, nil
 }
 
-// GetLatestFirmwareRelease ports getLatestFirmwareRelease(channel):
-// returns nil (not an error) if no matching release was found — that's
-// "unknown", not "no update available", same distinction the Node
-// original's comment draws. Cached per channel for firmwareCacheTTL.
+// GetLatestFirmwareRelease returns nil (not an error) if no matching
+// release was found — that's "unknown", not "no update available". Cached
+// per channel for firmwareCacheTTL.
 func (c *FirmwareChecker) GetLatestFirmwareRelease(ctx context.Context, channel *int) (*FirmwareRelease, error) {
 	ch := defaultFirmwareChannel
 	if channel != nil {
@@ -251,9 +251,8 @@ func (c *FirmwareChecker) GetLatestFirmwareRelease(ctx context.Context, channel 
 
 // ParseReleaseChannel converts the loosely-typed value getSettings(machine,
 // "system").releaseChannel decodes to (a JSON number in practice) into the
-// *int GetLatestFirmwareRelease expects — nil if absent/unrecognized,
-// which resolves to defaultFirmwareChannel same as Node's `channel != null
-// && CHANNEL_TAG_PREFIX[channel] ? channel : DEFAULT_CHANNEL`.
+// *int GetLatestFirmwareRelease expects — nil if absent/unrecognized, which
+// resolves to defaultFirmwareChannel.
 func ParseReleaseChannel(v any) *int {
 	switch t := v.(type) {
 	case float64:
@@ -270,8 +269,7 @@ func ParseReleaseChannel(v any) *int {
 	}
 }
 
-// resetCacheForTests clears the cache — test-only helper, mirrors
-// firmware-check.js's own _resetCacheForTests.
+// resetCacheForTests clears the cache — test-only helper.
 func (c *FirmwareChecker) resetCacheForTests() {
 	c.mu.Lock()
 	defer c.mu.Unlock()

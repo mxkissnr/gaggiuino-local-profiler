@@ -8,21 +8,16 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
 
-// This file ports lib/validation/schemas.js's machine-profile-input Zod
-// schemas (phaseSchema/transitionSchema/phaseStopConditionsSchema/
-// globalStopConditionsSchema/brewRecipeSchema/profileSchema) as plain Go
-// structs with pointer fields for every zod `.optional()` — nil means
-// "omitted", matching a request body that simply left the key out — plus
-// toWireProfile(), the Go port of gaggiuino-ws-client.js's function of the
-// same name: unlike proto.ProfileDto's own decode-path pointer semantics
-// (nil = absent from the wire, see messages.go), toWireProfile()
+// This file defines the machine-profile-input schemas as plain Go structs
+// with pointer fields for every optional field — nil means "omitted",
+// matching a request body that simply left the key out — plus
+// ToWireProfile(): unlike proto.ProfileDto's own decode-path pointer
+// semantics (nil = absent from the wire, see messages.go), ToWireProfile()
 // unconditionally builds a Target/StopConditions object for every phase —
-// defaulting every unset field to zero — since that's what the Node
-// original does (`target: {start: p.target?.start || 0, ...}`, never
-// `undefined`). Only GlobalStopConditions/Recipe stay conditional
-// (`profile.x ? {...} : undefined`), matching toWireProfile() exactly.
+// defaulting every unset field to zero. Only GlobalStopConditions/Recipe
+// stay conditional.
 
-// TransitionInput ports transitionSchema.
+// TransitionInput is a phase's transition target.
 type TransitionInput struct {
 	Start  *float64               `json:"start"`
 	End    *float64               `json:"end"`
@@ -31,7 +26,7 @@ type TransitionInput struct {
 	Volume *float64               `json:"volume"`
 }
 
-// PhaseStopConditionsInput ports phaseStopConditionsSchema.
+// PhaseStopConditionsInput holds a phase's stop conditions.
 type PhaseStopConditionsInput struct {
 	Time               *float64 `json:"time"`
 	PressureAbove      *float64 `json:"pressureAbove"`
@@ -42,11 +37,10 @@ type PhaseStopConditionsInput struct {
 	WaterPumpedInPhase *float64 `json:"waterPumpedInPhase"`
 }
 
-// PhaseInput ports phaseSchema. Type has no pointer/omitempty — zod's
-// phaseTypeSchema is required (no `.optional()`) — but a JSON body that
-// omits it entirely decodes to the Go zero value (proto.PhaseFlow) rather
-// than a validation error the way zod's required-field check would 400;
-// see doc.go for this documented, minor validation-parity gap.
+// PhaseInput is one phase of a profile. Type has no pointer/omitempty —
+// it's required — but a JSON body that omits it entirely decodes to the Go
+// zero value (proto.PhaseFlow) rather than a validation error; see doc.go
+// for this documented, minor validation gap.
 type PhaseInput struct {
 	Name             *string                   `json:"name"`
 	Type             proto.PhaseType           `json:"type"`
@@ -57,7 +51,7 @@ type PhaseInput struct {
 	Skip             *bool                     `json:"skip"`
 }
 
-// GlobalStopConditionsInput ports globalStopConditionsSchema.
+// GlobalStopConditionsInput holds a profile's global stop conditions.
 type GlobalStopConditionsInput struct {
 	Time                       *float64 `json:"time"`
 	Weight                     *float64 `json:"weight"`
@@ -66,17 +60,16 @@ type GlobalStopConditionsInput struct {
 	SwitchToManuaFlowCtrl      *bool    `json:"switchToManuaFlowCtrl"`
 }
 
-// BrewRecipeInput ports brewRecipeSchema.
+// BrewRecipeInput holds a profile's brew recipe.
 type BrewRecipeInput struct {
 	CoffeeIn  *float64 `json:"coffeeIn"`
 	CoffeeOut *float64 `json:"coffeeOut"`
 	Ratio     *float64 `json:"ratio"`
 }
 
-// ProfileInput ports profileSchema — the request body shape for
+// ProfileInput is the request body shape for
 // POST/PUT /api/machine/profile[/{id}]. MachineID is read directly off the
-// decoded body by handlers.go (mirrors req.body?.machineId), not part of
-// the wire conversion.
+// decoded body by handlers.go, not part of the wire conversion.
 //
 // RawBody is set by handlers_profiles.go from the original request bytes —
 // not decoded from JSON — so GaggiMate's CreateProfile/UpdateProfile can
@@ -96,10 +89,9 @@ type ProfileInput struct {
 const maxProfileNameLen = 200
 const maxPhaseNameLen = 100
 
-// Validate ports profileSchema's structural checks (z.string().min(1).max(200)
-// for name, z.array(phaseSchema).min(1) for phases, phaseSchema's
-// z.string().max(100).optional() for each phase name). Numeric fields have
-// no bounds in the zod schema either, so none are enforced here.
+// Validate applies the structural checks: 1-200 chars for name, at least
+// one phase, and at most 100 chars for each phase name. Numeric fields have
+// no bounds, so none are enforced here.
 func (p ProfileInput) Validate() error {
 	if len(p.Name) < 1 || len(p.Name) > maxProfileNameLen {
 		return fmt.Errorf("name must be 1-%d characters", maxProfileNameLen)
@@ -175,7 +167,7 @@ func boolOr(p *bool, def bool) bool {
 	return *p
 }
 
-// toWirePhase ports toWireProfile()'s per-phase mapping.
+// toWirePhase maps one phase to its wire form.
 func (ph PhaseInput) toWirePhase() proto.PhaseDto {
 	name := ""
 	if ph.Name != nil {
@@ -216,7 +208,7 @@ func (ph PhaseInput) toWirePhase() proto.PhaseDto {
 	}
 }
 
-// ToWireProfile ports gaggiuino-ws-client.js's toWireProfile(profile).
+// ToWireProfile converts a ProfileInput to the device wire profile.
 func (p ProfileInput) ToWireProfile() *proto.ProfileDto {
 	var id uint32
 	// Bounds-check before the narrowing cast — p.ID is an int64 (JSON body
@@ -262,10 +254,9 @@ func (p ProfileInput) ToWireProfile() *proto.ProfileDto {
 
 // ── #597 settings/control proxy input validation ────────────────────────
 
-// ValidateOperationMode ports operationModeSchema: BREW_MANUAL (1) is
-// rejected (live-verified silent no-op while idle — see
-// lib/machines/gaggiuino/adapter.js's setOperationMode() doc comment), and
-// the value must otherwise be a defined OperationModeDto value (0-7).
+// ValidateOperationMode rejects BREW_MANUAL (1) (live-verified silent no-op
+// while idle — see gaggiuino_adapter.go's SetOperationMode), and requires
+// the value to otherwise be a defined OperationMode (0-7).
 func ValidateOperationMode(m proto.OperationMode) error {
 	if m == proto.ModeBrewManual {
 		return fmt.Errorf("BREW_MANUAL (1) is not supported via this proxy")
@@ -276,7 +267,7 @@ func ValidateOperationMode(m proto.OperationMode) error {
 	return nil
 }
 
-// ValidateServiceTestPeripheral ports serviceTestPeripheralSchema.
+// ValidateServiceTestPeripheral requires a defined service-test peripheral.
 func ValidateServiceTestPeripheral(p proto.ServiceTestPeripheral) error {
 	if p < proto.PeripheralPump || p > proto.PeripheralLED {
 		return fmt.Errorf("invalid peripheral")
@@ -284,11 +275,11 @@ func ValidateServiceTestPeripheral(p proto.ServiceTestPeripheral) error {
 	return nil
 }
 
-// ValidateSettingsPayload ports settingsPayloadSchema (z.record(z.string(),
-// z.any()) — opaque JSON, only checked for being a JSON object). Passed
-// straight through to the machine's own REST endpoint unmodified — see
-// doc.go's bool-as-string quirk section for why this stays json.RawMessage
-// rather than a typed struct all the way through.
+// ValidateSettingsPayload checks that body is opaque JSON, an object and
+// nothing more. It is passed straight through to the machine's own REST
+// endpoint unmodified — see doc.go's bool-as-string quirk section for why
+// this stays json.RawMessage rather than a typed struct all the way
+// through.
 func ValidateSettingsPayload(body json.RawMessage) error {
 	_, err := decodeSettingsObject(body)
 	return err

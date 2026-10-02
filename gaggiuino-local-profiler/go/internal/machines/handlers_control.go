@@ -12,10 +12,10 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
 
-// This file ports routes/machine-control.js: the #597 Gaggiuino settings/
-// control proxy (settings read/write, opmode/tare/service-test, active-
-// profile persistence, firmware OTA, live sensor/system state). Every
-// route here is gated by requireSettingsProxySupport, same as Node.
+// This file is the #597 Gaggiuino settings/control proxy (settings
+// read/write, opmode/tare/service-test, active-profile persistence,
+// firmware OTA, live sensor/system state). Every route here is gated by
+// requireSettingsProxySupport.
 
 var gaggiuinoSettingsCategories = map[string]bool{
 	"boiler": true, "system": true, "display": true, "scales": true, "led": true, "theme": true,
@@ -26,8 +26,8 @@ func (h *Handlers) registerControlRoutes(mux *http.ServeMux) {
 	// Registered before the /{category} route below so this exact path
 	// always wins — Go's ServeMux already prefers the more specific
 	// literal pattern regardless of registration order (see
-	// shots/handlers.go's header comment on the same non-issue), but kept
-	// in the same order as the Node original for readability.
+	// shots/handlers.go's header comment on the same non-issue), but
+	// registered in this order for readability.
 	mux.HandleFunc("POST /api/machine/settings/save", h.saveSettings)
 	mux.HandleFunc("POST /api/machine/settings/{category}", h.updateSettings)
 
@@ -44,8 +44,8 @@ func (h *Handlers) registerControlRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/machine/live", h.machineLive)
 }
 
-// resolveWithAdapter ports the repeated `resolveMachine + getAdapter` pair
-// every route in this file (and handlers_profiles.go) opens with.
+// resolveWithAdapter performs the repeated resolve-machine + get-adapter
+// pair every route in this file (and handlers_profiles.go) opens with.
 func (h *Handlers) resolveWithAdapter(w http.ResponseWriter, machineID *int64) (*Machine, Adapter, bool) {
 	machine, err := h.registry.ResolveMachine(machineID)
 	if err != nil {
@@ -341,7 +341,7 @@ func (h *Handlers) firmwareFromTo(ctx context.Context, machine *Machine, adapter
 	return from, to
 }
 
-// firmwareVersion ports GET /api/machine/firmware/version (#620 Phase 1).
+// firmwareVersion serves GET /api/machine/firmware/version (#620).
 func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
 	if !ok {
@@ -350,9 +350,9 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 	if !requireSettingsProxySupport(w, adapter, machine) {
 		return
 	}
-	// Ports Node's Promise.all([getSettings('versions'), getSettings('system')])
-	// (#901 code review) — the two reads are independent, so fetch them
-	// concurrently instead of paying two round-trips back to back.
+	// The "versions" and "system" settings reads are independent (#901 code
+	// review), so fetch them concurrently instead of paying two round-trips
+	// back to back.
 	var versionsRaw, systemRaw json.RawMessage
 	var versionsErr, systemErr error
 	var versionsPanicked bool
@@ -440,7 +440,7 @@ func nullOr(s *string) any {
 	return *s
 }
 
-// machineLive ports GET /api/machine/live: latest cached live sensor/
+// machineLive serves GET /api/machine/live: latest cached live sensor/
 // system-state pushes from the machine's persistent WebSocket session
 // (live.go) — null until the first push arrives.
 func (h *Handlers) machineLive(w http.ResponseWriter, r *http.Request) {

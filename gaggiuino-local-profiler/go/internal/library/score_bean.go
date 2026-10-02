@@ -8,15 +8,15 @@ import (
 )
 
 // This file holds the shared shot→bean resolution the server-side scorer and
-// the achievement checks both use. It used to live in internal/achievements
-// (helpers.js's resolveBeanForShot), but internal/shots cannot import
-// internal/library (library imports shots), so the one implementation lives
-// here and shots receives it through an injected bean source — see
-// shots.SetBeanSource. Moving it out of achievements also means the badge
-// checks and the score agree by construction instead of by copy.
+// the achievement checks both use. It used to live in internal/achievements,
+// but internal/shots cannot import internal/library (library imports shots),
+// so the one implementation lives here and shots receives it through an
+// injected bean source — see shots.SetBeanSource. Moving it out of
+// achievements also means the badge checks and the score agree by
+// construction instead of by copy.
 
-// ResolveBeanForShot ports helpers.js's resolveBeanForShot: beanId-first,
-// coffee-name fallback (case-insensitive). Returns nil when the shot has no
+// ResolveBeanForShot resolves a shot's bean beanId-first, with a
+// case-insensitive coffee-name fallback. Returns nil when the shot has no
 // annotation, or the annotation matches no bean.
 func ResolveBeanForShot(shot shots.Shot, beans []Entity) Entity {
 	ann, _ := shot["annotation"].(map[string]any)
@@ -88,7 +88,7 @@ func beanRefID(v any) (int64, bool) {
 	return 0, false
 }
 
-// scoreBeanFloat ports the achievements asFloat64 the bean-target conversion
+// scoreBeanFloat mirrors the achievements asFloat64 bean-target conversion
 // used before the move: any JSON numeric type, but never a string (a numeric
 // string such as "93" is not a temperature here — that would silently change
 // which beans get a target).

@@ -21,14 +21,13 @@ func stubReleasesAPINoMatch(t *testing.T) {
 }
 
 // TestFirmwareVersion_ParallelSettingsFetch is the #901 code-review
-// regression test for firmwareVersion (routes/machine-control.js's
-// GET /api/machine/firmware/version): the Node original fetches
-// getSettings('versions') and getSettings('system') via Promise.all, but
-// this handler originally issued them as two sequential adapter calls.
-// Exercises the handler end-to-end against a fake machine server and a
-// fake GitHub-releases server to confirm both concurrent GetSettings
-// results actually make it into the response, not just that the handler
-// compiles.
+// regression test for firmwareVersion
+// (GET /api/machine/firmware/version): the handler should issue the
+// "versions" and "system" GetSettings calls concurrently, but it originally
+// issued them as two sequential adapter calls. Exercises the handler
+// end-to-end against a fake machine server and a fake GitHub-releases
+// server to confirm both concurrent GetSettings results actually make it
+// into the response, not just that the handler compiles.
 func TestFirmwareVersion_ParallelSettingsFetch(t *testing.T) {
 	allowLoopbackMachineHost(t)
 	h, registry, _ := newTestHandlers(t)

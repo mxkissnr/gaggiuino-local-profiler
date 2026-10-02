@@ -7,7 +7,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
-// This file ports routes/library/puckscreens.js (#635).
+// This file implements the puckscreen endpoints (#635).
 
 var puckScreenThicknesses = map[string]bool{"very-thin": true, "thin": true, "medium": true, "thick": true}
 
@@ -20,7 +20,7 @@ func findPuckScreenIndex(lib Library, id int64) int {
 	return -1
 }
 
-// listPuckScreens ports GET /api/library/puckscreens.
+// listPuckScreens serves GET /api/library/puckscreens.
 func (h *Handlers) listPuckScreens(w http.ResponseWriter, r *http.Request) {
 	lib, err := h.repo.GetLibrary()
 	if err != nil {
@@ -30,7 +30,7 @@ func (h *Handlers) listPuckScreens(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, lib.PuckScreens)
 }
 
-// createPuckScreen ports POST /api/library/puckscreen — a thin wrapper
+// createPuckScreen handles POST /api/library/puckscreen — a thin wrapper
 // around CreatePuckScreen (create.go).
 func (h *Handlers) createPuckScreen(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
@@ -53,7 +53,7 @@ func (h *Handlers) createPuckScreen(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, puckScreen)
 }
 
-// updatePuckScreen ports PUT /api/library/puckscreen/:id — a thin wrapper
+// updatePuckScreen handles PUT /api/library/puckscreen/:id — a thin wrapper
 // around UpdatePuckScreen (update.go).
 func (h *Handlers) updatePuckScreen(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
@@ -78,7 +78,7 @@ func (h *Handlers) updatePuckScreen(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, puckScreen)
 }
 
-// deletePuckScreen ports DELETE /api/library/puckscreen/:id.
+// deletePuckScreen handles DELETE /api/library/puckscreen/:id.
 func (h *Handlers) deletePuckScreen(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	var imgExt string
@@ -119,7 +119,7 @@ func (h *Handlers) deletePuckScreen(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// getPuckScreenImage ports GET /api/library/puckscreen/:id/image.
+// getPuckScreenImage handles GET /api/library/puckscreen/:id/image.
 func (h *Handlers) getPuckScreenImage(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	lib, err := h.repo.GetLibrary()
@@ -136,7 +136,7 @@ func (h *Handlers) getPuckScreenImage(w http.ResponseWriter, r *http.Request) {
 	h.serveImage(w, r, ext, "puckscreen-", id)
 }
 
-// postPuckScreenImage ports POST /api/library/puckscreen/:id/image.
+// postPuckScreenImage handles POST /api/library/puckscreen/:id/image.
 func (h *Handlers) postPuckScreenImage(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitImage(w, r) {
 		return

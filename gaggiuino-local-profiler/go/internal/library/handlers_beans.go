@@ -12,7 +12,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
-// This file ports routes/library/beans.js.
+// This file implements the bean endpoints.
 
 func findBeanIndex(lib Library, id int64) int {
 	for i, b := range lib.Beans {
@@ -23,7 +23,7 @@ func findBeanIndex(lib Library, id int64) int {
 	return -1
 }
 
-// createBean ports POST /api/library/bean — a thin wrapper around
+// createBean handles POST /api/library/bean — a thin wrapper around
 // CreateBean (create.go).
 func (h *Handlers) createBean(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
@@ -46,7 +46,7 @@ func (h *Handlers) createBean(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
-// updateBean ports PUT /api/library/bean/:id — a thin wrapper around
+// updateBean handles PUT /api/library/bean/:id — a thin wrapper around
 // UpdateBean (update.go). Partial update: omitted fields keep their current
 // value.
 func (h *Handlers) updateBean(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +67,7 @@ func (h *Handlers) updateBean(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
-// newBag ports POST /api/library/bean/:id/new-bag.
+// newBag handles POST /api/library/bean/:id/new-bag.
 func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)
@@ -141,9 +141,9 @@ func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
-// reorderBags ports POST /api/library/bean/:id/reorder-bags: the client
+// reorderBags handles POST /api/library/bean/:id/reorder-bags: the client
 // sends the desired bag ID order for its "upcoming" queue (never including
-// the current or past bags — see library.js's swapless drag reorder), and
+// the current or past bags — see the web UI's swapless drag reorder), and
 // this assigns sequential sortOrder values in one atomic write, replacing
 // what would otherwise be N sequential PUTs from the client.
 func (h *Handlers) reorderBags(w http.ResponseWriter, r *http.Request) {
@@ -239,7 +239,7 @@ func (h *Handlers) reorderBags(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
-// freezePortions ports POST /api/library/bean/:id/freeze-portions (#472).
+// freezePortions handles POST /api/library/bean/:id/freeze-portions (#472).
 func (h *Handlers) freezePortions(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)
@@ -260,8 +260,8 @@ func (h *Handlers) freezePortions(w http.ResponseWriter, r *http.Request) {
 		if len(bags) == 0 {
 			return errNoActiveBag
 		}
-		// `Number.isFinite(req.body?.frozenAt) ? ... : Date.now()` — strictly a
-		// JSON number, not a numeric string (unlike jsParseFloat elsewhere).
+		// frozenAt must be strictly a JSON number, not a numeric string (unlike
+		// jsParseFloat elsewhere).
 		frozenAt, isNum := body["frozenAt"].(float64)
 		if !isNum || math.IsInf(frozenAt, 0) {
 			frozenAt = float64(newID())
@@ -292,9 +292,8 @@ func (h *Handlers) freezePortions(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
-// findFrozenPortion locates a frozen portion by id across every bag,
-// mirroring the JS `for (const bag of bags) { portion = ...find(...); if
-// (portion) break; }` loop shared by thaw-portion/adjust-frozen-portion.
+// findFrozenPortion locates a frozen portion by id across every bag. The
+// same search backs both thaw-portion and adjust-frozen-portion.
 func findFrozenPortion(bean Entity, portionID int64, requireNotThawed bool) Entity {
 	for _, b := range bagsOf(bean) {
 		bag, _ := b.(Entity)
@@ -322,7 +321,7 @@ func findFrozenPortion(bean Entity, portionID int64, requireNotThawed bool) Enti
 	return nil
 }
 
-// thawPortion ports POST /api/library/bean/:id/thaw-portion (#472).
+// thawPortion handles POST /api/library/bean/:id/thaw-portion (#472).
 func (h *Handlers) thawPortion(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)
@@ -370,7 +369,7 @@ func (h *Handlers) thawPortion(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
-// adjustFrozenPortion ports POST /api/library/bean/:id/adjust-frozen-portion (#472).
+// adjustFrozenPortion handles POST /api/library/bean/:id/adjust-frozen-portion (#472).
 func (h *Handlers) adjustFrozenPortion(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)
@@ -436,7 +435,7 @@ func (h *Handlers) adjustFrozenPortion(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
-// deleteBag ports DELETE /api/library/bean/:id/bag/:bagId.
+// deleteBag handles DELETE /api/library/bean/:id/bag/:bagId.
 func (h *Handlers) deleteBag(w http.ResponseWriter, r *http.Request) {
 	id, idNoMatch := parseIDParam(r.PathValue("id"))
 	bagID, bagNoMatch := parseIDParam(r.PathValue("bagId"))
@@ -496,11 +495,11 @@ func validateBagFloatField(body Entity, key string) (any, bool) {
 	return f, true
 }
 
-// validateBagRoastDate ports updateBag's roastDate gate: a date parseable
-// as YYYY-MM-DD that's more than a day in the future almost certainly means
-// a client clock/timezone bug rather than an intentional future roast date,
-// so it's rejected outright — unlike bean-level roastDate (trimMax), which
-// never validates the string's content, just its length.
+// validateBagRoastDate implements the updateBag roastDate gate: a date
+// parseable as YYYY-MM-DD that's more than a day in the future almost
+// certainly means a client clock/timezone bug rather than an intentional
+// future roast date, so it's rejected outright — unlike bean-level roastDate
+// (trimMax), which never validates the string's content, just its length.
 func validateBagRoastDate(body Entity) (string, bool) {
 	roastDate := trimMax(body["roastDate"], 10)
 	if roastDate == "" {
@@ -602,7 +601,7 @@ func (h *Handlers) updateBag(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
-// deleteBean ports POST /api/library/bean/:id/delete.
+// deleteBean handles POST /api/library/bean/:id/delete.
 func (h *Handlers) deleteBean(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	var imgExt string
@@ -643,15 +642,15 @@ func (h *Handlers) deleteBean(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// toggleBeanActive ports POST /api/library/bean/:id/toggle-active (#578).
+// toggleBeanActive handles POST /api/library/bean/:id/toggle-active (#578).
 //
 // id is parsed but NOT validated before calling ToggleBeanActive — passing
 // through a noMatch id (0, matching no real bean) rather than
-// short-circuiting to 404 here keeps the original pre-#901 ordering: a
-// request always reaches the DB (ToggleBeanActive's own GetLibrary) before
-// "not found" is decided, so a broken/unreachable DB still surfaces as 500
-// even when the path's {id} also happens to be malformed, instead of a
-// malformed id masking a DB outage behind a false-negative 404.
+// short-circuiting to 404 here keeps the ordering: a request always reaches
+// the DB (ToggleBeanActive's own GetLibrary) before "not found" is decided,
+// so a broken/unreachable DB still surfaces as 500 even when the path's {id}
+// also happens to be malformed, instead of a malformed id masking a DB outage
+// behind a false-negative 404.
 func (h *Handlers) toggleBeanActive(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
 	bean, _, found, err := ToggleBeanActive(h.repo, id)
@@ -666,7 +665,7 @@ func (h *Handlers) toggleBeanActive(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
-// knownGrind ports POST /api/library/bean/:id/known-grind (#310).
+// knownGrind handles POST /api/library/bean/:id/known-grind (#310).
 func (h *Handlers) knownGrind(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)
@@ -704,7 +703,7 @@ func (h *Handlers) knownGrind(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
-// grindSettingString ports `String(grindSetting).trim().slice(0, 50)` —
+// grindSettingString coerces `String(grindSetting).trim().slice(0, 50)` —
 // grindSetting is typically a number (a "22" grinder click count) or a
 // string, and JS's String() coerces either.
 func grindSettingString(v any) string {
@@ -718,9 +717,9 @@ func grindSettingString(v any) string {
 	}
 }
 
-// formatJSNumber ports JS's String(number): an integral value prints
-// without a trailing ".0" (String(22) === "22"), matching what
-// grindSetting values (grinder click counts) realistically are.
+// formatJSNumber mirrors JS's String(number): an integral value prints
+// without a trailing ".0" (String(22) === "22"), matching what grindSetting
+// values (grinder click counts) realistically are.
 func formatJSNumber(f float64) string {
 	if f == math.Trunc(f) && !math.IsInf(f, 0) {
 		return strconv.FormatInt(int64(f), 10)
@@ -728,7 +727,7 @@ func formatJSNumber(f float64) string {
 	return strconv.FormatFloat(f, 'g', -1, 64)
 }
 
-// getBeanImage ports GET /api/library/bean/:id/image.
+// getBeanImage handles GET /api/library/bean/:id/image.
 func (h *Handlers) getBeanImage(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	lib, err := h.repo.GetLibrary()
@@ -745,9 +744,9 @@ func (h *Handlers) getBeanImage(w http.ResponseWriter, r *http.Request) {
 	h.serveImage(w, r, ext, "", id)
 }
 
-// postBeanImage ports POST /api/library/bean/:id/image (manual upload
-// fallback — no URL fetch, no SSRF surface, unlike bean creation's
-// imageUrl field).
+// postBeanImage handles POST /api/library/bean/:id/image (manual upload
+// fallback — no URL fetch, no SSRF surface, unlike bean creation's imageUrl
+// field).
 func (h *Handlers) postBeanImage(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitImage(w, r) {
 		return
