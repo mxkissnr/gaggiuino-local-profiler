@@ -13,22 +13,20 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// DefaultPath is the on-disk location the Node app opens (lib/db.js's
-// DB_PATH = path.join(DATA_DIR, 'glp.db')). Callers needing an isolated
-// database (tests, primarily) pass their own path to Open instead.
+// DefaultPath is the default on-disk location of the database. Callers
+// needing an isolated database (tests, primarily) pass their own path to
+// Open instead.
 const DefaultPath = "/data/glp.db"
 
 // Open opens (creating if necessary) the SQLite database at path, brings it
-// to the current schema, and runs the same additive migrations
-// lib/db.js's getDb() runs on every start — everything except the legacy
-// flat-JSON-to-SQLite migration (lib/db.js's migrate() against JSON_FILES),
-// which is deliberately not ported: it only ever mattered for installs
-// upgrading from a pre-SQLite version, and every install this Go binary can
+// to the current schema, and runs the additive migrations needed on every
+// start — everything except the legacy flat-JSON-to-SQLite migration, which
+// is deliberately not implemented: it only ever mattered for installs
+// upgrading from a pre-SQLite version, and every install this binary can
 // possibly run against is already on SQLite.
 //
-// modernc.org/sqlite is a database/sql driver, so unlike better-sqlite3
-// (Node's single synchronous connection) database/sql pools multiple
-// connections. The pragmas this database needs on every connection
+// modernc.org/sqlite is a database/sql driver, so database/sql pools
+// multiple connections. The pragmas this database needs on every connection
 // (journal_mode, foreign_keys, busy_timeout, synchronous) are therefore set
 // through the connection URL — modernc.org/sqlite applies each `_pragma=`
 // query parameter to every physical connection it opens, so a pooled
@@ -45,9 +43,7 @@ const DefaultPath = "/data/glp.db"
 //
 // Schema creation and the additive migrations below run before the pool is
 // opened up — on a single connection (SetMaxOpenConns(1)) — so a
-// multi-statement ALTER never races a concurrent reader, matching
-// lib/db.js's single better-sqlite3 handle exactly for the one phase where
-// it matters.
+// multi-statement ALTER never races a concurrent reader.
 func Open(path string) (*sql.DB, error) {
 	if dir := filepath.Dir(path); dir != "." && dir != "/" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -55,10 +51,9 @@ func Open(path string) (*sql.DB, error) {
 		}
 	}
 
-	// getDb(): _db.pragma('journal_mode = WAL') + initSchema()'s
-	// `foreign_keys = ON`, plus busy_timeout/synchronous(NORMAL) WAL tuning
-	// (#956). Applied per connection by the driver, so every pooled
-	// connection is identical.
+	// journal_mode = WAL + foreign_keys = ON, plus busy_timeout/synchronous
+	// (NORMAL) WAL tuning (#956). Applied per connection by the driver, so
+	// every pooled connection is identical.
 	dsn := "file:" + path +
 		"?_pragma=busy_timeout(5000)" +
 		"&_pragma=journal_mode(WAL)" +
@@ -70,7 +65,8 @@ func Open(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("db: opening %s: %w", path, err)
 	}
 
-	// Serial phase: schema + migrations on one connection (see doc comment).
+	// Schema + migrations on a single connection before widening the pool
+	// (see doc comment).
 	sqlDB.SetMaxOpenConns(1)
 	sqlDB.SetMaxIdleConns(1)
 
@@ -82,8 +78,8 @@ func Open(path string) (*sql.DB, error) {
 		sqlDB.Close()
 		return nil, err
 	}
-	// migrate() (flat JSON -> SQLite) intentionally not ported — see doc
-	// comment above.
+	// The flat-JSON-to-SQLite migration is intentionally not implemented —
+	// see doc comment above.
 	if err := MigrateMachineColumns(sqlDB, path); err != nil {
 		sqlDB.Close()
 		return nil, err
@@ -113,10 +109,9 @@ func Open(path string) (*sql.DB, error) {
 	return sqlDB, nil
 }
 
-// schemaSQL was ported verbatim (including its comments) from the former
-// lib/db.js's initSchema() template literal. Table/column/index definitions
-// are pinned against the frozen Node schema fixture by db_schema_test.go
-// (see its header and internal/db/doc.go).
+// schemaSQL defines the app's base tables, columns and indexes. Those
+// definitions are pinned against the frozen schema fixture by
+// db_schema_test.go (see its header and internal/db/doc.go).
 const schemaSQL = `
 	CREATE TABLE IF NOT EXISTS shots (
 		id          INTEGER PRIMARY KEY,
@@ -132,11 +127,10 @@ const schemaSQL = `
 	-- the default machine (id 1) keeps its native machine shot ids unchanged
 	-- (backward compat -- existing URLs/images/annotations keep working
 	-- untouched), additional machines get a synthetic id
-	-- (machineId * MACHINE_ID_OFFSET + nativeId, see lib/machines/index.js)
-	-- so no PRIMARY KEY rebuild is needed anywhere.
+	-- (machineId * MACHINE_ID_OFFSET + nativeId) so no PRIMARY KEY rebuild
+	-- is needed anywhere.
 	-- theme (#594): nullable JSON string, one of
-	--   {"preset":"<key>"}        -- one of the 8 approved preset keys (see
-	--                                lib/machines/theme-presets.js)
+	--   {"preset":"<key>"}        -- one of the 8 approved preset keys
 	--   {"a":"#rrggbb","b":"#rrggbb"} -- custom colour; b === a for a flat
 	--                                colour, b !== a for a two-stop gradient
 	-- NULL = no theme set, current default appearance. This is the
@@ -204,9 +198,9 @@ const schemaSQL = `
 		value       TEXT NOT NULL DEFAULT '{}'
 	);
 
-	-- #812: achievements stamp card. One row per badge id (see
-	-- lib/achievements/registry.js), written once on unlock and never
-	-- updated again except progress (e.g. "7 of 10") while still locked.
+	-- #812: achievements stamp card. One row per badge id, written once on
+	-- unlock and never updated again except progress (e.g. "7 of 10") while
+	-- still locked.
 	-- No machine_id column, deliberately: the collection is per-install,
 	-- shared across every machine registered in this app -- see the
 	-- registry file's header comment for why that's the right scope.
@@ -220,15 +214,14 @@ const schemaSQL = `
 `
 
 // InitSchema creates every table/index used by the app if it doesn't already
-// exist and turns on foreign-key enforcement — the Go port of lib/db.js's
-// initSchema(db). Extracted, like the Node original, so tests can stand up
+// exist and turns on foreign-key enforcement. Extracted so tests can stand up
 // an isolated database with the same schema instead of duplicating this SQL.
 //
 // Open() also sets foreign_keys via the connection DSN (per pooled
 // connection); the Exec here is kept so callers that open a raw *sql.DB
 // without that DSN (a custom driver in tests, an in-memory probe) still get
-// enforcement. It runs during Open()'s single-connection migration phase,
-// so it is not the "pragma on one random pooled connection" anti-pattern.
+// enforcement. It runs while Open() holds a single connection, so it is not
+// the "pragma on one random pooled connection" anti-pattern.
 func InitSchema(sqlDB *sql.DB) error {
 	if _, err := sqlDB.Exec(`PRAGMA foreign_keys = ON`); err != nil {
 		return fmt.Errorf("db: enabling foreign_keys: %w", err)
@@ -239,11 +232,10 @@ func InitSchema(sqlDB *sql.DB) error {
 	return nil
 }
 
-// FixSchema ports lib/db.js's fixSchema(): early installs created `orders`
-// with an INTEGER PRIMARY KEY id before order ids were known to be strings.
-// Safe to drop and recreate because the (never-ported) JSON migration only
-// ever set kv.migrated after succeeding, so a still-INTEGER orders table is
-// always empty when this runs.
+// FixSchema fixes early installs that created `orders` with an INTEGER
+// PRIMARY KEY id before order ids were known to be strings. Safe to drop and
+// recreate because the JSON migration only ever set kv.migrated after
+// succeeding, so a still-INTEGER orders table is always empty when this runs.
 func FixSchema(sqlDB *sql.DB) error {
 	var colType string
 	err := sqlDB.QueryRow(
@@ -290,10 +282,9 @@ func assertKnownTable(table string) {
 	}
 }
 
-// hasColumn ports the hasColumn(table, col) closure repeated in lib/db.js's
-// migrateMachineColumns/migrateMachineTheme. table is always an internal
-// literal from migrationTables (asserted below, never user input), so
-// building the pragma_table_info() query directly (that table-valued
+// hasColumn reports whether table has the named column. table is always an
+// internal literal from migrationTables (asserted below, never user input),
+// so building the pragma_table_info() query directly (that table-valued
 // function can't take a bound parameter for its own name) is safe; col is
 // still bound.
 func hasColumn(sqlDB *sql.DB, table, col string) (bool, error) {
@@ -312,16 +303,15 @@ func hasColumn(sqlDB *sql.DB, table, col string) (bool, error) {
 	return true, nil
 }
 
-// MigrateMachineColumns ports lib/db.js's migrateMachineColumns(): adds the
-// machine_id scoping column (#317) to shots/orders/maintenance_log, and
-// rebuilds maintenance onto a composite (machine_id, key) primary key —
-// without ever rebuilding shots'/orders'/maintenance_log's PRIMARY KEY, same
-// as the Node original. dbPath is the on-disk file backing sqlDB; it is only
-// used to snapshot the file before a migration that touches real shot/order
-// history actually runs (never on a fresh install with no file yet, never
-// again once machine_id already exists everywhere) — passed explicitly, like
-// the Node version's injectable dbPath default, so tests can point it at a
-// throwaway file instead of the real DefaultPath.
+// MigrateMachineColumns adds the machine_id scoping column (#317) to
+// shots/orders/maintenance_log, and rebuilds maintenance onto a composite
+// (machine_id, key) primary key — without ever rebuilding
+// shots'/orders'/maintenance_log's PRIMARY KEY. dbPath is the on-disk file
+// backing sqlDB; it is only used to snapshot the file before a migration that
+// touches real shot/order history actually runs (never on a fresh install
+// with no file yet, never again once machine_id already exists everywhere) —
+// passed explicitly so tests can point it at a throwaway file instead of the
+// real DefaultPath.
 func MigrateMachineColumns(sqlDB *sql.DB, dbPath string) error {
 	needsMigration := false
 	for _, t := range []string{"shots", "orders", "maintenance_log"} {
@@ -372,15 +362,14 @@ func MigrateMachineColumns(sqlDB *sql.DB, dbPath string) error {
 	// score, so GET /api/shots's keyset-paginated list — and the frontend's
 	// background walk of every page to build S.allShots — don't re-parse each
 	// shot's datapoints blob to re-score it on every request. Deliberately
-	// NOT in schemaSQL: that constant is pinned byte-for-byte to Node's
-	// lib/db.js by db_schema_test.go, and Node has no equivalent table. An
-	// additive CREATE TABLE IF NOT EXISTS Exec here (same pattern as
-	// idx_shots_machine just above) keeps the Node-parity schema intact while
-	// still giving every Go install the table. fingerprint is a cheap
-	// SQL-recomputable digest of the inputs to CalcShotScoreDetail
-	// (length(data) || timestamp || length(annotation)); a mismatch on read
-	// means the row is stale and gets recomputed + rewritten. See
-	// internal/shots/repository.go's FindPageExcludingTrash.
+	// NOT in schemaSQL: that constant is pinned by db_schema_test.go, and the
+	// frozen schema has no equivalent table. An additive CREATE TABLE IF NOT
+	// EXISTS Exec here (same pattern as idx_shots_machine just above) keeps
+	// the pinned schema intact while still giving every Go install the table.
+	// fingerprint is a cheap SQL-recomputable digest of the inputs to
+	// CalcShotScoreDetail (length(data) || timestamp || length(annotation));
+	// a mismatch on read means the row is stale and gets recomputed +
+	// rewritten. See internal/shots/repository.go's FindPageExcludingTrash.
 	if _, err := sqlDB.Exec(`CREATE TABLE IF NOT EXISTS shot_score_cache (
 		shot_id          INTEGER PRIMARY KEY,
 		score            INTEGER,
@@ -402,9 +391,9 @@ func MigrateMachineColumns(sqlDB *sql.DB, dbPath string) error {
 	}
 
 	// machine_profiles: local-first offline cache/outbox for machine
-	// profiles (Go-only, no Node equivalent — same "additive Exec, not in
-	// schemaSQL" reasoning as shot_score_cache above). Profiles used to live
-	// exclusively on the physical machine with zero local persistence, so
+	// profiles (Go-only, absent from the frozen schema — same "additive Exec,
+	// not in schemaSQL" reasoning as shot_score_cache above). Profiles used to
+	// live exclusively on the physical machine with zero local persistence, so
 	// editing one while the machine was unreachable hard-failed outright
 	// (2026-09-09 bug report). Every write now lands here first (can never
 	// fail due to the machine being offline) and gets pushed to the machine
@@ -467,10 +456,9 @@ func MigrateMachineColumns(sqlDB *sql.DB, dbPath string) error {
 	return nil
 }
 
-// MigrateMachineTheme ports lib/db.js's migrateMachineTheme(): adds the
-// machines.theme column (#594) for installs that created the machines table
-// before this column existed. NULL theme means "no theme set" — nothing
-// changes visually for existing machines.
+// MigrateMachineTheme adds the machines.theme column (#594) for installs that
+// created the machines table before this column existed. NULL theme means "no
+// theme set" — nothing changes visually for existing machines.
 func MigrateMachineTheme(sqlDB *sql.DB) error {
 	ok, err := hasColumn(sqlDB, "machines", "theme")
 	if err != nil {
@@ -503,23 +491,19 @@ func MigrateMachineWaterSensor(sqlDB *sql.DB) error {
 	return nil
 }
 
-// EnsureInstallID ports lib/db.js's ensureInstallId()/getInstallId(): a
-// random id, generated once per DB file and stored in kv, that lets the
-// frontend tell "this is still the install I already onboarded" apart from
-// "this DB was just (re-)created" (see lib/db.js's #751 comment for the
-// HA-Supervisor-wipe scenario this exists for). The value is stored
-// JSON-encoded (a quoted string) to match the Node original's
-// JSON.stringify(id)/JSON.parse(row.value) round trip exactly, since other
-// kv rows (e.g. 'migrated') follow the same convention and any future Go
-// reader of this table must decode it the same way.
+// EnsureInstallID returns a random id, generated once per DB file and stored
+// in kv, that lets the frontend tell "this is still the install I already
+// onboarded" apart from "this DB was just (re-)created" (the HA-Supervisor
+// wipe scenario this exists for, #751). The value is stored JSON-encoded (a
+// quoted string), since other kv rows (e.g. 'migrated') follow the same
+// convention and any future reader of this table must decode it the same way.
 //
 // A syntactically valid but wrongly-shaped stored value (e.g. kv.value is
 // "{}" or "123" instead of a JSON-encoded string) must not prevent the
-// server from starting: Node's `if (row) return JSON.parse(row.value);`
-// never type-checks its result, it just returns whatever JSON.parse
-// produced. This decodes into interface{} and tolerantly coerces via
-// installIDString instead of failing the unmarshal on a type mismatch, so
-// Open() always succeeds here regardless of what's actually stored.
+// server from starting: the stored value is never type-checked. This decodes
+// into interface{} and tolerantly coerces via installIDString instead of
+// failing the unmarshal on a type mismatch, so Open() always succeeds here
+// regardless of what's actually stored.
 func EnsureInstallID(sqlDB *sql.DB) (string, error) {
 	var value string
 	err := sqlDB.QueryRow(`SELECT value FROM kv WHERE key = 'install_id'`).Scan(&value)
@@ -552,12 +536,11 @@ func EnsureInstallID(sqlDB *sql.DB) (string, error) {
 }
 
 // installIDString tolerantly coerces a decoded kv.value for install_id into
-// a string, the same way lib/db.js implicitly does by just returning
-// JSON.parse's result unchecked: the expected case (the JSON-decoded value
-// is itself a string) is returned directly; anything else (a number, bool,
-// object, array, null -- kv.value was malformed or written by something
-// other than this code path) falls back to its JSON representation rather
-// than erroring, so a broken stored value can never fail Open().
+// a string: the expected case (the JSON-decoded value is itself a string) is
+// returned directly; anything else (a number, bool, object, array, null --
+// kv.value was malformed or written by something other than this code path)
+// falls back to its JSON representation rather than erroring, so a broken
+// stored value can never fail Open().
 func installIDString(raw interface{}) string {
 	if s, ok := raw.(string); ok {
 		return s
@@ -600,8 +583,8 @@ func SetKVBool(sqlDB *sql.DB, key string, v bool) error {
 }
 
 // copyFile is a plain byte-for-byte copy (no fsync/atomic-rename dance —
-// this is a best-effort pre-migration safety snapshot, same as
-// fs.copyFileSync in the Node original, not a crash-safe write path).
+// this is a best-effort pre-migration safety snapshot, not a crash-safe write
+// path).
 func copyFile(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
@@ -610,9 +593,9 @@ func copyFile(src, dst string) error {
 	return os.WriteFile(dst, data, 0o644)
 }
 
-// newUUIDv4 generates a random RFC 4122 version-4 UUID, matching Node's
-// crypto.randomUUID() used by lib/db.js. Implemented directly against
-// crypto/rand rather than pulling in a UUID library for one call site.
+// newUUIDv4 generates a random RFC 4122 version-4 UUID. Implemented directly
+// against crypto/rand rather than pulling in a UUID library for one call
+// site.
 func newUUIDv4() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
