@@ -16,43 +16,38 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports the part of lib/sync.js POST /api/sync actually needs
-// (Phase 2a, #901): a manual trigger of the default machine's shot-history
-// pull loop — syncShots()'s `${machineUrl}/latest` probe + `${machineUrl}/
-// {id}` backfill, including the #341/#1147 machine scoping and #719
-// oversized-id guard on the local max-id it catches up from, the #721
-// 404 -> blocklist skip, and the state.lastSyncTime/lastSyncError writes
-// GET /api/status reports. The GaggiMate default
-// machine path (syncGaggiMateShots) is scoped to that machine's own id
-// range too (#1147), so a GaggiMate set as the default imports its shots
-// under its own machine instead of the first machine's.
+// This file implements the shot-history pull loop POST /api/sync triggers for
+// the default machine: the `${machineUrl}/latest` probe + `${machineUrl}/{id}`
+// backfill, including the #341/#1147 machine scoping and #719 oversized-id
+// guard on the local max-id it catches up from, the #721 404 -> blocklist skip,
+// and the state.lastSyncTime/lastSyncError writes GET /api/status reports. The
+// GaggiMate default machine path (syncGaggiMateShots) is scoped to that
+// machine's own id range too (#1147), so a GaggiMate set as the default imports
+// its shots under its own machine instead of the first machine's.
 //
-// #1146 adds syncOtherMachines() on top: after the default machine, every
-// other enabled registered machine is pulled up from its own last-synced
-// native shot id — a GaggiMate through syncGaggiMateShots, a Gaggiuino
-// through syncGaggiuinoMachineShots (the same /api/shots REST surface as the
-// default path, re-keyed under the machine's own global id range, #341). One
-// machine failing never stops the others; a non-default machine records its
-// own reachability/error/firmware state (#1201) but never the default-only
+// #1146 adds syncOtherMachines() on top: after the default machine, every other
+// enabled registered machine is pulled up from its own last-synced native shot
+// id — a GaggiMate through syncGaggiMateShots, a Gaggiuino through
+// syncGaggiuinoMachineShots (the same /api/shots REST surface as the default
+// path, re-keyed under the machine's own global id range, #341). One machine
+// failing never stops the others; a non-default machine records its own
+// reachability/error/firmware state (#1201) but never the default-only
 // lastSyncTime/lastSyncError.
 //
-// Deliberately still NOT ported here (unchanged from doc.go's "Deliberately
-// not ported" — lib/sync.js as a whole is its own future phase):
+// Deliberately still NOT implemented here (see doc.go's "Deliberately not
+// implemented"):
 //
-//   - syncNativeMaintenance() (#578) — needs lib/maintenance-sync.js, a
-//     maintenance-domain port.
-//   - scheduleNextSync()'s retry/backoff timer and state.syncRetryCount —
-//     nothing drives an automatic sync loop in this Go port yet, so a
-//     retry schedule has nothing to hang off. GET /api/status's
-//     syncRetryCount stays 0.
-//   - state.syncProgress — the backfill still runs, but nothing tracks or
-//     streams its progress in this port, so there is no progress bar.
+//   - syncNativeMaintenance() (#578) — needs a maintenance-domain sync.
+//   - syncRetryCount — the scheduled loop (sync_triggers.go) retries with
+//     backoff but tracks it locally, so GET /api/status's syncRetryCount
+//     stays 0.
+//   - syncProgress — the backfill still runs, but nothing tracks or streams
+//     its progress, so there is no progress bar.
 
-// manualSyncCooldown mirrors routes/system.js's `now - state.lastManualSync
-// < 30000` guard.
+// manualSyncCooldown is the minimum gap between manual syncs.
 const manualSyncCooldown = 30 * time.Second
 
-// syncHTTPTimeout mirrors lib/sync.js's per-request `{ timeout: 10000 }`.
+// syncHTTPTimeout is the per-request timeout for sync fetches.
 const syncHTTPTimeout = 10 * time.Second
 
 // syncClient is a dedicated client so the per-request timeout above is
@@ -64,14 +59,13 @@ const syncHTTPTimeout = 10 * time.Second
 // would re-resolve that hostname unguarded at connect time.
 var syncClient = machines.NewGuardedHTTPClient(syncHTTPTimeout)
 
-// errMalformedShot tags a fully received 200 response whose body
-// json.Unmarshal could not read (#1151). The sync loop catches it and skips
-// that one shot — the Go equivalent of Node's "invalid data" branch —
-// instead of aborting the whole sync and leaving every newer shot
-// unimported forever. It is deliberately NOT the same as a transport error:
-// a dropped connection or a cancelled ctx aborts the sync instead, so the
-// next run retries — otherwise a later shot landing above this one would
-// hide it for good.
+// errMalformedShot tags a fully received 200 response whose body json.Unmarshal
+// could not read (#1151). The sync loop catches it and skips that one shot
+// instead of aborting the whole sync and leaving every newer shot unimported
+// forever. It is deliberately NOT the same as a transport error: a dropped
+// connection or a cancelled ctx aborts the sync instead, so the next run
+// retries — otherwise a later shot landing above this one would hide it for
+// good.
 var errMalformedShot = errors.New("malformed shot body")
 
 // syncBaseURLFor resolves a machine's base URL for the pull loop. A
@@ -102,8 +96,7 @@ var syncImageDir = shots.DefaultImageDir
 func (p *Poller) SetShotsRepo(repo *shots.Repository) { p.shots = repo }
 
 // SyncState is the subset of pollGlobalState GET /api/status's
-// lastSync/lastSyncError fields read (Phase 2a wired these — before, both
-// were permanently null per doc.go).
+// lastSync/lastSyncError fields read.
 type SyncState struct {
 	LastSync      *string
 	LastSyncError *string
@@ -116,9 +109,8 @@ func (p *Poller) SyncState() SyncState {
 	return SyncState{LastSync: p.state.lastSyncTime, LastSyncError: p.state.lastSyncError}
 }
 
-// tryStartManualSync ports the `now - state.lastManualSync < 30000` cooldown
-// check + `state.lastManualSync = now` claim as one atomic step. Returns
-// false when a sync ran less than 30s ago.
+// tryStartManualSync performs the cooldown check and the lastManualSync claim
+// as one atomic step. Returns false when a sync ran less than 30s ago.
 func (p *Poller) tryStartManualSync() bool {
 	p.state.mu.Lock()
 	defer p.state.mu.Unlock()
@@ -130,11 +122,10 @@ func (p *Poller) tryStartManualSync() bool {
 	return true
 }
 
-// RunManualSync ports lib/sync.js's syncAllMachines(): the default machine's
-// syncShots() pull loop, then every other enabled registered machine
-// (#1146). Safe to call in a goroutine (routes/system.js fires it un-awaited
-// after responding 200). Retry/backoff is unaffected by other machines'
-// outcomes — they only log.
+// RunManualSync runs the default machine's pull loop, then every other enabled
+// registered machine (#1146). Safe to call in a goroutine (postSync fires it
+// un-awaited after responding 200). Retry/backoff is unaffected by other
+// machines' outcomes — they only log.
 func (p *Poller) RunManualSync(ctx context.Context) {
 	if p.shots == nil {
 		log.Printf("system: manual sync requested but no shots repo wired — skipping")
@@ -241,11 +232,10 @@ type backfillLogs struct {
 	invalidReason  string
 }
 
-// syncDefaultMachineShots ports syncShots(defaultRuntime) — the default
-// machine branch only. Like the other two paths it is scoped to the default
-// machine's own id range (#1162): before that fix a Gaggiuino whose id is not
-// 1 but which is the default machine had its whole history filed under
-// machine 1.
+// syncDefaultMachineShots runs the default machine branch only. Like the other
+// two paths it is scoped to the default machine's own id range (#1162): before
+// that fix a Gaggiuino whose id is not 1 but which is the default machine had
+// its whole history filed under machine 1.
 func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 	// #655: skip (without touching lastSyncTime/lastSyncError) when the
 	// machine is known off — checkAndApplyMachinePower already drove the
@@ -357,13 +347,12 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 	return nil
 }
 
-// syncOtherMachines ports syncOtherMachines() (#341, #1146): after the
-// default machine's own pull, catch up every OTHER enabled registered machine
-// from its own last-synced native shot id. A GaggiMate goes through
-// syncGaggiMateShots, a Gaggiuino through syncGaggiuinoMachineShots. Each
-// machine's error is logged on its own and the loop moves on, so one machine
-// failing never stops the others — the caller's retry/backoff stays driven by
-// the default machine's result alone.
+// syncOtherMachines (#341, #1146): after the default machine's own pull, catch
+// up every OTHER enabled registered machine from its own last-synced native
+// shot id. A GaggiMate goes through syncGaggiMateShots, a Gaggiuino through
+// syncGaggiuinoMachineShots. Each machine's error is logged on its own and the
+// loop moves on, so one machine failing never stops the others — the caller's
+// retry/backoff stays driven by the default machine's result alone.
 func (p *Poller) syncOtherMachines(ctx context.Context) {
 	list, err := p.registry.ListMachines()
 	if err != nil {
@@ -377,7 +366,7 @@ func (p *Poller) syncOtherMachines(ctx context.Context) {
 			continue
 		}
 		// #773: one sync per machine at a time — a different machine's id is
-		// unaffected, matching Node's state.otherMachineSyncInFlight.
+		// unaffected.
 		if !p.beginOtherMachineSync(machine.ID) {
 			continue
 		}
@@ -420,13 +409,13 @@ func (p *Poller) endOtherMachineSync(machineID int64) {
 	delete(p.state.otherSyncInFlight, machineID)
 }
 
-// syncGaggiuinoMachineShots ports syncMachineShots() for a non-default
-// Gaggiuino machine: the same `${machineUrl}/latest` probe + `/api/shots/{id}`
-// backfill as syncDefaultMachineShots, except each fetched shot is re-keyed
-// under the machine's own global id range and stamped with its machine id
-// (#341). It records this machine's own reachability/error/firmware state
-// (#1201) but writes none of the default-only lastSyncTime/lastSyncError
-// (the backfillShots helper writes no state either).
+// syncGaggiuinoMachineShots pulls a non-default Gaggiuino machine: the same
+// `${machineUrl}/latest` probe + `/api/shots/{id}` backfill as
+// syncDefaultMachineShots, except each fetched shot is re-keyed under the
+// machine's own global id range and stamped with its machine id (#341). It
+// records this machine's own reachability/error/firmware state (#1201) but
+// writes none of the default-only lastSyncTime/lastSyncError (the
+// backfillShots helper writes no state either).
 func (p *Poller) syncGaggiuinoMachineShots(ctx context.Context, machine *machines.Machine) error {
 	base, err := syncBaseURLFor(ctx, machine)
 	if err != nil {
@@ -475,13 +464,12 @@ func (p *Poller) syncGaggiuinoMachineShots(ctx context.Context, machine *machine
 	return nil
 }
 
-// syncGaggiMateShots ports syncMachineShots() for GaggiMate (#952 Part B):
-// probes reachability via the WS adapter (live cache), then fetches
-// /api/history/index.bin to find the latest shot ID and pulls missing .slog
-// files — same blocklist/404 logic as the Gaggiuino path above.
-// HTTP unreachable is not an error: the adapter probe already recorded
-// reachability, so we return nil and skip the sync (the next scheduled tick
-// will retry).
+// syncGaggiMateShots pulls a GaggiMate (#952 Part B): probes reachability via
+// the WS adapter (live cache), then fetches /api/history/index.bin to find the
+// latest shot ID and pulls missing .slog files — same blocklist/404 logic as
+// the Gaggiuino path above. HTTP unreachable is not an error: the adapter probe
+// already recorded reachability, so we return nil and skip the sync (the next
+// scheduled tick will retry).
 func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machine) error {
 	// Probe via adapter (WS cache) — this sets MachineReachable independent of
 	// whether the HTTP history endpoint is up.
@@ -545,11 +533,10 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 	return nil
 }
 
-// fetchLatestShotID ports `axios.get(${machineUrl}/latest)` +
-// `latestResponse.data?.[0]?.lastShotId`. A nil return means the machine
-// reported no lastShotId (a valid, non-error "nothing to sync" state).
+// fetchLatestShotID probes `${machineUrl}/latest`. A nil return means the
+// machine reported no lastShotId (a valid, non-error "nothing to sync" state).
 func (p *Poller) fetchLatestShotID(ctx context.Context, machineURL string) (*int64, error) {
-	debugLogf("GET %s/latest", machineURL) // ports lib/sync.js's debugLog(`GET ${machineUrl}/latest`), #714
+	debugLogf("GET %s/latest", machineURL) // #714
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, machineURL+"/latest", nil)
 	if err != nil {
 		return nil, err
@@ -573,13 +560,12 @@ func (p *Poller) fetchLatestShotID(ctx context.Context, machineURL string) (*int
 	if !ok {
 		return nil, nil
 	}
-	debugLogf("/latest lastShotId=%d", id) // ports lib/sync.js's debugLog(`/latest raw response: ...`)
+	debugLogf("/latest lastShotId=%d", id)
 	return &id, nil
 }
 
-// fetchShot ports `axios.get(${machineUrl}/{i})`. status is the HTTP status
-// on an error (0 for a transport error), so the caller can special-case
-// 404 the way lib/sync.js's `err.response?.status === 404` branch does.
+// fetchShot fetches `${machineUrl}/{i}`. status is the HTTP status on an error
+// (0 for a transport error), so the caller can special-case 404.
 func (p *Poller) fetchShot(ctx context.Context, machineURL string, id int64) (map[string]any, int, error) {
 	shotStartedAt := time.Now()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, machineURL+"/"+strconv.FormatInt(id, 10), nil)
@@ -588,7 +574,6 @@ func (p *Poller) fetchShot(ctx context.Context, machineURL string, id int64) (ma
 	}
 	resp, err := syncClient.Do(req)
 	if err != nil {
-		// ports lib/sync.js's debugLog(`GET ${machineUrl}/${i} failed after ${ms}ms: ${err.message}`)
 		debugLogf("GET %s/%d failed after %dms: %v", machineURL, id, time.Since(shotStartedAt).Milliseconds(), err)
 		return nil, 0, err
 	}
@@ -613,14 +598,13 @@ func (p *Poller) fetchShot(ctx context.Context, machineURL string, id int64) (ma
 		// only this shot and carries on.
 		return nil, resp.StatusCode, fmt.Errorf("shot %d: %w: %v", id, errMalformedShot, err)
 	}
-	// ports lib/sync.js's debugLog(`GET ${machineUrl}/${i} -> ${ms}ms`)
 	debugLogf("GET %s/%d -> %dms", machineURL, id, time.Since(shotStartedAt).Milliseconds())
 	return shot, resp.StatusCode, nil
 }
 
-// captureMachineVersionFromShot ports syncShots()'s inline
-// `if (!state.cachedMachineVersion) { ... }` firmware sniff, keyed by the
-// machine the shot came from (#1201).
+// captureMachineVersionFromShot sniffs a firmware version out of a freshly
+// pulled shot, keyed by the machine the shot came from. It only sets the
+// version when none is cached yet (#1201).
 func (p *Poller) captureMachineVersionFromShot(machineID int64, shot map[string]any) {
 	p.state.mu.Lock()
 	defer p.state.mu.Unlock()
@@ -728,9 +712,8 @@ func effectiveSyncMax(machineID, maxLocalNative int64, blocklist []string) int64
 }
 
 // jsNumberToInt64 accepts the float64 encoding/json produces for a JSON
-// number, an int64, or a numeric JSON string (some firmware builds quote
-// the id), matching lib/sync.js tolerating whatever the machine's
-// firmware sends — JS coerced a string id, this port has to parse it.
+// number, an int64, or a numeric JSON string (some firmware builds quote the
+// id), tolerating whatever the machine's firmware sends.
 func jsNumberToInt64(v any) (int64, bool) {
 	switch t := v.(type) {
 	case float64:
@@ -747,8 +730,8 @@ func jsNumberToInt64(v any) (int64, bool) {
 	return 0, false
 }
 
-// jsStringify ports `String(ver)` for the firmware-field sniff: a JSON
-// string stays itself, a JSON number prints without a trailing ".0".
+// jsStringify renders a firmware-field value: a JSON string stays itself, a
+// JSON number prints without a trailing ".0".
 func jsStringify(v any) string {
 	switch t := v.(type) {
 	case string:
