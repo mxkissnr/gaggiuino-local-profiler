@@ -7,40 +7,37 @@ import (
 	"sync"
 )
 
-// This file ports lib/services/AchievementService.js: evaluate the registry
-// against a fresh context snapshot and persist newly-crossed badges, plus
-// shape the full catalogue + DB state for GET /api/achievements.
+// Evaluates the registry against a fresh context snapshot and persists
+// newly-crossed badges, plus shapes the full catalogue + DB state for
+// GET /api/achievements.
 //
 // # No event bus
 //
-// Node wires evaluateAll() to six bus events (shot saved, bean changed,
-// maintenance acknowledged, order completed, profile saved, backup
-// exported) AND runs one boot sweep. This Go port has no event bus, so
-// GetState() reconstructs the same "evaluate on change, not on a schedule"
-// signal from the data: it calls Repository.ChangeFingerprint() (a handful
-// of cheap COUNT/MAX aggregates, no datapoints blobs) on every read and
-// only runs the full evaluateAll(nil) pass — buildContext scans every
-// shot's datapoints and re-scores it, ~200ms on a real history (#956) —
-// when that digest, or the cached GitHub-version result, moved since the
-// last pass. A fresh install after an update still pays one retroactive
-// scoring sweep on its first GET /api/achievements, exactly what Node's
-// boot sweep does; steady-state reads with no new shot/bean/order/
-// maintenance activity pay only the fingerprint query.
+// There is no event bus, so GetState() reconstructs an "evaluate on change,
+// not on a schedule" signal from the data: it calls
+// Repository.ChangeFingerprint() (a handful of cheap COUNT/MAX aggregates, no
+// datapoints blobs) on every read and only runs the full evaluateAll(nil)
+// pass — buildContext scans every shot's datapoints and re-scores it, ~200ms
+// on a real history (#956) — when that digest, or the cached GitHub-version
+// result, moved since the last pass. A fresh install after an update still
+// pays one retroactive scoring sweep on its first GET /api/achievements;
+// steady-state reads with no new shot/bean/order/maintenance activity pay
+// only the fingerprint query.
 //
 // The four live-moment badges (first_profile/profile_edit, backup, restock)
-// are now all driven by explicit EvaluateEvent calls: cmd/server wires
+// are all driven by explicit EvaluateEvent calls: cmd/server wires
 // machines.Handlers.SetOnProfileSaved to a "profile-saved" event (#1286 R1),
 // backup.Handlers.SetOnExported to "backup-exported", and
 // library.Handlers.SetOnBeanRestocked to a "bean-changed" restock event
-// (#1286 R2). Each fires the moment its action succeeds, like Node's bus
-// listeners; as in Node, there is deliberately no retroactive path for these
-// four — every other badge re-evaluates from the data instead.
+// (#1286 R2). Each fires the moment its action succeeds; there is
+// deliberately no retroactive path for these four — every other badge
+// re-evaluates from the data instead.
 
 var supportedLangs = map[string]bool{
 	"de": true, "en": true, "it": true, "fr": true, "es": true, "nl": true,
 }
 
-// Service ports the AchievementService singleton.
+// Service evaluates the badge registry and serves its state.
 type Service struct {
 	repo *Repository
 	deps Deps
@@ -59,8 +56,8 @@ func NewService(repo *Repository, deps Deps) *Service {
 	return &Service{repo: repo, deps: deps}
 }
 
-// EvaluateEvent ports evaluateAll({ type, payload }) for a live event — the
-// call Node's bus listeners make. cmd/server calls it for profile-saved
+// EvaluateEvent runs the evaluator for one live event (a { type, payload }
+// value). cmd/server calls it for profile-saved
 // (machines.Handlers.SetOnProfileSaved), backup-exported
 // (backup.Handlers.SetOnExported) and the restock bean-changed event
 // (library.Handlers.SetOnBeanRestocked) — see #1286; it stays exported so an
@@ -114,7 +111,6 @@ func versionFingerprint(fn func() VersionCache) string {
 	return fmt.Sprintf("%s/%t", latest, vc.UpdateAvailable)
 }
 
-// evaluateAll ports AchievementService.evaluateAll(event).
 func (s *Service) evaluateAll(event *Event) ([]string, error) {
 	existing, err := s.repo.GetAll()
 	if err != nil {
@@ -170,9 +166,8 @@ func (s *Service) evaluateAll(event *Event) ([]string, error) {
 	return newlyUnlocked, nil
 }
 
-// safeCheck ports the `try { unlocked = !!badge.check(ctx) } catch { log;
-// continue }` guard — a Go check can't throw, but a nil-map/index access
-// could panic on unexpected data, so recover and treat as "not unlocked".
+// safeCheck guards a badge check — a nil-map/index access could panic on
+// unexpected data, so recover and treat it as "not unlocked".
 func safeCheck(b badge, ctx *Context) (result bool) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -193,10 +188,9 @@ func safeProgress(b badge, ctx *Context) (result int) {
 	return b.Progress(ctx)
 }
 
-// GetState ports getState(lang): the full catalogue + DB state. Runs a
-// fresh evaluateAll(nil) pass first when the change fingerprint moved (see
-// the file header for why — no event bus). lang is assumed already
-// validated by the handler.
+// GetState returns the full catalogue + DB state. Runs a fresh evaluateAll(nil)
+// pass first when the change fingerprint moved (see the file header for why —
+// no event bus). lang is assumed already validated by the handler.
 func (s *Service) GetState(lang string) ([]map[string]any, error) {
 	if err := s.maybeEvaluate(); err != nil {
 		return nil, err
@@ -248,6 +242,5 @@ func (s *Service) GetState(lang string) ([]map[string]any, error) {
 	return out, nil
 }
 
-// cards ports routes/achievements.js's CARD_KEYS constant returned as the
-// response's `cards` field.
+// cards returns the CARD_KEYS constant as the response's `cards` field.
 func cards() []string { return cardKeys }

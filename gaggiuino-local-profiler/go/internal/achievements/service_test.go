@@ -7,10 +7,9 @@ import (
 )
 
 // TestContract_EmptyState pins the Go GET /api/achievements response for a
-// fresh DB against the captured Node fixture (testdata/empty_en.json,
-// generated from lib/services/AchievementService.js — see the file header
-// there). Every badge's id/card/secret/unlocked/stamp/progress must match;
-// unlockedAt is null for all of them on an empty DB.
+// fresh DB against the captured fixture (testdata/empty_en.json — see the
+// file header there). Every badge's id/card/secret/unlocked/stamp/progress
+// must match; unlockedAt is null for all of them on an empty DB.
 func TestContract_EmptyState(t *testing.T) {
 	env := newTestEnv(t)
 	got := env.get(t, "en")
@@ -121,8 +120,8 @@ func TestSecretBadgeHiddenUntilUnlocked(t *testing.T) {
 }
 
 // TestSecretsTableDecodes verifies every base64 string in secretsTable
-// decodes to non-empty valid UTF-8 for all six languages (guards the
-// one-off transcription from lib/achievements/secrets.js).
+// decodes to non-empty valid UTF-8 for all six languages (guards the one-off
+// transcription).
 func TestSecretsTableDecodes(t *testing.T) {
 	for id := range secretsTable {
 		for _, lang := range []string{"de", "en", "it", "fr", "es", "nl"} {

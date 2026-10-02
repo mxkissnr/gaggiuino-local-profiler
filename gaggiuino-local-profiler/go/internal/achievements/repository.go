@@ -5,8 +5,7 @@ import (
 	"fmt"
 )
 
-// This file ports lib/repositories/AchievementRepository.js: deliberately
-// thin persistence for the `achievements` table (created by
+// Deliberately thin persistence for the `achievements` table (created by
 // internal/db/db.go — no schema work here). The badge conditions live in
 // registry.go; this only reads/writes the (id, unlocked_at, progress) rows
 // the evaluator decides on.
@@ -21,17 +20,16 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-// Row mirrors AchievementRepository.getAll()'s per-id value: {id,
-// unlockedAt, progress}. UnlockedAt/Progress are pointers so "column is
-// NULL" is distinct from 0.
+// Row is a per-id value: {id, unlockedAt, progress}. UnlockedAt/Progress are
+// pointers so "column is NULL" is distinct from 0.
 type Row struct {
 	ID         string
 	UnlockedAt *int64
 	Progress   *int64
 }
 
-// GetAll ports getAll(): id -> Row for every row ever written. An id with
-// no row is simply absent from the map (callers treat that as locked/0).
+// GetAll returns id -> Row for every row ever written. An id with no row is
+// simply absent from the map (callers treat that as locked/0).
 func (r *Repository) GetAll() (map[string]Row, error) {
 	rows, err := r.db.Query(`SELECT id, unlocked_at, progress FROM achievements`)
 	if err != nil {
@@ -67,10 +65,9 @@ func (r *Repository) GetAll() (map[string]Row, error) {
 // Service.GetState can call this on every GET /api/achievements and only
 // pay the ~200ms full-context scan (evaluateAll -> buildContext ->
 // FindAllExcludingTrash over every datapoints blob + per-shot scoring) when
-// the digest actually changed since the last pass. lib/db.js's Node
-// counterpart gets "evaluate on change, not on every read" for free from
-// its event bus; this port has none (see doc.go), so it derives the same
-// signal from the data. #956.
+// the digest actually changed since the last pass. Without an event bus (see
+// doc.go), this derives the "evaluate on change, not on every read" signal
+// from the data. #956.
 func (r *Repository) ChangeFingerprint() (string, error) {
 	var (
 		shotCount, shotMaxID, shotMaxTS int64
@@ -120,9 +117,9 @@ func (r *Repository) ChangeFingerprint() (string, error) {
 	), nil
 }
 
-// Unlock ports unlock(id, unlockedAt, progress): idempotent via INSERT OR
-// IGNORE — a badge already unlocked keeps its original unlocked_at forever,
-// even if evaluateAll runs again.
+// Unlock records id as unlocked, idempotent via INSERT OR IGNORE — a badge
+// already unlocked keeps its original unlocked_at forever, even if
+// evaluateAll runs again.
 func (r *Repository) Unlock(id string, unlockedAt int64, progress *int64) error {
 	var prog any
 	if progress != nil {
@@ -138,9 +135,8 @@ func (r *Repository) Unlock(id string, unlockedAt int64, progress *int64) error 
 	return nil
 }
 
-// SetProgress ports setProgress(id, progress): updates progress on a
-// still-locked badge, never touching unlocked_at (the WHERE clause makes an
-// already-unlocked row a no-op).
+// SetProgress updates progress on a still-locked badge, never touching
+// unlocked_at (the WHERE clause makes an already-unlocked row a no-op).
 func (r *Repository) SetProgress(id string, progress int64) error {
 	_, err := r.db.Exec(
 		`INSERT INTO achievements (id, unlocked_at, progress) VALUES (?, NULL, ?)
