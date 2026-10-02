@@ -39,18 +39,18 @@ import (
 //
 // # Atomicity: narrowed, not eliminated
 //
-// Every DB write is wrapped in a transaction. The structured shots restore
-// (wipe + every shot upsert + annotations + trash + blocklist +
-// library-save) commits as ONE transaction via
+// Each section commits in its own transaction, so a failure partway through
+// a restore can leave earlier sections applied and later ones not. The
+// structured shots restore (wipe + every shot upsert + annotations + trash +
+// blocklist + library-save) commits as ONE transaction via
 // shots.Repository.RestoreShots — a mid-restore failure in that section
 // rolls the whole section back, leaving the pre-restore shots intact. Orders
 // restore is one tx (orders.ReplaceAll); the two maintenance restores,
-// machines and kv are each their own tx. What is still not covered:
-// atomicity *across* those sections — a failure
-// after the shots tx commits but during, say, the maintenance write leaves
-// shots restored and maintenance not. Threading a shared *sql.Tx through
-// every repository across five packages (the only way to close that last
-// gap in-process) remains out of scope. Flagged again in doc.go and
+// machines and kv are each their own tx. Atomicity remains per-section only:
+// a failure after the shots tx commits but during, say, the maintenance write
+// leaves shots restored and maintenance not. Threading a shared *sql.Tx
+// through every repository across five packages (the only way to close that
+// last gap in-process) remains out of scope. Flagged again in doc.go and
 // go/README.md.
 const maxShotID = shots.MaxShotID
 

@@ -67,18 +67,19 @@
 //
 // # Deliberately deferred
 //
-//   - Cross-section atomicity: every restore write is wrapped in one
-//     transaction. #959 closed most of that gap — the structured shots
-//     restore (wipe + every shot upsert + annotations + trash + blocklist +
-//     library-save) now commits as ONE transaction via
-//     shots.Repository.RestoreShots, and orders restore is one tx
-//     (orders.ReplaceAll). What is still not covered: atomicity *across*
-//     sections — a failure after the shots tx commits but during a later
-//     section (maintenance, machines, kv) leaves shots restored and that
-//     section not. Threading a shared *sql.Tx through every repository
-//     across five packages (the only in-process way to close it) remains
-//     out of scope. Flagged again in restore.go's header and go/README.md's
-//     status section.
+//   - Cross-section atomicity: each section commits in its own transaction,
+//     so a failure partway through a restore can leave earlier sections
+//     applied and later ones not. The structured shots restore (wipe + every
+//     shot upsert + annotations + trash + blocklist + library-save) commits
+//     as ONE transaction via shots.Repository.RestoreShots, and orders
+//     restore is one tx (orders.ReplaceAll); the two maintenance restores,
+//     machines and kv are each their own. #959 closed most of the practical
+//     gap, but atomicity *across* sections remains: a failure after the shots
+//     tx commits but during a later section (maintenance, machines, kv)
+//     leaves shots restored and that section not. Threading a shared *sql.Tx
+//     through every repository across five packages (the only in-process way
+//     to close it) remains out of scope. Flagged again in restore.go's header
+//     and go/README.md's status section.
 //   - A restored API token (POST /api/restore's decrypted secrets.apiToken)
 //     is persisted to TOKEN_FILE on disk, but does NOT take effect in the
 //     already-running Go server process: internal/auth.RequireToken closes
