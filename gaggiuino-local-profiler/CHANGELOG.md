@@ -1,4 +1,4 @@
-## [Unreleased]
+## [3.3.0] – 2026-10-02
 ### Added
 - **The coffee library view is now fully type-checked.**
 - **Beans can now hold several bags at once as a queue, with a drag-reorderable upcoming list and per-bag stock.** (thanks @Paul-Lukas, #1122)
@@ -44,8 +44,6 @@
 - **The analytics screens now build their markup through the type-checked HTML builder, so every bean, grinder, profile and machine name they display is escaped.** Part of #1104
 - **The machine settings, status and setup-wizard modules no longer import each other in a circle, with no behavior change.** Part of #1102
 - **The unused shot-import progress tracking and its progress bar have been removed from the frontend, with no behavior change.** Part of #1200
-
-### Changed
 - **The whole frontend, including the remaining views and the whole test suite, is now type-checked with the stricter indexed-access rule enabled project-wide.** Part of #1105
 - **The library import, dial-in wizard, flavor matching, shot utilities, maintenance, grinder, machine-settings and recipe modules are now type-checked under the stricter indexed-access rule.** Part of #1105
 - **The coffee library's basket and puck-screen collections are now typed with the real API shapes.** Part of #1105
