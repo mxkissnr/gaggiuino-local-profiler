@@ -20,9 +20,8 @@ const en: Translations = {
     process_pressure:'Pressure (avg / max)', process_flow:'Pump flow (avg)', process_temp:'Temperature (avg ±σ)',
     conn_error:'Connection error',
     // #812 achievements: 48 open badges. The 6 secret ones are NOT here on
-    // purpose — their copy lives encoded in lib/achievements/secrets.js and
-    // only reaches the browser once unlocked, so it cannot be spoiled by
-    // reading this bundle.
+    // purpose — their copy is only sent to the browser once unlocked, so it
+    // cannot be spoiled by reading this bundle.
     ach_first_connect_n:'Connected', ach_first_connect_d:'Successfully connected the machine.',
     ach_first_bean_n:'First Bean', ach_first_bean_d:'Added a bean to the library.',
     ach_first_shot_n:'First Shot', ach_first_shot_d:'The very first logged shot.',

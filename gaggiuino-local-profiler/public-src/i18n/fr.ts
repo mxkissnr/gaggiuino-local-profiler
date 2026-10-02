@@ -20,9 +20,8 @@ const fr: Partial<Translations> = {
     process_pressure:'Pression (moy / max)', process_flow:'Débit pompe (moy)', process_temp:'Température (moy ±σ)',
     conn_error:'Erreur de connexion',
     // #812 achievements: 48 open badges. The 6 secret ones are NOT here on
-    // purpose — their copy lives encoded in lib/achievements/secrets.js and
-    // only reaches the browser once unlocked, so it cannot be spoiled by
-    // reading this bundle.
+    // purpose — their copy is only sent to the browser once unlocked, so it
+    // cannot be spoiled by reading this bundle.
     ach_first_connect_n:'Connectée', ach_first_connect_d:'Machine connectée avec succès.',
     ach_first_bean_n:'Premier café', ach_first_bean_d:'Un café ajouté à la bibliothèque.',
     ach_first_shot_n:'Première extraction', ach_first_shot_d:'La toute première extraction enregistrée.',

@@ -20,9 +20,8 @@ const nl: Partial<Translations> = {
     process_pressure:'Druk (gem / max)', process_flow:'Pompstroom (gem)', process_temp:'Temperatuur (gem ±σ)',
     conn_error:'Verbindingsfout',
     // #812 achievements: 48 open badges. The 6 secret ones are NOT here on
-    // purpose — their copy lives encoded in lib/achievements/secrets.js and
-    // only reaches the browser once unlocked, so it cannot be spoiled by
-    // reading this bundle.
+    // purpose — their copy is only sent to the browser once unlocked, so it
+    // cannot be spoiled by reading this bundle.
     ach_first_connect_n:'Verbonden', ach_first_connect_d:'De machine met succes verbonden.',
     ach_first_bean_n:'Eerste boon', ach_first_bean_d:'Een boon aan de bibliotheek toegevoegd.',
     ach_first_shot_n:'Eerste shot', ach_first_shot_d:'De allereerste vastgelegde shot.',

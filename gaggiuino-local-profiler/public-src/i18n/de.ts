@@ -20,9 +20,8 @@ const de: Partial<Translations> = {
     process_pressure:'Druck (Ø / Max)', process_flow:'Pumpenfluss (Ø)', process_temp:'Temperatur (Ø ±σ)',
     conn_error:'Verbindungsfehler',
     // #812 achievements: 48 open badges. The 6 secret ones are NOT here on
-    // purpose — their copy lives encoded in lib/achievements/secrets.js and
-    // only reaches the browser once unlocked, so it cannot be spoiled by
-    // reading this bundle.
+    // purpose — their copy is only sent to the browser once unlocked, so it
+    // cannot be spoiled by reading this bundle.
     ach_first_connect_n:'Angeschlossen', ach_first_connect_d:'Die Maschine erfolgreich verbunden.',
     ach_first_bean_n:'Erste Bohne', ach_first_bean_d:'Eine Bohne in der Bibliothek angelegt.',
     ach_first_shot_n:'Erster Bezug', ach_first_shot_d:'Der allererste protokollierte Shot.',

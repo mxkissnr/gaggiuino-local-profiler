@@ -10,8 +10,8 @@
 // comments below are Max's approved Theme Lab / redesign-2026-08 mockup
 // measurements, kept as-is; do not redesign.
 //
-// Body colour comes from the machine's theme (lib/machines/theme-presets.js
-// resolveTheme()); the dark/chrome parts are fixed neutral greys (not pure
+// Body colour comes from the machine's theme (resolveTheme()); the
+// dark/chrome parts are fixed neutral greys (not pure
 // black) by design, so the icon stays legible on both the app's light and
 // dark backgrounds regardless of theme.
 import { resolveTheme } from './shared/theme-presets.js';
@@ -521,13 +521,12 @@ export function setMachineIconMode(rootEl: Element, mode: MachineIconMode, heatF
 // result straight to setMachineIconMode().
 //
 // #902/#983: steam/flush/descale signal source -- msg.isSteaming/
-// msg.isFlushing/msg.isDescaling come from lib/machine-state.js's
-// deriveMachineState() (sensorSnap.steamActive/status.steamSwitchState for
-// steam; sysState.operationMode, normalized via gaggiuino-proto.js's
-// normalizeOperationMode(), for flush/descale), surfaced on every GET
-// /api/live/data / LIVE_SNAPSHOT payload by lib/poll.js's
-// buildLiveDataResponse(). Checked ahead of the isLive/heating/hot fallbacks
-// below since brewing/steaming/flushing/descaling are mutually exclusive
+// msg.isFlushing/msg.isDescaling come from the derived live machine state
+// (sensorSnap.steamActive/status.steamSwitchState for steam;
+// sysState.operationMode for flush/descale), surfaced on every GET
+// /api/live/data / LIVE_SNAPSHOT payload. Checked ahead of the
+// isLive/heating/hot fallbacks below since brewing/steaming/flushing/
+// descaling are mutually exclusive
 // machine states, checked in that priority order if somehow reported
 // alongside one another (mirrors poll.go's effectiveSteaming/
 // effectiveFlushing/effectiveDescaling priority guard).
