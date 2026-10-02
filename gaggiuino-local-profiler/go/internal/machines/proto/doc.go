@@ -47,9 +47,8 @@
 //     That encoder is gone, so this fixture is the frozen wire-format
 //     reference.
 //
-// No live-hardware verification happens in this package — the task that
-// produced this package notes that a golden-master test against a real
-// machine is a separate, later step (Max has a
+// No live-hardware verification happens in this package — a golden-master
+// test against a real machine is a separate, later step (Max has a
 // real Gaggiuino to test against, but network access to it is not available
 // in this environment). See cmd/gaggiuino-ws-probe (go/cmd/gaggiuino-ws-probe)
 // for a small CLI this package ships specifically so that later step is a
