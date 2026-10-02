@@ -41,8 +41,7 @@ interface SwitchState { configured?: boolean; state?: boolean }
 const _idKey = (id: string | undefined): string => id as string;
 
 // addEventListener's handler is typed void-returning; async click/change work
-// goes through this helper, which makes the fire-and-forget the .js already
-// did explicit.
+// goes through this helper, which makes the fire-and-forget explicit.
 function _onAsync(el: Element | null | undefined, type: string, fn: () => Promise<void>): void {
   el?.addEventListener(type, () => { void fn(); });
 }
@@ -52,7 +51,7 @@ function _onAsync(el: Element | null | undefined, type: string, fn: () => Promis
 // keep sending every notification they already were.
 // #614: notify_preheat_ready/notify_low_stock moved to the always-visible
 // Settings page card (components/notify-settings.js) — they fire regardless
-// of enable_orders (lib/preheat.js, lib/services/LibraryService.js), so this
+// of enable_orders, so this
 // panel (which only exists when Orders is enabled) is the wrong home for
 // them. Only the genuinely Orders-only types stay here.
 const NOTIFY_TYPE_KEYS = [

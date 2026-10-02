@@ -35,7 +35,7 @@ function getThemePreset(key: unknown): ThemePreset | null {
     return THEME_PRESETS.find(p => p.key === key) || null;
 }
 
-// Resolves a stored machines.theme value (see lib/db.js) to concrete {a,b}
+// Resolves a stored machines.theme value to concrete {a,b}
 // hex stops, or null if unset/unknown. Used wherever the actual colour is
 // needed (icon rendering, list swatches) rather than the raw stored shape.
 function resolveTheme(theme: unknown): ThemeStops | null {

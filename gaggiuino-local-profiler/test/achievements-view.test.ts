@@ -42,7 +42,7 @@ type Achievement = Parameters<typeof fieldHtml>[0];
 const LANGS = { de, en, it: itLang, fr, es, nl };
 
 // Mirrors CARD_KEYS/CARD_NAME_KEYS in the view (and CARD_KEYS in
-// lib/achievements/registry.js). Spelled out rather than imported so that
+// the achievement registry). Spelled out rather than imported so that
 // dropping a category from the view is a test failure, not a silently
 // shorter loop.
 const CARD_NAME_KEYS = [

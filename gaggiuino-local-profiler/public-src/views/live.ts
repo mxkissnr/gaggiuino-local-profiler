@@ -56,7 +56,7 @@ interface LiveMessage {
 }
 
 // GET /api/preheat — the fields updatePreheatWidget() reads. `ready`/`remaining`
-// are always present in the payload (buildPreheatResponse()), hence required.
+// are always present in the payload, hence required.
 interface PreheatData {
   ready: boolean;
   remaining: number;
@@ -92,8 +92,7 @@ interface LiveShotAnnotation {
 }
 
 // Multi-machine live gating (#325, #341) — shot sync now covers every
-// registered machine (lib/sync.js's syncOtherMachines()), but real-time
-// live status/brew-detection (lib/poll.js's pollViaGaggiuinoStatus()) is
+// registered machine, but real-time live status/brew-detection is
 // still hardcoded to the default machine only — deferred, not built yet.
 // 'all' and a not-yet-loaded activeMachineId both count as "assume default
 // machine" so single-machine installs (the vast majority) are unaffected.
@@ -157,8 +156,8 @@ export function renderLiveShotSetupPanel(): void {
   _renderRecipeSelect(draft.recipeId ?? null, 'lsRecipeField', 'lsRecipe');
   renderGrinderField('lsGrinder', 'lsGrinderOther', draft.grinder || '');
   // The tests' fake DOM records the raw assigned value (no <input> string
-  // coercion), so these two fields stay number-or-string exactly as the .js
-  // assigned them; a real input stringifies on assignment.
+  // coercion), so these two fields stay number-or-string when assigned;
+  // a real input stringifies on assignment.
   const doseEl = document.getElementById('lsDose') as (HTMLElement & { value: number | string }) | null;
   const grindEl = document.getElementById('lsGrindSetting') as (HTMLElement & { value: number | string }) | null;
   if (doseEl)  doseEl.value  = draft.dose ?? '';
@@ -661,9 +660,8 @@ function stopElapsedTimer(elId: string | null, finalElapsedSec: number | null): 
 // #736: SSE push handlers -- registered once in main.js's bootstrap
 // (connectEvents()/onEvent()), independent of whichever view is currently
 // open. Both payloads are already the identical shape their REST
-// counterparts (GET /api/live/data, GET /api/preheat) return -- see
-// lib/poll.js's buildLiveDataResponse()/lib/preheat.js's
-// buildPreheatResponse() -- so these are thin passthroughs, not adapters.
+// counterparts (GET /api/live/data, GET /api/preheat) return -- so these
+// are thin passthroughs, not adapters.
 export function handleLiveSnapshotEvent(payload: LiveMessage): void {
   handleLiveData(payload);
 }
@@ -684,7 +682,7 @@ export function handleLiveData(msg: LiveMessage): void {
   const idleTextEl  = document.getElementById('liveIdleText');
 
   // #655: machineReachable === false is the authoritative "machine is off/
-  // unreachable" signal (lib/poll.js's 1s backend poll) and must win over
+  // unreachable" signal (the 1s backend poll) and must win over
   // the isLive-based "ready" fallback below — otherwise a powered-off
   // machine renders identically to an idle-but-reachable one (state.liveAccum
   // is null in both cases) and the live tab keeps showing "Ready to brew"

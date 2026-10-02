@@ -7,7 +7,7 @@
 // balanced/bitter/watery/channeling), mapped to a concrete phase/field
 // adjustment via the coffee-expert skill's symptom→cause table — NOT
 // shot.profile.phases parsing, whose field shape is unverified against real
-// hardware. calcShotScore(shot) (lib/score.js) is the objective secondary
+// hardware. calcShotScore(shot) is the objective secondary
 // signal, used only for convergence detection, not for picking *which*
 // field to adjust.
 //

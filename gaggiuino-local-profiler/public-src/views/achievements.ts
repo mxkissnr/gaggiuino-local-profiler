@@ -40,7 +40,7 @@ const CARD_NAME_KEYS: Record<string, string> = {
 
 // Stamp motifs — ported from redesign-2026-08/build-prototype.py's
 // STAMP_INNER dict (see PLAN.md section 5), lowercased to match
-// registry.js's `stamp` field values. A badge whose `stamp` isn't one of
+// the registry's `stamp` field values. A badge whose `stamp` isn't one of
 // these keys (e.g. '90', '1:2', '30d', '5x') renders as plain ink text
 // instead — see stampInnerSvg() below. Paths are authored for the 54×54
 // viewBox stampSvg() wraps them in; they are not general-purpose nav icons
@@ -100,7 +100,7 @@ export function askewDeg(id: string): number {
   return (Math.abs(h) % 15) - 7; // -7..7 degrees
 }
 
-// unlockedAt is Unix SECONDS (lib/db.js's achievements table), not
+// unlockedAt is Unix SECONDS (the achievements table), not
 // milliseconds — see AchievementService.getState()'s header comment.
 export function formatStampedOn(unlockedAtSeconds: number, lang: string): string {
   const d = new Date(unlockedAtSeconds * 1000);
