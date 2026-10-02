@@ -14,10 +14,10 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports routes/maintenance.js's Express router onto Go 1.22+'s
-// method-and-wildcard http.ServeMux, the same pattern established in
-// shots/handlers.go, library/handlers.go, and internal/orders/handlers.go.
-const jsonBodyLimit = 16 * 1024 // express.json({ limit: '16kb' }) — server.js's global default.
+// This file wires the maintenance HTTP handlers onto Go 1.22+'s
+// method-and-wildcard http.ServeMux, the same pattern as the other
+// handlers.
+const jsonBodyLimit = 16 * 1024 // 16kb global JSON body limit.
 
 // Handlers wires Repository (+ the shots/library/machines cross-domain
 // dependencies computeMaintenanceStats/canonicalTask/machineHostname need)
@@ -76,13 +76,11 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, boo
 	return body, true
 }
 
-// machineHostname ports routes/maintenance.js's machineHostname()
-// (registry.hostFor()): the default machine's host, as a bare hostname,
+// machineHostname returns the default machine's host, as a bare hostname,
 // falling back to "gaggiuino" on any error — cosmetic display/log text
-// stored on newly-written maintenance_log rows, no behavior depends on it.
+// stored on newly-written maintenance_log rows; no behavior depends on it.
 // A standalone function (not a *Handlers method) so service.go's
-// MarkTaskDone can call it without needing a
-// *Handlers instance.
+// MarkTaskDone can call it without needing a *Handlers instance.
 func machineHostname(registry *machines.Registry) string {
 	m, err := registry.GetDefaultMachine()
 	if err != nil || m == nil || m.Host == "" {
@@ -170,8 +168,8 @@ func (h *Handlers) taskDone(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stats)
 }
 
-// ShotCountFor ports LibraryService.js's addMaintenanceLogEntry's shotCount
-// computation: waterfilter/grinder_* (shared equipment) count shots across
+// ShotCountFor computes the shot count a maintenance_log entry records:
+// waterfilter/grinder_* (shared equipment) count shots across
 // every machine, everything else scopes to the active machine. A standalone
 // function (not a *Handlers method) for the same reason machineHostname is
 // above — MarkTaskDone (service.go) needs it without a *Handlers instance,
@@ -209,14 +207,12 @@ func FirmwareUpdateNote(from, to string) string {
 	}
 }
 
-// findAllByMachine ports ShotRepository.js's findAll(machineId) (with
-// machineId supplied) — internal/shots.Repository.FindAll() has no
+// findAllByMachine returns the machineId-scoped shots for a maintenance
+// log's shot_count — internal/shots.Repository.FindAll() has no
 // machineId-scoped variant (only FindAllExcludingTrashByMachine, which
-// this call needs to NOT apply, since shot_count on a maintenance log
-// entry counts every synced shot, trashed or not — matching Node's
-// findAll(machineId), not findAllExcludingTrash(machineId)). Filters
-// client-side rather than adding a fifth query variant to
-// internal/shots.Repository for this one cosmetic counter.
+// this call needs to NOT apply, since shot_count counts every synced shot,
+// trashed or not). Filters client-side rather than adding a fifth query
+// variant to internal/shots.Repository for this one cosmetic counter.
 func findAllByMachine(shotsRepo *shots.Repository, machineID int64) ([]shots.Shot, error) {
 	all, err := shotsRepo.FindAll()
 	if err != nil {
@@ -305,8 +301,8 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stats)
 }
 
-// clampThreshold ports `const v = parseInt(x); (!isNaN(v) && v >= lo && v
-// <= hi) ? v : null`.
+// clampThreshold returns v when it parses as an integer within [lo, hi],
+// and nil otherwise.
 func clampThreshold(v any, lo, hi int64) any {
 	n, ok := jsParseIntAny(v)
 	if !ok || n < lo || n > hi {

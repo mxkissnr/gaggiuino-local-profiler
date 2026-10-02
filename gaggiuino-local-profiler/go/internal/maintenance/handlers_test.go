@@ -201,14 +201,12 @@ func TestTaskDone_MarksLastDateAndLogs(t *testing.T) {
 	}
 }
 
-// TestTaskDone_NoBodyIsNotAnError guards against a Go-migration regression
-// (#901) found verifying glp-integration against a standalone Go backend:
-// its maintenance_done HA service posts with no body at all (unlike its
-// other write calls, which all send at least `json={}`), and
-// routes/maintenance.js already tolerates that via req.body's optional
-// chaining default (empty string).
-// decodeJSONBody must treat a genuinely empty body as {} (io.EOF), not a
-// 400 "Invalid JSON body".
+// TestTaskDone_NoBodyIsNotAnError guards against a regression (#901) found
+// verifying glp-integration against a standalone Go backend: its
+// maintenance_done HA service posts with no body at all (unlike its other
+// write calls, which all send at least `json={}`), and an absent body's
+// optional fields must default to empty. decodeJSONBody must treat a
+// genuinely empty body as {} (io.EOF), not a 400 "Invalid JSON body".
 func TestTaskDone_NoBodyIsNotAnError(t *testing.T) {
 	h, _, _, _ := newTestHandlers(t)
 	mux := newMux(h)
@@ -335,8 +333,8 @@ func TestMaintenanceLog_PostAndDelete(t *testing.T) {
 	}
 }
 
-// TestMaintenanceLog_PostRequiresTask_EmptyBody guards against a
-// Go-migration regression (#901, the flip side of
+// TestMaintenanceLog_PostRequiresTask_EmptyBody guards against a regression
+// (#901, the flip side of
 // TestTaskDone_NoBodyIsNotAnError): POST /api/maintenance/log requires a
 // valid `task` field, so a genuinely empty request body (no bytes at all)
 // must still 400 with "Invalid task" -- httputil.DecodeJSONBody's io.EOF

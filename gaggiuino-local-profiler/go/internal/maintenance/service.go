@@ -11,22 +11,18 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports LibraryService.js's computeMaintenanceStats and
-// routes/maintenance.js's computeAllMachinesMaintenance.
-
 // ErrUnknownTask is MarkTaskDone's error for a task name that doesn't
 // canonicalize (see canonicalTask in model.go) — a static task typo, or a
 // grinder_<id> for an id that isn't currently a real grinder.
 var ErrUnknownTask = errors.New("unknown maintenance task")
 
-// MarkTaskDone ports routes/maintenance.js's POST /api/maintenance/:task/done
-// business logic (handlers.go's taskDone, which is now a thin wrapper around
-// this): validate the task, stamp lastDate, persist it, and add a
-// maintenance_log entry — then return the freshly recomputed stats for
-// machineID. Extracted into this service-layer function, not left as a
-// REST-handler-only private method, so any caller gets the exact
-// same maintenance_log side effect without silently missing it — the same
-// service-layer-extraction fix Phase 2d already applied to
+// MarkTaskDone is POST /api/maintenance/:task/done's business logic
+// (handlers.go's taskDone is a thin wrapper around this): validate the task,
+// stamp lastDate, persist it, and add a maintenance_log entry — then return
+// the freshly recomputed stats for machineID. Extracted into this
+// service-layer function, not left as a REST-handler-only private method, so
+// any caller gets the exact same maintenance_log side effect without
+// silently missing it — the same service-layer-extraction fix applied to
 // internal/orders' AcceptOrder/CompleteOrder/DeclineOrder (see that
 // package's service.go).
 func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *library.Repository, registry *machines.Registry, rawTask, notes string, machineID int64) (map[string]Stat, error) {
@@ -59,9 +55,8 @@ func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *librar
 // `{ ...task, daysSince, shotsSince, pct, status }`.
 type Stat = map[string]any
 
-// ComputeMaintenanceStats ports LibraryService.js's
-// computeMaintenanceStats(maint, machineId): per-task days/shots since
-// last done, percent-to-threshold, and a due/soon/ok/never status.
+// ComputeMaintenanceStats returns per-task days/shots since last done,
+// percent-to-threshold, and a due/soon/ok/never status.
 // descaling/backflush/grouphead/gaskets scope shot counts to the active
 // machine; waterfilter/grinder_* (shared equipment, #338) count shots
 // across every machine.
@@ -179,9 +174,8 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 	return result, nil
 }
 
-// parseJSDate ports `new Date(str).getTime()` for lastDate's two string
-// shapes: a full ISO timestamp (POST .../done writes
-// `new Date().toISOString()`) or a plain "YYYY-MM-DD" restore/import value.
+// parseJSDate parses lastDate's two string shapes: a full ISO timestamp
+// (POST .../done writes one) or a plain "YYYY-MM-DD" restore/import value.
 func parseJSDate(s string) (int64, error) {
 	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
 		if t, err := time.Parse(layout, s); err == nil {
@@ -193,12 +187,11 @@ func parseJSDate(s string) (int64, error) {
 
 var errBadDate = errors.New("unparseable date")
 
-// jsFloorDivDays ports `Math.floor(deltaMs / 86400000)`: Go's integer
-// division truncates toward zero, which diverges from Math.floor for a
-// negative deltaMs (lastTs in the future — clock skew, or a hand-edited/
-// restored backup) whenever the division isn't exact, e.g. 1.5 days in the
-// future truncates to -1 in Go but must floor to -2 like Node (#901 code
-// review).
+// jsFloorDivDays divides deltaMs by a day, rounding toward -infinity. Go's
+// integer division truncates toward zero, which diverges for a negative
+// deltaMs (lastTs in the future — clock skew, or a hand-edited/restored
+// backup) whenever the division isn't exact, e.g. -1.5 days truncates to -1
+// in Go but must floor to -2 (#901 code review).
 func jsFloorDivDays(deltaMs int64) int64 {
 	const dayMs = 86400000
 	q := deltaMs / dayMs
@@ -224,8 +217,7 @@ func jsPositiveInt(v any) (int64, bool) {
 	}
 }
 
-// AllMachinesResult mirrors routes/maintenance.js's
-// computeAllMachinesMaintenance() return shape.
+// AllMachinesResult is the shape ComputeAllMachinesMaintenance returns.
 type AllMachinesResult struct {
 	All      bool                 `json:"all"`
 	Machines []MachineMaintenance `json:"machines"`
@@ -239,9 +231,8 @@ type MachineMaintenance struct {
 	Tasks       map[string]Stat `json:"tasks"`
 }
 
-// ComputeAllMachinesMaintenance ports routes/maintenance.js's
-// computeAllMachinesMaintenance() (#392): per-machine-scoped tasks grouped
-// under `machines[]`, shared-equipment tasks computed once under `global`.
+// ComputeAllMachinesMaintenance (#392) groups per-machine-scoped tasks
+// under `machines[]` and computes shared-equipment tasks once under `global`.
 func ComputeAllMachinesMaintenance(repo *Repository, shotsRepo *shots.Repository, registry *machines.Registry) (AllMachinesResult, error) {
 	if err := registry.EnsureDefaultMachine(); err != nil {
 		return AllMachinesResult{}, err
