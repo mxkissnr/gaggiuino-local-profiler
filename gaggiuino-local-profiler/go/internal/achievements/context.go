@@ -10,28 +10,26 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports lib/achievements/context.js: the single read snapshot
-// every badge check() runs against, built once per evaluation pass so
-// evaluating 54 badges costs one pass over each table, not 54.
+// The single read snapshot every badge check() runs against, built once
+// per evaluation pass so evaluating 54 badges costs one pass over each
+// table, not 54.
 //
 // Per-install, not per-machine (see registry.go's header) — every
 // collection here is gathered across ALL machines.
 
-// VersionCache mirrors the fields of versionCheck.getCached() the
-// up_to_date badge reads (`ctx.version.latest`, `ctx.version.updateAvailable
-// === false`). Latest is nil when no /api/version request has filled the
-// cache yet — the badge treats that as "nothing known", never "up to
-// date", exactly like Node's `!!ctx.version.latest` guard. UpdateAvailable
-// is a plain bool (Node's getCached() also always returns a concrete
-// false, never null).
+// VersionCache holds the fields the up_to_date badge reads
+// (`ctx.version.latest`, `ctx.version.updateAvailable === false`). Latest is
+// nil when no /api/version request has filled the cache yet — the badge
+// treats that as "nothing known", never "up to date". UpdateAvailable is a
+// plain bool (always a concrete false, never null).
 type VersionCache struct {
 	Latest          *string
 	UpdateAvailable bool
 }
 
-// Event mirrors the `{ type, payload }` object AchievementService.evaluateAll
-// passes through to buildContext — the live-moment badges (first_profile,
-// profile_edit, backup, restock) key off it.
+// Event is the `{ type, payload }` value passed to buildContext — the
+// live-moment badges (first_profile, profile_edit, backup, restock) key off
+// it.
 type Event struct {
 	Type    string
 	Payload map[string]any
@@ -39,8 +37,7 @@ type Event struct {
 
 // Deps are the cross-domain repositories buildContext reads. VersionFn
 // returns the last-known GitHub-release check result without triggering a
-// fetch (Node's versionCheck.getCached()); cmd/server wires it to
-// internal/system's cached checker.
+// fetch; cmd/server wires it to internal/system's cached checker.
 type Deps struct {
 	Shots       *shots.Repository
 	Library     *library.Repository
@@ -50,9 +47,9 @@ type Deps struct {
 	VersionFn   func() VersionCache
 }
 
-// Context is the ported ctx object. Field names track context.js.
+// Context is the read snapshot built by buildContext.
 type Context struct {
-	Now   int64 // Date.now() — milliseconds
+	Now   int64 // milliseconds since epoch
 	Event *Event
 
 	Shots         []shots.Shot     // demo-filtered, each with ["score"] injected
@@ -69,13 +66,12 @@ type Context struct {
 	Version VersionCache
 }
 
-// staticMaintenanceTasks mirrors lib/constants.js's STATIC_MAINTENANCE_TASKS.
+// staticMaintenanceTasks is the built-in set of maintenance tasks.
 var staticMaintenanceTasks = map[string]bool{
 	"descaling": true, "backflush": true, "grouphead": true,
 	"gaskets": true, "waterfilter": true,
 }
 
-// buildContext ports context.js's buildContext(event).
 func buildContext(deps Deps, event *Event) (*Context, error) {
 	machineList, err := deps.Registry.ListMachines()
 	if err != nil {
@@ -172,11 +168,10 @@ func buildContext(deps Deps, event *Event) (*Context, error) {
 	}, nil
 }
 
-// scoreForShot ports context.js's `score: shotService.computeScoreDetail(s)
-// .score` — resolve the shot's library bean (beanId-first, coffee-name
+// scoreForShot resolves the shot's library bean (beanId-first, coffee-name
 // fallback — library.ScoreBean, the one implementation shared with the
-// server-side scorer) and score against its own brewTempC/brewRatio target
-// when it has one. Returns *int (nil for JS's null — not enough datapoints
+// server-side scorer) and scores against its own brewTempC/brewRatio target
+// when it has one. Returns *int (nil when there are not enough datapoints
 // to score).
 func scoreForShot(shot shots.Shot, beans []library.Entity) *int {
 	return shots.CalcShotScoreDetail(shot, library.ScoreBean(shot, beans)).Score

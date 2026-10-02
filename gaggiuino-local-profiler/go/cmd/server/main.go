@@ -1,27 +1,22 @@
-// Command server is the Go rewrite's HTTP bootstrap: it wires internal/db,
-// internal/auth, internal/ratelimit, internal/sse, internal/shots (Phase
-// 1c), internal/library (Phase 1d), internal/machines (Phase 1e),
-// internal/orders, internal/maintenance, internal/backup, internal/ha
-// (Phase 1f), and internal/system (Phase 1g, issue #901) together into a
-// real net/http server, in the same middleware order server.js actually
-// registers its own (read that file, not a paraphrase of it — see the
-// comment on the handler chain below).
+// Command server is the HTTP bootstrap: it wires internal/db, internal/auth,
+// internal/ratelimit, internal/sse, internal/shots, internal/library,
+// internal/machines, internal/orders, internal/maintenance, internal/backup,
+// internal/ha, and internal/system together into a real net/http server; the
+// handler chain below documents the middleware order.
 //
-// Every REST domain package the original Migrationsplan named now exists
-// and is registered: GET /api/events (Phase 1b), /shots.json + /api/shots/*
-// (Phase 1c), /api/library/* (Phase 1d), the machine-registry +
-// machine-control + machine-profile domain (Phase 1e), /api/orders/*,
-// /api/maintenance/*, GET/POST /api/backup + POST /api/restore (Phase 1f),
-// and internal/system's GET /api/machine/status, GET /api/live/data,
-// GET/POST /api/preheat*, GET /api/version, POST /api/demo/{seed,end}
-// plus the background polling loop that backs them (Phase 1g). A handful
-// of routes/system.js routes remain unrouted by design — see
-// go/internal/system/doc.go's "Scope" section for exactly which and why
-// (none of them are depended on by anything this phase ported). #977: this
-// binary is now the repo-root Dockerfile's own CMD (glp-server) — it is
-// the sole shipping entrypoint for every real install as of this cutover;
-// server.js remains in the tree but is no longer built or run in the
-// production image.
+// Every REST domain package now exists and is registered: GET /api/events,
+// /shots.json + /api/shots/*, /api/library/*, the machine-registry +
+// machine-control + machine-profile domain, /api/orders/*,
+// /api/maintenance/*, GET/POST /api/backup + POST /api/restore, and
+// internal/system's GET /api/machine/status, GET /api/live/data,
+// GET/POST /api/preheat*, GET /api/version, POST /api/demo/{seed,end} plus
+// the background polling loop that backs them. A handful of system routes
+// remain unrouted by design — see go/internal/system/doc.go's "Scope"
+// section for exactly which and why (none of them are depended on by
+// anything shipped). #977: this binary is now the repo-root Dockerfile's own
+// CMD (glp-server) — it is the sole shipping entrypoint for every real
+// install as of this cutover; the legacy server is no longer built or run in
+// the production image.
 package main
 
 import (
@@ -62,10 +57,10 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/webapp"
 )
 
-// defaultPort matches lib/constants.js's DEFAULT_PORT (8099) — the port the
-// Node app listens on today, confirmed against config.yaml's exposed add-on
-// port. Overridable via GLP_PORT for local/dev runs of this binary outside
-// the add-on container, same pattern as dbPath/tokenPath below.
+// defaultPort is the port the add-on exposes (8099), confirmed against
+// config.yaml's exposed add-on port. Overridable via GLP_PORT for local/dev
+// runs of this binary outside the add-on container, same pattern as
+// dbPath/tokenPath below.
 const defaultPort = "8099"
 
 // shutdownTimeout bounds how long main() waits for in-flight requests to
@@ -150,10 +145,9 @@ func main() {
 var onMux func(*http.ServeMux)
 
 // buildApp wires every internal/* domain into the full net/http handler
-// chain server.js registers, exactly as main() did inline before Phase 3
-// (#901) split it out so cmd/server's HA-ingress smoke test can exercise
-// the real middleware stack + real handlers end to end. ctx bounds the
-// background poller's tickers — cancelling it shuts the poller (and its
+// chain. Extracted from main() so cmd/server's HA-ingress smoke test can
+// exercise the real middleware stack + real handlers end to end. ctx bounds
+// the background poller's tickers — cancelling it shuts the poller (and its
 // live-poll goroutine) down cleanly. The returned *sql.DB is the caller's
 // to Close.
 func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error) {
@@ -175,12 +169,12 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	hub := sse.NewHub()
 	sseHandler := &sse.Handler{Hub: hub}
-	// Prime is wired below, once poller exists — routes/sse.js primes a
-	// newly-connected client with the current preheat-update/live-snapshot
-	// snapshot (buildPreheatResponse()/buildLiveDataResponse(), both
-	// synchronous reads) before subscribing it to the Hub. The
-	// sync-progress priming loop Node also does has no Go equivalent yet
-	// (state.syncProgress isn't ported — see internal/system/doc.go).
+	// Prime is wired below, once poller exists: it primes a newly-connected
+	// client with the current preheat-update/live-snapshot snapshot
+	// (buildPreheatResponse()/buildLiveDataResponse(), both synchronous reads)
+	// before subscribing it to the Hub. The sync-progress priming loop has no
+	// equivalent yet (state.syncProgress isn't implemented — see
+	// internal/system/doc.go).
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/events", sseHandler)
@@ -222,10 +216,8 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		)
 	})
 
-	// Phase 2f (#901): wire the share-card renderer's two cross-domain
-	// lookups (lib/card.js does both through a lazy require + try/catch).
-	// Closures keep internal/shots from importing internal/db or
-	// internal/library.
+	// Wire the share-card renderer's two cross-domain lookups. Closures keep
+	// internal/shots from importing internal/db or internal/library.
 	shotsHandlers.SetCardDeps(
 		func() string {
 			id, err := db.EnsureInstallID(sqlDB)
@@ -237,21 +229,19 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		func(coffeeName string) string { return library.ResolveBeanOriginCode(coffeeName, libRepo) },
 	)
 
-	// Phase 2g (#901): fire-and-forget bean-region geocoding
-	// (lib/geo.js + LibraryService.geocodeBean). library.CreateBean/
-	// UpdateBean call library.GeocodeHook un-awaited when a bean's region
-	// is set/changed — the Go equivalent of routes/library/beans.js's
-	// `libraryService.geocodeBean(id).catch(() => {})`. Set here (nil in
-	// tests) to keep those functions' signatures unchanged.
+	// Fire-and-forget bean-region geocoding: library.CreateBean/UpdateBean
+	// call library.GeocodeHook without waiting when a bean's region is
+	// set/changed. Set here (nil in tests) to keep those functions'
+	// signatures unchanged.
 	geocoder := library.NewGeocoder(libRepo)
 	library.GeocodeHook = func(beanID int64, _, _ string) {
 		geocoder.GeocodeBean(context.Background(), beanID)
 	}
 
-	// Phase 2c (#901): the bean-import domain — GET /api/import/url plus
-	// GET/POST /api/import/settings. beans is the loadLibrary().beans lookup
-	// routes/import.js's duplicate-warning check needs, passed as a callback
-	// (not a library import) the same way library.GeocodeHook is wired below.
+	// The bean-import domain — GET /api/import/url plus GET/POST
+	// /api/import/settings. beans is the loadLibrary().beans lookup the
+	// duplicate-warning check needs, passed as a callback (not a library
+	// import) the same way library.GeocodeHook is wired above.
 	importerHandlers := importer.NewHandlers(importer.NewRepository(sqlDB), func() []map[string]any {
 		lib, err := libRepo.GetLibrary()
 		if err != nil {
@@ -262,33 +252,27 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	importerHandlers.RegisterRoutes(mux)
 
 	registry := machines.NewRegistry(sqlDB)
-	// ports server.js's startup registry.logRegistrySnapshot() (#714) --
-	// behind debug_logging (#977 follow-up), so it's a no-op unless that
-	// option is on. Unlike Node, nothing has necessarily called
-	// EnsureDefaultMachine yet at this point (it's a lazy, per-request call
-	// in this Go port — see its own doc comment), so a genuinely fresh /data
-	// can log "(none)" here even though the default machine appears a
-	// moment later on the first real request.
+	// Startup logRegistrySnapshot() (#714) — behind debug_logging (#977
+	// follow-up), so it's a no-op unless that option is on. Nothing has
+	// necessarily called EnsureDefaultMachine yet at this point (it's a lazy,
+	// per-request call — see its own doc comment), so a genuinely fresh /data
+	// can log "(none)" here even though the default machine appears a moment
+	// later on the first real request.
 	registry.LogRegistrySnapshot()
 	profilesRepo := machines.NewProfilesRepository(sqlDB)
 	machinesHandlers := machines.NewHandlers(registry, hub, profilesRepo)
 	machinesHandlers.RegisterRoutes(mux)
 
-	// Phase 2e (#901): routes/debug.js — GET /api/debug/export-db,
-	// POST /api/debug/import-db — plus routes/system.js's H2 GET
-	// /api/debug/machine. All three (and the two ingress routes below) are
-	// gated on GLP_DEV_BUILD (#1051: previously /api/debug/machine and the
-	// ingress routes used a NODE_ENV != production check instead, but
-	// nothing in the shipped image ever sets NODE_ENV, so they were live on
-	// every real install). importDB's own http.MaxBytesReader is the
-	// route-scoped 500 MB body ceiling server.js:192 sets with
-	// express.raw({ limit: '500mb' }) — see the handler-chain comment below
-	// and go/internal/debug/debug.go.
-	//
-	// Phase 3 (#901): GET /api/debug/ingress (+ /sse-probe) — a Go-only
-	// HA-ingress self-diagnostic for opening through the real HA panel, same
-	// GLP_DEV_BUILD gating as /api/debug/machine. See
-	// go/internal/debug/ingress.go.
+	// The debug domain — GET /api/debug/export-db, POST /api/debug/import-db,
+	// GET /api/debug/machine, and GET /api/debug/ingress (+ /sse-probe), a
+	// Go-only HA-ingress self-diagnostic for opening through the real HA
+	// panel. All of them (and the two ingress routes below) are gated on
+	// GLP_DEV_BUILD (#1051: previously /api/debug/machine and the ingress
+	// routes used a NODE_ENV != production check instead, but nothing in the
+	// shipped image ever sets NODE_ENV, so they were live on every real
+	// install). importDB's own http.MaxBytesReader is the route-scoped 500 MB
+	// body ceiling — see the handler-chain comment below and
+	// go/internal/debug/debug.go.
 	debug.NewHandlers(sqlDB, dbPath, registry).RegisterRoutes(mux)
 
 	haClient := ha.NewClientFromEnv()
@@ -296,32 +280,31 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	ordersHandlers := orders.NewHandlers(ordersRepo, shotsRepo, libRepo, registry, haClient)
 	ordersHandlers.RegisterRoutes(mux)
 
-	// Phase 1g (#901): the background polling loop that backs
-	// GET /api/machine/status, GET /api/live/data, GET/POST /api/preheat*,
-	// and the live-snapshot/preheat-update SSE events — see
-	// internal/system/doc.go for the full scope and what it deliberately
-	// doesn't port. poller.Start launches its own 30s HA-check/preheat
-	// tickers bound to ctx; the process runs until the OS kills it (no
-	// graceful-shutdown signal handling exists in this binary yet, same as
-	// every other domain package here), so ctx is background — cancelling
-	// it would only matter for a future clean-shutdown path.
+	// The background polling loop that backs GET /api/machine/status,
+	// GET /api/live/data, GET/POST /api/preheat*, and the
+	// live-snapshot/preheat-update SSE events — see internal/system/doc.go
+	// for the full scope and what it deliberately leaves out. poller.Start
+	// launches its own 30s HA-check/preheat tickers bound to ctx; the process
+	// runs until the OS kills it (no graceful-shutdown signal handling exists
+	// in this binary yet, same as every other domain package here), so ctx is
+	// background — cancelling it would only matter for a future
+	// clean-shutdown path.
 	poller := system.NewPoller(registry, machinesHandlers, hub, haClient)
-	// Phase 2a (#901): POST /api/sync's manual shot-history pull loop
-	// persists through shotsRepo — see go/internal/system/sync.go.
+	// POST /api/sync's manual shot-history pull loop persists through
+	// shotsRepo — see go/internal/system/sync.go.
 	poller.SetShotsRepo(shotsRepo)
 	// Offline profile editor (2026-09-09): pushes locally-saved profile
 	// edits to the machine on reconnect/after a brew/periodically — see
 	// go/internal/system/profile_sync.go.
 	poller.SetProfilesRepo(profilesRepo)
 
-	// Phase 2d (#901): MQTT live-data transport (#608). mqttRepo is the
-	// Settings-page toggle + broker connection (kv.key = 'mqtt_settings', no
-	// migration needed). mqttTransport is lib/live-transport.js's dispatch
-	// seam — wired into the poller so the default machine's live reads go to
-	// the MQTT subscription instead of the adapter's WS session whenever the
-	// toggle selects it. The 4 /api/mqtt/* routes reuse machinesHandlers'
-	// GetAdapter (apply-to-machine) and haClient's Supervisor access
-	// (discovery).
+	// MQTT live-data transport (#608). mqttRepo is the Settings-page toggle +
+	// broker connection (kv.key = 'mqtt_settings', no migration needed).
+	// mqttTransport is the transport dispatch seam — wired into the poller so
+	// the default machine's live reads go to the MQTT subscription instead of
+	// the adapter's WS session whenever the toggle selects it. The 4
+	// /api/mqtt/* routes reuse machinesHandlers' GetAdapter
+	// (apply-to-machine) and haClient's Supervisor access (discovery).
 	mqttRepo := mqtt.NewRepository(sqlDB)
 	mqttTransport := mqtt.NewTransport(mqtt.NewClient(), mqttRepo)
 	poller.SetLiveTransport(mqttTransport)
@@ -329,9 +312,8 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	poller.Start(ctx)
 
-	// #1152: Node ran purgeExpiredTrash once at startup and then every 24h
-	// (server.js's startup call + its setInterval). StartTrashPurge mirrors
-	// both — the immediate purge plus a 24h ticker bound to ctx.
+	// #1152: purge expired trash once at startup and then every 24h —
+	// StartTrashPurge does the immediate purge plus a 24h ticker bound to ctx.
 	shots.StartTrashPurge(ctx, shots.NewService(shotsRepo), 24*time.Hour)
 
 	// Closes internal/orders' shop-broadcast deferral (see
@@ -343,9 +325,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	systemHandlers := system.NewHandlers(poller, demoService, token)
 	systemHandlers.RegisterRoutes(mux)
 
-	// routes/sse.js primes a newly-connected client with the current
-	// preheat/live snapshot before subscribing it to future pushes — see
-	// the Prime field's doc comment above.
+	// Prime a newly-connected client with the current preheat/live snapshot
+	// before subscribing it to future pushes — see the Prime field's doc
+	// comment above.
 	sseHandler.Prime = func() []sse.Event {
 		return []sse.Event{
 			{Type: sse.EventPreheatUpdate, Data: poller.PreheatStatus()},
@@ -356,10 +338,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	maintenanceRepo := maintenance.NewRepository(sqlDB, libRepo)
 	maintenanceHandlers := maintenance.NewHandlers(maintenanceRepo, shotsRepo, libRepo, registry)
 	maintenanceHandlers.RegisterRoutes(mux)
-	// #901 (Phase 1f): closes the Phase 1d gap flagged in
-	// internal/library/doc.go — deleting a grinder now also removes its
-	// `grinder_{id}` maintenance-table row, via a callback (not a direct
-	// import) since internal/maintenance already imports internal/library.
+	// Deleting a grinder now also removes its `grinder_{id}` maintenance-table
+	// row, via a callback (not a direct import) since internal/maintenance
+	// already imports internal/library (the gap flagged in
+	// internal/library/doc.go).
 	libraryHandlers.SetOnGrinderDeleted(maintenanceRepo.DeleteGrinderTask)
 
 	// #1136: a firmware update triggered from the app shows up in the
@@ -402,12 +384,11 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	}))
 	mcp.NewSettingsHandlers(mcpRepo).RegisterRoutes(mux)
 
-	// Phase 2b (#901): the achievements ("stamp card") domain —
-	// GET /api/achievements. A pure-logic port reading across shots,
-	// library, orders, maintenance, machines and the cached version check
-	// (systemHandlers.CachedVersion, via a callback — no cross-domain
-	// import). See go/internal/achievements/doc.go, incl. the documented
-	// "no event bus" design (evaluate-before-read instead).
+	// The achievements ("stamp card") domain — GET /api/achievements. Pure
+	// logic reading across shots, library, orders, maintenance, machines and
+	// the cached version check (systemHandlers.CachedVersion, via a callback
+	// — no cross-domain import). See go/internal/achievements/doc.go, incl.
+	// the documented "no event bus" design (evaluate-before-read instead).
 	achievementsRepo := achievements.NewRepository(sqlDB)
 	achievementsSvc := achievements.NewService(achievementsRepo, achievements.Deps{
 		Shots:       shotsRepo,
@@ -467,15 +448,13 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		}
 	})
 
-	// Phase 1 (#901): the production frontend. internal/webapp embeds and
-	// serves the existing Vite SPA bundle (gaggiuino-local-profiler/
-	// public-src, built to public/) — byte-for-byte the UI the Node app
-	// serves today, REST+SSE only, all relative paths. Registered last so
-	// its catch-all "GET /" only ever runs for paths no more-specific
-	// pattern (every /api/* route, /shots.json) claimed. Same
-	// registration-outside-/api/ auth model as those: GET falls through
-	// auth.RequireToken's static-asset bypass, exactly as the Node app's own
-	// express.static frontend does. See internal/webapp/doc.go.
+	// The production frontend. internal/webapp embeds and serves the existing
+	// Vite SPA bundle (gaggiuino-local-profiler/public-src, built to public/)
+	// — REST+SSE only, all relative paths. Registered last so its catch-all
+	// "GET /" only ever runs for paths no more-specific pattern (every /api/*
+	// route, /shots.json) claimed. Same registration-outside-/api/ auth model
+	// as those: GET falls through auth.RequireToken's static-asset bypass,
+	// exactly as the static frontend always has. See internal/webapp/doc.go.
 	webapp.NewHandlers().RegisterRoutes(mux)
 
 	if onMux != nil {
@@ -484,23 +463,18 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	limiter := ratelimit.New(rateLimitWindow, rateLimitMax)
 
-	// server.js's ACTUAL app.use() order — security headers (lines ~83-98),
-	// then the app-level rate limiter (line 104, deliberately ahead of auth
-	// so it also caps unauthenticated login/token-probing traffic, per
-	// lib/middleware/rateLimit.js's own comment), then token auth
-	// (lines ~144-173). Read from the innermost handler outward, this chain
-	// applies auth first, rate-limit second, security headers last, which
-	// is the correct nesting to make requests experience them in that
-	// server.js order.
+	// The middleware order: security headers, then the app-level rate limiter
+	// (deliberately ahead of auth so it also caps unauthenticated
+	// login/token-probing traffic), then token auth. Read from the innermost
+	// handler outward, this chain applies auth first, rate-limit second,
+	// security headers last, which is the correct nesting to make requests
+	// experience them in that order.
 	//
-	// server.js's body-parser step (lines ~178-193) has no Go equivalent to
-	// slot in here: net/http reads a request body lazily per-handler, not
-	// through a chained global middleware, so there is nothing to add yet.
-	// Phase 1c's handlers each bound their own request body size per-route
-	// the way routes/backup.js's /api/restore and routes/debug.js's
-	// /api/debug/import-db use route-scoped express.json()/express.raw()
-	// limits today — internal/debug's importDB, for one, wraps its body in
-	// http.MaxBytesReader at server.js:192's exact 500 MB ceiling.
+	// There is no global body-parser step to slot in here: net/http reads a
+	// request body lazily per-handler, not through a chained global
+	// middleware, so there is nothing to add. Instead each handler bounds its
+	// own request body size per-route — internal/debug's importDB, for one,
+	// wraps its body in http.MaxBytesReader at the 500 MB ceiling.
 	handler := auth.SecurityHeaders(
 		limiter.Middleware(
 			auth.RequireToken(token)(mux),
@@ -517,13 +491,10 @@ func getEnv(name, def string) string {
 	return def
 }
 
-// getEnvNumber ports lib/middleware/rateLimit.js's
-// `Number(process.env.X) || default` pattern for GLP_RATE_LIMIT_WINDOW_MS/
-// GLP_RATE_LIMIT_MAX: an unset env var, one that fails to parse as a number
-// (JS's Number() returns NaN, which is falsy), or one that parses to 0
-// (also falsy in JS) all fall back to def — matching the Node original's
-// behavior exactly, including that a literal "0" override is treated the
-// same as no override.
+// getEnvNumber parses GLP_RATE_LIMIT_WINDOW_MS/GLP_RATE_LIMIT_MAX: an unset
+// env var, one that fails to parse as a number, or one that parses to 0 all
+// fall back to def, including that a literal "0" override is treated the same
+// as no override.
 func getEnvNumber(name string, def float64) float64 {
 	v, ok := os.LookupEnv(name)
 	if !ok {
@@ -537,14 +508,11 @@ func getEnvNumber(name string, def float64) float64 {
 }
 
 // tcpNoDelayListener explicitly disables Nagle's algorithm on every
-// accepted connection. routes/sse.js's #740 fix (res.socket.setNoDelay(true))
-// has no real equivalent to port here: Go's net.TCPConn already defaults
-// NoDelay to true for every connection Go's own net package creates (see
-// net.TCPConn.SetNoDelay's doc comment) — Node's net.Socket defaults the
-// other way, which is the only reason that explicit call exists there. This
-// wrapper is defense-in-depth that makes the guarantee explicit at the
-// listener level for every connection this process accepts, rather than a
-// port of Node's per-connection workaround (see internal/sse/doc.go).
+// accepted connection. Go's net.TCPConn already defaults NoDelay to true for
+// every connection Go's own net package creates (see
+// net.TCPConn.SetNoDelay's doc comment), so this wrapper is defense-in-depth
+// that makes the guarantee explicit at the listener level for every
+// connection this process accepts (see internal/sse/doc.go).
 type tcpNoDelayListener struct{ net.Listener }
 
 func (l tcpNoDelayListener) Accept() (net.Conn, error) {
