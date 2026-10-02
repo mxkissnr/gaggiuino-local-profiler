@@ -7,7 +7,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
-// This file ports routes/library/baskets.js (#635).
+// This file implements the basket endpoints (#635).
 
 var basketWallTypes = map[string]bool{"pressurized": true, "single-wall": true, "precision-machined": true, "high-flow": true}
 var basketShapes = map[string]bool{"straight": true, "tapered": true}
@@ -21,7 +21,7 @@ func findBasketIndex(lib Library, id int64) int {
 	return -1
 }
 
-// listBaskets ports GET /api/library/baskets.
+// listBaskets serves GET /api/library/baskets.
 func (h *Handlers) listBaskets(w http.ResponseWriter, r *http.Request) {
 	lib, err := h.repo.GetLibrary()
 	if err != nil {
@@ -31,7 +31,7 @@ func (h *Handlers) listBaskets(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, lib.Baskets)
 }
 
-// createBasket ports POST /api/library/basket — a thin wrapper around
+// createBasket handles POST /api/library/basket — a thin wrapper around
 // CreateBasket (create.go).
 func (h *Handlers) createBasket(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
@@ -54,7 +54,7 @@ func (h *Handlers) createBasket(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, basket)
 }
 
-// updateBasket ports PUT /api/library/basket/:id — a thin wrapper around
+// updateBasket handles PUT /api/library/basket/:id — a thin wrapper around
 // UpdateBasket (update.go).
 func (h *Handlers) updateBasket(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
@@ -79,7 +79,7 @@ func (h *Handlers) updateBasket(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, basket)
 }
 
-// deleteBasket ports DELETE /api/library/basket/:id.
+// deleteBasket handles DELETE /api/library/basket/:id.
 func (h *Handlers) deleteBasket(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	var imgExt string
@@ -120,7 +120,7 @@ func (h *Handlers) deleteBasket(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// getBasketImage ports GET /api/library/basket/:id/image.
+// getBasketImage handles GET /api/library/basket/:id/image.
 func (h *Handlers) getBasketImage(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	lib, err := h.repo.GetLibrary()
@@ -137,7 +137,7 @@ func (h *Handlers) getBasketImage(w http.ResponseWriter, r *http.Request) {
 	h.serveImage(w, r, ext, "basket-", id)
 }
 
-// postBasketImage ports POST /api/library/basket/:id/image.
+// postBasketImage handles POST /api/library/basket/:id/image.
 func (h *Handlers) postBasketImage(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitImage(w, r) {
 		return
