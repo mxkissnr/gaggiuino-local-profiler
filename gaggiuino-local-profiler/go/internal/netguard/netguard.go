@@ -1,7 +1,6 @@
-// Package netguard holds the SSRF-guard machinery lib/ssrf-guard.js's
-// shared `_assertHostPasses` helper implements once in Node: resolve a
-// hostname (or accept a literal IP), then reject it if any resolved
-// address matches a caller-supplied "blocked" predicate. internal/library's
+// Package netguard holds the SSRF-guard machinery: resolve a hostname (or
+// accept a literal IP), then reject it if any resolved address matches a
+// caller-supplied "blocked" predicate. internal/library's
 // assertPublicHost (blocks private/loopback/link-local — used against
 // untrusted external hosts) and internal/machines's assertMachineHost
 // (blocks only loopback/link-local/cloud-metadata — used against the app
@@ -40,11 +39,11 @@ func IsBlocked(err error) bool {
 }
 
 // AssertHost resolves hostname via lookupIPAddr (or, for a literal IP,
-// parses it directly without a DNS round-trip — same as the Node
-// original), and returns an *ErrBlocked if blocked reports true for any
-// resolved address. A resolution failure is returned as a plain (non-
-// ErrBlocked) error, matching both callers' existing distinction between
-// "blocked by policy" and "just couldn't resolve."
+// parses it directly without a DNS round-trip), and returns an *ErrBlocked
+// if blocked reports true for any resolved address. A resolution failure is
+// returned as a plain (non-ErrBlocked) error, matching both callers'
+// existing distinction between "blocked by policy" and "just couldn't
+// resolve."
 func AssertHost(ctx context.Context, hostname string, blocked func(net.IP) bool, lookupIPAddr func(context.Context, string) ([]net.IPAddr, error)) error {
 	_, err := AssertHostResolved(ctx, hostname, blocked, lookupIPAddr)
 	return err

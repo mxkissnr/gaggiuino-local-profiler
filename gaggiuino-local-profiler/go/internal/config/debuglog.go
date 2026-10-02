@@ -50,10 +50,9 @@ var debugLoggingCache struct {
 // hot path that calls this.
 const cacheTTL = 5 * time.Second
 
-// IsDebugLoggingEnabled ports lib/data.js's isDebugLoggingEnabled() /
-// loadOptions().debug_logging (#977 follow-up): off by default, falling
-// back to GLP_DEBUG_LOGGING (#764, standalone Docker) when options.json is
-// missing or doesn't parse.
+// IsDebugLoggingEnabled reports whether debug logging is on: off by default,
+// falling back to GLP_DEBUG_LOGGING (#764, standalone Docker) when
+// options.json is missing or doesn't parse.
 //
 // Lives in this standalone leaf package rather than internal/system,
 // because internal/machines needs this exact check too
