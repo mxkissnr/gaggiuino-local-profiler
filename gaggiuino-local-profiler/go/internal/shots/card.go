@@ -19,66 +19,57 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
-// card.go is the Go port of lib/card.js's GET /api/shots/:id/card
-// share-card renderer (Phase 2f, issue #901). lib/card.js draws a PNG with
-// @napi-rs/canvas; the maintainer's decision (see the round's plan) was to
-// rebuild the card as an SVG we fully control and rasterise it with a
-// pure-Go, cgo-free renderer so the single-static-binary goal survives.
+// card.go renders the GET /api/shots/:id/card share-card PNG. The card is an
+// SVG we fully control, rasterised with a pure-Go, cgo-free renderer so the
+// single-static-binary goal survives.
 //
 // Pipeline:
 //
-//  1. buildCardSVG assembles the card as an SVG string via text/template-
-//     free string building (we own every element, so there's nothing to
-//     sanitise beyond XML-escaping user text — see esc). The
-//     pressure/flow/temp curves are plain <path> elements built from the
-//     shot's own datapoint series (the same series shot-chart.js feeds its
-//     Chart.js chart — dp.pressure/pumpFlow/weightFlow/shotWeight|weight/
-//     temperature and the dp.target* lines, all tenths, ÷10 here).
+//  1. The SVG is assembled via text/template-free string building (we own
+//     every element, so there's nothing to sanitise beyond XML-escaping user
+//     text — see esc). The pressure/flow/temp curves are plain <path>
+//     elements built from the shot's own datapoint series
+//     (dp.pressure/pumpFlow/weightFlow/shotWeight|weight/temperature and the
+//     dp.target* lines, all tenths, ÷10 here).
 //  2. rasterise renders that SVG to PNG with github.com/kanrichan/resvg-go
 //     (resvg 0.35 compiled to wasm, run on wazero — no cgo). Fonts are the
 //     Go typeface (golang.org/x/image/font/gofont), whose .TTF bytes are
 //     already compiled into those packages, so no separate //go:embed is
-//     needed to get them into the static binary. lib/card.js registers
-//     system Liberation/DejaVu Sans plus a bundled Fraunces woff2 for the
-//     bean headline; fontdb in the resvg wasm build has no woff2 support,
-//     so the headline uses bold Go sans here instead — lib/card.js's Fs()
-//     itself falls back to sans when the serif fails to register, so this
-//     is that same documented fallback, just always taken.
+//     needed to get them into the static binary. fontdb in the resvg wasm
+//     build has no woff2 support, so the bean headline uses bold Go sans
+//     instead — the serif would fall back to sans anyway, so this is just
+//     that fallback, always taken.
 //
-// Deviations from lib/card.js, all deliberate and all cosmetic:
+// Cosmetic deviations, all deliberate:
 //
 //   - The frozen LEGACY_GLP layout (boxed header/footer/tiles, score ring)
 //     for pre-#462 cached links is not reproduced — see card_palette.go.
 //   - The shot photo "avatar" and the icon.png logo are not drawn; the
-//     header shows the "GLP" wordmark lib/card.js falls back to when
-//     icon.png is missing.
+//     header shows the "GLP" wordmark anyway.
 //   - Visual equivalence, not pixel parity: text metrics come from the Go
-//     font, not @napi-rs/canvas, so wrap/centre positions differ slightly.
+//     font, so wrap/centre positions differ slightly.
 //
-// lib/card.js's "canvas module not available" 503 branch (routes/shots.js)
-// has no equivalent: the renderer is always compiled in. The frontend
-// already treats 501/503 as "card unavailable", so a partial Go rollout
-// stays safe regardless.
+// There is no "canvas unavailable" 503 branch: the renderer is always compiled
+// in. The frontend already treats 501/503 as "card unavailable", so a partial
+// Go rollout stays safe regardless.
 
-// cardDeps are the two cross-domain lookups lib/card.js does through a
-// lazy require() and a try/catch (so a card never fails over them). Wired
-// from cmd/server; either may be nil, in which case that piece is omitted
-// exactly as lib/card.js omits it on a caught error.
+// cardDeps are the two cross-domain lookups the card renderer performs
+// best-effort (so a card never fails over them). Wired from cmd/server;
+// either may be nil, in which case that piece is omitted.
 type cardDeps struct {
-	// installCode returns the install's short code (lib/card.js's
-	// installCodeFor(getInstallId())) or "" if unavailable.
+	// installCode returns the install's short code, or "" if unavailable.
 	installCode func() string
-	// beanOriginCode ports resolveBeanOriginCode(coffeeName, library): the
-	// origin chip's country code, or "" if none resolves.
+	// beanOriginCode returns the origin chip's country code for coffeeName,
+	// or "" if none resolves.
 	beanOriginCode func(coffeeName string) string
 }
 
 const installCodeAlphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
 
-// installCodeFor ports lib/card.js's installCodeFor: sha256 the UUID, take
-// the first 8 bytes as a big-endian uint64, render 8 base-31 digits from
-// the confusable-free alphabet, format as XXXX-XXXX. The algorithm is
-// frozen (it's in screenshots people have posted) — must never change.
+// InstallCodeFor derives the install's short code: sha256 the UUID, take the
+// first 8 bytes as a big-endian uint64, render 8 base-31 digits from the
+// confusable-free alphabet, format as XXXX-XXXX. The algorithm is frozen (it's
+// in screenshots people have posted) — must never change.
 func InstallCodeFor(uuid string) string {
 	sum := sha256.Sum256([]byte(uuid))
 	n := binary.BigEndian.Uint64(sum[:8])
@@ -114,8 +105,8 @@ func InstallCodeFor(uuid string) string {
 // holds an independent wazero runtime + linear memory, and that
 // re-verification only checked DB-endpoint latency and RSS, never
 // concurrent card-render latency. #980 found the gap: against a real
-// 2000-shot install, GET /api/shots/{id}/card at --concurrency 10 was 4.1x
-// slower than Node's (p50 1271 ms vs 308 ms).
+// 2000-shot install, GET /api/shots/{id}/card at --concurrency 10 had a
+// p50 of 1271 ms.
 //
 // Two things were verified, not assumed:
 //
@@ -129,7 +120,7 @@ func InstallCodeFor(uuid string) string {
 //     resvg parse+layout+rasterise work — not in this package's SVG string
 //     building or in repeat JIT compilation. There's no cheap win here
 //     short of replacing the cgo-free wasm renderer with a native one,
-//     which would give up the single-static-binary goal #901 chose it for.
+//     which would give up the single-static-binary goal it exists to keep.
 //
 // So the only lever available without redesigning the renderer is pool
 // size — trading RSS for less queueing. Rather than pick a new fixed
@@ -153,10 +144,10 @@ func InstallCodeFor(uuid string) string {
 //	3     1493 ms   145 MB    166 MB
 //	4     1416 ms   180 MB    206 MB   (this change's default on this box)
 //
-// This narrows, not closes, the gap to Node — the ~130 ms/render wasm cost
-// is the real floor per the profile above, and no pool size removes it.
-// It's still a straight improvement with no regression on the RSS-tightest
-// hosts, and it lets a host with real spare cores actually use them.
+// The ~130 ms/render wasm cost is the real floor per the profile above, and
+// no pool size removes it. It's still a straight improvement with no
+// regression on the RSS-tightest hosts, and it lets a host with real spare
+// cores actually use them.
 func defaultResvgPoolSize() int {
 	n := runtime.GOMAXPROCS(0)
 	if n < 2 {
@@ -268,8 +259,8 @@ func rasterise(svg []byte, w, h uint32) ([]byte, error) {
 	return cardPool.render(svg, w, h)
 }
 
-// renderShareCard is the package entry point routes/shots.js's getCard
-// calls. score is the shot's computed score (may be nil).
+// renderShareCard is the package entry point the card handler calls. score is
+// the shot's computed score (may be nil).
 func renderShareCard(shot Shot, score *int, format, accent, theme string, deps cardDeps) ([]byte, error) {
 	c := newCardModel(shot, score, format, accent, theme, deps)
 	svg := c.svg()
@@ -314,8 +305,8 @@ func faceFor(size float64, bold bool) font.Face {
 	return fc
 }
 
-// textWidth measures s in the Go font at the given px size. Used for
-// truncation and centring — the equivalent of ctx.measureText().width.
+// textWidth measures s in the Go font at the given px size, for truncation
+// and centring.
 func textWidth(s string, size float64, bold bool) float64 {
 	fc := faceFor(size, bold)
 	if fc == nil {
@@ -326,8 +317,7 @@ func textWidth(s string, size float64, bold bool) float64 {
 
 var _ = fixed.I // keep the math/fixed import meaningful across Go versions
 
-// truncateToWidth ports lib/card.js's truncateText: drop 4 runes at a time
-// (plus an ellipsis) until it fits.
+// truncateToWidth drops 4 runes at a time (plus an ellipsis) until s fits.
 func truncateToWidth(s string, maxWidth, size float64, bold bool) string {
 	r := []rune(s)
 	for textWidth(string(r), size, bold) > maxWidth && len(r) > 4 {

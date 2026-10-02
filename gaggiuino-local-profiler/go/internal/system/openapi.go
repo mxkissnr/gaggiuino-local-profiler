@@ -35,10 +35,9 @@ func buildOpenAPIJSON() {
 	openAPIJSON, openAPIErr = json.Marshal(doc)
 }
 
-// getOpenAPI ports GET /api/openapi.json. On a conversion failure it
-// mirrors routes/system.js's `catch (e) { res.status(500).json({ error:
-// e.message }) }` — getOpenApiSpec()'s own inner `catch { return {} }`
-// (a missing file) can't happen here since the file is embedded.
+// getOpenAPI serves GET /api/openapi.json. On a conversion failure it
+// responds 500 with the error message. The "missing spec file" case can't
+// happen here because the spec is embedded at compile time.
 func (h *Handlers) getOpenAPI(w http.ResponseWriter, r *http.Request) {
 	openAPIOnce.Do(buildOpenAPIJSON)
 	if openAPIErr != nil {

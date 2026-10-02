@@ -42,9 +42,9 @@ func TestPollViaGaggiuinoStatus_MachineReachable(t *testing.T) {
 	}
 }
 
-// TestPollViaGaggiuinoStatus_NoHostConfigured_SkipsCleanly ports #718: an
-// unconfigured host must never flip machineReachable at all (stays nil,
-// not false) — a false machineReachable specifically claims "this host was
+// TestPollViaGaggiuinoStatus_NoHostConfigured_SkipsCleanly covers #718: an
+// unconfigured host must never flip machineReachable at all (stays nil, not
+// false) — a false machineReachable specifically claims "this host was
 // contacted and didn't answer," which isn't true when there's no host to
 // contact.
 func TestPollViaGaggiuinoStatus_NoHostConfigured_SkipsCleanly(t *testing.T) {
@@ -142,14 +142,13 @@ func TestBrewAccumulation_LiveDataDatapoints(t *testing.T) {
 }
 
 // TestCheckAndApplyMachinePower_NoHAToken_StartsLivePollingAnyway is the
-// #901 code-review regression test for finding #1: lib/poll.js's
-// checkAndApplyMachinePower early-exits (and ensures live polling is
-// running) on `!entity || !HA_TOKEN`, not just `!entity`. A switch entity
-// configured but no HA token available must still start live polling — the
-// bug this used to have fell through to GetSwitchState instead, which
-// always returns nil when no token is configured (ha/client.go's
-// `!c.enabled()` guard), so isOn stayed nil and startLivePolling was never
-// reached for the entire process lifetime.
+// #901 code-review regression test for finding #1: checkAndApplyMachinePower
+// early-exits (and ensures live polling is running) on `!entity || !HA_TOKEN`,
+// not just `!entity`. A switch entity configured but no HA token available must
+// still start live polling — the bug this used to have fell through to
+// GetSwitchState instead, which always returns nil when no token is configured
+// (ha/client.go's `!c.enabled()` guard), so isOn stayed nil and
+// startLivePolling was never reached for the entire process lifetime.
 func TestCheckAndApplyMachinePower_NoHAToken_StartsLivePollingAnyway(t *testing.T) {
 	fake := &fakeAdapter{}
 	fake.setStatus(okStatus(t, `{}`, 93, 94, 9, 5, false, "Espresso", 1), nil)
@@ -369,7 +368,7 @@ func TestDescaleLiveSession(t *testing.T) {
 	}
 }
 
-// TestStopLivePolling_ClearsDescaleAccum ports stopLivePolling's #983
+// TestStopLivePolling_ClearsDescaleAccum covers stopLivePolling's #983
 // descale accumulator reset.
 func TestStopLivePolling_ClearsDescaleAccum(t *testing.T) {
 	fake := &fakeAdapter{}
@@ -377,7 +376,7 @@ func TestStopLivePolling_ClearsDescaleAccum(t *testing.T) {
 	fake.setLive(nil, &proto.SystemStateDto{OperationMode: proto.ModeDescale})
 	p, _ := newTestPoller(t, fake)
 
-	p.startLivePolling() // stopLivePolling only resets accumulators when a ticker is active (Node parity)
+	p.startLivePolling() // stopLivePolling only resets accumulators when a ticker is active
 	p.pollViaGaggiuinoStatus(context.Background())
 	if !p.LiveData().IsDescaling {
 		t.Fatal("precondition: expected a live descale session")
@@ -388,7 +387,7 @@ func TestStopLivePolling_ClearsDescaleAccum(t *testing.T) {
 	}
 }
 
-// TestStopLivePolling_ClearsSteamFlushAccum ports stopLivePolling's #908
+// TestStopLivePolling_ClearsSteamFlushAccum covers stopLivePolling's #908
 // steam/flush accumulator reset.
 func TestStopLivePolling_ClearsSteamFlushAccum(t *testing.T) {
 	fake := &fakeAdapter{}
@@ -396,7 +395,7 @@ func TestStopLivePolling_ClearsSteamFlushAccum(t *testing.T) {
 	fake.setLive(&proto.SensorStateSnapshotDto{Temperature: 130, SteamActive: true}, nil)
 	p, _ := newTestPoller(t, fake)
 
-	p.startLivePolling() // stopLivePolling only resets accumulators when a ticker is active (Node parity)
+	p.startLivePolling() // stopLivePolling only resets accumulators when a ticker is active
 	p.pollViaGaggiuinoStatus(context.Background())
 	if !p.LiveData().IsSteaming {
 		t.Fatal("precondition: expected a live steam session")
@@ -407,7 +406,7 @@ func TestStopLivePolling_ClearsSteamFlushAccum(t *testing.T) {
 	}
 }
 
-// TestStopLivePolling_ForcesUnreachableFalse ports stopLivePolling's #655
+// TestStopLivePolling_ForcesUnreachableFalse covers stopLivePolling's #655
 // unconditional machineReachable=false flip.
 func TestStopLivePolling_ForcesUnreachableFalse(t *testing.T) {
 	fake := &fakeAdapter{}

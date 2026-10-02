@@ -10,24 +10,22 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports lib/services/DemoService.js + lib/demo-seed.js: POST
-// /api/demo/seed and POST /api/demo/end (#274) — a static sample dataset
-// so a first-run user with no machine reachable yet can still see the app
-// populated. Both dependencies this needed (shots, library) are ported
-// domains as of Phase 1d/1c, so — per this phase's brief — demo mode is
-// fully in scope, not deferred.
+// This file implements POST /api/demo/seed and POST /api/demo/end (#274) —
+// a static sample dataset so a first-run user with no machine reachable yet
+// can still see the app populated. It builds on the shots and library
+// repositories.
 
 const demoKVKey = "demo_seed"
 
-// demoIDBase mirrors DEMO_ID_BASE: a high range a real machine's own
-// sequential shot ids will never reach, so demo rows are trivially
-// distinguishable and never collide with real data.
+// demoIDBase is a high range a real machine's own sequential shot ids will
+// never reach, so demo rows are trivially distinguishable and never collide
+// with real data.
 const demoIDBase = 900_000_000
 
-// DemoService ports DemoService.js as a struct around this package's own
-// *sql.DB handle (for the demo_seed kv record) plus the shots/library
-// repositories it seeds into — same db handle cmd/server already opens
-// once, passed in rather than reopened.
+// DemoService is a struct around this package's own *sql.DB handle (for the
+// demo_seed kv record) plus the shots/library repositories it seeds into —
+// the same db handle cmd/server already opens once, passed in rather than
+// reopened.
 type DemoService struct {
 	db      *sql.DB
 	shots   *shots.Repository
@@ -72,13 +70,14 @@ func (d *DemoService) clearSeedRecord() error {
 	return err
 }
 
-// IsDemoActive ports isDemoActive().
+// IsDemoActive reports whether a demo dataset is currently active.
 func (d *DemoService) IsDemoActive() bool {
 	rec := d.loadSeedRecord()
 	return rec != nil && rec.Active
 }
 
-// IsEmpty ports isEmpty(): refuses to seed on top of real data.
+// IsEmpty reports whether there are no shots or library entries yet, so
+// demo seeding never overwrites real data.
 func (d *DemoService) IsEmpty() (bool, error) {
 	all, err := d.shots.FindAll()
 	if err != nil {
@@ -94,7 +93,8 @@ func (d *DemoService) IsEmpty() (bool, error) {
 	return len(lib.Beans) == 0 && len(lib.Recipes) == 0, nil
 }
 
-// SeedDemoData ports seedDemoData().
+// SeedDemoData inserts the static demo dataset and records the inserted ids
+// so EndDemo can remove exactly those rows.
 func (d *DemoService) SeedDemoData() error {
 	shotsDS, beans, recipes := buildDemoDataset(time.Now().UnixMilli())
 
@@ -125,8 +125,7 @@ func (d *DemoService) SeedDemoData() error {
 	return d.saveSeedRecord(rec)
 }
 
-// EndDemo ports endDemo(): deletes exactly the rows recorded at seed time,
-// nothing else.
+// EndDemo deletes exactly the rows recorded at seed time, nothing else.
 func (d *DemoService) EndDemo() error {
 	rec := d.loadSeedRecord()
 	if rec == nil {
@@ -181,7 +180,7 @@ func entityID(e library.Entity) (int64, bool) {
 	return 0, false
 }
 
-// ── lib/demo-seed.js's static dataset ───────────────────────────────────
+// ── static demo dataset ───────────────────────────────────
 
 type demoShotDef struct {
 	daysAgo int
@@ -218,9 +217,9 @@ var demoShotDefs = []demoShotDef{
 	{daysAgo: 0, seconds: 31, dose: 18.3, yieldG: 41, temp: 94, peak: 8.9, coffee: "GLP Demo — Colombia Decaf", profile: "Demo Profile 3", rating: 4, tds: 8.9, grind: "20 clicks"},
 }
 
-// buildCurve ports buildCurve({seconds, peakPressure, targetTemp, yieldG}):
-// a plausible espresso-shot datapoints object, 0.1s steps, values in tenths
-// of their unit — matches lib/poll.js's liveAccum shape (see poll.go).
+// buildCurve builds a plausible espresso-shot datapoints object, 0.1s steps,
+// values in tenths of their unit — the same shape liveAccum uses (see
+// poll.go).
 func buildCurve(seconds, peakPressure, targetTemp, yieldG float64) liveDatapoints {
 	steps := int(math.Round(seconds * 10))
 	dp := liveDatapoints{}
@@ -250,9 +249,9 @@ func buildCurve(seconds, peakPressure, targetTemp, yieldG float64) liveDatapoint
 	return dp
 }
 
-// buildDemoDataset ports buildDemoDataset(now): fresh, deterministic-per-call
-// timestamps (relative to nowMs) so the shot list always looks recent when
-// demo mode is (re-)activated.
+// buildDemoDataset returns fresh, deterministic-per-call timestamps (relative
+// to nowMs) so the shot list always looks recent when demo mode is
+// (re-)activated.
 func buildDemoDataset(nowMs int64) ([]shots.Shot, []library.Entity, []library.Entity) {
 	nowSec := nowMs / 1000
 	const day = 86400

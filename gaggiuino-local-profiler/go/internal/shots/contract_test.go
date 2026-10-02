@@ -6,15 +6,14 @@ import (
 	"testing"
 )
 
-// This file pins routes/shots.js's responses against openapi.yaml's
-// component schemas for the shapes this package's endpoints actually
-// return: Ok (lines ~44-48: `{ok: boolean}`, required [ok]), Error (lines
-// ~50-54: `{error: string}`, required [error]), and Shot (lines ~131-148:
-// id/timestamp/duration/profileName/annotation, among other fields). This
-// is a structural check — required keys present with the right JSON type —
-// not a generated-schema validator, the same "pin the essential shape, not
-// the whole grammar" approach internal/db's db_schema_test.go applies to
-// the DB schema instead of HTTP payloads (see that file's doc comment).
+// This file pins the package's HTTP responses against openapi.yaml's component
+// schemas for the shapes the endpoints actually return: Ok (`{ok: boolean}`,
+// required [ok]), Error (`{error: string}`, required [error]) and Shot
+// (id/timestamp/duration/profileName/annotation, among other fields). This is
+// a structural check — required keys present with the right JSON type — not a
+// generated-schema validator, the same "pin the essential shape, not the whole
+// grammar" approach internal/db's db_schema_test.go applies to the DB schema
+// instead of HTTP payloads (see that file's doc comment).
 
 func requireBoolField(t *testing.T, body map[string]any, key string) {
 	t.Helper()
