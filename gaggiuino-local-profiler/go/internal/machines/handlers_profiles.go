@@ -18,7 +18,7 @@ import (
 // supposed to be an instant "stale" response into an apparent total outage.
 const profileLiveFetchTimeout = 5 * time.Second
 
-// This file ports routes/system.js's "Machine profiles" section
+// This file is the "Machine profiles" section
 // (GET /api/machine/profiles, POST /api/machine/profile/set,
 // GET/POST/PUT/DELETE /api/machine/profile[/{id}]).
 //

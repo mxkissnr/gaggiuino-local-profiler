@@ -12,7 +12,7 @@ func TestWriterVarint(t *testing.T) {
 		{127, []byte{0x7f}},
 		{128, []byte{0x80, 0x01}},
 		{300, []byte{0xac, 0x02}},
-		{5000, []byte{0x88, 0x27}}, // matches lib/gaggiuino-proto.js's own time:5000 encoding, see node_vectors_test.go
+		{5000, []byte{0x88, 0x27}}, // matches the reference time:5000 encoding, see node_vectors_test.go
 	}
 	for _, c := range cases {
 		w := &writer{}

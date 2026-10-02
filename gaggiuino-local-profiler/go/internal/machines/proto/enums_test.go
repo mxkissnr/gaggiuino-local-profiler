@@ -56,7 +56,7 @@ func TestNormalizeOperationMode(t *testing.T) {
 		{ModeFlushAuto, "FLUSH_AUTO"},
 		{ModeSteam, "STEAM"},
 		{ModeHome, "HOME"},
-		{OperationMode(99), ""}, // unrecognized -> "" (Node's null)
+		{OperationMode(99), ""}, // unrecognized -> ""
 	}
 	for _, c := range cases {
 		if got := NormalizeOperationMode(c.in); got != c.want {
@@ -77,9 +77,9 @@ func TestServiceTestPeripheralUnmarshalJSON(t *testing.T) {
 
 func TestEnumMarshalJSONIsPlainNumber(t *testing.T) {
 	// No custom MarshalJSON — a defined int32 type marshals as a plain
-	// number by default, matching lib/gaggiuino-proto.js's own
-	// fromBinary()+JSON.stringify() output (verified directly against the
-	// real runtime — see enums.go's header comment).
+	// number by default, matching the machine's own fromBinary()+JSON.stringify()
+	// output (verified directly against the real runtime — see enums.go's
+	// header comment).
 	b, err := json.Marshal(PhasePressure)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

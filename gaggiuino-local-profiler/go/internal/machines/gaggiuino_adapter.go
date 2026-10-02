@@ -10,12 +10,12 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
 
-// GaggiuinoAdapter ports lib/machines/gaggiuino/adapter.js: REST calls
-// (net/http, mirroring the Node original's axios calls) for status/shot-
-// history/profile-list/settings/firmware, plus ws.go's WebSocket client
-// for the machine capabilities that have no REST equivalent (profile
-// update/delete, opmode/tare/service-test/save-settings/save-active-
-// profile), plus live.go's persistent live-cache reads.
+// GaggiuinoAdapter is the Gaggiuino machine adapter: REST calls (net/http)
+// for status/shot-history/profile-list/settings/firmware, plus ws.go's
+// WebSocket client for the machine capabilities that have no REST
+// equivalent (profile update/delete, opmode/tare/service-test/
+// save-settings/save-active-profile), plus live.go's persistent live-cache
+// reads.
 type GaggiuinoAdapter struct {
 	live *gaggiuinoLiveClient
 }
@@ -76,10 +76,10 @@ func (a *GaggiuinoAdapter) ListProfiles(ctx context.Context, m *Machine) ([]Prof
 	return profiles, nil
 }
 
-// GetProfile ports getProfile(machine, id): try newer firmware's REST
-// GET /api/profile/{id} first (cheaper — one HTTP request vs a WS
-// handshake), fall back to the WebSocket path on any failure, the known-
-// working baseline for every firmware version.
+// GetProfile tries newer firmware's REST GET /api/profile/{id} first
+// (cheaper — one HTTP request vs a WS handshake), falling back to the
+// WebSocket path on any failure, the known-working baseline for every
+// firmware version.
 func (a *GaggiuinoAdapter) GetProfile(ctx context.Context, m *Machine, id string) (json.RawMessage, error) {
 	baseURL, err := BaseURLFor(ctx, m)
 	if err != nil {
@@ -99,9 +99,9 @@ func (a *GaggiuinoAdapter) GetProfile(ctx context.Context, m *Machine, id string
 	return json.Marshal(profile)
 }
 
-// CreateProfile ports createProfile(machine, profile): same try-REST-
-// first/fall-back-to-WS pattern as GetProfile — newer firmware's
-// POST /api/profile is create-only (an id in the body is ignored, #580).
+// CreateProfile uses the same try-REST-first/fall-back-to-WS pattern as
+// GetProfile — newer firmware's POST /api/profile is create-only (an id in
+// the body is ignored, #580).
 func (a *GaggiuinoAdapter) CreateProfile(ctx context.Context, m *Machine, profile ProfileInput) (ProfileSummary, error) {
 	baseURL, err := BaseURLFor(ctx, m)
 	if err != nil {
@@ -123,8 +123,8 @@ func (a *GaggiuinoAdapter) CreateProfile(ctx context.Context, m *Machine, profil
 	return ProfileSummary{ID: strconv.Itoa(int(saved.ID)), Name: saved.Name}, nil
 }
 
-// UpdateProfile ports updateProfile(machine, profile) — WebSocket-only
-// (#580 live-verified there is no REST update equivalent).
+// UpdateProfile is WebSocket-only (#580 live-verified there is no REST
+// update equivalent).
 func (a *GaggiuinoAdapter) UpdateProfile(ctx context.Context, m *Machine, profile ProfileInput) (ProfileSummary, error) {
 	baseURL, err := BaseURLFor(ctx, m)
 	if err != nil {
@@ -137,7 +137,7 @@ func (a *GaggiuinoAdapter) UpdateProfile(ctx context.Context, m *Machine, profil
 	return ProfileSummary{ID: strconv.Itoa(int(saved.ID)), Name: saved.Name}, nil
 }
 
-// DeleteProfile ports deleteProfile(machine, id) — WebSocket-only.
+// DeleteProfile is WebSocket-only.
 func (a *GaggiuinoAdapter) DeleteProfile(ctx context.Context, m *Machine, id string) ([]ProfileSummary, error) {
 	baseURL, err := BaseURLFor(ctx, m)
 	if err != nil {
@@ -174,8 +174,8 @@ func (a *GaggiuinoAdapter) Capabilities() Capabilities {
 
 // ── #597 settings/control proxy ─────────────────────────────────────────
 
-// GetSettings ports getSettings(machine, category): category "" (the
-// caller's `category == nil` case) reads the all-categories endpoint.
+// GetSettings: category "" (the caller's `category == nil` case) reads the
+// all-categories endpoint.
 func (a *GaggiuinoAdapter) GetSettings(ctx context.Context, m *Machine, category string) (json.RawMessage, error) {
 	baseURL, err := BaseURLFor(ctx, m)
 	if err != nil {
@@ -192,10 +192,9 @@ func (a *GaggiuinoAdapter) GetSettings(ctx context.Context, m *Machine, category
 	return json.RawMessage(raw), nil
 }
 
-// UpdateSettings ports updateSettings(machine, category, payload): the
-// exact request body bytes handlers.go read off the client request are
-// forwarded unmodified — see http.go's httpPostBytes doc comment for why
-// (the bool-as-string settings quirk, doc.go).
+// UpdateSettings forwards the exact request body bytes handlers.go read off
+// the client request, unmodified — see http.go's httpPostBytes doc comment
+// for why (the bool-as-string settings quirk, doc.go).
 func (a *GaggiuinoAdapter) UpdateSettings(ctx context.Context, m *Machine, category string, payload json.RawMessage) (json.RawMessage, error) {
 	baseURL, err := BaseURLFor(ctx, m)
 	if err != nil {
@@ -273,9 +272,8 @@ func (a *GaggiuinoAdapter) TriggerFirmwareUpdate(ctx context.Context, m *Machine
 	return json.RawMessage(raw), nil
 }
 
-// GetLiveSensorSnapshot/GetLiveSystemState port the adapter's synchronous
-// cache reads (see live.go — no I/O happens directly here, same as the
-// Node original's own header comment on these two methods). Like every
+// GetLiveSensorSnapshot/GetLiveSystemState are the adapter's synchronous
+// cache reads (see live.go — no I/O happens directly here). Like every
 // other adapter method, the base URL goes through BaseURLFor — NOT the
 // unguarded normalizeBaseURL — so these two live-cache reads run through
 // the same SSRF check (assertMachineHost) as every outbound call this

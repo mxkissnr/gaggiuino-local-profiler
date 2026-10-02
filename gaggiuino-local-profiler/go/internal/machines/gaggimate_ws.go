@@ -12,18 +12,17 @@ import (
 	"github.com/coder/websocket"
 )
 
-// This file ports lib/machines/gaggimate/ws-client.js's request()/
-// waitForStatus() — the short-lived-connection-per-call JSON WebSocket
-// client for GaggiMate machines. Protocol shape: one WebSocket at
-// ws://<host>/ws, JSON frames with a `tp` (type) field; requests are
-// `req:<name>` (optionally carrying an `rid` for correlation), answered by
-// a `res:<name>` frame; the server also pushes unsolicited `evt:status`
-// frames on its own cadence.
+// This file holds the short-lived-connection-per-call JSON WebSocket client
+// for GaggiMate machines: request() and waitForStatus(). Protocol shape: one
+// WebSocket at ws://<host>/ws, JSON frames with a `tp` (type) field;
+// requests are `req:<name>` (optionally carrying an `rid` for correlation),
+// answered by a `res:<name>` frame; the server also pushes unsolicited
+// `evt:status` frames on its own cadence.
 //
-// ws-client.js's GaggiMateLiveClient (a third, persistent-connection
-// pattern) IS ported now — gaggimate_live.go (#952): GaggiMateAdapter.GetStatus
-// reads its cache and only falls back to gaggimateWaitForStatus below when
-// the cache has no fresh frame yet.
+// The GaggiMateLiveClient (a third, persistent-connection pattern) lives in
+// gaggimate_live.go (#952): GaggiMateAdapter.GetStatus reads its cache and
+// only falls back to gaggimateWaitForStatus below when the cache has no
+// fresh frame yet.
 
 const gaggimateWSTimeout = 8 * time.Second
 
@@ -39,12 +38,12 @@ func gaggimateWSURL(baseURL string) (string, error) {
 	return fmt.Sprintf("%s://%s/ws", scheme, u.Host), nil
 }
 
-// gaggimateRequest ports request(baseUrl, reqType, payload): sends one
-// `req:<name>` frame with a request id for correlation, resolves with the
-// payload of the first matching `res:<name>` frame that echoes the same
-// rid. GaggiMate firmware echoes rid back as a string even though it's
-// sent as a number (#342, live-verified) — the comparison below is
-// type-tolerant (string(rid) either way), matching the Node original.
+// gaggimateRequest sends one `req:<name>` frame with a request id for
+// correlation and resolves with the payload of the first matching
+// `res:<name>` frame that echoes the same rid. GaggiMate firmware echoes
+// rid back as a string even though it's sent as a number (#342,
+// live-verified) — the comparison below is type-tolerant (string(rid)
+// either way).
 func gaggimateRequest(ctx context.Context, baseURL, reqType string, payload map[string]any) (map[string]any, error) {
 	if len(reqType) < 4 || reqType[:4] != "req:" {
 		return nil, fmt.Errorf("not a request type: %s", reqType)
@@ -94,9 +93,9 @@ func gaggimateRequest(ctx context.Context, baseURL, reqType string, payload map[
 	}
 }
 
-// gaggimateWaitForStatus ports waitForStatus(baseUrl): connects, waits for
-// the first evt:status broadcast (unsolicited telemetry, not a
-// request/response), resolves with its fields.
+// gaggimateWaitForStatus connects, waits for the first evt:status broadcast
+// (unsolicited telemetry, not a request/response), and resolves with its
+// fields.
 func gaggimateWaitForStatus(ctx context.Context, baseURL string, timeout time.Duration) (map[string]any, error) {
 	conn, ctx, cancel, err := wsConnect(ctx, baseURL, gaggimateWSURL, timeout)
 	if err != nil {
