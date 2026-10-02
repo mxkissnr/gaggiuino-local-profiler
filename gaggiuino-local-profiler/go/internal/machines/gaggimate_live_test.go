@@ -25,7 +25,13 @@ type streamingGaggiMate struct {
 	mu     sync.Mutex
 	temp   float64
 	pushMs time.Duration
-	active []*websocket.Conn
+	// partial switches the fake to firmware v1.9.0 framing: a slow state frame
+	// (m, p, bc, cw — no live readings) first, then alternating slow/fast
+	// frames. fast frames carry process unless processNull is set, in which
+	// case they send it as JSON null to exercise the clearing rule.
+	partial     bool
+	processNull bool
+	active      []*websocket.Conn
 }
 
 func newStreamingGaggiMate() *streamingGaggiMate {
@@ -61,20 +67,57 @@ func (f *streamingGaggiMate) handleWS(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	t := time.NewTicker(f.pushMs)
 	defer t.Stop()
+	i := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			f.mu.Lock()
-			temp := f.temp
-			f.mu.Unlock()
-			frame, _ := json.Marshal(map[string]any{"tp": "evt:status", "ct": temp, "tt": 93.0, "pr": 0.0, "m": 0, "p": "Espresso"})
+			frame := f.frameFor(i)
+			i++
 			if err := conn.Write(ctx, websocket.MessageText, frame); err != nil {
 				return
 			}
 		}
 	}
+}
+
+// frameFor builds the i-th evt:status frame pushed to a freshly accepted
+// connection: 0 is the slow snapshot, odd indices are fast telemetry frames,
+// even indices are slow snapshots again (partial mode).
+func (f *streamingGaggiMate) frameFor(i int) []byte {
+	f.mu.Lock()
+	partial := f.partial
+	processNull := f.processNull
+	temp := f.temp
+	f.mu.Unlock()
+
+	var frame map[string]any
+	if !partial {
+		frame = map[string]any{"tp": "evt:status", "ct": temp, "tt": 93.0, "pr": 0.0, "m": 0, "p": "Espresso"}
+	} else if i%2 == 0 {
+		frame = map[string]any{"tp": "evt:status", "m": 2, "p": "Espresso", "bc": true, "cw": 18.5}
+	} else {
+		var process any = map[string]any{"a": 1, "s": "brew"}
+		if processNull {
+			process = nil
+		}
+		frame = map[string]any{"tp": "evt:status", "ct": temp, "tt": 93.0, "pr": 1.2, "fl": 2.0, "process": process}
+	}
+	b, _ := json.Marshal(frame)
+	return b
+}
+
+func (f *streamingGaggiMate) setPartial(v bool) {
+	f.mu.Lock()
+	f.partial = v
+	f.mu.Unlock()
+}
+
+func (f *streamingGaggiMate) setProcessNull(v bool) {
+	f.mu.Lock()
+	f.processNull = v
+	f.mu.Unlock()
 }
 
 func TestGaggiMateLiveClient_CachesAndReusesOneConnection(t *testing.T) {
@@ -195,6 +238,108 @@ func TestGaggiMateAdapter_GetStatusUsesPersistentCache(t *testing.T) {
 	if fake.conns.Load() != connsAfterWarm {
 		t.Fatalf("GetStatus opened new connections (%d -> %d) instead of reading the cache",
 			connsAfterWarm, fake.conns.Load())
+	}
+}
+
+func TestMergeGaggiMateStatus(t *testing.T) {
+	prev := map[string]any{"tp": "evt:status", "p": "Espresso", "m": 2.0, "bc": true}
+	fast := map[string]any{"tp": "evt:status", "ct": 91.5, "pr": 1.2, "process": map[string]any{"a": 1.0, "s": "brew"}}
+
+	merged := mergeGaggiMateStatus(prev, fast)
+	if merged["p"] != "Espresso" || merged["m"] != 2.0 || merged["bc"] != true {
+		t.Fatalf("slow keys lost in merge: %+v", merged)
+	}
+	if merged["ct"] != 91.5 || merged["pr"] != 1.2 {
+		t.Fatalf("fast keys missing in merge: %+v", merged)
+	}
+	if _, ok := merged["process"]; !ok {
+		t.Fatalf("process missing from merge: %+v", merged)
+	}
+	// The merge copies: the previous map must be untouched.
+	if _, ok := prev["ct"]; ok {
+		t.Fatalf("merge mutated the previous map: %+v", prev)
+	}
+
+	// A null clears a previously cached key; an absent key keeps its value.
+	cleared := mergeGaggiMateStatus(merged, map[string]any{"tp": "evt:status", "process": nil})
+	if _, ok := cleared["process"]; ok {
+		t.Fatalf("null did not clear process: %+v", cleared)
+	}
+	if cleared["ct"] != 91.5 || cleared["p"] != "Espresso" {
+		t.Fatalf("absent keys were not kept: %+v", cleared)
+	}
+	if _, ok := merged["process"]; !ok {
+		t.Fatalf("clearing mutated the previous map: %+v", merged)
+	}
+}
+
+// TestGaggiMateLiveClient_MergesPartialFrames covers firmware v1.9.0's split
+// frames: the cached status must carry the slow state keys and the latest fast
+// live readings, and must be a fresh map (callers keep the one Status returned).
+func TestGaggiMateLiveClient_MergesPartialFrames(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	fake := newStreamingGaggiMate()
+	fake.setPartial(true)
+	defer fake.Close()
+
+	c := newGaggiMateLiveClient()
+	c.idleTimeout = time.Hour
+	t.Cleanup(c.DisconnectAll)
+	base := fake.URL
+
+	var merged map[string]any
+	waitUntil(t, 2*time.Second, func() bool {
+		st, ok := c.Status(base)
+		merged = st
+		return ok && st["ct"] == 90.0 && st["p"] == "Espresso"
+	})
+	if merged["m"] != 2.0 || merged["bc"] != true {
+		t.Fatalf("slow keys missing after merge: %+v", merged)
+	}
+	if merged["pr"] != 1.2 {
+		t.Fatalf("fast key missing after merge: %+v", merged)
+	}
+
+	// Later frames must not mutate the map Status() already handed out.
+	fake.setTemp(95.5)
+	waitUntil(t, 2*time.Second, func() bool {
+		st, ok := c.Status(base)
+		return ok && st["ct"] == 95.5
+	})
+	if merged["ct"] != 90.0 {
+		t.Fatalf("Status() map mutated by later frames: ct=%v", merged["ct"])
+	}
+
+	// A fast frame that sends process as null clears the cached process.
+	fake.setProcessNull(true)
+	waitUntil(t, 2*time.Second, func() bool {
+		st, ok := c.Status(base)
+		if !ok {
+			return false
+		}
+		_, has := st["process"]
+		return !has && st["p"] == "Espresso"
+	})
+}
+
+// TestGaggiMateWaitForStatus_MergesPartialFrames checks that the short-lived
+// fallback does not return the slow snapshot alone: it must merge until a fast
+// frame supplies the live readings, keeping the slow keys alongside them.
+func TestGaggiMateWaitForStatus_MergesPartialFrames(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	fake := newStreamingGaggiMate()
+	fake.setPartial(true)
+	defer fake.Close()
+
+	got, err := gaggimateWaitForStatus(context.Background(), fake.URL, 3*time.Second)
+	if err != nil {
+		t.Fatalf("gaggimateWaitForStatus: %v", err)
+	}
+	if got["ct"] != 90.0 || got["pr"] != 1.2 {
+		t.Fatalf("merged status missing live readings: %+v", got)
+	}
+	if got["p"] != "Espresso" || got["m"] != 2.0 || got["bc"] != true {
+		t.Fatalf("merged status missing slow keys: %+v", got)
 	}
 }
 

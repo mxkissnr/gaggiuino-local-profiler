@@ -93,9 +93,32 @@ func gaggimateRequest(ctx context.Context, baseURL, reqType string, payload map[
 	}
 }
 
-// gaggimateWaitForStatus connects, waits for the first evt:status broadcast
-// (unsolicited telemetry, not a request/response), and resolves with its
-// fields.
+// mergeGaggiMateStatus merges one evt:status frame onto a previous status map
+// and returns a NEW map. Since firmware v1.9.0 frames are partial: a key that
+// is absent keeps its previous value, a key sent as JSON null clears it. The
+// previous map is never mutated because Status() hands the cached map to
+// callers that read it after the session lock is released.
+func mergeGaggiMateStatus(prev, frame map[string]any) map[string]any {
+	merged := make(map[string]any, len(prev)+len(frame))
+	for k, v := range prev {
+		merged[k] = v
+	}
+	for k, v := range frame {
+		if v == nil {
+			delete(merged, k)
+			continue
+		}
+		merged[k] = v
+	}
+	return merged
+}
+
+// gaggimateWaitForStatus connects and merges evt:status broadcasts
+// (unsolicited telemetry, not a request/response) until at least one live
+// reading (ct) has arrived, then resolves with the merged fields. On firmware
+// <= v1.8.1 the first frame is already full, so it returns immediately as
+// before; on v1.9.0 the first frame is a slow snapshot without ct, so it keeps
+// merging until a fast frame fills the live keys in.
 func gaggimateWaitForStatus(ctx context.Context, baseURL string, timeout time.Duration) (map[string]any, error) {
 	conn, ctx, cancel, err := wsConnect(ctx, baseURL, gaggimateWSURL, timeout)
 	if err != nil {
@@ -104,6 +127,7 @@ func gaggimateWaitForStatus(ctx context.Context, baseURL string, timeout time.Du
 	defer cancel()
 	defer conn.CloseNow()
 
+	merged := map[string]any{}
 	for {
 		_, data, err := conn.Read(ctx)
 		if err != nil {
@@ -117,8 +141,12 @@ func gaggimateWaitForStatus(ctx context.Context, baseURL string, timeout time.Du
 			continue
 		}
 		if msg["tp"] == "evt:status" {
+			merged = mergeGaggiMateStatus(merged, msg)
+			if _, ok := merged["ct"]; !ok {
+				continue
+			}
 			conn.Close(websocket.StatusNormalClosure, "")
-			return msg, nil
+			return merged, nil
 		}
 	}
 }
