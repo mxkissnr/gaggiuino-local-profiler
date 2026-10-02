@@ -11,18 +11,15 @@ import (
 )
 
 // This file (plus handlers_registry.go, handlers_control.go,
-// handlers_profiles.go) ports routes/machines.js, routes/machine-control.js,
-// and the machine-profile/live-status portion of routes/system.js onto Go
-// 1.22+'s method-and-wildcard http.ServeMux — the same pattern
-// internal/shots and internal/library's handlers.go establish. See
-// doc.go for exactly which routes.js/system.js/machine-control.js routes
-// this package does and does NOT absorb (the system-domain-dependent ones:
-// /api/machine/status, /api/preheat*, /api/live/data).
+// handlers_profiles.go) is the machines REST surface, built on Go 1.22+'s
+// method-and-wildcard http.ServeMux — the same pattern internal/shots and
+// internal/library's handlers.go establish. See doc.go for exactly which
+// routes this package does and does NOT absorb (the system-domain-dependent
+// ones: /api/machine/status, /api/preheat*, /api/live/data).
 
-const jsonBodyLimit = 16 * 1024 // express.json({ limit: '16kb' }) — server.js's global default.
+const jsonBodyLimit = 16 * 1024 // the server-wide default JSON body limit.
 
-// The old in-memory-only profilesCache (routes/system.js's
-// getProfilesCacheFor/setProfilesCacheFor, #340) is gone — replaced by
+// The old in-memory-only profilesCache (#340) is gone — replaced by
 // ProfilesRepository (profiles_repo.go), a real local-first cache/outbox
 // that also survives restarts and lets create/update/delete succeed while
 // offline instead of just degrading reads. See handlers_profiles.go.
@@ -143,8 +140,7 @@ func internalError(w http.ResponseWriter, err error) {
 // jsonBodyLimit — mirrors library/handlers.go's decodeJSONBody. An empty
 // body decodes to v's zero value rather than erroring (every route this
 // package registers that reads a body treats a missing body the same as
-// `{}`, matching Express's req.body ?? {} convention throughout
-// routes/machine-control.js).
+// `{}`).
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, v any) bool {
 	return httputil.DecodeJSONBodyInto(w, r, jsonBodyLimit, v)
 }
@@ -171,10 +167,10 @@ func readRawJSONBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	return body, true
 }
 
-// queryMachineID ports the repeated `req.query.machineId` /
-// `req.body?.machineId` read every route in this package does before
-// calling registry.resolveMachine — nil means "not given at all",
-// matching resolveMachine's own nil-vs-NaN distinction.
+// queryMachineID reads the machineId query parameter, the repeated read
+// every route in this package does before calling registry.ResolveMachine —
+// nil means "not given at all", matching ResolveMachine's own
+// nil-vs-absent distinction.
 func queryMachineID(r *http.Request) *int64 {
 	raw := r.URL.Query().Get("machineId")
 	if raw == "" {
@@ -187,8 +183,7 @@ func queryMachineID(r *http.Request) *int64 {
 	return &n
 }
 
-// pathID64 parses the {id} path wildcard as an int64 —
-// mirrors `parseInt(req.params.id, 10)`.
+// pathID64 parses the {id} path wildcard as an int64.
 func pathID64(r *http.Request) (int64, bool) {
 	n, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	return n, err == nil
@@ -201,8 +196,8 @@ func pathIDStr(r *http.Request) string {
 	return r.PathValue("id")
 }
 
-// requireProfileEditSupport ports routes/system.js's
-// requireProfileEditSupport(adapter, machine, res).
+// requireProfileEditSupport returns 501 when an adapter cannot edit
+// profiles.
 func requireProfileEditSupport(w http.ResponseWriter, adapter Adapter, m *Machine) bool {
 	if adapter.Capabilities().ProfileEdit {
 		return true
@@ -214,8 +209,8 @@ func requireProfileEditSupport(w http.ResponseWriter, adapter Adapter, m *Machin
 	return false
 }
 
-// requireSettingsProxySupport ports routes/machine-control.js's
-// requireSettingsProxySupport(adapter, machine, res).
+// requireSettingsProxySupport returns 501 when an adapter has no
+// settings/control proxy.
 func requireSettingsProxySupport(w http.ResponseWriter, adapter Adapter, m *Machine) bool {
 	if adapter.Capabilities().SettingsProxy {
 		return true
