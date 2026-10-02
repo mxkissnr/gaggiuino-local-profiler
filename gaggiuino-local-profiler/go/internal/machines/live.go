@@ -14,37 +14,33 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
 
-// This file ports lib/gaggiuino-live-client.js: a persistent, auto-
-// reconnecting WebSocket session per machine baseURL that caches the
-// continuously-pushed d_sensor_snap/d_sys_state frames (#597), read by
-// GET /api/machine/live (via gaggiuinoAdapter.GetLiveSensorSnapshot/
-// GetLiveSystemState) without opening a fresh connection per poll — the
-// same rationale the Node original's header comment gives (staying within
-// the firmware's WS_MAX_CONNECTIONS=3 budget regardless of poll frequency).
+// This file holds the persistent, auto-reconnecting WebSocket session per
+// machine baseURL that caches the continuously-pushed d_sensor_snap/
+// d_sys_state frames (#597), read by GET /api/machine/live (via
+// gaggiuinoAdapter.GetLiveSensorSnapshot/GetLiveSystemState) without
+// opening a fresh connection per poll — staying within the firmware's
+// WS_MAX_CONNECTIONS=3 budget regardless of poll frequency.
 //
-// Phase 1e (when this file was first written) had this file also
-// Publish()ing every cache update directly onto the shared internal/sse.Hub
-// as an EventLiveSnapshot event — an explicitly-flagged stand-in ("the
-// payload shape here ... is NOT necessarily the same shape openapi.yaml's
-// LiveData schema documents ... reconciling the two is system-domain
-// work"). Phase 1g (#901, go/internal/system) did that reconciliation:
-// only lib/poll.js's own emitLiveSnapshot() ever publishes LIVE_SNAPSHOT
-// in Node — the WS client (this file's Node original,
-// lib/gaggiuino-live-client.js) only ever updates a cache lib/poll.js
-// reads from via lib/live-transport.js, never publishes itself. This file
-// now matches that: `hub` is kept (constructor signature unchanged, still
-// threaded through from cmd/server) only because a later phase may want a
-// narrower, WS-session-specific SSE event of its own; nothing in this file
-// calls Hub.Publish today. See go/internal/system/doc.go's "Reconciling
-// with Phase 1e's live.go" section for the full story.
+// An earlier version of this file also Publish()ed every cache update
+// directly onto the shared internal/sse.Hub as an EventLiveSnapshot event —
+// an explicitly-flagged stand-in ("the payload shape here ... is NOT
+// necessarily the same shape openapi.yaml's LiveData schema documents ...
+// reconciling the two is system-domain work"). That reconciliation is done
+// (#901, go/internal/system): only the system poller's own
+// emitLiveSnapshot() publishes LIVE_SNAPSHOT; the WS client (this file)
+// only updates a cache the poller reads from, never publishes itself. This
+// file now matches that: `hub` is kept (constructor signature unchanged,
+// still threaded through from cmd/server) only because a later phase may
+// want a narrower, WS-session-specific SSE event of its own; nothing in
+// this file calls Hub.Publish today. See go/internal/system/doc.go for the
+// full story.
 //
-// The persistent GaggiMate equivalent (ws-client.js's GaggiMateLiveClient
-// class) is its own file now — gaggimate_live.go (#952) — added once the
-// system-domain live-poll loop landed and started calling
-// GaggiMateAdapter.GetStatus once a second for a GaggiMate default machine
-// (PR #947's "GaggiMate WS hammer"). Same session/reconnect/idle-eviction
-// pattern as this file; it caches one evt:status map instead of the two
-// typed proto DTOs.
+// The GaggiMate equivalent (the GaggiMateLiveClient class) is its own file
+// now — gaggimate_live.go (#952) — added once the system-domain live-poll
+// loop landed and started calling GaggiMateAdapter.GetStatus once a second
+// for a GaggiMate default machine (PR #947's "GaggiMate WS hammer"). Same
+// session/reconnect/idle-eviction pattern as this file; it caches one
+// evt:status map instead of the two typed proto DTOs.
 
 const (
 	liveReconnectDelay = 3 * time.Second
@@ -82,10 +78,9 @@ type gaggiuinoLiveSession struct {
 	done chan struct{}
 }
 
-// gaggiuinoLiveClient ports gaggiuino-live-client.js's module-level
-// `sessions` Map + connect()/disconnect() functions as a struct so
-// cmd/server can own one instance instead of relying on Node's
-// module-singleton pattern.
+// gaggiuinoLiveClient holds the per-host sessions plus the connect/disconnect
+// logic as a struct so cmd/server can own one instance instead of relying on
+// package-level global state.
 type gaggiuinoLiveClient struct {
 	hub *sse.Hub
 
@@ -102,9 +97,9 @@ func newGaggiuinoLiveClient(hub *sse.Hub) *gaggiuinoLiveClient {
 	return &gaggiuinoLiveClient{hub: hub, idleTimeout: liveIdleTimeout, sessions: make(map[string]*gaggiuinoLiveSession)}
 }
 
-// session ports connect(baseUrl)'s lazy-open-or-reuse behavior, plus
-// resetting the idle timer on every reuse (#901 code review) so an
-// actively-polled session never expires mid-use.
+// session lazily opens or reuses a session, and resets the idle timer on
+// every reuse (#901 code review) so an actively-polled session never expires
+// mid-use.
 func (c *gaggiuinoLiveClient) session(baseURL string) *gaggiuinoLiveSession {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -144,9 +139,8 @@ func (c *gaggiuinoLiveClient) evictIdle(baseURL string, s *gaggiuinoLiveSession)
 	s.cancel()
 }
 
-// run ports connect()'s ws.on('close'/'error', scheduleReconnect) loop:
-// keep dialing baseURL, with a fixed RECONNECT_DELAY_MS pause between
-// attempts, until ctx is cancelled (by Disconnect or by the idle timer).
+// run keeps dialing baseURL, with a fixed pause between attempts, until ctx
+// is cancelled (by Disconnect or by the idle timer).
 func (c *gaggiuinoLiveClient) run(ctx context.Context, baseURL string, s *gaggiuinoLiveSession) {
 	defer close(s.done)
 	for {
@@ -181,9 +175,9 @@ func assertLiveHost(ctx context.Context, baseURL string) error {
 }
 
 // connectOnce dials once and reads frames until the connection closes or
-// errors, updating s's cache for every d_sensor_snap/d_sys_state push —
-// ports connect()'s ws.on('message', ...). No longer publishes onto the
-// SSE hub directly — see this file's header comment.
+// errors, updating s's cache for every d_sensor_snap/d_sys_state push. No
+// longer publishes onto the SSE hub directly — see this file's header
+// comment.
 func (c *gaggiuinoLiveClient) connectOnce(ctx context.Context, baseURL string, s *gaggiuinoLiveSession) {
 	if err := assertLiveHost(ctx, baseURL); err != nil {
 		return
@@ -210,10 +204,9 @@ func (c *gaggiuinoLiveClient) connectOnce(ctx context.Context, baseURL string, s
 			continue // not a valid envelope frame, ignore
 		}
 		// See ws.go's wsSendAndWait doc comment on the identical
-		// `!envelope.data` check in gaggiuino-live-client.js's Node
-		// original — always false in JS (an empty bytes field decodes to
-		// a truthy empty Uint8Array, never null/undefined), so it never
-		// actually filters there either; only the action switch below does.
+		// `!envelope.data` check — always false (an empty bytes field
+		// decodes to a truthy empty slice, never nil), so it never actually
+		// filters; only the action switch below does.
 
 		switch envelope.Action {
 		case pushSensor:
@@ -238,12 +231,11 @@ func (c *gaggiuinoLiveClient) connectOnce(ctx context.Context, baseURL string, s
 	}
 }
 
-// freshOrNil ports gaggiuino-live-client.js's freshOrNull(): a cached value
-// older than STALE_MS is reported as unavailable rather than served stale.
+// freshOrNilAt reports a cached value older than liveStaleAfter as
+// unavailable rather than serving it stale.
 func freshOrNilAt(at time.Time) bool { return time.Since(at) > liveStaleAfter }
 
-// GetLiveSensorSnapshot ports getLiveSensorSnapshot(baseUrl): lazily
-// (re)opens the session as a side effect, same as the Node original.
+// GetLiveSensorSnapshot lazily (re)opens the session as a side effect.
 func (c *gaggiuinoLiveClient) GetLiveSensorSnapshot(baseURL string) *proto.SensorStateSnapshotDto {
 	s := c.session(baseURL)
 	s.mu.Lock()
@@ -254,7 +246,7 @@ func (c *gaggiuinoLiveClient) GetLiveSensorSnapshot(baseURL string) *proto.Senso
 	return s.sensorSnap
 }
 
-// GetLiveSystemState ports getLiveSystemState(baseUrl).
+// GetLiveSystemState lazily (re)opens the session as a side effect.
 func (c *gaggiuinoLiveClient) GetLiveSystemState(baseURL string) *proto.SystemStateDto {
 	s := c.session(baseURL)
 	s.mu.Lock()
@@ -265,8 +257,7 @@ func (c *gaggiuinoLiveClient) GetLiveSystemState(baseURL string) *proto.SystemSt
 	return s.sysState
 }
 
-// Disconnect ports disconnect(baseUrl): closes and forgets exactly one
-// machine's session.
+// Disconnect closes and forgets exactly one machine's session.
 func (c *gaggiuinoLiveClient) Disconnect(baseURL string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -283,11 +274,11 @@ func (c *gaggiuinoLiveClient) Disconnect(baseURL string) {
 	s.cancel()
 }
 
-// normalizeBaseURL ports gaggiuino-live-client.js's normalizeBaseUrl(host):
-// the same session-key normalization connect() applies (scheme defaulted
-// to http://, then re-serialized), minus the async SSRF check — eviction
-// of a now-unreachable machine's stale session must not depend on that
-// host still resolving. Returns ("", false) for an empty/unparseable host.
+// normalizeBaseURL applies the same session-key normalization the connect
+// path uses (scheme defaulted to http://, then re-serialized), minus the
+// async SSRF check — eviction of a now-unreachable machine's stale session
+// must not depend on that host still resolving. Returns ("", false) for an
+// empty/unparseable host.
 func normalizeBaseURL(host string) (string, bool) {
 	raw := strings.TrimSpace(host)
 	if raw == "" {
@@ -305,8 +296,8 @@ func normalizeBaseURL(host string) (string, bool) {
 	return u.Scheme + "://" + u.Host, true
 }
 
-// DisconnectForHost ports gaggiuino-live-client.js's disconnectForHost(host)
-// — registry.go's UpdateMachine/DeleteMachine onHostChanged/onHostEvicted
+// DisconnectForHost closes a host's session by raw host string —
+// registry.go's UpdateMachine/DeleteMachine onHostChanged/onHostEvicted
 // callbacks wire straight to this.
 func (c *gaggiuinoLiveClient) DisconnectForHost(host string) {
 	baseURL, ok := normalizeBaseURL(host)
