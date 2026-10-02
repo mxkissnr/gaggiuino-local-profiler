@@ -83,7 +83,7 @@
 
             /* ── Accent (amber-americano default) ──
                #1019: these are amber-americano's own values (see
-               lib/machines/theme-presets.js's THEME_PRESETS, the single
+               shared/theme-presets.ts's THEME_PRESETS, the single
                source of truth both the per-machine theme picker and the
                Settings -> Farbschema picker now share) — this block only
                exists so <html> already has a sensible accent painted before
@@ -172,8 +172,7 @@
         /* #404: bundled locally (public-src/fonts/) so it renders fully
            offline / behind HA ingress — no external font CDN. Applied ONLY
            via .serif-display: bean names in the Bibliothek view and the
-           shot-card share image (lib/card.js registers the same file for
-           server-side rendering). Never on numeric/data displays —
+           shot-card share image. Never on numeric/data displays —
            tabular-nums UI stays sans-serif everywhere else, regardless of
            theme. */
         @font-face {

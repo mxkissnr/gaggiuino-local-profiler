@@ -1,22 +1,22 @@
 // Package proto is the wire schema for the Gaggiuino machine's binary
 // WebSocket protocol (real Protocol Buffers, confirmed against the upstream
-// docs — see go/RESEARCH.md's "The wire format is real binary Protocol
-// Buffers" section). It defines every message type the protocol uses, plus a
-// hand-written binary encoder/decoder for each — not generated code.
+// docs' WebSocket section, docs/rest-api/websocket.md). It defines every
+// message type the protocol uses, plus a hand-written binary
+// encoder/decoder for each — not generated code.
 //
 // # Why hand-written instead of protoc-gen-go
 //
-// go/RESEARCH.md documents the blocker this package starts from: no
-// `.proto` source files exist in this repo, in node_modules, or in any
-// branch/tag of the firmware repo this spike could locate — the firmware
-// is closed-source and its message definitions were "reconstructed
-// field-for-field from the machine's own web UI bundle... and verified live
-// against a real machine" (profile CRUD), with a documented subset
+// The blocker this package starts from: no `.proto` source files exist in
+// this repo, in node_modules, or in any branch/tag of the firmware repo
+// that could be located — the firmware is closed-source and its message
+// definitions were "reconstructed field-for-field from the machine's own
+// web UI bundle... and verified live against a real machine" (profile
+// CRUD), with a documented subset
 // transcribed from Gaggiuino's own published API docs (#597, sensor/
-// system-state/command messages). RESEARCH.md's recommended fallback —
-// cross-check the two independent sources (the published websocket.md doc's
-// inline schema blocks and the reconstructed field descriptors) field-by-
-// field — is what schema.proto below records the result of.
+// system-state/command messages). The recommended fallback — cross-check
+// the two independent sources (the published websocket.md doc's inline
+// schema blocks and the reconstructed field descriptors) field-by-field —
+// is what schema.proto below records the result of.
 //
 // This environment additionally has no `protoc`/`protoc-gen-go` binary
 // installed (confirmed: `which protoc protoc-gen-go` finds neither), so
@@ -47,9 +47,8 @@
 //     That encoder is gone, so this fixture is the frozen wire-format
 //     reference.
 //
-// No live-hardware verification happens in this package — go/RESEARCH.md's
-// caveat and the task that produced this package both note that a golden-
-// master test against a real machine is a separate, later step (Max has a
+// No live-hardware verification happens in this package — a golden-master
+// test against a real machine is a separate, later step (Max has a
 // real Gaggiuino to test against, but network access to it is not available
 // in this environment). See cmd/gaggiuino-ws-probe (go/cmd/gaggiuino-ws-probe)
 // for a small CLI this package ships specifically so that later step is a

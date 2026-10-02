@@ -194,7 +194,7 @@ code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_A/shots.json")
 
 step "frontend: webapp SPA at / (#901 Phase 1; /ui/ templ pages removed in #1200)"
 # GET / serves internal/webapp's index.html unauthenticated (auth.RequireToken
-# GET/HEAD static bypass), with server.js's no-cache headers. In a native run
+# GET/HEAD static bypass), with internal/webapp's no-cache headers. In a native run
 # this is the committed dist/index.html placeholder; in Docker mode it's the
 # real Vite build.
 root_headers=$(curl -s -D - -o "$SMOKE_DIR/root.html" "$BASE_A/")
