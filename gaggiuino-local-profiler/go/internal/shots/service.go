@@ -226,16 +226,6 @@ func StartTrashPurge(ctx context.Context, svc *Service, interval time.Duration) 
 	}()
 }
 
-// GetBlocklist returns the blocklist entries.
-func (s *Service) GetBlocklist() ([]string, error) {
-	return s.repo.GetBlocklist()
-}
-
-// SaveBlocklist replaces the blocklist with list.
-func (s *Service) SaveBlocklist(list []string) error {
-	return s.repo.SaveBlocklist(list)
-}
-
 // AppendToBlocklist atomically adds a single value to the blocklist — see
 // Repository.AppendToBlocklist's doc comment for why the delete handler
 // uses this instead of a GetBlocklist+SaveBlocklist read-modify-write.

@@ -101,15 +101,6 @@ type restoreImages struct {
 	total  *int64
 }
 
-func (ri restoreImages) present(name string) bool {
-	if ri.inline != nil {
-		_, ok := ri.inline[name]
-		return ok
-	}
-	_, ok := ri.zip["images/"+name]
-	return ok
-}
-
 // get returns the image bytes for name, capped at imageMaxBytes+1 so an
 // oversized entry is still distinguishable from a valid one by the
 // caller's `len(buf) > imageMaxBytes` check. Reads count toward the
