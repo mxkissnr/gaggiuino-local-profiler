@@ -9,39 +9,35 @@ import (
 	"time"
 )
 
-// PingInterval ports routes/sse.js's PING_INTERVAL_MS: how often a bare
-// keepalive comment line is written to an idle connection.
+// PingInterval is how often a bare keepalive comment line is written to an
+// idle connection.
 const PingInterval = 20 * time.Second
 
-// paddingBytes ports routes/sse.js's #740 workaround: a 2048-space
-// leading comment line (any line starting with ':' is a no-op per the SSE
-// spec) written immediately after headers, to force a flush past whichever
-// intermediate layer between the browser and this process is buffering the
-// response (see doc.go).
+// paddingBytes is the #740 workaround: a 2048-space leading comment line
+// (any line starting with ':' is a no-op per the SSE spec) written
+// immediately after headers, to force a flush past whichever intermediate
+// layer between the browser and this process is buffering the response (see
+// doc.go).
 const paddingBytes = 2048
 
 // Event types this package's Handler multiplexes over /api/events:
-// LIVE_SNAPSHOT/PREHEAT_UPDATE (#736) as routes/sse.js forwards them. See
-// doc.go for the events this endpoint deliberately does NOT carry.
+// LIVE_SNAPSHOT/PREHEAT_UPDATE (#736). See doc.go for the events this
+// endpoint deliberately does NOT carry.
 const (
 	EventLiveSnapshot  = "live-snapshot"
 	EventPreheatUpdate = "preheat-update"
 )
 
-// Event is one push through a Hub. Data is marshaled to JSON the same way
-// routes/sse.js's send(type, data) calls JSON.stringify(data) — Data should
-// be whatever value a future producer would otherwise have passed straight
-// to JSON.stringify (a plain map or struct, not a pre-encoded string).
+// Event is one push through a Hub. Data is marshaled to JSON — it should be
+// a plain map or struct, not a pre-encoded string.
 type Event struct {
 	Type string
 	Data any
 }
 
-// Hub is the Go port of lib/events.js's `bus` EventEmitter: a minimal
-// in-process pub/sub every open SSE connection subscribes to, and any later
-// domain package (Phase 1c+) publishes onto via Publish. Node's
-// bus.setMaxListeners(50) has no Go equivalent needed — Go channels don't
-// warn on listener/subscriber count.
+// Hub is a minimal in-process pub/sub every open SSE connection subscribes
+// to, and any domain package publishes onto via Publish. There is no
+// listener-count cap to mirror — Go channels don't warn on subscriber count.
 type Hub struct {
 	mu   sync.Mutex
 	subs map[chan Event]struct{}
@@ -55,10 +51,9 @@ func NewHub() *Hub {
 // Publish fans ev out to every current subscriber. Delivery to each
 // subscriber is non-blocking: a slow/stuck client's channel buffer (see
 // Subscribe) filling up drops that one event for that subscriber only,
-// rather than blocking every other subscriber or the publisher — Node's
-// EventEmitter.emit is synchronous and unbuffered so this failure mode has
-// no direct equivalent there, but an unbounded blocking send here would let
-// one wedged HTTP connection stall event delivery to every other open tab.
+// rather than blocking every other subscriber or the publisher. An unbounded
+// blocking send here would let one wedged HTTP connection stall event
+// delivery to every other open tab.
 func (h *Hub) Publish(ev Event) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -72,16 +67,13 @@ func (h *Hub) Publish(ev Event) {
 
 // subscriberBuffer bounds how many undelivered events a single subscriber
 // channel holds before Publish starts dropping for it — generous for this
-// app's actual event rates (at most a few pushes per second, see
-// lib/middleware/rateLimit.js's traffic-budget comment for the same
-// ballpark reasoning applied to HTTP requests).
+// app's actual event rates (at most a few pushes per second).
 const subscriberBuffer = 16
 
 // Subscribe registers a new listener and returns its event channel plus an
-// unsubscribe function the caller must call exactly once — the Go
-// equivalent of routes/sse.js's req.on('close', ...) bus.off() cleanup.
-// Calling unsubscribe closes the channel; callers must stop reading from it
-// once they've called unsubscribe.
+// unsubscribe function the caller must call exactly once. Calling
+// unsubscribe closes the channel; callers must stop reading from it once
+// they've called unsubscribe.
 func (h *Hub) Subscribe() (<-chan Event, func()) {
 	ch := make(chan Event, subscriberBuffer)
 	h.mu.Lock()
@@ -100,24 +92,22 @@ func (h *Hub) Subscribe() (<-chan Event, func()) {
 	return ch, unsubscribe
 }
 
-// Handler serves GET /api/events, the Go port of routes/sse.js: same
-// headers, same padding comment, same connect-time priming, same 20s
-// keepalive, same event multiplexing. It does not perform auth itself — see
-// doc.go — callers must wrap it with internal/auth.RequireToken the same
-// way cmd/server does.
+// Handler serves GET /api/events: same headers, same padding comment, same
+// connect-time priming, same 20s keepalive, same event multiplexing. It does
+// not perform auth itself — see doc.go — callers must wrap it with
+// internal/auth.RequireToken the same way cmd/server does.
 type Handler struct {
 	// Hub is the pub/sub broker this handler subscribes new connections to.
 	// Required.
 	Hub *Hub
 
 	// Prime, if set, is called once per new connection (after the padding
-	// line, before subscribing to Hub — matching routes/sse.js's ordering)
-	// to obtain the connect-time snapshot events Node sends before
-	// registering its bus listeners (the syncProgress-map loop,
-	// buildPreheatResponse(), buildLiveDataResponse()). Phase 1c's domain
-	// packages own that state; this field lets them supply it without this
-	// package importing them. nil means no priming, which is only correct
-	// until a real Prime func is wired in.
+	// line, before subscribing to Hub) to obtain the connect-time snapshot
+	// events a fresh connection should see (the syncProgress-map loop,
+	// buildPreheatResponse(), buildLiveDataResponse()). The domain packages
+	// own that state; this field lets them supply it without this package
+	// importing them. nil means no priming, which is only correct until a
+	// real Prime func is wired in.
 	Prime func() []Event
 
 	// PingInterval overrides PingInterval for tests that don't want to wait
@@ -205,8 +195,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return true
 	}
 
-	// Priming runs before Subscribe, same ordering as routes/sse.js (its
-	// priming loop/sends run before the bus.on() registrations).
+	// Priming runs before Subscribe, so a fresh connection's snapshots are
+	// sent before any event published after it subscribes.
 	if h.Prime != nil {
 		for _, ev := range h.Prime() {
 			if !send(ev) {
