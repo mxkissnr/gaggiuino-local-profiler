@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-// This file pins routes/debug.js's wire contract — the "pin the essential
-// shape" check orders/shots/library's contract_test.go established. The
+// This file pins the debug routes' wire contract — the "pin the essential
+// shape" check the other contract_test.go files established. The
 // export/import round-trip behaviour lives in debug_test.go; this file
 // pins the response contract each route owes its one caller (the dev-build
 // Debug settings page) and the SQLite-magic boundary the import guard
@@ -105,8 +105,8 @@ func TestContract_ImportDB_SQLiteMagicBoundary(t *testing.T) {
 	}
 }
 
-// TestContract_DebugMachine_AlwaysJSON200: routes/system.js's H2
-// /api/debug/machine answers 200 with a JSON body on both the success and
+// TestContract_DebugMachine_AlwaysJSON200: H2 /api/debug/machine answers
+// 200 with a JSON body on both the success and
 // the failure branch — { ok: bool, baseUrl, ... }.
 func TestContract_DebugMachine_AlwaysJSON200(t *testing.T) {
 	rec := httptest.NewRecorder()

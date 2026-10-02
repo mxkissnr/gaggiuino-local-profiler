@@ -10,11 +10,11 @@ import (
 	"time"
 )
 
-// TestBroadcastShopState_OpenedSendsNotify exercises the #901 Phase 1g
-// closure of this domain's shop-open/shop-closed HA-notify broadcast
-// deferral: flipping `enabled` false->true with a configured
-// broadcastRecipients entry must fire a notify.* HA service call, with the
-// "ready" wording when the wired PreheatInfoFunc reports the machine ready.
+// TestBroadcastShopState_OpenedSendsNotify exercises this domain's
+// shop-open/shop-closed HA-notify broadcast: flipping `enabled` false->true
+// with a configured broadcastRecipients entry must fire a notify.* HA
+// service call, with the "ready" wording when the wired PreheatInfoFunc
+// reports the machine ready.
 func TestBroadcastShopState_OpenedSendsNotify(t *testing.T) {
 	var mu sync.Mutex
 	var gotMessage string

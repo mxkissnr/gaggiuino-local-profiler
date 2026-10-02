@@ -10,17 +10,14 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 )
 
-// This file ports lib/repositories/LibraryRepository.js's
-// maintenance/maintenance_log methods — kept in this package (not
-// internal/library's) since Phase 1f splits the maintenance domain out
-// into its own package, unlike Node's single LibraryService.js/
-// LibraryRepository.js that carries both. See go/internal/library/doc.go
-// for the matching note on the library side.
+// This file holds the maintenance/maintenance_log DB methods — kept in this
+// package (not internal/library's) because the maintenance domain lives in
+// its own package rather than alongside the library. See
+// go/internal/library/doc.go for the matching note on the library side.
 
-// globalMaintenanceMachineID mirrors LibraryRepository.js's
-// GLOBAL_MAINTENANCE_MACHINE_ID: waterfilter/grinder_* rows always live
-// under this sentinel machine_id (#338) since that equipment is shared
-// across machines.
+// globalMaintenanceMachineID is the sentinel machine_id waterfilter/grinder_*
+// rows always live under (#338), since that equipment is shared across
+// machines.
 const globalMaintenanceMachineID = 1
 
 // Repository wraps an already-open *sql.DB and the library Repository
@@ -38,10 +35,9 @@ func NewRepository(db *sql.DB, libRepo *library.Repository) *Repository {
 	return &Repository{db: db, libRepo: libRepo}
 }
 
-// GetMaintenance ports LibraryRepository.js's getMaintenance(machineId):
-// merges MAINTENANCE_DEFAULTS with whatever's actually stored for this
-// machine (plus the shared global sentinel rows), then synthesizes one
-// entry per currently-existing grinder.
+// GetMaintenance merges the maintenance defaults with whatever's actually
+// stored for this machine (plus the shared global sentinel rows), then
+// synthesizes one entry per currently-existing grinder.
 func (r *Repository) GetMaintenance(machineID int64) (map[string]Task, error) {
 	rows, err := r.db.Query(
 		`SELECT key, data, machine_id FROM maintenance WHERE machine_id IN (?, ?)`,
@@ -172,8 +168,7 @@ func valueOrDefault(t Task, key string, def any) any {
 	return def
 }
 
-// SaveMaintenance ports LibraryRepository.js's saveMaintenance(data,
-// machineId): routes global tasks (waterfilter/grinder_*) to the shared
+// SaveMaintenance routes global tasks (waterfilter/grinder_*) to the shared
 // sentinel machine_id regardless of the requested machineID.
 func (r *Repository) SaveMaintenance(data map[string]Task, machineID int64) error {
 	tx, err := r.db.Begin()
@@ -207,8 +202,8 @@ func (r *Repository) SaveMaintenance(data map[string]Task, machineID int64) erro
 	return nil
 }
 
-// LogEntry mirrors one maintenance_log row, shaped for JSON exactly like
-// LibraryRepository.js's getMaintenanceLog() row projection.
+// LogEntry mirrors one maintenance_log row, shaped for the JSON the
+// maintenance log returns.
 type LogEntry struct {
 	ID              int64  `json:"id"`
 	TS              int64  `json:"ts"`
@@ -222,10 +217,9 @@ type LogEntry struct {
 	Label           string `json:"label,omitempty"`
 }
 
-// GetMaintenanceLog ports LibraryRepository.js's getMaintenanceLog
-// (machineId): machineID == 0 means "every machine" (matching Node's
-// `Number.isFinite(machineId)` optional-param convention), a positive
-// value scopes to that one machine.
+// GetMaintenanceLog returns the maintenance log: machineID == 0 means
+// "every machine" (the optional-param convention), a positive value scopes
+// to that one machine.
 func (r *Repository) GetMaintenanceLog(machineID int64) ([]LogEntry, error) {
 	// Resolve grinder names BEFORE opening the maintenance_log cursor
 	// below, and keep it that way: a second query issued while an earlier
@@ -307,11 +301,9 @@ func (r *Repository) GetMaintenanceLog(machineID int64) ([]LogEntry, error) {
 	return out, rows.Err()
 }
 
-// AddMaintenanceLogEntry ports LibraryRepository.js's
-// addMaintenanceLogEntry(task, notes, machine, shotCount, machineId).
-// lastLogID mirrors the Node original's `_lastLogId` monotonic-id guard
-// (#578): Date.now() alone collides when this is called more than once in
-// the same millisecond.
+// AddMaintenanceLogEntry appends a log entry. lastLogID is a monotonic-id
+// guard (#578): the current millisecond alone collides when this is called
+// more than once in the same millisecond.
 func (r *Repository) AddMaintenanceLogEntry(task, notes, machine string, shotCount, machineID int64) (LogEntry, error) {
 	now := time.Now()
 	id := now.UnixMilli()
@@ -342,7 +334,7 @@ func (r *Repository) AddMaintenanceLogEntry(task, notes, machine string, shotCou
 	return entry, nil
 }
 
-// DeleteMaintenanceLog ports LibraryRepository.js's deleteMaintenanceLog(id).
+// DeleteMaintenanceLog removes a log entry by id.
 func (r *Repository) DeleteMaintenanceLog(id int64) error {
 	if _, err := r.db.Exec(`DELETE FROM maintenance_log WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("maintenance: deleting log entry %d: %w", id, err)
@@ -366,18 +358,16 @@ func (r *Repository) DeleteGrinderTask(grinderID int64) error {
 	return nil
 }
 
-// RawRow mirrors LibraryRepository.js's getAllMaintenanceRaw() row shape —
-// the unfiltered table contents (no MAINTENANCE_DEFAULTS merge), what a
-// full backup export needs. Used by the backup domain (see
-// go/internal/backup/doc.go); not called by anything in this phase's own
-// handlers.
+// RawRow is the unfiltered maintenance-table row shape (no defaults merge),
+// what a full backup export needs. Used by the backup domain (see
+// go/internal/backup/doc.go); not called by this package's own handlers.
 type RawRow struct {
 	MachineID int64           `json:"machineId"`
 	Key       string          `json:"key"`
 	Data      json.RawMessage `json:"data"`
 }
 
-// GetAllMaintenanceRaw ports LibraryRepository.js's getAllMaintenanceRaw().
+// GetAllMaintenanceRaw returns the unfiltered maintenance rows for backup.
 func (r *Repository) GetAllMaintenanceRaw() ([]RawRow, error) {
 	rows, err := r.db.Query(`SELECT machine_id, key, data FROM maintenance`)
 	if err != nil {
@@ -397,8 +387,7 @@ func (r *Repository) GetAllMaintenanceRaw() ([]RawRow, error) {
 	return out, rows.Err()
 }
 
-// RestoreMaintenanceRaw ports LibraryRepository.js's
-// restoreMaintenanceRaw(rows): wipes and re-inserts the whole table.
+// RestoreMaintenanceRaw wipes and re-inserts the whole maintenance table.
 func (r *Repository) RestoreMaintenanceRaw(rows []RawRow) error {
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -426,9 +415,9 @@ func (r *Repository) RestoreMaintenanceRaw(rows []RawRow) error {
 	return nil
 }
 
-// RawLogRow mirrors LibraryRepository.js's getAllMaintenanceLogRaw() row
-// shape — a true round-trip (preserves id/ts exactly), unlike
-// AddMaintenanceLogEntry's live-logging path which mints new ones.
+// RawLogRow is the unfiltered maintenance_log row shape — a true round-trip
+// (preserves id/ts exactly), unlike AddMaintenanceLogEntry's live-logging
+// path which mints new ones.
 type RawLogRow struct {
 	ID        int64  `json:"id"`
 	TS        int64  `json:"ts"`
@@ -440,8 +429,7 @@ type RawLogRow struct {
 	MachineID int64  `json:"machineId"`
 }
 
-// GetAllMaintenanceLogRaw ports LibraryRepository.js's
-// getAllMaintenanceLogRaw().
+// GetAllMaintenanceLogRaw returns the unfiltered maintenance-log rows for backup.
 func (r *Repository) GetAllMaintenanceLogRaw() ([]RawLogRow, error) {
 	rows, err := r.db.Query(`SELECT id, ts, date, task, machine, shot_count, notes, machine_id FROM maintenance_log`)
 	if err != nil {
@@ -462,8 +450,7 @@ func (r *Repository) GetAllMaintenanceLogRaw() ([]RawLogRow, error) {
 	return out, rows.Err()
 }
 
-// RestoreMaintenanceLogRaw ports LibraryRepository.js's
-// restoreMaintenanceLogRaw(rows): wipes and re-inserts, preserving id/ts.
+// RestoreMaintenanceLogRaw wipes and re-inserts the log, preserving id/ts.
 func (r *Repository) RestoreMaintenanceLogRaw(rows []RawLogRow) error {
 	tx, err := r.db.Begin()
 	if err != nil {
