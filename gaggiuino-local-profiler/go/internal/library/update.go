@@ -109,10 +109,9 @@ func UpdateBean(repo *Repository, id int64, body Entity) (Entity, Library, bool,
 		if _, present := body["brewNotes"]; present {
 			bean["brewNotes"] = trimMax(body["brewNotes"], 300)
 		}
-		// Phase 2g (#901): a region change clears the stale `location` AND
-		// triggers a fire-and-forget re-geocode (maybeGeocode below, after the
-		// save), matching routes/library/beans.js's
-		// `if (regionChanged && ...region) libraryService.geocodeBean(id)`.
+		// A region change clears the stale `location` AND triggers a fire-and-forget
+		// re-geocode (maybeGeocode below, after the save) when the new region is
+		// non-empty.
 		if _, present := body["region"]; present {
 			newRegion := trimMax(body["region"], 200)
 			oldRegion, _ := bean["region"].(string)
@@ -211,8 +210,8 @@ func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, Library, bo
 	return grinder, saved, true, nil
 }
 
-// UpdateBasket applies a partial update to basket id, mirroring
-// PUT /api/library/basket/:id, including its wallType/shape enum validation
+// UpdateBasket applies a partial update to basket id (PUT
+// /api/library/basket/:id), including its wallType/shape enum validation
 // (an invalid value is reported via the bool return going false with a nil
 // error — see ErrInvalidField).
 func UpdateBasket(repo *Repository, id int64, body Entity) (Entity, Library, bool, error) {

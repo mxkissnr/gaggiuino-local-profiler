@@ -11,24 +11,23 @@ import (
 )
 
 // This file is the cross-validation step doc.go describes: every vector in
-// testdata/node_vectors.json was produced by the former
-// lib/gaggiuino-proto.js's real @protobuf-ts/runtime-backed encoder/decoder
-// — the wire format the app spoke to Gaggiuino firmware before the Go
-// rewrite. That fixture is now frozen: the Node backend was removed in
-// 3.0.0 (#1028), archived at tag archive/node-backend-final. For each
-// vector this test:
+// testdata/node_vectors.json was produced by the former implementation's
+// real @protobuf-ts/runtime-backed encoder/decoder — the wire format the app
+// spoke to Gaggiuino firmware before the rewrite. That fixture is now
+// frozen: the former backend was removed in 3.0.0 (#1028), archived at tag
+// archive/node-backend-final. For each vector this test:
 //
 //  1. Decodes the recorded hex bytes with this package's own Unmarshal and
-//     asserts the result matches Node's own recorded `decoded` value
+//     asserts the result matches the fixture's recorded `decoded` value
 //     field-for-field (via encoding/json, so the same custom enum
 //     UnmarshalJSON logic go/internal/machines uses for request bodies is
 //     exercised here too).
 //  2. Re-encodes the decoded value with this package's own Marshal and
-//     asserts the output is byte-identical to Node's recorded hex — this
-//     is the strong check: it only passes if field ordering, wire types,
-//     varint/fixed32 encoding, and default-value omission all match
-//     lib/gaggiuino-proto.js's actual wire output exactly, not just this
-//     package's own internal round-trip consistency.
+//     asserts the output is byte-identical to the fixture's recorded hex —
+//     this is the strong check: it only passes if field ordering, wire
+//     types, varint/fixed32 encoding, and default-value omission all match
+//     the original wire output exactly, not just this package's own
+//     internal round-trip consistency.
 
 type vector struct {
 	Name    string          `json:"name"`

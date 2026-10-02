@@ -8,14 +8,13 @@ import (
 	"sync"
 )
 
-// Repository ports lib/repositories/LibraryRepository.js's getLibrary()/
-// saveLibrary() — the only two LibraryRepository methods this phase needs.
-// Every other LibraryRepository method (getMaintenance/saveMaintenance/
+// Repository provides getLibrary()/saveLibrary() — the only two
+// LibraryRepository operations this package needs. Every other
+// maintenance-table operation (getMaintenance/saveMaintenance/
 // getMaintenanceLog/addMaintenanceLogEntry/the raw maintenance backup
-// round-trip) belongs to the maintenance domain (routes/maintenance.js),
-// still a Phase 0 placeholder (internal/maintenance) — see doc.go and
-// handlers.go's deleteGrinder doc comment for the one place this package
-// would otherwise need them.
+// round-trip) belongs to the maintenance domain (internal/maintenance) — see
+// doc.go and handlers.go's deleteGrinder doc comment for the one place this
+// package would otherwise need them.
 type Repository struct {
 	db *sql.DB
 }
@@ -40,9 +39,9 @@ type libraryRow struct {
 	PuckScreens []Entity `json:"puckScreens"`
 }
 
-// GetLibrary ports LibraryRepository.js's getLibrary(): reads the single
-// `library` row (key='main'), falling back to an empty Library (every
-// collection []) when no row exists yet — a fresh install's first read.
+// GetLibrary reads the single `library` row (key='main'), falling back to an
+// empty Library (every collection []) when no row exists yet — a fresh
+// install's first read.
 func (r *Repository) GetLibrary() (Library, error) {
 	var raw string
 	err := r.db.QueryRow(`SELECT data FROM library WHERE key = 'main'`).Scan(&raw)
@@ -85,15 +84,14 @@ func (r *Repository) GetLibrary() (Library, error) {
 	return lib, nil
 }
 
-// SaveLibrary ports LibraryRepository.js's saveLibrary(lib): an
-// INSERT-OR-REPLACE upsert of the whole blob under key='main', same
-// whole-document-rewrite semantics as the Node original.
+// SaveLibrary is an INSERT-OR-REPLACE upsert of the whole blob under
+// key='main' — a whole-document rewrite, not a partial update.
 //
-// Production writes must NOT call this directly: a bare
-// read-mutate-save round trip on the shared blob races every other writer,
-// so every read-modify-write goes through Update (below), which takes the
-// package write lock first. SaveLibrary remains exported only for tests and
-// for seeding a whole Library blob from other packages.
+// Production writes must NOT call this directly: a bare read-mutate-save
+// round trip on the shared blob races every other writer, so every
+// read-modify-write goes through Update (below), which takes the package
+// write lock first. SaveLibrary remains exported only for tests and for
+// seeding a whole Library blob from other packages.
 func (r *Repository) SaveLibrary(lib Library) error {
 	b, err := json.Marshal(lib)
 	if err != nil {

@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// This file pins routes/library/*.js's responses against openapi.yaml's
-// component schemas for the shapes this package's endpoints actually
-// return — the same "pin the essential shape, not the whole grammar"
-// approach shots/contract_test.go applies.
+// This file pins the package's endpoint responses against openapi.yaml's
+// component schemas for the shapes they actually return — the same "pin the
+// essential shape, not the whole grammar" approach shots/contract_test.go
+// applies.
 
 func requireField(t *testing.T, body map[string]any, key string) any {
 	t.Helper()
@@ -37,11 +37,10 @@ func TestContract_BeanShape(t *testing.T) {
 	bean := decodeBody(t, rec.Body.Bytes())
 	requireField(t, bean, "id")
 	requireField(t, bean, "name")
-	// knownGrindSettings is deliberately NOT expected here: LibraryService.js's
-	// upsertKnownGrindSetting only ever adds that key lazily on first use
-	// (POST .../known-grind) — a freshly created bean never has it, matching
-	// the Node original exactly (see TestBean_CreateUpdateDeleteLifecycle's
-	// known-grind subtest for that path).
+	// knownGrindSettings is deliberately NOT expected here: upsertKnownGrindSetting
+	// only ever adds that key lazily on first use (POST .../known-grind) — a
+	// freshly created bean never has it (see
+	// TestBean_CreateUpdateDeleteLifecycle's known-grind subtest for that path).
 	for _, field := range []string{"origin", "origins", "enabled", "decaf", "bags"} {
 		if _, ok := bean[field]; !ok {
 			t.Errorf("expected Bean field %q, got keys %v", field, keysOf(bean))
@@ -70,10 +69,9 @@ func TestContract_BeansInfoShape(t *testing.T) {
 }
 
 // TestContract_GrinderWearFieldNames pins the REAL field names
-// LibraryService.js's computeGrinderWearStats returns
-// (shotsSinceBurrs/gramsSinceBurrs) — see handlers.go's withWear doc
-// comment for why this deliberately does NOT match openapi.yaml's
-// documented {shots, grams} Grinder.wear schema.
+// computeGrinderWearStats returns (shotsSinceBurrs/gramsSinceBurrs) — see
+// handlers.go's withWear doc comment for why this deliberately does NOT
+// match openapi.yaml's documented {shots, grams} Grinder.wear schema.
 func TestContract_GrinderWearFieldNames(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)

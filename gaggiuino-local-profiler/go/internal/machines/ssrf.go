@@ -7,8 +7,8 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/netguard"
 )
 
-// This file ports lib/ssrf-guard.js's assertMachineHost — the narrower of
-// its two guards (see internal/library/ssrf.go for assertPublicHost, the
+// This file implements assertMachineHost — the narrower of the two SSRF
+// guards (see internal/library/ssrf.go for assertPublicHost, the
 // wider one that guards untrusted external content). A machine host is the
 // app owner's own trusted LAN configuration, not untrusted external
 // content — the opposite threat model, so only loopback/link-local/cloud-
@@ -23,7 +23,8 @@ import (
 // resolver instead of depending on real DNS or real address literals.
 var lookupIPAddr = net.DefaultResolver.LookupIPAddr
 
-// isLoopbackOrMetadataIPv4 ports ssrf-guard.js's isLoopbackOrMetadataIPv4.
+// isLoopbackOrMetadataIPv4 reports whether ip is a loopback, link-local or
+// cloud-metadata address.
 func isLoopbackOrMetadataIPv4(ip net.IP) bool {
 	v4 := ip.To4()
 	if v4 == nil {
@@ -39,7 +40,8 @@ func isLoopbackOrMetadataIPv4(ip net.IP) bool {
 	return false
 }
 
-// isLoopbackOrMetadataIPv6 ports ssrf-guard.js's isLoopbackOrMetadataIPv6.
+// isLoopbackOrMetadataIPv6 reports whether ip is a loopback, unspecified or
+// link-local address.
 func isLoopbackOrMetadataIPv6(ip net.IP) bool {
 	if ip.IsLoopback() || ip.IsUnspecified() {
 		return true
@@ -64,8 +66,8 @@ func isLoopbackOrMetadataAddress(ip net.IP) bool {
 	return isLoopbackOrMetadataIPv6(ip)
 }
 
-// assertMachineHost ports ssrf-guard.js's assertMachineHost(hostname), via
-// internal/netguard's shared AssertHost.
+// assertMachineHost validates hostname via internal/netguard's shared
+// AssertHost.
 func assertMachineHost(ctx context.Context, hostname string) error {
 	return netguard.AssertHost(ctx, hostname, isLoopbackOrMetadataAddress, lookupIPAddr)
 }

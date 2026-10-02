@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// This file ports lib/machines/gaggimate/profiles.js: thin pass-throughs
-// over gaggimate_ws.go's request() for GaggiMate's own profile JSON shape
+// This file provides thin pass-throughs over gaggimate_ws.go's request()
+// for GaggiMate's own profile JSON shape
 // (req:profiles:list/load/save/delete/select) — save/delete forward
 // straight to the machine (capabilities().profileEdit == true, see
 // gaggimate_adapter.go); GaggiMate itself is the only place these profiles
@@ -95,12 +95,11 @@ func gaggimateLoadProfile(ctx context.Context, baseURL string, id string) (json.
 	return gaggimateParseProfile(res)
 }
 
-// gaggimateSaveProfile ports saveProfile(baseUrl, profile) — used for both
-// create and update (profiles.js's saveProfile is the same call either
-// way; GaggiMate's own req:profiles:save has no separate create/update
-// distinction). profile is passed through as GaggiMate's own JSON profile
-// shape, not converted through Gaggiuino's ProfileInput/proto.ProfileDto —
-// see gaggimate_adapter.go's CreateProfile/UpdateProfile doc comment.
+// gaggimateSaveProfile is used for both create and update (GaggiMate's own
+// req:profiles:save has no separate create/update distinction). profile is
+// passed through as GaggiMate's own JSON profile shape, not converted
+// through Gaggiuino's ProfileInput/proto.ProfileDto — see
+// gaggimate_adapter.go's CreateProfile/UpdateProfile doc comment.
 func gaggimateSaveProfile(ctx context.Context, baseURL string, profile json.RawMessage) (ProfileSummary, error) {
 	var decoded any
 	if err := json.Unmarshal(profile, &decoded); err != nil {

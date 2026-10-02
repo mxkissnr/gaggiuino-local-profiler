@@ -7,19 +7,17 @@ import (
 	"strings"
 )
 
-// This file ports the individual field sanitizers from lib/sanitize-bean.js
-// that routes/library/beans.js's/baskets.js's own POST/PUT handlers call
-// directly. The "resanitize a whole restored entity" wrappers
-// (SanitizeBeanFields/SanitizeGrinderFields/SanitizeRecipeFields/
+// This file holds the individual field sanitizers that the bean/basket
+// POST/PUT handlers call directly. The "resanitize a whole restored entity"
+// wrappers (SanitizeBeanFields/SanitizeGrinderFields/SanitizeRecipeFields/
 // SanitizeMilkFields/SanitizeBasketFields/SanitizePuckScreenFields) live in
-// restore_sanitize.go instead (Phase 1f, #901) — their only caller is the
-// backup domain's POST /api/restore (internal/backup), a different
-// package, so they're exported there and kept in their own file rather
-// than mixed into this one.
+// restore_sanitize.go instead — their only caller is the backup domain's
+// POST /api/restore (internal/backup), a different package, so they're
+// exported there and kept in their own file rather than mixed into this one.
 
 var isoAlpha2Re = regexp.MustCompile(`^[A-Z]{2}$`)
 
-// sanitizeOrigin ports sanitizeOrigin(v): an ISO 3166-1 alpha-2 code or "".
+// sanitizeOrigin returns an ISO 3166-1 alpha-2 code or "".
 func sanitizeOrigin(v any) string {
 	s, ok := v.(string)
 	if !ok {
@@ -32,8 +30,8 @@ func sanitizeOrigin(v any) string {
 	return ""
 }
 
-// sanitizeOrigins ports sanitizeOrigins(v): blend-capable origins array,
-// deduped by code, capped at 5.
+// sanitizeOrigins returns a blend-capable origins array, deduped by code,
+// capped at 5.
 func sanitizeOrigins(v any) []any {
 	arr, ok := v.([]any)
 	if !ok {
@@ -98,8 +96,8 @@ func sanitizeCategory(v any) string {
 	return "normal"
 }
 
-// sanitizeFlavors ports sanitizeFlavors(v): short tag chips, deduped
-// case-insensitively, capped at 20.
+// sanitizeFlavors returns short tag chips, deduped case-insensitively,
+// capped at 20.
 func sanitizeFlavors(v any) []any {
 	arr, ok := v.([]any)
 	if !ok {
@@ -129,8 +127,8 @@ func sanitizeFlavors(v any) []any {
 	return out
 }
 
-// sanitizeEnabled ports sanitizeEnabled(v): missing/undefined means enabled
-// (true) — only an explicit false-ish value turns it off.
+// sanitizeEnabled returns true unless the value is explicitly false-ish —
+// missing/undefined means enabled.
 func sanitizeEnabled(v any) bool {
 	switch t := v.(type) {
 	case bool:
@@ -175,7 +173,7 @@ func sanitizeBrewTime(v any) any {
 	return nil
 }
 
-// safeURL ports safeUrl(v): only a well-formed http(s) URL survives.
+// safeURL keeps only a well-formed http(s) URL; anything else becomes "".
 func safeURL(v any) string {
 	s, ok := v.(string)
 	if !ok || s == "" {
@@ -188,9 +186,9 @@ func safeURL(v any) string {
 	return u.String()
 }
 
-// sanitizeFrozenPortions ports sanitizeFrozenPortions(v) (#472): dated
-// frozen-portion batches within a bag, capped at 50 entries; an entry
-// missing a required field is dropped entirely (`.filter(Boolean)`).
+// sanitizeFrozenPortions returns dated frozen-portion batches within a bag,
+// capped at 50 entries; an entry missing a required field is dropped
+// entirely.
 func sanitizeFrozenPortions(v any) []any {
 	arr, ok := v.([]any)
 	if !ok {
