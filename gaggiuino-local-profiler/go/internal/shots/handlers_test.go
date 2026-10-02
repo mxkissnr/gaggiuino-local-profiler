@@ -254,9 +254,8 @@ func TestGetCard_StatusCodes(t *testing.T) {
 	if rec := doJSON(t, mux, http.MethodGet, "/api/shots/999999/card", nil); rec.Code != http.StatusNotFound {
 		t.Errorf("missing shot: status = %d, want 404", rec.Code)
 	}
-	// Phase 2f (#901): the success path now renders a PNG (see card_test.go
-	// for the image-shape assertions); this test keeps only the 400/404
-	// branch coverage it originally had.
+	// The success path renders a PNG (see card_test.go for the image-shape
+	// assertions); this test keeps only the 400/404 branch coverage.
 	if rec := doJSON(t, mux, http.MethodGet, "/api/shots/1/card", nil); rec.Code != http.StatusOK {
 		t.Errorf("existing shot: status = %d, want 200", rec.Code)
 	}
@@ -312,7 +311,7 @@ func TestAnnotate_ValidationErrorBeforeIDCheck(t *testing.T) {
 	mux := newMux(h)
 
 	// Both the body (rating out of range) AND the id (invalid) are bad —
-	// validation must win, matching routes/shots.js's middleware order.
+	// validation must win (see the handlers.go header for that order).
 	rec := doJSON(t, mux, http.MethodPost, "/api/shots/notanumber/annotate", []byte(`{"rating":99}`))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
@@ -337,13 +336,11 @@ func TestAnnotate_InvalidIDWithValidBody(t *testing.T) {
 	}
 }
 
-// TestAnnotate_NonexistentShotFailsOnForeignKey pins a real, verified-in-
-// both-runtimes 500: ShotService.js's saveAnnotation() itself has no
-// existence check, but annotations.shot_id is `REFERENCES shots(id)` and
-// both lib/db.js and internal/db.InitSchema turn `PRAGMA foreign_keys = ON`
-// on, so an INSERT for a shot id that was never synced hits a foreign-key
-// constraint violation in both Node (better-sqlite3 throws, uncaught by
-// the route -> lib/middleware/error.js's generic 500 branch) and here.
+// TestAnnotate_NonexistentShotFailsOnForeignKey pins the 500 for a shot id
+// that was never synced: SaveAnnotation itself has no existence check, but
+// annotations.shot_id is `REFERENCES shots(id)` and internal/db.InitSchema
+// turns `PRAGMA foreign_keys = ON`, so the INSERT hits a foreign-key
+// constraint violation, surfaced by the handler as a generic 500.
 func TestAnnotate_NonexistentShotFailsOnForeignKey(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)
@@ -387,8 +384,8 @@ func TestRestore_NoExistenceCheck(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)
 
-	// Matches ShotService.js's restoreShot: succeeds even for an id that
-	// was never trashed (or doesn't exist at all).
+	// RestoreShot has no existence check: it succeeds even for an id that was
+	// never trashed (or doesn't exist at all).
 	rec := doJSON(t, mux, http.MethodPost, "/api/shots/999999/restore", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -578,9 +575,8 @@ func TestImage_UnsupportedContentTypeRejected(t *testing.T) {
 }
 
 func TestImage_GetWithInvalidIDIs404NotBadRequest(t *testing.T) {
-	// GET .../image treats an invalid id like "no image" (404), matching
-	// routes/shots.js's `id ? shotService.getById(id) : null` short circuit
-	// — unlike POST/DELETE .../image, which 400 on an invalid id.
+	// GET .../image treats an invalid id like "no image" (404) — unlike
+	// POST/DELETE .../image, which 400 on an invalid id.
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)
 
