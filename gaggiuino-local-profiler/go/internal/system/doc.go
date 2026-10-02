@@ -29,31 +29,31 @@
 //
 // # File layout
 //
-//      runtime.go   RuntimeState — the shared machine runtime state,
-//                   mutex-guarded because the 1s/30s/30s tickers plus
-//                   concurrent HTTP reads run in parallel.
-//      derive.go    deriveMachineState/isStillWarm — pure functions,
-//                   unit-tested without any I/O.
-//      poll.go      Poller — the polling loop + checkAndApplyMachinePower/
-//                   backgroundHaCheck, plus pollGlobalState (per-machine
-//                   reachability/error/firmware state keyed by machine id since
-//                   #1201), plus StatusInfo()/MachineStatus() snapshotting what
-//                   GET /api/status reads.
-//      preheat.go   buildPreheatResponse, SetReadyByTarget,
-//                   checkReadyByPreheat, save/load preheat_state.json.
-//      options.go   loadPreheatMinutes() — a narrow options.json read, same
-//                   pattern as internal/orders/options.go's isOrdersEnabled();
-//                   also isApiPortExposed()/loadSyncIntervalMinutes()/its own
-//                   isOrdersEnabled() duplicate, all GET /api/status fields.
-//      status.go    GET /api/status's pure-logic pieces —
-//                   statusMachine/buildStatusMachines (the `machines` array),
-//                   apiURLAndHostnameFor/hostnameOnly (machineUrl/
-//                   machineHostname string formatting), and
-//                   hasUnconfirmedLegacyMachineOptions (a documented stub —
-//                   see its own doc comment for why).
-//      version.go   GET /api/version's GitHub-release check.
-//      demo.go      POST /api/demo/{seed,end}.
-//      handlers.go  the REST surface for everything above.
+//	runtime.go   RuntimeState — the shared machine runtime state,
+//	             mutex-guarded because the 1s/30s/30s tickers plus
+//	             concurrent HTTP reads run in parallel.
+//	derive.go    deriveMachineState/isStillWarm — pure functions,
+//	             unit-tested without any I/O.
+//	poll.go      Poller — the polling loop + checkAndApplyMachinePower/
+//	             backgroundHaCheck, plus pollGlobalState (per-machine
+//	             reachability/error/firmware state keyed by machine id since
+//	             #1201), plus StatusInfo()/MachineStatus() snapshotting what
+//	             GET /api/status reads.
+//	preheat.go   buildPreheatResponse, SetReadyByTarget,
+//	             checkReadyByPreheat, save/load preheat_state.json.
+//	options.go   loadPreheatMinutes() — a narrow options.json read, same
+//	             pattern as internal/orders/options.go's isOrdersEnabled();
+//	             also isApiPortExposed()/loadSyncIntervalMinutes()/its own
+//	             isOrdersEnabled() duplicate, all GET /api/status fields.
+//	status.go    GET /api/status's pure-logic pieces —
+//	             statusMachine/buildStatusMachines (the `machines` array),
+//	             apiURLAndHostnameFor/hostnameOnly (machineUrl/
+//	             machineHostname string formatting), and
+//	             hasUnconfirmedLegacyMachineOptions (a documented stub —
+//	             see its own doc comment for why).
+//	version.go   GET /api/version's GitHub-release check.
+//	demo.go      POST /api/demo/{seed,end}.
+//	handlers.go  the REST surface for everything above.
 //
 // # Live-snapshot production
 //
