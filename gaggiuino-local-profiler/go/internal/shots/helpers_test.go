@@ -39,10 +39,9 @@ func newMux(h *Handlers) *http.ServeMux {
 	return mux
 }
 
-// insertShot writes a shots row directly (bypassing Repository, which
-// deliberately doesn't port ShotRepository.js's upsert()/upsertMany() in
-// this phase — see repository.go's doc comment) plus an optional
-// annotation row.
+// insertShot writes a shots row directly (bypassing Repository's Upsert,
+// which is sync/import-path only — see repository.go's doc comment) plus an
+// optional annotation row.
 func insertShot(t testing.TB, sqlDB *sql.DB, id, timestamp int64, duration *int64, profileName string, data map[string]any, annotation map[string]any) {
 	t.Helper()
 	if data == nil {

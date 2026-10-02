@@ -15,26 +15,15 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 )
 
-// This file ports routes/shots.js's Express router onto Go 1.22+'s
-// method-and-wildcard-pattern http.ServeMux (see RegisterRoutes). Two
-// ordering subtleties in the Node original have no Go equivalent to
-// replicate:
+// This file is the shots HTTP router, built on Go 1.22+'s
+// method-and-wildcard-pattern http.ServeMux (see RegisterRoutes).
 //
-//   - Express matches routes in registration order, which is why
-//     routes/shots.js registers '/api/shots/last' and '/api/shots/defaults'
-//     *before* '/api/shots/:id' (a wildcard route registered first would
-//     otherwise capture "last"/"defaults" as :id). Go's ServeMux instead
-//     always prefers the most specific *pattern* regardless of registration
-//     order — a literal segment ("/api/shots/last") always outranks a
-//     wildcard one ("/api/shots/{id}") — so RegisterRoutes below has no
-//     equivalent ordering requirement or comment to carry forward.
-//   - routes/shots.js's POST /api/shots/:id/annotate runs its validate()
-//     body-schema middleware *before* the handler's own id-parsing, so a
-//     malformed body on an invalid-id request gets the validation 400, not
-//     the "Invalid shot ID" 400. annotate() below preserves that exact
-//     order (validate body, then parse id) even though Go's mux has
-//     already routed the request by then.
-const jsonBodyLimit = 16 * 1024 // express.json({ limit: '16kb' }) — server.js's global default; shots routes never override it.
+// One binding requirement is worth spelling out: POST /api/shots/{id}/annotate
+// validates the body *before* parsing the id, so a malformed body on an
+// invalid-id request gets the validation 400, not the "Invalid shot ID" 400.
+// annotate() below preserves that order even though the mux has already routed
+// the request by then.
+const jsonBodyLimit = 16 * 1024 // limit for JSON request bodies; the shots routes never override the global 16kb default.
 
 // Handlers wires Service (+ its Repository, for the defaults/blocklist
 // calls that don't go through Service) into net/http handlers.
@@ -50,15 +39,13 @@ type Handlers struct {
 // GET /api/shots/{id}/card (#999, security audit #977 round 3 finding 3.2).
 // The share-card render drives an SVG→PNG pass through the resvg-wasm pool
 // — a measured concurrency hot-spot (#977's c=10 card-render regression) —
-// so it gets its own feature limiter on top of the app-wide 600/min
-// backstop. This is DELIBERATELY STRICTER THAN NODE: routes/shots.js
-// feature-limits neither this route nor /api/debug/export-db, relying on
-// the shared backstop alone. 600 renders/min from one socket is a cheap
-// local DoS; 30/min covers any legitimate share/preview burst.
+// so it gets its own feature limiter on top of the app-wide 600/min backstop.
+// 600 renders/min from one socket is a cheap local DoS; 30/min covers any
+// legitimate share/preview burst.
 //
 // A var, not a const, purely so the card-render benchmarks
-// (card_perf_test.go) can raise it past their request volume without a
-// real 60s wait — the same pattern as internal/debug's importDBMaxBytes.
+// (card_perf_test.go) can raise it past their request volume without a real
+// 60s wait — the same pattern as internal/debug's importDBMaxBytes.
 var cardRateLimitPerMin = 30
 
 // imageRateLimitPerMin is the dedicated per-IP ceiling for
@@ -67,18 +54,16 @@ var cardRateLimitPerMin = 30
 // to img.MaxBytes — the most CPU-expensive authenticated route in the app
 // without a feature limit before this. Set to the same ceiling as
 // cardRateLimitPerMin: a legitimate client never needs to burst uploads
-// faster than the share-card renderer's own limit. This is DELIBERATELY
-// STRICTER THAN NODE: routes/shots.js feature-limits neither this route nor
-// GET /api/shots/{id}/card, relying on the shared 600/min backstop alone.
+// faster than the share-card renderer's own limit.
 const imageRateLimitPerMin = 30
 
 // SetCardDeps wires the two cross-domain lookups the share-card renderer
 // (GET /api/shots/{id}/card) needs — the install-id short code and a
 // bean-name → origin-country-code resolver. cmd/server passes closures over
 // internal/db and internal/library so this package imports neither; either
-// closure may be nil, in which case the card omits that piece exactly as
-// lib/card.js does on a caught error. Optional: an unwired Handlers still
-// renders a card, just without the footer install code / origin chip.
+// closure may be nil, in which case the card omits that piece (the lookups
+// are best-effort). Optional: an unwired Handlers still renders a card, just
+// without the footer install code / origin chip.
 func (h *Handlers) SetCardDeps(installCode func() string, beanOriginCode func(coffeeName string) string) {
 	h.card = cardDeps{installCode: installCode, beanOriginCode: beanOriginCode}
 }
@@ -127,12 +112,12 @@ func withScore(shot Shot, detail ScoreDetail) Shot {
 
 // ── id parsing ──────────────────────────────────────────────────────────
 
-// jsParseInt ports JS's parseInt(s, 10): skip leading whitespace, an
-// optional sign, then consume as many leading decimal digits as present
-// ("123abc" -> 123, ok); no digits at all (after whitespace/sign) is NaN
-// ("abc" -> not ok). strconv.ParseInt/Atoi are both stricter — they reject
-// any trailing garbage outright — which would diverge from parseId()'s
-// behavior in routes/shots.js for a param like "123abc".
+// jsParseInt parses like parseInt(s, 10): skip leading whitespace, an optional
+// sign, then consume as many leading decimal digits as present ("123abc" ->
+// 123, ok); no digits at all (after whitespace/sign) is not ok ("abc").
+// strconv.ParseInt/Atoi are both stricter — they reject any trailing garbage
+// outright — which would diverge from what a shot-id param like "123abc" is
+// expected to yield.
 func jsParseInt(s string) (int64, bool) {
 	i, n := 0, len(s)
 	for i < n {
@@ -161,11 +146,11 @@ func jsParseInt(s string) (int64, bool) {
 	return v, true
 }
 
-// parseID ports routes/shots.js's parseId(param). Accepts a real shot id
-// (1..MaxShotID) or a demo-seed shot id (the tight demoIDBase..demoIDMax
-// band, which sits far above MaxShotID — see model.go for why the route
-// must reach these). Everything else — non-numeric, < 1, or a value between
-// MaxShotID and the demo band — is rejected exactly as before.
+// parseID accepts a real shot id (1..MaxShotID) or a demo-seed shot id (the
+// tight demoIDBase..demoIDMax band, which sits far above MaxShotID — see
+// model.go for why the route must reach these). Everything else —
+// non-numeric, < 1, or a value between MaxShotID and the demo band — is
+// rejected.
 func parseID(param string) (int64, bool) {
 	id, ok := jsParseInt(param)
 	if !ok || id < 1 {
@@ -179,11 +164,9 @@ func parseID(param string) (int64, bool) {
 
 // ── body decoding ───────────────────────────────────────────────────────
 
-// decodeJSONBody ports express.json({limit:'16kb'})'s two failure modes:
-// a body over the limit becomes a 413 (body-parser's own
-// entity.too.large -> lib/middleware/error.js's status>=400,<500 branch),
-// anything else that fails to parse becomes a 400. writes the error
-// response itself and returns ok=false on either.
+// decodeJSONBody has two failure modes: a body over the limit becomes a 413
+// (entity too large), anything else that fails to parse becomes a 400. It
+// writes the error response itself and returns ok=false on either.
 func decodeJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, bool) {
 	body, ok := httputil.DecodeJSONBody[map[string]any](w, r, jsonBodyLimit)
 	if !ok {
@@ -197,7 +180,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, boo
 
 // ── handlers ────────────────────────────────────────────────────────────
 
-// listShots ports GET /shots.json.
+// listShots serves the shot list; ?trash=1 selects the trash list.
 func (h *Handlers) listShots(w http.ResponseWriter, r *http.Request) {
 	var (
 		list []Shot
@@ -291,10 +274,9 @@ func (h *Handlers) listShotsPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// lastShot ports GET /api/shots/last. Node reads shotService.getAll() and
-// keeps `shots[shots.length - 1]`; this fetches only that one shot (see
-// Service.GetLast / Repository.FindLastExcludingTrash) instead of hydrating
-// the whole history to discard all but the newest (#951).
+// lastShot serves GET /api/shots/last. It fetches only the one newest shot
+// (see Service.GetLast / Repository.FindLastExcludingTrash) instead of
+// hydrating the whole history to discard all but the newest (#951).
 func (h *Handlers) lastShot(w http.ResponseWriter, r *http.Request) {
 	last, err := h.service.GetLast()
 	if err != nil {
@@ -308,7 +290,7 @@ func (h *Handlers) lastShot(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, withScore(last, h.service.ComputeScoreDetail(last)))
 }
 
-// getDefaults ports GET /api/shots/defaults (#654).
+// getDefaults serves GET /api/shots/defaults (#654).
 func (h *Handlers) getDefaults(w http.ResponseWriter, r *http.Request) {
 	defaults, err := h.repo.GetShotDefaults()
 	if err != nil {
@@ -318,9 +300,8 @@ func (h *Handlers) getDefaults(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, defaults)
 }
 
-// shotDefaultsFromBody ports routes/shots.js's POST /api/shots/defaults
-// handler's explicit field-by-field pick with `?? null` / `?? empty
-// string` fallbacks.
+// shotDefaultsFromBody picks the known shot-defaults fields out of a request
+// body, with null / empty-string fallbacks for the ones that are absent.
 func shotDefaultsFromBody(body map[string]any) map[string]any {
 	get := func(key string) any {
 		if v, ok := body[key]; ok {
@@ -345,7 +326,7 @@ func shotDefaultsFromBody(body map[string]any) map[string]any {
 	}
 }
 
-// postDefaults ports POST /api/shots/defaults.
+// postDefaults serves POST /api/shots/defaults.
 func (h *Handlers) postDefaults(w http.ResponseWriter, r *http.Request) {
 	body, ok := decodeJSONBody(w, r)
 	if !ok {
@@ -363,10 +344,8 @@ func (h *Handlers) postDefaults(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, defaults)
 }
 
-// getShot ports GET /api/shots/:id. Note this returns 200 null for both an
-// invalid id AND a valid-but-nonexistent one — never a 400/404 — matching
-// routes/shots.js exactly (`if (!id) return res.json(null)`;
-// `if (!shot) return res.json(null)`).
+// getShot serves GET /api/shots/{id}. Note this returns 200 null for both an
+// invalid id AND a valid-but-nonexistent one — never a 400/404.
 func (h *Handlers) getShot(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
@@ -401,15 +380,14 @@ func (h *Handlers) getShot(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// getCard ports routes/shots.js's GET /api/shots/:id/card — the share-card
-// PNG (lib/card.js). See internal/shots/card.go for the SVG-template +
-// resvg-wasm approach and the list of deliberate cosmetic deviations.
+// getCard serves GET /api/shots/{id}/card — the share-card PNG. See
+// internal/shots/card.go for the SVG-template + resvg-wasm approach and the
+// list of deliberate cosmetic deviations.
 //
-// routes/shots.js's `if (!cardAvailable()) return res.status(503)` branch
-// has no equivalent: the renderer is always compiled into this binary. The
-// frontend treats 501/503 identically ("card unavailable"), so a partial
-// Go rollout is safe regardless. Node sets no Cache-Control on this route,
-// only Content-Type + Content-Disposition — matched exactly.
+// There is no "card unavailable" 503 branch: the renderer is always compiled
+// into this binary. The frontend treats 501/503 identically ("card
+// unavailable"), so a partial Go rollout is safe regardless. The response sets
+// no Cache-Control, only Content-Type + Content-Disposition.
 func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
 	if !h.rl.Allow("card:"+auth.RemoteIP(r), cardRateLimitPerMin) {
 		writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
@@ -449,27 +427,24 @@ func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
 	w.Write(png)
 }
 
-// annotate ports POST /api/shots/:id/annotate. Body validation runs before
-// id parsing — see this file's header comment for why that order matters.
-// The body is then *merged* into the stored annotation (Service.PatchAnnotation,
+// annotate serves POST /api/shots/{id}/annotate. Body validation runs before
+// id parsing — see this file's header comment for why that order matters. The
+// body is then *merged* into the stored annotation (Service.PatchAnnotation,
 // #1273): keys absent from the body are kept, keys present as null or ""
 // clear, and server-owned keys (orderedBy) are ignored. The merged result is
 // validated again before it is written; a merge that fails validation is the
 // same 400 shape the body check above returns.
 //
-// The write itself has no existence check (matching ShotService.js's
-// saveAnnotation), but annotations.shot_id REFERENCES shots(id) with
-// foreign_keys=ON in both Node and Go, so annotating an id that isn't an
-// actual shot row still fails — as a foreign-key constraint error, mapped
-// to a generic 500 by both runtimes' error handling, not a 4xx — see
-// handlers_test.go's TestAnnotate_NonexistentShotFailsOnForeignKey.
+// The write itself has no existence check, but annotations.shot_id REFERENCES
+// shots(id) with foreign_keys=ON, so annotating an id that isn't an actual shot
+// row still fails — as a foreign-key constraint error, mapped to a generic 500
+// by the error handling, not a 4xx — see handlers_test.go's
+// TestAnnotate_NonexistentShotFailsOnForeignKey.
 //
-// libraryService.checkLowStockNotify(req.body) (the fire-and-forget
-// low-stock notification routes/shots.js's annotate handler kicks off
-// afterwards) is NOT called here: it needs internal/library (bean
-// resolution, bag stock, HA-notify settings), which is still a Phase 0
-// placeholder. Wire it in once the Library phase lands — until then,
-// annotating a shot in the Go server never sends a low-stock notification.
+// The fire-and-forget low-stock notification is NOT sent here: it needs
+// internal/library (bean resolution, bag stock, HA-notify settings), which is
+// still a placeholder. Wire it in once that lands — until then, annotating a
+// shot in the Go server never sends a low-stock notification.
 func (h *Handlers) annotate(w http.ResponseWriter, r *http.Request) {
 	body, ok := decodeJSONBody(w, r)
 	if !ok {
@@ -496,7 +471,7 @@ func (h *Handlers) annotate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// trash ports POST /api/shots/:id/trash.
+// trash serves POST /api/shots/{id}/trash.
 func (h *Handlers) trash(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
@@ -514,8 +489,7 @@ func (h *Handlers) trash(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// restore ports POST /api/shots/:id/restore — no existence check, matching
-// the Node original.
+// restore serves POST /api/shots/{id}/restore — no existence check.
 func (h *Handlers) restore(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
@@ -529,12 +503,12 @@ func (h *Handlers) restore(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// delete ports POST /api/shots/:id/delete: permanently deletes and adds
-// the id to the blocklist so a later re-import/re-sync never resurrects it.
-// The blocklist add goes through AppendToBlocklist's atomic INSERT OR
-// IGNORE rather than a GetBlocklist+SaveBlocklist read-modify-write — see
-// Repository.AppendToBlocklist's doc comment for why the latter loses
-// updates under concurrent deletes (#901).
+// delete serves POST /api/shots/{id}/delete: permanently deletes and adds the
+// id to the blocklist so a later re-import/re-sync never resurrects it. The
+// blocklist add goes through AppendToBlocklist's atomic INSERT OR IGNORE
+// rather than a GetBlocklist+SaveBlocklist read-modify-write — see
+// Repository.AppendToBlocklist's doc comment for why the latter loses updates
+// under concurrent deletes (#901).
 func (h *Handlers) delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
@@ -561,11 +535,9 @@ func (h *Handlers) delete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// getImage ports GET /api/shots/:id/image. An invalid id is treated
-// exactly like "no image" (404), not a 400 — matching routes/shots.js's
-// `const shot = id ? shotService.getById(id) : null;` (an invalid id
-// short-circuits to shot = null before the 404 check, same outcome as a
-// valid id with no shot).
+// getImage serves GET /api/shots/{id}/image. An invalid id is treated exactly
+// like "no image" (404), not a 400: it short-circuits to a nil shot before
+// the 404 check, the same outcome as a valid id with no shot.
 func (h *Handlers) getImage(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	var shot Shot
@@ -596,8 +568,8 @@ func (h *Handlers) getImage(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path)
 }
 
-// postImage ports POST /api/shots/:id/image (raw body upload, no URL
-// fetch — see image.go's doc comment).
+// postImage serves POST /api/shots/{id}/image (raw body upload, no URL fetch
+// — see image.go's doc comment).
 func (h *Handlers) postImage(w http.ResponseWriter, r *http.Request) {
 	if !h.rl.Allow("image:"+auth.RemoteIP(r), imageRateLimitPerMin) {
 		writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
@@ -627,11 +599,9 @@ func (h *Handlers) postImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusRequestEntityTooLarge, "request entity too large")
 		return
 	}
-	// Mirrors routes/shots.js's `!Buffer.isBuffer(req.body) ||
-	// req.body.length === 0`: express.raw() only populates req.body as a
-	// Buffer when Content-Type matches its whitelist, so an unrecognized
-	// content type reaches the same "no image data" branch an empty body
-	// does, distinctly from img.Save's own "unsupported image" check below.
+	// An unrecognized content type reaches the same "no image data" branch an
+	// empty body does, distinctly from img.Save's own "unsupported image" check
+	// below: the raw body is only accepted for a known content type.
 	if !typeKnown || len(data) == 0 {
 		writeError(w, http.StatusBadRequest, "no image data")
 		return
@@ -650,17 +620,13 @@ func (h *Handlers) postImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
-	// Only `score` is added here, not `usedBeanTarget` — matches
-	// routes/shots.js's `res.json({ ...updated, score:
-	// shotService.computeScore(updated) })` exactly.
+	// Only `score` is added here, not `usedBeanTarget`.
 	resp := updated.clone()
 	resp["score"] = h.service.ComputeScore(updated)
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// deleteImage (method) ports DELETE /api/shots/:id/image. It stays named
-// deleteImage on the Handlers receiver, mirroring the route it serves the
-// same way every other handler here mirrors its route name.
+// deleteImage serves DELETE /api/shots/{id}/image.
 func (h *Handlers) deleteImage(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
