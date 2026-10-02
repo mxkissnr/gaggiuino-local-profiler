@@ -120,8 +120,8 @@ import (
 			consumed += *row.Dose
 		}
 	}
-	// Mirrors `Math.round(Math.max(0, totalStock - Math.round(consumed)))`
-	// exactly — two separate rounds, not one round of the difference.
+	// Two separate rounds, not one round of the difference:
+	// Math.round(Math.max(0, totalStock - Math.round(consumed))).
 	remaining := mathRoundInt(totalStock - float64(mathRoundInt(consumed)))
 	if remaining < 0 {
 		remaining = 0

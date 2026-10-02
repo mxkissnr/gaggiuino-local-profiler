@@ -70,10 +70,10 @@ func newID() int64 {
 	}
 }
 
-// reserveID hands back a manually computed id (`Date.now() + 1`, deliberately
-// offset from the bean's own id) but still ratchets newID's clock forward
-// past it, so a later newID() call in the same request or the next one can
-// never collide with it.
+// reserveID hands back a manually computed id (the bean's own id plus one,
+// deliberately offset) but still ratchets newID's clock forward past it, so
+// a later newID() call in the same request or the next one can never collide
+// with it.
 func reserveID(id int64) int64 {
 	for {
 		prev := atomic.LoadInt64(&lastID)
@@ -141,7 +141,7 @@ func jsParseInt(s string) (int64, bool) {
 // entity's real id, so every route here treats it identically to a
 // valid-but-nonexistent id (a 404, or a 200/created-object response entirely
 // unaffected by it). noMatch reports true for a param that can never match
-// any real (positive, Date.now()-scale) entity id, standing in for JS's
+// any real (positive, millisecond-scale) entity id, standing in for JS's
 // `x === NaN` always being false.
 func parseIDParam(param string) (id int64, noMatch bool) {
 	v, ok := jsParseInt(param)
@@ -233,7 +233,7 @@ func trimMaxOrUndefined(body Entity, key string, max int) (value string, present
 }
 
 // enumStringField reads body[key] and validates it against allowed,
-// mirroring `if (v && !ALLOWED.has(v)) return 400` — with one deliberate,
+// matching `if (v && !ALLOWED.has(v)) return 400` — with one deliberate,
 // stricter divergence fixed under #901: the check used to reject only a
 // *truthy* mismatch, so a non-string JSON value (e.g. `{"wallType": 5}`) was
 // falsy-ish only by accident and actually sailed through as `undefined` via
@@ -244,7 +244,6 @@ func trimMaxOrUndefined(body Entity, key string, max int) (value string, present
 // reports whether key existed in body at all, so callers (the update
 // handlers) can tell "not provided, leave unchanged" apart from "provided
 // and valid".
-// unchanged" apart from "provided and valid".
 func enumStringField(body Entity, key string, allowed map[string]bool) (value string, present bool, ok bool) {
 	v, present := body[key]
 	if !present {

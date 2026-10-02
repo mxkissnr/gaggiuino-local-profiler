@@ -260,8 +260,8 @@ func (h *Handlers) freezePortions(w http.ResponseWriter, r *http.Request) {
 		if len(bags) == 0 {
 			return errNoActiveBag
 		}
-		// `Number.isFinite(req.body?.frozenAt) ? ... : Date.now()` — strictly a
-		// JSON number, not a numeric string (unlike jsParseFloat elsewhere).
+		// frozenAt must be strictly a JSON number, not a numeric string (unlike
+		// jsParseFloat elsewhere).
 		frozenAt, isNum := body["frozenAt"].(float64)
 		if !isNum || math.IsInf(frozenAt, 0) {
 			frozenAt = float64(newID())
@@ -292,9 +292,8 @@ func (h *Handlers) freezePortions(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
-// findFrozenPortion locates a frozen portion by id across every bag,
-// mirroring the JS `for (const bag of bags) { portion = ...find(...); if
-// (portion) break; }` loop shared by thaw-portion/adjust-frozen-portion.
+// findFrozenPortion locates a frozen portion by id across every bag. The
+// same search backs both thaw-portion and adjust-frozen-portion.
 func findFrozenPortion(bean Entity, portionID int64, requireNotThawed bool) Entity {
 	for _, b := range bagsOf(bean) {
 		bag, _ := b.(Entity)
