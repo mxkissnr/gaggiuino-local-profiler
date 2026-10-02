@@ -108,6 +108,18 @@ jobs:
       - name: Run E2E smoke test
         run: npm run test:e2e
 
+      # Same three steps the Pages deploy runs (demo-pages.yml), so a change
+      # that breaks the browser demo fails here instead of after the release
+      # reaches main (#1315).
+      - name: Generate demo fixtures
+        run: npm run demo:fixtures
+
+      - name: Build demo
+        run: npm run build:demo
+
+      - name: Smoke test demo build
+        run: npm run demo:smoke
+
   go-test:
     name: Go backend test/vet/build/vuln gate
     # #977 cutover: this used to be go-build.yaml's own `test` job, scoped
