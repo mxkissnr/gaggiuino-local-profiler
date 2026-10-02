@@ -1,10 +1,10 @@
 // Command gaggiuino-ws-probe is the manual verification tool
-// internal/machines/proto/doc.go promises: this package's protobuf
-// decoder is cross-validated against lib/gaggiuino-proto.js's real
-// runtime output (see proto/node_vectors_test.go), but never against a
-// real machine — no network access to one was available while this
-// package was built. This tool exists so that verification is a `go run`
-// away once real hardware is reachable, in two modes:
+// internal/machines/proto/doc.go promises: this package's protobuf decoder
+// is cross-validated against captured runtime vectors (see
+// proto/node_vectors_test.go), but never against a real machine — no network
+// access to one was available while this package was built. This tool exists
+// so that verification is a `go run` away once real hardware is reachable, in
+// two modes:
 //
 //   - Live: `go run ./cmd/gaggiuino-ws-probe -host 192.168.1.50` opens
 //     ws://192.168.1.50/ws, optionally sends one request (-action), and
