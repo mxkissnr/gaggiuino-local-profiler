@@ -9,16 +9,15 @@ import (
 	"time"
 )
 
-// Repository ports lib/repositories/ShotRepository.js's DB access. Phase
-// 1c originally scoped this to only what routes/shots.js's endpoints
-// needed; Phase 1f (orders/maintenance/backup) added the machineId-scoped
-// variants, FindAll, GetAnnotatedDoses, GetAnnotation, GetLatestID,
-// GetTrashEntry, SetTrashEntry, WipeAll and Upsert those later domains
-// actually call; Phase 3b (#901) added Count for GET /api/status's
-// shotCount. Still deliberately not ported: upsertMany, getMaxId,
-// getAllAnnotations, getMachineId — those are import/sync-path only (no
-// HTTP route reaches them yet in any phase so far); add them alongside
-// whichever later domain (sync/import) actually calls them.
+// Repository is the SQL DB access for shots, annotations and the related
+// trash/blocklist tables. It grew with the domains that needed it: the
+// machineId-scoped variants, FindAll, GetAnnotatedDoses, GetAnnotation,
+// GetLatestID, GetTrashEntry, SetTrashEntry, WipeAll and Upsert serve the
+// orders/maintenance/backup domains, and Count (#901) serves GET /api/status's
+// shotCount. Deliberately still absent are the import/sync-path helpers (bulk
+// upsert, max-id, all-annotations and machine-id reads) — no HTTP route
+// reaches them yet; add them alongside the sync/import domain that calls
+// them.
 type Repository struct {
 	db *sql.DB
 }
@@ -28,8 +27,8 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-// FindByID ports ShotRepository.js's findById. Returns (nil, nil) — not an
-// error — when no such shot exists, matching _hydrate(undefined) => null.
+// FindByID returns the hydrated shot, or (nil, nil) — not an error — when no
+// such shot exists.
 func (r *Repository) FindByID(id int64) (Shot, error) {
 	row := r.db.QueryRow(selectBase+` WHERE s.id = ?`, id)
 	shot, err := hydrateRow(row)
@@ -42,8 +41,8 @@ func (r *Repository) FindByID(id int64) (Shot, error) {
 	return shot, nil
 }
 
-// FindAllExcludingTrash ports ShotRepository.js's findAllExcludingTrash()
-// (no machineId — see the type doc comment), ordered by timestamp ASC.
+// FindAllExcludingTrash returns every non-trashed shot (no machineId filter —
+// see the type doc comment), ordered by timestamp ASC.
 func (r *Repository) FindAllExcludingTrash() ([]Shot, error) {
 	rows, err := r.db.Query(selectBase + ` WHERE s.id NOT IN (SELECT shot_id FROM trash) ORDER BY s.timestamp ASC`)
 	if err != nil {
@@ -62,15 +61,13 @@ func (r *Repository) FindAllExcludingTrash() ([]Shot, error) {
 	return out, rows.Err()
 }
 
-// FindLastExcludingTrash returns the single newest non-trashed shot — the
-// one routes/shots.js's GET /api/shots/last keeps as `shots[shots.length -
-// 1]` after shotService.getAll() (findAllExcludingTrash, ORDER BY timestamp
-// ASC). "Newest" there means greatest timestamp and, on a tie, the row
-// SQLite returned last for that ASC scan (greatest id) — so the equivalent
-// single-row query is ORDER BY s.timestamp DESC, s.id DESC LIMIT 1, the
-// same ordering getLatestId already uses. Hydrating one row instead of all
-// 213 to discard the rest (#951). Returns (nil, nil) when there are no
-// shots, matching the Node `shots.length ? … : null` / `if (!last)` branch.
+// FindLastExcludingTrash returns the single newest non-trashed shot. The
+// list-based equivalent (findAllExcludingTrash, ORDER BY timestamp ASC) would
+// keep the list's last element: greatest timestamp and, on a tie, the row
+// SQLite returned last for that ASC scan (greatest id) — so the single-row
+// query is ORDER BY s.timestamp DESC, s.id DESC LIMIT 1, the same ordering
+// GetLatestID uses. Hydrating one row instead of all 213 to discard the rest
+// (#951). Returns (nil, nil) when there are no shots.
 func (r *Repository) FindLastExcludingTrash() (Shot, error) {
 	row := r.db.QueryRow(selectBase + ` WHERE s.id NOT IN (SELECT shot_id FROM trash) ORDER BY s.timestamp DESC, s.id DESC LIMIT 1`)
 	shot, err := hydrateRow(row)
@@ -83,12 +80,10 @@ func (r *Repository) FindLastExcludingTrash() (Shot, error) {
 	return shot, nil
 }
 
-// FindAllExcludingTrashByMachine ports ShotRepository.js's
-// findAllExcludingTrash(machineId) with machineId actually supplied — the
-// machineId-scoped variant the type doc comment above flagged as
-// deliberately unported in Phase 1c. Needed by Phase 1f's maintenance
-// domain (computeMaintenanceStats scopes descaling/backflush/grouphead/
-// gaskets counts to one machine, see internal/maintenance/service.go).
+// FindAllExcludingTrashByMachine returns every non-trashed shot for one
+// machine. Used by the maintenance domain (computeMaintenanceStats scopes
+// descaling/backflush/grouphead/gaskets counts to one machine, see
+// internal/maintenance/service.go).
 func (r *Repository) FindAllExcludingTrashByMachine(machineID int64) ([]Shot, error) {
 	rows, err := r.db.Query(
 		selectBase+` WHERE s.machine_id = ? AND s.id NOT IN (SELECT shot_id FROM trash) ORDER BY s.timestamp ASC`,
@@ -110,11 +105,9 @@ func (r *Repository) FindAllExcludingTrashByMachine(machineID int64) ([]Shot, er
 	return out, rows.Err()
 }
 
-// FindAll ports ShotRepository.js's findAll() with no machineId — every
-// shot including trashed ones, ordered by timestamp ASC. Needed by the
-// backup domain's export (routes/backup.js reads shotRepo.findAll(), not
-// the trash-excluding getAll(), so a trashed shot's full payload is still
-// part of every export — see internal/backup/doc.go).
+// FindAll returns every shot including trashed ones (no machineId filter),
+// ordered by timestamp ASC. Used by the backup domain's export, which needs
+// the trashed shots' full payloads too — see internal/backup/doc.go.
 func (r *Repository) FindAll() ([]Shot, error) {
 	rows, err := r.db.Query(selectBase + ` ORDER BY s.timestamp ASC`)
 	if err != nil {
@@ -133,9 +126,9 @@ func (r *Repository) FindAll() ([]Shot, error) {
 	return out, rows.Err()
 }
 
-// AnnotatedDose is one row of ShotRepository.js's getAnnotatedDoses():
-// lightweight (coffee, beanId, dose, timestamp) tuples for bean-consumption
-// math, avoiding hydrating full shot payloads just to sum annotated doses.
+// AnnotatedDose is one lightweight (coffee, beanId, dose, timestamp) tuple for
+// bean-consumption math, avoiding hydrating full shot payloads just to sum
+// annotated doses.
 type AnnotatedDose struct {
 	Coffee    string
 	BeanID    *int64
@@ -143,8 +136,8 @@ type AnnotatedDose struct {
 	Timestamp int64
 }
 
-// GetAnnotatedDoses ports ShotRepository.js's getAnnotatedDoses() — used by
-// the library/orders domains' bean-stock math (computeBeanRemaining,
+// GetAnnotatedDoses returns the annotated-dose tuples used by the
+// library/orders domains' bean-stock math (computeBeanRemaining,
 // getActiveBeans).
 func (r *Repository) GetAnnotatedDoses() ([]AnnotatedDose, error) {
 	rows, err := r.db.Query(`
@@ -186,11 +179,10 @@ func (r *Repository) GetAnnotatedDoses() ([]AnnotatedDose, error) {
 	return out, rows.Err()
 }
 
-// GetAnnotation ports ShotRepository.js's getAnnotation(shotId): the raw
-// stored annotation object, or {} if none exists — the read half of
-// UpdateAnnotation's locked read-modify-write (see its doc comment), which
-// merges onto whatever annotation already exists rather than overwriting it
-// wholesale.
+// GetAnnotation returns the raw stored annotation object, or {} if none
+// exists — the read half of UpdateAnnotation's locked read-modify-write (see
+// its doc comment), which merges onto whatever annotation already exists
+// rather than overwriting it wholesale.
 func (r *Repository) GetAnnotation(shotID int64) (map[string]any, error) {
 	var raw string
 	err := r.db.QueryRow(`SELECT data FROM annotations WHERE shot_id = ?`, shotID).Scan(&raw)
@@ -210,15 +202,13 @@ func (r *Repository) GetAnnotation(shotID int64) (map[string]any, error) {
 	return ann, nil
 }
 
-// GetLatestID ports ShotRepository.js's getLatestId(machineId), extended
-// with a sinceSec lower bound (#1197). machineID == 0 mirrors the Node
-// original's `machineId` falsy branch (global latest, across every
-// machine); a positive machineID scopes to that one machine. When
-// sinceSec > 0 only shots whose Unix-seconds timestamp is at or after it
-// are considered — order fulfillment uses this so a completed order is not
-// matched to an unrelated older shot. sinceSec == 0 means no time filter,
-// the original behaviour. ok is false when there is no matching shot
-// (Node's `row?.id ?? null`).
+// GetLatestID returns the newest shot id, extended with a sinceSec lower bound
+// (#1197). machineID == 0 means global latest, across every machine; a
+// positive machineID scopes to that one machine. When sinceSec > 0 only shots
+// whose Unix-seconds timestamp is at or after it are considered — order
+// fulfillment uses this so a completed order is not matched to an unrelated
+// older shot. sinceSec == 0 means no time filter. ok is false when there is no
+// matching shot.
 func (r *Repository) GetLatestID(machineID, sinceSec int64) (id int64, ok bool, err error) {
 	var row *sql.Row
 	if machineID != 0 {
@@ -251,23 +241,21 @@ func (r *Repository) GetLatestID(machineID, sinceSec int64) (id int64, ok bool, 
 	return id, true, nil
 }
 
-// MaxNativeShotID ports lib/sync.js's maxDefaultMachineShotId(): the
-// highest shot id filed under the given machine that is still a real
-// native id. #341: scoped to one machine so another machine's synthetic
-// ids (10,000,000+) can't inflate it. #719: also excludes any id outside
-// that machine's own window even if it's (wrongly) filed under this machine —
-// a corrupt/pre-existing row must never poison the max the sync loop
-// catches up from. Machine 1's native ids are 0..MachineIDOffset; every other
-// machine's are stored globally as machineID*MachineIDOffset+nativeID, so its
-// max is read from (base, base+MachineIDOffset) and returned as the native id
-// by subtracting the base (#1147).
+// MaxNativeShotID returns the highest shot id filed under the given machine
+// that is still a real native id. #341: scoped to one machine so another
+// machine's synthetic ids (10,000,000+) can't inflate it. #719: also excludes
+// any id outside that machine's own window even if it's (wrongly) filed under
+// this machine — a corrupt/pre-existing row must never poison the max the sync
+// loop catches up from. Machine 1's native ids are 0..MachineIDOffset; every
+// other machine's are stored globally as machineID*MachineIDOffset+nativeID, so
+// its max is read from (base, base+MachineIDOffset) and returned as the native
+// id by subtracting the base (#1147).
 //
-// Trashed rows are deliberately INCLUDED here (#1150), unlike the Node
-// original's findAllExcludingTrash(1). A trashed id already exists
-// locally, so it must never count as "missing" and be re-fetched on every
-// sync; Node's exclusion left the starting point one too low whenever the
-// newest shot was in the trash. Returns 0 when the machine has no
-// qualifying shots yet, matching the Node reduce() seed.
+// Trashed rows are deliberately INCLUDED here (#1150). A trashed id already
+// exists locally, so it must never count as "missing" and be re-fetched on
+// every sync; excluding trashed rows would leave the starting point one too low
+// whenever the newest shot was in the trash. Returns 0 when the machine has no
+// qualifying shots yet.
 func (r *Repository) MaxNativeShotID(machineID int64) (int64, error) {
 	var maxID sql.NullInt64
 	if machineID == 1 {
@@ -297,11 +285,10 @@ func (r *Repository) MaxNativeShotID(machineID int64) (int64, error) {
 	return maxID.Int64 - base, nil
 }
 
-// Count ports ShotRepository.js's count(): a plain `SELECT COUNT(*) FROM
-// shots`, deliberately including trashed rows (no `NOT IN (SELECT shot_id
-// FROM trash)` filter — mirrors the Node original exactly, not
-// FindAllExcludingTrash's convention). GET /api/status's shotCount field
-// (#901 Phase 3b) is its only caller.
+// Count is a plain `SELECT COUNT(*) FROM shots`, deliberately including
+// trashed rows (no `NOT IN (SELECT shot_id FROM trash)` filter, unlike
+// FindAllExcludingTrash). GET /api/status's shotCount field (#901) is its
+// only caller.
 func (r *Repository) Count() (int, error) {
 	var n int
 	if err := r.db.QueryRow(`SELECT COUNT(*) FROM shots`).Scan(&n); err != nil {
@@ -310,10 +297,9 @@ func (r *Repository) Count() (int, error) {
 	return n, nil
 }
 
-// GetTrashEntry ports ShotRepository.js's getTrashEntry(shotId): a single
-// trash row's deleted_at, or (0, false) if the shot isn't trashed. Used by
-// the backup export, which needs a per-shot timestamp rather than
-// FindTrashed's full hydrated rows.
+// GetTrashEntry returns a single trash row's deleted_at, or (0, false) if the
+// shot isn't trashed. Used by the backup export, which needs a per-shot
+// timestamp rather than FindTrashed's full hydrated rows.
 func (r *Repository) GetTrashEntry(shotID int64) (deletedAt int64, ok bool, err error) {
 	err = r.db.QueryRow(`SELECT deleted_at FROM trash WHERE shot_id = ?`, shotID).Scan(&deletedAt)
 	if err == sql.ErrNoRows {
@@ -325,11 +311,10 @@ func (r *Repository) GetTrashEntry(shotID int64) (deletedAt int64, ok bool, err 
 	return deletedAt, true, nil
 }
 
-// SetTrashEntry ports ShotRepository.js's setTrashEntry(shotId, deletedAt)
-// — restore-only counterpart to MoveToTrash: takes the deletedAt timestamp
-// from the backup instead of always stamping time.Now(), so a restored
-// trash entry keeps its original deletion time rather than resetting the
-// 30-day TTL clock.
+// SetTrashEntry is the restore-only counterpart to MoveToTrash: it takes the
+// deletedAt timestamp from the backup instead of always stamping time.Now(),
+// so a restored trash entry keeps its original deletion time rather than
+// resetting the 30-day TTL clock.
 func (r *Repository) SetTrashEntry(shotID, deletedAt int64) error {
 	if _, err := r.db.Exec(`INSERT OR REPLACE INTO trash (shot_id, deleted_at) VALUES (?, ?)`, shotID, deletedAt); err != nil {
 		return fmt.Errorf("shots: setting trash entry for shot %d: %w", shotID, err)
@@ -337,10 +322,8 @@ func (r *Repository) SetTrashEntry(shotID, deletedAt int64) error {
 	return nil
 }
 
-// WipeAll ports ShotRepository.js's wipeAll() — deletes every shot,
-// annotation and trash row, used only by the backup domain's restore path
-// (a restore replaces the whole shots table, matching Node's
-// db.transaction(() => { shotRepo.wipeAll(); ... }) sequence).
+// WipeAll deletes every shot, annotation and trash row. Used only by the
+// backup domain's restore path, which replaces the whole shots table.
 func (r *Repository) WipeAll() error {
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -358,18 +341,16 @@ func (r *Repository) WipeAll() error {
 	return nil
 }
 
-// Upsert ports ShotRepository.js's upsert(shot): writes the shots row (and,
-// if the shot object carries an `annotation` key, the annotations row too)
-// straight from a sync-pulled or restored/imported shot object. Its
-// statement must never go back to INSERT OR REPLACE (#1150) — see the
-// inline comment on the Exec below.
-// ownerMachineID mirrors upsert()'s `shot.machineId ?? ownerOfShotId(id)`
-// fallback; #719's ownerOfShotId inference isn't ported (that needs
-// internal/machines' MACHINE_ID_OFFSET arithmetic, out of scope here), so a
-// shot with no explicit machineId defaults to machine 1 — every backup this
-// phase's restore handles was itself exported by an app version that always
-// wrote machineId, so this fallback is not expected to be reached in
-// practice.
+// Upsert writes the shots row (and, if the shot object carries an `annotation`
+// key, the annotations row too) straight from a sync-pulled or
+// restored/imported shot object. Its statement must never go back to INSERT OR
+// REPLACE (#1150) — see the inline comment on the Exec below.
+// ownerMachineID gives a shot with no explicit machineId machine 1 by default.
+// The ownerOfShotId inference (#719) isn't implemented (it needs
+// internal/machines' MACHINE_ID_OFFSET arithmetic, out of scope here); that
+// fallback is not expected to be reached in practice, because every backup the
+// restore path handles was itself exported by an app version that always wrote
+// machineId.
 func (r *Repository) Upsert(shot Shot) error {
 	row, err := shotInsertArgs(shot)
 	if err != nil {
@@ -461,19 +442,16 @@ func shotInsertArgs(shot Shot) (shotInsertRow, error) {
 	return row, nil
 }
 
-// FindTrashed ports ShotRepository.js's getTrash() paired with
-// ShotService.getTrash()'s per-id findById hydration — but as one joined
-// query instead of a TrashIDs()-then-FindByID(id)-per-id round trip: the
-// naive port issued 1+N queries (one to list trash ids, one more per id,
-// each re-running selectBase's shots<->annotations join), which scales
-// linearly with trash size. Driving the join FROM trash instead of shots
-// keeps the same "only rows with a live shots record" semantics
-// ShotService.getTrash()'s `.filter(Boolean)` had (an INNER JOIN silently
-// drops a trash entry whose shot row is somehow already gone, same as a nil
-// FindByID result did), and ordering by t.shot_id makes the result
-// deterministic (trash's shot_id is its INTEGER PRIMARY KEY, so this matches
-// the rowid-order SQLite returned for the old unordered `SELECT shot_id FROM
-// trash` in practice).
+// FindTrashed returns the trashed shots as one joined query instead of a
+// TrashIDs()-then-FindByID(id)-per-id round trip: the naive version issued 1+N
+// queries (one to list trash ids, one more per id, each re-running
+// selectBase's shots<->annotations join), which scales linearly with trash
+// size. Driving the join FROM trash instead of shots keeps the same "only rows
+// with a live shots record" semantics a per-id lookup had (an INNER JOIN
+// silently drops a trash entry whose shot row is somehow already gone), and
+// ordering by t.shot_id makes the result deterministic (trash's shot_id is its
+// INTEGER PRIMARY KEY, so this matches the rowid-order SQLite returned for the
+// old unordered `SELECT shot_id FROM trash` in practice).
 func (r *Repository) FindTrashed() ([]Shot, error) {
 	rows, err := r.db.Query(`
 		SELECT s.id, s.timestamp, s.duration, s.profile_name, s.data, s.machine_id, a.data AS ann_data
@@ -498,9 +476,9 @@ func (r *Repository) FindTrashed() ([]Shot, error) {
 	return out, rows.Err()
 }
 
-// FindPreviousByProfile ports ShotRepository.js's findPreviousByProfile
-// (#402): the most recent earlier shot before shotID with the same
-// profileName on the same machine, excluding trashed shots.
+// FindPreviousByProfile returns the most recent earlier shot before shotID
+// with the same profileName on the same machine, excluding trashed shots
+// (#402).
 func (r *Repository) FindPreviousByProfile(shotID int64, profileName string, machineID int64) (Shot, error) {
 	row := r.db.QueryRow(selectBase+`
 		WHERE s.machine_id = ?
@@ -520,9 +498,9 @@ func (r *Repository) FindPreviousByProfile(shotID int64, profileName string, mac
 	return shot, nil
 }
 
-// SetImage ports ShotRepository.js's setImage: merges the `image` key into
-// the shot's JSON blob without disturbing the rest of the payload. Returns
-// (nil, nil) if the shot doesn't exist.
+// SetImage merges the `image` key into the shot's JSON blob without
+// disturbing the rest of the payload. Returns (nil, nil) if the shot doesn't
+// exist.
 func (r *Repository) SetImage(id int64, ext string) (Shot, error) {
 	data, err := r.rawData(id)
 	if err != nil {
@@ -538,7 +516,7 @@ func (r *Repository) SetImage(id int64, ext string) (Shot, error) {
 	return r.FindByID(id)
 }
 
-// ClearImage ports ShotRepository.js's clearImage.
+// ClearImage removes the `image` key from the shot's JSON blob.
 func (r *Repository) ClearImage(id int64) (Shot, error) {
 	data, err := r.rawData(id)
 	if err != nil {
@@ -631,16 +609,15 @@ func (r *Repository) UpdateAnnotation(shotID int64, fn func(ann map[string]any) 
 	return ann, nil
 }
 
-// SaveAnnotation ports ShotRepository.js's saveAnnotation — a full-replace
-// upsert with no existence check against `shots` in the query itself,
-// matching the Node original. It stays the whole-object write for
-// Repository.Upsert (restore/sync/import), where the shot object carries
-// the complete annotation; callers that merge a patch use UpdateAnnotation.
-// In practice this still fails for a shot id that was never synced:
-// annotations.shot_id REFERENCES shots(id) and foreign_keys=ON in both
-// InitSchema and lib/db.js, so the INSERT hits a foreign-key constraint
-// violation, surfaced as a generic error (500) by the caller — see
-// handlers.go's annotate doc comment.
+// SaveAnnotation is a full-replace upsert with no existence check against
+// `shots` in the query itself. It stays the whole-object write for
+// Repository.Upsert (restore/sync/import), where the shot object carries the
+// complete annotation; callers that merge a patch use UpdateAnnotation. In
+// practice this still fails for a shot id that was never synced:
+// annotations.shot_id REFERENCES shots(id) with foreign_keys=ON (see
+// InitSchema), so the INSERT hits a foreign-key constraint violation,
+// surfaced as a generic error (500) by the caller — see handlers.go's
+// annotate doc comment.
 func (r *Repository) SaveAnnotation(shotID int64, annotation map[string]any) error {
 	annotationMu.Lock()
 	defer annotationMu.Unlock()
@@ -664,7 +641,7 @@ func (r *Repository) saveAnnotation(shotID int64, annotation map[string]any) err
 	return nil
 }
 
-// MoveToTrash ports ShotRepository.js's moveToTrash.
+// MoveToTrash inserts a trash entry stamped with the current time.
 func (r *Repository) MoveToTrash(shotID int64) error {
 	if _, err := r.db.Exec(`INSERT OR REPLACE INTO trash (shot_id, deleted_at) VALUES (?, ?)`, shotID, time.Now().UnixMilli()); err != nil {
 		return fmt.Errorf("shots: trashing shot %d: %w", shotID, err)
@@ -672,8 +649,7 @@ func (r *Repository) MoveToTrash(shotID int64) error {
 	return nil
 }
 
-// RestoreFromTrash ports ShotRepository.js's restoreFromTrash — no
-// existence check, matching the Node original.
+// RestoreFromTrash deletes the shot's trash entry — no existence check.
 func (r *Repository) RestoreFromTrash(shotID int64) error {
 	if _, err := r.db.Exec(`DELETE FROM trash WHERE shot_id = ?`, shotID); err != nil {
 		return fmt.Errorf("shots: restoring shot %d: %w", shotID, err)
@@ -681,8 +657,8 @@ func (r *Repository) RestoreFromTrash(shotID int64) error {
 	return nil
 }
 
-// DeleteByID ports ShotRepository.js's deleteById: annotations, then
-// trash, then the shot row itself, inside one transaction.
+// DeleteByID deletes annotations, then trash, then the shot row itself, inside
+// one transaction.
 func (r *Repository) DeleteByID(shotID int64) error {
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -802,22 +778,20 @@ func (r *Repository) MoveMisfiledShot(nativeID, timestamp, toMachineID int64) (m
 	return true, nil
 }
 
-// trashTTL is the 30-day trash retention Node's purgeExpiredTrash used
-// (ShotRepository.js: `deleted_at < now - 30d`). A named constant so the
-// cutoff arithmetic and its tests share one source of truth.
+// trashTTL is the 30-day trash retention period (the purge cutoff is
+// `deleted_at < now - 30d`). A named constant so the cutoff arithmetic and its
+// tests share one source of truth.
 const trashTTL = 30 * 24 * time.Hour
 
-// PurgeExpiredTrash ports ShotRepository.js's purgeExpiredTrash (#1152):
-// permanently drops every trash entry older than trashTTL, together with
-// its shot row and annotation, in one transaction. deleted_at is in
-// milliseconds (MoveToTrash stamps time.Now().UnixMilli), so the cutoff is
-// a strict `<` against now's epoch-millis minus trashTTL.
+// PurgeExpiredTrash permanently drops every trash entry older than trashTTL,
+// together with its shot row and annotation, in one transaction (#1152).
+// deleted_at is in milliseconds (MoveToTrash stamps time.Now().UnixMilli), so
+// the cutoff is a strict `<` against now's epoch-millis minus trashTTL.
 //
-// Unlike Node, Go deliberately blocklists each purged id (#1159) so the next
-// sync does not resume below it and re-import the shot from the machine;
-// image files are still not deleted, matching Node. Node also did not clear
-// shot_score_cache (Go-only, no Node equivalent) — DeleteByID does, and
-// without the same line here a purge would leave orphaned cache rows behind.
+// Each purged id is deliberately blocklisted (#1159) so the next sync does not
+// resume below it and re-import the shot from the machine. Image files are not
+// deleted. shot_score_cache is likewise cleared (DeleteByID does this, and a
+// purge would otherwise leave orphaned cache rows behind).
 func (r *Repository) PurgeExpiredTrash(now time.Time) ([]int64, error) {
 	cutoff := now.UnixMilli() - trashTTL.Milliseconds()
 	rows, err := r.db.Query(`SELECT shot_id FROM trash WHERE deleted_at < ?`, cutoff)
@@ -872,7 +846,7 @@ func (r *Repository) PurgeExpiredTrash(now time.Time) ([]int64, error) {
 	return ids, nil
 }
 
-// GetBlocklist ports ShotRepository.js's getBlocklist.
+// GetBlocklist returns the blocklist entries.
 func (r *Repository) GetBlocklist() ([]string, error) {
 	rows, err := r.db.Query(`SELECT value FROM blocklist`)
 	if err != nil {
@@ -891,8 +865,7 @@ func (r *Repository) GetBlocklist() ([]string, error) {
 	return out, rows.Err()
 }
 
-// SaveBlocklist ports ShotRepository.js's saveBlocklist: replaces the
-// entire table contents inside one transaction.
+// SaveBlocklist replaces the entire table contents inside one transaction.
 func (r *Repository) SaveBlocklist(list []string) error {
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -921,17 +894,14 @@ func (r *Repository) SaveBlocklist(list []string) error {
 }
 
 // AppendToBlocklist atomically adds a single value to the blocklist without
-// the read-then-replace round trip SaveBlocklist requires for a
-// single-id add. Node's saveBlocklist(list) has no concurrency issue
-// (single-threaded event loop, so a route handler's read-modify-write
-// always runs to completion before the next request starts), but Go's
-// handlers run concurrently: two overlapping DELETE /api/shots/{id}/delete
-// requests can each read the same blocklist snapshot via GetBlocklist,
-// append their own id, and then SaveBlocklist — whose DELETE+re-INSERT
-// replaces the whole table — so the second write silently drops the first
-// request's id (#901). blocklist.value has a UNIQUE constraint (see
-// internal/db/db.go), so INSERT OR IGNORE is a single atomic statement with
-// no read step and therefore no lost-update window.
+// the read-then-replace round trip SaveBlocklist requires for a single-id add.
+// The handlers run concurrently: two overlapping
+// DELETE /api/shots/{id}/delete requests can each read the same blocklist
+// snapshot via GetBlocklist, append their own id, and then SaveBlocklist —
+// whose DELETE+re-INSERT replaces the whole table — so the second write
+// silently drops the first request's id (#901). blocklist.value has a UNIQUE
+// constraint (see internal/db/db.go), so INSERT OR IGNORE is a single atomic
+// statement with no read step and therefore no lost-update window.
 func (r *Repository) AppendToBlocklist(value string) error {
 	if _, err := r.db.Exec(`INSERT OR IGNORE INTO blocklist (value) VALUES (?)`, value); err != nil {
 		return fmt.Errorf("shots: appending blocklist entry %q: %w", value, err)

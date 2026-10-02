@@ -44,10 +44,9 @@ func TestFindTrashed_MultipleEntriesOrderedAndHydrated(t *testing.T) {
 	}
 }
 
-// TestFindTrashed_SkipsOrphanTrashEntry mirrors ShotService.js's
-// getTrash().filter(Boolean): a trash row whose shots row is somehow
-// already gone (trash has no FK to shots — see internal/db/db.go) must be
-// silently skipped, not returned as a nil/zero entry or an error.
+// TestFindTrashed_SkipsOrphanTrashEntry pins that a trash row whose shots row
+// is somehow already gone (trash has no FK to shots — see internal/db/db.go)
+// is silently skipped, not returned as a nil/zero entry or an error.
 func TestFindTrashed_SkipsOrphanTrashEntry(t *testing.T) {
 	_, repo, sqlDB := newTestHandlers(t)
 

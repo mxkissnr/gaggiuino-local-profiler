@@ -9,8 +9,8 @@ import (
 	json "github.com/goccy/go-json"
 )
 
-// MaxShotID mirrors lib/constants.js's MAX_SHOT_ID: the highest value a
-// real shot id (native or multi-machine synthetic) can ever take.
+// MaxShotID is the highest value a real shot id (native or multi-machine
+// synthetic) can ever take.
 const MaxShotID = 99_999_999
 
 // Demo-mode shots (POST /api/demo/seed) are seeded with ids in a high,
@@ -22,7 +22,7 @@ const MaxShotID = 99_999_999
 // (and annotate / trash / card / image) 200-nulls every demo shot, which is
 // what left demo mode's shot detail (curve, P·Q, average pressure) empty
 // once #957 moved curve data to a per-shot fetch instead of shipping it in
-// the bulk list payload the Node backend's /shots.json fallback still primed.
+// the bulk list payload.
 // Accept the whole demoIDBase..2*demoIDBase namespace, matching
 // internal/achievements' own copy of this range — the demo bean/profile
 // offset scheme (+101/+201/+301, and room to grow) lives in that space too,
@@ -33,20 +33,18 @@ const (
 	demoIDMax  = demoIDBase * 2
 )
 
-// MachineIDOffset mirrors lib/machines/index.js's MACHINE_ID_OFFSET: the
-// stride between one machine's native shot ids and the globally-unique
-// synthetic ids stored internally (machine 1 keeps its native ids; any other
-// machine's shots live at machineID*MachineIDOffset+nativeID). Exported
-// because internal/system/sync.go uses it too, to scope a machine's blocklist
-// range to that machine's own ids (#1147); the machines domain has no home for
-// it yet (lib/machines/index.js -> internal/machines is still a Phase 0
-// placeholder), so the small amount of arithmetic this package needs from it
-// (toNativeShotID/ownerOfShotID) stays duplicated here rather than imported.
+// MachineIDOffset is the stride between one machine's native shot ids and the
+// globally-unique synthetic ids stored internally (machine 1 keeps its native
+// ids; any other machine's shots live at machineID*MachineIDOffset+nativeID).
+// Exported because internal/system/sync.go uses it too, to scope a machine's
+// blocklist range to that machine's own ids (#1147); the machines domain has
+// no home for it yet (internal/machines is still a placeholder), so the small
+// amount of arithmetic this package needs from it (toNativeShotID/
+// ownerOfShotID) stays duplicated here rather than imported.
 const MachineIDOffset = 10_000_000
 
-// toNativeShotID ports lib/machines/index.js's toNativeShotId(machineId,
-// globalId): the machine's own shot number, as opposed to the
-// globally-unique synthetic id used everywhere internally.
+// toNativeShotID converts a globally-unique synthetic id back to the
+// machine's own shot number.
 func toNativeShotID(machineID, globalID int64) int64 {
 	if machineID == 1 {
 		return globalID
@@ -54,10 +52,9 @@ func toNativeShotID(machineID, globalID int64) int64 {
 	return globalID - machineID*MachineIDOffset
 }
 
-// ToGlobalShotID ports lib/machines/index.js's toGlobalShotId(machineId,
-// nativeId): the inverse of toNativeShotID. Machine 1's native ids are used
-// unchanged; every other machine's shots get a synthetic id prefixed by its own
-// offset, so two machines' ids can never collide.
+// ToGlobalShotID is the inverse of toNativeShotID. Machine 1's native ids are
+// used unchanged; every other machine's shots get a synthetic id prefixed by
+// its own offset, so two machines' ids can never collide.
 func ToGlobalShotID(machineID, nativeID int64) int64 {
 	if machineID == 1 {
 		return nativeID
@@ -82,12 +79,11 @@ func NativeShotIDIfOwned(machineID, globalID int64) (int64, bool) {
 
 // Shot is a hydrated shot record: the fixed shots-table columns plus the
 // arbitrary JSON payload the Gaggiuino machine (or GaggiMate adapter)
-// reported, merged into one map exactly the way lib/repositories/
-// ShotRepository.js's _hydrate() spreads `...rest` over the fixed fields —
-// see hydrateRow below. A map, not a struct, deliberately: the shot payload
-// shape is a cross-repo contract this package must reproduce byte-for-byte
-// without knowing every field the machine adapters might ever add, the same
-// reason the Node original never declares a fixed shot type either.
+// reported, merged into one map with the payload's own keys spread over the
+// fixed fields — see hydrateRow below. A map, not a struct, deliberately: the
+// shot payload shape is a cross-repo contract this package must reproduce
+// byte-for-byte without knowing every field the machine adapters might ever
+// add, so no fixed shot type is declared.
 type Shot map[string]any
 
 // clone returns a shallow copy of s — used whenever a handler needs to add
@@ -101,9 +97,8 @@ func (s Shot) clone() Shot {
 	return out
 }
 
-// profileName returns shot["profileName"] as a string, or "" if absent/not
-// a string/null — mirrors JS's `shot.profileName` falsy-check usage in
-// ShotService.getPreviousByProfile.
+// profileName returns shot["profileName"] as a string, or "" if absent/not a
+// string/null.
 func (s Shot) profileName() string {
 	v, _ := s["profileName"].(string)
 	return v
@@ -116,8 +111,7 @@ func (s Shot) id() int64 {
 	return v
 }
 
-// machineID returns shot["machineId"], defaulting to 1 — mirrors JS's
-// `shot.machineId ?? 1`.
+// machineID returns shot["machineId"], defaulting to 1.
 func (s Shot) machineID() int64 {
 	if v, ok := s["machineId"].(int64); ok {
 		return v
@@ -138,18 +132,16 @@ type rowScanner interface {
 	Scan(dest ...any) error
 }
 
-// selectBase ports lib/repositories/ShotRepository.js's SELECT_BASE
-// verbatim: the shots<->annotations left join every repository read here
+// selectBase is the shots<->annotations left join every repository read here
 // builds on.
 const selectBase = `
 	SELECT s.id, s.timestamp, s.duration, s.profile_name, s.data, s.machine_id, a.data AS ann_data
 	FROM shots s LEFT JOIN annotations a ON a.shot_id = s.id
 `
 
-// hydrateRow ports ShotRepository.js's _hydrate(row): scans one joined
-// shots+annotations row and merges the JSON `data` blob's own keys over the
-// fixed columns, then re-applies machineId/nativeId/annotation on top —
-// same field set, same precedence order, as the Node original.
+// hydrateRow scans one joined shots+annotations row and merges the JSON `data`
+// blob's own keys over the fixed columns, then re-applies
+// machineId/nativeId/annotation on top.
 func hydrateRow(sc rowScanner) (Shot, error) {
 	var id, timestamp, machineID int64
 	var duration sql.NullInt64
