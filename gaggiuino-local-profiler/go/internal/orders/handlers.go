@@ -19,29 +19,25 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports routes/orders.js's Express router onto Go 1.22+'s
+// This file wires the orders HTTP handlers onto Go 1.22+'s
 // method-and-wildcard http.ServeMux, the same pattern established in
 // shots/handlers.go and library/handlers.go.
 //
-// _broadcastShopState (the shop-open/shop-closed HA-notify broadcast POST
-// /api/orders/settings triggers when `enabled` flips) IS ported below
-// (postSettings), now that internal/system (#901 Phase 1g) exists and
-// exposes the default machine's live runtime state
-// (machineOn/switchOnAt — lib/machine-runtime-state.js, populated by
-// lib/poll.js's background polling loop) this needed. It's wired via
-// SetPreheatInfoProvider's PreheatInfoFunc callback, NOT a direct import
-// of internal/system: that package's own preheat-ready-notify feature
-// would need this package's settings right back (notify_preheat_ready/
-// baristaNotifyService), and importing each other directly would close a
-// package cycle — see internal/system/doc.go's "internal/orders'
-// shop-broadcast" section for the full reasoning. cmd/server wires
-// ordersHandlers.SetPreheatInfoProvider(poller.PreheatInfo) after
-// constructing both.
-const jsonBodyLimit = 16 * 1024 // express.json({ limit: '16kb' }) — server.js's global default.
+// The shop-open/shop-closed HA-notify broadcast POST /api/orders/settings
+// triggers when `enabled` flips lives below (postSettings), using the
+// default machine's live runtime state (machineOn/switchOnAt, read from
+// internal/system). It's wired via SetPreheatInfoProvider's PreheatInfoFunc
+// callback, NOT a direct import of internal/system: that package's own
+// preheat-ready-notify feature would need this package's settings right back
+// (notify_preheat_ready/baristaNotifyService), and importing each other
+// directly would close a package cycle — see internal/system/doc.go's
+// "internal/orders' shop-broadcast" section for the full reasoning.
+// cmd/server wires ordersHandlers.SetPreheatInfoProvider(poller.PreheatInfo)
+// after constructing both.
+const jsonBodyLimit = 16 * 1024 // 16kb global JSON body limit.
 
-// PreheatInfoFunc ports _getPreheatInfo()'s return shape: whether the
-// default machine is currently within its configured preheat window, and
-// how many minutes remain if not.
+// PreheatInfoFunc reports whether the default machine is currently within
+// its configured preheat window, and how many minutes remain if not.
 type PreheatInfoFunc func() (ready bool, remainingMin int)
 
 // Handlers wires Service (+ Repository, the machines registry, and the HA
@@ -72,8 +68,8 @@ func NewHandlers(repo *Repository, shotsRepo *shots.Repository, libRepo *library
 // SetPreheatInfoProvider wires the shop-open broadcast's "is the machine
 // ready, or how many minutes until it is" text to internal/system's
 // Poller — see this file's header comment. A nil provider (the zero value,
-// before cmd/server calls this) makes _broadcastShopState's opened branch
-// report "not ready, 20 min" (loadPreheatMinutes()'s own default), rather
+// before cmd/server calls this) makes the shop-broadcast's opened branch
+// fall back to "not ready, 20 min", rather
 // than panicking — only cmd/server's real wiring should ever leave this
 // unset, but tests that don't care about the broadcast text shouldn't have
 // to supply one either.
@@ -82,16 +78,15 @@ func (h *Handlers) SetPreheatInfoProvider(fn PreheatInfoFunc) {
 }
 
 // RegisterRoutes registers every /api/orders* route onto mux, each wrapped
-// by the isOrdersEnabled gate routes/orders.js's router.use('/api/orders',
-// ...) applies to the whole subtree.
+// by the isOrdersEnabled gate that applies to the whole /api/orders subtree.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	gate := h.withOrdersGate
 
-	// Phase 2a (#901): routes/system.js's GET /api/menu — the public drink
-	// list for shot annotations, deliberately NOT behind the isOrdersEnabled
-	// gate (loadMenu() === orderRepo.getMenu(), so it's this same handler,
-	// just ungated). Lives here rather than internal/system because this
-	// package owns the orders Repository getMenu reads from.
+	// GET /api/menu serves the public drink list for shot annotations,
+	// deliberately NOT behind the isOrdersEnabled gate: the menu the orders
+	// Repository returns is the same data, just ungated. Lives here rather
+	// than internal/system because this package owns the orders Repository
+	// getMenu reads from.
 	mux.HandleFunc("GET /api/menu", h.getMenu)
 
 	mux.HandleFunc("GET /api/orders/menu", gate(h.getMenu))
@@ -126,7 +121,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/orders/{id}", gate(h.deleteOrder))
 }
 
-// withOrdersGate ports the isOrdersEnabled 404 guard every /api/orders*
+// withOrdersGate applies the isOrdersEnabled 404 guard every /api/orders*
 // route sits behind.
 func (h *Handlers) withOrdersGate(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -162,12 +157,11 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, boo
 
 // decodeOptionalJSONBody decodes a request body that's allowed to be
 // entirely absent (POST /api/orders/:id/accept|decline's `eta`/`reason`
-// fields — routes/orders.js reads them via `req.body?.eta`, never
-// requiring a body at all, unlike decodeJSONBody's callers, which all
+// fields — both are optional, unlike decodeJSONBody's callers, which all
 // guard a required field with their own ValidateX check afterward). An
-// empty body decodes to {}, matching Express's own req.body for a
-// bodyless request; a non-empty body still goes through the same
-// size-limit/malformed-JSON handling decodeJSONBody applies.
+// empty body decodes to {}, the same as a bodyless request; a non-empty
+// body still goes through the same size-limit/malformed-JSON handling
+// decodeJSONBody applies.
 func decodeOptionalJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, bool) {
 	if r.ContentLength == 0 {
 		return map[string]any{}, true
@@ -184,7 +178,7 @@ func writeOrderError(w http.ResponseWriter, err error) {
 	internalError(w, err)
 }
 
-// sanitizeEmoji ports routes/orders.js's sanitizeEmoji(raw, fallback).
+// sanitizeEmoji validates raw as a short emoji, returning fallback otherwise.
 func sanitizeEmoji(raw any, fallback string) string {
 	s, _ := raw.(string)
 	trimmed := strings.TrimSpace(s)
@@ -238,11 +232,10 @@ func toStringAny(v any) any {
 	}
 }
 
-// milkMlOrNil ports routes/orders.js's `parseFloat(req.body.milkMl) || null`
-// for the menu item's milk amount. External callers (Home Assistant
-// templates, for instance) often send the amount as a JSON string, which the
-// old float64-only type assertion dropped silently; an unparseable value —
-// and, mirroring JS's `||`, an explicit 0 — collapses to nil.
+// milkMlOrNil parses the menu item's milk amount. External callers (Home
+// Assistant templates, for instance) often send the amount as a JSON string,
+// which a float64-only type assertion would drop silently; an unparseable
+// value — and an explicit 0 — collapses to nil.
 func milkMlOrNil(v any) any {
 	var f float64
 	switch t := v.(type) {
@@ -257,7 +250,7 @@ func milkMlOrNil(v any) any {
 	default:
 		return nil
 	}
-	if f == 0 || f != f { // 0 / NaN -> null, per JS `parseFloat(v) || null`
+	if f == 0 || f != f { // 0 and NaN both collapse to null
 		return nil
 	}
 	return f
@@ -303,9 +296,8 @@ func (h *Handlers) postMenu(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
-// boolOf ports JS's `!!v` truthiness coercion (routes/orders.js's
-// `!!req.body.useBeans`) — a present, non-empty, non-zero value of any
-// type is truthy, not just a literal JSON boolean.
+// boolOf applies truthiness coercion — a present, non-empty, non-zero value
+// of any type is truthy, not just a literal JSON boolean.
 func boolOf(v any) bool {
 	switch t := v.(type) {
 	case bool:
@@ -484,7 +476,7 @@ func (h *Handlers) activeMilks(w http.ResponseWriter, r *http.Request) {
 
 // ── Settings ─────────────────────────────────────────────────────────────
 
-// notifyToggleKeys mirrors routes/orders.js's NOTIFY_TOGGLE_KEYS (#603).
+// notifyToggleKeys are the settings keys that toggle a notification (#603).
 var notifyToggleKeys = []string{
 	"notify_preheat_ready", "notify_low_stock", "notify_shop_state",
 	"notify_new_order", "notify_order_status",
@@ -547,9 +539,7 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s)
 	recipients := stringSliceField(s, "broadcastRecipients")
 	if len(recipients) > 0 {
-		// Fire-and-forget, same as Node's un-awaited _broadcastShopState
-		// call after res.json(s) — the response must not wait on HA/person
-		// lookups.
+		// Fire-and-forget: the response must not wait on HA/person lookups.
 		httputil.SafeGo("orders: broadcast shop state", func() { h.broadcastShopState(context.Background(), s, prev, recipients) })
 	}
 }
@@ -568,9 +558,9 @@ func stringSliceField(s Settings, key string) []string {
 	return out
 }
 
-// broadcastShopState ports _broadcastShopState(s, prev, recipients): sends
-// an HA push notification to every recipient currently home (or with no
-// person mapping at all) when `enabled` flips true->false or false->true.
+// broadcastShopState sends an HA push notification to every recipient
+// currently home (or with no person mapping at all) when `enabled` flips
+// true->false or false->true.
 func (h *Handlers) broadcastShopState(ctx context.Context, s, prev Settings, recipients []string) {
 	opened, _ := s["enabled"].(bool)
 	prevEnabled, _ := prev["enabled"].(bool)
@@ -772,11 +762,11 @@ func (h *Handlers) stats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// First-seen order, not map iteration order: JS builds machineCounts as
-	// a plain object (Object.keys() then preserves insertion order) before
-	// sorting by count — a Go map's range order is randomized, which would
-	// only show up as a difference in how count-tied machines are ordered,
-	// but is worth getting right for a byte-fidelity contract.
+	// First-seen order, not map iteration order: machineCounts is built in
+	// insertion order before sorting by count — a Go map's range order is
+	// randomized, which would only show up as a difference in how
+	// count-tied machines are ordered, but is worth getting right for a
+	// byte-fidelity contract.
 	machineCounts := map[int64]int{}
 	var machineOrder []int64
 	for _, o := range done {
@@ -883,12 +873,11 @@ func favItemOrdered(items map[string]int, order []string) any {
 	return item
 }
 
-// mostPopularItemOrdered ports `Object.entries(items).sort((a, b) =>
-// b[1] - a[1])[0]`: highest count wins, first-seen (insertion order) wins a
-// tie — Array.prototype.sort is stable, so a plain map-range reduction
-// (whose iteration order Go randomizes) would only diverge from Node on a
-// tied count, but `order` (each map's first-seen key sequence, tracked
-// alongside it by the caller) restores that exact tie-break.
+// mostPopularItemOrdered returns the highest count, with first-seen
+// (insertion order) winning a tie. A plain map-range reduction would have
+// randomized iteration order, so `order` (each map's first-seen key
+// sequence, tracked alongside it by the caller) supplies the deterministic
+// tie-break.
 func mostPopularItemOrdered(items map[string]int, order []string) (string, int, bool) {
 	best, bestCount := "", -1
 	for _, item := range order {
