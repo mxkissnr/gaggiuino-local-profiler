@@ -2,21 +2,14 @@ package importer
 
 import "strings"
 
-// This file ports lib/coffee-countries.js: mapOriginToCode + findCountriesInText.
-//
-// The Node original builds its localized-name -> alpha-2 map at module load
-// from Intl.DisplayNames (de + en) over COFFEE_COUNTRY_CODES, plus a handful
-// of manual aliases. Go's standard library has no ICU/CLDR region-name table,
-// so countryNames below is that exact map captured once from Node (the same
-// insertion order: the four manual aliases first, then the `de` pass, then
-// the `en` pass) and kept as static data. It is a data table, not logic —
-// regenerate it from lib/coffee-countries.js if the CLDR names ever drift.
+// countryNames is static data because Go's standard library has no ICU/CLDR
+// region-name table: the localized-name -> alpha-2 map, with the four manual
+// aliases first, then the `de` names, then the `en` names.
 //
 // An ordered slice (not a Go map) is deliberate: findCountriesInText sorts
-// its hits by first-appearance position with a stable sort, and JS Map
-// iteration order is insertion order — a Go map's randomized range would
-// change the tie-break for two names that resolve to different codes at the
-// same text position.
+// its hits by first-appearance position with a stable sort, so a map's
+// randomized range would change the tie-break for two names that resolve to
+// different codes at the same text position.
 
 type countryName struct {
 	name string
@@ -55,33 +48,31 @@ var nameToCode = func() map[string]string {
 	return m
 }()
 
-// mapOriginToCode ports lib/coffee-countries.js's mapOriginToCode(text):
-// exact (trimmed, lowercased) match against the localized-name table, else "".
+// mapOriginToCode returns the code for an exact (trimmed, lowercased) match
+// against the localized-name table, else "".
 func mapOriginToCode(text string) string {
 	return nameToCode[strings.ToLower(strings.TrimSpace(text))]
 }
 
-// isCountryLetter ports coffee-countries.js's `isLetter = c => /[a-zäöüß]/.test(c)`
-// (the text is already lowercased before this runs) — note it deliberately
-// excludes accented Latin letters like the 'é' in "côte d’ivoire".
+// isCountryLetter reports whether c is one of the letters treated as part of
+// a country name (the text is already lowercased before this runs) — note it
+// deliberately excludes accented Latin letters like the 'é' in "côte d’ivoire".
 func isCountryLetter(c byte) bool {
 	if c >= 'a' && c <= 'z' {
 		return true
 	}
 	// ä ö ü ß are 2-byte UTF-8 sequences; a bare byte can only be a
-	// continuation or lead byte, never a full rune. Node's regex tests one
-	// JS char (UTF-16 code unit) at a time, but every name in the table that
+	// continuation or lead byte, never a full rune. Every name in the table that
 	// this boundary check runs against a preceding/following character for is
-	// ASCII at its edges — so a byte-level ASCII check matches Node's
-	// behavior for every real input. Non-ASCII bytes are treated as
-	// non-letter, exactly as Node's regex would for a lone surrogate.
+	// ASCII at its edges, so a byte-level ASCII check is correct for every real
+	// input. Non-ASCII bytes are treated as non-letter.
 	return false
 }
 
-// findCountriesInText ports lib/coffee-countries.js's findCountriesInText(text, maxCount=3):
-// scans lowercased prose for the localized country names, returns distinct
-// codes in first-appearance order, and treats "more than maxCount distinct
-// matches" as boilerplate noise (returns nil).
+// findCountriesInText scans lowercased prose for the localized country names
+// (maxCount defaults to 3), returns distinct codes in first-appearance order,
+// and treats "more than maxCount distinct matches" as boilerplate noise
+// (returns nil).
 func findCountriesInText(text string, maxCount int) []string {
 	if maxCount == 0 {
 		maxCount = 3

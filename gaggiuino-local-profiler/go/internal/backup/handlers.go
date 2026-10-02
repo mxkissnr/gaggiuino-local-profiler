@@ -26,19 +26,17 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports routes/backup.js's Express router (GET/POST /api/backup,
-// POST /api/restore) onto Go 1.22+'s method-and-wildcard http.ServeMux.
+// This file implements the backup/restore routes (GET/POST /api/backup,
+// POST /api/restore) on Go 1.22+'s method-and-wildcard http.ServeMux.
 
-// restoreJSONBodyLimit/restoreZipBodyLimit mirror server.js's
-// `app.use('/api/restore', express.json({ limit: '50mb' }))` /
-// `express.raw({ type: 'application/zip', limit: '50mb' })`. With #959's
-// true streaming (the body goes to a temp file, never a slice) these are a
-// zip-bomb / abuse guard on the compressed upload, no longer a memory
+// restoreJSONBodyLimit/restoreZipBodyLimit cap the restore upload body. With
+// #959's true streaming (the body goes to a temp file, never a slice) these
+// are a zip-bomb / abuse guard on the compressed upload, no longer a memory
 // guard — kept at their current values.
 const (
 	restoreJSONBodyLimit = 50 * 1024 * 1024
 	restoreZipBodyLimit  = 50 * 1024 * 1024
-	postBackupBodyLimit  = 16 * 1024 // POST /api/backup's own body is tiny (sections+passphrase) — server.js's global express.json({limit:'16kb'}) default applies.
+	postBackupBodyLimit  = 16 * 1024 // POST /api/backup's own body is tiny (sections+passphrase).
 )
 
 // backupEnvelopeEstimateBytes and perShotEstimateBytes feed the
@@ -69,9 +67,8 @@ var (
 )
 
 // Dependencies wires every cross-domain repository this package's export/
-// restore need — one *sql.DB-backed dependency per domain this rewrite has
-// split its own routes/*.js file into, plus the two ports never got a
-// domain package of their own (see kv.go).
+// restore need — one *sql.DB-backed dependency per domain, plus the two
+// settings blobs that have no domain package of their own (see kv.go).
 type Dependencies struct {
 	DB              *sql.DB
 	ShotsRepo       *shots.Repository
@@ -89,10 +86,9 @@ type Dependencies struct {
 	// TokenFile is where a restored token is persisted — see restore.go's
 	// applyRestoredToken doc comment for why writing it here does NOT take
 	// effect in this already-running process until a restart (a real,
-	// deliberate gap from Node's live state.apiToken — internal/auth's
-	// RequireToken middleware closes over a fixed string at startup, with
-	// no mutable/live token source to swap into, and building one is out
-	// of this phase's scope).
+	// deliberate gap: internal/auth's RequireToken middleware closes over a
+	// fixed string at startup, with no mutable/live token source to swap into,
+	// and building one is out of scope).
 	Token     string
 	TokenFile string
 }
@@ -155,8 +151,8 @@ func internalError(w http.ResponseWriter, err error) {
 	httputil.InternalError(w, "backup", err)
 }
 
-// backupTimestamp ports routes/backup.js's backupTimestamp(): a filename-
-// safe local-time timestamp, e.g. "2026-08-06_08-32-05".
+// backupTimestamp returns a filename-safe local-time timestamp, e.g.
+// "2026-08-06_08-32-05".
 func backupTimestamp() string {
 	return time.Now().Format("2006-01-02_15-04-05")
 }
@@ -167,13 +163,13 @@ func backupTimestamp() string {
 // only streams the raw SQLite file and is already limited to 5/min (#999,
 // security audit #977 round 3 finding 3.2) — so it gets the same feature
 // limiter on top of the app-wide 600/min backstop. This is DELIBERATELY
-// STRICTER THAN NODE: routes/backup.js feature-limits neither this route
-// nor the image-upload routes, relying on the shared backstop alone.
+// STRICTER than the image-upload routes, which rely on the shared backstop
+// alone.
 const backupRateLimitPerMin = 5
 
 // ── GET /api/backup ──────────────────────────────────────────────────────
 
-// getBackup ports GET /api/backup: always the unscoped, all-sections,
+// getBackup serves GET /api/backup: always the unscoped, all-sections,
 // secrets-free legacy JSON export — streamed straight to the response
 // (backup.json's contents plus an inline base64 `images` map), never
 // assembled in RAM (#959).
@@ -204,7 +200,7 @@ func (h *Handlers) getBackup(w http.ResponseWriter, r *http.Request) {
 // on the response size (stat-only — it never opens an image or a shot row),
 // for a client-side determinate progress bar. Clients clamp at 99% until
 // the stream ends and treat a missing/zero/non-numeric header as
-// indeterminate (the Node backend never sends it).
+// indeterminate (a missing header is unknown, not zero).
 func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, postBackupBodyLimit)
 	var body struct {
@@ -212,9 +208,8 @@ func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 		Sections   any    `json:"sections"`
 	}
 	// An empty/absent body is valid (full, secrets-free export) — only a
-	// malformed non-empty body is an error, mirroring express.json()'s own
-	// leniency (routes/backup.js reads req.body?.passphrase/req.body?.sections
-	// with optional chaining, never requiring a body at all).
+	// malformed non-empty body is an error; passphrase/sections are optional
+	// fields and the request never requires a body.
 	if r.ContentLength != 0 {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			var mbe *http.MaxBytesError
@@ -312,7 +307,7 @@ func (h *Handlers) backupSizeEstimate(sec sections) (int64, error) {
 // streamImagesIntoZip copies every file in imageDir into zw as an
 // images/<name> entry, one io.Copy at a time — a file is never read into a
 // slice. Best-effort per file: one unreadable file must not abort the
-// archive (matches routes/backup.js).
+// archive.
 func streamImagesIntoZip(zw *zip.Writer) {
 	entries, err := os.ReadDir(imageDir)
 	if err != nil {

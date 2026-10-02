@@ -8,11 +8,11 @@ import (
 	"strings"
 )
 
-// This file ports lib/repositories/ImportSettingsRepository.js: the import
-// provider settings blob stored under kv.key = 'import_settings' (same kv
-// pattern as internal/shots' ShotDefaultsRepository port).
+// This file holds the import provider settings blob stored under
+// kv.key = 'import_settings' (same kv pattern as internal/shots'
+// ShotDefaults).
 
-// Settings mirrors ImportSettingsRepository.js's shape.
+// Settings is the import provider settings blob shape.
 type Settings struct {
 	DisabledProviders    []string `json:"disabledProviders"`
 	CustomShopifyDomains []string `json:"customShopifyDomains"`
@@ -27,8 +27,8 @@ func defaultSettings() Settings {
 	return Settings{DisabledProviders: []string{}, CustomShopifyDomains: []string{}}
 }
 
-// GetSettings ports ImportSettingsRepository.js's getSettings: DEFAULTS on a
-// missing row or malformed JSON; each array coerced to [] when not an array.
+// GetSettings returns the defaults on a missing row or malformed JSON; each
+// array is coerced to [] when not an array.
 func (r *Repository) GetSettings() Settings {
 	var value string
 	err := r.db.QueryRow(`SELECT value FROM kv WHERE key = 'import_settings'`).Scan(&value)
@@ -54,7 +54,7 @@ func (r *Repository) GetSettings() Settings {
 	return out
 }
 
-// SaveSettings ports saveSettings: INSERT OR REPLACE the JSON blob verbatim.
+// SaveSettings does an INSERT OR REPLACE of the JSON blob verbatim.
 func (r *Repository) SaveSettings(s Settings) error {
 	b, err := json.Marshal(s)
 	if err != nil {
@@ -66,16 +66,15 @@ func (r *Repository) SaveSettings(s Settings) error {
 	return nil
 }
 
-// domainRe ports routes/import.js's DOMAIN_RE.
+// domainRe validates a custom Shopify domain.
 var domainRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`)
 
 var schemePrefixRe = regexp.MustCompile(`(?i)^https?://`)
 
-// normalizeCustomDomain ports routes/import.js's POST /api/import/settings
-// per-domain normalization: strip a leading scheme, cut at the first '/'
-// with a plain index lookup (not a regex — CodeQL js/polynomial-redos),
-// strip a leading "www.", validate against DOMAIN_RE. Returns "" for a
-// rejected entry.
+// normalizeCustomDomain normalizes a custom-domain entry from POST
+// /api/import/settings: strip a leading scheme, cut at the first '/' with a
+// plain index lookup (not a regex — CodeQL js/polynomial-redos), strip a
+// leading "www.", validate against domainRe. Returns "" for a rejected entry.
 func normalizeCustomDomain(d string) string {
 	withoutScheme := schemePrefixRe.ReplaceAllString(strings.ToLower(strings.TrimSpace(d)), "")
 	host := withoutScheme

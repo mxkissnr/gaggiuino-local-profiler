@@ -1,18 +1,17 @@
 package backup
 
-// This file ports routes/backup.js's section-scoping constants/logic:
-// BACKUP_SECTIONS, SECTION_BUNDLE_KEYS, SECTION_PRESENCE_BUNDLE_KEYS, and
-// normaliseSections(raw).
+// This file holds the section-scoping constants/logic: backupSections,
+// sectionBundleKeys, sectionPresenceBundleKeys, and normaliseSections(raw).
 
-// backupSections mirrors BACKUP_SECTIONS: the six independently selectable
-// backup domains, used for both export scope and restore scope selection.
+// backupSections lists the six independently selectable backup domains,
+// used for both export scope and restore scope selection.
 var backupSections = map[string]bool{
 	"shots": true, "maintenance": true, "orders": true,
 	"machines": true, "settings": true, "secrets": true,
 }
 
-// sectionBundleKeys mirrors SECTION_BUNDLE_KEYS: which top-level bundle
-// keys a section pulls in on export.
+// sectionBundleKeys lists which top-level bundle keys a section pulls in on
+// export.
 var sectionBundleKeys = map[string][]string{
 	"shots":       {"shots", "annotations", "coffee_library", "blocklist", "trash", "achievements", "images"},
 	"maintenance": {"maintenance", "maintenance_log"},
@@ -22,9 +21,9 @@ var sectionBundleKeys = map[string][]string{
 	"secrets":     {"secrets"},
 }
 
-// sectionPresenceBundleKeys mirrors SECTION_PRESENCE_BUNDLE_KEYS: the
-// narrower set of keys that prove a section is actually *present* in a
-// file being restored (dry-run preview's `sectionsPresent`).
+// sectionPresenceBundleKeys is the narrower set of keys that prove a
+// section is actually *present* in a file being restored (dry-run preview's
+// `sectionsPresent`).
 var sectionPresenceBundleKeys = map[string][]string{
 	"shots":       {"shots", "achievements"},
 	"maintenance": {"maintenance", "maintenance_log"},
@@ -47,8 +46,7 @@ var sectionOrder = []string{"shots", "maintenance", "orders", "machines", "setti
 type sections map[string]bool
 
 // has reports whether s selects the given section — a nil s (meaning "all
-// sections") always reports true, matching every `sections === null ||
-// sections.has(x)` check throughout routes/backup.js.
+// sections") always reports true, the rule every section check applies.
 func (s sections) has(name string) bool {
 	if s == nil {
 		return true
@@ -56,10 +54,9 @@ func (s sections) has(name string) bool {
 	return s[name]
 }
 
-// normaliseSections ports normaliseSections(raw): raw must be a []any of
-// section-name strings to produce a non-nil result; anything else (absent,
-// wrong type) means "all sections". Unknown section names are silently
-// dropped rather than rejected.
+// normaliseSections requires raw to be a []any of section-name strings to
+// produce a non-nil result; anything else (absent, wrong type) means "all
+// sections". Unknown section names are silently dropped rather than rejected.
 func normaliseSections(raw any) sections {
 	arr, ok := raw.([]any)
 	if !ok {

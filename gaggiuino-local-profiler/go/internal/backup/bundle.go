@@ -7,14 +7,13 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 )
 
-// This file ports the "gather the small stuff" half of routes/backup.js's
-// gatherBackupData: every backup section EXCEPT shots, annotations and
-// images. Shots stream one page at a time (shots.Repository.
-// ForEachShotForBackup), annotations accumulate during that stream, and
-// images travel as real zip entries / a streamed base64 map — all in
-// stream.go's writeBundleJSON, which composes the bundle JSON object
-// incrementally so peak memory is O(one shot + one image), independent of
-// dataset size (#959).
+// This file handles the "gather the small stuff" half of backup export:
+// every backup section EXCEPT shots, annotations and images. Shots stream one
+// page at a time (shots.Repository.ForEachShotForBackup), annotations
+// accumulate during that stream, and images travel as real zip entries / a
+// streamed base64 map — all in stream.go's writeBundleJSON, which composes
+// the bundle JSON object incrementally so peak memory is O(one shot + one
+// image), independent of dataset size (#959).
 
 // glpVersion is stamped into the backup bundle metadata. config.yaml's
 // `version:` is canonical; this const must match it and is bumped alongside

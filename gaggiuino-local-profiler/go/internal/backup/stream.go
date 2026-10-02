@@ -13,25 +13,24 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// writeBundleJSON emits the exact same top-level JSON object routes/
-// backup.js's gatherBackupData + json.Marshal produce, but incrementally:
-// the scalar fields and the small sections (pre-gathered in `small`, see
-// gatherSmallSections) are marshalled one at a time, the shots array
-// streams one hydrated shot at a time from shots.Repository.
-// ForEachShotForBackup, and — only for the legacy GET /api/backup path —
-// the images map streams each file base64-encoded straight to w. Peak
-// retention is one shot + the annotations accumulator (bounded by
-// annotated-shot count, not datapoints size), never the whole shots table.
+// writeBundleJSON emits the backup bundle's top-level JSON object, but
+// incrementally: the scalar fields and the small sections (pre-gathered in
+// `small`, see gatherSmallSections) are marshalled one at a time, the shots
+// array streams one hydrated shot at a time from
+// shots.Repository.ForEachShotForBackup, and — only for the legacy
+// GET /api/backup path — the images map streams each file base64-encoded
+// straight to w. Peak retention is one shot + the annotations accumulator
+// (bounded by annotated-shot count, not datapoints size), never the whole
+// shots table.
 //
 // small is gathered before the caller writes any response header, so a DB
 // error there still becomes a clean 500; an error raised mid-stream here
 // (a failed shot query after the array has started) cannot — the caller
-// logs it and drops the connection, the same constraint Node's
-// res.download has.
+// logs it and drops the connection, the constraint a streamed response has.
 //
 // sec == nil means a full export (every key present). A scoped export
-// reproduces gatherBackupData's sectionBundleKeys selection exactly: an
-// out-of-scope key is absent, not empty.
+// follows sectionBundleKeys' selection exactly: an out-of-scope key is
+// absent, not empty.
 func (d Dependencies) writeBundleJSON(w io.Writer, small map[string]any, sec sections, inlineImages bool) error {
 	bw := bufio.NewWriterSize(w, 32*1024)
 
