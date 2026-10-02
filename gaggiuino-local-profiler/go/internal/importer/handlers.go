@@ -39,7 +39,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/import/settings", h.postSettings)
 }
 
-// FETCH_OPTS's User-Agent/timeout/size cap all live on the *fetcher.
+// The User-Agent, timeout and size cap all live on the *fetcher.
 
 func (h *Handlers) getSettings(w http.ResponseWriter, _ *http.Request) {
 	s := h.repo.GetSettings()

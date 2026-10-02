@@ -17,7 +17,7 @@ import (
 // This file implements safeGet: a bounded, SSRF-hardened fetch applied to
 // every hop — https-only, a private/loopback/link-local check before each
 // request (initial URL and every redirect target; redirects are never
-// auto-followed), an 8s timeout, and the 5 MiB IMPORT_FETCH_MAX_BYTES size
+// auto-followed), an 8s timeout, and the 5 MiB importFetchMaxBytes size
 // cap.
 
 const (

@@ -7,8 +7,8 @@
 //
 // File layout:
 //
-//	model.go     BACKUP_SECTIONS / SECTION_BUNDLE_KEYS /
-//	              SECTION_PRESENCE_BUNDLE_KEYS / normaliseSections(raw)
+//	model.go     backupSections / sectionBundleKeys /
+//	              sectionPresenceBundleKeys / normaliseSections(raw)
 //	kv.go         the mqtt/import settings get/save round trip — narrowly,
 //	              just what the `kv` block needs (see its own doc comment)
 //	crypto.go     AES-256-GCM-scrypt secrets encryption
@@ -44,7 +44,7 @@
 //     torn down immediately — cosmetic timing, not data correctness) and
 //     options reconciliation (ties a restored machine's stale host/
 //     switchEntity back to the current legacy add-on options.json — no
-//     options.json facade exists in this Go port yet). See RestoreMachines'
+//     options.json facade exists in this Go codebase yet). See RestoreMachines'
 //     own doc comment.
 //   - internal/library's whole-entity restore sanitizers
 //     (sanitizeBeanFields et al.) live in
