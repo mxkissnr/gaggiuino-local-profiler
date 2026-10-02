@@ -72,7 +72,6 @@ approximated — see `internal/auth/doc.go`.
 go/
   go.mod
   README.md              — this file
-  RESEARCH.md            — Phase 0 research spikes (historical: protobuf sources, image/QR libs)
   Makefile               `make build`/`vet`/`test`/`fmt-check`; `make frontend` bundles the SPA into `internal/webapp/dist` via `cmd/frontend-build`
   cmd/
     server/                main() — opens the DB, wires every `internal/<domain>` package together, and serves the REST/SSE API

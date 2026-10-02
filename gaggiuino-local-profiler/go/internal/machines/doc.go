@@ -160,7 +160,7 @@
 // ground truth, since it comes from the code talking to real machines in
 // production today. It has NOT been verified against a live machine
 // directly: no network access to real hardware was available while this
-// package was built (go/RESEARCH.md's documented blocker).
+// package was built.
 // cmd/gaggiuino-ws-probe is the tool this package ships specifically so
 // that step is a `go run` away once real hardware is reachable — see its
 // own doc comment.
