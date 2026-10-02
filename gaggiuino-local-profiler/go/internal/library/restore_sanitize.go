@@ -1,6 +1,6 @@
 package library
 
-// This file ports lib/sanitize-bean.js's whole-entity sanitizers
+// This file holds the whole-entity sanitizers
 // (sanitizeBeanFields/sanitizeGrinderFields/sanitizeRecipeFields/
 // sanitizeMilkFields/sanitizeBasketFields/sanitizePuckScreenFields) —
 // deliberately left out of sanitize.go (see that file's header comment):
@@ -11,9 +11,9 @@ package library
 // strings that later render unescaped in the frontend). Exported (capital
 // S) so internal/backup, a different package, can call them.
 
-// SanitizeBeanFields ports sanitizeBeanFields(bean): applies every bean
-// field sanitizer, preserving structural fields (id, bags, image,
-// location, source, importedAt, ...) unchanged.
+// SanitizeBeanFields applies every bean field sanitizer, preserving
+// structural fields (id, bags, image, location, source, importedAt, ...)
+// unchanged.
 func SanitizeBeanFields(bean Entity) Entity {
 	if bean == nil {
 		return nil
@@ -82,10 +82,9 @@ func SanitizeBeanFields(bean Entity) Entity {
 	return out
 }
 
-// orFallback ports the `s(x, n) || x` idiom (sanitizeBeanFields'/
-// sanitizeGrinderFields'/sanitizeMilkFields' `name` field): an empty
-// trimmed/truncated result falls back to the original raw value rather
-// than clobbering it with "".
+// orFallback implements the `s(x, n) || x` idiom (the `name` field of the
+// bean/grinder/milk sanitizers): an empty trimmed/truncated result falls back
+// to the original raw value rather than clobbering it with "".
 func orFallback(trimmed string, raw any) any {
 	if trimmed != "" {
 		return trimmed
@@ -93,7 +92,7 @@ func orFallback(trimmed string, raw any) any {
 	return raw
 }
 
-// SanitizeGrinderFields ports sanitizeGrinderFields(grinder).
+// SanitizeGrinderFields applies every grinder field sanitizer.
 func SanitizeGrinderFields(grinder Entity) Entity {
 	if grinder == nil {
 		return nil
@@ -109,7 +108,7 @@ func SanitizeGrinderFields(grinder Entity) Entity {
 	return out
 }
 
-// SanitizeMilkFields ports sanitizeMilkFields(milk) (#635).
+// SanitizeMilkFields applies every milk field sanitizer (#635).
 func SanitizeMilkFields(milk Entity) Entity {
 	if milk == nil {
 		return nil
@@ -150,7 +149,7 @@ func sanitizeBasketShape(v any) string {
 	return ""
 }
 
-// SanitizeBasketFields ports sanitizeBasketFields(basket) (#635).
+// SanitizeBasketFields applies every basket field sanitizer (#635).
 func SanitizeBasketFields(basket Entity) Entity {
 	if basket == nil {
 		return nil
@@ -178,7 +177,7 @@ func sanitizePuckScreenThickness(v any) string {
 	return ""
 }
 
-// SanitizePuckScreenFields ports sanitizePuckScreenFields(puckScreen) (#635).
+// SanitizePuckScreenFields applies every puckScreen field sanitizer (#635).
 func SanitizePuckScreenFields(ps Entity) Entity {
 	if ps == nil {
 		return nil
@@ -225,7 +224,7 @@ func sanitizeRecipeSteps(v any) []any {
 	return out
 }
 
-// SanitizeRecipeFields ports sanitizeRecipeFields(recipe).
+// SanitizeRecipeFields applies every recipe field sanitizer.
 func SanitizeRecipeFields(recipe Entity) Entity {
 	if recipe == nil {
 		return nil
@@ -250,9 +249,8 @@ func SanitizeRecipeFields(recipe Entity) Entity {
 	return out
 }
 
-// SanitizeLibraryForRestore ports routes/backup.js's
-// sanitizeRestoredLibrary(lib): re-runs every entity type's field
-// sanitizer over a restored coffee_library.
+// SanitizeLibraryForRestore re-runs every entity type's field sanitizer over
+// a restored coffee_library.
 func SanitizeLibraryForRestore(lib Library) Library {
 	out := lib
 	if lib.Beans != nil {

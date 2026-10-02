@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// This file ports routes/library/milks.js.
+// This file implements the milk endpoints.
 
 func findMilkIndex(lib Library, id int64) int {
 	for i, m := range lib.Milks {
@@ -16,7 +16,7 @@ func findMilkIndex(lib Library, id int64) int {
 	return -1
 }
 
-// listMilks ports GET /api/library/milks — a lightweight
+// listMilks serves GET /api/library/milks — a lightweight
 // id/name/emoji/stockMl projection, defaulting emoji to the milk-carton
 // emoji when unset.
 func (h *Handlers) listMilks(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +36,7 @@ func (h *Handlers) listMilks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// createMilk ports POST /api/library/milk — a thin wrapper around
+// createMilk handles POST /api/library/milk — a thin wrapper around
 // CreateMilk (create.go).
 func (h *Handlers) createMilk(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
@@ -59,7 +59,7 @@ func (h *Handlers) createMilk(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, milk)
 }
 
-// updateMilk ports PUT /api/library/milk/:id — a thin wrapper around
+// updateMilk handles PUT /api/library/milk/:id — a thin wrapper around
 // UpdateMilk (update.go).
 func (h *Handlers) updateMilk(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
@@ -79,7 +79,7 @@ func (h *Handlers) updateMilk(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, milk)
 }
 
-// deleteMilk ports DELETE /api/library/milk/:id.
+// deleteMilk handles DELETE /api/library/milk/:id.
 func (h *Handlers) deleteMilk(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	err := h.repo.Update(func(lib *Library) error {
@@ -106,7 +106,7 @@ func (h *Handlers) deleteMilk(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// deductMilk ports POST /api/library/milk/:id/deduct.
+// deductMilk handles POST /api/library/milk/:id/deduct.
 func (h *Handlers) deductMilk(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)
@@ -145,9 +145,9 @@ func (h *Handlers) deductMilk(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, milk)
 }
 
-// restockMilk ports POST /api/library/milk/:id/restock (#931): an additive
-// server-side top-up, mirroring deductMilk above. Replaces the frontend's
-// old absolute-overwrite PUT — the "Restock" button implies adding a fresh
+// restockMilk handles POST /api/library/milk/:id/restock (#931): an additive
+// server-side top-up, like deductMilk above. Replaces the frontend's old
+// absolute-overwrite PUT — the "Restock" button implies adding a fresh
 // carton to what's left, and a client-computed current+val PUT would let
 // two concurrent restocks race and drop one.
 func (h *Handlers) restockMilk(w http.ResponseWriter, r *http.Request) {
