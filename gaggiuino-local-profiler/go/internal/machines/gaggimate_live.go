@@ -14,7 +14,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
 
-// gaggimate_live.go ports ws-client.js's GaggiMateLiveClient: a persistent,
+// gaggimate_live.go holds the GaggiMateLiveClient: a persistent,
 // auto-reconnecting WebSocket session per GaggiMate baseURL that caches the
 // unsolicited evt:status frames the controller pushes on its own cadence
 // (#952). Before this, GaggiMateAdapter.GetStatus opened a fresh short-lived
