@@ -18,33 +18,28 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
 
-// LiveTransport is the WS-vs-MQTT dispatch seam lib/live-transport.js
-// implements (#608) — *mqtt.Transport satisfies it. Each method's second
-// return is true when MQTT is the active transport for this machine (only
-// ever the default machine, and only when the Settings toggle is on MQTT
-// with a broker configured): the poller then uses the returned value
-// (possibly nil, if the MQTT cache is stale/empty) instead of the adapter's
-// WS session, exactly as Node's `if (useMqtt) return gaggiuinoMqtt...`. An
-// interface (not a direct internal/mqtt import) keeps this central package
-// decoupled from the transport implementation, the same pattern
-// AdapterProvider already follows here.
+// LiveTransport is the WS-vs-MQTT dispatch seam (#608) — *mqtt.Transport
+// satisfies it. Each method's second return is true when MQTT is the active
+// transport for this machine (only ever the default machine, and only when the
+// Settings toggle is on MQTT with a broker configured): the poller then uses
+// the returned value (possibly nil, if the MQTT cache is stale/empty) instead
+// of the adapter's WS session. An interface (not a direct internal/mqtt
+// import) keeps this central package decoupled from the transport
+// implementation, the same pattern AdapterProvider already follows here.
 type LiveTransport interface {
 	SensorSnapshot(isDefaultMachine bool) (*proto.SensorStateSnapshotDto, bool)
 	SystemState(isDefaultMachine bool) (*proto.SystemStateDto, bool)
 }
 
-// This file ports lib/poll.js: the 1s live-polling loop
-// (startLivePolling/stopLivePolling/pollLive/pollViaGaggiuinoStatus) plus
-// checkAndApplyMachinePower/backgroundHaCheck, the 30s HA-switch-state
-// watcher that starts/stops it. See doc.go for what this phase
-// deliberately does not port from lib/poll.js/lib/sync.js (the shot-sync
-// triggers, connectivity-stats logging, MQTT transport).
+// This file implements the 1s live-polling loop plus
+// checkAndApplyMachinePower/backgroundHaCheck, the 30s HA-switch-state watcher
+// that starts/stops it. See doc.go for what is deliberately not implemented
+// (the shot-sync triggers, connectivity-stats logging, MQTT transport).
 
-// liveDatapoints mirrors the fixed set of per-tenth-second arrays
-// state.liveAccum.datapoints accumulates during a brew — the exact shape
-// GET /api/shots/:id already stores for a finished shot (lib/poll.js's
-// liveAccum feeds ShotRepository on save), reused here unchanged for the
-// in-progress GET /api/live/data / live-snapshot SSE payload.
+// liveDatapoints is the fixed set of per-tenth-second arrays the brew
+// accumulator fills during a brew — the exact shape GET /api/shots/:id already
+// stores for a finished shot, reused here unchanged for the in-progress
+// GET /api/live/data / live-snapshot SSE payload.
 type liveDatapoints struct {
 	TimeInShot        []int `json:"timeInShot"`
 	Pressure          []int `json:"pressure"`
@@ -64,27 +59,23 @@ type liveAccumState struct {
 
 // modeDatapoints is the simpler per-tick datapoint set #902's steam/flush
 // live sessions accumulate — timeInMode/pressure/temperature only, no
-// weight/flow (neither mode moves the scale). Field names match Node's
-// state.steamAccum/flushAccum.datapoints.
+// weight/flow (neither mode moves the scale).
 type modeDatapoints struct {
 	TimeInMode  []int `json:"timeInMode"`
 	Pressure    []int `json:"pressure"`
 	Temperature []int `json:"temperature"`
 }
 
-// modeAccumState mirrors state.steamAccum/state.flushAccum — the same
-// start/accumulate/stop lifecycle as liveAccumState, minus the brew-only
-// profileName/prevWeight.
+// modeAccumState is the same start/accumulate/stop lifecycle as
+// liveAccumState, minus the brew-only profileName/prevWeight.
 type modeAccumState struct {
 	startTime  int64
 	datapoints modeDatapoints
 }
 
-// LiveData mirrors openapi.yaml's LiveData schema exactly — GET
-// /api/live/data's response and the live-snapshot SSE event's payload,
-// both built by buildLiveDataResponse() (#736: single source of truth for
-// both, matching routes/sse.js/routes/system.js sharing the same Node
-// function).
+// LiveData is openapi.yaml's LiveData schema exactly — GET /api/live/data's
+// response and the live-snapshot SSE event's payload, both built by
+// buildLiveDataResponse() (#736: single source of truth for both).
 type LiveData struct {
 	IsLive           bool            `json:"isLive"`
 	ProfileName      string          `json:"profileName"`
@@ -117,13 +108,11 @@ type LiveData struct {
 	WaterLevel        *int     `json:"waterLevel"`
 }
 
-// pollGlobalState ports the subset of lib/state.js's module-level fields
-// this package needs (as opposed to lib/machine-runtime-state.js's
-// per-machine RuntimeState) — mutex-guarded for the same reason
-// RuntimeState is (see its own header comment). See RuntimeState's doc
-// comment for this struct's mu's fixed lock ordering relative to
-// RuntimeState.mu (RuntimeState.mu first, this one second) — a #901
-// code-review minimal fix, not a full consolidation.
+// pollGlobalState holds package-level polling state (as opposed to the
+// per-machine RuntimeState) — mutex-guarded for the same reason RuntimeState
+// is (see its own header comment). See RuntimeState's doc comment for this
+// struct's mu's fixed lock ordering relative to RuntimeState.mu
+// (RuntimeState.mu first, this one second).
 type pollGlobalState struct {
 	mu sync.Mutex
 
@@ -144,28 +133,25 @@ type pollGlobalState struct {
 	descaleAccum *modeAccumState
 	descaleSeq   int
 
-	// Phase 2a (#901): manual-sync (POST /api/sync) progress. lastManualSync
-	// backs the 30s cooldown; lastSyncTime/lastSyncError mirror
-	// lib/state.js's fields of the same name and are now reported by GET
-	// /api/status (before 2a they were permanently null — see doc.go).
-	// defaultSyncInFlight is syncShots()'s #773 single-run guard.
+	// Manual-sync (POST /api/sync) progress. lastManualSync backs the 30s
+	// cooldown; lastSyncTime/lastSyncError are reported by GET /api/status.
+	// defaultSyncInFlight is the #773 single-run guard.
 	lastManualSync      time.Time
 	lastSyncTime        *string
 	lastSyncError       *string
 	defaultSyncInFlight bool
-	// otherSyncInFlight is syncMachineShots()'s #773 per-machine single-run
-	// guard for non-default machines (syncOtherMachines, #1146), keyed by
-	// machine id — one slot per machine, so a slow backfill on one machine
-	// never blocks another's. Lazy-initialized: nil until the first sync.
+	// otherSyncInFlight is the #773 per-machine single-run guard for non-default
+	// machines (syncOtherMachines, #1146), keyed by machine id — one slot per
+	// machine, so a slow backfill on one machine never blocks another's.
+	// Lazy-initialized: nil until the first sync.
 	otherSyncInFlight map[int64]bool
 
 	readyByTargetAt   *int64
 	plannedSwitchOnAt *int64
-	// preheatNotifySent mirrors lib/state.js's field of the same name,
-	// cleared here on machine-off exactly like Node's stopLivePolling does.
-	// Unread until _checkPreheatNotify (doc.go's "Deliberately not
-	// ported," tracked as a follow-up) is itself ported — nothing sets it
-	// true yet, so this reset is currently a no-op every time.
+	// preheatNotifySent is cleared here on machine-off. Nothing sets it true yet:
+	// the preheat-ready notification (doc.go's "Deliberately not implemented,"
+	// tracked as a follow-up) is not implemented, so this reset is currently a
+	// no-op every time.
 	preheatNotifySent bool
 }
 
@@ -218,10 +204,9 @@ type AdapterProvider interface {
 	GetAdapter(m *machines.Machine) (machines.Adapter, error)
 }
 
-// Poller ports lib/poll.js's module-level polling loop as a struct so
-// cmd/server can own one instance instead of relying on Node's
-// module-singleton pattern (same rationale as machines.gaggiuinoLiveClient,
-// Phase 1e).
+// Poller is the module-level polling loop as a struct so cmd/server can own
+// one instance instead of a module singleton (same rationale as
+// machines.gaggiuinoLiveClient).
 type Poller struct {
 	registry *machines.Registry
 	adapters AdapterProvider
@@ -269,12 +254,10 @@ type Poller struct {
 	syncFn func(context.Context) error
 }
 
-// NewPoller wires registry (the default machine's host/switch-entity
-// source of truth) + adapters (machines.Handlers.GetAdapter) + hub
-// (live-snapshot/preheat-update SSE producer) + haClient (switch-state
-// reads, the ready-by auto turn-on call) into one Poller, matching
-// lib/poll.js's own module-level dependencies (lib/machines/registry.js,
-// lib/ha.js, lib/events.js's bus).
+// NewPoller wires registry (the default machine's host/switch-entity source of
+// truth) + adapters (machines.Handlers.GetAdapter) + hub (live-snapshot/
+// preheat-update SSE producer) + haClient (switch-state reads, the ready-by
+// auto turn-on call) into one Poller.
 func NewPoller(registry *machines.Registry, adapters AdapterProvider, hub *sse.Hub, haClient *ha.Client) *Poller {
 	return &Poller{registry: registry, adapters: adapters, hub: hub, ha: haClient, runtime: NewRuntimeState()}
 }
@@ -345,24 +328,22 @@ func (p *Poller) MachineStatus(id int64) MachinePollStatus {
 	return MachinePollStatus{Reachable: ms.reachable, LastError: ms.lastError, FirmwareVersion: ms.version}
 }
 
-// Start ports server.js's startup sequence for this domain: load any
-// persisted preheat session, run one unconditional checkAndApplyMachinePower
-// (the call that actually starts live polling on a fresh boot for the
-// common no-HA-switch-control install, see checkAndApplyMachinePower's own
-// comment), then launch the 30s HA-check and 30s preheat-watch tickers.
-// ctx bounds both tickers' lifetime — cancelling it stops this Poller,
-// though it does NOT stop an already-running live-poll ticker (that one's
-// own lifecycle is startLivePolling/stopLivePolling-driven, exactly like
-// Node's livePollTimer).
+// Start runs this domain's startup sequence: load any persisted preheat
+// session, run one unconditional checkAndApplyMachinePower (the call that
+// actually starts live polling on a fresh boot for the common
+// no-HA-switch-control install, see checkAndApplyMachinePower's own comment),
+// then launch the 30s HA-check and 30s preheat-watch tickers. ctx bounds both
+// tickers' lifetime — cancelling it stops this Poller, though it does NOT stop
+// an already-running live-poll ticker (that one's own lifecycle is
+// startLivePolling/stopLivePolling-driven).
 func (p *Poller) Start(ctx context.Context) {
 	p.lifeCtx = ctx
 	p.loadPreheatState()
 	if err := p.checkAndApplyMachinePower(ctx); err != nil {
 		log.Printf("system: machine power check failed on startup: %v", err)
 	}
-	// #953: the periodic shot-history pull (lib/sync.js's scheduleNextSync).
-	// A no-op until SetShotsRepo has been called (cmd/server does; tests
-	// generally don't).
+	// #953: the periodic shot-history pull. A no-op until SetShotsRepo has been
+	// called (cmd/server does; tests generally don't).
 	httputil.SafeGo("system: scheduled sync", func() { p.runScheduledSync(ctx) })
 	httputil.SafeGo("system: background HA check", func() {
 		p.runTicker(ctx, backgroundHaCheckInterval, func() {
@@ -381,11 +362,10 @@ func (p *Poller) Start(ctx context.Context) {
 	httputil.SafeGo("system: profile sync sweep", func() {
 		p.runTicker(ctx, profilesSyncInterval, func() { p.runProfileSyncSweep(ctx) })
 	})
-	// ctx cancellation also tears the live-poll ticker down (its goroutine
-	// is otherwise only stopped by stopLivePolling on a machine-off
-	// transition). Node's process just exits; this gives the Go binary —
-	// and, load-bearing here, cmd/server's smoke test — a clean shutdown
-	// with no leaked poll goroutine.
+	// ctx cancellation also tears the live-poll ticker down (its goroutine is
+	// otherwise only stopped by stopLivePolling on a machine-off transition).
+	// This gives the binary — and, load-bearing here, cmd/server's smoke test
+	// — a clean shutdown with no leaked poll goroutine.
 	httputil.SafeGo("system: live poll shutdown watcher", func() {
 		<-ctx.Done()
 		p.stopLivePolling()
@@ -405,23 +385,21 @@ func (p *Poller) runTicker(ctx context.Context, interval time.Duration, fn func(
 	}
 }
 
-// checkAndApplyMachinePower ports checkAndApplyMachinePower(runtime).
-// Node's early-exit branch — `if (!entity || !HA_TOKEN)` (lib/poll.js) —
-// fires on EITHER no switch entity configured OR no HA integration at all
-// (a switch entity configured but no token to read it with is just as
-// unable to tell GLP the machine's power state), and always just ensures
-// live polling is running, treating the machine as permanently "on" since
-// nothing in this install can tell GLP otherwise. That branch is also what
-// Start() above relies on to begin polling on a fresh boot for the common
-// case (no HA switch-control configured): calling this repeatedly on that
-// path is a harmless no-op once live polling is already active, so
-// backgroundHaCheck's own Node-side `if (!HA_TOKEN) return` gate has no Go
-// equivalent here — this function is safe to call unconditionally on every
-// 30s tick. #901 code review: this used to check only `entity == ""` and
-// fall through to GetSwitchState otherwise, which always returns nil when
-// no token is configured (ha/client.go's `!c.enabled()` guard) — live
-// polling then never started for an entity-configured-but-tokenless
-// install, for the entire process lifetime.
+// checkAndApplyMachinePower's early-exit branch fires on EITHER no switch
+// entity configured OR no HA integration at all (a switch entity configured
+// but no token to read it with is just as unable to tell GLP the machine's
+// power state), and always just ensures live polling is running, treating the
+// machine as permanently "on" since nothing in this install can tell GLP
+// otherwise. That branch is also what Start() above relies on to begin polling
+// on a fresh boot for the common case (no HA switch-control configured):
+// calling this repeatedly on that path is a harmless no-op once live polling
+// is already active, so the HA-token gate has no separate equivalent here —
+// this function is safe to call unconditionally on every 30s tick. #901 code
+// review: this used to check only `entity == ""` and fall through to
+// GetSwitchState otherwise, which always returns nil when no token is
+// configured (ha/client.go's `!c.enabled()` guard) — live polling then never
+// started for an entity-configured-but-tokenless install, for the entire
+// process lifetime.
 func (p *Poller) checkAndApplyMachinePower(ctx context.Context) error {
 	machine, err := p.registry.GetDefaultMachine()
 	if err != nil {
@@ -449,8 +427,8 @@ func (p *Poller) checkAndApplyMachinePower(ctx context.Context) error {
 	if *isOn {
 		log.Printf("system: machine on -- live polling resumed")
 		p.startLivePolling()
-		// #1153: pull right after the machine comes on, matching Node's
-		// syncSoonAfterPowerOn(), instead of waiting for the next interval.
+		// #1153: pull right after the machine comes on instead of waiting for the
+		// next interval.
 		p.scheduleSyncSoonAfterPowerOn()
 	} else {
 		log.Printf("system: machine off -- live polling paused")
@@ -468,7 +446,7 @@ func (p *Poller) livePollActive() bool {
 	return p.liveTicker != nil
 }
 
-// startLivePolling ports startLivePolling(runtime).
+// startLivePolling starts the 1s live-poll ticker.
 func (p *Poller) startLivePolling() {
 	p.liveMu.Lock()
 	if p.liveTicker != nil {
@@ -504,10 +482,9 @@ func (p *Poller) startLivePolling() {
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
-// stopLivePolling ports stopLivePolling(runtime): the #655 machineReachable
-// flip is unconditional, applied even when there was no active live-poll
-// ticker to stop, matching Node's own reasoning (see lib/poll.js's comment)
-// — nothing else can ever flip this back to false on its own once a
+// stopLivePolling stops the 1s live-poll ticker: the #655 machineReachable
+// flip is unconditional, applied even when there was no active live-poll ticker
+// to stop — nothing else can ever flip this back to false on its own once a
 // runtime never reaches startLivePolling.
 func (p *Poller) stopLivePolling() {
 	if id, ok := p.defaultMachineID(); ok {
@@ -544,9 +521,9 @@ func (p *Poller) stopLivePolling() {
 	p.emitLiveSnapshot()
 }
 
-// pollTick ports pollLive(runtime): the isPollRunning mutex guard around
-// one pollViaGaggiuinoStatus call, so a slow poll (e.g. a machine taking
-// >1s to answer) can never overlap with the next tick.
+// pollTick is the isPollRunning mutex guard around one pollViaGaggiuinoStatus
+// call, so a slow poll (e.g. a machine taking >1s to answer) can never overlap
+// with the next tick.
 func (p *Poller) pollTick() {
 	p.state.mu.Lock()
 	if p.state.isPollRunning {
@@ -567,25 +544,24 @@ func (p *Poller) pollTick() {
 	p.pollViaGaggiuinoStatus(ctx)
 }
 
-// pollViaGaggiuinoStatus ports pollViaGaggiuinoStatus(runtime). Despite the
-// name it is adapter-agnostic: adapter.GetStatus dispatches to the right
-// machine adapter, and for a GaggiMate default that call now reads the
-// persistent evt:status cache (gaggimate_live.go, #952) rather than opening
-// a fresh WebSocket every tick (PR #947's "GaggiMate WS hammer") —
+// pollViaGaggiuinoStatus is adapter-agnostic despite the name:
+// adapter.GetStatus dispatches to the right machine adapter, and for a
+// GaggiMate default that call reads the persistent evt:status cache
+// (gaggimate_live.go, #952) rather than opening a fresh WebSocket every tick
+// (PR #947's "GaggiMate WS hammer") —
 // GetLiveSensorSnapshot/GetLiveSystemState return nil for GaggiMate, which
-// deriveMachineState already tolerates. The #725 reachability-recovery
-// catch-up sync and the brew-finished setTimeout(syncAfterBrew, 3000) are
-// ported (#953, sync_triggers.go); still not ported (see doc.go) is
-// recordConnectivity()'s debug-log summary.
+// deriveMachineState already tolerates. The #725 reachability-recovery catch-up
+// sync and the brew-finished 3s pull are implemented (#953,
+// sync_triggers.go); still not implemented (see doc.go) is recordConnectivity()'s
+// debug-log summary.
 func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	machine, err := p.registry.GetDefaultMachine()
 	if err != nil || machine == nil {
 		return
 	}
-	// #718: no host configured anywhere -- skip cleanly, don't request
-	// against a placeholder/fallback hostname, and don't touch
-	// machineReachable (nil stays nil, exactly like Node never assigning
-	// state.machineReachable on this early-return path).
+	// #718: no host configured anywhere -- skip cleanly, don't request against a
+	// placeholder/fallback hostname, and don't touch machineReachable (nil stays
+	// nil on this early-return path).
 	if strings.TrimSpace(machine.Host) == "" {
 		return
 	}
@@ -594,16 +570,15 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		return
 	}
 
-	// ports lib/poll.js's debugLog(`GET ${baseUrl}/api/system/status`) --
-	// the actual HTTP GET happens one layer down, inside the adapter
-	// (internal/machines/gaggiuino_adapter.go for a Gaggiuino default), so
-	// this traces the poll tick itself rather than the literal request line.
-	// Calling debugLogf directly is safe here despite firing every single
-	// pollInterval tick (1s): its isDebugLoggingEnabled() check goes through
-	// internal/config's shared cache, which now carries its own TTL sized
-	// for exactly this hot path (#977 follow-up code review, round 5 --
-	// see internal/config/debuglog.go's debugLoggingCache doc comment), so
-	// this no longer needs its own throttling wrapper.
+	// The actual HTTP GET happens one layer down, inside the adapter
+	// (internal/machines/gaggiuino_adapter.go for a Gaggiuino default), so this
+	// traces the poll tick itself rather than the literal request line. Calling
+	// debugLogf directly is safe here despite firing every single pollInterval
+	// tick (1s): its isDebugLoggingEnabled() check goes through internal/config's
+	// shared cache, which now carries its own TTL sized for exactly this hot path
+	// (#977 follow-up code review, round 5 -- see
+	// internal/config/debuglog.go's debugLoggingCache doc comment), so this no
+	// longer needs its own throttling wrapper.
 	debugLogf("poll: GET status from %s (%s)", machine.Host, machine.Type)
 	status, err := adapter.GetStatus(ctx, machine)
 	if err != nil {
@@ -639,11 +614,10 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	// up now instead of waiting for the next scheduled pull.
 	p.maybeCatchUpAfterRecovery(prevReachable)
 
-	// #608: lib/live-transport.js's dispatch — MQTT for the default machine
-	// when the Settings toggle selects it, the adapter's WS session
-	// otherwise. When MQTT is the active transport its getter is used even
-	// if it returns nil (a stale/empty MQTT cache), never falling through to
-	// open a WS session, matching Node's `if (useMqtt) return`.
+	// #608: MQTT for the default machine when the Settings toggle selects it, the
+	// adapter's WS session otherwise. When MQTT is the active transport its getter
+	// is used even if it returns nil (a stale/empty MQTT cache), never falling
+	// through to open a WS session.
 	var sensorSnap *proto.SensorStateSnapshotDto
 	var sysState *proto.SystemStateDto
 	if p.liveTransport != nil {
@@ -700,14 +674,12 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	if result.IsBrewing && p.state.liveAccum == nil {
 		p.state.liveAccum = &liveAccumState{startTime: now, profileName: result.ProfileName, prevWeight: derived.Weight}
 		log.Printf("system: brew started: profile %s", result.ProfileName)
-		// ports lib/poll.js's debugLog(`Brew started detail: brewSwitchState=... sensorBrewActive=... upTime=...`)
 		debugLogf("Brew started detail: brewSwitchState=%v sensorBrewActive=%v upTime=%d",
 			rawStatus.Brewing, sensorSnap != nil && sensorSnap.BrewActive, rawStatus.UpTime)
 	}
 	brewJustFinished := false
 	if !result.IsBrewing && p.state.liveAccum != nil {
 		log.Printf("system: brew finished")
-		// ports lib/poll.js's debugLog(`Brew finished detail: brewSwitchState=... sensorBrewActive=... upTime=...`)
 		debugLogf("Brew finished detail: brewSwitchState=%v sensorBrewActive=%v upTime=%d",
 			rawStatus.Brewing, sensorSnap != nil && sensorSnap.BrewActive, rawStatus.UpTime)
 		p.state.liveAccum = nil
@@ -794,8 +766,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	}
 	p.state.mu.Unlock()
 
-	// #953: 3s after a brew ends, pull the shot the machine just wrote
-	// (lib/poll.js's setTimeout(syncAfterBrew, 3000)).
+	// #953: 3s after a brew ends, pull the shot the machine just wrote.
 	if brewJustFinished {
 		p.scheduleSyncAfterBrew()
 	}
@@ -805,11 +776,11 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 
 func round10(v float64) int { return int(v*10 + 0.5) }
 
-// elapsedTenths ports lib/poll.js:287's `Math.round((now - startTime) /
-// 100)` (tenths-of-a-second precision timeInShot datapoints) — Node rounds,
-// a bare Go `int(x/100)` truncates toward zero, which produces a
-// systematic off-by-one offset against Node-recorded shots sharing the same
-// DB (#901 code review: 950ms elapsed rounds to 10 in Node, truncated to 9).
+// elapsedTenths rounds to tenths-of-a-second precision for timeInShot
+// datapoints. It uses math.Round rather than a bare `int(x/100)` truncation:
+// truncation toward zero would produce a systematic off-by-one offset against
+// shots already recorded with rounded values sharing the same DB (#901 code
+// review: 950ms elapsed rounds to 10, truncates to 9).
 func elapsedTenths(now, startTime int64) int {
 	return int(math.Round(float64(now-startTime) / 100))
 }
@@ -895,9 +866,8 @@ func derefFloat(v *float64) float64 {
 	return *v
 }
 
-// extractVersion ports pollViaGaggiuinoStatus's inline
-// `status.softwareVersion || status.version || status.firmware ||
-// status.buildNumber || status.fw_version || status.buildDate || null`.
+// extractVersion reads the machine's firmware version from the first present
+// of softwareVersion/version/firmware/buildNumber/fw_version/buildDate.
 func extractVersion(raw json.RawMessage) string {
 	var obj struct {
 		SoftwareVersion any `json:"softwareVersion"`
@@ -929,9 +899,8 @@ func anyToString(v any) string {
 	}
 }
 
-// redactURLs ports lib/poll.js's `err.message.replace(/https?:\/\/\S+/g,
-// '[url]')` -- lastMachineError must never leak the configured machine
-// host to a client.
+// redactURLs replaces any URL in an error message with "[url]" --
+// lastMachineError must never leak the configured machine host to a client.
 func redactURLs(msg string) string {
 	for {
 		idx := strings.Index(msg, "http://")
@@ -949,8 +918,8 @@ func redactURLs(msg string) string {
 	}
 }
 
-// buildLiveDataResponse ports buildLiveDataResponse(): the single source
-// of truth for GET /api/live/data and the live-snapshot SSE payload. Must
+// buildLiveDataResponse is the single source of truth for GET /api/live/data
+// and the live-snapshot SSE payload. Must
 // return a value wholly independent of p.state.liveAccum once unlocked: a
 // caller (emitLiveSnapshot -> Hub.Publish -> a per-subscriber buffered
 // channel, see internal/sse) can hold onto this LiveData and json.Marshal
@@ -1059,15 +1028,15 @@ func copyDatapoints(src *liveDatapoints) *liveDatapoints {
 // SSE-priming wiring.
 func (p *Poller) LiveData() LiveData { return p.buildLiveDataResponse() }
 
-// emitLiveSnapshot publishes the current buildLiveDataResponse() onto the
-// SSE hub as EventLiveSnapshot. This is this package's sole producer of
-// that event (see doc.go's "Reconciling with Phase 1e's live.go" section):
-// machines/live.go's own WS session cache no longer publishes directly,
-// since its raw {machineHost, sensorSnap}/{machineHost, sysState} shape
-// doesn't match openapi.yaml's LiveData schema this endpoint/event are
-// bound to. Deliberately simpler than Node's #708 optimization (an
-// immediate push the instant a fresh WS/MQTT sample arrives, on top of the
-// 1s tick) — every push here is tick-driven only; see doc.go.
+// emitLiveSnapshot publishes the current buildLiveDataResponse() onto the SSE
+// hub as EventLiveSnapshot. This is this package's sole producer of that event
+// (see doc.go's "Live-snapshot production" section): machines/live.go's own WS
+// session cache no longer publishes directly, since its raw
+// {machineHost, sensorSnap}/{machineHost, sysState} shape doesn't match
+// openapi.yaml's LiveData schema this endpoint/event are bound to. Deliberately
+// simpler than #708's optimization (an immediate push the instant a fresh
+// WS/MQTT sample arrives, on top of the 1s tick) — every push here is
+// tick-driven only; see doc.go.
 func (p *Poller) emitLiveSnapshot() {
 	p.hub.Publish(sse.Event{Type: sse.EventLiveSnapshot, Data: p.buildLiveDataResponse()})
 }

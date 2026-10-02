@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// This file pins routes/import.js's wire contract — the "pin the essential
+// This file pins the import routes' wire contract — the "pin the essential
 // shape, not the whole grammar" check orders/shots/library's
 // contract_test.go established. The parser-by-parser value assertions live
 // in handlers_test.go; this file pins what every response of each route

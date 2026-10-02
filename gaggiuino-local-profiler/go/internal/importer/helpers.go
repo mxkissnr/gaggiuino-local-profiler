@@ -8,21 +8,20 @@ import (
 	"time"
 )
 
-// This file ports the small shared helpers lib/import-parsers.js and
-// lib/import-generic.js both use: roast-type inference, image-URL
+// This file holds the small shared helpers: roast-type inference, image-URL
 // normalization, altitude/price extraction, the Shopify product-JSON URL
-// rewrite, and the loose map accessors that stand in for JS's duck typing
-// (every parser here works over a decoded product JSON / bean object as a
-// map[string]any, exactly as the Node original works over plain objects).
+// rewrite, and the loose map accessors that tolerate the many optional fields
+// a decoded product JSON / bean object may carry (every parser here works
+// over it as a map[string]any).
 
 func today() string { return time.Now().UTC().Format("2006-01-02") }
 
 // jsWhitespace is exactly the character set JavaScript's RegExp `\s` (and
-// String.prototype.trim) matches. Go's own regexp `\s` is ASCII-only, but
-// the Node parsers' pervasive `.replace(/\s+/g, ' ')` relies on JS `\s`
-// also collapsing NBSP (U+00A0), the Unicode spaces and the BOM — real
-// roaster product copy is full of `&nbsp;` (e.g. elbgold's
-// "Hier&nbsp;findest Du" footer that extractFlavorKeywords stops at).
+// String.prototype.trim) matches. Go's own regexp `\s` is ASCII-only, so
+// collapseWS needs its own set that also collapses NBSP (U+00A0), the
+// Unicode spaces and the BOM — real roaster product copy is full of
+// `&nbsp;` (e.g. elbgold's "Hier&nbsp;findest Du" footer that
+// extractFlavorKeywords stops at).
 const jsWhitespace = "\t\n\v\f\r \u00a0\u1680" +
 	"\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a" +
 	"\u2028\u2029\u202f\u205f\u3000\ufeff"
@@ -30,15 +29,14 @@ const jsWhitespace = "\t\n\v\f\r \u00a0\u1680" +
 var jsWhitespaceRe = regexp.MustCompile(
 	`[\t\n\v\f\r \x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}]+`)
 
-// collapseWS ports the ubiquitous `.replace(/\s+/g, ' ').trim()` in the
-// Node parsers.
+// collapseWS collapses runs of whitespace to a single space and trims.
 func collapseWS(s string) string {
 	return jsTrim(jsWhitespaceRe.ReplaceAllString(s, " "))
 }
 
-// jsTrim ports String.prototype.trim — strings.TrimSpace's unicode.IsSpace
-// set is close but not identical, and the parsers compare trimmed values
-// for equality.
+// jsTrim trims exactly the jsWhitespace set — strings.TrimSpace's
+// unicode.IsSpace set is close but not identical, and the parsers compare
+// trimmed values for equality.
 func jsTrim(s string) string { return strings.Trim(s, jsWhitespace) }
 
 // strOrNil returns s, or nil when s is empty — the Go equivalent of JS's
@@ -94,7 +92,6 @@ func anyToStrings(v any) []string {
 
 // ── roast type ─────────────────────────────────────────────────────────────
 
-// roastTypeFromTags ports lib/import-parsers.js's roastTypeFromTags(tags).
 func roastTypeFromTags(tags []string) string {
 	if tags == nil {
 		return ""
@@ -116,8 +113,8 @@ func roastTypeFromTags(tags []string) string {
 
 var profileOptionRe = regexp.MustCompile(`(?i)profile|roast`)
 
-// roastTypeFromProduct ports lib/import-generic.js's roastTypeFromProduct(product):
-// prefer an options entry whose name suggests roast profile, fall back to tags.
+// roastTypeFromProduct prefers an options entry whose name suggests roast
+// profile, falling back to tags.
 func roastTypeFromProduct(product map[string]any) string {
 	for _, o := range marr(product, "options") {
 		om, ok := o.(map[string]any)
@@ -141,8 +138,8 @@ func roastTypeFromProduct(product map[string]any) string {
 
 var httpSchemeRe = regexp.MustCompile(`(?i)^https?://`)
 
-// normalizeImageURL ports lib/import-parsers.js's normalizeImageUrl(url):
-// protocol-relative -> https, absolute http(s) untouched, anything else "".
+// normalizeImageURL maps a protocol-relative URL to https, leaves absolute
+// http(s) untouched, and returns "" for anything else.
 func normalizeImageURL(v any) string {
 	url, ok := v.(string)
 	if !ok || jsTrim(url) == "" {
@@ -158,8 +155,8 @@ func normalizeImageURL(v any) string {
 	return ""
 }
 
-// priceFromProduct ports lib/import-parsers.js's priceFromProduct(product):
-// Shopify reports price in cents; > 0 -> euros rounded to the cent, else nil.
+// priceFromProduct converts the Shopify price (in cents) to euros rounded to
+// the cent; returns nil when <= 0.
 func priceFromProduct(product map[string]any) *float64 {
 	cents, ok := mnum(product, "price")
 	if !ok || cents <= 0 {
@@ -185,8 +182,7 @@ var (
 	altPlainSingleRe = regexp.MustCompile(`(?i)\b(\d{3,4})\s*(?:` + altPlainUnit + `)\b`)
 )
 
-// extractAltitudeM ports lib/import-parsers.js's extractAltitudeM(text).
-// Returns nil (JS null) when nothing parses.
+// extractAltitudeM returns nil when nothing parses.
 func extractAltitudeM(text string) *int {
 	if m := altRangeRe.FindStringSubmatch(text); m != nil {
 		lo := atoiZ(m[1] + m[2])
@@ -218,8 +214,8 @@ func atoiZ(s string) int {
 
 var shopifyHandleRe = regexp.MustCompile(`(?i)/products/([a-z0-9-]+)`)
 
-// shopifyJSONURL ports lib/import-parsers.js's shopifyJsonUrl(parsedUrl, host):
-// rewrites a pasted product URL's path to <host>/products/<handle>.js.
+// shopifyJSONURL rewrites a pasted product URL's path to
+// <host>/products/<handle>.js.
 func shopifyJSONURL(pathname, host string) string {
 	m := shopifyHandleRe.FindStringSubmatch(pathname)
 	if m == nil {
@@ -232,7 +228,6 @@ func shopifyJSONURL(pathname, host string) string {
 
 var lowerWordRe = regexp.MustCompile(`^[a-z]+$`)
 
-// looksLikeRoasterName ports lib/import-generic.js's looksLikeRoasterName(vendor, host).
 func looksLikeRoasterName(vendor, host string) bool {
 	v := jsTrim(vendor)
 	if v == "" {

@@ -11,12 +11,11 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 )
 
-// manifestLink is injected before </head> for non-Ingress requests, byte
-// for byte what server.js's app.get(['/', '/index.html']) handler inserts.
+// manifestLink is injected before </head> for non-Ingress requests.
 const manifestLink = `    <link rel="manifest" href="manifest.json">` + "\n" + `</head>`
 
 // Handlers serves the embedded SPA bundle. See this package's doc comment
-// for the server.js parity it mirrors.
+// for the handler behavior it follows.
 type Handlers struct {
 	dist      fs.FS
 	indexHTML []byte
@@ -41,9 +40,8 @@ func newHandlers(dist fs.FS) *Handlers {
 }
 
 // RegisterRoutes registers the SPA routes onto mux, following the codebase
-// convention. Not prefixed
-// with /api/ — GET requests fall through auth.RequireToken's static-asset
-// bypass exactly as the Node app's own static frontend does.
+// convention. Not prefixed with /api/ — GET requests fall through
+// auth.RequireToken's static-asset bypass.
 //
 // "/" is a method-less catch-all: it only ever runs for paths no
 // more-specific pattern claimed (every /api/* route, /shots.json, the
@@ -51,9 +49,8 @@ func newHandlers(dist fs.FS) *Handlers {
 // method-bound "GET /" conflicts with cmd/server's method-less "/api/events"
 // route under net/http.ServeMux's precedence rules (neither is strictly
 // more specific); static filters non-GET/HEAD itself instead. A genuinely
-// unknown path 404s, matching express.static + Express's default 404 —
-// the SPA is tab-driven with no client-side history routing, so there is
-// no index.html fallback to serve.
+// unknown path 404s — the SPA is tab-driven with no client-side history
+// routing, so there is no index.html fallback to serve.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", h.index)
 	mux.HandleFunc("GET /index.html", h.index)
@@ -79,13 +76,12 @@ func (h *Handlers) kioskRedirect(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusFound)
 }
 
-// index serves the server-templated index.html — see doc.go's "Handler
-// parity with server.js".
+// index serves the templated index.html — see doc.go's "Handler behavior".
 func (h *Handlers) index(w http.ResponseWriter, r *http.Request) {
 	html := h.indexHTML
 	if !auth.IsIngressRequest(r) {
-		// String.prototype.replace with a string pattern replaces the first
-		// occurrence only — bytes.Replace with n=1 matches that.
+		// Only the first occurrence of a string pattern is replaced —
+		// bytes.Replace with n=1 does the same.
 		html = bytes.Replace(html, []byte("</head>"), []byte(manifestLink), 1)
 	}
 	setNoCache(w)
@@ -95,11 +91,10 @@ func (h *Handlers) index(w http.ResponseWriter, r *http.Request) {
 
 // static serves any other file under dist/. A missing file 404s; a
 // directory 404s (no listings); a .html file gets the same no-cache
-// headers express.static's setHeaders callback applies.
+// headers.
 func (h *Handlers) static(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		// express.static ignores non-GET/HEAD and Express falls through to
-		// its default 404; match that rather than sending a 405.
+		// Non-GET/HEAD requests 404 rather than 405.
 		http.NotFound(w, r)
 		return
 	}
@@ -147,7 +142,7 @@ func (h *Handlers) static(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, path.Base(name), info.ModTime(), seeker)
 }
 
-// setNoCache writes server.js's three no-cache headers for HTML responses.
+// setNoCache writes the three no-cache headers for HTML responses.
 func setNoCache(w http.ResponseWriter) {
 	h := w.Header()
 	h.Set("Cache-Control", "no-cache, no-store, must-revalidate")

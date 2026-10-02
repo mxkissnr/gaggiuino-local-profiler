@@ -36,8 +36,7 @@ func TestDeriveMachineState_RESTOnly_NoLiveSession(t *testing.T) {
 		t.Errorf("UpdatedAt = %d, want 1000", ms.UpdatedAt)
 	}
 	// No live session -> every sensorSnap/sysState-sourced field must be
-	// absent (nil), exactly like Node never assigning them outside the
-	// `if (sensorSnap)`/`if (sysState)` blocks.
+	// absent (nil).
 	if ms.PumpFlow != nil || ms.BoilerState != nil || ms.ThermocoupleFaulted != nil {
 		t.Errorf("expected sensorSnap/sysState fields to be nil, got %+v", ms)
 	}

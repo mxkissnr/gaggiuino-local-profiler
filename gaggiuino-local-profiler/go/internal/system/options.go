@@ -13,8 +13,8 @@ import (
 
 // This mirrors internal/orders/options.go's isOrdersEnabled(): a narrow,
 // single-field read of /data/options.json (written by the Supervisor),
-// rather than a full loadOptions() facade — see that file's doc comment
-// for the trade-off reasoning, which applies identically here.
+// rather than a full options.json load — see that file's doc comment for the
+// trade-off reasoning, which applies identically here.
 
 // preheatMinutesCache caches loadPreheatMinutes()'s parsed result, keyed on
 // options.json's mtime. #901 code review: loadPreheatMinutes() used to
@@ -32,11 +32,10 @@ var preheatMinutesCache struct {
 	minutes int
 }
 
-// loadPreheatMinutes ports `Math.max(1, parseInt(opts.preheat_time) || 20)`,
-// used by buildPreheatResponse/_checkReadyByPreheat/_checkPreheatNotify.
-// Falls back to GLP_PREHEAT_TIME (#764, standalone Docker with no
-// Supervisor) when options.json doesn't exist/parse, then to 20, matching
-// loadOptions()'s own fallback chain.
+// loadPreheatMinutes reads the preheat_time option, defaulting to 20, used by
+// buildPreheatResponse/_checkReadyByPreheat/_checkPreheatNotify. Falls back to
+// GLP_PREHEAT_TIME (#764, standalone Docker with no Supervisor) when
+// options.json doesn't exist/parse, then to 20.
 func loadPreheatMinutes() int {
 	preheatMinutesCache.mu.Lock()
 	defer preheatMinutesCache.mu.Unlock()
@@ -187,23 +186,20 @@ func isOrdersEnabled() bool {
 	return loadStatusOptions().ordersEnabled
 }
 
-// isApiPortExposed ports lib/data.js's isApiPortExposed() /
-// loadOptions().expose_api_port !== false. Opposite default from
-// isOrdersEnabled/loadPreheatMinutes above: a missing/unparseable
-// options.json, or a valid options.json that simply doesn't have this key
-// yet (an install predating #803), must resolve to true — only an
-// explicit JSON `false` turns it off. See routes/system.js's GET
-// /api/token doc comment (ported verbatim in handlers.go's getToken) for
-// why the default can't be closed.
+// isApiPortExposed reports whether expose_api_port is enabled. Opposite
+// default from isOrdersEnabled/loadPreheatMinutes above: a
+// missing/unparseable options.json, or a valid options.json that simply
+// doesn't have this key yet (an install predating #803), must resolve to
+// true — only an explicit JSON `false` turns it off. See handlers.go's
+// getToken doc comment for why the default can't be closed.
 func isApiPortExposed() bool {
 	return loadStatusOptions().apiPortExposed
 }
 
-// loadSyncIntervalMinutes ports `opts.sync_interval || 5` — GET
-// /api/status's syncInterval field. A missing/unparseable options.json
-// falls back to GLP_SYNC_INTERVAL (#764) then 5; a valid options.json that
-// simply lacks (or has a non-positive) sync_interval falls straight to 5,
-// matching loadOptions()'s own per-branch fallback chain.
+// loadSyncIntervalMinutes returns GET /api/status's syncInterval field. A
+// missing/unparseable options.json falls back to GLP_SYNC_INTERVAL (#764) then
+// 5; a valid options.json that simply lacks (or has a non-positive)
+// sync_interval falls straight to 5.
 func loadSyncIntervalMinutes() int {
 	return loadStatusOptions().syncIntervalMinutes
 }
@@ -219,22 +215,20 @@ func isDebugLoggingEnabled() bool {
 	return config.IsDebugLoggingEnabled()
 }
 
-// debugLogf ports lib/data.js's debugLog(message) — logs with a "[debug]"
-// prefix, but only when isDebugLoggingEnabled(). See sync.go/poll.go for
-// the call sites this backs (lib/sync.js/lib/poll.js's own debugLog calls).
+// debugLogf logs with a "[debug]" prefix, but only when
+// isDebugLoggingEnabled(). See sync.go/poll.go for the call sites this backs.
 func debugLogf(format string, args ...any) {
 	if isDebugLoggingEnabled() {
 		log.Printf("[debug] "+format, args...)
 	}
 }
 
-// IsDebugLoggingEnabled/DebugLogf are isDebugLoggingEnabled/debugLogf
-// exposed for internal/importer's HTML/JSON fetch traces (routes/
-// import.js's own debugLog call sites — #977 follow-up code review):
+// IsDebugLoggingEnabled/DebugLogf are isDebugLoggingEnabled/debugLogf exposed
+// for internal/importer's HTML/JSON fetch traces (#977 follow-up code review):
 // internal/system<->internal/importer has no import cycle (unlike
 // internal/machines, which is imported BY internal/system — see
-// internal/config.IsDebugLoggingEnabled's doc comment for how that cycle
-// is broken instead), so importer just calls straight through to this
-// package's own wrapper around the shared internal/config implementation.
+// internal/config.IsDebugLoggingEnabled's doc comment for how that cycle is
+// broken instead), so importer just calls straight through to this package's
+// own wrapper around the shared internal/config implementation.
 func IsDebugLoggingEnabled() bool          { return isDebugLoggingEnabled() }
 func DebugLogf(format string, args ...any) { debugLogf(format, args...) }

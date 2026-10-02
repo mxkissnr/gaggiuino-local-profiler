@@ -176,7 +176,7 @@ func remainingTotal(total *int64) int64 {
 
 // decodeInlineImages base64-decodes a legacy self-contained JSON bundle's
 // `images` object (filename -> base64 string). A value that isn't valid
-// base64 is silently dropped, matching the Node original.
+// base64 is silently dropped.
 func decodeInlineImages(v any) map[string][]byte {
 	out := map[string][]byte{}
 	raw, ok := v.(map[string]any)
@@ -197,8 +197,7 @@ func decodeInlineImages(v any) map[string][]byte {
 // array with datapoints), and each element of the `shots` array is handed
 // to onShot as raw bytes and then dropped. Returns b, the shot count, and
 // whether `shots` was present AND an array (an absent or non-array `shots`
-// makes the caller answer "Invalid backup file", matching Node's
-// `Array.isArray(b.shots)` gate).
+// makes the caller answer "Invalid backup file").
 func parseBundleStream(r io.Reader, onShot func(raw json.RawMessage) error) (b map[string]any, shotCount int, sawShotsArray bool, err error) {
 	dec := json.NewDecoder(r)
 	b = map[string]any{}

@@ -10,10 +10,10 @@ import (
 	"golang.org/x/net/html"
 )
 
-// This file ports lib/import-generic.js: the generic Shopify product-JSON
-// parser, the JSON-LD and OpenGraph fallbacks, findDuplicateBean, and the
-// HTML-only bean-detail enrichment pass (accordion / origin-wrapper / brew-
-// guide scrapers). cheerio -> goquery + golang.org/x/net/html.
+// This file holds the generic Shopify product-JSON parser, the JSON-LD and
+// OpenGraph fallbacks, findDuplicateBean, and the HTML-only bean-detail
+// enrichment pass (accordion / origin-wrapper / brew-guide scrapers), built
+// on goquery + golang.org/x/net/html.
 
 // ── generic Shopify product JSON ─────────────────────────────────────────
 
@@ -167,7 +167,8 @@ func bodyScanText(doc *goquery.Document) string {
 	return sliceRunes(collapseWS(scope.Text()), bodyScanMaxChars)
 }
 
-// mergeUnique ports lib/import-generic.js's mergeUnique(primary, fallback, max).
+// mergeUnique appends fallback entries to primary, skipping case-insensitive
+// duplicates, capped at max.
 func mergeUnique(primary, fallback []string, max int) []string {
 	seen := map[string]bool{}
 	merged := append([]string{}, primary...)
@@ -240,10 +241,9 @@ var lineBreakTags = map[string]bool{
 	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true, "tr": true,
 }
 
-// textWithLineBreaks ports lib/import-generic.js's textWithLineBreaks: read
-// .text() but with a literal "\n" inserted after every block-level element,
-// so minified themes with no incidental whitespace between tags don't run
-// adjacent lines together.
+// textWithLineBreaks reads .text() but inserts a literal "\n" after every
+// block-level element, so minified themes with no incidental whitespace
+// between tags don't run adjacent lines together.
 func textWithLineBreaks(sel *goquery.Selection) string {
 	var b strings.Builder
 	for _, n := range sel.Nodes {
@@ -272,8 +272,8 @@ func nodeTextLB(n *html.Node, b *strings.Builder) {
 
 var tabRunRe = regexp.MustCompile(`[ \t]+`)
 
-// accordionLines ports lib/import-generic.js's accordionLines: deduped
-// non-empty lines of a content block (insertion order preserved).
+// accordionLines returns the deduped non-empty lines of a content block
+// (insertion order preserved).
 func accordionLines(content *goquery.Selection) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -288,7 +288,7 @@ func accordionLines(content *goquery.Selection) []string {
 	return out
 }
 
-// accordionLabelFields ports ACCORDION_LABEL_FIELDS.
+// accordionLabelFields maps lowercase accordion labels to bean field names.
 var accordionLabelFields = map[string]string{
 	"process": "process", "prozess": "process",
 	"variety": "variety", "varietal": "variety", "cultivar": "variety", "sorte": "variety",
@@ -306,7 +306,6 @@ var accordionLabelRe = func() *regexp.Regexp {
 	return regexp.MustCompile(`(?i)^(` + strings.Join(keys, "|") + `)\s*[-–—:]\s*(.+)$`)
 }()
 
-// scanAccordionLabelValues ports lib/import-generic.js's scanAccordionLabelValues.
 func scanAccordionLabelValues(doc *goquery.Document) map[string]any {
 	fields := map[string]any{}
 	doc.Find("details").Each(func(_ int, el *goquery.Selection) {
@@ -337,7 +336,6 @@ func scanAccordionLabelValues(doc *goquery.Document) map[string]any {
 	return fields
 }
 
-// scanOriginWrapperFields ports lib/import-generic.js's scanOriginWrapperFields.
 func scanOriginWrapperFields(doc *goquery.Document) map[string]any {
 	var blockScopes []*goquery.Selection
 	blocks := doc.Find(".origin-content")
@@ -411,8 +409,8 @@ func scanOriginWrapperFields(doc *goquery.Document) map[string]any {
 	return merged
 }
 
-// scanBeanDetailFields ports lib/import-generic.js's scanBeanDetailFields:
-// the <details> accordion scan wins; origin-wrapper only fills gaps.
+// scanBeanDetailFields merges the detail fields: the <details> accordion
+// scan wins; origin-wrapper only fills gaps.
 func scanBeanDetailFields(doc *goquery.Document) map[string]any {
 	fields := scanAccordionLabelValues(doc)
 	for field, value := range scanOriginWrapperFields(doc) {
@@ -489,7 +487,6 @@ var (
 	sentenceEndRe   = regexp.MustCompile(`[.!?]$`)
 )
 
-// extractBulletRecipeDetails ports lib/import-generic.js's extractBulletRecipeDetails.
 func extractBulletRecipeDetails(doc *goquery.Document) map[string]any {
 	var content *goquery.Selection
 	doc.Find(".recipe-title").EachWithBreak(func(_ int, el *goquery.Selection) bool {
@@ -555,7 +552,6 @@ type brewBlock struct {
 	lines   []string
 }
 
-// extractEspressoBrewGuide ports lib/import-generic.js's extractEspressoBrewGuide.
 func extractEspressoBrewGuide(doc *goquery.Document) map[string]any {
 	var content *goquery.Selection
 	doc.Find("details").EachWithBreak(func(_ int, el *goquery.Selection) bool {

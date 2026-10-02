@@ -108,8 +108,7 @@ func readLines(t *testing.T, r *bufio.Reader, n int, timeout time.Duration) []st
 // TestHandler_ConnectPrimeAndPublish opens a real HTTP connection to a
 // Handler and verifies the headers, the padding comment, connect-time
 // priming, and that an event published after connecting is delivered over
-// the same stream — the four things Phase 1b's dispatch explicitly calls
-// out as needing coverage.
+// the same stream — the four things this handler must provide.
 func TestHandler_ConnectPrimeAndPublish(t *testing.T) {
 	hub := NewHub()
 	primed := Event{Type: EventPreheatUpdate, Data: map[string]any{"ready": true}}

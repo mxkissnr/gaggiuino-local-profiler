@@ -13,8 +13,8 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 )
 
-// DefaultWindow and DefaultMax port lib/middleware/rateLimit.js's
-// RATE_LIMIT_WINDOW_MS/RATE_LIMIT_MAX defaults (60s / 600 requests).
+// DefaultWindow and DefaultMax are the app-wide rate-limit defaults
+// (60s / 600 requests).
 const (
 	DefaultWindow = 60 * time.Second
 	DefaultMax    = 600
@@ -23,8 +23,8 @@ const (
 // Limiter holds one token bucket per client key, created lazily on first
 // use and never evicted — bounded in practice by the number of distinct
 // socket addresses (LAN clients + the single shared Supervisor-Ingress
-// address) that ever reach this process, same unbounded-but-small-in-
-// practice memory profile as express-rate-limit's default in-memory store.
+// address) that ever reach this process, an unbounded-but-small-in-practice
+// memory profile.
 type Limiter struct {
 	mu      sync.Mutex
 	buckets map[string]*rate.Limiter
@@ -58,12 +58,11 @@ func (l *Limiter) Allow(key string) bool {
 	return l.bucket(key).Allow()
 }
 
-// bucketKey ports express-rate-limit's ipKeyGenerator default behavior
-// (used by lib/middleware/rateLimit.js's keyGenerator): IPv4 addresses are
-// used as-is, one bucket per exact address, but IPv6 addresses are masked
-// down to their /64 network prefix first, so every address a client can
-// draw from a single routed /64 (or larger) allocation shares one bucket
-// instead of getting a fresh one on every request — see doc.go.
+// bucketKey normalizes an address for use as a rate-limit key: IPv4
+// addresses are used as-is, one bucket per exact address, but IPv6 addresses
+// are masked down to their /64 network prefix first, so every address a
+// client can draw from a single routed /64 (or larger) allocation shares one
+// bucket instead of getting a fresh one on every request — see doc.go.
 func bucketKey(ip string) string {
 	parsed := net.ParseIP(ip)
 	if parsed == nil {
@@ -75,10 +74,9 @@ func bucketKey(ip string) string {
 	return parsed.Mask(net.CIDRMask(64, 128)).String()
 }
 
-// Middleware ports server.js's app.use(createApiRateLimiter()) registration:
-// same key (auth.RemoteIP — raw socket address only, IPv6-/64-normalized
-// via bucketKey, see doc.go), same /assets/* exemption, same 429 JSON error
-// shape.
+// Middleware applies the app-wide rate limit: same key (auth.RemoteIP — raw
+// socket address only, IPv6-/64-normalized via bucketKey, see doc.go), same
+// /assets/* exemption, same 429 JSON error shape.
 func (l *Limiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/assets/") {

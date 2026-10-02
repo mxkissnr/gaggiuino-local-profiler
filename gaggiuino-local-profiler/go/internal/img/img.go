@@ -8,9 +8,9 @@ import (
 	"strings"
 )
 
-// DefaultImageDir mirrors lib/constants.js's BEAN_IMAGE_DIR — the one
-// directory every entity photo (bean/grinder/basket/puckScreen/shot) lives
-// in, distinguished by filename prefix (see Filename). Handlers take this as
+// DefaultImageDir is the one directory every entity photo
+// (bean/grinder/basket/puckScreen/shot) lives in, distinguished by filename
+// prefix (see Filename). Handlers take this as
 // an injectable field so tests can point uploads at a t.TempDir() instead
 // of the real /data mount. Resolved from GLP_IMAGE_DIR at startup (falling
 // back to /data/bean-images) so the throwaway E2E/screenshot harness keeps
@@ -28,8 +28,7 @@ func resolveImageDir() string {
 	return "/data/bean-images"
 }
 
-// MaxBytes mirrors lib/constants.js's BEAN_IMAGE_MAX_BYTES — the cap on a
-// raw uploaded / fetched / restored image body.
+// MaxBytes is the cap on a raw uploaded / fetched / restored image body.
 const MaxBytes = 4 * 1024 * 1024
 
 // MaxEdge / ThumbEdge are the #961 downscale targets: the long edge of the
@@ -59,8 +58,8 @@ func withinPixelCap(w, h int) bool {
 	return w > 0 && h > 0 && int64(w)*int64(h) <= MaxPixels
 }
 
-// ContentTypeExt mirrors ImageService.js's CONTENT_TYPE_EXT: the whitelist
-// of image content types the app accepts, mapped to the on-disk extension.
+// ContentTypeExt is the whitelist of image content types the app accepts,
+// mapped to the on-disk extension.
 var ContentTypeExt = map[string]string{
 	"image/jpeg": "jpg",
 	"image/png":  "png",
@@ -68,8 +67,8 @@ var ContentTypeExt = map[string]string{
 	"image/gif":  "gif",
 }
 
-// ExtContentType is ContentTypeExt inverted — ports the effect of Node's
-// `res.type(ext)` (mime-type lookup by extension) for GET .../image.
+// ExtContentType is ContentTypeExt inverted — a mime-type lookup by
+// extension for GET .../image.
 var ExtContentType = map[string]string{
 	"jpg":  "image/jpeg",
 	"png":  "image/png",
@@ -93,14 +92,13 @@ func ContentTypeKnown(contentType string) (ext string, ok bool) {
 	return ext, ok
 }
 
-// Filename ports ImageService.js's imageFilename: prefix distinguishes
-// entity types sharing the image dir ("shot-", "grinder-", …) so ids can
-// never collide across types (beans use the empty prefix).
+// Filename's prefix distinguishes entity types sharing the image dir
+// ("shot-", "grinder-", …) so ids can never collide across types (beans use
+// the empty prefix).
 func Filename(id int64, ext, prefix string) string {
 	return fmt.Sprintf("%s%d.%s", prefix, id, ext)
 }
 
-// Path ports ImageService.js's imagePath.
 func Path(dir string, id int64, ext, prefix string) string {
 	return filepath.Join(dir, Filename(id, ext, prefix))
 }
@@ -122,9 +120,8 @@ func thumbPathFor(path, ext string) string {
 	return strings.TrimSuffix(path, filepath.Ext(path)) + ".thumb." + ext
 }
 
-// Delete ports ImageService.js's deleteImage: best-effort removal of a
-// stored image AND its thumbnail, silently ignoring an already-missing
-// file.
+// Delete is the best-effort removal of a stored image AND its thumbnail,
+// silently ignoring an already-missing file.
 func Delete(dir string, id int64, ext, prefix string) {
 	if ext == "" {
 		return
@@ -149,11 +146,10 @@ func ServePath(dir string, id int64, ext, prefix string, thumb bool) string {
 	return Path(dir, id, ext, prefix)
 }
 
-// MatchesMagicBytes ports ImageService.js's matchesImageMagicBytes: a
-// first-bytes sniff for the whitelisted image types. Content-Type headers
-// and extensions are caller-supplied and trivially spoofable, so a blob
-// claiming to be `png` must actually start with a PNG signature before it
-// is ever written to disk or handed to a decoder.
+// MatchesMagicBytes is a first-bytes sniff for the whitelisted image types.
+// Content-Type headers and extensions are caller-supplied and trivially
+// spoofable, so a blob claiming to be `png` must actually start with a PNG
+// signature before it is ever written to disk or handed to a decoder.
 func MatchesMagicBytes(buf []byte, ext string) bool {
 	if len(buf) < 12 {
 		return false

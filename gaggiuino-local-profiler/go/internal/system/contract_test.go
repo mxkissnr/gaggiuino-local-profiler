@@ -10,7 +10,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
 )
 
-// This file pins the wire contract of routes/system.js's machine-switch and
+// This file pins the wire contract of the machine-switch and
 // openapi endpoints — the "pin the essential shape" check
 // orders/shots/library's contract_test.go established. The not-configured
 // branches and the openapi-copy-in-sync guard live in extra_test.go; this

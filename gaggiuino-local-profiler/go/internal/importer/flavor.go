@@ -6,12 +6,10 @@ import (
 	"unicode/utf8"
 )
 
-// This file ports lib/flavor-terms.js's curated vocabulary plus the
-// splitFlavors / matchFlavorTerms / extractFlavorKeywords helpers that
-// lib/import-parsers.js and lib/import-generic.js share.
+// This file holds the curated flavor vocabulary plus the splitFlavors /
+// matchFlavorTerms / extractFlavorKeywords helpers.
 
-// flavorTermsDE mirrors lib/flavor-terms.js's FLAVOR_TERMS_DE exactly,
-// order included.
+// flavorTermsDE is the curated flavor vocabulary; the order is significant.
 var flavorTermsDE = []string{
 	// Fruity
 	"Kirsche", "Mandarine", "Orange", "Zitrone", "Zitrus", "Apfel", "Aprikose",
@@ -31,9 +29,8 @@ var flavorTermsDE = []string{
 	"Tropisch", "Tropical", "Lactic",
 }
 
-// flavorTermMatchers precompiles matchFlavorTerms's per-term
-// `new RegExp('\\b' + escapeRegex(term) + '\\w*', 'i')`. Go's regexp \b/\w
-// are ASCII by default, matching JS's own non-unicode-flag RegExp semantics.
+// flavorTermMatchers precompiles matchFlavorTerms's per-term `(?i)\b<term>\w*`
+// matchers; Go's regexp \b/\w being ASCII by default is deliberate.
 var flavorTermMatchers = func() []*regexp.Regexp {
 	out := make([]*regexp.Regexp, len(flavorTermsDE))
 	for i, term := range flavorTermsDE {
@@ -47,9 +44,9 @@ var (
 	flavorSplitRe   = regexp.MustCompile(`[;,]`)
 )
 
-// splitFlavors ports lib/import-parsers.js's splitFlavors(text): split on
-// , and ;, strip a trailing parenthesized qualifier, trim, drop empties and
-// >50-char fragments, dedupe case-insensitively (first spelling wins).
+// splitFlavors splits on , and ;, strips a trailing parenthesized qualifier,
+// trims, drops empties and >50-char fragments, and dedupes case-insensitively
+// (first spelling wins).
 func splitFlavors(text string) []string {
 	seen := map[string]bool{}
 	out := []string{}
@@ -68,9 +65,8 @@ func splitFlavors(text string) []string {
 	return out
 }
 
-// matchFlavorTerms ports lib/import-generic.js's matchFlavorTerms(text, max=8):
-// scan prose for the curated vocabulary, then run the hits through
-// splitFlavors and cap at max.
+// matchFlavorTerms scans prose for the curated vocabulary (max defaults to 8),
+// then runs the hits through splitFlavors and caps at max.
 func matchFlavorTerms(text string, max int) []string {
 	if max == 0 {
 		max = 8
@@ -93,9 +89,9 @@ func matchFlavorTerms(text string, max int) []string {
 
 var flavorHeadingRe = regexp.MustCompile(`(?i)(?:Sensorik|Geschmack|Aromen?)\s*[–—:-]?\s*[^.]{0,60}`)
 
-// extractFlavorKeywords ports lib/import-parsers.js's extractFlavorKeywords(text):
-// narrow to the window after a Sensorik/Geschmack/Aromen heading (stopping
-// at "Hier findest Du" or 600 chars), then run matchFlavorTerms over it.
+// extractFlavorKeywords narrows to the window after a Sensorik/Geschmack/
+// Aromen heading (stopping at "Hier findest Du" or 600 chars), then runs
+// matchFlavorTerms over it.
 func extractFlavorKeywords(text string) []string {
 	loc := flavorHeadingRe.FindStringIndex(text)
 	if loc == nil {
