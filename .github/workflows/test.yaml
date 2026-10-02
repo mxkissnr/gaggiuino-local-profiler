@@ -196,6 +196,19 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
+      # BLOCKING deadcode gate (#1285, motivated by #1286): fails on any
+      # function no production path reaches, so code that is built but never
+      # wired up is caught in the PR that adds it. Keep list: the three proto
+      # command DTOs keep Unmarshal for a symmetric codec (round-trip tests).
+      # Version-pinned like govulncheck.
+      - name: deadcode
+        run: |
+          go run golang.org/x/tools/cmd/deadcode@v0.50.0 ./cmd/... > "$RUNNER_TEMP/deadcode.txt"
+          if grep -vE '(WebSocketProfileIdCommandDto|UpdateSystemStateCommandDto|ServiceTestCommandDto)\.Unmarshal$' "$RUNNER_TEMP/deadcode.txt"; then
+            echo "::error::deadcode found unreachable Go functions (listed above)"
+            exit 1
+          fi
+
   docker-smoke:
     name: Docker image build+smoke test (${{ matrix.arch }})
     # #977 follow-up code review (2nd pass): deleting go-build.yaml (see
