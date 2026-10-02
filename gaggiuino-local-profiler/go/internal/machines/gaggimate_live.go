@@ -138,6 +138,13 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 	}
 	defer conn.CloseNow()
 
+	// A new connection starts a new session: drop the status merged from the
+	// previous connection so stale live readings can't survive a reconnect. The
+	// controller sends a full snapshot to every client right after it connects.
+	s.mu.Lock()
+	s.status = nil
+	s.mu.Unlock()
+
 	// Reader goroutine feeds frames into readCh so the select loop below can
 	// interleave reads with outgoing frame writes.
 	readCh := make(chan []byte, 1)
@@ -171,7 +178,9 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 			tp, _ := msg["tp"].(string)
 			if tp == "evt:status" {
 				s.mu.Lock()
-				s.status = msg
+				// Firmware v1.9.0 sends partial frames: merge onto the last
+				// status (absent key keeps, null clears) instead of replacing.
+				s.status = mergeGaggiMateStatus(s.status, msg)
 				s.statusAt = time.Now()
 				s.mu.Unlock()
 			} else if strings.HasPrefix(tp, "res:") {
